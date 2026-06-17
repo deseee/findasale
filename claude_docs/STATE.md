@@ -8,6 +8,15 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
+**S1005 — DEV (2026-06-17). Google Merchant feed quality fix + cart checkout regression fix + return policy page.**
+- **Google Merchant feed (image_link quality):** `googleMerchantFeed.ts` — added `isEbayThumbnail()` filter. eBay CDN thumbnails (`i.ebayimg.com/$_N.JPG` ~180px) excluded from `image_link`/`additional_image_link`. Cloudinary URLs preferred; falls back to any eBay URL only if no Cloudinary photo. Fixes 0% high-res images causing Google "FAIR" store quality score.
+- **Cart item links (CartDrawer.tsx):** "Saved in Cart" section — wrapped item thumbnail + title in `<Link href="/items/${item.id}" onClick={closeCart}>`. Cart items now navigate to item page on click, matching the "On Hold" section pattern.
+- **Cart checkout wired to Stripe (CartDrawer.tsx + stripeController.ts + stripe.ts):** Replaced "coming soon" toast with real multi-item Stripe Checkout Session. New function `createCartCheckoutSession` — validates items, all same sale, all AVAILABLE, builds `line_items`, uses `payment_method_types: ['card']` (not `automatic_payment_methods`), Connect fallback pattern (try with `payment_intent_data`, catch Connect errors, retry without). New route `POST /stripe/create-cart-checkout-session` (authenticate + paymentLimiter). Webhook extended: `cart_checkout` type → creates Purchase per item, marks all SOLD.
+- **Buy Now Connect fallback broadened (stripeController.ts):** `createPaymentIntent` — new `CONNECT_FALLBACK_CODES` Set (`insufficient_capabilities_for_transfer`, `account_invalid`, `account_closed`, `platform_cannot_pay`, `platform_api_key_expired`) + message-based matching ("does not have the necessary capabilities", "No such account"). Fixes "try again" on Buy Now for real Stripe Connect test accounts.
+- **Return policy page (return-policy.tsx NEW):** `/return-policy` — marketplace language (each seller sets their own policy, no blanket return window). 6 sections. Matches `privacy.tsx` layout + dark mode. Google Merchant Center can now point to this URL.
+- **TypeScript: 0 errors (both packages). BQ: 0 (unchanged).**
+- **CODE-ONLY — pending Chrome QA next session.**
+
 **S1004 — QA/RECORDS (2026-06-17). BQ cleared to 0: eBay Queue cron confirmed live + Facebook Connected badge dev fix + SEO5/SEO6 Chrome QA ✅.**
 - **BQ item 1 — eBay Queue Mode RESOLVED ✅:** Railway logs confirmed `[eBay Queue] Starting queue cron for 0 organizer(s)` + `[CRON OK] ebayListingQueueCron completed` at 02:30:01 and 03:00:11 — both on */30 schedule. "0 organizer(s)" correct (no org has ebayQueueMode enabled). Cron registered and firing.
 - **BQ item 2 — Facebook Connected badge RESOLVED ✅:** platforms.tsx Facebook card now shows green "Connected" badge (bg-green-100/text-green-700) when `facebook?.connected` truthy, "Not connected" badge otherwise. TypeScript: 0 errors. Agent-applied + verified in file.
@@ -355,9 +364,9 @@ _(SEO4 ✅ S1003 Human QA applied — roadmap.md Human QA col already ✅ S1003 
 
 ## Next Session
 
-### S1004 onward
+### S1005 onward — QA session
 
-**S1004 push block (Patrick) — includes S1003 SEO pages + S1004 Facebook badge fix:**
+**S1005 push block (Patrick) — includes S1003/S1004 files + S1005 cart/checkout/GMC fixes:**
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
 git add "packages/frontend/pages/auctions/[city-slug].tsx"
@@ -365,24 +374,53 @@ git add "packages/frontend/pages/flea-markets/[city-slug].tsx"
 git add packages/frontend/lib/seo/cityData.ts
 git add packages/frontend/pages/api/server-sitemap.xml.tsx
 git add packages/frontend/pages/organizer/platforms.tsx
+git add packages/frontend/components/CartDrawer.tsx
+git add packages/backend/src/controllers/stripeController.ts
+git add packages/backend/src/routes/stripe.ts
+git add packages/backend/src/utils/googleMerchantFeed.ts
+git add packages/frontend/pages/return-policy.tsx
 git add claude_docs/strategy/roadmap.md
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "S1003/S1004: Auction+flea-market SEO pages; Facebook Connected badge fix; BQ cleared to 0"
+git commit -m "S1003-S1005: Auction+flea-market SEO pages; FB Connected badge; cart checkout fix; Google Merchant feed; return policy"
 .\push.ps1
 ```
 
 **No migration required.**
 
-**Session type: DEV or QA (BQ=0 — no ceiling)**
-
-**Records pass S1005: COMPLETED.**
-SEO4 Hum ✅ S1003 already applied prior session. SEO5 Chr ✅ S1004 (ss_533815fys) applied. SEO6 Chr ✅ S1004 (ss_0332eyqoc/ss_7930nzpey) applied. PCV table cleared. roadmap.md pushed.
+**Session type: QA (BQ=0 — run QA on S1005 cart/checkout/GMC fixes before new dev)**
 
 **BQ = 0**
 
+---
+
+**QA dispatch stubs — S1006 (run sequentially, one Chrome agent at a time):**
+
+**QA-1 — Cart item links:**
+`Skill('findasale-qa')` → Navigate to finda.sale as logged-in shopper. Add an item to cart. Open CartDrawer. Click item thumbnail in "Saved in Cart" section. Verify: navigates to `/items/:id` page AND cart drawer closes. Evidence: Navigated [URL] as [user]. Clicked [element]. Saw [outcome]. Screenshot IDs required.
+
+**QA-2 — Cart multi-item checkout:**
+`Skill('findasale-qa')` → As logged-in shopper, add 2+ items from the SAME sale to cart. Open CartDrawer. Click "Go to Checkout". Verify: no "coming soon" toast, Stripe Checkout page loads with correct line items and total. Use Stripe test card 4242 4242 4242 4242. Verify redirect to sale page with `?checkout=success`. Verify items show as SOLD. Evidence required per QA Honesty Gate.
+
+**QA-3 — Buy Now fix:**
+`Skill('findasale-qa')` → As logged-in shopper, open any item detail page. Click "Buy Now". Verify: checkout modal opens, payment form loads without "try again" error, can enter test card. Evidence required.
+
+**QA-4 — Google Merchant feed image quality:**
+`Skill('findasale-qa')` → Hit feed endpoint (check backend routes for the GMC feed URL). Verify `image_link` column contains no `i.ebayimg.com` URLs for items that have Cloudinary photos (`res.cloudinary.com` URLs). Evidence: grep or sample of feed output.
+
+**QA-5 — Return policy page:**
+`Skill('findasale-qa')` → Navigate to `finda.sale/return-policy`. Verify page loads, contains marketplace language ("each seller"), no blanket return window, dark mode works. Evidence: screenshot ID + URL.
+
+---
+
+**Patrick — actions needed post S1005:**
+1. Push the S1005 block above.
+2. After deploy, Google Merchant Center: update return policy URL to `https://finda.sale/return-policy` and remove the 2-day blanket window.
+3. Pending fee rate question: `feeCalculator.ts` returns 8% for PRO/TEAMS but CLAUDE.md §10/Stack says 10% flat (locked S106). Confirm which is correct — needs a Patrick decision before touching that file.
+
 **Optional carry-forward:**
 - 4 unpublished eBay items backfill (Loy Norrix Choirs offerId=166668232011, Kirkland Pepper offerId=166412704011, Whip-It Butane offerId=151850469011, Contigo Travel Mug offerId=151769728011)
+- Canada return policy in Google Merchant Center
 - Flip ebayQueueMode on a test org to observe actual queue processing (optional validation)
 
 
