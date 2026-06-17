@@ -299,6 +299,7 @@ export default function LabelComposerPage() {
   const [showSavedBatches, setShowSavedBatches] = useState(false);
   // Partial-sheet support: first usable label slot (1–30, 1 = top-left / normal).
   const [startPosition, setStartPosition] = useState(1);
+  const [startPosExpanded, setStartPosExpanded] = useState(false);
 
   // Refresh saved batches list from localStorage
   const refreshSavedBatches = useCallback(() => {
@@ -837,6 +838,68 @@ export default function LabelComposerPage() {
 
             {/* ==================== RIGHT — Live Sheet Preview ==================== */}
             <div className="space-y-5">
+              {/* Starting position — collapsed by default, ABOVE the preview */}
+              <div className="bg-white dark:bg-gray-800 rounded-lg border border-warm-200 dark:border-gray-700">
+                <button
+                  type="button"
+                  onClick={() => setStartPosExpanded((v) => !v)}
+                  className="w-full flex items-center justify-between px-4 py-3 text-left"
+                  aria-expanded={startPosExpanded}
+                >
+                  <span className="text-sm font-medium text-warm-700 dark:text-gray-200">
+                    {startPosition === 1
+                      ? 'Expand to choose starting label'
+                      : `Starting at label ${startPosition} · skipping ${startPosition - 1}`}
+                  </span>
+                  <span className="text-warm-400 dark:text-gray-500 text-xs ml-2">{startPosExpanded ? '▲' : '▼'}</span>
+                </button>
+                {startPosExpanded && (
+                  <div className="px-4 pb-4">
+                    <p className="text-xs text-warm-400 dark:text-gray-500 mb-3">
+                      Already peeled a few labels off this sheet? Tap the first blank slot — labels before it are skipped so your printout lines up. (Counts left-to-right, top-to-bottom.)
+                    </p>
+                    <div className="grid grid-cols-3 gap-1 w-32 mb-2">
+                      {Array.from({ length: LABELS_PER_PAGE }).map((_, i) => {
+                        const slot = i + 1;
+                        const isSkipped = slot < startPosition;
+                        const isStart = slot === startPosition;
+                        return (
+                          <button
+                            key={slot}
+                            type="button"
+                            onClick={() => setStartPosition(slot)}
+                            title={`Start at slot ${slot}`}
+                            className={`h-5 rounded-sm border text-[8px] flex items-center justify-center transition-colors ${
+                              isStart
+                                ? 'bg-amber-500 border-amber-600 text-white font-bold'
+                                : isSkipped
+                                ? 'bg-warm-200 dark:bg-gray-600 border-warm-300 dark:border-gray-500 text-warm-400 dark:text-gray-400'
+                                : 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-700 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/40'
+                            }`}
+                          >
+                            {slot}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <p className="text-xs text-warm-600 dark:text-gray-300">
+                      {startPosition === 1
+                        ? 'Starting at the top-left (full sheet).'
+                        : `Skipping ${startPosition - 1} used slot${startPosition - 1 !== 1 ? 's' : ''} — printing starts at position ${startPosition}.`}
+                      {startPosition !== 1 && (
+                        <button
+                          type="button"
+                          onClick={() => setStartPosition(1)}
+                          className="ml-2 underline text-amber-700 dark:text-amber-400"
+                        >
+                          Reset
+                        </button>
+                      )}
+                    </p>
+                  </div>
+                )}
+              </div>
+
               {/* Sheet Preview */}
               <div className="bg-white dark:bg-gray-800 rounded-lg border border-warm-200 dark:border-gray-700 p-4">
                 <div className="flex items-baseline justify-between mb-3">
@@ -921,53 +984,6 @@ export default function LabelComposerPage() {
                 </div>
               </div>
 
-              {/* Starting position — for partially-used Avery sheets */}
-              <div className="bg-white dark:bg-gray-800 rounded-lg border border-warm-200 dark:border-gray-700 p-4">
-                <h2 className="text-sm font-semibold text-warm-500 dark:text-gray-400 uppercase tracking-wide mb-2">
-                  Starting position
-                </h2>
-                <p className="text-xs text-warm-400 dark:text-gray-500 mb-3">
-                  Already peeled a few labels off this sheet? Tap the first blank slot — labels before it are skipped so your printout lines up. (Counts left-to-right, top-to-bottom.)
-                </p>
-                <div className="grid grid-cols-3 gap-1 w-32 mb-2">
-                  {Array.from({ length: LABELS_PER_PAGE }).map((_, i) => {
-                    const slot = i + 1;
-                    const isSkipped = slot < startPosition;
-                    const isStart = slot === startPosition;
-                    return (
-                      <button
-                        key={slot}
-                        type="button"
-                        onClick={() => setStartPosition(slot)}
-                        title={`Start at slot ${slot}`}
-                        className={`h-5 rounded-sm border text-[8px] flex items-center justify-center transition-colors ${
-                          isStart
-                            ? 'bg-amber-500 border-amber-600 text-white font-bold'
-                            : isSkipped
-                            ? 'bg-warm-200 dark:bg-gray-600 border-warm-300 dark:border-gray-500 text-warm-400 dark:text-gray-400'
-                            : 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-700 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/40'
-                        }`}
-                      >
-                        {slot}
-                      </button>
-                    );
-                  })}
-                </div>
-                <p className="text-xs text-warm-600 dark:text-gray-300">
-                  {startPosition === 1
-                    ? 'Starting at the top-left (full sheet).'
-                    : `Skipping ${startPosition - 1} used slot${startPosition - 1 !== 1 ? 's' : ''} — printing starts at position ${startPosition}.`}
-                  {startPosition !== 1 && (
-                    <button
-                      type="button"
-                      onClick={() => setStartPosition(1)}
-                      className="ml-2 underline text-amber-700 dark:text-amber-400"
-                    >
-                      Reset
-                    </button>
-                  )}
-                </p>
-              </div>
 
               {/* Leftovers */}
               <div className="bg-white dark:bg-gray-800 rounded-lg border border-warm-200 dark:border-gray-700 p-4">
