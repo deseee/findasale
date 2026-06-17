@@ -511,29 +511,30 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
         { idempotencyKey }
       );
     } catch (stripeError: any) {
-      // Fallback: if Connect routing fails (incomplete onboarding, invalid account, etc.), retry without it
-      const CONNECT_FALLBACK_CODES = new Set([
-        'insufficient_capabilities_for_transfer',
-        'account_invalid',
-        'account_closed',
-        'platform_cannot_pay',
-        'platform_api_key_expired',
-      ]);
-      const isConnectError =
+      // S1006: Connect routing failed. If the SELLER's connected account can't receive
+      // funds (missing / invalid / not-onboarded), do NOT capture the buyer's money into
+      // the platform account — block cleanly with a friendly, specific message (the
+      // frontend now renders it). Preserves seller payout integrity and replaces the old
+      // silent platform-capture fallback. Valid accounts never reach this branch.
+      const stripeCode = stripeError?.code;
+      const stripeMsg = typeof stripeError?.message === 'string' ? stripeError.message : '';
+      const sellerAccountUnusable =
         shouldUseConnect &&
-        (CONNECT_FALLBACK_CODES.has(stripeError.code) ||
-          (stripeError.type === 'StripeInvalidRequestError' &&
-            (stripeError.message?.includes('insufficient_capabilities_for_transfer') ||
-              stripeError.message?.includes('does not have the necessary capabilities') ||
-              stripeError.message?.includes('No such account'))));
-      if (isConnectError) {
+        (['insufficient_capabilities_for_transfer', 'account_invalid', 'account_closed'].includes(stripeCode) ||
+          stripeMsg.includes('No such destination') ||
+          stripeMsg.includes('No such account') ||
+          stripeMsg.includes('does not have the necessary capabilities') ||
+          stripeMsg.includes('insufficient_capabilities_for_transfer'));
+      if (sellerAccountUnusable) {
         console.warn(
-          `[Stripe Connect fallback] Account ${stripeConnectId} not ready (${stripeError.code}), proceeding without Connect routing`
+          `[Stripe Connect] Seller account ${stripeConnectId} cannot receive funds (${stripeCode || stripeMsg}); blocking checkout with friendly message`
         );
-        paymentIntent = await stripe().paymentIntents.create(basePaymentIntentData, { idempotencyKey: `${idempotencyKey}-fallback` });
-      } else {
-        throw stripeError;
+        return res.status(409).json({
+          message: "This seller isn't set up to accept online payments yet. Please contact the organizer to arrange your purchase.",
+          code: 'SELLER_PAYMENTS_UNAVAILABLE',
+        });
       }
+      throw stripeError;
     }
 
     const purchase = await prisma.purchase.create({

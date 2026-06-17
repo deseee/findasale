@@ -441,7 +441,9 @@ const CheckoutModal = ({ itemId, purchaseId: initialPurchaseId, itemTitle, listi
       {started && (
         <>
           {loadError && (
-            <div className="p-3 bg-red-50 border border-red-200 rounded text-red-700 text-sm mb-4" role="alert" id="checkout-load-error">
+            <div className="p-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded text-red-700 dark:text-red-300 text-sm mb-4" role="alert" id="checkout-load-error">
+              {/* S1006: render the actual server message so buyers see WHY (was a bare "Try Again") */}
+              <p className="mb-2 font-medium">{loadError}</p>
               {/* Allow user to retry — clears error and reloads payment intent */}
               <button
                 className="block text-xs underline text-red-600 hover:text-red-800 font-medium"
