@@ -378,13 +378,8 @@ git commit -m "S1003/S1004: Auction+flea-market SEO pages; Facebook Connected ba
 
 **Session type: DEV or QA (BQ=0 — no ceiling)**
 
-**Records pass (first action next session):**
-Apply S1003 + S1004 PCVs to roadmap.md:
-1. SEO4 Human QA ✅ S1003 → roadmap.md Human QA col (evidence in PCV table: H1 ✅, FAQPage JSON-LD ✅, nearby cities ✅, 7 sales ✅, screenshots ss_3207v3q1s/ss_4548wcacx/ss_4234cbvhi)
-2. SEO5 Chrome QA ✅ S1004 → roadmap.md Chrome QA col (evidence: H1 ✅, FAQPage JSON-LD 7 auction-specific Q&As ✅, ISR serving ✅, screenshot ss_533815fys)
-3. SEO6 Chrome QA ✅ S1004 → roadmap.md Chrome QA col (evidence: H1 ✅, FAQPage JSON-LD 5 flea-market Q&As ✅, ISR serving ✅, screenshots ss_0332eyqoc/ss_7930nzpey)
-4. eBay Queue Mode cron confirmed (BQ item 1 cleared) → update roadmap row 549 if applicable
-5. Facebook Connected badge fixed (BQ item 2 cleared) → note platforms.tsx fix in relevant roadmap row if applicable
+**Records pass S1005: COMPLETED.**
+SEO4 Hum ✅ S1003 already applied prior session. SEO5 Chr ✅ S1004 (ss_533815fys) applied. SEO6 Chr ✅ S1004 (ss_0332eyqoc/ss_7930nzpey) applied. PCV table cleared. roadmap.md pushed.
 
 **BQ = 0**
 
