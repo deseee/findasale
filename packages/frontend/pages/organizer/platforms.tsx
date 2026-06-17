@@ -431,7 +431,11 @@ export default function PlatformsPage() {
                   <span className="text-2xl">&#x1F4D8;</span>
                   <span className="font-semibold text-warm-900 dark:text-warm-100">Facebook</span>
                 </div>
-                {!facebook?.connected && (
+                {facebook?.connected ? (
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300">
+                    Connected
+                  </span>
+                ) : (
                   <span className="text-xs px-2 py-0.5 rounded-full bg-warm-100 dark:bg-gray-700 text-warm-500">
                     Not connected
                   </span>
