@@ -817,3 +817,257 @@ export function getYardSaleFaqs(cityName: string, stateCode: string): FaqItem[] 
     },
   ];
 }
+
+// ---------------------------------------------------------------------------
+// Auction-specific About content
+// ---------------------------------------------------------------------------
+
+const AUCTION_ABOUT: Record<string, { knownFor: string; tip: string }> = {
+  'grand-rapids-mi': {
+    knownFor:
+      'Grand Rapids auctions draw on West Michigan\'s deep furniture and manufacturing history — live and online auctions regularly feature estate lots, farm equipment, industrial tools, and quality vintage furniture from the area\'s long-established families.',
+    tip:
+      'Register early for Grand Rapids area auctions — bidder registration often closes 24 hours before the live event. Preview days are usually the day before; inspect large lots in person before bidding.',
+  },
+  'denver-co': {
+    knownFor:
+      'Denver auctions span a wide range — from high-country ranch equipment and Western art at live estate auctions, to downtown gallery auctions featuring Colorado artists and contemporary collectibles.',
+    tip:
+      'Western art and Native American pieces command premiums at Denver auctions. Research artists and makers before bidding — Colorado collectors are knowledgeable and prices reflect it.',
+  },
+  'chicago-il': {
+    knownFor:
+      'Chicago\'s auction scene is one of the most active in the Midwest — the city hosts weekly estate auctions, specialty art auctions, and large-format industrial and real estate auctions year-round.',
+    tip:
+      'North Shore estate auctions (Evanston, Winnetka, Lake Forest) consistently offer the highest-quality lots. Many Chicago auction houses now offer real-time online bidding — register in advance for access.',
+  },
+  'phoenix-az': {
+    knownFor:
+      'Phoenix auctions reflect the region\'s active retiree and collector communities — estate auctions in Scottsdale and Paradise Valley regularly feature Southwestern art, Native American jewelry, and quality contemporary furnishings.',
+    tip:
+      'Scottsdale auction houses are the premier destination for Native American and Western art bidding in the Southwest. Authenticate turquoise and Navajo textiles carefully — provenance matters significantly for value.',
+  },
+  'dallas-tx': {
+    knownFor:
+      'Dallas hosts some of the largest estate and art auctions in the South — Highland Park and Preston Hollow estate auctions produce Texas art, fine furniture, jewelry, and luxury goods from established families.',
+    tip:
+      'Major Dallas auction events are listed weeks in advance. Set your maximum bid before the live event — competitive Dallas bidders can drive prices well beyond estimate on desirable Texas art lots.',
+  },
+  'los-angeles-ca': {
+    knownFor:
+      'Los Angeles is a world-class auction market — Hollywood memorabilia, fine art, Mid-Century Modern furniture, and entertainment-industry estates appear at LA auction houses alongside major international auction house satellite sales.',
+    tip:
+      'Preview events at LA auction houses are essential — descriptions don\'t capture condition on vintage furniture and art. Online bidding platforms for LA auctions are highly competitive; set a ceiling and stick to it.',
+  },
+  'new-york-ny': {
+    knownFor:
+      'New York City is the epicenter of the US auction world — Sotheby\'s, Christie\'s, and hundreds of regional auction houses handle everything from fine art and jewelry to mid-century design and rare books every week.',
+    tip:
+      'For regional NYC estate auctions, Brooklyn and Queens houses offer better value than Manhattan boutiques. Register online in advance — New York auction registration requirements vary significantly by house.',
+  },
+  'houston-tx': {
+    knownFor:
+      'Houston auctions reflect the city\'s oil-industry wealth and global connections — River Oaks estate auctions feature fine art, antiques, and collections from decades of international travel and executive-level acquisitions.',
+    tip:
+      'Houston estate auctions are most active in spring and fall. Oil-industry estate lots often contain international antiques and rare pieces — research provenance carefully before bidding.',
+  },
+  'seattle-wa': {
+    knownFor:
+      'Seattle auctions capture the Pacific Northwest\'s eclectic character — estate auctions in Bellevue and Capitol Hill produce Pacific Rim antiques, mid-century modern furniture, and unique technology-era collectibles from Boeing and early tech families.',
+    tip:
+      'Seattle auction houses are increasingly offering hybrid live/online formats. Pacific Rim antiques (Japanese, Chinese, Korean) require authentication — research makers before bidding.',
+  },
+  'atlanta-ga': {
+    knownFor:
+      'Atlanta auctions serve one of the South\'s largest metropolitan markets — Buckhead estate auctions produce Southern antiques, fine art, and jewelry, while specialty auction houses handle real estate and commercial lots.',
+    tip:
+      'Buckhead and Sandy Springs estate auctions are the most active in the Atlanta metro. Fall (October–November) brings the most estate auction volume in the region.',
+  },
+  'minneapolis-mn': {
+    knownFor:
+      'Minneapolis auctions blend Scandinavian heritage with active Midwest collector culture — estate auctions in Edina and Wayzata produce quality furniture, Nordic decorative arts, and regional Minnesota artist works.',
+    tip:
+      'Spring auctions in Minneapolis are the most stocked — families clear estates after winter and before summer moves. Scandinavian decorative arts are a specialty of this market.',
+  },
+};
+
+/**
+ * Returns auction-specific About content (knownFor + tip) for a city page.
+ * Falls back to a generic auction template for cities not in AUCTION_ABOUT.
+ */
+export function getAuctionMeta(
+  slug: string,
+  cityName: string,
+  stateCode: string
+): { knownFor: string; tip: string } {
+  if (AUCTION_ABOUT[slug]) {
+    return AUCTION_ABOUT[slug];
+  }
+  return {
+    knownFor: `${cityName} auctions offer competitive bidding on estate lots, antiques, collectibles, furniture, and specialty items. Local auction houses run regular events throughout the year with online and in-person bidding options.`,
+    tip: `Register for bidder access before auction day — most ${cityName} auction houses require advance registration. Attend preview events to inspect lots in person before placing bids.`,
+  };
+}
+
+/**
+ * Returns FAQ items for an auctions city page.
+ */
+export function getAuctionFaqs(cityName: string, stateCode: string): FaqItem[] {
+  return [
+    {
+      question: `How do I bid at an auction in ${cityName}, ${stateCode}?`,
+      answer: `To bid at auctions in ${cityName}, you typically need to register in advance with a valid ID and, for higher-value auctions, a credit card for deposit. Once registered, you receive a bidder number. Bidding starts at an opening price and rises in increments until only one bidder remains. Many ${cityName} auction houses now offer online absentee bidding so you can participate remotely.`,
+    },
+    {
+      question: `What types of auctions are held in ${cityName}?`,
+      answer: `${cityName} hosts a variety of auction formats including estate auctions (selling the complete contents of a home), art and antique auctions, vehicle auctions, real estate auctions, and specialty collector auctions. Estate auctions are the most common and are usually held on weekends. Online auction platforms have expanded access to many ${cityName} area auction events.`,
+    },
+    {
+      question: `Are there buyer's premiums at auctions in ${cityName}?`,
+      answer: `Yes — most auction houses in ${cityName} charge a buyer's premium, typically 10–25% of the hammer price, added to your winning bid. Always factor the buyer's premium into your maximum bid calculation. The premium percentage is always disclosed in the auction terms before you register.`,
+    },
+    {
+      question: `How do I find upcoming auctions in ${cityName}, ${stateCode}?`,
+      answer: `FindA.Sale lists upcoming auctions in ${cityName} as soon as they're posted. Check this page regularly or browse the map view to find auctions near you. Many auctioneers also post preview schedules — attending a preview before auction day lets you inspect lots and set informed maximum bids.`,
+    },
+    {
+      question: `Can I sell items at an auction in ${cityName}?`,
+      answer: `Yes — most ${cityName} auction houses accept consignments from individuals and estates. Contact the auction house directly to discuss consignment terms, minimum lot values, and commission rates. Estate auction companies can also come to your home to evaluate and catalog items for a dedicated estate auction.`,
+    },
+    {
+      question: `What should I know before attending my first auction in ${cityName}?`,
+      answer: `Before your first ${cityName} auction: register for a bidder number, attend the preview to inspect lots, research estimated values for items you want, set a maximum bid per item and don't exceed it, factor in the buyer's premium when calculating your limit, and bring cash or a card for payment. Popular items move fast — don't hesitate if something you want comes up.`,
+    },
+    {
+      question: `Are ${cityName} auctions open to the public?`,
+      answer: `Most estate and general auctions in ${cityName} are open to the public — no invitation or membership required. Registration (free) is typically all that's needed to bid. Some specialty auctions (art, jewelry) may require proof of financial qualification to participate. Check individual auction listings for specific requirements.`,
+    },
+  ];
+}
+
+// ---------------------------------------------------------------------------
+// Flea-market-specific About content
+// ---------------------------------------------------------------------------
+
+const FLEA_MARKET_ABOUT: Record<string, { knownFor: string; tip: string }> = {
+  'grand-rapids-mi': {
+    knownFor:
+      'Grand Rapids flea markets draw vendors from across West Michigan — expect vintage furniture, vinyl records, handmade crafts, farm surplus, and antique glassware alongside everyday household goods and local food vendors.',
+    tip:
+      'The early bird hours at Grand Rapids area flea markets (first hour before posted open) often offer the best vendor selection. Bring cash — many small vendors don\'t accept cards.',
+  },
+  'denver-co': {
+    knownFor:
+      'Denver flea markets blend Colorado\'s outdoor culture with eclectic urban creativity — vintage clothing, artisan goods, camping gear, vinyl records, and handcrafted jewelry are staples at weekend markets across the metro.',
+    tip:
+      'Arrive before 9 AM at popular Denver flea markets for the best selection. The summer months bring the most vendors and the widest variety — spring markets can be cold but are less crowded.',
+  },
+  'chicago-il': {
+    knownFor:
+      'Chicago flea markets are a weekend institution — from the famous Randolph Street Market to neighborhood rummage sales, the city\'s market scene spans vintage fashion, art, antiques, vinyl, and unique handcrafted goods.',
+    tip:
+      'Chicago\'s most popular flea markets fill up early — arrive at opening time for the best vendor selection. Indoor winter markets (November–March) keep the scene active year-round.',
+  },
+  'phoenix-az': {
+    knownFor:
+      'Phoenix flea markets run year-round thanks to the desert climate — Southwestern crafts, vintage turquoise jewelry, retro Americana, and outdoor goods are common finds at the metro\'s many weekend markets.',
+    tip:
+      'October through April is the best season for Phoenix flea markets — comfortable morning temperatures make browsing enjoyable. Summer heat drives most outdoor markets to very early morning hours only.',
+  },
+  'dallas-tx': {
+    knownFor:
+      'Dallas flea markets are diverse and well-attended — from the sprawling Canton First Monday Trade Days to neighborhood weekend markets, the Dallas area offers one of the largest flea market ecosystems in Texas.',
+    tip:
+      'Canton First Monday Trade Days (held the weekend before the first Monday of each month) is one of the largest flea markets in the US and worth the drive from Dallas. Local Dallas weekend markets are most active March–May.',
+  },
+  'los-angeles-ca': {
+    knownFor:
+      'Los Angeles flea markets are world-famous — the Rose Bowl Flea Market, Melrose Trading Post, and Fairfax High Flea Market attract vintage clothing enthusiasts, prop stylists, and collectors from around the globe.',
+    tip:
+      'The Rose Bowl Flea Market (second Sunday of each month) is LA\'s most iconic flea market event. Arrive at early-bird opening (7 AM) for the best selection before crowds arrive.',
+  },
+  'new-york-ny': {
+    knownFor:
+      'New York City flea markets are legendary for eclectic finds — Brooklyn Flea, Hell\'s Kitchen Flea Market, and seasonal markets across the boroughs produce vintage fashion, art, antiques, vinyl, and artisan food in a uniquely NYC atmosphere.',
+    tip:
+      'Brooklyn Flea is the most well-known NYC market — arrive early on Saturday or Sunday for the best vendor selection. Bring cash; smaller vendors often don\'t accept cards and ATMs have lines.',
+  },
+  'houston-tx': {
+    knownFor:
+      'Houston flea markets reflect the city\'s diverse cultural character — from the sprawling Sunny Flea Market to weekend neighborhood markets, buyers find Latin American crafts, vintage Americana, antiques, and food alongside everyday goods.',
+    tip:
+      'Sunny Flea Market is one of Houston\'s largest and most eclectic — open weekends year-round. The weather is comfortable October through April; summer morning sessions start as early as 6 AM to beat the heat.',
+  },
+  'seattle-wa': {
+    knownFor:
+      'Seattle flea markets capture the city\'s creative, independent spirit — vintage clothing, Pacific Northwest art, vinyl records, handcrafted goods, and Asian antiques are regular finds at weekend markets across the metro.',
+    tip:
+      'Seattle flea markets are most active May through September. Many Seattle vendors specialize in Pacific Northwest and Japanese vintage goods — arrive early for the best selection in those categories.',
+  },
+  'atlanta-ga': {
+    knownFor:
+      'Atlanta flea markets serve a large and diverse metro — the Scott Antique Markets (monthly) and neighborhood weekend markets offer Southern antiques, vintage clothing, crafts, and collectibles from the region\'s rich cultural history.',
+    tip:
+      'Scott Antique Markets (held monthly at the Atlanta Expo Centers) is one of the largest antique and flea markets in the Southeast. Shop both buildings — the two venues have different vendor mixes.',
+  },
+  'minneapolis-mn': {
+    knownFor:
+      'Minneapolis flea markets are a warm-weather highlight — Minnehaha, Powderhorn, and suburban market events produce vintage furniture, Scandinavian household goods, vinyl records, and handcrafted items from local artists and vendors.',
+    tip:
+      'Minneapolis flea market season runs May through September. Arrive at opening time for vintage furniture and vinyl — those categories move fastest at metro-area markets.',
+  },
+};
+
+/**
+ * Returns flea-market-specific About content (knownFor + tip) for a city page.
+ * Falls back to a generic flea-market template for cities not in FLEA_MARKET_ABOUT.
+ */
+export function getFleaMarketMeta(
+  slug: string,
+  cityName: string,
+  stateCode: string
+): { knownFor: string; tip: string } {
+  if (FLEA_MARKET_ABOUT[slug]) {
+    return FLEA_MARKET_ABOUT[slug];
+  }
+  return {
+    knownFor: `${cityName} flea markets bring together local vendors selling vintage goods, antiques, handmade crafts, collectibles, and everyday household items. Weekend markets draw buyers and sellers from across the metro area.`,
+    tip: `Bring cash to ${cityName} flea markets — many vendors don't accept cards. Arrive early for the best vendor selection; popular items go quickly in the first hour of market hours.`,
+  };
+}
+
+/**
+ * Returns FAQ items for a flea markets city page.
+ */
+export function getFleaMarketFaqs(cityName: string, stateCode: string): FaqItem[] {
+  return [
+    {
+      question: `Are there flea markets in ${cityName}, ${stateCode}?`,
+      answer: `Yes — ${cityName} has an active flea market scene with weekend markets, monthly events, and seasonal outdoor markets operating throughout the area. FindA.Sale lists flea markets in ${cityName} as they're posted so you can find the ones happening near you this weekend.`,
+    },
+    {
+      question: `What can I find at flea markets in ${cityName}?`,
+      answer: `${cityName} flea markets typically offer vintage clothing, antiques, furniture, vinyl records, handmade crafts, collectibles, artwork, jewelry, tools, books, and local food vendors. Every market has a different mix — checking the listing photos before you go is the best way to know what to expect.`,
+    },
+    {
+      question: `What time do flea markets open in ${cityName}, ${stateCode}?`,
+      answer: `Most flea markets in ${cityName} open between 7–9 AM on weekends and run until early afternoon. Some markets offer early-bird access for a small fee — this gives you first pick before the general public arrives. Check individual market listings for specific hours.`,
+    },
+    {
+      question: `Can I sell at a flea market in ${cityName}?`,
+      answer: `Yes — most flea markets in ${cityName} rent vendor spaces by the day or season. Contact the market organizer directly to ask about booth fees, size options, and availability. Vendor spaces at popular ${cityName} markets book quickly for peak season, so reach out early.`,
+    },
+    {
+      question: `Are flea markets in ${cityName} cash only?`,
+      answer: `Many individual vendors at ${cityName} flea markets prefer cash, though larger markets often have ATMs on site and some vendors accept cards or mobile payments. Bringing cash gives you the most flexibility and can help with price negotiation.`,
+    },
+    {
+      question: `How do I find flea markets near me in ${cityName}?`,
+      answer: `FindA.Sale lists flea markets in ${cityName} and nearby cities as they're posted. Check this page on Thursday or Friday for the most complete weekend listing. You can also use the map view to find flea markets within a specific distance from your location.`,
+    },
+    {
+      question: `What's the difference between a flea market and an estate sale?`,
+      answer: `Flea markets are recurring vendor markets where multiple sellers set up booths to sell goods — vendors rent their spaces and return week after week. Estate sales are one-time events that liquidate the entire contents of a single home or estate over a weekend. Both offer great finds, but flea markets provide a more consistent, browsable shopping experience while estate sales are time-limited and location-specific.`,
+    },
+  ];
+}
