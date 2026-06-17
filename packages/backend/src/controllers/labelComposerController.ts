@@ -38,6 +38,7 @@ interface TagRecord {
   price: number;
   itemId?: string;
   position: number;
+  room?: string | null; // per-item room tag (Item.roomTag); null when item has none or for preset/blank tags
   blank?: boolean; // leading skip-slot for partially-used Avery sheets (no QR / no price rendered)
 }
 
@@ -149,6 +150,7 @@ export const getItemsForLabels = async (req: AuthRequest, res: Response) => {
         title: true,
         price: true,
         category: true,
+        roomTag: true,
       },
       orderBy: { createdAt: 'desc' },
       take: limit + 1,
@@ -160,12 +162,13 @@ export const getItemsForLabels = async (req: AuthRequest, res: Response) => {
     const nextCursor = hasMore ? results[results.length - 1].id : null;
 
     return res.json({
-      items: results.map((item: { id: string; sku: string | null; title: string; price: number | null; category: string | null }) => ({
+      items: results.map((item: { id: string; sku: string | null; title: string; price: number | null; category: string | null; roomTag: string | null }) => ({
         id: item.id,
         code: item.sku || item.id.slice(-6).toUpperCase(),
         name: item.title,
         price: item.price ?? 0,
         category: item.category,
+        room: item.roomTag ?? null,
         needsTag: true, // v1: always true — tag tracking is a follow-up
       })),
       nextCursor,
@@ -211,14 +214,35 @@ export const createLabelBatch = async (req: AuthRequest, res: Response) => {
       });
     }
 
+    // Authoritative room lookup: pull roomTag straight from the DB for every
+    // referenced itemId (don't trust the client payload).
+    const referencedItemIds = Array.from(
+      new Set(
+        items
+          .filter((it) => it.source.kind === 'item' && it.source.itemId)
+          .map((it) => it.source.itemId as string)
+      )
+    );
+    const roomMap = new Map<string, string | null>();
+    if (referencedItemIds.length > 0) {
+      const roomRows = await prisma.item.findMany({
+        where: { id: { in: referencedItemIds } },
+        select: { id: true, roomTag: true },
+      });
+      for (const row of roomRows) roomMap.set(row.id, row.roomTag ?? null);
+    }
+
     for (const item of items) {
       const qty = Math.max(1, Math.min(item.qty, 300)); // cap at 300 per row
+      const itemId = item.source.kind === 'item' ? item.source.itemId : undefined;
+      const room = itemId ? roomMap.get(itemId) ?? null : null;
       for (let i = 0; i < qty; i++) {
         tags.push({
           tagId: generateId(10),
           price: item.price,
-          itemId: item.source.kind === 'item' ? item.source.itemId : undefined,
+          itemId,
           position: position++,
+          room,
         });
       }
     }
@@ -317,6 +341,7 @@ export const printLabelBatch = async (req: AuthRequest, res: Response) => {
       page-break-after: always;
     }
     .label {
+      position: relative;
       width: 2.625in;
       height: 1in;
       overflow: hidden;
@@ -346,9 +371,10 @@ export const printLabelBatch = async (req: AuthRequest, res: Response) => {
     }
     .label-sale { font-size: 6pt; color: #666; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .label-price { font-size: 16pt; font-weight: bold; color: #000; line-height: 1; }
-    .label-footer { display: flex; justify-content: space-between; }
+    .label-footer { display: flex; justify-content: space-between; align-items: flex-end; }
     .label-brand { font-size: 5pt; color: #999; }
-    .label-dates { font-size: 5pt; color: #999; }
+    .label-room { font-size: 5pt; color: #666; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 1in; text-align: right; }
+    .label-date-corner { position: absolute; top: 0.05in; right: 0.06in; font-size: 5pt; color: #999; }
   </style>
 </head>
 <body>`;
@@ -372,6 +398,7 @@ export const printLabelBatch = async (req: AuthRequest, res: Response) => {
 
         htmlContent += `
           <div class="label">
+            <div class="label-date-corner">${batch.saleDates}</div>
             <div class="label-qr">
               <img src="${qrDataUrl}" alt="QR">
             </div>
@@ -380,7 +407,7 @@ export const printLabelBatch = async (req: AuthRequest, res: Response) => {
               <div class="label-price">$${tag.price.toFixed(2)}</div>
               <div class="label-footer">
                 <div class="label-brand">finda.sale</div>
-                <div class="label-dates">${batch.saleDates}</div>
+                <div class="label-room">${tag.room ?? ''}</div>
               </div>
             </div>
           </div>`;
