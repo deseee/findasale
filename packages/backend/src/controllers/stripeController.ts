@@ -510,18 +510,25 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
         { idempotencyKey }
       );
     } catch (stripeError: any) {
-      // Fallback: if Connect routing fails due to incomplete onboarding, retry without it
-      if (
+      // Fallback: if Connect routing fails (incomplete onboarding, invalid account, etc.), retry without it
+      const CONNECT_FALLBACK_CODES = new Set([
+        'insufficient_capabilities_for_transfer',
+        'account_invalid',
+        'account_closed',
+        'platform_cannot_pay',
+        'platform_api_key_expired',
+      ]);
+      const isConnectError =
         shouldUseConnect &&
-        (stripeError.code === 'insufficient_capabilities_for_transfer' ||
+        (CONNECT_FALLBACK_CODES.has(stripeError.code) ||
           (stripeError.type === 'StripeInvalidRequestError' &&
-            stripeError.message?.includes('insufficient_capabilities_for_transfer')))
-      ) {
+            (stripeError.message?.includes('insufficient_capabilities_for_transfer') ||
+              stripeError.message?.includes('does not have the necessary capabilities') ||
+              stripeError.message?.includes('No such account'))));
+      if (isConnectError) {
         console.warn(
-          `[Stripe Connect fallback] Account ${stripeConnectId} not fully onboarded, proceeding without Connect routing`,
-          { errorCode: stripeError.code }
+          `[Stripe Connect fallback] Account ${stripeConnectId} not ready (${stripeError.code}), proceeding without Connect routing`
         );
-        // Retry without Connect data — use a different idempotency key (Stripe rejects same key with different params)
         paymentIntent = await stripe().paymentIntents.create(basePaymentIntentData, { idempotencyKey: `${idempotencyKey}-fallback` });
       } else {
         throw stripeError;
@@ -2911,9 +2918,9 @@ export const createCartCheckoutSession = async (req: AuthRequest, res: Response)
     const successUrl = `${frontendUrl}/sales/${saleId}?checkout=success`;
     const cancelUrl = `${frontendUrl}/sales/${saleId}`;
 
-    const sessionParams: Parameters<ReturnType<typeof stripe>['checkout']['sessions']['create']>[0] = {
+    const baseSessionParams: Parameters<ReturnType<typeof stripe>['checkout']['sessions']['create']>[0] = {
       mode: 'payment',
-      automatic_payment_methods: { enabled: true },
+      payment_method_types: ['card'],
       line_items: lineItems,
       success_url: successUrl,
       cancel_url: cancelUrl,
@@ -2927,15 +2934,33 @@ export const createCartCheckoutSession = async (req: AuthRequest, res: Response)
 
     // Apply Connect routing if organizer has a valid Stripe Connect account
     const shouldUseConnect = stripeConnectId && !stripeConnectId.startsWith('acct_test_');
-    if (shouldUseConnect) {
-      (sessionParams as any).payment_intent_data = {
-        application_fee_amount: platformFeeAmount,
-        on_behalf_of: stripeConnectId,
-        transfer_data: { destination: stripeConnectId },
-      };
-    }
+    const connectParams = shouldUseConnect
+      ? {
+          payment_intent_data: {
+            application_fee_amount: platformFeeAmount,
+            on_behalf_of: stripeConnectId,
+            transfer_data: { destination: stripeConnectId },
+          },
+        }
+      : {};
 
-    const session = await stripe().checkout.sessions.create(sessionParams);
+    let session;
+    try {
+      session = await stripe().checkout.sessions.create({ ...baseSessionParams, ...connectParams });
+    } catch (connectErr: any) {
+      // If Connect routing fails (e.g. organizer not fully onboarded), retry without Connect
+      if (
+        shouldUseConnect &&
+        (connectErr.code === 'insufficient_capabilities_for_transfer' ||
+          connectErr.message?.includes('insufficient_capabilities_for_transfer') ||
+          connectErr.message?.includes('does not have the necessary capabilities'))
+      ) {
+        console.warn(`[cart-checkout] Connect fallback for ${stripeConnectId}:`, connectErr.code);
+        session = await stripe().checkout.sessions.create(baseSessionParams);
+      } else {
+        throw connectErr;
+      }
+    }
 
     if (!session.url) {
       return res.status(500).json({ error: 'Failed to create checkout session' });
@@ -2943,7 +2968,8 @@ export const createCartCheckoutSession = async (req: AuthRequest, res: Response)
 
     return res.json({ url: session.url });
   } catch (error: unknown) {
-    console.error('[cart-checkout] Error creating cart checkout session:', error);
-    return res.status(500).json({ error: 'Failed to create checkout session' });
+    const msg = error instanceof Error ? error.message : String(error);
+    console.error('[cart-checkout] Error creating cart checkout session:', msg);
+    return res.status(500).json({ error: 'Failed to create checkout session', details: msg });
   }
 };
