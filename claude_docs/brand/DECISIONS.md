@@ -37,6 +37,7 @@
 
 **Reference:** `claude_docs/brand/brand-voice-guide-2026-03-16.md`
 **Last Updated:** 2026-03-22 (S239)
+**Last Reviewed:** 2026-06-18 (S1006) — all 10 decisions confirmed current; no edits required.
 
 ---
 
@@ -56,6 +57,7 @@
 **Test Protocol:** For each component: verify text is readable, backgrounds contrast properly, interactive states (hover, focus, active) have dark variants, conditional styles (e.g., unread badges) use dark-aware colors.
 
 **Last Updated:** 2026-03-22 (S239)
+**Last Reviewed:** 2026-06-18 (S1006) — all 10 decisions confirmed current; no edits required.
 
 ---
 
@@ -77,6 +79,7 @@
 **Enforcement:** findasale-dev Human-Ready Gate. findasale-ux pre-ship audit. Polish Agent.
 
 **Last Updated:** 2026-03-22 (S239)
+**Last Reviewed:** 2026-06-18 (S1006) — all 10 decisions confirmed current; no edits required.
 
 ---
 
@@ -95,6 +98,7 @@
 **Enforcement:** findasale-dev Human-Ready Gate. Weekly UX spotcheck. Chrome MCP viewport testing.
 
 **Last Updated:** 2026-03-22 (S239)
+**Last Reviewed:** 2026-06-18 (S1006) — all 10 decisions confirmed current; no edits required.
 
 ---
 
@@ -123,6 +127,7 @@
 **Enforcement:** Mandatory in findasale-qa checklist. findasale-dev must identify all endpoints in handoff. Polish Agent verifies bidirectional flows.
 
 **Last Updated:** 2026-03-22 (S239)
+**Last Reviewed:** 2026-06-18 (S1006) — all 10 decisions confirmed current; no edits required.
 
 ---
 
@@ -147,6 +152,7 @@
 **Enforcement:** findasale-dev must verify section order after any edit to this page. findasale-qa includes section order in sale detail review.
 
 **Last Updated:** 2026-03-22 (S239)
+**Last Reviewed:** 2026-06-18 (S1006) — all 10 decisions confirmed current; no edits required.
 
 ---
 
@@ -170,6 +176,7 @@
 - Org model (schema.prisma)
 
 **Last Updated:** 2026-03-22 (S240)
+**Last Reviewed:** 2026-06-18 (S1006) — all 10 decisions confirmed current; no edits required.
 
 ---
 
@@ -187,6 +194,7 @@
 **Enforcement:** findasale-dev Human-Ready Gate. findasale-qa frontend checklist.
 
 **Last Updated:** 2026-03-22 (S239)
+**Last Reviewed:** 2026-06-18 (S1006) — all 10 decisions confirmed current; no edits required.
 
 ---
 
@@ -206,6 +214,7 @@
 **Enforcement:** findasale-dev Human-Ready Gate. findasale-qa review checklist.
 
 **Last Updated:** 2026-03-22 (S239)
+**Last Reviewed:** 2026-06-18 (S1006) — all 10 decisions confirmed current; no edits required.
 
 ---
 
@@ -229,3 +238,4 @@
 - Main session surfaces all removal decisions to Patrick verbatim
 
 **Last Updated:** 2026-03-23 (S248)
+**Last Reviewed:** 2026-06-18 (S1006) — all 10 decisions confirmed current; no edits required.
