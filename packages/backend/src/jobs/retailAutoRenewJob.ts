@@ -25,6 +25,13 @@ import { prisma } from '../lib/prisma';
  */
 
 export const retailAutoRenew = async (): Promise<void> => {
+  // Permanent-storefront model: RETAIL sales are now isOngoing and never expire,
+  // so they must never be cloned/ended into a monthly chain. This cron is disabled.
+  // The file/registration is kept to avoid startup churn; the body is a no-op.
+  console.log('[retailAutoRenew] disabled — permanent storefronts are isOngoing now');
+  return;
+
+  // eslint-disable-next-line no-unreachable
   try {
     const now = new Date();
 

@@ -39,9 +39,7 @@ export const getCityHeatIndex = async (): Promise<CityHeat[]> => {
       startDate: {
         gte: thirtyDaysAgo,
       },
-      endDate: {
-        gte: now, // hasn't ended yet
-      },
+      OR: [{ isOngoing: true }, { endDate: { gte: now } }],
     },
     select: {
       id: true,
@@ -60,9 +58,7 @@ export const getCityHeatIndex = async (): Promise<CityHeat[]> => {
       startDate: {
         gte: thirtyDaysAgo,
       },
-      endDate: {
-        gte: now,
-      },
+      OR: [{ isOngoing: true }, { endDate: { gte: now } }],
     },
     select: {
       id: true,

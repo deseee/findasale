@@ -23,6 +23,7 @@ export function scheduleMarkdownCron(): void {
       where: {
         status: 'PUBLISHED',
         markdownEnabled: true,
+        isOngoing: false, // permanent storefronts don't run time-based auto-markdown
           startDate: { lte: now },
         },
         select: {

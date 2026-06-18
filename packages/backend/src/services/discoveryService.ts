@@ -66,7 +66,8 @@ export async function getPersonalizedFeed(
     status: 'PUBLISHED',
     deletedAt: null,
     isInventoryContainer: false,
-    endDate: { gte: new Date() },
+    // Permanent storefronts (isOngoing) are always current; time-boxed sales keep endDate filter.
+    OR: [{ isOngoing: true }, { endDate: { gte: new Date() } }],
   };
 
   // Add bounding box when user coords are available
