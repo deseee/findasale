@@ -963,7 +963,10 @@ export default function LabelComposerPage() {
                               {formatPrice(label.price)}
                             </span>
                             {label.name ? (
-                              <span className="text-[6px] leading-tight opacity-70 truncate max-w-full mt-[1px]">
+                              <span
+                                className="text-[7px] leading-tight opacity-70 max-w-full mt-[1px]"
+                                style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}
+                              >
                                 {label.name}
                               </span>
                             ) : null}

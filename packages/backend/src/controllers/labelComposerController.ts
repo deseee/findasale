@@ -378,7 +378,7 @@ export const printLabelBatch = async (req: AuthRequest, res: Response) => {
     }
     .label-sale { font-size: 6pt; color: #666; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .label-price { font-size: 16pt; font-weight: bold; color: #000; line-height: 1; }
-    .label-name { font-size: 6pt; color: #222; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
+    .label-name { font-size: 7.5pt; color: #222; line-height: 1.08; margin-top: 1px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
     .label-footer { display: flex; justify-content: space-between; align-items: flex-end; }
     .label-brand { font-size: 5pt; color: #999; }
     .label-room { font-size: 5pt; color: #666; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 1in; text-align: right; }
