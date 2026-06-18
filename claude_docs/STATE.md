@@ -14,7 +14,7 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 - **`c06cb773` label composer: start-position card above preview, collapsed by default** — UI layout change: start-position picker card moves above label preview and collapses by default (expand toggle). LIVE.
 - **`17595003` perf(scraper): batch lastScrapedAt writes + GIN-index dedup** — scraper/index.ts + internalScraperController.ts + dedupe.ts: `lastScrapedAt` writes batched (was N individual DB writes); GIN index on dedup key reduces duplicate detection cost. Backend only — LIVE on Railway.
 - **Infrastructure confirmed:** Vercel ✅ READY (`b99f05c1` latest, 2026-06-18 ~12:53 EDT). Railway backend ✅ SUCCESS (2026-06-18T16:53:07 UTC). All S1006+S1007 commits deployed.
-- **BQ: 3** (blog Chrome QA, Buy Now graceful error Chrome QA, cart payment-completion UNVERIFIED — all unchanged, Chrome not available this session start).
+- **BQ: 3** (Buy Now graceful error UNVERIFIED — no active organizer sale in prod, retest June 29+; cart payment-completion UNVERIFIED — live Stripe keys; label composer S1006c/d UNVERIFIED — sale starts June 29). **Blog ✅ VERIFIED this session** (7 cards, post body+JSON-LD+canonical+Back-to-Blog, dark mode; ss_170867567, ss_9890ula3j).
 
 
 **S1007 — DEV (2026-06-18). Blog section built — /blog + /blog/[slug], 7 posts, SEO, JSON-LD. Competitor-monitor scheduled task updated to write full blog posts weekly.**
@@ -142,43 +142,38 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
   - Empty-state nearby city links (reduces pogo-stick on zero-sale pages)
   - Count-aware title: `"51 Estate Sales in Denver, CO — Find Local Sales | FindA.Sale"` (multi-variant)
 - TypeScript: 0 errors (frontend tsc clean). BQ unchanged = 1.
+## Blocked Queue
+
+| Feature | Reason | What's Needed | Session Added |
+|---------|--------|---------------|---------------|
+| Buy Now graceful error (409 friendly msg) | No active organizer sale in production to test with; "Artifact Downtown Paw Paw" starts June 29 | Chrome QA on/after June 29: user5 → Buy Now on a sold-by organizer without Stripe → verify "This seller isn't set up…" message | S1006 |
+| Cart multi-item payment-completion | Stripe LIVE keys block test card; real purchase needed to verify items→SOLD webhook | Real purchase or test-mode proxy | S1006 |
+| Label composer: item name, room tag, start-position card (S1006c/d) | No active organizer sale in production; label-composer requires saleId | Chrome QA on/after June 29: log in as organizer → /organizer/label-composer/[saleId] → verify item name on label, room tag, start-position card layout | S1008 |
+
+## Pending Chrome Verifications
+
+| # | Feature | Evidence | Session |
+|---|---------|----------|---------|
+| 551 | Blog — /blog listing + /blog/[slug] post page | Navigated finda.sale/blog as user5. 7 cards rendered (category badge, date, reading time, title, excerpt). Clicked post → full body, breadcrumb, "← Back to Blog" link. JSON-LD Article schema verified (correct @type, headline, datePublished). Canonical URL correct. Footer Blog link confirmed. Dark mode clean. ss_170867567, ss_9890ula3j | S1008 |
+
 ## Next Session
 
-### S1008 — Push blog + S1006 fixes, then QA
+### S1009 — Dev or QA
 
-**Push block — S1007 (blog) + S1006b (graceful Buy Now error):**
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale
-git add packages/frontend/data/blog/index.ts
-git add "packages/frontend/data/blog/posts/estate-sale-software-built-for-buyers-not-organizers.ts"
-git add "packages/frontend/data/blog/posts/hidden-cost-estate-sale-patchwork-workflow.ts"
-git add "packages/frontend/data/blog/posts/estate-sale-photos-value-cataloging-tips.ts"
-git add "packages/frontend/data/blog/posts/ai-estate-sale-cataloging-what-actually-matters.ts"
-git add "packages/frontend/data/blog/posts/estate-sale-organizer-revenue-digital-tools-data.ts"
-git add "packages/frontend/data/blog/posts/estate-sale-listing-page-convert-ad-traffic.ts"
-git add "packages/frontend/data/blog/posts/estate-sale-buyer-discovery-vs-organizer-tools.ts"
-git add packages/frontend/pages/blog/index.tsx
-git add "packages/frontend/pages/blog/[slug].tsx"
-git add packages/frontend/components/Layout.tsx
-git add packages/backend/src/controllers/stripeController.ts
-git add packages/frontend/components/CheckoutModal.tsx
-git add claude_docs/STATE.md
-git add claude_docs/patrick-dashboard.md
-git add claude_docs/strategy/roadmap.md
-git commit -m "S1007: blog section (7 posts, /blog, /blog/[slug], SEO) + S1006b graceful Buy Now error for unusable seller accounts"
-.\push.ps1
-```
-**No migration required.**
+**Patrick action (already done — blog push block was S1007 Next Session):** Confirm push `b99f05c1` included blog + S1006 graceful-error files.
 
-**After deploy — QA dispatch stubs (run sequentially, one Chrome agent at a time):**
+**On June 29 or after — QA dispatch stubs (run sequentially, one Chrome agent at a time):**
 
-**QA-Blog:** `Skill('findasale-qa')` → Navigate to finda.sale/blog as guest. Verify: 7 cards render (title, category badge, publish date, reading time, excerpt). Click any post → verify post page renders (title, body, SEO tags, Back to Blog link). Dark mode. Evidence: Navigated [URL] as [user]. Clicked [element]. Saw [outcome]. Screenshot IDs required.
+**QA-Buy-Now-Graceful:** `Skill('findasale-qa')` → As shopper (user5@example.com / Seedy2025!), navigate to "Artifact Downtown Paw Paw" sale → attempt Buy Now on any item. Organizer's `stripeConnectEnabled=false`. Verify: modal shows friendly error "This seller isn't set up to accept online payments yet…" — NOT bare "Try Again". Evidence sentence + screenshot required.
 
-**QA-Buy-Now-Graceful:** `Skill('findasale-qa')` → As shopper (user5@example.com / Seedy2025!), attempt Buy Now on an item from Kelly's Estate Sales (seed org, no real Stripe Connect account). Verify: modal shows friendly error "This seller isn't set up to accept online payments yet…" — NOT a bare "Try Again". Screenshot required.
+**QA-LabelComposer:** `Skill('findasale-qa')` → As organizer, navigate to /organizer/label-composer/[saleId]. Verify: (1) item name shows after price on each label; (2) room tag on each label; (3) start-position card appears ABOVE the label preview and is collapsed by default. Evidence + screenshot.
 
-**BQ items still open (from S1006):**
-1. Cart multi-item checkout payment-completion + items-SOLD webhook — UNVERIFIED (live keys; needs real purchase or test-mode path)
-2. S1006c item search + S1006d label sheets / edit-item return / label composer — CODE-ONLY, needs deploy + smoke test
+**BQ items still open:**
+1. Buy Now graceful error — retest June 29+ (sale live date)
+2. Cart payment-completion — UNVERIFIED (live keys)
+3. Label composer S1006c/d — retest June 29+
+
+**Apply blog PCV to roadmap.md (per cross-session rule):** Row 551 Blog Chrome QA column → ✅ S1008. Include roadmap.md in push block.
 
 **Open carry-forward:**
 - Fee rate question: feeCalculator.ts 8% vs CLAUDE.md/Stack 10% locked S106 — Patrick decision needed before touching that file
@@ -186,6 +181,16 @@ git commit -m "S1007: blog section (7 posts, /blog, /blog/[slug], SEO) + S1006b 
 - Flip ebayQueueMode on a test org to observe actual queue processing
 
 ## Recent Sessions
+
+### S1008 — 2026-06-18 | QA (Blog ✅ + Buy Now/Label Composer UNVERIFIED)
+
+**Session type:** QA
+**Confirmed Patrick commits live:** `b99f05c1` (labels: item name after price), `55abfc62` (labels: room tag + dates to corner), `c06cb773` (label composer: start-position card above preview, collapsed), `17595003` (scraper: batch lastScrapedAt writes + GIN-index dedup). Infrastructure: Vercel ✅ READY, Railway ✅ SUCCESS.
+**QA-Blog ✅:** Navigated finda.sale/blog as user5. 7 cards loaded (category badge, date, reading time, title, excerpt). Clicked post → full body rendered, breadcrumb, "← Back to Blog" link, JSON-LD Article schema (@type Article, correct headline+datePublished), canonical URL. Footer Blog link confirmed. Dark mode clean. ss_170867567, ss_9890ula3j.
+**QA-Buy-Now-Graceful UNVERIFIED:** No active organizer sale in production (Patrick's "Artifact Downtown Paw Paw" starts June 29). Cannot trigger Buy Now flow without a live sale.
+**QA-Label-Composer UNVERIFIED:** Same — label-composer requires a live saleId. No active organizer sale until June 29.
+**BQ delta:** 3 → 3 (blog removed ✅; label composer added UNVERIFIED). Net: Buy Now, cart payment-completion, label composer remain.
+**PCV staged:** Blog row 551 — apply Chrome QA ✅ to roadmap.md in S1009.
 
 ### S1007 — 2026-06-18 | DEV (Blog section + competitor-monitor update)
 - Blog section built (CODE-ONLY): /blog listing page (7 posts, ISR revalidate:86400), /blog/[slug] detail page (parseMarkdown, JSON-LD Article schema, SEO Head, Back to Blog link). 10 new files + Layout.tsx footer Blog link. TypeScript: 0 errors.
