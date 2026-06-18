@@ -8,6 +8,11 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
+**S1007 — DEV (2026-06-18). Blog section built — /blog + /blog/[slug], 7 posts, SEO, JSON-LD. Competitor-monitor scheduled task updated to write full blog posts weekly.**
+- **Blog section (CODE-ONLY, 10 new files + 1 modified):** `/blog` listing page (7 cards: title, category badge, publish date, reading time, excerpt). `/blog/[slug]` post pages (parseMarkdown renderer, JSON-LD Article schema, canonical + og: tags, breadcrumb, Back to Blog link). 7 post data files in `packages/frontend/data/blog/posts/`. Blog index (`packages/frontend/data/blog/index.ts`). Footer Blog link added to Layout.tsx. ISR: revalidate:86400 on both pages. Static paths with fallback:'blocking'. TypeScript: 0 errors.
+- **Competitor-monitor SKILL.md updated:** Phase 2 now writes full 600–900 word blog post drafts to `claude_docs/marketing/blog-drafts/draft-[DATE]-[slug].md` in BlogPost format. Hardcoded old session path fixed → dynamic discovery via `ls -d /sessions/*/mnt/FindaSale`.
+- **BQ: 2→3** (blog /blog + /blog/[slug] added, CODE-ONLY pending push + Chrome QA).
+
 **S1006 — QA/BUG (2026-06-17). QA of S1005 cart/checkout/GMC fixes. Found + fixed a P1: Buy It Now broken by `automatic_tax` on raw PaymentIntent.**
 - **S1006d — 3 organizer-workflow features (Patrick requests, CODE-ONLY):** (1) edit-item Save Changes now returns to `/organizer/add-items/${saleId}` (was /dashboard). (2) "🏷️ Label Sheets" link added to add-items + edit-item action rows → `/organizer/label-composer/${saleId}`. (3) Label composer: new **starting-position** picker (3×10 mini-grid) for partially-used Avery 5160 sheets — prepends `(startPosition-1)` blank slots so labels begin at the chosen slot; default 1 = no-op. PDF is server-side (Puppeteer in labelComposerController.ts), so the offset was wired through the backend (`startPosition` body param → blank `TagRecord`s; print loop renders empty cells). Backend tsc 0 errors; frontend not VM-tsc-verifiable. Files: edit-item/[id].tsx, add-items/[saleId].tsx, label-composer/[saleId].tsx, labelComposerController.ts.
 - **NEW FEATURE (Patrick request, S1006c CODE-ONLY): item search on add-items page.** `add-items/[saleId].tsx` — added a live client-side search box above the saved-items list (filters by title/category/tags, case-insensitive), "Showing X of Y" count, clear button, and a no-match empty state. Helps organizers with 100+ items. Additive; selection/bulk untouched. Frontend not VM-tsc-verifiable (corrupt node_modules); needs deploy + Chrome verify.
@@ -130,91 +135,53 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 - TypeScript: 0 errors (frontend tsc clean). BQ unchanged = 1.
 ## Next Session
 
-### S1007 — re-test Buy Now after deploy (Buy Now fix + live-keys note)
+### S1008 — Push blog + S1006 fixes, then QA
 
-**S1006 push block (Patrick):**
+**Push block — S1007 (blog) + S1006b (graceful Buy Now error):**
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
+git add packages/frontend/data/blog/index.ts
+git add "packages/frontend/data/blog/posts/estate-sale-software-built-for-buyers-not-organizers.ts"
+git add "packages/frontend/data/blog/posts/hidden-cost-estate-sale-patchwork-workflow.ts"
+git add "packages/frontend/data/blog/posts/estate-sale-photos-value-cataloging-tips.ts"
+git add "packages/frontend/data/blog/posts/ai-estate-sale-cataloging-what-actually-matters.ts"
+git add "packages/frontend/data/blog/posts/estate-sale-organizer-revenue-digital-tools-data.ts"
+git add "packages/frontend/data/blog/posts/estate-sale-listing-page-convert-ad-traffic.ts"
+git add "packages/frontend/data/blog/posts/estate-sale-buyer-discovery-vs-organizer-tools.ts"
+git add packages/frontend/pages/blog/index.tsx
+git add "packages/frontend/pages/blog/[slug].tsx"
+git add packages/frontend/components/Layout.tsx
 git add packages/backend/src/controllers/stripeController.ts
 git add packages/frontend/components/CheckoutModal.tsx
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "S1006b: graceful Buy Now error for unusable seller Connect accounts + render error in CheckoutModal"
+git add claude_docs/strategy/roadmap.md
+git commit -m "S1007: blog section (7 posts, /blog, /blog/[slug], SEO) + S1006b graceful Buy Now error for unusable seller accounts"
 .\push.ps1
 ```
 **No migration required.**
 
-**After Railway deploy — Chrome re-test (S1007):**
-1. As a shopper (user5@example.com / Seedy2025!) OR artifactmi: open any AVAILABLE Buy-Now item, click Buy It Now → Continue to Pay. Expect the Stripe payment step to load (redirect to checkout.stripe.com / payment element) — NO "Try Again". Evidence: network `POST /api/stripe/create-payment-intent` → 200 with clientSecret (replay in-page is fine).
-2. Do NOT complete a real charge — prod is on **Stripe LIVE keys**. Verifying the 200 + payment step loads = the fix; payment completion stays a Patrick/real-purchase check.
+**After deploy — QA dispatch stubs (run sequentially, one Chrome agent at a time):**
+
+**QA-Blog:** `Skill('findasale-qa')` → Navigate to finda.sale/blog as guest. Verify: 7 cards render (title, category badge, publish date, reading time, excerpt). Click any post → verify post page renders (title, body, SEO tags, Back to Blog link). Dark mode. Evidence: Navigated [URL] as [user]. Clicked [element]. Saw [outcome]. Screenshot IDs required.
+
+**QA-Buy-Now-Graceful:** `Skill('findasale-qa')` → As shopper (user5@example.com / Seedy2025!), attempt Buy Now on an item from Kelly's Estate Sales (seed org, no real Stripe Connect account). Verify: modal shows friendly error "This seller isn't set up to accept online payments yet…" — NOT a bare "Try Again". Screenshot required.
+
+**BQ items still open (from S1006):**
+1. Cart multi-item checkout payment-completion + items-SOLD webhook — UNVERIFIED (live keys; needs real purchase or test-mode path)
+2. S1006c item search + S1006d label sheets / edit-item return / label composer — CODE-ONLY, needs deploy + smoke test
 
 **Open carry-forward:**
-- Cart multi-item checkout payment-completion + items-SOLD webhook still UNVERIFIED (live keys; needs a real purchase or a QA test-mode path).
-- Pending fee-rate question (feeCalculator.ts 8% vs CLAUDE.md/Stack 10% locked S106) — Patrick decision before touching feeCalculator.
-
-### S1005 onward — QA session
-
-**S1005 push block (Patrick) — includes S1003/S1004 files + S1005 cart/checkout/GMC fixes:**
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale
-git add "packages/frontend/pages/auctions/[city-slug].tsx"
-git add "packages/frontend/pages/flea-markets/[city-slug].tsx"
-git add packages/frontend/lib/seo/cityData.ts
-git add packages/frontend/pages/api/server-sitemap.xml.tsx
-git add packages/frontend/pages/organizer/platforms.tsx
-git add packages/frontend/components/CartDrawer.tsx
-git add packages/backend/src/controllers/stripeController.ts
-git add packages/backend/src/routes/stripe.ts
-git add packages/backend/src/utils/googleMerchantFeed.ts
-git add packages/frontend/pages/return-policy.tsx
-git add claude_docs/strategy/roadmap.md
-git add claude_docs/STATE.md
-git add claude_docs/patrick-dashboard.md
-git commit -m "S1003-S1005: Auction+flea-market SEO pages; FB Connected badge; cart checkout fix; Google Merchant feed; return policy"
-.\push.ps1
-```
-
-**No migration required.**
-
-**Session type: QA (BQ=0 — run QA on S1005 cart/checkout/GMC fixes before new dev)**
-
-**BQ = 0**
-
----
-
-**QA dispatch stubs — S1006 (run sequentially, one Chrome agent at a time):**
-
-**QA-1 — Cart item links:**
-`Skill('findasale-qa')` → Navigate to finda.sale as logged-in shopper. Add an item to cart. Open CartDrawer. Click item thumbnail in "Saved in Cart" section. Verify: navigates to `/items/:id` page AND cart drawer closes. Evidence: Navigated [URL] as [user]. Clicked [element]. Saw [outcome]. Screenshot IDs required.
-
-**QA-2 — Cart multi-item checkout:**
-`Skill('findasale-qa')` → As logged-in shopper, add 2+ items from the SAME sale to cart. Open CartDrawer. Click "Go to Checkout". Verify: no "coming soon" toast, Stripe Checkout page loads with correct line items and total. Use Stripe test card 4242 4242 4242 4242. Verify redirect to sale page with `?checkout=success`. Verify items show as SOLD. Evidence required per QA Honesty Gate.
-
-**QA-3 — Buy Now fix:**
-`Skill('findasale-qa')` → As logged-in shopper, open any item detail page. Click "Buy Now". Verify: checkout modal opens, payment form loads without "try again" error, can enter test card. Evidence required.
-
-**QA-4 — Google Merchant feed image quality:**
-`Skill('findasale-qa')` → Hit feed endpoint (check backend routes for the GMC feed URL). Verify `image_link` column contains no `i.ebayimg.com` URLs for items that have Cloudinary photos (`res.cloudinary.com` URLs). Evidence: grep or sample of feed output.
-
-**QA-5 — Return policy page:**
-`Skill('findasale-qa')` → Navigate to `finda.sale/return-policy`. Verify page loads, contains marketplace language ("each seller"), no blanket return window, dark mode works. Evidence: screenshot ID + URL.
-
----
-
-**Patrick — actions needed post S1005:**
-1. Push the S1005 block above.
-2. After deploy, Google Merchant Center: update return policy URL to `https://finda.sale/return-policy` and remove the 2-day blanket window.
-3. Pending fee rate question: `feeCalculator.ts` returns 8% for PRO/TEAMS but CLAUDE.md §10/Stack says 10% flat (locked S106). Confirm which is correct — needs a Patrick decision before touching that file.
-
-**Optional carry-forward:**
-- 4 unpublished eBay items backfill (Loy Norrix Choirs offerId=166668232011, Kirkland Pepper offerId=166412704011, Whip-It Butane offerId=151850469011, Contigo Travel Mug offerId=151769728011)
-- Canada return policy in Google Merchant Center
-- Flip ebayQueueMode on a test org to observe actual queue processing (optional validation)
-
-
-
+- Fee rate question: feeCalculator.ts 8% vs CLAUDE.md/Stack 10% locked S106 — Patrick decision needed before touching that file
+- 4 unpublished eBay items backfill (Loy Norrix Choirs, Kirkland Pepper, Whip-It Butane, Contigo Travel Mug)
+- Flip ebayQueueMode on a test org to observe actual queue processing
 
 ## Recent Sessions
+
+### S1007 — 2026-06-18 | DEV (Blog section + competitor-monitor update)
+- Blog section built (CODE-ONLY): /blog listing page (7 posts, ISR revalidate:86400), /blog/[slug] detail page (parseMarkdown, JSON-LD Article schema, SEO Head, Back to Blog link). 10 new files + Layout.tsx footer Blog link. TypeScript: 0 errors.
+- Competitor-monitor SKILL.md updated: Phase 2 now writes full 600–900 word blog posts to claude_docs/marketing/blog-drafts/. Hardcoded session path replaced with dynamic discovery.
+- BQ: 2→3 (blog QA added).
 
 ### S1006 — 2026-06-17 | QA/BUG (Buy It Now P1 fix + organizer workflow features)
 
