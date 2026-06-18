@@ -295,6 +295,31 @@ export const createLabelBatch = async (req: AuthRequest, res: Response) => {
 // ---------------------------------------------------------------------------
 // GET /api/organizers/batches/:batchId/print
 // ---------------------------------------------------------------------------
+// --- Warm shared Puppeteer browser ---------------------------------------------
+// Launching Chromium per request causes the first/cold print to time out. Keep one
+// browser warm and reuse it (open a fresh page per request); relaunch if it dies.
+let sharedBrowser: any = null;
+let browserLaunching: Promise<any> | null = null;
+
+async function getLabelBrowser(): Promise<any> {
+  if (sharedBrowser && sharedBrowser.isConnected && sharedBrowser.isConnected()) return sharedBrowser;
+  if (browserLaunching) return browserLaunching;
+  browserLaunching = (async () => {
+    const puppeteer = await import('puppeteer');
+    const b = await puppeteer.default.launch({
+      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    });
+    b.on('disconnected', () => { if (sharedBrowser === b) sharedBrowser = null; });
+    sharedBrowser = b;
+    browserLaunching = null;
+    return b;
+  })();
+  return browserLaunching;
+}
+
+// Warm the browser on boot so the first label print doesn't pay the cold-launch cost.
+getLabelBrowser().catch((e) => console.warn('[labels] browser warm-up failed (will retry on demand):', (e as Error)?.message));
+
 export const printLabelBatch = async (req: AuthRequest, res: Response) => {
   try {
     const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
@@ -378,7 +403,7 @@ export const printLabelBatch = async (req: AuthRequest, res: Response) => {
     }
     .label-sale { font-size: 6pt; color: #666; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .label-price { font-size: 16pt; font-weight: bold; color: #000; line-height: 1; }
-    .label-name { font-size: 7.5pt; color: #222; line-height: 1.08; margin-top: 1px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .label-name { font-size: 8pt; color: #111; line-height: 1.12; margin-top: 1px; width: 100%; white-space: normal; overflow-wrap: anywhere; word-break: break-word; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; max-height: 2.3em; }
     .label-footer { display: flex; justify-content: space-between; align-items: flex-end; }
     .label-brand { font-size: 5pt; color: #999; }
     .label-room { font-size: 5pt; color: #666; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 1in; text-align: right; }
@@ -427,27 +452,38 @@ export const printLabelBatch = async (req: AuthRequest, res: Response) => {
 
     htmlContent += '</body></html>';
 
-    // Use Puppeteer to render HTML to PDF
-    const puppeteer = await import('puppeteer');
-    const browser = await puppeteer.default.launch({
-      args: ['--no-sandbox', '--disable-setuid-sandbox'],
-    });
-
-    try {
+    // Render to PDF using the warm shared browser (fast after boot). All images are
+    // inline data URLs, so 'load' resolves quickly. Retry once with a fresh browser if
+    // the shared instance is stale/crashed.
+    const renderPdf = async () => {
+      const browser = await getLabelBrowser();
       const page = await browser.newPage();
-      await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
-      const pdfBuffer = await page.pdf({
-        format: 'Letter',
-        printBackground: true,
-        margin: { top: '0', right: '0', bottom: '0', left: '0' },
-      });
+      try {
+        await page.setContent(htmlContent, { waitUntil: 'load' });
+        return await page.pdf({
+          format: 'Letter',
+          printBackground: true,
+          margin: { top: '0', right: '0', bottom: '0', left: '0' },
+        });
+      } finally {
+        await page.close().catch(() => {});
+      }
+    };
 
-      res.setHeader('Content-Type', 'application/pdf');
-      res.setHeader('Content-Disposition', `attachment; filename="labels-${batchId}.pdf"`);
-      res.end(pdfBuffer);
-    } finally {
-      await browser.close();
+    let pdfBuffer;
+    try {
+      pdfBuffer = await renderPdf();
+    } catch (firstErr) {
+      console.warn('[labels] render failed, relaunching browser and retrying:', (firstErr as Error)?.message);
+      try { if (sharedBrowser) await sharedBrowser.close(); } catch {}
+      sharedBrowser = null;
+      browserLaunching = null;
+      pdfBuffer = await renderPdf();
     }
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="labels-${batchId}.pdf"`);
+    res.end(pdfBuffer);
   } catch (error) {
     console.error('printLabelBatch error:', error);
     if (!res.headersSent) {

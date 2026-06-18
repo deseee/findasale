@@ -958,13 +958,13 @@ export default function LabelComposerPage() {
                             {saleDateRange}
                           </span>
                           {/* Price + item name */}
-                          <div className="flex flex-col items-center justify-center max-w-full px-[12px]">
+                          <div className="flex flex-col items-center justify-center w-full px-[10px]">
                             <span className="font-bold text-[11px] leading-none">
                               {formatPrice(label.price)}
                             </span>
                             {label.name ? (
                               <span
-                                className="text-[7px] leading-tight opacity-70 max-w-full mt-[1px]"
+                                className="text-[8px] leading-tight opacity-80 max-w-full mt-[1px] text-center"
                                 style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}
                               >
                                 {label.name}
