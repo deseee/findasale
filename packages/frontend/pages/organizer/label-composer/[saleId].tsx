@@ -954,7 +954,7 @@ export default function LabelComposerPage() {
                           {/* Mini QR placeholder */}
                           <div className="absolute left-[3px] top-[3px] w-[10px] h-[10px] bg-gray-800 opacity-40 rounded-[1px]" />
                           {/* Date — moved to top-right corner */}
-                          <span className="absolute top-[2px] right-[3px] text-[6px] opacity-50 font-mono">
+                          <span className="absolute top-[2px] right-[3px] text-[6px] opacity-90 font-mono">
                             {saleDateRange}
                           </span>
                           {/* Price + item name */}
@@ -964,7 +964,7 @@ export default function LabelComposerPage() {
                             </span>
                             {label.name ? (
                               <span
-                                className="text-[8px] leading-tight opacity-80 max-w-full mt-[1px] text-center"
+                                className="text-[8px] leading-tight max-w-full mt-[1px] text-center"
                                 style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}
                               >
                                 {label.name}
@@ -973,7 +973,7 @@ export default function LabelComposerPage() {
                           </div>
                           {/* Room — per-item; rendered where the date used to be */}
                           {label.room ? (
-                            <span className="absolute bottom-[2px] right-[3px] left-[3px] text-[6px] opacity-60 font-mono truncate text-right">
+                            <span className="absolute bottom-[2px] right-[3px] left-[3px] text-[6px] opacity-90 font-mono truncate text-right">
                               {label.room}
                             </span>
                           ) : null}
