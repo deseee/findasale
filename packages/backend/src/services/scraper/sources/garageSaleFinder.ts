@@ -13,7 +13,7 @@
 import * as cheerio from 'cheerio';
 import { RateLimiter } from '../rateLimiter';
 import { parseGarageSalesFinderListing, parseGarageSalesFinderGallery, extractEmails } from '../htmlParser';
-import { ingestScrapedListing, ScrapedItem } from '../index';
+import { ingestScrapedListing, flushFreshnessTouches, ScrapedItem } from '../index';
 import { getRandomUserAgent, jitterDelay } from '../userAgents';
 
 const GARAGE_SALES_BASE_URL = 'https://www.garagesalefinder.com';
@@ -119,6 +119,7 @@ export async function scrapeGarageSaleFinder(
       else if (result.status === 'skipped') stats.skipped++;
       else stats.failed++;
     }
+    await flushFreshnessTouches();
 
     rateLimiter.clearBackoff(domain);
     return stats;

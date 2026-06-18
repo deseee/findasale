@@ -75,18 +75,19 @@ export async function checkDuplicate(
       }
     }
 
-    // 2. Check sourceItemId match within same source
+    // 2. Check sourceItemId match within same source.
+    // Uses JSONB containment (@>) so the partial GIN index Sale_scrapedMetadata_gin_idx
+    // is used. Prisma's path/equals emits #> path-equality which CANNOT use a
+    // jsonb_path_ops GIN index (Sentry slow-query fix 2026-06-18). Semantics preserved:
+    // top-level "sourceItemId" key equals the given value, scoped to the same source.
     if (sourceItemId) {
-      const existing = await prisma.sale.findFirst({
-        where: {
-          scrapedMetadata: {
-            path: ['sourceItemId'],
-            equals: sourceItemId,
-          },
-          sourceName,
-        },
-        select: { id: true },
-      });
+      const rows = await prisma.$queryRaw<Array<{ id: string }>>`
+        SELECT "id" FROM "Sale"
+        WHERE "scrapedMetadata" @> ${JSON.stringify({ sourceItemId })}::jsonb
+          AND "sourceName" = ${sourceName}
+        LIMIT 1
+      `;
+      const existing = rows[0];
       if (existing) {
         return {
           isDuplicate: true,
