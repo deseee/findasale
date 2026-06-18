@@ -39,6 +39,7 @@ interface TagRecord {
   itemId?: string;
   position: number;
   room?: string | null; // per-item room tag (Item.roomTag); null when item has none or for preset/blank tags
+  name?: string | null; // per-item title (Item.title); shown after the price
   blank?: boolean; // leading skip-slot for partially-used Avery sheets (no QR / no price rendered)
 }
 
@@ -224,18 +225,23 @@ export const createLabelBatch = async (req: AuthRequest, res: Response) => {
       )
     );
     const roomMap = new Map<string, string | null>();
+    const nameMap = new Map<string, string | null>();
     if (referencedItemIds.length > 0) {
       const roomRows = await prisma.item.findMany({
         where: { id: { in: referencedItemIds } },
-        select: { id: true, roomTag: true },
+        select: { id: true, roomTag: true, title: true },
       });
-      for (const row of roomRows) roomMap.set(row.id, row.roomTag ?? null);
+      for (const row of roomRows) {
+        roomMap.set(row.id, row.roomTag ?? null);
+        nameMap.set(row.id, row.title ?? null);
+      }
     }
 
     for (const item of items) {
       const qty = Math.max(1, Math.min(item.qty, 300)); // cap at 300 per row
       const itemId = item.source.kind === 'item' ? item.source.itemId : undefined;
       const room = itemId ? roomMap.get(itemId) ?? null : null;
+      const name = itemId ? nameMap.get(itemId) ?? null : null;
       for (let i = 0; i < qty; i++) {
         tags.push({
           tagId: generateId(10),
@@ -243,6 +249,7 @@ export const createLabelBatch = async (req: AuthRequest, res: Response) => {
           itemId,
           position: position++,
           room,
+          name,
         });
       }
     }
@@ -371,6 +378,7 @@ export const printLabelBatch = async (req: AuthRequest, res: Response) => {
     }
     .label-sale { font-size: 6pt; color: #666; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .label-price { font-size: 16pt; font-weight: bold; color: #000; line-height: 1; }
+    .label-name { font-size: 6pt; color: #222; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
     .label-footer { display: flex; justify-content: space-between; align-items: flex-end; }
     .label-brand { font-size: 5pt; color: #999; }
     .label-room { font-size: 5pt; color: #666; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 1in; text-align: right; }
@@ -405,6 +413,7 @@ export const printLabelBatch = async (req: AuthRequest, res: Response) => {
             <div class="label-text">
               <div class="label-sale">${batch.saleTitle}</div>
               <div class="label-price">$${tag.price.toFixed(2)}</div>
+              <div class="label-name">${tag.name ?? ''}</div>
               <div class="label-footer">
                 <div class="label-brand">finda.sale</div>
                 <div class="label-room">${tag.room ?? ''}</div>

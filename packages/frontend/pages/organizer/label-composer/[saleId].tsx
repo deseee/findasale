@@ -429,11 +429,12 @@ export default function LabelComposerPage() {
   const totalPages = Math.max(1, Math.ceil((totalLabels + (startPosition - 1)) / LABELS_PER_PAGE));
   const currentPageLabels = useMemo(() => {
     // Flatten batch into individual label entries in insertion order
-    const flat: Array<{ price: number; source: BatchItem['source']; room: string | null }> = [];
+    const flat: Array<{ price: number; source: BatchItem['source']; room: string | null; name: string | null }> = [];
     for (const item of state.items) {
       const room = item.source.kind === 'item' ? (item.source.room ?? null) : null;
+      const name = item.source.kind === 'item' ? (item.source.itemName ?? null) : null;
       for (let i = 0; i < item.qty; i++) {
-        flat.push({ price: item.price, source: item.source, room });
+        flat.push({ price: item.price, source: item.source, room, name });
       }
     }
     const start = state.currentPage * LABELS_PER_PAGE;
@@ -956,10 +957,17 @@ export default function LabelComposerPage() {
                           <span className="absolute top-[2px] right-[3px] text-[6px] opacity-50 font-mono">
                             {saleDateRange}
                           </span>
-                          {/* Price */}
-                          <span className="font-bold text-[11px] leading-none">
-                            {formatPrice(label.price)}
-                          </span>
+                          {/* Price + item name */}
+                          <div className="flex flex-col items-center justify-center max-w-full px-[12px]">
+                            <span className="font-bold text-[11px] leading-none">
+                              {formatPrice(label.price)}
+                            </span>
+                            {label.name ? (
+                              <span className="text-[6px] leading-tight opacity-70 truncate max-w-full mt-[1px]">
+                                {label.name}
+                              </span>
+                            ) : null}
+                          </div>
                           {/* Room — per-item; rendered where the date used to be */}
                           {label.room ? (
                             <span className="absolute bottom-[2px] right-[3px] left-[3px] text-[6px] opacity-60 font-mono truncate text-right">
