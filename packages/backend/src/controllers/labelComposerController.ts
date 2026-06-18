@@ -401,13 +401,13 @@ export const printLabelBatch = async (req: AuthRequest, res: Response) => {
       justify-content: space-between;
       overflow: hidden;
     }
-    .label-sale { font-size: 6pt; color: #666; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .label-sale { font-size: 6pt; color: #000; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .label-price { font-size: 16pt; font-weight: bold; color: #000; line-height: 1; }
-    .label-name { font-size: 8pt; color: #111; line-height: 1.12; margin-top: 1px; width: 100%; white-space: normal; overflow-wrap: anywhere; word-break: break-word; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; max-height: 2.3em; }
+    .label-name { font-size: 8pt; color: #000; line-height: 1.12; margin-top: 1px; width: 100%; white-space: normal; overflow-wrap: anywhere; word-break: break-word; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; max-height: 2.3em; }
     .label-footer { display: flex; justify-content: space-between; align-items: flex-end; }
-    .label-brand { font-size: 5pt; color: #999; }
-    .label-room { font-size: 5pt; color: #666; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 1in; text-align: right; }
-    .label-date-corner { position: absolute; top: 0.05in; right: 0.06in; font-size: 5pt; color: #999; }
+    .label-brand { font-size: 5pt; color: #000; }
+    .label-room { font-size: 5pt; color: #000; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 1in; text-align: right; }
+    .label-date-corner { position: absolute; top: 0.05in; right: 0.06in; font-size: 5pt; color: #000; }
   </style>
 </head>
 <body>`;
