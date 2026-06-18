@@ -8,6 +8,15 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
+**S1008 — Patrick commits (2026-06-18). 4 label/scraper improvements shipped directly by Patrick.**
+- **`b99f05c1` labels: show item name after the price** — label-composer/[saleId].tsx + labelComposerController.ts updated. Item title now displays alongside the price on printed Avery 5160 labels. LIVE (Vercel + Railway).
+- **`55abfc62` labels: add per-item room tag + move sale dates to top corner** — room tag shown on each label (where dates previously were); sale date range moved to corner. LIVE.
+- **`c06cb773` label composer: start-position card above preview, collapsed by default** — UI layout change: start-position picker card moves above label preview and collapses by default (expand toggle). LIVE.
+- **`17595003` perf(scraper): batch lastScrapedAt writes + GIN-index dedup** — scraper/index.ts + internalScraperController.ts + dedupe.ts: `lastScrapedAt` writes batched (was N individual DB writes); GIN index on dedup key reduces duplicate detection cost. Backend only — LIVE on Railway.
+- **Infrastructure confirmed:** Vercel ✅ READY (`b99f05c1` latest, 2026-06-18 ~12:53 EDT). Railway backend ✅ SUCCESS (2026-06-18T16:53:07 UTC). All S1006+S1007 commits deployed.
+- **BQ: 3** (blog Chrome QA, Buy Now graceful error Chrome QA, cart payment-completion UNVERIFIED — all unchanged, Chrome not available this session start).
+
+
 **S1007 — DEV (2026-06-18). Blog section built — /blog + /blog/[slug], 7 posts, SEO, JSON-LD. Competitor-monitor scheduled task updated to write full blog posts weekly.**
 - **Blog section (CODE-ONLY, 10 new files + 1 modified):** `/blog` listing page (7 cards: title, category badge, publish date, reading time, excerpt). `/blog/[slug]` post pages (parseMarkdown renderer, JSON-LD Article schema, canonical + og: tags, breadcrumb, Back to Blog link). 7 post data files in `packages/frontend/data/blog/posts/`. Blog index (`packages/frontend/data/blog/index.ts`). Footer Blog link added to Layout.tsx. ISR: revalidate:86400 on both pages. Static paths with fallback:'blocking'. TypeScript: 0 errors.
 - **Competitor-monitor SKILL.md updated:** Phase 2 now writes full 600–900 word blog post drafts to `claude_docs/marketing/blog-drafts/draft-[DATE]-[slug].md` in BlogPost format. Hardcoded old session path fixed → dynamic discovery via `ls -d /sessions/*/mnt/FindaSale`.
