@@ -429,7 +429,10 @@ export default function LabelComposerPage() {
   const totalPages = Math.max(1, Math.ceil((totalLabels + (startPosition - 1)) / LABELS_PER_PAGE));
   const currentPageLabels = useMemo(() => {
     // Flatten batch into individual label entries in insertion order
-    const flat: Array<{ price: number; source: BatchItem['source']; room: string | null; name: string | null }> = [];
+    const flat: Array<{ price: number; source: BatchItem['source']; room: string | null; name: string | null } | null> = [];
+    // Leading skip-slots so the preview starts on the chosen start position (mirrors the PDF).
+    const skip = Math.max(1, Math.min(startPosition, LABELS_PER_PAGE)) - 1;
+    for (let i = 0; i < skip; i++) flat.push(null);
     for (const item of state.items) {
       const room = item.source.kind === 'item' ? (item.source.room ?? null) : null;
       const name = item.source.kind === 'item' ? (item.source.itemName ?? null) : null;
@@ -439,7 +442,7 @@ export default function LabelComposerPage() {
     }
     const start = state.currentPage * LABELS_PER_PAGE;
     return flat.slice(start, start + LABELS_PER_PAGE);
-  }, [state.items, state.currentPage]);
+  }, [state.items, state.currentPage, startPosition]);
 
   const blanksOnPage = LABELS_PER_PAGE - currentPageLabels.length;
 
