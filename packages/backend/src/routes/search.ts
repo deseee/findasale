@@ -68,7 +68,7 @@ router.get('/', searchLimiter, async (req: Request, res: Response) => {
     if (saleStatus === 'active') {
       saleStatusWhere = {
         startDate: { lte: now },
-        endDate: { gte: now },
+        OR: [{ isOngoing: true }, { endDate: { gte: now } }],
       };
     } else if (saleStatus === 'upcoming') {
       saleStatusWhere = { startDate: { gt: now } };
@@ -115,7 +115,7 @@ router.get('/', searchLimiter, async (req: Request, res: Response) => {
     const [salesResult, itemsResult, itemSearchResult, organizerSearchResult] = await Promise.all([
       type !== 'items'
         ? prisma.sale.findMany({
-            where: { ...textWhere, status: 'PUBLISHED', deletedAt: null, isInventoryContainer: false, endDate: { gte: new Date() }, ...(saleType ? { saleType } : {}) },
+            where: { ...textWhere, status: 'PUBLISHED', deletedAt: null, isInventoryContainer: false, AND: [{ OR: [{ isOngoing: true }, { endDate: { gte: new Date() } }] }], ...(saleType ? { saleType } : {}) },
             select: {
               id: true,
               title: true,
@@ -203,7 +203,7 @@ router.get('/', searchLimiter, async (req: Request, res: Response) => {
             status: 'PUBLISHED',
             deletedAt: null,
             isInventoryContainer: false,
-            endDate: { gte: new Date() },
+            OR: [{ isOngoing: true }, { endDate: { gte: new Date() } }],
           },
           select: { id: true },
           take: 200, // P2: bound unbounded public findMany — final result is sliced to `limit` anyway
@@ -408,7 +408,7 @@ router.get('/random', async (req: Request, res: Response) => {
       WHERE
         i.status = 'AVAILABLE'
         AND s.status = 'PUBLISHED'
-        AND s."endDate" >= NOW()
+        AND (s."isOngoing" = true OR s."endDate" >= NOW())
         AND i."draftStatus" = 'PUBLISHED'
         ${priceCondition}
         ${categoryCondition}

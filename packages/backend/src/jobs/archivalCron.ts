@@ -20,7 +20,8 @@ export function scheduleArchivalCron(): void {
       where: {
         endDate: { lt: twoYearsAgo },
         deletedAt: null,
-        status: { not: 'DRAFT' }
+        status: { not: 'DRAFT' },
+        isOngoing: false, // never archive permanent storefronts
       },
       data: { deletedAt: now }
     });
@@ -32,7 +33,8 @@ export function scheduleArchivalCron(): void {
       where: {
         sale: {
           endDate: { lt: twoYearsAgo },
-          deletedAt: { not: null }
+          deletedAt: { not: null },
+          isOngoing: false, // never archive items of permanent storefronts
         },
         deletedAt: null
       },

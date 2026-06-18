@@ -50,9 +50,8 @@ export const computeHeatmapTiles = async (
       startDate: {
         lte: new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000), // within next 14 days
       },
-      endDate: {
-        gte: now, // hasn't ended yet
-      },
+      // Permanent storefronts (isOngoing) always qualify; time-boxed sales keep endDate filter.
+      OR: [{ isOngoing: true }, { endDate: { gte: now } }],
     },
     select: { id: true, lat: true, lng: true },
     take: 10000, // Reasonable upper bound for heatmap tile computation

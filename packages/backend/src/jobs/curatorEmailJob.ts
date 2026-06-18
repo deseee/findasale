@@ -22,6 +22,7 @@ interface UpcomingSale {
   state: string;
   startDate: Date;
   endDate: Date;
+  isOngoing: boolean;
 }
 
 const buildDigestHtml = (
@@ -43,7 +44,7 @@ const buildDigestHtml = (
           </a><br/>
           <span style="font-size:13px; color:#6b5f52;">
             📍 ${s.city}, ${s.state} &nbsp;·&nbsp;
-            ${formatDate(s.startDate)} – ${formatDate(s.endDate)}
+            ${s.isOngoing ? 'Always open' : `${formatDate(s.startDate)} – ${formatDate(s.endDate)}`}
           </span>
         </td>
         <td style="padding:14px 0; border-bottom:1px solid #e8e0d8; text-align:right; white-space:nowrap;">
@@ -151,7 +152,7 @@ export const sendWeeklyCuratorDigest = async (): Promise<void> => {
           startDate: { gte: now, lte: sevenDaysOut },
         },
         orderBy: { startDate: 'asc' },
-        select: { id: true, title: true, city: true, state: true, startDate: true, endDate: true },
+        select: { id: true, title: true, city: true, state: true, startDate: true, endDate: true, isOngoing: true },
       },
     },
   });

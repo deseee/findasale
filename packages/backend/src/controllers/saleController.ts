@@ -163,7 +163,8 @@ export const listSales = async (req: Request, res: Response) => {
     const where: any = {
       status: 'PUBLISHED',
       isInventoryContainer: false,
-      endDate: { gte: new Date() },
+      // Permanent storefronts (isOngoing) always count as current.
+      OR: [{ isOngoing: true }, { endDate: { gte: new Date() } }],
     };
 
     if (query.city) {
@@ -540,8 +541,12 @@ export const createSale = async (req: AuthRequest, res: Response) => {
       });
     }
 
-    // Feature #XXX: Retail Mode — auto-calculate endDate
+    // Feature #XXX: Retail Mode — permanent storefront.
+    // Mark isOngoing so the sale is always treated as current/live everywhere.
+    // endDate keeps a normal value (no sentinel) as a harmless placeholder; the
+    // auto-renew cron is disabled, so this endDate is never used to expire the store.
     if (saleData.saleType === 'RETAIL') {
+      (saleData as any).isOngoing = true;
       const startDate = new Date(saleData.startDate);
       const renewDays = saleData.retailAutoRenewDays || 30;
       const calculatedEndDate = new Date(startDate.getTime() + renewDays * 24 * 60 * 60 * 1000);
@@ -678,6 +683,13 @@ export const updateSale = async (req: AuthRequest, res: Response) => {
           });
         }
       }
+    }
+
+    // Permanent storefront: keep isOngoing in sync with RETAIL type on edits.
+    // If the (effective) sale type is RETAIL, it is an always-live storefront.
+    const effectiveSaleType = saleData.saleType ?? existingSale.saleType;
+    if (effectiveSaleType === 'RETAIL') {
+      (saleData as any).isOngoing = true;
     }
 
     const sale = await prisma.sale.update({ where: { id }, data: saleData });
@@ -1142,7 +1154,7 @@ export const getSalesByNeighborhood = async (req: Request, res: Response) => {
       where: {
         neighborhood: slug,
         status: 'PUBLISHED',
-        endDate: { gte: now },
+        OR: [{ isOngoing: true }, { endDate: { gte: now } }],
       },
       select: {
         id: true, title: true, description: true, startDate: true, endDate: true,
@@ -1195,7 +1207,7 @@ export const getSalesByCity = async (req: Request, res: Response) => {
     const sales = await prisma.sale.findMany({
       where: {
         status: 'PUBLISHED',
-        endDate: { gte: now },
+        OR: [{ isOngoing: true }, { endDate: { gte: now } }],
         city: { contains: citySlug, mode: 'insensitive' },
       },
       skip,
@@ -1214,7 +1226,7 @@ export const getSalesByCity = async (req: Request, res: Response) => {
     const total = await prisma.sale.count({
       where: {
         status: 'PUBLISHED',
-        endDate: { gte: now },
+        OR: [{ isOngoing: true }, { endDate: { gte: now } }],
         city: { contains: citySlug, mode: 'insensitive' },
       }
     });

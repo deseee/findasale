@@ -927,6 +927,10 @@ model Sale {
   buyersPremiumPct            Decimal?                   @db.Decimal(5, 2)
   // eBay inventory import: hidden DRAFT container sale for organizer's inventory items
   isInventoryContainer        Boolean                    @default(false)
+  // Permanent-storefront model (RETAIL): isOngoing=true means the sale never expires
+  // and is always treated as "current"/live in discovery, feeds, search, and sitemap.
+  // endDate stays a normal value (no sentinel); filters OR-in isOngoing instead.
+  isOngoing                   Boolean                    @default(false)
   // Feature #XXX: Retail Mode — saleType='RETAIL' indicates always-live storefront
   // Auto-renewal: if saleType='RETAIL' and sale is nearing expiration, a new sale is auto-created
   retailAutoRenewDays         Int                        @default(30) // Days until auto-renewal (default 30) — used only when saleType='RETAIL'

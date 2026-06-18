@@ -63,6 +63,7 @@ export const processSaleEndingSoonNotifications = async (): Promise<void> => {
       where: {
         status: 'PUBLISHED',
         endingSoonNotified: false,
+        isOngoing: false, // a permanent storefront is never "ending soon"
         endDate: {
           gte: soonestEnd,
           lte: latestEnd,

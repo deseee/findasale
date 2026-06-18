@@ -126,6 +126,7 @@ interface Sale {
   status: string;
   photoUrls: string[];
   saleType?: string;
+  isOngoing?: boolean; // permanent storefront (RETAIL) — never expires
   buyersPremiumPct?: number | null;
   organizer: {
     id: string;
@@ -241,6 +242,8 @@ interface InitialSaleData {
   zip: string;
   startDate: string;
   endDate: string;
+  saleType?: string;
+  isOngoing?: boolean; // permanent storefront (RETAIL)
   photoUrls: string[];
   organizerId: string | null;
   organizer: {
@@ -780,7 +783,8 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
   const saleEndDate = sale ? parseISO(sale.endDate) : null;
   const now = new Date();
   const saleHasStarted = saleStartDate ? now >= saleStartDate : false;
-  const saleHasEnded = saleEndDate ? now >= saleEndDate : false;
+  // Permanent storefronts (isOngoing) never "end" — they are always live.
+  const saleHasEnded = sale?.isOngoing ? false : (saleEndDate ? now >= saleEndDate : false);
 
   // M-005: Type used for the display badge + meta copy. Organizer intent wins;
   // scraped listings with an untrusted default get title-based inference.
@@ -840,13 +844,16 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
             <script type="application/ld+json" dangerouslySetInnerHTML={{
               __html: JSON.stringify({
                 '@context': 'https://schema.org',
-                '@type': 'Event',
+                // Permanent storefronts emit Store (LocalBusiness) instead of a dated Event.
+                '@type': initialData.isOngoing ? 'Store' : 'Event',
                 'name': initialData.title,
                 'description': initialData.description || undefined,
                 'startDate': initialData.startDate,
-                'endDate': initialData.endDate,
-                'eventStatus': 'https://schema.org/EventScheduled',
-                'eventAttendanceMode': 'https://schema.org/OfflineEventAttendanceMode',
+                ...(initialData.isOngoing ? {} : {
+                  'endDate': initialData.endDate,
+                  'eventStatus': 'https://schema.org/EventScheduled',
+                  'eventAttendanceMode': 'https://schema.org/OfflineEventAttendanceMode',
+                }),
                 'location': {
                   '@type': 'Place',
                   'name': initialData.title,
@@ -1070,13 +1077,16 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
           <script type="application/ld+json" dangerouslySetInnerHTML={{
             __html: JSON.stringify({
               '@context': 'https://schema.org',
-              '@type': 'Event',
+              // Permanent storefronts emit Store (LocalBusiness) instead of a dated Event.
+              '@type': sale.isOngoing ? 'Store' : 'Event',
               'name': sale.title,
               'description': sale.description || undefined,
               'startDate': sale.startDate,
-              'endDate': sale.endDate,
-              'eventStatus': 'https://schema.org/EventScheduled',
-              'eventAttendanceMode': 'https://schema.org/OfflineEventAttendanceMode',
+              ...(sale.isOngoing ? {} : {
+                'endDate': sale.endDate,
+                'eventStatus': 'https://schema.org/EventScheduled',
+                'eventAttendanceMode': 'https://schema.org/OfflineEventAttendanceMode',
+              }),
               'location': {
                 '@type': 'Place',
                 'name': sale.title,
@@ -2594,6 +2604,8 @@ export const getStaticProps: GetStaticProps<SaleDetailPageProps> = async ({ para
       zip: sale.zip || '',
       startDate: sale.startDate || '',
       endDate: sale.endDate || '',
+      saleType: sale.saleType || undefined,
+      isOngoing: sale.isOngoing ?? false,
       photoUrls: sale.photoUrls || [],
       organizerId: sale.organizer?.id || null,
       isClaimed: sale.organizer?.isClaimed ?? false,

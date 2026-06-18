@@ -8,6 +8,7 @@ export interface SaleWithItems {
   description: string | null;
   startDate: Date;
   endDate: Date;
+  isOngoing: boolean;
   address: string;
   city: string;
   state: string;
@@ -107,7 +108,7 @@ export interface SchemaOrgEvent {
   name: string;
   description?: string;
   startDate: string;
-  endDate: string;
+  endDate?: string;
   eventStatus: string;
   eventAttendanceMode: string;
   location: SchemaOrgPostalAddress | { '@type': 'VirtualLocation'; url: string };
@@ -146,7 +147,7 @@ export interface DataCommonsEntry {
   '@type': 'Event';
   name: string;
   startDate: string;
-  endDate: string;
+  endDate?: string;
   location: {
     '@type': 'Place';
     name: string;
@@ -259,7 +260,8 @@ export function formatSaleForSchemaOrg(sale: SaleWithItems): SchemaOrgEvent {
     '@type': 'Event',
     name: sale.title,
     startDate: sale.startDate.toISOString(),
-    endDate: sale.endDate.toISOString(),
+    // Permanent storefronts (isOngoing) advertise no end date.
+    ...(sale.isOngoing ? {} : { endDate: sale.endDate.toISOString() }),
     eventStatus:
       sale.status === 'ENDED'
         ? 'https://schema.org/EventCancelled'
@@ -363,7 +365,7 @@ export function formatSaleForDataCommons(sale: SaleWithItems): DataCommonsEntry 
     '@type': 'Event',
     name: sale.title,
     startDate: sale.startDate.toISOString(),
-    endDate: sale.endDate.toISOString(),
+    ...(sale.isOngoing ? {} : { endDate: sale.endDate.toISOString() }),
     location: {
       '@type': 'Place',
       name: `${sale.city}, ${sale.state}`,
@@ -508,6 +510,7 @@ export async function generateSyndicationBundle(saleId: string): Promise<Syndica
     description: sale.description,
     startDate: sale.startDate,
     endDate: sale.endDate,
+    isOngoing: sale.isOngoing,
     address: sale.address,
     city: sale.city,
     state: sale.state,

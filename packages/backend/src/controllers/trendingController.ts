@@ -46,11 +46,15 @@ export const getTrendingSales = async (req: Request, res: Response) => {
     const sales = await prisma.sale.findMany({
       where: {
         status: 'PUBLISHED',
-        // Sale must still be active but end within 90 days —
-        // permanent retail businesses have endDates years in the future
-        endDate: { gte: now, lte: ninetyDaysOut },
-        // Must start within 60 days (upcoming/current events only)
-        startDate: { lte: sixtyDaysOut },
+        // Permanent storefronts (isOngoing) always qualify regardless of date window.
+        // Time-boxed sales must still be active, end within 90 days, and start within 60.
+        OR: [
+          { isOngoing: true },
+          {
+            endDate: { gte: now, lte: ninetyDaysOut },
+            startDate: { lte: sixtyDaysOut },
+          },
+        ],
       },
       include: {
         organizer: { select: { user: { select: { name: true } } } },

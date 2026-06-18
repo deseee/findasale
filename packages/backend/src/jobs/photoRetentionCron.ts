@@ -101,6 +101,7 @@ export function schedulePhotoRetentionCron(): void {
             endDate: {
               lte: ninetyDaysAgo,
             },
+            isOngoing: false, // permanent storefront photos are not retention-cleaned by sale end
           },
           photoUrls: {
             hasSome: [''], // Has at least one photo URL (trick: check if array is non-empty)
@@ -135,6 +136,7 @@ export function schedulePhotoRetentionCron(): void {
             endDate: {
               lte: oneYearAgo,
             },
+            isOngoing: false, // permanent storefront photos are not retention-cleaned by sale end
           },
           photoUrls: {
             hasSome: [''],
