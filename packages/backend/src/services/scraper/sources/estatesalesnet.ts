@@ -6,7 +6,7 @@
  */
 
 import { RateLimiter } from '../rateLimiter';
-import { ingestScrapedListing, ScrapedItem } from '../index';
+import { ingestScrapedListing, flushFreshnessTouches, ScrapedItem } from '../index';
 import { getRandomUserAgent, getRandomReferer } from '../userAgents';
 import { getCachedHeaders, setCachedHeaders, fetchWithConditionalHeaders, extractCacheHeaders } from '../httpCache';
 
@@ -262,6 +262,7 @@ export async function scrapeEstateSalesNet(
       else if (result.status === 'skipped') stats.skipped++;
       else stats.failed++;
     }
+    await flushFreshnessTouches();
 
     return stats;
   } catch (error) {

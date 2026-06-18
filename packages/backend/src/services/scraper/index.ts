@@ -652,6 +652,44 @@ function saleTypeToTags(saleType?: string): string[] {
   }
 }
 
+// --- Freshness-touch batching (Sentry slow-query fix 2026-06-18) ---
+// Per-duplicate lastScrapedAt updates were the #1 slow-query offender: one
+// `UPDATE ... RETURNING` per duplicate, each rewriting all 26 Sale indexes
+// (only ~8% HOT updates). We buffer the IDs and flush via a single updateMany
+// (no RETURNING). Auto-flushes at FRESHNESS_FLUSH_CHUNK; scrape passes also call
+// flushFreshnessTouches() at the end so the final partial batch is persisted.
+const FRESHNESS_FLUSH_CHUNK = 100;
+const freshnessTouchBuffer: string[] = [];
+
+async function flushFreshnessTouchBatch(ids: string[]): Promise<void> {
+  if (ids.length === 0) return;
+  try {
+    await prisma.sale.updateMany({
+      where: { id: { in: ids } },
+      data: { lastScrapedAt: new Date() },
+    });
+  } catch (err) {
+    console.error('[scraper] flushFreshnessTouches failed:', err);
+  }
+}
+
+async function enqueueFreshnessTouch(saleId: string): Promise<void> {
+  freshnessTouchBuffer.push(saleId);
+  if (freshnessTouchBuffer.length >= FRESHNESS_FLUSH_CHUNK) {
+    const batch = freshnessTouchBuffer.splice(0, freshnessTouchBuffer.length);
+    await flushFreshnessTouchBatch(batch);
+  }
+}
+
+/**
+ * Flush any buffered lastScrapedAt freshness touches. Call at the end of every
+ * scrape pass so the final partial batch is persisted.
+ */
+export async function flushFreshnessTouches(): Promise<void> {
+  const batch = freshnessTouchBuffer.splice(0, freshnessTouchBuffer.length);
+  await flushFreshnessTouchBatch(batch);
+}
+
 /**
  * Ingest a single scraped listing into the database.
  * Handles dedup, validation, and DB insertion.
@@ -670,12 +708,9 @@ export async function ingestScrapedListing(
     );
 
     if (dupeResult.isDuplicate) {
-      // Update lastScrapedAt to keep listings fresh
+      // Buffer the lastScrapedAt touch — flushed in bulk via updateMany (Sentry fix 2026-06-18)
       if (dupeResult.existingSaleId) {
-        await prisma.sale.update({
-          where: { id: dupeResult.existingSaleId },
-          data: { lastScrapedAt: new Date() },
-        });
+        await enqueueFreshnessTouch(dupeResult.existingSaleId);
       }
       return {
         saleId: dupeResult.existingSaleId,

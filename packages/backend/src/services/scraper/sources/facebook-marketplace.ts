@@ -6,7 +6,7 @@
 
 import axios from 'axios';
 import { RateLimiter } from '../rateLimiter';
-import { ingestScrapedListing, getOrCreateSystemOrganizer, ScrapedItem } from '../index';
+import { ingestScrapedListing, getOrCreateSystemOrganizer, flushFreshnessTouches, ScrapedItem } from '../index';
 import { jitterDelay, getRandomUserAgent, getRandomReferer } from '../userAgents';
 
 const FB_GRAPHQL_ENDPOINT = 'https://www.facebook.com/api/graphql/';
@@ -350,6 +350,7 @@ export async function scrapeFacebookMarketplace(
       }
     }
 
+    await flushFreshnessTouches();
     console.log(
       `[FacebookMarketplace] Complete for ${metro} — created ${stats.created}, updated ${stats.updated}, skipped ${stats.skipped}, failed ${stats.failed}`
     );
