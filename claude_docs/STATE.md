@@ -8,13 +8,25 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
+**S1009 — DEV/QA (2026-06-18). Label composer polish + Buy Now graceful error + Stripe tax OFF. All pushed + Patrick-verified live as artifactmi on "QA First Item Test Sale S983".**
+- **CORRECTION (Patrick flagged):** prior S1008 BQ rows claimed Buy Now/labels "can't be tested until June 29." FALSE — the published "Artifact Downtown Paw Paw" sale (cmpt2oq6q00138cehpgqx3huk) has 101 AVAILABLE items and its items are purchasable NOW (verified Buy Now 200 + live cart checkout session this session); purchase endpoints don't gate on startDate. The "June 29" was that sale's DB startDate (2026-06-29→07-29) — possibly a wrong date on an already-open sale (flagged to Patrick).
+- **Label composer — 5 refinements, all LIVE + Patrick-confirmed working:**
+  1. Item name now prints after the price (8pt) and wraps to 2 lines (forced: width:100% + white-space:normal + overflow-wrap + -webkit-line-clamp:2). Name pulled from Item.title via the same DB lookup as roomTag.
+  2. ALL label text now **black (#000)** — sale name, item name, finda.sale, room, dates were grey (#666/#999) and unreadable in mono prints.
+  3. **Warm shared Puppeteer browser** — launched on boot, reused per request (fresh page each), relaunch+retry on failure. Fixes the cold-start "failed first time, worked second" on label generation.
+  4. Page preview now **starts at the chosen start-position slot** (prepends skip slots, mirrors the PDF).
+  5. Per-item **room tag** (the "Room / Area Tag" form field, saved via itemController) prints on each label; sale dates moved to the top corner.
+  - Files: labelComposerController.ts, label-composer/[saleId].tsx, plus earlier add-items/[saleId].tsx + edit-item/[id].tsx (Label Sheets links, save→add-items redirect, item search).
+- **Buy It Now P1 (S1006, live + valid-path VERIFIED ✅):** removed `automatic_tax` from raw PaymentIntent (Stripe rejected it → every Buy Now 400'd; S1005 had patched the wrong cause). HTTP 200 confirmed as user5 buying an Artifact item. Graceful 409 "seller not set up to accept payments" + CheckoutModal now renders the error text (was a bare "Try Again").
+- **Stripe tax OFF (Patrick decision, memory saved):** removed automatic_tax from all 3 Stripe sites (Buy Now PI + subscription + à-la-carte Checkout Sessions). Don't collect until FindA.Sale must register in nexus states. Prod runs Stripe LIVE keys.
+
 **S1008 — Patrick commits (2026-06-18). 4 label/scraper improvements shipped directly by Patrick.**
 - **`b99f05c1` labels: show item name after the price** — label-composer/[saleId].tsx + labelComposerController.ts updated. Item title now displays alongside the price on printed Avery 5160 labels. LIVE (Vercel + Railway).
 - **`55abfc62` labels: add per-item room tag + move sale dates to top corner** — room tag shown on each label (where dates previously were); sale date range moved to corner. LIVE.
 - **`c06cb773` label composer: start-position card above preview, collapsed by default** — UI layout change: start-position picker card moves above label preview and collapses by default (expand toggle). LIVE.
 - **`17595003` perf(scraper): batch lastScrapedAt writes + GIN-index dedup** — scraper/index.ts + internalScraperController.ts + dedupe.ts: `lastScrapedAt` writes batched (was N individual DB writes); GIN index on dedup key reduces duplicate detection cost. Backend only — LIVE on Railway.
 - **Infrastructure confirmed:** Vercel ✅ READY (`b99f05c1` latest, 2026-06-18 ~12:53 EDT). Railway backend ✅ SUCCESS (2026-06-18T16:53:07 UTC). All S1006+S1007 commits deployed.
-- **BQ: 3** (Buy Now graceful error UNVERIFIED — no active organizer sale in prod, retest June 29+; cart payment-completion UNVERIFIED — live Stripe keys; label composer S1006c/d UNVERIFIED — sale starts June 29). **Blog ✅ VERIFIED this session** (7 cards, post body+JSON-LD+canonical+Back-to-Blog, dark mode; ss_170867567, ss_9890ula3j).
+- **BQ: 3→1** (Buy Now graceful 409 ✅ VERIFIED this session — user5 on Kelly's QA sale → "This seller isn't set up to accept online payments yet…" rendered correctly; ss_8945gfi4w, ss_8856ik32o. Label composer S1006c/d ✅ VERIFIED this session — item name after price, dates in corner (6/18–19), start-position card collapsed above preview; ss_7380smxpk, ss_2761xkv7y. Cart payment-completion UNVERIFIED — Stripe LIVE keys, test card rejected). **Blog ✅ VERIFIED this session** (7 cards, post body+JSON-LD+canonical+Back-to-Blog, dark mode; ss_170867567, ss_9890ula3j).
 
 
 **S1007 — DEV (2026-06-18). Blog section built — /blog + /blog/[slug], 7 posts, SEO, JSON-LD. Competitor-monitor scheduled task updated to write full blog posts weekly.**
@@ -146,15 +158,15 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
-| Buy Now graceful error (409 friendly msg) | No active organizer sale in production to test with; "Artifact Downtown Paw Paw" starts June 29 | Chrome QA on/after June 29: user5 → Buy Now on a sold-by organizer without Stripe → verify "This seller isn't set up…" message | S1006 |
 | Cart multi-item payment-completion | Stripe LIVE keys block test card; real purchase needed to verify items→SOLD webhook | Real purchase or test-mode proxy | S1006 |
-| Label composer: item name, room tag, start-position card (S1006c/d) | No active organizer sale in production; label-composer requires saleId | Chrome QA on/after June 29: log in as organizer → /organizer/label-composer/[saleId] → verify item name on label, room tag, start-position card layout | S1008 |
 
 ## Pending Chrome Verifications
 
 | # | Feature | Evidence | Session |
 |---|---------|----------|---------|
 | 551 | Blog — /blog listing + /blog/[slug] post page | Navigated finda.sale/blog as user5. 7 cards rendered (category badge, date, reading time, title, excerpt). Clicked post → full body, breadcrumb, "← Back to Blog" link. JSON-LD Article schema verified (correct @type, headline, datePublished). Canonical URL correct. Footer Blog link confirmed. Dark mode clean. ss_170867567, ss_9890ula3j | S1008 |
+| — | Buy Now graceful 409 error (S1006 fix — CheckoutModal renders loadError) | Navigated to item cmqer8m8w00x5me4oqoabaulh as user5 (Leo Thomas). Clicked "Buy It Now" → "Complete Purchase" modal opened. Clicked "Continue to Pay" → red error box: "This seller isn't set up to accept online payments yet. Please contact the organizer to arrange your purchase." with "Try Again" link. stripeController.ts 409 + CheckoutModal.tsx {loadError} confirmed working. ss_8945gfi4w, ss_9148p3694, ss_8856ik32o, ss_56944gx1i | S1008 |
+| — | Label composer: item name after price (b99f05c1) + dates in corner (55abfc62) + start-position card above preview collapsed (c06cb773) | As Alice Johnson (user1@example.com), navigated /organizer/label-composer/cmpfplxqbxwtucltmbouvz0os. Added "QA Test First Item S983" ($5.00) via PULL FROM PRICED ITEMS → batch shows 1/30 used. Page text confirmed: label contains "$5.00" then "QA Test First Item S983" (item name after price ✅), "6/18–19" in corner (dates ✅). "Expand to choose starting label ▲" card collapsed above label grid (start-position ✅). ss_7380smxpk, ss_26234jf7i, ss_2761xkv7y | S1008 |
 
 ## Next Session
 
@@ -162,16 +174,10 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 **Patrick action (already done — blog push block was S1007 Next Session):** Confirm push `b99f05c1` included blog + S1006 graceful-error files.
 
-**On June 29 or after — QA dispatch stubs (run sequentially, one Chrome agent at a time):**
+**BQ item open:**
+1. Cart payment-completion — UNVERIFIED (Stripe LIVE keys; test card rejected on prod)
 
-**QA-Buy-Now-Graceful:** `Skill('findasale-qa')` → As shopper (user5@example.com / Seedy2025!), navigate to "Artifact Downtown Paw Paw" sale → attempt Buy Now on any item. Organizer's `stripeConnectEnabled=false`. Verify: modal shows friendly error "This seller isn't set up to accept online payments yet…" — NOT bare "Try Again". Evidence sentence + screenshot required.
-
-**QA-LabelComposer:** `Skill('findasale-qa')` → As organizer, navigate to /organizer/label-composer/[saleId]. Verify: (1) item name shows after price on each label; (2) room tag on each label; (3) start-position card appears ABOVE the label preview and is collapsed by default. Evidence + screenshot.
-
-**BQ items still open:**
-1. Buy Now graceful error — retest June 29+ (sale live date)
-2. Cart payment-completion — UNVERIFIED (live keys)
-3. Label composer S1006c/d — retest June 29+
+**Apply PCVs to roadmap.md (per cross-session rule):** Blog row 551 + Buy Now graceful error + Label composer S1006c/d → apply Chrome QA ✅ columns. Include roadmap.md in push block.
 
 **Apply blog PCV to roadmap.md (per cross-session rule):** Row 551 Blog Chrome QA column → ✅ S1008. Include roadmap.md in push block.
 
@@ -187,10 +193,10 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 **Session type:** QA
 **Confirmed Patrick commits live:** `b99f05c1` (labels: item name after price), `55abfc62` (labels: room tag + dates to corner), `c06cb773` (label composer: start-position card above preview, collapsed), `17595003` (scraper: batch lastScrapedAt writes + GIN-index dedup). Infrastructure: Vercel ✅ READY, Railway ✅ SUCCESS.
 **QA-Blog ✅:** Navigated finda.sale/blog as user5. 7 cards loaded (category badge, date, reading time, title, excerpt). Clicked post → full body rendered, breadcrumb, "← Back to Blog" link, JSON-LD Article schema (@type Article, correct headline+datePublished), canonical URL. Footer Blog link confirmed. Dark mode clean. ss_170867567, ss_9890ula3j.
-**QA-Buy-Now-Graceful UNVERIFIED:** No active organizer sale in production (Patrick's "Artifact Downtown Paw Paw" starts June 29). Cannot trigger Buy Now flow without a live sale.
-**QA-Label-Composer UNVERIFIED:** Same — label-composer requires a live saleId. No active organizer sale until June 29.
-**BQ delta:** 3 → 3 (blog removed ✅; label composer added UNVERIFIED). Net: Buy Now, cart payment-completion, label composer remain.
-**PCV staged:** Blog row 551 — apply Chrome QA ✅ to roadmap.md in S1009.
+**QA-Buy-Now-Graceful ✅ VERIFIED (S1008 continuation):** Found "QA First Item Test Sale S983" (Alice Johnson / Kelly's Estate Sales, stripeConnectEnabled=false) LIVE in prod. As user5 (Leo Thomas), navigated to item cmqer8m8w00x5me4oqoabaulh → clicked "Buy It Now" → "Continue to Pay" → red error box displayed: "This seller isn't set up to accept online payments yet." CheckoutModal.tsx {loadError} rendering confirmed. ss_8945gfi4w, ss_9148p3694, ss_8856ik32o, ss_56944gx1i.
+**QA-Label-Composer ✅ VERIFIED (S1008 continuation):** As Alice Johnson (user1@example.com), navigated /organizer/label-composer/cmpfplxqbxwtucltmbouvz0os. Added "QA Test First Item S983" ($5.00) to batch via PULL FROM PRICED ITEMS. Page text confirmed: label shows "$5.00" then "QA Test First Item S983" (item name after price ✅ b99f05c1), "6/18–19" in corner (dates ✅ 55abfc62). "Expand to choose starting label ▲" collapsed above label grid (start-position ✅ c06cb773). ss_7380smxpk, ss_26234jf7i, ss_2761xkv7y.
+**BQ delta:** 3 → 1 (Buy Now graceful error ✅; label composer ✅; blog ✅ — only cart payment-completion remains).
+**PCVs staged:** Blog row 551 + Buy Now graceful error + Label composer — apply Chrome QA ✅ to roadmap.md next session.
 
 ### S1007 — 2026-06-18 | DEV (Blog section + competitor-monitor update)
 - Blog section built (CODE-ONLY): /blog listing page (7 posts, ISR revalidate:86400), /blog/[slug] detail page (parseMarkdown, JSON-LD Article schema, SEO Head, Back to Blog link). 10 new files + Layout.tsx footer Blog link. TypeScript: 0 errors.

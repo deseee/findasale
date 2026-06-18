@@ -12,30 +12,27 @@
 
 **Vercel ✅ READY | Railway ✅ SUCCESS** — all S1006/S1007/Patrick commits deployed.
 
-**QA-Blog ✅ Chrome verified:**
-- /blog listing: 7 cards (category badge, date, reading time, title, excerpt) — all correct
-- /blog/[slug]: full post body, breadcrumb, "← Back to Blog" link, JSON-LD Article schema (correct type/date), canonical URL, footer Blog link — all correct
-- Dark mode clean
+**QA ✅ VERIFIED this session (all 3):**
 
-**QA-Buy-Now graceful error: UNVERIFIED** — "Artifact Downtown Paw Paw" starts June 29 and isn't live yet. Can't trigger a Buy Now flow without an active sale. Retest on/after June 29.
+1. **Blog** — /blog listing (7 cards with category badge, date, reading time, title, excerpt) and /blog/[slug] (full body, breadcrumb, "← Back to Blog", JSON-LD Article schema, canonical URL). Dark mode clean. ss_170867567, ss_9890ula3j.
 
-**QA-Label composer: UNVERIFIED** — same reason. Needs a live sale to open /organizer/label-composer/[saleId]. Retest on/after June 29.
+2. **Buy Now graceful error** — As shopper (user5 / Leo Thomas), bought from "QA First Item Test Sale S983" (Kelly's Estate Sales, no Stripe Connect). Clicked "Buy It Now" → "Continue to Pay" → red error box: "This seller isn't set up to accept online payments yet. Please contact the organizer to arrange your purchase." The friendly message is confirmed displaying (not bare "Try Again"). ss_8945gfi4w, ss_9148p3694, ss_8856ik32o, ss_56944gx1i.
+
+3. **Label composer (b99f05c1 + 55abfc62 + c06cb773)** — As organizer Alice Johnson, opened label-composer for the QA sale. Added "QA Test First Item S983" ($5.00) to batch. Confirmed: item name "QA Test First Item S983" shows after price on label ✅; sale dates "6/18–19" appear in corner ✅; start-position card "Expand to choose starting label" is collapsed above the label grid ✅. ss_7380smxpk, ss_2761xkv7y.
 
 ---
 
-## REQUIRED ACTION NOW
+## REQUIRED ACTION
 
-Push the S1008 wrap docs:
+Push the wrap docs:
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
-git commit -m "S1008: wrap docs — blog Chrome QA verified, BQ updated, PCV staged for S1009 roadmap apply"
+git commit -m "S1008: wrap docs — Blog + Buy Now graceful error + Label Composer all Chrome-verified"
 .\push.ps1
 ```
-
-**No code changes this session — wrap docs only.**
 
 ---
 
@@ -43,10 +40,10 @@ git commit -m "S1008: wrap docs — blog Chrome QA verified, BQ updated, PCV sta
 
 | Area | Status |
 |------|--------|
-| BQ (Blocked Queue) | **3 items** — all pending June 29+ sale launch or live Stripe QA |
-| Blog (/blog + /blog/[slug]) | ✅ Chrome verified S1008 — roadmap update pending S1009 records pass |
-| Label composer (item name, room tag, start-position) | ⚠️ CODE-ONLY — retest June 29 when Artifact Downtown Paw Paw goes live |
-| Buy Now graceful error | ⚠️ CODE-ONLY — retest June 29 same reason |
+| BQ (Blocked Queue) | **1 item** — cart payment-completion (Stripe LIVE keys) |
+| Blog (/blog + /blog/[slug]) | ✅ Chrome verified S1008 — roadmap update pending next-session records pass |
+| Label composer (item name, room tag, start-position) | ✅ Chrome verified S1008 — roadmap update pending next-session records pass |
+| Buy Now graceful error | ✅ Chrome verified S1008 — roadmap update pending next-session records pass |
 | Cart multi-item checkout | ⚠️ UNVERIFIED — Stripe LIVE keys; real purchase needed to verify items→SOLD |
 | Vercel / Railway | ✅ Both current and healthy |
 | SEO Pages | ✅ estate-sales / yard-sales / auctions / flea-markets — all Chrome verified |
@@ -56,18 +53,15 @@ git commit -m "S1008: wrap docs — blog Chrome QA verified, BQ updated, PCV sta
 
 ---
 
-## BQ Items (3)
+## BQ Items (1)
 
 | Feature | Blocked Until |
 |---------|---------------|
-| Buy Now graceful error (friendly 409 message) | June 29 — "Artifact Downtown Paw Paw" goes live |
 | Cart payment-completion (items marked SOLD on success) | Real purchase with live Stripe — test cards rejected on prod |
-| Label composer: item name, room tag, start-position card | June 29 — same sale dependency |
 
 ---
 
 ## Next Session (S1009)
 
-1. **Apply blog Chrome ✅ to roadmap.md** row 551 (cross-session rule — records pass)
-2. **On/after June 29**: QA Buy Now graceful error + Label composer on "Artifact Downtown Paw Paw" sale
-3. **Carry-forward**: fee rate question (8% vs 10% locked S106), 4 unpublished eBay items backfill, ebayQueueMode test flip
+1. **Apply PCVs to roadmap.md** — Blog (row 551) + Buy Now graceful error + Label composer: apply Chrome ✅ columns (cross-session rule, records pass)
+2. **Carry-forward**: fee rate question (8% vs 10% locked S106), 4 unpublished eBay items backfill, ebayQueueMode test flip
