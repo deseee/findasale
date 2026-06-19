@@ -72,12 +72,14 @@ export const getStats = async (req: AuthRequest, res: Response) => {
       tierBreakdownMap[t.subscriptionTier as string] = t._count;
     });
 
-    // MRR calculation (real organizers only)
+    // MRR calculation (real organizers only — exclude internal/test accounts)
+    const INTERNAL_EMAILS = ['***REDACTED-TEST-ORGANIZER-EMAIL***', '***REDACTED-ADMIN-EMAIL***'];
     const activePaidOrganizers = await prisma.organizer.findMany({
       where: {
         isUnmanagedListing: false,
         subscriptionStatus: 'active',
         subscriptionTier: { in: ['PRO', 'TEAMS'] },
+        user: { email: { notIn: INTERNAL_EMAILS } },
       },
       select: { subscriptionTier: true },
       take: 10000,
