@@ -31,9 +31,17 @@ export const recalculateOrganizerTiers = async (): Promise<void> => {
     });
 
     for (const organizer of organizers) {
-      const [endedSalesCount, reviews] = await Promise.all([
+      const [qualifyingSalesCount, reviews] = await Promise.all([
+        // A permanent storefront (PUBLISHED + isOngoing) counts as one active sale
+        // for reputation, since it never reaches ENDED (Patrick decision S1009).
         prisma.sale.count({
-          where: { organizerId: organizer.id, status: 'ENDED' },
+          where: {
+            organizerId: organizer.id,
+            OR: [
+              { status: 'ENDED' },
+              { status: 'PUBLISHED', isOngoing: true },
+            ],
+          },
         }),
         prisma.review.findMany({
           where: { sale: { organizerId: organizer.id } },
@@ -48,9 +56,9 @@ export const recalculateOrganizerTiers = async (): Promise<void> => {
           : 0;
 
       let newTier: string;
-      if (endedSalesCount >= 20 && avgRating >= 4.5 && followerCount >= 50) {
+      if (qualifyingSalesCount >= 20 && avgRating >= 4.5 && followerCount >= 50) {
         newTier = 'ESTATE_CURATOR';
-      } else if (endedSalesCount >= 5 && avgRating >= 4.0) {
+      } else if (qualifyingSalesCount >= 5 && avgRating >= 4.0) {
         newTier = 'TRUSTED';
       } else {
         newTier = 'NEW';

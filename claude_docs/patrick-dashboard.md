@@ -1,4 +1,23 @@
-# Patrick's Dashboard — Week of June 16, 2026 (Updated S1008)
+# Patrick's Dashboard — Week of June 16, 2026 (Updated S1009)
+
+---
+
+## What Happened This Session (S1009 — June 18)
+
+**Big one: Artifact is now a true permanent storefront** (was being recreated as a new monthly sale by an auto-renew job — that's why you saw "monthly" sales). Designed by the Architect, implemented, deployed, and Chrome-verified:
+- ✅ Auto-renew job retired; added an `isOngoing` flag; permanent stores never expire and stay visible everywhere.
+- ✅ Artifact's two-row chain consolidated into ONE store (104 items); it now shows "Permanent storefront" (no end date / countdown), with proper Store (not Event) SEO.
+- ✅ No discovery regression — the public feed (19,509 sales) and search still work with normal time-boxed sales.
+
+**Follow-ups closed this session (no more deferring):**
+- ✅ Soft-deleted sales now return 404 (the old Artifact sale link will stop showing a stale page).
+- ✅ Permanent stores now count toward your reputation tier (they never "end", so they were being ignored).
+- ✅ Buy Now "seller isn't set up to accept payments yet" message — re-confirmed it displays correctly.
+- ✅ Photo retention already correct for permanent stores (item photos kept while listed).
+
+**Earlier today (S1008, also verified):** Blog pages, Buy Now graceful error, label composer (item name / room tag / dates-corner / start-position). Plus the whole label set: black text, 2-line names, warm-browser cold-start fix, preview starts at chosen slot.
+
+**Still open (one item, needs you):** cart multi-item checkout completion can only be confirmed with one real small purchase — production runs live Stripe, so QA can't use a test card.
 
 ---
 
@@ -24,15 +43,18 @@
 
 ## REQUIRED ACTION
 
-Push the wrap docs:
+Push the two follow-up code fixes + wrap docs (no migration — the isOngoing column is already on prod):
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
-git add claude_docs/STATE.md
-git add claude_docs/patrick-dashboard.md
-git commit -m "S1008: wrap docs — Blog + Buy Now graceful error + Label Composer all Chrome-verified"
+git add packages/backend/src/controllers/saleController.ts packages/backend/src/jobs/reputationJob.ts claude_docs/STATE.md claude_docs/patrick-dashboard.md
+git commit -m "S1009 follow-ups: soft-deleted sales 404 + permanent stores count toward reputation"
 .\push.ps1
 ```
+
+Also delete the stray temp file locally (not committed): `Remove-Item packages\database\prisma\schema.tmpgen.prisma`
+
+After deploy, next session does a quick QA pass (old sale ID 404s; feed/search regression) — and one real small purchase from you confirms cart checkout completion.
 
 ---
 

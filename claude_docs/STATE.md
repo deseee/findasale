@@ -9,6 +9,16 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 ## Current Status
 
 **S1009 — DEV/QA (2026-06-18). Label composer polish + Buy Now graceful error + Stripe tax OFF. All pushed + Patrick-verified live as artifactmi on "QA First Item Test Sale S983".**
+- **PERMANENT STOREFRONT (isOngoing) — SHIPPED + Chrome-verified ✅ (deployed commit 066e0be0):** Retired retailAutoRenewJob (no-op); added Sale.isOngoing; additive discovery/feed/search filters `(isOngoing OR endDate>=now)`; Store/LocalBusiness JSON-LD (not Event); cron guards. 16 files + migration. **Chrome QA:** Artifact storefront (cmpt2oq6q) renders LIVE as "Permanent storefront" (no end date/countdown/archive), JSON-LD @type=Store with NO endDate/Event, 104 items ✅. Regression clean: /sales feed 19,509 sales render with date ranges ✅; /search?q=thrift returns 10 sales ✅ (additive filters did NOT break discovery). 
+  - **Migration handling note (correction):** this repo's _prisma_migrations IS in sync — `prisma migrate deploy` had only 1 pending migration. The isOngoing column was applied via raw `ALTER TABLE` (psycopg2); when Patrick separately ran `migrate deploy` it hit P3018 (column already exists). Resolved by marking the migration applied in _prisma_migrations (equivalent of `prisma migrate resolve --applied`). 0 unfinished migrations now. LESSON: for a schema change here, either let `migrate deploy` apply it OR raw-DDL THEN `migrate resolve --applied` — don't do both.
+  - **Artifact consolidation DONE:** canonical sale cmpt2oq6q set isOngoing=true; orphaned item from old ENDED row (cmom7h73l) re-pointed (103→104 items); old row soft-deleted (deletedAt set, status ENDED, 0 items). Historical PointsTransaction/SaleChecklist/SaleRipple left on the old row (not re-pointed — avoids points/analytics skew).
+  - **FOLLOW-UPS CLOSED (S1009, Patrick: stop deferring):**
+    1. **Soft-deleted sales now 404** — `saleController.getSale` returns 404 when `sale.deletedAt` is set (was returning the row → stale render). Frontend getStaticProps already returns Next `notFound` on backend 404. Backend tsc 0. CODE-ONLY pending deploy (then old Artifact sale ID 404s once ISR revalidates).
+    2. **reputationJob credits permanent stores** — count widened to `ENDED OR (PUBLISHED && isOngoing)` (var renamed qualifyingSalesCount) so a permanent storefront isn't stuck at NEW tier. Backend tsc 0. (Patrick decision: permanent store = 1 qualifying sale.)
+    3. **Photo retention** — already handled: photoRetentionCron skips isOngoing sales (permanent-store item photos retained while listed). No further work.
+    4. **Buy Now graceful message — QA ✅ VERIFIED live:** as user5 shopper, Buy It Now → Continue to Pay on Kelly's QA item (invalid Stripe acct) → modal displays "This seller isn't set up to accept online payments yet. Please contact the organizer to arrange your..." (alert element). Not the bare "Try Again". Graceful 409 + CheckoutModal render confirmed end-to-end.
+    5. **Platform-wide consolidation of 400+ scraped RETAIL chains** — intentionally NOT done (Patrick: Artifact is the only real storefront; auto-renew now disabled so no new fragmentation).
+  - **STILL OPEN (genuine external constraint, not a defer):** cart multi-item payment-completion → items-SOLD webhook — prod is on Stripe LIVE keys, so it can only be confirmed by a real (small) purchase. No code to finish.
 - **CORRECTION (Patrick flagged):** prior S1008 BQ rows claimed Buy Now/labels "can't be tested until June 29." FALSE — the published "Artifact Downtown Paw Paw" sale (cmpt2oq6q00138cehpgqx3huk) has 101 AVAILABLE items and its items are purchasable NOW (verified Buy Now 200 + live cart checkout session this session); purchase endpoints don't gate on startDate. The "June 29" was that sale's DB startDate (2026-06-29→07-29) — possibly a wrong date on an already-open sale (flagged to Patrick).
 - **Label composer — 5 refinements, all LIVE + Patrick-confirmed working:**
   1. Item name now prints after the price (8pt) and wraps to 2 lines (forced: width:100% + white-space:normal + overflow-wrap + -webkit-line-clamp:2). Name pulled from Item.title via the same DB lookup as roomTag.
@@ -159,6 +169,7 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
 | Cart multi-item payment-completion | Stripe LIVE keys block test card; real purchase needed to verify items→SOLD webhook | Real purchase or test-mode proxy | S1006 |
+| Soft-deleted sales → 404 (deploy + verify) | FIXED CODE-ONLY S1009 (getSale 404s on deletedAt). Not yet deployed. | Deploy → Chrome: old Artifact sale cmom7h73l → 404; a normal sale unaffected | S1009 |
 
 ## Pending Chrome Verifications
 
@@ -169,6 +180,26 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 | — | Label composer: item name after price (b99f05c1) + dates in corner (55abfc62) + start-position card above preview collapsed (c06cb773) | As Alice Johnson (user1@example.com), navigated /organizer/label-composer/cmpfplxqbxwtucltmbouvz0os. Added "QA Test First Item S983" ($5.00) via PULL FROM PRICED ITEMS → batch shows 1/30 used. Page text confirmed: label contains "$5.00" then "QA Test First Item S983" (item name after price ✅), "6/18–19" in corner (dates ✅). "Expand to choose starting label ▲" card collapsed above label grid (start-position ✅). ss_7380smxpk, ss_26234jf7i, ss_2761xkv7y | S1008 |
 
 ## Next Session
+
+### S1010 — QA the S1009 shipped work (after Patrick pushes the pending block)
+
+**Push first (pending — code + docs, no migration; the isOngoing column is already on prod):**
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale
+git add packages/backend/src/controllers/saleController.ts packages/backend/src/jobs/reputationJob.ts claude_docs/STATE.md claude_docs/patrick-dashboard.md
+git commit -m "S1009 follow-ups: soft-deleted sales 404 (getSale) + permanent stores count toward reputation"
+.\push.ps1
+```
+
+**QA dispatch stubs (Chrome, after the above deploys — run sequentially):**
+1. **Soft-deleted sale → 404** — `Skill('findasale-qa')`: navigate `/sales/cmom7h73l000hz36wzbruoa64` (old Artifact ENDED row, soft-deleted) → expect Next 404 (NOT the stale storefront page). Negative test: a normal published sale still loads 200. Evidence: URL + outcome + screenshot.
+2. **Cart multi-item payment-completion** — Patrick action (not automatable): make ONE real low-value purchase (2 same-sale Buy-Now items → cart → Go to Checkout → real card) → confirm redirect `?checkout=success` + both items flip to SOLD + Purchase rows created. Prod is on Stripe LIVE keys so QA cannot use a test card. Accept as the only open item.
+3. **Regression re-confirm (already spot-checked S1009, re-confirm post-deploy):** `/sales` feed renders, `/search?q=thrift` returns results, a normal time-boxed sale page loads + a normal ENDED sale still shows ended — confirm the saleController 404 change didn't affect non-deleted sales.
+
+**Already VERIFIED this session — do NOT re-QA (recorded S1009):** permanent storefront live (Artifact = one ongoing store, Store JSON-LD, 104 items); feed 19,509 + search regression clean; Buy Now graceful "seller isn't set up" message renders; reputationJob fix (code-only — tier recalculation is weekly/non-observable, accept code-only); photo-retention (handled). Label composer (item name, room tag, dates-corner, start-position, black text, preview offset) + Blog — verified prior.
+
+**Deferred (ADR §6, Patrick decisions when ready, non-blocking):** old→canonical redirect map for dead sale links; permanent-store photo-retention-by-item-status refinement; reputationJob "active storefront" weighting.
+
 
 ### S1009 — Dev or QA
 
