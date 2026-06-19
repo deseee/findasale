@@ -163,7 +163,7 @@ async function runGeocodeBacklog(): Promise<void> {
       zip: true,
       sourceName: true,
     },
-    orderBy: { createdAt: 'asc' },
+    orderBy: [{ startDate: { sort: 'asc', nulls: 'last' } }, { createdAt: 'asc' }],
     take: BATCH_SIZE,
   });
 
