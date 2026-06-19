@@ -1461,6 +1461,20 @@ export const webhookHandler = async (req: Request, res: Response) => {
           );
         }
       }
+
+      // À-la-carte sale fee: apply alaCarteFeePaid via PI metadata
+      if (paymentIntent.metadata?.type === 'ALA_CARTE' && paymentIntent.metadata?.saleId) {
+        try {
+          await prisma.sale.update({
+            where: { id: paymentIntent.metadata.saleId },
+            data: { alaCarteFeePaid: true, purchaseModel: 'ALA_CARTE', alaCarte: true },
+          });
+          console.log(`[ala-carte] Sale ${paymentIntent.metadata.saleId} marked alaCarteFeePaid via PI webhook`);
+        } catch (err: any) {
+          console.error('[ala-carte] Failed to update sale via PI webhook:', err);
+        }
+      }
+
       break;
     }
     case 'payment_intent.payment_failed': {
@@ -2550,6 +2564,12 @@ export const createAlaCarteCheckout = async (req: AuthRequest, res: Response) =>
       metadata: {
         saleId: id,
         type: 'ALA_CARTE',
+      },
+      payment_intent_data: {
+        metadata: {
+          saleId: id,
+          type: 'ALA_CARTE',
+        },
       },
     });
 
