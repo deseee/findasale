@@ -1,28 +1,32 @@
-# Patrick's Dashboard — Week of June 16, 2026 (Updated S1010)
+# Patrick's Dashboard — Week of June 19, 2026 (Updated S1011)
 
 ---
 
-## What Happened This Session (S1010 — June 18)
+## What Happened This Session (S1011 — June 19)
 
-**QA session — closed out pending items:**
+**Bug/Data session — 4 fixes + cleanup:**
 
-- ✅ **PCVs applied to roadmap.md:** Blog (row 551) and Label Composer (row 301) now show Chrome ✅ S1008 in roadmap. Buy Now graceful error noted inline (no standalone row).
-- ✅ **Soft-deleted sale → 404 Chrome-verified:** Navigated directly to the old Artifact ENDED sale URL — got the proper "Page not found" 404. The S1009 fix is confirmed working in production. ss_7566z4gbe.
-- ✅ **Normal sale unaffected (negative test):** Permanent Artifact storefront still loads correctly — "Permanent storefront" label, Paw Paw MI, 104 items. ss_9410vkt0l.
-- ✅ **Feed + search regression clean:** /sales showed 19,496 sales ✅; /search?q=thrift returned 10 results ✅. No regressions from the saleController 404 change.
+- ✅ **Permanent sale date fix** — Artifact storefront (and any RETAIL sale) no longer shows a date range or "Ending Soon" badge on the organizer dashboard. Deployed (commit 75c1bf2e).
+- ✅ **MRR internal exclusion** — artifactmi@gmail.com and deseee@gmail.com now excluded from the admin MRR calculation. Deployed (commit 37d9f9c3).
+- ✅ **À-la-carte webhook pipeline fixed** — the $9.99 sale fee now gets recorded automatically when Stripe processes the payment. Root cause: metadata wasn't propagating from the Checkout Session to the underlying PaymentIntent, so the webhook handler couldn't identify it as ALA_CARTE. Two-part fix in stripeController.ts. **Pending push (in push block below).**
+- ✅ **DB cleanup** — deleted 4 test sales (Artifact ENDED row, 2 Kelly's test sales, Up North QA315) + Leo Thomas / Star Raiders test purchase. Star Raiders item restored to AVAILABLE.
 
-**Still open (one item, needs you):** Cart multi-item checkout completion — production is on Stripe LIVE keys, so QA cannot use a test card. One small real purchase from you confirms items flip to SOLD.
+**Admin "Failed to load users" error (your screenshot):** This is a Railway PostgreSQL shared memory pressure issue (OS error 53100 "No space left on device") — NOT caused by anything in this session. First 500 occurred 9 minutes before my commit was pushed. Railway's DB node is running out of shared memory on large user queries. Intermittent — reloading usually works. May want to restart the Railway PostgreSQL service if it keeps happening.
 
 ---
 
-## REQUIRED ACTION (S1010 wrap docs)
+## REQUIRED ACTION (S1011 push)
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
-git add claude_docs/STATE.md claude_docs/patrick-dashboard.md claude_docs/strategy/roadmap.md
-git commit -m "S1010 wrap: PCVs applied (Blog #551 + Label Composer #301), soft-deleted 404 Chrome-verified, regression clean"
+git add packages/backend/src/controllers/stripeController.ts
+git add packages/frontend/pages/organizer/dashboard.tsx
+git add claude_docs/STATE.md claude_docs/patrick-dashboard.md
+git commit -m "S1011 wrap: ala-carte PI webhook fix + RETAIL dashboard dates + MRR exclusion + wrap docs"
 .\push.ps1
 ```
+
+Note: adminController.ts (MRR fix) already deployed in commit 37d9f9c3. dashboard.tsx (dates fix) already deployed in 75c1bf2e. Only stripeController.ts is new here.
 
 ---
 
@@ -31,12 +35,14 @@ git commit -m "S1010 wrap: PCVs applied (Blog #551 + Label Composer #301), soft-
 | Area | Status |
 |------|--------|
 | BQ (Blocked Queue) | **1 item** — cart payment-completion (Stripe LIVE keys) |
-| Soft-deleted sales → 404 | ✅ Chrome-verified S1010 (ss_7566z4gbe) |
-| Blog (/blog + /blog/[slug]) | ✅ Chrome-verified S1008 — roadmap ✅ applied S1010 |
-| Label composer (item name, dates, start-position) | ✅ Chrome-verified S1008 — roadmap ✅ applied S1010 |
-| Buy Now graceful error | ✅ Chrome-verified S1008 (noted inline — no roadmap row) |
+| À-la-carte webhook | ✅ Fixed — pending push |
+| RETAIL sale dashboard dates | ✅ Fixed + deployed |
+| Admin MRR calculation | ✅ Fixed + deployed |
+| Blog (/blog + /blog/[slug]) | ✅ Chrome-verified S1008 |
+| Label composer | ✅ Chrome-verified S1008 |
+| Buy Now graceful error | ✅ Chrome-verified S1008 |
 | Cart multi-item checkout | ⚠️ UNVERIFIED — Stripe LIVE keys; real purchase needed |
-| Vercel / Railway | ✅ Both current and healthy |
+| Vercel / Railway | ✅ Both healthy (Railway DB has intermittent memory pressure) |
 | SEO Pages | ✅ estate-sales / yard-sales / auctions / flea-markets — all Chrome verified |
 | eBay Queue Mode | ✅ Confirmed firing */30 |
 | Platform Dashboard | ✅ live |
@@ -52,8 +58,9 @@ git commit -m "S1010 wrap: PCVs applied (Blog #551 + Label Composer #301), soft-
 
 ---
 
-## Next Session (S1011)
+## Next Session (S1012)
 
-1. **Patrick action:** Make one small real purchase from cart (2 same-sale items → checkout → real card) to verify cart checkout completion + items flip to SOLD.
-2. **Carry-forward (Patrick decisions, non-blocking):** Fee rate question (feeCalculator.ts 8% vs 10% locked S106), 4 unpublished eBay items backfill, ebayQueueMode test flip.
-3. **New feature dev:** Check roadmap for next priority after QA is clean (BQ at 1).
+1. **Push block above first** — gets stripeController.ts to Railway.
+2. **Verify à-la-carte fix** — next time an organizer pays the $9.99 fee, confirm `alaCarteFeePaid` flips automatically (check DB or admin panel).
+3. **Railway DB memory pressure** — if admin/users keeps failing, restart Railway PostgreSQL service from the Railway dashboard.
+4. **BQ item** — cart payment-completion still needs a real purchase to verify.

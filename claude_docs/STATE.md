@@ -8,7 +8,7 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
-**S1009 — DEV/QA (2026-06-18). Label composer polish + Buy Now graceful error + Stripe tax OFF. All pushed + Patrick-verified live as artifactmi on "QA First Item Test Sale S983".**
+**S1011 — BUG/DATA (2026-06-19). À-la-carte Stripe webhook pipeline fixed + MRR internal exclusion + RETAIL dashboard dates fixed + DB test-data cleanup.** Label composer polish + Buy Now graceful error + Stripe tax OFF. All pushed + Patrick-verified live as artifactmi on "QA First Item Test Sale S983".**
 - **PERMANENT STOREFRONT (isOngoing) — SHIPPED + Chrome-verified ✅ (deployed commit 066e0be0):** Retired retailAutoRenewJob (no-op); added Sale.isOngoing; additive discovery/feed/search filters `(isOngoing OR endDate>=now)`; Store/LocalBusiness JSON-LD (not Event); cron guards. 16 files + migration. **Chrome QA:** Artifact storefront (cmpt2oq6q) renders LIVE as "Permanent storefront" (no end date/countdown/archive), JSON-LD @type=Store with NO endDate/Event, 104 items ✅. Regression clean: /sales feed 19,509 sales render with date ranges ✅; /search?q=thrift returns 10 sales ✅ (additive filters did NOT break discovery). 
   - **Migration handling note (correction):** this repo's _prisma_migrations IS in sync — `prisma migrate deploy` had only 1 pending migration. The isOngoing column was applied via raw `ALTER TABLE` (psycopg2); when Patrick separately ran `migrate deploy` it hit P3018 (column already exists). Resolved by marking the migration applied in _prisma_migrations (equivalent of `prisma migrate resolve --applied`). 0 unfinished migrations now. LESSON: for a schema change here, either let `migrate deploy` apply it OR raw-DDL THEN `migrate resolve --applied` — don't do both.
   - **Artifact consolidation DONE:** canonical sale cmpt2oq6q set isOngoing=true; orphaned item from old ENDED row (cmom7h73l) re-pointed (103→104 items); old row soft-deleted (deletedAt set, status ENDED, 0 items). Historical PointsTransaction/SaleChecklist/SaleRipple left on the old row (not re-pointed — avoids points/analytics skew).
@@ -186,26 +186,41 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Next Session
 
-### S1011 — Next priority work
+### S1012 — Next priority work
 
 **BQ (1 open item):**
 - Cart multi-item payment-completion — Stripe LIVE keys; real purchase needed. Patrick action only.
 
-**Push block for S1010 wrap docs:**
+**Push block for S1011 code changes + wrap docs:**
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
-git add claude_docs/STATE.md claude_docs/patrick-dashboard.md claude_docs/strategy/roadmap.md
-git commit -m "S1010 wrap: PCVs applied (Blog/Label Composer), soft-deleted 404 Chrome-verified, regression clean"
+git add packages/backend/src/controllers/stripeController.ts
+git add packages/frontend/pages/organizer/dashboard.tsx
+git add claude_docs/STATE.md claude_docs/patrick-dashboard.md
+git commit -m "S1011 wrap: ala-carte PI webhook fix + RETAIL dashboard dates + MRR exclusion + wrap docs"
 .\push.ps1
 ```
+Note: adminController.ts MRR fix already deployed (commit 37d9f9c3). dashboard.tsx date fix deployed (commit 75c1bf2e). Only stripeController.ts is genuinely new in this push.
 
 **Carry-forward (Patrick decisions, non-blocking):**
-- Fee rate question: feeCalculator.ts 8% vs CLAUDE.md/Stack 10% locked S106 — Patrick decision needed before touching that file
+- Fee rate question: feeCalculator.ts 8% vs CLAUDE.md/Stack 10% locked S106 — Patrick decision needed
 - 4 unpublished eBay items backfill (Loy Norrix Choirs, Kirkland Pepper, Whip-It Butane, Contigo Travel Mug)
 - Flip ebayQueueMode on a test org to observe actual queue processing
-- old→canonical redirect map for dead sale links; permanent-store photo-retention-by-item-status refinement
+- Railway PostgreSQL memory pressure — intermittent 500s on admin/users (error 53100); may need Railway DB restart or instance upgrade
+- old→canonical redirect map for dead sale links
 
 ## Recent Sessions
+
+### S1011 — 2026-06-19 | BUG/DATA (Stripe webhook fix + MRR + dashboard + DB cleanup)
+
+**Session type:** BUG/DATA
+**Shipped (pending push):**
+1. **RETAIL dashboard dates** — dashboard.tsx: `saleType !== 'RETAIL'` guard on date range display + urgency tag. Permanent storefronts no longer show "Jun 29 – Jul 29" date range or "Ending Soon" badge. Backend tsc 0 errors.
+2. **MRR internal exclusion** — adminController.ts: `INTERNAL_EMAILS = ['artifactmi@gmail.com', 'deseee@gmail.com']` added to `getStats` Prisma query. Removes ~$158 fake MRR from admin dashboard. Backend tsc 0 errors. **DEPLOYED (commit 37d9f9c3).**
+3. **À-la-carte Stripe webhook pipeline** — stripeController.ts: (a) `payment_intent_data: { metadata: { saleId, type: 'ALA_CARTE' } }` added to `createAlaCarteCheckout` so future PIs carry metadata; (b) ALA_CARTE handler added to `payment_intent.succeeded` — applies `alaCarteFeePaid=true` + `purchaseModel/alaCarte` to the sale automatically. Root cause: metadata was set on Checkout Session but not propagated to the underlying PaymentIntent, so `payment_intent.succeeded` handler had no way to identify ALA_CARTE events. Backend tsc 0 errors. **PENDING PUSH.**
+4. **DB test-data cleanup** — deleted 4 test sales (Artifact ENDED soft-deleted row, Kelly's S875 Mixed Goods, Kelly's QA Flip Report, Up North QA315) + Leo Thomas / Star Raiders test purchase ($3.49 PENDING); restored Star Raiders item to AVAILABLE.
+**Diagnosed:** Admin users "Failed to load users" = Railway PostgreSQL shared memory pressure (PostgreSQL error 53100 `No space left on device`). First 500 at 17:20 UTC, 9 min BEFORE my commit at 17:29 UTC. Not caused by session changes. Railway DB node is hitting memory limits on large user queries.
+**BQ delta:** 1 → 1 (unchanged — cart payment-completion still needs real purchase).
 
 ### S1010 — 2026-06-18 | QA (PCVs applied; soft-deleted 404 Chrome ✅; regressions clean)
 
@@ -246,12 +261,7 @@ git commit -m "S1010 wrap: PCVs applied (Blog/Label Composer), soft-deleted 404 
 **BQ delta:** 0 → 2 (Buy It Now graceful error CODE-ONLY; cart payment completion UNVERIFIED).
 
 ### S1005 — 2026-06-17 | DEV (Google Merchant feed + cart checkout + return policy)
-
-**Session type:** DEV
-**Shipped:** (1) Google Merchant feed `isEbayThumbnail()` filter — eBay CDN thumbnails excluded from image_link, Cloudinary preferred; (2) cart item links clickable (CartDrawer.tsx thumbnail+title → /items/:id); (3) cart multi-item checkout wired to real Stripe Checkout Session (createCartCheckoutSession, Connect fallback pattern, webhook extended: cart_checkout type → Purchase records + SOLD); (4) Buy Now Connect fallback broadened (5 new error codes + message-based matching); (5) return policy page /return-policy (marketplace language, dark mode, 6 sections).
-**Files changed:** googleMerchantFeed.ts, CartDrawer.tsx, stripeController.ts, stripe.ts, pages/return-policy.tsx (new).
-**QA:** CODE-ONLY — all 5 features pending Chrome verification.
-**BQ delta:** unchanged (BQ from S1000 pending).
+- GM feed isEbayThumbnail() filter; cart item links; cart checkout → Stripe; Buy Now fallback broadened; /return-policy page. All CODE-ONLY at wrap.
 
 ### S1004 — 2026-06-17 | QA/RECORDS (BQ cleared to 0; SEO5+SEO6 Chrome ✅)
 
