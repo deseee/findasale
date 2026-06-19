@@ -110,6 +110,7 @@ const AdminUserDetail = () => {
   const isZeroActivity = userData.purchases.length === 0 && !userData.organizer;
 
   return (
+    <>
     <div className="container mx-auto px-4 py-8 max-w-4xl">
       {/* Back link */}
       <Link href="/admin/users" className="text-amber-600 hover:underline text-sm mb-6 inline-block">
@@ -389,7 +390,7 @@ const AdminUserDetail = () => {
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 };
 
