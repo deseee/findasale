@@ -50,8 +50,8 @@ const TEMPLATES: Record<string, Record<string, { subject: string; html: string }
   },
   HOT: {
     touch1: {
-      subject: '[Business Name]: built for the volume you run',
-      html: '<p>Hi [Business Name],</p><p>We\'ve been talking to organizers in [state] running multiple sale events a month — licensed auctioneers, professional liquidators, consignment shops moving real volume.</p><p>The throughput tools we built for that group:</p><p>• RapidFire phone capture: 100 items in under an hour, tagged and priced as you shoot<br>• Staff accounts: delegate photo, pricing, and listing review work<br>• Printable inventory sheets for sale day<br>• Inventory export to eBay, Shopify, accounting and your other systems anytime</p><p>Your storefront is built and waiting:<br><a href="[preview href]">[preview link]</a></p><p>45-second walkthrough: <a href="[video href]?src=outreach-hot-1">finda.sale/video</a></p><p>The FindA.Sale Team<br><a href="[unsubscribe link]">Unsubscribe</a> · [physical address]</p>',
+      subject: '[Business Name] — every sale is its own discovery problem',
+      html: '<p>Hi [Business Name],</p><p>Every sale you run starts from scratch on discovery. New flyers, new Facebook posts, new emails to your list. When the sale ends, the inventory disappears — even if half the items didn\'t move.</p><p>We built [Business Name] a storefront on FindA.Sale where your inventory stays discoverable between sales. Shoppers searching for what you sell find it whether the sale was last week or last month. Repeat buyers come back to one place instead of hunting you down every time.</p><p>Your storefront is already built:<br><a href="[preview href]">[preview link]</a></p><p>45-second walkthrough: <a href="[video href]?src=outreach-hot-1">finda.sale/video</a></p><p>The FindA.Sale Team<br><a href="[unsubscribe link]">Unsubscribe</a> · [physical address]</p>',
     },
     touch2: {
       subject: 'Why repeat buyers stop showing up',
