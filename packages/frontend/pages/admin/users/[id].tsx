@@ -54,6 +54,11 @@ const AdminUserDetail = () => {
   const [userData, setUserData] = useState<UserDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [showMessageModal, setShowMessageModal] = useState(false);
+  const [msgSubject, setMsgSubject] = useState('');
+  const [msgBody, setMsgBody] = useState('');
+  const [msgSending, setMsgSending] = useState(false);
+  const [msgResult, setMsgResult] = useState<{ ok: boolean; text: string } | null>(null);
 
   useEffect(() => {
     if (!isLoading && (!user || !user.roles?.includes('ADMIN'))) {
@@ -118,6 +123,12 @@ const AdminUserDetail = () => {
           <p className="text-warm-500 dark:text-warm-400 text-sm mt-1">{userData.email}</p>
         </div>
         <div className="flex flex-wrap gap-2 justify-end">
+          <button
+            onClick={() => { setShowMessageModal(true); setMsgResult(null); setMsgSubject(''); setMsgBody(''); }}
+            className="px-3 py-1.5 text-xs font-medium bg-amber-600 hover:bg-amber-700 text-white rounded transition-colors"
+          >
+            Send Message
+          </button>
           {userData.roles.map(r => (
             <span
               key={r}
@@ -304,6 +315,80 @@ const AdminUserDetail = () => {
           </div>
         )}
       </div>
+    </div>
+
+      {/* Send Direct Message Modal */}
+      {showMessageModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-lg">
+            <div className="flex items-center justify-between p-5 border-b border-warm-200 dark:border-gray-700">
+              <h2 className="text-base font-semibold text-warm-900 dark:text-warm-100">
+                Send Message to {userData.name}
+              </h2>
+              <button
+                onClick={() => setShowMessageModal(false)}
+                className="text-warm-400 hover:text-warm-600 dark:text-warm-500 dark:hover:text-warm-300 text-xl leading-none"
+              >
+                ×
+              </button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-warm-600 dark:text-warm-400 mb-1">Subject</label>
+                <input
+                  type="text"
+                  value={msgSubject}
+                  onChange={e => setMsgSubject(e.target.value)}
+                  placeholder="e.g. Welcome to FindA.Sale!"
+                  className="w-full border border-warm-300 dark:border-gray-600 rounded px-3 py-2 text-sm bg-white dark:bg-gray-700 text-warm-900 dark:text-warm-100 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-warm-600 dark:text-warm-400 mb-1">Message</label>
+                <textarea
+                  value={msgBody}
+                  onChange={e => setMsgBody(e.target.value)}
+                  rows={6}
+                  placeholder="Write your message here..."
+                  className="w-full border border-warm-300 dark:border-gray-600 rounded px-3 py-2 text-sm bg-white dark:bg-gray-700 text-warm-900 dark:text-warm-100 focus:outline-none focus:ring-2 focus:ring-amber-500 resize-none"
+                />
+              </div>
+              {msgResult && (
+                <p className={`text-sm ${msgResult.ok ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                  {msgResult.text}
+                </p>
+              )}
+            </div>
+            <div className="flex justify-end gap-3 px-5 pb-5">
+              <button
+                onClick={() => setShowMessageModal(false)}
+                className="px-4 py-2 text-sm text-warm-600 dark:text-warm-400 hover:text-warm-900 dark:hover:text-warm-100 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                disabled={msgSending || !msgSubject.trim() || !msgBody.trim()}
+                onClick={async () => {
+                  setMsgSending(true);
+                  setMsgResult(null);
+                  try {
+                    await api.post(`/admin/users/${userData.id}/message`, { subject: msgSubject, body: msgBody });
+                    setMsgResult({ ok: true, text: `Message sent to ${userData.email}` });
+                    setTimeout(() => setShowMessageModal(false), 1500);
+                  } catch (err: any) {
+                    setMsgResult({ ok: false, text: err?.response?.data?.message || 'Failed to send message' });
+                  } finally {
+                    setMsgSending(false);
+                  }
+                }}
+                className="px-4 py-2 text-sm font-medium bg-amber-600 hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded transition-colors"
+              >
+                {msgSending ? 'Sending...' : 'Send'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

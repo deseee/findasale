@@ -1473,6 +1473,24 @@ export const webhookHandler = async (req: Request, res: Response) => {
         } catch (err: any) {
           console.error('[ala-carte] Failed to update sale via PI webhook:', err);
         }
+        // Idempotency: checkout.session.completed creates the Purchase record for ALA_CARTE.
+        // This PI handler only creates one if no checkout session fired (e.g. direct PI flow).
+        const existingPurchase = await prisma.purchase.findFirst({
+          where: { saleId: paymentIntent.metadata.saleId, source: 'ALA_CARTE', status: 'PAID' },
+        });
+        if (!existingPurchase) {
+          await prisma.purchase.create({
+            data: {
+              amount: 9.99,
+              platformFeeAmount: 9.99,
+              status: 'PAID',
+              saleId: paymentIntent.metadata.saleId,
+              stripePaymentIntentId: paymentIntent.id,
+              source: 'ALA_CARTE',
+              isTestTransaction: false,
+            },
+          }).catch((err: any) => console.error('[ala-carte] Failed to create Purchase via PI webhook:', err));
+        }
       }
 
       break;
@@ -1789,6 +1807,25 @@ export const webhookHandler = async (req: Request, res: Response) => {
             alaCarte: true,
           },
         }).catch(err => console.error('[ala-carte] Failed to update sale after checkout:', err));
+        // Create Purchase record for revenue tracking
+        try {
+          await prisma.purchase.create({
+            data: {
+              amount: 9.99,
+              platformFeeAmount: 9.99,
+              status: 'PAID',
+              saleId: session.metadata.saleId,
+              stripePaymentIntentId: typeof session.payment_intent === 'string'
+                ? session.payment_intent
+                : (session.payment_intent as any)?.id ?? null,
+              source: 'ALA_CARTE',
+              isTestTransaction: false,
+            },
+          });
+          console.log(`[ala-carte] Purchase record created for sale ${session.metadata.saleId}`);
+        } catch (purchaseErr: any) {
+          console.error('[ala-carte] Failed to create Purchase record:', purchaseErr);
+        }
       }
       // Hold-to-Pay Phase 2: Handle checkout session completion for invoices
       if (session.payment_intent) {
