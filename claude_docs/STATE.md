@@ -169,55 +169,49 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
 | Cart multi-item payment-completion | Stripe LIVE keys block test card; real purchase needed to verify items→SOLD webhook | Real purchase or test-mode proxy | S1006 |
-| Soft-deleted sales → 404 (deploy + verify) | FIXED CODE-ONLY S1009 (getSale 404s on deletedAt). Not yet deployed. | Deploy → Chrome: old Artifact sale cmom7h73l → 404; a normal sale unaffected | S1009 |
 
 ## Pending Chrome Verifications
 
 | # | Feature | Evidence | Session |
 |---|---------|----------|---------|
-| 551 | Blog — /blog listing + /blog/[slug] post page | Navigated finda.sale/blog as user5. 7 cards rendered (category badge, date, reading time, title, excerpt). Clicked post → full body, breadcrumb, "← Back to Blog" link. JSON-LD Article schema verified (correct @type, headline, datePublished). Canonical URL correct. Footer Blog link confirmed. Dark mode clean. ss_170867567, ss_9890ula3j | S1008 |
-| — | Buy Now graceful 409 error (S1006 fix — CheckoutModal renders loadError) | Navigated to item cmqer8m8w00x5me4oqoabaulh as user5 (Leo Thomas). Clicked "Buy It Now" → "Complete Purchase" modal opened. Clicked "Continue to Pay" → red error box: "This seller isn't set up to accept online payments yet. Please contact the organizer to arrange your purchase." with "Try Again" link. stripeController.ts 409 + CheckoutModal.tsx {loadError} confirmed working. ss_8945gfi4w, ss_9148p3694, ss_8856ik32o, ss_56944gx1i | S1008 |
-| — | Label composer: item name after price (b99f05c1) + dates in corner (55abfc62) + start-position card above preview collapsed (c06cb773) | As Alice Johnson (user1@example.com), navigated /organizer/label-composer/cmpfplxqbxwtucltmbouvz0os. Added "QA Test First Item S983" ($5.00) via PULL FROM PRICED ITEMS → batch shows 1/30 used. Page text confirmed: label contains "$5.00" then "QA Test First Item S983" (item name after price ✅), "6/18–19" in corner (dates ✅). "Expand to choose starting label ▲" card collapsed above label grid (start-position ✅). ss_7380smxpk, ss_26234jf7i, ss_2761xkv7y | S1008 |
+| (all S1008 PCVs applied to roadmap.md this session S1010 — table cleared) | | | |
 
 ## Next Session
 
-### S1010 — QA the S1009 shipped work (after Patrick pushes the pending block)
+### S1011 — Next priority work
 
-**Push first (pending — code + docs, no migration; the isOngoing column is already on prod):**
+**BQ (1 open item):**
+- Cart multi-item payment-completion — Stripe LIVE keys; real purchase needed. Patrick action only.
+
+**Push block for S1010 wrap docs:**
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
-git add packages/backend/src/controllers/saleController.ts packages/backend/src/jobs/reputationJob.ts claude_docs/STATE.md claude_docs/patrick-dashboard.md
-git commit -m "S1009 follow-ups: soft-deleted sales 404 (getSale) + permanent stores count toward reputation"
+git add claude_docs/STATE.md claude_docs/patrick-dashboard.md claude_docs/strategy/roadmap.md
+git commit -m "S1010 wrap: PCVs applied (Blog/Label Composer), soft-deleted 404 Chrome-verified, regression clean"
 .\push.ps1
 ```
 
-**QA dispatch stubs (Chrome, after the above deploys — run sequentially):**
-1. **Soft-deleted sale → 404** — `Skill('findasale-qa')`: navigate `/sales/cmom7h73l000hz36wzbruoa64` (old Artifact ENDED row, soft-deleted) → expect Next 404 (NOT the stale storefront page). Negative test: a normal published sale still loads 200. Evidence: URL + outcome + screenshot.
-2. **Cart multi-item payment-completion** — Patrick action (not automatable): make ONE real low-value purchase (2 same-sale Buy-Now items → cart → Go to Checkout → real card) → confirm redirect `?checkout=success` + both items flip to SOLD + Purchase rows created. Prod is on Stripe LIVE keys so QA cannot use a test card. Accept as the only open item.
-3. **Regression re-confirm (already spot-checked S1009, re-confirm post-deploy):** `/sales` feed renders, `/search?q=thrift` returns results, a normal time-boxed sale page loads + a normal ENDED sale still shows ended — confirm the saleController 404 change didn't affect non-deleted sales.
-
-**Already VERIFIED this session — do NOT re-QA (recorded S1009):** permanent storefront live (Artifact = one ongoing store, Store JSON-LD, 104 items); feed 19,509 + search regression clean; Buy Now graceful "seller isn't set up" message renders; reputationJob fix (code-only — tier recalculation is weekly/non-observable, accept code-only); photo-retention (handled). Label composer (item name, room tag, dates-corner, start-position, black text, preview offset) + Blog — verified prior.
-
-**Deferred (ADR §6, Patrick decisions when ready, non-blocking):** old→canonical redirect map for dead sale links; permanent-store photo-retention-by-item-status refinement; reputationJob "active storefront" weighting.
-
-
-### S1009 — Dev or QA
-
-**Patrick action (already done — blog push block was S1007 Next Session):** Confirm push `b99f05c1` included blog + S1006 graceful-error files.
-
-**BQ item open:**
-1. Cart payment-completion — UNVERIFIED (Stripe LIVE keys; test card rejected on prod)
-
-**Apply PCVs to roadmap.md (per cross-session rule):** Blog row 551 + Buy Now graceful error + Label composer S1006c/d → apply Chrome QA ✅ columns. Include roadmap.md in push block.
-
-**Apply blog PCV to roadmap.md (per cross-session rule):** Row 551 Blog Chrome QA column → ✅ S1008. Include roadmap.md in push block.
-
-**Open carry-forward:**
+**Carry-forward (Patrick decisions, non-blocking):**
 - Fee rate question: feeCalculator.ts 8% vs CLAUDE.md/Stack 10% locked S106 — Patrick decision needed before touching that file
 - 4 unpublished eBay items backfill (Loy Norrix Choirs, Kirkland Pepper, Whip-It Butane, Contigo Travel Mug)
 - Flip ebayQueueMode on a test org to observe actual queue processing
+- old→canonical redirect map for dead sale links; permanent-store photo-retention-by-item-status refinement
 
 ## Recent Sessions
+
+### S1010 — 2026-06-18 | QA (PCVs applied; soft-deleted 404 Chrome ✅; regressions clean)
+
+**Session type:** QA
+**PCVs applied to roadmap.md (cross-session rule, from S1008 PCV table):**
+- Row 551 Blog → Chrome QA ✅ S1008 (7 cards, JSON-LD, dark mode, Footer link. ss_170867567, ss_9890ula3j)
+- Row 301 Label Composer → Human QA ✅ S1008 (item name after price, dates corner, start-position collapsed. ss_7380smxpk, ss_26234jf7i, ss_2761xkv7y)
+- Buy Now graceful 409 → no standalone roadmap row; noted inline (stripeController 409 + CheckoutModal {loadError} ✅ S1008)
+**QA — Soft-deleted sale → 404 ✅:** Navigated finda.sale/sales/cmom7h73l000hz36wzbruoa64 (old Artifact ENDED row, deletedAt set). Got Next.js 404 page "This page could not be found." Confirmed fix (getSale 404s on deletedAt) deployed and working. ss_7566z4gbe.
+**QA — Negative test (normal sale unaffected) ✅:** Navigated finda.sale/sales/cmpt2oq6q00138cehpgqx3huk (Artifact storefront, isOngoing). Page loaded correctly — "Permanent storefront" label, Paw Paw MI, store content. saleController change did not break non-deleted sales. ss_9410vkt0l.
+**QA — /sales feed regression ✅:** finda.sale/sales rendered 19,496 sales. ss_16629aq1d.
+**QA — /search regression ✅:** /search?q=thrift returned Sales (10) tab with results. ss_1405rtn1d.
+**BQ delta:** 2 → 1 (soft-deleted 404 Chrome-verified S1010 → removed; cart payment-completion remains, Patrick action needed).
+**PCV table:** Cleared (all 3 S1008 PCVs applied to roadmap.md).
 
 ### S1008 — 2026-06-18 | QA (Blog ✅ + Buy Now/Label Composer UNVERIFIED)
 
