@@ -419,7 +419,8 @@ export const getSale = async (req: Request, res: Response) => {
       }
     });
 
-    if (!sale) return res.status(404).json({ message: 'Sale not found' });
+    // Soft-deleted sales must 404 (not render a stale shell)
+    if (!sale || sale.deletedAt) return res.status(404).json({ message: 'Sale not found' });
 
     // Rank-Based Early Access Gate: Check if user can view this sale
     const isOrganizer = authReq.user?.id === sale.organizer.userId;
