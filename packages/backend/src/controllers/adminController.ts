@@ -4,6 +4,7 @@ import { prisma } from '../lib/prisma';
 import { getMonthlyAICost, resetMonthlyAICost } from '../lib/aiCostTracker';
 import { getMonthlyCloudinaryEstimate, getBandwidthThreshold, getTodayCloudinaryUsage, resetTodayCloudinaryUsage } from '../lib/cloudinaryBandwidthTracker';
 import { getEbayRateLimitStatus } from '../lib/ebayRateLimiter';
+import { emailService } from '../lib/emailService';
 
 // GET /api/admin/stats — platform overview
 export const getStats = async (req: AuthRequest, res: Response) => {
@@ -109,6 +110,7 @@ export const getStats = async (req: AuthRequest, res: Response) => {
       where: {
         createdAt: { gte: thirtyDaysAgo },
         status: 'PAID',
+        source: { not: 'ALA_CARTE' },
       },
       include: {
         item: {
@@ -141,6 +143,7 @@ export const getStats = async (req: AuthRequest, res: Response) => {
       where: {
         createdAt: { gte: todayStart },
         status: 'PAID',
+        source: { not: 'ALA_CARTE' },
       },
       include: {
         item: {
@@ -165,11 +168,23 @@ export const getStats = async (req: AuthRequest, res: Response) => {
       transactionRevenueToday += Math.round(p.amount * feeRate * 100);
     });
 
+    // Ala-carte revenue today
+    const alaCartePurchasesToday = await prisma.purchase.aggregate({
+      where: { source: 'ALA_CARTE', status: 'PAID', createdAt: { gte: todayStart } },
+      _sum: { amount: true },
+    });
+    const alaCarteRevenueToday = Math.round((alaCartePurchasesToday._sum.amount || 0) * 100);
+    transactionRevenueToday += alaCarteRevenueToday;
+
     // Hunt Pass revenue (items with HUNT_PASS type if field exists; for now 0)
     const huntPassRevenueLast30d = 0;
 
-    // À la carte revenue (items marked as alaCarte with fee paid)
-    const alaCarteRevenueLast30d = 0;
+    // À la carte revenue — real query against Purchase.source = 'ALA_CARTE'
+    const alaCartePurchasesLast30d = await prisma.purchase.aggregate({
+      where: { source: 'ALA_CARTE', status: 'PAID', createdAt: { gte: thirtyDaysAgo } },
+      _sum: { amount: true },
+    });
+    const alaCarteRevenueLast30d = Math.round((alaCartePurchasesLast30d._sum.amount || 0) * 100);
 
     // Conversion funnel
     const totalSignups = totalUsers;
@@ -1606,5 +1621,49 @@ export const getOutreachOpens = async (req: AuthRequest, res: Response) => {
   } catch (error: any) {
     console.error('Error fetching outreach opens:', error);
     res.status(500).json({ message: 'Failed to fetch outreach opens', error: error.message });
+  }
+};
+
+// POST /api/admin/users/:userId/message
+export const sendDirectMessageToUser = async (req: AuthRequest, res: Response) => {
+  try {
+    const { userId } = req.params;
+    const { subject, body } = req.body;
+
+    if (!subject?.trim() || !body?.trim()) {
+      return res.status(400).json({ message: 'Subject and body are required' });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, email: true, name: true },
+    });
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    await emailService.emails.send({
+      from: 'FindA.Sale <support@finda.sale>',
+      to: user.email,
+      subject: subject.trim(),
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <p>Hi ${user.name || 'there'},</p>
+          ${body.trim().split('\n').map((line: string) => `<p>${line || '&nbsp;'}</p>`).join('')}
+          <hr style="border: none; border-top: 1px solid #eee; margin: 24px 0;" />
+          <p style="color: #666; font-size: 12px;">
+            — The FindA.Sale Team<br/>
+            <a href="https://finda.sale">finda.sale</a>
+          </p>
+        </div>
+      `,
+      jobName: 'admin-direct-message',
+    });
+
+    res.json({ success: true, message: `Message sent to ${user.email}` });
+  } catch (err: any) {
+    console.error('[admin] sendDirectMessageToUser error:', err);
+    res.status(500).json({ message: 'Failed to send message' });
   }
 };

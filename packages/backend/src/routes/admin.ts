@@ -37,6 +37,7 @@ import {
   getOutreachStats,
   getOutreachOpens,
   getDrilldown,
+  sendDirectMessageToUser,
 } from '../controllers/adminController';
 import {
   createInvite,
@@ -76,6 +77,7 @@ router.patch('/users/:userId/role', updateUserRole);
 router.patch('/users/:userId/suspend', suspendUser);
 router.patch('/users/:userId/unsuspend', unsuspendUser);
 router.delete('/users/:userId', deleteUser);
+router.post('/users/:userId/message', sendDirectMessageToUser);
 router.patch('/users/:userId/restore', restoreUser);
 router.get('/sales', getSales);
 router.delete('/sales/:saleId', deleteSale);
