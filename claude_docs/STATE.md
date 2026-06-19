@@ -39,6 +39,14 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 - **BQ: 3→1** (Buy Now graceful 409 ✅ VERIFIED this session — user5 on Kelly's QA sale → "This seller isn't set up to accept online payments yet…" rendered correctly; ss_8945gfi4w, ss_8856ik32o. Label composer S1006c/d ✅ VERIFIED this session — item name after price, dates in corner (6/18–19), start-position card collapsed above preview; ss_7380smxpk, ss_2761xkv7y. Cart payment-completion UNVERIFIED — Stripe LIVE keys, test card rejected). **Blog ✅ VERIFIED this session** (7 cards, post body+JSON-LD+canonical+Back-to-Blog, dark mode; ss_170867567, ss_9890ula3j).
 
 
+**S1008 — RESEARCH/CONTENT (2026-06-19). Competitor research + content expansion.**
+- Researched 3 new competitors from AlternativeTo: EstiMint ($49+/mo, DIRECT AI-catalog competitor), Stoople (buyer map), Loot Aura (free app). Added all three to competitor-monitor SKILL.md.
+- Competitive analysis: EstiMint is the primary threat; FindA.Sale free tier + marketplace is the differentiator. EstiMint advertises on Capterra, Gavelist software roundups.
+- Researched Vinted (vinted.com): US launch Jan 2026, zero seller fees (buyers pay 5%+$0.70). Fashion-focused, NOT an organizer tool. Indirect threat: individual sellers list items there instead of via organizer-managed FindA.Sale sales. Added to competitor-monitor SKILL.md.
+- Added roadmap rows: #552 (Gavelist AI roundup outreach), #553 (EstiMint alternative blog post).
+- Blog post written and registered: "Free Estate Sale Cataloging Software: A Better Alternative to Subscription Tools" (slug: free-estate-sale-cataloging-software-estimint-alternative, postH, publishDate 2026-07-15). CODE-ONLY, pending push.
+- BQ: 3 items unchanged (blog /blog, Buy Now graceful error, cart payment-completion).
+
 **S1007 — DEV (2026-06-18). Blog section built — /blog + /blog/[slug], 7 posts, SEO, JSON-LD. Competitor-monitor scheduled task updated to write full blog posts weekly.**
 - **Blog section (CODE-ONLY, 10 new files + 1 modified):** `/blog` listing page (7 cards: title, category badge, publish date, reading time, excerpt). `/blog/[slug]` post pages (parseMarkdown renderer, JSON-LD Article schema, canonical + og: tags, breadcrumb, Back to Blog link). 7 post data files in `packages/frontend/data/blog/posts/`. Blog index (`packages/frontend/data/blog/index.ts`). Footer Blog link added to Layout.tsx. ISR: revalidate:86400 on both pages. Static paths with fallback:'blocking'. TypeScript: 0 errors.
 - **Competitor-monitor SKILL.md updated:** Phase 2 now writes full 600–900 word blog post drafts to `claude_docs/marketing/blog-drafts/draft-[DATE]-[slug].md` in BlogPost format. Hardcoded old session path fixed → dynamic discovery via `ls -d /sessions/*/mnt/FindaSale`.
