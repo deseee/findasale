@@ -75,7 +75,7 @@ export async function getBatchOfUngeocodedSales(req: Request, res: Response): Pr
           zip: true,
           sourceName: true,
         },
-        orderBy: { createdAt: 'asc' },
+        orderBy: [{ startDate: { sort: 'asc', nulls: 'last' } }, { createdAt: 'asc' }],
         take: limit,
         skip: offset,
       }),
