@@ -491,7 +491,7 @@ const OrganizerDashboard = () => {
 
   // Helper: Get urgency tag based on hours remaining from statsData activeSale
   const getUrgencyTag = () => {
-    if (!statsData?.activeSale?.endDate || statsData.activeSale.status !== 'PUBLISHED') return null;
+    if (!statsData?.activeSale?.endDate || statsData.activeSale.status !== 'PUBLISHED' || statsData.activeSale.saleType === 'RETAIL') return null;
     const now = new Date();
     const endTime = new Date(statsData.activeSale.endDate);
     const hoursRemaining = (endTime.getTime() - now.getTime()) / (1000 * 60 * 60);
@@ -1033,7 +1033,7 @@ const OrganizerDashboard = () => {
                             {activeSale.city && (
                               <p className="text-sm text-warm-600 dark:text-warm-400 mb-3">
                                 {activeSale.city}
-                                {activeSale.startDate && (
+                                {activeSale.startDate && activeSale.saleType !== 'RETAIL' && (
                                   <>
                                     {' • '}
                                     {activeSale.status === 'PUBLISHED' ? (
