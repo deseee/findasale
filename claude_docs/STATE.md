@@ -8,6 +8,10 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
+**S1012 — BUG/DATA (2026-06-19). À-la-carte revenue now tracked in admin dashboard + admin DM feature.**
+- **À-LA-CARTE REVENUE FIXED (S1012, deployed commits 9c445eb7 + 4374e40a):** Admin "Today's Revenue" now includes the $9.99 ala-carte fee. Backfilled existing Purchase record via psycopg2 (id: cj5sxhx0ruuyw9lb4n98exiax). Code fixes: (1) adminController.ts — real prisma.purchase.aggregate query for ala-carte revenue (30d + today), ALA_CARTE excluded from fee-rate multiplication to avoid double-counting; (2) stripeController.ts — checkout.session.completed ALA_CARTE handler now creates Purchase record (source='ALA_CARTE'); payment_intent.succeeded handler has idempotency guard. (3) Admin DM feature: POST /admin/users/:userId/message sends transactional email via emailService; "Send Message" button + modal added to admin/users/[id].tsx.
+- **BQ: 1 → 1 (unchanged).**
+
 **S1011 — BUG/DATA (2026-06-19). À-la-carte Stripe webhook pipeline fixed + MRR internal exclusion + RETAIL dashboard dates fixed + DB test-data cleanup.** Label composer polish + Buy Now graceful error + Stripe tax OFF. All pushed + Patrick-verified live as artifactmi on "QA First Item Test Sale S983".**
 - **PERMANENT STOREFRONT (isOngoing) — SHIPPED + Chrome-verified ✅ (deployed commit 066e0be0):** Retired retailAutoRenewJob (no-op); added Sale.isOngoing; additive discovery/feed/search filters `(isOngoing OR endDate>=now)`; Store/LocalBusiness JSON-LD (not Event); cron guards. 16 files + migration. **Chrome QA:** Artifact storefront (cmpt2oq6q) renders LIVE as "Permanent storefront" (no end date/countdown/archive), JSON-LD @type=Store with NO endDate/Event, 104 items ✅. Regression clean: /sales feed 19,509 sales render with date ranges ✅; /search?q=thrift returns 10 sales ✅ (additive filters did NOT break discovery). 
   - **Migration handling note (correction):** this repo's _prisma_migrations IS in sync — `prisma migrate deploy` had only 1 pending migration. The isOngoing column was applied via raw `ALTER TABLE` (psycopg2); when Patrick separately ran `migrate deploy` it hit P3018 (column already exists). Resolved by marking the migration applied in _prisma_migrations (equivalent of `prisma migrate resolve --applied`). 0 unfinished migrations now. LESSON: for a schema change here, either let `migrate deploy` apply it OR raw-DDL THEN `migrate resolve --applied` — don't do both.
@@ -186,21 +190,18 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Next Session
 
-### S1012 — Next priority work
+### S1013 — Next priority work
 
 **BQ (1 open item):**
 - Cart multi-item payment-completion — Stripe LIVE keys; real purchase needed. Patrick action only.
 
-**Push block for S1011 code changes + wrap docs:**
+**Wrap docs push (S1012):**
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
-git add packages/backend/src/controllers/stripeController.ts
-git add packages/frontend/pages/organizer/dashboard.tsx
 git add claude_docs/STATE.md claude_docs/patrick-dashboard.md
-git commit -m "S1011 wrap: ala-carte PI webhook fix + RETAIL dashboard dates + MRR exclusion + wrap docs"
+git commit -m "S1012 wrap: docs"
 .\push.ps1
 ```
-Note: adminController.ts MRR fix already deployed (commit 37d9f9c3). dashboard.tsx date fix deployed (commit 75c1bf2e). Only stripeController.ts is genuinely new in this push.
 
 **Carry-forward (Patrick decisions, non-blocking):**
 - Fee rate question: feeCalculator.ts 8% vs CLAUDE.md/Stack 10% locked S106 — Patrick decision needed
@@ -210,6 +211,17 @@ Note: adminController.ts MRR fix already deployed (commit 37d9f9c3). dashboard.t
 - old→canonical redirect map for dead sale links
 
 ## Recent Sessions
+
+### S1012 — 2026-06-19 | BUG/DATA (Ala-carte revenue tracking + admin DM)
+
+**Session type:** BUG/DATA
+**Shipped (commits 9c445eb7, 4374e40a):**
+1. **Ala-carte revenue backfill** — psycopg2 direct DB insert: Purchase record `cj5sxhx0ruuyw9lb4n98exiax` ($9.99, PAID, source=ALA_CARTE) for the existing ala-carte sale. Admin dashboard "Today's Revenue" now shows $9.99 immediately.
+2. **adminController.ts revenue fix** — replaced hardcoded `alaCarteRevenueLast30d = 0` with real `prisma.purchase.aggregate` queries (30d + today); ALA_CARTE source excluded from fee-rate multiplication; `transactionRevenueToday += alaCarteRevenueToday` so the TODAY card reflects the combined total.
+3. **stripeController.ts webhook fix** — `checkout.session.completed` ALA_CARTE handler now creates a `Purchase` record (source=ALA_CARTE, amount=9.99, status=PAID). `payment_intent.succeeded` ALA_CARTE handler has idempotency guard (`findFirst` check) to prevent double-counting.
+4. **Admin DM feature** — `POST /admin/users/:userId/message` endpoint (adminController + admin.ts route); "Send Message" button + subject/body modal on admin/users/[id].tsx. Sends via emailService.emails.send (Gmail transactional rail). Fixed JSX fragment wrapper for modal overlay.
+**Files changed:** adminController.ts, stripeController.ts, admin.ts, admin/users/[id].tsx. TypeScript: 0 errors (both packages).
+**BQ delta:** 1 → 1 (cart payment-completion unchanged — Stripe LIVE keys, Patrick action only).
 
 ### S1011 — 2026-06-19 | BUG/DATA (Stripe webhook fix + MRR + dashboard + DB cleanup)
 
@@ -259,9 +271,6 @@ Note: adminController.ts MRR fix already deployed (commit 37d9f9c3). dashboard.t
 **QA:** Buy It Now valid-account path ✅ deployed (HTTP 200, commit 45829dd). Graceful invalid-account error CODE-ONLY. Cart payment-completion UNVERIFIED (Stripe LIVE keys — test card rejected).
 **Decision:** Patrick — no sales tax collection until nexus registration required. All 3 `automatic_tax` usages removed.
 **BQ delta:** 0 → 2 (Buy It Now graceful error CODE-ONLY; cart payment completion UNVERIFIED).
-
-### S1005 — 2026-06-17 | DEV (Google Merchant feed + cart checkout + return policy)
-- GM feed isEbayThumbnail() filter; cart item links; cart checkout → Stripe; Buy Now fallback broadened; /return-policy page. All CODE-ONLY at wrap.
 
 ### S1004 — 2026-06-17 | QA/RECORDS (BQ cleared to 0; SEO5+SEO6 Chrome ✅)
 
