@@ -33,6 +33,7 @@ export const BLOCKED_DOMAINS: ReadonlySet<string> = new Set([
  */
 export const UNSENDABLE_DOMAINS: ReadonlySet<string> = new Set([
   'system.finda.sale',
+  'sentry.io',       // Sentry error-tracking endpoint — never a real organizer inbox
   'domain.com',
   'domain.org',
   'domain.net',
@@ -45,6 +46,30 @@ export const UNSENDABLE_DOMAINS: ReadonlySet<string> = new Set([
   'test.com',
   'test.org',
 ]);
+
+/**
+ * Specific full email addresses that are known scraped artifacts / template placeholders
+ * that slip past domain-level checks. Add entries in lowercase.
+ */
+const JUNK_FULL_ADDRESSES: ReadonlySet<string> = new Set([
+  'filler@godaddy.com',   // GoDaddy template placeholder in website-builder contact fields
+  'admin@facebook.com',   // Facebook admin address scraped from NAA/directory profiles
+  'info@indiantypefoundry.com', // Indian tech company — scraped from ESN profile mismatch (S-email-inv)
+]);
+
+/**
+ * Returns true if the local part of the email is a programmatic hash (32+ hex chars).
+ * These are never real user inboxes — they are Sentry error-tracking IDs or similar
+ * machine-generated identifiers scraped from error widget config.
+ * Example: 605a7baede844d278b89dc95ae0a9123@sentry-next.wixpress.com
+ */
+const HEX_HASH_RE = /^[0-9a-f]{32,}$/i;
+
+function isHexHashLocalPart(email: string): boolean {
+  const atIndex = email.lastIndexOf('@');
+  if (atIndex === -1) return false;
+  return HEX_HASH_RE.test(email.slice(0, atIndex));
+}
 
 /**
  * Internal finda.sale addresses we DO legitimately send to (e.g. the contact-form
@@ -76,6 +101,10 @@ export function isEmailDomainBlocked(email: string): boolean {
   if (BLOCKED_DOMAINS.has(domain)) return true;
   if (UNSENDABLE_DOMAINS.has(domain)) return true;
   if (domain.endsWith('.wixpress.com')) return true;
+  // Specific full-address junk (template placeholders, scraped artifacts)
+  if (JUNK_FULL_ADDRESSES.has(e)) return true;
+  // Hex-hash local parts are programmatic IDs, never real inboxes
+  if (isHexHashLocalPart(e)) return true;
   return false;
 }
 
