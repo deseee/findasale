@@ -8,6 +8,8 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
+**S1018 WRAP (2026-06-20) — RESEARCH/DEV (automated email health sweep + root-cause investigation + suppression fix + ESN backfill). Push confirmed live (Patrick redeployed green). BQ unchanged at 2.**
+
 **S1017 START (2026-06-20) — DEV session.** Push confirmed live (29de3aed). PCVs applied to roadmap. Patrick spot-check needed: visit finda.sale/admin/users to clear BQ item 2. Dev priorities: migration history repair (P2); audio CDN migration (P3).
 
 **S1016 WRAP (2026-06-20) — QA + FIXES session.** Chrome re-authenticated after 2 failed sessions. All 4 BQ QA items addressed: /feed ✅ sale cards render immediately, no spinner (ss_0566nitc9); /leaderboard ✅ all 3 tabs instant (ss_9351nlc6c, ss_6728wlx91, ss_6482h13up); SEO4 yard-sales/grand-rapids-mi ✅ H1 + FAQPage JSON-LD + nearby cities + ISR (ss_3217o7wwg); /admin/users Alice redirect ✅ redirected to homepage (ss_8004e8she), admin rows still need Patrick's Google OAuth. Local file fixes: feed.tsx restored from GitHub (7348B, was 5263B), leaderboard.tsx NUL bytes stripped (14737B = GitHub). admin/index.tsx LOW-2: added dark:text-warm-400 to close button. BQ 4→2.
@@ -223,15 +225,11 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Next Session
 
-### S1017 — Apply S1016 PCVs + dev priorities
+### S1019 — Dev priorities
 
 **Session type: DEV.** BQ = 2 (below 8 ceiling).
 
-**Session start (findasale-records):** Apply PCV table above to roadmap Chrome column: /feed ISR ✅, /leaderboard ISR ✅, SEO4 ✅, /admin/users Alice redirect ✅ (partial).
-
-**Patrick quick spot-check (30 seconds):** Visit finda.sale/admin/users while logged in as yourself — confirm user rows render. Clears the last BQ item.
-
-**Push block (from this session):** admin/index.tsx (LOW-2 dark mode fix) + saleController.ts (S1015 items cap) + STATE.md + patrick-dashboard.md. See patrick-dashboard.md for full push block.
+**Session start:** Load STATE.md. BQ at 2 — no QA gate.
 
 **Dev priorities:**
 - `Skill('findasale-dev')`: repair migration history (shadow replay fails — use raw DDL for schema changes)
@@ -240,6 +238,22 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 **BQ (2):** cart payment-completion (Patrick real purchase); /admin/users admin rows (Patrick spot-check).
 ## Recent Sessions
+
+### S1018 — 2026-06-20 | RESEARCH/DEV (email health sweep + ESN source backfill + suppression fix)
+
+**Session type:** RESEARCH/DEV (automated + Patrick joined mid-session)
+**Triggered by:** Daily email & deliverability health sweep (scheduled task)
+**Investigation findings:**
+- Check D (EmailSuppression spike): 65 hard bounces in 2 days = normal cold outreach behavior (22% bounce rate from directory contacts). `resendEventId=NULL` confirms Gmail rail. System working correctly.
+- Check E (ungated services): All 4 bulk email services (winBack, onboarding, reviewRequest, postSaleRecap) route through `outwardEmailAutomationsJob.ts` which has the OUTREACH_ENABLED gate. No ungated sends. No code change needed.
+- Check M3: RESEND_WEBHOOK_SECRET confirmed set on Railway by Patrick ✅.
+- Root cause of bounces: 48 NULL-source organizers with contactEmail traced to EstateSales.NET scraper run May 2, 2026 (pre-S654 hardening). `getOrCreateScrapedOrganizer` at that time did not write `sourcesJson` or `directoryMostRecentSource` on initial create. Total affected: 2,195 ESN organizers missing source attribution.
+- Garbage contact emails (sentry hash, filler@godaddy.com, admin@facebook.com, user@domain.com): ESN data quality problems — organizer profiles on EstateSales.NET have placeholder/error-tracking addresses in their contact fields.
+**Shipped (Patrick pushed + redeployed green):**
+- `suppressionService.ts`: added `sentry.io` to UNSENDABLE_DOMAINS; added `JUNK_FULL_ADDRESSES` set (`filler@godaddy.com`, `admin@facebook.com`); added `isHexHashLocalPart()` + `HEX_HASH_RE` regex to block 32+ hex-char local parts (Sentry IDs). All checks in `isEmailDomainBlocked()` — covers every send path system-wide.
+- `backfill-null-source-esn.ts` created + run by Patrick: updated 2,195 ESN organizers with `directoryMostRecentSource='EstateSalesNet'` + `sourcesJson=[{sourceName:'EstateSalesNet',...}]`; marked 3 sentry DirectoryClaimEmail entries INVALID.
+**Files changed:** packages/backend/src/services/suppressionService.ts (modified), packages/backend/src/scripts/backfill-null-source-esn.ts (new).
+**BQ delta:** 2 → 2 (unchanged).
 
 ### S1016 — 2026-06-20 | QA + FIXES (audit findings, Chrome QA, local file fixes)
 
