@@ -52,7 +52,7 @@ export interface MetroTarget {
 
 /**
  * SEARCH_METROS is DERIVED from GOOGLE_PLACES_METROS (the canonical scraper metro
- * list exported by googlePlaces.ts) so the two scrapers stay in sync — adding a
+ * list exported by scraperConfig.ts) so the two scrapers stay in sync — adding a
  * metro in one place propagates to both. Each canonical entry is a `"City, ST"`
  * string; we split on the LAST comma (city names never contain a trailing comma,
  * but may contain apostrophes/periods e.g. "Coeur d'Alene, ID" / "St. Louis, MO").

@@ -65,7 +65,7 @@ Dedup is automatic via `checkDuplicate` on `sourceName`/`sourceUrl`/`sourceItemI
 
 ## Decision 2 — Expand flea-market queries in PLACES_QUERIES
 
-**Approved (small, additive).** `PLACES_QUERIES` (in `googlePlaces.ts`, consumed by both Foursquare and HERE scrapers) currently has only `flea market` + `swap meet` for `FLEA_MARKET`. Add flea-synonym query configs so the next monthly Foursquare/HERE runs widen flea capture with zero new infrastructure:
+**Approved (small, additive).** `PLACES_QUERIES` (in `scraperConfig.ts`, consumed by both Foursquare and HERE scrapers) currently has only `flea market` + `swap meet` for `FLEA_MARKET`. Add flea-synonym query configs so the next monthly Foursquare/HERE runs widen flea capture with zero new infrastructure:
 - `flea market`, `swap meet` (existing)
 - **add:** `antique flea market`, `outdoor market`, `vendor market`, `trade days`, `farmers and flea market`, `bazaar`, `marketplace` (dev to tune; drop any that return mostly food/grocery noise).
 

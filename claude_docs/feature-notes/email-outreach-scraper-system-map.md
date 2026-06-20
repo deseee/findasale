@@ -13,7 +13,7 @@ The S937 brief and the memory header assert "Gmail rail SUSPENDED, ~40 files fai
 - **Gmail rail is ACTIVE, not suspended.** STATE.md S933 (2026-06-09): "outreach IS active (658 DirectoryClaimEmail rows sent, cron running)." STATE.md S917: "OUTREACH_ENABLED=true confirmed set on Railway." The S913 broken-refresh-token issue was RESOLVED S915. → There is **no** "outreach is dead" P0. Reporting one would be fabrication.
 - **The outreach/pipeline crons are NOT scheduled in-process.** `packages/backend/src/index.ts:250-252` documents that in-process scheduling for autoSeedOutreachCron, outreachEmailsCron, emailDiscoveryJob, websiteEnrichmentJob was **removed and moved to GitHub Actions.** They now run via GitHub Actions → `POST /api/internal/jobs/run` → `internalJobRunnerController.JOB_MAP`. The `cron.schedule(...)` and `init*Cron()` functions still in those files are dead code.
 - **S936 fixes are present and confirmed** (admin.ts test endpoint + transactionalEmailService FROM_DEFAULT + suppression check). See Part 1 / Part 4.
-- **S934 scraper widenings are present** (FB Events flea/auction query + googlePlaces flea synonyms). See Part 3.
+- **S934 scraper widenings are present** (FB Events flea/auction query + scraperConfig flea synonyms). See Part 3.
 
 The real, code-verified gaps are smaller in count but concrete. They are in Part 4.
 
@@ -110,7 +110,7 @@ GitHub Actions workflow (scheduled)
 
 ### S934 changes confirmed present
 - `search-facebook-events.ts:494` — widened query includes `"flea market" OR "swap meet" OR "public auction" OR "online auction" OR "consignment sale"`; `inferSaleType` maps `flea`→`FLEA_MARKET` (L168). ✅
-- `googlePlaces.ts:135-163` — `PLACES_QUERIES` now includes `antique flea market`, `outdoor market`, `vendor market`, `trade days`, `bazaar`; `FLEA_MARKET` typeMap expanded (L395). ✅
+- `scraperConfig.ts:135-163` — `PLACES_QUERIES` now includes `antique flea market`, `outdoor market`, `vendor market`, `trade days`, `bazaar`; `FLEA_MARKET` typeMap expanded (L395). ✅
 
 ### BLOCKED sources (ToS — documented, do not build)
 - **HiBid** — ToS §7 prohibits scraping/aggregation (ADR-hibid-auction-scraper.md). NO-GO (legal).
