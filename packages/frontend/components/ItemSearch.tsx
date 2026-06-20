@@ -73,7 +73,7 @@ const ItemSearch: React.FC<ItemSearchProps> = ({
           placeholder={placeholder}
           autoFocus={autoFocus}
           aria-label="Search items across all sales"
-          className="w-full pl-9 pr-8 py-3 border border-warm-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white text-warm-900 dark:text-warm-100 text-sm"
+          className="w-full pl-9 pr-8 py-3 border border-warm-300 dark:border-warm-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white dark:bg-warm-800 text-warm-900 dark:text-warm-100 text-sm"
         />
         {localValue && (
           <button
@@ -94,7 +94,7 @@ const ItemSearch: React.FC<ItemSearchProps> = ({
           className={`md:hidden flex items-center gap-1.5 px-4 py-3 border rounded-xl text-sm font-medium transition-colors min-w-[80px] justify-center ${
             hasActiveFilters
               ? 'bg-amber-600 text-white border-amber-600'
-              : 'bg-white text-warm-700 border-warm-300 hover:border-amber-400'
+              : 'bg-white dark:bg-warm-800 text-warm-700 dark:text-warm-200 border-warm-300 dark:border-warm-600 hover:border-amber-400'
           }`}
         >
           ☰ Filters

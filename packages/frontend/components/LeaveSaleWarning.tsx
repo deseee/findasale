@@ -48,7 +48,7 @@ const LeaveSaleWarning: React.FC<LeaveSaleWarningProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
+      <div className="bg-white dark:bg-warm-800 rounded-xl shadow-xl max-w-md w-full p-6">
         <div className="flex items-start gap-4 mb-4">
           <div className="p-3 bg-amber-100 rounded-lg">
             <svg className="h-6 w-6 text-amber-600" fill="currentColor" viewBox="0 0 20 20">

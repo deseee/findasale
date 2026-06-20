@@ -20,7 +20,7 @@ export function LoyaltyPassport() {
 
   if (isLoading) {
     return (
-      <div className="p-4 bg-white rounded-lg border border-gray-200 animate-pulse">
+      <div className="p-4 bg-white dark:bg-warm-800 rounded-lg border border-gray-200 dark:border-warm-700 animate-pulse">
         <div className="h-6 bg-gray-200 rounded w-1/3 mb-4"></div>
         <div className="h-4 bg-gray-200 rounded w-1/2"></div>
       </div>
@@ -34,7 +34,7 @@ export function LoyaltyPassport() {
   return (
     <div className="space-y-4">
       {/* Total Stamps & Next Milestone */}
-      <div className="bg-white rounded-lg border border-gray-200 p-4">
+      <div className="bg-white dark:bg-warm-800 rounded-lg border border-gray-200 dark:border-warm-700 p-4">
         <div className="flex justify-between items-center mb-4">
           <h3 className="font-semibold text-gray-900">Explorer's Guild</h3>
           <span className="text-2xl font-bold" style={{ color: '#8FB897' }}>
@@ -64,7 +64,7 @@ export function LoyaltyPassport() {
 
       {/* Milestones / Badges */}
       {passport.milestones.length > 0 && (
-        <div className="bg-white rounded-lg border border-gray-200 p-4">
+        <div className="bg-white dark:bg-warm-800 rounded-lg border border-gray-200 dark:border-warm-700 p-4">
           <h4 className="font-semibold text-gray-900 mb-3">Badges Earned</h4>
           <div className="flex gap-3">
             {passport.milestones.map((m) => (
@@ -88,7 +88,7 @@ export function LoyaltyPassport() {
 
       {/* Stamp Breakdown */}
       {passport.stamps.length > 0 && (
-        <div className="bg-white rounded-lg border border-gray-200 p-4">
+        <div className="bg-white dark:bg-warm-800 rounded-lg border border-gray-200 dark:border-warm-700 p-4">
           <h4 className="font-semibold text-gray-900 mb-3">Stamp Breakdown</h4>
           <div className="space-y-2">
             {passport.stamps.map((s) => (

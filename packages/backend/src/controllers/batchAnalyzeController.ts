@@ -91,6 +91,16 @@ export const batchAnalyzeImages = async (req: AuthRequest, res: Response): Promi
       return;
     }
 
+    // Fetch sale to get organizerId (needed to denormalize onto created Items)
+    const sale = await prisma.sale.findUnique({
+      where: { id: saleId },
+      select: { organizerId: true },
+    });
+    if (!sale) {
+      res.status(404).json({ message: 'Sale not found' });
+      return;
+    }
+
     // Step 1: Download all images from Cloudinary
     const downloadedImages: { buffer: Buffer; mimeType: string; url: string }[] = [];
 
@@ -157,6 +167,7 @@ export const batchAnalyzeImages = async (req: AuthRequest, res: Response): Promi
             clusterConfidence: cluster.confidence,
             isAiTagged: true,
             saleId,
+            organizerId: sale.organizerId,
             embedding: [],
           },
         });
@@ -184,6 +195,7 @@ export const batchAnalyzeImages = async (req: AuthRequest, res: Response): Promi
             isSet: false,
             isAiTagged: true,
             saleId,
+            organizerId: sale.organizerId,
             embedding: [],
           },
         });

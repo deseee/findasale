@@ -8,6 +8,41 @@
  */
 
 import { prisma } from '../lib/prisma';
+import { getCacheMeta } from './googleMerchantFeedService';
+
+// ─── eBay proxy helpers (mirrors ebayController — Railway blocks api.ebay.com at DNS) ──
+
+const _ebayProxyUrl = (path: string): string =>
+  `${process.env.FRONTEND_URL ?? 'https://finda.sale'}/api/proxy/ebay?path=${encodeURIComponent(path)}`;
+
+const _ebayProxyHeaders = (): Record<string, string> => {
+  const secret = process.env.EBAY_PROXY_SECRET;
+  return secret ? { 'X-Proxy-Secret': secret } : {};
+};
+
+/**
+ * Fetch the live PUBLISHED offer count from eBay Inventory API via Vercel proxy.
+ * Returns the count on success, or null on failure (caller falls back to DB count).
+ */
+async function fetchEbayLivePublishedCount(accessToken: string): Promise<number | null> {
+  try {
+    const res = await fetch(
+      _ebayProxyUrl('/sell/inventory/v1/offer?status=PUBLISHED&limit=1'),
+      {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+          ..._ebayProxyHeaders(),
+        },
+      },
+    );
+    if (!res.ok) return null;
+    const data = await res.json() as { total?: number };
+    return typeof data.total === 'number' ? data.total : null;
+  } catch {
+    return null;
+  }
+}
 
 // ─── Cache ───────────────────────────────────────────────────────────────────
 
@@ -45,6 +80,7 @@ export interface EbayPlatformCount extends PlatformCount {
   activeSlots: number;
   freeSlots: number;
   warningLevel: 'ok' | 'warning' | 'critical' | 'over';
+  liveCountAvailable: boolean; // true = listed count came from eBay API; false = DB fallback
 }
 
 export interface FacebookPlatformCount extends PlatformCount {
@@ -63,6 +99,7 @@ export interface PlatformStatsResponse {
     totalAvailableItems: number;
     totalListedAnywhere: number;
     totalUnlisted: number;
+    totalVisibleOnSite: number; // items shoppers can see on finda.sale right now
   };
 }
 
@@ -133,7 +170,7 @@ export async function computePlatformStats(organizerId: string): Promise<Platfor
       fbCatalogEnabled: true,
       ebayQueueMode: true,
       ebayQueueRotation: true,
-      ebayConnection: { select: { id: true } },
+      ebayConnection: { select: { id: true, accessToken: true, tokenExpiresAt: true } },
     },
   });
 
@@ -146,15 +183,16 @@ export async function computePlatformStats(organizerId: string): Promise<Platfor
 
   // Run all count queries in parallel
   const [
-    ebayListed,
+    ebayListedDb,
     ebayQueued,
     shopifyCount,
     facebookCount,
     totalAvailable,
-    totalListedAnywhere,
+    totalListedAnywhereDb,
     googleCandidates,
+    findasaleVisible,
   ] = await Promise.all([
-    // eBay listed: AVAILABLE items with an offerId
+    // eBay listed (DB fallback): AVAILABLE items with an offerId
     prisma.item.count({
       where: { ...availableWhere, ebayOfferId: { not: null } },
     }),
@@ -177,7 +215,8 @@ export async function computePlatformStats(organizerId: string): Promise<Platfor
     // Total AVAILABLE items
     prisma.item.count({ where: availableWhere }),
 
-    // Listed on at least one platform (deduped via OR) — AVAILABLE only
+    // totalListedAnywhereDb — kept for reference but recalculated below
+    // to include findasaleVisible in the OR; result stored in totalListedAnywhereDb
     prisma.item.count({
       where: {
         ...availableWhere,
@@ -205,6 +244,16 @@ export async function computePlatformStats(organizerId: string): Promise<Platfor
         listingType: true,
         draftStatus: true,
         sale: { select: { status: true, deletedAt: true } },
+      },
+    }),
+
+    // Items shoppers can actually see on finda.sale right now
+    prisma.item.count({
+      where: {
+        ...availableWhere,
+        draftStatus: 'PUBLISHED',
+        deletedAt: null,
+        sale: { status: 'PUBLISHED', deletedAt: null },
       },
     }),
   ]);
@@ -240,6 +289,31 @@ export async function computePlatformStats(organizerId: string): Promise<Platfor
     if (!item.sale || item.sale.status !== 'PUBLISHED' || item.sale.deletedAt) breakdown.saleNotPublished++;
   }
 
+  // eBay: attempt live count from eBay Inventory API if token is valid
+  let ebayListed = ebayListedDb;
+  let ebayLiveCountAvailable = false;
+  if (org.ebayConnection?.accessToken && org.ebayConnection.tokenExpiresAt > new Date()) {
+    const liveCount = await fetchEbayLivePublishedCount(org.ebayConnection.accessToken);
+    if (liveCount !== null) {
+      ebayListed = liveCount;
+      ebayLiveCountAvailable = true;
+    }
+  }
+
+  // totalListedAnywhere: recalculate to include findasaleVisible in the OR
+  // (items on our own site count as "listed somewhere")
+  const totalListedAnywhere = await prisma.item.count({
+    where: {
+      ...availableWhere,
+      OR: [
+        { ebayOfferId: { not: null } },
+        { fbExportedAt: { not: null } },
+        { shopifyListing: { status: 'ACTIVE' } },
+        { draftStatus: 'PUBLISHED', deletedAt: null, sale: { status: 'PUBLISHED', deletedAt: null } },
+      ],
+    },
+  });
+
   // eBay limit resolution
   const { limit: ebayLimit, limitSource, storeDetected } = resolveEbayLimit(org);
   const ebayFreeSlots = Math.max(0, ebayLimit - ebayListed);
@@ -247,6 +321,11 @@ export async function computePlatformStats(organizerId: string): Promise<Platfor
   const ebayUtilPct = Math.round((ebayListed / ebayLimit) * 100);
 
   // Coverage score
+  // Google Merchant feed: use nightly-cached item count as the live "in feed" count
+  // Falls back to computed eligibility if the feed cache hasn't been built yet.
+  const googleFeedMeta = getCacheMeta();
+  const googleInFeed = googleFeedMeta?.itemCount ?? googleEligible;
+
   const coverageScore =
     totalAvailable === 0 ? 0 : Math.round((totalListedAnywhere / totalAvailable) * 100);
 
@@ -269,11 +348,12 @@ export async function computePlatformStats(organizerId: string): Promise<Platfor
       activeSlots: ebayListed,
       freeSlots: ebayFreeSlots,
       warningLevel: ebayWarningLevel(ebayListed, ebayLimit),
+      liveCountAvailable: ebayLiveCountAvailable,
     },
 
     googleMerchant: {
       connected: true, // feed is always available (public TSV endpoint)
-      listed: googleEligible,
+      listed: googleInFeed,
       limit: null,
       limitSource: 'UNKNOWN',
       overLimit: false,
@@ -286,7 +366,7 @@ export async function computePlatformStats(organizerId: string): Promise<Platfor
     facebook: {
       connected: !!(org as any).fbCatalogEnabled || !!org.facebookPageId,
       listed: (org as any).fbCatalogEnabled
-        ? totalAvailable   // CM feed covers all active-sale items; use available count
+        ? findasaleVisible  // Catalog feed covers items in published sales (shopper-visible)
         : facebookCount,   // Marketplace: only items with fbExportedAt stamped
       limit: null,
       limitSource: 'UNKNOWN',
@@ -308,6 +388,7 @@ export async function computePlatformStats(organizerId: string): Promise<Platfor
       totalAvailableItems: totalAvailable,
       totalListedAnywhere,
       totalUnlisted: totalAvailable - totalListedAnywhere,
+      totalVisibleOnSite: findasaleVisible,
     },
   };
 

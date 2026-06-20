@@ -53,7 +53,7 @@ const RecommendationsPanel: React.FC<RecommendationsPanelProps> = ({
     <div className="space-y-6">
       {/* Seasonal Pricing Tips */}
       {seasonalPricingTips.length > 0 && (
-        <div className="bg-white rounded-lg shadow p-6">
+        <div className="bg-white dark:bg-warm-800 rounded-lg shadow p-6">
           <h3 className="text-lg font-semibold text-warm-900 dark:text-warm-100 mb-4">Seasonal Pricing Tips</h3>
           <div className="space-y-4">
             {seasonalPricingTips.map((tip) => {
@@ -106,7 +106,7 @@ const RecommendationsPanel: React.FC<RecommendationsPanelProps> = ({
 
       {/* Action Items */}
       {actionItems.length > 0 && (
-        <div className="bg-white rounded-lg shadow p-6">
+        <div className="bg-white dark:bg-warm-800 rounded-lg shadow p-6">
           <h3 className="text-lg font-semibold text-warm-900 dark:text-warm-100 mb-4">Action Items</h3>
           <div className="space-y-3">
             {actionItems.map((item, idx) => (

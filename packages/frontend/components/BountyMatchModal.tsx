@@ -54,7 +54,7 @@ const BountyMatchModal: React.FC<Props> = ({ isOpen, matches, itemId, itemTitle,
       onClose={onClose}
       ariaLabelledBy="bounty-match-modal-title"
     >
-      <div className="w-full max-w-lg rounded-lg bg-white shadow-lg">
+      <div className="w-full max-w-lg rounded-lg bg-white dark:bg-warm-800 shadow-lg">
         {/* Header */}
         <div className="border-b border-gray-200 px-6 py-4">
           <h2 id="bounty-match-modal-title" className="text-lg font-semibold text-gray-900">

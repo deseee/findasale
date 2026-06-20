@@ -1103,7 +1103,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
                         <div className="flex gap-2">
                           <button
                             onClick={qualityOverlay.onUsePhoto}
-                            className="flex-1 bg-white text-amber-700 font-medium py-2 rounded-lg text-sm hover:bg-amber-50 transition-colors"
+                            className="flex-1 bg-white dark:bg-warm-800 text-amber-700 dark:text-amber-300 font-medium py-2 rounded-lg text-sm hover:bg-amber-50 dark:hover:bg-warm-700 transition-colors"
                           >
                             Use Anyway
                           </button>

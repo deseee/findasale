@@ -99,7 +99,7 @@ const SaleQRCode: React.FC<SaleQRCodeProps> = ({
       {/* QR Code image */}
       <button
         onClick={() => setEnlarged(true)}
-        className="border border-warm-200 rounded-xl p-3 bg-white shadow-sm cursor-pointer hover:shadow-md transition-shadow"
+        className="border border-warm-200 dark:border-warm-700 rounded-xl p-3 bg-white dark:bg-warm-800 shadow-sm cursor-pointer hover:shadow-md transition-shadow"
         title="Click to enlarge"
         aria-label={`Enlarge QR code for ${saleTitle}`}
       >

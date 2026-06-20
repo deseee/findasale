@@ -128,25 +128,25 @@ export const RippleCard: React.FC<RippleCardProps> = ({ saleId, className = '' }
       <h3 className="text-sm font-semibold text-gray-700 mb-4">Activity Ripples</h3>
 
       <div className="grid grid-cols-2 gap-4">
-        <div className="flex flex-col items-center p-3 bg-white rounded-lg border border-blue-100">
+        <div className="flex flex-col items-center p-3 bg-white dark:bg-warm-800 rounded-lg border border-blue-100 dark:border-blue-900">
           <Eye className="w-5 h-5 text-blue-500 mb-2" />
           <span className="text-2xl font-bold text-gray-900">{formatCount(summary.views)}</span>
           <span className="text-xs text-gray-500 mt-1">Views</span>
         </div>
 
-        <div className="flex flex-col items-center p-3 bg-white rounded-lg border border-green-100">
+        <div className="flex flex-col items-center p-3 bg-white dark:bg-warm-800 rounded-lg border border-green-100 dark:border-green-900">
           <Share2 className="w-5 h-5 text-green-500 mb-2" />
           <span className="text-2xl font-bold text-gray-900">{formatCount(summary.shares)}</span>
           <span className="text-xs text-gray-500 mt-1">Shares</span>
         </div>
 
-        <div className="flex flex-col items-center p-3 bg-white rounded-lg border border-yellow-100">
+        <div className="flex flex-col items-center p-3 bg-white dark:bg-warm-800 rounded-lg border border-yellow-100 dark:border-yellow-900">
           <Save className="w-5 h-5 text-yellow-500 mb-2" />
           <span className="text-2xl font-bold text-gray-900">{formatCount(summary.saves)}</span>
           <span className="text-xs text-gray-500 mt-1">Saves</span>
         </div>
 
-        <div className="flex flex-col items-center p-3 bg-white rounded-lg border border-purple-100">
+        <div className="flex flex-col items-center p-3 bg-white dark:bg-warm-800 rounded-lg border border-purple-100 dark:border-purple-900">
           <TrendingUp className="w-5 h-5 text-purple-500 mb-2" />
           <span className="text-2xl font-bold text-gray-900">{formatCount(summary.totalRipples)}</span>
           <span className="text-xs text-gray-500 mt-1">Total</span>

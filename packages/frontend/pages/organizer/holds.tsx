@@ -312,14 +312,14 @@ const OrganizerHoldsPage = () => {
                 <button
                   onClick={() => handleBatch('release')}
                   disabled={batchMutation.isPending}
-                  className="text-sm bg-white border border-red-300 text-red-600 hover:bg-red-50 px-4 py-1.5 rounded-md disabled:opacity-50 transition-colors"
+                  className="text-sm bg-white dark:bg-warm-800 border border-red-300 dark:border-red-700 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 px-4 py-1.5 rounded-md disabled:opacity-50 transition-colors"
                 >
                   Release
                 </button>
                 <button
                   onClick={() => handleBatch('extend')}
                   disabled={batchMutation.isPending}
-                  className="text-sm bg-white border border-blue-300 text-blue-600 hover:bg-blue-50 px-4 py-1.5 rounded-md disabled:opacity-50 transition-colors"
+                  className="text-sm bg-white dark:bg-warm-800 border border-blue-300 dark:border-blue-700 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 px-4 py-1.5 rounded-md disabled:opacity-50 transition-colors"
                 >
                   Extend
                 </button>

@@ -451,6 +451,7 @@ export const uploadRapidfire = async (req: AuthRequest, res: Response): Promise<
     const item = await prisma.item.create({
       data: {
         saleId,
+        organizerId: sale.organizerId,
         title: 'Untitled Item',
         photoUrls: [photoUrl],
         draftStatus: 'DRAFT',

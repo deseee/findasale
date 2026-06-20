@@ -59,7 +59,7 @@ export default function OfflineIndicator({ className = '' }: OfflineIndicatorPro
           {(pendingCount > 0 || isError) && (
             <button
               onClick={() => setShowSyncQueue(true)}
-              className="flex items-center gap-1 px-3 py-2 rounded bg-white/80 hover:bg-white text-gray-700 text-sm font-medium transition-colors"
+              className="flex items-center gap-1 px-3 py-2 rounded bg-white/80 dark:bg-warm-700/80 hover:bg-white dark:hover:bg-warm-700 text-gray-700 dark:text-warm-200 text-sm font-medium transition-colors"
             >
               {isError ? 'Review' : 'View Queue'}
               <ChevronRight className="w-4 h-4" />

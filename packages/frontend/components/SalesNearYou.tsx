@@ -36,7 +36,7 @@ const SalesNearYou: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+      <div className="bg-white dark:bg-warm-800 rounded-lg shadow-sm p-6 mb-6">
         <h3 className="text-lg font-semibold text-warm-900 dark:text-warm-100 mb-4">Sales Near You</h3>
         <div className="flex gap-4 overflow-x-auto pb-2">
           {[1, 2, 3].map((i) => (
@@ -63,7 +63,7 @@ const SalesNearYou: React.FC = () => {
   }
 
   return (
-    <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+    <div className="bg-white dark:bg-warm-800 rounded-lg shadow-sm p-6 mb-6">
       <div className="flex justify-between items-center mb-4">
         <h3 className="text-lg font-semibold text-warm-900 dark:text-warm-100">Sales Near You</h3>
         <Link href="/" className="text-sm text-amber-600 hover:text-amber-700">

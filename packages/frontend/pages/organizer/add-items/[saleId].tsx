@@ -2190,12 +2190,12 @@ const AddItemsDetailPage = () => {
                       onChange={(e) => setBulkPrice(e.target.value)}
                       placeholder="$ Price"
                       step="0.01"
-                      className="w-20 px-2 py-1 border border-amber-400 rounded text-xs focus:outline-none focus:ring-2 focus:ring-white bg-white text-amber-900 placeholder-amber-400"
+                      className="w-20 px-2 py-1 border border-amber-400 rounded text-xs focus:outline-none focus:ring-2 focus:ring-white bg-white dark:bg-warm-800 text-amber-900 dark:text-amber-200 placeholder-amber-400 dark:placeholder-amber-500"
                      aria-label="$ Price" />
                     <button
                       onClick={() => { if (bulkPrice) handleBulkOperation('price', parseFloat(bulkPrice)); }}
                       disabled={bulkUpdateMutation.isPending || !bulkPrice}
-                      className="text-xs font-semibold bg-white text-amber-800 hover:bg-amber-50 disabled:opacity-50 px-3 py-1 rounded transition-colors"
+                      className="text-xs font-semibold bg-white dark:bg-warm-800 text-amber-800 dark:text-amber-200 hover:bg-amber-50 dark:hover:bg-warm-700 disabled:opacity-50 px-3 py-1 rounded transition-colors"
                     >
                       Set Price
                     </button>
