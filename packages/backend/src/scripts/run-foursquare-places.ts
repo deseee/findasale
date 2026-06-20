@@ -18,7 +18,7 @@ import {
 } from '../services/scraper/sources/foursquarePlaces';
 import { ScrapedItem } from '../services/scraper/index';
 import { getNextCrawlsToRun, recordCrawlSuccess, recordCrawlFailure } from '../services/scraper/crawlQueueManager';
-import { PLACES_QUERIES } from '../services/scraper/sources/googlePlaces';
+import { PLACES_QUERIES } from '../services/scraper/sources/scraperConfig';
 import { QUERY_TYPE_TO_SEARCH } from '../services/scraper/subAreaConfig';
 
 const INGEST_URL =

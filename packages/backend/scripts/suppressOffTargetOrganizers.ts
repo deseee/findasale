@@ -54,7 +54,7 @@ const VALID_CATEGORIES = [
 
 /**
  * Business name keywords that indicate a non-target business.
- * Mirrors BUSINESS_NAME_BLOCKLIST in googlePlaces.ts — keep in sync.
+ * Mirrors BUSINESS_NAME_BLOCKLIST in scraperConfig.ts — keep in sync.
  *
  * False positive notes (S648 dry-run):
  * - 'spa' removed: too broad as substring, matched 'Spann', 'Sparrow', 'Spanish'
