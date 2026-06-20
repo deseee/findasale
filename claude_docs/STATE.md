@@ -8,6 +8,14 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
+**S1013 — AUDIT/BUG/RECORDS (2026-06-19). Past-session audit → admin /users 500 root-caused+fixed, eBay S998 backfill closed, doc-drift caught (roadmap #554).**
+- **Concurrent-session note:** an S1012 window logged the admin DM + à-la-carte work (commits 9c445eb7/4374e40a) in STATE while this audit ran — this session is **S1013**, edits here are additive only. (Flagged to Patrick: two Cowork windows editing STATE.md simultaneously is the doc-drift risk in action.)
+- **Admin /users intermittent 500 (Postgres 53100) — ROOT-CAUSED + FIXED (adminController.ts, backend tsc 0, CODE-ONLY pending push):** `getUsers` AND `getSales` were paginated but fetched full purchase/sale/item **ID arrays** per row only to `.length` them → for scraper orgs with thousands of sales the transfer spills to Railway's tiny /dev/shm → error 53100 "No space left on device". Replaced with Prisma `_count` relations; response shapes unchanged. **Infra lever (Patrick): raise Railway DB /dev/shm or upgrade the instance** — the code fix cuts the spill but the DB node is memory-constrained.
+- **eBay 4-item cleanup (S998) — RESOLVED:** all 4 turned out to be test/dead. Loy Norrix (1970s Choirs album, item cmp2yeq5p) + Kirkland Pepper (cmp4o68ic) sit in DRAFT "Test sale don't publish" → confirmed test items, so the S1013 `ebayOfferId` backfills were **REVERTED** (both NULL again). Whip-It (151850469011) + Contigo (151769728011) orphaned eBay offers **DELETED** (204). NOTE: the REAL Loy Norrix ("Songs of Christmas…1987", item cmp5t9ti7) is LIVE in "Artifact Downtown Paw Paw"; a no-sale duplicate (cmqh1wzpe, same eBay listingId 137314168141) should be de-duped. STILL OPEN (Patrick call): delete the 2 test-sale eBay offers (Kirkland 166412704011, Loy Norrix 166668232011) + the DRAFT "Test sale don't publish" sale.
+- **Doc-drift captured:** roadmap **#554** added for the admin DM + à-la-carte revenue feature (the concurrent S1012 logged it in STATE but added no roadmap row).
+- **Fee-rate "discrepancy" is NOT a bug:** feeCalculator.ts intentionally tiers 10% SIMPLE/default, 8% PRO+TEAMS — reconcile STACK.md wording so it stops resurfacing.
+- **BQ: 1 → 2** (added admin DM #554 UNVERIFIED in prod).
+
 **S1012 — BUG/DATA (2026-06-19). À-la-carte revenue now tracked in admin dashboard + admin DM feature.**
 - **À-LA-CARTE REVENUE FIXED (S1012, deployed commits 9c445eb7 + 4374e40a):** Admin "Today's Revenue" now includes the $9.99 ala-carte fee. Backfilled existing Purchase record via psycopg2 (id: cj5sxhx0ruuyw9lb4n98exiax). Code fixes: (1) adminController.ts — real prisma.purchase.aggregate query for ala-carte revenue (30d + today), ALA_CARTE excluded from fee-rate multiplication to avoid double-counting; (2) stripeController.ts — checkout.session.completed ALA_CARTE handler now creates Purchase record (source='ALA_CARTE'); payment_intent.succeeded handler has idempotency guard. (3) Admin DM feature: POST /admin/users/:userId/message sends transactional email via emailService; "Send Message" button + modal added to admin/users/[id].tsx.
 - **BQ: 1 → 1 (unchanged).**
@@ -181,6 +189,7 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
 | Cart multi-item payment-completion | Stripe LIVE keys block test card; real purchase needed to verify items→SOLD webhook | Real purchase or test-mode proxy | S1006 |
+| Admin Send Message (DM) + à-la-carte revenue (#554) | Shipped 4374e40a + LIVE but never QA'd | Chrome QA: send a real DM as admin, confirm email delivers; verify dashboard ALA_CARTE revenue card | S1013 |
 
 ## Pending Chrome Verifications
 
@@ -190,27 +199,44 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Next Session
 
-### S1013 — Next priority work
+### S1014 — Next priority work
 
-**BQ (1 open item):**
+**BQ (2 open):**
 - Cart multi-item payment-completion — Stripe LIVE keys; real purchase needed. Patrick action only.
+- Admin Send Message (DM) #554 — Chrome QA: send a real DM as admin, confirm email delivers; verify dashboard ALA_CARTE revenue card.
 
-**Wrap docs push (S1012):**
+**Push block (S1013 code + wrap docs):**
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
-git add claude_docs/STATE.md claude_docs/patrick-dashboard.md
-git commit -m "S1012 wrap: docs"
+git add packages/backend/src/controllers/adminController.ts
+git add claude_docs/strategy/roadmap.md
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git commit -m "S1013: admin getUsers/getSales _count fix (53100) + roadmap #554 + wrap docs"
 .\push.ps1
 ```
+Note: if the concurrent S1012 window already pushed STATE.md/patrick-dashboard.md, run `git fetch && git pull` first so local git re-syncs before this push.
 
-**Carry-forward (Patrick decisions, non-blocking):**
-- Fee rate question: feeCalculator.ts 8% vs CLAUDE.md/Stack 10% locked S106 — Patrick decision needed
-- 4 unpublished eBay items backfill (Loy Norrix Choirs, Kirkland Pepper, Whip-It Butane, Contigo Travel Mug)
-- Flip ebayQueueMode on a test org to observe actual queue processing
-- Railway PostgreSQL memory pressure — intermittent 500s on admin/users (error 53100); may need Railway DB restart or instance upgrade
-- old→canonical redirect map for dead sale links
+**Carry-forward / dispatch-stubs (not code-dispatchable this session — need Patrick, Chrome QA, or a data source):**
+- **Railway DB memory (P1, infra — Patrick):** /admin/users 53100 spill; the S1013 `_count` fix reduces transfer but the DB node is memory-constrained — raise Railway /dev/shm or upgrade the instance. Recurring since S1011.
+- **ebayQueueMode test-org flip (QA):** flip on a non-prod org → observe ebayListingQueueCron processing; #549 human-QA still ⬜.
+- **Stale S804 UNVERIFIED (QA decision):** #203 Email+SMS validation, #23 Unsubscribe-to-Snooze, #21 Sentry impact scoring, #435 bot tracking — unverified ~200 sessions; run a Chrome QA pass or formally defer.
+- **old→canonical redirect map** for dead sale links (needs old→new ID source; Artifact cmom7h73l→cmpt2oq6q is the one known pair).
+- **Fee-rate doc reconcile:** STACK.md should state tiered 10% SIMPLE / 8% PRO+TEAMS (matches feeCalculator.ts) — not a code bug.
+- **2 orphaned eBay offers** (Whip-It, Contigo) — recreate the items or end the offers on eBay to clean up.
 
 ## Recent Sessions
+
+### S1013 — 2026-06-19 | AUDIT/BUG/RECORDS (admin 500 fix + eBay backfill + doc-drift)
+
+**Session type:** AUDIT/BUG/RECORDS
+**Triggered by:** Patrick — "audit past sessions, what's undone, what to fix."
+**Shipped (pending push):** adminController.ts — `getUsers` + `getSales` ID-array fetch → Prisma `_count` (fixes /admin/users 53100 500). Backend tsc 0.
+**Data (prod, no push):** eBay `ebayOfferId` backfilled on 2 items (Loy Norrix, Kirkland); Whip-It + Contigo orphaned (DB rows gone). S998 carry-forward CLOSED.
+**Docs:** roadmap #554 added for admin DM + ALA_CARTE revenue (commit 4374e40a). Confirmed the concurrent S1012 window already logged that work in STATE Current Status.
+**Concurrent-session collision:** STATE.md was being edited by an S1012 window during this audit — additive edits only here; flagged to Patrick as a workflow risk.
+**Verified deploy:** HEAD 4374e40a LIVE on Vercel (READY); prior 9c445eb7 ERRORed but superseded.
+**BQ delta:** 1 → 2.
 
 ### S1012 — 2026-06-19 | BUG/DATA (Ala-carte revenue tracking + admin DM)
 

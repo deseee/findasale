@@ -294,7 +294,7 @@ export const getStats = async (req: AuthRequest, res: Response) => {
       tierBreakdown: tierBreakdownMap,
       mrr: mrrCents,
       mrrByTier,
-      transactionRevenueLast30d,
+      transactionRevenueLast30d: transactionRevenueLast30d + alaCarteRevenueLast30d,
       transactionRevenueToday,
       huntPassRevenueLast30d,
       aLaCarteRevenueLast30d: alaCarteRevenueLast30d,
@@ -400,11 +400,11 @@ export const getUsers = async (req: AuthRequest, res: Response) => {
           emailVerified: true,
           suspendedAt: true,
           deletedAt: true,
-          purchases: { select: { id: true } },
+          _count: { select: { purchases: true } },
           organizer: {
             select: {
-              sales: { select: { id: true } },
               customStorefrontSlug: true,
+              _count: { select: { sales: true } },
             },
           },
         },
@@ -425,8 +425,8 @@ export const getUsers = async (req: AuthRequest, res: Response) => {
       emailVerified: user.emailVerified,
       suspendedAt: user.suspendedAt,
       deletedAt: user.deletedAt,
-      purchaseCount: user.purchases.length,
-      saleCount: user.organizer?.sales.length || 0,
+      purchaseCount: user._count.purchases,
+      saleCount: user.organizer?._count.sales || 0,
       storefrontSlug: user.organizer?.customStorefrontSlug || null,
     }));
 
@@ -667,7 +667,7 @@ export const getSales = async (req: AuthRequest, res: Response) => {
           startDate: true,
           endDate: true,
           organizer: { select: { businessName: true } },
-          items: { select: { id: true } },
+          _count: { select: { items: true } },
           purchases: { select: { amount: true } },
         },
         skip,
@@ -684,7 +684,7 @@ export const getSales = async (req: AuthRequest, res: Response) => {
       startDate: sale.startDate,
       endDate: sale.endDate,
       organizerName: sale.organizer.businessName,
-      itemCount: sale.items.length,
+      itemCount: sale._count.items,
       revenue: sale.purchases.reduce((sum: number, p: any) => sum + p.amount, 0),
     }));
 

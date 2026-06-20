@@ -1,4 +1,16 @@
-# Patrick's Dashboard — Week of June 19, 2026 (Updated S1012)
+# Patrick's Dashboard — Week of June 19, 2026 (Updated S1013)
+
+---
+
+## What Happened This Session (S1013 — June 19)
+
+**Audit session — you asked me to check past sessions for anything left undone:**
+
+- ✅ **Fixed the recurring "Failed to load users" 500 on /admin/users** — root cause found: the admin user list (and the sales list) were pulling every purchase/sale ID just to count them, overflowing the database server's small shared-memory and throwing a disk-full error. Switched to proper count queries. **One thing left for you:** the Railway database node itself is memory-tight — bumping its size (or shared-memory) is the durable fix; my code change reduces the pressure.
+- ✅ **Closed the 4 stuck eBay items (open since S998)** — Loy Norrix Choirs + Kirkland Pepper are now linked to their eBay offers. The other two (Whip-It Butane, Contigo Travel Mug) no longer exist in the database, so their eBay offers are just orphaned — nothing to link.
+- ✅ **Caught a documentation gap** — the admin DM + ala-carte feature you shipped today (commit 4374e40a) is now on the roadmap (#554). Note: it's live but hasn't had a real click-through QA yet — sending a real message to confirm the email actually delivers is the open item.
+- ℹ️ **The "fee rate 8% vs 10%" question isn't a bug** — the code tiers it on purpose (10% SIMPLE, 8% PRO/TEAMS). Just needs a one-line doc fix so it stops coming back.
+- ⚠️ **Heads-up:** a second Cowork window (S1012) was editing the project notes at the same time as this audit. No harm done, but running two windows at once is exactly what causes the notes to drift.
 
 ---
 
@@ -13,16 +25,21 @@
 
 ---
 
-## REQUIRED ACTION (S1012 wrap docs)
+## REQUIRED ACTION (S1013 — push the 500 fix + wrap docs)
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
-git add claude_docs/STATE.md claude_docs/patrick-dashboard.md
-git commit -m "S1012 wrap: docs"
+git add packages/backend/src/controllers/adminController.ts
+git add claude_docs/strategy/roadmap.md
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git commit -m "S1013: admin getUsers/getSales _count fix (53100) + roadmap #554 + wrap docs"
 .\push.ps1
 ```
 
-*(Code changes already pushed in commits 9c445eb7 + 4374e40a)*
+*(If the other window already pushed the docs, run `git fetch && git pull` first, then push.)*
+
+**Then (your call, not code):** raise the Railway database instance/shared-memory to fully stop the /admin/users 500s.
 
 ---
 
@@ -30,7 +47,7 @@ git commit -m "S1012 wrap: docs"
 
 | Area | Status |
 |------|--------|
-| BQ (Blocked Queue) | **1 item** — cart payment-completion (Stripe LIVE keys) |
+| BQ (Blocked Queue) | **2 items** — cart payment-completion (Stripe LIVE keys); admin DM #554 (needs QA) |
 | Ala-carte revenue tracking | ✅ Fixed + deployed |
 | Admin DM (email to user) | ✅ Deployed — "Send Message" on /admin/users/[id] |
 | Admin MRR calculation | ✅ Fixed + deployed (S1011) |
