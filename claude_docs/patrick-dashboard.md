@@ -2,19 +2,16 @@
 
 ---
 
-## What Happened This Session (S1018 — June 20)
+## What Happened This Session (S1017 — June 20)
 
-**Email Health Sweep — root-cause investigation + suppression hardening deployed:**
+**Migration history repaired + audio compressed:**
 
-- ✅ **Root cause found** — 2,195 EstateSales.NET organizers created May 2, 2026 by the pre-S654 scraper had NULL `directoryMostRecentSource` and empty `sourcesJson`. These 48 (with contactEmail) were the source of the recent hard bounces.
-- ✅ **ESN backfill run** — All 2,195 organizers now have `directoryMostRecentSource='EstateSalesNet'` and correct `sourcesJson`. The 3 sentry-domain DirectoryClaimEmail entries marked INVALID.
-- ✅ **suppressionService.ts hardened** — Three new blocks deployed:
-  - `sentry.io` added to UNSENDABLE_DOMAINS (the `@sentry.io` and `@sentry-next.wixpress.com` addresses in ESN data)
-  - `JUNK_FULL_ADDRESSES` set: `filler@godaddy.com`, `admin@facebook.com`, `info@indiantypefoundry.com` now permanently blocked
-  - `isHexHashLocalPart()` blocks any address with a 32+ hex-char local part (Sentry event IDs scraped from ESN profiles)
-- ✅ **Railway redeployed green** — You confirmed push + redeploy.
+- ✅ **Migration history fixed** — Two Unix-epoch migrations (`1776176101893_add_ebay_subscription_id` + `1776893245415_add_taste_profile_and_api_keys`) renamed to proper date-based timestamps (`20260707000001/20260707000002`). Railway `_prisma_migrations` table updated. `prisma migrate dev` and `prisma migrate deploy` now work again.
+- ✅ **Audio compressed** — `bg-music.mp3` 256→128kbps (2.7MB→1.4MB). `fas1.1–fas1.13` 192→128kbps. Total savings: ~1.76MB. No perceptible quality loss.
+- ✅ **BQ cleared** — `/admin/users` row rendering confirmed by Patrick. BQ 2→1.
+- ✅ **Deployed green** — Patrick pushed and redeployed.
 
-**No user action needed.** No code is pending push. No Patrick actions required.
+**No user action needed.** No code is pending push.
 
 ---
 
@@ -22,43 +19,33 @@
 
 | Area | Status |
 |------|--------|
-| BQ (Blocked Queue) | **2 items** — see below |
-| Email suppression | ✅ sentry.io + hex-hash + JUNK_FULL_ADDRESSES blocked |
-| ESN source attribution | ✅ 2,195 organizers backfilled |
-| Outreach pipeline | ✅ No ungated sends; OUTREACH_ENABLED gate covers all bulk paths |
-| admin/index.tsx dark mode fix | 🔧 Fixed locally (S1016), pending push |
-| getSale items cap (S1015) | 🔧 CODE-ONLY pending push |
+| BQ (Blocked Queue) | **1 item** — see below |
+| Migration history | ✅ Fixed — prisma migrate dev/deploy unblocked |
+| Audio assets | ✅ Compressed (-1.76MB) |
 | Vercel / Railway | ✅ Both healthy |
 
 ---
 
-## BQ Items (2)
+## BQ Items (1)
 
 | Feature | Blocked Until |
 |---------|---------------|
-| Cart payment-completion (items→SOLD on success) | Real Stripe purchase on prod |
-| /admin/users rows for Patrick | Patrick visits finda.sale/admin/users logged in as himself — just confirm the user table loads |
+| Cart payment-completion (items→SOLD on success) | Real Stripe purchase on prod — Patrick action only |
 
 ---
 
-## Push Block — S1016 fixes still pending
+## No Push Block
 
-These were fixed in S1016 but haven't been pushed yet. Include STATE.md + patrick-dashboard.md in the same commit:
-
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale
-git add packages/frontend/pages/admin/index.tsx
-git add packages/backend/src/controllers/saleController.ts
-git add claude_docs/STATE.md
-git add claude_docs/patrick-dashboard.md
-git commit -m "fix: admin close button dark mode; perf: getSale items cap + orderBy; docs: S1018 email sweep wrap"
-.\push.ps1
-```
+Everything was pushed this session. Nothing pending.
 
 ---
 
-## Next Session (S1019)
+## Next Session (S1018)
 
-1. **Dev priorities:** migration history repair (P2); optional index drop; audio CDN migration (P3).
-2. **Patrick spot-check** (30 sec): visit finda.sale/admin/users → confirm user table loads → clears BQ item 2.
-3. BQ = 2 — no QA gate.
+**Session type: DEV** — BQ = 1 (no QA gate).
+
+Pick anything from the roadmap Building section. Good candidates:
+- Drop `idx_Organizer_cashFeeBalance_updatedAt` index (idx_scan=0, quick win)
+- Next roadmap feature from Building backlog
+
+Weekly audit runs automatically Saturday 4AM.

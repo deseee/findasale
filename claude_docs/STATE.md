@@ -10,7 +10,7 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 **S1018 WRAP (2026-06-20) — RESEARCH/DEV (automated email health sweep + root-cause investigation + suppression fix + ESN backfill). Push confirmed live (Patrick redeployed green). BQ unchanged at 2.**
 
-**S1017 START (2026-06-20) — DEV session.** Push confirmed live (29de3aed). PCVs applied to roadmap. Patrick spot-check needed: visit finda.sale/admin/users to clear BQ item 2. Dev priorities: migration history repair (P2); audio CDN migration (P3).
+**S1017 WRAP (2026-06-20) — DEV session.** PCVs applied to roadmap (rows 190/212/554). Migration history repaired — two Unix-epoch migrations (1776176101893 + 1776893245415) renamed to 20260707000001/20260707000002; Railway _prisma_migrations updated; prisma migrate dev/deploy now unblocked. Audio compression: bg-music.mp3 2.7MB→1.4MB, fas1.1–fas1.13 192→128kbps; total -1.76MB saved. fas-01–13 and vo-08b.mp3 kept in project folder. BQ 2→1 (Patrick confirmed /admin/users rows load; cart payment-completion remains — Stripe LIVE keys only). Deployed green.
 
 **S1016 WRAP (2026-06-20) — QA + FIXES session.** Chrome re-authenticated after 2 failed sessions. All 4 BQ QA items addressed: /feed ✅ sale cards render immediately, no spinner (ss_0566nitc9); /leaderboard ✅ all 3 tabs instant (ss_9351nlc6c, ss_6728wlx91, ss_6482h13up); SEO4 yard-sales/grand-rapids-mi ✅ H1 + FAQPage JSON-LD + nearby cities + ISR (ss_3217o7wwg); /admin/users Alice redirect ✅ redirected to homepage (ss_8004e8she), admin rows still need Patrick's Google OAuth. Local file fixes: feed.tsx restored from GitHub (7348B, was 5263B), leaderboard.tsx NUL bytes stripped (14737B = GitHub). admin/index.tsx LOW-2: added dark:text-warm-400 to close button. BQ 4→2.
 
@@ -215,7 +215,6 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
 | Cart multi-item payment-completion | Stripe LIVE keys block test card; real purchase needed to verify items→SOLD webhook | Real purchase or test-mode proxy | S1006 |
-| /admin/users — admin row rendering | Patrick's account uses Google OAuth; can't automate login. Alice redirect ✅ re-confirmed S1016 (ss_8004e8she). Admin rows need Patrick to visit /admin/users himself and confirm rows render. | Patrick manual spot-check (30 sec) | S1015 |
 
 ## Pending Chrome Verifications
 
