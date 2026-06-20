@@ -58,7 +58,7 @@ const AdminInvitesPage = () => {
       }
     };
 
-    if (user?.role === 'ADMIN') {
+    if (user?.roles?.includes('ADMIN')) {
       fetchInvites();
     }
   }, [user]);

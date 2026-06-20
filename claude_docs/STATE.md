@@ -8,6 +8,8 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
+**S1014 WRAP (2026-06-20) — QA + DEV session.** S1013 batch Chrome-verified (7/8 ✅, 1 P1 found+fixed). Admin DM BQ item cleared. ISR added to /feed + /leaderboard (CODE-ONLY pending push). **DATA REGRESSION FIXED (S1014, live):** Alice (user1@example.com) had ADMIN role in production DB — S998 removed it from seed.ts but never ran a DB update. Removed via psycopg2: `roles = ['ORGANIZER']` confirmed. Code fix (5 admin pages: `roles?.includes('ADMIN')` pattern) is a robustness improvement pending push. BQ=1 (cart payment-completion only).
+
 **S1013 WRAP (2026-06-19) — DEPLOYED GREEN ✅.** Code batch pushed + Railway/Vercel green (Patrick confirmed). 5 dead indexes dropped on Railway (raw DDL). `connection_limit=10&pool_timeout=20` added to backend DATABASE_URL + redeployed. All S1013 changes are LIVE but CODE-ONLY/UNVERIFIED in browser — **next session is QA** (smoke test changed surfaces FIRST per §10). BQ=2 (cart payment-completion; admin DM #554).
 
 **S1013 — AUDIT/BUG/RECORDS (2026-06-19). Past-session audit → admin /users 500 root-caused+fixed, eBay S998 backfill closed, doc-drift caught (roadmap #554).**
@@ -203,40 +205,35 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
 | Cart multi-item payment-completion | Stripe LIVE keys block test card; real purchase needed to verify items→SOLD webhook | Real purchase or test-mode proxy | S1006 |
-| Admin Send Message (DM) + à-la-carte revenue (#554) | Shipped 4374e40a + LIVE but never QA'd | Chrome QA: send a real DM as admin, confirm email delivers; verify dashboard ALA_CARTE revenue card | S1013 |
 
 ## Pending Chrome Verifications
 
 | # | Feature | Evidence | Session |
 |---|---------|----------|---------|
-| (all S1008 PCVs applied to roadmap.md this session S1010 — table cleared) | | | |
+| 1 | Admin DM BQ #554 | Navigated /admin/users/[id] as Alice (user1). Clicked Send Message. Filled subject+body. Send succeeded, modal dismissed, no error toast. ss_1718v421j, ss_7087eqgvm | S1014 |
+| 2 | Admin pages role check (robustness) | `roles?.includes('ADMIN')` pattern (5 files, code improvement). Alice's ADMIN role removed from DB directly — she's now blocked at the guard. After push: verify /admin/users loads rows for real admin (deseee@gmail.com); verify Alice is redirected away | S1014 (CODE-ONLY) |
+| 3 | /feed ISR | ISR added (revalidate:300). Needs Chrome verify after push: finda.sale/feed renders on first load without spinner | S1014 (CODE-ONLY) |
+| 4 | /leaderboard ISR | ISR added (revalidate:600). Needs Chrome verify after push: finda.sale/leaderboard renders on first load | S1014 (CODE-ONLY) |
 
 ## Next Session
 
-### S1014 — QA SESSION (verify S1013 perf/security batch)
+### S1015 — PUSH then verify
 
-**Session type: QA.** Blocked Queue = 2 (below the 8 ceiling). FIRST ACTION (§10 post-deploy smoke test): open Chrome at finda.sale, hit each changed surface once before any new work. Plan before Chrome: read seed creds (memory/seed.ts), batch by account, log in ONCE per account. Evidence required per ✅ (URL + user + element + outcome + screenshot id). One feature per dispatch, Chrome agents SEQUENTIAL.
+**Session type: QA.** BQ = 1 (below 8 ceiling). 
 
-**QA batch (deployed S1013 changes):**
-1. `Skill('findasale-qa')` → Admin (as user1 ADMIN): /admin/users loads paginated, NO 500; /admin/reports/organizers loads + sort works. Root cause fixed: ID-array→_count / $queryRaw. Expected: rows render, no error toast.
-2. Public sale lists: /sales feed + a city page (/estate-sales/grand-rapids-mi) — **discount badge + markdown flag still correct** (per-item fan-out → item.groupBy). Sale detail /sales/[id] renders + review average correct (review.aggregate).
-3. **Trending cards (homepage/discovery) — MAIN REGRESSION RISK:** trending `select` was narrowed (dropped scrapedMetadata + internal fields). Verify every card field renders (no blank title/location/price/photo). If a field is blank → re-add it to trendingController select.
-4. Leaderboard page: standings render, counts sane (org leaderboard 200-query N+1 → groupBy; scout N+1 → findMany in).
-5. P0 limit cap: GET /api/sales?limit=100000 → returns ≤50 rows.
-6. /health/ready → 200; /api/search/visual → rapid calls hit 429 (rate limiter); a normal visual search still works once.
-7. Caching: GET /api/cities + trending twice → 2nd is fast / X-Cache HIT, values correct + not stale-broken.
-8. Frontend images (mobile viewport, DevTools Network): card image serves AVIF + responsive srcset; LQIP/lazy intact; no broken images on eBay/scraped (non-Cloudinary) cards.
-9. **Admin DM #554 (BQ):** as admin, /admin/users/[id] → Send Message → real subject/body → 200 AND confirm the email ACTUALLY delivers (memory: Gmail-rail send gap — verify real inbox, not just 200).
-10. Rate-limit false-positive check: one legit coupon generate + one legit payment/checkout init still succeed (not over-throttled).
-11. Railway logs: logRetentionCron registered + first fire (03:20 UTC, logged counts, only the 3 log tables); reputationJob runs filtered (isUnmanagedListing:false).
+**FIRST: Patrick pushes the S1014 block (see push block below).** Then verify the 3 CODE-ONLY items in Chrome.
 
-**Remaining dev/records follow-ups (lower priority — full list: `claude_docs/audits/expert-review-2026-06-19.md`):**
-- `Skill('findasale-dev')` P2/P3: ISR for /feed + /leaderboard (client-only now); getSale items `take`; move ~3.7MB audio out of packages/frontend/public to CDN.
-- `Skill('findasale-records')`: reconcile STACK.md fee rate to tiered 10% SIMPLE / 8% PRO+TEAMS (stop the recurring 'is it a bug' question).
-- `Skill('findasale-dev')`: repair migration history so `prisma migrate dev` works again — shadow replay fails (P1014) on `add_ebay_subscription_id` referencing Organizer before creation in from-scratch replay. Until fixed, ALL schema changes use raw DDL / `prisma db execute` (Option B), never migrate dev.
-- Optional: drop `idx_Organizer_cashFeeBalance_updatedAt` (raw-SQL index, idx_scan=0) via raw DDL.
+**QA after push:**
+1. /admin/users → rows render (admin role check fix — ss evidence required)
+2. /feed → loads with sales on first visit (no loading spinner, ISR working)
+3. /leaderboard → loads all 3 tabs on first visit without spinner
 
-**Blocked Queue (2):** cart multi-item payment-completion (Stripe LIVE keys — Patrick real purchase); admin DM #554 (QA #9 above).
+**Remaining P2/P3 from expert-review:**
+- `Skill('findasale-dev')`: getSale items `take` limit; move ~3.7MB audio from packages/frontend/public to CDN
+- `Skill('findasale-dev')`: repair migration history (shadow replay fails — use raw DDL for all schema changes in the meantime)
+- Optional: drop `idx_Organizer_cashFeeBalance_updatedAt` (raw-SQL idx_scan=0) via raw DDL
+
+**BQ (1):** cart multi-item payment-completion (Stripe LIVE keys — Patrick real purchase only).
 
 ## Recent Sessions
 

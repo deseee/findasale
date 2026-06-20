@@ -65,7 +65,7 @@ const ABTestsPage = () => {
 
   const winner = getWinner();
 
-  if (userLoading || (user?.role === 'ADMIN' && loading)) {
+  if (userLoading || (user?.roles?.includes('ADMIN') && loading)) {
     return (
       <div className="container mx-auto px-4 py-8">
         <div className="animate-spin rounded-full h-12 w-12 border-2 border-amber-600 border-t-white"></div>
@@ -73,7 +73,7 @@ const ABTestsPage = () => {
     );
   }
 
-  if (user?.role !== 'ADMIN') {
+  if (!user?.roles?.includes('ADMIN')) {
     return null;
   }
 

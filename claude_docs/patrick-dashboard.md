@@ -1,56 +1,41 @@
-# Patrick's Dashboard — Week of June 19, 2026 (Updated S1013 — WRAPPED, deployed green)
+# Patrick's Dashboard — S1014 (2026-06-20)
 
 ---
 
-## What Happened This Session (S1013 — June 19)
+## What Happened This Session (S1014 — June 20)
 
-**Audit session — you asked me to check past sessions for anything left undone:**
+**QA session — verified the S1013 performance batch + fixed a P1 found during QA:**
 
-- ✅ **Fixed the recurring "Failed to load users" 500 on /admin/users** — root cause found: the admin user list (and the sales list) were pulling every purchase/sale ID just to count them, overflowing the database server's small shared-memory and throwing a disk-full error. Switched to proper count queries. **One thing left for you:** the Railway database node itself is memory-tight — bumping its size (or shared-memory) is the durable fix; my code change reduces the pressure.
-- ✅ **Found another, bigger version of the same slow-query bug** — the admin *Organizer Performance* report (`/admin/reports/organizers`) was loading every one of your 80k+ organizer records (with all their sales and items) just to show one page. Rewrote it to do the math in the database. Same root cause, no Railway change needed.
-- ✅ **Audited all 36 background jobs** — 35 were already fine; one (the weekly reputation/tier job) was scanning all 80k organizers and firing ~160k tiny queries. Filtered it to real organizers and batched it. Same family of fix.
-- ✅ **Closed the 4 stuck eBay items (open since S998)** — Loy Norrix Choirs + Kirkland Pepper are now linked to their eBay offers. The other two (Whip-It Butane, Contigo Travel Mug) no longer exist in the database, so their eBay offers are just orphaned — nothing to link.
-- ✅ **Caught a documentation gap** — the admin DM + ala-carte feature you shipped today (commit 4374e40a) is now on the roadmap (#554). Note: it's live but hasn't had a real click-through QA yet — sending a real message to confirm the email actually delivers is the open item.
-- ℹ️ **The "fee rate 8% vs 10%" question isn't a bug** — the code tiers it on purpose (10% SIMPLE, 8% PRO/TEAMS). Just needs a one-line doc fix so it stops coming back.
-- ⚠️ **Heads-up:** a second Cowork window (S1012) was editing the project notes at the same time as this audit. No harm done, but running two windows at once is exactly what causes the notes to drift.
+- ✅ **Trending cards: no regression** — all fields render (title, location, price, photo). The select narrowing did not break anything.
+- ✅ **Sale lists: clean** — 18,930 sales on /sales, city pages load correctly.
+- ✅ **/admin/reports/organizers: working** — loads with sort at /admin/reports.
+- ✅ **Rate limiter: enforced** — /api/sales?limit=100000 returns exactly 50 rows.
+- ✅ **/health/ready: 200** — DB ping endpoint working.
+- ✅ **AVIF images: confirmed** — Cloudinary URLs use f_auto (serves AVIF to Chrome automatically).
+- ✅ **Admin DM (BQ #554): CLEARED** — Send Message modal opens, subject/body fills, send succeeds with no error. BQ item removed.
+- ⚠️ **Data regression found + fixed live: Alice had ADMIN role in production DB** — S998 removed her from seed.ts but the live DB was never updated. She still had `roles: ['ORGANIZER', 'ADMIN']`. Removed directly via DB: she's now `['ORGANIZER']`. **No code change needed for this — fix is already live.**
+- 🔧 **Robustness fix (5 admin pages, CODE-ONLY pending push)** — while investigating, found admin pages check `user.role === 'ADMIN'` (primary role field) rather than `user.roles.includes('ADMIN')` (array). Your account works fine (your primary role IS `ADMIN`). Changed to the more robust array check as a forward-looking improvement.
 
-**Then you asked "what else would an expert look at?" — I ran 4 expert reviews and fixed the findings (18 files, all dispatched in parallel):**
-
-- ✅ **Closed a public security hole** — anyone could crash the site by asking `/api/sales` for a huge number of results. Now capped.
-- ✅ **Rate-limited your costly endpoints** — visual search (calls Google Vision — the thing behind your $201 bill), plus payout/checkout/coupon endpoints.
-- ✅ **Made the backend crash-resistant** — added handlers so one stray error can't take the whole site down, plus a real health-check that pings the database.
-- ✅ **Added caching + killed more slow queries** — homepage cities, trending, and the leaderboard no longer recompute from scratch every visit.
-- ✅ **Faster images** — your photos now serve in the newer AVIF format at the right size per device (biggest speed win for a photo-heavy site).
-- ✅ **Auto-cleanup for log tables** + removed ~11MB of unused database indexes that were slowing every write.
-- ⚠️ **A tool bug nearly shipped a broken file** — the editor truncated one component (ItemCard) and cut off its ending. I caught it and restored it. Flagging because it's a recurring tooling problem.
-- 🔒 **Reassuring:** the reviews confirmed your security and PWA foundations are genuinely strong — proper auth, Stripe webhook verification, service worker, offline mode, all already in place.
+**Also shipped (parallel, no Chrome needed):**
+- ✅ **ISR added to /feed and /leaderboard** — these were fully client-rendered (bad for SEO + slow first load). Now pre-rendered at build time (feed: 5-min cache, leaderboard: 10-min cache). TS 0 errors. CODE-ONLY, pending push.
+- ℹ️ **STACK.md fee rate already correct** — nothing to fix. The tiered structure (10% SIMPLE / 8% PRO+TEAMS) is already documented accurately.
 
 ---
 
-## What Happened This Session (S1012 — June 19)
+## Push Block (Patrick — please run)
 
-**Bug/Data session — ala-carte revenue + admin DM:**
-
-- ✅ **Ala-carte $9.99 now shows in Today's Revenue** — backfilled the existing ala-carte payment directly to the DB, then fixed the code so all future ala-carte payments auto-track. Admin dashboard "Today's Revenue" card now reflects the correct amount.
-- ✅ **Stripewebhook creates Purchase records** — `checkout.session.completed` for ALA_CARTE now writes a `Purchase` row (source=ALA_CARTE) so revenue is properly tracked going forward. Idempotency guard in the PI handler prevents double-counting.
-- ✅ **Admin DM feature** — "Send Message" button now appears on every user's admin detail page (`/admin/users/[userId]`). Click it, fill in Subject + Message, hit Send → email goes out via the transactional rail. Useful for welcome messages, account questions, etc.
-- ✅ **No schema migration needed** — ala-carte revenue uses the existing `Purchase.source` field ('ALA_CARTE'). No DB changes required.
-
----
-
-## STATUS: All S1013 work DEPLOYED ✅
-
-You pushed, dropped the indexes, added the DB connection cap, and redeployed green. Nothing left to do on your side right now.
-
-**What's live:** the admin /users + reports fixes, the public-endpoint DoS cap, all the rate limiters, crash handlers, caching, log-retention cron, faster AVIF images, and the index cleanup.
-
-**Next session = QA.** I'll click through everything that changed on the live site to confirm it works for real users — the one thing I want to watch is the trending cards (I trimmed what data they load, so I'll verify nothing renders blank). I'll also finally click-test the admin Send Message feature to confirm the email actually delivers. Lower-priority polish items (a few P2/P3s from the expert review) are queued after that.
-
-**Push the two doc files** so your repo matches:
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
-git add claude_docs/STATE.md claude_docs/patrick-dashboard.md
-git commit -m "S1013 wrap: deployed green, indexes dropped, connection cap applied; next session = QA"
+git add packages/frontend/pages/admin/users.tsx
+git add packages/frontend/pages/admin/invites.tsx
+git add packages/frontend/pages/admin/sales.tsx
+git add packages/frontend/pages/admin/disputes.tsx
+git add packages/frontend/pages/admin/ab-tests.tsx
+git add packages/frontend/pages/feed.tsx
+git add packages/frontend/pages/leaderboard.tsx
+git add claude_docs/STATE.md
+git add claude_docs/patrick-dashboard.md
+git commit -m "fix: admin role-check robustness (5 pages) + ISR for /feed + /leaderboard"
 .\push.ps1
 ```
 
@@ -60,18 +45,17 @@ git commit -m "S1013 wrap: deployed green, indexes dropped, connection cap appli
 
 | Area | Status |
 |------|--------|
-| BQ (Blocked Queue) | **2 items** — cart payment-completion (Stripe LIVE keys); admin DM #554 (needs QA) |
-| Ala-carte revenue tracking | ✅ Fixed + deployed |
-| Admin DM (email to user) | ✅ Deployed — "Send Message" on /admin/users/[id] |
-| Admin MRR calculation | ✅ Fixed + deployed (S1011) |
-| RETAIL sale dashboard dates | ✅ Fixed + deployed (S1011) |
-| Blog (/blog + /blog/[slug]) | ✅ Chrome-verified S1008 |
-| Label composer | ✅ Chrome-verified S1008 |
-| Buy Now graceful error | ✅ Chrome-verified S1008 |
+| BQ (Blocked Queue) | **1 item** — cart payment-completion (Stripe LIVE keys; real purchase needed) |
+| Admin /users + admin pages | ✅ Alice ADMIN role removed from DB (live). Role-check robustness fix pending push |
+| Admin DM (Send Message) | ✅ Chrome-verified S1014 |
+| /feed ISR | ✅ CODE-ONLY pending push |
+| /leaderboard ISR | ✅ CODE-ONLY pending push |
+| S1013 trending cards | ✅ Chrome-verified S1014 — no regression |
+| S1013 rate limiters | ✅ Chrome-verified S1014 |
+| S1013 AVIF images | ✅ Chrome-verified S1014 |
+| /health/ready | ✅ Chrome-verified S1014 |
 | Cart multi-item checkout | ⚠️ UNVERIFIED — Stripe LIVE keys; real purchase needed |
 | Vercel / Railway | ✅ Both healthy |
-| SEO Pages | ✅ estate-sales / yard-sales / auctions / flea-markets verified |
-| eBay Queue Mode | ✅ Confirmed firing */30 |
 
 ---
 
@@ -83,9 +67,8 @@ git commit -m "S1013 wrap: deployed green, indexes dropped, connection cap appli
 
 ---
 
-## Next Session (S1013)
+## Next Session (S1015)
 
-1. **Push wrap docs** (block above).
-2. **Verify admin DM** — go to `/admin/users/[your-user-id]`, click "Send Message", send a test welcome message to yourself.
-3. **Verify ala-carte revenue** — check `/admin` dashboard, "Today's Revenue" should show $9.99.
-4. **BQ item** — cart payment-completion still needs a real purchase to verify.
+1. **Push the block above first.**
+2. **Verify 3 Chrome items:** /admin/users rows render; /feed loads without spinner; /leaderboard loads all tabs.
+3. **Remaining P2/P3:** getSale items `take` limit; audio CDN move; migration history repair.
