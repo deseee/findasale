@@ -511,7 +511,6 @@ model Organizer {
   confidenceLastCalculated DateTime?
 
   @@index([directoryStatus])
-  @@index([directoryNextCheckAt])
   @@index([suppressOutreach])
   @@index([claimStatus])
   @@index([isClaimed]) // leadScoringService nightly batch filter — fixes Sentry FINDASALE-NODEJS-1G
@@ -519,8 +518,6 @@ model Organizer {
   @@index([isHiddenFromDirectory]) // Public directory queries filter on this flag
   @@index([esnOrgId])
   @@index([dedupeKey])
-  @@index([corroborationScore])
-  @@index([sourceCount])
   @@index([stripeCustomerId]) // Sentry slow Organizer SELECT: stripeController findFirst by customerId in 3 webhook handlers (1108–2063ms)
   @@index([subscriptionStatus, subscriptionTier]) // Sentry slow Organizer SELECT: adminController MRR query filters on both columns simultaneously
   @@index([graceEndAt, graceTierBefore]) // Sentry slow Organizer SELECT: tierGraceCronJob findMany WHERE graceEndAt <= now AND graceTierBefore IS NOT NULL
@@ -980,7 +977,6 @@ model Sale {
   updatedAt                   DateTime                   @updatedAt
 
   @@index([deletedAt])
-  @@index([prelaunchAt])
   @@index([lifecycleStage])
   @@index([organizerId, status, endDate]) // Feature #249: Concurrent Sales Gate optimization
   @@index([locationId]) // #311: Multi-Location filter
@@ -998,7 +994,6 @@ model Sale {
   @@index([city]) // Sentry slow query fix 2026-05-30: Sale SELECT (6298ms) — ILIKE city queries; note leading-wildcard ILIKE won't use index, but prefix matches benefit
   @@index([status, isInventoryContainer, endDate]) // Sentry NODEJS-3E: search.ts COUNT WHERE status=PUBLISHED AND isInventoryContainer=false AND endDate >= now (missing covering index)
   @@index([sourceName]) // Sentry slow query: SELECT Sale WHERE scrapedMetadata JSON path + sourceName (1115ms, 6x) — sourceName filter enables partition pruning before GIN eval
-  @@index([status, markdownEnabled, markdownFloor]) // Sentry slow query: SELECT Sale WHERE status+markdownEnabled+markdownFloor (1374ms) — dedicated covering index for markdown auto-clear job
   // Sentry NODEJS-10 fix (partial indexes — raw SQL only, Prisma @@index does not support WHERE predicates):
   //   Sale_status_endDate_autoclose_idx: (status, endDate) WHERE deletedAt IS NULL
   //     → saleAutoCloseCron was bitmap-scanning 14k PUBLISHED rows via wrong index; partial index → 0.046ms
