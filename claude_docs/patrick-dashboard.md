@@ -52,7 +52,7 @@ git commit -m "S1013 perf/security batch: limit caps, N+1 fixes, caching, rate l
 .\push.ps1
 ```
 
-**2. Drop the dead indexes** (separate migration — see STATE.md Next Session for the `prisma migrate dev`/`deploy` block).
+**2. ~~Drop the dead indexes~~ — DONE.** I dropped the 5 unused indexes directly on Railway (the `migrate dev` route can't work here — it's a known Railway limitation, not your fault). Nothing left to do on this.
 
 **3. (Optional, Railway dashboard) Cap the DB pool:** add `?connection_limit=10&pool_timeout=20` to the backend `DATABASE_URL` env var.
 

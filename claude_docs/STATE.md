@@ -24,7 +24,8 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
   - tierGraceService: `new PrismaClient()`→shared singleton (kills 2nd pool).
   - frontend: imageUtils `f_webp`→`f_auto`(AVIF)+`getCloudinarySrcSet`; SaleCard/ItemCard responsive `srcset`+`sizes`. **NOTE: Write tool TRUNCATED ItemCard.tsx (cut 14 lines, lost export default) — caught via tail/grep (no frontend tsc in VM), restored from git + re-patched. Write tool now truncates like the banned Edit tool.**
   - schema.prisma: 5 never-scanned `@@index` removed (Organizer corroborationScore/sourceCount/directoryNextCheckAt; Sale prelaunchAt/status_markdownEnabled_markdownFloor) — ~11MB write-amp relief. **Separate migration (Patrick).**
-  - STILL PATRICK-ONLY: (a) Railway DATABASE_URL `?connection_limit=10&pool_timeout=20`; (b) index-drop migration (`prisma migrate dev` → `migrate deploy`).
+  - **Index drop DONE (S1013, raw DDL):** the 5 `@@index` were dropped from Railway via `DROP INDEX CONCURRENTLY` (psycopg2) — `migrate dev` can't be used here (Railway shadow-DB replay fails on a pre-existing migration-history ordering issue: `add_ebay_subscription_id` references Organizer before it exists in replay). DB now matches committed schema; no migration file needed. STILL PATRICK-ONLY: Railway DATABASE_URL `?connection_limit=10&pool_timeout=20` (optional pool cap).
+  - **NOTE for future schema changes:** `prisma migrate dev` is BROKEN here (shadow replay fails). Use raw DDL via psycopg2 / `prisma db execute --stdin` (dev-environment Option B), never migrate dev.
 
 
 **S1012 — BUG/DATA (2026-06-19). À-la-carte revenue now tracked in admin dashboard + admin DM feature.**
@@ -228,19 +229,7 @@ git commit -m "S1013 perf/security batch: limit caps + groupBy fan-out fixes + N
 .\push.ps1
 ```
 
-**Schema/index-drop migration (SEPARATE — run after the code push, §6 protocol):**
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
-npx prisma migrate dev --name drop_unused_organizer_sale_indexes   # generates DROP migration from schema diff (local)
-# inspect migration.sql = 5 DROP INDEX IF EXISTS, then:
-$env:DATABASE_URL="<Railway DATABASE_URL from CLAUDE.md global>"
-npx prisma migrate deploy
-npx prisma generate
-cd ..\..
-git add packages/database/prisma/schema.prisma packages/database/prisma/migrations
-git commit -m "S1013: drop 5 never-scanned indexes on Organizer/Sale (write-amp relief)"
-.\push.ps1
-```
+**Index drop — DONE this session (raw DDL, no Patrick action needed).** The 5 dead indexes were dropped from Railway via `DROP INDEX CONCURRENTLY`. `migrate dev` is unusable here (shadow-DB replay fails on pre-existing migration history) — future schema changes use raw DDL / `prisma db execute`, not migrate dev.
 
 **Infra (Patrick, Railway dashboard — no code):** append `?connection_limit=10&pool_timeout=20` to the backend service DATABASE_URL env var (caps Prisma pool under the 100-conn ceiling).
 
