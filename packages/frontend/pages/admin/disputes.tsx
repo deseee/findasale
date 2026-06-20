@@ -78,7 +78,7 @@ const AdminDisputesPage = () => {
       const response = await api.get(`/disputes/admin?${params}`);
       return response.data;
     },
-    enabled: !!user?.id && user?.role === 'ADMIN',
+    enabled: !!user?.id && user?.roles?.includes('ADMIN'),
   });
 
   const updateStatusMutation = useMutation({

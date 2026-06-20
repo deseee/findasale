@@ -69,14 +69,14 @@ const AdminUsers = () => {
   };
 
   useEffect(() => {
-    if (user?.role === 'ADMIN') {
+    if (user?.roles?.includes('ADMIN')) {
       fetchUsers(1);
     }
   }, [user]);
 
   // Re-fetch when hideZeroActivity changes
   useEffect(() => {
-    if (user?.role === 'ADMIN') {
+    if (user?.roles?.includes('ADMIN')) {
       fetchUsers(1);
     }
   }, [hideScraped]);

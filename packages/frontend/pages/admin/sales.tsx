@@ -62,7 +62,7 @@ const AdminSales = () => {
   };
 
   useEffect(() => {
-    if (user?.role === 'ADMIN') {
+    if (user?.roles?.includes('ADMIN')) {
       fetchSales(1);
     }
   }, [user]);
