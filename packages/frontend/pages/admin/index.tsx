@@ -207,7 +207,7 @@ const AdminDashboard = () => {
             <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 border-l-4 border-amber-600">
               <h3 className="text-warm-600 dark:text-warm-400 text-sm font-medium uppercase">Today's Revenue</h3>
               <p className="text-3xl font-bold text-warm-900 dark:text-warm-100 mt-2">{formatCurrency(stats.transactionRevenueToday)}</p>
-              <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">Transaction revenue</p>
+              <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">Gross · before Stripe fees</p>
             </div>
 
             <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 border-l-4 border-amber-600">
@@ -219,7 +219,7 @@ const AdminDashboard = () => {
             <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 border-l-4 border-amber-600">
               <h3 className="text-warm-600 dark:text-warm-400 text-sm font-medium uppercase">30d Revenue</h3>
               <p className="text-3xl font-bold text-warm-900 dark:text-warm-100 mt-2">{formatCurrency(stats.transactionRevenueLast30d)}</p>
-              <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">Transactions last 30 days</p>
+              <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">Gross · before Stripe fees</p>
             </div>
 
             <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 border-l-4 border-amber-600">
