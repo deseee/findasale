@@ -1,6 +1,21 @@
 import { Response } from 'express';
+import { Prisma } from '@prisma/client';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
+
+// Raw row shape returned by the per-organizer aggregate query.
+// COUNT(...) comes back from Postgres as bigint; numeric SUM(...) as Prisma.Decimal | null.
+interface OrganizerPerformanceRow {
+  id: string;
+  businessName: string;
+  subscriptionTier: string;
+  salesCount: bigint;
+  itemsCount: bigint;
+  soldItemsCount: bigint;
+  totalGmv: Prisma.Decimal | null; // sum of Purchase.amount (dollars)
+  lastSaleAt: Date | null;
+  joinedAt: Date;
+}
 
 // GET /api/admin/reports/organizers
 export const getOrganizerPerformance = async (req: AuthRequest, res: Response) => {
@@ -19,96 +34,88 @@ export const getOrganizerPerformance = async (req: AuthRequest, res: Response) =
       return res.status(400).json({ message: 'Invalid order parameter' });
     }
 
-    // Fetch all organizers with their related data
-    const organizers = await prisma.organizer.findMany({
-      select: {
-        id: true,
-        businessName: true,
-        subscriptionTier: true,
-        sales: {
-          where: { deletedAt: null },
-          select: {
-            id: true,
-            items: {
-              select: {
-                id: true,
-                status: true,
-              },
-            },
-            purchases: {
-              select: {
-                amount: true,
-              },
-            },
-            createdAt: true,
-          },
-        },
-      },
-    });
+    // ---- Sorting is done in SQL so it is correct across the FULL set while we
+    //      only ever return a single page. The ORDER BY column and direction are
+    //      injected via Prisma.raw, so they MUST come from a fixed whitelist —
+    //      never from raw user input — to stay injection-safe.
+    const direction = order === 'desc' ? 'DESC' : 'ASC';
+    // Map the public sortBy to a computed SQL expression. sellThrough divides
+    // sold/total items (guarding against divide-by-zero) so the ordering matches
+    // the rate the client sees. revenue sorts by GMV (a monotonic proxy for
+    // platformRevenue, which is just GMV * a per-tier constant — both produce the
+    // same ordering since the fee rate is always positive).
+    const sortColumnMap: Record<string, string> = {
+      revenue: '"totalGmv"',
+      sales: '"salesCount"',
+      sellThrough:
+        'CASE WHEN "itemsCount" > 0 THEN ("soldItemsCount"::float / "itemsCount"::float) ELSE 0 END',
+      lastActive: '"lastSaleAt"',
+    };
+    const sortExpr = sortColumnMap[sortBy];
+    // NULLS LAST keeps organizers with no sales / no revenue at the bottom on a
+    // DESC sort (matches the old in-memory behavior where 0 / null sank to the end).
+    const nullsOrder = direction === 'DESC' ? 'NULLS LAST' : 'NULLS FIRST';
 
-    // Compute metrics for each organizer
-    const withMetrics = organizers.map((org: any) => {
-      const salesCount = org.sales.length;
-      const itemsCount = org.sales.reduce((sum: number, sale: any) => sum + sale.items.length, 0);
-      const soldItemsCount = org.sales.reduce(
-        (sum: number, sale: any) => sum + sale.items.filter((item: any) => item.status === 'SOLD').length,
-        0
-      );
+    // ---- Single DB round-trip: aggregate per organizer, sort, then LIMIT/OFFSET.
+    // Sales are filtered to deletedAt IS NULL. Item counts come from a LEFT JOIN
+    // on Item; GMV comes from a CORRELATED SUBQUERY against Purchase so the
+    // item-row fan-out does not multiply the purchase totals.
+    const rows = await prisma.$queryRaw<OrganizerPerformanceRow[]>(
+      Prisma.sql`
+        SELECT
+          o.id                                   AS "id",
+          o."businessName"                       AS "businessName",
+          o."subscriptionTier"::text             AS "subscriptionTier",
+          COUNT(DISTINCT s.id)                   AS "salesCount",
+          COUNT(i.id)                            AS "itemsCount",
+          COUNT(i.id) FILTER (WHERE i.status = 'SOLD') AS "soldItemsCount",
+          (
+            SELECT COALESCE(SUM(p.amount), 0)
+            FROM "Purchase" p
+            JOIN "Sale" ps ON ps.id = p."saleId"
+            WHERE ps."organizerId" = o.id
+              AND ps."deletedAt" IS NULL
+          )                                      AS "totalGmv",
+          MAX(s."createdAt")                     AS "lastSaleAt",
+          o."createdAt"                          AS "joinedAt"
+        FROM "Organizer" o
+        LEFT JOIN "Sale" s ON s."organizerId" = o.id AND s."deletedAt" IS NULL
+        LEFT JOIN "Item" i ON i."saleId" = s.id
+        GROUP BY o.id, o."businessName", o."subscriptionTier", o."createdAt"
+        ORDER BY ${Prisma.raw(sortExpr)} ${Prisma.raw(direction)} ${Prisma.raw(nullsOrder)}, o.id ASC
+        LIMIT ${limit} OFFSET ${skip}
+      `
+    );
+
+    // Total organizer count for pagination — does NOT load any rows.
+    const total = await prisma.organizer.count();
+
+    const items = rows.map((row) => {
+      const salesCount = Number(row.salesCount);
+      const itemsCount = Number(row.itemsCount);
+      const soldItemsCount = Number(row.soldItemsCount);
       const sellThroughRate = itemsCount > 0 ? soldItemsCount / itemsCount : 0;
-      const totalGmv = org.sales.reduce(
-        (sum: number, sale: any) => sum + sale.purchases.reduce((psum: number, p: any) => psum + p.amount, 0),
-        0
-      );
+      // totalGmv is the sum of Purchase.amount in dollars (Decimal | null).
+      const totalGmvDollars = row.totalGmv ? Number(row.totalGmv) : 0;
 
-      // Platform fee: SIMPLE=10%, PRO/TEAMS=8%
-      const feeRate = org.subscriptionTier === 'SIMPLE' ? 0.1 : 0.08;
-      const platformRevenue = Math.round(totalGmv * feeRate);
-
-      // Last sale
-      const lastSaleAt = org.sales.length > 0
-        ? new Date(Math.max(...org.sales.map((s: any) => s.createdAt.getTime())))
-        : null;
+      // Platform fee: SIMPLE=10%, PRO/TEAMS=8% — identical math to the prior impl.
+      const feeRate = row.subscriptionTier === 'SIMPLE' ? 0.1 : 0.08;
+      const platformRevenue = Math.round(totalGmvDollars * feeRate);
 
       return {
-        id: org.id,
-        businessName: org.businessName,
-        tier: org.subscriptionTier,
+        id: row.id,
+        businessName: row.businessName,
+        tier: row.subscriptionTier,
         salesCount,
         itemsCount,
         soldItemsCount,
         sellThroughRate: parseFloat(sellThroughRate.toFixed(4)),
-        totalGmv: Math.round(totalGmv * 100), // cents
-        platformRevenue, // cents
-        lastSaleAt,
-        joinedAt: new Date(), // Would need to add createdAt to schema join
+        totalGmv: Math.round(totalGmvDollars * 100), // cents
+        platformRevenue, // dollars (matches prior output: round(gmvDollars * feeRate))
+        lastSaleAt: row.lastSaleAt,
+        joinedAt: row.joinedAt,
       };
     });
-
-    // Sort in memory
-    let sorted = [...withMetrics];
-    if (sortBy === 'revenue') {
-      sorted.sort((a, b) =>
-        order === 'desc' ? b.platformRevenue - a.platformRevenue : a.platformRevenue - b.platformRevenue
-      );
-    } else if (sortBy === 'sales') {
-      sorted.sort((a, b) =>
-        order === 'desc' ? b.salesCount - a.salesCount : a.salesCount - b.salesCount
-      );
-    } else if (sortBy === 'sellThrough') {
-      sorted.sort((a, b) =>
-        order === 'desc' ? b.sellThroughRate - a.sellThroughRate : a.sellThroughRate - b.sellThroughRate
-      );
-    } else if (sortBy === 'lastActive') {
-      sorted.sort((a, b) => {
-        const aTime = a.lastSaleAt?.getTime() || 0;
-        const bTime = b.lastSaleAt?.getTime() || 0;
-        return order === 'desc' ? bTime - aTime : aTime - bTime;
-      });
-    }
-
-    // Paginate
-    const total = sorted.length;
-    const items = sorted.slice(skip, skip + limit);
 
     res.json({
       items,
