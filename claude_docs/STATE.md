@@ -8,6 +8,8 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
+**S1013 WRAP (2026-06-19) — DEPLOYED GREEN ✅.** Code batch pushed + Railway/Vercel green (Patrick confirmed). 5 dead indexes dropped on Railway (raw DDL). `connection_limit=10&pool_timeout=20` added to backend DATABASE_URL + redeployed. All S1013 changes are LIVE but CODE-ONLY/UNVERIFIED in browser — **next session is QA** (smoke test changed surfaces FIRST per §10). BQ=2 (cart payment-completion; admin DM #554).
+
 **S1013 — AUDIT/BUG/RECORDS (2026-06-19). Past-session audit → admin /users 500 root-caused+fixed, eBay S998 backfill closed, doc-drift caught (roadmap #554).**
 - **Concurrent-session note:** an S1012 window logged the admin DM + à-la-carte work (commits 9c445eb7/4374e40a) in STATE while this audit ran — this session is **S1013**, edits here are additive only. (Flagged to Patrick: two Cowork windows editing STATE.md simultaneously is the doc-drift risk in action.)
 - **Admin /users intermittent 500 (Postgres 53100) — ROOT-CAUSED + FIXED (adminController.ts, backend tsc 0, CODE-ONLY pending push):** `getUsers` AND `getSales` were paginated but fetched full purchase/sale/item **ID arrays** per row only to `.length` them → for scraper orgs with thousands of sales the transfer spills to Railway's tiny /dev/shm → error 53100 "No space left on device". Replaced with Prisma `_count` relations; response shapes unchanged. **This is the root-cause fix** — the spill was caused by the query shape (one admin page load walked all 80k+ rows), not by load or DB size, so it resolves on deploy. Railway instance bump is NOT required; only revisit if a 53100 recurs after deploy.
@@ -211,43 +213,30 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Next Session
 
-### S1014 — Next priority work
+### S1014 — QA SESSION (verify S1013 perf/security batch)
 
-**BQ (2 open):**
-- Cart multi-item payment-completion — Stripe LIVE keys; real purchase needed. Patrick action only.
-- Admin Send Message (DM) #554 — Chrome QA: send a real DM as admin, confirm email delivers; verify dashboard ALA_CARTE revenue card.
+**Session type: QA.** Blocked Queue = 2 (below the 8 ceiling). FIRST ACTION (§10 post-deploy smoke test): open Chrome at finda.sale, hit each changed surface once before any new work. Plan before Chrome: read seed creds (memory/seed.ts), batch by account, log in ONCE per account. Evidence required per ✅ (URL + user + element + outcome + screenshot id). One feature per dispatch, Chrome agents SEQUENTIAL.
 
-**Push block — S1013 expert-review fix batch (code + frontend + docs). NOT schema.prisma (separate migration below):**
-```powershell
-cd C:\Users\desee\ClaudeProjects\FindaSale
-git add packages/backend/src/controllers/saleController.ts packages/backend/src/controllers/leaderboardController.ts packages/backend/src/controllers/trendingController.ts
-git add packages/backend/src/index.ts packages/backend/src/jobs/logRetentionCron.ts packages/backend/src/services/tierGraceService.ts
-git add packages/backend/src/routes/search.ts packages/backend/src/routes/stripeConnect.ts packages/backend/src/routes/settlement.ts packages/backend/src/routes/billing.ts packages/backend/src/routes/pos.ts packages/backend/src/routes/coupons.ts packages/backend/src/routes/organizers.ts packages/backend/src/routes/pricing.ts
-git add packages/frontend/lib/imageUtils.ts packages/frontend/components/SaleCard.tsx packages/frontend/components/ItemCard.tsx
-git add claude_docs/STATE.md claude_docs/patrick-dashboard.md claude_docs/audits/expert-review-2026-06-19.md
-git commit -m "S1013 perf/security batch: limit caps + groupBy fan-out fixes + N+1 fixes + Redis cache + rate limiters + crash handlers + log retention + responsive images"
-.\push.ps1
-```
+**QA batch (deployed S1013 changes):**
+1. `Skill('findasale-qa')` → Admin (as user1 ADMIN): /admin/users loads paginated, NO 500; /admin/reports/organizers loads + sort works. Root cause fixed: ID-array→_count / $queryRaw. Expected: rows render, no error toast.
+2. Public sale lists: /sales feed + a city page (/estate-sales/grand-rapids-mi) — **discount badge + markdown flag still correct** (per-item fan-out → item.groupBy). Sale detail /sales/[id] renders + review average correct (review.aggregate).
+3. **Trending cards (homepage/discovery) — MAIN REGRESSION RISK:** trending `select` was narrowed (dropped scrapedMetadata + internal fields). Verify every card field renders (no blank title/location/price/photo). If a field is blank → re-add it to trendingController select.
+4. Leaderboard page: standings render, counts sane (org leaderboard 200-query N+1 → groupBy; scout N+1 → findMany in).
+5. P0 limit cap: GET /api/sales?limit=100000 → returns ≤50 rows.
+6. /health/ready → 200; /api/search/visual → rapid calls hit 429 (rate limiter); a normal visual search still works once.
+7. Caching: GET /api/cities + trending twice → 2nd is fast / X-Cache HIT, values correct + not stale-broken.
+8. Frontend images (mobile viewport, DevTools Network): card image serves AVIF + responsive srcset; LQIP/lazy intact; no broken images on eBay/scraped (non-Cloudinary) cards.
+9. **Admin DM #554 (BQ):** as admin, /admin/users/[id] → Send Message → real subject/body → 200 AND confirm the email ACTUALLY delivers (memory: Gmail-rail send gap — verify real inbox, not just 200).
+10. Rate-limit false-positive check: one legit coupon generate + one legit payment/checkout init still succeed (not over-throttled).
+11. Railway logs: logRetentionCron registered + first fire (03:20 UTC, logged counts, only the 3 log tables); reputationJob runs filtered (isUnmanagedListing:false).
 
-**Index drop — DONE this session (raw DDL, no Patrick action needed).** The 5 dead indexes were dropped from Railway via `DROP INDEX CONCURRENTLY`. `migrate dev` is unusable here (shadow-DB replay fails on pre-existing migration history) — future schema changes use raw DDL / `prisma db execute`, not migrate dev.
+**Remaining dev/records follow-ups (lower priority — full list: `claude_docs/audits/expert-review-2026-06-19.md`):**
+- `Skill('findasale-dev')` P2/P3: ISR for /feed + /leaderboard (client-only now); getSale items `take`; move ~3.7MB audio out of packages/frontend/public to CDN.
+- `Skill('findasale-records')`: reconcile STACK.md fee rate to tiered 10% SIMPLE / 8% PRO+TEAMS (stop the recurring 'is it a bug' question).
+- `Skill('findasale-dev')`: repair migration history so `prisma migrate dev` works again — shadow replay fails (P1014) on `add_ebay_subscription_id` referencing Organizer before creation in from-scratch replay. Until fixed, ALL schema changes use raw DDL / `prisma db execute` (Option B), never migrate dev.
+- Optional: drop `idx_Organizer_cashFeeBalance_updatedAt` (raw-SQL index, idx_scan=0) via raw DDL.
 
-**Infra (Patrick, Railway dashboard — no code):** append `?connection_limit=10&pool_timeout=20` to the backend service DATABASE_URL env var (caps Prisma pool under the 100-conn ceiling).
-
-**Post-deploy QA (next session):** admin /users + /admin/reports/organizers load clean; trending-sales card still renders all fields (B narrowed the select — verify no missing field); /health/ready returns 200; a card image serves AVIF + srcset on mobile.
-
-**Carry-forward / dispatch-stubs (not code-dispatchable this session — need Patrick, Chrome QA, or a data source):**
-- **Railway DB memory — likely RESOLVED by the S1013 `_count` fix** (root cause was query shape, not DB size). No infra action needed unless a 53100 recurs on /admin/users after the fix deploys; only then consider a Railway bump.
-- **ebayQueueMode test-org flip (QA):** flip on a non-prod org → observe ebayListingQueueCron processing; #549 human-QA still ⬜.
-- **Stale S804 UNVERIFIED (QA decision):** #203 Email+SMS validation, #23 Unsubscribe-to-Snooze, #21 Sentry impact scoring, #435 bot tracking — unverified ~200 sessions; run a Chrome QA pass or formally defer.
-- **old→canonical redirect map** for dead sale links (needs old→new ID source; Artifact cmom7h73l→cmpt2oq6q is the one known pair).
-- **Fee-rate doc reconcile:** STACK.md should state tiered 10% SIMPLE / 8% PRO+TEAMS (matches feeCalculator.ts) — not a code bug.
-- **2 orphaned eBay offers** (Whip-It, Contigo) — recreate the items or end the offers on eBay to clean up.
-
-**Expert stack review (S1013) — see `claude_docs/audits/expert-review-2026-06-19.md` (full, tool-cited):**
-- **P0:** uncapped `limit` on public GET /api/sales (`listSales` saleController.ts:82) → OOM/DB-spill DoS. One-line Zod `.max(50)`.
-- **P1 quick wins:** rate-limit `POST /api/search/visual` (Google Vision billing-DoS, search.ts:454); add process-level uncaughtException/unhandledRejection handlers; set `connection_limit` on Railway DATABASE_URL; point `tierGraceService.ts:10` at shared prisma singleton.
-- **P1 dev passes:** per-item fan-out in 3 public sale-list endpoints → groupBy; getOrganizerLeaderboard 200-query N+1; add Redis response-cache to feed/getCities/trending; drop ~26MB never-scanned indexes on Sale/Organizer (EXPLAIN-verify first).
-- **P2:** payment/payout endpoints need paymentLimiter; retention cron for ScrapedSalesJob/OutreachAuditLog/DirectoryCrawlLog; Cloudinary f_auto(AVIF)+responsive srcset on card images (biggest LCP lever); getSale review.aggregate + items take.
+**Blocked Queue (2):** cart multi-item payment-completion (Stripe LIVE keys — Patrick real purchase); admin DM #554 (QA #9 above).
 
 ## Recent Sessions
 

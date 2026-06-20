@@ -1,4 +1,4 @@
-# Patrick's Dashboard — Week of June 19, 2026 (Updated S1013 — expert review batch)
+# Patrick's Dashboard — Week of June 19, 2026 (Updated S1013 — WRAPPED, deployed green)
 
 ---
 
@@ -38,23 +38,21 @@
 
 ---
 
-## REQUIRED ACTION (S1013 — 3 steps)
+## STATUS: All S1013 work DEPLOYED ✅
 
-**1. Push the code + frontend + docs** (everything except the index drop):
+You pushed, dropped the indexes, added the DB connection cap, and redeployed green. Nothing left to do on your side right now.
+
+**What's live:** the admin /users + reports fixes, the public-endpoint DoS cap, all the rate limiters, crash handlers, caching, log-retention cron, faster AVIF images, and the index cleanup.
+
+**Next session = QA.** I'll click through everything that changed on the live site to confirm it works for real users — the one thing I want to watch is the trending cards (I trimmed what data they load, so I'll verify nothing renders blank). I'll also finally click-test the admin Send Message feature to confirm the email actually delivers. Lower-priority polish items (a few P2/P3s from the expert review) are queued after that.
+
+**Push the two doc files** so your repo matches:
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
-git add packages/backend/src/controllers/saleController.ts packages/backend/src/controllers/leaderboardController.ts packages/backend/src/controllers/trendingController.ts
-git add packages/backend/src/index.ts packages/backend/src/jobs/logRetentionCron.ts packages/backend/src/services/tierGraceService.ts
-git add packages/backend/src/routes/search.ts packages/backend/src/routes/stripeConnect.ts packages/backend/src/routes/settlement.ts packages/backend/src/routes/billing.ts packages/backend/src/routes/pos.ts packages/backend/src/routes/coupons.ts packages/backend/src/routes/organizers.ts packages/backend/src/routes/pricing.ts
-git add packages/frontend/lib/imageUtils.ts packages/frontend/components/SaleCard.tsx packages/frontend/components/ItemCard.tsx
-git add claude_docs/STATE.md claude_docs/patrick-dashboard.md claude_docs/audits/expert-review-2026-06-19.md
-git commit -m "S1013 perf/security batch: limit caps, N+1 fixes, caching, rate limiters, crash handlers, log retention, responsive images"
+git add claude_docs/STATE.md claude_docs/patrick-dashboard.md
+git commit -m "S1013 wrap: deployed green, indexes dropped, connection cap applied; next session = QA"
 .\push.ps1
 ```
-
-**2. ~~Drop the dead indexes~~ — DONE.** I dropped the 5 unused indexes directly on Railway (the `migrate dev` route can't work here — it's a known Railway limitation, not your fault). Nothing left to do on this.
-
-**3. (Optional, Railway dashboard) Cap the DB pool:** add `?connection_limit=10&pool_timeout=20` to the backend `DATABASE_URL` env var.
 
 ---
 
