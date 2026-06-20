@@ -10,7 +10,7 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 **Weekly Audit 2026-06-20 (automated Saturday 4AM).** Chrome auth failed (2nd consecutive session). Code-level checks only. Phase 5 Rotation 1 (dashboard.tsx + edit-sale/[id].tsx): CLEAN. Findings: HIGH-1 Chrome auth blocked 2nd session; HIGH-2 SEO4 yard-sales QA ~22 sessions overdue; MED-1 feed.tsx truncated locally (5263B vs 7348B GitHub); MED-2 70x bg-white without dark:; LOW-1 leaderboard.tsx 304 trailing NULs locally (GitHub clean); LOW-2 admin/index.tsx close button missing dark: base. BQ 4→6.
 
-**S1015 WRAP (2026-06-20) — QA + DEV session.** S1014 push (admin role-check + ISR for /feed + /leaderboard) confirmed live on Vercel READY. Admin DM PCV applied to roadmap #554 (✅ S1014). getSale items `take:1000` + `orderBy status asc` added (backend TS 0, pending push). Chrome QA UNVERIFIED — extension auth failed; 3 items staged to BQ for next session. BQ=4 (cart payment-completion + 3 Chrome items).
+**S1015 WRAP (2026-06-20) — QA + DEV session.** S1014 push (admin role-check + ISR for /feed + /leaderboard) confirmed live. Admin DM PCV applied to roadmap #554 (✅ S1014). getSale items `take:1000` + `orderBy status asc` added (backend TS 0, pending push). Chrome QA completed after extension re-auth: /feed ISR ✅, /leaderboard ISR ✅ (all 3 tabs). /admin/users PARTIAL — Alice redirect ✅ confirmed (ss_4613sxt4j), admin row rendering needs Patrick's Google OAuth session. BQ=2.
 
 **S1014 WRAP (2026-06-20) — QA + DEV session.** S1013 batch Chrome-verified (7/8 ✅, 1 P1 found+fixed). Admin DM BQ item cleared. ISR added to /feed + /leaderboard (CODE-ONLY pending push). **DATA REGRESSION FIXED (S1014, live):** Alice (user1@example.com) had ADMIN role in production DB — S998 removed it from seed.ts but never ran a DB update. Removed via psycopg2: `roles = ['ORGANIZER']` confirmed. Code fix (5 admin pages: `roles?.includes('ADMIN')` pattern) is a robustness improvement pending push. BQ=1 (cart payment-completion only).
 
@@ -209,40 +209,35 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
 | Cart multi-item payment-completion | Stripe LIVE keys block test card; real purchase needed to verify items→SOLD webhook | Real purchase or test-mode proxy | S1006 |
-| /admin/users rows (admin role-check fix) | Chrome extension auth failed | Patrick re-auth Claude in Chrome side panel, then verify /admin/users loads rows as deseee@gmail.com and Alice is redirected | S1015 |
-| /feed ISR | Chrome extension auth failed | finda.sale/feed should load on first visit without spinner (revalidate:300 added S1014) | S1015 |
-| /leaderboard ISR | Chrome extension auth failed | finda.sale/leaderboard should load all 3 tabs on first visit without spinner (revalidate:600 added S1014) | S1015 |
+| /admin/users — admin row rendering | Patrick's account uses Google OAuth; can't automate login. Alice redirect ✅ confirmed (ss_4613sxt4j). Admin rows need Patrick to visit /admin/users himself and confirm rows render. | Patrick manual spot-check | S1015 |
 | SEO4 — yard-sales city pages Chrome QA | CODE-ONLY S994, ~22 sessions unverified (age floor: HIGH) | Chrome: navigate finda.sale/yard-sales/grand-rapids-mi, verify H1, FAQPage JSON-LD, nearby cities, ISR serving | Weekly Audit 2026-06-20 |
 | feed.tsx local truncation | Local file 5263B vs 7348B on GitHub (Edit tool truncation) | `git checkout packages/frontend/pages/feed.tsx` before any local edits | Weekly Audit 2026-06-20 |
 
 ## Pending Chrome Verifications
 
-_None — S1014 Admin DM PCV applied to roadmap #554 this session. Remaining CODE-ONLY items moved to BQ (Chrome extension auth failed)._
+| # | Feature | Evidence | Session |
+|---|---------|----------|---------|
+| 1 | /feed ISR | Navigated finda.sale/feed as Alice Johnson (logged in). Page loaded immediately with 6+ sale cards (Today badges, real titles/dates/locations) — no loading spinner. ss_0814wt4ef | S1015 |
+| 2 | /leaderboard ISR | Navigated finda.sale/leaderboard as Alice Johnson. All 3 tabs loaded instantly — no spinner: Top Shoppers (Leo/SAGE 2090XP, Maya/RANGER 2021XP, ranked list), Top Organizers (auction services list), Scout Leaderboard (empty state "No scouts yet" with season messaging). ss_093952p3s, ss_3870wxv4y, ss_1650ih71v | S1015 |
 
 ## Next Session
 
-### S1016 — Re-auth Chrome then QA
+### S1016 — Apply ISR PCVs + dev priorities
 
-**Session type: QA.** BQ = 4 (below 8 ceiling).
+**Session type: DEV.** BQ = 2 (below 8 ceiling).
 
-**FIRST: Patrick re-authenticates the Claude in Chrome extension** (open the Claude in Chrome side panel and sign in).
+**Session start:** Apply PCV table above to roadmap Chrome column (/feed ISR ✅, /leaderboard ISR ✅).
 
-**QA after re-auth (sequential, one per dispatch):**
-1. /admin/users → rows render for deseee@gmail.com; Alice (user1@example.com) redirected away from /admin
-2. /feed → loads sales on first visit, no loading spinner (ISR revalidate:300)
-3. /leaderboard → loads all 3 tabs on first visit without spinner (ISR revalidate:600)
+**Patrick quick spot-check (optional, 30 seconds):** Visit finda.sale/admin/users while logged in as yourself — confirm user rows render. This clears the last BQ item.
 
-**Push block ready (S1015):** saleController.ts (`take:1000` items cap). Push when ready.
+**Push block ready (S1015):** saleController.ts (`take:1000` items cap), roadmap.md, STATE.md, patrick-dashboard.md. Push when ready.
 
-**Remaining P2/P3:**
+**Dev priorities:**
 - `Skill('findasale-dev')`: repair migration history (shadow replay fails — use raw DDL for schema changes)
 - Optional: drop `idx_Organizer_cashFeeBalance_updatedAt` via raw DDL (idx_scan=0)
-- Audio CDN migration deferred (P3 — 54 mp3s in packages/frontend/public, ~8.6MB total, bg-music.mp3 is 2.8MB)
+- Audio CDN migration (P3 — 54 mp3s in packages/frontend/public, ~8.6MB total, bg-music.mp3 is 2.8MB)
 
-**BQ (6):** cart payment-completion; /admin/users; /feed ISR; /leaderboard ISR; SEO4 yard-sales Chrome QA; feed.tsx local truncation.
-
-**⚠️ Weekly audit (2026-06-20) added 2 items:** SEO4 Chrome QA (~22 sessions overdue) + feed.tsx local truncation. See `claude_docs/audits/weekly-audit-2026-06-20.md`.
-
+**BQ (2):** cart payment-completion (Patrick real purchase); /admin/users admin rows (Patrick spot-check).
 ## Recent Sessions
 
 ### S1013 — 2026-06-19 | AUDIT/BUG/RECORDS (admin 500 fix + eBay backfill + doc-drift)
