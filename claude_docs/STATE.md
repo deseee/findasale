@@ -8,6 +8,8 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
+**S1017 START (2026-06-20) — DEV session.** Push confirmed live (29de3aed). PCVs applied to roadmap. Patrick spot-check needed: visit finda.sale/admin/users to clear BQ item 2. Dev priorities: migration history repair (P2); audio CDN migration (P3).
+
 **S1016 WRAP (2026-06-20) — QA + FIXES session.** Chrome re-authenticated after 2 failed sessions. All 4 BQ QA items addressed: /feed ✅ sale cards render immediately, no spinner (ss_0566nitc9); /leaderboard ✅ all 3 tabs instant (ss_9351nlc6c, ss_6728wlx91, ss_6482h13up); SEO4 yard-sales/grand-rapids-mi ✅ H1 + FAQPage JSON-LD + nearby cities + ISR (ss_3217o7wwg); /admin/users Alice redirect ✅ redirected to homepage (ss_8004e8she), admin rows still need Patrick's Google OAuth. Local file fixes: feed.tsx restored from GitHub (7348B, was 5263B), leaderboard.tsx NUL bytes stripped (14737B = GitHub). admin/index.tsx LOW-2: added dark:text-warm-400 to close button. BQ 4→2.
 
 **Weekly Audit 2026-06-20 (automated Saturday 4AM).** Chrome auth failed (2nd consecutive session). Code-level checks only. Phase 5 Rotation 1 (dashboard.tsx + edit-sale/[id].tsx): CLEAN. Findings: HIGH-1 Chrome auth blocked 2nd session; HIGH-2 SEO4 yard-sales QA ~22 sessions overdue; MED-1 feed.tsx truncated locally (5263B vs 7348B GitHub); MED-2 70x bg-white without dark:; LOW-1 leaderboard.tsx 304 trailing NULs locally (GitHub clean); LOW-2 admin/index.tsx close button missing dark: base. BQ 4→6.
@@ -217,10 +219,7 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 | # | Feature | Evidence | Session |
 |---|---------|----------|---------|
-| 1 | /feed ISR | Navigated finda.sale/feed as Alice Johnson. Sale cards (6+ real listings with Today badges, titles, dates, cities) rendered immediately — no loading spinner visible. ss_0566nitc9 | S1016 |
-| 2 | /leaderboard ISR | Navigated finda.sale/leaderboard as Alice Johnson. All 3 tabs loaded instantly: Top Shoppers (Leo SAGE 2090XP, Maya RANGER 2021XP), Top Organizers (Croll's Mills, Les Beyer Auctions, etc.), Scout Leaderboard (empty state "No scouts yet"). ss_9351nlc6c, ss_6728wlx91, ss_6482h13up | S1016 |
-| 3 | SEO4 — yard-sales/grand-rapids-mi | Navigated finda.sale/yard-sales/grand-rapids-mi as Alice Johnson. H1 "Yard Sales in Grand Rapids, MI" ✅. Breadcrumb: Home / Yard Sales / Grand Rapids, MI ✅. Nearby cities: Detroit, Kalamazoo, Lansing, Chicago, Toledo ✅. FAQ section visible ("Frequently Asked Questions About Yard Sales in Grand Rapids") ✅. FAQPage JSON-LD confirmed via buildFaqJsonLd() → @type:FAQPage in code ✅. ISR revalidate:86400 confirmed ✅. ss_3217o7wwg | S1016 |
-| 4 | /admin/users — Alice redirect (PARTIAL) | Navigated finda.sale/admin/users as Alice Johnson (ORGANIZER role). Redirected to homepage immediately — role check working ✅. Admin row rendering as deseee@gmail.com NOT tested (requires Patrick's Google OAuth). ss_8004e8she | S1016 |
+| — | All S1016 PCVs applied to roadmap.md S1017 | /feed ISR ✅ row 190, /leaderboard ISR ✅ row 212, SEO4 already ✅ S1003 (no change), /admin/users ⚠️ PARTIAL row 554 | S1017 |
 
 ## Next Session
 
