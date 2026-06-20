@@ -279,7 +279,7 @@ const AdminDashboard = () => {
                 <h3 className="text-lg font-bold text-warm-900 dark:text-warm-100">
                   {drilldownOpen === 'signups' ? 'Recent Sign-ups' : drilldownOpen === 'sales' ? 'Sales Breakdown' : 'Scraped Sales'}
                 </h3>
-                <button aria-label="Close" onClick={() => setDrilldownOpen(null)} className="text-warm-500 hover:text-warm-900 dark:hover:text-warm-100 text-lg font-bold">✕</button>
+                <button aria-label="Close" onClick={() => setDrilldownOpen(null)} className="text-warm-500 dark:text-warm-400 hover:text-warm-900 dark:hover:text-warm-100 text-lg font-bold">✕</button>
               </div>
               {drilldownLoading ? (
                 <p className="text-warm-500 dark:text-warm-400">Loading...</p>
