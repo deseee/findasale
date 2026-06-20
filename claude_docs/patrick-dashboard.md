@@ -7,6 +7,7 @@
 **Audit session — you asked me to check past sessions for anything left undone:**
 
 - ✅ **Fixed the recurring "Failed to load users" 500 on /admin/users** — root cause found: the admin user list (and the sales list) were pulling every purchase/sale ID just to count them, overflowing the database server's small shared-memory and throwing a disk-full error. Switched to proper count queries. **One thing left for you:** the Railway database node itself is memory-tight — bumping its size (or shared-memory) is the durable fix; my code change reduces the pressure.
+- ✅ **Found another, bigger version of the same slow-query bug** — the admin *Organizer Performance* report (`/admin/reports/organizers`) was loading every one of your 80k+ organizer records (with all their sales and items) just to show one page. Rewrote it to do the math in the database. Same root cause, no Railway change needed.
 - ✅ **Closed the 4 stuck eBay items (open since S998)** — Loy Norrix Choirs + Kirkland Pepper are now linked to their eBay offers. The other two (Whip-It Butane, Contigo Travel Mug) no longer exist in the database, so their eBay offers are just orphaned — nothing to link.
 - ✅ **Caught a documentation gap** — the admin DM + ala-carte feature you shipped today (commit 4374e40a) is now on the roadmap (#554). Note: it's live but hasn't had a real click-through QA yet — sending a real message to confirm the email actually delivers is the open item.
 - ℹ️ **The "fee rate 8% vs 10%" question isn't a bug** — the code tiers it on purpose (10% SIMPLE, 8% PRO/TEAMS). Just needs a one-line doc fix so it stops coming back.
@@ -30,6 +31,7 @@
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
 git add packages/backend/src/controllers/adminController.ts
+git add packages/backend/src/controllers/adminReportsController.ts
 git add claude_docs/strategy/roadmap.md
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md

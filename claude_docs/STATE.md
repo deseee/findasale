@@ -10,8 +10,9 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 **S1013 — AUDIT/BUG/RECORDS (2026-06-19). Past-session audit → admin /users 500 root-caused+fixed, eBay S998 backfill closed, doc-drift caught (roadmap #554).**
 - **Concurrent-session note:** an S1012 window logged the admin DM + à-la-carte work (commits 9c445eb7/4374e40a) in STATE while this audit ran — this session is **S1013**, edits here are additive only. (Flagged to Patrick: two Cowork windows editing STATE.md simultaneously is the doc-drift risk in action.)
-- **Admin /users intermittent 500 (Postgres 53100) — ROOT-CAUSED + FIXED (adminController.ts, backend tsc 0, CODE-ONLY pending push):** `getUsers` AND `getSales` were paginated but fetched full purchase/sale/item **ID arrays** per row only to `.length` them → for scraper orgs with thousands of sales the transfer spills to Railway's tiny /dev/shm → error 53100 "No space left on device". Replaced with Prisma `_count` relations; response shapes unchanged. **Infra lever (Patrick): raise Railway DB /dev/shm or upgrade the instance** — the code fix cuts the spill but the DB node is memory-constrained.
-- **eBay 4-item cleanup (S998) — RESOLVED:** all 4 turned out to be test/dead. Loy Norrix (1970s Choirs album, item cmp2yeq5p) + Kirkland Pepper (cmp4o68ic) sit in DRAFT "Test sale don't publish" → confirmed test items, so the S1013 `ebayOfferId` backfills were **REVERTED** (both NULL again). Whip-It (151850469011) + Contigo (151769728011) orphaned eBay offers **DELETED** (204). NOTE: the REAL Loy Norrix ("Songs of Christmas…1987", item cmp5t9ti7) is LIVE in "Artifact Downtown Paw Paw"; a no-sale duplicate (cmqh1wzpe, same eBay listingId 137314168141) should be de-duped. STILL OPEN (Patrick call): delete the 2 test-sale eBay offers (Kirkland 166412704011, Loy Norrix 166668232011) + the DRAFT "Test sale don't publish" sale.
+- **Admin /users intermittent 500 (Postgres 53100) — ROOT-CAUSED + FIXED (adminController.ts, backend tsc 0, CODE-ONLY pending push):** `getUsers` AND `getSales` were paginated but fetched full purchase/sale/item **ID arrays** per row only to `.length` them → for scraper orgs with thousands of sales the transfer spills to Railway's tiny /dev/shm → error 53100 "No space left on device". Replaced with Prisma `_count` relations; response shapes unchanged. **This is the root-cause fix** — the spill was caused by the query shape (one admin page load walked all 80k+ rows), not by load or DB size, so it resolves on deploy. Railway instance bump is NOT required; only revisit if a 53100 recurs after deploy.
+- **Resource sweep (Patrick: "other bloated queries?") — found + fixed the worst one:** `adminReportsController.getOrganizerPerformance` (GET /admin/reports/organizers) took page/limit params but loaded EVERY organizer with ALL nested sales+items+purchases, counted/sorted in JS, then sliced — fake pagination, full 80k-org materialization per view (same class as getUsers, larger). Rewritten to a single parameterized `$queryRaw` doing aggregation + ORDER BY + LIMIT/OFFSET at the DB; total via `organizer.count()`. Response shape preserved; `joinedAt` now real `createdAt` (was hardcoded). Sale(organizerId) already indexed — no migration. Backend tsc 0. CODE-ONLY pending push. Sibling `getRevenueReport` checked — bounded (90d + active-subs), left as-is. Lesser N+1s noted as low-priority: leaderboardController (bounded take:100, 2 counts/org) and trendingController (bounded take:8, 1 follow.count/sale) — acceptable, not spills. ~36 cron findMany over big tables not individually audited — most have bounding `where`; flagged for a follow-up batching pass.
+- **eBay 4-item cleanup (S998) — DONE:** all 4 were test/dead. Whip-It + Contigo orphaned offers DELETED (204). Kirkland + Loy Norrix "Choirs 1970s" were in Patrick's DRAFT "Test sale don't publish" sandbox (Patrick: the sale STAYS — it's his test sale) → S1013 backfills reverted, then the **test ITEMS deleted** (sale kept) + their 2 test eBay offers DELETED (204). Also deleted a no-sale duplicate of "Songs of Christmas 1987" (cmqh1wzpe). The REAL Loy Norrix (cmp5t9ti7) stays LIVE in "Artifact Downtown Paw Paw" — confirmed only that one remains.
 - **Doc-drift captured:** roadmap **#554** added for the admin DM + à-la-carte revenue feature (the concurrent S1012 logged it in STATE but added no roadmap row).
 - **Fee-rate "discrepancy" is NOT a bug:** feeCalculator.ts intentionally tiers 10% SIMPLE/default, 8% PRO+TEAMS — reconcile STACK.md wording so it stops resurfacing.
 - **BQ: 1 → 2** (added admin DM #554 UNVERIFIED in prod).
@@ -209,6 +210,7 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
 git add packages/backend/src/controllers/adminController.ts
+git add packages/backend/src/controllers/adminReportsController.ts
 git add claude_docs/strategy/roadmap.md
 git add claude_docs/STATE.md
 git add claude_docs/patrick-dashboard.md
@@ -218,7 +220,7 @@ git commit -m "S1013: admin getUsers/getSales _count fix (53100) + roadmap #554 
 Note: if the concurrent S1012 window already pushed STATE.md/patrick-dashboard.md, run `git fetch && git pull` first so local git re-syncs before this push.
 
 **Carry-forward / dispatch-stubs (not code-dispatchable this session — need Patrick, Chrome QA, or a data source):**
-- **Railway DB memory (P1, infra — Patrick):** /admin/users 53100 spill; the S1013 `_count` fix reduces transfer but the DB node is memory-constrained — raise Railway /dev/shm or upgrade the instance. Recurring since S1011.
+- **Railway DB memory — likely RESOLVED by the S1013 `_count` fix** (root cause was query shape, not DB size). No infra action needed unless a 53100 recurs on /admin/users after the fix deploys; only then consider a Railway bump.
 - **ebayQueueMode test-org flip (QA):** flip on a non-prod org → observe ebayListingQueueCron processing; #549 human-QA still ⬜.
 - **Stale S804 UNVERIFIED (QA decision):** #203 Email+SMS validation, #23 Unsubscribe-to-Snooze, #21 Sentry impact scoring, #435 bot tracking — unverified ~200 sessions; run a Chrome QA pass or formally defer.
 - **old→canonical redirect map** for dead sale links (needs old→new ID source; Artifact cmom7h73l→cmpt2oq6q is the one known pair).
@@ -231,7 +233,7 @@ Note: if the concurrent S1012 window already pushed STATE.md/patrick-dashboard.m
 
 **Session type:** AUDIT/BUG/RECORDS
 **Triggered by:** Patrick — "audit past sessions, what's undone, what to fix."
-**Shipped (pending push):** adminController.ts — `getUsers` + `getSales` ID-array fetch → Prisma `_count` (fixes /admin/users 53100 500). Backend tsc 0.
+**Shipped (pending push):** adminController.ts — `getUsers` + `getSales` ID-array fetch → Prisma `_count` (fixes /admin/users 53100 500). Backend tsc 0. PLUS adminReportsController.ts — getOrganizerPerformance full-dataset load → DB-side `$queryRaw` aggregation+pagination (fixes a worse 53100/OOM on /admin/reports/organizers).
 **Data (prod, no push):** eBay `ebayOfferId` backfilled on 2 items (Loy Norrix, Kirkland); Whip-It + Contigo orphaned (DB rows gone). S998 carry-forward CLOSED.
 **Docs:** roadmap #554 added for admin DM + ALA_CARTE revenue (commit 4374e40a). Confirmed the concurrent S1012 window already logged that work in STATE Current Status.
 **Concurrent-session collision:** STATE.md was being edited by an S1012 window during this audit — additive edits only here; flagged to Patrick as a workflow risk.
