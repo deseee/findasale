@@ -6,6 +6,7 @@ import {
   getConsignorPayoutStatus,
 } from '../controllers/stripeConnectController';
 import { authenticate } from '../middleware/auth';
+import { paymentLimiter } from '../middleware/rateLimiter';
 
 const router = Router();
 
@@ -14,7 +15,7 @@ router.post('/onboard/:consignorId', authenticate, initiateConsignorOnboarding);
 router.get('/return/:consignorId', authenticate, handleConnectReturn);
 
 // Payout execution
-router.post('/pay/:consignorId', authenticate, payConsignor);
+router.post('/pay/:consignorId', authenticate, paymentLimiter, payConsignor);
 
 // Status check
 router.get('/status/:consignorId', authenticate, getConsignorPayoutStatus);

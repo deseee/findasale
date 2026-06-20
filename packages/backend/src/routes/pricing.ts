@@ -9,17 +9,17 @@ import {
   listSourcesController,
   updateSourceController,
 } from '../controllers/pricingController';
-import { requireOrganizer } from '../middleware/auth';
+import { authenticate, requireOrganizer } from '../middleware/auth';
 
 const router = Router();
 
 // POST /api/pricing/estimate — Estimate price for an item
-router.post('/estimate', requireOrganizer, estimatePriceController);
+router.post('/estimate', authenticate, requireOrganizer, estimatePriceController);
 
 // GET /api/pricing/sources — List all sources and status
-router.get('/sources', requireOrganizer, listSourcesController);
+router.get('/sources', authenticate, requireOrganizer, listSourcesController);
 
 // PATCH /api/pricing/sources/:sourceId — Toggle source on/off
-router.patch('/sources/:sourceId', requireOrganizer, updateSourceController);
+router.patch('/sources/:sourceId', authenticate, requireOrganizer, updateSourceController);
 
 export default router;

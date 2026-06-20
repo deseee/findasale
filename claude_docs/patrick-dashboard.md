@@ -1,4 +1,4 @@
-# Patrick's Dashboard — Week of June 19, 2026 (Updated S1013)
+# Patrick's Dashboard — Week of June 19, 2026 (Updated S1013 — expert review batch)
 
 ---
 
@@ -14,6 +14,17 @@
 - ℹ️ **The "fee rate 8% vs 10%" question isn't a bug** — the code tiers it on purpose (10% SIMPLE, 8% PRO/TEAMS). Just needs a one-line doc fix so it stops coming back.
 - ⚠️ **Heads-up:** a second Cowork window (S1012) was editing the project notes at the same time as this audit. No harm done, but running two windows at once is exactly what causes the notes to drift.
 
+**Then you asked "what else would an expert look at?" — I ran 4 expert reviews and fixed the findings (18 files, all dispatched in parallel):**
+
+- ✅ **Closed a public security hole** — anyone could crash the site by asking `/api/sales` for a huge number of results. Now capped.
+- ✅ **Rate-limited your costly endpoints** — visual search (calls Google Vision — the thing behind your $201 bill), plus payout/checkout/coupon endpoints.
+- ✅ **Made the backend crash-resistant** — added handlers so one stray error can't take the whole site down, plus a real health-check that pings the database.
+- ✅ **Added caching + killed more slow queries** — homepage cities, trending, and the leaderboard no longer recompute from scratch every visit.
+- ✅ **Faster images** — your photos now serve in the newer AVIF format at the right size per device (biggest speed win for a photo-heavy site).
+- ✅ **Auto-cleanup for log tables** + removed ~11MB of unused database indexes that were slowing every write.
+- ⚠️ **A tool bug nearly shipped a broken file** — the editor truncated one component (ItemCard) and cut off its ending. I caught it and restored it. Flagging because it's a recurring tooling problem.
+- 🔒 **Reassuring:** the reviews confirmed your security and PWA foundations are genuinely strong — proper auth, Stripe webhook verification, service worker, offline mode, all already in place.
+
 ---
 
 ## What Happened This Session (S1012 — June 19)
@@ -27,23 +38,23 @@
 
 ---
 
-## REQUIRED ACTION (S1013 — push the 500 fix + wrap docs)
+## REQUIRED ACTION (S1013 — 3 steps)
 
+**1. Push the code + frontend + docs** (everything except the index drop):
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
-git add packages/backend/src/controllers/adminController.ts
-git add packages/backend/src/controllers/adminReportsController.ts
-git add packages/backend/src/jobs/reputationJob.ts
-git add claude_docs/strategy/roadmap.md
-git add claude_docs/STATE.md
-git add claude_docs/patrick-dashboard.md
-git commit -m "S1013: admin getUsers/getSales _count fix (53100) + roadmap #554 + wrap docs"
+git add packages/backend/src/controllers/saleController.ts packages/backend/src/controllers/leaderboardController.ts packages/backend/src/controllers/trendingController.ts
+git add packages/backend/src/index.ts packages/backend/src/jobs/logRetentionCron.ts packages/backend/src/services/tierGraceService.ts
+git add packages/backend/src/routes/search.ts packages/backend/src/routes/stripeConnect.ts packages/backend/src/routes/settlement.ts packages/backend/src/routes/billing.ts packages/backend/src/routes/pos.ts packages/backend/src/routes/coupons.ts packages/backend/src/routes/organizers.ts packages/backend/src/routes/pricing.ts
+git add packages/frontend/lib/imageUtils.ts packages/frontend/components/SaleCard.tsx packages/frontend/components/ItemCard.tsx
+git add claude_docs/STATE.md claude_docs/patrick-dashboard.md claude_docs/audits/expert-review-2026-06-19.md
+git commit -m "S1013 perf/security batch: limit caps, N+1 fixes, caching, rate limiters, crash handlers, log retention, responsive images"
 .\push.ps1
 ```
 
-*(If the other window already pushed the docs, run `git fetch && git pull` first, then push.)*
+**2. Drop the dead indexes** (separate migration — see STATE.md Next Session for the `prisma migrate dev`/`deploy` block).
 
-**Then (your call, not code):** raise the Railway database instance/shared-memory to fully stop the /admin/users 500s.
+**3. (Optional, Railway dashboard) Cap the DB pool:** add `?connection_limit=10&pool_timeout=20` to the backend `DATABASE_URL` env var.
 
 ---
 

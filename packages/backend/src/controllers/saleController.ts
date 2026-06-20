@@ -28,6 +28,7 @@ import { checkCrewVisitBonus } from '../services/crewService'; // Crew visit XP 
 import { TIER_LIMITS } from '../constants/tierLimits'; // Feature #249: Concurrent Sales Gate
 import { isSaleLocked, getEffectivePublishTime, getMinutesUntilUnlock } from '../services/rankService'; // Rank-based early access gate
 import { geocodeAddress } from '../services/geocodingService'; // Map pin fix: geocode platform sales on publish
+import { redis } from '../lib/redis'; // Perf: short-TTL cache for getCities GROUP BY
 
 // Feature #5: Sale type categories (inlined from shared package)
 enum SaleType {
@@ -157,7 +158,8 @@ export const listSales = async (req: Request, res: Response) => {
     const query = saleQuerySchema.parse(req.query);
     
     const page = parseInt(query.page);
-    const limit = parseInt(query.limit);
+    // Perf P0: cap effective page size at 50 to prevent unbounded result sets
+    const limit = Math.min(parseInt(query.limit) || 10, 50);
     const skip = (page - 1) * limit;
     
     const where: any = {
@@ -206,9 +208,6 @@ export const listSales = async (req: Request, res: Response) => {
           organizer: {
             select: { id: true, businessName: true, phone: true, reputationTier: true, directoryConfidenceScore: true, user: { select: { customMapPin: true } } }
           },
-          items: {
-            select: { organizerDiscountAmount: true, markdownApplied: true }
-          },
           _count: { select: { favorites: true } },
           trails: {
             where: { isActive: true, isPublic: true },
@@ -221,6 +220,30 @@ export const listSales = async (req: Request, res: Response) => {
 
     // BoostPurchase has no direct relation on Sale — query separately by targetId
     const saleIds = sales.map((s: any) => s.id);
+
+    // Perf P1: derive max organizer discount + markdown flag via aggregate groupBy
+    // instead of pulling every item for every sale (per-sale fan-out).
+    const [discountGroups, markdownGroups] = saleIds.length > 0
+      ? await Promise.all([
+          prisma.item.groupBy({
+            by: ['saleId'],
+            where: { saleId: { in: saleIds }, organizerDiscountAmount: { gt: 0 } },
+            _max: { organizerDiscountAmount: true },
+          }),
+          prisma.item.groupBy({
+            by: ['saleId'],
+            where: { saleId: { in: saleIds }, markdownApplied: true },
+          }),
+        ])
+      : [[], []];
+    const maxDiscountBySaleId = new Map<string, number>();
+    for (const g of discountGroups as any[]) {
+      const v = g._max?.organizerDiscountAmount;
+      if (g.saleId && v != null) maxDiscountBySaleId.set(g.saleId, Number(v));
+    }
+    const markdownSaleIds = new Set<string>(
+      (markdownGroups as any[]).map((g) => g.saleId).filter(Boolean)
+    );
     const activeBoosts = saleIds.length > 0
       ? await prisma.boostPurchase.findMany({
           where: {
@@ -242,13 +265,11 @@ export const listSales = async (req: Request, res: Response) => {
     const userRank = authReq.user?.explorerRank || 'INITIATE';
 
     const convertedSales = sales.map((sale: any) => {
-      const { _count, trails, items, ...rest } = convertDecimalsToNumbers(sale);
-      const maxOrganizerDiscount = items && items.length > 0
-        ? Math.max(...items
-            .filter((item: any) => item.organizerDiscountAmount && item.organizerDiscountAmount > 0)
-            .map((item: any) => item.organizerDiscountAmount))
+      const { _count, trails, ...rest } = convertDecimalsToNumbers(sale);
+      const maxOrganizerDiscount = maxDiscountBySaleId.has(sale.id)
+        ? maxDiscountBySaleId.get(sale.id)!
         : null;
-      const hasMarkdownItems = items && items.some((item: any) => item.markdownApplied === true);
+      const hasMarkdownItems = markdownSaleIds.has(sale.id);
 
       // Rank-Based Early Access: compute lock status for each sale
       const locked = isSaleLocked(sale.publishedAt, userRank);
@@ -459,12 +480,15 @@ export const getSale = async (req: Request, res: Response) => {
       }
     }
 
-    const reviews = await prisma.review.findMany({
+    // Perf P1: aggregate avg + count in the DB instead of pulling every review row.
+    const reviewAgg = await prisma.review.aggregate({
       where: { sale: { organizerId: sale.organizerId } },
-      select: { rating: true }
+      _avg: { rating: true },
+      _count: true,
     });
-    const avgRating = reviews.length > 0
-      ? Math.round((reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length) * 10) / 10
+    const reviewCount = reviewAgg._count;
+    const avgRating = reviewCount > 0 && reviewAgg._avg.rating != null
+      ? Math.round(reviewAgg._avg.rating * 10) / 10
       : 0;
 
     const organizer = sale.organizer as any;
@@ -479,7 +503,7 @@ export const getSale = async (req: Request, res: Response) => {
       organizer: {
         id: organizer.id, userId: organizer.userId, businessName: organizer.businessName,
         phone: organizer.phone, address: organizer.address, badges, avgRating,
-        reviewCount: reviews.length,
+        reviewCount,
         tier: organizer.tier, verificationStatus: organizer.verificationStatus, verificationSource: organizer.verificationSource,
         subscriptionTier: organizer.subscriptionTier, removeWatermarkEnabled: organizer.removeWatermarkEnabled,
         isClaimed: organizer.isClaimed, isUnmanagedListing: organizer.isUnmanagedListing,
@@ -1162,24 +1186,42 @@ export const getSalesByNeighborhood = async (req: Request, res: Response) => {
         address: true, city: true, state: true, zip: true, lat: true, lng: true,
         neighborhood: true, photoUrls: true, tags: true,
         organizer: { select: { businessName: true, avgRating: true } },
-        items: { select: { organizerDiscountAmount: true, markdownApplied: true } },
         _count: { select: { items: true } },
       },
       orderBy: { startDate: 'asc' },
       take: 50,
     });
 
+    // Perf P1: derive discount/markdown via aggregate groupBy instead of per-sale item fan-out.
+    const nbSaleIds = sales.map((s: any) => s.id);
+    const [nbDiscountGroups, nbMarkdownGroups] = nbSaleIds.length > 0
+      ? await Promise.all([
+          prisma.item.groupBy({
+            by: ['saleId'],
+            where: { saleId: { in: nbSaleIds }, organizerDiscountAmount: { gt: 0 } },
+            _max: { organizerDiscountAmount: true },
+          }),
+          prisma.item.groupBy({
+            by: ['saleId'],
+            where: { saleId: { in: nbSaleIds }, markdownApplied: true },
+          }),
+        ])
+      : [[], []];
+    const nbMaxDiscount = new Map<string, number>();
+    for (const g of nbDiscountGroups as any[]) {
+      const v = g._max?.organizerDiscountAmount;
+      if (g.saleId && v != null) nbMaxDiscount.set(g.saleId, Number(v));
+    }
+    const nbMarkdownSaleIds = new Set<string>(
+      (nbMarkdownGroups as any[]).map((g) => g.saleId).filter(Boolean)
+    );
+
     const enrichedSales = sales.map((sale: any) => {
       const convertedSale = convertDecimalsToNumbers(sale);
-      const maxOrganizerDiscount = convertedSale.items && convertedSale.items.length > 0
-        ? Math.max(...convertedSale.items
-            .filter((item: any) => item.organizerDiscountAmount && item.organizerDiscountAmount > 0)
-            .map((item: any) => item.organizerDiscountAmount))
-        : null;
-      const hasMarkdownItems = convertedSale.items && convertedSale.items.some((item: any) => item.markdownApplied === true);
-      const { items, ...saleWithoutItems } = convertedSale;
+      const maxOrganizerDiscount = nbMaxDiscount.has(sale.id) ? nbMaxDiscount.get(sale.id)! : null;
+      const hasMarkdownItems = nbMarkdownSaleIds.has(sale.id);
       return {
-        ...saleWithoutItems,
+        ...convertedSale,
         maxOrganizerDiscount: maxOrganizerDiscount || null,
         hasMarkdownItems: hasMarkdownItems || false,
       };
@@ -1198,7 +1240,8 @@ export const getSalesByCity = async (req: Request, res: Response) => {
     const { page = '1', limit = '12' } = req.query;
 
     const pageNum = parseInt(page as string) || 1;
-    const limitNum = parseInt(limit as string) || 12;
+    // Perf P0: cap effective page size at 50 to prevent unbounded result sets
+    const limitNum = Math.min(parseInt(limit as string) || 12, 50);
     const skip = (pageNum - 1) * limitNum;
 
     // Decode city slug and convert hyphens to spaces for matching
@@ -1218,7 +1261,6 @@ export const getSalesByCity = async (req: Request, res: Response) => {
         address: true, city: true, state: true, zip: true, lat: true, lng: true,
         photoUrls: true, tags: true,
         organizer: { select: { businessName: true, avgRating: true } },
-        items: { select: { organizerDiscountAmount: true, markdownApplied: true } },
         _count: { select: { items: true } },
       },
       orderBy: { startDate: 'asc' },
@@ -1232,17 +1274,36 @@ export const getSalesByCity = async (req: Request, res: Response) => {
       }
     });
 
+    // Perf P1: derive discount/markdown via aggregate groupBy instead of per-sale item fan-out.
+    const citySaleIds = sales.map((s: any) => s.id);
+    const [cityDiscountGroups, cityMarkdownGroups] = citySaleIds.length > 0
+      ? await Promise.all([
+          prisma.item.groupBy({
+            by: ['saleId'],
+            where: { saleId: { in: citySaleIds }, organizerDiscountAmount: { gt: 0 } },
+            _max: { organizerDiscountAmount: true },
+          }),
+          prisma.item.groupBy({
+            by: ['saleId'],
+            where: { saleId: { in: citySaleIds }, markdownApplied: true },
+          }),
+        ])
+      : [[], []];
+    const cityMaxDiscount = new Map<string, number>();
+    for (const g of cityDiscountGroups as any[]) {
+      const v = g._max?.organizerDiscountAmount;
+      if (g.saleId && v != null) cityMaxDiscount.set(g.saleId, Number(v));
+    }
+    const cityMarkdownSaleIds = new Set<string>(
+      (cityMarkdownGroups as any[]).map((g) => g.saleId).filter(Boolean)
+    );
+
     const enrichedSales = sales.map((sale: any) => {
       const convertedSale = convertDecimalsToNumbers(sale);
-      const maxOrganizerDiscount = convertedSale.items && convertedSale.items.length > 0
-        ? Math.max(...convertedSale.items
-            .filter((item: any) => item.organizerDiscountAmount && item.organizerDiscountAmount > 0)
-            .map((item: any) => item.organizerDiscountAmount))
-        : null;
-      const hasMarkdownItems = convertedSale.items && convertedSale.items.some((item: any) => item.markdownApplied === true);
-      const { items, ...saleWithoutItems } = convertedSale;
+      const maxOrganizerDiscount = cityMaxDiscount.has(sale.id) ? cityMaxDiscount.get(sale.id)! : null;
+      const hasMarkdownItems = cityMarkdownSaleIds.has(sale.id);
       return {
-        ...saleWithoutItems,
+        ...convertedSale,
         maxOrganizerDiscount: maxOrganizerDiscount || null,
         hasMarkdownItems: hasMarkdownItems || false,
       };
@@ -1509,6 +1570,18 @@ export const getSaleStatus = async (req: Request, res: Response) => {
  */
 export const getCities = async (req: Request, res: Response) => {
   try {
+    // Perf P1: short-TTL cache around the full GROUP BY (degrades gracefully if Redis is down).
+    const CITIES_CACHE_KEY = 'cities:all';
+    const CITIES_CACHE_TTL = 300; // seconds
+    try {
+      const cached = await redis.get(CITIES_CACHE_KEY);
+      if (cached) {
+        return res.json({ cities: JSON.parse(cached) });
+      }
+    } catch (cacheErr: any) {
+      console.error('[cities] cache read failed, falling through to live query:', cacheErr?.message);
+    }
+
     const now = new Date();
 
     // #105: SQL Injection hardening - use Prisma.sql for parameterized queries
@@ -1532,6 +1605,12 @@ export const getCities = async (req: Request, res: Response) => {
       totalSales: Number(item.count),
       lastSaleDate: item.lastSaleDate ? item.lastSaleDate.toISOString() : undefined,
     }));
+
+    try {
+      await redis.setex(CITIES_CACHE_KEY, CITIES_CACHE_TTL, JSON.stringify(response));
+    } catch (cacheErr: any) {
+      console.error('[cities] cache write failed (non-fatal):', cacheErr?.message);
+    }
 
     res.json({ cities: response });
   } catch (error: any) {

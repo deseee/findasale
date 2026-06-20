@@ -1919,7 +1919,7 @@ router.get('/me/broadcasts', authenticate, async (req: AuthRequest, res: Respons
 });
 
 // Feature #361: POST /organizers/:id/claim — submit claim request for unclaimed listing
-router.post('/:id/claim', async (req: Request, res: Response) => {
+router.post('/:id/claim', publicDirectoryRateLimiter, async (req: Request, res: Response) => {
   try {
     const { randomBytes } = require('crypto');
     

@@ -16,6 +16,16 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 - **Doc-drift captured:** roadmap **#554** added for the admin DM + à-la-carte revenue feature (the concurrent S1012 logged it in STATE but added no roadmap row).
 - **Fee-rate "discrepancy" is NOT a bug:** feeCalculator.ts intentionally tiers 10% SIMPLE/default, 8% PRO+TEAMS — reconcile STACK.md wording so it stops resurfacing.
 - **BQ: 1 → 2** (added admin DM #554 UNVERIFIED in prod).
+- **EXPERT-REVIEW FIX BATCH (S1013, Patrick: "dispatch all in parallel") — 18 files, CODE-ONLY pending push. Backend full tsc 0.** 6 parallel dev agents + 1 main-session fix:
+  - saleController: P0 `limit` caps (listSales/getSalesByCity ≤50) + per-item fan-out→`item.groupBy` in 3 public list endpoints + getSale `review.aggregate` + getCities 300s Redis cache (graceful).
+  - leaderboard/trending: org-leaderboard 200-query N+1→`groupBy` (4 queries); scout N+1→`findMany in`; trending lean `select` (drop scrapedMetadata)+`follow.groupBy`+120s cache.
+  - index.ts: process `uncaughtException`/`unhandledRejection`→Sentry; `GET /health/ready` DB ping; generic 500 message. New `jobs/logRetentionCron.ts` (60-day prune of ScrapedSalesJob/OutreachAuditLog/DirectoryCrawlLog ONLY, daily 03:20).
+  - routes: rate limiters added — `/search/visual` (Vision billing-DoS), paymentLimiter on payout/settlement/billing/pos, couponRateLimiter on coupon generate, claim throttle; pricing.ts `authenticate` added (was failing closed).
+  - tierGraceService: `new PrismaClient()`→shared singleton (kills 2nd pool).
+  - frontend: imageUtils `f_webp`→`f_auto`(AVIF)+`getCloudinarySrcSet`; SaleCard/ItemCard responsive `srcset`+`sizes`. **NOTE: Write tool TRUNCATED ItemCard.tsx (cut 14 lines, lost export default) — caught via tail/grep (no frontend tsc in VM), restored from git + re-patched. Write tool now truncates like the banned Edit tool.**
+  - schema.prisma: 5 never-scanned `@@index` removed (Organizer corroborationScore/sourceCount/directoryNextCheckAt; Sale prelaunchAt/status_markdownEnabled_markdownFloor) — ~11MB write-amp relief. **Separate migration (Patrick).**
+  - STILL PATRICK-ONLY: (a) Railway DATABASE_URL `?connection_limit=10&pool_timeout=20`; (b) index-drop migration (`prisma migrate dev` → `migrate deploy`).
+
 
 **S1012 — BUG/DATA (2026-06-19). À-la-carte revenue now tracked in admin dashboard + admin DM feature.**
 - **À-LA-CARTE REVENUE FIXED (S1012, deployed commits 9c445eb7 + 4374e40a):** Admin "Today's Revenue" now includes the $9.99 ala-carte fee. Backfilled existing Purchase record via psycopg2 (id: cj5sxhx0ruuyw9lb4n98exiax). Code fixes: (1) adminController.ts — real prisma.purchase.aggregate query for ala-carte revenue (30d + today), ALA_CARTE excluded from fee-rate multiplication to avoid double-counting; (2) stripeController.ts — checkout.session.completed ALA_CARTE handler now creates Purchase record (source='ALA_CARTE'); payment_intent.succeeded handler has idempotency guard. (3) Admin DM feature: POST /admin/users/:userId/message sends transactional email via emailService; "Send Message" button + modal added to admin/users/[id].tsx.
@@ -206,19 +216,35 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 - Cart multi-item payment-completion — Stripe LIVE keys; real purchase needed. Patrick action only.
 - Admin Send Message (DM) #554 — Chrome QA: send a real DM as admin, confirm email delivers; verify dashboard ALA_CARTE revenue card.
 
-**Push block (S1013 code + wrap docs):**
+**Push block — S1013 expert-review fix batch (code + frontend + docs). NOT schema.prisma (separate migration below):**
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale
-git add packages/backend/src/controllers/adminController.ts
-git add packages/backend/src/controllers/adminReportsController.ts
-git add packages/backend/src/jobs/reputationJob.ts
-git add claude_docs/strategy/roadmap.md
-git add claude_docs/STATE.md
-git add claude_docs/patrick-dashboard.md
-git commit -m "S1013: admin getUsers/getSales _count fix (53100) + roadmap #554 + wrap docs"
+git add packages/backend/src/controllers/saleController.ts packages/backend/src/controllers/leaderboardController.ts packages/backend/src/controllers/trendingController.ts
+git add packages/backend/src/index.ts packages/backend/src/jobs/logRetentionCron.ts packages/backend/src/services/tierGraceService.ts
+git add packages/backend/src/routes/search.ts packages/backend/src/routes/stripeConnect.ts packages/backend/src/routes/settlement.ts packages/backend/src/routes/billing.ts packages/backend/src/routes/pos.ts packages/backend/src/routes/coupons.ts packages/backend/src/routes/organizers.ts packages/backend/src/routes/pricing.ts
+git add packages/frontend/lib/imageUtils.ts packages/frontend/components/SaleCard.tsx packages/frontend/components/ItemCard.tsx
+git add claude_docs/STATE.md claude_docs/patrick-dashboard.md claude_docs/audits/expert-review-2026-06-19.md
+git commit -m "S1013 perf/security batch: limit caps + groupBy fan-out fixes + N+1 fixes + Redis cache + rate limiters + crash handlers + log retention + responsive images"
 .\push.ps1
 ```
-Note: if the concurrent S1012 window already pushed STATE.md/patrick-dashboard.md, run `git fetch && git pull` first so local git re-syncs before this push.
+
+**Schema/index-drop migration (SEPARATE — run after the code push, §6 protocol):**
+```powershell
+cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
+npx prisma migrate dev --name drop_unused_organizer_sale_indexes   # generates DROP migration from schema diff (local)
+# inspect migration.sql = 5 DROP INDEX IF EXISTS, then:
+$env:DATABASE_URL="<Railway DATABASE_URL from CLAUDE.md global>"
+npx prisma migrate deploy
+npx prisma generate
+cd ..\..
+git add packages/database/prisma/schema.prisma packages/database/prisma/migrations
+git commit -m "S1013: drop 5 never-scanned indexes on Organizer/Sale (write-amp relief)"
+.\push.ps1
+```
+
+**Infra (Patrick, Railway dashboard — no code):** append `?connection_limit=10&pool_timeout=20` to the backend service DATABASE_URL env var (caps Prisma pool under the 100-conn ceiling).
+
+**Post-deploy QA (next session):** admin /users + /admin/reports/organizers load clean; trending-sales card still renders all fields (B narrowed the select — verify no missing field); /health/ready returns 200; a card image serves AVIF + srcset on mobile.
 
 **Carry-forward / dispatch-stubs (not code-dispatchable this session — need Patrick, Chrome QA, or a data source):**
 - **Railway DB memory — likely RESOLVED by the S1013 `_count` fix** (root cause was query shape, not DB size). No infra action needed unless a 53100 recurs on /admin/users after the fix deploys; only then consider a Railway bump.
@@ -227,6 +253,12 @@ Note: if the concurrent S1012 window already pushed STATE.md/patrick-dashboard.m
 - **old→canonical redirect map** for dead sale links (needs old→new ID source; Artifact cmom7h73l→cmpt2oq6q is the one known pair).
 - **Fee-rate doc reconcile:** STACK.md should state tiered 10% SIMPLE / 8% PRO+TEAMS (matches feeCalculator.ts) — not a code bug.
 - **2 orphaned eBay offers** (Whip-It, Contigo) — recreate the items or end the offers on eBay to clean up.
+
+**Expert stack review (S1013) — see `claude_docs/audits/expert-review-2026-06-19.md` (full, tool-cited):**
+- **P0:** uncapped `limit` on public GET /api/sales (`listSales` saleController.ts:82) → OOM/DB-spill DoS. One-line Zod `.max(50)`.
+- **P1 quick wins:** rate-limit `POST /api/search/visual` (Google Vision billing-DoS, search.ts:454); add process-level uncaughtException/unhandledRejection handlers; set `connection_limit` on Railway DATABASE_URL; point `tierGraceService.ts:10` at shared prisma singleton.
+- **P1 dev passes:** per-item fan-out in 3 public sale-list endpoints → groupBy; getOrganizerLeaderboard 200-query N+1; add Redis response-cache to feed/getCities/trending; drop ~26MB never-scanned indexes on Sale/Organizer (EXPLAIN-verify first).
+- **P2:** payment/payout endpoints need paymentLimiter; retention cron for ScrapedSalesJob/OutreachAuditLog/DirectoryCrawlLog; Cloudinary f_auto(AVIF)+responsive srcset on card images (biggest LCP lever); getSale review.aggregate + items take.
 
 ## Recent Sessions
 
