@@ -63,7 +63,7 @@ export default function ItemPriceHistoryChart({ itemId, currentPrice }: Props) {
   return (
     <div className="mt-6">
       <h3 className="text-sm font-semibold text-gray-700 mb-3">Price History</h3>
-      <div className="border border-gray-200 rounded-xl p-4 bg-white">
+      <div className="border border-gray-200 dark:border-warm-700 rounded-xl p-4 bg-white dark:bg-warm-800">
         <ResponsiveContainer width="100%" height={140}>
           <LineChart data={chartData} margin={{ top: 4, right: 8, left: -16, bottom: 4 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />

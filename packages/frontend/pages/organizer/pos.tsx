@@ -2549,7 +2549,7 @@ export default function POSPage() {
                     const venmoUrl = `https://venmo.com/${organizerVenmo}?txn=pay&amount=${cartTotal.toFixed(2)}&note=${encodeURIComponent(selectedSaleTitle)}`;
                     return (
                       <div className="flex flex-col items-center gap-2 mb-3">
-                        <div className="bg-white p-3 rounded-xl border border-blue-200 dark:border-blue-700">
+                        <div className="bg-white dark:bg-warm-800 p-3 rounded-xl border border-blue-200 dark:border-blue-700">
                           <QRCode value={venmoUrl} size={160} />
                         </div>
                         <p className="text-xs text-blue-700 dark:text-blue-300 text-center">

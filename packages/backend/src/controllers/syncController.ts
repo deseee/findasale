@@ -177,6 +177,7 @@ async function handleCreateItem(operation: SyncOperation, organizerId: string) {
         photoUrls: payload.photoUrls || [],
         tags: payload.tags || [],
         saleId: operation.saleId,
+        organizerId,
       },
     });
 

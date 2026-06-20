@@ -113,7 +113,7 @@ const WishlistShareButton: React.FC<WishlistShareButtonProps> = ({
       </button>
 
       {showShare && (
-        <div className="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-lg p-4 z-50 border border-warm-200">
+        <div className="absolute right-0 mt-2 w-80 bg-white dark:bg-warm-800 rounded-lg shadow-lg p-4 z-50 border border-warm-200 dark:border-warm-700">
           <div className="space-y-3">
             <p className="text-sm text-warm-700 font-medium">Share this wishlist</p>
 

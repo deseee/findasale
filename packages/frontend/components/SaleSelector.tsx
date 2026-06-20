@@ -35,7 +35,7 @@ const SaleSelector: React.FC<SaleSelectorProps> = ({ onSaleChange, selectedSaleI
     <div className="relative">
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full px-4 py-2 bg-white border border-warm-300 rounded-lg text-left text-warm-900 dark:text-warm-100 font-medium hover:border-warm-400 transition-colors"
+        className="w-full px-4 py-2 bg-white dark:bg-warm-800 border border-warm-300 dark:border-warm-600 rounded-lg text-left text-warm-900 dark:text-warm-100 font-medium hover:border-warm-400 transition-colors"
       >
         <div className="flex justify-between items-center">
           <span>{selectedSale?.title || 'Select a Sale'}</span>
@@ -44,7 +44,7 @@ const SaleSelector: React.FC<SaleSelectorProps> = ({ onSaleChange, selectedSaleI
       </button>
 
       {isOpen && (
-        <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-warm-300 rounded-lg shadow-lg z-50">
+        <div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-warm-800 border border-warm-300 dark:border-warm-600 rounded-lg shadow-lg z-50">
           {sales.length === 0 ? (
             <div className="px-4 py-3 text-center text-warm-600 text-sm">
               No sales yet

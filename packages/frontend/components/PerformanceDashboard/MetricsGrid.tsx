@@ -83,7 +83,7 @@ const MetricsGrid: React.FC<MetricsGridProps> = ({ data }) => {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
       {/* Revenue Card */}
-      <div className="bg-white rounded-lg shadow p-6 border-l-4 border-green-600">
+      <div className="bg-white dark:bg-warm-800 rounded-lg shadow p-6 border-l-4 border-green-600">
         <p className="text-warm-600 text-sm font-semibold uppercase mb-2">Total Revenue</p>
         <p className="text-3xl font-bold text-warm-900 dark:text-warm-100 mb-3">${data.revenue.total.toFixed(2)}</p>
         <p className="text-xs text-warm-600 mb-3">
@@ -102,7 +102,7 @@ const MetricsGrid: React.FC<MetricsGridProps> = ({ data }) => {
       </div>
 
       {/* Conversion Rate Card */}
-      <div className="bg-white rounded-lg shadow p-6 border-l-4 border-blue-600">
+      <div className="bg-white dark:bg-warm-800 rounded-lg shadow p-6 border-l-4 border-blue-600">
         <p className="text-warm-600 text-sm font-semibold uppercase mb-2">Conversion Rate</p>
         <p className="text-3xl font-bold text-warm-900 dark:text-warm-100 mb-3">
           {(data.purchasingMetrics.conversionRate * 100).toFixed(1)}%
@@ -125,7 +125,7 @@ const MetricsGrid: React.FC<MetricsGridProps> = ({ data }) => {
       </div>
 
       {/* Health Score Card */}
-      <div className="bg-white rounded-lg shadow p-6 border-l-4 border-purple-600">
+      <div className="bg-white dark:bg-warm-800 rounded-lg shadow p-6 border-l-4 border-purple-600">
         <p className="text-warm-600 text-sm font-semibold uppercase mb-2">Avg Health Score</p>
         <p className="text-3xl font-bold text-warm-900 dark:text-warm-100 mb-3">
           {data.itemMetrics.aggregateHealthScore.toFixed(0)}
@@ -154,7 +154,7 @@ const MetricsGrid: React.FC<MetricsGridProps> = ({ data }) => {
       </div>
 
       {/* Sell-Through Rate Card */}
-      <div className="bg-white rounded-lg shadow p-6 border-l-4 border-amber-600">
+      <div className="bg-white dark:bg-warm-800 rounded-lg shadow p-6 border-l-4 border-amber-600">
         <p className="text-warm-600 text-sm font-semibold uppercase mb-2">Sell-Through Rate</p>
         <p className="text-3xl font-bold text-warm-900 dark:text-warm-100 mb-3">
           {totalItems > 0 ? ((soldItems / totalItems) * 100).toFixed(0) : 0}%
@@ -182,7 +182,7 @@ const MetricsGrid: React.FC<MetricsGridProps> = ({ data }) => {
       </div>
 
       {/* Total Items Card */}
-      <div className="bg-white rounded-lg shadow p-6 border-l-4 border-indigo-600">
+      <div className="bg-white dark:bg-warm-800 rounded-lg shadow p-6 border-l-4 border-indigo-600">
         <p className="text-warm-600 text-sm font-semibold uppercase mb-2">Total Items Listed</p>
         <p className="text-3xl font-bold text-warm-900 dark:text-warm-100 mb-3">{totalItems}</p>
         <p className="text-xs text-warm-600 mb-3">
@@ -208,7 +208,7 @@ const MetricsGrid: React.FC<MetricsGridProps> = ({ data }) => {
       </div>
 
       {/* Top-Selling Item Card */}
-      <div className="bg-white rounded-lg shadow p-6 border-l-4 border-pink-600">
+      <div className="bg-white dark:bg-warm-800 rounded-lg shadow p-6 border-l-4 border-pink-600">
         <p className="text-warm-600 text-sm font-semibold uppercase mb-2">Top Item</p>
         {data.itemMetrics.topSellingItems.length > 0 ? (
           <>
@@ -239,7 +239,7 @@ const MetricsGrid: React.FC<MetricsGridProps> = ({ data }) => {
       </div>
 
       {/* Hold Conversion Card */}
-      <div className="bg-white rounded-lg shadow p-6 border-l-4 border-orange-600">
+      <div className="bg-white dark:bg-warm-800 rounded-lg shadow p-6 border-l-4 border-orange-600">
         <p className="text-warm-600 text-sm font-semibold uppercase mb-2">Hold Conversion</p>
         <p className="text-3xl font-bold text-warm-900 dark:text-warm-100 mb-3">
           {data.holdMetrics.holdsCreated > 0
@@ -263,7 +263,7 @@ const MetricsGrid: React.FC<MetricsGridProps> = ({ data }) => {
       </div>
 
       {/* No-Show Rate Card */}
-      <div className="bg-white rounded-lg shadow p-6 border-l-4 border-red-600">
+      <div className="bg-white dark:bg-warm-800 rounded-lg shadow p-6 border-l-4 border-red-600">
         <p className="text-warm-600 text-sm font-semibold uppercase mb-2">No-Show Rate</p>
         <p className="text-3xl font-bold text-red-600 mb-3">
           {(data.holdMetrics.noShowRate * 100).toFixed(1)}%

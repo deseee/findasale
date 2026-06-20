@@ -1235,7 +1235,7 @@ const EditItemPage = () => {
                 id="qrEmbedEnabled"
                 checked={formData.qrEmbedEnabled}
                 onChange={(e) => setFormData({ ...formData, qrEmbedEnabled: e.target.checked })}
-                className="w-4 h-4 text-amber-600 bg-white border-warm-300 rounded focus:ring-2 focus:ring-amber-500 cursor-pointer"
+                className="w-4 h-4 text-amber-600 bg-white dark:bg-warm-700 border-warm-300 dark:border-warm-500 rounded focus:ring-2 focus:ring-amber-500 cursor-pointer"
               />
               <label htmlFor="qrEmbedEnabled" className="text-sm font-medium text-warm-700 dark:text-warm-300 cursor-pointer">
                 Embed QR code in exported photos
@@ -1274,7 +1274,7 @@ const EditItemPage = () => {
                   id="isLegendary"
                   checked={formData.isLegendary}
                   onChange={(e) => setFormData({ ...formData, isLegendary: e.target.checked })}
-                  className="w-4 h-4 text-amber-600 bg-white border-warm-300 rounded focus:ring-2 focus:ring-amber-500 cursor-pointer mt-1"
+                  className="w-4 h-4 text-amber-600 bg-white dark:bg-warm-700 border-warm-300 dark:border-warm-500 rounded focus:ring-2 focus:ring-amber-500 cursor-pointer mt-1"
                 />
                 <div className="flex-1">
                   <label htmlFor="isLegendary" className="text-sm font-bold text-amber-900 dark:text-amber-100 cursor-pointer block">

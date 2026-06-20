@@ -80,7 +80,7 @@ const QuickReplyPicker: React.FC<Props> = ({ onSelect }) => {
       </button>
 
       {isOpen && (
-        <div className="absolute bottom-full mb-2 left-0 w-72 bg-white border border-warm-200 rounded-xl shadow-lg z-20 overflow-hidden">
+        <div className="absolute bottom-full mb-2 left-0 w-72 bg-white dark:bg-warm-800 border border-warm-200 dark:border-warm-700 rounded-xl shadow-lg z-20 overflow-hidden">
           <div className="p-3 border-b border-warm-100">
             <div className="flex items-center justify-between mb-2">
               <p className="text-xs font-bold text-warm-900 dark:text-warm-100 uppercase tracking-wide">Quick Replies</p>

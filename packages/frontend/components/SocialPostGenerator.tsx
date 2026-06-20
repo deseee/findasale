@@ -67,7 +67,7 @@ const SocialPostGenerator: React.FC<Props> = ({ saleId, saleTitle, onClose }) =>
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+      <div className="bg-white dark:bg-warm-800 rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-warm-200">
           <div>
@@ -89,7 +89,7 @@ const SocialPostGenerator: React.FC<Props> = ({ saleId, saleTitle, onClose }) =>
                   className={`flex-1 py-2.5 px-3 rounded-xl text-sm font-semibold transition flex flex-col items-center gap-1 border-2 ${
                     platform === p.id
                       ? 'border-amber-500 bg-amber-50 text-amber-800'
-                      : 'border-warm-200 bg-white text-warm-700 hover:border-warm-300'
+                      : 'border-warm-200 bg-white dark:bg-warm-800 text-warm-700 dark:text-warm-200 hover:border-warm-300'
                   }`}
                 >
                   <span className="text-xl">{p.icon}</span>

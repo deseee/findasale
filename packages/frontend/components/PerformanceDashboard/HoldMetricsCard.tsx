@@ -26,7 +26,7 @@ const HoldMetricsCard: React.FC<HoldMetricsCardProps> = ({ data }) => {
   };
 
   return (
-    <div className="bg-white rounded-lg shadow p-6 border-l-4 border-amber-600">
+    <div className="bg-white dark:bg-warm-800 rounded-lg shadow p-6 border-l-4 border-amber-600">
       <h3 className="text-lg font-semibold text-warm-900 dark:text-warm-100 mb-4">Hold Performance</h3>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">

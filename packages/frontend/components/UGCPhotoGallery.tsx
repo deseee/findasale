@@ -40,7 +40,7 @@ export default function UGCPhotoGallery({
       {photos.map((photo) => (
         <div
           key={photo.id}
-          className="bg-white rounded-lg overflow-hidden shadow-md hover:shadow-lg transition-shadow"
+          className="bg-white dark:bg-warm-800 rounded-lg overflow-hidden shadow-md hover:shadow-lg transition-shadow"
         >
           {/* Photo Image */}
           <div className="relative w-full h-48 bg-gray-200 overflow-hidden">

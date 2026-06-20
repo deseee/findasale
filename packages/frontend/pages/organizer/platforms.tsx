@@ -33,6 +33,7 @@ interface EbayStats {
   activeSlots: number;
   freeSlots: number;
   warningLevel: 'ok' | 'warning' | 'critical' | 'over';
+  liveCountAvailable: boolean;
 }
 
 interface GoogleStats {
@@ -75,6 +76,7 @@ interface PlatformStatsResponse {
     totalAvailableItems: number;
     totalListedAnywhere: number;
     totalUnlisted: number;
+    totalVisibleOnSite: number;
   };
 }
 
