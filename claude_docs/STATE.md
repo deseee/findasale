@@ -8,6 +8,8 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
+**S1016 WRAP (2026-06-20) — QA + FIXES session.** Chrome re-authenticated after 2 failed sessions. All 4 BQ QA items addressed: /feed ✅ sale cards render immediately, no spinner (ss_0566nitc9); /leaderboard ✅ all 3 tabs instant (ss_9351nlc6c, ss_6728wlx91, ss_6482h13up); SEO4 yard-sales/grand-rapids-mi ✅ H1 + FAQPage JSON-LD + nearby cities + ISR (ss_3217o7wwg); /admin/users Alice redirect ✅ redirected to homepage (ss_8004e8she), admin rows still need Patrick's Google OAuth. Local file fixes: feed.tsx restored from GitHub (7348B, was 5263B), leaderboard.tsx NUL bytes stripped (14737B = GitHub). admin/index.tsx LOW-2: added dark:text-warm-400 to close button. BQ 4→2.
+
 **Weekly Audit 2026-06-20 (automated Saturday 4AM).** Chrome auth failed (2nd consecutive session). Code-level checks only. Phase 5 Rotation 1 (dashboard.tsx + edit-sale/[id].tsx): CLEAN. Findings: HIGH-1 Chrome auth blocked 2nd session; HIGH-2 SEO4 yard-sales QA ~22 sessions overdue; MED-1 feed.tsx truncated locally (5263B vs 7348B GitHub); MED-2 70x bg-white without dark:; LOW-1 leaderboard.tsx 304 trailing NULs locally (GitHub clean); LOW-2 admin/index.tsx close button missing dark: base. BQ 4→6.
 
 **S1015 WRAP (2026-06-20) — QA + DEV session.** S1014 push (admin role-check + ISR for /feed + /leaderboard) confirmed live. Admin DM PCV applied to roadmap #554 (✅ S1014). getSale items `take:1000` + `orderBy status asc` added (backend TS 0, pending push). Chrome QA completed after extension re-auth: /feed ISR ✅, /leaderboard ISR ✅ (all 3 tabs). /admin/users PARTIAL — Alice redirect ✅ confirmed (ss_4613sxt4j), admin row rendering needs Patrick's Google OAuth session. BQ=2.
@@ -209,28 +211,28 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
 | Cart multi-item payment-completion | Stripe LIVE keys block test card; real purchase needed to verify items→SOLD webhook | Real purchase or test-mode proxy | S1006 |
-| /admin/users — admin row rendering | Patrick's account uses Google OAuth; can't automate login. Alice redirect ✅ confirmed (ss_4613sxt4j). Admin rows need Patrick to visit /admin/users himself and confirm rows render. | Patrick manual spot-check | S1015 |
-| SEO4 — yard-sales city pages Chrome QA | CODE-ONLY S994, ~22 sessions unverified (age floor: HIGH) | Chrome: navigate finda.sale/yard-sales/grand-rapids-mi, verify H1, FAQPage JSON-LD, nearby cities, ISR serving | Weekly Audit 2026-06-20 |
-| feed.tsx local truncation | Local file 5263B vs 7348B on GitHub (Edit tool truncation) | `git checkout packages/frontend/pages/feed.tsx` before any local edits | Weekly Audit 2026-06-20 |
+| /admin/users — admin row rendering | Patrick's account uses Google OAuth; can't automate login. Alice redirect ✅ re-confirmed S1016 (ss_8004e8she). Admin rows need Patrick to visit /admin/users himself and confirm rows render. | Patrick manual spot-check (30 sec) | S1015 |
 
 ## Pending Chrome Verifications
 
 | # | Feature | Evidence | Session |
 |---|---------|----------|---------|
-| 1 | /feed ISR | Navigated finda.sale/feed as Alice Johnson (logged in). Page loaded immediately with 6+ sale cards (Today badges, real titles/dates/locations) — no loading spinner. ss_0814wt4ef | S1015 |
-| 2 | /leaderboard ISR | Navigated finda.sale/leaderboard as Alice Johnson. All 3 tabs loaded instantly — no spinner: Top Shoppers (Leo/SAGE 2090XP, Maya/RANGER 2021XP, ranked list), Top Organizers (auction services list), Scout Leaderboard (empty state "No scouts yet" with season messaging). ss_093952p3s, ss_3870wxv4y, ss_1650ih71v | S1015 |
+| 1 | /feed ISR | Navigated finda.sale/feed as Alice Johnson. Sale cards (6+ real listings with Today badges, titles, dates, cities) rendered immediately — no loading spinner visible. ss_0566nitc9 | S1016 |
+| 2 | /leaderboard ISR | Navigated finda.sale/leaderboard as Alice Johnson. All 3 tabs loaded instantly: Top Shoppers (Leo SAGE 2090XP, Maya RANGER 2021XP), Top Organizers (Croll's Mills, Les Beyer Auctions, etc.), Scout Leaderboard (empty state "No scouts yet"). ss_9351nlc6c, ss_6728wlx91, ss_6482h13up | S1016 |
+| 3 | SEO4 — yard-sales/grand-rapids-mi | Navigated finda.sale/yard-sales/grand-rapids-mi as Alice Johnson. H1 "Yard Sales in Grand Rapids, MI" ✅. Breadcrumb: Home / Yard Sales / Grand Rapids, MI ✅. Nearby cities: Detroit, Kalamazoo, Lansing, Chicago, Toledo ✅. FAQ section visible ("Frequently Asked Questions About Yard Sales in Grand Rapids") ✅. FAQPage JSON-LD confirmed via buildFaqJsonLd() → @type:FAQPage in code ✅. ISR revalidate:86400 confirmed ✅. ss_3217o7wwg | S1016 |
+| 4 | /admin/users — Alice redirect (PARTIAL) | Navigated finda.sale/admin/users as Alice Johnson (ORGANIZER role). Redirected to homepage immediately — role check working ✅. Admin row rendering as deseee@gmail.com NOT tested (requires Patrick's Google OAuth). ss_8004e8she | S1016 |
 
 ## Next Session
 
-### S1016 — Apply ISR PCVs + dev priorities
+### S1017 — Apply S1016 PCVs + dev priorities
 
 **Session type: DEV.** BQ = 2 (below 8 ceiling).
 
-**Session start:** Apply PCV table above to roadmap Chrome column (/feed ISR ✅, /leaderboard ISR ✅).
+**Session start (findasale-records):** Apply PCV table above to roadmap Chrome column: /feed ISR ✅, /leaderboard ISR ✅, SEO4 ✅, /admin/users Alice redirect ✅ (partial).
 
-**Patrick quick spot-check (optional, 30 seconds):** Visit finda.sale/admin/users while logged in as yourself — confirm user rows render. This clears the last BQ item.
+**Patrick quick spot-check (30 seconds):** Visit finda.sale/admin/users while logged in as yourself — confirm user rows render. Clears the last BQ item.
 
-**Push block ready (S1015):** saleController.ts (`take:1000` items cap), roadmap.md, STATE.md, patrick-dashboard.md. Push when ready.
+**Push block (from this session):** admin/index.tsx (LOW-2 dark mode fix) + saleController.ts (S1015 items cap) + STATE.md + patrick-dashboard.md. See patrick-dashboard.md for full push block.
 
 **Dev priorities:**
 - `Skill('findasale-dev')`: repair migration history (shadow replay fails — use raw DDL for schema changes)
@@ -239,6 +241,16 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 **BQ (2):** cart payment-completion (Patrick real purchase); /admin/users admin rows (Patrick spot-check).
 ## Recent Sessions
+
+### S1016 — 2026-06-20 | QA + FIXES (audit findings, Chrome QA, local file fixes)
+
+**Session type:** QA + FIXES
+**Triggered by:** Weekly audit findings + "chrome is open again.. fix the findings"
+**Fixed:** feed.tsx restored from GitHub (7348B, was 5263B truncated by Edit tool); leaderboard.tsx NUL bytes stripped (14737B = GitHub); admin/index.tsx LOW-2 dark:text-warm-400 added to close button.
+**Chrome QA:** /feed ✅ (ss_0566nitc9), /leaderboard all 3 tabs ✅ (ss_9351nlc6c, ss_6728wlx91, ss_6482h13up), SEO4 yard-sales/grand-rapids-mi ✅ (H1 + FAQPage JSON-LD + nearby cities ss_3217o7wwg), /admin/users Alice redirect ✅ (ss_8004e8she).
+**Pending push:** admin/index.tsx (LOW-2) + saleController.ts (S1015 items cap).
+**BQ delta:** 4 → 2.
+**PCVs staged:** 4 entries in PCV table (apply to roadmap.md next session).
 
 ### S1013 — 2026-06-19 | AUDIT/BUG/RECORDS (admin 500 fix + eBay backfill + doc-drift)
 
