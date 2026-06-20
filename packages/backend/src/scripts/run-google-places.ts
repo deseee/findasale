@@ -16,7 +16,7 @@
 import {
   scrapeGooglePlacesQuery,
   PLACES_QUERIES,
-} from '../services/scraper/sources/googlePlaces';
+} from '../services/scraper/sources/scraperConfig';
 import { ScrapedItem } from '../services/scraper/index';
 import { getNextCrawlsToRun, recordCrawlSuccess, recordCrawlFailure } from '../services/scraper/crawlQueueManager';
 

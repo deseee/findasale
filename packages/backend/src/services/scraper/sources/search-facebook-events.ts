@@ -29,7 +29,7 @@
 import * as cheerio from 'cheerio';
 import { ScrapedItem } from '../index';
 import { getRandomUserAgent, jitterDelay } from '../userAgents';
-import { GOOGLE_PLACES_METROS } from './googlePlaces';
+import { GOOGLE_PLACES_METROS } from './scraperConfig';
 
 // ---------------------------------------------------------------------------
 // Shared result shape (normalised before building ScrapedItem)

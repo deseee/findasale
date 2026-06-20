@@ -15,7 +15,7 @@
  */
 
 import { ScrapedItem } from '../index';
-import { PLACES_QUERIES, GOOGLE_PLACES_METROS, BUSINESS_NAME_BLOCKLIST } from './googlePlaces';
+import { PLACES_QUERIES, GOOGLE_PLACES_METROS, BUSINESS_NAME_BLOCKLIST } from './scraperConfig';
 
 const FOURSQUARE_API_BASE = 'https://places-api.foursquare.com/places/search';
 

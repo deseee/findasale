@@ -13,7 +13,7 @@
  */
 
 import { ScrapedItem } from '../index';
-import { PLACES_QUERIES, GOOGLE_PLACES_METROS, BUSINESS_NAME_BLOCKLIST } from './googlePlaces';
+import { PLACES_QUERIES, GOOGLE_PLACES_METROS, BUSINESS_NAME_BLOCKLIST } from './scraperConfig';
 import { getRandomUserAgent } from '../userAgents';
 
 const HERE_API_BASE = 'https://discover.search.hereapi.com/v1/discover';
