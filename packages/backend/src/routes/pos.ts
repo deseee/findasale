@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { authenticate } from '../middleware/auth';
 import { requireOrganizer } from '../middleware/auth';
+import { paymentLimiter } from '../middleware/rateLimiter';
 import {
   shareCart,
   getLinkedCarts,
@@ -50,7 +51,7 @@ router.post('/sessions/:sessionId/pull-holds', authenticate, pullHoldsToCart);
 router.post('/sessions/:sessionId/create-invoice', authenticate, createCombinedInvoice);
 
 // POS Payment Request endpoints
-router.post('/payment-request', authenticate, requireOrganizer, createPaymentRequest);
+router.post('/payment-request', authenticate, requireOrganizer, paymentLimiter, createPaymentRequest);
 // Transaction summary — organizer only
 router.get('/transactions/today-summary', authenticate, requireOrganizer, getTodaySummary);
 // 'active' and 'pending' must be registered before '/:requestId' to avoid param collision

@@ -22,38 +22,38 @@ const insertTransform = (url: string, transform: string): string => {
 export const getThumbnailUrl = (url: string): string => {
   if (!url) return '';
   if (!isCloudinaryUrl(url)) return url;
-  return insertTransform(url, 'w_200,h_200,c_fill,g_auto,q_60,f_webp');
+  return insertTransform(url, 'w_200,h_200,c_fill,g_auto,q_60,f_auto');
 };
 
 export const getOptimizedUrl = (url: string, quality?: number): string => {
   if (!url) return '';
   if (!isCloudinaryUrl(url)) return url;
   const qualityParam = quality ? `q_${quality}` : 'q_auto';
-  return insertTransform(url, `w_800,c_limit,${qualityParam},f_webp`);
+  return insertTransform(url, `w_800,c_limit,${qualityParam},f_auto`);
 };
 
 export const getFullUrl = (url: string): string => {
   if (!url) return '';
   if (!isCloudinaryUrl(url)) return url;
-  return insertTransform(url, 'w_1600,c_limit,q_auto:good,f_webp');
+  return insertTransform(url, 'w_1600,c_limit,q_auto:good,f_auto');
 };
 
 export const getLqipUrl = (url: string): string => {
   if (!url) return '';
   if (!isCloudinaryUrl(url)) return url;
-  return insertTransform(url, 'w_30,q_20,f_webp,e_blur:400');
+  return insertTransform(url, 'w_30,q_20,f_auto,e_blur:400');
 };
 
 export const getLandscape4x3Url = (url: string): string => {
   if (!url) return '';
   if (!isCloudinaryUrl(url)) return url;
-  return insertTransform(url, 'c_fill,ar_4:3,w_1200,q_auto,f_webp');
+  return insertTransform(url, 'c_fill,ar_4:3,w_1200,q_auto,f_auto');
 };
 
 export const getPortrait3x4Url = (url: string): string => {
   if (!url) return '';
   if (!isCloudinaryUrl(url)) return url;
-  return insertTransform(url, 'c_fill,ar_3:4,w_800,q_auto,f_webp');
+  return insertTransform(url, 'c_fill,ar_3:4,w_800,q_auto,f_auto');
 };
 
 const EBAY_IMAGE_DOMAINS = [
@@ -121,4 +121,24 @@ export const getSaleImageUrl = (url: string | null | undefined, quality?: number
   }
 
   return url;
+};
+
+/**
+ * Build a Cloudinary responsive `srcset` string at multiple widths.
+ *
+ * Reuses the same transform pipeline as getOptimizedUrl (q_auto, c_limit, f_auto)
+ * so browsers receive AVIF/WebP at the width that best fits the rendered slot.
+ *
+ * Defensive: returns '' for empty input or any non-Cloudinary URL (eBay-proxied,
+ * scraped CDN, or external). An empty srcset is a no-op on <img>, so callers can
+ * safely spread it without breaking non-Cloudinary images.
+ */
+export const getCloudinarySrcSet = (
+  url: string | null | undefined,
+  widths: number[] = [400, 800, 1200],
+): string => {
+  if (!url || !isCloudinaryUrl(url)) return '';
+  return widths
+    .map((w) => `${insertTransform(url, `w_${w},c_limit,q_auto,f_auto`)} ${w}w`)
+    .join(', ');
 };

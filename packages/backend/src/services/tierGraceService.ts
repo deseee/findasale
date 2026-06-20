@@ -4,10 +4,11 @@
  * finalizing locks, and restoring access on re-upgrade.
  */
 
-import { PrismaClient } from '@prisma/client';
 import { TIER_LIMITS } from '../constants/tierLimits';
+import { prisma } from '../lib/prisma';
 
-const prisma = new PrismaClient();
+// Uses shared Prisma singleton (avoids a second connection pool — S1013 perf fix)
+
 
 /**
  * Calculate what items/features will be hidden when downgrading to a new tier

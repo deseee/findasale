@@ -74,43 +74,68 @@ export const getOrganizerLeaderboard = async (req: Request, res: Response) => {
       select: {
         id: true,
         businessName: true,
-        user: {
-          select: {
-            id: true,
-          },
-        },
       },
       take: 100, // Fetch more to ensure we can sort all before slicing top 20
     });
 
-    // Fetch sale and item counts for each organizer
-    const leaderboardData = await Promise.all(
-      organizers.map(async (org) => {
-        const [completedSalesCount, totalItems] = await Promise.all([
-          prisma.sale.count({
-            where: {
-              organizerId: org.id,
-              status: 'ENDED',
-            },
-          }),
-          prisma.item.count({
-            where: {
-              sale: {
-                organizerId: org.id,
-              },
-              status: 'SOLD',
-            },
-          }),
-        ]);
+    const organizerIds = organizers.map((o) => o.id);
 
-        return {
-          organizerId: org.id, // Return full ID for frontend navigation
-          organizerName: org.businessName,
-          completedSales: completedSalesCount,
-          totalItemsSold: totalItems,
-        };
-      })
-    );
+    // --- Set-based aggregation (replaces per-organizer count fan-out / N+1) ---
+    // 1) Completed (ENDED) sales per organizer — single grouped query.
+    const completedSalesGroups = await prisma.sale.groupBy({
+      by: ['organizerId'],
+      where: {
+        organizerId: { in: organizerIds },
+        status: 'ENDED',
+      },
+      _count: { _all: true },
+    });
+    const completedSalesByOrg = new Map<string, number>();
+    for (const g of completedSalesGroups) {
+      completedSalesByOrg.set(g.organizerId, g._count._all);
+    }
+
+    // 2) Sold items per organizer. Items relate to organizers via Sale, so we
+    //    group SOLD items by saleId (single query), then resolve each saleId to
+    //    its organizerId (single query) — preserving the original
+    //    `item.sale.organizerId` semantics without the denormalized field.
+    const soldItemGroups = await prisma.item.groupBy({
+      by: ['saleId'],
+      where: {
+        status: 'SOLD',
+        sale: { organizerId: { in: organizerIds } },
+      },
+      _count: { _all: true },
+    });
+    const involvedSaleIds = soldItemGroups
+      .map((g) => g.saleId)
+      .filter((id): id is string => id !== null);
+
+    const saleOwners = involvedSaleIds.length
+      ? await prisma.sale.findMany({
+          where: { id: { in: involvedSaleIds } },
+          select: { id: true, organizerId: true },
+        })
+      : [];
+    const organizerBySaleId = new Map<string, string>();
+    for (const s of saleOwners) {
+      organizerBySaleId.set(s.id, s.organizerId);
+    }
+
+    const soldItemsByOrg = new Map<string, number>();
+    for (const g of soldItemGroups) {
+      if (g.saleId === null) continue;
+      const orgId = organizerBySaleId.get(g.saleId);
+      if (!orgId) continue;
+      soldItemsByOrg.set(orgId, (soldItemsByOrg.get(orgId) ?? 0) + g._count._all);
+    }
+
+    const leaderboardData = organizers.map((org) => ({
+      organizerId: org.id, // Return full ID for frontend navigation
+      organizerName: org.businessName,
+      completedSales: completedSalesByOrg.get(org.id) ?? 0,
+      totalItemsSold: soldItemsByOrg.get(org.id) ?? 0,
+    }));
 
     // Sort by completed sales count (descending), then by total items sold (descending)
     const sorted = leaderboardData
@@ -183,25 +208,25 @@ export const getScoutLeaderboard = async (req: Request, res: Response) => {
       take: 25,
     });
 
-    // Fetch user details for each scout
-    const scouts = await Promise.all(
-      scoutData.map(async (entry) => {
-        const user = await prisma.user.findUnique({
-          where: { id: entry.shopperId },
+    // Fetch user details for all scouts in a single query (replaces per-id findUnique N+1)
+    const scoutIds = scoutData.map((entry) => entry.shopperId);
+    const scoutUsers = scoutIds.length
+      ? await prisma.user.findMany({
+          where: { id: { in: scoutIds } },
           select: {
             id: true,
             name: true,
             // avatarUrl not in schema, use placeholder or initials
           },
-        });
+        })
+      : [];
+    const userById = new Map(scoutUsers.map((u) => [u.id, u]));
 
-        return {
-          userId: entry.shopperId,
-          displayName: user?.name || 'Scout',
-          count: entry._count.organizerId,
-        };
-      })
-    );
+    const scouts = scoutData.map((entry) => ({
+      userId: entry.shopperId,
+      displayName: userById.get(entry.shopperId)?.name || 'Scout',
+      count: entry._count.organizerId,
+    }));
 
     // Determine current user's rank if logged in
     let currentUserRank: number | null = null;

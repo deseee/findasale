@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 
 import { Lock } from 'lucide-react';
-import { getOptimizedUrl, getLqipUrl, getSaleImageUrl } from '../lib/imageUtils';
+import { getOptimizedUrl, getLqipUrl, getSaleImageUrl, getCloudinarySrcSet } from '../lib/imageUtils';
 import { formatUnlockTime } from '../lib/rankEarlyAccess';
 import Skeleton from './Skeleton';
 import TierBadge from './TierBadge'; // Phase 22
@@ -84,6 +84,8 @@ const SaleCard: React.FC<SaleCardProps> = ({ sale, priority = false }) => {
   const imageQuality = isLowBandwidth ? 40 : 75;
   // getSaleImageUrl handles both Cloudinary optimization AND scraped CDN proxying
   const optimizedUrl = photoUrl ? getSaleImageUrl(photoUrl, imageQuality) : null;
+  // Responsive Cloudinary srcset (AVIF/WebP via f_auto); '' for proxied/external images
+  const srcSet = photoUrl ? getCloudinarySrcSet(photoUrl) : '';
   // Render the <img> only when we have a usable URL AND it hasn't errored.
   const hasPhoto = !!photoUrl && !!optimizedUrl && optimizedUrl.trim().length > 0 && !imgError;
 
@@ -168,6 +170,7 @@ const SaleCard: React.FC<SaleCardProps> = ({ sale, priority = false }) => {
           <img
             key={optimizedUrl}
             src={optimizedUrl!}
+            {...(srcSet ? { srcSet, sizes: '(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 280px' } : {})}
             alt={sale.title}
             className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${
               imgLoaded ? 'opacity-100' : 'opacity-0'

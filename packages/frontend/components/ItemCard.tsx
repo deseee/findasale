@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { getOptimizedUrl, getLqipUrl, getThumbnailUrl, getItemImageUrl } from '../lib/imageUtils';
+import { getOptimizedUrl, getLqipUrl, getThumbnailUrl, getItemImageUrl, getCloudinarySrcSet } from '../lib/imageUtils';
 import { formatCategoryLabel } from '../lib/itemConstants';
 import Skeleton from './Skeleton';
 import { useNetworkQuality } from '../hooks/useNetworkQuality';
@@ -157,6 +157,7 @@ const ItemCard: React.FC<ItemCardProps> = ({
   // Resolve primary photo URL (photoUrls array takes precedence, fallback to photoUrl)
   // Route eBay CDN URLs through /api/image-proxy to bypass Chrome tracking protection in incognito
   const primaryPhotoUrl = getItemImageUrl(((item as any).photoUrls?.[0]) || (item as any).photoUrl || null);
+  const srcSet = primaryPhotoUrl ? getCloudinarySrcSet(primaryPhotoUrl) : '';
 
   // Calculate image URLs based on optimization mode
   let lqipUrl_calc: string | null = null;
@@ -270,6 +271,7 @@ const ItemCard: React.FC<ItemCardProps> = ({
             <img
               key={optimizedUrl || primaryPhotoUrl}
               src={optimizedUrl || primaryPhotoUrl}
+              {...(srcSet ? { srcSet, sizes: '(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 280px' } : {})}
               alt={item.title}
               className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${
                 imgLoaded ? 'opacity-100' : 'opacity-0'

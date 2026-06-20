@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { authenticate, requireOrganizer } from '../middleware/auth';
+import { paymentLimiter } from '../middleware/rateLimiter';
 import {
   getSettlement,
   createSettlement,
@@ -18,7 +19,7 @@ router.post('/:saleId/settlement', authenticate, requireOrganizer, createSettlem
 router.patch('/:saleId/settlement', authenticate, requireOrganizer, updateSettlement);
 router.post('/:saleId/settlement/expenses', authenticate, requireOrganizer, addExpense);
 router.delete('/:saleId/settlement/expenses/:expenseId', authenticate, requireOrganizer, removeExpense);
-router.post('/:saleId/settlement/payout', authenticate, requireOrganizer, initiateClientPayout);
+router.post('/:saleId/settlement/payout', authenticate, requireOrganizer, paymentLimiter, initiateClientPayout);
 router.get('/:saleId/settlement/receipt', authenticate, requireOrganizer, getSettlementReceipt);
 
 export default router;

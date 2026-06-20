@@ -226,6 +226,7 @@ import { scheduleAuctionAutoCloseCron } from './jobs/auctionAutoCloseCron'; // A
 import { scheduleSaleAutoCloseCron } from './jobs/saleAutoCloseCron'; // Auto-close expired PUBLISHED scraped sales hourly
 import { schedulePhotoRetentionCron } from './jobs/photoRetentionCron'; // Feature #103: Photo retention + deletion
 import { scheduleWebhookEventPruneJob } from './jobs/webhookEventPruneJob'; // Webhook event pruning (30-day retention)
+import { scheduleLogRetentionCron } from './jobs/logRetentionCron'; // Operational-log retention sweep (60-day retention)
 import { scheduleArchivalCron } from './jobs/archivalCron'; // #112: Soft-delete archival (quarterly)
 import { scheduleMarkdownCron } from './jobs/markdownCron'; // Feature #91: Auto-markdown (smart clearance)
 import { scheduleMarkdownCycleCron } from './jobs/markdownCycleCron'; // Feature #XXX: Automatic Markdown Cycles (PRO Tier)
@@ -509,6 +510,18 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// Readiness probe — verifies the DB is reachable before declaring the instance ready to serve.
+// Liveness (/health above) only confirms the process is up; readiness confirms dependencies.
+app.get('/health/ready', async (req, res) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    res.status(200).json({ status: 'ready' });
+  } catch (err) {
+    console.error('[health/ready] Readiness check failed — DB unreachable:', err);
+    res.status(503).json({ status: 'not-ready' });
+  }
+});
+
 // Routes
 app.use('/api/auth', authLimiter, authRoutes); // stricter rate limit on auth
 app.use('/api/auth/passkey', passkeyRoutes); // Feature #19: Passkey/WebAuthn routes (authLimiter already applied via /api/auth mount above)
@@ -683,6 +696,44 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
 // Captures exceptions and attaches Sentry event IDs to req.sentry
 Sentry.setupExpressErrorHandler(app);
 
+// ─── Process-level safety net ────────────────────────────────────────────────────────────────────
+// Reliability hardening: capture errors that escape Express/async handlers so they reach Sentry
+// instead of vanishing (or, for uncaughtException, silently taking the process down).
+// Sentry was initialized at the top of this file via `import './instrument'`.
+
+// unhandledRejection: a Promise rejected with no .catch(). Log + capture, but DO NOT exit —
+// a stray rejected promise should not take the whole API down.
+process.on('unhandledRejection', (reason: unknown, promise: Promise<unknown>) => {
+  console.error('[unhandledRejection] Unhandled promise rejection:', reason);
+  try {
+    Sentry.captureException(reason instanceof Error ? reason : new Error(String(reason)), {
+      tags: { type: 'unhandledRejection' },
+      extra: { promise: String(promise) },
+      level: 'error',
+    });
+  } catch (_sentryErr) {
+    // Sentry capture failed — never let the handler itself throw.
+  }
+});
+
+// uncaughtException: a truly fatal, unrecovered synchronous error. Log + capture to Sentry,
+// then let the existing graceful-shutdown path run and the process exit. We deliberately do
+// NOT swallow this — continuing after an uncaught exception leaves the process in an undefined
+// state. flush() best-effort ensures the Sentry event is sent before exit.
+process.on('uncaughtException', (err: Error) => {
+  console.error('[uncaughtException] Fatal uncaught exception:', err?.message, err?.stack);
+  try {
+    Sentry.captureException(err, {
+      tags: { type: 'uncaughtException' },
+      level: 'fatal',
+    });
+    // Best-effort flush, then exit non-zero so Railway restarts the service cleanly.
+    Sentry.flush(2000).finally(() => process.exit(1));
+  } catch (_sentryErr) {
+    process.exit(1);
+  }
+});
+
 // H8: Global error handler — catches uncaught async errors forwarded via next(err)
 // Must be defined AFTER all routes and BEFORE app.listen
 app.use((err: Error, req: express.Request, res: express.Response, _next: express.NextFunction) => {
@@ -694,7 +745,14 @@ app.use((err: Error, req: express.Request, res: express.Response, _next: express
     return;
   }
   const status = (err as any).status || (err as any).statusCode || 500;
-  res.status(status).json({ message: err.message || 'Internal server error' });
+  // Don't leak internal error details to clients on 5xx. Full detail is already logged above
+  // and captured by Sentry's error handler; return a generic message for server errors.
+  // 4xx messages are client-actionable and are preserved as-is.
+  if (status >= 500) {
+    res.status(status).json({ message: 'Internal server error' });
+  } else {
+    res.status(status).json({ message: err.message || 'Request error' });
+  }
 });
 
 // Graceful shutdown handler — shared between SIGINT and SIGTERM
@@ -747,6 +805,10 @@ httpServer.listen(PORT, '0.0.0.0', () => {
 
   // Webhook event pruning (30-day retention)
   scheduleWebhookEventPruneJob();
+
+  // Operational-log retention sweep (60-day retention) — prunes ScrapedSalesJob,
+  // OutreachAuditLog, DirectoryCrawlLog. Operational logs only; no user/sale/item data.
+  scheduleLogRetentionCron();
 
   // #112: Register quarterly archival cron
   scheduleArchivalCron();
