@@ -426,6 +426,8 @@ export const getSale = async (req: Request, res: Response) => {
         },
         items: {
           where: PUBLIC_ITEM_FILTER,
+          take: 1000,
+          orderBy: [{ status: 'asc' }, { id: 'asc' }],
           select: {
             id: true, title: true, description: true, price: true,
             auctionStartPrice: true, auctionReservePrice: true, currentBid: true, bidIncrement: true,
