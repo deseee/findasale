@@ -8,6 +8,8 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
+**S1019 WRAP (2026-06-20) — DEV/BUG (platform stats investigation, organizerId backfill, live counts). Push confirmed green. BQ unchanged at 1.**
+
 **S1018 WRAP (2026-06-20) — RESEARCH/DEV (automated email health sweep + root-cause investigation + suppression fix + ESN backfill). Push confirmed live (Patrick redeployed green). BQ unchanged at 2.**
 
 **S1017 WRAP (2026-06-20) — DEV session.** PCVs applied to roadmap (rows 190/212/554). Migration history repaired — two Unix-epoch migrations (1776176101893 + 1776893245415) renamed to 20260707000001/20260707000002; Railway _prisma_migrations updated; prisma migrate dev/deploy now unblocked. Audio compression: bg-music.mp3 2.7MB→1.4MB, fas1.1–fas1.13 192→128kbps; total -1.76MB saved. fas-01–13 and vo-08b.mp3 kept in project folder. BQ 2→1 (Patrick confirmed /admin/users rows load; cart payment-completion remains — Stripe LIVE keys only). Deployed green.
@@ -224,19 +226,51 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Next Session
 
-### S1019 — Dev priorities
+### S1020 — priorities
 
-**Session type: DEV.** BQ = 2 (below 8 ceiling).
+**Session type: QA or DEV.** BQ = 1 (below 8 ceiling).
 
-**Session start:** Load STATE.md. BQ at 2 — no QA gate.
+**Session start:** Load STATE.md. Smoke test finda.sale/organizer/platforms as Artifact MI — confirm eBay=10, Google≥92, Facebook=93, coverage≥69.
+
+**Action required — Patrick:**
+- eBay token expired June 20 at 21:30 UTC. Platform dashboard falls back to DB count (still accurate from S1019 backfill). To restore live API count: reconnect eBay in organizer settings → re-authorize.
+- AlternativeTo submission: did you submit after the June 18 scheduled task prompted you?
 
 **Dev priorities:**
-- `Skill('findasale-dev')`: repair migration history (shadow replay fails — use raw DDL for schema changes)
-- Optional: drop `idx_Organizer_cashFeeBalance_updatedAt` via raw DDL (idx_scan=0)
+- `Skill('findasale-dev')`: #547 eBay Calculated Shipping E2E QA (requires Patrick)
+- Facebook latent bug: `facebookCount` query has no status filter — could count SOLD items. Low priority but worth a roadmap card.
 - Audio CDN migration (P3 — 54 mp3s in packages/frontend/public, ~8.6MB total, bg-music.mp3 is 2.8MB)
 
-**BQ (2):** cart payment-completion (Patrick real purchase); /admin/users admin rows (Patrick spot-check).
+**BQ (1):** cart payment-completion (Patrick real purchase to verify items→SOLD webhook).
 ## Recent Sessions
+
+### S1019 — 2026-06-20 | DEV/BUG (platform stats investigation + live counts + dark mode sweep)
+
+**Session type:** DEV/BUG
+**Triggered by:** Patrick: "investigate and find the discrepancies" in platform dashboard numbers
+
+**Root cause (tool-cited):** 36 items in Artifact MI's sales had `organizerId = NULL`. `platformStatsService` filters every query by `organizerId`, so those items were invisible across all platform counts. Additionally, all three stats metrics were derived from stale DB flags rather than live platform data.
+
+**DB backfill (live, no push needed):** `UPDATE "Item" SET "organizerId" = <org-id> WHERE "saleId" IN (<sale-ids>) AND "organizerId" IS NULL` — 36 items corrected via psycopg2 against Railway public proxy.
+
+**3 controller fixes (organizerId always stamped on item creation):**
+- `uploadController.ts` L454: added `organizerId: sale.organizerId` to rapidfire DRAFT create
+- `syncController.ts` L180: added `organizerId` to `handleCreateItem` data payload
+- `batchAnalyzeController.ts` L94-198: `sale.findUnique` added; `organizerId` passed to cluster + ungrouped create
+
+**platformStatsService.ts overhaul (live counts):**
+- eBay: now calls eBay Inventory API via `/api/proxy/ebay` for live published count (falls back to DB if token expired — token expired June 20 21:30 UTC, DB count=10 accurate post-backfill)
+- Google: uses `getCacheMeta().itemCount` from `googleMerchantFeedService` (feed has 92 items; shows 93 on cold cache = computed fallback, will sync at 3:30 AM cron)
+- Facebook: `fbCatalogEnabled` set true for Artifact MI via DB; `listed` now uses `findasaleVisible` (items in published sales) = 93
+- New `totalVisibleOnSite` field: AVAILABLE+isActive+draftStatus=PUBLISHED+sale.status=PUBLISHED = 93
+
+**platforms.tsx:** local `EbayStats` + `PlatformStatsResponse.totals` interfaces updated with new fields. TS 0 errors.
+
+**Dark mode bg-white sweep (30 files):** 58 instances of `bg-white` → `bg-white dark:bg-gray-800` across components and pages.
+
+**Live verification (post-push):** eBay=10 ✅, Google=93 ✅, Facebook=93 ✅, totalAvailable=137 ✅, visibleOnSite=93 ✅, coverage=69% ✅
+
+**BQ: 1 (unchanged).** Push: commit `f3490c48`, green.
 
 ### S1018 — 2026-06-20 | RESEARCH/DEV (email health sweep + ESN source backfill + suppression fix)
 

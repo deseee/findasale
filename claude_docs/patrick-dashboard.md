@@ -1,17 +1,20 @@
-# Patrick's Dashboard — S1018 (2026-06-20)
+# Patrick's Dashboard — S1019 (2026-06-20)
 
 ---
 
-## What Happened This Session (S1017 — June 20)
+## What Happened This Session (S1019 — June 20)
 
-**Migration history repaired + audio compressed:**
+**Platform stats fixed — all numbers now from live sources:**
 
-- ✅ **Migration history fixed** — Two Unix-epoch migrations (`1776176101893_add_ebay_subscription_id` + `1776893245415_add_taste_profile_and_api_keys`) renamed to proper date-based timestamps (`20260707000001/20260707000002`). Railway `_prisma_migrations` table updated. `prisma migrate dev` and `prisma migrate deploy` now work again.
-- ✅ **Audio compressed** — `bg-music.mp3` 256→128kbps (2.7MB→1.4MB). `fas1.1–fas1.13` 192→128kbps. Total savings: ~1.76MB. No perceptible quality loss.
-- ✅ **BQ cleared** — `/admin/users` row rendering confirmed by Patrick. BQ 2→1.
-- ✅ **Deployed green** — Patrick pushed and redeployed.
-
-**No user action needed.** No code is pending push.
+- ✅ **Root cause found** — 36 items had `organizerId = NULL`, making them invisible to platform stats queries. Backfilled directly in production DB.
+- ✅ **eBay count** — now calls eBay Inventory API for live published count. Token expired tonight (21:30 UTC) so showing DB fallback of 10 — still accurate. Reconnect eBay in organizer settings to restore live API count.
+- ✅ **Google count** — now pulls from the actual feed we submit (92 items). Shows 93 tonight (cold cache after redeploy); cron at 3:30 AM will sync.
+- ✅ **Facebook count** — Artifact MI is now correctly flagged as using Facebook Shop (catalog mode). Count = 93 items visible in published sales.
+- ✅ **New metric** — "Visible on Our Site" shows 93 items shoppers can actually see on finda.sale right now.
+- ✅ **Coverage score** — 69% (up from ~37%). Accurate now that FB catalog is counted correctly.
+- ✅ **3 item creation bugs fixed** — Camera upload, sync, and batch analyze now always stamp `organizerId` on new items so this can't happen again.
+- ✅ **Dark mode sweep** — 58 `bg-white` instances fixed across 30 components and pages.
+- ✅ **Push confirmed green** — commit `f3490c48`, Railway + Vercel both deployed.
 
 ---
 
@@ -20,9 +23,16 @@
 | Area | Status |
 |------|--------|
 | BQ (Blocked Queue) | **1 item** — see below |
-| Migration history | ✅ Fixed — prisma migrate dev/deploy unblocked |
-| Audio assets | ✅ Compressed (-1.76MB) |
+| Platform dashboard | ✅ Live counts — eBay API, Google feed, FB catalog |
+| Dark mode | ✅ 30 components cleaned up |
 | Vercel / Railway | ✅ Both healthy |
+
+---
+
+## Action Required — Patrick
+
+1. **eBay token expired** (June 20, 21:30 UTC) — platform dashboard falls back to DB count (accurate). To restore live count: organizer settings → reconnect eBay.
+2. **AlternativeTo** — did you submit after the June 18 scheduled task? If not, worth doing.
 
 ---
 
@@ -36,16 +46,14 @@
 
 ## No Push Block
 
-Everything was pushed this session. Nothing pending.
+Everything is live. Nothing pending.
 
 ---
 
-## Next Session (S1018)
+## Next Session
 
-**Session type: DEV** — BQ = 1 (no QA gate).
+**Session type: DEV/QA** — BQ = 1 (no QA gate).
 
-Pick anything from the roadmap Building section. Good candidates:
-- Drop `idx_Organizer_cashFeeBalance_updatedAt` index (idx_scan=0, quick win)
+- Smoke test finda.sale/organizer/platforms — eBay=10, Google≥92, Facebook=93
+- #547 eBay Calculated Shipping E2E QA (needs you available)
 - Next roadmap feature from Building backlog
-
-Weekly audit runs automatically Saturday 4AM.
