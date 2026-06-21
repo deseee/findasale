@@ -45,6 +45,10 @@ export const UNSENDABLE_DOMAINS: ReadonlySet<string> = new Set([
   'yourdomain.net',
   'test.com',
   'test.org',
+  // noemail.* — non-deliverable placeholder family; noemail.com confirmed 4/4 hard bounce (2026-06)
+  'noemail.com',
+  'noemail.net',
+  'noemail.org',
 ]);
 
 /**
@@ -96,6 +100,8 @@ export function isEmailDomainBlocked(email: string): boolean {
   if (atIndex === -1) return false;
   if (SENDABLE_INTERNAL_ALLOWLIST.has(e)) return false;
   const domain = e.slice(atIndex + 1);
+  // A domain with no dot cannot resolve to a real public mail server (e.g. "x@email").
+  if (!domain.includes('.')) return true;
   // Never email our own domain zone (S937 — placeholder/bounce-flood guard).
   if (domain === 'finda.sale' || domain.endsWith('.finda.sale')) return true;
   if (BLOCKED_DOMAINS.has(domain)) return true;
