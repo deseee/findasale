@@ -107,6 +107,104 @@ function parseFirstEmail(value: string): string | null {
   return m ? m[1].toLowerCase() : null;
 }
 
+// ---------------------------------------------------------------------------
+// Bounce classification
+// ---------------------------------------------------------------------------
+
+type BounceCategory =
+  | 'DEAD_MAILBOX'
+  | 'NO_MX'
+  | 'POLICY_BLOCK'
+  | 'TRANSIENT'
+  | 'COMPLAINT'
+  | 'UNKNOWN';
+
+interface BounceClassification {
+  category: BounceCategory;
+  statusCode: string | null;
+  diagnostic: string | null;
+}
+
+/**
+ * Inspect the DSN headers + body and classify the bounce so we suppress
+ * proportionally: permanent dead-mailbox / no-MX failures get hard-suppressed,
+ * while recoverable Google policy blocks (5.7.1 "Message rejected") get a
+ * time-boxed retryAfter cooldown instead of a permanent hard suppression.
+ */
+function classifyBounce(
+  headers: Array<{ name?: string | null; value?: string | null }>,
+  bodyText: string
+): BounceClassification {
+  // --- Extract enhanced SMTP status code ---
+  // Prefer the DSN Status: header (RFC 3464), else scan the body.
+  let statusCode: string | null = null;
+  const statusHeader = headers.find(h => h.name?.toLowerCase() === 'status');
+  if (statusHeader?.value) {
+    const m = statusHeader.value.match(/\b([245]\.\d{1,3}\.\d{1,3})\b/);
+    if (m) statusCode = m[1];
+  }
+  if (!statusCode) {
+    const m = bodyText.match(/\b([245]\.\d{1,3}\.\d{1,3})\b/);
+    if (m) statusCode = m[1];
+  }
+  // Fall back to a bare 3-digit SMTP reply code if no enhanced code was found.
+  if (!statusCode) {
+    const m = bodyText.match(/\b([245]\d{2})\b/);
+    if (m) statusCode = m[1];
+  }
+
+  // --- Extract diagnostic text ---
+  let diagnostic: string | null = null;
+  const diagHeader = headers.find(h => h.name?.toLowerCase() === 'diagnostic-code');
+  if (diagHeader?.value) {
+    diagnostic = diagHeader.value.trim();
+  }
+  if (!diagnostic) {
+    const m = bodyText.match(/the response was:\s*([^\n]+)/i);
+    if (m?.[1]) diagnostic = m[1].trim();
+  }
+
+  // Combined haystack for keyword classification.
+  const hay = `${diagnostic ?? ''}\n${bodyText}`;
+  const code = statusCode ?? '';
+
+  // --- Classify (order matters: most specific / most recoverable first) ---
+
+  // TRANSIENT — 4.x.x soft failures and "will retry" language. Never suppress.
+  if (/^4\./.test(code) || /delivery incomplete|will retry|temporary|try again/i.test(hay)) {
+    return { category: 'TRANSIENT', statusCode, diagnostic };
+  }
+
+  // DEAD_MAILBOX — permanent recipient-does-not-exist failures.
+  if (
+    code === '5.1.1' ||
+    /^5\.2\./.test(code) ||
+    /user unknown|mailbox (is )?disabled|address (couldn'?t be found|not found)|no such user|recipient.*rejected|does not exist|unable to receive/i.test(hay)
+  ) {
+    return { category: 'DEAD_MAILBOX', statusCode, diagnostic };
+  }
+
+  // NO_MX — domain has no mail server / DNS failure.
+  if (/DNS (Error|type)|no MX|MX .*lookup|domain .*not found|nxdomain/i.test(hay)) {
+    return { category: 'NO_MX', statusCode, diagnostic };
+  }
+
+  // POLICY_BLOCK — recoverable provider policy / content rejection (e.g. Google 5.7.1).
+  if (
+    /^5\.7\./.test(code) ||
+    /message (rejected|blocked)|unsolicited|policy|spam|answer\/69585|content/i.test(hay)
+  ) {
+    return { category: 'POLICY_BLOCK', statusCode, diagnostic };
+  }
+
+  // COMPLAINT — feedback-loop / abuse report.
+  if (/complaint|feedback[- ]?loop|abuse report|this is a complaint/i.test(hay)) {
+    return { category: 'COMPLAINT', statusCode, diagnostic };
+  }
+
+  return { category: 'UNKNOWN', statusCode, diagnostic };
+}
+
 /**
  * Decode a Gmail message part body (base64url encoded).
  */
@@ -201,23 +299,53 @@ export const bounceSuppressService = {
         if (!bouncedAddress) {
           console.warn(`[bounceSuppressService] Could not extract address from message ${msgId} — skipping suppression but will trash.`);
         } else {
-          // Upsert into EmailSuppression
-          await prisma.emailSuppression.upsert({
-            where: { emailAddress: bouncedAddress },
-            update: {
-              bounceHard: true,
-              suppressionReason: 'BOUNCED',
-              suppressedAt: new Date(),
-            },
-            create: {
-              emailAddress: bouncedAddress,
-              bounceHard: true,
-              suppressionReason: 'BOUNCED',
-              suppressedAt: new Date(),
-            },
-          });
-          result.suppressed++;
-          console.log(`[bounceSuppressService] Suppressed: ${bouncedAddress}`);
+          // Classify the bounce so suppression is proportional to the real cause.
+          const { category, statusCode, diagnostic } = classifyBounce(headers, bodyText);
+          const diagnosticCode = diagnostic ? diagnostic.slice(0, 500) : null;
+
+          if (category === 'TRANSIENT') {
+            // Recoverable soft failure — do NOT suppress. Just trash + log.
+            console.log(`[bounceSuppressService] TRANSIENT bounce for ${bouncedAddress} (${statusCode ?? 'no-code'}) — not suppressing.`);
+          } else {
+            const now = new Date();
+
+            // Category-driven suppression fields.
+            let bounceHard = false;
+            let retryAfter: Date | null = null;
+            let complaintEmail: Date | null = null;
+
+            if (category === 'DEAD_MAILBOX' || category === 'NO_MX') {
+              bounceHard = true;
+              retryAfter = null;
+            } else if (category === 'POLICY_BLOCK') {
+              const cooldownDays = Number(process.env.POLICY_BLOCK_COOLDOWN_DAYS || 7);
+              retryAfter = new Date(Date.now() + cooldownDays * 86400000);
+            } else if (category === 'UNKNOWN') {
+              retryAfter = new Date(Date.now() + 3 * 86400000);
+            } else if (category === 'COMPLAINT') {
+              complaintEmail = now;
+            }
+
+            const fields = {
+              bounceHard,
+              retryAfter,
+              ...(complaintEmail ? { complaintEmail } : {}),
+              bounceCategory: category,
+              bounceStatusCode: statusCode,
+              diagnosticCode,
+              classifiedAt: now,
+              suppressionReason: category,
+              suppressedAt: now,
+            };
+
+            await prisma.emailSuppression.upsert({
+              where: { emailAddress: bouncedAddress },
+              update: fields,
+              create: { emailAddress: bouncedAddress, ...fields },
+            });
+            result.suppressed++;
+            console.log(`[bounceSuppressService] Suppressed: ${bouncedAddress} category=${category} code=${statusCode ?? 'none'}`);
+          }
         }
 
         // Move message to Trash regardless — keeps inbox clean.
@@ -239,6 +367,113 @@ export const bounceSuppressService = {
 
     console.log(
       `[bounceSuppressService] Done. processed=${result.processed} suppressed=${result.suppressed} errors=${result.errors.length}`
+    );
+    return result;
+  },
+
+  /**
+   * Backfill: re-classify historical bounce DSNs (including those already moved
+   * to Trash — Gmail retains trash ~30 days) and repair existing EmailSuppression
+   * rows that were blanket hard-suppressed with the old `bounceHard: true` logic.
+   *
+   * - Recovers POLICY_BLOCK rows: bounceHard=false, retryAfter=now+cooldown.
+   * - Keeps DEAD_MAILBOX / NO_MX rows hard-suppressed.
+   * - Only UPDATES existing rows (updateMany) — never creates new rows, so a DSN
+   *   for an address with no suppression row is a harmless no-op.
+   * - Does NOT trash any messages.
+   */
+  async reclassifyBounces(): Promise<ProcessResult> {
+    const result: ProcessResult = { processed: 0, suppressed: 0, errors: [] };
+
+    let gmail: ReturnType<typeof google.gmail>;
+    try {
+      gmail = createGmailClient();
+    } catch (err: any) {
+      result.errors.push(`Gmail auth failed: ${err.message}`);
+      console.error('[bounceSuppressService] reclassify Gmail auth error:', err.message);
+      return result;
+    }
+
+    let messageIds: string[] = [];
+    try {
+      const listResp = await gmail.users.messages.list({
+        userId: 'me',
+        q: '(from:mailer-daemon OR from:postmaster OR subject:(delivery status OR undeliverable OR "mail delivery" OR "failure notice" OR "returned mail")) in:anywhere',
+        maxResults: 100,
+      });
+      messageIds = (listResp.data.messages ?? []).map(m => m.id!).filter(Boolean);
+    } catch (err: any) {
+      result.errors.push(`Gmail list failed: ${err.message}`);
+      console.error('[bounceSuppressService] reclassify Gmail list error:', err.message);
+      return result;
+    }
+
+    if (messageIds.length === 0) {
+      console.log('[bounceSuppressService] reclassify: no bounce messages found.');
+      return result;
+    }
+
+    console.log(`[bounceSuppressService] reclassify: found ${messageIds.length} message(s) to re-classify.`);
+
+    for (const msgId of messageIds) {
+      try {
+        result.processed++;
+
+        const msgResp = await gmail.users.messages.get({
+          userId: 'me',
+          id: msgId,
+          format: 'full',
+        });
+        const msg = msgResp.data;
+        const headers: Array<{ name?: string | null; value?: string | null }> = msg.payload?.headers ?? [];
+        const bodyText = extractText(msg.payload ?? {});
+
+        const bouncedAddress = extractBouncedAddress(headers, bodyText);
+        if (!bouncedAddress) {
+          continue;
+        }
+
+        const { category, statusCode, diagnostic } = classifyBounce(headers, bodyText);
+        const diagnosticCode = diagnostic ? diagnostic.slice(0, 500) : null;
+        const now = new Date();
+
+        const data: Record<string, unknown> = {
+          bounceCategory: category,
+          bounceStatusCode: statusCode,
+          diagnosticCode,
+          classifiedAt: now,
+        };
+
+        if (category === 'POLICY_BLOCK') {
+          // Recover the row: lift the permanent hard suppression, apply a cooldown.
+          const cooldownDays = Number(process.env.POLICY_BLOCK_COOLDOWN_DAYS || 7);
+          data.bounceHard = false;
+          data.retryAfter = new Date(Date.now() + cooldownDays * 86400000);
+        } else if (category === 'DEAD_MAILBOX' || category === 'NO_MX') {
+          // Confirmed permanent — keep hard-suppressed.
+          data.bounceHard = true;
+        }
+        // TRANSIENT / COMPLAINT / UNKNOWN: only record the classification metadata,
+        // leave the existing bounceHard/retryAfter state untouched in the backfill.
+
+        // updateMany so a missing row is a no-op (never creates new rows).
+        const updated = await prisma.emailSuppression.updateMany({
+          where: { emailAddress: bouncedAddress },
+          data,
+        });
+        if (updated.count > 0) {
+          result.suppressed += updated.count;
+          console.log(`[bounceSuppressService] reclassify: ${bouncedAddress} -> ${category} (rows=${updated.count})`);
+        }
+      } catch (err: any) {
+        const errMsg = `Message ${msgId}: ${err.message}`;
+        result.errors.push(errMsg);
+        console.error(`[bounceSuppressService] reclassify error processing ${msgId}:`, err.message);
+      }
+    }
+
+    console.log(
+      `[bounceSuppressService] reclassify done. processed=${result.processed} updated=${result.suppressed} errors=${result.errors.length}`
     );
     return result;
   },

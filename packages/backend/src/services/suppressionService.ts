@@ -127,6 +127,9 @@ export const suppressionService = {
     if (suppression.bounceHard) return true;
     if (suppression.optedOut) return true;
     if (suppression.complaintEmail) return true;
+    // Temp suppression for recoverable categories (POLICY_BLOCK / UNKNOWN): blocked
+    // only until retryAfter elapses, then the address becomes sendable again.
+    if (suppression.retryAfter && suppression.retryAfter > new Date()) return true;
     if (suppression.bounceSoftCount >= SOFT_BOUNCE_THRESHOLD) return true;
     return false;
   },
