@@ -9,7 +9,7 @@
  * returns HTTP 000 (connection refused). No DSPS data export was found at
  * dsps.wi.gov (returns 404). This scraper returns an empty array and logs a
  * warning rather than throwing, so the GitHub Actions step passes with 0 records.
- * TODO: Investigate Wisconsin DSPS open data or FOIA request for license list.
+ * NOTE (BLOCKED): Investigate Wisconsin DSPS open data or FOIA request for license list.
  */
 
 const WISCONSIN_BASE_URL = 'https://licensesearch.wi.gov/';

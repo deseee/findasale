@@ -87,8 +87,8 @@ export const getAccountStatus = async (accountId: string) => {
 
 /**
  * Pay a consignor via ACH using Stripe Transfers.
- * TODO: Verify Stripe Identity at $500 lifetime threshold
- * TODO: Track 1099-NEC reporting at $600/yr
+ * TODO (compliance): Verify Stripe Identity at $500 lifetime threshold
+ * TODO (compliance): Track 1099-NEC reporting at $600/yr
  */
 export const payConsignorViaACH = async (
   consignorAccountId: string,

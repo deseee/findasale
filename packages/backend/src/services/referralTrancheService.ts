@@ -4,7 +4,7 @@ import { ReferralTranche } from '@prisma/client';
 
 /**
  * Referral XP Anti-Fraud System — 4-Tranche Escrow with Reputation Scoring
- * Feature #XXX: Progressive payouts as referred user proves legitimacy
+ * Feature: Progressive payouts as referred user proves legitimacy
  *
  * Tranche A (100 XP): Referred user logs in on 3 distinct calendar days (UTC)
  * Tranche B (150 XP): Referred user visits 3 distinct sales (distinct saleIds)

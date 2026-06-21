@@ -10,7 +10,7 @@
  * scRegulator=4210 triggers a server error because the AJAX cascade state is not
  * reproduced. Without a headless browser to drive the cascade, this scraper cannot
  * reliably retrieve results. Returns gracefully with 0 records.
- * TODO: Investigate ALMS data export or FOIA request for auctioneer list.
+ * NOTE (BLOCKED): Investigate ALMS data export or FOIA request for auctioneer list.
  */
 
 const MAINE_SEARCH_URL =

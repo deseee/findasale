@@ -887,7 +887,7 @@ export const login = async (req: Request, res: Response) => {
     const { password: _, ...userWithoutPassword } = user;
     res.json({ user: userWithoutPassword, token });
 
-    // Feature #XXX: Record referral tranche login (non-blocking)
+    // Feature: Record referral tranche login (non-blocking)
     try {
       await referralTrancheService.recordLogin(user.id);
     } catch (err) {

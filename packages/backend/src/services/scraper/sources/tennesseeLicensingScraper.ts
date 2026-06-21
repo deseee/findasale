@@ -5,7 +5,7 @@
  * STATUS (2026-06-01): Tennessee migrated from verify.sos.tn.gov (dead — ENOTFOUND)
  * to search.cloud.commerce.tn.gov, a React SPA that does not serve VIEWSTATE forms.
  * This scraper detects the SPA and returns 0 gracefully; no Sentry error is raised.
- * TODO: Rewrite using the search.cloud.commerce.tn.gov REST API or Playwright once
+ * NOTE (BLOCKED): Rewrite using the search.cloud.commerce.tn.gov REST API or Playwright once
  *       the API endpoint is identified.
  */
 
@@ -84,7 +84,7 @@ export async function runTennesseeLicensingScraper(): Promise<void> {
       console.warn(
         '[TennesseeLicensing] No VIEWSTATE found — site is a JavaScript SPA and ' +
         'cannot be scraped with fetch. Returning 0 results. ' +
-        'TODO: Rewrite with Playwright or REST API.'
+        'NOTE (BLOCKED): Rewrite with Playwright or REST API.'
       );
       return;
     }

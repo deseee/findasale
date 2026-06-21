@@ -49,7 +49,7 @@ export class KeepaAdapter implements PricingAdapter {
 
   private async resolveASIN(_title: string, _brand?: string): Promise<string | null> {
     // Phase 1: Stub
-    // TODO: Implement ASIN lookup via UPC or Google API
+    // NOTE: Implement ASIN lookup via UPC or Google API
     return null;
   }
 

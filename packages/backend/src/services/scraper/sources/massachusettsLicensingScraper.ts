@@ -7,7 +7,7 @@
  * unreachable — DNS resolution fails (curl exit code 6). The host appears to be
  * decommissioned or renamed. This scraper returns gracefully and logs a warning
  * rather than throwing, so the GitHub Actions step passes with 0 records.
- * TODO: Find replacement endpoint when MA OCA publishes a new API.
+ * NOTE (BLOCKED): Find replacement endpoint when MA OCA publishes a new API.
  */
 
 const MASSACHUSETTS_API_URL =

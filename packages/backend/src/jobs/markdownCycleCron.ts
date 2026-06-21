@@ -3,7 +3,7 @@ import { prisma } from '../index';
 import { cronGuard } from '../utils/cronGuard';
 
 /**
- * Feature #XXX: Automatic Markdown Cycles (PRO Tier)
+ * Feature: Automatic Markdown Cycles (PRO Tier)
  * Apply time-based automatic price reductions based on organizer-defined markdown cycles.
  * 
  * For each active MarkdownCycle:

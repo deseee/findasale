@@ -1,5 +1,5 @@
 /**
- * Feature #XXX: Verified Social Share XP System Controller
+ * Feature: Verified Social Share XP System Controller
  *
  * Endpoints for generating shareable sale links and tracking verified clicks with XP awards.
  * XP is awarded only to authenticated users (2 XP per unique click, capped at 20 XP per link).

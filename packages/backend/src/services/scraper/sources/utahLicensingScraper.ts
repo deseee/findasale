@@ -87,7 +87,7 @@ export async function runUtahLicensingScraper(): Promise<void> {
     if (!viewStateMatch) {
       console.warn(
         '[UtahLicensing] No VIEWSTATE found — site may have migrated to a JavaScript SPA. ' +
-        'Returning 0 results. TODO: Rewrite with Playwright or REST API.'
+        'Returning 0 results. NOTE (BLOCKED): Rewrite with Playwright or REST API.'
       );
       return;
     }

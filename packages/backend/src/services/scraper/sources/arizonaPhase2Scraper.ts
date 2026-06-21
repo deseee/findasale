@@ -8,11 +8,11 @@
  * thrift, resale, secondhand, flea market, yard sale, surplus, liquidation).
  *
  * NOTE: data.mesaaz.gov covers Mesa only. Other AZ cities need separate portals:
- * TODO: Phoenix — https://www.phoenixopendata.com (check for business license dataset)
- * TODO: Scottsdale — https://data.scottsdaleaz.gov (check for business license dataset)
- * TODO: Tucson — https://data.tucsonaz.gov (check for business license dataset)
- * TODO: Chandler — https://data.chandleraz.gov or https://chandleraz.gov/open-data
- * TODO: Tempe — https://data.tempe.gov or https://tempegov.socrata.com
+ * NOTE (BLOCKED): Phoenix — https://www.phoenixopendata.com (check for business license dataset)
+ * NOTE (BLOCKED): Scottsdale — https://data.scottsdaleaz.gov (check for business license dataset)
+ * NOTE (BLOCKED): Tucson — https://data.tucsonaz.gov (check for business license dataset)
+ * NOTE (BLOCKED): Chandler — https://data.chandleraz.gov or https://chandleraz.gov/open-data
+ * NOTE (BLOCKED): Tempe — https://data.tempe.gov or https://tempegov.socrata.com
  */
 
 import { getOrCreateScrapedOrganizer } from '../index';

@@ -52,7 +52,7 @@ const extractText = (html: string): string =>
 
 async function fetchAllRecords(): Promise<NmLicenseRecord[]> {
   /**
-   * TODO: Implement once NM RLD endpoint or public records dataset is confirmed.
+   * NOTE (BLOCKED): Implement once NM RLD endpoint or public records dataset is confirmed.
    *
    * Option A — CSV from public records response:
    *   Parse rows with a line-by-line CSV reader (no external dep needed for simple CSVs):

@@ -8,7 +8,7 @@
  * No open data API or CSV export for NY auctioneer licenses was found on
  * data.ny.gov or dos.ny.gov. This scraper returns gracefully and logs a warning
  * rather than throwing, so the GitHub Actions step passes with 0 records.
- * TODO: Re-check dos.ny.gov licensing section if they publish a data download.
+ * NOTE (BLOCKED): Re-check dos.ny.gov licensing section if they publish a data download.
  */
 
 const SEARCH_URL = 'https://www.dos.ny.gov/licensing/search/search.html';

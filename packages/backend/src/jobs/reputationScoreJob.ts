@@ -3,7 +3,7 @@ import { cronGuard } from '../utils/cronGuard';
 import { referralTrancheService } from '../services/referralTrancheService';
 
 /**
- * Feature #XXX: Referral Reputation Score Recomputation Job
+ * Feature: Referral Reputation Score Recomputation Job
  *
  * Runs daily at 2 AM UTC to recompute all referrer reputation scores.
  * Score = fully-earned referral pairs / total referral pairs in rolling 90-day window

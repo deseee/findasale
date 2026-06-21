@@ -270,7 +270,7 @@ export const CharityHeartBadge: React.FC<{ size?: number }> = ({ size = 32 }) =>
 
 /**
  * Filter strip groups for the homepage explore filter.
- * TODO: Update the homepage filter strip to use these groups when Brief F ships.
+ * NOTE (deferred): Update the homepage filter strip to use these groups when Brief F ships.
  * Groups: Estate | Yard & Moving | Auction | Markets & Pop-Ups | Antique Shops | Online | All
  */
 export const SALE_TYPE_FILTER_GROUPS = [

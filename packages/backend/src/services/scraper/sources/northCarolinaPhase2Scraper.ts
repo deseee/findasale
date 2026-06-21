@@ -203,7 +203,7 @@ async function fetchNcalbRecords(): Promise<NcalbRecord[]> {
   if (isJsRendered(html)) {
     console.warn(
       '[NC Phase2] NCALB: page appears JS-rendered — no server-side licensee table detected. ' +
-      'TODO: implement Playwright headless scrape of https://www.ncalb.org/licensee-information/license-search — ' +
+      'NOTE (BLOCKED): implement Playwright headless scrape of https://www.ncalb.org/licensee-information/license-search — ' +
       'set SHOW=ALL in the filter, then parse the resulting HTML table. ' +
       'Alternatively request a licensee roster CSV from the board: https://www.ncalb.org/agency-information/board-information'
     );

@@ -10,7 +10,7 @@
  * The previous scraper incorrectly POSTed ASP.NET ViewState form data to a React
  * SPA endpoint (search.dca.ca.gov/api/v1/License — which returns 404).
  * Returns gracefully with 0 records rather than throwing.
- * TODO: Investigate California Secretary of State or county-level auction data.
+ * NOTE (BLOCKED): Investigate California Secretary of State or county-level auction data.
  */
 
 const CALIFORNIA_DCA_URL = 'https://search.dca.ca.gov/';

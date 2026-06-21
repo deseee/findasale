@@ -3,7 +3,7 @@ import { prisma } from '../lib/prisma';
 import { Organizer, Item } from '@prisma/client';
 
 /**
- * Feature #XXX: Shopify Cross-Listing
+ * Feature: Shopify Cross-Listing
  * Service for managing Shopify product listings
  */
 

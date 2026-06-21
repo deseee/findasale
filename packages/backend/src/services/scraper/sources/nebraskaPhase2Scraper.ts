@@ -54,7 +54,7 @@ export async function runNebraskaPhase2Scraper(): Promise<void> {
       const downloadMatches = [...html.matchAll(downloadRegex)];
       if (downloadMatches.length > 0) {
         console.log(`[NebraskaPhase2] Found ${downloadMatches.length} download link(s)`);
-        // TODO: Implement Excel/CSV download parsing for any NDBF static roster
+        // NOTE (BLOCKED): Implement Excel/CSV download parsing for any NDBF static roster
       }
     } else {
       console.warn(`[NebraskaPhase2] NDBF licensing page returned ${licensingPageResponse.status}`);
@@ -157,7 +157,7 @@ export async function runNebraskaPhase2Scraper(): Promise<void> {
         console.warn(
           '[NebraskaPhase2] ASP.NET form tokens not found — page may be JS-rendered or have different structure'
         );
-        // TODO: If NDBF is a JS SPA, consider requesting a data export or using their API
+        // NOTE (BLOCKED): If NDBF is a JS SPA, consider requesting a data export or using their API
       }
     } else {
       console.warn(`[NebraskaPhase2] NDBF search page returned ${searchPageResponse.status} — falling back to NMLS`);

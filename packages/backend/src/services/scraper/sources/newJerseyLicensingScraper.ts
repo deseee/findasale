@@ -8,7 +8,7 @@
  * as an option — NJ auctioneers are not regulated through the mylicense.com portal.
  * NJ auctioneer licenses are issued by county clerks, not a state board.
  * Returns gracefully with 0 records rather than throwing.
- * TODO: Investigate county-level auctioneer data or NJ Treasury open data.
+ * NOTE (BLOCKED): Investigate county-level auctioneer data or NJ Treasury open data.
  */
 
 const SEARCH_URL = 'https://newjersey.mylicense.com/verification/Search.aspx';

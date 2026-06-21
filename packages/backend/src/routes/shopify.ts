@@ -10,7 +10,7 @@ import {
 const router = Router();
 
 /**
- * Feature #XXX: Shopify Cross-Listing (TEAMS tier)
+ * Feature: Shopify Cross-Listing (TEAMS tier)
  */
 
 // Connection management

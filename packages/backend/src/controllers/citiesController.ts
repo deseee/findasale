@@ -108,7 +108,7 @@ export async function listCities(req: Request, res: Response) {
  */
 export async function syncCityData(req: Request, res: Response) {
   try {
-    // TODO: Phase 2 — implement nightly cron job
+    // NOTE (Phase 2): — implement nightly cron job
     // For now, this is a placeholder for future metro sync cron
 
     return res.json({

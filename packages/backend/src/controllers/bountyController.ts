@@ -260,7 +260,7 @@ export const getLocalBounties = async (req: AuthRequest, res: Response) => {
     if (sortBy === 'offer_price_desc') {
       orderBy = { offerPrice: 'desc' };
     } else if (sortBy === 'distance_asc') {
-      // TODO: implement distance sorting once Sales have consistent lat/lng
+      // NOTE (deferred): implement distance sorting once Sales have consistent lat/lng
       orderBy = { createdAt: 'desc' };
     }
 
@@ -268,7 +268,7 @@ export const getLocalBounties = async (req: AuthRequest, res: Response) => {
       where: {
         status: 'OPEN',
         saleId: { notIn: organizerSaleIds },
-        // TODO: add category filter if needed
+        // NOTE (deferred): add category filter if needed
       },
       include: {
         user: { select: { id: true, name: true, roles: true } },
@@ -295,7 +295,7 @@ export const getLocalBounties = async (req: AuthRequest, res: Response) => {
       offerPrice: b.offerPrice,
       user: b.user,
       sale: b.sale,
-      distance: null, // TODO: calculate if lat/lng available
+      distance: null, // NOTE (deferred): calculate if lat/lng available
       createdAt: b.createdAt,
       submissionCount: b.submissions.length,
       yourSubmission: b.submissions.length > 0 ? b.submissions[0] : null,
@@ -513,7 +513,7 @@ export const approveDeclineSubmission = async (req: AuthRequest, res: Response) 
       return res.json({
         id: updated.id,
         status: updated.status,
-        checkoutUrl: null, // TODO: integrate Stripe
+        checkoutUrl: null, // NOTE (deferred): integrate Stripe
       });
     } else {
       // DECLINE: reject but keep bounty open

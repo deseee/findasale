@@ -3,7 +3,7 @@ import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 
 /**
- * Feature #XXX: Automatic Markdown Cycles (PRO Tier)
+ * Feature: Automatic Markdown Cycles (PRO Tier)
  * Time-based automatic price reductions. Organizers define when prices drop by percentage.
  * Example: 10% off after 5 days, 20% off after 10 days.
  */

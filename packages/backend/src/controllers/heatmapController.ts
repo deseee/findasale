@@ -23,7 +23,7 @@ export const getHeatmapHandler = async (
     const daysWindow = parseInt(query.days);
     const forceRefresh = query.forceRefresh === 'true';
 
-    // TODO: Validate lat/lng/zoom bounds if needed in Phase 2
+    // NOTE (Phase 2): Validate lat/lng/zoom bounds if needed in Phase 2
     // For now, return global heatmap (all cells)
 
     const response = await getOrComputeHeatmapTiles(daysWindow, forceRefresh);
