@@ -50,8 +50,8 @@ const TEMPLATES: Record<string, Record<string, { subject: string; html: string }
   },
   HOT: {
     touch1: {
-      subject: '[Business Name] — every sale is its own discovery problem',
-      html: '<p>Hi [Business Name],</p><p>Every sale you run starts from scratch on discovery. New flyers, new Facebook posts, new emails to your list. When the sale ends, the inventory disappears — even if half the items didn\'t move.</p><p>We built [Business Name] a storefront on FindA.Sale where your inventory stays discoverable between sales. Shoppers searching for what you sell find it whether the sale was last week or last month. Repeat buyers come back to one place instead of hunting you down every time.</p><p>Your storefront is already built:<br><a href="[preview href]">[preview link]</a></p><p>45-second walkthrough: <a href="[video href]?src=outreach-hot-1">finda.sale/video</a></p><p>The FindA.Sale Team<br><a href="[unsubscribe link]">Unsubscribe</a> · [physical address]</p>',
+      subject: '[Business Name]: built for the volume you\'re running in [state]',
+      html: '<p>Hi [Business Name],</p><p>We track sale activity across [state]. You\'re in the group running real, consistent volume — the kind where standard listing tools stop keeping up.</p><p>What we built for that level:</p><p>• RapidFire phone capture — 100 items tagged and priced as you shoot, not at a desk afterward<br>• Staff accounts — delegate photos and listing review without sharing your login<br>• Printable inventory sheets for sale day<br>• Export to eBay, Shopify, and accounting platforms anytime</p><p>Buyers who find you on FindA.Sale can follow your profile — they see your next sale the moment it goes live, not if they catch a Facebook post in time.</p><p>Your storefront is built:<br><a href="[preview href]">[preview link]</a></p><p>45-second walkthrough: <a href="[video href]?src=outreach-hot-1">finda.sale/video</a></p><p>The FindA.Sale Team<br><a href="[unsubscribe link]">Unsubscribe</a> · [physical address]</p>',
     },
     touch2: {
       subject: 'Why repeat buyers stop showing up',
