@@ -14,7 +14,7 @@ export const ingestFromGitHubActions = async (req: Request, res: Response): Prom
   try {
     // Validate x-scraper-key header
     const key = req.headers['x-scraper-key'];
-    if (key !== process.env.INTERNAL_SCRAPER_KEY) {
+    if (!process.env.INTERNAL_SCRAPER_KEY || key !== process.env.INTERNAL_SCRAPER_KEY) {
       res.status(401).json({ message: 'Unauthorized' });
       return;
     }
