@@ -4875,6 +4875,12 @@ model EmailSuppression {
   resendEventId   String?
   resendTimestamp DateTime?
 
+  bounceCategory   String?   // DEAD_MAILBOX | NO_MX | POLICY_BLOCK | TRANSIENT | COMPLAINT | UNKNOWN
+  bounceStatusCode String?   // SMTP enhanced status, e.g. "5.7.1"
+  diagnosticCode   String?   // raw remote-MTA / Google diagnostic text
+  retryAfter       DateTime? // temp-suppression cutoff for recoverable categories
+  classifiedAt     DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -4882,6 +4888,7 @@ model EmailSuppression {
   @@index([bounceHard])
   @@index([complaintEmail])
   @@index([optedOut])
+  @@index([retryAfter])
 }
 
 // CAN-SPAM Compliance: Audit trail for outreach events (SENT, OPTED_OUT, etc.)

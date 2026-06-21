@@ -52,6 +52,7 @@ const JOB_MAP: Record<string, () => Promise<unknown>> = {
   'suspension-detect': runSuspensionDetect,
   'deliverability-monitor': runDeliverabilityMonitor,
   'process-bounces': () => bounceSuppressService.processBounces(),
+  'reclassify-bounces': () => bounceSuppressService.reclassifyBounces(),
 };
 
 /**
