@@ -239,7 +239,9 @@ async function fetchPage(
 
   if (!res.ok) {
     if (res.status === 404) return { listings: [], hasMore: false };
-    throw new Error(`YellowPagesCA HTTP ${res.status} for ${url}`);
+    // Transient server error — log and skip this page; run continues with next keyword/province
+    console.warn(`[YellowPagesCA] HTTP ${res.status} for ${url} — skipping page`);
+    return { listings: [], hasMore: false };
   }
 
   const html = await res.text();
