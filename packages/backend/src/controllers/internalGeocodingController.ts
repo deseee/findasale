@@ -26,7 +26,7 @@ interface GeocodedResult {
 export async function getBatchOfUngeocodedSales(req: Request, res: Response): Promise<void> {
   try {
     const key = req.headers['x-scraper-key'];
-    if (key !== process.env.INTERNAL_SCRAPER_KEY) {
+    if (!process.env.INTERNAL_SCRAPER_KEY || key !== process.env.INTERNAL_SCRAPER_KEY) {
       res.status(401).json({ message: 'Unauthorized' });
       return;
     }
@@ -104,7 +104,7 @@ export async function getBatchOfUngeocodedSales(req: Request, res: Response): Pr
 export async function bulkUpdateGeocodedSales(req: Request, res: Response): Promise<void> {
   try {
     const key = req.headers['x-scraper-key'];
-    if (key !== process.env.INTERNAL_SCRAPER_KEY) {
+    if (!process.env.INTERNAL_SCRAPER_KEY || key !== process.env.INTERNAL_SCRAPER_KEY) {
       res.status(401).json({ message: 'Unauthorized' });
       return;
     }
