@@ -9,6 +9,7 @@
 
 import { prisma } from '../lib/prisma';
 import { getCacheMeta } from './googleMerchantFeedService';
+import { refreshEbayAccessToken } from '../controllers/ebayController';
 
 // ─── eBay proxy helpers (mirrors ebayController — Railway blocks api.ebay.com at DNS) ──
 
@@ -292,11 +293,14 @@ export async function computePlatformStats(organizerId: string): Promise<Platfor
   // eBay: attempt live count from eBay Inventory API if token is valid
   let ebayListed = ebayListedDb;
   let ebayLiveCountAvailable = false;
-  if (org.ebayConnection?.accessToken && org.ebayConnection.tokenExpiresAt > new Date()) {
-    const liveCount = await fetchEbayLivePublishedCount(org.ebayConnection.accessToken);
-    if (liveCount !== null) {
-      ebayListed = liveCount;
-      ebayLiveCountAvailable = true;
+  if (org.ebayConnection) {
+    const freshToken = await refreshEbayAccessToken(organizerId);
+    if (freshToken) {
+      const liveCount = await fetchEbayLivePublishedCount(freshToken);
+      if (liveCount !== null) {
+        ebayListed = liveCount;
+        ebayLiveCountAvailable = true;
+      }
     }
   }
 
