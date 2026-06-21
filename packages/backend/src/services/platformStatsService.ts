@@ -26,20 +26,27 @@ const _ebayProxyHeaders = (): Record<string, string> => {
  * Returns the count on success, or null on failure (caller falls back to DB count).
  */
 async function fetchEbayLivePublishedCount(accessToken: string): Promise<number | null> {
+  // Trading API GetMyeBaySelling with EntriesPerPage=1 returns TotalNumberOfEntries
+  // (Inventory API /sell/inventory/v1/offer requires a SKU param — not a list endpoint)
   try {
-    const res = await fetch(
-      _ebayProxyUrl('/sell/inventory/v1/offer?status=PUBLISHED&limit=1'),
-      {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-          ..._ebayProxyHeaders(),
-        },
+    const xml = `<?xml version="1.0" encoding="utf-8"?><GetMyeBaySellingRequest xmlns="urn:ebay:apis:eBLBaseComponents"><RequesterCredentials></RequesterCredentials><OutputSelector>ActiveList.PaginationResult</OutputSelector><ActiveList><Include>true</Include><Pagination><EntriesPerPage>1</EntriesPerPage><PageNumber>1</PageNumber></Pagination></ActiveList></GetMyeBaySellingRequest>`;
+    const res = await fetch(_ebayProxyUrl('/ws/api.dll'), {
+      method: 'POST',
+      headers: {
+        'X-EBAY-API-CALL-NAME': 'GetMyeBaySelling',
+        'X-EBAY-API-SITEID': '0',
+        'X-EBAY-API-COMPATIBILITY-LEVEL': '967',
+        'X-EBAY-API-APP-NAME': process.env.EBAY_CLIENT_ID ?? '',
+        'X-EBAY-API-IAF-TOKEN': accessToken,
+        'Content-Type': 'text/xml',
+        ..._ebayProxyHeaders(),
       },
-    );
+      body: xml,
+    });
     if (!res.ok) return null;
-    const data = await res.json() as { total?: number };
-    return typeof data.total === 'number' ? data.total : null;
+    const text = await res.text();
+    const match = text.match(/<TotalNumberOfEntries>(\d+)<\/TotalNumberOfEntries>/);
+    return match ? parseInt(match[1], 10) : null;
   } catch {
     return null;
   }
