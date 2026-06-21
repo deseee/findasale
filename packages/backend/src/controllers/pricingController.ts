@@ -48,7 +48,7 @@ export async function listSourcesController(_req: Request, res: Response): Promi
     const response = {
       sources: sources.map((source: any) => ({
         sourceId: source.sourceId,
-        sourceName: source.sourceId, // TODO: Use registry for display names
+        sourceName: source.sourceId, // NOTE: Use registry for display names
         tier: source.tier,
         enabled: source.enabled,
         costPerCall: source.costPerCall,

@@ -57,7 +57,7 @@ export async function runKansasPhase2Scraper(): Promise<void> {
 
     if (!probeResponse.ok) {
       console.warn(
-        `[Kansas Phase2] Portal blocked — TODO: Playwright/headless browser required for osbckansas.org. HTTP ${probeResponse.status}`
+        `[Kansas Phase2] Portal blocked — NOTE (BLOCKED): Playwright/headless browser required for osbckansas.org. HTTP ${probeResponse.status}`
       );
       return;
     }
@@ -77,18 +77,18 @@ export async function runKansasPhase2Scraper(): Promise<void> {
 
     if (isJsRendered) {
       console.warn(
-        '[Kansas Phase2] Portal blocked — TODO: Playwright/headless browser required for osbckansas.org (JS-rendered search detected)'
+        '[Kansas Phase2] Portal blocked — NOTE (BLOCKED): Playwright/headless browser required for osbckansas.org (JS-rendered search detected)'
       );
       return;
     }
 
     console.warn(
-      '[Kansas Phase2] Portal accessible but full scraper not yet implemented — TODO: implement pawnbroker license type search and HTML table parsing for osbckansas.org'
+      '[Kansas Phase2] Portal accessible but full scraper not yet implemented — NOTE (BLOCKED): implement pawnbroker license type search and HTML table parsing for osbckansas.org'
     );
     return;
   } catch (err) {
     console.warn(
-      '[Kansas Phase2] Portal blocked — TODO: Playwright/headless browser required for osbckansas.org',
+      '[Kansas Phase2] Portal blocked — NOTE (BLOCKED): Playwright/headless browser required for osbckansas.org',
       err
     );
     return;

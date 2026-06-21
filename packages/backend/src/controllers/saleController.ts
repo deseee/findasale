@@ -22,7 +22,7 @@ import { checkFollowsForNewSale } from '../services/smartFollowService'; // Feat
 import { checkPassportMatchForNewSale } from '../services/collectorPassportService'; // Feature #45: Collector Passport
 import { awardXp, XP_AWARDS, applyHuntPassMultiplier, RANK_EARLY_ACCESS_HOURS } from '../services/xpService'; // Explorer's Guild XP awards
 import { checkAndAwardLocalLegend } from '../services/badgeService'; // Feature #399: Local Legend badge
-import { referralTrancheService } from '../services/referralTrancheService'; // Feature #XXX: Referral tranche system
+import { referralTrancheService } from '../services/referralTrancheService'; // Feature: Referral tranche system
 import { awardOrgReferralFirstSale } from '../services/referralService'; // Feature #398: Org referral loop
 import { checkCrewVisitBonus } from '../services/crewService'; // Crew visit XP multiplier
 import { TIER_LIMITS } from '../constants/tierLimits'; // Feature #249: Concurrent Sales Gate
@@ -115,7 +115,7 @@ const saleCreateSchema = z.object({
   treasureHuntEnabled: z.boolean().optional(),
   treasureHuntCompletionBadge: z.boolean().optional(),
   holdsEnabled: z.boolean().optional(),  // Feature #121: allow organizer to disable holds per-sale
-  // Feature #XXX: Retail Mode — auto-renewal for retail stores (saleType='RETAIL')
+  // Feature: Retail Mode — auto-renewal for retail stores (saleType='RETAIL')
   retailAutoRenewDays: z.number().int().min(1).max(365).optional().default(30),
   // Feature #363: Auction Buyer's Premium
   buyersPremiumPct: z.number().min(0).max(50).optional(),
@@ -559,7 +559,7 @@ export const createSale = async (req: AuthRequest, res: Response) => {
       organizer = organizerProfile;
     }
 
-    // Feature #XXX: Retail Mode — TEAMS tier only
+    // Feature: Retail Mode — TEAMS tier only
     if (saleData.saleType === 'RETAIL' && (!organizer || (organizer.subscriptionTier as string) !== 'TEAMS' && (organizer.subscriptionTier as string) !== 'ENTERPRISE')) {
       return res.status(403).json({
         message: 'Retail Mode requires TEAMS tier',
@@ -568,7 +568,7 @@ export const createSale = async (req: AuthRequest, res: Response) => {
       });
     }
 
-    // Feature #XXX: Retail Mode — permanent storefront.
+    // Feature: Retail Mode — permanent storefront.
     // Mark isOngoing so the sale is always treated as current/live everywhere.
     // endDate keeps a normal value (no sentinel) as a harmless placeholder; the
     // auto-renew cron is disabled, so this endDate is never used to expire the store.
@@ -1896,7 +1896,7 @@ export const recordVisit = async (req: AuthRequest, res: Response): Promise<void
       // Field may not exist, continue
     }
 
-    // Feature #XXX: Record referral tranche sale visit (non-blocking)
+    // Feature: Record referral tranche sale visit (non-blocking)
     try {
       await referralTrancheService.recordSaleVisit(userId, saleId);
     } catch (err) {

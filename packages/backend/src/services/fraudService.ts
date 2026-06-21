@@ -91,7 +91,7 @@ export async function recordChargebackIncident(
 
     // Suspend organizer after 3+ chargebacks
     if (chargebackCount >= 3) {
-      // TODO: Set suspendedAt on User once field added to schema (#73-phase3)
+      // NOTE (Phase 3): Set suspendedAt on User once field added to schema (#73-phase3)
       console.warn(`[fraudService] Organizer ${organizerId} should be suspended — schema field pending`);
 
       // Create notification for admin

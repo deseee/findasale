@@ -5,7 +5,7 @@
  * STATUS (2026-06-01): license.ohio.gov retired and completely unreachable (connect timeout).
  * Official retirement date: October 16, 2025. New system: elicense.ohio.gov (React SPA).
  * This scraper detects the SPA or timeout and returns 0 gracefully; no Sentry error.
- * TODO: Rewrite for elicense.ohio.gov REST API or Playwright.
+ * NOTE (BLOCKED): Rewrite for elicense.ohio.gov REST API or Playwright.
  */
 
 import { defaultRateLimiter } from '../rateLimiter';
@@ -15,7 +15,7 @@ import { getRandomUserAgent } from '../userAgents';
 
 // Updated 2026-06-01: license.ohio.gov (retired Oct 2025, connect timeout) -> elicense.ohio.gov
 // elicense.ohio.gov is a SPA — this scraper will detect that and return 0 gracefully.
-// TODO: Replace with elicense.ohio.gov REST API or Playwright scraper.
+// NOTE (BLOCKED): Replace with elicense.ohio.gov REST API or Playwright scraper.
 const SEARCH_URL = 'https://elicense.ohio.gov/oh_verifylicense';
 
 function parseAddress(address: string): { city: string; zip: string } {
@@ -80,7 +80,7 @@ export async function runOhioLicensingScraper(): Promise<void> {
       console.warn(
         '[OhioLicensing] No VIEWSTATE found — elicense.ohio.gov is a JavaScript SPA and ' +
         'cannot be scraped with fetch. Returning 0 results. ' +
-        'TODO: Rewrite with Playwright or REST API.'
+        'NOTE (BLOCKED): Rewrite with Playwright or REST API.'
       );
       return;
     }

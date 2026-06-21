@@ -212,7 +212,7 @@ const LoginPage = () => {
             </div>
           </div>
 
-          {/* TODO: Implement extended JWT expiry for "Remember me" — requires backend support */}
+          {/* NOTE (deferred): Implement extended JWT expiry for "Remember me" — requires backend support */}
 
           <div>
             <button

@@ -3,7 +3,7 @@ import { cronGuard } from '../utils/cronGuard';
 import { prisma } from '../lib/prisma';
 
 /**
- * Feature #XXX: Retail Mode Auto-Renewal Job
+ * Feature: Retail Mode Auto-Renewal Job
  *
  * Runs daily. Auto-renews retail mode sales that are nearing expiration.
  * For each sale where:

@@ -91,7 +91,7 @@ async function generateCouponForLuckyRoll(userId: string): Promise<void> {
       },
     });
 
-    // TODO: Send notification to user with coupon code
+    // NOTE (deferred): Send notification to user with coupon code
     console.log(`[luckyRoll] Generated COUPON_1 ${code} for user ${userId}`);
   } catch (error) {
     console.error('[luckyRoll] Failed to generate coupon for COUPON_1:', error);

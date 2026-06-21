@@ -251,7 +251,7 @@ export async function fetchEbayCompsForItem(itemId: string): Promise<void> {
  * Called by itemController.publishItem to queue job without blocking HTTP response.
  * Uses setImmediate to ensure caller response is sent first.
  *
- * TODO: Move to Bull queue when project reaches scale.
+ * NOTE (scale): Move to Bull queue when project reaches scale.
  */
 export function enqueueFetchEbayComps(itemId: string): void {
   setImmediate(() => {

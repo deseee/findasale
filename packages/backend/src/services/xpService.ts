@@ -724,7 +724,7 @@ export function getRankXpMultiplier(rank: ExplorerRank): number {
  * Replaced by weekly cadence: 7-day active week bonus (STREAK_7DAY_BONUS = 100 XP, once/month)
  * and 30-day anniversary (ANNIVERSARY_30DAY = 250 XP, once/month).
  * This function now awards STREAK_7DAY_BONUS when user hits 7 active days in a calendar month.
- * TODO: wire ANNIVERSARY_30DAY into user anniversary tracking (separate feature).
+ * NOTE (deferred): wire ANNIVERSARY_30DAY into user anniversary tracking (separate feature).
  */
 export async function checkStreakMilestones(
   userId: string,

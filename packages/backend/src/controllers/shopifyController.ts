@@ -8,7 +8,7 @@ import {
 } from '../services/shopifyService';
 
 /**
- * Feature #XXX: Shopify Cross-Listing
+ * Feature: Shopify Cross-Listing
  * Controller for Shopify connection and listing management
  */
 

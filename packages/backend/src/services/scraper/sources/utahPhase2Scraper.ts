@@ -106,7 +106,7 @@ export async function runUtahPhase2Scraper(): Promise<void> {
       if (besResult.totalRecords === 0) {
         console.warn(
           '[UtahPhase2] All approaches exhausted. ' +
-          'TODO: 1. Try https://dfi.utah.gov/licensees/ for complete licensee directory. ' +
+          'NOTE (BLOCKED): 1. Try https://dfi.utah.gov/licensees/ for complete licensee directory. ' +
           '2. Email dfi@utah.gov to request pawnbroker licensee list. ' +
           '3. Check https://www.utah.gov/pmn/sitemap/business for business license data.'
         );
@@ -117,7 +117,7 @@ export async function runUtahPhase2Scraper(): Promise<void> {
     if (html.includes('captcha') || html.includes('CAPTCHA') || html.includes('Cloudflare') || html.length < 300) {
       console.warn(
         '[UtahPhase2] Bot protection detected. ' +
-        'TODO: Utah DFI blocking server-side requests. ' +
+        'NOTE (BLOCKED): Utah DFI blocking server-side requests. ' +
         'Try https://dfi.utah.gov/licensees/ or contact dfi@utah.gov for bulk data.'
       );
       return;
@@ -130,7 +130,7 @@ export async function runUtahPhase2Scraper(): Promise<void> {
       const raw = xlsxMatch ? xlsxMatch[1] : csvMatch![1];
       const fileUrl = raw.startsWith('http') ? raw : UT_DFI_BASE_URL + raw;
       console.log('[UtahPhase2] Found downloadable file: ' + fileUrl);
-      // TODO: Implement XLSX/CSV parsing for Utah DFI pawnbroker list.
+      // NOTE (BLOCKED): Implement XLSX/CSV parsing for Utah DFI pawnbroker list.
       // File should contain: Business Name, License Number, City, Status columns.
       console.warn('[UtahPhase2] Downloadable file found — XLSX/CSV parsing not yet implemented.');
       return;

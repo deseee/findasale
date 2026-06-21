@@ -1,5 +1,5 @@
 /**
- * Feature #XXX: Automatic Markdown Cycles Management
+ * Feature: Automatic Markdown Cycles Management
  * PRO+ tier only. Allows organizers to create time-based automatic price reductions.
  */
 

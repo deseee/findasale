@@ -16,7 +16,7 @@ import { awardStamp } from '../services/loyaltyService'; // Feature #29: Loyalty
 import { checkAndAward } from '../services/achievementService'; // Features #58-59: Achievement Badges & Streak Rewards
 import { awardXp, applyHuntPassMultiplier, XP_AWARDS, markHuntPassCancellation } from '../services/xpService'; // Explorer's Guild XP awards
 import { checkAndAwardOgBuyer } from '../services/badgeService'; // Feature #404: OG Buyer badge
-import { referralTrancheService } from '../services/referralTrancheService'; // Feature #XXX: Referral tranche system
+import { referralTrancheService } from '../services/referralTrancheService'; // Feature: Referral tranche system
 import { awardOrganizerClaimedXp, awardProUpgradeXp } from '../services/referralService'; // Organizer referral XP
 import { processTierLapse, recordTierResumption } from '../services/tierLapseService'; // Feature #75: Tier lapse logic
 import { evaluateReferralFraud, getAccountAgeDays, MIN_ACCOUNT_AGE_DAYS } from '../services/referralFraudService'; // D-XP-004: Referral Fraud Gate
@@ -25,7 +25,7 @@ import { checkPaymentDuplicate, storePaymentFingerprint, logPaymentDuplicateWarn
 import { getPlatformFeeRate, SubscriptionTier } from '../utils/feeCalculator'; // S388: Tier-aware fee calculation
 import { endEbayListingIfExists } from './ebayController'; // Feature #244 Phase 2: eBay direct push — withdraw on sale
 import { notifyFacebookExportedItemSold } from '../services/facebookNudgeService';
-import { markShopifyItemSold } from '../services/shopifyService'; // Feature #XXX: Shopify Cross-Listing
+import { markShopifyItemSold } from '../services/shopifyService'; // Feature: Shopify Cross-Listing
 import { sendConsignorItemSold } from '../services/consignorEmailService'; // Feature #309: Consignor email notifications
 import { applyFirstMonthRefundCap, logRefundProcessing } from '../services/refundService'; // P2-2: Refund cap + logging
 import { transactionalEmailService } from '../lib/transactionalEmailService';
@@ -990,7 +990,7 @@ export const webhookHandler = async (req: Request, res: Response) => {
                 console.error('[XP] Failed to award first purchase milestone XP:', err)
               );
 
-              // Feature #XXX: Record referral tranche first purchase (non-blocking)
+              // Feature: Record referral tranche first purchase (non-blocking)
               try {
                 await referralTrancheService.recordFirstPurchase(purchase.userId, purchase.id);
 

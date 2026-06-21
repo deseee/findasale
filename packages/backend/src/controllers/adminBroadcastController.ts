@@ -92,7 +92,7 @@ export const sendBroadcast = async (req: AuthRequest, res: Response) => {
 
     // Send via Resend if available, otherwise log and mock
     // SAFETY: isEmailDomainBlocked filter applied — @system.finda.sale and other placeholder domains excluded
-    // TODO: Wire to actual send API — sendableRecipients list is already domain-filtered
+    // NOTE (deferred): Wire to actual send API — sendableRecipients list is already domain-filtered
     const sendableRecipients = users.filter(r => r.email && !isEmailDomainBlocked(r.email));
     const recipientCount = sendableRecipients.length;
 

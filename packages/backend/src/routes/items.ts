@@ -72,7 +72,7 @@ const highValueSchema = z.object({
   threshold: z.number().optional(),
 });
 // P2 #10: CURATED_TAGS — single source of truth (shared package not yet wired into backend tsconfig rootDir)
-// TODO: Once shared is properly set up as a workspace dep with path aliases, import from '@findasale/shared'
+// NOTE: Once shared is properly set up as a workspace dep with path aliases, import from '@findasale/shared'
 const CURATED_TAGS = [
   'mid-century-modern','art-deco','victorian','craftsman','industrial','farmhouse','bohemian',
   'danish-modern','scandinavian','atomic-age','hollywood-regency','arts-and-crafts','colonial',

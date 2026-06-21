@@ -63,7 +63,7 @@ export async function detectCollusionPattern(
   details: string;
 }> {
   try {
-    // TODO: Requires storing IP/device fingerprint on Bid records
+    // NOTE (Phase 3): Requires storing IP/device fingerprint on Bid records
     return {
       isCollusionRisk: false,
       riskLevel: 'low',

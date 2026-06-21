@@ -143,7 +143,7 @@ import verificationRoutes from './routes/verification';       // Feature #16: Ve
 import lootLogRoutes from './routes/lootLog';                 // Feature #50: Loot Log
 import ugcPhotoRoutes from './routes/ugcPhotos';              // Feature #47: UGC Photo Tags
 import photoOpRoutes from './routes/photoOps';                // Feature #39: Photo Op Stations
-import shareLinksRouter from './routes/shareLinks';           // Feature #XXX: Verified Social Share XP System
+import shareLinksRouter from './routes/shareLinks';           // Feature: Verified Social Share XP System
 import achievementRoutes from './routes/achievements';        // Features #58-59: Achievement Badges & Streak Rewards
 import fraudRoutes from './routes/fraud';                     // Feature #17: Bid Bot Detector
 import trailRoutes from './routes/trails';                    // Feature #48: Treasure Trail Route Builder
@@ -179,11 +179,11 @@ import posRoutes from './routes/pos';                         // POS Upgrade: Op
 import ebayRoutes from './routes/ebay';                       // eBay Marketplace Account Deletion
 import ebayTaxonomyRoutes from './routes/ebayTaxonomy';       // Phase C: eBay Taxonomy, Catalog, AI Suggest
 import barcodeRoutes from './routes/barcode';                  // Barcode scan -> eBay Catalog product enrichment
-import shopifyRoutes from './routes/shopify';              // Feature #XXX: Shopify Cross-Listing
+import shopifyRoutes from './routes/shopify';              // Feature: Shopify Cross-Listing
 import luckyRollRoutes from './routes/lucky-roll';             // Phase 2b: Lucky Roll — weekly XP gacha
 import crewsRoutes from './routes/crews';                       // Phase 2a: Explorer's Guild — Crew Creation
 import discountRuleRoutes from './routes/discountRules';        // Feature #310: Color-tagged Discount Rules
-import markdownCycleRoutes from './routes/markdownCycles';       // Feature #XXX: Automatic Markdown Cycles (PRO Tier)
+import markdownCycleRoutes from './routes/markdownCycles';       // Feature: Automatic Markdown Cycles (PRO Tier)
 import locationRoutes from './routes/locations';                 // #311: Multi-Location Inventory View
 import qrScannerRoutes from './routes/qrScanner';                // QR Scanner Phase 2: scan analytics
 import imageProxyRoutes from './routes/imageProxy';              // Image proxy for eBay CDN images
@@ -229,7 +229,7 @@ import { scheduleWebhookEventPruneJob } from './jobs/webhookEventPruneJob'; // W
 import { scheduleLogRetentionCron } from './jobs/logRetentionCron'; // Operational-log retention sweep (60-day retention)
 import { scheduleArchivalCron } from './jobs/archivalCron'; // #112: Soft-delete archival (quarterly)
 import { scheduleMarkdownCron } from './jobs/markdownCron'; // Feature #91: Auto-markdown (smart clearance)
-import { scheduleMarkdownCycleCron } from './jobs/markdownCycleCron'; // Feature #XXX: Automatic Markdown Cycles (PRO Tier)
+import { scheduleMarkdownCycleCron } from './jobs/markdownCycleCron'; // Feature: Automatic Markdown Cycles (PRO Tier)
 import { scheduleGoogleMerchantFeedCron } from './jobs/googleMerchantFeedCron'; // Feature #463: Google Merchant Center feed
 import { scheduleQuotaResetCron, scheduleCircuitBreakerRecoveryCron } from './jobs/pricingEngineCron'; // Phase S574: Pricing engine quota + recovery
 import { startEbaySoldSyncCron } from './jobs/ebaySoldSyncCron'; // Feature #244 Phase 3: eBay sold sync
@@ -240,11 +240,11 @@ import { registerEbayNotificationSubscription } from './jobs/ebayNotificationSet
 import { startTierGraceCron } from './jobs/tierGraceCronJob'; // Feature #75: Tier grace period finalization
 import { scheduleReferralRewardAgeGateCron } from './jobs/referralRewardAgeGateJob'; // D-XP-004 Phase 4: Referral reward age gate cron
 import { scheduleFoundingOrgBadgeCron } from './jobs/foundingOrgBadgeJob'; // Feature #405: Founding Organizer Badge — nightly award
-import { scheduleRetailAutoRenewCron } from './jobs/retailAutoRenewJob'; // Feature #XXX: Retail Mode auto-renewal
+import { scheduleRetailAutoRenewCron } from './jobs/retailAutoRenewJob'; // Feature: Retail Mode auto-renewal
 import { scheduleConsignorExpiryNoticeCron } from './jobs/consignorExpiryNoticeJob'; // Feature #309: Consignor expiry notices
 import { scheduleListingEnrichmentCron } from './jobs/listingEnrichmentCron'; // Feature #651: Nightly AI enrichment for scraped listings (4 AM UTC)
 import { scheduleResyncShippingDriftCron } from './jobs/resyncShippingDrift'; // ADR shipping-resync Phase 3 / Part C: daily carrier-rate drift re-pin (4 AM UTC)
-import { scheduleReputationScoreCron } from './jobs/reputationScoreJob'; // Feature #XXX: Referral reputation score recomputation
+import { scheduleReputationScoreCron } from './jobs/reputationScoreJob'; // Feature: Referral reputation score recomputation
 import './jobs/curatorReviewJob'; // ADR-069 Phase 2: Automated curator review for AUTO_GENERATED Encyclopedia entries
 import { runBackfillBenchmarks } from './jobs/backfillBenchmarks'; // ADR-069 Phase 1: Backfill PriceBenchmark from Items with aiSuggestedPrice
 import { initScraperCron } from './jobs/scraperCron'; // ADR-073 Phase 1: Directory scraper national cron
@@ -607,7 +607,7 @@ app.use('/api/flip-report', flipReportRoutes);                       // Feature 
 app.use('/api/verification', verificationRoutes);                    // Feature #16: Verified Organizer Badge
 app.use('/api/loot-log', lootLogRoutes);                             // Feature #50: Loot Log
 app.use('/api/ugc-photos', ugcPhotoRoutes);                          // Feature #47: UGC Photo Tags
-app.use('/api', shareLinksRouter);                                   // Feature #XXX: Verified Social Share XP System
+app.use('/api', shareLinksRouter);                                   // Feature: Verified Social Share XP System
 app.use('/api/health', healthRoutes);                                // Feature #20: Proactive Degradation Mode
 app.use('/api/achievements', achievementRoutes);                     // Features #58-59: Achievement Badges & Streak Rewards
 app.use('/api/fraud', fraudRoutes);                                  // Feature #17: Bid Bot Detector
@@ -655,11 +655,11 @@ app.use('/api/consignor-settlements', consignorSettlementRoutes);          // Fe
 app.use('/api/ebay', ebayRoutes);                                          // eBay Marketplace Account Deletion
 app.use('/api/ebay', ebayTaxonomyRoutes);                                  // Phase C: eBay Taxonomy + Catalog + AI Suggest
 app.use('/api/barcode', barcodeRoutes);                                    // Barcode scan -> eBay Catalog product enrichment
-app.use('/api/shopify', shopifyRoutes);                              // Feature #XXX: Shopify Cross-Listing
+app.use('/api/shopify', shopifyRoutes);                              // Feature: Shopify Cross-Listing
 app.use('/api/lucky-roll', luckyRollRoutes);                               // Phase 2b: Lucky Roll — weekly XP gacha
 app.use('/api/crews', crewsRoutes);                                        // Phase 2a: Explorer's Guild — Crew Creation
 app.use('/api/discount-rules', discountRuleRoutes);                         // Feature #310: Color-tagged Discount Rules
-app.use('/api/markdown-cycles', markdownCycleRoutes);                       // Feature #XXX: Automatic Markdown Cycles (PRO Tier)
+app.use('/api/markdown-cycles', markdownCycleRoutes);                       // Feature: Automatic Markdown Cycles (PRO Tier)
 app.use('/api/locations', locationRoutes);                                   // #311: Multi-Location Inventory View
 app.use('/api/qr-scanner', qrScannerRoutes);                                 // QR Scanner Phase 2: scan analytics
 app.use('/api', imageProxyRoutes);                                              // Image proxy for eBay CDN images
@@ -820,10 +820,10 @@ httpServer.listen(PORT, '0.0.0.0', () => {
   // Feature #463: Register Google Merchant Center feed cron (3:30 AM UTC daily)
   scheduleGoogleMerchantFeedCron();
 
-  // Feature #XXX: Register retail auto-renewal cron (daily at 1 AM UTC)
+  // Feature: Register retail auto-renewal cron (daily at 1 AM UTC)
   scheduleRetailAutoRenewCron();
 
-  // Feature #XXX: Register referral reputation score recomputation cron (daily at 2 AM UTC)
+  // Feature: Register referral reputation score recomputation cron (daily at 2 AM UTC)
   scheduleReputationScoreCron();
 
   // Feature #309: Register consignor expiry notice cron (daily at 2 AM UTC)
