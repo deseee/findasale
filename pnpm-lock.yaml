@@ -39,8 +39,8 @@ importers:
         specifier: ^7.0.0
         version: 7.0.1
       axios:
-        specifier: ^1.15.1
-        version: 1.17.0
+        specifier: ^1.18.0
+        version: 1.18.0
       bcryptjs:
         specifier: ^2.4.3
         version: 2.4.3
@@ -138,7 +138,7 @@ importers:
         specifier: ^2.17.2
         version: 2.17.2
       socket.io:
-        specifier: ^4.8.1
+        specifier: ^4.8.3
         version: 4.8.3
       stripe:
         specifier: ^14.4.0
@@ -5100,8 +5100,8 @@ packages:
       - debug
     dev: false
 
-  /axios@1.17.0:
-    resolution: {integrity: sha512-J8SwNxprqqpbfenehxWYXE7CW+wM1BB4w3+N+g+/Wx40xM4rsLrfPmHHxSWIxJLYDgSY/HqlFPIYb2/S3rxafw==}
+  /axios@1.18.0:
+    resolution: {integrity: sha512-E32NzpYKp++W7XRe52rHiXV2ehxmh3wbdgO7MHeFM+vqxLBYHzt0ElkiImtOBxtOmyp0yoC8C6uESVV84Y2/hw==}
     dependencies:
       follow-redirects: 1.16.0
       form-data: 4.0.5
@@ -12209,7 +12209,7 @@ packages:
     resolution: {integrity: sha512-LdNBQfOe0dY2oJH2sAsrxazpgfFQo5yXGxe96QA8UWB5uu+433PrUbkv8gQ5RmrRCqUTPQ0aOrIyAdBr1aB03Q==}
     engines: {node: '>=14.0'}
     dependencies:
-      axios: 1.17.0
+      axios: 1.18.0
       dayjs: 1.11.19
       https-proxy-agent: 5.0.1
       jsonwebtoken: 9.0.3
