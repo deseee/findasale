@@ -216,3 +216,89 @@ Older session entries archived from STATE.md. Most recent entries at bottom.
 **Files changed:** packages/backend/src/routes/sales.ts, packages/frontend/pages/server-sitemap.xml.tsx, packages/frontend/pages/this-weekend/[city].tsx, packages/frontend/pages/sales/[id].tsx, packages/frontend/vercel.json, claude_docs/strategy/roadmap.md, claude_docs/STATE.md, claude_docs/patrick-dashboard.md
 
 **BQ delta:** 1 (unchanged)
+
+
+<!-- Archived from STATE.md Recent Sessions at S1020 wrap (2026-06-22) -->
+
+### S1012 — 2026-06-19 | BUG/DATA (Ala-carte revenue tracking + admin DM)
+
+**Session type:** BUG/DATA
+**Shipped (commits 9c445eb7, 4374e40a):**
+1. **Ala-carte revenue backfill** — psycopg2 direct DB insert: Purchase record `cj5sxhx0ruuyw9lb4n98exiax` ($9.99, PAID, source=ALA_CARTE) for the existing ala-carte sale. Admin dashboard "Today's Revenue" now shows $9.99 immediately.
+2. **adminController.ts revenue fix** — replaced hardcoded `alaCarteRevenueLast30d = 0` with real `prisma.purchase.aggregate` queries (30d + today); ALA_CARTE source excluded from fee-rate multiplication; `transactionRevenueToday += alaCarteRevenueToday` so the TODAY card reflects the combined total.
+3. **stripeController.ts webhook fix** — `checkout.session.completed` ALA_CARTE handler now creates a `Purchase` record (source=ALA_CARTE, amount=9.99, status=PAID). `payment_intent.succeeded` ALA_CARTE handler has idempotency guard (`findFirst` check) to prevent double-counting.
+4. **Admin DM feature** — `POST /admin/users/:userId/message` endpoint (adminController + admin.ts route); "Send Message" button + subject/body modal on admin/users/[id].tsx. Sends via emailService.emails.send (Gmail transactional rail). Fixed JSX fragment wrapper for modal overlay.
+**Files changed:** adminController.ts, stripeController.ts, admin.ts, admin/users/[id].tsx. TypeScript: 0 errors (both packages).
+**BQ delta:** 1 → 1 (cart payment-completion unchanged — Stripe LIVE keys, Patrick action only).
+
+### S1011 — 2026-06-19 | BUG/DATA (Stripe webhook fix + MRR + dashboard + DB cleanup)
+
+**Session type:** BUG/DATA
+**Shipped (pending push):**
+1. **RETAIL dashboard dates** — dashboard.tsx: `saleType !== 'RETAIL'` guard on date range display + urgency tag. Permanent storefronts no longer show "Jun 29 – Jul 29" date range or "Ending Soon" badge. Backend tsc 0 errors.
+2. **MRR internal exclusion** — adminController.ts: `INTERNAL_EMAILS = ['artifactmi@gmail.com', 'deseee@gmail.com']` added to `getStats` Prisma query. Removes ~$158 fake MRR from admin dashboard. Backend tsc 0 errors. **DEPLOYED (commit 37d9f9c3).**
+3. **À-la-carte Stripe webhook pipeline** — stripeController.ts: (a) `payment_intent_data: { metadata: { saleId, type: 'ALA_CARTE' } }` added to `createAlaCarteCheckout` so future PIs carry metadata; (b) ALA_CARTE handler added to `payment_intent.succeeded` — applies `alaCarteFeePaid=true` + `purchaseModel/alaCarte` to the sale automatically. Root cause: metadata was set on Checkout Session but not propagated to the underlying PaymentIntent, so `payment_intent.succeeded` handler had no way to identify ALA_CARTE events. Backend tsc 0 errors. **PENDING PUSH.**
+4. **DB test-data cleanup** — deleted 4 test sales (Artifact ENDED soft-deleted row, Kelly's S875 Mixed Goods, Kelly's QA Flip Report, Up North QA315) + Leo Thomas / Star Raiders test purchase ($3.49 PENDING); restored Star Raiders item to AVAILABLE.
+**Diagnosed:** Admin users "Failed to load users" = Railway PostgreSQL shared memory pressure (PostgreSQL error 53100 `No space left on device`). First 500 at 17:20 UTC, 9 min BEFORE my commit at 17:29 UTC. Not caused by session changes. Railway DB node is hitting memory limits on large user queries.
+**BQ delta:** 1 → 1 (unchanged — cart payment-completion still needs real purchase).
+
+### S1010 — 2026-06-18 | QA (PCVs applied; soft-deleted 404 Chrome ✅; regressions clean)
+
+**Session type:** QA
+**PCVs applied to roadmap.md (cross-session rule, from S1008 PCV table):**
+- Row 551 Blog → Chrome QA ✅ S1008 (7 cards, JSON-LD, dark mode, Footer link. ss_170867567, ss_9890ula3j)
+- Row 301 Label Composer → Human QA ✅ S1008 (item name after price, dates corner, start-position collapsed. ss_7380smxpk, ss_26234jf7i, ss_2761xkv7y)
+- Buy Now graceful 409 → no standalone roadmap row; noted inline (stripeController 409 + CheckoutModal {loadError} ✅ S1008)
+**QA — Soft-deleted sale → 404 ✅:** Navigated finda.sale/sales/cmom7h73l000hz36wzbruoa64 (old Artifact ENDED row, deletedAt set). Got Next.js 404 page "This page could not be found." Confirmed fix (getSale 404s on deletedAt) deployed and working. ss_7566z4gbe.
+**QA — Negative test (normal sale unaffected) ✅:** Navigated finda.sale/sales/cmpt2oq6q00138cehpgqx3huk (Artifact storefront, isOngoing). Page loaded correctly — "Permanent storefront" label, Paw Paw MI, store content. saleController change did not break non-deleted sales. ss_9410vkt0l.
+**QA — /sales feed regression ✅:** finda.sale/sales rendered 19,496 sales. ss_16629aq1d.
+**QA — /search regression ✅:** /search?q=thrift returned Sales (10) tab with results. ss_1405rtn1d.
+**BQ delta:** 2 → 1 (soft-deleted 404 Chrome-verified S1010 → removed; cart payment-completion remains, Patrick action needed).
+**PCV table:** Cleared (all 3 S1008 PCVs applied to roadmap.md).
+
+### S1008 — 2026-06-18 | QA (Blog ✅ + Buy Now/Label Composer UNVERIFIED)
+
+**Session type:** QA
+**Confirmed Patrick commits live:** `b99f05c1` (labels: item name after price), `55abfc62` (labels: room tag + dates to corner), `c06cb773` (label composer: start-position card above preview, collapsed), `17595003` (scraper: batch lastScrapedAt writes + GIN-index dedup). Infrastructure: Vercel ✅ READY, Railway ✅ SUCCESS.
+**QA-Blog ✅:** Navigated finda.sale/blog as user5. 7 cards loaded (category badge, date, reading time, title, excerpt). Clicked post → full body rendered, breadcrumb, "← Back to Blog" link, JSON-LD Article schema (@type Article, correct headline+datePublished), canonical URL. Footer Blog link confirmed. Dark mode clean. ss_170867567, ss_9890ula3j.
+**QA-Buy-Now-Graceful ✅ VERIFIED (S1008 continuation):** Found "QA First Item Test Sale S983" (Alice Johnson / Kelly's Estate Sales, stripeConnectEnabled=false) LIVE in prod. As user5 (Leo Thomas), navigated to item cmqer8m8w00x5me4oqoabaulh → clicked "Buy It Now" → "Continue to Pay" → red error box displayed: "This seller isn't set up to accept online payments yet." CheckoutModal.tsx {loadError} rendering confirmed. ss_8945gfi4w, ss_9148p3694, ss_8856ik32o, ss_56944gx1i.
+**QA-Label-Composer ✅ VERIFIED (S1008 continuation):** As Alice Johnson (user1@example.com), navigated /organizer/label-composer/cmpfplxqbxwtucltmbouvz0os. Added "QA Test First Item S983" ($5.00) to batch via PULL FROM PRICED ITEMS. Page text confirmed: label shows "$5.00" then "QA Test First Item S983" (item name after price ✅ b99f05c1), "6/18–19" in corner (dates ✅ 55abfc62). "Expand to choose starting label ▲" collapsed above label grid (start-position ✅ c06cb773). ss_7380smxpk, ss_26234jf7i, ss_2761xkv7y.
+**BQ delta:** 3 → 1 (Buy Now graceful error ✅; label composer ✅; blog ✅ — only cart payment-completion remains).
+**PCVs staged:** Blog row 551 + Buy Now graceful error + Label composer — apply Chrome QA ✅ to roadmap.md next session.
+
+### S1007 — 2026-06-18 | DEV (Blog section + competitor-monitor update)
+- Blog section built (CODE-ONLY): /blog listing page (7 posts, ISR revalidate:86400), /blog/[slug] detail page (parseMarkdown, JSON-LD Article schema, SEO Head, Back to Blog link). 10 new files + Layout.tsx footer Blog link. TypeScript: 0 errors.
+- Competitor-monitor SKILL.md updated: Phase 2 now writes full 600–900 word blog posts to claude_docs/marketing/blog-drafts/. Hardcoded session path replaced with dynamic discovery.
+- BQ: 2→3 (blog QA added).
+
+### S1006 — 2026-06-17 | QA/BUG (Buy It Now P1 fix + organizer workflow features)
+
+**Session type:** QA/BUG
+**Shipped:** (1) Buy It Now P1 fix — removed `automatic_tax` from raw PaymentIntent (stripeController.ts); (2) graceful invalid-account 409 error + CheckoutModal renders error text (stripeController.ts, CheckoutModal.tsx); (3) edit-item Save returns to add-items page; (4) Label Sheets link on add-items+edit-item pages; (5) label composer start-position picker (3×10 grid, prepends blank TagRecords); (6) live item search on add-items page (client-side filter, case-insensitive, title/category/tags).
+**Files changed:** stripeController.ts, CheckoutModal.tsx, edit-item/[id].tsx, add-items/[saleId].tsx, label-composer/[saleId].tsx, labelComposerController.ts. Backend tsc 0 errors; frontend not VM-tsc-verifiable (corrupt node_modules).
+**QA:** Buy It Now valid-account path ✅ deployed (HTTP 200, commit 45829dd). Graceful invalid-account error CODE-ONLY. Cart payment-completion UNVERIFIED (Stripe LIVE keys — test card rejected).
+**Decision:** Patrick — no sales tax collection until nexus registration required. All 3 `automatic_tax` usages removed.
+**BQ delta:** 0 → 2 (Buy It Now graceful error CODE-ONLY; cart payment completion UNVERIFIED).
+
+### S1004 — 2026-06-17 | QA/RECORDS (BQ cleared to 0; SEO5+SEO6 Chrome ✅)
+
+**Session type:** QA/RECORDS
+**Shipped:** (1) Facebook Connected badge fix — platforms.tsx now shows green "Connected" badge when `facebook?.connected` truthy (TS 0 errors); (2) BQ item 1 RESOLVED — Railway logs confirmed eBay Queue cron firing */30 (`[eBay Queue] Starting queue cron for 0 organizer(s)` at 02:30:01 + 03:00:11).
+**QA:** SEO5 /auctions/grand-rapids-mi ✅ Chrome (H1, FAQPage JSON-LD x7, ISR, no bleed-over; ss_533815fys). SEO6 /flea-markets/grand-rapids-mi ✅ Chrome (H1, FAQPage JSON-LD x5, ISR; ss_0332eyqoc, ss_7930nzpey).
+**PCVs staged:** SEO5 + SEO6 for next-session roadmap Chrome col apply (cross-session rule).
+**BQ delta:** 2 → 0.
+
+### S1003 — 2026-06-17 | QA/DEV (ISR smoke; SEO4 ✅; auction+flea-market pages)
+
+**Session type:** QA/DEV
+**Shipped:** (1) /pages/auctions/[city-slug].tsx (ISR revalidate:86400, 47-city prerender, fallback:blocking, FAQPage JSON-LD, auction-specific copy); (2) /pages/flea-markets/[city-slug].tsx (same pattern, flea-market copy); (3) cityData.ts extended (getAuctionMeta/Faqs, getFleaMarketMeta/Faqs); (4) server-sitemap.xml.tsx updated (auctionsUrls + fleaMarketsUrls priority 0.70).
+**Files changed:** pages/auctions/[city-slug].tsx (new), pages/flea-markets/[city-slug].tsx (new), lib/seo/cityData.ts, pages/server-sitemap.xml.tsx. TS 0 errors.
+**QA:** ISR /items/:id ✅ (ss_8940sbrut, ss_03897mqk5). SEO4 /yard-sales/grand-rapids-mi ✅ (H1, FAQPage x7, BreadcrumbList+ItemList+FAQPage; ss_3207v3q1s, ss_4548wcacx). fbCatalogEnabled data-layer ✅. eBay Queue cron UNVERIFIED (Railway logs empty this session).
+**BQ delta:** 2 → 2 (cron remained UNVERIFIED; FB badge gap replaced FB data-layer BQ item).
+
+### S1002 — 2026-06-16 | DEV/RECORDS (ISR conversion for /items/[id]; records pass)
+
+**Session type:** DEV/RECORDS
+**Shipped:** (1) /items/[id].tsx converted to ISR (getServerSideProps → getStaticProps + getStaticPaths, revalidate:3600, fallback:'blocking'; 1392→1398 lines). (2) Records pass: SEO4 Claude QA col → ✅ S997; roadmap rows 548-550 added (Platform Dashboard+Widget, eBay Queue Mode, FB Commerce Manager); 7 PCV entries cleared.
+**Files changed:** packages/frontend/pages/items/[id].tsx, claude_docs/STATE.md, claude_docs/strategy/roadmap.md.
+**BQ delta:** 4 → 2 (ISR conversion FIXED; FB feed link 404 already pushed S1001 — cleared; eBay Queue Mode live flip + fbCatalogEnabled remain).

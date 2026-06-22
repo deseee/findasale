@@ -231,7 +231,7 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
-| Cart multi-item payment-completion | Stripe LIVE keys block test card; real purchase needed to verify items→SOLD webhook | Real purchase or test-mode proxy | S1006 |
+| ~~Cart multi-item payment-completion~~ | **CLOSED S1021** — Patrick confirmed cart purchase 2026-06-19; "Test Prod 2" item → SOLD via webhook (PI pi_3Tk2Rw, purchase PAID). Webhook works. Note: two separate checkout sessions per item (not one bundled transaction). | — | S1006 → closed S1021 |
 | bounceSuppressService reads WRONG mailbox | Recipient bounces forward to deseee@gmail.com, not the Workspace mailbox the backend polls → recipient bounces never reach bounceSuppressService; the sweep task is the live writer | Root fix in ADR-bounce-suppression-mailbox-fix.md (optional) — point bounceSuppressService at the correct inbox | S1020 |
 | reclassify-bounces backfill ineffective | Same wrong-mailbox cause — ~93 historical bounces not reclassifiable | Fix mailbox source first, then re-run backfill | S1020 |
 | schema.prisma drift — 5 EmailSuppression cols | bounceCategory/bounceStatusCode/diagnosticCode/retryAfter/classifiedAt exist in DB+schema but have NO migration file (applied via raw DDL) | Optionally generate the migration locally + `prisma migrate resolve --applied` | S1020 |
