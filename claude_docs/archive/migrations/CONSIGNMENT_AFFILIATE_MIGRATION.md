@@ -95,7 +95,7 @@ Open PowerShell and run:
 
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
-$env:DATABASE_URL="postgresql://neondb_owner:npg_VYBnJs8Gt3bf@ep-plain-sound-aeefcq1y.c-2.us-east-2.aws.neon.tech/neondb?sslmode=require"
+$env:DATABASE_URL="postgresql://neondb_owner:[REDACTED_NEON_PW]@ep-plain-sound-aeefcq1y.c-2.us-east-2.aws.neon.tech/neondb?sslmode=require"
 npx prisma migrate deploy
 ```
 

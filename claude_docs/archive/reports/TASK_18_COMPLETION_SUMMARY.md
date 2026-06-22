@@ -75,7 +75,7 @@ Implement UTM tracking + analytics dashboard for social shared sale links (PRO t
 After merge, run on Neon:
 ```powershell
 cd packages/database
-$env:DATABASE_URL="postgresql://neondb_owner:npg_VYBnJs8Gt3bf@ep-plain-sound-aeefcq1y.c-2.us-east-2.aws.neon.tech/neondb?sslmode=require"
+$env:DATABASE_URL="postgresql://neondb_owner:[REDACTED_NEON_PW]@ep-plain-sound-aeefcq1y.c-2.us-east-2.aws.neon.tech/neondb?sslmode=require"
 npx prisma migrate deploy   # Applies migration to live DB
 npx prisma generate         # Regenerates @prisma/client
 ```

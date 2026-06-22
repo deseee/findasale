@@ -26,7 +26,7 @@ No P0 blockers. One P1 Patrick action (stale credential in global config). Four 
 
 ## ✅ P1 — Global CLAUDE.md Password — RESOLVED 2026-05-27
 
-Patrick updated the global CLAUDE.md manually. Both DATABASE_URL lines now use `tEYYjdiay8x8q8N7A6LojJtG04R7sDBN`. Takes effect next session.
+Patrick updated the global CLAUDE.md manually. Both DATABASE_URL lines now use `[REDACTED_DB_PW_ROTATE]`. Takes effect next session.
 
 ---
 

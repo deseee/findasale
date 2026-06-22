@@ -112,7 +112,7 @@ Patrick has decided to migrate from Neon serverless Postgres ($19/month) to Rail
 # From a bash/terminal window with psql installed
 # Use Neon's direct connection string (non-pooled)
 
-NEON_DIRECT_URL="postgresql://neondb_owner:npg_VYBnJs8Gt3bf@ep-plain-sound-aeefcq1y.c-2.us-east-2.aws.neon.tech/neondb?sslmode=require"
+NEON_DIRECT_URL="postgresql://neondb_owner:[REDACTED_NEON_PW]@ep-plain-sound-aeefcq1y.c-2.us-east-2.aws.neon.tech/neondb?sslmode=require"
 
 # Export full database (schema + data)
 pg_dump "$NEON_DIRECT_URL" > findasale-neon-backup.sql
@@ -441,7 +441,7 @@ After Phase 6 smoke tests pass, complete final checks:
 
 ### Export Neon
 ```bash
-pg_dump "postgresql://neondb_owner:npg_VYBnJs8Gt3bf@ep-plain-sound-aeefcq1y.c-2.us-east-2.aws.neon.tech/neondb?sslmode=require" > findasale-neon-backup.sql
+pg_dump "postgresql://neondb_owner:[REDACTED_NEON_PW]@ep-plain-sound-aeefcq1y.c-2.us-east-2.aws.neon.tech/neondb?sslmode=require" > findasale-neon-backup.sql
 ```
 
 ### Import Railway

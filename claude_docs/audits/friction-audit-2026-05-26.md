@@ -65,14 +65,14 @@ Files cleared: `fraudDetectionService.ts`, `subAreaConfig.ts`, `itemConstants.ts
 
 **Category:** doc-staleness / session-friction
 **Severity:** P1
-**Detail:** Railway DB password rotated 2026-05-24 (`tEYYjdiay8x8q8N7A6LojJtG04R7sDBN`). STATE.md S780b section notes: "⚠️ Global CLAUDE.md still has old password — Patrick must update manually." This has appeared in Next Session blocks across S780, S781, S783, S785, S787, S788, and the 2026-05-25 friction audit without being cleared.
+**Detail:** Railway DB password rotated 2026-05-24 (`[REDACTED_DB_PW_ROTATE]`). STATE.md S780b section notes: "⚠️ Global CLAUDE.md still has old password — Patrick must update manually." This has appeared in Next Session blocks across S780, S781, S783, S785, S787, S788, and the 2026-05-25 friction audit without being cleared.
 
 **Effect:** Any session that references the global CLAUDE.md DATABASE_URL for shell commands will fail auth against Railway. Not blocking current sessions (devs use Railway CLI to pull live password) but adds friction on every session start.
 
 **Cannot auto-dispatch:** global CLAUDE.md is outside the git repo; only Patrick can edit it.
 
 **Patrick action required:**
-Update both DATABASE_URL lines in `C:\Users\desee\AppData\Roaming\Claude\local-agent-mode-sessions\...\CLAUDE.md` (search for the old password and replace with `tEYYjdiay8x8q8N7A6LojJtG04R7sDBN`).
+Update both DATABASE_URL lines in `C:\Users\desee\AppData\Roaming\Claude\local-agent-mode-sessions\...\CLAUDE.md` (search for the old password and replace with `[REDACTED_DB_PW_ROTATE]`).
 
 ---
 

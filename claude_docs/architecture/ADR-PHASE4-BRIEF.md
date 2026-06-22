@@ -689,7 +689,7 @@ const {
 cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
 
 # Before any deploy, apply migrations to Neon
-$env:DATABASE_URL="postgresql://neondb_owner:npg_VYBnJs8Gt3bf@ep-plain-sound-aeefcq1y.c-2.us-east-2.aws.neon.tech/neondb?sslmode=require"
+$env:DATABASE_URL="postgresql://neondb_owner:[REDACTED_NEON_PW]@ep-plain-sound-aeefcq1y.c-2.us-east-2.aws.neon.tech/neondb?sslmode=require"
 
 npx prisma migrate deploy   # Applies all pending migrations to Neon
 npx prisma generate         # Regenerates TypeScript client with new models

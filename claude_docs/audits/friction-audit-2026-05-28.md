@@ -86,13 +86,13 @@ The Priority section also still references "S794 push ready — push block below
 **Severity:** P1
 **Unresolved since:** S780 (~4 days, 15+ sessions)
 
-Railway DB password is `tEYYjdiay8x8q8N7A6LojJtG04R7sDBN` (rotated 2026-05-24). The global CLAUDE.md at `C:\Users\desee\AppData\Roaming\Claude\...\CLAUDE.md` still shows the old password on both DATABASE_URL lines.
+Railway DB password is `[REDACTED_DB_PW_ROTATE]` (rotated 2026-05-24). The global CLAUDE.md at `C:\Users\desee\AppData\Roaming\Claude\...\CLAUDE.md` still shows the old password on both DATABASE_URL lines.
 
 Effect: any session that reads the global CLAUDE.md for a copy-paste DB command will hit auth failure against Railway. Sessions currently work around this by pulling the live password via Railway CLI, but the stale value creates unnecessary friction.
 
 **Cannot auto-dispatch** — global CLAUDE.md is outside the git repo. Patrick must edit directly.
 
-**Patrick action (same as prior sessions):** Search for old password in the file and replace with `tEYYjdiay8x8q8N7A6LojJtG04R7sDBN`. (Note: as of S780b the new password was documented in STATE.md; the global CLAUDE.md is the only remaining stale location.)
+**Patrick action (same as prior sessions):** Search for old password in the file and replace with `[REDACTED_DB_PW_ROTATE]`. (Note: as of S780b the new password was documented in STATE.md; the global CLAUDE.md is the only remaining stale location.)
 
 ---
 

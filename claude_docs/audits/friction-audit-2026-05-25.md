@@ -42,9 +42,9 @@ TypeScript: ✅ clean (0 errors, frontend + backend).
 
 **Category:** doc-staleness / security
 **Severity:** P1
-**Detail:** Railway DB password rotated 2026-05-24 (`tEYYjdiay8x8q8N7A6LojJtG04R7sDBN`). STATE.md S780b section explicitly notes: "⚠️ Global CLAUDE.md still has old password — Patrick must update manually." This Patrick action has appeared in Next Session across S780, S781, S783, S785, S787 without being cleared. Stale credentials in global CLAUDE.md means any session that references it for DB commands will use the wrong password and fail.
+**Detail:** Railway DB password rotated 2026-05-24 (`[REDACTED_DB_PW_ROTATE]`). STATE.md S780b section explicitly notes: "⚠️ Global CLAUDE.md still has old password — Patrick must update manually." This Patrick action has appeared in Next Session across S780, S781, S783, S785, S787 without being cleared. Stale credentials in global CLAUDE.md means any session that references it for DB commands will use the wrong password and fail.
 
-**Action needed:** Patrick to update `C:\Users\desee\AppData\Roaming\Claude\local-agent-mode-sessions\...\CLAUDE.md` — both DATABASE_URL lines — with password `tEYYjdiay8x8q8N7A6LojJtG04R7sDBN`.
+**Action needed:** Patrick to update `C:\Users\desee\AppData\Roaming\Claude\local-agent-mode-sessions\...\CLAUDE.md` — both DATABASE_URL lines — with password `[REDACTED_DB_PW_ROTATE]`.
 
 **Cannot auto-dispatch:** global CLAUDE.md is not in the git repo; subagent cannot modify it.
 
