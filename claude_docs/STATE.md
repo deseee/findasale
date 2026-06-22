@@ -8,6 +8,8 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
+**S1021 WRAP (2026-06-22) — BUG/SEO (Google indexing investigation — 2 P0 sitemap bugs fixed + GSC manual actions complete). Sitemap now contains 5,000 sale URLs (was 0). BQ 4→3 (cart payment-completion closed).**
+
 **S1020 WRAP (2026-06-22) — RESEARCH/BUG (outreach email deliverability root-cause + throttle fixes + scheduled-task hardening). Pushed + deployed green; backend healthy; OutreachCron verified live "12 sent, 0 failed". BQ 1→4 (3 P1 email follow-ups added).**
 - **Prior P0 was FABRICATED.** The earlier-claimed "RAILWAY_BACKEND_URL not set → phishing links" was a code-inference, DISPROVEN this session — the var has been set for months. Real diagnosis came from direct mailbox reads + Railway DB, not code-reading.
 - **ROOT CAUSE (tool-cited — corrected 6/22):** NOT volume. The sender `outreach@finda.sale` (paid Workspace; auth/SPF/DKIM all confirmed correct) sends only ~169/day total (verified via the SENT folder — matches the quota log; no hidden mail), steady, with ZERO send-limit failures through 6/20. The trigger was **BOUNCE RATE**: sending to scraped directory addresses produced a 15-26% bounce rate over 6/18-6/20 (6/18 ~24/165=15%, 6/19 ~37/140=26%, 6/20 ~38/199=19%). Google tolerates ~2-5%; a ~1-in-5 bounce rate is the classic signature of a purchased/garbage list, so Google's abuse system **CLAMPED the account's sending limit on 6/21** (a one-day-lagged abuse penalty) → 136 "reached a limit for sending" failures that day, 12 the next. The account is now in Google's penalty box, so even tiny batches fail (a 12-message batch on 6/22 all bounced as over-limit). The old "~200-300/day reputation throttle" framing is WRONG — it was an abuse clamp triggered by the bounce rate, not a flat volume throttle.
@@ -244,28 +246,58 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Next Session
 
-### S1021 — priorities
+### S1022 — priorities
 
-**Session type: QA or DEV.** BQ = 4 (below 8 ceiling).
+**Session type: DEV or QA.** BQ = 3 (below 8 ceiling).
 
-**Session start:** Load STATE.md. Post-deploy smoke test of S1020 email work: confirm backend healthy + OutreachCron still logging clean ("N sent, 0 failed", no "reached a limit" errors). Run the `findasale-email-delivery-health` check manually and confirm B/B2 read the real throttle + mailbox.
+**Session start:** Load STATE.md. Check Google Search Console Sitemaps page — confirm server-sitemap.xml has been re-read since the S1021 resubmission and the discovered-pages count has increased beyond 2,766 (may take 1-3 days for Google to re-crawl with the fixed sitemap).
 
 **Action required — Patrick:**
-- **Outreach is PAUSED.** `OUTREACH_DAILY_CAP=1` (near-zero) is set in Railway so Google sees sending stop and the abuse clamp clears over a few days. Leave it at 1 until the resume condition below is met. Do NOT ramp from 75 — that earlier plan was wrong; the bounce RATE (not volume) was the cause, so we serve the penalty first.
-- **Resume condition:** raise the cap to a small value (low-volume, cleaned list only) ONLY AFTER the daily `findasale-email-delivery-health` check shows **zero "reached a limit" send-limit failures AND a bounce rate <5%**. The bounce rate is the governing constraint — keep it under 5% or the clamp returns.
-- eBay token still expired (June 20, 21:30 UTC) — reconnect eBay in organizer settings to restore live API count (DB fallback is accurate meanwhile).
+- **Outreach is PAUSED.** `OUTREACH_DAILY_CAP=1` (near-zero) in Railway. Resume only after the daily health check shows **zero "reached a limit" failures AND bounce rate <5%**. Do NOT ramp before both conditions are met.
+- eBay token still expired (June 20, 21:30 UTC) — reconnect eBay in organizer settings.
 - AlternativeTo submission — did you submit after the June 18 scheduled-task prompt?
 
-**Dev priorities (email follow-ups — see Blocked Queue):**
-- `Skill('findasale-dev')`: **bounceSuppressService wrong-mailbox fix** (P1). Root cause confirmed: recipient bounces forward to deseee@gmail.com, not the Workspace mailbox the backend polls, so bounceSuppressService never sees them; the `bounce-suppression-sweep` task is the live writer (now classifying). Expected output: point bounceSuppressService at the correct inbox per ADR-bounce-suppression-mailbox-fix.md, then re-enable the reclassify-bounces backfill (~93 historical bounces). Optional per Patrick.
-- **schema.prisma drift fix** (P1): the 5 EmailSuppression columns (bounceCategory/bounceStatusCode/diagnosticCode/retryAfter/classifiedAt) exist in DB + schema but have no migration file. Generate the migration locally + `prisma migrate resolve --applied`. NOTE: `prisma migrate dev` is BROKEN in this repo (shadow-DB replay fails) — generate the SQL and resolve-applied, don't run migrate dev.
-- `Skill('findasale-dev')`: **async send-limit bounce detection + false-SENT counting fix** (P1, email reliability). Root cause confirmed: over-limit failures are ASYNC — Gmail ACCEPTS the API send (cron logs "sent," consumes quota, marks the touch SENT) then bounces it later as "message not sent." The limit-aware backoff only fires on a synchronous send-call error, so it misses these and the cron over-counts "sent." Expected output: detect async send-limit bounces (mailbox poll / DSN match) and correct the SENT touch state + quota accounting so the cap and health check reflect reality.
+**Dev priorities:**
+- `Skill('findasale-dev')`: **bounceSuppressService wrong-mailbox fix** (P1). Root cause confirmed: recipient bounces forward to deseee@gmail.com, not the Workspace mailbox the backend polls. Expected output: point bounceSuppressService at the correct inbox per ADR-bounce-suppression-mailbox-fix.md + re-enable reclassify-bounces backfill.
+- **schema.prisma drift fix** (P1): 5 EmailSuppression columns exist in DB+schema but have no migration file. Generate SQL + `prisma migrate resolve --applied`. NOTE: `prisma migrate dev` is BROKEN in this repo — use raw SQL.
+- `Skill('findasale-dev')`: **async send-limit bounce detection + false-SENT counting fix** (P1). Root cause confirmed: Gmail ACCEPTS the API send then bounces later; backoff only fires on synchronous errors so cron over-counts "sent."
 - `Skill('findasale-dev')`: #547 eBay Calculated Shipping E2E QA (requires Patrick available).
 - Audio CDN migration (P3 — 54 mp3s in packages/frontend/public, ~8.6MB total).
 
-**BQ (4):** cart payment-completion (Patrick real purchase); bounceSuppressService wrong-mailbox; reclassify-bounces backfill ineffective; schema.prisma 5-column drift.
+**SEO — no action needed this session.** All GSC manual work is done. Google needs days-to-weeks to re-crawl and index. Check GSC Indexing → Pages in ~7 days to see movement.
+
+**BQ (3):** bounceSuppressService wrong-mailbox; reclassify-bounces backfill ineffective; schema.prisma 5-column drift.
 
 ## Recent Sessions
+
+### S1021 — 2026-06-22 | BUG/SEO (Google indexing investigation + sitemap P0 fixes + GSC manual actions)
+
+**Session type:** BUG/SEO
+**Triggered by:** Patrick — "figure out why we still aren't being indexed even after all the fixes."
+
+**Root causes found (tool-cited, Opus SEO expert + findasale-dev dispatch):**
+
+**P0-1 — Zero sale pages in sitemap (5,000 pages silently excluded):**
+`server-sitemap.xml.tsx` filtered `.filter((sale: any) => sale.status === 'PUBLISHED')` but the `/sales/sitemap` backend endpoint pre-filters in SQL and returns only `{ id, updatedAt }` — no `status` field. The filter was always false (undefined !== 'PUBLISHED'), silently excluding all 5,000 published sales. Confirmed via direct API call. Fix: removed the filter line. Verified post-deploy: `curl -s https://finda.sale/server-sitemap.xml | grep -c "/sales/"` → 5000.
+
+**P0-2 — lastmod abuse causing Google trust loss (2,210 pages affected):**
+Every non-sale, non-guide URL emitted `lastmod: new Date().toISOString()` — the exact moment Googlebot fetched the sitemap. Google's June 2024 sitemap policy: always-"now" lastmod is treated as inaccurate and ignored sitewide, starving crawl budget. Fix: added `const STATIC_LASTMOD = '2026-06-22'`; replaced 14 occurrences across all static URL groups. Left `saleUrls` (uses real `sale.updatedAt`) and `guideUrls` (already static `'2026-05-01'`) untouched.
+
+**Critical find — prebuild script overwrote curated guide content on every deploy:**
+`packages/frontend/package.json` had `"prebuild": "tsx scripts/generate-seo-index.ts"` — this generator produces thin city×sale-type templates (Google Scaled Content Abuse violation) and overwrote the curated brand pricing guides in `data/seo-pages/index.json` on every `next build`. Fix: removed the prebuild script entirely. Generator also guarded with a deprecation throw at the top of `main()`.
+
+**GSC manual actions (completed this session):**
+- ✅ Zombie sitemap `sitemap_index.xml` (Jun 2023, 0 pages, "Sitemap is HTML" error) removed via GSC UI.
+- ✅ `server-sitemap.xml` resubmitted via GSC Sitemaps "Add a new sitemap" — "Sitemap submitted successfully."
+- ✅ Indexing requested on 2 sale URLs via GSC URL Inspection tool — both confirmed "Indexing requested" with priority crawl queue placement.
+
+**Files changed (Patrick pushed; Railway cache-busted and redeployed green):**
+- `packages/frontend/pages/server-sitemap.xml.tsx` — removed status filter; added STATIC_LASTMOD constant; replaced 14 `new Date().toISOString()` occurrences.
+- `packages/frontend/scripts/generate-seo-index.ts` — added deprecation throw at top of `main()`.
+- `packages/frontend/package.json` — removed `prebuild` script.
+- `packages/backend/Dockerfile.production` — cache-bust comment updated.
+
+**TypeScript gate:** PASS (0 errors). BQ: 4 → 3 (cart payment-completion closed — Patrick confirmed real purchase 2026-06-19; BQ entry removed). No new SEO BQ items (all GSC work is manual, done).
 
 ### S1020 — 2026-06-22 | RESEARCH/BUG (outreach email deliverability root-cause + throttle fixes + task hardening)
 
