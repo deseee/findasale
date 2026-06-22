@@ -5,6 +5,7 @@
  */
 
 import { Request, Response } from 'express';
+import * as Sentry from '@sentry/node';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { enrichScrapedListing } from '../services/listingEnrichmentService';
@@ -66,6 +67,7 @@ async function _runEnrichmentBatch(batchSize: number): Promise<void> {
       }
     } catch (err: any) {
       console.error(`[ListingEnrichmentBatch] Failed to enrich sale ${sale.id}:`, err.message ?? err);
+      Sentry.captureException(err);
       skipped++;
     }
 
@@ -87,6 +89,7 @@ export function runListingEnrichmentBatch(req: Request, res: Response): void {
 
   _runEnrichmentBatch(batchSize).catch((err) => {
     console.error('[enrichment] background error:', err);
+    Sentry.captureException(err);
   });
 }
 

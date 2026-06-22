@@ -140,7 +140,7 @@ ${itemCardsHtml}
     unsubLabel: 'Unsubscribe from weekly picks',
     unsubUrl: `${FRONTEND_URL}/unsubscribe?token=${unsubToken}`,
   });
-};;
+};
 
 // Send weekly picks email to a single user
 const sendWeeklyPicksEmail = async (email: string, userId: string, name: string, picks: WeeklyPickItem[]): Promise<void> => {
