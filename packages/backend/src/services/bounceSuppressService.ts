@@ -4,18 +4,38 @@ import { prisma } from '../lib/prisma';
 /**
  * Bounce Suppression Service
  *
- * Polls the outreach@finda.sale Gmail inbox for mailer-daemon / postmaster
+ * Polls the find@outreach.finda.sale Gmail mailbox for mailer-daemon / postmaster
  * delivery-failure notifications, extracts the bounced recipient address,
  * upserts it into EmailSuppression, and moves the processed message to Trash.
  *
+ * MAILBOX ROUTING (confirmed root cause — ADR-bounce-suppression-mailbox-fix, 2026-06-13):
+ *   Outreach is sent via the Gmail API. The bounce DSN / Return-Path is the
+ *   AUTHENTICATED account's primary address, NOT the From header. Bounces for
+ *   outreach therefore land at find@outreach.finda.sale (Google MX), which is the
+ *   ONLY mailbox this poller must authenticate. Authenticating any other mailbox
+ *   (e.g. outreach@finda.sale, whose inbound is ImprovMX-forwarded to a personal
+ *   Gmail and is NOT a pollable Google mailbox) makes the list below return 0
+ *   bounce messages on every run.
+ *
+ *   The mailbox is selected purely by which refresh token is set in env:
+ *   GMAIL_MAILBOX_REFRESH_TOKEN must be an OAuth2 token for find@outreach.finda.sale
+ *   with gmail.modify scope (list + trash). OUTREACH_BOUNCE_MAILBOX is an OPTIONAL,
+ *   self-documenting env var naming the expected mailbox — it is logged for
+ *   diagnostics and does NOT change which credential is used.
+ *
  * Auth pattern copied from lib/emailService.ts (createGmailClient).
- * Uses the same GMAIL_CLIENT_ID / GMAIL_CLIENT_SECRET / GMAIL_REFRESH_TOKEN
- * env vars — no additional credentials required.
+ * Uses the same GMAIL_CLIENT_ID / GMAIL_CLIENT_SECRET. The refresh token is
+ * GMAIL_MAILBOX_REFRESH_TOKEN (preferred) with GMAIL_REFRESH_TOKEN fallback.
  *
  * Scheduled: daily at 06:00 UTC via GitHub Actions
  * (.github/workflows/pipeline-bounce-suppress.yml → POST /api/internal/jobs/run
  * with job 'process-bounces'). No longer an in-process node-cron job.
  */
+
+// Optional self-documenting expected mailbox (does NOT select the credential —
+// the credential is whichever refresh token is set below). Logged for diagnostics.
+const EXPECTED_BOUNCE_MAILBOX =
+  process.env.OUTREACH_BOUNCE_MAILBOX || 'find@outreach.finda.sale';
 
 interface ProcessResult {
   processed: number;
@@ -27,11 +47,21 @@ interface ProcessResult {
 // Gmail client factory — prefers GMAIL_MAILBOX_REFRESH_TOKEN (needs gmail.modify
 // scope to list/get/trash messages). Falls back to GMAIL_REFRESH_TOKEN.
 // Same pattern as scripts/outreach-mailbox-ops.js.
+//
+// IMPORTANT (ADR-bounce-suppression-mailbox-fix): GMAIL_MAILBOX_REFRESH_TOKEN
+// MUST authenticate find@outreach.finda.sale (the mailbox bounce DSNs return to).
+// If it authenticates any other account, processBounces lists 0 messages forever.
 // ---------------------------------------------------------------------------
 function createGmailClient() {
   const token = process.env.GMAIL_MAILBOX_REFRESH_TOKEN || process.env.GMAIL_REFRESH_TOKEN;
   if (!process.env.GMAIL_CLIENT_ID || !process.env.GMAIL_CLIENT_SECRET || !token) {
     throw new Error('[bounceSuppressService] Missing GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, or GMAIL_MAILBOX_REFRESH_TOKEN (or GMAIL_REFRESH_TOKEN)');
+  }
+  if (!process.env.GMAIL_MAILBOX_REFRESH_TOKEN) {
+    console.warn(
+      `[bounceSuppressService] GMAIL_MAILBOX_REFRESH_TOKEN not set — falling back to GMAIL_REFRESH_TOKEN. ` +
+        `For bounce polling to work this token MUST authenticate ${EXPECTED_BOUNCE_MAILBOX} with gmail.modify scope.`,
+    );
   }
   const oauth2Client = new google.auth.OAuth2(
     process.env.GMAIL_CLIENT_ID,
@@ -251,6 +281,8 @@ export const bounceSuppressService = {
       console.error('[bounceSuppressService] Gmail auth error:', err.message);
       return result;
     }
+
+    console.log(`[bounceSuppressService] Polling bounce mailbox (expected: ${EXPECTED_BOUNCE_MAILBOX}).`);
 
     // Search for bounce/failure notifications not yet processed (not in Trash).
     // IMPORTANT: bounce DSNs for outreach land at find@outreach.finda.sale — the
