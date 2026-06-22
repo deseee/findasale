@@ -1,4 +1,5 @@
 import cron from 'node-cron';
+import { google } from 'googleapis';
 import { cronGuard } from '../utils/cronGuard';
 import { v4 as uuid } from 'uuid';
 import jwt from 'jsonwebtoken';
@@ -7,7 +8,6 @@ import { suppressionService, isEmailDomainBlocked } from '../services/suppressio
 import { domainCanReceiveMail } from '../lib/mxValidator';
 import { batchSyncLeadTiersToMailerLite } from '../services/mailerliteService';
 import { checkAndIncrementQuota, getDailyEmailCount, QuotaExceededError } from '../lib/emailService';
-import { sendOutreachMessage, isOutreachLimitError, getOutreachSender } from '../lib/outreachSender';
 
 // Tier-specific T1 templates (strategy doc §2.1–2.3). T2–T4 are shared across tiers.
 // Token format: [Token Name] — replaced by renderTemplate() below.
@@ -76,8 +76,103 @@ const getDailyQuota = (daysSinceStart: number): number => {
   return 200;
 };
 
-// Email transport (Gmail | SMTP), raw-message construction, encodeSubject, and
-// htmlToPlainText now live in ../lib/outreachSender (provider-agnostic outreach rail).
+const createGmailClient = () => {
+  if (!process.env.GMAIL_CLIENT_ID || !process.env.GMAIL_CLIENT_SECRET || !process.env.GMAIL_REFRESH_TOKEN) {
+    throw new Error('Missing GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, or GMAIL_REFRESH_TOKEN');
+  }
+  const oauth2Client = new google.auth.OAuth2(
+    process.env.GMAIL_CLIENT_ID,
+    process.env.GMAIL_CLIENT_SECRET
+  );
+  oauth2Client.setCredentials({
+    refresh_token: process.env.GMAIL_REFRESH_TOKEN,
+  });
+  return google.gmail({ version: 'v1', auth: oauth2Client });
+};
+
+/**
+ * RFC 2047 encode a header value if it contains non-ASCII characters.
+ */
+function encodeSubject(subject: string): string {
+  // eslint-disable-next-line no-control-regex
+  if (/^[\x00-\x7F]*$/.test(subject)) return subject;
+  return `=?UTF-8?B?${Buffer.from(subject, 'utf-8').toString('base64')}?=`;
+}
+
+/**
+ * Convert HTML to plain text for the text/plain MIME part.
+ * Strips tags, decodes common HTML entities, collapses whitespace.
+ */
+const htmlToPlainText = (html: string): string => {
+  return html
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/?(p|div|h[1-6]|li|tr)[^>]*>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&nbsp;/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .replace(/[ \t]+/g, ' ')
+    .trim();
+};
+
+/**
+ * Build an RFC 2822 raw email message string with proper MIME headers.
+ * Returns base64url-encoded string ready for Gmail API.
+ */
+const buildRawEmail = (opts: {
+  from: string;
+  to: string;
+  subject: string;
+  html: string;
+  listUnsubscribe: string;
+}): string => {
+  const boundary = `boundary_${uuid().replace(/-/g, '')}`;
+  const plainText = htmlToPlainText(opts.html);
+  const plainBase64 = Buffer.from(plainText, 'utf-8').toString('base64');
+  const htmlBase64 = Buffer.from(opts.html, 'utf-8').toString('base64');
+  const rawLines = [
+    `From: ${opts.from}`,
+    `To: ${opts.to}`,
+    `Subject: ${encodeSubject(opts.subject)}`,
+    `MIME-Version: 1.0`,
+    `Content-Type: multipart/alternative; boundary="${boundary}"`,
+    `List-Unsubscribe: ${opts.listUnsubscribe}`,
+    `List-Unsubscribe-Post: List-Unsubscribe=One-Click`,
+    '',
+    `--${boundary}`,
+    `Content-Type: text/plain; charset="UTF-8"`,
+    `Content-Transfer-Encoding: base64`,
+    '',
+    plainBase64,
+    '',
+    `--${boundary}`,
+    `Content-Type: text/html; charset="UTF-8"`,
+    `Content-Transfer-Encoding: base64`,
+    '',
+    htmlBase64,
+    '',
+    `--${boundary}--`,
+  ];
+  const rawEmail = rawLines.join('\r\n');
+  return Buffer.from(rawEmail).toString('base64url');
+};
+
+/**
+ * Determine whether a Gmail send error is a rate/limit/throttle/quota signal that
+ * should trigger the day-stop backoff. Inline matcher (the outreach send rail is
+ * Gmail-only; previously this lived in the now-removed outreachSender lib).
+ * Matches Gmail API HTTP 429 + "reached a limit for sending mail" style messages.
+ */
+function isOutreachLimitError(err: any): boolean {
+  const status = err?.code ?? err?.responseCode ?? err?.response?.status;
+  const msg: string = err?.message || err?.response || '';
+  if (status === 429) return true;
+  return /rate|too many|throttl|limit|quota|exceeded/i.test(String(msg));
+}
 
 const escapeHtml = (str: string): string => {
   return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
@@ -433,9 +528,7 @@ const sendOutreachEmailsInner = async (): Promise<void> => {
       console.log(`[OutreachCron] Deduped ${recordsToSend.length - dedupedRecords.length} duplicate email address(es) from candidate pool`);
     }
 
-    // Transport is now selected inside outreachSender (gmail | smtp) via OUTREACH_SENDER.
-    const activeSender = getOutreachSender();
-    console.log(`[OutreachCron] Active outreach rail: ${activeSender}`);
+    const gmail = createGmailClient();
     const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
     let sent = 0;
     let failed = 0;
@@ -630,17 +723,13 @@ const sendOutreachEmailsInner = async (): Promise<void> => {
         }
         const listUnsubscribeHeader = `<mailto:unsubscribe@finda.sale?subject=unsubscribe>, <${unsubscribeLink}>`;
 
-        // Transport-agnostic message. The active rail (gmail | smtp) is chosen
-        // inside outreachSender via OUTREACH_SENDER. Headers (List-Unsubscribe
-        // one-click + CAN-SPAM physical-address footer embedded in htmlWithPixel)
-        // are identical on both rails.
-        const outreachMessage = {
+        const rawMessage = buildRawEmail({
           from: `The FindA.Sale Team <${fromEmail}>`,
           to: toEmail,
           subject,
           html: htmlWithPixel,
           listUnsubscribe: listUnsubscribeHeader,
-        };
+        });
 
         // ATOMIC CLAIM BEFORE SEND (incident 2026-05-18: duplicate touch blasts).
         // Previously the row was marked sent AFTER the Gmail send — a crash, restart,
@@ -684,20 +773,21 @@ const sendOutreachEmailsInner = async (): Promise<void> => {
         }
 
         try {
-          // Rail-agnostic send (gmail | smtp). Selected by OUTREACH_SENDER inside outreachSender.
-          await sendOutreachMessage(outreachMessage);
+          await gmail.users.messages.send({
+            userId: 'me',
+            requestBody: { raw: rawMessage },
+          });
         } catch (sendErr: any) {
-          // LIMIT-AWARE BACKOFF (incident 2026-06-21). A throttled sender gets clamped:
+          // LIMIT-AWARE BACKOFF (incident 2026-06-21). A throttled Gmail sender gets clamped:
           //   - Gmail: "You have reached a limit for sending mail." (HTTP 429 / 4xx)
-          //   - SMTP:  4xx transient codes 421/450/452 + rate/throttle/quota text
-          // isOutreachLimitError matches BOTH rails. When it fires, STOP immediately and
+          // isOutreachLimitError matches the Gmail clamp. When it fires, STOP immediately and
           // prevent any further sends for the rest of the UTC day. NO-MIGRATION mechanism:
           // force today's EmailQuotaLog.count up to the daily cap so the next window's
           // remaining-headroom check returns 0.
           const sendStatus = sendErr?.code ?? sendErr?.responseCode ?? sendErr?.response?.status;
           const sendMsg = sendErr?.message || '';
           if (isOutreachLimitError(sendErr)) {
-            console.warn(`[OutreachCron] Outreach send-limit hit (${activeSender}) — backing off for the day (status=${sendStatus}, msg="${sendMsg}")`);
+            console.warn(`[OutreachCron] Outreach send-limit hit (gmail) — backing off for the day (status=${sendStatus}, msg="${sendMsg}")`);
             try {
               // Pin today's counter to the cap so under-cap checks block subsequent sends.
               await prisma.emailQuotaLog.upsert({
