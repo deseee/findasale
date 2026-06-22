@@ -446,4 +446,8 @@ router.post('/send-test-email', sendTestEmailLimiter, async (req: any, res: any)
 
   } catch (err: any) {
     console.error('[admin/send-test-email] Unexpected error:', err);
-    return res.status(500).json({ success: false, error: er
+    return res.status(500).json({ success: false, error: err?.message || 'Internal server error' });
+  }
+});
+
+export default router;
