@@ -2,7 +2,7 @@
 
 > **Purpose:** The durable reference for the **receiving / addressing / DNS / provider-account** side of FindA.Sale email — every `@finda.sale` address, what it's for, where it surfaces, and where inbound mail goes.
 > **Companion doc (sending side):** `feature-notes/email-outreach-scraper-system-map.md` — the code-verified map of the 3 *send* rails. This file is the *inbound + infrastructure* map; that file is the *outbound code* map.
-> **Last verified:** S953 (2026-06-11) — DNS re-checked live via `dig`; ImprovMX aliases + Resend suppression list confirmed in their dashboards; address inventory from `grep` over `packages/`.
+> **Last verified:** S953 (2026-06-11) — DNS re-checked live via `dig`; ImprovMX aliases + Resend suppression list confirmed in their dashboards; address inventory from `grep` over `packages/`. S-current (2026-06-21) — sending-limit throttling identified; bounce classification added.
 > No date suffix — this is a living reference. Update it in place when addresses, aliases, DNS, or providers change.
 
 ---
@@ -80,7 +80,7 @@ Root `finda.sale` MX points at ImprovMX. **Every alias below forwards to `deseee
 ## 5. Sending Rails (summary — full detail in companion doc)
 
 Three outbound paths. See `email-outreach-scraper-system-map.md` for code-level detail.
-- **Rail A — Gmail API** (`lib/emailService.ts`): bulk / lifecycle / cold outreach from `find@outreach.finda.sale`. DB-backed hard cap 1500/day (`GMAIL_DAILY_HARD_LIMIT`).
+- **Rail A — Gmail API** (`lib/emailService.ts`): bulk / lifecycle / cold outreach from `find@outreach.finda.sale`. DB-backed internal guard of 1500/day (`GMAIL_DAILY_HARD_LIMIT`) — but this is the CODE's own guard, NOT Google's enforced limit. Google's REAL enforced limit is **reputation-throttled to ~200-300/day** (far below the 2000/day paid Workspace ceiling). Evidence (2026-06-21): the cron attempted ~305 sends (quota log recorded 169) and 136 bounced with Gmail "You have reached a limit for sending mail. Your message was not sent." (daily sending-limit, no 4.x.x rate code). See §8.
 - **Rail B — Resend** (`lib/transactionalEmailService.ts`): transactional (auth, receipts, invites) + quota alerts. FROM `noreply@finda.sale`. Gmail-suspension-proof.
 - **Rail C — Amazon SES** (`send.finda.sale`): legacy fallback FROM addresses only.
 
@@ -102,10 +102,27 @@ Three outbound paths. See `email-outreach-scraper-system-map.md` for code-level 
 
 **S953 incident (self-inflicted, resolved):** testing forwarding for `legal@`/`privacy@`/`info@` via Resend *before* their ImprovMX aliases existed hard-bounced them → Resend-suppressed + 4 `EmailSuppression` DB rows. Fix: removed all three from the Resend suppression list (dashboard), deleted the 4 DB rows, re-sent — all delivered and forwarded to Gmail. `receipts@` was only a soft bounce (never suppressed).
 
+**Bounce classification (verified 2026-06-21):** the daily bounce job (`bounceSuppressService`) now classifies bounces by category — `DEAD_MAILBOX` / `NO_MX` / `POLICY_BLOCK` / `TRANSIENT` / `UNKNOWN` — and only permanently suppresses true dead mailboxes. Recoverable policy-blocks get a cooldown (`retryAfter`) instead of permanent suppression. New `EmailSuppression` columns: `bounceCategory`, `bounceStatusCode`, `diagnosticCode`, `retryAfter`, `classifiedAt`.
+
 ---
 
-## 7. Related
+## 8. Sending Limits & Reputation Throttling (verified 2026-06-21)
+
+**The 1500/day in §5 is a code guard, not Google's limit.** `GMAIL_DAILY_HARD_LIMIT` (1500) is FindA.Sale's own internal cap. Google enforces a *separate* limit, and for `find@outreach.finda.sale` that limit is currently **reputation-throttled to roughly ~200-300/day** — far below the 2000/day ceiling of a paid Workspace seat.
+
+**Evidence (2026-06-21):** the cron attempted ~305 sends (quota log recorded 169) and **136 bounced** with the Gmail message *"You have reached a limit for sending mail. Your message was not sent."* — a daily sending-limit block (no 4.x.x transient rate code). 500+ such failures exist historically, so this is **chronic, not a one-off**.
+
+**Root signal:** reputation throttling driven by cold-outreach spam flags — the same `5.7.1` *"unsolicited / Message rejected"* outbound blocks documented in the deliverability findings.
+
+**Tactical fix (shipping):** new env `OUTREACH_DAILY_CAP` (default 75), surge guard, send pacing, and limit-aware backoff so the cron stays under the throttle instead of slamming into it.
+
+**Strategic fix (specced):** migrate cold outreach off the Workspace mailbox onto a **dedicated sending domain + ESP** to isolate `finda.sale`'s root reputation. See `feature-notes/ADR-dedicated-outreach-sender.md`.
+
+---
+
+## 9. Related
 - `feature-notes/email-outreach-scraper-system-map.md` — sending rails (code map)
 - `feature-notes/email-audit-history-consolidated.md` — historical deliverability findings
 - `feature-notes/gmail-rail-audit-s937.md` — Gmail rail DKIM/SPF/quota audit
+- `feature-notes/ADR-dedicated-outreach-sender.md` — strategic migration to a dedicated outreach sender (domain + ESP)
 - Memory: `reference_dns_infrastructure`, `reference_email_rails_and_gates`, `reference_email_recipient_domain_policy`
