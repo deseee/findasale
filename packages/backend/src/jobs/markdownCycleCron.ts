@@ -78,21 +78,25 @@ export function scheduleMarkdownCycleCron(): void {
 
           if (firstMarkdownItems.length > 0) {
             const effectiveFirstPct = Math.min(100, cycle.firstPct * dormDashMultiplier);
-            const newPrice = Math.max(
-              0,
-              firstMarkdownItems[0].price! * (1 - effectiveFirstPct / 100)
-            );
 
-            await prisma.item.updateMany({
-              where: {
-                id: { in: firstMarkdownItems.map(item => item.id) },
-              },
-              data: {
-                priceBeforeMarkdown: firstMarkdownItems[0].price,
-                price: newPrice,
-                markdownApplied: true,
-              },
-            });
+            // Per-item update: each item must store ITS OWN current price as
+            // priceBeforeMarkdown and have its own price reduced. A batch
+            // updateMany would (incorrectly) write item[0]'s price onto every item.
+            // The `priceBeforeMarkdown: null` filter above is the idempotency guard —
+            // items already marked down were excluded from firstMarkdownItems.
+            for (const item of firstMarkdownItems) {
+              const currentPrice = item.price!;
+              const newPrice = Math.max(0, currentPrice * (1 - effectiveFirstPct / 100));
+
+              await prisma.item.update({
+                where: { id: item.id },
+                data: {
+                  priceBeforeMarkdown: currentPrice,
+                  price: newPrice,
+                  markdownApplied: true,
+                },
+              });
+            }
 
             totalMarkdownsApplied += firstMarkdownItems.length;
             console.log(

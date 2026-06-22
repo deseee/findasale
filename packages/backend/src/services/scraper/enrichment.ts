@@ -4,6 +4,7 @@
  * NOTE: Google Places enrichment removed — paid API, $200/run (S695).
  */
 
+import * as Sentry from '@sentry/node';
 import { prisma } from '../../lib/prisma';
 import { getRandomUserAgent, getRandomReferer } from './userAgents';
 import {
@@ -204,6 +205,7 @@ export async function enrichOrganizer(
       `[Enrichment] Failed to enrich organizer ${organizerId}:`,
       error instanceof Error ? error.message : String(error)
     );
+    Sentry.captureException(error);
   }
 }
 

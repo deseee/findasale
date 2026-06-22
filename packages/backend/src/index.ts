@@ -892,7 +892,21 @@ httpServer.listen(PORT, '0.0.0.0', () => {
   initCouponRateLimiter();
 
   // ADR-073 Phase 1: Initialize directory scraper cron (gated by SCRAPER_ENABLED env var)
-  initScraperCron();
+  // Defensive try/catch: a corrupt/missing compiled source module or an undefined
+  // SOURCE_REGISTRY entry must NOT crash-loop the entire server at startup.
+  // (Sentry FINDASALE-NODEJS-3G / 1D pattern — same precedent as geocodeBacklog above.)
+  try {
+    initScraperCron();
+  } catch (err: any) {
+    console.error('[scraperCron] Non-fatal startup error — scraper cron not scheduled:', err?.message);
+    try {
+      Sentry.captureException(err instanceof Error ? err : new Error(String(err)), {
+        tags: { type: 'scraperCronInitFailure' },
+      });
+    } catch (_sentryErr) {
+      // swallow — Sentry must never turn a logged warning into a crash
+    }
+  }
 
   // ADR-074: Initialize metro sync cron (gated by METRO_SYNC_ENABLED env var)
   initMetroSyncCron();

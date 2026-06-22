@@ -303,6 +303,19 @@ const salePhotoUrls = [
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 async function main() {
+  // ── PRODUCTION GUARD (defense-in-depth) ───────────────────────────────────
+  // This seed CLEARS data and upserts real founder/test accounts. Running it
+  // against the production database would wipe live organizer/shopper records.
+  // Refuse to run in production unless ALLOW_PROD_SEED=true is explicitly set.
+  if (process.env.NODE_ENV === 'production' && process.env.ALLOW_PROD_SEED !== 'true') {
+    console.error(
+      '\n❌ REFUSING TO SEED: NODE_ENV=production detected.\n' +
+      '   This seed clears data and upserts accounts — it must never run against prod.\n' +
+      '   If you are absolutely certain, set ALLOW_PROD_SEED=true to override.\n'
+    );
+    process.exit(1);
+  }
+
   console.log('🌱 Starting database seed...');
   const defaultPassword = await bcrypt.hash('Seedy2025!', 10);
 
