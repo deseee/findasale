@@ -1,0 +1,70 @@
+name: CI Typecheck & Tests
+
+# Pre-deploy quality gate. Runs the same checks locally documented in CLAUDE.md so a
+# red X appears on GitHub before Vercel/Railway pick up a bad commit.
+#
+# IMPORTANT: A green/red status here does NOT block deploys by itself. Vercel and
+# Railway auto-deploy on push to main regardless of Actions status. To make this gate
+# actually block, wire it up per the instructions in the PR/README:
+#   - Vercel:  Project -> Settings -> Git -> enable "Wait for CI before deploying"
+#              (or an Ignored Build Step that checks the commit status).
+#   - Railway: Service -> Settings -> enable "Wait for CI" / check-gating, or remove
+#              auto-deploy and trigger deploys from a successful run of this workflow.
+# Until that is configured, this workflow only reports status; it does not gate.
+#
+# Setup mirrors the repo's existing workflows (corepack + setup-node@v4, node 22,
+# pnpm cache). The root package.json pins packageManager: pnpm@8.15.5, so corepack
+# selects that version automatically — no pnpm/action-setup step needed.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Cancel superseded runs on the same ref to save minutes.
+concurrency:
+  group: ci-typecheck-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  typecheck:
+    name: Typecheck, tests & lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Prisma client is generated from packages/database and imported by the backend.
+      # Without it, backend tsc fails on missing @prisma/client types. Generate it
+      # before any typecheck step. (No DB connection required for `generate`.)
+      - name: Generate Prisma client
+        run: pnpm --filter ./packages/database exec prisma generate
+
+      - name: Backend typecheck
+        run: npx tsc --noEmit --skipLibCheck
+        working-directory: packages/backend
+
+      - name: Frontend typecheck
+        run: npx tsc --noEmit --skipLibCheck
+        working-directory: packages/frontend
+
+      - name: Backend tests
+        run: pnpm --filter ./packages/backend test
+
+      - name: Frontend lint
+        run: pnpm --filter ./packages/frontend lint
