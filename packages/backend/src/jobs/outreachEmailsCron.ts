@@ -4,6 +4,7 @@ import { v4 as uuid } from 'uuid';
 import jwt from 'jsonwebtoken';
 import { prisma } from '../lib/prisma';
 import { suppressionService, isEmailDomainBlocked } from '../services/suppressionService';
+import { domainCanReceiveMail } from '../lib/mxValidator';
 import { batchSyncLeadTiersToMailerLite } from '../services/mailerliteService';
 import { checkAndIncrementQuota, getDailyEmailCount, QuotaExceededError } from '../lib/emailService';
 import { sendOutreachMessage, isOutreachLimitError, getOutreachSender } from '../lib/outreachSender';
@@ -598,6 +599,33 @@ const sendOutreachEmailsInner = async (): Promise<void> => {
         // quota is not consumed. Sending to these produced a Google DSN bounce flood.
         if (isEmailDomainBlocked(toEmail)) {
           console.warn('[OutreachCron] Skipped blocked/placeholder recipient:', toEmail);
+          continue;
+        }
+
+        // PRE-SEND MX CHECK (bounce-rate guard — top Gmail-reputation signal).
+        // Scraped directory domains frequently have NO MX record (cannot receive
+        // mail) and hard-bounce every send ("DNS Error: no MX"). Verify the domain
+        // can receive mail BEFORE the atomic claim + quota increment so no SENT row
+        // is written and no quota is consumed on a guaranteed-undeliverable address.
+        // Fails OPEN on transient lookup errors (handled inside domainCanReceiveMail).
+        const mxCheck = await domainCanReceiveMail(toEmail);
+        if (!mxCheck.ok) {
+          const category = mxCheck.reason || 'NO_MX'; // 'NO_MX' | 'NXDOMAIN'
+          // Permanent suppression: the domain genuinely cannot receive mail.
+          await suppressionService.addSuppression(toEmail, 'hard_bounce', { organizerId: record.organizerId });
+          // Record the classification fields (addSuppression's metadata does not set these).
+          await prisma.emailSuppression.update({
+            where: { emailAddress: toEmail.toLowerCase() },
+            data: {
+              bounceCategory: category,
+              bounceHard: true,
+              diagnosticCode: 'pre-send MX check: no MX record',
+              classifiedAt: new Date(),
+            },
+          }).catch((updErr: any) => {
+            console.error('[OutreachCron] Failed to set MX classification fields for', toEmail, '—', updErr?.message);
+          });
+          console.log(`[OutreachCron] Skipped ${toEmail} — domain has no MX (pre-send), suppressed ${category}`);
           continue;
         }
         const listUnsubscribeHeader = `<mailto:unsubscribe@finda.sale?subject=unsubscribe>, <${unsubscribeLink}>`;
