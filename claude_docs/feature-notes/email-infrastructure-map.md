@@ -2,7 +2,7 @@
 
 > **Purpose:** The durable reference for the **receiving / addressing / DNS / provider-account** side of FindA.Sale email — every `@finda.sale` address, what it's for, where it surfaces, and where inbound mail goes.
 > **Companion doc (sending side):** `feature-notes/email-outreach-scraper-system-map.md` — the code-verified map of the 3 *send* rails. This file is the *inbound + infrastructure* map; that file is the *outbound code* map.
-> **Last verified:** S953 (2026-06-11) — DNS re-checked live via `dig`; ImprovMX aliases + Resend suppression list confirmed in their dashboards; address inventory from `grep` over `packages/`. S-current (2026-06-21) — sending-limit throttling identified; bounce classification added.
+> **Last verified:** S953 (2026-06-11) — DNS re-checked live via `dig`; ImprovMX aliases + Resend suppression list confirmed in their dashboards; address inventory from `grep` over `packages/`. S1020 (2026-06-22) — root cause corrected: the send-limit failures are a **Google abuse CLAMP triggered by a 15-26% bounce rate** (not a flat ~200-300/day volume throttle); bounce classification + MX validation added; outreach paused (`OUTREACH_DAILY_CAP=1`).
 > No date suffix — this is a living reference. Update it in place when addresses, aliases, DNS, or providers change.
 
 ---
@@ -80,7 +80,7 @@ Root `finda.sale` MX points at ImprovMX. **Every alias below forwards to `deseee
 ## 5. Sending Rails (summary — full detail in companion doc)
 
 Three outbound paths. See `email-outreach-scraper-system-map.md` for code-level detail.
-- **Rail A — Gmail API** (`lib/emailService.ts`): bulk / lifecycle / cold outreach from `find@outreach.finda.sale`. DB-backed internal guard of 1500/day (`GMAIL_DAILY_HARD_LIMIT`) — but this is the CODE's own guard, NOT Google's enforced limit. Google's REAL enforced limit is **reputation-throttled to ~200-300/day** (far below the 2000/day paid Workspace ceiling). Evidence (2026-06-21): the cron attempted ~305 sends (quota log recorded 169) and 136 bounced with Gmail "You have reached a limit for sending mail. Your message was not sent." (daily sending-limit, no 4.x.x rate code). See §8.
+- **Rail A — Gmail API** (`lib/emailService.ts`): bulk / lifecycle / cold outreach from `find@outreach.finda.sale`. DB-backed internal guard of 1500/day (`GMAIL_DAILY_HARD_LIMIT`) — but this is the CODE's own guard, NOT Google's enforced limit. The account sends only ~169/day (well under the 2000/day paid ceiling), so volume was never the issue. The send-limit failures are a **Google abuse CLAMP triggered by a high bounce rate** (15-26% over 6/18-6/20 vs Google's ~2-5% tolerance). On 6/21 Google clamped the account → 136 bounced "You have reached a limit for sending mail. Your message was not sent." (daily sending-limit, no 4.x.x rate code). See §8.
 - **Rail B — Resend** (`lib/transactionalEmailService.ts`): transactional (auth, receipts, invites) + quota alerts. FROM `noreply@finda.sale`. Gmail-suspension-proof.
 - **Rail C — Amazon SES** (`send.finda.sale`): legacy fallback FROM addresses only.
 
@@ -106,19 +106,23 @@ Three outbound paths. See `email-outreach-scraper-system-map.md` for code-level 
 
 ---
 
-## 8. Sending Limits & Reputation Throttling (verified 2026-06-21)
+## 8. Sending Limits — Abuse Clamp Triggered by Bounce Rate (corrected 2026-06-22)
 
-**The 1500/day in §5 is a code guard, not Google's limit.** `GMAIL_DAILY_HARD_LIMIT` (1500) is FindA.Sale's own internal cap. Google enforces a *separate* limit, and for `find@outreach.finda.sale` that limit is currently **reputation-throttled to roughly ~200-300/day** — far below the 2000/day ceiling of a paid Workspace seat.
+**It is NOT a flat ~200-300/day volume throttle.** The earlier framing was wrong. The send-limit failures are a **Google abuse-system CLAMP triggered by the BOUNCE RATE**, not by volume.
 
-**Evidence (2026-06-21):** the cron attempted ~305 sends (quota log recorded 169) and **136 bounced** with the Gmail message *"You have reached a limit for sending mail. Your message was not sent."* — a daily sending-limit block (no 4.x.x transient rate code). 500+ such failures exist historically, so this is **chronic, not a one-off**.
+**Evidence (tool-cited, 2026-06-22):**
+- **Volume was never the problem.** `outreach@finda.sale` (paid Workspace; auth/SPF/DKIM all confirmed correct) sends only **~169/day total** — verified directly from the mailbox SENT folder, matching the quota log (no hidden mail). That volume was steady and had **ZERO send-limit failures through 6/20**, far under the 2000/day paid ceiling.
+- **Bounce rate was the trigger.** Sending to scraped directory addresses produced a **15-26% bounce rate** over 6/18-6/20 (6/18 ~24/165 = 15%, 6/19 ~37/140 = 26%, 6/20 ~38/199 = 19%). Google tolerates roughly **2-5%**. A ~1-in-5 bounce rate is the classic signature of a purchased/garbage list, so Google's abuse system **clamped the account's sending limit on 6/21** — a one-day-lagged abuse penalty → **136** "reached a limit for sending" failures that day, **12** the next.
+- **Penalty box.** Because the account is now clamped, even tiny batches fail (a 12-message batch on 6/22 all bounced as over-limit).
 
-**Root signal:** reputation throttling driven by cold-outreach spam flags — the same `5.7.1` *"unsolicited / Message rejected"* outbound blocks documented in the deliverability findings.
+**ASYNC-bounce mechanism (important — known code gap):** these over-limit failures are **asynchronous**. Gmail *accepts* the API send — the cron logs it as "sent," consumes quota, and marks the touch SENT — then bounces it *later* as "message not sent." So the limit-aware backoff (which fires only on a synchronous send-call error) does **NOT** catch this, and the cron **over-counts "sent."** Follow-up: detect async send-limit bounces and fix the false SENT counting.
 
-**Tactical fix (shipping):** new env `OUTREACH_DAILY_CAP` (default 75), surge guard, send pacing, and limit-aware backoff so the cron stays under the throttle instead of slamming into it.
+**The fix (root → recovery):**
+1. **List hygiene = the root fix.** Pre-send MX validation (`lib/mxValidator.ts`) + suppression + placeholder filters (all shipped S1020) cut the bounce rate at the source, which is the actual root cause.
+2. **Pause.** `OUTREACH_DAILY_CAP` set to **1** (near-zero) in Railway so Google sees sending stop and the clamp clears over a few days. (The old "ramp up from 75" plan was wrong — we paused to near-zero to serve the penalty first.)
+3. **Resume** only at low volume on the cleaned list **after** the daily health check shows **zero "reached a limit" failures and a bounce rate <5%**. The bounce RATE, not volume, is the governing constraint.
 
-**Strategic fix (specced):** migrate cold outreach off the Workspace mailbox onto a **dedicated sending domain + ESP** to isolate `finda.sale`'s root reputation. See `feature-notes/ADR-dedicated-outreach-sender.md`.
-
----
+**NOT pursued:** dedicated sending domain + ESP migration — no budget; decision stands shelved (`feature-notes/ADR-dedicated-outreach-sender.md` is reference-only).
 
 ## 9. Related
 - `feature-notes/email-outreach-scraper-system-map.md` — sending rails (code map)

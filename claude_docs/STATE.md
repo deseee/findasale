@@ -8,6 +8,21 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
+**S1020 WRAP (2026-06-22) — RESEARCH/BUG (outreach email deliverability root-cause + throttle fixes + scheduled-task hardening). Pushed + deployed green; backend healthy; OutreachCron verified live "12 sent, 0 failed". BQ 1→4 (3 P1 email follow-ups added).**
+- **Prior P0 was FABRICATED.** The earlier-claimed "RAILWAY_BACKEND_URL not set → phishing links" was a code-inference, DISPROVEN this session — the var has been set for months. Real diagnosis came from direct mailbox reads + Railway DB, not code-reading.
+- **ROOT CAUSE (tool-cited — corrected 6/22):** NOT volume. The sender `outreach@finda.sale` (paid Workspace; auth/SPF/DKIM all confirmed correct) sends only ~169/day total (verified via the SENT folder — matches the quota log; no hidden mail), steady, with ZERO send-limit failures through 6/20. The trigger was **BOUNCE RATE**: sending to scraped directory addresses produced a 15-26% bounce rate over 6/18-6/20 (6/18 ~24/165=15%, 6/19 ~37/140=26%, 6/20 ~38/199=19%). Google tolerates ~2-5%; a ~1-in-5 bounce rate is the classic signature of a purchased/garbage list, so Google's abuse system **CLAMPED the account's sending limit on 6/21** (a one-day-lagged abuse penalty) → 136 "reached a limit for sending" failures that day, 12 the next. The account is now in Google's penalty box, so even tiny batches fail (a 12-message batch on 6/22 all bounced as over-limit). The old "~200-300/day reputation throttle" framing is WRONG — it was an abuse clamp triggered by the bounce rate, not a flat volume throttle.
+- **ASYNC-BOUNCE MECHANISM NOTE:** these over-limit failures are ASYNC — Gmail ACCEPTS the API send (the cron logs it "sent," consumes quota, marks the touch SENT) then bounces it later as "message not sent." So the limit-aware backoff (which fires on a send-call error) does NOT catch this, and the cron over-counts "sent." Known gap → code follow-up: detect async send-limit bounces / fix the false SENT counting.
+- **FIXES SHIPPED (all on main, deployed green):**
+  1. `4e1d06f` suppressionService.isEmailDomainBlocked: `noemail.*` placeholder family + no-dot-domain guard.
+  2. `641fb55` bounce classification: EmailSuppression +5 cols (bounceCategory, bounceStatusCode, diagnosticCode, retryAfter, classifiedAt) applied to Railway via DIRECT DDL (no migration file → schema drift, see Next Session); bounceSuppressService classifies; isSuppressed honors retryAfter; reclassify-bounces job registered.
+  3. `661e4413` tactical throttle: `OUTREACH_DAILY_CAP` (default 75) is the binding daily cap + surge guard (day-total attempts can't exceed cap) + 1.1s pacing + limit-aware backoff (stops for the UTC day on a Gmail send-limit error by pinning EmailQuotaLog).
+  4. `432638b` pre-send MX validation (new lib/mxValidator.ts): skips+suppresses NO_MX domains before sending.
+  5. `a90c793` (HEAD): built then REMOVED a provider-agnostic SMTP outreach rail per Patrick — kept inline Gmail send.
+- **DB actions (live):** un-suppressed the 12 Google-blocked addresses, then applied POLICY_BLOCK + 7-day retryAfter cooldown so they don't immediately re-send into the throttle.
+- **THE FIX (LOCKED):** the root cause is the BOUNCE RATE, so (1) **list hygiene** — pre-send MX validation + suppression + placeholder filters (all shipped this session) cut the bounce rate at the source; (2) **PAUSE** — `OUTREACH_DAILY_CAP` set to **1** (near-zero) in Railway so Google sees sending stop and the clamp clears over a few days (we paused to near-zero to serve the penalty FIRST — the old "ramp up from 75" plan was wrong); (3) **resume** only at low volume on the cleaned list AFTER the health check shows zero "reached a limit" failures + bounce rate <5%. Do NOT migrate to a dedicated domain / SES — no budget; that decision stands SHELVED. ADR `claude_docs/feature-notes/ADR-dedicated-outreach-sender.md` is reference-only.
+- **Scheduled tasks hardened:** `findasale-email-delivery-health` Check B now watches the real abuse-clamp signal (not 75% of 1500); new B2 reads the outreach mailbox directly for "reached a limit for sending" failures + surge detection + bounce-category breakdown (the bounce RATE is the governing metric to watch). `bounce-suppression-sweep` now CLASSIFIES bounces and sets the new columns — this is the LIVE suppression path (bounceSuppressService polls the wrong mailbox; recipient bounces forward to deseee@gmail.com, not the Workspace mailbox the backend reads).
+- **Docs:** email-infrastructure-map.md updated (§5 corrected, new §8 "Sending Limits & Reputation Throttling"). New ADR-dedicated-outreach-sender.md (shelved).
+
 **S1019 WRAP (2026-06-20) — DEV/BUG (platform stats investigation, organizerId backfill, live counts). Push confirmed green. BQ unchanged at 1.**
 
 **S1018 WRAP (2026-06-20) — RESEARCH/DEV (automated email health sweep + root-cause investigation + suppression fix + ESN backfill). Push confirmed live (Patrick redeployed green). BQ unchanged at 2.**
@@ -217,6 +232,9 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
 | Cart multi-item payment-completion | Stripe LIVE keys block test card; real purchase needed to verify items→SOLD webhook | Real purchase or test-mode proxy | S1006 |
+| bounceSuppressService reads WRONG mailbox | Recipient bounces forward to deseee@gmail.com, not the Workspace mailbox the backend polls → recipient bounces never reach bounceSuppressService; the sweep task is the live writer | Root fix in ADR-bounce-suppression-mailbox-fix.md (optional) — point bounceSuppressService at the correct inbox | S1020 |
+| reclassify-bounces backfill ineffective | Same wrong-mailbox cause — ~93 historical bounces not reclassifiable | Fix mailbox source first, then re-run backfill | S1020 |
+| schema.prisma drift — 5 EmailSuppression cols | bounceCategory/bounceStatusCode/diagnosticCode/retryAfter/classifiedAt exist in DB+schema but have NO migration file (applied via raw DDL) | Optionally generate the migration locally + `prisma migrate resolve --applied` | S1020 |
 
 ## Pending Chrome Verifications
 
@@ -226,23 +244,56 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Next Session
 
-### S1020 — priorities
+### S1021 — priorities
 
-**Session type: QA or DEV.** BQ = 1 (below 8 ceiling).
+**Session type: QA or DEV.** BQ = 4 (below 8 ceiling).
 
-**Session start:** Load STATE.md. Smoke test finda.sale/organizer/platforms as Artifact MI — confirm eBay=10, Google≥92, Facebook=93, coverage≥69.
+**Session start:** Load STATE.md. Post-deploy smoke test of S1020 email work: confirm backend healthy + OutreachCron still logging clean ("N sent, 0 failed", no "reached a limit" errors). Run the `findasale-email-delivery-health` check manually and confirm B/B2 read the real throttle + mailbox.
 
 **Action required — Patrick:**
-- eBay token expired June 20 at 21:30 UTC. Platform dashboard falls back to DB count (still accurate from S1019 backfill). To restore live API count: reconnect eBay in organizer settings → re-authorize.
-- AlternativeTo submission: did you submit after the June 18 scheduled task prompted you?
+- **Outreach is PAUSED.** `OUTREACH_DAILY_CAP=1` (near-zero) is set in Railway so Google sees sending stop and the abuse clamp clears over a few days. Leave it at 1 until the resume condition below is met. Do NOT ramp from 75 — that earlier plan was wrong; the bounce RATE (not volume) was the cause, so we serve the penalty first.
+- **Resume condition:** raise the cap to a small value (low-volume, cleaned list only) ONLY AFTER the daily `findasale-email-delivery-health` check shows **zero "reached a limit" send-limit failures AND a bounce rate <5%**. The bounce rate is the governing constraint — keep it under 5% or the clamp returns.
+- eBay token still expired (June 20, 21:30 UTC) — reconnect eBay in organizer settings to restore live API count (DB fallback is accurate meanwhile).
+- AlternativeTo submission — did you submit after the June 18 scheduled-task prompt?
 
-**Dev priorities:**
-- `Skill('findasale-dev')`: #547 eBay Calculated Shipping E2E QA (requires Patrick)
-- Facebook latent bug: `facebookCount` query has no status filter — could count SOLD items. Low priority but worth a roadmap card.
-- Audio CDN migration (P3 — 54 mp3s in packages/frontend/public, ~8.6MB total, bg-music.mp3 is 2.8MB)
+**Dev priorities (email follow-ups — see Blocked Queue):**
+- `Skill('findasale-dev')`: **bounceSuppressService wrong-mailbox fix** (P1). Root cause confirmed: recipient bounces forward to deseee@gmail.com, not the Workspace mailbox the backend polls, so bounceSuppressService never sees them; the `bounce-suppression-sweep` task is the live writer (now classifying). Expected output: point bounceSuppressService at the correct inbox per ADR-bounce-suppression-mailbox-fix.md, then re-enable the reclassify-bounces backfill (~93 historical bounces). Optional per Patrick.
+- **schema.prisma drift fix** (P1): the 5 EmailSuppression columns (bounceCategory/bounceStatusCode/diagnosticCode/retryAfter/classifiedAt) exist in DB + schema but have no migration file. Generate the migration locally + `prisma migrate resolve --applied`. NOTE: `prisma migrate dev` is BROKEN in this repo (shadow-DB replay fails) — generate the SQL and resolve-applied, don't run migrate dev.
+- `Skill('findasale-dev')`: **async send-limit bounce detection + false-SENT counting fix** (P1, email reliability). Root cause confirmed: over-limit failures are ASYNC — Gmail ACCEPTS the API send (cron logs "sent," consumes quota, marks the touch SENT) then bounces it later as "message not sent." The limit-aware backoff only fires on a synchronous send-call error, so it misses these and the cron over-counts "sent." Expected output: detect async send-limit bounces (mailbox poll / DSN match) and correct the SENT touch state + quota accounting so the cap and health check reflect reality.
+- `Skill('findasale-dev')`: #547 eBay Calculated Shipping E2E QA (requires Patrick available).
+- Audio CDN migration (P3 — 54 mp3s in packages/frontend/public, ~8.6MB total).
 
-**BQ (1):** cart payment-completion (Patrick real purchase to verify items→SOLD webhook).
+**BQ (4):** cart payment-completion (Patrick real purchase); bounceSuppressService wrong-mailbox; reclassify-bounces backfill ineffective; schema.prisma 5-column drift.
+
 ## Recent Sessions
+
+### S1020 — 2026-06-22 | RESEARCH/BUG (outreach email deliverability root-cause + throttle fixes + task hardening)
+
+**Session type:** RESEARCH/BUG
+**Triggered by:** Outreach email deliverability problem investigation.
+
+**Prior P0 disproven (fabrication caught):** the earlier-claimed "RAILWAY_BACKEND_URL not set → phishing links" was a code-inference, NOT a real finding — the var has been set for months. Real diagnosis came from direct mailbox reads + Railway DB.
+
+**Root cause (tool-cited — CORRECTED 6/22):** NOT volume. The sender `outreach@finda.sale` (paid Workspace; auth/SPF/DKIM confirmed correct) sends only ~169/day total (verified via SENT folder = quota log; no hidden mail), steady, ZERO send-limit failures through 6/20. The trigger was **BOUNCE RATE**: scraped directory addresses produced a 15-26% bounce rate over 6/18-6/20 (6/18 15%, 6/19 26%, 6/20 19%). Google tolerates ~2-5%; a ~1-in-5 bounce rate is the signature of a purchased/garbage list, so Google's abuse system **CLAMPED the account's sending limit on 6/21** (one-day-lagged abuse penalty) → 136 "reached a limit for sending" failures that day, 12 the next. Account now in the penalty box → even a 12-message batch on 6/22 bounced all-over-limit. The earlier "~200-300/day throttle" framing is WRONG: it's an abuse clamp from the bounce rate, not a volume cap. **Async-bounce mechanism:** Gmail ACCEPTS the API send (cron logs "sent," consumes quota, marks SENT) then bounces it later — so the limit-aware backoff (fires on a send-call error) does NOT catch this and the cron over-counts "sent." Known gap → code follow-up.
+
+**Fixes shipped (all on main, deployed green; backend healthy; OutreachCron live "12 sent, 0 failed"):**
+- `4e1d06f` — suppressionService: `noemail.*` placeholder family + no-dot-domain guard.
+- `641fb55` — bounce classification: EmailSuppression +5 cols (DIRECT DDL, no migration file → schema drift); bounceSuppressService classifies; isSuppressed honors retryAfter; reclassify-bounces job registered.
+- `661e4413` — throttle: OUTREACH_DAILY_CAP (default 75) binding daily cap + surge guard + 1.1s pacing + limit-aware backoff (pins EmailQuotaLog, stops for the UTC day on a Gmail send-limit error).
+- `432638b` — pre-send MX validation (lib/mxValidator.ts): skips+suppresses NO_MX domains.
+- `a90c793` (HEAD) — built then REMOVED provider-agnostic SMTP rail per Patrick; kept inline Gmail send.
+
+**DB actions (live):** un-suppressed 12 Google-blocked addresses, then applied POLICY_BLOCK + 7-day retryAfter cooldown.
+
+**The fix (LOCKED):** root cause is the bounce RATE → (1) list hygiene (MX validation + suppression + placeholder filters, all shipped) cuts the bounce rate at the source; (2) PAUSE — `OUTREACH_DAILY_CAP=1` (near-zero) in Railway so Google sees sending stop and the clamp clears over a few days; (3) resume at low volume on the cleaned list ONLY after the health check shows zero "reached a limit" failures + bounce rate <5%. We paused to near-zero to serve the penalty FIRST — the old "ramp from 75" plan was wrong. No dedicated domain / SES (no budget); ADR-dedicated-outreach-sender.md stands SHELVED.
+
+**Scheduled tasks hardened:** `findasale-email-delivery-health` B now watches the real abuse-clamp signal + new B2 reads the outreach mailbox for "reached a limit" failures + surge + bounce-category breakdown (bounce RATE is the metric to watch, target <5%). `bounce-suppression-sweep` now CLASSIFIES bounces (the LIVE suppression path — bounceSuppressService polls the wrong mailbox).
+
+**Docs:** email-infrastructure-map.md (§5 corrected, new §8 throttling); new ADR-dedicated-outreach-sender.md (shelved).
+
+**Follow-ups → Blocked Queue (3 P1):** bounceSuppressService wrong-mailbox; reclassify-bounces backfill ineffective (~93 bounces); schema.prisma 5-column drift.
+
+**BQ: 1 → 4.** All commits deployed green.
 
 ### S1019 — 2026-06-20 | DEV/BUG (platform stats investigation + live counts + dark mode sweep)
 
@@ -309,85 +360,3 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 **Verified deploy:** HEAD 4374e40a LIVE on Vercel (READY); prior 9c445eb7 ERRORed but superseded.
 **BQ delta:** 1 → 2.
 
-### S1012 — 2026-06-19 | BUG/DATA (Ala-carte revenue tracking + admin DM)
-
-**Session type:** BUG/DATA
-**Shipped (commits 9c445eb7, 4374e40a):**
-1. **Ala-carte revenue backfill** — psycopg2 direct DB insert: Purchase record `cj5sxhx0ruuyw9lb4n98exiax` ($9.99, PAID, source=ALA_CARTE) for the existing ala-carte sale. Admin dashboard "Today's Revenue" now shows $9.99 immediately.
-2. **adminController.ts revenue fix** — replaced hardcoded `alaCarteRevenueLast30d = 0` with real `prisma.purchase.aggregate` queries (30d + today); ALA_CARTE source excluded from fee-rate multiplication; `transactionRevenueToday += alaCarteRevenueToday` so the TODAY card reflects the combined total.
-3. **stripeController.ts webhook fix** — `checkout.session.completed` ALA_CARTE handler now creates a `Purchase` record (source=ALA_CARTE, amount=9.99, status=PAID). `payment_intent.succeeded` ALA_CARTE handler has idempotency guard (`findFirst` check) to prevent double-counting.
-4. **Admin DM feature** — `POST /admin/users/:userId/message` endpoint (adminController + admin.ts route); "Send Message" button + subject/body modal on admin/users/[id].tsx. Sends via emailService.emails.send (Gmail transactional rail). Fixed JSX fragment wrapper for modal overlay.
-**Files changed:** adminController.ts, stripeController.ts, admin.ts, admin/users/[id].tsx. TypeScript: 0 errors (both packages).
-**BQ delta:** 1 → 1 (cart payment-completion unchanged — Stripe LIVE keys, Patrick action only).
-
-### S1011 — 2026-06-19 | BUG/DATA (Stripe webhook fix + MRR + dashboard + DB cleanup)
-
-**Session type:** BUG/DATA
-**Shipped (pending push):**
-1. **RETAIL dashboard dates** — dashboard.tsx: `saleType !== 'RETAIL'` guard on date range display + urgency tag. Permanent storefronts no longer show "Jun 29 – Jul 29" date range or "Ending Soon" badge. Backend tsc 0 errors.
-2. **MRR internal exclusion** — adminController.ts: `INTERNAL_EMAILS = ['artifactmi@gmail.com', 'deseee@gmail.com']` added to `getStats` Prisma query. Removes ~$158 fake MRR from admin dashboard. Backend tsc 0 errors. **DEPLOYED (commit 37d9f9c3).**
-3. **À-la-carte Stripe webhook pipeline** — stripeController.ts: (a) `payment_intent_data: { metadata: { saleId, type: 'ALA_CARTE' } }` added to `createAlaCarteCheckout` so future PIs carry metadata; (b) ALA_CARTE handler added to `payment_intent.succeeded` — applies `alaCarteFeePaid=true` + `purchaseModel/alaCarte` to the sale automatically. Root cause: metadata was set on Checkout Session but not propagated to the underlying PaymentIntent, so `payment_intent.succeeded` handler had no way to identify ALA_CARTE events. Backend tsc 0 errors. **PENDING PUSH.**
-4. **DB test-data cleanup** — deleted 4 test sales (Artifact ENDED soft-deleted row, Kelly's S875 Mixed Goods, Kelly's QA Flip Report, Up North QA315) + Leo Thomas / Star Raiders test purchase ($3.49 PENDING); restored Star Raiders item to AVAILABLE.
-**Diagnosed:** Admin users "Failed to load users" = Railway PostgreSQL shared memory pressure (PostgreSQL error 53100 `No space left on device`). First 500 at 17:20 UTC, 9 min BEFORE my commit at 17:29 UTC. Not caused by session changes. Railway DB node is hitting memory limits on large user queries.
-**BQ delta:** 1 → 1 (unchanged — cart payment-completion still needs real purchase).
-
-### S1010 — 2026-06-18 | QA (PCVs applied; soft-deleted 404 Chrome ✅; regressions clean)
-
-**Session type:** QA
-**PCVs applied to roadmap.md (cross-session rule, from S1008 PCV table):**
-- Row 551 Blog → Chrome QA ✅ S1008 (7 cards, JSON-LD, dark mode, Footer link. ss_170867567, ss_9890ula3j)
-- Row 301 Label Composer → Human QA ✅ S1008 (item name after price, dates corner, start-position collapsed. ss_7380smxpk, ss_26234jf7i, ss_2761xkv7y)
-- Buy Now graceful 409 → no standalone roadmap row; noted inline (stripeController 409 + CheckoutModal {loadError} ✅ S1008)
-**QA — Soft-deleted sale → 404 ✅:** Navigated finda.sale/sales/cmom7h73l000hz36wzbruoa64 (old Artifact ENDED row, deletedAt set). Got Next.js 404 page "This page could not be found." Confirmed fix (getSale 404s on deletedAt) deployed and working. ss_7566z4gbe.
-**QA — Negative test (normal sale unaffected) ✅:** Navigated finda.sale/sales/cmpt2oq6q00138cehpgqx3huk (Artifact storefront, isOngoing). Page loaded correctly — "Permanent storefront" label, Paw Paw MI, store content. saleController change did not break non-deleted sales. ss_9410vkt0l.
-**QA — /sales feed regression ✅:** finda.sale/sales rendered 19,496 sales. ss_16629aq1d.
-**QA — /search regression ✅:** /search?q=thrift returned Sales (10) tab with results. ss_1405rtn1d.
-**BQ delta:** 2 → 1 (soft-deleted 404 Chrome-verified S1010 → removed; cart payment-completion remains, Patrick action needed).
-**PCV table:** Cleared (all 3 S1008 PCVs applied to roadmap.md).
-
-### S1008 — 2026-06-18 | QA (Blog ✅ + Buy Now/Label Composer UNVERIFIED)
-
-**Session type:** QA
-**Confirmed Patrick commits live:** `b99f05c1` (labels: item name after price), `55abfc62` (labels: room tag + dates to corner), `c06cb773` (label composer: start-position card above preview, collapsed), `17595003` (scraper: batch lastScrapedAt writes + GIN-index dedup). Infrastructure: Vercel ✅ READY, Railway ✅ SUCCESS.
-**QA-Blog ✅:** Navigated finda.sale/blog as user5. 7 cards loaded (category badge, date, reading time, title, excerpt). Clicked post → full body rendered, breadcrumb, "← Back to Blog" link, JSON-LD Article schema (@type Article, correct headline+datePublished), canonical URL. Footer Blog link confirmed. Dark mode clean. ss_170867567, ss_9890ula3j.
-**QA-Buy-Now-Graceful ✅ VERIFIED (S1008 continuation):** Found "QA First Item Test Sale S983" (Alice Johnson / Kelly's Estate Sales, stripeConnectEnabled=false) LIVE in prod. As user5 (Leo Thomas), navigated to item cmqer8m8w00x5me4oqoabaulh → clicked "Buy It Now" → "Continue to Pay" → red error box displayed: "This seller isn't set up to accept online payments yet." CheckoutModal.tsx {loadError} rendering confirmed. ss_8945gfi4w, ss_9148p3694, ss_8856ik32o, ss_56944gx1i.
-**QA-Label-Composer ✅ VERIFIED (S1008 continuation):** As Alice Johnson (user1@example.com), navigated /organizer/label-composer/cmpfplxqbxwtucltmbouvz0os. Added "QA Test First Item S983" ($5.00) to batch via PULL FROM PRICED ITEMS. Page text confirmed: label shows "$5.00" then "QA Test First Item S983" (item name after price ✅ b99f05c1), "6/18–19" in corner (dates ✅ 55abfc62). "Expand to choose starting label ▲" collapsed above label grid (start-position ✅ c06cb773). ss_7380smxpk, ss_26234jf7i, ss_2761xkv7y.
-**BQ delta:** 3 → 1 (Buy Now graceful error ✅; label composer ✅; blog ✅ — only cart payment-completion remains).
-**PCVs staged:** Blog row 551 + Buy Now graceful error + Label composer — apply Chrome QA ✅ to roadmap.md next session.
-
-### S1007 — 2026-06-18 | DEV (Blog section + competitor-monitor update)
-- Blog section built (CODE-ONLY): /blog listing page (7 posts, ISR revalidate:86400), /blog/[slug] detail page (parseMarkdown, JSON-LD Article schema, SEO Head, Back to Blog link). 10 new files + Layout.tsx footer Blog link. TypeScript: 0 errors.
-- Competitor-monitor SKILL.md updated: Phase 2 now writes full 600–900 word blog posts to claude_docs/marketing/blog-drafts/. Hardcoded session path replaced with dynamic discovery.
-- BQ: 2→3 (blog QA added).
-
-### S1006 — 2026-06-17 | QA/BUG (Buy It Now P1 fix + organizer workflow features)
-
-**Session type:** QA/BUG
-**Shipped:** (1) Buy It Now P1 fix — removed `automatic_tax` from raw PaymentIntent (stripeController.ts); (2) graceful invalid-account 409 error + CheckoutModal renders error text (stripeController.ts, CheckoutModal.tsx); (3) edit-item Save returns to add-items page; (4) Label Sheets link on add-items+edit-item pages; (5) label composer start-position picker (3×10 grid, prepends blank TagRecords); (6) live item search on add-items page (client-side filter, case-insensitive, title/category/tags).
-**Files changed:** stripeController.ts, CheckoutModal.tsx, edit-item/[id].tsx, add-items/[saleId].tsx, label-composer/[saleId].tsx, labelComposerController.ts. Backend tsc 0 errors; frontend not VM-tsc-verifiable (corrupt node_modules).
-**QA:** Buy It Now valid-account path ✅ deployed (HTTP 200, commit 45829dd). Graceful invalid-account error CODE-ONLY. Cart payment-completion UNVERIFIED (Stripe LIVE keys — test card rejected).
-**Decision:** Patrick — no sales tax collection until nexus registration required. All 3 `automatic_tax` usages removed.
-**BQ delta:** 0 → 2 (Buy It Now graceful error CODE-ONLY; cart payment completion UNVERIFIED).
-
-### S1004 — 2026-06-17 | QA/RECORDS (BQ cleared to 0; SEO5+SEO6 Chrome ✅)
-
-**Session type:** QA/RECORDS
-**Shipped:** (1) Facebook Connected badge fix — platforms.tsx now shows green "Connected" badge when `facebook?.connected` truthy (TS 0 errors); (2) BQ item 1 RESOLVED — Railway logs confirmed eBay Queue cron firing */30 (`[eBay Queue] Starting queue cron for 0 organizer(s)` at 02:30:01 + 03:00:11).
-**QA:** SEO5 /auctions/grand-rapids-mi ✅ Chrome (H1, FAQPage JSON-LD x7, ISR, no bleed-over; ss_533815fys). SEO6 /flea-markets/grand-rapids-mi ✅ Chrome (H1, FAQPage JSON-LD x5, ISR; ss_0332eyqoc, ss_7930nzpey).
-**PCVs staged:** SEO5 + SEO6 for next-session roadmap Chrome col apply (cross-session rule).
-**BQ delta:** 2 → 0.
-
-### S1003 — 2026-06-17 | QA/DEV (ISR smoke; SEO4 ✅; auction+flea-market pages)
-
-**Session type:** QA/DEV
-**Shipped:** (1) /pages/auctions/[city-slug].tsx (ISR revalidate:86400, 47-city prerender, fallback:blocking, FAQPage JSON-LD, auction-specific copy); (2) /pages/flea-markets/[city-slug].tsx (same pattern, flea-market copy); (3) cityData.ts extended (getAuctionMeta/Faqs, getFleaMarketMeta/Faqs); (4) server-sitemap.xml.tsx updated (auctionsUrls + fleaMarketsUrls priority 0.70).
-**Files changed:** pages/auctions/[city-slug].tsx (new), pages/flea-markets/[city-slug].tsx (new), lib/seo/cityData.ts, pages/server-sitemap.xml.tsx. TS 0 errors.
-**QA:** ISR /items/:id ✅ (ss_8940sbrut, ss_03897mqk5). SEO4 /yard-sales/grand-rapids-mi ✅ (H1, FAQPage x7, BreadcrumbList+ItemList+FAQPage; ss_3207v3q1s, ss_4548wcacx). fbCatalogEnabled data-layer ✅. eBay Queue cron UNVERIFIED (Railway logs empty this session).
-**BQ delta:** 2 → 2 (cron remained UNVERIFIED; FB badge gap replaced FB data-layer BQ item).
-
-### S1002 — 2026-06-16 | DEV/RECORDS (ISR conversion for /items/[id]; records pass)
-
-**Session type:** DEV/RECORDS
-**Shipped:** (1) /items/[id].tsx converted to ISR (getServerSideProps → getStaticProps + getStaticPaths, revalidate:3600, fallback:'blocking'; 1392→1398 lines). (2) Records pass: SEO4 Claude QA col → ✅ S997; roadmap rows 548-550 added (Platform Dashboard+Widget, eBay Queue Mode, FB Commerce Manager); 7 PCV entries cleared.
-**Files changed:** packages/frontend/pages/items/[id].tsx, claude_docs/STATE.md, claude_docs/strategy/roadmap.md.
-**BQ delta:** 4 → 2 (ISR conversion FIXED; FB feed link 404 already pushed S1001 — cleared; eBay Queue Mode live flip + fbCatalogEnabled remain).
