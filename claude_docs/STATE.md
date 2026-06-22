@@ -237,6 +237,8 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 | bounceSuppressService reads WRONG mailbox | Recipient bounces forward to deseee@gmail.com, not the Workspace mailbox the backend polls → recipient bounces never reach bounceSuppressService; the sweep task is the live writer | Root fix in ADR-bounce-suppression-mailbox-fix.md (optional) — point bounceSuppressService at the correct inbox | S1020 |
 | reclassify-bounces backfill ineffective | Same wrong-mailbox cause — ~93 historical bounces not reclassifiable | Fix mailbox source first, then re-run backfill | S1020 |
 | schema.prisma drift — 5 EmailSuppression cols | bounceCategory/bounceStatusCode/diagnosticCode/retryAfter/classifiedAt exist in DB+schema but have NO migration file (applied via raw DDL) | Optionally generate the migration locally + `prisma migrate resolve --applied` | S1020 |
+| Production error-fix batch (6 files) — UNVERIFIED in prod | Shipped S1022, pending push+deploy: scraperCron boot crash-loop guard (index.ts), seed.ts prod guard, markdownCycleCron per-item price fix, cronGuard→Sentry alerting (internalListingEnrichmentController.ts + scraper/enrichment.ts), weeklyEmailService ;; cleanup. Code-only; not yet live. | Patrick push 6-file block → Railway green → job QA markdown + enrichment crons fire cleanly post-deploy | S1022 |
+| Stale Sentry issues to resolve post-deploy | Sentry findasale-nodejs 1A/1D/3G (scraper boot), 2G (Sale.isOngoing), 3Y (geocodeBacklog query), D (SyntaxError) confirmed STALE by evidence (current code/schema/live DB all correct). | After deploy stays quiet 24-48h, mark resolved in Sentry. New deploy-diff + job-heartbeat monitors will catch any regression. | S1022 |
 
 ## Pending Chrome Verifications
 
