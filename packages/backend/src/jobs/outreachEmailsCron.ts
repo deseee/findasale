@@ -220,16 +220,20 @@ const sendOutreachEmailsInner = async (): Promise<void> => {
     console.log(`[OutreachCron] TEST MODE — all sends redirected to ${process.env.OUTREACH_TEST_EMAIL}`);
   }
 
-  // Pre-run quota check — abort the entire window if daily hard limit already reached.
-  // This prevents any sends even if multiple Railway instances start simultaneously.
+  // Pre-run quota check — abort the entire window if the binding daily cap is already
+  // reached. The binding cap is min(OUTREACH_DAILY_CAP, GMAIL_DAILY_HARD_LIMIT): the
+  // outreach sender is reputation-throttled FAR below the hard limit, so the smaller
+  // OUTREACH_DAILY_CAP (default 75) is what actually protects us (incident 2026-06-21).
   try {
     const quota = await getDailyEmailCount();
+    const outreachCap = Math.max(1, parseInt(process.env.OUTREACH_DAILY_CAP || '75', 10));
     const hardLimit = parseInt(process.env.GMAIL_DAILY_HARD_LIMIT || '1500', 10);
-    if (quota.sent >= hardLimit) {
-      console.error(`[OutreachCron] ABORT: daily quota already at ${quota.sent}/${hardLimit} — no sends this window`);
+    const bindingCap = Math.min(outreachCap, hardLimit);
+    if (quota.sent >= bindingCap) {
+      console.error(`[OutreachCron] ABORT: daily attempts already at ${quota.sent}/${bindingCap} (outreachCap=${outreachCap}) — no sends this window`);
       return;
     }
-    console.log(`[OutreachCron] Quota check: ${quota.sent}/${hardLimit} used (${quota.remaining} remaining)`);
+    console.log(`[OutreachCron] Quota check: ${quota.sent}/${bindingCap} attempts used`);
   } catch (err) {
     console.error('[OutreachCron] Quota pre-check failed — proceeding with caution:', err);
   }
@@ -253,13 +257,44 @@ const sendOutreachEmailsInner = async (): Promise<void> => {
     const WARMUP_START = new Date(process.env.OUTREACH_WARMUP_START_DATE || '2026-05-06');
     const today = new Date();
     const daysSinceStart = Math.floor((today.getTime() - WARMUP_START.getTime()) / (1000 * 60 * 60 * 24));
-    const dailyQuota = getDailyQuota(daysSinceStart);
-    // NOTE: the `/ 6` divisor assumes 6 send windows per day. It is coupled to the
-    // every-4-hours workflow cadence (.github/workflows/pipeline-outreach-emails.yml,
-    // cron '0 */4 * * *' = 6 runs/day). If that workflow schedule changes, update this
-    // divisor to match — otherwise the daily quota will be over- or under-sent.
-    const quotaPerWindow = Math.max(1, Math.floor(dailyQuota / 6));
-    console.log(`[OutreachCron] Day ${daysSinceStart}, quota: ${dailyQuota}/day, this window: ${quotaPerWindow}`);
+    const warmupQuota = getDailyQuota(daysSinceStart);
+
+    // TACTICAL CAP (incident 2026-06-21): outreach@finda.sale is reputation-throttled by
+    // Google to ~200-300 sends/day — FAR below the GMAIL_DAILY_HARD_LIMIT (1500) the quota
+    // guard assumes. On 2026-06-21 ~305 attempts ran and 136 hit Gmail's "reached a limit
+    // for sending mail" daily clamp and were never delivered. OUTREACH_DAILY_CAP (default 75)
+    // is the real binding limit; it must never be exceeded by SEND ATTEMPTS in a UTC day.
+    const outreachDailyCap = Math.max(1, parseInt(process.env.OUTREACH_DAILY_CAP || '75', 10));
+    const gmailHardLimit = parseInt(process.env.GMAIL_DAILY_HARD_LIMIT || '1500', 10);
+    // The binding daily limit is the SMALLER of the outreach cap and the global hard limit,
+    // also never above the warmup ramp.
+    const dailyCap = Math.min(outreachDailyCap, gmailHardLimit, warmupQuota);
+
+    // How many sends have already been ATTEMPTED today (DB-backed, survives restarts).
+    // EmailQuotaLog.count is incremented on every attempt via checkAndIncrementQuota, so
+    // it reflects attempts across all 6 windows of the UTC day — not just this window.
+    let attemptsToday = 0;
+    try {
+      const q = await getDailyEmailCount();
+      attemptsToday = q.sent;
+    } catch (err) {
+      console.error('[OutreachCron] Could not read daily attempt count — assuming 0:', err);
+    }
+
+    // Remaining headroom for the whole day. Once this hits 0, no window may send.
+    const remainingToday = Math.max(0, dailyCap - attemptsToday);
+
+    // NOTE: the `/ 6` divisor assumes 6 send windows per day (every-4-hours GH Actions
+    // cadence, .github/workflows/pipeline-outreach-emails.yml). Per-window slice is bounded
+    // by remainingToday so catch-up / overlapping windows can never push the day past the cap.
+    const perWindowSlice = Math.max(1, Math.floor(dailyCap / 6));
+    const quotaPerWindow = Math.min(perWindowSlice, remainingToday);
+    console.log(`[OutreachCron] Day ${daysSinceStart}, daily cap: ${dailyCap} (outreachCap=${outreachDailyCap}, hardLimit=${gmailHardLimit}, warmup=${warmupQuota}), attempts today: ${attemptsToday}, remaining: ${remainingToday}, this window: ${quotaPerWindow}`);
+
+    if (quotaPerWindow <= 0) {
+      console.log(`[OutreachCron] Daily cap reached (${attemptsToday}/${dailyCap} attempts) — no sends this window`);
+      return;
+    }
 
     // ADR-075: Base filter criteria (reused across all three leadTier passes)
     const baseWhere = {
@@ -483,6 +518,7 @@ const sendOutreachEmailsInner = async (): Promise<void> => {
     const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
     let sent = 0;
     let failed = 0;
+    let limitHit = false;
 
     for (const record of dedupedRecords) {
       // Stop once we've hit the per-window quota (candidates pool is larger than quota)
@@ -695,10 +731,39 @@ const sendOutreachEmailsInner = async (): Promise<void> => {
           throw quotaErr;
         }
 
-        await gmail.users.messages.send({
-          userId: 'me',
-          requestBody: { raw: rawMessage },
-        });
+        try {
+          await gmail.users.messages.send({
+            userId: 'me',
+            requestBody: { raw: rawMessage },
+          });
+        } catch (sendErr: any) {
+          // LIMIT-AWARE BACKOFF (incident 2026-06-21). Google clamps a throttled sender
+          // with "You have reached a limit for sending mail." (HTTP 429 / 4xx). When that
+          // happens, STOP immediately and prevent any further sends for the rest of the
+          // UTC day. NO-MIGRATION mechanism: force today's EmailQuotaLog.count up to the
+          // daily cap so the next window's remaining-headroom check returns 0.
+          const sendStatus = sendErr?.code ?? sendErr?.response?.status;
+          const sendMsg = sendErr?.message || '';
+          const isLimitError =
+            sendStatus === 429 ||
+            /reached a limit for sending|sending limit|limit|quota|exceeded|rate/i.test(sendMsg);
+          if (isLimitError) {
+            console.warn(`[OutreachCron] Gmail send-limit hit — backing off for the day (status=${sendStatus}, msg="${sendMsg}")`);
+            try {
+              // Pin today's counter to the cap so under-cap checks block subsequent sends.
+              await prisma.emailQuotaLog.upsert({
+                where: { date: new Date().toISOString().slice(0, 10) },
+                update: { count: dailyCap },
+                create: { date: new Date().toISOString().slice(0, 10), count: dailyCap },
+              });
+            } catch (pinErr) {
+              console.error('[OutreachCron] Failed to pin EmailQuotaLog count on backoff:', pinErr);
+            }
+            limitHit = true;
+            break; // stop the send loop entirely
+          }
+          throw sendErr; // non-limit failure — let the outer catch log it as a send error
+        }
 
         // Log SENT event for CAN-SPAM audit trail
         try {
@@ -742,7 +807,7 @@ const sendOutreachEmailsInner = async (): Promise<void> => {
       }
     }
 
-    console.log(`[OutreachCron] Batch complete: ${sent} sent, ${failed} failed`);
+    console.log(`[OutreachCron] Batch complete: ${sent} sent, ${failed} failed${limitHit ? ' — backed off after Gmail send-limit hit' : ''}`);
   } catch (err) {
     console.error('[OutreachCron] Batch failed:', err);
   }

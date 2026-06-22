@@ -293,6 +293,24 @@ export const bounceSuppressService = {
         const headers: Array<{ name?: string | null; value?: string | null }> = msg.payload?.headers ?? [];
         const bodyText = extractText(msg.payload ?? {});
 
+        // SEND-LIMIT NOTICE GUARD (incident 2026-06-21): Google's daily-send-limit
+        // notices ("You have reached a limit for sending mail. Your message was not
+        // sent.") land in the sender mailbox and carry NO bounced recipient. They are
+        // a throttle signal, NOT a recipient delivery failure — must never create a
+        // suppression. The last-resort body email scan could otherwise latch onto a
+        // stray address and wrongly suppress it. Skip suppression (still trash + log).
+        const subjectHeader = headers.find(h => h.name?.toLowerCase() === 'subject');
+        const sendLimitHaystack = `${subjectHeader?.value ?? ''}\n${bodyText}`;
+        if (/reached a limit for sending|sending limit|message was not sent because you have reached/i.test(sendLimitHaystack)) {
+          console.log(`[bounceSuppressService] Send-limit notice (no recipient bounce) for message ${msgId} — not suppressing.`);
+          try {
+            await gmail.users.messages.trash({ userId: 'me', id: msgId });
+          } catch (trashErr: any) {
+            console.warn(`[bounceSuppressService] Could not trash send-limit notice ${msgId} — continuing:`, trashErr.message);
+          }
+          continue;
+        }
+
         // Extract the bounced address
         const bouncedAddress = extractBouncedAddress(headers, bodyText);
 
