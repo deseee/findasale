@@ -15,6 +15,13 @@
 import { Request, Response } from 'express';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
+import {
+  isGenericEmail,
+  registrableDomain,
+  emailDomain,
+  domainMatchesBusiness,
+  FAMOUS_UNRELATED_DOMAINS,
+} from '../services/emailProvenance';
 
 const DEFAULT_BATCH_SIZE = 2000;
 
@@ -88,6 +95,7 @@ export async function runOrganizerContactBackfill(req: Request, res: Response): 
       where: { id: { in: eligibleIds.map((r) => r.id) } },
       select: {
         id: true,
+        businessName: true,
         address: true,
         phone: true,
         website: true,
@@ -114,7 +122,7 @@ export async function runOrganizerContactBackfill(req: Request, res: Response): 
 
     for (const organizer of organizers) {
       processed++;
-      const patch: Record<string, string> = {};
+      const patch: Record<string, unknown> = {};
 
       // --- Address ---
       if (!hasStreetNumber(organizer.address)) {
@@ -143,28 +151,47 @@ export async function runOrganizerContactBackfill(req: Request, res: Response): 
         }
       }
 
-      // --- Website ---
+      // --- Website (gated: bounce-incident fix) ---
       if (!organizer.website) {
         for (const sale of organizer.sales) {
           const meta = sale.scrapedMetadata as Record<string, unknown> | null;
           const found = extractFromMeta(meta, ['website', 'websiteUrl', 'url', 'siteUrl']);
           if (found) {
-            patch.website = found;
-            websiteFilled++;
-            break;
+            const dom = registrableDomain(found);
+            if (dom && !FAMOUS_UNRELATED_DOMAINS.has(dom) && domainMatchesBusiness(dom, organizer.businessName)) {
+              patch.website = found;
+              websiteFilled++;
+              break;
+            } else {
+              console.warn(`[OrganizerContactBackfill] Skipped website '${found}' for ${organizer.id} — domain '${dom ?? 'unparseable'}' rejected`);
+            }
           }
         }
       }
 
-      // --- contactEmail ---
+      // --- contactEmail (provenance + wrong-entity guard: bounce-incident fix) ---
+      // Reject generic mailboxes and wrong-entity domains. Accepted emails are stored as
+      // 'directory_listing' / 0.3 confidence so the outreach send gate skips them until
+      // emailDiscoveryService re-verifies. contactEmail is never nulled.
       if (!organizer.contactEmail) {
         for (const sale of organizer.sales) {
           const meta = sale.scrapedMetadata as Record<string, unknown> | null;
           const found = extractFromMeta(meta, ['contactEmail', 'email']);
-          if (found && isValidEmail(found)) {
-            patch.contactEmail = found;
-            emailFilled++;
-            break;
+          if (found && isValidEmail(found) && !isGenericEmail(found)) {
+            const eDom = emailDomain(found.toLowerCase());
+            const eDomReg = eDom ? (registrableDomain(eDom) ?? eDom) : null;
+            const siteDom = registrableDomain((patch.website as string | undefined) ?? organizer.website ?? undefined);
+            const matchesSite = eDomReg != null && siteDom != null && eDomReg === siteDom;
+            if (eDomReg && (matchesSite || domainMatchesBusiness(eDomReg, organizer.businessName))) {
+              patch.contactEmail = found;
+              patch.emailDiscoveryMethod = 'directory_listing';
+              patch.emailDiscoveryConfidence = 0.3;
+              patch.emailDiscoveredAt = new Date();
+              emailFilled++;
+              break;
+            } else {
+              console.warn(`[OrganizerContactBackfill] Rejected email '${found}' for ${organizer.id} — wrong-entity domain`);
+            }
           }
         }
       }
