@@ -202,6 +202,13 @@ function generatePricingEntry(city: string, state: string, saleType: string): Gu
 }
 
 function main() {
+  // DEPRECATED: this generator produces thin city×sale-type templates (e.g.,
+  // "How to run a yard sale in Grand Rapids, MI") that were replaced by the curated
+  // brand/pricing guides now live at /guide/* pages. Running it overwrites the good
+  // data/seo-pages/index.json with Google-flagged scaled-content-abuse templates.
+  // To update guide content, edit data/seo-pages/index.json and slugs.json directly.
+  throw new Error('generate-seo-index.ts is DEPRECATED — see comment above. Do not run.');
+  // eslint-disable-next-line no-unreachable
   console.log('Generating ADR-075 SEO Content Index...');
 
   const entries: GuideEntry[] = [];

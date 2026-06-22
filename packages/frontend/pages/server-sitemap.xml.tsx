@@ -5,6 +5,11 @@ export async function getServerSideProps(ctx: any) {
   try {
     const baseUrl = process.env.SITE_URL || 'https://finda.sale';
 
+    // STATIC_LASTMOD: stable date for pages whose content doesn't change every request.
+    // Google June 2024 policy: always-"now" lastmod is treated as inaccurate and ignored sitewide.
+    // Bump this string only when the template/structure of static/city/category pages meaningfully changes.
+    const STATIC_LASTMOD = '2026-06-22';
+
     // Fetch all sales and tags to generate URLs
     const salesResponse = await api.get('/sales/sitemap');
     const sales = salesResponse.data.sales || salesResponse.data;
@@ -41,25 +46,24 @@ export async function getServerSideProps(ctx: any) {
 
     const staticUrls = discoveryPages.map((page) => ({
       loc: `${baseUrl}${page.path}`,
-      lastmod: new Date().toISOString(),
+      lastmod: STATIC_LASTMOD,
       changefreq: page.changefreq,
       priority: page.priority,
     }));
 
     // Generate sale URLs (only published sales for SEO)
+    // /sales/sitemap pre-filters to PUBLISHED in SQL and returns only { id, updatedAt }.
+    // There is NO `status` field on the response — filtering on it here silently excluded
+    // all 5,000 published sales (root cause: 0 sale URLs in sitemap). Do not re-add the filter.
     const saleUrls = Array.isArray(sales)
-      ? sales
-          .filter((sale: any) => sale.status === 'PUBLISHED')
-          .map((sale: any) => ({
-            loc: `${baseUrl}/sales/${sale.id}`,
-            lastmod: sale.updatedAt
-              ? new Date(sale.updatedAt).toISOString()
-              : sale.createdAt
-              ? new Date(sale.createdAt).toISOString()
-              : new Date().toISOString(),
-            changefreq: 'daily',
-            priority: 0.8,
-          }))
+      ? sales.map((sale: any) => ({
+          loc: `${baseUrl}/sales/${sale.id}`,
+          lastmod: sale.updatedAt
+            ? new Date(sale.updatedAt).toISOString()
+            : new Date().toISOString(),
+          changefreq: 'daily',
+          priority: 0.8,
+        }))
       : [];
 
     // Fetch organizer profile pages for sitemap
@@ -71,7 +75,7 @@ export async function getServerSideProps(ctx: any) {
         .filter((org: any) => org.organizerId)
         .map((org: any) => ({
           loc: `${baseUrl}/organizers/${org.organizerId}`,
-          lastmod: new Date().toISOString(),
+          lastmod: STATIC_LASTMOD,
           changefreq: 'weekly',
           priority: 0.7,
         }));
@@ -103,14 +107,14 @@ export async function getServerSideProps(ctx: any) {
     for (const slug of canonicalCitySlugs) {
       cityCategoryUrls.push({
         loc: `${baseUrl}/city/${slug}`,
-        lastmod: new Date().toISOString(),
+        lastmod: STATIC_LASTMOD,
         changefreq: 'daily',
         priority: 0.75, // lowered from 0.8 — preserve crawl budget for core nav pages
       });
       for (const category of SALE_CATEGORIES) {
         cityCategoryUrls.push({
           loc: `${baseUrl}/city/${slug}/${category}`,
-          lastmod: new Date().toISOString(),
+          lastmod: STATIC_LASTMOD,
           changefreq: 'daily',
           priority: 0.7,
         });
@@ -120,7 +124,7 @@ export async function getServerSideProps(ctx: any) {
     // /this-weekend/{city-slug} — high-intent "this weekend" discovery pages
     const thisWeekendUrls = canonicalCitySlugs.map((slug: string) => ({
       loc: `${baseUrl}/this-weekend/${slug}`,
-      lastmod: new Date().toISOString(),
+      lastmod: STATIC_LASTMOD,
       changefreq: 'daily',
       priority: 0.7, // lowered from 0.8 — reduce crawl budget drain on GEO variants
     }));
@@ -129,7 +133,7 @@ export async function getServerSideProps(ctx: any) {
     // Targets GSC cluster: "estate sales [city]" / "estate sale [city]"
     const estateSalesUrls = canonicalCitySlugs.map((slug: string) => ({
       loc: `${baseUrl}/estate-sales/${slug}`,
-      lastmod: new Date().toISOString(),
+      lastmod: STATIC_LASTMOD,
       changefreq: 'daily',
       priority: 0.75, // lower from 0.85 — was outcompeting core nav pages for crawl budget
     }));
@@ -138,7 +142,7 @@ export async function getServerSideProps(ctx: any) {
     // Targets GSC cluster: "yard sales [city]" / "garage sales [city]"
     const yardSalesUrls = canonicalCitySlugs.map((slug: string) => ({
       loc: `${baseUrl}/yard-sales/${slug}`,
-      lastmod: new Date().toISOString(),
+      lastmod: STATIC_LASTMOD,
       changefreq: 'daily',
       priority: 0.70,
     }));
@@ -147,7 +151,7 @@ export async function getServerSideProps(ctx: any) {
     // Targets GSC cluster: "auctions in [city]" / "auction houses [city]"
     const auctionsUrls = canonicalCitySlugs.map((slug: string) => ({
       loc: `${baseUrl}/auctions/${slug}`,
-      lastmod: new Date().toISOString(),
+      lastmod: STATIC_LASTMOD,
       changefreq: 'daily',
       priority: 0.70,
     }));
@@ -156,7 +160,7 @@ export async function getServerSideProps(ctx: any) {
     // Targets GSC cluster: "flea markets in [city]" / "flea market near me [city]"
     const fleaMarketsUrls = canonicalCitySlugs.map((slug: string) => ({
       loc: `${baseUrl}/flea-markets/${slug}`,
-      lastmod: new Date().toISOString(),
+      lastmod: STATIC_LASTMOD,
       changefreq: 'daily',
       priority: 0.70,
     }));
@@ -164,7 +168,7 @@ export async function getServerSideProps(ctx: any) {
     // Generate neighborhood URLs
     const neighborhoodUrls = neighborhoods.map((neighborhood: string) => ({
       loc: `${baseUrl}/neighborhoods/${neighborhood}`,
-      lastmod: new Date().toISOString(),
+      lastmod: STATIC_LASTMOD,
       changefreq: 'daily',
       priority: 0.7,
     }));
@@ -172,7 +176,7 @@ export async function getServerSideProps(ctx: any) {
     // Generate zip URLs
     const zipUrls = zips.map((zip: string) => ({
       loc: `${baseUrl}/sales/zip/${zip}`,
-      lastmod: new Date().toISOString(),
+      lastmod: STATIC_LASTMOD,
       changefreq: 'daily',
       priority: 0.6,
     }));
@@ -180,7 +184,7 @@ export async function getServerSideProps(ctx: any) {
     // Generate tag/category URLs
     const tagUrls = tags.map((tag: any) => ({
       loc: `${baseUrl}/tags/${tag.slug}`,
-      lastmod: new Date().toISOString(),
+      lastmod: STATIC_LASTMOD,
       changefreq: 'weekly',
       priority: 0.7,
     }));
@@ -206,7 +210,7 @@ export async function getServerSideProps(ctx: any) {
     ];
     const categoryUrls = ITEM_CATEGORIES.map((cat) => ({
       loc: `${baseUrl}/categories/${cat}`,
-      lastmod: new Date().toISOString(),
+      lastmod: STATIC_LASTMOD,
       changefreq: 'daily',
       priority: 0.8,
     }));
@@ -220,7 +224,7 @@ export async function getServerSideProps(ctx: any) {
         .filter((entry: any) => entry.slug)
         .map((entry: any) => ({
           loc: `${baseUrl}/encyclopedia/${entry.slug}`,
-          lastmod: new Date().toISOString(),
+          lastmod: STATIC_LASTMOD,
           changefreq: 'weekly',
           priority: 0.7,
         }));
