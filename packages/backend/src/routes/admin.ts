@@ -65,6 +65,7 @@ import {
 } from '../controllers/scraperController';
 import { isEmailDomainBlocked } from '../services/suppressionService';
 import { sendTestEmailLimiter } from '../middleware/rateLimiter';
+import { adminSendEmail } from '../controllers/adminEmailSendController';
 const router = express.Router();
 
 // All admin routes require authentication and admin role
@@ -358,6 +359,11 @@ router.get('/organizers/confidence', async (req: any, res: any) => {
 });
 
 
+// POST /admin/send-email — strictly-controlled admin email send (S1022).
+// DISABLED by default: returns 403 unless env EMAIL_SEND_ENABLED==='true'. Controls in adminEmailSendController:
+// admin-auth re-check + recipient allowlist (EMAIL_SEND_ALLOWLIST/SENDABLE_FINDA_SALE_ADDRESSES) + per-day cap (EMAIL_SEND_DAILY_CAP) + confirm:true flag + audit log.
+router.post('/send-email', sendTestEmailLimiter, adminSendEmail);
+
 // Feature #472: POST /admin/send-test-email — allows automation (e.g. Claude via Chrome MCP)
 // to send test emails without manual Gmail interaction.
 // Rail defaults to 'resend' (reliable transactional rail). Gmail fallback via rail='gmail'.
@@ -440,8 +446,4 @@ router.post('/send-test-email', sendTestEmailLimiter, async (req: any, res: any)
 
   } catch (err: any) {
     console.error('[admin/send-test-email] Unexpected error:', err);
-    return res.status(500).json({ success: false, error: err?.message ?? 'Internal server error' });
-  }
-});
-
-export default router;
+    return res.status(500).json({ success: false, error: er
