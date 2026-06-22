@@ -2,6 +2,11 @@ import { Prisma } from '@prisma/client';
 import * as cheerio from 'cheerio';
 import { prisma } from '../lib/prisma';
 import { randomUUID } from 'crypto';
+import {
+  GENERIC_PATTERNS as SHARED_GENERIC_PATTERNS,
+  calibrateConfidence as sharedCalibrateConfidence,
+  type DiscoverySource,
+} from './emailProvenance';
 
 /**
  * Email Discovery Service — Free tier pipeline
@@ -241,10 +246,8 @@ function isJunkEmail(email: string): boolean {
 
 /**
  * Apply confidence penalties based on discovery context.
- * organizerDomain: the domain extracted from organizer.website (null if unknown)
- * emailDomain: the domain of the discovered email
- * source: how the email was found
- * organizerAddress: the raw address string (used to detect residential patterns)
+ * Thin wrapper delegating to the shared emailProvenance.calibrateConfidence so the
+ * good path and the enrichment path use IDENTICAL scoring logic.
  */
 function calibrateConfidence(
   baseConfidence: number,
@@ -253,39 +256,19 @@ function calibrateConfidence(
   organizerDomain: string | null,
   organizerAddress: string | null
 ): number {
-  let score = baseConfidence;
-
-  // Pattern permutation only (not scraped from the actual site) — cap at 0.70
-  if (source === 'smtp_pattern') {
-    score = Math.min(score, 0.70);
-  }
-
-  // Email domain doesn't match the organizer's known website domain
-  if (organizerDomain && emailDomain !== organizerDomain) {
-    score -= 0.10;
-  }
-
-  // Residential address pattern (no suite/unit — just a plain street address)
-  if (organizerAddress) {
-    const hasSuite = /\b(suite|ste|unit|apt|#|floor|fl)\b/i.test(organizerAddress);
-    if (!hasSuite) {
-      score -= 0.05;
-    }
-  }
-
-  // Floor at 0.10
-  return Math.max(score, 0.10);
+  return sharedCalibrateConfidence(
+    baseConfidence,
+    source as DiscoverySource,
+    emailDomain,
+    organizerDomain,
+    organizerAddress
+  );
 }
 
-const GENERIC_PATTERNS = [
-  'noreply@',
-  'notification@',
-  'alerts@',
-  'test@',
-  'admin@',
-  'hello@',
-  'info@',
-];
+// GENERIC_PATTERNS is the single source of truth in emailProvenance.ts.
+// Re-exported here so existing imports of this module keep working.
+const GENERIC_PATTERNS = SHARED_GENERIC_PATTERNS;
+export { GENERIC_PATTERNS, calibrateConfidence };
 
 /**
  * Stage 1: Website Contact Page Scraping

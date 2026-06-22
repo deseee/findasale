@@ -14,6 +14,7 @@
 import * as cron from 'node-cron';
 import { prisma } from '../lib/prisma';
 import { discoverEmail } from '../services/emailDiscoveryService';
+import { registrableDomain, domainMatchesBusiness, FAMOUS_UNRELATED_DOMAINS } from '../services/emailProvenance';
 import { updateDirectoryConfidenceScore } from '../services/directoryConfidenceService';
 
 const BATCH_SIZE = 50;
@@ -120,6 +121,17 @@ async function enrichBatch(skip: number): Promise<number> {
       const foursquare = await lookupWebsiteViaFoursquare(org.businessName, city, state);
       website = foursquare.website;
       if (!phone) phone = foursquare.phone;
+    }
+
+    // Website-assignment guard (bounce-incident fix): HERE/Foursquare return name-search
+    // matches, NOT same-business verified links — they can be the wrong entity. Only attach
+    // if the domain isn't a famous-unrelated mega-brand and shares a token with the name.
+    if (website) {
+      const dom = registrableDomain(website);
+      if (!dom || FAMOUS_UNRELATED_DOMAINS.has(dom) || !domainMatchesBusiness(dom, org.businessName)) {
+        console.warn(`[WebsiteEnrichment] Skipped website '${website}' for "${org.businessName}" — domain '${dom ?? 'unparseable'}' has no name overlap`);
+        website = null;
+      }
     }
 
     const updateData: Record<string, unknown> = { updatedAt: new Date() };

@@ -10,6 +10,13 @@ import { checkDuplicate } from './dedupe';
 import { RateLimiter, defaultRateLimiter } from './rateLimiter';
 import { enrichOrganizer } from './enrichment';
 import { getSourceById } from './sourceRegistry';
+import {
+  isGenericEmail,
+  registrableDomain,
+  emailDomain,
+  domainMatchesBusiness,
+  FAMOUS_UNRELATED_DOMAINS,
+} from '../emailProvenance';
 
 export interface ScrapeJob {
   source: string;
@@ -147,6 +154,67 @@ function isValidExternalEmail(email?: string): string | null {
 }
 
 /**
+ * Gate a scraped website (from Google Places / Foursquare / HERE) before attaching it.
+ * Rejects famous-unrelated mega-brand domains and domains with no name overlap with the
+ * business — the guard that stops the wrong site (e.g. disney/club33) being scraped later.
+ * Returns the website if acceptable, otherwise null (and logs the skip).
+ */
+function gateScrapedWebsite(website?: string, businessName?: string): string | null {
+  if (!website) return null;
+  const dom = registrableDomain(website);
+  if (!dom) {
+    console.warn(`[Ingest] Skipped website — unparseable domain: ${website}`);
+    return null;
+  }
+  if (FAMOUS_UNRELATED_DOMAINS.has(dom)) {
+    console.warn(`[Ingest] Skipped website — famous unrelated domain: ${dom}`);
+    return null;
+  }
+  if (!domainMatchesBusiness(dom, businessName)) {
+    console.warn(`[Ingest] Skipped website — domain '${dom}' has no name overlap with '${businessName ?? ''}'`);
+    return null;
+  }
+  return website;
+}
+
+/**
+ * Gate a scraped contact email (from a directory listing) before storing it.
+ * Rejects generic mailboxes (info@/admin@/…) and wrong-entity domains (no match to the
+ * org website domain AND no token overlap with the business name). Directory-sourced
+ * emails are stored with method 'directory_listing' + low confidence so the outreach send
+ * gate will NOT email them until emailDiscoveryService re-verifies them.
+ * Returns provenance fields to merge into the update, or null if rejected.
+ */
+function gateScrapedEmail(
+  email: string | null,
+  website: string | null | undefined,
+  businessName?: string
+): { contactEmail: string; emailDiscoveryMethod: string; emailDiscoveryConfidence: number; emailDiscoveredAt: Date } | null {
+  if (!email) return null;
+  const normalized = email.trim().toLowerCase();
+  if (isGenericEmail(normalized)) {
+    console.warn(`[Ingest] Rejected generic scraped email: ${normalized}`);
+    return null;
+  }
+  const eDom = emailDomain(normalized);
+  if (!eDom) return null;
+  const eDomReg = registrableDomain(eDom) ?? eDom;
+  const siteDom = registrableDomain(website ?? undefined);
+  const matchesSite = siteDom != null && eDomReg === siteDom;
+  if (!matchesSite && !domainMatchesBusiness(eDomReg, businessName)) {
+    console.warn(`[Ingest] Rejected scraped email '${normalized}' — domain '${eDomReg}' matches neither site '${siteDom ?? 'none'}' nor business '${businessName ?? ''}'`);
+    return null;
+  }
+  // Directory-listing source: stored but NOT send-eligible until re-discovered/verified.
+  return {
+    contactEmail: email.trim(),
+    emailDiscoveryMethod: 'directory_listing',
+    emailDiscoveryConfidence: 0.3,
+    emailDiscoveredAt: new Date(),
+  };
+}
+
+/**
  * Get or create a scraped organizer with per-source attribution.
  * One system user per business per source (e.g., scraper+john-doe-estatesalesnet@system.finda.sale)
  * Automatically triggers enrichment to fill in phone, website, logo.
@@ -229,9 +297,18 @@ export async function getOrCreateScrapedOrganizer(
       if (esnOrgId) updates.esnOrgId = esnOrgId;
       if (businessCategory) updates.businessCategory = businessCategory;
       const validEmail = isValidExternalEmail(contactEmail);
-      if (validEmail && !byPlaceId.contactEmail) updates.contactEmail = validEmail;
+      // Provenance + wrong-entity guard (bounce-incident fix): directory-listing emails
+      // are stored as low-confidence/non-send-eligible until re-verified.
+      const emailGate = gateScrapedEmail(validEmail, byPlaceId.website ?? website, businessName);
+      if (emailGate && !byPlaceId.contactEmail) {
+        updates.contactEmail = emailGate.contactEmail;
+        updates.emailDiscoveryMethod = emailGate.emailDiscoveryMethod;
+        updates.emailDiscoveryConfidence = emailGate.emailDiscoveryConfidence;
+        updates.emailDiscoveredAt = emailGate.emailDiscoveredAt;
+      }
       if (phone && !byPlaceId.phone) updates.phone = phone;
-      if (website && !byPlaceId.website) updates.website = website;
+      const gatedWebsite = gateScrapedWebsite(website, businessName);
+      if (gatedWebsite && !byPlaceId.website) updates.website = gatedWebsite;
       if (lat !== undefined && lat !== null && !byPlaceId.lat) updates.lat = lat;
       if (lng !== undefined && lng !== null && !byPlaceId.lng) updates.lng = lng;
       if (isStateLicensed && !byPlaceId.isStateLicensed) updates.isStateLicensed = isStateLicensed;
@@ -274,9 +351,18 @@ export async function getOrCreateScrapedOrganizer(
       if (esnOrgId) updates.esnOrgId = esnOrgId;
       if (businessCategory) updates.businessCategory = businessCategory;
       const validEmail = isValidExternalEmail(contactEmail);
-      if (validEmail && !byFoursquare.contactEmail) updates.contactEmail = validEmail;
+      // Provenance + wrong-entity guard (bounce-incident fix): directory-listing emails
+      // are stored as low-confidence/non-send-eligible until re-verified.
+      const emailGate = gateScrapedEmail(validEmail, byFoursquare.website ?? website, businessName);
+      if (emailGate && !byFoursquare.contactEmail) {
+        updates.contactEmail = emailGate.contactEmail;
+        updates.emailDiscoveryMethod = emailGate.emailDiscoveryMethod;
+        updates.emailDiscoveryConfidence = emailGate.emailDiscoveryConfidence;
+        updates.emailDiscoveredAt = emailGate.emailDiscoveredAt;
+      }
       if (phone && !byFoursquare.phone) updates.phone = phone;
-      if (website && !byFoursquare.website) updates.website = website;
+      const gatedWebsite = gateScrapedWebsite(website, businessName);
+      if (gatedWebsite && !byFoursquare.website) updates.website = gatedWebsite;
       if (lat !== undefined && lat !== null && !byFoursquare.lat) updates.lat = lat;
       if (lng !== undefined && lng !== null && !byFoursquare.lng) updates.lng = lng;
       if (isStateLicensed && !byFoursquare.isStateLicensed) updates.isStateLicensed = isStateLicensed;
@@ -319,9 +405,18 @@ export async function getOrCreateScrapedOrganizer(
       if (esnOrgId) updates.esnOrgId = esnOrgId;
       if (businessCategory) updates.businessCategory = businessCategory;
       const validEmail = isValidExternalEmail(contactEmail);
-      if (validEmail && !byHere.contactEmail) updates.contactEmail = validEmail;
+      // Provenance + wrong-entity guard (bounce-incident fix): directory-listing emails
+      // are stored as low-confidence/non-send-eligible until re-verified.
+      const emailGate = gateScrapedEmail(validEmail, byHere.website ?? website, businessName);
+      if (emailGate && !byHere.contactEmail) {
+        updates.contactEmail = emailGate.contactEmail;
+        updates.emailDiscoveryMethod = emailGate.emailDiscoveryMethod;
+        updates.emailDiscoveryConfidence = emailGate.emailDiscoveryConfidence;
+        updates.emailDiscoveredAt = emailGate.emailDiscoveredAt;
+      }
       if (phone && !byHere.phone) updates.phone = phone;
-      if (website && !byHere.website) updates.website = website;
+      const gatedWebsite = gateScrapedWebsite(website, businessName);
+      if (gatedWebsite && !byHere.website) updates.website = gatedWebsite;
       if (lat !== undefined && lat !== null && !byHere.lat) updates.lat = lat;
       if (lng !== undefined && lng !== null && !byHere.lng) updates.lng = lng;
       if (isStateLicensed && !byHere.isStateLicensed) updates.isStateLicensed = isStateLicensed;
@@ -366,9 +461,18 @@ export async function getOrCreateScrapedOrganizer(
     if (esnOrgId) updates.esnOrgId = esnOrgId;
     if (businessCategory) updates.businessCategory = businessCategory;
     const validEmail = isValidExternalEmail(contactEmail);
-    if (validEmail && !byDedupeKey.contactEmail) updates.contactEmail = validEmail;
+    // Provenance + wrong-entity guard (bounce-incident fix): directory-listing emails
+    // are stored as low-confidence/non-send-eligible until re-verified.
+    const emailGate = gateScrapedEmail(validEmail, byDedupeKey.website ?? website, businessName);
+    if (emailGate && !byDedupeKey.contactEmail) {
+      updates.contactEmail = emailGate.contactEmail;
+      updates.emailDiscoveryMethod = emailGate.emailDiscoveryMethod;
+      updates.emailDiscoveryConfidence = emailGate.emailDiscoveryConfidence;
+      updates.emailDiscoveredAt = emailGate.emailDiscoveredAt;
+    }
     if (phone && !byDedupeKey.phone) updates.phone = phone;
-    if (website && !byDedupeKey.website) updates.website = website;
+    const gatedWebsite = gateScrapedWebsite(website, businessName);
+    if (gatedWebsite && !byDedupeKey.website) updates.website = gatedWebsite;
     if (lat !== undefined && lat !== null && !byDedupeKey.lat) updates.lat = lat;
     if (lng !== undefined && lng !== null && !byDedupeKey.lng) updates.lng = lng;
     if (isStateLicensed && !byDedupeKey.isStateLicensed) updates.isStateLicensed = isStateLicensed;
@@ -419,9 +523,18 @@ export async function getOrCreateScrapedOrganizer(
     if (esnOrgId) updates.esnOrgId = esnOrgId;
     if (businessCategory) updates.businessCategory = businessCategory;
     const validEmail = isValidExternalEmail(contactEmail);
-    if (validEmail && !existing.contactEmail) updates.contactEmail = validEmail;
+    // Provenance + wrong-entity guard (bounce-incident fix): directory-listing emails
+    // are stored as low-confidence/non-send-eligible until re-verified.
+    const emailGate = gateScrapedEmail(validEmail, existing.website ?? website, businessName);
+    if (emailGate && !existing.contactEmail) {
+      updates.contactEmail = emailGate.contactEmail;
+      updates.emailDiscoveryMethod = emailGate.emailDiscoveryMethod;
+      updates.emailDiscoveryConfidence = emailGate.emailDiscoveryConfidence;
+      updates.emailDiscoveredAt = emailGate.emailDiscoveredAt;
+    }
     if (phone && !existing.phone) updates.phone = phone;
-    if (website && !existing.website) updates.website = website;
+    const gatedWebsite = gateScrapedWebsite(website, businessName);
+    if (gatedWebsite && !existing.website) updates.website = gatedWebsite;
     if (lat !== undefined && lat !== null && !existing.lat) updates.lat = lat;
     if (lng !== undefined && lng !== null && !existing.lng) updates.lng = lng;
     if (isStateLicensed && !existing.isStateLicensed) updates.isStateLicensed = isStateLicensed;
@@ -471,6 +584,9 @@ export async function getOrCreateScrapedOrganizer(
   let newOrgId: string;
   try {
     const validEmail = isValidExternalEmail(contactEmail);
+    // Provenance + wrong-entity guards on initial create (bounce-incident fix).
+    const emailGate = gateScrapedEmail(validEmail, website, businessName);
+    const gatedWebsite = gateScrapedWebsite(website, businessName);
     const created = await prisma.user.create({
       data: {
         email: systemEmail,
@@ -489,8 +605,11 @@ export async function getOrCreateScrapedOrganizer(
             esnOrgId,
             googlePlaceId,
             businessCategory,
-            contactEmail: validEmail || null,
-            website: website ?? null,
+            contactEmail: emailGate?.contactEmail ?? null,
+            emailDiscoveryMethod: emailGate?.emailDiscoveryMethod ?? null,
+            emailDiscoveryConfidence: emailGate?.emailDiscoveryConfidence ?? null,
+            emailDiscoveredAt: emailGate?.emailDiscoveredAt ?? null,
+            website: gatedWebsite ?? null,
             lat: lat ?? null,
             lng: lng ?? null,
             dedupeKey: generateDedupeKey(businessName, city),

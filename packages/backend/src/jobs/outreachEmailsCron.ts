@@ -5,6 +5,7 @@ import { v4 as uuid } from 'uuid';
 import jwt from 'jsonwebtoken';
 import { prisma } from '../lib/prisma';
 import { suppressionService, isEmailDomainBlocked } from '../services/suppressionService';
+import { isGenericEmail } from '../services/emailProvenance';
 import { domainCanReceiveMail } from '../lib/mxValidator';
 import { batchSyncLeadTiersToMailerLite } from '../services/mailerliteService';
 import { checkAndIncrementQuota, getDailyEmailCount, QuotaExceededError } from '../lib/emailService';
@@ -367,6 +368,15 @@ const sendOutreachEmailsInner = async (): Promise<void> => {
         ],
         // Respect suppressOutreach flag
         suppressOutreach: false,
+        // EMAIL-VERIFICATION GATE (bounce-incident fix, Jun 2026): only send to organizers
+        // whose contactEmail was discovered by a verified method with sufficient confidence.
+        // Excludes emailDiscoveryMethod IS NULL (13.7k legacy unprovenanced guesses),
+        // 'directory_listing', 'unverified_import', 'low_confidence_mismatch', and any record
+        // below 0.5 confidence. Unverified guesses stay in the DB but are NOT emailed until
+        // rediscover-null-method-emails re-verifies them. This is what stopped the 15-28%
+        // bounce rate that triggered the Google abuse clamp on outreach@finda.sale.
+        emailDiscoveryMethod: { in: ['website_scrape', 'whois_rdap', 'smtp_pattern', 'sale_description'] },
+        emailDiscoveryConfidence: { gte: 0.5 },
         // Canada outreach is paused by default (OUTREACH_CANADA_ENABLED != 'true').
         // Canadian orgs are identified by province abbreviation or full name in the address field
         // (no country column on Organizer — detection is address-string based).
@@ -583,6 +593,15 @@ const sendOutreachEmailsInner = async (): Promise<void> => {
         if (PLACEHOLDER_LOCALS.has(emailLocal)) {
           console.warn(`[OutreachCron] Skipped org:${record.organizerId} — placeholder local-part "${emailLocal}"; suppressing`);
           await suppressionService.addSuppression(record.emailAddress, 'manual', { organizerId: record.organizerId });
+          continue;
+        }
+
+        // Fifth safety net (bounce-incident fix): generic mailbox prefixes (info@, admin@,
+        // hello@, sales@, …). These were the bulk of the wrong-entity guesses that bounced.
+        // Belt-and-suspenders to the verified-method query gate above — skip without suppressing,
+        // since the same address could later be re-discovered as a real per-person inbox.
+        if (isGenericEmail(record.emailAddress)) {
+          console.warn(`[OutreachCron] Skipped org:${record.organizerId} — generic mailbox prefix`);
           continue;
         }
 
