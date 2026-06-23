@@ -61,7 +61,7 @@ export const CHALLENGE_CONFIG: Challenge[] = [
     id: 'summer-2026',
     name: 'Summer Clearance Chase 2026',
     theme: 'summer',
-    description: 'Beat the heat! Find deals all summer long and hunt for treasures across estate sales.',
+    description: 'Beat the heat! Find deals all summer long and hunt for treasures across sales near you.',
     emoji: '☀️',
     startDate: new Date(2026, 5, 1), // Jun 1
     endDate: new Date(2026, 7, 31), // Aug 31
@@ -77,7 +77,7 @@ export const CHALLENGE_CONFIG: Challenge[] = [
     id: 'fall-2026',
     name: 'Fall Harvest Hunt 2026',
     theme: 'fall',
-    description: 'Autumn treasures await! Find collectibles and explore the season\'s best estate sales.',
+    description: 'Autumn treasures await! Find collectibles and explore the season\'s best sales near you.',
     emoji: '🍂',
     startDate: new Date(2026, 8, 1), // Sep 1
     endDate: new Date(2026, 10, 30), // Nov 30
@@ -92,7 +92,7 @@ export const CHALLENGE_CONFIG: Challenge[] = [
     id: 'holiday-2026',
     name: 'Holiday Treasure Hunt 2026',
     theme: 'holiday',
-    description: 'Spread holiday cheer! Find perfect gifts and festive decor across your favorite estate sales.',
+    description: 'Spread holiday cheer! Find perfect gifts and festive decor across your favorite local sales.',
     emoji: '🎄',
     startDate: new Date(2026, 11, 1), // Dec 1
     endDate: new Date(2027, 1, 28), // Feb 28 next year

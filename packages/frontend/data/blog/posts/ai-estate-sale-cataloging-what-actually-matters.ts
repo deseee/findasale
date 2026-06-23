@@ -2,7 +2,7 @@ import { BlogPost } from '../index';
 
 export const postD: BlogPost = {
   slug: 'ai-estate-sale-cataloging-what-actually-matters',
-  title: 'AI Cataloging Is Table Stakes Now. Here\'s What Actually Matters.',
+  title: 'Smart Cataloging Is Table Stakes Now. Here\'s What Actually Matters.',
   metaDescription: 'Every major estate sale platform now offers AI cataloging. The question isn\'t who has it anymore. Here\'s what to actually test before trusting it with your next sale.',
   publishDate: '2026-08-15',
   category: 'guides',
