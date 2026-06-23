@@ -12,13 +12,63 @@
  * any redirect that might still move the URL.
  *
  * Cookie: fsa_utm_pending — JSON, path=/, maxAge=300s, httpOnly=false, sameSite=lax.
+ *
+ * Flag 4 — AI Crawler Visit Tracking:
+ * ISR pages (sales/[id], city/[slug], this-weekend/[city]) are served directly by
+ * Vercel — bots crawling these pages never reach the Express backend, so
+ * crawlerAnalyticsMiddleware sees zero entries. This middleware runs on EVERY
+ * request (including bots) and fires a fire-and-forget POST to /api/crawler-log
+ * for known crawlers on page paths. The backend route writes the CrawlerVisit record.
  */
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
-export function middleware(request: NextRequest) {
-  const { searchParams } = request.nextUrl;
+// ── Crawler detection ──────────────────────────────────────────────────────────
+const CRAWLER_PATTERNS: RegExp[] = [
+  /GPTBot/i,
+  /OAI-SearchBot/i,
+  /Claude-Web|ClaudeBot/i,
+  /PerplexityBot/i,
+  /Bytespider/i,
+  /Googlebot/i,
+  /bingbot/i,
+];
 
+const CRAWLER_PAGE_PREFIXES = ['/sales/', '/city/', '/this-weekend/', '/organizers/'];
+
+function isCrawler(ua: string): boolean {
+  return CRAWLER_PATTERNS.some((p) => p.test(ua));
+}
+
+function isCrawlerPage(pathname: string): boolean {
+  return CRAWLER_PAGE_PREFIXES.some((prefix) => pathname.startsWith(prefix));
+}
+
+// ── Main middleware ────────────────────────────────────────────────────────────
+export function middleware(request: NextRequest) {
+  const { searchParams, pathname } = request.nextUrl;
+  const ua = request.headers.get('user-agent') ?? '';
+
+  // ── Crawler tracking (Flag 4 fix) ──────────────────────────────────────────
+  // Fire-and-forget: never await, never block the response.
+  if (isCrawler(ua) && isCrawlerPage(pathname)) {
+    const ip =
+      request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ??
+      request.headers.get('x-real-ip') ??
+      '';
+    const backendUrl = (
+      process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000/api'
+    ).replace(/\/api$/, ''); // strip trailing /api — we append /api/crawler-log ourselves
+    fetch(`${backendUrl}/api/crawler-log`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userAgent: ua, path: pathname, ip }),
+    }).catch(() => {
+      // Intentionally silent — crawler analytics must never affect page delivery
+    });
+  }
+
+  // ── UTM / fsa_* attribution capture ───────────────────────────────────────
   // fsa_* params: used in outreach emails (Chrome-safe names)
   const fsa_src = searchParams.get('fsa_src');
   const fsa_med = searchParams.get('fsa_med');
