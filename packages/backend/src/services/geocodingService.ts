@@ -34,6 +34,16 @@ const MIN_NOMINATIM_INTERVAL_MS = 1100;
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+// Canadian (and other non-US) province/territory codes. US Census 400s on these,
+// so Strategy 3 is skipped and Nominatim (which covers Canada) is relied upon.
+const NON_US_STATE_CODES = new Set([
+  'AB', 'BC', 'MB', 'NB', 'NL', 'NS', 'NT', 'NU', 'ON', 'PE', 'QC', 'SK', 'YT',
+]);
+
+function isNonUsState(state: string): boolean {
+  return NON_US_STATE_CODES.has((state || '').trim().toUpperCase());
+}
+
 async function waitForNominatimSlot(): Promise<void> {
   const now = Date.now();
   const elapsed = now - lastNominatimRequestTime;
@@ -84,7 +94,7 @@ export async function geocodeAddress(
         format: 'json',
         limit: 1,
       },
-      headers: { 'User-Agent': 'FindA.Sale/1.0 (contact@finda.sale)' },
+      headers: { 'User-Agent': 'FindA.Sale/1.0 (https://finda.sale; support@finda.sale)' },
       timeout: 8000,
     });
 
@@ -113,7 +123,7 @@ export async function geocodeAddress(
         limit: 1,
         countrycodes: 'us',
       },
-      headers: { 'User-Agent': 'FindA.Sale/1.0 (contact@finda.sale)' },
+      headers: { 'User-Agent': 'FindA.Sale/1.0 (https://finda.sale; support@finda.sale)' },
       timeout: 8000,
     });
 
@@ -131,7 +141,10 @@ export async function geocodeAddress(
     console.error('[geocodingService] Strategy 2 (Nominatim free-text) error:', err instanceof Error ? err.message : err);
   }
 
-  // Strategy 3: US Census Geocoder
+  // Strategy 3: US Census Geocoder (US-only — skip for Canadian/non-US states)
+  if (isNonUsState(state)) {
+    return null;
+  }
   try {
     const censusResponse = await axios.get('https://geocoding.geo.census.gov/geocoder/locations/address', {
       params: {

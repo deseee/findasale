@@ -42,7 +42,7 @@ async function nominatimGet(params: Record<string, string | undefined>): Promise
       countrycodes: 'us',
     },
     headers: {
-      'User-Agent': 'FindA.Sale/1.0 (contact@finda.sale)',
+      'User-Agent': 'FindA.Sale/1.0 (https://finda.sale; support@finda.sale)',
     },
     timeout: 8000,
   });
@@ -53,6 +53,36 @@ async function nominatimGet(params: Record<string, string | undefined>): Promise
 interface GeoResult {
   lat: number;
   lng: number;
+}
+
+// Canadian (and other non-US) province/territory codes. US Census 400s on these,
+// so we skip Strategy 3 and rely on Nominatim (which covers Canada).
+const NON_US_STATE_CODES = new Set([
+  'AB', 'BC', 'MB', 'NB', 'NL', 'NS', 'NT', 'NU', 'ON', 'PE', 'QC', 'SK', 'YT',
+]);
+
+function isNonUsState(state: string): boolean {
+  return NON_US_STATE_CODES.has((state || '').trim().toUpperCase());
+}
+
+/**
+ * Detect addresses too fragmentary to geocode so they don't burn all 3 strategies.
+ * Conservative: only flags a non-empty street fragment that has NO house number
+ * (no digit) AND is a partial single token. A valid "City, ST" (empty address)
+ * still passes through — Nominatim can resolve it to a city centroid.
+ */
+function isUngeocodeable(address: string, city: string, state: string): boolean {
+  const hasCity = (city || '').trim().length > 0;
+  const hasState = (state || '').trim().length > 0;
+  // "City, ST" with no street is fine — let it geocode to a centroid.
+  if (!hasCity || !hasState) return true;
+  const street = (address || '').trim();
+  if (!street) return false; // empty street + valid city/state = geocodeable centroid
+  const hasDigit = /\d/.test(street);
+  const wordCount = street.split(/\s+/).filter(Boolean).length;
+  // A street fragment with no house number AND only one token (e.g. "Maple")
+  // is hopeless. Multi-word streets ("Maple Ave") can still resolve.
+  return !hasDigit && wordCount < 2;
 }
 
 /**
@@ -106,7 +136,10 @@ async function geocodeSaleAddress(
     console.warn('[geocodeBacklog] Strategy 2 (Nominatim free-text) error:', (err as Error).message);
   }
 
-  // Strategy 3: US Census Geocoder
+  // Strategy 3: US Census Geocoder (US-only — skip for Canadian/non-US states)
+  if (isNonUsState(state)) {
+    return null;
+  }
   try {
     const censusResponse = await axios.get(
       'https://geocoding.geo.census.gov/geocoder/locations/address',
@@ -177,8 +210,20 @@ async function runGeocodeBacklog(): Promise<void> {
   let succeeded = 0;
   let failed = 0;
 
+  let skipped = 0;
+
   for (const sale of sales) {
     try {
+      // Skip clearly-hopeless fragments before burning all 3 strategies on them.
+      if (isUngeocodeable(sale.address ?? '', sale.city ?? '', sale.state ?? '')) {
+        skipped++;
+        console.log(
+          `[geocodeBacklog] Skipping un-geocodeable sale ${sale.id} ` +
+            `(addr="${sale.address ?? ''}", ${sale.city}, ${sale.state})`
+        );
+        continue;
+      }
+
       const result = await geocodeSaleAddress(
         sale.address ?? '',
         sale.city ?? '',
@@ -217,7 +262,7 @@ async function runGeocodeBacklog(): Promise<void> {
   }
 
   console.log(
-    `[geocodeBacklog] Run complete — geocoded: ${succeeded}, failed: ${failed}, total processed: ${sales.length}`
+    `[geocodeBacklog] Run complete — geocoded: ${succeeded}, failed: ${failed}, skipped: ${skipped}, total processed: ${sales.length}`
   );
 }
 
