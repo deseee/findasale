@@ -12,21 +12,23 @@ name: CI Typecheck & Tests
 #              auto-deploy and trigger deploys from a successful run of this workflow.
 # Until that is configured, this workflow only reports status; it does not gate.
 #
-# ⚠️ ALL QUALITY STEPS ARE CURRENTLY NON-BLOCKING (continue-on-error: true) — S1026.
-#   This gate had NEVER passed across 12 runs. When Railway "Wait for CI" was enabled
-#   it blocked EVERY deploy. Root cause: the checks fail on CI-environment / install
-#   drift, NOT on real product regressions (production builds + runs all of this fine):
-#     - Backend typecheck: ~232 pre-existing errors the prod build already tolerates
-#       (packages/backend/Dockerfile.production runs `tsc || true`, comment S512).
-#     - Frontend typecheck: TS2688 "Cannot find type definition file for 'csv-parse'"
-#       — csv-parse is a hoisted transitive dep the frontend does not use or declare;
-#       the frontend tsconfig has no `types` allowlist so it auto-includes it, and
-#       CI's frozen-lockfile install cannot resolve its .d.ts. Vercel builds fine.
-#     - Backend tests / Frontend lint: unverifiable while the above type state stands.
-#   Every step still RUNS and PRINTS its failures (nothing hidden) but does not fail
-#   the check suite, so deploys are unblocked. TODO (dedicated cleanup session): fix
-#   the frontend tsconfig `types` allowlist + work down the backend drift, then flip
-#   continue-on-error back to false per step to restore real gating.
+# GATING STATUS (S1027): the two TYPECHECK steps are BLOCKING; tests + lint remain
+#   NON-BLOCKING (continue-on-error: true) for now. History: this gate had never passed
+#   across 12 runs and, with Railway "Wait for CI" on, blocked every deploy (S1026).
+#   A faithful fresh-install reproduction (clean pnpm install --frozen-lockfile +
+#   `prisma generate` + tsc, node 22, scripts on) settled the root causes:
+#     - Backend typecheck: 0 errors on a fresh install. The earlier "~232 errors" did
+#       NOT reproduce — backend + database share one @prisma/client instance and the
+#       explicit generate step populates it. NOW BLOCKING.
+#     - Frontend typecheck: the lone TS2688 "Cannot find type definition file for
+#       'csv-parse'" is fixed by a `types` allowlist in packages/frontend/tsconfig.json
+#       (the hoisted @types/csv-parse stub was auto-included because no allowlist existed).
+#       0 errors after the fix. NOW BLOCKING.
+#     - Backend tests: only 1 test file; `jest` cold-compiles a large import graph via
+#       ts-jest and needs --forceExit + test infra before it can gate. Left non-blocking.
+#     - Frontend lint: the repo has NO eslint config, so `next lint` prompts/aborts.
+#       Needs an eslint config + violation cleanup before gating. Left non-blocking.
+#   Every step still RUNS and PRINTS; tests + lint just don't fail the suite yet.
 #
 # Setup mirrors the repo's existing workflows (corepack + setup-node@v4, node 22,
 # pnpm cache). The root package.json pins packageManager: pnpm@8.15.5, so corepack
@@ -75,26 +77,24 @@ jobs:
       - name: Generate Prisma client
         run: pnpm --filter ./packages/database exec prisma generate
 
-      # NON-BLOCKING: ~232 pre-existing errors tolerated by the production build
-      # (Dockerfile.production: `tsc || true`). Still runs + reports; does not gate.
+      # BLOCKING (S1027): 0 errors on a faithful fresh CI install (verified by repro).
       - name: Backend typecheck
         run: npx tsc --noEmit --skipLibCheck
         working-directory: packages/backend
-        continue-on-error: true
 
-      # NON-BLOCKING: TS2688 csv-parse implicit-type-library resolution fails in CI's
-      # frozen-lockfile install (not a product bug — Vercel builds fine). Runs + reports.
+      # BLOCKING (S1027): 0 errors after the tsconfig `types` allowlist fix (verified by repro).
       - name: Frontend typecheck
         run: npx tsc --noEmit --skipLibCheck
         working-directory: packages/frontend
-        continue-on-error: true
 
-      # NON-BLOCKING while the type state above stands. Still runs + reports.
+      # NON-BLOCKING (S1027): only 1 test file; `jest` cold-compiles a large import graph
+      # via ts-jest and needs --forceExit + test infra before it can gate. Runs + reports.
       - name: Backend tests
         run: pnpm --filter ./packages/backend test
         continue-on-error: true
 
-      # NON-BLOCKING for now — runs + reports, does not gate.
+      # NON-BLOCKING (S1027): repo has no eslint config, so `next lint` prompts/aborts.
+      # Needs an eslint config + violation cleanup before gating. Runs + reports.
       - name: Frontend lint
         run: pnpm --filter ./packages/frontend lint
         continue-on-error: true
