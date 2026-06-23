@@ -244,13 +244,13 @@ const buildDigestHtml = (userName: string, sales: any[], frontendUrl: string, un
     <!-- Header -->
     <div style="background:#2563eb;border-radius:10px;padding:24px;margin-bottom:24px;text-align:center;">
       <h1 style="margin:0;color:#fff;font-size:24px;font-weight:700;">🏷️ FindA.Sale</h1>
-      <p style="margin:8px 0 0;color:#bfdbfe;font-size:14px;">Your Weekend Estate Sale Digest</p>
+      <p style="margin:8px 0 0;color:#bfdbfe;font-size:14px;">Your Weekend Sale Digest</p>
     </div>
 
     <!-- Greeting -->
     <p style="color:#374151;font-size:15px;margin-bottom:20px;">
       Hi ${userName || 'there'},<br><br>
-      Here are the estate sales happening this weekend near you. Don't miss out!
+      Here are the sales happening this weekend near you — estate sales, yard sales, auctions, flea markets, and more. Don't miss out!
     </p>
 
     <!-- Sale cards -->
@@ -352,7 +352,7 @@ export const sendWeeklyDigest = async () => {
         await emailService.emails.send({
           from: fromEmail,
           to: user.email,
-          subject: `🏷️ ${upcomingSales.length} estate sale${upcomingSales.length > 1 ? 's' : ''} this weekend near you`,
+          subject: `🏷️ ${upcomingSales.length} sale${upcomingSales.length > 1 ? 's' : ''} near you this weekend`,
           html,
           jobName: 'notificationController-weeklyDigest',
         });

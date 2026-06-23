@@ -59,9 +59,9 @@ function generatePostText(
 ): string {
   switch (tone) {
     case 'casual':
-      return `Found this beauty — ${title} at our upcoming estate sale — ${saleDates}, ${city}! ${price} and it won't last. Link in bio to see more.`;
+      return `Found this beauty — ${title} at our upcoming sale — ${saleDates}, ${city}! ${price} and it won't last. Link in bio to see more.`;
     case 'professional':
-      return `Now available: ${title}${condition ? ` — ${condition} condition` : ''}, priced at ${price}. Browse the full collection at our upcoming estate sale ${saleDates} in ${city}.`;
+      return `Now available: ${title}${condition ? ` — ${condition} condition` : ''}, priced at ${price}. Browse the full collection at our upcoming sale ${saleDates} in ${city}.`;
     case 'friendly':
       return `Hey friends! This gorgeous ${title} is waiting for a new home at our sale ${saleDates} in ${city}. Stop by and say hi — it's ${price}!`;
   }
