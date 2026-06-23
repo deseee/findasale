@@ -32,6 +32,10 @@ jobs:
     name: Typecheck, tests & lint
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      # Prevents OOM kill (exit 134/SIGABRT) on GitHub Actions ubuntu-latest runners.
+      # Full-monorepo tsc exceeds the default 2GB V8 heap — 4GB cap fixes it.
+      NODE_OPTIONS: --max-old-space-size=4096
 
     steps:
       - name: Checkout code
