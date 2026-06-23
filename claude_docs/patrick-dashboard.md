@@ -4,36 +4,38 @@
 
 ## What Happened This Week
 
-Two big threads. Earlier in the week was SEO: we fixed two P0 bugs that were silently keeping your 5,000 sale pages out of Google's index, plus a hidden build script that overwrote your curated guide content on every deploy — all fixed, sitemap resubmitted, Google now crawling.
+Two big threads. Earlier in the week was SEO: we fixed two P0 bugs that were silently keeping your 5,000 sale pages out of Google's index — all fixed, sitemap resubmitted, Google now crawling.
 
-The latest session (S1022) was a deep "what are we overlooking" pass on the whole operation, and a lot got built: four new monitoring guardrails (including the one that would've caught the content-overwrite bug — it now watches your real data daily), real-time email alerts for fatal production errors, a pre-deploy code-checking gate, a cleanup/consolidation of your ~30 scheduled tasks, and a fix to the address-geocoding pipeline that had stopped working (rate-limited, and couldn't handle Canadian addresses). We also found a serious one: your live database password was sitting in 16 files in your public code repo — scrubbed from the current files, but it still needs rotating (see below).
+S1022 was a deep "what are we overlooking" pass: four new monitoring guardrails, real-time error alerts for fatal production errors, a pre-deploy CI gate, scheduled-task consolidation, and a fix to the address-geocoding pipeline. We also found that your live database password was sitting in 16 files in your public repo — scrubbed from the current files. S1022 ended with a brief production outage (self-inflicted, resolved same session).
 
-Honest note: during that session I caused a brief production outage. I added an email feature, a file got silently truncated by a tooling bug, and a weak spot in your build process (it ignores type errors) let the broken build ship. The backend crash-looped. I found the root cause and restored it — prod is green and confirmed healthy. The fix for that whole class of problem is the CI gate (built) once it's set to *block* bad deploys, which is the top priority next.
+**S1023 (just finished):** You said "do all 3 outstanding — I'm not doing them, you have the tools." So I did them:
+
+1. **Database password rotated ✅** — old password invalid, new one active in Railway and confirmed working. Railway backend redeployed and healthy. See note below about what you still need to do locally.
+2. **Railway "Wait for CI" enabled ✅** — Railway backend will now wait for the "Typecheck, tests & lint" GitHub Actions job before deploying. This is the real CI gate.
+3. **Bounce mailbox confirmed ✅** — The `bounce-suppression-sweep` Cowork task is already handling this (reads your Gmail where bounces actually land, writes to suppression list). No code change needed.
 
 ---
 
 ## What Got Built (and is live)
 
-- **Data-persistence monitor** — daily check that your real organizer data (sales, items, prices, the Artifact storefront) hasn't been silently wiped or reset. The guard for exactly the kind of bug you stumbled onto.
-- **Job-heartbeat + Sentry-to-queue** — folded into your daily health task: catches background jobs that silently die, and routes serious production errors into your real work queue instead of a report nobody reads.
-- **Token-expiry watch** — daily check so things like the eBay token never lapse unnoticed again.
-- **Real-time error alerts** — an email the moment a fatal error hits production (backend or frontend), not a day later.
-- **Geocoder fixed** — sale addresses (including Canadian ones) can be mapped again; deployed and green.
+- **DB password rotated** — new password active in Railway, backend green.
+- **Railway CI gate** — deploys blocked until tests pass.
+- **Data-persistence monitor, job-heartbeat, Sentry-to-queue, token-expiry watch, real-time error alerts, geocoder fix** — all from S1022, all live.
 
 ---
 
-## Action Items for Patrick
+## Action Items for Patrick (short list)
 
-- [ ] **Rotate your database password (most important).** It's live and exposed in your public repo's history. I can drive ~90% of it on your go — you'd just paste the new value into your local `.env`. Say "rotate it" when ready.
-- [ ] **Turn on deploy-blocking for the new CI gate** — Vercel -> Settings -> Git -> "Wait for CI", and Railway backend -> wait-for-checks. This is what stops a bad build from ever reaching production again. (I'll also remove the `tsc || true` line in the build that let it through.)
+- [ ] **Update your local `.env` and `CLAUDE_MASTER.md`** with the new DB password. It's in your session history / memory — not in this file (security rule). This is the only local piece of the rotation you need to do.
+- [ ] **GitHub password — 2-minute action:** Go to `github.com/settings/installations`, click "Review request" next to Vercel, enter your GitHub password. Then go to `github.com/deseee/findasale/settings/branch_protection_rules` and save the pre-configured form (already has "main" + "Typecheck, tests & lint"). Note: branch protection won't actually enforce on a free private repo — the Railway gate above is the real blocker — but this is still worth doing for the record.
 - [ ] **Reconnect eBay** — token expired June 20 (Settings -> Platforms -> eBay).
-- [ ] **Leave `OUTREACH_DAILY_CAP=1`** — don't raise it until the daily health check shows zero send-limit failures and bounce rate under 5%.
-- [ ] **Bounce-email mailbox** — needs you to generate a Google Workspace login/token for `find@outreach.finda.sale` so bounce handling can move to the right inbox. I'll wire it once it exists.
-- [ ] **Watch GSC** in ~7 days (Indexing -> Pages) for the indexing fixes to take effect.
+- [ ] **Leave `OUTREACH_DAILY_CAP=1`** — don't raise until daily health check shows clean send-limit + bounce rate under 5%.
+- [ ] **Watch GSC** in ~7 days for indexing fixes to appear.
 
 ---
 
 ## What to Watch
 
-- The geocoder fix is live but **unverified until its next run** (every 2 hours) — that run should show a non-zero "geocoded" count. If it's still zero tomorrow, flag it.
-- The email-send feature is **abandoned** — it caused two outages for the least valuable feature, and is left as a harmless disabled stub to be removed.
+- Geocoder fix: live but **unverified until next run** (every 2h). Should show `geocoded > 0`. Flag if still zero tomorrow.
+- Vercel "Required CI checks before deploy" is a **Pro plan feature** — not available on Hobby. Railway's "Wait for CI" is the gate for now.
+- The email-send feature is **abandoned** — harmless disabled stub, to be removed next dev session.
