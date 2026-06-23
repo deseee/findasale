@@ -428,7 +428,7 @@ export const getWorkspaceSettings = async (req: AuthRequest, res: Response) => {
     const memberCount = workspace.members.filter((m: any) => m.acceptedAt !== null).length;
     const ownerName = workspace.owner?.user?.name || workspace.owner?.user?.email || 'Unknown';
 
-    let brandRules = null;
+    let brandRules: any = null;
     if (settings.brandRules) {
       try { brandRules = JSON.parse(settings.brandRules); } catch { brandRules = settings.brandRules; }
     }
@@ -922,7 +922,7 @@ export const getWorkspaceTasks = async (req: AuthRequest, res: Response) => {
     // Check workspace membership
     const workspace = await prisma.organizerWorkspace.findUnique({
       where: { id: workspaceId },
-      include: { members: { where: { organizerId } } },
+      include: { members: { where: { organizerId }, include: { organizer: { include: { user: true } }, user: true } } },
     });
     if (!workspace || (workspace.ownerId !== organizerId && workspace.members.length === 0)) {
       return res.status(403).json({ message: 'Not a workspace member' });
@@ -957,7 +957,7 @@ export const getWorkspaceTasks = async (req: AuthRequest, res: Response) => {
     // Format response to include assignedTo name if available
     const formattedTasks = await Promise.all(
       tasks.map(async (task: any) => {
-        let assigneeInfo = null;
+        let assigneeInfo: { id: string; businessName: string } | null = null;
         if (task.assignedTo) {
           // assignedTo now stores WorkspaceMember.id instead of organizerId
           const member = workspace.members.find((m: any) => m.id === task.assignedTo);

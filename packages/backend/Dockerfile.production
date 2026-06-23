@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-# cache-bust: 2026-06-23-ci-backend-nonblocking-S1027
+# cache-bust: 2026-06-23-ci-backend-gated-S1027
 FROM node:20-slim AS base
 
 # Install OpenSSL for Prisma
@@ -40,11 +40,10 @@ COPY . .
 # Generate Prisma client (writes into node_modules/.pnpm virtual store)
 RUN cd packages/database && npx prisma generate
 
-# S512/S1027: the backend has ~30 pre-existing type errors vs the committed schema
-# (CI-confirmed). tsc still EMITS valid JS, so allow non-zero exit so the prod build
-# proceeds. The completeness gate below catches OOM/partial emits. Re-gate (drop `|| true`)
-# only after a dedicated dev session clears the backend type debt.
-RUN cd packages/backend && npx tsc || true
+# S1027 final: backend type debt cleared (CI typecheck is 0 and now BLOCKING via Wait-for-CI,
+# so broken-type commits never reach this build). A real type error must fail the Docker build,
+# not ship via `|| true`. The completeness gate below remains as an OOM backstop.
+RUN cd packages/backend && npx tsc
 
 # Build completeness gate: fail Docker build if tsc OOM'd and produced <75% of source files
 # Prevents a partial dist/ from being deployed when the builder runs out of memory.

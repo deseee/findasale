@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import Stripe from 'stripe';
 import { getStripe, getTestStripe } from '../utils/stripe';
 import { AuthRequest } from '../middleware/auth';
 import { createNotification as createNotificationEmail } from '../services/notificationService';
@@ -1272,7 +1273,7 @@ export const webhookHandler = async (req: Request, res: Response) => {
                     setImmediate(() => {
                       sendConsignorItemSold({
                         consignorName: consignor.name,
-                        consignorEmail: consignor.email,
+                        consignorEmail: consignor.email ?? '',
                         itemName: soldItem.title,
                         itemPrice: soldItem.price || 0,
                         consignorPayout,
@@ -2344,8 +2345,7 @@ export const createRefund = async (req: AuthRequest, res: Response) => {
         user: { select: { id: true, email: true, name: true } },
         sale: {
           include: {
-            organizer: { select: { userId: true, businessName: true } },
-            items: { where: { id: purchase.itemId || undefined } }
+            organizer: { select: { userId: true, businessName: true } }
           }
         },
         item: { select: { title: true } }
@@ -2975,7 +2975,7 @@ export const createCartCheckoutSession = async (req: AuthRequest, res: Response)
     const successUrl = `${frontendUrl}/sales/${saleId}?checkout=success`;
     const cancelUrl = `${frontendUrl}/sales/${saleId}`;
 
-    const baseSessionParams: Parameters<ReturnType<typeof stripe>['checkout']['sessions']['create']>[0] = {
+    const baseSessionParams: Stripe.Checkout.SessionCreateParams = {
       mode: 'payment',
       payment_method_types: ['card'],
       line_items: lineItems,
