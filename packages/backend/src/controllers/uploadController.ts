@@ -194,11 +194,12 @@ export const uploadSalePhotos = async (req: Request, res: Response): Promise<voi
 
     // If NSFW detected, return early with specific error
     if (nsfwDetected) {
-      return res.status(400).json({
+      res.status(400).json({
         error: 'NSFW_DETECTED',
         message: 'One or more images were rejected for policy violation',
         partialErrors,
       });
+      return;
     }
 
     // P0-1: Validate that all returned URLs are non-empty strings

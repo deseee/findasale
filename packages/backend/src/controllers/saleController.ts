@@ -4,6 +4,7 @@ import QRCode from 'qrcode';
 import { handleFavoriteBadge } from './userController';
 import { prisma } from '../lib/prisma';
 import { Prisma } from '@prisma/client';
+import type { Organizer } from '@prisma/client';
 import { AuthRequest } from '../middleware/auth';
 import { createNotification } from '../lib/notificationService';
 import { notifyFollowersOfNewSale } from '../services/followerNotificationService';
@@ -574,7 +575,7 @@ export const createSale = async (req: AuthRequest, res: Response) => {
     // auto-renew cron is disabled, so this endDate is never used to expire the store.
     if (saleData.saleType === 'RETAIL') {
       (saleData as any).isOngoing = true;
-      const startDate = new Date(saleData.startDate);
+      const startDate = new Date(saleData.startDate ?? Date.now());
       const renewDays = saleData.retailAutoRenewDays || 30;
       const calculatedEndDate = new Date(startDate.getTime() + renewDays * 24 * 60 * 60 * 1000);
       saleData.endDate = calculatedEndDate.toISOString();
@@ -842,7 +843,7 @@ export const updateSaleStatus = async (req: AuthRequest, res: Response) => {
     const existingSale = await prisma.sale.findUnique({ where: { id } });
     if (!existingSale) return res.status(404).json({ message: 'Sale not found' });
 
-    let organizerProfile = null;
+    let organizerProfile: Organizer | null = null;
     if (!isAdmin) {
       organizerProfile = await prisma.organizer.findUnique({ where: { userId: req.user.id } });
       if (!organizerProfile || existingSale.organizerId !== organizerProfile.id) {

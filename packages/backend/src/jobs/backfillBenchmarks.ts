@@ -65,11 +65,11 @@ async function backfillBatch(skip: number): Promise<{
     },
     include: {
       sale: {
-        select: { zipCode: true },
+        select: { zip: true },
       },
       purchases: {
         where: { status: 'PAID' },
-        select: { finalPrice: true },
+        select: { amount: true },
         take: 1,
       },
     },
@@ -89,7 +89,7 @@ async function backfillBatch(skip: number): Promise<{
     // Determine price: prefer aiSuggestedPrice, fallback to sold price
     const priceInDollars = item.aiSuggestedPrice
       ? Number(item.aiSuggestedPrice)
-      : item.purchases[0]?.finalPrice ?? 0;
+      : item.purchases[0]?.amount ?? 0;
 
     if (priceInDollars <= 0) {
       result.skipped++;
@@ -130,7 +130,7 @@ async function backfillBatch(skip: number): Promise<{
           benchmarks: {
             create: {
               condition,
-              region: inferRegionFromZip(item.sale?.zipCode),
+              region: inferRegionFromZip(item.sale?.zip),
               priceRangeLow: Math.round(priceInCents * 0.7),
               priceRangeHigh: Math.round(priceInCents * 1.3),
               dataSource: 'haiku_inferred',
@@ -164,7 +164,7 @@ async function backfillBatch(skip: number): Promise<{
           data: {
             entryId: entry.id,
             condition,
-            region: inferRegionFromZip(item.sale?.zipCode),
+            region: inferRegionFromZip(item.sale?.zip),
             priceRangeLow: Math.round(priceInCents * 0.7),
             priceRangeHigh: Math.round(priceInCents * 1.3),
             dataSource: 'haiku_inferred',

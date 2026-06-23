@@ -110,7 +110,7 @@ export async function getWidgetInventory(req: Request, res: Response): Promise<v
   }
 
   // Base where clause (without category filter — for category discovery)
-  const baseWhere: Parameters<typeof prisma.item.findMany>[0]['where'] = {
+  const baseWhere: NonNullable<Parameters<typeof prisma.item.findMany>[0]>['where'] = {
     saleId: { in: saleIds },
     isActive: true,
     draftStatus: 'PUBLISHED',
@@ -118,7 +118,7 @@ export async function getWidgetInventory(req: Request, res: Response): Promise<v
   };
 
   // Build item where clause (with optional category filter)
-  const itemWhere: Parameters<typeof prisma.item.findMany>[0]['where'] = { ...baseWhere };
+  const itemWhere: NonNullable<Parameters<typeof prisma.item.findMany>[0]>['where'] = { ...baseWhere };
   if (category && typeof category === 'string') {
     itemWhere.category = category;
   }

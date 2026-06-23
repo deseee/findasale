@@ -441,7 +441,7 @@ export const getPublicShopperProfile = async (req: Request, res: Response) => {
     });
 
     // Fetch recent purchases if purchasesVisible is true
-    let purchases = null;
+    let purchases: any[] | null = null;
     if (user.purchasesVisible) {
       const purchaseData = await prisma.purchase.findMany({
         where: { userId },

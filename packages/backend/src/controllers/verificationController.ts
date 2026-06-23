@@ -360,7 +360,7 @@ export const previewGooglePlace = async (req: AuthRequest, res: Response) => {
       const place = response.data.result;
 
       // Convert Google hours to our format
-      const incomingHours = [];
+      const incomingHours: Array<{ dayOfWeek: number; openTime: string; closeTime: string }> = [];
       if (place.opening_hours?.periods) {
         const daysUsed = new Set<number>();
         for (const period of place.opening_hours.periods) {
@@ -466,7 +466,7 @@ export const confirmGoogleVerification = async (req: AuthRequest, res: Response)
       const place = response.data.result;
 
       // Parse Google hours
-      const incomingHours = [];
+      const incomingHours: Array<{ dayOfWeek: number; openTime: string; closeTime: string }> = [];
       const daysUsed = new Set<number>();
       if (place.opening_hours?.periods) {
         for (const period of place.opening_hours.periods) {
