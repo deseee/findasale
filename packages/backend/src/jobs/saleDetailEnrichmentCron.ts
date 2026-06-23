@@ -5,7 +5,7 @@
 
 import cron from 'node-cron';
 import { cronGuard } from '../utils/cronGuard';
-import { enrichSaleDetails } from '../services/scraper/saleDetailEnrichment';
+import { runEnrichmentBatch } from '../services/scraper/saleDetailEnrichment';
 
 /**
  * Schedule the enrichment cron to run every 4 hours (0, 4, 8, 12, 16, 20 UTC).
@@ -34,7 +34,7 @@ export function scheduleSaleDetailEnrichmentCron(): void {
     );
 
     try {
-      const result = await enrichSaleDetails(batchSize);
+      const result = await runEnrichmentBatch({ limit: batchSize });
 
       const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
       console.log(

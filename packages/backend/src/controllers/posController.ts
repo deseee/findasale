@@ -15,6 +15,7 @@ import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import { getStripe } from '../utils/stripe';
+import type Stripe from 'stripe';
 import { getIO } from '../lib/socket';
 import { createNotification } from '../lib/notificationService';
 import { getPlatformFeeRate, SubscriptionTier } from '../utils/feeCalculator';
@@ -1059,7 +1060,7 @@ export const createCombinedInvoice = async (req: AuthRequest, res: Response) => 
     if (cardAmountCents > 0) {
       try {
         // Build line_items from held items
-        const line_items = [];
+        const line_items: Stripe.Checkout.SessionCreateParams.LineItem[] = [];
 
         for (const res of heldReservations) {
           line_items.push({

@@ -1512,6 +1512,7 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     // Feature #244 Phase 4: Push-on-save eBay sync (fire-and-forget, non-blocking)
     // Only fires if this item is currently live on eBay (has an offer ID)
     if (updatedItem.ebayOfferId) {
+      const ebayOfferId = updatedItem.ebayOfferId;
       (async () => {
         try {
           const frontendUrl = process.env.FRONTEND_URL ?? 'https://finda.sale';
@@ -1545,7 +1546,7 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
           // body causes HTTP 400. So we always GET the full object, mutate the changed
           // field(s), then PUT the complete object back. We also fetch the offer first
           // to recover the REAL SKU (which carries a date suffix) — `FAS-${id}` is wrong.
-          const offerPath = `/sell/inventory/v1/offer/${encodeURIComponent(updatedItem.ebayOfferId)}`;
+          const offerPath = `/sell/inventory/v1/offer/${encodeURIComponent(ebayOfferId)}`;
           let offerObject: Record<string, unknown> | null = null;
           try {
             const offerGetRes = await fetch(
@@ -2280,7 +2281,7 @@ export const analyzeItemTags = async (req: AuthRequest, res: Response) => {
 
     const item = await prisma.item.findUnique({
       where: { id },
-      include: { sale: { select: { isUnmanagedListing: true, organizer: { select: { userId: true, id: true, subscriptionTier: true } } } } }
+      include: { sale: { select: { organizer: { select: { isUnmanagedListing: true, userId: true, id: true, subscriptionTier: true } } } } }
     });
 
     if (!item) {
@@ -2288,7 +2289,7 @@ export const analyzeItemTags = async (req: AuthRequest, res: Response) => {
     }
 
     // Guard: reject actions on unmanaged listings
-    if (item.sale?.isUnmanagedListing) {
+    if (item.sale?.organizer?.isUnmanagedListing) {
       return res.status(403).json({
         message: 'This listing is not yet claimed by an organizer. Try one of our verified organizer sales.',
         code: 'UNMANAGED_LISTING'
@@ -3025,7 +3026,7 @@ export const recordQrScan = async (req: AuthRequest, res: Response): Promise<voi
     }
 
     // Geofence check: if client provided lat/lng, enforce 100m radius from sale location
-    if (latitude !== undefined && longitude !== undefined && item.sale?.lat !== null && item.sale?.lng !== null) {
+    if (latitude !== undefined && longitude !== undefined && item.sale && item.sale.lat !== null && item.sale.lng !== null) {
       const distance = haversineDistance(latitude, longitude, item.sale.lat, item.sale.lng);
       const MAX_DISTANCE = 100; // 100 meters
       if (distance > MAX_DISTANCE) {

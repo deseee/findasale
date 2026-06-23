@@ -3675,7 +3675,7 @@ async function resolvePoliciesForItem(
           return {
             fulfillmentPolicyId: _gapFvf.policyId,
             returnPolicyId: mapping.defaultReturnPolicyId || conn.returnPolicyId || '',
-            paymentPolicyId: mapping.defaultPaymentPolicyId || conn.paymentPolicyId,
+            paymentPolicyId: mapping.defaultPaymentPolicyId || conn.paymentPolicyId || '',
             descriptionHtml: mapping.defaultDescriptionHtml ?? null,
             pushAsDraft: mapping.pushAsDraft ?? false,
             merchantLocationSource: mapping.merchantLocationSource || conn.merchantLocationSource || 'SALE_ADDRESS',

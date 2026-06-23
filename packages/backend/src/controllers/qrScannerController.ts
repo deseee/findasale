@@ -43,7 +43,7 @@ export const recordQRScanEvent = async (
     const shopperId = req.user?.id || null;
 
     // Create QRScannerEvent record (saleId is optional per frontend)
-    const event = await prisma.qrScannerEvent.create({
+    const event = await prisma.qRScannerEvent.create({
       data: {
         saleId: saleId || null,
         shopperId,
@@ -120,7 +120,7 @@ export const getQRFunnel = async (
     const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 
     // Fetch all events for this sale in the time window
-    const events = await prisma.qrScannerEvent.findMany({
+    const events = await prisma.qRScannerEvent.findMany({
       where: {
         saleId,
         createdAt: { gte: since }

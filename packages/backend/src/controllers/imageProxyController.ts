@@ -95,7 +95,7 @@ export const imageProxy = async (req: Request, res: Response) => {
     if (response.body) {
       // Convert ReadableStream to Node.js readable stream
       const chunks: Buffer[] = [];
-      for await (const chunk of response.body as AsyncIterable<Uint8Array>) {
+      for await (const chunk of response.body as unknown as AsyncIterable<Uint8Array>) {
         chunks.push(Buffer.from(chunk));
       }
       const buffer = Buffer.concat(chunks);

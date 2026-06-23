@@ -218,10 +218,8 @@ export const getOrganizerInsights = async (req: AuthRequest, res: Response) => {
 
         if (item.status === 'SOLD' && item.price) {
           totalItemsSold += 1;
-          // Convert Decimal to number before addition
-          const price = typeof item.price === 'object' && 'toNumber' in item.price
-            ? item.price.toNumber()
-            : Number(item.price);
+          // Item.price is Float? (number | null) — coerce to number
+          const price = Number(item.price);
           totalRevenue += price;
         }
 

@@ -191,7 +191,7 @@ export const sendSMSUpdate = async (req: AuthRequest, res: Response) => {
     }
 
     // Send SMS to each subscriber
-    const results = [];
+    const results: Array<{ phone: string | null; success: boolean; sid?: string; error?: string }> = [];
     for (const subscriber of subscribers) {
       try {
         const sms = await twilioClient.messages.create({
