@@ -521,7 +521,7 @@ export const batchAnalyzeImages = async (req: AuthRequest, res: Response): Promi
       successCount: results.filter(r => r.suggestedTitle !== 'Error').length,
     };
 
-    return res.json(response);
+    res.json(response); return;
   } catch (error) {
     console.error('batchAnalyzeImages error:', error);
     if (!res.headersSent) {

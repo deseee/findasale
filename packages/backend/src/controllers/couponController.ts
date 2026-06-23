@@ -201,7 +201,7 @@ export const generateXpSinkCoupon = async (req: AuthRequest, res: Response) => {
 
     // Generate unique code — retry up to 3 times on collision
     let code = '';
-    let existing = null;
+    let existing: Awaited<ReturnType<typeof prisma.coupon.findUnique>> = null;
     for (let attempt = 0; attempt < 3; attempt++) {
       code = generateCouponCode();
       existing = await prisma.coupon.findUnique({ where: { code } });
@@ -343,7 +343,7 @@ export const generateShopperCoupon = async (req: AuthRequest, res: Response) => 
 
     // Generate unique code — retry up to 3 times on collision
     let code = '';
-    let existing = null;
+    let existing: Awaited<ReturnType<typeof prisma.coupon.findUnique>> = null;
     for (let attempt = 0; attempt < 3; attempt++) {
       code = generateCouponCode();
       existing = await prisma.coupon.findUnique({ where: { code } });

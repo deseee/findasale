@@ -5,7 +5,7 @@ import sanitizeHtml from 'sanitize-html';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import { getWatermarkedUrl, getWatermarkedUrlWithQR } from '../utils/cloudinaryWatermark';
-import { canRemoveWatermark } from '../utils/watermarkPolicy';
+import { canRemoveWatermark, WatermarkPolicyOrganizer } from '../utils/watermarkPolicy';
 import { classifyEbayShipping } from '../utils/ebayShippingClassifier';
 import { getIO } from '../lib/socket';
 import { isEbayRateLimited, trackEbayCall, getEbayRateLimitStatus } from '../lib/ebayRateLimiter';
@@ -579,7 +579,7 @@ function generateEbayCsv(
   }>,
   saleTitle: string,
   includeWatermark: boolean = false,
-  organizer: { subscriptionTier?: string | null } | null = null
+  organizer: WatermarkPolicyOrganizer | null = null
 ): string {
   // Escape CSV values (quote if contains comma, quote, or newline)
   const escapeCsvValue = (value: string | number): string => {
@@ -2039,7 +2039,7 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
         console.warn('[eBay ShippingPick] failed to fetch fulfillment policies:', err);
         ebayFulfillmentPolicies = [];
       }
-      return ebayFulfillmentPolicies;
+      return ebayFulfillmentPolicies ?? [];
     };
 
     // Push each item to eBay
@@ -3674,7 +3674,7 @@ async function resolvePoliciesForItem(
           );
           return {
             fulfillmentPolicyId: _gapFvf.policyId,
-            returnPolicyId: mapping.defaultReturnPolicyId || conn.returnPolicyId,
+            returnPolicyId: mapping.defaultReturnPolicyId || conn.returnPolicyId || '',
             paymentPolicyId: mapping.defaultPaymentPolicyId || conn.paymentPolicyId,
             descriptionHtml: mapping.defaultDescriptionHtml ?? null,
             pushAsDraft: mapping.pushAsDraft ?? false,

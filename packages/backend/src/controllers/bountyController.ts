@@ -839,20 +839,19 @@ export const completeBountyPurchase = async (req: AuthRequest, res: Response) =>
     // Create Stripe PaymentIntent
     const idempotencyKey = `bounty-${submissionId}-${userId}`;
     let paymentIntent;
+    const basePaymentIntentData = {
+      amount: priceCents,
+      currency: 'usd',
+      metadata: {
+        submissionId: submission.id,
+        bountyId: submission.bountyId,
+        itemId: submission.itemId,
+        saleId: submission.item.sale!.id,
+        userId,
+        type: 'BOUNTY_SUBMISSION',
+      },
+    };
     try {
-      const basePaymentIntentData = {
-        amount: priceCents,
-        currency: 'usd',
-        metadata: {
-          submissionId: submission.id,
-          bountyId: submission.bountyId,
-          itemId: submission.itemId,
-          saleId: submission.item.sale!.id,
-          userId,
-          type: 'BOUNTY_SUBMISSION',
-        },
-      };
-
       paymentIntent = await stripe().paymentIntents.create(
         shouldUseConnect
           ? {

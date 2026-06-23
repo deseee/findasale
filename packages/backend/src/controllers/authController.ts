@@ -12,6 +12,7 @@ import { referralTrancheService } from '../services/referralTrancheService';
 import { checkRegistrationLimit, recordRegistration } from '../lib/registrationRateLimiter';
 import { recordRegistration as recordFraudRegistration } from '../lib/fraudDetectionService';
 import { transactionalEmailService } from '../lib/transactionalEmailService';
+import { AuthRequest } from '../middleware/auth';
 
 // SECURITY FIX P0: OAuth redirect URI allowlist to prevent open redirect attacks
 const ALLOWED_REDIRECT_URIS = () => {
@@ -62,7 +63,7 @@ export const register = async (req: Request, res: Response) => {
     }
 
     // Validate invite code if provided (beta access gate)
-    let validatedInvite = null;
+    let validatedInvite: Awaited<ReturnType<typeof prisma.betaInvite.findUnique>> = null;
     if (inviteCode) {
       validatedInvite = await prisma.betaInvite.findUnique({
         where: { code: inviteCode.toUpperCase() }
@@ -391,7 +392,7 @@ export const register = async (req: Request, res: Response) => {
     }
 
     // Load organizer if user is an organizer (for subscriptionTier in JWT)
-    let organizerProfile = null;
+    let organizerProfile: Awaited<ReturnType<typeof prisma.organizer.findUnique>> = null;
     let subscriptionLapsed = false;
     if (user.role === 'ORGANIZER' || user.roles?.includes('ORGANIZER')) {
       organizerProfile = await prisma.organizer.findUnique({
@@ -524,7 +525,7 @@ export const oauthLogin = async (req: Request, res: Response) => {
       const userReferralCode = randomUUID().substring(0, 8).toUpperCase();
 
       // Validate invite code if provided (beta access gate for OAuth)
-      let validatedInvite = null;
+      let validatedInvite: Awaited<ReturnType<typeof prisma.betaInvite.findUnique>> = null;
       if (inviteCode) {
         validatedInvite = await prisma.betaInvite.findUnique({
           where: { code: inviteCode.toUpperCase() }
@@ -596,7 +597,7 @@ export const oauthLogin = async (req: Request, res: Response) => {
     }
 
     // Load organizer if user is an organizer (for subscriptionTier in JWT)
-    let organizerProfile = null;
+    let organizerProfile: Awaited<ReturnType<typeof prisma.organizer.findUnique>> = null;
     let subscriptionLapsed = false;
     const hasOrganizerRole = user.roles?.includes('ORGANIZER') || user.role === 'ORGANIZER';
     if (hasOrganizerRole) {
@@ -801,7 +802,7 @@ export const login = async (req: Request, res: Response) => {
     }
 
     // Load organizer if user is an organizer (for subscriptionTier in JWT)
-    let organizerProfile = null;
+    let organizerProfile: Awaited<ReturnType<typeof prisma.organizer.findUnique>> = null;
     let subscriptionLapsed = false;
     const hasOrganizerRole = user.roles?.includes('ORGANIZER') || user.role === 'ORGANIZER';
     if (hasOrganizerRole) {
