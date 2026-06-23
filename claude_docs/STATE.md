@@ -8,6 +8,8 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
+**S1022 WRAP (2026-06-22) — META/OPS/INFRA (proactive blind-spot + agent-fleet hardening). Big build-out, one self-inflicted prod outage (resolved), geocoder fixed + green.** Shipped live: 4 monitoring guardrails (data-persistence/clobber, token-expiry, + cron-heartbeat & Sentry-P0→Blocked-Queue folded into ci-sentry-health Steps 7-8; 2 interim tasks disabled, cluster 3→1); scheduled-task consolidation (brand-drift→pure copy/tone, label fixes, 4 dead tasks); pre-deploy CI typecheck gate (NOT yet blocking — top next-session priority); 2 real-time Sentry fatal/error email alerts (rules 17220190/17220191); DB-password scrub from 13 repo files; geocoder fix (Nominatim UA+throttle, Canadian→Nominatim, skip fragments — validated live, deployed green). Incident + outstanding Patrick/infra actions detailed below and in Next Session.**
+
 **S1022 INCIDENT (2026-06-22) — PROD OUTAGE, RESOLVED. `admin.ts` truncation crash-loop.** An email-endpoint dev agent's Windows-fs write silently TRUNCATED `packages/backend/src/routes/admin.ts` (lost its `export default router` tail) → `import adminRoutes` was `undefined` → `app.use('/api/admin', undefined)` → backend crash-loop (`Router.use() requires a middleware function but got undefined`, dist/index.js:576). TWO symptom-fixes (revert admin.ts top; stub the controller) failed before the real cause was found by checking FILE INTEGRITY (`wc -l` = 434, no `export default`). FIX: restored the send-test-email tail + `export default router` (453 lines, braces/parens balanced), Patrick pushed, Railway green (3x /health 200). Also fixed a side-issue: a deleted controller left a dangling import (Cannot find module) — re-added as a disabled 403 stub via emergency MCP push. **Email endpoint ABANDONED** (2 outages for the least-valuable feature). LESSONS: (1) on ANY undefined-router/middleware error, check file integrity FIRST (`wc -l` + grep `export`). (2) `Dockerfile.production` builds with `tsc || true` → broken builds SHIP — making the new CI gate BLOCK deploys is now top priority. (3) Never push backend code that couldn't be tsc-verified in-session (VM node_modules is I/O-corrupted). SURVIVED INTACT this session: 4 monitors (data-persistence/clobber, token-expiry, + cron-heartbeat & Sentry→BQ folded into ci-sentry-health), 2 real-time Sentry fatal/error alert rules, DB-password scrub from 13 repo files, scheduled-task consolidation, CI typecheck gate (.github/workflows/ci-typecheck.yml).**
 
 **S1021 WRAP (2026-06-22) — BUG/SEO (Google indexing investigation — 2 P0 sitemap bugs fixed + GSC manual actions complete). Sitemap now contains 5,000 sale URLs (was 0). BQ 4→3 (cart payment-completion closed).**
@@ -241,7 +243,7 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 | schema.prisma drift — 5 EmailSuppression cols | bounceCategory/bounceStatusCode/diagnosticCode/retryAfter/classifiedAt exist in DB+schema but have NO migration file (applied via raw DDL) | Optionally generate the migration locally + `prisma migrate resolve --applied` | S1020 |
 | Production error-fix batch (6 files) — UNVERIFIED in prod | Shipped S1022, pending push+deploy: scraperCron boot crash-loop guard (index.ts), seed.ts prod guard, markdownCycleCron per-item price fix, cronGuard→Sentry alerting (internalListingEnrichmentController.ts + scraper/enrichment.ts), weeklyEmailService ;; cleanup. Code-only; not yet live. | Patrick push 6-file block → Railway green → job QA markdown + enrichment crons fire cleanly post-deploy | S1022 |
 | Stale Sentry issues to resolve post-deploy | Sentry findasale-nodejs 1A/1D/3G (scraper boot), 2G (Sale.isOngoing), 3Y (geocodeBacklog query), D (SyntaxError) confirmed STALE by evidence (current code/schema/live DB all correct). | After deploy stays quiet 24-48h, mark resolved in Sentry. New deploy-diff + job-heartbeat monitors will catch any regression. | S1022 |
-| geocodeBacklog geocodes 0/178 (pipeline degraded) | S1022 cron ran clean (`[CRON OK]`, 423s) but `geocoded:0 failed:178`. Cascade: Strategy 2 Nominatim → HTTP 429 (rate-limited; likely missing 1 req/s throttle or User-Agent), then Strategy 3 US Census → HTTP 400 (Canadian SK/ON addrs + fragmentary FB-Events addrs it can't parse) / 8000ms timeout. FB-Events source addresses are low-quality (street fragments, no house #). Net: every sale falls through all strategies. | Dispatch dev (after CI gate is blocking OR with local tsc verify): read geocodeBacklogJob.ts — add Nominatim 1req/s throttle + valid User-Agent, route non-US (CA) to a provider that handles it, skip/flag un-geocodeable fragments so they don't burn the run. Verify success rate >0. | S1022 |
+| geocodeBacklog geocodes 0/178 (pipeline degraded) | S1022 cron ran clean (`[CRON OK]`, 423s) but `geocoded:0 failed:178`. Cascade: Strategy 2 Nominatim → HTTP 429 (rate-limited; likely missing 1 req/s throttle or User-Agent), then Strategy 3 US Census → HTTP 400 (Canadian SK/ON addrs + fragmentary FB-Events addrs it can't parse) / 8000ms timeout. FB-Events source addresses are low-quality (street fragments, no house #). Net: every sale falls through all strategies. | Dispatch dev (after CI gate is blocking OR with local tsc verify): read geocodeBacklogJob.ts — add Nominatim 1req/s throttle + valid User-Agent, route non-US (CA) to a provider that handles it, skip/flag un-geocodeable fragments so they don't burn the run. Verify success rate >0. **FIXED+pushed+green S1022 (descriptive Nominatim UA + 1req/s throttle + Canadian→Nominatim routing + skip fragments; validated live). UNVERIFIED until next 2h backlog run logs geocoded>0.** | S1022 |
 
 ## Pending Chrome Verifications
 
@@ -251,29 +253,40 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Next Session
 
-### S1022 — priorities
+### S1023 — priorities
 
-**Session type: DEV or QA.** BQ = 3 (below 8 ceiling).
+**Session type: OPS/INFRA then DEV.** Re-check BQ count at start (the daily Sentry→BQ sync may have added rows overnight).
 
-**Session start:** Load STATE.md. Check Google Search Console Sitemaps page — confirm server-sitemap.xml has been re-read since the S1021 resubmission and the discovered-pages count has increased beyond 2,766 (may take 1-3 days for Google to re-crawl with the fixed sitemap).
+**Smoke test FIRST (§10):** S1022 shipped the admin.ts hotfix + geocode fix + CI gate + a disabled email stub. Confirm backend /health is 200 AND the geocodeBacklog cron's next run (every 2h) logs `geocoded:` >0 — the geocode fix is UNVERIFIED until a real run succeeds.
 
-**Action required — Patrick:**
-- **Outreach is PAUSED.** `OUTREACH_DAILY_CAP=1` (near-zero) in Railway. Resume only after the daily health check shows **zero "reached a limit" failures AND bounce rate <5%**. Do NOT ramp before both conditions are met.
-- eBay token still expired (June 20, 21:30 UTC) — reconnect eBay in organizer settings.
-- AlternativeTo submission — did you submit after the June 18 scheduled-task prompt?
+**TOP PRIORITY — make the CI gate actually BLOCK deploys.** The whole S1022 outage happened because `packages/backend/Dockerfile.production` builds with `tsc || true` (broken builds ship) and the new CI gate isn't enforced. Two parts: (1) `Skill('findasale-dev')` → remove/replace `tsc || true` so a type error fails the build; (2) Patrick toggles Vercel→Settings→Git→"Wait for CI" + Railway backend wait-for-checks + GitHub branch protection requiring `Typecheck, tests & lint` on main. UNTIL DONE: no unverified backend pushes.
 
-**Dev priorities:**
-- `Skill('findasale-dev')`: **bounceSuppressService wrong-mailbox fix** (P1). Root cause confirmed: recipient bounces forward to deseee@gmail.com, not the Workspace mailbox the backend polls. Expected output: point bounceSuppressService at the correct inbox per ADR-bounce-suppression-mailbox-fix.md + re-enable reclassify-bounces backfill.
-- **schema.prisma drift fix** (P1): 5 EmailSuppression columns exist in DB+schema but have no migration file. Generate SQL + `prisma migrate resolve --applied`. NOTE: `prisma migrate dev` is BROKEN in this repo — use raw SQL.
-- `Skill('findasale-dev')`: **async send-limit bounce detection + false-SENT counting fix** (P1). Root cause confirmed: Gmail ACCEPTS the API send then bounces later; backoff only fires on synchronous errors so cron over-counts "sent."
-- `Skill('findasale-dev')`: #547 eBay Calculated Shipping E2E QA (requires Patrick available).
-- Audio CDN migration (P3 — 54 mp3s in packages/frontend/public, ~8.6MB total).
+**Patrick actions (Claude can't reach these UIs/logins):**
+- **ROTATE the Railway DB password (P0).** Still live + in git history (scrubbed from working tree S1022; rotation is the real fix). Claude can drive ~90% on your "go" (ALTER USER via psycopg2 + Railway vars + GitHub secret + scheduled-task prompt rewrites); your local .env is the only manual piece.
+- **Bounce mailbox:** generate an OAuth token for find@outreach.finda.sale (Google Workspace login) so bounceSuppressService can poll the right inbox.
+- **CI-blocking toggles** (Vercel/Railway/GitHub, above).
 
-**SEO — no action needed this session.** All GSC manual work is done. Google needs days-to-weeks to re-crawl and index. Check GSC Indexing → Pages in ~7 days to see movement.
+**Dev priorities (dispatch; all need local `tsc` verify until CI blocks):**
+- `Skill('findasale-dev')`: migration shadow-replay repair per `outputs/PRISMA_MIGRATION_REPAIR_PLAN.md` — stray 2025 `organizer_claim_email` duplicate + the new EmailSuppression drift migration. Needs prisma CLI (Patrick's machine); files + resolve sequence already prepped.
+- Confirm the S1022 6-file error-fix batch (seed prod-guard, markdownCycleCron per-item price, scraperCron boot guard, cronGuard→Sentry alerting) actually landed green on GitHub — re-push if not.
+- `Skill('findasale-dev')`: bounceSuppressService wrong-mailbox + async send-limit/false-SENT counting (after the OAuth token exists).
+- Remove the dead `adminEmailSendController` stub + the dangling `/send-email` route (email endpoint abandoned — caused 2 outages).
 
-**BQ (3):** bounceSuppressService wrong-mailbox; reclassify-bounces backfill ineffective; schema.prisma 5-column drift.
+**Carried (unchanged): outreach PAUSED (`OUTREACH_DAILY_CAP=1`), eBay token expired (reconnect), GSC indexing watch (~7 days), AlternativeTo submission.**
 
 ## Recent Sessions
+
+### S1022 — 2026-06-22 | META/OPS/INFRA + PROD INCIDENT (resolved)
+
+**Triggered by:** Patrick — "what have we overlooked, what's not automated that should be... you're the frontline, do it."
+
+**Built/shipped (live):** 4 monitoring scheduled tasks (data-persistence/deploy-clobber [baseline seeded], token-expiry; cron-heartbeat + Sentry-P0→Blocked-Queue folded into daily ci-sentry-health Steps 7+8; 2 standalone interim tasks disabled). Scheduled-task fleet consolidation (brand-drift re-scoped to pure copy/tone of all customer-facing copy; 2 desc/cron mismatches fixed; 4 dead tasks flagged). CI typecheck gate `.github/workflows/ci-typecheck.yml` (NOT yet blocking). 2 real-time Sentry fatal/error→email rules (17220190 nodejs, 17220191 nextjs). DB password scrubbed from 13 repo files + secrets-audit gitignored. Geocoder fix (geocodeBacklogJob.ts + geocodingService.ts): descriptive Nominatim UA + 1req/s throttle (fixes 429) + route Canadian/non-US off US-Census + skip ungeocodeable fragments — validated live, deployed green.
+
+**PROD INCIDENT (self-inflicted, resolved same session):** A locked admin email-send endpoint was added; the dev agent's Windows-fs write TRUNCATED admin.ts (lost `export default router`) and `tsc || true` shipped the broken build → backend crash-loop (`Router.use undefined`, index.js:576). Two symptom-fixes (revert top, stub controller) failed; root cause found via file-integrity check (`wc -l`=434, no export). Fixed by restoring the truncated tail (453 lines, braces balanced); prod green (3x /health 200). Email endpoint ABANDONED (disabled 403 stub left on prod, to remove). LESSONS: integrity-check files FIRST on undefined-router/middleware errors; never push un-tsc-verified backend; make CI block.
+
+**Diagnosed, not yet fixed (→ Next Session):** migration shadow-replay (stray 2025 organizer_claim_email duplicate; repair plan written, needs prisma CLI); DB password rotation (Patrick); bounce mailbox OAuth token (Patrick); CI-blocking toggles (Patrick dashboards).
+
+**Pushes (all green):** CI-gate+scrub+migration-file (Patrick); emergency MCP stub controller; admin.ts hotfix (Patrick); geocode fix (Patrick).
 
 ### S1021 — 2026-06-22 | BUG/SEO (Google indexing investigation + sitemap P0 fixes + GSC manual actions)
 
