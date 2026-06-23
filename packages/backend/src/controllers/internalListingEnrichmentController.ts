@@ -12,6 +12,33 @@ import { enrichScrapedListing } from '../services/listingEnrichmentService';
 
 const DEFAULT_BATCH_SIZE = 35;
 
+/**
+ * Strip characters that cause PostgreSQL hex-escape parse errors.
+ * Covers: NUL bytes, incomplete \x escapes (\x not followed by 2 hex digits),
+ * and lone backslashes before non-escape characters.
+ * Applied to every string in the metadata blob before the Prisma update.
+ */
+function sanitizeStr(s: string): string {
+  return s
+    .replace(/\x00/g, '')                        // NUL bytes
+    .replace(/\\x(?![0-9a-fA-F]{2})/g, ' ')     // incomplete \x hex escapes
+    .replace(/\\(?![\\nrtbf"'0-9xu])/g, '\\\\'); // lone backslash → escaped backslash
+}
+
+/** Recursively sanitize all string values in a plain-object/array tree. */
+function sanitizeMetadataStrings(value: unknown): unknown {
+  if (typeof value === 'string') return sanitizeStr(value);
+  if (Array.isArray(value)) return value.map(sanitizeMetadataStrings);
+  if (value !== null && typeof value === 'object') {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      out[k] = sanitizeMetadataStrings(v);
+    }
+    return out;
+  }
+  return value;
+}
+
 async function _runEnrichmentBatch(batchSize: number): Promise<void> {
   let processed = 0;
   let enriched = 0;
@@ -50,7 +77,9 @@ async function _runEnrichmentBatch(batchSize: number): Promise<void> {
       const result = await enrichScrapedListing(sale.description!, sale.title);
 
       if (result) {
-        const currentMetadata = (sale.scrapedMetadata as Record<string, unknown>) || {};
+        const rawMetadata = (sale.scrapedMetadata as Record<string, unknown>) || {};
+        // Sanitize all string values in existing metadata to strip invalid PG hex escapes
+        const currentMetadata = sanitizeMetadataStrings(rawMetadata) as Record<string, unknown>;
         await prisma.sale.update({
           where: { id: sale.id },
           data: {
