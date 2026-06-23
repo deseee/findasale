@@ -1276,7 +1276,7 @@ export const webhookHandler = async (req: Request, res: Response) => {
                         itemName: soldItem.title,
                         itemPrice: soldItem.price || 0,
                         consignorPayout,
-                        organizerName: saleData.organizer.user.name,
+                        organizerName: saleData?.organizer?.user?.name ?? '',
                         saleId: soldItem.saleId!,
                       }).catch(err => console.warn('[consignor-email] Failed to send item sold email:', err));
                     });

@@ -87,7 +87,7 @@ export const placeHold = async (req: AuthRequest, res: Response) => {
       },
     });
     if (!item) return res.status(404).json({ message: 'Item not found' });
-    if (item.sale?.isUnmanagedListing) {
+    if (item.sale?.organizer?.isUnmanagedListing) {
       return res.status(403).json({
         message: 'This listing is not yet claimed by an organizer. Try one of our verified organizer sales.',
         code: 'UNMANAGED_LISTING'

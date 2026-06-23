@@ -15,7 +15,7 @@ import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import { getStripe } from '../utils/stripe';
-import type Stripe from 'stripe';
+import Stripe from 'stripe';
 import { getIO } from '../lib/socket';
 import { createNotification } from '../lib/notificationService';
 import { getPlatformFeeRate, SubscriptionTier } from '../utils/feeCalculator';
