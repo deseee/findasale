@@ -263,17 +263,17 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 **CI gate status (S1023 updated):**
 - ✅ Railway "Wait for CI" ENABLED — backend won't deploy until "Typecheck, tests & lint" passes.
-- ⏳ GitHub branch protection — configured, needs Patrick's GitHub password to save (github.com/deseee/findasale/settings/branch_protection_rules). Won't enforce on free private repos regardless.
+- ✅ GitHub branch protection — rule saved S1024 (Patrick entered GitHub password). "main" branch with "Typecheck, tests & lint" required. Won't enforce on free private repos; Railway Wait-for-CI is the real gate.
 - ❌ Vercel "Required CI checks" — Pro plan only, not available on Hobby.
 - ⏳ `tsc || true` in Dockerfile.production — still needs `Skill('findasale-dev')` to remove it so type errors fail the build.
 The Railway gate is now the real blocker. Until `tsc || true` is removed from Dockerfile.production: no unverified backend pushes.
 
 **Patrick actions (Claude can't reach these UIs/logins):**
-- ~~**ROTATE the Railway DB password**~~ ✅ DONE S1023 — DB rotated, Railway vars updated, backend green. **Update your local .env + CLAUDE_MASTER.md with new password** (see credentials in memory, not in this file per CREDENTIAL BLACKOUT rule).
+- ~~**ROTATE the Railway DB password**~~ ✅ DONE S1023 — DB rotated, Railway vars updated, backend green. ~~Update local .env~~ ✅ S1024 (packages/database/.env updated). ~~Update CLAUDE_MASTER.md~~ ✅ S1024 (bat executed via File Explorer Run-as-admin).
 - ~~**Bounce mailbox**~~ ✅ Handled by Cowork sweep task — no Patrick action needed unless you want the full OAuth fix.
-- **GitHub branch protection** — the form is configured but needs your GitHub password (sudo mode) to save. Navigate to `github.com/deseee/findasale/settings/branch_protection_rules` — the pending form with "main" + "Typecheck, tests & lint" is ready to submit with your password.
+- ~~**GitHub branch protection**~~ ✅ DONE S1024 — Patrick entered GitHub password, rule saved. "Not enforced" label is expected (free private repo).
 - **Vercel GitHub App permissions** — pending request at `github.com/settings/installations` → Vercel → "Review request". Requires your GitHub password. (Note: Vercel "Required CI checks before deploy" is a Pro plan feature — the Railway Wait-for-CI is the real enforcement.)
-- **Update local .env + CLAUDE_MASTER.md** with new DB password (value is in your memory/session, not in this file).
+- ~~**Update local .env + CLAUDE_MASTER.md**~~ ✅ DONE S1024 — packages/database/.env updated; CLAUDE_MASTER.md updated via bat (File Explorer Run-as-admin).
 
 **Dev priorities (dispatch; all need local `tsc` verify until CI blocks):**
 - `Skill('findasale-dev')`: migration shadow-replay repair per `outputs/PRISMA_MIGRATION_REPAIR_PLAN.md` — stray 2025 `organizer_claim_email` duplicate + the new EmailSuppression drift migration. Needs prisma CLI (Patrick's machine); files + resolve sequence already prepped.
