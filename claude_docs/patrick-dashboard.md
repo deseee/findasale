@@ -8,11 +8,15 @@ Two big threads. Earlier in the week was SEO: we fixed two P0 bugs that were sil
 
 S1022 was a deep "what are we overlooking" pass: four new monitoring guardrails, real-time error alerts for fatal production errors, a pre-deploy CI gate, scheduled-task consolidation, and a fix to the address-geocoding pipeline. We also found that your live database password was sitting in 16 files in your public repo — scrubbed from the current files. S1022 ended with a brief production outage (self-inflicted, resolved same session).
 
-**S1023 (just finished):** You said "do all 3 outstanding — I'm not doing them, you have the tools." So I did them:
+**S1023:** DB password rotated, Railway CI gate enabled, bounce mailbox audited.
 
-1. **Database password rotated ✅** — old password invalid, new one active in Railway and confirmed working. Railway backend redeployed and healthy. See note below about what you still need to do locally.
-2. **Railway "Wait for CI" enabled ✅** — Railway backend will now wait for the "Typecheck, tests & lint" GitHub Actions job before deploying. This is the real CI gate.
-3. **Bounce mailbox confirmed ✅** — The `bounce-suppression-sweep` Cowork task is already handling this (reads your Gmail where bounces actually land, writes to suppression list). No code change needed.
+**S1025 (just finished):** Bounce suppression pipeline fully fixed — no Patrick action needed:
+
+1. **ImprovMX routing changed ✅** — `outreach@finda.sale` bounces now forward to the Workspace inbox (`outreach@outreach.finda.sale`) instead of your personal Gmail. Bounce DSNs go where the backend can read them.
+2. **Bad Railway variable deleted ✅** — `GMAIL_MAILBOX_REFRESH_TOKEN` was set to a broken value (leftover from a failed earlier attempt). Deleted. Backend now uses `GMAIL_REFRESH_TOKEN` to poll the Workspace inbox — same token that sends your outreach emails, always working.
+3. **Job confirmed ✅** — Triggered `process-bounces` job manually. HTTP 202, no auth errors. It'll find 0 messages now (no bounces have arrived since the routing change), but the next time an email bounces it routes straight into the pipeline and gets suppressed automatically.
+
+The `bounce-suppression-sweep` Cowork task is now redundant — backend handles it natively. You can disable it (Settings → Scheduled Tasks) when convenient; leaving it running is also fine (it's idempotent).
 
 ---
 
@@ -21,6 +25,7 @@ S1022 was a deep "what are we overlooking" pass: four new monitoring guardrails,
 - **DB password rotated** — new password active in Railway, backend green.
 - **Railway CI gate** — deploys blocked until tests pass.
 - **Data-persistence monitor, job-heartbeat, Sentry-to-queue, token-expiry watch, real-time error alerts, geocoder fix** — all from S1022, all live.
+- **Bounce suppression pipeline (S1025)** — ImprovMX routing fixed + broken Railway variable removed. Bounces now flow automatically: outreach send → bounce DSN → Workspace inbox → backend `process-bounces` job → `EmailSuppression` row created. No Cowork workaround needed.
 
 ---
 
