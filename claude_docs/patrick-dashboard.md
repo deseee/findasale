@@ -4,6 +4,8 @@
 
 ## What Happened This Week
 
+**S1027 (latest) — CI deploy protection turned back ON for typechecks.** Last session I made the CI checks report-only so your deploys could flow. This session I did the real fix you asked for. Instead of guessing at the CI quirk, I rebuilt your project from scratch the exact way the CI server does (a clean install in a Linux sandbox) and watched what actually broke. Result: the backend was already clean — the scary "232 errors" from last session simply did not happen on a fresh, correct rebuild. The frontend had **one** real issue: a stray type package (`csv-parse`) was being pulled in where it didn't belong. One-line fix to the frontend config and it's gone. I then turned the two typecheck gates back to **blocking**, so from now on a broken-code commit (like the truncated file that caused the S1022 outage) can't reach your servers. Two checks (backend tests, frontend lint) stay report-only for now because they need separate setup work first — I documented exactly what each needs. No changes to your actual app code. **Needs your push** (3 files — see below).
+
 **S1026 (latest) — your deploys were silently blocked; now unblocked.** Your backend had stopped deploying — every push sat at "waiting for CI." Cause: the CI check we turned on (S1023) was set to block deploys, but it had never once passed. When I dug in, the failures (232 backend + 1 frontend) turned out to be a quirk of how the CI server rebuilds the project from scratch — **not real bugs in your code.** I proved this by rebuilding the database client cleanly and re-running the check: zero errors. Production was never affected (it already ignores this same quirk). Fix: I made the CI checks report-only instead of deploy-blocking, and your deploys are flowing again (CI is green, backend is healthy). Your scheduled tasks were never involved — those run on a separate track. **Decision you made:** next session we'll properly fix the CI rebuild so the check can go back to actually protecting deploys (you asked to use Opus for it — agreed, it's fiddly work).
 
 Two big threads. Earlier in the week was SEO: we fixed two P0 bugs that were silently keeping your 5,000 sale pages out of Google's index — all fixed, sitemap resubmitted, Google now crawling.
@@ -43,7 +45,7 @@ The `bounce-suppression-sweep` Cowork task is now redundant — backend handles 
 
 ## What to Watch
 
-- **CI deploy gate is temporarily report-only** (S1026). Deploys work, but the check isn't blocking bad code right now. Next dev session (Opus) restores it to blocking once the CI rebuild quirk is fixed. Not urgent — your code is sound.
+- **CI deploy gate — typecheck protection is back ON** (S1027). Broken-type commits are now blocked from deploying. Two slower checks (backend tests, frontend lint) stay report-only until they get separate setup work (tests need a `--forceExit`/infra tweak; lint needs an eslint config added). Typecheck is the protection that matters.
 - Geocoder fix: live but **unverified until next run** (every 2h). Should show `geocoded > 0`. Flag if still zero tomorrow.
 - Vercel "Required CI checks before deploy" is a **Pro plan feature** — not available on Hobby. Railway's "Wait for CI" is the gate for now.
 - The email-send feature is **abandoned** — harmless disabled stub, to be removed next dev session.
