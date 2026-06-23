@@ -5,7 +5,7 @@
 
 import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
-import { enrichSaleDetails } from '../services/scraper/saleDetailEnrichment';
+import { runEnrichmentBatch } from '../services/scraper/saleDetailEnrichment';
 
 /**
  * POST /api/internal/enrich-sale-details
@@ -36,7 +36,7 @@ export async function triggerSaleDetailEnrichment(req: Request, res: Response): 
     // Start enrichment in background
     setImmediate(async () => {
       try {
-        const result = await enrichSaleDetails();
+        const result = await runEnrichmentBatch();
         console.log(
           `[SaleDetailEnrichment Trigger] Background job complete: ` +
           `${result.processed} processed, ${result.enriched} enriched, ${result.skipped} skipped`
@@ -81,9 +81,7 @@ export async function getSaleDetailEnrichmentStatus(req: Request, res: Response)
         sourceName: 'EstateSalesNet',
         sourceUrl: { not: null },
         description: { not: null },
-        photoUrls: {
-          not: { equals: [] },
-        },
+        photoUrls: { isEmpty: false },
       },
     });
 

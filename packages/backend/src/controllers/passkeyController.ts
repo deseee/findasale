@@ -357,7 +357,7 @@ export const authenticateComplete = async (req: Request, res: Response) => {
       }
 
       // Load organizer if user is an organizer (for subscriptionTier and other fields in JWT)
-      let organizerProfile = null;
+      let organizerProfile: Awaited<ReturnType<typeof prisma.organizer.findUnique>> = null;
       if (user.role === 'ORGANIZER') {
         organizerProfile = await prisma.organizer.findUnique({
           where: { userId: user.id },

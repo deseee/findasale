@@ -32,7 +32,7 @@ export async function runEnrichmentBackfill(req: Request, res: Response): Promis
     const whereWithEmailGuard = { ...where, ...emailFilter };
 
     const organizers = await prisma.organizer.findMany({
-      where: whereWithEmailGuard as Parameters<typeof prisma.organizer.findMany>[0]['where'],
+      where: whereWithEmailGuard as NonNullable<Parameters<typeof prisma.organizer.findMany>[0]>['where'],
       select: {
         id: true,
         businessName: true,

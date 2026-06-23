@@ -68,7 +68,7 @@ export const getMonthlyReport = async (req: Request, res: Response): Promise<voi
     // We use updatedAt as proxy for "active in the month"
     const activeSalesWhere = {
       deletedAt: null,
-      status: { in: ['PUBLISHED', 'ENDED'] as const },
+      status: { in: ['PUBLISHED', 'ENDED'] },
       updatedAt: { gte: periodStart, lt: periodEnd },
     };
 
@@ -118,7 +118,7 @@ export const getMonthlyReport = async (req: Request, res: Response): Promise<voi
         category: { not: null },
         sale: {
           deletedAt: null,
-          status: { in: ['PUBLISHED', 'ENDED'] as const },
+          status: { in: ['PUBLISHED', 'ENDED'] },
           updatedAt: { gte: periodStart, lt: periodEnd },
         },
       },

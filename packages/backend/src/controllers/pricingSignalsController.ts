@@ -31,7 +31,7 @@ export const getPricingSignals = [
       }
 
       // Check for sleeper pattern match
-      let sleeperAlert = null;
+      let sleeperAlert: { patternName: string; displayLabel: string; currentPrice: number; estimatedLow: number; estimatedHigh: number; confidence: number } | null = null;
       if (item.title && item.category) {
         const sleeperPatterns = await prisma.sleeperPattern.findMany({
           where: { category: item.category },
@@ -66,7 +66,7 @@ export const getPricingSignals = [
       }
 
       // Check for brand exception match
-      let brandPremiumAlert = null;
+      let brandPremiumAlert: { brand: string; multiplier: number; sampleSize: number; appreciationMode: string } | null = null;
       if (item.brand && item.category) {
         const brandException = await prisma.brandException.findFirst({
           where: {

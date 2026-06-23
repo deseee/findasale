@@ -86,10 +86,10 @@ export const createHaulPost = async (req: AuthRequest, res: Response) => {
     if (saleId) {
       const sale = await prisma.sale.findUnique({
         where: { id: saleId },
-        select: { userId: true },
+        select: { organizer: { select: { userId: true } } },
       });
-      if (sale?.userId) {
-        awardXp(sale.userId, 'ORG_HAUL_FROM_SALE', XP_AWARDS.ORG_HAUL_FROM_SALE, {
+      if (sale?.organizer?.userId) {
+        awardXp(sale.organizer.userId, 'ORG_HAUL_FROM_SALE', XP_AWARDS.ORG_HAUL_FROM_SALE, {
           saleId,
           description: 'Haul published from your sale'
         }).catch(err => console.error('[HaulPost] Organizer XP award failed:', err));

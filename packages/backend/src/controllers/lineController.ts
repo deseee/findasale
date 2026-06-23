@@ -70,7 +70,7 @@ export const startLine = async (req: AuthRequest, res: Response) => {
     });
 
     // Create line entries
-    const lineEntries = [];
+    const lineEntries: Awaited<ReturnType<typeof prisma.lineEntry.create>>[] = [];
     for (let i = 0; i < subscribers.length; i++) {
       const entry = await prisma.lineEntry.create({
         data: {

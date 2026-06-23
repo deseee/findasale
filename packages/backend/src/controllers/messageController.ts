@@ -202,7 +202,7 @@ export const sendMessage = async (req: AuthRequest, res: Response) => {
       createNotification({
         userId: organizer.userId,
         type: 'message',
-        title: `New message from ${message.sender.name}`,
+        title: `New message from ${message.sender?.name ?? 'a shopper'}`,
         body: message.body.substring(0, 100),
         link: `/messages/${conversation.id}`,
       }).catch(() => {});
@@ -260,7 +260,7 @@ export const replyInThread = async (req: AuthRequest, res: Response) => {
     createNotification({
       userId: recipientId,
       type: 'message',
-      title: 'New message from ' + message.sender.name,
+      title: 'New message from ' + (message.sender?.name ?? 'a shopper'),
       body: message.body.substring(0, 100),
       link: `/messages/${conversationId}`,
     }).catch(() => {});

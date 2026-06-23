@@ -381,7 +381,7 @@ export const joinHub = async (req: AuthRequest, res: Response) => {
 
     // Add memberships
     let added = 0;
-    const skipped = [];
+    const skipped: Array<{ saleId: string; reason: string }> = [];
 
     for (const saleId of validated.saleIds) {
       const existing = await prisma.saleHubMembership.findUnique({
