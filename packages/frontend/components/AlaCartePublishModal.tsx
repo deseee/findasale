@@ -44,7 +44,7 @@ const AlaCartePublishModal: React.FC<AlaCartePublishModalProps> = ({
 
   const handleProClick = () => {
     // Redirect to pricing page
-    window.location.href = '/organizer/pricing';
+    window.location.href = '/pricing';
   };
 
   const handleAlaCarteClick = () => {

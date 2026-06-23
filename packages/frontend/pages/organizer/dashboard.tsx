@@ -826,7 +826,7 @@ const OrganizerDashboard = () => {
                     <strong>PRO includes:</strong> 500+ items per sale • Advanced analytics • Brand Kit
                   </p>
                 </div>
-                <Link href="/organizer/pricing" className="flex-shrink-0 px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg transition-colors whitespace-nowrap">
+                <Link href="/pricing" className="flex-shrink-0 px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg transition-colors whitespace-nowrap">
                   Upgrade to PRO
                 </Link>
               </div>
@@ -851,7 +851,7 @@ const OrganizerDashboard = () => {
                   </p>
                 </div>
                 <div className="flex-shrink-0 flex gap-2">
-                  <Link href="/organizer/pricing" className="px-6 py-2 bg-amber-600 hover:bg-amber-700 text-white font-medium rounded-lg transition-colors whitespace-nowrap">
+                  <Link href="/pricing" className="px-6 py-2 bg-amber-600 hover:bg-amber-700 text-white font-medium rounded-lg transition-colors whitespace-nowrap">
                     Upgrade Now
                   </Link>
                   <button
@@ -879,7 +879,7 @@ const OrganizerDashboard = () => {
                     {orgProfile?.subscriptionLapsed ? <strong>You are temporarily on SIMPLE tier.</strong> : <><strong>TEAMS includes:</strong> Shared workspace • Team members • Collaboration tools</>}
                   </p>
                 </div>
-                <Link href={orgProfile?.subscriptionLapsed ? "/organizer/subscription" : "/organizer/pricing"} className={`flex-shrink-0 px-6 py-2 text-white font-medium rounded-lg transition-colors whitespace-nowrap ${orgProfile?.subscriptionLapsed ? 'bg-amber-600 hover:bg-amber-700' : 'bg-teal-600 hover:bg-teal-700'}`}>
+                <Link href={orgProfile?.subscriptionLapsed ? "/organizer/subscription" : "/pricing"} className={`flex-shrink-0 px-6 py-2 text-white font-medium rounded-lg transition-colors whitespace-nowrap ${orgProfile?.subscriptionLapsed ? 'bg-amber-600 hover:bg-amber-700' : 'bg-teal-600 hover:bg-teal-700'}`}>
                   {orgProfile?.subscriptionLapsed ? 'Renew Now' : 'Learn about TEAMS'}
                 </Link>
               </div>

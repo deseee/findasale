@@ -157,7 +157,7 @@ export default function SubscriptionPage() {
                     </div>
                   </div>
 
-                  <Link href="/organizer/pricing" className="inline-block bg-amber-600 dark:bg-amber-700 text-white px-8 py-3 rounded-lg font-semibold hover:bg-amber-700 dark:hover:bg-amber-600 transition">
+                  <Link href="/pricing" className="inline-block bg-amber-600 dark:bg-amber-700 text-white px-8 py-3 rounded-lg font-semibold hover:bg-amber-700 dark:hover:bg-amber-600 transition">
                     Upgrade to PRO
                   </Link>
                 </div>
@@ -194,7 +194,7 @@ export default function SubscriptionPage() {
                     One-time $9.99 charge when you publish the sale. Same 10% platform fee applies.
                   </p>
 
-                  <Link href="/organizer/pricing" className="inline-block bg-purple-600 dark:bg-purple-700 text-white px-8 py-3 rounded-lg font-semibold hover:bg-purple-700 dark:hover:bg-purple-600 transition">
+                  <Link href="/pricing" className="inline-block bg-purple-600 dark:bg-purple-700 text-white px-8 py-3 rounded-lg font-semibold hover:bg-purple-700 dark:hover:bg-purple-600 transition">
                     Learn about À La Carte
                   </Link>
                 </div>
@@ -399,7 +399,7 @@ export default function SubscriptionPage() {
                     TEAMS is designed for organizers running flea markets, auction houses, or multi-location operations with team members.
                   </p>
 
-                  <Link href="/organizer/pricing" className="inline-block bg-teal-600 dark:bg-teal-700 text-white px-8 py-3 rounded-lg font-semibold hover:bg-teal-700 dark:hover:bg-teal-600 transition">
+                  <Link href="/pricing" className="inline-block bg-teal-600 dark:bg-teal-700 text-white px-8 py-3 rounded-lg font-semibold hover:bg-teal-700 dark:hover:bg-teal-600 transition">
                     Upgrade to TEAMS
                   </Link>
                 </div>
@@ -470,7 +470,7 @@ export default function SubscriptionPage() {
                   </div>
                 </div>
 
-                <Link href="/organizer/pricing" className="inline-block bg-amber-600 dark:bg-amber-700 text-white px-8 py-3 rounded-lg font-semibold hover:bg-amber-700 dark:hover:bg-amber-600 transition">
+                <Link href="/pricing" className="inline-block bg-amber-600 dark:bg-amber-700 text-white px-8 py-3 rounded-lg font-semibold hover:bg-amber-700 dark:hover:bg-amber-600 transition">
                   Upgrade to PRO
                 </Link>
               </div>
@@ -507,7 +507,7 @@ export default function SubscriptionPage() {
                   One-time $9.99 charge when you publish the sale. Same 10% platform fee applies.
                 </p>
 
-                <Link href="/organizer/pricing" className="inline-block bg-purple-600 dark:bg-purple-700 text-white px-8 py-3 rounded-lg font-semibold hover:bg-purple-700 dark:hover:bg-purple-600 transition">
+                <Link href="/pricing" className="inline-block bg-purple-600 dark:bg-purple-700 text-white px-8 py-3 rounded-lg font-semibold hover:bg-purple-700 dark:hover:bg-purple-600 transition">
                   Learn about À La Carte
                 </Link>
               </div>
