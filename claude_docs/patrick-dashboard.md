@@ -39,3 +39,21 @@ S1022 was a deep "what are we overlooking" pass: four new monitoring guardrails,
 - Geocoder fix: live but **unverified until next run** (every 2h). Should show `geocoded > 0`. Flag if still zero tomorrow.
 - Vercel "Required CI checks before deploy" is a **Pro plan feature** — not available on Hobby. Railway's "Wait for CI" is the gate for now.
 - The email-send feature is **abandoned** — harmless disabled stub, to be removed next dev session.
+
+---
+
+## ⚠️ Brand Copy Alert — 2026-06-23
+
+Weekly brand-drift scan found **9 violations** across D-001 (sale-type exclusivity) and D-006 (no "AI" in copy). Full report: `claude_docs/audits/brand-copy-2026-06-23.md`
+
+**Top 3 to fix (all backend strings → findasale-dev):**
+
+1. **Weekly digest email** (`notificationController.ts:248,253,355`) — Subject line, header, and body all say "estate sale" only. Goes to all users every week. High visibility.
+2. **Social post templates** (`socialController.ts:62,64`) — "at our upcoming estate sale" hardcoded for casual and professional tones. Wrong for organizers running yard sales, auctions, etc.
+3. **Seasonal challenge descriptions** (`challengeService.ts:64,80,95`) — 3 challenges on the `/challenges` page say "across estate sales."
+
+**Marketing fix:**
+
+4. Blog post title "AI Cataloging Is Table Stakes Now…" has "AI" in the title — needs rename per D-006.
+
+Otherwise the product is clean: homepage, about, pricing, footer, onboarding, UI feature labels, camera flow, and item tagging all use compliant inclusive language.
