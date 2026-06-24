@@ -86,10 +86,6 @@ const OrganizerBountiesPage = () => {
   const [submissionItemId, setSubmissionItemId] = useState('');
   const [submissionMessage, setSubmissionMessage] = useState('');
 
-  if (!authLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
-    router.push('/login');
-    return null;
-  }
 
   const { data: sales, isError: salesError } = useQuery<Sale[]>({
     queryKey: ['organizer-sales-list'],
@@ -179,6 +175,12 @@ const OrganizerBountiesPage = () => {
     },
     onError: (err: any) => showToast(err.response?.data?.message || 'Failed to submit', 'error'),
   });
+
+
+  if (!authLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
+    router.push('/login');
+    return null;
+  }
 
   if (authLoading) {
     return (

@@ -60,16 +60,6 @@ const AdminDisputesPage = () => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editResolution, setEditResolution] = useState<string>('');
 
-  if (!isLoading && !user) {
-    router.push('/login');
-    return null;
-  }
-
-  if (!isLoading && user?.role !== 'ADMIN') {
-    router.push('/');
-    return null;
-  }
-
   const { data, isLoading: isLoadingDisputes } = useQuery({
     queryKey: ['admin-disputes', currentPage, filterStatus],
     queryFn: async () => {
@@ -99,6 +89,16 @@ const AdminDisputesPage = () => {
       showToast(err.response?.data?.message || 'Failed to update dispute', 'error');
     },
   });
+
+  if (!isLoading && !user) {
+    router.push('/login');
+    return null;
+  }
+
+  if (!isLoading && user?.role !== 'ADMIN') {
+    router.push('/');
+    return null;
+  }
 
   const disputes: Dispute[] = data?.disputes || [];
   const pagination: PaginationData = data?.pagination || { page: 1, limit: 50, total: 0, pages: 0 };

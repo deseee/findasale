@@ -98,11 +98,6 @@ const OrganizerHoldsPage = () => {
     }
   }, [router.isReady, router.query.saleId]);
 
-  if (!isLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
-    router.push('/login');
-    return null;
-  }
-
   // Fetch holds with filters
   const { data: holds = [], isLoading: holdsLoading, isError: holdsError } = useQuery({
     queryKey: ['organizer-holds', saleFilter, sortBy],
@@ -182,6 +177,11 @@ const OrganizerHoldsPage = () => {
     }
     return Object.values(groups).sort((a, b) => b.holds.length - a.holds.length);
   }, [holds]);
+
+  if (!isLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
+    router.push('/login');
+    return null;
+  }
 
   // Selection helpers
   const toggleSelect = (id: string) => {

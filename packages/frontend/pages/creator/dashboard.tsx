@@ -41,12 +41,6 @@ const CreatorDashboard = () => {
   const { user, isLoading } = useAuth();
   const [activeTab, setActiveTab] = useState<'analytics' | 'settings'>('analytics');
 
-  // Redirect if not authenticated or not a creator
-  if (!isLoading && (!user || (!user.roles?.includes('CREATOR') && !user.roles?.includes('ADMIN') && !user.roles?.includes('ORGANIZER')))) {
-    router.push('/login');
-    return null;
-  }
-
   // Fetch creator affiliate stats
   const {
     data: creatorStats,
@@ -91,6 +85,12 @@ const CreatorDashboard = () => {
     },
     enabled: !!user?.id,
   });
+
+  // Redirect if not authenticated or not a creator
+  if (!isLoading && (!user || (!user.roles?.includes('CREATOR') && !user.roles?.includes('ADMIN') && !user.roles?.includes('ORGANIZER')))) {
+    router.push('/login');
+    return null;
+  }
 
   if (isLoading) {
     return (

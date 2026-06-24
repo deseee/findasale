@@ -18,12 +18,6 @@ const ChecklistPage = () => {
   const { user, isLoading: authLoading } = useAuth();
   const { saleId } = router.query;
 
-  // Redirect if not authenticated or not an organizer
-  if (!authLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
-    router.push('/login');
-    return null;
-  }
-
   // Fetch sale details
   const {
     data: sale,
@@ -37,6 +31,13 @@ const ChecklistPage = () => {
     },
     enabled: !!saleId && typeof saleId === 'string',
   });
+
+
+  // Redirect if not authenticated or not an organizer
+  if (!authLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
+    router.push('/login');
+    return null;
+  }
 
   if (authLoading || saleLoading) {
     return (

@@ -95,12 +95,6 @@ const FlashDealsPage: React.FC = () => {
   const [durationMinutes, setDurationMinutes] = useState(120);
   const [showForm, setShowForm] = useState(false);
 
-  // Auth gate
-  if (!authLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
-    router.push('/login');
-    return null;
-  }
-
   const saleIdStr = typeof saleId === 'string' ? saleId : '';
 
   // Fetch AVAILABLE items for this sale (to populate item selector)
@@ -173,6 +167,12 @@ const FlashDealsPage: React.FC = () => {
       showToast(err.response?.data?.message || 'Failed to cancel flash deal', 'error');
     },
   });
+
+  // Auth gate
+  if (!authLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
+    router.push('/login');
+    return null;
+  }
 
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault();

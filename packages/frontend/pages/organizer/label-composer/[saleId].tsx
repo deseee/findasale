@@ -323,12 +323,6 @@ export default function LabelComposerPage() {
     setSavedBatches(results);
   }, [saleId]);
 
-  // Auth redirect
-  if (!authLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
-    router.push('/login');
-    return null;
-  }
-
   // Fetch sale
   const { data: sale } = useQuery<Sale>({
     queryKey: ['label-composer-sale', saleId],
@@ -408,7 +402,7 @@ export default function LabelComposerPage() {
     refreshSavedBatches();
   }, [saleId, initialized, refreshSavedBatches]);
 
-  // Keyboard shortcuts
+  // Keyboard shortcuts (handler refs resolved at call time — safe to declare before handlePrint/handleSaveBatch)
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'p') {
@@ -457,6 +451,12 @@ export default function LabelComposerPage() {
     if (s.getMonth() === e.getMonth()) return `${sM}/${sD}–${eD}`;
     return `${sM}/${sD}–${e.getMonth() + 1}/${eD}`;
   }, [sale]);
+
+  // Auth redirect
+  if (!authLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
+    router.push('/login');
+    return null;
+  }
 
   // Handlers
   const handlePrint = async () => {

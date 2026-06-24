@@ -86,12 +86,6 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
   const { isPro } = useOrganizerTier();
   const apiBase = process.env.NEXT_PUBLIC_API_URL || '/api';
 
-  // Redirect if not authenticated or not an organizer
-  if (!authLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
-    router.push('/login');
-    return null;
-  }
-
   // Fetch sale details
   const { data: sale, isLoading: saleLoading, error: saleError } = useQuery<Sale>({
     queryKey: ['print-kit-sale', saleId],
@@ -146,6 +140,12 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
     },
     enabled: !!user,
   });
+
+  // Redirect if not authenticated or not an organizer
+  if (!authLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
+    router.push('/login');
+    return null;
+  }
 
   const canRemoveWatermark =
     organizerProfile?.subscriptionTier === 'TEAMS' &&
