@@ -1,4 +1,5 @@
 // DIAGNOSTIC ONLY — dry-run, no DB writes
+export {}; // module-scope isolation (prevents global-script name collisions)
 /**
  * diagnose-osm.ts
  * Hits the Overpass API exactly as osmScraper.ts does.

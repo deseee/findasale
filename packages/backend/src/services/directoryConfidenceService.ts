@@ -129,7 +129,7 @@ export async function updateDirectoryConfidenceScore(organizerId: string): Promi
 
   if (!organizer) return;
 
-  const score = calculateDirectoryConfidence(organizer);
+  const score = calculateDirectoryConfidence(organizer as OrganizerConfidenceFields);
 
   await prisma.organizer.update({
     where: { id: organizerId },

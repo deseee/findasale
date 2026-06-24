@@ -116,7 +116,7 @@ async function fetchFromTier(
 
   for (let i = 0; i < results.length; i++) {
     const result = results[i];
-    if (result.status === 'fulfilled' && result.value.value) {
+    if (result.status === 'fulfilled' && result.value.status === 'fulfilled' && result.value.value) {
       allResults.push(...result.value.value);
     }
   }

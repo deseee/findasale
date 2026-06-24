@@ -18,7 +18,7 @@ export interface AuthRequest extends Request {
 export const optionalAuthenticate = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     // P0 Security Fix: Try cookie first (httpOnly), then Authorization header, then query param
-    let token = null;
+    let token: string | null = null;
 
     // Try httpOnly cookie first
     if (req.cookies?.accessToken) {
@@ -141,7 +141,7 @@ export const checkTierLapse = async (req: AuthRequest, res: Response, next: Next
 export const authenticate = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     // P0 Security Fix: Try cookie first (httpOnly), then Authorization header
-    let token = null;
+    let token: string | null = null;
 
     // Try httpOnly cookie first
     if (req.cookies?.accessToken) {

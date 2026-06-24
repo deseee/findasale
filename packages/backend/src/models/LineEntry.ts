@@ -20,7 +20,7 @@ export const createLineEntries = async (saleId: string) => {
       },
     });
 
-    const lineEntries = [];
+    const lineEntries: any[] = [];
     for (let i = 0; i < subscribers.length; i++) {
       const entry = await prisma.lineEntry.create({
         data: {

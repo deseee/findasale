@@ -101,7 +101,7 @@ function parseResultsHtml(html: string, countyName: string, licenseLabel: string
     const cells = row.match(/<td[^>]*>[\s\S]*?<\/td>/gi) ?? [];
     if (cells.length < 2) continue;
 
-    const licenseNumber = extractText(cells[0]);
+    const licenseNumber = extractText(cells[0] ?? '');
     const businessName = extractText(cells[1]);
     const city = cells.length > 2 ? extractText(cells[2]) : countyName;
 

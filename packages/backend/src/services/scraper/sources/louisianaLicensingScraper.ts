@@ -55,7 +55,7 @@ export async function runLouisianaLicensingScraper(): Promise<void> {
       const cells = $(row).find('td').toArray();
       if (cells.length < 1) continue;
 
-      const getText = (el: cheerio.Element) =>
+      const getText = (el: any) =>
         $(el).text().replace(/\s+/g, ' ').trim();
 
       // Column layout (best-effort — adapt to whatever the table actually provides):

@@ -124,7 +124,7 @@ async function fetchWvdaAuctioneers(): Promise<Array<{ businessName: string; cit
       const cells = rows[i].match(/<td[^>]*>[\s\S]*?<\/td>/gi) ?? [];
       if (cells.length < 2) continue;
 
-      const licenseNumber = extractText(cells[0]);
+      const licenseNumber = extractText(cells[0] ?? '');
       const businessName = extractText(cells[1]);
       const city = cells.length > 2 ? extractText(cells[2]) : '';
 

@@ -95,7 +95,7 @@ export async function notifyNewMessage(conversationId: string, messageId: string
       }
 
       // Determine recipient (the one who didn't send the message)
-      const isOrganizerSender = message.sender.id === conversation.organizer.userId;
+      const isOrganizerSender = message.sender?.id === conversation.organizer.userId;
       const recipientEmail = isOrganizerSender
         ? conversation.shopperUser?.email
         : conversation.organizer.user.email;
@@ -114,7 +114,7 @@ export async function notifyNewMessage(conversationId: string, messageId: string
       await sendNewMessageEmail({
         recipientEmail,
         recipientName,
-        senderName: message.sender.name || 'A user',
+        senderName: message.sender?.name || 'A user',
         saleTitle: conversation.sale?.title || null,
         conversationId,
         messagePreview,

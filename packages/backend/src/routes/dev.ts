@@ -28,7 +28,7 @@ export const fixSeedTiers = async (req: AuthRequest, res: Response) => {
       include: { organizer: true },
     });
 
-    let user2OrganizerUpdate = null;
+    let user2OrganizerUpdate: any = null;
     if (user2?.organizer) {
       user2OrganizerUpdate = await prisma.organizer.update({
         where: { id: user2.organizer.id },
@@ -50,7 +50,7 @@ export const fixSeedTiers = async (req: AuthRequest, res: Response) => {
       include: { organizer: true },
     });
 
-    let user3OrganizerUpdate = null;
+    let user3OrganizerUpdate: any = null;
     if (user3?.organizer) {
       user3OrganizerUpdate = await prisma.organizer.update({
         where: { id: user3.organizer.id },

@@ -221,7 +221,7 @@ async function fetchNcalbRecords(): Promise<NcalbRecord[]> {
     const cells = row.match(cellRegex) || [];
     if (cells.length < 2) continue;
 
-    const name = extractText(cells[0]);
+    const name = extractText(cells[0] ?? '');
     const licenseNumber = extractText(cells[1]);
     const city = cells.length > 3 ? extractText(cells[3]) : '';
     const statusRaw = cells.length > 2 ? extractText(cells[2]) : '';

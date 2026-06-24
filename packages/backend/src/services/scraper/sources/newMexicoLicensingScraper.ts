@@ -72,8 +72,8 @@ export async function runNewMexicoLicensingScraper(): Promise<void> {
     const viewStateMatch = formHtml.match(/name="__VIEWSTATE"\s+value="([^"]+)"/);
     const eventValidationMatch = formHtml.match(/name="__EVENTVALIDATION"\s+value="([^"]+)"/);
 
-    const viewState = viewStateMatch ? viewStateMatch[1] : '';
-    const eventValidation = eventValidationMatch ? eventValidationMatch[1] : '';
+    const viewState = viewStateMatch?.[1] ?? '';
+    const eventValidation = eventValidationMatch?.[1] ?? '';
 
     console.log('[NewMexicoLicensing] Extracted ASP.NET form state');
 
@@ -124,8 +124,8 @@ export async function runNewMexicoLicensingScraper(): Promise<void> {
         continue;
       }
 
-      const extractText = (html: string): string => {
-        return html
+      const extractText = (html: string | undefined): string => {
+        return (html ?? '')
           .replace(/<[^>]*>/g, '')
           .replace(/&nbsp;/g, ' ')
           .replace(/&amp;/g, '&')
@@ -171,7 +171,7 @@ export async function runNewMexicoLicensingScraper(): Promise<void> {
 
       if (organizerId) {
         await prisma.organizer.update({
-          where: { id: organizerId },
+          where: { id: organizerId ?? undefined },
           data: {
             licenseNumber: licenseNum,
             licenseState: 'NM',

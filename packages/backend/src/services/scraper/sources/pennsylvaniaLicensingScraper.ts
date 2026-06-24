@@ -111,8 +111,8 @@ export async function runPennsylvaniaLicensingScraper(): Promise<void> {
         continue;
       }
 
-      const extractText = (html: string): string => {
-        return html
+      const extractText = (html: string | undefined): string => {
+        return (html ?? '')
           .replace(/<[^>]*>/g, '')
           .replace(/&nbsp;/g, ' ')
           .replace(/&amp;/g, '&')
