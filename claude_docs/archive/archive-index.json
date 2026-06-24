@@ -1,59 +1,59 @@
 {
-  "_schema": "Archive Index v1 — Records-only write access. All agents may read to check existence. To retrieve a file, dispatch findasale-records.",
-  "_lastUpdated": "2026-05-12",
+  "_schema": "Archive Index v1 \u2014 Records-only write access. All agents may read to check existence. To retrieve a file, dispatch findasale-records.",
+  "_lastUpdated": "2026-06-24",
   "_archivedBy": "findasale-records (Records subagent, doc-cleanup task)",
   "entries": [
     {
       "file": "CORE-deprecated.md",
-      "topic": "CORE.md — Behavioral Operating System v4.4 (legacy)",
+      "topic": "CORE.md \u2014 Behavioral Operating System v4.4 (legacy)",
       "archivedFrom": "claude_docs/CORE.md",
-      "originSession": "112 (created) — 265 (last updated)",
+      "originSession": "112 (created) \u2014 265 (last updated)",
       "dateArchived": "2026-05-12",
       "summary": "Legacy behavioral rules file (v4.4). Content fully merged into CLAUDE.md v5.0 at S226. Deprecated and archived. Root replaced with tombstone redirect."
     },
     {
       "file": "next-session-brief-deprecated.md",
-      "topic": "Next Session Brief — S199 planning doc",
+      "topic": "Next Session Brief \u2014 S199 planning doc",
       "archivedFrom": "claude_docs/next-session-brief.md",
       "originSession": "198 (created)",
       "dateArchived": "2026-05-12",
-      "summary": "Legacy next-session planning format. Format superseded by STATE.md §Next Session section (S264). S199 priorities: Records audit, #51 Sale Ripples, #42 Voice-to-Tag, Passkey QA. Root replaced with tombstone redirect."
+      "summary": "Legacy next-session planning format. Format superseded by STATE.md \u00a7Next Session section (S264). S199 priorities: Records audit, #51 Sale Ripples, #42 Voice-to-Tag, Passkey QA. Root replaced with tombstone redirect."
     },
     {
       "file": "COMPLETED_PHASES-archived.md",
-      "topic": "Completed Phases Archive — S428–S449 session archive blocks",
+      "topic": "Completed Phases Archive \u2014 S428\u2013S449 session archive blocks",
       "archivedFrom": "claude_docs/COMPLETED_PHASES.md",
       "originSession": "465 (last updated)",
       "dateArchived": "2026-05-12",
-      "summary": "Historical session archive blocks from S428–S449, stored outside STATE.md during compaction. No active planning content. Root violation — moved to archive."
+      "summary": "Historical session archive blocks from S428\u2013S449, stored outside STATE.md during compaction. No active planning content. Root violation \u2014 moved to archive."
     },
     {
       "file": "monthly-digest-2026-04.md",
-      "topic": "Monthly Digest April 2026 (S321–S366)",
+      "topic": "Monthly Digest April 2026 (S321\u2013S366)",
       "archivedFrom": "claude_docs/monthly-digest-2026-04.md",
       "originSession": "366 (generated)",
       "dateArchived": "2026-05-12",
-      "summary": "Auto-generated monthly digest covering S321–S366. High-velocity sprint period. Root violation — moved to archive."
+      "summary": "Auto-generated monthly digest covering S321\u2013S366. High-velocity sprint period. Root violation \u2014 moved to archive."
     },
     {
       "file": "monthly-digest-2026-04-archive.md",
-      "topic": "Monthly Digest Archive — April 2026 (S617–S630)",
+      "topic": "Monthly Digest Archive \u2014 April 2026 (S617\u2013S630)",
       "archivedFrom": "claude_docs/monthly-digest-2026-04-archive.md",
       "originSession": "630 (generated)",
       "dateArchived": "2026-05-12",
-      "summary": "Archived session summaries from S617–S630. Moved from STATE.md during compaction. Root violation — moved to archive."
+      "summary": "Archived session summaries from S617\u2013S630. Moved from STATE.md during compaction. Root violation \u2014 moved to archive."
     },
     {
       "file": "session696_roadmap_ideas.xls",
-      "topic": "Session 696 roadmap ideas — Excel spreadsheet",
+      "topic": "Session 696 roadmap ideas \u2014 Excel spreadsheet",
       "archivedFrom": "claude_docs/session696_roadmap_ideas.xls",
       "originSession": "696",
       "dateArchived": "2026-05-12",
-      "summary": "Excel file with roadmap brainstorm from S696. Root violation (binary file, wrong format for claude_docs root) — moved to archive."
+      "summary": "Excel file with roadmap brainstorm from S696. Root violation (binary file, wrong format for claude_docs root) \u2014 moved to archive."
     },
     {
       "file": "pricing-strategy-STALE-archived-2026-03-15.md",
-      "topic": "Pricing Strategy — outdated fee structure",
+      "topic": "Pricing Strategy \u2014 outdated fee structure",
       "archivedFrom": "claude_docs/strategy/pricing-strategy.md",
       "originSession": "85 (last updated 2026-03-06)",
       "dateArchived": "2026-03-15",
@@ -61,31 +61,31 @@
     },
     {
       "file": "feature-notes/CD2_PHASE2_TREASURE_HUNT.md",
-      "topic": "CD2 Phase 2 — Treasure Hunt Mode implementation spec",
+      "topic": "CD2 Phase 2 \u2014 Treasure Hunt Mode implementation spec",
       "archivedFrom": "docs/CD2_PHASE2_TREASURE_HUNT.md",
       "originSession": "unknown (pre-session-144 governance)",
       "dateArchived": "2026-03-13",
-      "summary": "Full implementation handoff spec for Treasure Hunt Mode: schema (TreasureHunt + TreasureHuntFind models), backend service + routes, frontend banner + item detail integration, AI clue generation prompt. Feature is shipped. docs/ directory is unauthorized — archived and source pending deletion."
+      "summary": "Full implementation handoff spec for Treasure Hunt Mode: schema (TreasureHunt + TreasureHuntFind models), backend service + routes, frontend banner + item detail integration, AI clue generation prompt. Feature is shipped. docs/ directory is unauthorized \u2014 archived and source pending deletion."
     },
     {
       "file": "AGENT_QUICK_REFERENCE.md",
-      "topic": "Agent fleet quick reference — routing map",
+      "topic": "Agent fleet quick reference \u2014 routing map",
       "archivedFrom": "AGENT_QUICK_REFERENCE.md (repo root)",
       "originSession": "85 (last updated)",
       "dateArchived": "2026-03-13",
-      "summary": "Agent-to-task routing map and pipeline patterns. Stale — references eliminated agents (findasale-cx, findasale-support, findasale-rd, findasale-pitchman) and superseded scheduled tasks. Replaced by each agent's SKILL.md trigger descriptions and conversation-defaults routing rules."
+      "summary": "Agent-to-task routing map and pipeline patterns. Stale \u2014 references eliminated agents (findasale-cx, findasale-support, findasale-rd, findasale-pitchman) and superseded scheduled tasks. Replaced by each agent's SKILL.md trigger descriptions and conversation-defaults routing rules."
     },
     {
       "file": "feature-notes/CAMERA_WORKFLOW_V2_IMPLEMENTATION_STATUS.md",
-      "topic": "Camera Workflow v2 — Phases 1-2 complete, 3-6 implementation handoff",
+      "topic": "Camera Workflow v2 \u2014 Phases 1-2 complete, 3-6 implementation handoff",
       "archivedFrom": "CAMERA_WORKFLOW_V2_IMPLEMENTATION_STATUS.md (repo root)",
       "originSession": 147,
       "dateArchived": "2026-03-13",
-      "summary": "Point-in-time implementation status doc for Camera Workflow v2. Phases 1-2 (DB schema + backend) confirmed complete. Phases 3-6 (on-device processing, publishing page, multi-photo carousel) were the implementation target for sessions 148+. Superseded by completed code — Phase 5 confirmed wired in session 148."
+      "summary": "Point-in-time implementation status doc for Camera Workflow v2. Phases 1-2 (DB schema + backend) confirmed complete. Phases 3-6 (on-device processing, publishing page, multi-photo carousel) were the implementation target for sessions 148+. Superseded by completed code \u2014 Phase 5 confirmed wired in session 148."
     },
     {
       "file": "STRIPE_WEBHOOK_HARDENING.md",
-      "topic": "Stripe webhook hardening — beta production readiness",
+      "topic": "Stripe webhook hardening \u2014 beta production readiness",
       "archivedFrom": "STRIPE_WEBHOOK_HARDENING.md (repo root)",
       "originSession": "pre-144 (March 5, 2026)",
       "dateArchived": "2026-03-13",
@@ -93,7 +93,7 @@
     },
     {
       "file": "fleet-redesign-proposal-v1.md",
-      "topic": "Fleet redesign proposal v1 — sessions 141-143",
+      "topic": "Fleet redesign proposal v1 \u2014 sessions 141-143",
       "archivedFrom": "fleet-redesign-proposal-v1.md (repo root)",
       "originSession": 141,
       "dateArchived": "2026-03-13",
@@ -205,7 +205,7 @@
     },
     {
       "file": "context-audit/advisory-board-final.md",
-      "topic": "Context audit — advisory board findings",
+      "topic": "Context audit \u2014 advisory board findings",
       "archivedFrom": "claude_docs/operations/context-audit/",
       "originSession": 113,
       "dateArchived": "2026-03-11",
@@ -213,7 +213,7 @@
     },
     {
       "file": "context-audit/architect-findings.md",
-      "topic": "Context audit — architect findings",
+      "topic": "Context audit \u2014 architect findings",
       "archivedFrom": "claude_docs/operations/context-audit/",
       "originSession": 113,
       "dateArchived": "2026-03-11",
@@ -221,7 +221,7 @@
     },
     {
       "file": "context-audit/dev-findings.md",
-      "topic": "Context audit — dev findings",
+      "topic": "Context audit \u2014 dev findings",
       "archivedFrom": "claude_docs/operations/context-audit/",
       "originSession": 113,
       "dateArchived": "2026-03-11",
@@ -229,7 +229,7 @@
     },
     {
       "file": "context-audit/pitchman-findings.md",
-      "topic": "Context audit — pitchman findings",
+      "topic": "Context audit \u2014 pitchman findings",
       "archivedFrom": "claude_docs/operations/context-audit/",
       "originSession": 113,
       "dateArchived": "2026-03-11",
@@ -237,7 +237,7 @@
     },
     {
       "file": "context-audit/poweruser-findings.md",
-      "topic": "Context audit — power user findings",
+      "topic": "Context audit \u2014 power user findings",
       "archivedFrom": "claude_docs/operations/context-audit/",
       "originSession": 113,
       "dateArchived": "2026-03-11",
@@ -245,7 +245,7 @@
     },
     {
       "file": "context-audit/qa-findings.md",
-      "topic": "Context audit — QA findings",
+      "topic": "Context audit \u2014 QA findings",
       "archivedFrom": "claude_docs/operations/context-audit/",
       "originSession": 113,
       "dateArchived": "2026-03-11",
@@ -253,7 +253,7 @@
     },
     {
       "file": "context-audit/workflow-findings.md",
-      "topic": "Context audit — workflow findings",
+      "topic": "Context audit \u2014 workflow findings",
       "archivedFrom": "claude_docs/operations/context-audit/",
       "originSession": 113,
       "dateArchived": "2026-03-11",
@@ -309,7 +309,7 @@
     },
     {
       "file": "operations/consent-review-74-registration-flow.md",
-      "topic": "Legal compliance review — role-aware registration consent",
+      "topic": "Legal compliance review \u2014 role-aware registration consent",
       "archivedFrom": "claude_docs/legal/",
       "originSession": 235,
       "dateArchived": "2026-03-22",
@@ -341,11 +341,19 @@
     },
     {
       "file": "strategy/advisory-board-adr-065-pricing-analysis-2026-03-16.md",
-      "topic": "Advisory board ADR — pricing analysis",
+      "topic": "Advisory board ADR \u2014 pricing analysis",
       "archivedFrom": "claude_docs/strategic/",
       "originSession": 235,
       "dateArchived": "2026-03-22",
       "summary": "Advisory board decision record for pricing analysis. Consolidated from duplicate strategic/ directory into strategy/."
+    },
+    {
+      "file": "feature-notes/seo-content-moat-group5-summary.md",
+      "topic": "SEO Content Moat Phase 1 \u2014 Group 5 Implementation Summary",
+      "archivedFrom": "IMPLEMENTATION_SUMMARY_GROUP5.md (project root)",
+      "originSession": "ADR-075 SEO Content Moat Phase 1",
+      "dateArchived": "2026-06-24",
+      "summary": "Implementation summary for 500 SEO guide pages (ISR page, sitemap, build automation). Feature shipped. Root violation cleaned up by findasale-records 2026-06-24."
     }
   ]
 }
