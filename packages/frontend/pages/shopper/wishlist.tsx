@@ -137,11 +137,6 @@ const WishlistPage = () => {
     }
   }, [router.query.tab]);
 
-  if (!authLoading && !user) {
-    router.push('/login');
-    return null;
-  }
-
   // Fetch saved items and sales (favorites)
   const { data: favoritesData, isLoading: favoritesLoading, isError: favoritesError } = useQuery({
     queryKey: ['favorites'],
@@ -177,6 +172,11 @@ const WishlistPage = () => {
     },
     enabled: !!user,
   });
+
+  if (!authLoading && !user) {
+    router.push('/login');
+    return null;
+  }
 
   const savedItems = favoritesData?.favorites ?? [];
   const savedSales = favoritesData?.saleFavorites ?? [];

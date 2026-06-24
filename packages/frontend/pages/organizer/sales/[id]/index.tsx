@@ -57,11 +57,6 @@ const SaleDetailPage = () => {
   const [showedPostSaleToast, setShowedPostSaleToast] = useState(false);
   const [postSaleToastDismissed, setPostSaleToastDismissed] = useState(false);
 
-  if (!authLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
-    router.push('/login');
-    return null;
-  }
-
   // Fetch sale details
   const { data: sale, isLoading: saleLoading } = useQuery({
     queryKey: ['sale', id],
@@ -198,6 +193,11 @@ const SaleDetailPage = () => {
       }
     }
   }, [sale, items, id, showedPostSaleToast, postSaleToastDismissed]);
+
+  if (!authLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
+    router.push('/login');
+    return null;
+  }
 
   const isLoading = authLoading || saleLoading || itemsLoading;
 

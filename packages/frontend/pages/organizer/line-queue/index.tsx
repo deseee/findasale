@@ -35,12 +35,6 @@ const LineQueueLandingPage = () => {
   const { user, isLoading: authLoading } = useAuth();
   const [retryCount, setRetryCount] = useState(0);
 
-  // Auth guard
-  if (!authLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
-    router.push('/login');
-    return null;
-  }
-
   // Fetch organizer's sales
   const { data: salesData, isLoading, isError, refetch } = useQuery<Sale[]>({
     queryKey: ['organizer-line-queue-sales'],
@@ -50,6 +44,12 @@ const LineQueueLandingPage = () => {
     },
     enabled: !!user?.id,
   });
+
+  // Auth guard
+  if (!authLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
+    router.push('/login');
+    return null;
+  }
 
   const sales = salesData || [];
 

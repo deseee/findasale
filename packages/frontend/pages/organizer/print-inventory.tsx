@@ -57,12 +57,6 @@ const PrintInventoryPage = () => {
   const [showExportDropdown, setShowExportDropdown] = useState(false);
   const [isPrintKitLoading, setIsPrintKitLoading] = useState(false);
 
-  // Redirect if not authenticated or not an organizer
-  if (!authLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
-    router.push('/login');
-    return null;
-  }
-
   // Fetch organizer's sales — same endpoint as dashboard
   const { data: salesData, isLoading: salesLoading } = useQuery<Sale[]>({
     queryKey: ['organizer-sales', user?.id],
@@ -111,6 +105,12 @@ const PrintInventoryPage = () => {
     });
     setGroupedData(grouped);
   }, [inventoryData]);
+
+  // Redirect if not authenticated or not an organizer
+  if (!authLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
+    router.push('/login');
+    return null;
+  }
 
   const handlePrint = () => {
     // Hide all sale sections except the selected one (if selected)

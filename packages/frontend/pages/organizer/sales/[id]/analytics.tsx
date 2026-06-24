@@ -59,12 +59,6 @@ const PerSaleAnalyticsPage = () => {
     setIsClient(true);
   }, []);
 
-  // Redirect if not authenticated or not an organizer
-  if (!authLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
-    router.push('/login');
-    return null;
-  }
-
   // Fetch per-sale analytics
   const { data: analytics, isLoading: analyticsLoading, error } = useQuery({
     queryKey: ['sale-analytics', saleId],
@@ -74,6 +68,12 @@ const PerSaleAnalyticsPage = () => {
     },
     enabled: !!saleId && typeof saleId === 'string',
   });
+
+  // Redirect if not authenticated or not an organizer
+  if (!authLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
+    router.push('/login');
+    return null;
+  }
 
   if (authLoading) {
     return <div className="min-h-screen flex items-center justify-center">Loading...</div>;

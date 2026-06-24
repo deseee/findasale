@@ -174,12 +174,6 @@ export default function PlatformsPage() {
   const [unlistedTotal, setUnlistedTotal] = useState(0);
   const [unlistedInit, setUnlistedInit] = useState(false);
 
-  // Auth guard
-  if (!authLoading && (!user || !(user.roles?.includes('ORGANIZER') || user.role === 'ORGANIZER' || user.role === 'ADMIN'))) {
-    router.push('/access-denied');
-    return null;
-  }
-
   const { data: stats, isLoading: statsLoading } = useQuery<PlatformStatsResponse>({
     queryKey: ['platform-stats'],
     queryFn: async () => {
@@ -231,6 +225,12 @@ export default function PlatformsPage() {
       queryClient.invalidateQueries({ queryKey: ['platform-gap-unlisted'] });
     },
   });
+
+  // Auth guard
+  if (!authLoading && (!user || !(user.roles?.includes('ORGANIZER') || user.role === 'ORGANIZER' || user.role === 'ADMIN'))) {
+    router.push('/access-denied');
+    return null;
+  }
 
   const isLoading = authLoading || statsLoading;
 

@@ -416,6 +416,35 @@ const OrganizerDashboard = () => {
     enabled: !!user?.id && isClient,
   });
 
+  // Derive activeSale before guard so useQuery can be called unconditionally
+  const _dashboardState: DashboardState = (() => {
+    if (!salesData || salesData.length === 0) return 'new';
+    const hasActiveSale = salesData.some((s: Sale) => s.status === 'DRAFT' || s.status === 'PUBLISHED');
+    return hasActiveSale ? 'active' : 'between';
+  })();
+
+  const _activeSale: Sale | null = _dashboardState === 'active' ? (() => {
+    if (!salesData) return null;
+    if (manualPrimaryId) {
+      const manual = salesData.find((s: Sale) => s.id === manualPrimaryId);
+      if (manual && (manual.status === 'DRAFT' || manual.status === 'PUBLISHED')) return manual;
+    }
+    let sale = salesData.find((s: Sale) => s.status === 'PUBLISHED');
+    if (!sale) sale = salesData.find((s: Sale) => s.status === 'DRAFT');
+    return sale || null;
+  })() : null;
+
+  // Feature #404: OG Buyer count for active sale -- organizer dashboard metric
+  const { data: ogBuyerData } = useQuery({
+    queryKey: ['og-buyer-count', _activeSale?.id],
+    queryFn: async () => {
+      const response = await api.get(`/sales/${_activeSale!.id}/og-buyer-count`);
+      return response.data as { count: number; limit: number };
+    },
+    enabled: !!_activeSale?.id && _activeSale.status === 'PUBLISHED' && isClient,
+    staleTime: 60_000,
+  });
+
   // Auth guard — after all hooks
   if (!authLoading && (!user || !(user.roles?.includes('ORGANIZER') || user.role === 'ORGANIZER' || user.role === 'ADMIN'))) {
     router.push('/access-denied');
@@ -450,18 +479,7 @@ const OrganizerDashboard = () => {
     return sale || null;
   };
 
-  const activeSale = dashboardState === 'active' ? getActiveSale() : null;
-
-  // Feature #404: OG Buyer count for active sale -- organizer dashboard metric
-  const { data: ogBuyerData } = useQuery({
-    queryKey: ['og-buyer-count', activeSale?.id],
-    queryFn: async () => {
-      const response = await api.get(`/sales/${activeSale!.id}/og-buyer-count`);
-      return response.data as { count: number; limit: number };
-    },
-    enabled: !!activeSale?.id && activeSale.status === 'PUBLISHED' && isClient,
-    staleTime: 60_000,
-  });
+  const activeSale = _activeSale;
 
   // Helper: Check if sale is ending soon (<24h)
   const isEndingSoon = (sale: Sale): boolean => {
