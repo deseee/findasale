@@ -43,7 +43,7 @@ export async function searchNearbyPlaces(params: {
     partner: 'establishment',
   };
 
-  const googleType = (type && googleTypeMap[type]) || 'establishment';
+  const googleType = googleTypeMap[type ?? ''] || 'establishment';
 
   try {
     const response = await axios.get(`${PLACES_API_BASE}/nearbysearch/json`, {
@@ -71,7 +71,7 @@ export async function searchNearbyPlaces(params: {
       phone: place.formatted_phone_number,
       iconUrl: place.icon,
     }));
-  } catch (err) {
+  } catch (err: any) {
     console.error('Places API request failed:', err instanceof Error ? err.message : String(err));
     return [];
   }
