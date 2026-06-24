@@ -41,6 +41,24 @@ const ShopifyPage: React.FC = () => {
   const [showForm, setShowForm] = useState(false);
   const [disconnectConfirm, setDisconnectConfirm] = useState(false);
 
+  const fetchStatus = async () => {
+    try {
+      setLoading(true);
+      const response = await api.get('/shopify/status');
+      setStatus(response.data);
+    } catch (error: any) {
+      console.error('Failed to fetch Shopify status:', error);
+      showToast('Failed to load Shopify status', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Fetch Shopify status on mount
+  useEffect(() => {
+    fetchStatus();
+  }, []);
+
   // Redirect if not authenticated
   if (!authLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
     router.push('/login');
@@ -83,24 +101,6 @@ const ShopifyPage: React.FC = () => {
       </>
     );
   }
-
-  // Fetch Shopify status on mount
-  useEffect(() => {
-    fetchStatus();
-  }, []);
-
-  const fetchStatus = async () => {
-    try {
-      setLoading(true);
-      const response = await api.get('/shopify/status');
-      setStatus(response.data);
-    } catch (error: any) {
-      console.error('Failed to fetch Shopify status:', error);
-      showToast('Failed to load Shopify status', 'error');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleConnect = async (e: React.FormEvent) => {
     e.preventDefault();

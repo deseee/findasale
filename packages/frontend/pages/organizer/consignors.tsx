@@ -64,19 +64,6 @@ const ConsignorsPage: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
 
-  // Redirect if not authenticated or not an organizer
-  if (!authLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
-    router.push('/login');
-    return null;
-  }
-
-  // Fetch consignors on mount
-  useEffect(() => {
-    if (user && user.roles?.includes('ORGANIZER') && canAccess('TEAMS')) {
-      fetchConsignors();
-    }
-  }, [user, canAccess]);
-
   const fetchConsignors = async () => {
     try {
       setLoading(true);
@@ -89,6 +76,19 @@ const ConsignorsPage: React.FC = () => {
       setLoading(false);
     }
   };
+
+  // Fetch consignors on mount
+  useEffect(() => {
+    if (user && user.roles?.includes('ORGANIZER') && canAccess('TEAMS')) {
+      fetchConsignors();
+    }
+  }, [user, canAccess]);
+
+  // Redirect if not authenticated or not an organizer
+  if (!authLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
+    router.push('/login');
+    return null;
+  }
 
   const handleOpenCreateModal = () => {
     setFormData({
