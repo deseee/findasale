@@ -95,11 +95,20 @@ jobs:
       # NON-BLOCKING (S1027): only 1 test file; `jest` cold-compiles a large import graph
       # via ts-jest and needs --forceExit + test infra before it can gate. Runs + reports.
       - name: Backend tests
-        run: pnpm --filter ./packages/backend test
+        # RECON (S1028): jest cold-compiles dedupe.test.ts's import graph (dedupe.ts -> lib/prisma
+        # opens a PrismaClient handle that keeps the process alive). --forceExit closes it;
+        # --ci --runInBand make CI runs deterministic. Still continue-on-error for ONE recon run
+        # to confirm the suite completes + passes in CI before flipping to blocking.
+        run: pnpm --filter ./packages/backend test -- --ci --runInBand --forceExit
         continue-on-error: true
 
       # NON-BLOCKING (S1027): repo has no eslint config, so `next lint` prompts/aborts.
       # Needs an eslint config + violation cleanup before gating. Runs + reports.
       - name: Frontend lint
+        # RECON (S1028): packages/frontend/.eslintrc.json added (extends next/core-web-vitals;
+        # pre-existing noise downgraded: no-unescaped-entities off, rules-of-hooks + no-html-link-for-pages warn).
+        # Verified 0 errors locally via a standalone eslint-config-next install. Kept continue-on-error
+        # for ONE recon run to confirm 0 errors in real `next lint` (which loads @typescript-eslint
+        # for the 6 inline disable-directives) before flipping to blocking.
         run: pnpm --filter ./packages/frontend lint
         continue-on-error: true
