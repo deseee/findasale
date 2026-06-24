@@ -1,0 +1,9 @@
+{
+  "root": true,
+  "extends": "next/core-web-vitals",
+  "rules": {
+    "react/no-unescaped-entities": "off",
+    "react-hooks/rules-of-hooks": "warn",
+    "@next/next/no-html-link-for-pages": "warn"
+  }
+}
