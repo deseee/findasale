@@ -41,8 +41,16 @@ name: CI Typecheck & Tests
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - 'claude_docs/**'
+      - '**.md'
+      - '.github/CODEOWNERS'
   pull_request:
     branches: [main]
+    paths-ignore:
+      - 'claude_docs/**'
+      - '**.md'
+      - '.github/CODEOWNERS'
 
 # Cancel superseded runs on the same ref to save minutes.
 concurrency:
