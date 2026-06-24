@@ -181,8 +181,12 @@ export async function getTrendMultiplier(
     await prisma.trendSignal.create({
       data: {
         category,
+        searchTerm: category,
+        signal: 'GOOGLE_TRENDS',
         trendType,
         trendStrength: multiplier,
+        dataPoints: 1,
+        period: '30d',
         fetchedAt: new Date(),
         expireAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24h TTL
       },

@@ -43,7 +43,7 @@ export async function searchNearbyPlaces(params: {
     partner: 'establishment',
   };
 
-  const googleType = type ? googleTypeMap[type] || 'establishment' : 'establishment';
+  const googleType = (type && googleTypeMap[type]) || 'establishment';
 
   try {
     const response = await axios.get(`${PLACES_API_BASE}/nearbysearch/json`, {
@@ -72,7 +72,7 @@ export async function searchNearbyPlaces(params: {
       iconUrl: place.icon,
     }));
   } catch (err) {
-    console.error('Places API request failed:', err instanceof Error ? err.message : err);
+    console.error('Places API request failed:', err instanceof Error ? err.message : String(err));
     return [];
   }
 }

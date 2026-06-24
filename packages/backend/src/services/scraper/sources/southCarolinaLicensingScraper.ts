@@ -165,8 +165,8 @@ export async function runSouthCarolinaLicensingScraper(): Promise<void> {
 
     console.log(`[SouthCarolinaLicensing] Found ${rows.length} table rows`);
 
-    const extractText = (cellHtml: string): string =>
-      cellHtml
+    const extractText = (cellHtml: string | undefined): string =>
+      (cellHtml ?? '')
         .replace(/<[^>]*>/g, '')
         .replace(/&nbsp;/g, ' ')
         .replace(/&amp;/g, '&')

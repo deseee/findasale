@@ -79,15 +79,13 @@ jobs:
       - name: Generate Prisma client
         run: pnpm --filter ./packages/database exec prisma generate
 
-      # NON-BLOCKING (S1027 — scope correction): controllers cleared (3 passes), but the backend
-      # still has ~100+ pre-existing errors in src/services/scraper/sources/*.ts (one repeated
-      # `string | undefined`->`string` regex-match pattern across ~40 state scrapers) + a few services.
-      # The CI annotation cap (10) + truncated raw-log captures hid this. Reverted to non-blocking to
-      # keep deploys flowing while the scraper batch is cleaned up. Frontend typecheck stays BLOCKING.
+      # BLOCKING (S1027 FINAL): all ~142 pre-existing backend type errors fixed (verified to 0 via the
+      # uncapped CI raw log across runs #17-#23) — null/never annotations, missing Prisma includes,
+      # wrong field names, scraper string|undefined guards, + several latent runtime-bug fixes
+      # (qRScannerEvent, trendSignal missing required fields, broadcast notification fields). Gates deploys.
       - name: Backend typecheck
         run: npx tsc --noEmit --skipLibCheck
         working-directory: packages/backend
-        continue-on-error: true
 
       # BLOCKING (S1027): 0 errors after the tsconfig `types` allowlist fix (verified by repro).
       - name: Frontend typecheck
