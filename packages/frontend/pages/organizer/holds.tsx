@@ -178,6 +178,9 @@ const OrganizerHoldsPage = () => {
     return Object.values(groups).sort((a, b) => b.holds.length - a.holds.length);
   }, [holds]);
 
+  // Accordion state for buyer groups
+  const [expandedBuyers, setExpandedBuyers] = useState<Set<string>>(new Set());
+
   if (!isLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
     router.push('/login');
     return null;
@@ -211,8 +214,6 @@ const OrganizerHoldsPage = () => {
     batchMutation.mutate({ ids: Array.from(selectedIds), action });
   };
 
-  // Accordion state for buyer groups
-  const [expandedBuyers, setExpandedBuyers] = useState<Set<string>>(new Set());
   const toggleBuyerExpand = (buyerId: string) => {
     setExpandedBuyers((prev) => {
       const next = new Set(prev);
