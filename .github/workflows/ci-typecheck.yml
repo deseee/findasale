@@ -14,8 +14,8 @@ name: CI Typecheck & Tests
 #
 # GATING STATUS (S1028): FRONTEND + BACKEND typecheck BLOCKING (S1027: all 142 backend type errors
 #   cleared to 0, run #25 green); FRONTEND LINT now BLOCKING (S1028: eslint config added, 6 stale
-#   disable-directives removed -> 0 errors). BACKEND TESTS still non-blocking for one recon run
-#   (isolatedModules OOM fix applied S1028 — flip to blocking once it passes in CI).
+#   disable-directives removed -> 0 errors). BACKEND TESTS now BLOCKING (S1028: isolatedModules
+#   cleared the OOM; 2 stale comma-handling test expectations fixed). ALL 4 quality steps gate deploys.
 #   History: this gate had never passed
 #   across 12 runs and, with Railway "Wait for CI" on, blocked every deploy (S1026).
 #   A faithful fresh-install reproduction (clean pnpm install --frozen-lockfile +
@@ -94,14 +94,13 @@ jobs:
         run: npx tsc --noEmit --skipLibCheck
         working-directory: packages/frontend
 
+      # BLOCKING (S1028): isolatedModules:true (jest config, transpile-only) cleared the recon-run-#27
+      # OOM (ts-jest was type-checking the whole import graph). Recon run #28 then surfaced 2 stale
+      # test expectations (dedupe normalizeAddress preserves commas as field separators by design) —
+      # fixed to match the implementation. --forceExit closes the PrismaClient handle dedupe.ts opens.
+      # Suite now green -> gates deploys.
       - name: Backend tests
-        # RECON 2 (S1028): recon run #27 OOM'd (Mark-Compact 4050MB allocation failure) — ts-jest
-        # was TYPE-CHECKING the whole transitive import graph. Fix: isolatedModules:true (transpile-only)
-        # added to packages/backend jest config -> drops compile memory. --forceExit closes the
-        # PrismaClient handle dedupe.ts opens. continue-on-error for ONE more recon to confirm the
-        # suite completes + passes, then flip to blocking.
         run: pnpm --filter ./packages/backend test -- --ci --runInBand --forceExit
-        continue-on-error: true
 
       # BLOCKING (S1028): packages/frontend/.eslintrc.json (extends next/core-web-vitals; pre-existing
       # noise downgraded to warn/off: no-unescaped-entities off, rules-of-hooks + no-html-link-for-pages warn).

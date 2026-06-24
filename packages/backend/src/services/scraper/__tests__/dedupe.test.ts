@@ -47,8 +47,8 @@ describe('normalizeAddress', () => {
     expect(normalizeAddress("O'Brien's Lane")).toBe('obriens ln');
   });
 
-  test('removes punctuation: comma and periods', () => {
-    expect(normalizeAddress('123 Main St., Suite A.')).toBe('123 main st suite a');
+  test('removes periods, preserves commas as field separators', () => {
+    expect(normalizeAddress('123 Main St., Suite A.')).toBe('123 main st, suite a');
   });
 
   test('collapses multiple spaces', () => {
@@ -64,7 +64,7 @@ describe('normalizeAddress', () => {
   });
 
   test('handles multiple suffix types in one address', () => {
-    expect(normalizeAddress('123 East Main Street, North Suite')).toBe('123 e main st n suite');
+    expect(normalizeAddress('123 East Main Street, North Suite')).toBe('123 e main st, n suite');
   });
 
   test('preserves commas as field separators', () => {
