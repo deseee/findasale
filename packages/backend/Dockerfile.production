@@ -1,4 +1,5 @@
 # syntax=docker/dockerfile:1
+# cache-bust: 2026-06-24 — force backend redeploy of HEAD (scraper fix 9b27c9f was stranded by watch-pattern; see STATE.md §10c)
 FROM node:20-slim AS base
 
 # Install OpenSSL for Prisma
