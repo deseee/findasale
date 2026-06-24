@@ -113,7 +113,6 @@ async function upsertRecord(record: NmLicenseRecord): Promise<boolean> {
         isStateLicensed: true,
         directoryMostRecentSource: 'NewMexicoPhase2',
         directoryMostRecentAt: new Date(),
-        ...(city && { city }),
         ...(phone && { phone }),
       },
     });
@@ -125,7 +124,6 @@ async function upsertRecord(record: NmLicenseRecord): Promise<boolean> {
       businessName,
       phone: phone ?? null,
       address: address ?? (city ? `${city}, NM` : 'New Mexico'),
-      city: city || null,
       bio: `Licensed pawnbroker in ${city || 'New Mexico'}.`,
       isClaimed: false,
       isUnmanagedListing: true,

@@ -212,8 +212,12 @@ export async function getPersonalizedFeed(
   ]);
 
   // Extract data from history
-  const purchasedCategories = new Set(purchases.map((p) => p.item?.category).filter(Boolean));
-  const favoritedSaleIds = new Set(favorites.map((f) => f.saleId).filter(Boolean));
+  const purchasedCategories = new Set(
+    purchases.map((p) => p.item?.category).filter((c): c is string => Boolean(c))
+  );
+  const favoritedSaleIds = new Set(
+    favorites.map((f) => f.saleId).filter((s): s is string => Boolean(s))
+  );
   const followedOrganizerIds = new Set(follows.map((f) => f.organizerId));
 
   // Score each sale

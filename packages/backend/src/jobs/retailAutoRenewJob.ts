@@ -77,6 +77,10 @@ export const retailAutoRenew = async (): Promise<void> => {
 
     for (const oldSale of retailSalesNeedingRenewal) {
       try {
+        // endDate is filtered non-null by the findMany where-clause above, but Prisma types it as nullable.
+        if (!oldSale.endDate) {
+          continue;
+        }
         // Check if a future retail sale already exists for this organizer
         const futureRetailSale = await prisma.sale.findFirst({
           where: {

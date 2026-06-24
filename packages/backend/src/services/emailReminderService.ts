@@ -196,7 +196,7 @@ export const processReminderEmails = async (): Promise<void> => {
         if (subscriber.email) {
           await sendReminderEmail({
             to: subscriber.email,
-            userId: subscriber.userId,
+            userId: subscriber.userId ?? '',
             saleName: sale.title,
             saleAddress: `${sale.address}, ${sale.city}, ${sale.state}`,
             startDate: sale.startDate,
@@ -257,7 +257,7 @@ export const processReminderEmails = async (): Promise<void> => {
         if (subscriber.email) {
           await sendReminderEmail({
             to: subscriber.email,
-            userId: subscriber.userId,
+            userId: subscriber.userId ?? '',
             saleName: sale.title,
             saleAddress: `${sale.address}, ${sale.city}, ${sale.state}`,
             startDate: sale.startDate,

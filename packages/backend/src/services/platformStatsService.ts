@@ -92,7 +92,7 @@ export interface EbayPlatformCount extends PlatformCount {
 }
 
 export interface FacebookPlatformCount extends PlatformCount {
-  note: 'EXPORT_ONLY';
+  note: 'EXPORT_ONLY' | 'COMMERCE_MANAGER';
 }
 
 export interface PlatformStatsResponse {

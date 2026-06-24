@@ -32,6 +32,8 @@ export async function searchNearbyPlaces(params: {
   return [];
 
   const { latitude, longitude, radiusMeters = 500, type } = params;
+  // Restored declaration (TS2304): apiKey was orphaned when the billing-lockdown return [] above made this block unreachable. Type-correctness only; never executes while the gate stands.
+  const apiKey = process.env.GOOGLE_PLACES_API_KEY || "";
 
   // Map our stop types to Google Places types
   const googleTypeMap: Record<string, string> = {

@@ -1,6 +1,6 @@
 import { prisma } from '../lib/prisma';
 import { fetchEbayPriceComps } from '../controllers/ebayController';
-import { searchPriceCharting } from '../services/priceChartingService';
+import { searchPriceCharting, PriceChartingResult } from '../services/priceChartingService';
 
 /**
  * ADR-069 Phase 2: Async eBay Comps Fetch (Enhanced)
@@ -50,7 +50,7 @@ async function fetchEbayCompsWithFallbacks(
   let comps = await fetchEbayPriceComps({
     title,
     category: category || undefined,
-    condition,
+    condition: condition ?? undefined,
     maxResults,
   });
 
@@ -62,7 +62,7 @@ async function fetchEbayCompsWithFallbacks(
   console.log(`[fetchEbayComps] Tier 1 (title+category) returned 0 results; trying Tier 2 (title only)`);
   comps = await fetchEbayPriceComps({
     title,
-    condition,
+    condition: condition ?? undefined,
     maxResults,
   });
 
@@ -77,7 +77,7 @@ async function fetchEbayCompsWithFallbacks(
     comps = await fetchEbayPriceComps({
       title: keywords,
       category: category || undefined,
-      condition,
+      condition: condition ?? undefined,
       maxResults,
     });
 
@@ -91,7 +91,7 @@ async function fetchEbayCompsWithFallbacks(
     console.log(`[fetchEbayComps] Tier 3 (keywords+category) returned 0 results; trying Tier 4 (category only)`);
     comps = await fetchEbayPriceComps({
       title: category,
-      condition,
+      condition: condition ?? undefined,
       maxResults: 5,
     });
 
@@ -158,7 +158,7 @@ export async function fetchEbayCompsForItem(itemId: string): Promise<void> {
     console.log(`[fetchEbayComps] Item ${itemId}: fetched ${comps.count} results, median=$${comps.median}, fallbackTier=${fallbackTier}`);
 
     // Task 2: Search PriceCharting for relevant categories
-    let priceChartingResult = null;
+    let priceChartingResult: PriceChartingResult | null = null;
     let blendedPrice: number | null = null;
     let source = 'ebay';
 
