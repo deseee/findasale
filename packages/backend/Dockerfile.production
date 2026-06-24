@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-# cache-bust: 2026-06-23-ci-backend-unblock-scrapers-S1027
+# cache-bust: 2026-06-23-ci-backend-gated-final-S1027
 FROM node:20-slim AS base
 
 # Install OpenSSL for Prisma
@@ -43,7 +43,7 @@ RUN cd packages/database && npx prisma generate
 # S1027: backend still has ~100+ pre-existing type errors (scraper sources). tsc still EMITS
 # valid JS, so allow non-zero exit so the prod build proceeds. Completeness gate below catches
 # OOM/partial emits. Drop `|| true` once the scraper type-debt is cleared and CI typecheck gates.
-RUN cd packages/backend && npx tsc || true
+RUN cd packages/backend && npx tsc
 
 # Build completeness gate: fail Docker build if tsc OOM'd and produced <75% of source files
 # Prevents a partial dist/ from being deployed when the builder runs out of memory.

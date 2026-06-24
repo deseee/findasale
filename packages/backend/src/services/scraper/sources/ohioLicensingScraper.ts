@@ -118,8 +118,8 @@ export async function runOhioLicensingScraper(): Promise<void> {
     const rows = html.match(/<tr[^>]*>[\s\S]*?<\/tr>/g) || [];
     console.log(`[OhioLicensing] Found ${rows.length} table rows`);
 
-    const extractText = (h: string) =>
-      h.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').trim();
+    const extractText = (h: string | undefined) =>
+      (h ?? '').replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').trim();
 
     for (const row of rows) {
       const cells = row.match(/<td[^>]*>[\s\S]*?<\/td>/g) || [];

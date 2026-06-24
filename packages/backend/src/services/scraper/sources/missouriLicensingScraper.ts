@@ -55,7 +55,7 @@ export async function runMissouriLicensingScraper(): Promise<void> {
       const cellRegex = /<td[^>]*>[\s\S]*?<\/td>/g;
       const cells = row.match(cellRegex) || [];
       if (cells.length < 3) continue;
-      const extractText = (h: string) => h.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').trim();
+      const extractText = (h: string | undefined) => (h ?? '').replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').trim();
       const name = extractText(cells[0]);
       const licenseNum = extractText(cells[1]);
       const status = cells.length > 2 ? extractText(cells[2]) : 'Active';

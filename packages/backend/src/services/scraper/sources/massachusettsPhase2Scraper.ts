@@ -221,17 +221,17 @@ export async function runMassachusettsPhase2Scraper(): Promise<void> {
 
         primaryWorked = true;
 
-        if (pageRecords.length === 0) {
+        if (pageRecords!.length === 0) {
           if (page === 1) {
             console.log(`[MA Phase2] Primary API returned 0 records for ${query.board}`);
           }
           break;
         }
 
-        allRecords = allRecords.concat(pageRecords);
-        console.log(`[MA Phase2] Page ${page}: ${pageRecords.length} records (running total: ${allRecords.length})`);
+        allRecords = allRecords.concat(pageRecords!);
+        console.log(`[MA Phase2] Page ${page}: ${pageRecords!.length} records (running total: ${allRecords.length})`);
 
-        if (pageRecords.length < PAGE_SIZE) break;
+        if (pageRecords!.length < PAGE_SIZE) break;
         page++;
       }
 

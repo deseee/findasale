@@ -96,7 +96,7 @@ export const retailAutoRenew = async (): Promise<void> => {
         if (futureRetailSale) {
           console.log(
             `[retailAutoRenew] Skipping renewal for sale ${oldSale.id} — ` +
-            `future retail sale ${futureRetailSale.id} already exists for organizer ${oldSale.organizerId}`
+            `future retail sale ${futureRetailSale!.id} already exists for organizer ${oldSale.organizerId}`
           );
           continue;
         }
