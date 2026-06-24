@@ -261,7 +261,7 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 | schema.prisma drift — 5 EmailSuppression cols | bounceCategory/bounceStatusCode/diagnosticCode/retryAfter/classifiedAt exist in DB+schema but have NO migration file (applied via raw DDL) | Optionally generate the migration locally + `prisma migrate resolve --applied` | S1020 |
 
 | ~~CI exit 134 — OOM kill on tsc~~ | **RESOLVED** — NODE_OPTIONS=--max-old-space-size=4096 pushed (commit 0614bc97), CI now runs to completion. | — | 2026-06-23 -> closed S1026 |
-| CI gate — FRONTEND + BACKEND typecheck BLOCKING (0 errors) | **RESOLVED S1027 FINAL.** All 142 backend type errors fixed (verified 0 via uncapped CI raw log, runs #17-#23). Both typecheck steps gate; Dockerfile `npx tsc` (no `\|\| true`). | Confirm the final push is GREEN in CI. Lower priority: backend TESTS + frontend LINT still non-blocking (need `--forceExit`/infra + eslint config). | S1026 → resolved S1027 |
+| ~~CI gate — typecheck blocking~~ | **RESOLVED S1027 FINAL — CI run #25 GREEN, backend typecheck = 0 verified, gate LOCKED (commit 58cbe3d).** All 142 backend type errors fixed; both typecheck steps blocking; Dockerfile `npx tsc`. | Closed. (Follow-ups in Next Session: gate backend TESTS + frontend LINT.) | S1026 → CLOSED S1027 |
 ## Pending Chrome Verifications
 
 | # | Feature | Evidence | Session |
@@ -270,63 +270,31 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Next Session
 
-### S1026 — PRIMARY: restore the CI gate to STRICT (Patrick decision — option #1)
+### PRIMARY (Patrick request) — TECH-DEBT HUNT + finish the CI gate
+**Session type: DEV (audit-led). Smoke test FIRST (Section 10):** the S1027 marathon pushed ~85 backend files (controllers/jobs/services/routes/scrapers). Before new work: Chrome / `/health` smoke-test that backend is 200 and key surfaces load — broad type-fixes can compile yet shift runtime. Then hunt debt:
 
-**Session type: DEV. USE OPUS** — subtle CI/environment debugging (why a fresh `pnpm install` resolves the Prisma client + `csv-parse` types differently than an established local install). Low code volume, high reasoning; Opus minimizes the number of push/CI-read cycles. NOT a bulk-codegen task.
+1. **Gate the two remaining CI steps (finish what S1027 started).**
+   - `Skill('findasale-dev')` -> Frontend LINT: the repo has **NO eslint config** (`next lint` prompts/aborts). Add `.eslintrc.json` extending `next/core-web-vitals`, run it, fix/triage violations, then remove `continue-on-error:true` on the **Frontend lint** step in `.github/workflows/ci-typecheck.yml`.
+   - Backend TESTS: only 1 test file; `jest` cold-compiles a huge graph via ts-jest. Add `--ci --runInBand --forceExit` (or a jest config) so it completes; confirm green in CI; then drop its `continue-on-error:true`.
 
-**GOAL:** make `ci-typecheck.yml` pass GREEN on REAL checks, then return the steps to blocking. Do NOT change application code — code is proven correct (S1026: fresh correct Prisma client -> backend `tsc --noEmit` = 0 errors; prod DB schema-in-sync).
+2. **`Skill('health-scout')` broad debt scan** (typecheck is now a clean baseline). Hunt: error-swallowers (`|| true`, empty `catch {}`), `as any` proliferation introduced this session (S1027 used several casts — audit they're justified, not masking real bugs), dead code (the abandoned `adminEmailSendController` stub + `/send-email` route — remove if still present), unbounded/N+1 Prisma queries (S1013 fixed the worst; sweep remaining `findMany` without `take`/`where`).
 
-**Confirmed root cause (S1026, tool-cited):** CI's fresh `pnpm install --frozen-lockfile` + `pnpm --filter ./packages/database exec prisma generate` produces a Prisma client the backend `tsc` cannot resolve -> 232 phantom 'property does not exist' errors. Frontend `tsc` fails on 1: TS2688 'Cannot find type definition file for \'csv-parse\'' (hoisted transitive dep the frontend doesn't use; root `.npmrc` has `public-hoist-pattern[]=*types*`, frontend `tsconfig.json` has no `types` allowlist). NOT reproducible locally (local uses an established node_modules) -> must iterate via push + read CI.
+3. **Schema drift** (was BQ): 5 `EmailSuppression` cols (bounceCategory/bounceStatusCode/diagnosticCode/retryAfter/classifiedAt) live in DB+schema via raw DDL with **no migration file**. Generate the migration + `prisma migrate resolve --applied`. Also the stray 2025 `organizer_claim_email` duplicate migration (plan: `outputs/PRISMA_MIGRATION_REPAIR_PLAN.md`). Needs prisma CLI (Patrick's machine).
 
-**Dispatch plan (`Skill('findasale-dev')`; iterative, push block per iteration — subagents cannot push):**
-1. Frontend: add a `types`/`typeRoots` allowlist to `packages/frontend/tsconfig.json` so tsc stops auto-including stray hoisted type packages. Push -> read CI Frontend-typecheck step.
-2. Backend: make CI generate the Prisma client where the backend resolves it — try `pnpm --filter ./packages/backend run db:generate` (backend's own `prisma generate --schema=../database/prisma/schema.prisma`), or a root-level generate, or an `.npmrc` hoist tweak, or a postinstall. Push -> read CI Backend-typecheck step.
-3. Once typechecks pass in CI, confirm Backend tests + Frontend lint pass too.
-4. Per step, only AFTER it is GREEN on real checks in CI, flip its `continue-on-error: true` back to `false` in `ci-typecheck.yml`.
+4. **QA the S1027 latent RUNTIME-bug fixes** (`Skill('findasale-qa')`, Chrome) — type-fixed but runtime must be confirmed: (a) QR scanner endpoint (`prisma.qRScannerEvent`), (b) price-trend cache write (`trendSignal.create` now has required fields), (c) organizer broadcast notifications (now write `title`/`body`/`link`), (d) sale-detail enrichment job/cron.
 
-**Expected output:** gate strict again, CI run GREEN on real checks (not via continue-on-error); per-iteration push blocks. Then also remove `tsc || true` from `Dockerfile.production` so prod builds fail on real breakage.
+### Patrick manual cleanup (1 min)
+- Delete stray temp files an audit agent left in repo root (untracked, harmless): in PowerShell `Remove-Item C:\Users\desee\ClaudeProjects\FindaSale\tsc_out.txt, C:\Users\desee\ClaudeProjects\FindaSale\scr.txt`. Ignore/delete any stray `node-compile-cache` junk path under packages/backend if present.
 
-**Context:** gate is currently NON-BLOCKING-but-visible (S1026) — deploys are flowing, this is hygiene to restore protection, not an outage.
+### Carried (unchanged)
+- Outreach PAUSED (`OUTREACH_DAILY_CAP=1`) — don't raise until bounce rate <5% + zero send-limit failures.
+- eBay token expired (Patrick: Settings -> Platforms -> eBay reconnect).
+- GSC indexing watch (~7 days from S1021 sitemap fixes).
+- AlternativeTo submission (marketing).
 
----
-
-### Carried from S1025 — priorities
-
-**⚡ BQ UPDATED (health monitor 2026-06-23):** BQ is now **5 rows** (was 9). 4 resolved items removed: Sentry P0/P1 issues ✅, geocodeBacklog ✅, GitGuardian cred ✅, S1022 error-fix batch ✅. NEXT SESSION IS NO LONGER FORCED QA-ONLY.
-
-**Session type: DEV.** CI OOM pushblock needed first (see Patrick actions below).
-
-**Smoke test FIRST (§10):** S1022 shipped the admin.ts hotfix + geocode fix + CI gate + a disabled email stub. Confirm backend /health is 200 AND the geocodeBacklog cron's next run (every 2h) logs `geocoded:` >0 — the geocode fix is UNVERIFIED until a real run succeeds.
-
-**CI gate status (updated 2026-06-23):**
-- ✅ Railway "Wait for CI" ENABLED — backend won't deploy until "Typecheck, tests & lint" passes.
-- ✅ GitHub branch protection — rule saved S1024. Railway Wait-for-CI is the real gate.
-- ❌ Vercel "Required CI checks" — Pro plan only.
-- ⚠️ **CI OOM (exit 134) — FIX READY, NEEDS PUSH:** Add `NODE_OPTIONS: --max-old-space-size=4096` at job env level in `.github/workflows/ci-typecheck.yml`. Full file content prepared by health monitor. Patrick push:
-  ```
-  # In ci-typecheck.yml, under "jobs: typecheck:" after "timeout-minutes: 20", add:
-  #     env:
-  #       NODE_OPTIONS: --max-old-space-size=4096
-  git add .github/workflows/ci-typecheck.yml
-  git commit -m "fix(ci): NODE_OPTIONS=--max-old-space-size=4096 prevents OOM kill (exit 134)"
-  .\push.ps1
-  ```
-- ⏳ `tsc || true` in Dockerfile.production — still needs `Skill('findasale-dev')` to remove it.
-
-**Patrick actions (Claude can't reach these UIs/logins):**
-- ~~**ROTATE the Railway DB password**~~ ✅ DONE S1023 — DB rotated, Railway vars updated, backend green. ~~Update local .env~~ ✅ S1024 (packages/database/.env updated). ~~Update CLAUDE_MASTER.md~~ ✅ S1024 (bat executed via File Explorer Run-as-admin).
-- ~~**Bounce mailbox**~~ ✅ Handled by Cowork sweep task — no Patrick action needed unless you want the full OAuth fix.
-- ~~**GitHub branch protection**~~ ✅ DONE S1024 — Patrick entered GitHub password, rule saved. "Not enforced" label is expected (free private repo).
-- **Vercel GitHub App permissions** — pending request at `github.com/settings/installations` → Vercel → "Review request". Requires your GitHub password. (Note: Vercel "Required CI checks before deploy" is a Pro plan feature — the Railway Wait-for-CI is the real enforcement.)
-- ~~**Update local .env + CLAUDE_MASTER.md**~~ ✅ DONE S1024 — packages/database/.env updated; CLAUDE_MASTER.md updated via bat (File Explorer Run-as-admin).
-
-**Dev priorities (dispatch; all need local `tsc` verify until CI blocks):**
-- `Skill('findasale-dev')`: migration shadow-replay repair per `outputs/PRISMA_MIGRATION_REPAIR_PLAN.md` — stray 2025 `organizer_claim_email` duplicate + the new EmailSuppression drift migration. Needs prisma CLI (Patrick's machine); files + resolve sequence already prepped.
-- Confirm the S1022 6-file error-fix batch (seed prod-guard, markdownCycleCron per-item price, scraperCron boot guard, cronGuard→Sentry alerting) actually landed green on GitHub — re-push if not.
-- ~~`Skill('findasale-dev')`: bounceSuppressService wrong-mailbox~~ ✅ FIXED S1025 — mailbox routing + token fallback corrected. Remaining: async send-limit/false-SENT counting fix (separate issue).
-- Remove the dead `adminEmailSendController` stub + the dangling `/send-email` route (email endpoint abandoned — caused 2 outages).
-
-**Carried (unchanged): outreach PAUSED (`OUTREACH_DAILY_CAP=1`), eBay token expired (reconnect), GSC indexing watch (~7 days), AlternativeTo submission.**
+### PROCESS NOTES locked this session (any tsc/CI debugging)
+- **Read the UNCAPPED CI raw-log blob**, never the 10-cap annotations (that cap turned a 142-error fix into a multi-hour slog). Failed job -> "View raw logs" -> 302s to a `productionresultssa*.blob.core.windows.net/.../job-logs.txt` plaintext (full log). Backend `tsc` CANNOT run in the Cowork sandbox (23MB Prisma client parse > 45s). A `continue-on-error` step shows "passed" even with errors — only the raw log gives a true count.
+- The Cowork **`Write` tool corrupts mounted files with NUL bytes** like the banned `Edit` tool — use Python-via-bash for all FindA.Sale file edits; `tr -cd` NUL-check before every pushblock.
 
 ## Recent Sessions
 
