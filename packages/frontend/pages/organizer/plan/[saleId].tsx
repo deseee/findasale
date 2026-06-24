@@ -169,8 +169,6 @@ const SalePlanPage = () => {
     },
   });
 
-  if (!saleId || typeof saleId !== 'string') return null;
-
   const items = checklist?.items || [];
   const stageProgress = checklist?.stageProgress || [];
 
@@ -201,6 +199,8 @@ const SalePlanPage = () => {
       router.replace({ pathname: router.pathname, query: rest }, undefined, { shallow: true });
     }
   }, [router.query.testCheckout, showToast, router, updateTask]);
+
+  if (!saleId || typeof saleId !== 'string') return null;
 
   // Calculate overall progress
   const totalTasks = items.length;

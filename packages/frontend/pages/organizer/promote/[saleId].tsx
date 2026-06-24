@@ -111,12 +111,6 @@ export default function PromotePage(): JSX.Element {
   const [shareCardBlobUrl, setShareCardBlobUrl] = useState<string | null>(null);
   const [shareCardLoading, setShareCardLoading] = useState(false);
 
-  // Redirect if not authenticated or not an organizer
-  if (!authLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
-    router.push('/login');
-    return <></>;
-  }
-
   // Fetch sale to verify ownership and get details
   const { data: sale, isLoading: saleLoading, isError } = useQuery({
     queryKey: ['sale', saleId],
@@ -182,6 +176,12 @@ export default function PromotePage(): JSX.Element {
       if (shareCardBlobUrl) URL.revokeObjectURL(shareCardBlobUrl);
     };
   }, [saleId, sale, selectedTheme, selectedFormat]);
+
+  // Redirect if not authenticated or not an organizer
+  if (!authLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
+    router.push('/login');
+    return <></>;
+  }
 
   // Loading state
   if (authLoading || saleLoading) {
