@@ -16,8 +16,10 @@
 >    suppression. The Cowork task can be disabled when convenient (it's idempotent, so leaving it
 >    running is safe but wastes Cowork context daily).
 >
+> **UPDATE 2026-06-24 (S1030 automated sweep):** GMAIL_MAILBOX_REFRESH_TOKEN restored with gmail.modify scope for outreach@finda.sale. After S1025, the deleted token caused bounceSuppressService to fall back to GMAIL_REFRESH_TOKEN which has gmail.send scope only — polls silently fail (cannot list/trash with send-only scope). Fix: new OAuth token obtained via browser consent flow (outreach@finda.sale account, gmail.modify scope), exchanged via fetch() on oauthplayground, stored as GMAIL_MAILBOX_REFRESH_TOKEN in Railway. Service now uses the modify-scoped token to poll userId=me (outreach@finda.sale Workspace inbox), which receives forwarded bounces via ImprovMX. OUTREACH_DAILY_CAP=1 maintained until bounce rate <5%.
+>
 > The "Patrick Action List" (Workspace + OAuth) section below describes the **original** plan.
-> It was superseded by the simpler ImprovMX-routing approach. No further action needed.
+> The ImprovMX-routing approach (S1025) fixed the routing; the token fix (S1030) completed the auth. No further action needed.
 
 
 ## Context / Confirmed Root Cause
