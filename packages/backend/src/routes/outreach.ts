@@ -179,7 +179,7 @@ router.post('/page-view', async (req, res) => {
         organizerId: organizerId.trim(),
         event: 'ORGANIZER_PAGE_VIEWED',
         touchNumber: typeof touchNumber === 'number' ? touchNumber : null,
-        metadata: tier ? { tier } : null,
+        metadata: tier ? ({ tier } as any) : undefined,
       },
     });
 
@@ -242,7 +242,7 @@ async function handleResendWebhook(payload: any, res: express.Response): Promise
   const emailId: string | undefined = data.email_id;
   const bounceType: string | undefined = data?.bounce?.type; // 'Permanent' | 'Transient'
 
-  if (toList.length === 0) return res.status(400).json({ error: 'Missing recipient' });
+  if (toList.length === 0) { res.status(400).json({ error: 'Missing recipient' }); return; }
 
   for (const addr of toList) {
     if (type === 'email.bounced') {

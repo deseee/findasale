@@ -134,7 +134,7 @@ export async function fetchWithConditionalHeaders(
         data = await response.text();
       }
 
-      const responseHeaders = Object.fromEntries(response.headers.entries());
+      const responseHeaders = Object.fromEntries((response.headers as any).entries());
       return {
         status: 200,
         data,

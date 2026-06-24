@@ -332,7 +332,7 @@ export async function runLeadScoringBackfill(): Promise<BackfillStats> {
       { isClaimed: false },
       { isUnmanagedListing: true },
     ],
-  } as const;
+  };
 
   // Count unmanaged organizers upfront for logging
   stats.total = await prisma.organizer.count({ where: unmanagedWhere });

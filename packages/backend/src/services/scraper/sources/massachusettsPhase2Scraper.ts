@@ -213,7 +213,7 @@ export async function runMassachusettsPhase2Scraper(): Promise<void> {
       while (true) {
         const pageRecords = await fetchFromPrimaryApi(query.board, query.profession, page);
 
-        if (pageRecords === null) {
+        if (!pageRecords) {
           // Primary API not available — break out and try fallback
           console.log(`[MA Phase2] Primary API unavailable for ${query.board}, trying legacy fallback`);
           break;

@@ -1,4 +1,5 @@
 // DIAGNOSTIC ONLY — dry-run, no DB writes
+export {}; // module-scope isolation (prevents global-script name collisions)
 /**
  * diagnose-auctionzip.ts
  * Hits AuctionZip /Auctioneer-Directory/[letter].html exactly as auctionZipScraper.ts does.

@@ -123,8 +123,8 @@ export async function runConnecticutLicensingScraper(): Promise<void> {
       }
 
       // Extract text from cells, removing HTML tags
-      const extractText = (html: string): string => {
-        return html
+      const extractText = (html: string | undefined): string => {
+        return (html ?? '')
           .replace(/<[^>]*>/g, '')
           .replace(/&nbsp;/g, ' ')
           .replace(/&amp;/g, '&')

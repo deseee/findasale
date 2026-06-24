@@ -172,7 +172,7 @@ export async function runDelawarePhase2Scraper(): Promise<void> {
 
         if (existing) {
           await prisma.organizer.update({
-            where: { id: existing.id },
+            where: { id: existing!.id },
             data: {
               licenseNumber: licenseNumber || undefined,
               licenseState: 'DE',
@@ -197,7 +197,7 @@ export async function runDelawarePhase2Scraper(): Promise<void> {
 
           if (organizerId) {
             await prisma.organizer.update({
-              where: { id: organizerId },
+              where: { id: organizerId ?? undefined },
               data: {
                 address: address || undefined,
                 licenseNumber: licenseNumber || undefined,

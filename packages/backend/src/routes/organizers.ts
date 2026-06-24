@@ -271,7 +271,7 @@ router.get('/stats', authenticate, async (req: AuthRequest, res: Response) => {
       });
     });
 
-    let activeSaleData = null;
+    let activeSaleData: any = null;
     if (activeSale) {
       const activeItemCount = activeSale.items.filter(
         (i: any) => i.draftStatus !== 'DRAFT' && i.status !== 'SOLD'
@@ -1865,8 +1865,9 @@ router.post('/me/broadcast', authenticate, async (req: AuthRequest, res: Respons
         data: followers.map((follower) => ({
           userId: follower.userId,
           type: 'organizer_broadcast',
-          message: `${subject}`,
-          relatedId: broadcast.id,
+          title: subject,
+          body: message,
+          link: `/broadcasts/${broadcast.id}`,
         })),
       });
     }

@@ -170,7 +170,7 @@ router.get('/xp-velocity', authenticate, requireAdmin, async (req: any, res: any
     `;
 
     // Enrich with recent events for each user
-    const flagged = [];
+    const flagged: any[] = [];
     const processedUsers = new Set();
 
     for (const result of results) {

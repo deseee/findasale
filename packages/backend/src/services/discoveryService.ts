@@ -123,7 +123,7 @@ export async function getPersonalizedFeed(
     findManyOptions.take = 500;
   }
 
-  const sales = await prisma.sale.findMany(findManyOptions);
+  const sales = await prisma.sale.findMany(findManyOptions) as any[];
 
   // BoostPurchase has no direct FK on Sale — query separately by targetId
   const saleIds = sales.map((s) => s.id);

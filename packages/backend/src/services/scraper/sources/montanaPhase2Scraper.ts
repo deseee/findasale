@@ -86,7 +86,7 @@ function parseHtmlTable(html: string): Array<{
     if (rows.length < 2) continue;
 
     // Try to detect column positions from header row
-    const headerCells = (rows[0].match(/<t[hd][^>]*>[\s\S]*?<\/t[hd]>/gi) || []).map(c => extractText(c).toLowerCase());
+    const headerCells = (rows[0]?.match(/<t[hd][^>]*>[\s\S]*?<\/t[hd]>/gi) || []).map(c => extractText(c).toLowerCase());
 
     let nameCol = -1;
     let licenseCol = -1;

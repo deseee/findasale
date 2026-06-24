@@ -34,7 +34,7 @@ router.get('/sale/:saleId', authenticate, async (req: Request, res: Response) =>
 router.get('/organizer', authenticate, async (req: Request, res: Response) => {
   try {
     const organizerProfile = await prisma.organizer.findUnique({
-      where: { userId: req.user!.id },
+      where: { userId: (req as any).user!.id },
       select: { id: true },
     });
     if (!organizerProfile) {

@@ -84,8 +84,8 @@ export async function runNevadaLicensingScraper(): Promise<void> {
         continue;
       }
 
-      const extractText = (html: string): string => {
-        return html
+      const extractText = (html: string | undefined): string => {
+        return (html ?? '')
           .replace(/<[^>]*>/g, '')
           .replace(/&nbsp;/g, ' ')
           .replace(/&amp;/g, '&')
@@ -131,7 +131,7 @@ export async function runNevadaLicensingScraper(): Promise<void> {
 
       if (organizerId) {
         await prisma.organizer.update({
-          where: { id: organizerId },
+          where: { id: organizerId ?? undefined },
           data: {
             licenseNumber: licenseNum,
             licenseState: 'NV',

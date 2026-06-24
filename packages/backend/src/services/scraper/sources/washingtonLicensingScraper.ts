@@ -109,8 +109,8 @@ export async function runWashingtonLicensingScraper(): Promise<void> {
 
     console.log(`[WashingtonLicensing] Found ${rows.length} table rows`);
 
-    const extractText = (html: string): string => {
-      return html
+    const extractText = (html: string | undefined): string => {
+      return (html ?? '')
         .replace(/<[^>]*>/g, '')
         .replace(/&nbsp;/g, ' ')
         .replace(/&amp;/g, '&')
