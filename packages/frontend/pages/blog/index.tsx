@@ -9,7 +9,6 @@ interface BlogIndexProps {
 }
 
 // Next.js cannot serialize `undefined` — replace with null before returning props
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function sanitize<T>(obj: T): T {
   return JSON.parse(JSON.stringify(obj, (_k, v) => (v === undefined ? null : v)));
 }
