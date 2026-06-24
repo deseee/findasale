@@ -127,7 +127,25 @@ export const getAllChallenges = (): Challenge[] => {
  */
 export const getMyChallengeProgress = async (userId: string) => {
   const activeChallenges = getActiveChallenges();
-  const results = [];
+  const results: Array<{
+    challengeId: string;
+    name: string;
+    emoji: string;
+    theme: string;
+    description: string;
+    startDate: Date;
+    endDate: Date;
+    badgeEarned: boolean;
+    earnedAt: Date | null;
+    objectives: Array<{
+      objectiveId: string;
+      description: string;
+      progress: number;
+      target: number;
+      completed: boolean;
+    }>;
+    daysRemaining: number;
+  }> = [];
 
   for (const challenge of activeChallenges) {
     const progress = await prisma.challengeProgress.findMany({

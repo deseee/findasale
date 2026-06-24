@@ -898,7 +898,7 @@ export async function syncLeadTierGroups(): Promise<void> {
       contactEmail: { not: null },
       leadTier: { not: null },
       lastScoredAt: { gte: sevenDaysAgo },
-      userId: { not: null },  // Only sync registered users — exclude scraped directory entries
+      // NOTE: Organizer.userId is a required (non-null) column, so every row is a registered user; the prior { not: null } filter was a no-op and is a type error against the non-nullable StringFilter.
     },
     select: { id: true, contactEmail: true, leadTier: true },
   });

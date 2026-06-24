@@ -72,7 +72,7 @@ export function applyDepreciation(
 function calculateRetentionRate(ageYears: number, curve: DepreciationCurve): number {
   if (ageYears <= 0) return 1.0;
 
-  let rate: number;
+  let rate: number = curve.minRetentionRate;
 
   if (curve.curve === 'LINEAR') {
     // Linear: retention = base - (base - min) * (age / reference_age)

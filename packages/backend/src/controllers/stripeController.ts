@@ -2379,7 +2379,7 @@ export const createRefund = async (req: AuthRequest, res: Response) => {
     }
 
     // P2-2: Apply first-month refund cap for new accounts
-    const { cappedAmount, wasCapped } = await applyFirstMonthRefundCap(purchase.userId, purchase.amount);
+    const { cappedAmount, wasCapped } = await applyFirstMonthRefundCap(purchase.userId ?? "", purchase.amount);
     const refundAmount = cappedAmount;
 
     // Create Stripe refund with capped amount

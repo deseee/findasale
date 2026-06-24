@@ -22,6 +22,7 @@ import { getBatchOfUngeocodedSales, bulkUpdateGeocodedSales } from '../controlle
 import { runOrganizerContactBackfill } from '../controllers/internalOrganizerContactBackfillController';
 import { getPipelineHealth } from '../controllers/pipelineHealthController';
 import { runCategorySync } from '../jobs/categorySyncCron';
+import { NATIONAL_METROS } from '../jobs/scraperCron'; // TS2304: DEFAULT_METROS fallback for GarageSaleFinder national run
 import { runLeadScoringBackfill } from '../services/leadScoringService';
 import { runScrapeRun } from '../services/scraper/index';
 import { runIndianaLicensingScraper } from '../services/scraper/sources/indianaLicensingScraper';
@@ -622,7 +623,7 @@ router.post('/scraper/run-garagesalefinder', requireSecret, async (req: express.
     try {
       const { getOrCreateSystemOrganizer, defaultRateLimiter } = await import('../services/scraper/index');
       const organizerId = await getOrCreateSystemOrganizer();
-      const metros: string[] = req.body?.metros || DEFAULT_METROS;
+      const metros: string[] = req.body?.metros || NATIONAL_METROS;
       for (const metro of metros) {
         try {
           await scrapeGarageSaleFinder(metro, organizerId, defaultRateLimiter);

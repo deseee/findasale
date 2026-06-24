@@ -221,7 +221,7 @@ async function finalizeResult(
     await prisma.itemCompLookup.upsert({
       where: { itemId: request.itemId },
       update: {
-        pricingResultJson: result,
+        pricingResultJson: result as any,
         estimatedPrice: BigInt(result.estimatedPrice),
         priceConfidence: result.confidence,
         tierUsed: result.tier,
@@ -238,7 +238,7 @@ async function finalizeResult(
       },
       create: {
         itemId: request.itemId,
-        pricingResultJson: result,
+        pricingResultJson: result as any,
         estimatedPrice: BigInt(result.estimatedPrice),
         priceConfidence: result.confidence,
         tierUsed: result.tier,

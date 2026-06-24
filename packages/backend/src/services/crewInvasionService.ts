@@ -114,7 +114,7 @@ async function evaluateCrew(saleId: string, crewId: string, triggerUserId: strin
     holderUserIds.map(async (userId) => {
       // Award 75 XP per spec
       try {
-        await awardXp(userId, 'CREW_INVASION', CREW_INVASION_XP, { saleId, crewId });
+        await awardXp(userId, 'CREW_INVASION', CREW_INVASION_XP, { saleId });
       } catch (xpErr) {
         console.error(`[crewInvasion] XP award failed for user ${userId}:`, xpErr);
       }

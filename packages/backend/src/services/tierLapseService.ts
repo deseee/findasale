@@ -185,7 +185,15 @@ export async function processBatchTierLapses() {
   const gracePeriodMs = GRACE_DAYS * 24 * 60 * 60 * 1000;
   const now = new Date();
 
-  const results = [];
+  const results: Array<{
+    status: 'grace_active' | 'success' | 'error';
+    subscriptionId: string;
+    userId: string;
+    email: string;
+    daysRemaining?: number;
+    tier?: string;
+    error?: string;
+  }> = [];
   for (const sub of lapsed) {
     try {
       // Check if grace period has elapsed

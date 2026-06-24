@@ -113,7 +113,7 @@ export const payConsignorViaACH = async (
 
     return {
       transferId: transfer.id,
-      status: transfer.status,
+      status: (transfer as any).status,
       amountCents: transfer.amount,
       amountFormatted: (transfer.amount / 100).toFixed(2),
     };

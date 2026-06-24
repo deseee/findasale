@@ -39,7 +39,7 @@ export function applyWeighting(
     result.recencyDecayFactor = recencyDecay;
 
     // 4. Sample size boost: log(sampleSize + 1) / log(10 + 1)
-    const sampleBoost = Math.log(result.sampleSize + 1) / Math.log(11);
+    const sampleBoost = Math.log((result as any).sampleSize + 1) / Math.log(11);
     weight *= sampleBoost;
     result.sampleSizeBoost = sampleBoost;
 

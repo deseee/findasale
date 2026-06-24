@@ -227,8 +227,10 @@ async function fetchSalePageHTML(sourceUrl: string, saleId?: string): Promise<st
     }
   }
 
+  // Page type derived from the launched browser's newPage() to avoid an extra playwright import.
+  type PwPage = Awaited<ReturnType<NonNullable<Awaited<ReturnType<typeof getPlaywrightBrowser>>>['newPage']>>;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    let page = null;
+    let page: PwPage | null = null;
     try {
       const browser = await getPlaywrightBrowser();
       page = await browser.newPage();
@@ -300,8 +302,12 @@ async function fetchSalePageHTML(sourceUrl: string, saleId?: string): Promise<st
       await page.close();
 
       // Store conditional GET cache headers for future requests
-      if (saleId && capturedResponseHeaders) {
-        const cacheHeaders = extractCacheHeaders(capturedResponseHeaders);
+      // capturedResponseHeaders is mutated inside the page.on('response') closure,
+      // which TypeScript's control-flow analysis cannot prove ran; read through a
+      // typed local so the Record<string, string> | null union is preserved.
+      const headersForCache = capturedResponseHeaders as Record<string, string> | null;
+      if (saleId && headersForCache) {
+        const cacheHeaders = extractCacheHeaders(headersForCache);
         if (cacheHeaders.etag || cacheHeaders.lastModified) {
           await setCachedHeaders(saleId, cacheHeaders);
         }
@@ -391,7 +397,7 @@ export async function runEnrichmentBatch(options: { limit?: number } = {}): Prom
   try {
     const sales = await prisma.sale.findMany({
       where: {
-        directorySource: { not: null },
+        sourceName: { not: null },
         sourceUrl: { not: null },
         OR: [
           { description: null },

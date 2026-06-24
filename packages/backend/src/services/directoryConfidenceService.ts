@@ -38,7 +38,7 @@ interface OrganizerConfidenceFields {
   claimStatus?: string | null;
   isStateLicensed?: boolean | null;
   verificationStatus?: string | null;
-  esnOrgId?: string | null;
+  esnOrgId?: number | null;
   foursquareVenueId?: string | null;
   googlePlaceId?: string | null;
   yelpBusinessId?: string | null;

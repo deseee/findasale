@@ -1,4 +1,5 @@
 import { prisma } from '../lib/prisma';
+import { Prisma } from '@prisma/client';
 import { analyzeItemImage, analyzeItemImages, suggestPrice } from '../services/cloudAIService';
 import { checkAITagLimit } from '../lib/tierEnforcement';
 import { composeDescription } from '../services/descriptionMerger'; // Item Description Authoring Contract (2026-05-12)
@@ -315,7 +316,7 @@ export async function processRapidDraft(itemId: string): Promise<void> {
         // cloudAIService already gates these at packageConfidence >= 0.5 before returning.
         ...(aiResult?.estimatedWeightOz != null && aiResult?.packageConfidence != null ? {
           aiPackageWeightOz: Math.round(aiResult.estimatedWeightOz),
-          aiPackageDimsJson: aiResult.estimatedDimensionsIn ?? null,
+          aiPackageDimsJson: aiResult.estimatedDimensionsIn ?? Prisma.JsonNull,
           aiPackageConfidence: aiResult.packageConfidence,
         } : {}),
       };
