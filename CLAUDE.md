@@ -611,6 +611,16 @@ Count the findings in the report. Count the distinct tool citations (bash comman
 
 ---
 
+## 10c. CI / Deploy Verification Gate (HARD RULE — survives compression)
+
+A "CI is green / passing / ✅" claim is valid ONLY when it cites the actual GitHub Actions run number and its `conclusion` field = success. **Vercel `state=READY` and Railway `status=SUCCESS` are NOT evidence that GitHub Actions CI passed — they are independent systems** that build the same commit separately. Inferring "CI green" from a Vercel/Railway deploy is prohibited. (This produced the false S1029 "CI lint gate GREEN" while GitHub Actions had actually lint-failed on run #31 and was billing-blocked on #32+.)
+
+**Actions-disabled / billing signature:** If `ci-typecheck` runs are failing in seconds (<~30s) instead of the normal ~2–4 min, OR a run annotation reads "the job was not started because recent account payments have failed or your spending limit needs to be increased," the GitHub ACCOUNT is billing-blocked / Actions is disabled. This is a Patrick-only fix (GitHub → Settings → Billing & plans), NOT a code failure. Diagnose this FIRST — never "fix" code to chase a red X that no job ever ran.
+
+**Backend deploy-freshness check (after any push touching `packages/backend/**`):** Railway's `backend` service deploys only on `watchPatterns: ["/packages/backend/**"]`, evaluated against the PUSH TIP. If a push's tip is a docs/frontend commit, backend changes buried earlier in the same push are SKIPPED and stranded. After such a push, verify the `backend` service's latest SUCCESS deployment commit == HEAD (railway MCP `get-status` / `list-deployments`). If a `packages/backend` change sits between the deployed SHA and HEAD undeployed, force a deploy by bumping the cache-bust comment in `packages/backend/Dockerfile.production` (§10). Documented incident 2026-06-24: backend frozen at ff80636 for ~13h while the scraper fix 9b27c9f sat undeployed; Vercel kept deploying green so it went unnoticed. There is NO Railway "Wait for CI" gate configured (despite the S1023 claim) — do not assume CI gates deploys.
+
+---
+
 ## 10. Operational Rules
 
 **Post-fix live verification (mandatory — FIRST action of every session):** After ANY
