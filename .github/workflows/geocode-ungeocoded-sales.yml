@@ -12,11 +12,9 @@ on:
         required: false
         default: ''
   schedule:
-    # Run 3× daily — backlog clearing mode (15,792 ungeocoded + ~785 new/day from GarageSaleFinder)
-    # 02:00 UTC — after nightly scrapes; 10:00 UTC — mid-day pass; 18:00 UTC — evening pass
+    # Run 1× daily — backlog now ~165 (was 15,792); 1 run/day handles ~785 new/day intake
+    # 02:00 UTC — after nightly scrapes
     - cron: '0 2 * * *'
-    - cron: '0 10 * * *'
-    - cron: '0 18 * * *'
 
 jobs:
   geocode:

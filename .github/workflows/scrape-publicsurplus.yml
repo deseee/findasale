@@ -2,7 +2,7 @@ name: Scrape PublicSurplus Government Auction Directory
 
 on:
   schedule:
-    - cron: '0 8 * * 2'  # Tuesdays at 8:00 UTC (weekly — government auction platform)
+    - cron: '0 8 1-7 * 2'  # 1st Tuesday of each month at 8:00 UTC — gov agencies are stable institutions, monthly is sufficient
   workflow_dispatch:
 
 jobs:
