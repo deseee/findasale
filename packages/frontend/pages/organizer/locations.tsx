@@ -78,12 +78,6 @@ const LocationsPage = () => {
   const [transferTargetLocationId, setTransferTargetLocationId] = useState('');
   const [isTransferring, setIsTransferring] = useState(false);
 
-  // Auth guard
-  if (!authLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
-    router.push('/login');
-    return null;
-  }
-
   // Fetch locations
   useEffect(() => {
     const fetchLocations = async () => {
@@ -103,6 +97,12 @@ const LocationsPage = () => {
       fetchLocations();
     }
   }, [authLoading, user, showToast, canAccess]);
+
+  // Auth guard
+  if (!authLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
+    router.push('/login');
+    return null;
+  }
 
   const handleCreateOrUpdate = async (e: React.FormEvent) => {
     e.preventDefault();

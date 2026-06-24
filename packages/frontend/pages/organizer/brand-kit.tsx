@@ -56,12 +56,6 @@ const BrandKitPage = () => {
 
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
 
-  // Redirect if not authenticated or not an organizer
-  if (!isLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
-    router.push('/login');
-    return null;
-  }
-
   // Fetch current organizer data on mount
   useEffect(() => {
     const fetchOrganizerData = async () => {
@@ -107,6 +101,12 @@ const BrandKitPage = () => {
       fetchOrganizerData();
     }
   }, [user?.id, showToast]);
+
+  // Redirect if not authenticated or not an organizer
+  if (!isLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
+    router.push('/login');
+    return null;
+  }
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;

@@ -51,18 +51,6 @@ const ConsignorDetailPage: React.FC = () => {
   const [showPayoutModal, setShowPayoutModal] = useState(false);
   const [activeTab, setActiveTab] = useState<'items' | 'payouts'>('items');
 
-  // Redirect if not authenticated
-  if (!authLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
-    router.push('/login');
-    return null;
-  }
-
-  useEffect(() => {
-    if (id && typeof id === 'string') {
-      fetchConsignor();
-    }
-  }, [id]);
-
   const fetchConsignor = async () => {
     try {
       setLoading(true);
@@ -75,6 +63,18 @@ const ConsignorDetailPage: React.FC = () => {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (id && typeof id === 'string') {
+      fetchConsignor();
+    }
+  }, [id]);
+
+  // Redirect if not authenticated
+  if (!authLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
+    router.push('/login');
+    return null;
+  }
 
   const handlePayoutSuccess = () => {
     setShowPayoutModal(false);
