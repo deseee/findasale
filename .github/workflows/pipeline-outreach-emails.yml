@@ -2,7 +2,7 @@
 name: Pipeline — Outreach Emails
 on:
   schedule:
-    - cron: '0 */4 * * *'
+    - cron: '0 8 * * *'   # 1x/day while outreach paused (cap=1); was every-4h/6x — cuts Actions minutes
   workflow_dispatch:
 concurrency:
   group: ${{ github.workflow }}
