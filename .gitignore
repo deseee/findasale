@@ -169,3 +169,6 @@ claude_docs/scripts/.analytics-creds.json
 
 # Security audit output — maps secret locations; never commit to public repo
 claude_docs/audits/secrets-audit-*.md
+
+# centralized local secrets for scheduled tasks (never commit)
+.secrets.env
