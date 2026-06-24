@@ -204,9 +204,21 @@ router.get('/by-city/:citySlug', async (req, res) => {
 
     const whereClause: any = {
       status: 'PUBLISHED',
-      city: { equals: cityName, mode: 'insensitive' },
+      endDate: { gte: new Date() },
       state: { equals: stateCode, mode: 'insensitive' },
     };
+    // Problem C: expand city match to known borough/alias sets
+    const cityAliases: Record<string, string[]> = {
+      'New York': ['New York City', 'NYC', 'Brooklyn', 'Queens', 'Bronx', 'Staten Island', 'Manhattan'],
+      'Los Angeles': ['LA', 'Los Angeles City'],
+      'Chicago': ['Chicago City'],
+    };
+    const aliases = cityAliases[cityName] ?? [];
+    if (aliases.length > 0) {
+      whereClause.city = { in: [cityName, ...aliases], mode: 'insensitive' };
+    } else {
+      whereClause.city = { equals: cityName, mode: 'insensitive' };
+    }
     if (saleTypeFilter) {
       whereClause.saleType = saleTypeFilter;
     }
@@ -238,7 +250,7 @@ router.get('/by-city/:citySlug', async (req, res) => {
           },
         },
       },
-      orderBy: [{ endDate: 'desc' }, { startDate: 'asc' }],
+      orderBy: [{ startDate: 'asc' }, { endDate: 'asc' }],
       take: fetchLimit,
     });
 
