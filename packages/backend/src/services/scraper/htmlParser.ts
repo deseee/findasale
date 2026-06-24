@@ -52,8 +52,15 @@ export function parseEstateSalesNetListing(html: string): Partial<ParsedListing>
     if (!dateMatch) return null;
 
     const [, startStr, endStr] = dateMatch;
-    const startDate = new Date(`${startStr}, 2026`);
+    // Derive year dynamically from endDate (which already carries a full year from the regex).
+    // Handles cross-year sales (e.g. Dec 31 → Jan 2) by stepping back one year if startDate
+    // would otherwise fall after endDate.
     const endDate = new Date(endStr);
+    const endYear = endDate.getFullYear();
+    const startAttempt = new Date(`${startStr}, ${endYear}`);
+    const startDate = startAttempt > endDate
+      ? new Date(`${startStr}, ${endYear - 1}`)
+      : startAttempt;
 
     const photoUrls: string[] = [];
     $('img.sale-photo').each((_, el) => {

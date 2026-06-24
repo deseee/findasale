@@ -46,3 +46,37 @@ export function scheduleArchivalCron(): void {
 
   console.log('[archival-cron] Registered quarterly archival cron (1st of quarter at 02:00 UTC)');
 }
+
+/**
+ * Daily job that archives stale scraped venue records.
+ * Runs at 3:00 AM UTC every day.
+ *
+ * Targets RETAIL and FLEA_MARKET records that were scraped (sourceName IS NOT NULL)
+ * and whose endDate has passed. These records have a rolling fake date window that is
+ * refreshed on every re-scrape (Issue 1 fix). If the window has expired it means the
+ * venue was not re-scraped in time — soft-archive it so it stops showing as PUBLISHED.
+ * Status is set to ARCHIVED (not hard-deleted) so it can be restored on next scrape.
+ */
+export function expireStaleVenueCron(): void {
+  // Daily at 03:00 UTC
+  cron.schedule('0 3 * * *', cronGuard({ jobName: 'expireStaleVenueCron' }, async () => {
+    const now = new Date();
+
+    console.log(`[expire-stale-venue-cron] Starting stale venue expiry sweep (now: ${now.toISOString()})`);
+
+    const expired = await prisma.sale.updateMany({
+      where: {
+        endDate: { lt: now },
+        deletedAt: null,
+        status: 'PUBLISHED',
+        saleType: { in: ['RETAIL', 'FLEA_MARKET'] },
+        sourceName: { not: null },
+      },
+      data: { status: 'ARCHIVED' },
+    });
+
+    console.log(`[expire-stale-venue-cron] Archived ${expired.count} stale venue records`);
+  }));
+
+  console.log('[expire-stale-venue-cron] Registered daily stale venue expiry cron (03:00 UTC)');
+}

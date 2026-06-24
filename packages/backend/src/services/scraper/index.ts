@@ -872,13 +872,19 @@ export async function ingestScrapedListing(
             ...(listing.scrapedMetadata as Record<string, unknown>),
           };
         }
-        
-        if (Object.keys(updates).length > 0) {
-          await prisma.sale.update({
-            where: { id: existing.id },
-            data: { ...updates, lastScrapedAt: new Date() },
-          });
-        }
+
+        // Always refresh date window on every RETAIL dedup hit — venue records
+        // (flea markets, consignment shops) need a rolling 1-year window, not the
+        // frozen date from initial ingestion.
+        updates.startDate = new Date();
+        updates.endDate = (() => { const d = new Date(); d.setFullYear(d.getFullYear() + 1); return d; })();
+
+        // Always touch lastScrapedAt unconditionally — even if no other field changed,
+        // we still want to record that we saw this record during this scrape run.
+        await prisma.sale.update({
+          where: { id: existing.id },
+          data: { ...updates, lastScrapedAt: new Date() },
+        });
         
         return {
           saleId: existing.id,
