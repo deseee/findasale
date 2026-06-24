@@ -20,7 +20,7 @@ Reference: `ADR-holds-to-cart-invoice.md` (full spec) and `ADR-012-SUMMARY.md` (
 - [ ] Verify migration applies cleanly to Railway DB (with DATABASE_URL override):
   ```powershell
   cd packages/database
-  $env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
+  $env:DATABASE_URL="postgresql://postgres:[ROTATED — get current password from Railway dashboard]@maglev.proxy.rlwy.net:13949/railway"
   npx prisma migrate deploy
   npx prisma generate
   ```

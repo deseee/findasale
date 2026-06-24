@@ -22,7 +22,7 @@ S465 completed the S464 migration, but S469's migration is still outstanding. ST
 **Patrick action required:**
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
-$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
+$env:DATABASE_URL="postgresql://postgres:[ROTATED — get current password from Railway dashboard]@maglev.proxy.rlwy.net:13949/railway"
 npx prisma migrate deploy
 npx prisma generate
 ```

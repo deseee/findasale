@@ -192,7 +192,7 @@ model User {
 3. **Phase 3 — Deploy Migration:**
    ```powershell
    cd packages/database
-   $env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
+   $env:DATABASE_URL="postgresql://postgres:[ROTATED — get current password from Railway dashboard]@maglev.proxy.rlwy.net:13949/railway"
    npx prisma migrate deploy
    npx prisma generate
    ```
@@ -565,7 +565,7 @@ stripe.paymentIntents.create({
 If migration fails in production:
 ```powershell
 cd packages/database
-$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
+$env:DATABASE_URL="postgresql://postgres:[ROTATED — get current password from Railway dashboard]@maglev.proxy.rlwy.net:13949/railway"
 npx prisma migrate resolve --rolled-back [migration-name]
 # OR: manually run SQL to drop tables (generated from Prisma)
 ```

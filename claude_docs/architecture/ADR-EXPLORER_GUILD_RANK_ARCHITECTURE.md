@@ -1381,7 +1381,7 @@ export default function HallOfFamePage() {
 cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
 
 # Override environment to Railway
-$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
+$env:DATABASE_URL="postgresql://postgres:[ROTATED — get current password from Railway dashboard]@maglev.proxy.rlwy.net:13949/railway"
 
 # Run migrations in order
 npx prisma migrate deploy

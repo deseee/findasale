@@ -41,7 +41,7 @@ git commit -m "chore(s289): seed rarity values + Chrome QA docs update
 **Also needed for rarity badge visual verification (#57):**
 ```powershell
 cd C:\Users\desee\ClaudeProjects\FindaSale\packages\database
-$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
+$env:DATABASE_URL="postgresql://postgres:[ROTATED — get current password from Railway dashboard]@maglev.proxy.rlwy.net:13949/railway"
 npx ts-node prisma/seed.ts
 ```
 

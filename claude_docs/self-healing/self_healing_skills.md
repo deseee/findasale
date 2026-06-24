@@ -558,7 +558,7 @@ For truncated files: `git show <last-good-commit>:<file-path> > <file-path>` res
 1. Verify the migration is pending on Railway BEFORE pushing schema-dependent code:
    ```powershell
    # From packages/database/
-   $env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
+   $env:DATABASE_URL="postgresql://postgres:[ROTATED — get current password from Railway dashboard]@maglev.proxy.rlwy.net:13949/railway"
    npx prisma migrate status
    ```
 2. Run migration FIRST, deploy code SECOND. Never reverse the order.

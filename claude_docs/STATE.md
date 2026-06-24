@@ -8,6 +8,8 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
+**S1031 WRAP (2026-06-24) — OPS (credential rotation complete + stale-credential scrub). CREDENTIAL BLACKOUT applied.** All 4 exposed tokens confirmed rotated: GitHub PAT (fine-grained), Sentry token (FindA.Sale-2026), GitGuardian token (FindASale-2026), INTERNAL_SCRAPER_KEY (GH Actions confirmed prior session; Railway backend updated + deployed this session via Chrome). Stale Railway DB password (already rotated/dead) scrubbed from 15 committed files across claude_docs/ (14 docs + dev-environment SKILL.md). .secrets.env at project root is now the single gitignored source of truth. BQ secret-rotation item CLOSED. GitHub Actions workflow optimizations (paths-ignore on CI, geocode 3x->1x/day, PublicSurplus weekly->monthly) still need Patrick pushblock — see Next Session.
+
 **CI/DEPLOY AUDIT CORRECTION (2026-06-24, post-S1030) — two false doc claims corrected + a backend deploy freeze found (all tool-verified).** (1) The "CI check suite failed" is a GitHub ACCOUNT billing block, NOT code: ci-typecheck runs #35/#36 die in ~5s with "the job was not started because recent account payments have failed or your spending limit needs to be increased." Application code at HEAD is clean (Vercel state=READY on HEAD + last 4 commits). Patrick-only fix: GitHub → Settings → Billing & plans. (2) CORRECTION to S1029 "CI lint gate GREEN" — FALSE. GitHub Actions CI never passed: run #31 lint-FAILED (rules-of-hooks Error at pages/organizer/brand-kit.tsx:66) and #32+ were billing-blocked. The "green" was inferred from the Vercel build, not the GitHub Actions run conclusion. **Vercel READY ≠ GitHub Actions CI pass** (independent systems). (3) CORRECTION to S1023 "Railway backend Wait-for-CI enabled ✅" — FALSE. No Wait-for-CI/check-suite gate exists in the Railway backend service config or railway.toml; deploys gate ONLY on `watchPatterns: ["/packages/backend/**"]` (verified via railway MCP). (4) BACKEND DEPLOY FROZEN: backend last SUCCESS = ff80636 @02:41Z 2026-06-24; every push since SKIPPED. Scraper fix 9b27c9f (routes/sales.ts cityAliases Brooklyn/Queens/Bronx + endDate>=now filter — confirmed present at HEAD) is NOT live; Railway skipped because the recent push tips were docs/frontend commits not matching the backend watchPattern. Fix: bump the cache-bust comment in `packages/backend/Dockerfile.production` to force a backend rebuild of HEAD. New behavior rule added: CLAUDE.md §10c CI/Deploy Verification Gate. BQ 2→4.
 
 **S1030 WRAP (2026-06-24) — OPS (Google Postmaster Tools setup + domain verification for outreach.finda.sale).** Investigated spam flags on outreach@finda.sale: 67 CAF-blocked bounces in EmailSuppression confirmed as Gmail silently dropping DSN forwards to deseee@gmail.com (content classified as spam). Confirmed `answer/69585` DSNs = per-message reputation filtering, NOT account suspension — account is active. Root cause confirmed: June 6 spike of ~400 sends/day on a fresh domain triggered Google's reputation abuse clamp. Actions taken: (1) Added Google Postmaster Tools monitoring for `outreach.finda.sale` under deseee@gmail.com (u/2). (2) Added TXT verification record to Vercel DNS (`outreach TXT google-site-verification=iBSn7FgJ-8aNo5xYZWaiv1VJ7_DgZ5zxYPJDLs_UNSA`, TTL 60) — confirmed live in DNS. (3) Clicked Verify Domain → modal "outreach.finda.sale is verified." ✅ Dashboards show "No data yet" — normal for a freshly-verified domain (data populates within 24–48 hours as emails flow). **OUTREACH_DAILY_CAP=1 stays in place.** Do NOT raise until Postmaster Tools Domain Reputation shows "Medium" or better AND bounce rate <5% AND zero send-limit failures in the health cron. Warmup plan: 1 → 5 → 10 → 20 over 2–3 weeks after reputation confirms. BQ unchanged (2 items).
@@ -267,6 +269,7 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 | Feature | Reason | What's Needed | Session Added |
 |---------|--------|---------------|---------------|
+| ~~Secret rotation (PAT/Sentry/GitGuardian/scraper-key)~~ | **CLOSED S1031** — All 4 tokens rotated. GitHub PAT new fine-grained; Sentry FindA.Sale-2026; GitGuardian FindASale-2026; INTERNAL_SCRAPER_KEY updated in GH Actions + Railway (deployed). Stale DB password scrubbed from 15 committed files (14 claude_docs + dev-environment SKILL.md). .secrets.env is now the single gitignored source of truth. | — | 2026-06-24 → closed S1031 |
 | GitHub Actions billing block (Patrick-only) | Account billing-blocked → ci-typecheck jobs do not start ("recent account payments have failed or your spending limit needs to be increased"). All CI red until resolved; CI no longer verifies any commit. | GitHub → Settings → Billing & plans: clear failed payment / raise spending limit, then re-run ci-typecheck. | 2026-06-24 |
 | Backend deploy stranded at ff80636 | Railway `backend` last SUCCESS = ff80636 @02:41Z 2026-06-24; scraper fix 9b27c9f (routes/sales.ts cityAliases+endDate, scraper/index.ts, htmlParser.ts, archivalCron.ts) present at HEAD but NOT deployed. Railway skipped deploys (push tips were docs/frontend; watchPattern=/packages/backend/**). | Pushblock: bump cache-bust comment in `packages/backend/Dockerfile.production` to force a backend rebuild of HEAD. | 2026-06-24 |
 | ~~Cart multi-item payment-completion~~ | **CLOSED S1021** — Patrick confirmed cart purchase 2026-06-19; "Test Prod 2" item → SOLD via webhook (PI pi_3Tk2Rw, purchase PAID). Webhook works. Note: two separate checkout sessions per item (not one bundled transaction). | — | S1006 → closed S1021 |
@@ -309,6 +312,19 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 - The Cowork **`Write` tool corrupts mounted files with NUL bytes** like the banned `Edit` tool — use Python-via-bash for all FindA.Sale file edits; `tr -cd` NUL-check before every pushblock.
 
 ## Recent Sessions
+
+### S1031 — 2026-06-24 | OPS (credential rotation complete + stale-credential scrub)
+
+**Triggered by:** Continuation of interrupted credential rotation from prior session.
+
+**Completed:**
+- All 4 tokens confirmed rotated: GitHub PAT, Sentry (FindA.Sale-2026), GitGuardian (FindASale-2026), INTERNAL_SCRAPER_KEY
+- INTERNAL_SCRAPER_KEY updated in Railway backend Variables via Chrome and deployed (redeploy triggered)
+- Stale DB password (already rotated/dead) scrubbed from 15 committed files across claude_docs/
+- .secrets.env at project root is the single gitignored source of truth for all scheduled-task credentials
+- BQ secret-rotation item CLOSED
+
+**Patrick actions pending:** Push the 3 GitHub Actions workflow changes from prior session (paths-ignore on CI, geocode 3x->1x/day, PublicSurplus weekly->monthly) — pushblock in Next Session.
 
 ### S1030 — 2026-06-24 | OPS (Google Postmaster Tools setup + outreach domain verification)
 

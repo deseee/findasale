@@ -109,7 +109,7 @@ Before running `prisma migrate dev`:
 Before running `prisma migrate deploy` against Railway production:
 
 1. Patrick opens Railway dashboard → findasale-db service → Variables tab → copies `DATABASE_URL`
-2. Patrick sets: `$env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"`
+2. Patrick sets: `$env:DATABASE_URL="[Railway DATABASE_URL — copy from Railway dashboard → findasale-db → Variables tab]"`
 3. Verify the expected migration folder exists in `prisma/migrations/` before running
 
 ---
