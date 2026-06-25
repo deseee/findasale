@@ -43,7 +43,16 @@ export async function estimatePriceController(req: Request, res: Response): Prom
  */
 export async function listSourcesController(_req: Request, res: Response): Promise<void> {
   try {
-    const sources = await prisma.pricingSourceConfig.findMany();
+    const sources = await prisma.pricingSourceConfig.findMany({
+      select: {
+        sourceId: true,
+        tier: true,
+        enabled: true,
+        costPerCall: true,
+        apiUsedToday: true,
+        apiQuotaDaily: true,
+      },
+    });
 
     const response = {
       sources: sources.map((source: any) => ({

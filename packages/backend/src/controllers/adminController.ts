@@ -1337,7 +1337,7 @@ export const getScrapePoolStats = async (req: AuthRequest, res: Response) => {
     };
 
     // Outreach status — queried from DirectoryClaimEmail live status (not audit logs)
-    const outreachStatusCounts = await (prisma as any).directoryClaimEmail.groupBy({
+    const outreachStatusCounts = await prisma.directoryClaimEmail.groupBy({
       by: ['status'],
       _count: true,
     });
@@ -1348,7 +1348,7 @@ export const getScrapePoolStats = async (req: AuthRequest, res: Response) => {
     });
 
     const outreachOrgsWithSent = { length: outreachStatusMap['SENT'] ?? 0 };
-    const outreachOrgsWithOpened = { length: await (prisma as any).directoryClaimEmail.count({
+    const outreachOrgsWithOpened = { length: await prisma.directoryClaimEmail.count({
       where: {
         OR: [
           { touch1OpenedAt: { not: null } },
@@ -1555,7 +1555,7 @@ export const getDrilldown = async (req: AuthRequest, res: Response) => {
 // GET /api/admin/outreach-opens — list emails with any touch opened
 export const getOutreachOpens = async (req: AuthRequest, res: Response) => {
   try {
-    const rows = await (prisma as any).directoryClaimEmail.findMany({
+    const rows = await prisma.directoryClaimEmail.findMany({
       where: {
         OR: [
           { touch1OpenedAt: { not: null } },
