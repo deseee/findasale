@@ -7,8 +7,7 @@ name: Sentry Post-Deploy Regression Check
 #
 # Prerequisites:
 #   - SENTRY_TOKEN: repo secret (already set — used by ci-sentry-health scheduled task)
-#   - SENTRY_ORG: repo secret — your Sentry organization slug (e.g. "findasale")
-#   - SENTRY_PROJECT: repo secret — your Sentry project slug (e.g. "findasale-backend")
+#   Org (deseee) and project (findasale-nodejs) are hardcoded — no additional secrets needed.
 #
 # This workflow does NOT block deploys. Railway and Vercel have already deployed by
 # the time this runs. Its purpose is visibility: surface regressions quickly so a
