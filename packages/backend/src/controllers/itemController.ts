@@ -1521,6 +1521,7 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
           const proxyHeaders: Record<string, string> = {
             'Content-Type': 'application/json',
             'Content-Language': 'en-US',
+            'Accept-Language': 'en-US',
             ...(proxySecret ? { 'X-Proxy-Secret': proxySecret } : {}),
           };
 
