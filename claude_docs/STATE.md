@@ -8,6 +8,13 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
+**S1034 WRAP (2026-06-25) — OPS/CI (Vercel build failure + CI corruption fix). CREDENTIAL BLACKOUT applied.**
+- **Vercel build failure fixed:** `packages/frontend/data/blog/posts/digital-buyers-expect-more-than-a-listing.ts` existed locally but was never committed to GitHub. All Vercel builds from commits `56a8a2b` and `f3fc5cf` failed with `Cannot find module './posts/digital-buyers-expect-more-than-a-listing'`. Fixed by MCP push as commit `bcaac4fe`.
+- **CI corruption fixed (runs #44–47 fast-failing ~53–63s):** `internalListingEnrichmentController.ts` was corrupted — commit `fd842ee3` (health-scout P2 dispatch, S1033) replaced all 132 lines with a single base64-encoded line (6360 chars) via MCP double-encoding. TypeScript compiler failed at `(1,6361): error TS1109: Expression expected`. Restored 132-line clean version from `db3e3856` via `git show`, applied the single intended change (`aiEnriched: sanitizeMetadataStrings(result),`), pushed as commit `5960be3c`. CI run #48 confirmed green (2m 31s, all 4 steps passed — normal duration, not fast-failing).
+- **Root cause logged:** `mcp__github__push_files` expects raw text content. Health-scout P2 dispatch passed already-base64-encoded content → double-encoding stored base64 text as the file on GitHub. Prevention: any subagent output using MCP push must be verified against a line-count check before accepting.
+- **BQ update:** FINDASALE-NODEJS-42 and fd842ee3-unverified items CLOSED (real fix shipped as `5960be3c`). Active BQ count = 5.
+- **Patrick action required:** Run `git fetch && git pull` before next `.\push.ps1` — commits `bcaac4fe` and `5960be3c` were MCP-pushed and are NOT in local git. Without pulling, next `.\push.ps1` will fail or create conflicts.
+
 **S1033 WRAP (2026-06-25) — DEV/OPS/QA (health-scout P2 fixes + infra guardrails + S1027 runtime QA).**
 - **Health-scout P2 fixes (4 items):** `wishlist.tsx:440` debug `|| true` artifact removed (now explicit `true &&`). `adminController.ts` — 3 `(prisma as any).directoryClaimEmail` casts removed (type safety restored; accessor confirmed valid). `autoSeedOutreachCron.ts` — all 3 unbounded in-memory loads moved to DB-side filtering (`claimEmails: { none: {} }` relation filter + `emailAddress: { in: candidateEmails }` scope). `pricingController.ts` — unbounded `findMany()` scoped with `select`. Frontend tsc: 0 errors (code-only; backend tsc via CI).
 - **Infra guardrails (4 items from §8 audit):** `claude_docs/INFRA_MAP.md` created (242-line single-source-of-truth for all 11 infra providers, watchPattern stranding callout, env var inventory). `/health` endpoint enhanced with `deployedSha` (RAILWAY_GIT_COMMIT_SHA), `lastJobRunAt`/`lastJobSource`/`lastJobStatus` (last ScrapedSalesJob), and `uptimeSec` — now catches the S1031 "stranded deploy" class. `.github/workflows/check-sentry-after-deploy.yml` created — post-deploy regression tripwire (fires 30min after ci-typecheck success on main, queries Sentry for new issues, fails the step if any found). `claude_docs/infra-spend-tracker.md` created. **Patrick action required:** add `SENTRY_ORG` and `SENTRY_PROJECT` GitHub Actions secrets; populate Railway spend in infra-spend-tracker.md.
@@ -301,8 +308,8 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 | Rhode Island license scraper — gutted dataset | Socrata query fixed (`'Y'`→`'1'`, now HTTP 200) but the RI dataset has been cut to 1 row since Dec 2021 — effectively dead at the source. | DATA-SOURCE DECISION: locate a current RI license/registry source (the old Socrata set is abandoned). | 2026-06-24 |
 | Georgia license scraper — Cloudflare 403 | GA source sits behind Cloudflare, returns 403 to the scraper. Lone expected fail in the weekly batch. | COST DECISION: proxy key / formal records request / bulk-data purchase. | 2026-06-24 |
 | QR Scanner — saleId NOT NULL constraint | S1027 fixed the `qRScannerEvent` case-sensitivity bug, but the controller passes `saleId: saleId || null` while the schema has `saleId String` (NOT NULL). Every null-saleId POST returns `{success:true}` but writes 0 DB rows (Prisma throws, fire-and-forget catch swallows it). Confirmed via DB count = 0 after multiple POST calls (2026-06-25 QA). | Fix: either make `saleId String?` in schema + migration, or validate saleId as required in controller and return 400 when missing. `qrScannerController.ts`. | S1033 |
-| [auto:sentry FINDASALE-NODEJS-42] PrismaClientKnownRequestError: hex escape in sale.update() (P2) | ERROR, count 4, first seen 2026-06-23, substatus new. https://deseee.sentry.io/issues/7569281148/ Root cause: `_runEnrichmentBatch` in listingEnrichmentCron sanitized existing metadata but NOT the AI `result` object before writing as `aiEnriched`. | AUTO-FIXED 2026-06-25 (commit fd842ee3) — `aiEnriched: sanitizeMetadataStrings(result)`. Pending Railway redeploy verification. | 2026-06-25 |
-| [P1] FINDASALE-NODEJS-42 commit fd842ee3 unverified | ci-sentry-health task wrote "commit fd842ee3" as the repair commit today, but `git log --oneline | grep fd842ee3` returns nothing in local log. Repair may not have shipped. | Patrick: run `git fetch && git log --oneline | head -5` to confirm fd842ee3 exists on GitHub. If absent, Sentry issue not repaired. | 2026-06-25 |
+| ~~[auto:sentry FINDASALE-NODEJS-42] PrismaClientKnownRequestError~~ | **CLOSED S1034** — Real fix shipped as commit `5960be3c`. `fd842ee3` was the CORRUPT commit (double-encoded base64). Restored `internalListingEnrichmentController.ts` from `db3e3856` + applied `sanitizeMetadataStrings(result)`. CI #48 green (2m 31s). | — | 2026-06-25 → closed S1034 |
+| ~~[P1] FINDASALE-NODEJS-42 fd842ee3 unverified~~ | **CLOSED S1034** — `fd842ee3` confirmed as the corrupt commit (health-scout double-encoding). Real repair: `5960be3c` (MCP-pushed 2026-06-25). Patrick needs `git fetch && git pull` to sync local git with both new commits (`bcaac4fe` + `5960be3c`). | — | 2026-06-25 → closed S1034 |
 
 ## Pending Chrome Verifications
 
@@ -313,6 +320,12 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 ## Next Session
 
 ### PRIMARY — NEXT PRIORITIES
+
+### ⚠️ FIRST ACTION (before any push)
+**`git fetch && git pull`** — Two commits were MCP-pushed this session and are NOT in local git:
+- `bcaac4fe` — blog post file fix (`digital-buyers-expect-more-than-a-listing.ts`)
+- `5960be3c` — controller restore + sanitize fix (`internalListingEnrichmentController.ts`)
+Without this, `.\push.ps1` will fail or create merge conflicts.
 
 1. **`Skill('findasale-dev')` → shared upsert-batching speedup.** Context: the slowest license scrapers (Oregon ~12min, Indiana ~7min, Colorado ~4min) are slow because of serial per-row N+1 upserts in the shared `getOrCreateScrapedOrganizer` ingest path; Oregon also downloads OR's entire statewide business CSV. Expected output: batch the upserts safely without losing dedup/completeness (touches all 51 scrapers — careful) + pushblock.
 
@@ -350,6 +363,19 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 - The Cowork **`Write` tool corrupts mounted files with NUL bytes** like the banned `Edit` tool — use Python-via-bash for all FindA.Sale file edits; `tr -cd` NUL-check before every pushblock.
 
 ## Recent Sessions
+
+### S1034 — 2026-06-25 | OPS/CI (Vercel build failure + CI corruption fix)
+
+**Triggered by:** Patrick — "ci check suite and vercel failed" / "skipped isn't fine... investigate and fix"
+
+**Completed:**
+- **Vercel build failure:** Missing blog post file `digital-buyers-expect-more-than-a-listing.ts` was never committed. All Vercel builds failing with `Cannot find module './posts/digital-buyers-expect-more-than-a-listing'`. Fixed via MCP push commit `bcaac4fe`.
+- **CI corruption (runs #44–47):** `internalListingEnrichmentController.ts` (132 lines) was replaced by a single 6360-char base64 line in commit `fd842ee3` — a health-scout P2 dispatch had passed already-base64-encoded content to `mcp__github__push_files`, causing double-encoding. Backend tsc failed at `(1,6361): error TS1109`. Restored from `db3e3856` (last clean version via git history), applied the intended `sanitizeMetadataStrings(result)` change, pushed as `5960be3c`.
+- CI run #48 confirmed GREEN (2m 31s — normal duration; runs #44–47 were all 53–63s fast-fail, now explained).
+- FINDASALE-NODEJS-42 Sentry issue real fix now shipped.
+- Both commits MCP-pushed — Patrick needs `git fetch && git pull` before next `.\push.ps1`.
+
+**BQ: 5 open** (FINDASALE-NODEJS-42 items closed; QR scanner, NE/RI/GA dead scrapers, reclassify-bounces remain).
 
 ### S1031 — 2026-06-24 | OPS/COST (GitHub Actions cost optimization + 51-scraper batch consolidation + NE/RI scraper fixes + credential rotation close-out)
 

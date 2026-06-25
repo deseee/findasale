@@ -2,7 +2,24 @@
 
 ---
 
-## S1033 — 2026-06-25 (today)
+## S1034 — 2026-06-25 (today)
+
+**Found and fixed two separate failures: a Vercel build error and a CI corruption.**
+
+**Vercel build failure:** A blog post file (`digital-buyers-expect-more-than-a-listing.ts`) was written to your local machine during a previous session but was never committed to GitHub. Every Vercel build from the last two pushes was failing with `Cannot find module './posts/digital-buyers-expect-more-than-a-listing'`. Fixed — file is now on GitHub (commit `bcaac4fe`). Vercel should be green.
+
+**CI corruption:** Your CI had been fast-failing in ~53–63 seconds (normal is ~2–3 minutes) since the S1033 health-scout dispatch. Root cause: that session's agent pushed `internalListingEnrichmentController.ts` via GitHub's MCP but accidentally double-encoded the file — it replaced 132 lines of TypeScript with a single line of Base64 text. TypeScript couldn't parse it, so every CI run was dying immediately at line 1. I restored the file from its last clean version in git history, applied the one intended change (sanitizing AI results before writing to the DB), and pushed it (commit `5960be3c`). CI run #48 came back green, full 2m 31s.
+
+**⚠️ You need to sync git before your next push:** Because both fixes were pushed directly from Claude's tools (not from your local machine), your local git is 2 commits behind GitHub. **Before running `.\push.ps1` next time:**
+```
+git fetch
+git pull
+```
+If you push without doing this first, you'll get a merge conflict.
+
+**No other action needed.** Both CI and Vercel are green. The Sentry issue (FINDASALE-NODEJS-42) that S1033 tried to fix is now actually fixed.
+
+## S1033 — 2026-06-25 (earlier today)
 
 **Three things done: cleaned up 4 code quality issues, added infra visibility guardrails, and QA'd the 4 runtime fixes from last week.**
 
