@@ -180,15 +180,15 @@ export const getStaticProps: GetStaticProps<FeedPageProps> = async () => {
     const apiBase = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api').replace(/\/$/, '');
     const response = await fetch(`${apiBase}/feed`);
     if (!response.ok) {
-      return { props: { initialSales: [] }, revalidate: 60 };
+      return { props: { initialSales: [] }, revalidate: 300 };
     }
     const data = await response.json() as { sales: FeedSale[]; personalized: boolean };
     return {
       props: { initialSales: data.sales ?? [] },
-      revalidate: 300, // 5 minutes
+      revalidate: 3600, // 1 hour
     };
   } catch {
-    return { props: { initialSales: [] }, revalidate: 60 };
+    return { props: { initialSales: [] }, revalidate: 300 };
   }
 };
 

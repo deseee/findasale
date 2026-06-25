@@ -1342,7 +1342,7 @@ export async function getStaticProps(context: GetStaticPropsContext) {
     null;
 
   if (!apiUrl) {
-    return { props: { ogData: null, initialData: null }, revalidate: 3600 };
+    return { props: { ogData: null, initialData: null }, revalidate: 86400 };
   }
 
   try {
@@ -1353,13 +1353,13 @@ export async function getStaticProps(context: GetStaticPropsContext) {
     clearTimeout(timeout);
 
     if (!res.ok) {
-      return { props: { ogData: null, initialData: null }, revalidate: 3600 };
+      return { props: { ogData: null, initialData: null }, revalidate: 86400 };
     }
     const item = await res.json();
 
     // Safeguard: check that item has required fields for OG data
     if (!item?.id || !item?.title) {
-      return { props: { ogData: null, initialData: null }, revalidate: 3600 };
+      return { props: { ogData: null, initialData: null }, revalidate: 86400 };
     }
 
     const ogData: OGItemData = {
@@ -1390,10 +1390,10 @@ export async function getStaticProps(context: GetStaticPropsContext) {
       status: item.status || 'AVAILABLE',
     };
 
-    return { props: { ogData, initialData }, revalidate: 3600 };
+    return { props: { ogData, initialData }, revalidate: 86400 };
   } catch (error) {
     // Fail open — page still works, OG tags fall back to CSR version
     console.error('[items/[id] getStaticProps error]', error);
-    return { props: { ogData: null, initialData: null }, revalidate: 3600 };
+    return { props: { ogData: null, initialData: null }, revalidate: 86400 };
   }
 }

@@ -354,10 +354,10 @@ export const getStaticProps: GetStaticProps<LeaderboardPageProps> = async () => 
         initialScoutSeason: scoutSeason,
         initialScoutResetDate: scoutResetDate,
       },
-      revalidate: 600, // 10 minutes
+      revalidate: 3600, // 1 hour
     };
   } catch {
-    return { props: empty, revalidate: 60 };
+    return { props: empty, revalidate: 300 };
   }
 };
 
