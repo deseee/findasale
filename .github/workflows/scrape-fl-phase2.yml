@@ -1,9 +1,6 @@
 name: Scrape Florida Secondary Sale Licenses (Phase 2)
 
 on:
-  schedule:
-    # Monday 6:15 AM UTC
-    - cron: '15 6 * * 1'
   workflow_dispatch:
 
 jobs:

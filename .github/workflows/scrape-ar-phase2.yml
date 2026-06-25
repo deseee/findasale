@@ -1,9 +1,6 @@
 name: Scrape Arkansas Secondary Sale Registry (Phase 2)
 
 on:
-  schedule:
-    # Monday 12:15 PM UTC (staggered from other Phase 2 scrapers)
-    - cron: '15 12 * * 1'
   workflow_dispatch:
 
 jobs:

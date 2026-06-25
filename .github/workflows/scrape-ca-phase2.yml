@@ -1,9 +1,6 @@
 name: Scrape California Secondhand Dealer / Pawnbroker Licenses (Phase 2)
 
 on:
-  schedule:
-    # Monday 09:30 UTC — CA runs first (highest priority, large dataset)
-    - cron: '30 9 * * 1'
   workflow_dispatch:
 
 jobs:

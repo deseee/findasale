@@ -1,9 +1,6 @@
 name: Scrape Wisconsin Pawnbroker & Auctioneer Licenses (Phase 2)
 
 on:
-  schedule:
-    # Monday 1:15 PM UTC
-    - cron: '15 13 * * 1'
   workflow_dispatch:
 
 jobs:

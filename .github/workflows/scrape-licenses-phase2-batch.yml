@@ -10,6 +10,8 @@ name: Scrape Licenses & Registries (Phase 2 Batch)
 # state via manual dispatch.
 
 on:
+  schedule:
+    - cron: '0 5 * * 1'   # weekly Monday — replaces the 51 individual phase2 scrapers
   workflow_dispatch:
 
 jobs:

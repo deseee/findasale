@@ -1,9 +1,6 @@
 name: Scrape Alaska Pawnbroker Licenses (Phase 2)
 
 on:
-  schedule:
-    # Monday 5:00 AM UTC
-    - cron: '0 5 * * 1'
   workflow_dispatch:
 
 jobs:

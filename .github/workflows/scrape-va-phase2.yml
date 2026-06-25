@@ -1,9 +1,6 @@
 name: Scrape Virginia DPOR Regulant Lists (Phase 2)
 
 on:
-  schedule:
-    # Tuesday 10:00 AM UTC
-    - cron: '0 10 * * 2'
   workflow_dispatch:
 
 jobs:

@@ -1,9 +1,6 @@
 name: Scrape Connecticut Pawnbroker Licenses (Phase 2)
 
 on:
-  schedule:
-    # Monday 10:15 UTC
-    - cron: '15 10 * * 1'
   workflow_dispatch:
 
 jobs:

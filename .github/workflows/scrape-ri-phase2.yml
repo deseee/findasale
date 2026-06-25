@@ -1,8 +1,6 @@
 name: Scrape Rhode Island Pawnbroker Licenses (Phase 2)
 
 on:
-  schedule:
-    - cron: '5 8 * * 1'
   workflow_dispatch:
 
 jobs:
