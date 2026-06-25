@@ -6,6 +6,11 @@
 
 **S1032 (just finished) — scraper speedup shipped, migration gap patched, health scan clean.** Three things done this session:
 
+**S1032 additional — NE/RI/GA dead scrapers resolved:**
+- Rhode Island scraper rewritten to use RI SOS corporate registry (business.sos.ri.gov) — 56 active "auction"/"consignment" businesses confirmed. Source is corporate registrations, not licenses.
+- Nebraska converted to documented stub — confirmed no statewide auctioneer license exists and the SOS site has a reCAPTCHA gate (no plain-HTTP path available).
+- Georgia: Open Records Act request drafted. **Check your Gmail drafts** (draft ID: r8020511170121382949). Submit via the contact form at sos.ga.gov/form/contact-georgia-auctioneers-commission — it's a free legally-binding request requiring a 3-day response. Alternatively, the paid roster form is at sos.ga.gov/page/licensing-roster-requests-form (check/money order to SOS).
+
 1. **Scraper speedup** — the Oregon license scraper was taking ~12 minutes per run. I restructured how all 39 state scrapers write records: instead of fetching each organizer individually then updating them again separately (two round-trips per row), they now batch the lookups and pass all the license data in a single write. Oregon should drop from ~12min to ~2min. No data changes, just performance. **Needs your push — see pushblock below.**
 
 2. **Migration file created** — back in June, I added 5 new columns to the EmailSuppression table (for bounce classification) directly on the Railway database, skipping Prisma's migration tracker. That left Prisma confused about the schema. I've created the migration file locally. **You need to run one command to close the loop:** `cd packages/database` then `npx prisma migrate resolve --applied 20260618000001_add_email_suppression_bounce_fields` then `npx prisma generate`. (Paste the Railway DATABASE_URL from the Railway dashboard first — instructions in the pushblock.)
