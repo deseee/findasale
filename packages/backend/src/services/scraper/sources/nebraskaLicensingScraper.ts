@@ -1,150 +1,51 @@
 /**
- * Nebraska Department of Regulation & Licensure — Auctioneer License Scraper
- * Scrapes licensed auctioneers from Nebraska Public License Lookup (LUP)
- * Source: https://www.nebraska.gov/LISSearch/search.cgi (updated 2026 — old LUP portal dead; new DHHS search uses AJAX, needs JS rendering for full data)
- * Public directory with auctioneer records
+ * Nebraska Secretary of State — Corporate Registry Scraper
+ *
+ * STUB — reCAPTCHA gate confirmed: Nebraska SOS corporate search
+ * (https://www.nebraska.gov/sos/corp/corpsearch.cgi) returns clean HTML with a
+ * form, but requires Google reCAPTCHA completion before any search can be
+ * submitted. The reCAPTCHA div is present in the static page HTML and the submit
+ * button is only enabled after the challenge passes. Plain HTTP POST without a
+ * valid g-recaptcha-response token returns an empty result or 400.
+ *
+ * Additionally, Nebraska has NO statewide auctioneer license requirement — the
+ * original DHHS LUP portal (nebraska.gov/LISSearch/search.cgi) was never the
+ * correct source. There is no Nebraska state auctioneer license registry.
+ *
+ * Probe conducted: 2026-06-24. reCAPTCHA site key 6LcmsP4SAAAAAJeHxpx9VA7CeZq_9gf74M8tJVra
+ * confirmed present in page source. No bypass path available without JS rendering.
+ *
+ * To implement: would require Puppeteer/Playwright with reCAPTCHA solver, or a
+ * headless browser integration. Out of scope for Phase 1 HTTP-only scrapers.
+ *
  * ADR-073: Directory Scraper Phase 1 — State licensing data
  */
 
-import { RateLimiter, defaultRateLimiter } from '../rateLimiter';
+import { defaultRateLimiter } from '../rateLimiter';
 import { getOrCreateScrapedOrganizer } from '../index';
-import { prisma } from '../../../lib/prisma';
 import { getRandomUserAgent } from '../userAgents';
 
-// NOTE: The old Nebraska LUP portal is dead. The current DHHS License Search uses AJAX
-// to load profession lists and results — static HTML fetch returns an empty form only.
-// Flagged as needing JS rendering for full data access.
-const NEBRASKA_BASE_URL = 'https://www.nebraska.gov/LISSearch/search.cgi';
+// Suppress unused import warnings — kept for consistency with other state scrapers
+void defaultRateLimiter;
+void getOrCreateScrapedOrganizer;
+void getRandomUserAgent;
 
 /**
- * Parse an address string into city and zip components
- */
-function parseAddress(address: string): { city: string; zip: string } {
-  const parts = address.split(',').map((s) => s.trim());
-  if (parts.length < 2) {
-    return { city: address, zip: '' };
-  }
-  const cityPart = parts[0];
-  const stateZip = parts[1];
-  const zipMatch = stateZip.match(/\d{5}/);
-  const zip = zipMatch ? zipMatch[0] : '';
-  return { city: cityPart, zip };
-}
-
-/**
- * Scrape Nebraska auctioneer licenses from Public License Lookup system.
- * Public directory — no authentication required.
- * Ingests records into Organizer table with NebraskaLicensing source attribution.
+ * Nebraska SOS corporate registry scraper — currently a no-op stub.
+ *
+ * The Nebraska SOS search requires reCAPTCHA (confirmed 2026-06-24). Plain HTTP
+ * scraping is not possible without a headless browser + CAPTCHA solver.
+ * Nebraska also has no statewide auctioneer license — no alternative licensing
+ * registry exists to fall back to.
+ *
+ * Function name kept as runNebraskaLicensingScraper for export compatibility.
  */
 export async function runNebraskaLicensingScraper(): Promise<void> {
-  const rateLimiter = defaultRateLimiter;
-  const domain = new URL(NEBRASKA_BASE_URL).hostname;
-  let totalRecords = 0;
-  let createdOrganizers = 0;
-
-  try {
-    console.log('[NebraskaLicensing] Starting auctioneer license scraper');
-
-    await rateLimiter.waitBeforeRequest(domain);
-
-    const response = await fetch(NEBRASKA_BASE_URL, {
-      method: 'GET',
-      headers: {
-        'User-Agent': getRandomUserAgent(),
-        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Encoding': 'gzip, deflate',
-        Connection: 'keep-alive',
-      },
-      signal: AbortSignal.timeout(30000),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to fetch Nebraska licensing page: ${response.status}`);
-    }
-
-    const html = await response.text();
-
-    // Parse HTML table rows
-    const rowRegex = /<tr[^>]*>[\s\S]*?<\/tr>/g;
-    const rows = html.match(rowRegex) || [];
-
-    console.log(`[NebraskaLicensing] Found ${rows.length} table rows`);
-
-    for (let i = 0; i < rows.length; i++) {
-      const row = rows[i];
-
-      const cellRegex = /<td[^>]*>[\s\S]*?<\/td>/g;
-      const cells = row.match(cellRegex) || [];
-
-      if (cells.length < 5) {
-        continue;
-      }
-
-      const extractText = (html: string | undefined): string => {
-        return (html ?? '')
-          .replace(/<[^>]*>/g, '')
-          .replace(/&nbsp;/g, ' ')
-          .replace(/&amp;/g, '&')
-          .trim();
-      };
-
-      const name = extractText(cells[0]);
-      const licenseNum = extractText(cells[1]);
-      const status = extractText(cells[2]);
-      const city = extractText(cells[3]);
-      const zip = extractText(cells[4]);
-
-      if (!name || !licenseNum) {
-        continue;
-      }
-
-      totalRecords++;
-
-      // Only ingest active licenses
-      if (status !== 'Active') {
-        console.log(`[NebraskaLicensing] Skipping ${name} (license ${licenseNum}): status=${status}`);
-        continue;
-      }
-
-      console.log(`[NebraskaLicensing] Processing: ${name} (License ${licenseNum}) in ${city}, NE`);
-
-      const organizerId = await getOrCreateScrapedOrganizer(
-        name,
-        'NebraskaLicensing',
-        city || 'Nebraska',
-        'NE',
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        'AUCTION_HOUSE',
-        undefined, // contactEmail
-        undefined, // phone
-        undefined, // website
-        undefined, // lat
-        undefined, // lng
-        true,       // isStateLicensed
-        'NE',  // licenseState
-        licenseNum, // licenseNumber
-      );
-
-      if (organizerId) {
-
-        createdOrganizers++;
-
-        if (totalRecords % 50 === 0) {
-          console.log(
-            `[NebraskaLicensing] Progress: processed ${totalRecords} records, created/updated ${createdOrganizers} organizers`
-          );
-        }
-      }
-    }
-
-    console.log(
-      `[NebraskaLicensing] Scraper completed: processed ${totalRecords} records, created/updated ${createdOrganizers} organizers`
-    );
-  } catch (error) {
-    console.error('[NebraskaLicensing] Scraper error:', error);
-    throw error;
-  }
+  // PARKED: Nebraska SOS requires reCAPTCHA — plain HTTP scraping not viable.
+  // Nebraska has no statewide auctioneer license registry.
+  // See file header for full research notes.
+  console.log(
+    '[NebraskaSOS] PARKED: Nebraska SOS corporate search requires reCAPTCHA (confirmed 2026-06-24). ' +
+    'Nebraska has no statewide auctioneer license. No plain-HTTP data source available. Exiting cleanly.'
+  );
 }
