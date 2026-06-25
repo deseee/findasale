@@ -280,6 +280,10 @@ export async function processRapidDraft(itemId: string): Promise<void> {
         category: !userEdited.includes('category') ? (aiResult.category || item.category) : item.category,
         condition: !userEdited.includes('condition') ? (aiResult.condition || item.condition) : item.condition,
         brand: !userEdited.includes('brand') ? (aiResult.brand || item.brand) : item.brand,
+        // Catalog Enrichment: persist AI-read model/part number when organizer hasn't set one.
+        // aiResult.mpn is evidence-only (Vision reads it from visible labels — never inferred).
+        // Barcode enrichment below still wins if it provides a more authoritative mpn.
+        mpn: !userEdited.includes('mpn') ? (aiResult.mpn || item.mpn) : item.mpn,
         conditionGrade: aiResult.suggestedConditionGrade || item.conditionGrade,
         price: !userEdited.includes('price') ? (refinedPrice ?? item.price) : item.price,
         tags: aiResult.tags || [],
