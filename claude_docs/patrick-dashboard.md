@@ -2,6 +2,26 @@
 
 ---
 
+## S1033 — 2026-06-25 (today)
+
+**Three things done: cleaned up 4 code quality issues, added infra visibility guardrails, and QA'd the 4 runtime fixes from last week.**
+
+**Code cleanup (health-scout P2 batch):** Fixed a debug artifact in the wishlist page that was always showing the "Watching" section even when empty. Removed 3 unnecessary type-bypasses in the admin controller (they were accessing a database table correctly but casting away the type safety). Tightened two background jobs that were loading entire database tables into memory for filtering — now they let the database do the filtering instead. Tightened one pricing query that was fetching all columns when only 6 were needed.
+
+**Infra guardrails:** Created `claude_docs/INFRA_MAP.md` — a single reference doc for every infrastructure piece (Railway, Vercel, GitHub Actions, Cloudinary, Sentry, Resend, Google, Stripe, DNS/email), what triggers each to deploy, and which environment variables each owns. Enhanced the backend `/health` endpoint: it now reports which git commit is deployed (so you can catch "stranded deploy" situations like S1031) and when the last scraper job ran. Created a new GitHub Actions workflow that waits 30 minutes after each deploy and checks Sentry for any new errors — a regression tripwire. Created `claude_docs/infra-spend-tracker.md` with all known paid providers and their monthly costs.
+
+**You need to do two things for the Sentry tripwire to activate:**
+1. Go to GitHub → your findasale repo → Settings → Secrets and variables → Actions → New repository secret. Add `SENTRY_ORG` (your Sentry org slug — find it in Sentry → Settings → Organization Slug) and `SENTRY_PROJECT` (the project slug — Sentry → Settings → Projects → click the project → slug in the URL). The `SENTRY_TOKEN` is already set. Until these are added, the workflow bails gracefully — no failures.
+2. Open `claude_docs/infra-spend-tracker.md` and fill in the actual Railway monthly cost (Railway dashboard → keen-wisdom → Usage).
+
+**Runtime QA results — S1027 latent fixes:**
+- ✅ Organizer broadcast notifications — working. Posted a test broadcast, got 200 back with 2 recipients. Prisma write succeeded.
+- ✅ Sale-detail enrichment — working. Status endpoint returns real data (29,780 sales, 10,813 enriched).
+- CODE-ONLY: Price-trend cache write — the fix is structurally correct but I couldn't trigger the code path via API (it fires on a cache miss during item analysis).
+- ❌ QR scanner — a NEW bug found. The original case-sensitivity fix (S1027) is correct and deployed, but the endpoint silently fails on every call because the database schema requires `saleId` to be non-null, but the code sends it as null when no sale is specified. The result: every scan call returns "success" but writes nothing to the database. I've added this to the work queue with the fix options.
+
+**Two pushblocks below** — both are independent, push in either order.
+
 ## What Happened This Week
 
 **S1032 (just finished) — scraper speedup shipped, migration gap patched, health scan clean.** Three things done this session:
