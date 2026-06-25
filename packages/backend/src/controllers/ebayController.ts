@@ -4402,7 +4402,19 @@ async function fillRequiredAspects(
             source = 'identifier-default';
           }
         }
-        // Skip rather than fabricate an MPN/Model
+        // For Model specifically: derive from item title when no enum match found.
+        // MPN and Manufacturer must NOT be derived from title (risk of wrong part number),
+        // but Model is the product name — title is the safest available source.
+        if (!picked && /^model$/i.test(aspect.name) && item.title) {
+          const brandStr = (item.brand || '').toLowerCase().trim();
+          const escapedBrand = brandStr.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          const titleClean = brandStr
+            ? item.title.replace(new RegExp('\\b' + escapedBrand + '\\b', 'i'), '').trim().replace(/\s+/g, ' ')
+            : item.title.trim();
+          picked = titleClean.slice(0, 65);
+          source = 'title-derived-model';
+        }
+        // Skip rather than fabricate an MPN/Manufacturer — Model already handled above
         if (!picked) {
           console.warn(
             `[eBay AspectFill] category ${categoryId}: SKIPPED ${aspect.name} (no item.mpn, no safe enum default) — listing may fail with missing-aspect`
