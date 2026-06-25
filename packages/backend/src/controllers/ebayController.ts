@@ -3062,6 +3062,14 @@ export const publishItemOffer = async (req: AuthRequest, res: Response) => {
           if (!hasKey('MPN')) {
             aspectsObj['MPN'] = [item.mpn?.trim() || 'Does Not Apply'];
           }
+          // Model aspect: required for many hardware/electronics categories (e.g. 47091).
+          // Use item.mpn as Model when organizer has set it; fall back to title-derived.
+          if (!hasKey('Model')) {
+            const modelVal = item.mpn?.trim()
+              || (item as any).title?.replace(new RegExp('\\b' + (item.brand || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'i'), '').trim().slice(0, 65)
+              || 'Unspecified';
+            aspectsObj['Model'] = [modelVal];
+          }
           invBody.product.aspects = aspectsObj;
           // Mirror the MPN into the top-level product field so the pair is complete.
           if (!invBody.product.mpn) {
