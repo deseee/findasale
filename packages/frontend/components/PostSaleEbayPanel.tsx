@@ -230,12 +230,12 @@ const EbayEditForm: React.FC<{
                  aria-label="e.g., Canon" />
               </div>
               <div>
-                <label className="block text-xs font-medium text-warm-700 dark:text-warm-300 mb-1">MPN</label>
+                <label className="block text-xs font-medium text-warm-700 dark:text-warm-300 mb-1">MPN / Model #</label>
                 <input
                   type="text"
                   value={formData.mpn || ''}
                   onChange={(e) => handleInputChange('mpn', e.target.value)}
-                  placeholder="Manufacturer part #"
+                  placeholder="e.g. Active MixCube, iPhone 15, DW-5000"
                   maxLength={100}
                   className="w-full px-2 py-1 text-sm rounded border border-warm-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
                  aria-label="Manufacturer part #" />
@@ -598,7 +598,10 @@ export const PostSaleEbayPanel: React.FC<PostSaleEbayPanelProps> = ({ saleId }) 
       queryClient.invalidateQueries({ queryKey: ['unsold-items', saleId] });
     },
     onError: (error: any) => {
-      const msg = error.response?.data?.message || 'Failed to push items to eBay';
+      const rawMsg: string = error.response?.data?.message || 'Failed to push items to eBay';
+      const msg = rawMsg.includes('Model is missing') || rawMsg.includes('item specific Model')
+        ? 'eBay requires a Model — fill in the MPN / Model # field and save before pushing'
+        : rawMsg;
       showToast(msg, 'error');
     },
   });

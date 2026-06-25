@@ -82,6 +82,7 @@ export async function syncListedItemFieldsToEbay(params: {
     const proxyHeaders: Record<string, string> = {
       'Content-Type': 'application/json',
       'Content-Language': 'en-US',
+      'Accept-Language': 'en-US',   // Bug #506: missing header caused errorId 25709 on republish
       ...(proxySecret ? { 'X-Proxy-Secret': proxySecret } : {}),
     };
 
