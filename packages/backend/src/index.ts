@@ -268,6 +268,9 @@ import widgetRoutes from './routes/widget'; // Public embeddable widget inventor
 import { prisma } from './lib/prisma';
 export { prisma };
 
+// S1032 guardrail (b): server start time for uptimeSec in /health freshness endpoint
+const SERVER_START_TIME = Date.now();
+
 const app = express();
 const PORT = parseInt(process.env.PORT || '3001', 10);
 // V1: Wrap Express in a bare HTTP server so Socket.io can share the same port
@@ -507,8 +510,39 @@ app.get('/', (req, res) => {
 });
 
 // Bare /health — uptime monitors that don't use /api prefix (no auth required)
-app.get('/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+// S1032 guardrail (b): enhanced freshness assertion — detects the stranded-deploy class (S1031).
+// deployedSha: Railway auto-injects RAILWAY_GIT_COMMIT_SHA on each deploy; mismatch vs HEAD = stranded.
+// lastJobRunAt: most recent ScrapedSalesJob.createdAt — confirms cron pipeline is alive.
+// uptimeSec: elapsed seconds since process start — abnormally low = recent crash-loop restart.
+app.get('/health', async (req, res) => {
+  try {
+    const [lastJob] = await prisma.scrapedSalesJob.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: 1,
+      select: { createdAt: true, source: true, status: true },
+    });
+    res.json({
+      status: 'ok',
+      deployedSha: process.env.RAILWAY_GIT_COMMIT_SHA ?? 'unknown',
+      lastJobRunAt: lastJob?.createdAt ?? null,
+      lastJobSource: lastJob?.source ?? null,
+      lastJobStatus: lastJob?.status ?? null,
+      uptimeSec: Math.floor((Date.now() - SERVER_START_TIME) / 1000),
+      timestamp: new Date().toISOString(),
+    });
+  } catch (err) {
+    // DB unavailable — still return liveness with degraded flag so uptime monitors don't false-positive
+    res.json({
+      status: 'ok',
+      deployedSha: process.env.RAILWAY_GIT_COMMIT_SHA ?? 'unknown',
+      lastJobRunAt: null,
+      lastJobSource: null,
+      lastJobStatus: null,
+      uptimeSec: Math.floor((Date.now() - SERVER_START_TIME) / 1000),
+      timestamp: new Date().toISOString(),
+      dbError: true,
+    });
+  }
 });
 
 // Readiness probe — verifies the DB is reachable before declaring the instance ready to serve.

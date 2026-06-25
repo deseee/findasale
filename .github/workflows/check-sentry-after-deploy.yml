@@ -1,0 +1,107 @@
+name: Sentry Post-Deploy Regression Check
+
+# S1032 guardrail (c): fires 30 minutes after ci-typecheck completes on main.
+# Queries the Sentry API for new issues created in the 30-minute window after the
+# CI run finished. Fails the workflow (creating a visible red X) if new issues appear,
+# giving the team a regression tripwire without blocking the deploy itself.
+#
+# Prerequisites:
+#   - SENTRY_TOKEN: repo secret (already set — used by ci-sentry-health scheduled task)
+#   - SENTRY_ORG: repo secret — your Sentry organization slug (e.g. "findasale")
+#   - SENTRY_PROJECT: repo secret — your Sentry project slug (e.g. "findasale-backend")
+#
+# This workflow does NOT block deploys. Railway and Vercel have already deployed by
+# the time this runs. Its purpose is visibility: surface regressions quickly so a
+# fix can be dispatched in the same session rather than discovered hours later.
+#
+# Billing note: this workflow runs curl + jq only — typically <1 minute billed time.
+
+on:
+  workflow_run:
+    workflows: ["CI Typecheck & Tests"]
+    types: [completed]
+    branches: [main]
+
+jobs:
+  sentry-regression-check:
+    name: Check Sentry for new issues (30-min window)
+    runs-on: ubuntu-latest
+    # Only run when CI passed — no point checking Sentry if the commit was already
+    # known-broken. Also skip if SENTRY_TOKEN is not configured.
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    timeout-minutes: 5
+
+    steps:
+      - name: Wait 30 minutes for errors to surface
+        run: sleep 1800
+
+      - name: Query Sentry for new issues in post-deploy window
+        id: sentry_check
+        env:
+          SENTRY_TOKEN: ${{ secrets.SENTRY_TOKEN }}
+          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
+          # Timestamp of when CI finished (workflow_run.updated_at) — used as window start.
+          CI_FINISHED_AT: ${{ github.event.workflow_run.updated_at }}
+        run: |
+          # Bail gracefully if secrets are not configured yet
+          if [ -z "$SENTRY_TOKEN" ] || [ -z "$SENTRY_ORG" ] || [ -z "$SENTRY_PROJECT" ]; then
+            echo "::warning::SENTRY_TOKEN / SENTRY_ORG / SENTRY_PROJECT not configured. Skipping check."
+            echo "new_issue_count=0" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Convert CI finish time to epoch seconds for the firstSeen query filter.
+          # The window is: CI_FINISHED_AT → CI_FINISHED_AT + 30 min (i.e., now).
+          WINDOW_START=$(date -d "$CI_FINISHED_AT" +%s 2>/dev/null || date -j -f "%Y-%m-%dT%H:%M:%SZ" "$CI_FINISHED_AT" +%s)
+          WINDOW_START_ISO=$(date -u -d "@$WINDOW_START" +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || date -u -r "$WINDOW_START" +"%Y-%m-%dT%H:%M:%SZ")
+          NOW_ISO=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+          echo "Checking Sentry for new issues between $WINDOW_START_ISO and $NOW_ISO"
+          echo "Org: $SENTRY_ORG  Project: $SENTRY_PROJECT"
+
+          # Sentry Issues API — filter to issues firstSeen in the deploy window.
+          # Docs: https://docs.sentry.io/api/events/list-a-projects-issues/
+          RESPONSE=$(curl -sf \
+            -H "Authorization: Bearer $SENTRY_TOKEN" \
+            "https://sentry.io/api/0/projects/${SENTRY_ORG}/${SENTRY_PROJECT}/issues/?query=firstSeen:>${WINDOW_START_ISO}&limit=25" \
+          ) || {
+            echo "::warning::Sentry API call failed (network error or invalid token). Skipping check."
+            echo "new_issue_count=0" >> "$GITHUB_OUTPUT"
+            exit 0
+          }
+
+          # Count issues returned
+          ISSUE_COUNT=$(echo "$RESPONSE" | python3 -c "import json,sys; data=json.load(sys.stdin); print(len(data))")
+          echo "New issues found: $ISSUE_COUNT"
+          echo "new_issue_count=$ISSUE_COUNT" >> "$GITHUB_OUTPUT"
+
+          # Write a summary to the Actions step summary for easy visibility
+          echo "## Sentry Post-Deploy Check" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Window: \`$WINDOW_START_ISO\` → \`$NOW_ISO\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "$ISSUE_COUNT" -eq 0 ]; then
+            echo "✅ **No new Sentry issues** in the 30-minute post-deploy window." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "⚠️ **$ISSUE_COUNT new Sentry issue(s)** appeared after this deploy:" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "$RESPONSE" | python3 -c "
+          import json, sys
+          issues = json.load(sys.stdin)
+          for i in issues[:10]:
+              title = i.get('title', 'Unknown')
+              count = i.get('count', '?')
+              url = i.get('permalink', '')
+              print(f'- **{title}** ({count} events) — {url}')
+          " >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Fail if new issues found
+        if: ${{ steps.sentry_check.outputs.new_issue_count != '0' }}
+        run: |
+          echo "::error::${{ steps.sentry_check.outputs.new_issue_count }} new Sentry issue(s) appeared within 30 minutes of this deploy. Check the step summary above for details."
+          echo "This does NOT roll back the deploy — Railway and Vercel have already shipped."
+          echo "Dispatch findasale-dev to investigate and fix the regression."
+          exit 1
