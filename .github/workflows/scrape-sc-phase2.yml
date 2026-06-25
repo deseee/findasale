@@ -1,9 +1,6 @@
 name: Scrape South Carolina LLR Additional Licenses (Phase 2)
 
 on:
-  schedule:
-    # Monday 12:45 PM UTC (staggered from other Phase 2 scrapers)
-    - cron: '45 12 * * 1'
   workflow_dispatch:
 
 jobs:

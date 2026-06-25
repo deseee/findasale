@@ -1,9 +1,6 @@
 name: Scrape New Jersey Pawnbroker Licenses (Phase 2)
 
 on:
-  schedule:
-    # Monday 5:05 AM UTC
-    - cron: '5 5 * * 1'
   workflow_dispatch:
 
 jobs:

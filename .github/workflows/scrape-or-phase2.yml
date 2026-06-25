@@ -1,9 +1,6 @@
 name: Scrape Oregon Pawnbroker Licenses (Phase 2)
 
 on:
-  schedule:
-    # Monday 11:45 AM UTC
-    - cron: '45 11 * * 1'
   workflow_dispatch:
 
 jobs:

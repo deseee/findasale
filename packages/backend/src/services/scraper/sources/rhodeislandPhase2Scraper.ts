@@ -73,12 +73,15 @@ function isFalsePositive(name: string): boolean {
  */
 // Providence RI dataset uses boolean flag columns for specific license types.
 // These flags reliably identify secondhand/pawn/junk businesses regardless of name.
+// Providence flag columns are TEXT holding '0'/'1' (NOT 'Y'/'N').
+// Comparing to 'Y' triggers Socrata "query.soql.type-mismatch" HTTP 400.
+// Verified 2026-06-24 against live dataset: {"pawnbrok":"0", ...}.
 const RI_FLAG_CLAUSES = [
-  "pawnbrok = 'Y'",
-  "sechandstore = 'Y'",
-  "sechandaut = 'Y'",
-  "junkshop = 'Y'",
-  "yardsale = 'Y'",
+  "pawnbrok = '1'",
+  "sechandstore = '1'",
+  "sechandaut = '1'",
+  "junkshop = '1'",
+  "yardsale = '1'",
 ];
 
 function buildWhereClause(nameField: string, typeField?: string): string {

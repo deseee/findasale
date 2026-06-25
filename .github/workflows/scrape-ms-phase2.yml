@@ -1,9 +1,6 @@
 name: Scrape Mississippi Secondary Sale Registry (Phase 2)
 
 on:
-  schedule:
-    # Monday 12:30 PM UTC (staggered from other Phase 2 scrapers)
-    - cron: '30 12 * * 1'
   workflow_dispatch:
 
 jobs:

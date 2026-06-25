@@ -14,8 +14,15 @@ import { defaultRateLimiter } from '../rateLimiter';
 import { prisma } from '../../../lib/prisma';
 import { getRandomUserAgent } from '../userAgents';
 
-const NDBF_SEARCH_URL = 'https://www.ndbf.nebraska.gov/licensing/search.aspx';
-const NDBF_LICENSING_URL = 'https://www.ndbf.nebraska.gov/licensing/';
+// NDBF restructured its site (verified 2026-06-24):
+//  - OLD host www.ndbf.nebraska.gov no longer resolves (DNS NXDOMAIN) -> caused TypeError: fetch failed
+//  - New canonical host: ndbf.nebraska.gov ; searchable licensee DB: www.nebraska.gov/ndbf/searches/financial.cgi
+//  NOTE: the new NDBF "financial.cgi" search contains banks/lenders/money-transmitters only — it has NO
+//  Pawnbroker institution type. NE pawnbrokers are not currently published in any open NDBF dataset.
+//  The NMLS fallback host api.nmlsconsumeraccess.org also returns NXDOMAIN (API subdomain decommissioned).
+//  These fetches are kept but made non-fatal so a dead source degrades gracefully instead of crashing the run.
+const NDBF_SEARCH_URL = 'https://ndbf.nebraska.gov/searches';
+const NDBF_LICENSING_URL = 'https://ndbf.nebraska.gov/searches';
 const NMLS_API_BASE = 'https://api.nmlsconsumeraccess.org/FieldSearch/RetailSearch';
 
 /**
@@ -23,6 +30,21 @@ const NMLS_API_BASE = 'https://api.nmlsconsumeraccess.org/FieldSearch/RetailSear
  * NDBF uses ASP.NET WebForms — this scraper extracts ViewState tokens and submits
  * a search for license type "Pawnbroker".
  */
+/**
+ * Network-safe fetch wrapper. A DNS/connection failure (e.g. a decommissioned host)
+ * rejects with `TypeError: fetch failed` — this caught the whole Nebraska run before.
+ * We catch network errors, log a clear warning, and return null so the scraper can
+ * continue to the next source / complete gracefully instead of throwing.
+ */
+async function safeFetch(url: string, init: RequestInit, label: string): Promise<Response | null> {
+  try {
+    return await fetch(url, init);
+  } catch (err) {
+    console.warn(`[NebraskaPhase2] ${label} fetch failed (host unreachable / network error) — skipping: ${(err as Error).message}`);
+    return null;
+  }
+}
+
 export async function runNebraskaPhase2Scraper(): Promise<void> {
   const domain = new URL(NDBF_SEARCH_URL).hostname;
   let totalRecords = 0;
@@ -34,7 +56,7 @@ export async function runNebraskaPhase2Scraper(): Promise<void> {
     // Step 1: Fetch NDBF licensing overview for any static lists
     await defaultRateLimiter.waitBeforeRequest(domain);
 
-    const licensingPageResponse = await fetch(NDBF_LICENSING_URL, {
+    const licensingPageResponse = await safeFetch(NDBF_LICENSING_URL, {
       method: 'GET',
       headers: {
         'User-Agent': getRandomUserAgent(),
@@ -43,9 +65,9 @@ export async function runNebraskaPhase2Scraper(): Promise<void> {
         Connection: 'keep-alive',
       },
       signal: AbortSignal.timeout(30000),
-    });
+    }, 'NDBF licensing page');
 
-    if (licensingPageResponse.ok) {
+    if (licensingPageResponse?.ok) {
       const html = await licensingPageResponse.text();
       console.log('[NebraskaPhase2] Fetched NDBF licensing page');
 
@@ -57,13 +79,13 @@ export async function runNebraskaPhase2Scraper(): Promise<void> {
         // NOTE (BLOCKED): Implement Excel/CSV download parsing for any NDBF static roster
       }
     } else {
-      console.warn(`[NebraskaPhase2] NDBF licensing page returned ${licensingPageResponse.status}`);
+      console.warn(`[NebraskaPhase2] NDBF licensing page returned ${licensingPageResponse?.status ?? 'no response (host unreachable)'}`);
     }
 
     // Step 2: Fetch search page for ASP.NET WebForms tokens
     await defaultRateLimiter.waitBeforeRequest(domain);
 
-    const searchPageResponse = await fetch(NDBF_SEARCH_URL, {
+    const searchPageResponse = await safeFetch(NDBF_SEARCH_URL, {
       method: 'GET',
       headers: {
         'User-Agent': getRandomUserAgent(),
@@ -72,9 +94,9 @@ export async function runNebraskaPhase2Scraper(): Promise<void> {
         Connection: 'keep-alive',
       },
       signal: AbortSignal.timeout(30000),
-    });
+    }, 'NDBF search page');
 
-    if (searchPageResponse.ok) {
+    if (searchPageResponse?.ok) {
       const html = await searchPageResponse.text();
       console.log('[NebraskaPhase2] Fetched NDBF search page');
 
@@ -106,7 +128,7 @@ export async function runNebraskaPhase2Scraper(): Promise<void> {
         formData.append('ctl00$ContentPlaceHolder1$txtName', '');
         formData.append('ctl00$ContentPlaceHolder1$btnSearch', 'Search');
 
-        const searchResultsResponse = await fetch(NDBF_SEARCH_URL, {
+        const searchResultsResponse = await safeFetch(NDBF_SEARCH_URL, {
           method: 'POST',
           headers: {
             'User-Agent': getRandomUserAgent(),
@@ -116,9 +138,9 @@ export async function runNebraskaPhase2Scraper(): Promise<void> {
           },
           body: formData.toString(),
           signal: AbortSignal.timeout(30000),
-        });
+        }, 'NDBF search POST');
 
-        if (searchResultsResponse.ok) {
+        if (searchResultsResponse?.ok) {
           const resultsHtml = await searchResultsResponse.text();
 
           const extractText = (cellHtml: string): string =>
@@ -151,7 +173,7 @@ export async function runNebraskaPhase2Scraper(): Promise<void> {
             }
           }
         } else {
-          console.warn(`[NebraskaPhase2] Search POST returned ${searchResultsResponse.status}`);
+          console.warn(`[NebraskaPhase2] Search POST returned ${searchResultsResponse?.status ?? 'no response (host unreachable)'}`);
         }
       } else {
         console.warn(
@@ -160,7 +182,7 @@ export async function runNebraskaPhase2Scraper(): Promise<void> {
         // NOTE (BLOCKED): If NDBF is a JS SPA, consider requesting a data export or using their API
       }
     } else {
-      console.warn(`[NebraskaPhase2] NDBF search page returned ${searchPageResponse.status} — falling back to NMLS`);
+      console.warn(`[NebraskaPhase2] NDBF search page returned ${searchPageResponse?.status ?? 'no response (host unreachable)'} — falling back to NMLS`);
     }
 
     // Step 3: NMLS fallback for NE pawnbrokers
@@ -176,7 +198,7 @@ export async function runNebraskaPhase2Scraper(): Promise<void> {
 
       const nmlsUrl = `${NMLS_API_BASE}?StateRegulator=NE&LicenseType=Pawnbroker&PageIndex=${pageIndex}&PageSize=${pageSize}`;
 
-      const nmlsResponse = await fetch(nmlsUrl, {
+      const nmlsResponse = await safeFetch(nmlsUrl, {
         method: 'GET',
         headers: {
           'User-Agent': getRandomUserAgent(),
@@ -185,8 +207,12 @@ export async function runNebraskaPhase2Scraper(): Promise<void> {
           Referer: 'https://www.nmlsconsumeraccess.org/',
         },
         signal: AbortSignal.timeout(30000),
-      });
+      }, 'NMLS API');
 
+      if (!nmlsResponse) {
+        console.warn('[NebraskaPhase2] NMLS API host unreachable (DNS NXDOMAIN) — stopping NMLS fallback');
+        break;
+      }
       if (!nmlsResponse.ok) {
         console.warn(`[NebraskaPhase2] NMLS API returned ${nmlsResponse.status} — stopping`);
         break;
@@ -231,6 +257,14 @@ export async function runNebraskaPhase2Scraper(): Promise<void> {
       if (totalRecords % 50 === 0 && totalRecords > 0) {
         console.log(`[NebraskaPhase2] Progress: ${totalRecords} records, ${createdOrganizers} upserted`);
       }
+    }
+
+    if (totalRecords === 0) {
+      console.warn(
+        '[NebraskaPhase2] DATA-SOURCE GAP: 0 records. NDBF no longer publishes a pawnbroker ' +
+        'licensee search (new financial.cgi DB lists banks/lenders only) and the NMLS API host is ' +
+        'decommissioned. A new NE pawnbroker source is required — surface as DECISION NEEDED.'
+      );
     }
 
     console.log(

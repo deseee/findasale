@@ -1,8 +1,6 @@
 name: Scrape South Dakota Secondary Sale Licenses (Phase 2)
 
 on:
-  schedule:
-    - cron: '30 3 * * 1'
   workflow_dispatch:
 
 jobs:

@@ -1,8 +1,6 @@
 name: Scrape New Hampshire Secondary Sale Licenses (Phase 2)
 
 on:
-  schedule:
-    - cron: '40 4 * * 1'
   workflow_dispatch:
 
 jobs:

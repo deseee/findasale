@@ -1,9 +1,6 @@
 name: Scrape Colorado Pawnbroker Licenses (Phase 2)
 
 on:
-  schedule:
-    # Monday 10:00 UTC
-    - cron: '0 10 * * 1'
   workflow_dispatch:
 
 jobs:

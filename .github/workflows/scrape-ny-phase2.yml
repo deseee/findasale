@@ -1,9 +1,6 @@
 name: Scrape New York Pawnbroker Licenses (Phase 2)
 
 on:
-  schedule:
-    # Monday 11:30 AM UTC
-    - cron: '30 11 * * 1'
   workflow_dispatch:
 
 jobs:

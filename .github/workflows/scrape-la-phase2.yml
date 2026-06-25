@@ -1,9 +1,6 @@
 name: Scrape Louisiana Secondary Sale Business Licenses (Phase 2)
 
 on:
-  schedule:
-    # Monday 1:30 PM UTC
-    - cron: '30 13 * * 1'
   workflow_dispatch:
 
 jobs:
