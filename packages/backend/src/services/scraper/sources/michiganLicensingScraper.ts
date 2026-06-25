@@ -121,18 +121,17 @@ export async function runMichiganLicensingScraper(): Promise<void> {
         undefined,
         undefined,
         'AUCTION_HOUSE',
-        undefined
+        undefined, // contactEmail
+        undefined, // phone
+        undefined, // website
+        undefined, // lat
+        undefined, // lng
+        true,       // isStateLicensed
+        'MI',  // licenseState
+        licenseNum, // licenseNumber
       );
 
       if (organizerId) {
-        await prisma.organizer.update({
-          where: { id: organizerId },
-          data: {
-            licenseNumber: licenseNum,
-            licenseState: 'MI',
-            isStateLicensed: true,
-          },
-        });
 
         createdOrganizers++;
 

@@ -162,18 +162,17 @@ export async function runRhodeIslandLicensingScraper(): Promise<void> {
         undefined,
         undefined,
         'AUCTION_HOUSE',
-        undefined
+        undefined, // contactEmail
+        undefined, // phone
+        undefined, // website
+        undefined, // lat
+        undefined, // lng
+        true,       // isStateLicensed
+        'RI',  // licenseState
+        licenseNum, // licenseNumber
       );
 
       if (organizerId) {
-        await prisma.organizer.update({
-          where: { id: organizerId ?? undefined },
-          data: {
-            licenseNumber: licenseNum,
-            licenseState: 'RI',
-            isStateLicensed: true,
-          },
-        });
 
         createdOrganizers++;
 

@@ -162,21 +162,17 @@ export async function runWashingtonLicensingScraper(): Promise<void> {
         undefined,
         undefined,
         'AUCTION_HOUSE',
-        undefined
+        undefined, // contactEmail
+        undefined, // phone
+        undefined, // website
+        undefined, // lat
+        undefined, // lng
+        true,       // isStateLicensed
+        'WA',  // licenseState
+        licenseNum, // licenseNumber
       );
 
       if (organizerId) {
-        // Set state licensing fields — these are the key signals for HOT lead scoring
-        await prisma.organizer.update({
-          where: { id: organizerId },
-          data: {
-            licenseNumber: licenseNum,
-            licenseState: 'WA',
-            isStateLicensed: true,
-            directoryMostRecentSource: 'WashingtonLicensing',
-            directoryMostRecentAt: new Date(),
-          },
-        });
 
         createdOrganizers++;
 

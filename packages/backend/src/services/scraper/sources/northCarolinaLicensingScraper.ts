@@ -104,18 +104,17 @@ export async function runNorthCarolinaLicensingScraper(): Promise<void> {
         undefined,
         undefined,
         'AUCTION_HOUSE',
-        undefined
+        undefined, // contactEmail
+        undefined, // phone
+        undefined, // website
+        undefined, // lat
+        undefined, // lng
+        true,       // isStateLicensed
+        'NC',  // licenseState
+        licenseNum, // licenseNumber
       );
 
       if (organizerId) {
-        await prisma.organizer.update({
-          where: { id: organizerId },
-          data: {
-            licenseNumber: licenseNum,
-            licenseState: 'NC',
-            isStateLicensed: true,
-          },
-        });
 
         createdOrganizers++;
 

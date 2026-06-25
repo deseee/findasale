@@ -142,13 +142,17 @@ export async function runTennesseeLicensingScraper(): Promise<void> {
 
       const organizerId = await getOrCreateScrapedOrganizer(
         name, 'TennesseeLicensing', city || 'Tennessee', 'TN',
-        undefined, undefined, undefined, undefined, 'AUCTION_HOUSE', undefined
+        undefined, undefined, undefined, undefined, 'AUCTION_HOUSE',
+        undefined, // contactEmail
+        undefined, // phone
+        undefined, // website
+        undefined, // lat
+        undefined, // lng
+        true,       // isStateLicensed
+        'TN',  // licenseState
+        licenseNum, // licenseNumber
       );
       if (organizerId) {
-        await prisma.organizer.update({
-          where: { id: organizerId },
-          data: { licenseNumber: licenseNum, licenseState: 'TN', isStateLicensed: true },
-        });
         createdOrganizers++;
         if (totalRecords % 50 === 0) {
           console.log(`[TennesseeLicensing] Progress: ${totalRecords} processed, ${createdOrganizers} upserted`);

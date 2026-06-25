@@ -126,18 +126,17 @@ export async function runNevadaLicensingScraper(): Promise<void> {
         undefined,
         undefined,
         'AUCTION_HOUSE',
-        undefined
+        undefined, // contactEmail
+        undefined, // phone
+        undefined, // website
+        undefined, // lat
+        undefined, // lng
+        true,       // isStateLicensed
+        'NV',  // licenseState
+        licenseNum, // licenseNumber
       );
 
       if (organizerId) {
-        await prisma.organizer.update({
-          where: { id: organizerId ?? undefined },
-          data: {
-            licenseNumber: licenseNum,
-            licenseState: 'NV',
-            isStateLicensed: true,
-          },
-        });
 
         createdOrganizers++;
 
