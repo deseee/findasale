@@ -437,7 +437,7 @@ const WishlistPage = () => {
               )}
 
               {/* Watching Section */}
-              {(watching.length > 0 || true) && (
+              {true && (
                 <div id="watching">
                   <div className="flex items-center justify-between mb-4">
                     <h2 className="text-lg font-semibold text-warm-900 dark:text-warm-100">Watching</h2>

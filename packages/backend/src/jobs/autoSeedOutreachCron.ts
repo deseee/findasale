@@ -116,6 +116,7 @@ export async function runAutoSeedOutreach(): Promise<void> {
         contactEmail: { not: null },
         claimStatus: { notIn: ['CLAIMED', 'OPTED_OUT'] },
         suppressOutreach: false,
+        claimEmails: { none: {} }, // DB-side dedup: skip orgs already in outreach queue
         // Null-safe confidence filter: NULL = scraped email (trusted), 0.0 = junk (blocked), >0 = verified.
       // Cannot use NOT:[{emailDiscoveryConfidence:0.0}] — Prisma NOT excludes NULLs in SQL.
       AND: [
@@ -136,20 +137,20 @@ export async function runAutoSeedOutreach(): Promise<void> {
 
     console.log(`[AutoSeedCron] Found ${organizers.length} eligible unmanaged organizers`);
 
-    // Load suppressed emails
+    // Load suppressions scoped to candidate emails only — avoids full-table load
+    const candidateEmails = organizers
+      .map(o => o.contactEmail)
+      .filter((e): e is string => !!e)
+      .map(e => e.toLowerCase());
     const suppressions = await prisma.emailSuppression.findMany({
+      where: { emailAddress: { in: candidateEmails } },
       select: { emailAddress: true },
     });
     const suppressedEmails = new Set(suppressions.map(s => s.emailAddress.toLowerCase()));
 
-    // Load existing DirectoryClaimEmail organizerIds to avoid duplicates
-    const existingClaims = await prisma.directoryClaimEmail.findMany({
-      select: { organizerId: true },
-      distinct: ['organizerId'],
-    });
-    const existingOrgIds = new Set(existingClaims.map(c => c.organizerId));
-
-    console.log(`[AutoSeedCron] ${existingOrgIds.size} organizers already in outreach queue`);
+    // existingOrgIds check moved into DB query above (claimEmails: { none: {} }).
+    // No in-memory load needed — Prisma relation filter excludes already-queued orgs at query time.
+    console.log('[AutoSeedCron] Org dedup handled by DB relation filter (claimEmails: { none: {} })');
 
     // Build insert list
     const toInsert: Array<{
@@ -165,10 +166,12 @@ export async function runAutoSeedOutreach(): Promise<void> {
 
     // Track email addresses already queued this run to prevent two organizers
     // sharing the same contactEmail from both entering the outreach queue.
-    // We also need to check the DB for emails already present in existing rows
-    // (different organizers may share sam@gmail.com across 48 rows, etc.).
+    // Scoped to candidate emails only — avoids full-table scan of DirectoryClaimEmail.
     const existingClaimEmails = await prisma.directoryClaimEmail.findMany({
-      where: { status: { not: 'ARCHIVED' } }, // Don't block seeds because an ARCHIVED row holds this email
+      where: {
+        emailAddress: { in: candidateEmails }, // only check our candidate set
+        status: { not: 'ARCHIVED' }, // Don't block seeds because an ARCHIVED row holds this email
+      },
       select: { emailAddress: true },
       distinct: ['emailAddress'],
     });
@@ -177,8 +180,6 @@ export async function runAutoSeedOutreach(): Promise<void> {
 
     for (const org of organizers) {
       if (toInsert.length >= MAX_PER_RUN) break;
-
-      if (existingOrgIds.has(org.id)) continue;
 
       const email = org.contactEmail;
       if (!email) continue;
