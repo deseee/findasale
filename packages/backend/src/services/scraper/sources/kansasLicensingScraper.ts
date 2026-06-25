@@ -124,18 +124,17 @@ export async function runKansasLicensingScraper(): Promise<void> {
         undefined,
         undefined,
         'AUCTION_HOUSE',
-        undefined
+        undefined, // contactEmail
+        undefined, // phone
+        undefined, // website
+        undefined, // lat
+        undefined, // lng
+        true,       // isStateLicensed
+        'KS',  // licenseState
+        licenseNum, // licenseNumber
       );
 
       if (organizerId) {
-        await prisma.organizer.update({
-          where: { id: organizerId },
-          data: {
-            licenseNumber: licenseNum,
-            licenseState: 'KS',
-            isStateLicensed: true,
-          },
-        });
 
         createdOrganizers++;
 

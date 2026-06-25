@@ -67,13 +67,17 @@ export async function runMissouriLicensingScraper(): Promise<void> {
       }
       const organizerId = await getOrCreateScrapedOrganizer(
         name, 'MissouriLicensing', 'Missouri', 'MO',
-        undefined, undefined, undefined, undefined, 'AUCTION_HOUSE', undefined
+        undefined, undefined, undefined, undefined, 'AUCTION_HOUSE',
+        undefined, // contactEmail
+        undefined, // phone
+        undefined, // website
+        undefined, // lat
+        undefined, // lng
+        true,       // isStateLicensed
+        'MO',  // licenseState
+        licenseNum, // licenseNumber
       );
       if (organizerId) {
-        await prisma.organizer.update({
-          where: { id: organizerId },
-          data: { licenseNumber: licenseNum, licenseState: 'MO', isStateLicensed: true },
-        });
         createdOrganizers++;
         if (totalRecords % 50 === 0) console.log(`[MissouriLicensing] Progress: ${totalRecords}/${createdOrganizers}`);
       }

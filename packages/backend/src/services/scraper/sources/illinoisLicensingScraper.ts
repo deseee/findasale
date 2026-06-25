@@ -108,18 +108,17 @@ export async function runIllinoisLicensingScraper(): Promise<void> {
           undefined, // foursquareVenueId
           undefined, // hereBusinessId
           'AUCTION_HOUSE',
-          undefined  // contactEmail
+          undefined, // contactEmail
+          undefined, // phone
+          undefined, // website
+          undefined, // lat
+          undefined, // lng
+          true,       // isStateLicensed
+          'IL',  // licenseState
+          licenseNum, // licenseNumber
         );
 
         if (organizerId) {
-          await prisma.organizer.update({
-            where: { id: organizerId },
-            data: {
-              licenseNumber: licenseNum,
-              licenseState: 'IL',
-              isStateLicensed: true,
-            },
-          });
           createdOrganizers++;
         }
 

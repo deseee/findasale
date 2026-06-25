@@ -186,20 +186,17 @@ export async function runIndianaLicensingScraper(): Promise<void> {
         undefined, // foursquareVenueId
         undefined, // hereBusinessId
         'AUCTION_HOUSE', // businessCategory
-        undefined // contactEmail
+        undefined, // contactEmail
+        undefined, // phone
+        undefined, // website
+        undefined, // lat
+        undefined, // lng
+        true,       // isStateLicensed
+        'IN',  // licenseState
+        licenseNum, // licenseNumber
       );
 
       if (organizerId) {
-        // Set state licensing fields — these are the key signals for HOT lead scoring
-        await prisma.organizer.update({
-          where: { id: organizerId },
-          data: {
-            licenseNumber: licenseNum,
-            licenseState: 'IN',
-            isStateLicensed: true,
-            directoryMostRecentSource: 'IndianaLicensing',
-          },
-        });
 
         createdOrganizers++;
 

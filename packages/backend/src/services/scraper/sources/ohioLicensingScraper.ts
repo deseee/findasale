@@ -138,13 +138,17 @@ export async function runOhioLicensingScraper(): Promise<void> {
 
       const organizerId = await getOrCreateScrapedOrganizer(
         name, 'OhioLicensing', city || 'Ohio', 'OH',
-        undefined, undefined, undefined, undefined, 'AUCTION_HOUSE', undefined
+        undefined, undefined, undefined, undefined, 'AUCTION_HOUSE',
+        undefined, // contactEmail
+        undefined, // phone
+        undefined, // website
+        undefined, // lat
+        undefined, // lng
+        true,       // isStateLicensed
+        'OH',  // licenseState
+        licenseNum, // licenseNumber
       );
       if (organizerId) {
-        await prisma.organizer.update({
-          where: { id: organizerId },
-          data: { licenseNumber: licenseNum, licenseState: 'OH', isStateLicensed: true },
-        });
         createdOrganizers++;
         if (totalRecords % 50 === 0) {
           console.log(`[OhioLicensing] Progress: ${totalRecords} processed, ${createdOrganizers} upserted`);

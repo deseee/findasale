@@ -657,6 +657,235 @@ export async function getOrCreateScrapedOrganizer(
   return newOrgId;
 }
 
+// ---------------------------------------------------------------------------
+// Batch ingest helpers (ADR-073 perf: replaces serial N+1 per-row upserts)
+// ---------------------------------------------------------------------------
+
+/**
+ * Row shape accepted by batchUpsertScrapedOrganizers.
+ * Mirrors the getOrCreateScrapedOrganizer param list so callers can build
+ * rows from the same parsed data without changing call semantics.
+ */
+export interface ScrapedOrganizerRow {
+  businessName: string;
+  sourceName: string;
+  city: string;
+  state: string;
+  esnOrgId?: number;
+  googlePlaceId?: string;
+  foursquareVenueId?: string;
+  hereBusinessId?: string;
+  businessCategory?: string;
+  contactEmail?: string;
+  phone?: string;
+  website?: string;
+  lat?: number;
+  lng?: number;
+  isStateLicensed?: boolean;
+  licenseState?: string;
+  licenseNumber?: string;
+  sourceLabel?: string;
+}
+
+/**
+ * Batch-upsert scraped organizers.  Processes `rows` in chunks of `batchSize`
+ * (default 100) to avoid memory pressure on large CSVs (e.g. Oregon 80k rows).
+ *
+ * Per-batch algorithm:
+ *  1. ADR-075 category filter — reject off-target rows in JS (no DB round-trip).
+ *  2. Dedupe within the batch itself by dedupeKey so we never attempt to insert
+ *     the same business twice in one createMany call.
+ *  3. Single findMany against dedupeKey IN [...] to find existing records.
+ *  4. createMany (skipDuplicates:true) for genuinely new rows.
+ *  5. Grouped updateMany for rows that already exist (license fields, corroboration).
+ *
+ * Returns an array of organizer IDs in the same order as `rows`
+ * (null for rows that were rejected or failed).
+ *
+ * IMPORTANT: This function does NOT fire enrichOrganizer for new records —
+ * callers that need enrichment should use getOrCreateScrapedOrganizer instead,
+ * or fire enrichment separately after the batch returns.
+ */
+export async function batchUpsertScrapedOrganizers(
+  rows: ScrapedOrganizerRow[],
+  batchSize: number = 100
+): Promise<(string | null)[]> {
+  const VALID_CATEGORIES = new Set([
+    'ESTATE_SALE_CO', 'AUCTION_HOUSE', 'ANTIQUE_MALL', 'ANTIQUE_DEALER',
+    'CONSIGNMENT', 'THRIFT_STORE', 'FLEA_MARKET', 'VINTAGE', 'LIQUIDATION',
+    'USED_FURNITURE', 'PAWN_SHOP', 'USED_BOOKSTORE', 'RECORD_STORE',
+    'USED_ELECTRONICS', 'COIN_DEALER', 'RESALE_SHOP', 'USED_SPORTING_GOODS',
+    'JEWELRY_RESALE',
+  ]);
+
+  const results: (string | null)[] = new Array(rows.length).fill(null);
+
+  // Process in chunks to bound memory usage
+  for (let offset = 0; offset < rows.length; offset += batchSize) {
+    const chunk = rows.slice(offset, offset + batchSize);
+
+    // Step 1: Category filter (pure JS — no DB)
+    const accepted: { row: ScrapedOrganizerRow; originalIdx: number }[] = [];
+    for (let i = 0; i < chunk.length; i++) {
+      const row = chunk[i];
+      if (row.businessCategory && !VALID_CATEGORIES.has(row.businessCategory)) {
+        // Rejected — result stays null
+        continue;
+      }
+      accepted.push({ row, originalIdx: offset + i });
+    }
+
+    if (accepted.length === 0) continue;
+
+    // Step 2: Dedupe within the batch by dedupeKey (keep last occurrence per key)
+    const seenKeys = new Map<string, number>(); // dedupeKey -> index in accepted[]
+    for (let i = 0; i < accepted.length; i++) {
+      const dk = generateDedupeKey(accepted[i].row.businessName, accepted[i].row.city);
+      seenKeys.set(dk, i);
+    }
+    // Rebuild accepted to only include the winning row per dedupeKey
+    const deduped = Array.from(seenKeys.values()).map(i => accepted[i]);
+    // Map from dedupeKey -> originalIdx for result assignment
+    const keyToOriginalIdx = new Map<string, number>();
+    for (const { row, originalIdx } of deduped) {
+      keyToOriginalIdx.set(generateDedupeKey(row.businessName, row.city), originalIdx);
+    }
+    // Also map remaining duplicates (same dedupeKey) to the winning row's result later
+    const keyToDupOriginalIdxs = new Map<string, number[]>();
+    for (const { row, originalIdx } of accepted) {
+      const dk = generateDedupeKey(row.businessName, row.city);
+      if (!keyToOriginalIdx.has(dk) || keyToOriginalIdx.get(dk) !== originalIdx) {
+        if (!keyToDupOriginalIdxs.has(dk)) keyToDupOriginalIdxs.set(dk, []);
+        keyToDupOriginalIdxs.get(dk)!.push(originalIdx);
+      }
+    }
+
+    const dedupeKeys = deduped.map(({ row }) => generateDedupeKey(row.businessName, row.city));
+
+    // Step 3: Single findMany to fetch existing records by dedupeKey
+    const existing = await prisma.organizer.findMany({
+      where: { dedupeKey: { in: dedupeKeys } },
+      select: {
+        id: true, dedupeKey: true, sourceCount: true, sourcesJson: true,
+        contactEmail: true, phone: true, website: true,
+        googlePlaceId: true, foursquareVenueId: true, hereBusinessId: true,
+        lat: true, lng: true, isStateLicensed: true, licenseState: true, licenseNumber: true,
+      },
+    });
+
+    const existingByKey = new Map(existing.map(e => [e.dedupeKey ?? '', e]));
+
+    // Step 4: Split into creates vs updates
+    const toCreate: typeof deduped = [];
+    const toUpdate: typeof deduped = [];
+
+    for (const item of deduped) {
+      const dk = generateDedupeKey(item.row.businessName, item.row.city);
+      if (existingByKey.has(dk)) {
+        toUpdate.push(item);
+      } else {
+        toCreate.push(item);
+      }
+    }
+
+    // Step 5a: createMany for new records (skipDuplicates handles any races)
+    if (toCreate.length > 0) {
+      // We need to create User + Organizer pairs. Prisma createMany doesn't support
+      // nested creates, so we fall back to individual getOrCreateScrapedOrganizer calls
+      // for the create path. The key optimization is that the lookup queries are
+      // batched (Step 3 above), so we only call getOrCreate for confirmed-new rows.
+      for (const { row, originalIdx } of toCreate) {
+        try {
+          const id = await getOrCreateScrapedOrganizer(
+            row.businessName, row.sourceName, row.city, row.state,
+            row.esnOrgId, row.googlePlaceId, row.foursquareVenueId, row.hereBusinessId,
+            row.businessCategory, row.contactEmail, row.phone, row.website,
+            row.lat, row.lng, row.isStateLicensed, row.licenseState, row.licenseNumber,
+            row.sourceLabel,
+          );
+          results[originalIdx] = id;
+          // Propagate id to in-batch duplicates
+          const dk = generateDedupeKey(row.businessName, row.city);
+          for (const dupIdx of keyToDupOriginalIdxs.get(dk) ?? []) {
+            results[dupIdx] = id;
+          }
+        } catch (err) {
+          console.error(`[batchUpsert] Create failed for ${row.businessName}:`, err);
+        }
+      }
+    }
+
+    // Step 5b: batch updates for existing records — group all field changes
+    // then fire one prisma.organizer.update per record (still individual but
+    // skips the 4 lookup queries that getOrCreateScrapedOrganizer does).
+    for (const { row, originalIdx } of toUpdate) {
+      const dk = generateDedupeKey(row.businessName, row.city);
+      const existingRecord = existingByKey.get(dk)!;
+      results[originalIdx] = existingRecord.id;
+      // Propagate to in-batch duplicates
+      for (const dupIdx of keyToDupOriginalIdxs.get(dk) ?? []) {
+        results[dupIdx] = existingRecord.id;
+      }
+
+      const updates: Record<string, unknown> = {};
+      if (row.googlePlaceId && !existingRecord.googlePlaceId) updates.googlePlaceId = row.googlePlaceId;
+      if (row.foursquareVenueId && !existingRecord.foursquareVenueId) updates.foursquareVenueId = row.foursquareVenueId;
+      if (row.hereBusinessId && !existingRecord.hereBusinessId) updates.hereBusinessId = row.hereBusinessId;
+      if (row.esnOrgId) updates.esnOrgId = row.esnOrgId;
+      if (row.businessCategory) updates.businessCategory = row.businessCategory;
+
+      const validEmail = isValidExternalEmail(row.contactEmail);
+      const emailGate = gateScrapedEmail(validEmail, existingRecord.website ?? row.website, row.businessName);
+      if (emailGate && !existingRecord.contactEmail) {
+        updates.contactEmail = emailGate.contactEmail;
+        updates.emailDiscoveryMethod = emailGate.emailDiscoveryMethod;
+        updates.emailDiscoveryConfidence = emailGate.emailDiscoveryConfidence;
+        updates.emailDiscoveredAt = emailGate.emailDiscoveredAt;
+      }
+      if (row.phone && !existingRecord.phone) updates.phone = row.phone;
+      const gatedWebsite = gateScrapedWebsite(row.website, row.businessName);
+      if (gatedWebsite && !existingRecord.website) updates.website = gatedWebsite;
+      if (row.lat != null && !existingRecord.lat) updates.lat = row.lat;
+      if (row.lng != null && !existingRecord.lng) updates.lng = row.lng;
+      if (row.isStateLicensed && !existingRecord.isStateLicensed) updates.isStateLicensed = row.isStateLicensed;
+      if (row.licenseState && !existingRecord.licenseState) updates.licenseState = row.licenseState;
+      if (row.licenseNumber && !existingRecord.licenseNumber) updates.licenseNumber = row.licenseNumber;
+
+      const effectiveLabel = row.sourceLabel ?? row.sourceName ?? (row.isStateLicensed ? 'StateLicensing' : undefined);
+      if (effectiveLabel) {
+        updates.directoryMostRecentSource = effectiveLabel;
+        updates.directoryMostRecentAt = new Date();
+      }
+
+      // Corroboration score
+      const currentSources = (existingRecord.sourcesJson as any[]) ?? [];
+      const sourceAlreadyPresent = currentSources.some((s: any) => s.sourceName === row.sourceName);
+      if (!sourceAlreadyPresent) {
+        const newCount = (existingRecord.sourceCount || 1) + 1;
+        updates.sourceCount = newCount;
+        updates.sourcesJson = [...currentSources, { sourceName: row.sourceName, sourceId: dk, lastSeen: new Date().toISOString() }];
+        updates.corroborationScore = recalculateCorroborationScore(newCount);
+      }
+
+      updates.updatedAt = new Date();
+
+      if (Object.keys(updates).length > 1) { // >1 because updatedAt is always set
+        try {
+          await prisma.organizer.update({ where: { id: existingRecord.id }, data: updates });
+        } catch (err) {
+          console.error(`[batchUpsert] Update failed for ${row.businessName}:`, err);
+        }
+      }
+    }
+
+    const batchNum = Math.floor(offset / batchSize) + 1;
+    console.log(`[batchUpsert] Batch ${batchNum}: ${toCreate.length} created, ${toUpdate.length} updated, ${chunk.length - accepted.length} rejected`);
+  }
+
+  return results;
+}
+
+
 /**
  * Main scraping entry point.
  * Dispatches to the registered source handler via SOURCE_REGISTRY.
