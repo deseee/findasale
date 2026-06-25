@@ -8,6 +8,8 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
+**S1031 WRAP (2026-06-24) — OPS/COST (GitHub Actions cost optimization + 51-scraper batch consolidation + NE/RI scraper bug fixes). All tool-verified; all shipped/confirmed green by Patrick.** Cut GitHub Actions usage from ~3,300–4,000 min/mo toward under the free 2,000/mo tier. **(1) CI paths-ignore** for docs-only commits (must NOT exclude .github/workflows/** or auth paths). **(2) Geocode Ungeocoded Sales** 3×/day → 1×/day (backlog now ~165, down from 15,792; 1×/day handles ~785/day steady intake). **(3) PublicSurplus** weekly → monthly (discovers stable govt AGENCIES, not time-sensitive listings; ~−840 min/mo) — done in a concurrent session. **(4) Outreach Emails** pipeline 6×/day → 1×/day (outreach is PAUSED cap=1; was burning ~146 min/mo firing into a near-zero cap). **(5) BATCH CONSOLIDATION — 51 individual phase2 license-scraper workflows → ONE weekly workflow.** New `packages/backend/src/scripts/runLicenseScrapersBatch.ts` runs all 51 state license/registry scrapers sequentially with per-state try/catch + a pass/fail summary to `$GITHUB_STEP_SUMMARY` + exit(1) on any failure (preserves failure isolation + visibility). New workflow `.github/workflows/scrape-licenses-phase2-batch.yml` (weekly Monday 05:00 UTC). Retired 42 individual crons (9 of the 51 were already stub-disabled). **Originals kept on disk + manually runnable** (workflow_dispatch). Batch verified locally: 48/51 pass (Georgia, Nebraska, Rhode Island the known fails — see below). Projected total savings ≈ −1,450 min/mo → back under the free 2,000 (≈$0), no Railway move, no data lost. Full audit: `claude_docs/audits/infra-cost-security-2026-06-24.md`. **SCRAPER BUG FIXES (shipped, commit confirmed green by Patrick):** **Nebraska** pawnbroker source host is dead (NXDOMAIN) → now fails gracefully instead of crashing the run (no open NE source remains — see Blocked Queue). **Rhode Island** Socrata query compared text flags to `'Y'` instead of `'1'` → corrected, endpoint now returns HTTP 200 (but the RI dataset has been gutted to 1 row since Dec 2021 — needs a new source). **Georgia** remains behind Cloudflare 403 (needs a proxy key / records request / bulk-data purchase — cost decision). **Also corrected this session:** the `/api/internal/pipeline-health` health-check was mislabeled to send `INTERNAL_SCRAPER_KEY`, but the endpoint validates `OUTREACH_SECRET` (internal.ts:146) → corrected. After the DB password rotation, the GitHub Actions `DATABASE_URL`/`DIRECT_URL` repo secrets (a separate store) were stale → Patrick updated them; all 76 scraper workflows now authenticate. **SECURITY (local Cowork task files, NOT in repo):** scrubbed hardcoded plaintext secrets out of 6 scheduled-task SKILL.md files (ci-sentry-health, data-persistence-monitor, token-expiry-watch, seo-geo-monitor, job-heartbeat, sentry-blocked-queue-sync) — all now read from a single gitignored `.secrets.env` store (0 plaintext remaining). BQ: secret-rotation item CLOSED; +3 dead-source decision items (NE/RI/GA).
+
 **S1031 WRAP (2026-06-24) — OPS (credential rotation complete + stale-credential scrub). CREDENTIAL BLACKOUT applied.** All 4 exposed tokens confirmed rotated: GitHub PAT (fine-grained), Sentry token (FindA.Sale-2026), GitGuardian token (FindASale-2026), INTERNAL_SCRAPER_KEY (GH Actions confirmed prior session; Railway backend updated + deployed this session via Chrome). Stale Railway DB password (already rotated/dead) scrubbed from 15 committed files across claude_docs/ (14 docs + dev-environment SKILL.md). .secrets.env at project root is now the single gitignored source of truth. BQ secret-rotation item CLOSED. GitHub Actions workflow optimizations (paths-ignore on CI, geocode 3x->1x/day, PublicSurplus weekly->monthly) still need Patrick pushblock — see Next Session.
 
 **CI/DEPLOY AUDIT CORRECTION (2026-06-24, post-S1030) — two false doc claims corrected + a backend deploy freeze found (all tool-verified).** (1) The "CI check suite failed" is a GitHub ACCOUNT billing block, NOT code: ci-typecheck runs #35/#36 die in ~5s with "the job was not started because recent account payments have failed or your spending limit needs to be increased." Application code at HEAD is clean (Vercel state=READY on HEAD + last 4 commits). Patrick-only fix: GitHub → Settings → Billing & plans. (2) CORRECTION to S1029 "CI lint gate GREEN" — FALSE. GitHub Actions CI never passed: run #31 lint-FAILED (rules-of-hooks Error at pages/organizer/brand-kit.tsx:66) and #32+ were billing-blocked. The "green" was inferred from the Vercel build, not the GitHub Actions run conclusion. **Vercel READY ≠ GitHub Actions CI pass** (independent systems). (3) CORRECTION to S1023 "Railway backend Wait-for-CI enabled ✅" — FALSE. No Wait-for-CI/check-suite gate exists in the Railway backend service config or railway.toml; deploys gate ONLY on `watchPatterns: ["/packages/backend/**"]` (verified via railway MCP). (4) BACKEND DEPLOY FROZEN: backend last SUCCESS = ff80636 @02:41Z 2026-06-24; every push since SKIPPED. Scraper fix 9b27c9f (routes/sales.ts cityAliases Brooklyn/Queens/Bronx + endDate>=now filter — confirmed present at HEAD) is NOT live; Railway skipped because the recent push tips were docs/frontend commits not matching the backend watchPattern. Fix: bump the cache-bust comment in `packages/backend/Dockerfile.production` to force a backend rebuild of HEAD. New behavior rule added: CLAUDE.md §10c CI/Deploy Verification Gate. BQ 2→4.
@@ -279,6 +281,10 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 | ~~CI exit 134 — OOM kill on tsc~~ | **RESOLVED** — NODE_OPTIONS=--max-old-space-size=4096 pushed (commit 0614bc97), CI now runs to completion. | — | 2026-06-23 -> closed S1026 |
 | ~~CI gate — typecheck blocking~~ | **RESOLVED S1027 FINAL — CI run #25 GREEN, backend typecheck = 0 verified, gate LOCKED (commit 58cbe3d).** All 142 backend type errors fixed; both typecheck steps blocking; Dockerfile `npx tsc`. | Closed. (Follow-ups in Next Session: gate backend TESTS + frontend LINT.) | S1026 → CLOSED S1027 |
+| Nebraska license scraper — dead source | NE pawnbroker source host returns NXDOMAIN (dead). Scraper now fails gracefully (no crash) but produces 0 NE records. No open NE source remains. | DATA-SOURCE DECISION: find a replacement NE source, or accept no Nebraska license/registry data. | 2026-06-24 |
+| Rhode Island license scraper — gutted dataset | Socrata query fixed (`'Y'`→`'1'`, now HTTP 200) but the RI dataset has been cut to 1 row since Dec 2021 — effectively dead at the source. | DATA-SOURCE DECISION: locate a current RI license/registry source (the old Socrata set is abandoned). | 2026-06-24 |
+| Georgia license scraper — Cloudflare 403 | GA source sits behind Cloudflare, returns 403 to the scraper. Lone expected fail in the weekly batch. | COST DECISION: proxy key / formal records request / bulk-data purchase. | 2026-06-24 |
+
 ## Pending Chrome Verifications
 
 | # | Feature | Evidence | Session |
@@ -287,7 +293,18 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Next Session
 
-### PRIMARY — TECH-DEBT HUNT (CI gate + rules-of-hooks DONE — S1028/S1029)
+### PRIMARY — INFRA / SCRAPER FOLLOW-UPS (from S1031 cost + batch work)
+
+1. **`Skill('findasale-dev')` → shared upsert-batching speedup.** Context: the slowest license scrapers (Oregon ~12min, Indiana ~7min, Colorado ~4min) are slow because of serial per-row N+1 upserts in the shared `getOrCreateScrapedOrganizer` ingest path; Oregon also downloads OR's entire statewide business CSV. Expected output: batch the upserts safely without losing dedup/completeness (touches all 51 scrapers — careful) + pushblock.
+
+2. **Verify the consolidated license-scraper batch on its FIRST SCHEDULED run** (next Monday 05:00 UTC). Confirm ~50/51 pass (Georgia the lone expected fail); Nebraska/Rhode Island will run but produce ~0 rows (dead sources — tracked in Blocked Queue). If ~50/51 pass, no action needed — the 42 originals are already retired (kept manually-runnable).
+
+3. **Implement the agent-wishlist infra guardrails** from `claude_docs/audits/infra-cost-security-2026-06-24.md` §8: (a) a single-source-of-truth `INFRA_MAP.md`; (b) a `/health` freshness assertion (deployed-SHA == HEAD + last-job timestamp, not just liveness); (c) a Sentry post-change regression tripwire after each cadence/batch ship; (d) total-infra-spend tracking across ALL providers (GitHub is likely the smallest bill; Railway/Cloudinary/Anthropic compute are unmonitored).
+
+4. **Carry the 3 dead-source DECISIONS for Patrick** (Blocked Queue): Nebraska (no open source — replace or accept no NE data), Rhode Island (dataset gutted to 1 row since Dec 2021 — needs a new source), Georgia (Cloudflare 403 — proxy key / records request / bulk-data purchase = cost decision).
+
+### CARRIED — TECH-DEBT HUNT (CI gate + rules-of-hooks DONE — S1028/S1029)
+
 **Session type: DEV (audit-led). Smoke test FIRST (Section 10).** S1028 finished the CI gate (all 4 quality steps BLOCKING + green). S1029 completed #1 below; remaining:
 
 1. ~~**react-hooks/rules-of-hooks fix batch**~~ **✅ DONE S1029** — all ~27 files fixed, rule promoted back to `"error"`, Vercel build GREEN.
@@ -313,18 +330,22 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Recent Sessions
 
-### S1031 — 2026-06-24 | OPS (credential rotation complete + stale-credential scrub)
+### S1031 — 2026-06-24 | OPS/COST (GitHub Actions cost optimization + 51-scraper batch consolidation + NE/RI scraper fixes + credential rotation close-out)
 
-**Triggered by:** Continuation of interrupted credential rotation from prior session.
+**Triggered by:** CI "check suite failed" investigation + continuation of credential rotation.
 
 **Completed:**
-- All 4 tokens confirmed rotated: GitHub PAT, Sentry (FindA.Sale-2026), GitGuardian (FindASale-2026), INTERNAL_SCRAPER_KEY
-- INTERNAL_SCRAPER_KEY updated in Railway backend Variables via Chrome and deployed (redeploy triggered)
-- Stale DB password (already rotated/dead) scrubbed from 15 committed files across claude_docs/
-- .secrets.env at project root is the single gitignored source of truth for all scheduled-task credentials
-- BQ secret-rotation item CLOSED
+- **Diagnosed "CI check suite failed" = GitHub Actions ACCOUNT billing block** (2,000 free min/mo exhausted), NOT code. Now resolved — Actions running again (the batch ran). Application code at HEAD clean.
+- **Found + fixed a backend deploy stranded ~13h** (Railway watchPatterns evaluate the PUSH TIP; docs-tip commits stranded a buried backend change). Guardrail: CLAUDE.md §10c + ci-sentry-health Step 9 (billing-block + backend deploy-freshness checks).
+- **Corrected two FALSE doc claims:** S1029 "CI lint gate GREEN" (inferred from Vercel, not GitHub Actions) and S1023 "Railway Wait-for-CI enabled" (no such gate exists in Railway config). New audit: `claude_docs/audits/infra-cost-security-2026-06-24.md`.
+- **SECURITY:** scrubbed hardcoded plaintext secrets out of 6 scheduled-task SKILL.md files (ci-sentry-health, data-persistence-monitor, token-expiry-watch, seo-geo-monitor, job-heartbeat, sentry-blocked-queue-sync) — all now read from one gitignored `.secrets.env`; 0 plaintext remaining. (Local Cowork task files — NOT in repo.)
+- **All 4 tokens rotated** (Patrick, across sessions): GitHub PAT (fine-grained), Sentry, GitGuardian, INTERNAL_SCRAPER_KEY, + DB password — all validated green via a 5-way auth check. Stale DB password scrubbed from 15 committed files. `.secrets.env` is the single gitignored source of truth. **CREDENTIAL BLACKOUT: no values recorded here.**
+- **Fixed a real bug:** `/api/internal/pipeline-health` was mislabeled to use INTERNAL_SCRAPER_KEY but the endpoint validates OUTREACH_SECRET (internal.ts:146) → corrected.
+- **Flagged + resolved:** GitHub Actions `DATABASE_URL`/`DIRECT_URL` repo secrets (separate store) were stale after the password rotation — Patrick updated them; all 76 scraper workflows now authenticate.
+- **COST OPTIMIZATION** (toward under the free 2,000 min/mo): CI paths-ignore for docs; geocode 3×→1×/day; PublicSurplus weekly→monthly (concurrent session); Outreach 6×→1×/day; **batched 51 individual phase2 license-scraper workflows into ONE weekly workflow** (new `packages/backend/src/scripts/runLicenseScrapersBatch.ts` + `.github/workflows/scrape-licenses-phase2-batch.yml`; retired 42 individual crons, 9 already stub-disabled; originals kept + manually runnable). Batch verified: 48/51 pass. Projected ≈ −1,450 min/mo.
+- **Scraper bug fixes (shipped, commit confirmed green by Patrick):** Nebraska (dead host NXDOMAIN → now fails gracefully) and Rhode Island (Socrata query compared text flags to `'Y'` instead of `'1'` → now HTTP 200).
 
-**Patrick actions pending:** Push the 3 GitHub Actions workflow changes from prior session (paths-ignore on CI, geocode 3x->1x/day, PublicSurplus weekly->monthly) — pushblock in Next Session.
+**BQ:** secret-rotation CLOSED; +3 dead-source decision items (Nebraska / Rhode Island / Georgia).
 
 ### S1030 — 2026-06-24 | OPS (Google Postmaster Tools setup + outreach domain verification)
 
