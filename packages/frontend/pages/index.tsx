@@ -666,10 +666,10 @@ export const getStaticProps: GetStaticProps<HomePageProps> = async () => {
     const data = res.ok ? await res.json() : null;
     return {
       props: { initialSalesData: data },
-      revalidate: 300, // 5 minutes ISR
+      revalidate: 3600, // 1 hour ISR
     };
   } catch (error) {
-    return { props: { initialSalesData: null }, revalidate: 60 };
+    return { props: { initialSalesData: null }, revalidate: 300 };
   }
 };
 export default HomePage;

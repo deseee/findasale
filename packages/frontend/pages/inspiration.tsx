@@ -104,7 +104,7 @@ export const getStaticProps: GetStaticProps<InspirationPageProps> = async () => 
       props: {
         initialItems: response.data.items || [],
       },
-      revalidate: 300, // ISR: revalidate every 5 minutes
+      revalidate: 3600, // ISR: revalidate every 1 hour
     };
   } catch (err) {
     console.error('Failed to fetch inspiration items at build time:', err);
@@ -113,7 +113,7 @@ export const getStaticProps: GetStaticProps<InspirationPageProps> = async () => 
         initialItems: [],
         error: 'Failed to load inspiration items',
       },
-      revalidate: 60, // Retry in 1 minute on error
+      revalidate: 300, // Retry after error
     };
   }
 };

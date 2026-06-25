@@ -694,14 +694,14 @@ export const getStaticProps: GetStaticProps<Props> = async () => {
     const data = (await res.json()) as { categories: Record<string, number> };
     return {
       props: { initialData: data },
-      revalidate: 300, // ISR: re-render every 5 minutes on Vercel
+      revalidate: 3600, // ISR: re-render every 1 hour on Vercel
     };
   } catch (err) {
     console.error('[categories/index] getStaticProps error:', err);
     // Graceful fallback: serve page without pre-rendered data; client hydrates.
     return {
       props: {},
-      revalidate: 60, // retry sooner after error
+      revalidate: 300, // retry after error
     };
   }
 };
