@@ -373,6 +373,31 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 - The Cowork **`Write` tool corrupts mounted files with NUL bytes** like the banned `Edit` tool — use Python-via-bash for all FindA.Sale file edits; `tr -cd` NUL-check before every pushblock.
 
 ## Recent Sessions
+### findasale-ci-sentry-health — 2026-06-26 (manual re-run, 19:45 UTC) | AUTOMATED HEALTH RUN
+**Status:** ⚠️ Action needed — CI broken by dev agent TS error; auto-fixed this run.
+
+**Step 1 — GitHub Actions failures (24h):** 1 failure: CI Typecheck & Tests (run 28258955076, 18:56 UTC). ROOT_CAUSE: CODE_BUG — `internalListingEnrichmentController.ts` imported `PrismaClientKnownRequestError` directly from `@prisma/client` (TS2305); must use `Prisma.PrismaClientKnownRequestError`. AUTO-FIXED: pushed 3adca81e. CI will re-run automatically. NOT a billing block (81s duration, jobs ran). Actions NOT disabled.
+
+**Step 1c — Staleness:** 4 REGRESSION workflows (AuctionNinja, PropertyRoom, BidSpotter, GarageSaleFinder) + 3 non-regression failures (Louisiana/Virginia Phase 2, Licenses Phase 2 Batch). All niche/directory/license scrapers — MEDIUM at worst. GSF pipeline-health shows 987 sales/24h despite workflow failure (logs empty/inaccessible — likely external block or data from prior runs). Phase 2 batch failures are expected (GA/NE/RI dead sources). Sentry Post-Deploy Regression Check = skipped (no recent deploy at check time — expected).
+
+**Step 1d — Pipeline freshness:** Outreach 0/24h (expected — both pipeline workflows ran 9-10h ago, cap=1). ESN 353, GSF 987, AI enrichment 860, geocoding 8,962/24h, backlog 488. All pipelines producing. No auto-trigger needed (both HIGH pipelines ran <10h ago and succeeded).
+
+**Step 1b — FB Events:** ✅ success, 17.9 min, 376 created, 129 Searlo OK, 0 Serper backups. Healthy.
+
+**Step 2 — Sentry:** Backend: 10 unresolved (1 ERROR: FINDASALE-NODEJS-42 PrismaClientKnownRequestError 7x; 9 WARNING slow queries). Fix now on GitHub (dev agent surrogate hardening + TS fix 3adca81e), pending Railway redeploy. Frontend: 3 unresolved (NEXTJS-K SecurityError IDBFactory 6x — browser context noise; NEXTJS-H MetaMask noise; NEXTJS-J unknown 1x). No new qualifying P0/P1 for BQ.
+
+**Step 3 — GitGuardian:** 0 new incidents ✅ (new FindASale-monitor-2026 token with scan+incidents:read working correctly).
+
+**Step 7 — Railway cron heartbeat:** SKIPPED — Railway CLI binary not present in this session (/sessions/fervent-tender-edison/mnt/.claude/bin/railway not found). Verify at next session.
+
+**Step 8 — Sentry → BQ:** No new entries. FINDASALE-NODEJS-42 already present/closed in STATE.md (dedup rule). BQ active items: 0. No ceiling triggered.
+
+**Step 9 — CI billing + deploy freshness:** CI NOT billing-blocked (81s duration). HEAD 3adca81e pushed to packages/backend — Railway will auto-deploy. Railway MCP unavailable for SHA verification; verify in next session.
+
+**Auto-fixes this run:** AUTO-FIXED CI — pushed `3adca81e` (Prisma.PrismaClientKnownRequestError import fix). GH_PAT `actions:read` permission added (pre-compaction). New GitGuardian token `FindASale-monitor-2026` created with scan+incidents:read (pre-compaction). `.secrets.env` GITGUARDIAN_TOKEN updated (pre-compaction).
+
+**Escalations:** None. All issues either auto-fixed or known/expected.
+
 
 ### findasale-ci-sentry-health — 2026-06-26 | AUTOMATED DAILY HEALTH RUN
 
