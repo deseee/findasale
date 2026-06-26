@@ -2878,13 +2878,15 @@ export const publishItemOffer = async (req: AuthRequest, res: Response) => {
         ebayListingId: true,
         ebayListedAt: true,
         ebayCategoryId: true,
+        ebayCategoryName: true,
         title: true,
+        category: true,
         brand: true,
         mpn: true,
         createdAt: true,
         costBasis: true,
         roomTag: true,
-        sale: { select: { organizerId: true } },
+        sale: { select: { organizerId: true, address: true, city: true, state: true, zip: true } },
       },
     });
 
@@ -3101,7 +3103,128 @@ export const publishItemOffer = async (req: AuthRequest, res: Response) => {
         }
       }
 
-      // If still no listingId, try fetching from the offer directly (in case it already published)
+         // 25005 self-heal: eBay category is invalid/deprecated.
+      // Strategy: GET the current offer from eBay, swap categoryId with a fresh taxonomy
+      // lookup, PUT it back (or delete+recreate if PUT fails), then republish.
+      if (!ebayListingId && publishError.includes('25005')) {
+        console.warn(`[eBay PublishNow 25005] ${sku}: invalid category — attempting full self-heal`);
+        try {
+          // 1. Get fresh category from eBay taxonomy
+          const freshCategory = await suggestEbayCategoryForTitle(item.title, (item as any).category ?? null);
+          const newCategoryId = freshCategory?.categoryId;
+
+          if (newCategoryId) {
+            // 2. GET the current offer payload from eBay
+            const offerPath = encodeURIComponent(`/sell/inventory/v1/offer/${item.ebayOfferId}`);
+            const offerGetRes = await fetch(ebayProxyUrl(offerPath), {
+              headers: { ...ebayUserHeaders(accessToken), ...ebayProxyHeaders() },
+            });
+
+            if (offerGetRes.ok) {
+              trackEbayCall();
+              const offerBody = (await offerGetRes.json()) as Record<string, unknown>;
+
+              // Build updated offer — swap category, strip eBay read-only fields
+              const updatedOffer: Record<string, unknown> = { ...offerBody, categoryId: newCategoryId };
+              for (const ro of ['offerId', 'status', 'listing', 'listingId', 'listingStatus', 'marketplaceId']) {
+                delete updatedOffer[ro];
+              }
+
+              // 3. Try PUT (update in place)
+              let activeOfferId: string = item.ebayOfferId as string;
+              const offerPutRes = await fetch(ebayProxyUrl(offerPath), {
+                method: 'PUT',
+                headers: { ...ebayUserHeaders(accessToken), ...ebayProxyHeaders() },
+                body: JSON.stringify(updatedOffer),
+              });
+
+              if (offerPutRes.ok || offerPutRes.status === 204) {
+                trackEbayCall();
+                console.log(`[eBay PublishNow 25005] offer PUT succeeded with category=${newCategoryId}`);
+                await prisma.item.update({
+                  where: { id: item.id },
+                  data: { ebayCategoryId: newCategoryId, ebayCategoryName: freshCategory.categoryName },
+                });
+              } else {
+                // 4. PUT failed — delete and recreate offer
+                const putErrText = await offerPutRes.text();
+                console.warn(`[eBay PublishNow 25005] PUT failed (${offerPutRes.status} ${putErrText.slice(0, 200)}) — deleting + recreating offer`);
+
+                await fetch(ebayProxyUrl(offerPath), {
+                  method: 'DELETE',
+                  headers: { ...ebayUserHeaders(accessToken), ...ebayProxyHeaders() },
+                });
+
+                // updatedOffer already has the new categoryId and no read-only fields
+                // marketplaceId is required for POST — add it back
+                updatedOffer.marketplaceId = 'EBAY_US';
+                const createRes = await fetch(
+                  `${frontendUrl}/api/proxy/ebay?path=/sell/inventory/v1/offer`,
+                  {
+                    method: 'POST',
+                    headers: { ...ebayUserHeaders(accessToken), ...ebayProxyHeaders() },
+                    body: JSON.stringify(updatedOffer),
+                  }
+                );
+
+                if (createRes.ok) {
+                  trackEbayCall();
+                  const createData = (await createRes.json()) as any;
+                  activeOfferId = createData.offerId;
+                  console.log(`[eBay PublishNow 25005] new offer created: offerId=${activeOfferId} category=${newCategoryId}`);
+                  await prisma.item.update({
+                    where: { id: item.id },
+                    data: {
+                      ebayOfferId: activeOfferId,
+                      ebayCategoryId: newCategoryId,
+                      ebayCategoryName: freshCategory.categoryName,
+                    },
+                  });
+                } else {
+                  const createErr = await createRes.text();
+                  console.error(`[eBay PublishNow 25005] offer recreate failed: ${createErr.slice(0, 300)}`);
+                }
+              }
+
+              // 5. Republish with the corrected offer
+              const republishPath = encodeURIComponent(`/sell/inventory/v1/offer/${activeOfferId}/publish`);
+              publishResponse = await fetch(`${frontendUrl}/api/proxy/ebay?path=${republishPath}`, {
+                method: 'POST',
+                headers: {
+                  ...ebayUserHeaders(accessToken),
+                  ...(proxySecret ? { 'X-Proxy-Secret': proxySecret } : {}),
+                },
+              });
+              if (publishResponse.ok) {
+                trackEbayCall();
+                const pubData = (await publishResponse.json()) as any;
+                ebayListingId = pubData.listingId ?? null;
+                console.log(`[eBay PublishNow 25005] self-heal published: listingId=${ebayListingId}`);
+              } else {
+                const pubErr = await publishResponse.text();
+                console.warn(`[eBay PublishNow 25005] re-publish failed: ${pubErr.slice(0, 300)}`);
+              }
+            } else {
+              console.warn(`[eBay PublishNow 25005] offer GET failed (${offerGetRes.status}) — cannot self-heal`);
+            }
+          } else {
+            console.warn(`[eBay PublishNow 25005] taxonomy returned no category for "${item.title.slice(0, 40)}" — cannot self-heal`);
+          }
+        } catch (healErr) {
+          console.error('[eBay PublishNow 25005] self-heal threw:', (healErr as Error).message);
+        }
+
+        // If still no listingId, clear the stale category so the next push re-resolves it
+        if (!ebayListingId) {
+          await prisma.item.update({
+            where: { id: item.id },
+            data: { ebayCategoryId: null, ebayCategoryName: null },
+          });
+          console.warn(`[eBay PublishNow 25005] self-heal failed — stale category cleared for next push`);
+        }
+      }
+
+            // If still no listingId, try fetching from the offer directly (in case it already published)
       if (!ebayListingId) {
         const offerDetailRes = await fetch(
           `${frontendUrl}/api/proxy/ebay?path=${encodeURIComponent(`/sell/inventory/v1/offer/${item.ebayOfferId}`)}`,
