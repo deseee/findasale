@@ -2758,7 +2758,7 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
           }
         }
 
-        // Update item with eBay listing ID; clear any prior review flag
+        // Update item with eBay listing ID; auto-publish on FindA.Sale; clear any prior review flag
         await prisma.item.update({
           where: { id: item.id },
           data: {
@@ -2767,6 +2767,9 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
             // ebayListedAt: first listing timestamp — only set once, never overwritten on relist
             ...(item.ebayListedAt == null ? { ebayListedAt: new Date() } : {}),
             ebayNeedsReview: false,
+            // Auto-publish on FindA.Sale when pushed to eBay — item should not
+            // remain on the "review & publish" page after a successful eBay push.
+            ...(item.draftStatus !== 'PUBLISHED' ? { draftStatus: 'PUBLISHED' } : {}),
           },
         });
 
@@ -2777,7 +2780,6 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
           status: 'success',
           ebayUrl: `https://www.ebay.com/itm/${ebayListingId}`,
           publishedAt: new Date(),
-          ...(item.draftStatus !== 'PUBLISHED' ? { warning: 'DRAFT_ON_FINDASALE' } : {}),
         });
       } catch (itemError) {
         // Structured per-item error log — captures saleId/itemId/category/reason
@@ -2879,6 +2881,7 @@ export const publishItemOffer = async (req: AuthRequest, res: Response) => {
         ebayListedAt: true,
         ebayCategoryId: true,
         ebayCategoryName: true,
+        draftStatus: true,
         title: true,
         category: true,
         brand: true,
@@ -3271,7 +3274,7 @@ export const publishItemOffer = async (req: AuthRequest, res: Response) => {
       }
     }
 
-    // Success — persist listing ID
+    // Success — persist listing ID and auto-publish on FindA.Sale
     await prisma.item.update({
       where: { id: item.id },
       data: {
@@ -3280,6 +3283,9 @@ export const publishItemOffer = async (req: AuthRequest, res: Response) => {
         // ebayListedAt: first listing timestamp — only set once, never overwritten on relist
         ...(item.ebayListedAt == null ? { ebayListedAt: new Date() } : {}),
         ebayNeedsReview: false,
+        // Auto-publish on FindA.Sale — pushing to eBay should remove the item
+        // from the "review & publish" queue automatically.
+        ...(item.draftStatus !== 'PUBLISHED' ? { draftStatus: 'PUBLISHED' } : {}),
       },
     });
 
