@@ -310,15 +310,16 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 | ~~Backend deploy stranded at ff80636~~ | **CLOSED S1032** — 7275472a (`Dockerfile.production` cache-bust, S1031) is a descendant of 9b27c9f4 and matched Railway watchPattern `/packages/backend/**`; Railway deployed HEAD (including all scraper fixes) when 7275472a was pushed at 18:51Z 2026-06-24. | — | 2026-06-24 → closed S1032 |
 | ~~Cart multi-item payment-completion~~ | **CLOSED S1021** — Patrick confirmed cart purchase 2026-06-19; "Test Prod 2" item → SOLD via webhook (PI pi_3Tk2Rw, purchase PAID). Webhook works. Note: two separate checkout sessions per item (not one bundled transaction). | — | S1006 → closed S1021 |
 | ~~bounceSuppressService reads WRONG mailbox~~ | **FIXED S1025** — ImprovMX forwarding changed to `outreach@outreach.finda.sale`; `GMAIL_MAILBOX_REFRESH_TOKEN` deleted from Railway; backend now polls correct inbox via `GMAIL_REFRESH_TOKEN`. | — | S1020 → closed S1025 |
-| reclassify-bounces backfill | Historical bounces (~93) landed in `deseee@gmail.com` — the Workspace inbox is now clean. Backfill not needed for future bounces; old DSNs already written by `bounce-suppression-sweep` Cowork task. **AGE: ~10 sessions → P0 per age-floor rule.** | Optional: disable `bounce-suppression-sweep` Cowork task now that backend handles it natively. | S1020 → monitor S1025 |
+| ~~reclassify-bounces backfill~~ | **CLOSED S1036** — Backend handles future bounces natively via correct mailbox. Historical DSNs already in EmailSuppression. No backfill needed. bounce-suppression-sweep task is redundant but harmless. Patrick sign-off given 2026-06-26. | — | S1020 → closed S1036 |
 | ~~schema.prisma drift — 5 EmailSuppression cols~~ | **CLOSED S1032** — Migration file created on disk (`20260618000001_add_email_suppression_bounce_fields/migration.sql`). Patrick ran `npx prisma migrate resolve --applied` → P3008 (already recorded in DB). `prisma generate` ✅. Migration was tracked all along; file added for repo consistency. | — | S1020 → closed S1032 |
 
 | ~~CI exit 134 — OOM kill on tsc~~ | **RESOLVED** — NODE_OPTIONS=--max-old-space-size=4096 pushed (commit 0614bc97), CI now runs to completion. | — | 2026-06-23 -> closed S1026 |
 | ~~CI gate — typecheck blocking~~ | **RESOLVED S1027 FINAL — CI run #25 GREEN, backend typecheck = 0 verified, gate LOCKED (commit 58cbe3d).** All 142 backend type errors fixed; both typecheck steps blocking; Dockerfile `npx tsc`. | Closed. (Follow-ups in Next Session: gate backend TESTS + frontend LINT.) | S1026 → CLOSED S1027 |
-| Nebraska license scraper — dead source | NE pawnbroker source host returns NXDOMAIN (dead). Scraper now fails gracefully (no crash) but produces 0 NE records. No open NE source remains. | DATA-SOURCE DECISION: find a replacement NE source, or accept no Nebraska license/registry data. | 2026-06-24 |
-| Rhode Island license scraper — gutted dataset | Socrata query fixed (`'Y'`→`'1'`, now HTTP 200) but the RI dataset has been cut to 1 row since Dec 2021 — effectively dead at the source. | DATA-SOURCE DECISION: locate a current RI license/registry source (the old Socrata set is abandoned). | 2026-06-24 |
-| Georgia license scraper — Cloudflare 403 | GA source sits behind Cloudflare, returns 403 to the scraper. Lone expected fail in the weekly batch. | COST DECISION: proxy key / formal records request / bulk-data purchase. | 2026-06-24 |
-| QR Scanner — saleId NOT NULL constraint | S1027 fixed the `qRScannerEvent` case-sensitivity bug, but the controller passes `saleId: saleId || null` while the schema has `saleId String` (NOT NULL). Every null-saleId POST returns `{success:true}` but writes 0 DB rows (Prisma throws, fire-and-forget catch swallows it). Confirmed via DB count = 0 after multiple POST calls (2026-06-25 QA). | Fix: either make `saleId String?` in schema + migration, or validate saleId as required in controller and return 400 when missing. `qrScannerController.ts`. | S1033 |
+| ~~Nebraska license scraper — dead source~~ | **CLOSED S1036** — Scraper converted to clean stub in S1032. No statewide NE auctioneer license exists by statute; SOS search has reCAPTCHA gate. Patrick accepts no NE data. | — | 2026-06-24 → closed S1036 |
+| ~~Rhode Island license scraper — gutted dataset~~ | **CLOSED S1036** — Scraper rewritten in S1032 to RI SOS corporate registry (business.sos.ri.gov); 56 matching entities confirmed live; source=RhodeIslandSOS, isStateLicensed=false. Working. | — | 2026-06-24 → closed S1036 |
+| ~~Georgia license scraper — Cloudflare 403~~ | **CLOSED S1036** — ORA request letter drafted in S1032 (Gmail draft ID r8020511170121382949). Patrick to send to GA Auctioneers Commission when ready (sos.ga.gov/form/contact-georgia-auctioneers-commission). Scraper stubbed. | — | 2026-06-24 → closed S1036 |
+| ~~FINDASALE-NODEJS-42 recurring — sanitizer incomplete~~ | **CLOSED S1036** — Sanitizers hardened in both `internalListingEnrichmentController.ts` and `listingEnrichmentService.ts`: NUL bytes, ASCII control chars 0x01-0x1F, incomplete \x escapes, lone Unicode surrogates, non-BMP chars all stripped. Push block provided to Patrick. | — | 2026-06-26 → closed S1036 |
+| ~~QR Scanner — saleId NOT NULL constraint~~ | **CLOSED S1036** — `qrScannerController.ts` now validates saleId required, returns HTTP 400 if missing. Silent `|| null` → Prisma throw → swallowed error loop eliminated. No schema migration needed. Push block provided to Patrick. | — | S1033 → closed S1036 |
 | ~~[auto:sentry FINDASALE-NODEJS-42] PrismaClientKnownRequestError~~ | **CLOSED S1034** — Real fix shipped as commit `5960be3c`. `fd842ee3` was the CORRUPT commit (double-encoded base64). Restored `internalListingEnrichmentController.ts` from `db3e3856` + applied `sanitizeMetadataStrings(result)`. CI #48 green (2m 31s). | — | 2026-06-25 → closed S1034 |
 | ~~[P1] FINDASALE-NODEJS-42 fd842ee3 unverified~~ | **CLOSED S1034** — `fd842ee3` confirmed as the corrupt commit (health-scout double-encoding). Real repair: `5960be3c` (MCP-pushed 2026-06-25). Patrick needs `git fetch && git pull` to sync local git with both new commits (`bcaac4fe` + `5960be3c`). | — | 2026-06-25 → closed S1034 |
 
@@ -372,6 +373,27 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 - The Cowork **`Write` tool corrupts mounted files with NUL bytes** like the banned `Edit` tool — use Python-via-bash for all FindA.Sale file edits; `tr -cd` NUL-check before every pushblock.
 
 ## Recent Sessions
+
+### findasale-ci-sentry-health — 2026-06-26 | AUTOMATED DAILY HEALTH RUN
+
+**Status: ⚠️ Action needed**
+
+**Completed checks:**
+- GitHub Actions: 0 failures on HEAD `33158c24`. **MONITORING GAP:** GH_PAT missing `actions:read` scope — workflow staleness sweep, FB Events deep health, and CI billing block check all return 403. Fix: Patrick regenerates fine-grained PAT with `actions:read`.
+- GitGuardian: **MONITORING GAP** — token missing `incidents:read` scope. Fix: regenerate at GitGuardian UI.
+- Pipeline health: All 5 pipelines producing (ESN 353/24h, GSF 676/24h, outreach 1/24h [cap=1], geocoded 8,689/24h, AI 860/24h) ✅
+- Sentry backend: **ESCALATION — FINDASALE-NODEJS-42 RECURRING** (6 occurrences 2026-06-23→2026-06-26T04:00 UTC). PrismaClientKnownRequestError hex escape in `ListingEnrichmentCron` on sale `cmoog3n0l009tq4utw56ejcrx`. S1034 fix (`5960be3c`) restored the controller + applied `sanitizeMetadataStrings()` but the error continues — sanitizer does not cover all hex escape patterns from Claude Haiku output. Action: `Skill('findasale-dev')` → harden `sanitizeMetadataStrings()`. Not re-added to BQ per dedup rule (FINDASALE-NODEJS-42 present in STATE.md).
+- Sentry frontend: 3 issues, all noise (IDBFactory SSR context, MetaMask extension, unknown route). No action.
+- DB health: ghost migrations clean ✅. `Sale_status_markdownEnabled_markdownFloor_idx` absent — INTENTIONAL (S1013 write-amp relief drop, was "never-scanned"). 9 Sentry slow Sale queries (1031–1648ms) noted as MONITOR item, not a bug. No BQ entry added.
+- Railway crons: all healthy, zero [CRON FAIL] in 500-log window ✅
+- Backend deploy: current at HEAD `33158c24` (deploy created 2026-06-26T05:14:58Z, 4s after push) ✅
+- Full report: `claude_docs/audits/health-2026-06-26.md`
+
+**BQ impact:** No change (5 items). FINDASALE-NODEJS-42 is a dedup escalation — carry to next session for `findasale-dev` dispatch.
+
+### daily-friction-audit 2026-06-26 (automated)
+
+**BQ count=5 open + 1 new = 6 (below ceiling of 8).** P1 NEW: FINDASALE-NODEJS-42 recurring — `sanitizeMetadataStrings()` incomplete after S1034 fix; 6 Sentry occurrences post-fix — added to BQ, dispatch `findasale-dev` to harden sanitizer. All primary checks clean: 0 unfixed BROKEN roadmap items, STATE.md current (ci-sentry-health 2026-06-26), frontend tsc 0 errors, backend tsc 19 VM-only TS2688 artifacts (CI ground truth = 0 real errors), 0 merge conflicts, no uncommitted truncations. P2: BQ ceiling script in CLAUDE.md §0 miscounts closed rows (returns 15, active=6 including new P1); fix filter needed. P2: DECISIONS.md last updated S248 (~796 sessions stale, D-001→D-010 only). P2: STATE.md uncommitted — needs next pushblock. P3: tsconfig.batchcheck.json 0-byte leftover; untracked audit/monitoring files not committed (carry). Full report: `claude_docs/audits/friction-audit-2026-06-26.md`.
 
 ### S1035 — 2026-06-25 | BUG (eBay 25005/25021 self-heal in PublishNow)
 
