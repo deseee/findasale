@@ -23,6 +23,12 @@ export const recordQRScanEvent = async (
   try {
     const { saleId, eventType, decodedUrl, deviceType } = req.body;
 
+    // Validate saleId — required field (NOT NULL in schema)
+    if (!saleId || typeof saleId !== 'string') {
+      res.status(400).json({ error: 'saleId is required' });
+      return;
+    }
+
     // Validate eventType — valid values per ADR-072
     const validEventTypes = ['SCAN_INITIATED', 'SCAN_DECODED_ON_DOMAIN', 'SCAN_DECODED_OFF_DOMAIN', 'SCAN_CAMERA_DENIED', 'SCAN_COMPLETED'];
     if (!eventType || !validEventTypes.includes(eventType)) {
@@ -42,10 +48,10 @@ export const recordQRScanEvent = async (
     // Get shopper ID from JWT if present
     const shopperId = req.user?.id || null;
 
-    // Create QRScannerEvent record (saleId is optional per frontend)
+    // Create QRScannerEvent record
     const event = await prisma.qRScannerEvent.create({
       data: {
-        saleId: saleId || null,
+        saleId,
         shopperId,
         eventType,
         decodedUrl: decodedUrl || null,
