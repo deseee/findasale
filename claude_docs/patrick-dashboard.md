@@ -2,7 +2,45 @@
 
 ---
 
-## S1034 — 2026-06-25 (today)
+## S1035 — 2026-06-25 (today)
+
+**Fixed the eBay "Push to eBay" button so it handles category and condition errors automatically — no manual workaround needed.**
+
+Three separate eBay errors were cascading on the Avantone MixCube push. All three are now handled end-to-end by the button itself:
+
+1. **Category error (25005):** The stored eBay category for that item ("Speakers", ID 47091) was deprecated — eBay stopped accepting it. The button now detects this, calls eBay's own taxonomy service to find the correct current category for the item's title, updates the listing on eBay (or recreates it if needed), and publishes. No redirect, no fallback prompt.
+
+2. **Condition error (25021):** Part of the condition-fallback logic was accidentally suggesting a condition ("For Parts or Not Working") that eBay's listing API rejects even though a different eBay API says it's valid. Fixed the fallback so it never suggests that condition unless you explicitly set it. Also fixed a silent authentication error in the condition-recovery path (it was calling eBay without the required header, getting a 403, and failing silently).
+
+3. **Database cleanup (done live):** Cleared the stale bad category from the Avantone item's database record so the next push starts clean.
+
+**What to do now:**
+1. Run the git pull first (from S1034 — see below if you haven't yet)
+2. Push the commit below
+3. Click "Push to eBay" on the Avantone item — it should publish successfully
+
+```
+git add packages/backend/src/controllers/ebayController.ts
+git commit -m "fix(ebay): full 25005 self-heal in PublishNow — GET offer, swap category, PUT/recreate, republish
+
+When eBay rejects publish with 25005 (invalid/deprecated category):
+1. Calls suggestEbayCategoryForTitle to get correct leaf category from eBay taxonomy
+2. GETs the current offer payload from eBay
+3. Swaps categoryId, strips read-only fields
+4. Tries PUT (update in place) — falls back to DELETE + POST if PUT fails
+5. Republishes with corrected offer
+6. If all fails, clears ebayCategoryId from DB so next push auto-resolves
+
+Also expands publishItemOffer item select to include category + sale
+address fields needed for taxonomy domain hint and future location work."
+.\push.ps1
+```
+
+Watch Railway logs for: `[eBay PublishNow 25005] self-heal published: listingId=...` — that confirms it worked.
+
+---
+
+## S1034 — 2026-06-25 (earlier today)
 
 **Found and fixed two separate failures: a Vercel build error and a CI corruption.**
 

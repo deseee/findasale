@@ -8,6 +8,17 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ## Current Status
 
+**S1035 WRAP (2026-06-25) — BUG (eBay 25005/25021 self-heal in PublishNow). CREDENTIAL BLACKOUT applied.**
+- **25005 self-heal shipped:** `publishItemOffer` now handles invalid/deprecated eBay categories end-to-end without user intervention. When eBay rejects a publish with 25005: (1) calls `suggestEbayCategoryForTitle` for a fresh taxonomy category, (2) GETs the current offer payload from eBay (requires proxy secret on the GET — was the silent 403 root cause), (3) swaps `categoryId`, strips read-only fields, (4) tries PUT in-place; if PUT fails, DELETE + POST to recreate, (5) republishes. If all legs fail, clears stale `ebayCategoryId` from DB so the next push auto-resolves cleanly. No "use the batch button" redirect.
+- **25021 proxy-secret fix:** The 25021 self-heal's GET to `/sell/inventory/v1/inventory_item/{sku}` was using `ebayUserHeaders()` only — missing `X-Proxy-Secret`. Vercel proxy returned 403, the error was swallowed, and condition fallback ran blind. Added `...ebayProxyHeaders()` to both the GET call and the fix path.
+- **Fallback chain safety:** `USED_GOOD` and `USED_ACCEPTABLE` fallback chains in `ensureConditionValidForCategory` no longer fall to `FOR_PARTS_OR_NOT_WORKING`. eBay's `getItemConditionPolicies` API accepts it but the publish API rejects it with 25021 — the policy API was lying. Fallback chains now terminate at `NEW_OTHER` rather than `FOR_PARTS_OR_NOT_WORKING` (unless organizer explicitly set PARTS_OR_REPAIR).
+- **Expanded `publishItemOffer` item select:** Added `ebayCategoryName`, `category` (domain hint for taxonomy), and `sale { address, city, state, zip }` (for merchant location context).
+- **DB fix (live):** Cleared `ebayCategoryId='47091'` (`ebayCategoryName='Speakers'`) from item `cmqty043y000d10d709l1bvmh` (Avantone MixCube) directly via psycopg2 so the next push triggers a fresh taxonomy lookup.
+- **TypeScript:** 0 errors confirmed post-implementation.
+- **Push block provided to Patrick.** 1 file: `packages/backend/src/controllers/ebayController.ts`.
+- **BQ: 5 items unchanged** (no new items added or closed this session).
+- **Next action:** Patrick pushes the commit block then clicks "Push to eBay" on the Avantone item. Self-heal should fire, get a valid category, and produce a listing ID.
+
 **S1034 WRAP (2026-06-25) — OPS/CI (Vercel build failure + CI corruption fix). CREDENTIAL BLACKOUT applied.**
 - **Vercel build failure fixed:** `packages/frontend/data/blog/posts/digital-buyers-expect-more-than-a-listing.ts` existed locally but was never committed to GitHub. All Vercel builds from commits `56a8a2b` and `f3fc5cf` failed with `Cannot find module './posts/digital-buyers-expect-more-than-a-listing'`. Fixed by MCP push as commit `bcaac4fe`.
 - **CI corruption fixed (runs #44–47 fast-failing ~53–63s):** `internalListingEnrichmentController.ts` was corrupted — commit `fd842ee3` (health-scout P2 dispatch, S1033) replaced all 132 lines with a single base64-encoded line (6360 chars) via MCP double-encoding. TypeScript compiler failed at `(1,6361): error TS1109: Expression expected`. Restored 132-line clean version from `db3e3856` via `git show`, applied the single intended change (`aiEnriched: sanitizeMetadataStrings(result),`), pushed as commit `5960be3c`. CI run #48 confirmed green (2m 31s, all 4 steps passed — normal duration, not fast-failing).
@@ -321,11 +332,9 @@ FindA.Sale is a two-sided marketplace PWA for secondary sale organizers (estate 
 
 ### PRIMARY — NEXT PRIORITIES
 
-### ⚠️ FIRST ACTION (before any push)
-**`git fetch && git pull`** — Two commits were MCP-pushed this session and are NOT in local git:
-- `bcaac4fe` — blog post file fix (`digital-buyers-expect-more-than-a-listing.ts`)
-- `5960be3c` — controller restore + sanitize fix (`internalListingEnrichmentController.ts`)
-Without this, `.\push.ps1` will fail or create merge conflicts.
+### ⚠️ FIRST ACTIONS (before any other push)
+1. **`git fetch && git pull`** — Two commits were MCP-pushed in S1034 and are NOT in local git: `bcaac4fe` + `5960be3c`. Without this, `.\push.ps1` will fail.
+2. **Push S1035 ebayController.ts commit** (push block provided end of S1035), then click "Push to eBay" on the Avantone MixCube item to confirm the 25005 self-heal fires and produces a listing ID. Watch Railway logs for `[eBay PublishNow 25005] self-heal published: listingId=...`.
 
 1. **`Skill('findasale-dev')` → shared upsert-batching speedup.** Context: the slowest license scrapers (Oregon ~12min, Indiana ~7min, Colorado ~4min) are slow because of serial per-row N+1 upserts in the shared `getOrCreateScrapedOrganizer` ingest path; Oregon also downloads OR's entire statewide business CSV. Expected output: batch the upserts safely without losing dedup/completeness (touches all 51 scrapers — careful) + pushblock.
 
@@ -363,6 +372,20 @@ Without this, `.\push.ps1` will fail or create merge conflicts.
 - The Cowork **`Write` tool corrupts mounted files with NUL bytes** like the banned `Edit` tool — use Python-via-bash for all FindA.Sale file edits; `tr -cd` NUL-check before every pushblock.
 
 ## Recent Sessions
+
+### S1035 — 2026-06-25 | BUG (eBay 25005/25021 self-heal in PublishNow)
+
+**Triggered by:** Patrick — eBay push failures on Avantone MixCube: errorId 25021 (invalid condition) + 25005 (invalid/deprecated category) after Accept-Language fix deployed.
+
+**Completed:**
+- **25005 full self-heal in `publishItemOffer`:** GET offer → taxonomy lookup → PUT/delete+recreate → republish. No user redirect.
+- **25021 proxy-secret fix:** GET in the 25021 self-heal was silently 403ing (missing X-Proxy-Secret). Fixed.
+- **Fallback chain safety:** `USED_GOOD`/`USED_ACCEPTABLE` no longer fall back to `FOR_PARTS_OR_NOT_WORKING` (eBay policy API accepts it; publish API rejects it — policy API was lying).
+- **Expanded item select:** `publishItemOffer` now fetches `ebayCategoryName`, `category`, and `sale` address fields.
+- **DB fix (live):** Cleared stale `ebayCategoryId='47091'` from Avantone item via psycopg2.
+- TS check: 0 errors. Push block provided.
+
+**BQ: 5 open** (unchanged — no new items added or closed).
 
 ### S1034 — 2026-06-25 | OPS/CI (Vercel build failure + CI corruption fix)
 
