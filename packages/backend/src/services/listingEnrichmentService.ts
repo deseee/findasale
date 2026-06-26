@@ -121,14 +121,35 @@ function tryFreeExtraction(description: string, saleTitle: string): EnrichedList
 }
 
 /**
- * Strip invalid PostgreSQL hex escape sequences from a string.
- * Scraped descriptions often contain literal \x sequences (e.g. \xc2\xa0 for NBSP)
- * that PostgreSQL interprets as hex escapes and rejects when invalid.
- * We replace them with a space so the text remains readable.
+ * Strip characters that PostgreSQL rejects in string literals.
+ *
+ * Covers the same set as sanitizeStr() in the controller:
+ *   1. NUL bytes (\x00)
+ *   2. ASCII control chars 0x01-0x08, 0x0B-0x0C, 0x0E-0x1F
+ *      (tab/newline/CR are safe and preserved)
+ *   3. Incomplete \x hex escapes (\x not followed by exactly 2 hex digits)
+ *   4. Lone backslashes before unrecognised chars
+ *   5. Lone Unicode surrogates (U+D800–U+DFFF) and non-BMP chars (emoji)
+ *      — PostgreSQL 18 jsonb rejects lone surrogates (root cause of recurring
+ *        FINDASALE-NODEJS-42; sale cmoog3n0l009tq4utw56ejcrx description ends
+ *        with 🔥 emoji; slicing at 150 codepoints can split a surrogate pair)
+ *
+ * This runs on the Haiku AI response fields (categories, priceRange, summary)
+ * BEFORE they reach the controller's recursive sanitizeMetadataStrings() pass,
+ * providing defence-in-depth for FINDASALE-NODEJS-42 recurrences.
  */
 function sanitizeForPostgres(value: string): string {
-  // Replace any \x not followed by exactly two hex digits with a space
-  return value.replace(/\\x(?![0-9a-fA-F]{2})/g, ' ').trim();
+  return value
+    .replace(/\x00/g, '')
+    // eslint-disable-next-line no-control-regex
+    .replace(/[\x01-\x08\x0B\x0C\x0E-\x1F]/g, '')
+    .replace(/\\x(?![0-9a-fA-F]{2})/g, ' ')
+    .replace(/\\(?![\\nrtbf"'0-9xu])/g, '\\\\')
+    // Lone Unicode surrogates (U+D800–U+DFFF) and non-BMP chars (emoji etc.)
+    // cause "invalid input syntax for type json" in PostgreSQL 18 jsonb.
+    // eslint-disable-next-line no-misleading-character-class
+    .replace(/[\uD800-\uDFFF]|[^\u0000-\uFFFF]/g, ' ')
+    .trim();
 }
 
 export async function enrichScrapedListing(
