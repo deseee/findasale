@@ -2989,7 +2989,7 @@ export const publishItemOffer = async (req: AuthRequest, res: Response) => {
         const inventoryPath = encodeURIComponent(`/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`);
         const inventoryUrl = ebayProxyUrl(inventoryPath);
         // Fetch the current inventory item so we have its payload shape
-        const invGet = await fetch(inventoryUrl, { headers: ebayUserHeaders(accessToken) });
+        const invGet = await fetch(inventoryUrl, { headers: { ...ebayUserHeaders(accessToken), ...ebayProxyHeaders() } });
         if (invGet.ok) {
           const invBody = (await invGet.json()) as any;
           const accepted = await getAcceptedConditionsForCategory(item.ebayCategoryId);
@@ -4210,8 +4210,8 @@ async function ensureConditionValidForCategory(
     'LIKE_NEW':                 ['USED_VERY_GOOD', 'USED_EXCELLENT', 'USED_GOOD', 'NEW_OTHER'],
     'USED_VERY_GOOD':           ['USED_EXCELLENT', 'USED_GOOD', 'USED_ACCEPTABLE', 'NEW_OTHER'],
     'USED_EXCELLENT':           ['USED_VERY_GOOD', 'USED_GOOD', 'USED_ACCEPTABLE'],
-    'USED_GOOD':                ['USED_VERY_GOOD', 'USED_ACCEPTABLE', 'FOR_PARTS_OR_NOT_WORKING'],
-    'USED_ACCEPTABLE':          ['USED_GOOD', 'FOR_PARTS_OR_NOT_WORKING'],
+    'USED_GOOD':                ['USED_VERY_GOOD', 'USED_ACCEPTABLE', 'USED_EXCELLENT', 'NEW_OTHER'],  // never downgrade to FOR_PARTS unless organizer set PARTS_OR_REPAIR
+    'USED_ACCEPTABLE':          ['USED_GOOD', 'USED_VERY_GOOD', 'NEW_OTHER'],  // never downgrade to FOR_PARTS unless organizer set PARTS_OR_REPAIR
     'FOR_PARTS_OR_NOT_WORKING': ['USED_ACCEPTABLE', 'USED_GOOD'],
   };
   const chain = fallbacksByDesired[desired] || ['USED_GOOD', 'USED_VERY_GOOD', 'NEW'];
