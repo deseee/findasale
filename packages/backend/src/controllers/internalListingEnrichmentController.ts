@@ -6,7 +6,7 @@
 
 import { Request, Response } from 'express';
 import * as Sentry from '@sentry/node';
-import { Prisma, PrismaClientKnownRequestError } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { enrichScrapedListing } from '../services/listingEnrichmentService';
 
@@ -118,7 +118,7 @@ async function _runEnrichmentBatch(batchSize: number): Promise<void> {
     } catch (err: unknown) {
       // Surface full Prisma error detail -- PrismaClientKnownRequestError.message
       // is often empty in Sentry; the real signal is .code and .meta
-      if (err instanceof PrismaClientKnownRequestError) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError) {
         if (err.code === 'P2025') {
           // Sale was deleted between findMany and update -- expected race, not a bug
           console.warn(`[ListingEnrichmentBatch] Sale ${sale.id} deleted mid-batch -- skipping (P2025)`);
