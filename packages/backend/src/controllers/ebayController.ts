@@ -2988,7 +2988,21 @@ export const publishItemOffer = async (req: AuthRequest, res: Response) => {
 
       // 25021 retry path: walk accepted conditions and re-publish
       if (publishError.includes('25021') && item.ebayCategoryId) {
-        const inventoryPath = encodeURIComponent(`/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`);
+        // Resolve the canonical SKU from the live offer — buildCustomLabel may return a
+        // different string if item fields (roomTag, costBasis, createdAt) changed since
+        // the offer was first pushed.  The offer always stores the original SKU.
+        let canonicalSku25021 = sku;
+        const offerPath25021 = encodeURIComponent(`/sell/inventory/v1/offer/${item.ebayOfferId}`);
+        const offerGetRes25021 = await fetch(ebayProxyUrl(offerPath25021), {
+          headers: { ...ebayUserHeaders(accessToken), ...ebayProxyHeaders() },
+        });
+        if (offerGetRes25021.ok) {
+          const offerData25021 = (await offerGetRes25021.json()) as any;
+          if (offerData25021.sku) canonicalSku25021 = offerData25021.sku;
+        } else {
+          console.warn(`[eBay PublishNow 25021] offer GET failed (${offerGetRes25021.status}); falling back to buildCustomLabel SKU`);
+        }
+        const inventoryPath = encodeURIComponent(`/sell/inventory/v1/inventory_item/${encodeURIComponent(canonicalSku25021)}`);
         const inventoryUrl = ebayProxyUrl(inventoryPath);
         // Fetch the current inventory item so we have its payload shape
         const invGet = await fetch(inventoryUrl, { headers: { ...ebayUserHeaders(accessToken), ...ebayProxyHeaders() } });
@@ -3006,7 +3020,7 @@ export const publishItemOffer = async (req: AuthRequest, res: Response) => {
             : ['NEW_OTHER', 'NEW', 'NEW_WITH_DEFECTS', 'USED_EXCELLENT', 'USED_GOOD']
           ).filter((c) => c !== invBody.condition && (!accepted || accepted.has(c)));
           for (const retryCondition of retryOrder) {
-            console.log(`[eBay PublishNow Retry25021] ${sku}: retrying with condition=${retryCondition}`);
+            console.log(`[eBay PublishNow Retry25021] ${canonicalSku25021}: retrying with condition=${retryCondition}`);
             const retryInvPayload = { ...invBody, condition: retryCondition };
             const retryInvRes = await fetch(inventoryUrl, {
               method: 'PUT',
@@ -3042,9 +3056,21 @@ export const publishItemOffer = async (req: AuthRequest, res: Response) => {
       // values into product.aspects, PUT it back, then re-publish once. Fall back to
       // "Unbranded" (eBay's accepted no-brand value) when the organizer set no brand.
       if (!ebayListingId && publishError.includes('25002')) {
-        const inventoryPath = encodeURIComponent(`/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`);
+        // Resolve the canonical SKU from the live offer — same SKU-drift risk as 25021.
+        let canonicalSku25002 = sku;
+        const offerPath25002 = encodeURIComponent(`/sell/inventory/v1/offer/${item.ebayOfferId}`);
+        const offerGetRes25002 = await fetch(ebayProxyUrl(offerPath25002), {
+          headers: { ...ebayUserHeaders(accessToken), ...ebayProxyHeaders() },
+        });
+        if (offerGetRes25002.ok) {
+          const offerData25002 = (await offerGetRes25002.json()) as any;
+          if (offerData25002.sku) canonicalSku25002 = offerData25002.sku;
+        } else {
+          console.warn(`[eBay PublishNow 25002] offer GET failed (${offerGetRes25002.status}); falling back to buildCustomLabel SKU`);
+        }
+        const inventoryPath = encodeURIComponent(`/sell/inventory/v1/inventory_item/${encodeURIComponent(canonicalSku25002)}`);
         const inventoryUrl = ebayProxyUrl(inventoryPath);
-        const invGet = await fetch(inventoryUrl, { headers: ebayUserHeaders(accessToken) });
+        const invGet = await fetch(inventoryUrl, { headers: { ...ebayUserHeaders(accessToken), ...ebayProxyHeaders() } });
         if (invGet.ok) {
           const invBody = (await invGet.json()) as any;
           if (!invBody.product || typeof invBody.product !== 'object') invBody.product = {};
@@ -3077,7 +3103,7 @@ export const publishItemOffer = async (req: AuthRequest, res: Response) => {
           if (!invBody.product.mpn) {
             invBody.product.mpn = item.mpn?.trim() || 'Does Not Apply';
           }
-          console.log(`[eBay PublishNow Retry25002] ${sku}: injecting Brand=${aspectsObj['Brand']?.[0]} + MPN=${aspectsObj['MPN']?.[0]} and re-publishing`);
+          console.log(`[eBay PublishNow Retry25002] ${canonicalSku25002}: injecting Brand=${aspectsObj['Brand']?.[0]} + MPN=${aspectsObj['MPN']?.[0]} and re-publishing`);
           const retryInvRes = await fetch(inventoryUrl, {
             method: 'PUT',
             headers: {
