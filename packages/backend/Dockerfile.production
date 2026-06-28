@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-# cache-bust: 2026-06-24T22:40:37Z — force redeploy to pick up rotated INTERNAL_SCRAPER_KEY env
+# cache-bust: 2026-06-28T14:10:00Z — force backend redeploy to pick up /api/index/metros (Weekend Sale Index route stranded by SKIPPED deploy)
 FROM node:20-slim AS base
 
 # Install OpenSSL for Prisma
