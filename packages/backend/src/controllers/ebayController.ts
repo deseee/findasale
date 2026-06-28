@@ -4864,7 +4864,7 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
       if (!target || !listingId) return false;
       const candidates = await prisma.item.findMany({
         where: { organizerId: organizer.id, ebayListingId: null },
-        select: { id: true, title: true, listedOnEbayAt: true, ebayCategoryId: true, category: true },
+        select: { id: true, title: true, listedOnEbayAt: true, ebayCategoryId: true, category: true, draftStatus: true },
       });
       const hits = candidates.filter((c) => normTitleForMatch(c.title) === target);
       if (hits.length === 0) return false;
@@ -4880,6 +4880,9 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
           listedOnEbayAt: hit.listedOnEbayAt ?? new Date(),
           ...(hit.ebayCategoryId || !categoryId ? {} : { ebayCategoryId: categoryId }),
           ...(hit.category || !categoryName ? {} : { category: categoryName }),
+          // Auto-publish on FindA.Sale: this item is confirmed live on eBay, so it
+          // should not sit on the "review & publish" queue.
+          ...(hit.draftStatus !== 'PUBLISHED' ? { draftStatus: 'PUBLISHED' } : {}),
         },
       });
       console.log(`[eBay Import] Reconciled eBay listing ${listingId} to existing item ${hit.id} by title match ("${target}")`);
@@ -4992,7 +4995,11 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
             if (ebayListingIdToStore !== sku && existing.ebayListingId !== ebayListingIdToStore) {
               await prisma.item.update({
                 where: { id: existing.id },
-                data: { ebayListingId: ebayListingIdToStore },
+                data: {
+                  ebayListingId: ebayListingIdToStore,
+                  // Auto-publish on FindA.Sale — item is live on eBay.
+                  ...(existing.draftStatus !== 'PUBLISHED' ? { draftStatus: 'PUBLISHED' } : {}),
+                },
               });
               console.log(`[eBay Import] Backfilled numeric listingId ${ebayListingIdToStore} on item ${existing.id} (was SKU: ${sku})`);
             }
@@ -5025,6 +5032,8 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
                   data: {
                     ebayListingId: listingId,
                     listedOnEbayAt: new Date(),
+                    // Auto-publish on FindA.Sale — item is live on eBay.
+                    ...(existing.draftStatus !== 'PUBLISHED' ? { draftStatus: 'PUBLISHED' } : {}),
                   },
                 });
                 skipped++;
@@ -5080,6 +5089,9 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
             organizerId: organizer.id,
             saleId: null,          // Feature #300: inventory items need no sale container
             ebayListingId: ebayListingIdToStore, // numeric listingId if offer fetch succeeded; sku as fallback
+            // Imported item is live on eBay — publish it on FindA.Sale immediately
+            // rather than landing it on the "review & publish" queue.
+            draftStatus: 'PUBLISHED',
             conditionGrade,
             condition,
             embedding: [],  // populated later when item is indexed for search
@@ -5228,6 +5240,9 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
             if (ebayCategoryIdFromImport && existing.ebayCategoryId !== ebayCategoryIdFromImport) backfill.ebayCategoryId = ebayCategoryIdFromImport;
             // Migrate SKU-stored ebayListingId to numeric eBay ItemID so GetItem enrichment works
             if (existing.ebayListingId !== ebayItemId) backfill.ebayListingId = ebayItemId;
+            // Auto-publish on FindA.Sale — this item is live on eBay (returned by the
+            // active-listings call), so it should not sit on the review queue.
+            if (existing.draftStatus !== 'PUBLISHED') backfill.draftStatus = 'PUBLISHED';
             if (Object.keys(backfill).length > 0) {
               await prisma.item.update({ where: { id: existing.id }, data: backfill });
             }
@@ -5249,6 +5264,8 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
               organizerId: organizer.id,
               saleId: null,          // Feature #300: inventory items need no sale container
               ebayListingId: ebayItemId,  // always store numeric eBay ItemID, not SKU
+              // Imported item is live on eBay — publish it on FindA.Sale immediately.
+              draftStatus: 'PUBLISHED',
               conditionGrade,
               condition,
               category: ebayCategory || undefined,
