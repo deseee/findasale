@@ -21,6 +21,8 @@ module.exports = {
     '/forgot-password',
     '/reset-password',
     '/500',
+    '/embed',
+    '/embed/*',
   ],
   robotsTxtOptions: {
     policies: [
@@ -37,6 +39,7 @@ module.exports = {
           '/register',
           '/forgot-password',
           '/reset-password',
+          '/embed/',
         ],
       }
     ],
