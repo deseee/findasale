@@ -2,6 +2,24 @@
 
 ---
 
+## Weekly Audit — 2026-06-27 (Saturday automated)
+
+✅ **Clean audit — no action required.**
+
+15 routes browser-tested (25 screenshots), 3 user roles, Phase 5 code review. Blocked Queue is at **0 active items**. No CRITICAL, HIGH, or MEDIUM findings.
+
+- Admin auth gate works correctly (organizer → /access-denied with recovery CTAs)
+- All major pages load with proper states: homepage, pricing, sale detail, organizer dashboard, shopper dashboard, map
+- Dark mode: no violations found
+- SEO/ISR: `getStaticProps` with `revalidate: 3600` confirmed on sale detail pages
+- Phase 5 Rotation 2 code review (index.tsx + sales/[id].tsx): CLEAN
+
+2 LOW informational items (map tile ~1s load delay on cold nav; city pages show placeholder images for scraped sales — expected behavior). Neither requires any action.
+
+Full report: `claude_docs/audits/weekly-audit-2026-06-27.md`
+
+---
+
 ## S1035 — 2026-06-25 (today)
 
 **Fixed the eBay "Push to eBay" button so it handles category and condition errors automatically — no manual workaround needed.**
