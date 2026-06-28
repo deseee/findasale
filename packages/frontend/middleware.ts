@@ -19,6 +19,12 @@
  * crawlerAnalyticsMiddleware sees zero entries. This middleware runs on EVERY
  * request (including bots) and fires a fire-and-forget POST to /api/crawler-log
  * for known crawlers on page paths. The backend route writes the CrawlerVisit record.
+ *
+ * Sitemap index (fix/sitemap-stale-lastmod):
+ * `/sitemap.xml` is rewritten to the dynamic /api/sitemap-index route, which emits
+ * the sitemap INDEX with a `lastmod` computed at request time. Middleware runs before
+ * static file serving, so this overrides the stale committed public/sitemap.xml
+ * (frozen at lastmod 2026-05-24 because Vercel skips the next-sitemap postbuild hook).
  */
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
@@ -48,6 +54,16 @@ function isCrawlerPage(pathname: string): boolean {
 export function middleware(request: NextRequest) {
   const { searchParams, pathname } = request.nextUrl;
   const ua = request.headers.get('user-agent') ?? '';
+
+  // ── Sitemap index rewrite (fix/sitemap-stale-lastmod) ──────────────────────
+  // Must run before any early return below. Middleware executes before static
+  // file serving, so rewriting here makes the dynamic /api/sitemap-index route
+  // (fresh lastmod) authoritative for /sitemap.xml and overrides the stale
+  // committed public/sitemap.xml. Exact-match only — does not affect
+  // /server-sitemap.xml.
+  if (pathname === '/sitemap.xml') {
+    return NextResponse.rewrite(new URL('/api/sitemap-index', request.url));
+  }
 
   // ── Crawler tracking (Flag 4 fix) ──────────────────────────────────────────
   // Fire-and-forget: never await, never block the response.
