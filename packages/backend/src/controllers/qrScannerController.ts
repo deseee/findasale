@@ -23,12 +23,11 @@ export const recordQRScanEvent = async (
   try {
     const { saleId, eventType, decodedUrl, deviceType } = req.body;
 
-    // saleId is OPTIONAL — the global scanner (nav button) fires SCAN_INITIATED /
-    // SCAN_CAMERA_DENIED before any sale context exists, and decodes can target
-    // arbitrary off-domain QR codes. Normalize to null so the (now nullable)
-    // saleId column accepts these legitimate sale-less events.
-    const normalizedSaleId =
-      typeof saleId === 'string' && saleId.length > 0 ? saleId : null;
+    // Validate saleId — required field (NOT NULL in schema)
+    if (!saleId || typeof saleId !== 'string') {
+      res.status(400).json({ error: 'saleId is required' });
+      return;
+    }
 
     // Validate eventType — valid values per ADR-072
     const validEventTypes = ['SCAN_INITIATED', 'SCAN_DECODED_ON_DOMAIN', 'SCAN_DECODED_OFF_DOMAIN', 'SCAN_CAMERA_DENIED', 'SCAN_COMPLETED'];
@@ -52,7 +51,7 @@ export const recordQRScanEvent = async (
     // Create QRScannerEvent record
     const event = await prisma.qRScannerEvent.create({
       data: {
-        saleId: normalizedSaleId,
+        saleId,
         shopperId,
         eventType,
         decodedUrl: decodedUrl || null,
