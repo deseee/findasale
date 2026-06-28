@@ -162,6 +162,7 @@ import savedSearchRoutes from './routes/savedSearches';         // Saved Searche
 import saleWaitlistRoutes from './routes/saleWaitlist';         // Sale Waitlist (sale-level)
 import treasureHuntRoutes from './routes/treasureHunt';         // Daily Treasure Hunt
 import trendingRoutes from './routes/trending';                 // Trending Items & Sales
+import indexMetrosRoutes from './routes/index-metros';          // Weekend Sale Index — public aggregation (backlink/PR asset)
 import reportsRoutes from './routes/reports';                   // #442: Monthly trend report pages
 import unsubscribeRoutes from './routes/unsubscribe';           // Unsubscribe / Preferences
 import outreachRoutes from './routes/outreach';                      // Phase 1: Cold outreach email pipeline
@@ -662,6 +663,7 @@ app.use('/api/saved-searches', savedSearchRoutes);                     // Saved 
 app.use('/api/sale-waitlist', saleWaitlistRoutes);                     // Sale Waitlist (sale-level)
 app.use('/api/treasure-hunt', treasureHuntRoutes);                     // Daily Treasure Hunt
 app.use('/api/trending', trendingRoutes);                              // Trending Items & Sales
+app.use('/api/index', indexMetrosRoutes);                              // Weekend Sale Index — public aggregation for backlink/PR asset
 app.use('/api/reports', reportsRoutes);                                // #442: Monthly trend report pages
 app.use('/api/cities', citiesRoutes);                                  // ADR-074: Metro Sync city pages
 app.use('/api/categories', categoriesRoutes);                          // ADR-074 Phase 2: Category trending items

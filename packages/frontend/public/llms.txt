@@ -63,6 +63,7 @@ City landing pages at /city/{slug} and /city/{slug}/{category} include ItemList 
 - **City + Category** (`/city/{slug}/{category}`) — Filtered by sale type (e.g., /city/chicago-il/estate-sales)
 - **AI Score Tool** (`/ai-score`) — Check how discoverable any sale page is to AI crawlers
 - **Cities Index** (`/cities`) — Browse all cities with active sales
+- **The Weekend Sale Index** (`/sale-index`) — Live ranking of U.S. metros by upcoming estate sales, yard sales, auctions, and flea markets
 
 ## API & Integrations
 
@@ -108,6 +109,7 @@ FindA.Sale operates nationally with strongest density in Michigan, Illinois, Ohi
 
 - Homepage: https://finda.sale
 - Browse Sales: https://finda.sale/sales
+- The Weekend Sale Index: https://finda.sale/sale-index
 - Organizer Pricing: https://finda.sale/pricing
 - Organizer Guide: https://finda.sale/guide
 - Shopper Guild Primer: https://finda.sale/shopper/guild-primer

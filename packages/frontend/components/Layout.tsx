@@ -1894,6 +1894,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                 <li><Link href="/search" className="text-warm-400 hover:text-white">Search</Link></li>
                 <li><Link href="/categories" className="text-warm-400 hover:text-white">Browse by Category</Link></li>
                 <li><Link href="/cities" className="text-warm-400 hover:text-white">Browse by City</Link></li>
+                <li><Link href="/sale-index" className="text-warm-400 hover:text-white">The Weekend Sale Index</Link></li>
                 <li><Link href="/encyclopedia" className="text-warm-400 hover:text-white">Encyclopedia</Link></li>
                 <li><Link href="/guides" className="text-warm-400 hover:text-white">Guides</Link></li>
               </ul>

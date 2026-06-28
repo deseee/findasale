@@ -5,6 +5,7 @@ Disallow: /shopper/
 Disallow: /admin/
 Disallow: /api/
 Disallow: /auth/
+Disallow: /embed/
 Crawl-delay: 2
 
 Sitemap: https://finda.sale/server-sitemap.xml
