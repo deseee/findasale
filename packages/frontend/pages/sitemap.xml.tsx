@@ -1,32 +1,24 @@
 /**
- * Dynamic sitemap INDEX route.
+ * Fail-safe dynamic sitemap INDEX (Pages Router).
  *
- * Why this exists:
- *   The sitemap index used to be a committed static file at
- *   public/frontend/public/sitemap.xml with a hardcoded
- *   `<lastmod>2026-05-24</lastmod>`. On Vercel the `postbuild`
- *   (`next-sitemap`) lifecycle hook is not regenerating these files
- *   in production, so the static index was frozen — crawlers saw a
- *   `lastmod` that never advanced and de-prioritised re-crawls.
+ * NOTE ON ROUTING — this page is normally NOT the path that serves
+ * /sitemap.xml in production:
+ *   1. The committed public/sitemap.xml static file shadows this page, and
+ *   2. middleware.ts rewrites /sitemap.xml -> /api/sitemap-index (which runs
+ *      before static file serving and is therefore authoritative).
  *
- * What this does:
- *   Emits the same sitemap index, but as a server-rendered Pages Router
- *   route. `lastmod` is computed at request time (UTC date), so every
- *   production response is fresh without relying on the build pipeline.
+ * This page exists purely as defense-in-depth. If a maintainer later deletes
+ * public/sitemap.xml AND removes the middleware rewrite, Next.js will fall back
+ * to this route — and it still emits a fresh `lastmod` rather than a 404 or a
+ * frozen file. There is intentionally no hardcoded date anywhere in this fix.
  *
- * IMPORTANT: For this route to be reachable, the static
- * public/sitemap.xml MUST be deleted — in the Pages Router a static
- * file in /public shadows a route of the same path. That file is
- * removed in the same change that introduced this route.
- *
- * The actual content sitemap remains the dynamic /server-sitemap.xml
- * route — this index simply points at it with a current lastmod.
+ * Keep this output identical to pages/api/sitemap-index.ts.
  */
 import type { GetServerSideProps } from 'next';
 
-const baseUrl = process.env.SITE_URL || 'https://finda.sale';
-
 export const getServerSideProps: GetServerSideProps = async ({ res }) => {
+  const baseUrl = process.env.SITE_URL || 'https://finda.sale';
+
   // UTC YYYY-MM-DD — W3C date format accepted by Google for <lastmod>.
   const lastmod = new Date().toISOString().split('T')[0];
 
@@ -39,7 +31,6 @@ export const getServerSideProps: GetServerSideProps = async ({ res }) => {
 </sitemapindex>`;
 
   res.setHeader('Content-Type', 'application/xml; charset=utf-8');
-  // Mirror the caching strategy used for /server-sitemap.xml in vercel.json.
   res.setHeader(
     'Cache-Control',
     'public, max-age=3600, s-maxage=3600, stale-while-revalidate=86400'
