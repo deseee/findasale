@@ -104,7 +104,6 @@ export const getMetroIndex = async (req: Request, res: Response) => {
         deletedAt: null, // soft-delete exclude
         saleType: { notIn: ['RETAIL'] }, // exclude permanent retail storefronts
         city: { not: '' },
-        NOT: { city: null },
       },
       _count: { _all: true },
     });
