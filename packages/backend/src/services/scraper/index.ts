@@ -139,18 +139,63 @@ function generateDedupeKey(name: string, city: string): string {
 }
 
 /**
+ * Decode and sanitise a raw scraped email before storage.
+ *
+ * Handles the three malformed-email patterns found in the wild:
+ *   1. HTML entity encoding  — &#116;&#104;&#101;&#099;&#111;&#064;… (decimal or hex &#x…;)
+ *   2. Percent-encoding      — %40 → @, %20 → space, %2e → dot
+ *   3. Leading/trailing junk — " info@…" (space), "email:%20…" prefix, trailing "/", "&nbsp;"
+ *
+ * Returns the cleaned, lowercased email if it passes format validation,
+ * or null if the result is still malformed.
+ */
+function cleanScrapedEmail(raw: string): string | null {
+  if (!raw) return null;
+  let cleaned = raw;
+
+  // 1. Decode HTML entities — decimal (&#116;) and hex (&#x74;) and named (&amp; &quot;)
+  cleaned = cleaned
+    .replace(/&#x([0-9a-fA-F]+);/g, (_: string, hex: string) => String.fromCharCode(parseInt(hex, 16)))
+    .replace(/&#([0-9]+);?/g, (_: string, dec: string) => String.fromCharCode(parseInt(dec, 10)))
+    .replace(/&amp;/gi, '&')
+    .replace(/&quot;/gi, '"')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&nbsp;/gi, '');
+
+  // 2. Percent-decode (e.g. %40 → @, %20 → space, %2e → .)
+  try { cleaned = decodeURIComponent(cleaned); } catch { /* leave as-is if malformed */ }
+
+  // 3. Strip "email:" or "Email:" prefix
+  cleaned = cleaned.replace(/^email:\s*/i, '');
+
+  // 4. Strip surrounding whitespace, quotes, angle brackets
+  cleaned = cleaned.trim().replace(/^["'<]+|["'>]+$/g, '').trim();
+
+  // 5. Strip trailing slash / backslash
+  cleaned = cleaned.replace(/[\/\\]+$/, '').trim();
+
+  // 6. Basic email format validation: one @, dot in domain, no spaces or remaining junk
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(cleaned)) return null;
+  if (cleaned.includes('%') || cleaned.includes('&') || cleaned.includes(' ') || cleaned.includes('#')) return null;
+  if (cleaned.length < 5) return null;
+
+  return cleaned.toLowerCase();
+}
+
+/**
  * Validate and sanitize an email address for storage.
- * Returns the email if valid and external (not @system.finda.sale), otherwise null.
+ * Decodes HTML entities and percent-encoding before format checking.
+ * Returns the cleaned email if valid and external (not @system.finda.sale), otherwise null.
  */
 function isValidExternalEmail(email?: string): string | null {
   if (!email || typeof email !== 'string') return null;
-  const trimmed = email.trim();
-  // Basic email regex check
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  if (!emailRegex.test(trimmed)) return null;
+  const cleaned = cleanScrapedEmail(email);
+  if (!cleaned) return null;
   // Exclude system emails
-  if (trimmed.includes('@system.finda.sale')) return null;
-  return trimmed;
+  if (cleaned.includes('@system.finda.sale')) return null;
+  return cleaned;
 }
 
 /**
