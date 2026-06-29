@@ -34,9 +34,15 @@ export const useQRScanner = ({ onDecode, onCompleted, saleId }: UseQRScannerProp
         if (saleId) {
           payload.saleId = saleId;
         }
+        // Include CSRF token (double-submit cookie pattern) so the request passes the
+        // backend CSRF middleware — without this, every analytics event silently 403s.
+        const csrfToken = document.cookie
+          .split('; ')
+          .find(row => row.startsWith('csrf-token='))
+          ?.split('=')[1] ?? '';
         await fetch('/api/qr-scanner/event', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'x-csrf-token': csrfToken },
           body: JSON.stringify(payload),
         });
       } catch {
