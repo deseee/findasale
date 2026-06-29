@@ -28,6 +28,7 @@
 
 import { prisma } from '../lib/prisma';
 import { isEmailDomainBlocked } from '../services/suppressionService';
+import { isValidOutreachTarget } from '../utils/outreachFilter';
 import crypto from 'crypto';
 
 const IMAGE_EXTENSION_RE = /\.(png|jpe?g|gif|webp|svg|bmp|tiff?|ico)(\b|$)/i;
@@ -183,6 +184,12 @@ async function main() {
       if (isEmailDomainBlocked(email)) {
         suppressed++;
         console.log(`[seedDirectoryClaimEmails] Skipped ${org.id} — blocked domain: ${email}`);
+        continue;
+      }
+
+      // Business-name filter: skip off-topic businesses before queuing
+      if (!isValidOutreachTarget(org.businessName ?? '')) {
+        console.log(`[seedDirectoryClaimEmails] Skipped ${org.id} — business name filtered: ${org.businessName}`);
         continue;
       }
 

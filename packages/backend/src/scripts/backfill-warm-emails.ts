@@ -31,6 +31,7 @@
 
 import { prisma } from '../lib/prisma';
 import { isEmailDomainBlocked } from '../services/suppressionService';
+import { isValidOutreachTarget } from '../utils/outreachFilter';
 import crypto from 'crypto';
 
 const IMAGE_EXTENSION_RE = /\.(png|jpe?g|gif|webp|svg|bmp|tiff?|ico)(\b|$)/i;
@@ -192,6 +193,12 @@ async function main(): Promise<void> {
     }
 
     seenThisRun.add(emailLower);
+
+    // Business-name filter: skip off-topic businesses before queuing
+    if (!isValidOutreachTarget(org.businessName ?? '')) {
+      console.log(`[BackfillWarmEmails] Skipped ${org.id} (${org.businessName}) — business name filtered`);
+      continue;
+    }
 
     toInsert.push({
       organizerId: org.id,

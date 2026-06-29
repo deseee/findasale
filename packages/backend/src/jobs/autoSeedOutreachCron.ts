@@ -18,6 +18,7 @@ import { v4 as uuid } from 'uuid';
 import crypto from 'crypto';
 import { prisma } from '../lib/prisma';
 import { isEmailDomainBlocked } from '../services/suppressionService';
+import { isValidOutreachTarget } from '../utils/outreachFilter';
 
 const MAX_PER_RUN = 500;
 
@@ -131,6 +132,7 @@ export async function runAutoSeedOutreach(): Promise<void> {
       },
       select: {
         id: true,
+        businessName: true,
         contactEmail: true,
       },
     });
@@ -205,6 +207,12 @@ export async function runAutoSeedOutreach(): Promise<void> {
         continue;
       }
       seenEmailAddresses.add(emailLower);
+
+      // Business-name filter: skip off-topic businesses before queuing
+      if (!isValidOutreachTarget(org.businessName ?? '')) {
+        console.log(`[AutoSeedCron] Skipped organizer ${org.id} — business name filtered: ${org.businessName}`);
+        continue;
+      }
 
       toInsert.push({
         organizerId: org.id,
