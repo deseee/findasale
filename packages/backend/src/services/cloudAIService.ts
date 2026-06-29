@@ -512,46 +512,6 @@ export async function analyzeItemImage(
   return result;
 }
 
-/**
- * @deprecated Use getVisionLabels().qualityScore instead — it derives the same max-label-score
- * in the same Vision call that fetches labels, eliminating a redundant second API call.
- *
- * Enhancement 2: Compute a quality proxy for a photo based on Vision label scores.
- * Uses the maximum score from Vision labelAnnotations as the "confidence" of the photo.
- * Falls back to 0 if labels unavailable.
- */
-async function computePhotoQualityScore(imageBase64: string): Promise<number> {
-  try {
-    const response = await axios.post(
-      `https://vision.googleapis.com/v1/images:annotate?key=${GOOGLE_VISION_API_KEY}`,
-      {
-        requests: [
-          {
-            image: { content: imageBase64 },
-            features: [
-              { type: 'LABEL_DETECTION', maxResults: 15 },
-            ],
-          },
-        ],
-      },
-      { timeout: 15000 }
-    );
-
-    const annotations = response.data.responses?.[0];
-    const labelAnnotations = annotations?.labelAnnotations ?? [];
-
-    // Extract max score from all labels
-    if (labelAnnotations.length === 0) {
-      return 0;
-    }
-
-    const maxScore = Math.max(...labelAnnotations.map((l: any) => l.score ?? 0));
-    return maxScore;
-  } catch {
-    // Quality score computation failed — default to 0 (non-blocking)
-    return 0;
-  }
-}
 
 /**
  * Analyze multiple photos of the same item using Google Vision + Claude Haiku.

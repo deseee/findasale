@@ -2322,6 +2322,15 @@ export const analyzeItemTags = async (req: AuthRequest, res: Response) => {
       });
     }
 
+    // Organizer-intent gate (D-006): if all 5 core fields are already organizer-set,
+    // skip Vision + Haiku entirely — organizer values always win over AI suggestions.
+    // This prevents unnecessary API calls when the organizer has already filled everything.
+    const CORE_FIELDS = ['title', 'category', 'condition', 'price', 'brand'];
+    const allCoreFieldsOrganizerSet = CORE_FIELDS.every(f => item.userEditedFields.includes(f));
+    if (allCoreFieldsOrganizerSet) {
+      return res.json({ suggestedTags: item.tags || [] });
+    }
+
     let suggestedTags: string[] = [];
     if (isCloudAIAvailable()) {
       try {
