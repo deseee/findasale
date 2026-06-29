@@ -104,7 +104,7 @@ export const endAuctions = async () => {
               application_fee_amount: feeAmount,
               on_behalf_of: currentItem.sale!.organizer.stripeConnectId,
               transfer_data: { destination: currentItem.sale!.organizer.stripeConnectId },
-            });
+            }, { idempotencyKey: `auction-pi-${currentItem.id}` });
             stripePaymentIntentId = paymentIntent.id;
           } catch (err) {
             console.error(`Stripe PaymentIntent creation failed for item ${currentItem.id}:`, err);

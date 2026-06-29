@@ -272,6 +272,44 @@ export const batchAnalyzeImages = async (req: AuthRequest, res: Response): Promi
 
           let analysis: any = null;
 
+          // Organizer-intent gate: skip AI pipeline when all core fields are already
+          // set by the organizer (mirrors processRapidDraft.ts lines 113–130).
+          // For freshly-created items this will never fire (userEditedFields=[]),
+          // but guards against re-analysis of pre-existing organizer-filled items.
+          try {
+            const gateItem = await prisma.item.findUnique({
+              where: { id: itemId },
+              select: { userEditedFields: true, title: true, category: true, condition: true, price: true, brand: true },
+            });
+            if (gateItem) {
+              const gateEditedFields = gateItem.userEditedFields ?? [];
+              const coreFields = ['title', 'category', 'condition', 'price', 'brand'] as const;
+              const allOrganizerFilled = coreFields.every(field => {
+                if (gateEditedFields.includes(field)) return true;
+                const val = (gateItem as any)[field];
+                return val !== null && val !== undefined && val !== '';
+              });
+              if (allOrganizerFilled) {
+                console.log(`[AI] Skipping — organizer fields complete for item ${itemId}`);
+                return {
+                  itemId,
+                  photoIndices,
+                  isSet: photoIndices.length > 1,
+                  quantity: photoIndices.length,
+                  suggestedTitle: gateItem.title || 'Item',
+                  suggestedDescription: undefined,
+                  suggestedCategory: gateItem.category ?? undefined,
+                  suggestedCondition: gateItem.condition ?? undefined,
+                  suggestedPrice: gateItem.price ? gateItem.price / 100 : undefined,
+                  suggestedTags: [],
+                  aiConfidence: undefined,
+                } as ClusterSummary;
+              }
+            }
+          } catch (gateErr) {
+            console.warn(`[AI] Organizer-intent gate check failed for item ${itemId}; proceeding with AI:`, gateErr);
+          }
+
           if (useCloudAI) {
             try {
               const imageBuffers = clusterImages.map(img => img.buffer);
