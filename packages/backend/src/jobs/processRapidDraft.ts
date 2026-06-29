@@ -110,6 +110,25 @@ export async function processRapidDraft(itemId: string): Promise<void> {
         return;
       }
 
+      // Organizer-intent gate: skip full Vision + Haiku pipeline when all core fields
+      // are already populated by the organizer. This avoids a needless Vision API call
+      // (and its associated cost) when there is nothing for AI to contribute.
+      const userEditedFields = item.userEditedFields ?? [];
+      const coreFields = ['title', 'category', 'condition', 'price', 'brand'] as const;
+      const allOrganizerFilled = coreFields.every(field => {
+        if (userEditedFields.includes(field)) return true;
+        const val = (item as any)[field];
+        return val !== null && val !== undefined && val !== '';
+      });
+      if (allOrganizerFilled) {
+        console.log(`[processRapidDraft] Skipping AI pipeline for item ${itemId} — all core organizer fields pre-set`);
+        await prisma.item.update({
+          where: { id: itemId },
+          data: { draftStatus: 'PENDING_REVIEW' }
+        });
+        return;
+      }
+
       // Call Vision → Haiku chain with all photos (or single if only one available)
       const aiResult = photoBuffers.length === 1
         ? await analyzeItemImage(photoBuffers[0], mimeTypes[0])

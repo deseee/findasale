@@ -224,7 +224,6 @@ import './jobs/deliverabilityMonitorJob'; // Email deliverability monitoring —
 import './jobs/gmailHealthCron';          // Gmail OAuth health, daily send summary, suspension detect
 import { scheduleCleanupCron } from './jobs/cleanupStaleDrafts'; // Phase 2B: Cleanup stale DRAFT items daily
 import { syncAchievements } from './services/achievementService'; // Features #58-59: Initialize achievements
-import { scheduleAuctionAutoCloseCron } from './jobs/auctionAutoCloseCron'; // ADR-013 Phase 2: Auto-close expired auctions + notify winners
 import { scheduleSaleAutoCloseCron } from './jobs/saleAutoCloseCron'; // Auto-close expired PUBLISHED scraped sales hourly
 import { schedulePhotoRetentionCron } from './jobs/photoRetentionCron'; // Feature #103: Photo retention + deletion
 import { scheduleWebhookEventPruneJob } from './jobs/webhookEventPruneJob'; // Webhook event pruning (30-day retention)
@@ -831,9 +830,6 @@ httpServer.listen(PORT, '0.0.0.0', () => {
 
   // Phase 2B: Register cleanup cron for stale DRAFT items
   scheduleCleanupCron();
-
-  // ADR-013 Phase 2: Auction auto-close cron (background + notifications)
-  scheduleAuctionAutoCloseCron();
 
   // Auto-close expired PUBLISHED scraped sales hourly
   scheduleSaleAutoCloseCron();

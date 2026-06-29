@@ -133,6 +133,25 @@ export function pruneOldCostRecords(): void {
 }
 
 /**
+ * Track a Google Vision API call for unified cost ceiling enforcement.
+ *
+ * Google Vision pricing (combined features: LABEL + OBJECT + TEXT):
+ *   ~$1.50 per 1,000 images = $0.0015 per image
+ * Converted to Anthropic-equivalent tokens so the same $50 ceiling applies.
+ *
+ * @param imageCount Number of images sent in this Vision call (default 1)
+ */
+export async function trackVisionCall(imageCount: number = 1): Promise<void> {
+  // Google Vision combined-feature cost per image (~$0.0015)
+  const GOOGLE_VISION_COST_PER_IMAGE = 0.0015;
+  const visionCostUsd = imageCount * GOOGLE_VISION_COST_PER_IMAGE;
+  // Convert to Anthropic-equivalent token units so the shared $50 ceiling counts Vision spend
+  const equivalentTokens = Math.round((visionCostUsd / ANTHROPIC_COST_PER_M_TOKENS) * 1_000_000);
+  await trackAITokens(equivalentTokens);
+}
+
+
+/**
  * Estimate tokens for Claude request.
  * Formula: rough estimate based on input + expected output.
  * Claude Haiku: ~100k input tokens per sec, typical responses 50–400 tokens.

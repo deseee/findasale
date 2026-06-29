@@ -13,7 +13,7 @@
 import axios from 'axios';
 import { regionConfig } from '../config/regionConfig';
 import { EBAY_L1_CATEGORIES } from '../config/ebayCategories';
-import { trackAITokens, estimateTokensForRequest, isAICostCeilingExceeded } from '../lib/aiCostTracker';
+import { trackAITokens, estimateTokensForRequest, isAICostCeilingExceeded, trackVisionCall } from '../lib/aiCostTracker';
 
 const GOOGLE_VISION_API_KEY = process.env.GOOGLE_VISION_API_KEY;
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
@@ -89,7 +89,7 @@ export function isAnthropicAvailable(): boolean {
 
 // ── Step 1: Google Vision label extraction ────────────────────────────────────
 
-export async function getVisionLabels(imageBase64: string): Promise<string[]> {
+export async function getVisionLabels(imageBase64: string): Promise<{ labels: string[]; qualityScore: number }> {
   try {
     const response = await axios.post(
       `https://vision.googleapis.com/v1/images:annotate?key=${GOOGLE_VISION_API_KEY}`,
@@ -109,7 +109,8 @@ export async function getVisionLabels(imageBase64: string): Promise<string[]> {
     );
 
     const annotations = response.data.responses?.[0];
-    const labels: string[] = (annotations?.labelAnnotations ?? []).map((l: any) => l.description);
+    const labelAnnotations: any[] = annotations?.labelAnnotations ?? [];
+    const labels: string[] = labelAnnotations.map((l: any) => l.description);
     const objects: string[] = (annotations?.localizedObjectAnnotations ?? []).map((o: any) => o.name);
     // TEXT_DETECTION returns a single block with all text, plus individual word annotations
     const textAnnotations: any[] = annotations?.textAnnotations ?? [];
@@ -118,13 +119,21 @@ export async function getVisionLabels(imageBase64: string): Promise<string[]> {
       .map((t: any) => t.description?.trim())
       .filter((t: string) => t && t.length > 1 && t.length < 40); // skip single chars and long strings
 
+    // Derive quality score from max label confidence — replaces computePhotoQualityScore
+    const qualityScore = labelAnnotations.length > 0
+      ? Math.max(...labelAnnotations.map((l: any) => l.score ?? 0))
+      : 0.5;
+
+    // Track Vision API cost for unified $50 ceiling
+    await trackVisionCall(1);
+
     // Objects first (more specific), then labels, then detected text — deduplicated
     const combined = [...new Set([...objects, ...labels, ...detectedTexts])];
-    return combined.slice(0, 18);
+    return { labels: combined.slice(0, 18), qualityScore };
   } catch (error: any) {
     // Feature #109: Graceful degradation — return empty labels on Vision API failure
     console.warn('[cloudAIService] Google Vision API error:', error.message || error);
-    return [];
+    return { labels: [], qualityScore: 0.5 };
   }
 }
 
@@ -477,7 +486,8 @@ export async function analyzeItemImage(
   // Vision labels are best-effort — proceed without them if Vision API fails
   let visionLabels: string[] = [];
   try {
-    visionLabels = await getVisionLabels(imageBase64);
+    const visionResult = await getVisionLabels(imageBase64);
+    visionLabels = visionResult.labels;
   } catch {
     // Vision API unavailable or quota exceeded — Haiku will analyse image alone
   }
@@ -503,6 +513,9 @@ export async function analyzeItemImage(
 }
 
 /**
+ * @deprecated Use getVisionLabels().qualityScore instead — it derives the same max-label-score
+ * in the same Vision call that fetches labels, eliminating a redundant second API call.
+ *
  * Enhancement 2: Compute a quality proxy for a photo based on Vision label scores.
  * Uses the maximum score from Vision labelAnnotations as the "confidence" of the photo.
  * Falls back to 0 if labels unavailable.
@@ -583,21 +596,23 @@ export async function analyzeItemImages(
 
   const imageBase64Array = buffers.map(buf => buf.toString('base64'));
 
-  // Enhancement 2: Compute quality score for each photo (best-photo-first sorting)
-  // This runs in parallel with subsequent analysis, non-blocking
+  // Enhancement 2 + ADR-069 Phase 1: Single Vision pass per photo — derives both
+  // quality score (for best-photo-first sorting) and labels (for Haiku context).
+  // Previously: two separate Vision calls per photo (computePhotoQualityScore + getVisionLabels).
+  // Now: getVisionLabels() returns { labels, qualityScore } in one API call.
   let photoOrderIndices: number[] = Array.from({ length: buffers.length }, (_, i) => i);
-  let photosWithScores: PhotoWithScore[] | null = null;
+  let visionLabels: string[] = [];
   try {
-    const photosWithQuality = await Promise.all(
-      buffers.map((buf, idx) =>
-        computePhotoQualityScore(imageBase64Array[idx])
-          .then(score => ({ index: idx, buffer: buf, mimeType: types[idx], qualityScore: score }))
-          .catch(() => ({ index: idx, buffer: buf, mimeType: types[idx], qualityScore: 0 }))
+    const allVisionResults = await Promise.all(
+      imageBase64Array.map((b64, idx) =>
+        getVisionLabels(b64)
+          .then(res => ({ index: idx, buffer: buffers[idx], mimeType: types[idx], qualityScore: res.qualityScore, labels: res.labels }))
+          .catch(() => ({ index: idx, buffer: buffers[idx], mimeType: types[idx], qualityScore: 0, labels: [] as string[] }))
       )
     );
 
-    // Sort by quality score (descending) — highest score first
-    photosWithScores = photosWithQuality.sort((a, b) => b.qualityScore - a.qualityScore);
+    // Sort by quality score (descending) — highest score first (best-photo-first)
+    const photosWithScores = [...allVisionResults].sort((a, b) => b.qualityScore - a.qualityScore);
 
     // Track the reordered indices
     photoOrderIndices = photosWithScores.map(p => p.index);
@@ -612,26 +627,12 @@ export async function analyzeItemImages(
       types[i] = reorderedTypes[i];
       imageBase64Array[i] = reorderedBuffers[i].toString('base64');
     }
-  } catch {
-    // Quality score computation failed — proceed with original order (non-blocking)
-  }
 
-  // ADR-069 Phase 1: Vision labels from ALL photos, not just [0]
-  let visionLabels: string[] = [];
-  try {
-    const allVisionLabels: string[] = [];
-    for (let i = 0; i < imageBase64Array.length; i++) {
-      try {
-        const labels = await getVisionLabels(imageBase64Array[i]);
-        allVisionLabels.push(...labels);
-      } catch {
-        // Graceful: skip this photo's labels, continue with others
-      }
-    }
-    // Deduplicate + cap at 20
-    visionLabels = Array.from(new Set(allVisionLabels)).slice(0, 20);
+    // Collect deduplicated labels from all photos (cap at 20)
+    const allLabels: string[] = allVisionResults.flatMap(r => r.labels);
+    visionLabels = Array.from(new Set(allLabels)).slice(0, 20);
   } catch {
-    // Vision API unavailable or quota exceeded — proceed without labels
+    // Vision pass failed — proceed with original order and no labels (non-blocking)
   }
 
   // Multi-image Haiku analysis (Phase 2: pass clusterPhotos for role context)

@@ -322,7 +322,7 @@ export const getStaticPaths: GetStaticPaths = async () => {
         Array.isArray(data) ? data : data.slugs ?? [];
       if (fetched.length > 0) {
         // Pre-build top 30 by count
-        slugs = fetched.slice(0, 30).map((s) => (typeof s === 'string' ? s : s.slug));
+        slugs = fetched.slice(0, 25).map((s) => (typeof s === 'string' ? s : s.slug));
       }
     }
   } catch (err) {

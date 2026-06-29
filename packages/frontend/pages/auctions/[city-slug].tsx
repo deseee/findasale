@@ -35,7 +35,7 @@ import {
 // Add cities with known GSC impressions here. All other slugs use blocking ISR.
 // ---------------------------------------------------------------------------
 const TOP_AUCTION_CITIES = [
-  // Core US markets
+  // Core US markets (top 15)
   'denver-co',
   'grand-rapids-mi',
   'chicago-il',
@@ -51,37 +51,15 @@ const TOP_AUCTION_CITIES = [
   'seattle-wa',
   'atlanta-ga',
   'minneapolis-mn',
-  // GSC-confirmed markets
-  'birmingham-al',
-  'long-beach-ca',
+  // GSC-confirmed markets (top 10 by impressions)
   'boston-ma',
   'nashville-tn',
   'charlotte-nc',
   'austin-tx',
-  'fort-worth-tx',
   'columbus-oh',
-  'cleveland-oh',
-  'cincinnati-oh',
-  'pittsburgh-pa',
-  'richmond-va',
-  'raleigh-nc',
-  'milwaukee-wi',
   'indianapolis-in',
-  'memphis-tn',
-  'louisville-ky',
   'kansas-city-mo',
   'st-louis-mo',
-  'san-diego-ca',
-  'san-francisco-ca',
-  'sacramento-ca',
-  'las-vegas-nv',
-  'salt-lake-city-ut',
-  'oklahoma-city-ok',
-  'albuquerque-nm',
-  'tucson-az',
-  'el-paso-tx',
-  'jacksonville-fl',
-  'orlando-fl',
   'miami-fl',
   'tampa-fl',
 ];
@@ -495,7 +473,7 @@ export const getStaticPaths: GetStaticPaths = async () => {
       if (fetched.length > 0) {
         // Merge API slugs with our top list, deduplicated, capped at 200
         const merged = Array.from(new Set([...TOP_AUCTION_CITIES, ...fetched]));
-        slugs = merged.slice(0, 200);
+        slugs = merged.slice(0, 25);
       }
     }
   } catch (err) {

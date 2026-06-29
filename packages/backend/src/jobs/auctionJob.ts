@@ -5,6 +5,7 @@ import { prisma } from '../lib/prisma';
 import { awardXp, applyHuntPassMultiplier, XP_AWARDS, checkMonthlyXpCap } from '../services/xpService'; // Explorer's Guild XP awards
 import { emailService } from '../lib/emailService';
 import { suppressionService } from '../services/suppressionService';
+import { createNotification } from '../services/notificationService';
 const stripe = () => getStripe();
 
 
@@ -25,7 +26,7 @@ export const endAuctions = async () => {
         sale: {
           select: {
             id: true,
-            organizer: { select: { stripeConnectId: true } }
+            organizer: { select: { stripeConnectId: true, userId: true } }
           }
         },
       },
@@ -60,7 +61,7 @@ export const endAuctions = async () => {
 
         const currentItem = await tx.item.findUnique({
           where: { id: item.id },
-          include: { sale: { include: { organizer: { select: { stripeConnectId: true } } } } }
+          include: { sale: { include: { organizer: { select: { stripeConnectId: true, userId: true } } } } }
         });
 
         if (!currentItem) return null;
@@ -187,6 +188,29 @@ export const endAuctions = async () => {
             }
           }
         }
+      }
+
+      // In-app notifications: winner + organizer (ported from auctionAutoCloseCron)
+      if (result.highestBid) {
+        await createNotification(
+          result.highestBid.userId,
+          'AUCTION_WON',
+          'Auction Won!',
+          `Congratulations! You won the auction for ${result.item.title} with a bid of $${result.price.toFixed(2)}`,
+          `/items/${result.item.id}`,
+          'OPERATIONAL'
+        ).catch(err => console.warn('[auctionJob] Failed to create winner notification:', err));
+      }
+
+      if (result.item.sale?.organizer?.userId) {
+        await createNotification(
+          result.item.sale.organizer.userId,
+          'AUCTION_CLOSED',
+          'Auction Closed',
+          `Your auction for ${result.item.title} has ended. Final bid: $${result.price.toFixed(2)}`,
+          `/items/${result.item.id}`,
+          'OPERATIONAL'
+        ).catch(err => console.warn('[auctionJob] Failed to create organizer notification:', err));
       }
 
       console.log(

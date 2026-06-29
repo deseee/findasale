@@ -307,7 +307,7 @@ export const getStaticPaths: GetStaticPaths = async () => {
         typeof item === 'string' ? item : item.slug
       ).filter(Boolean);
       if (fetched.length > 0) {
-        slugs = fetched.slice(0, 50);
+        slugs = fetched.slice(0, 25);
       }
     }
   } catch (err) {
