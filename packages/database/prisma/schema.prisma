@@ -4581,8 +4581,8 @@ model MarkdownCycle {
 
 model QRScannerEvent {
   id         String   @id @default(cuid())
-  saleId     String
-  sale       Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  saleId     String?
+  sale       Sale?    @relation(fields: [saleId], references: [id], onDelete: SetNull)
   shopperId  String?
   shopper    User?    @relation("QRScannerEventShopper", fields: [shopperId], references: [id], onDelete: SetNull)
   eventType  String // SCAN_INITIATED | SCAN_DECODED_ON_DOMAIN | SCAN_DECODED_OFF_DOMAIN | SCAN_CAMERA_DENIED

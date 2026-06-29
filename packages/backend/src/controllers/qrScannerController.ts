@@ -23,9 +23,9 @@ export const recordQRScanEvent = async (
   try {
     const { saleId, eventType, decodedUrl, deviceType } = req.body;
 
-    // Validate saleId — required field (NOT NULL in schema)
-    if (!saleId || typeof saleId !== 'string') {
-      res.status(400).json({ error: 'saleId is required' });
+    // saleId is optional — global nav scanner fires events without a sale context
+    if (saleId !== undefined && saleId !== null && typeof saleId !== 'string') {
+      res.status(400).json({ error: 'saleId must be a string if provided' });
       return;
     }
 
@@ -51,7 +51,7 @@ export const recordQRScanEvent = async (
     // Create QRScannerEvent record
     const event = await prisma.qRScannerEvent.create({
       data: {
-        saleId,
+        saleId: saleId || null,
         shopperId,
         eventType,
         decodedUrl: decodedUrl || null,
