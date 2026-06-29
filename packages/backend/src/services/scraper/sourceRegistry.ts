@@ -332,7 +332,7 @@ export const SOURCE_REGISTRY: ScraperSourceDef[] = [
     displayName: 'AuctionZip.com (Auctioneer Directory)',
     type: 'directory',
     runMode: 'national-once',
-    enabled: true,
+    enabled: false, // DISABLED 2026-06-29 — Cloudflare IP-block on Railway egress; data covered by Invaluable.com
     qualityTier: 'high',
     legalNote: "ToS CLEAR — ToS Section 4 states content is public information usable for personal and commercial use. robots.txt disallows only /cgi-bin/*, /search, /my-account, /login, /bidNow — /Auctioneer-Directory/ explicitly allowed. Static HTML A–Z letter pages, ~25,000 US auction houses. Verified 2026-06-10.",
     run: async (_metro: string, _organizerId: string, _rateLimiter: RateLimiter): Promise<ScrapeStats> => {
