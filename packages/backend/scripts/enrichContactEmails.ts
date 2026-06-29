@@ -207,44 +207,12 @@ interface GooglePlacesResponse {
 }
 
 async function queryGooglePlaces(
-  businessName: string,
-  city: string
+  _businessName: string,
+  _city: string
 ): Promise<string | null> {
-  // BILLING LOCKDOWN — May 2026: $201 incident. Hard-coded off.
-  // Do NOT remove this block or gate on GOOGLE_MAPS_ENABLED — that env var is no longer the control.
+  // BILLING LOCKDOWN — May 2026: $201 incident. Hard-coded off permanently.
+  // Dead code below has been removed. Do NOT re-enable without Patrick sign-off.
   return null;
-
-  const query = `${businessName} ${city}`.trim();
-  
-  try {
-    const body = JSON.stringify({
-      textQuery: query,
-      maxResultCount: 1,
-    });
-
-    const response = await fetchWithTimeout(
-      'https://places.googleapis.com/v1/places:searchText',
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Goog-Api-Key': GOOGLE_PLACES_API_KEY,
-          'X-Goog-FieldMask': 'places.websiteUri,places.displayName',
-        },
-        body,
-      }
-    );
-
-    if (!response) return null;
-
-    const data: GooglePlacesResponse = JSON.parse(response);
-    if (data.places && data.places.length > 0 && data.places[0].websiteUri) {
-      return data.places[0].websiteUri;
-    }
-    return null;
-  } catch (error) {
-    return null;
-  }
 }
 
 /**
