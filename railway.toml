@@ -1,5 +1,18 @@
 [build]
 dockerfilePath = "packages/backend/Dockerfile.production"
+# Watch paths: trigger a backend deploy whenever backend source, database schema,
+# shared types, root manifests (pnpm-lock.yaml / package.json / pnpm-workspace.yaml),
+# or this config file itself changes. Docs/frontend-only pushes are excluded so they
+# don't wake the backend builder unnecessarily.
+watchPatterns = [
+  "packages/backend/**",
+  "packages/database/**",
+  "packages/shared/**",
+  "pnpm-lock.yaml",
+  "package.json",
+  "pnpm-workspace.yaml",
+  "railway.toml"
+]
 
 [deploy]
 startCommand = "node /app/packages/backend/dist/index.js"
