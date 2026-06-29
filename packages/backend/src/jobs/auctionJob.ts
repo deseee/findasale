@@ -207,7 +207,7 @@ export const endAuctions = async () => {
           result.item.sale.organizer.userId,
           'AUCTION_CLOSED',
           'Auction Closed',
-          `Your auction for ${result.item.title} has ended. Final bid: $${result.price.toFixed(2)}`,
+          `Your auction for ${result.item.title} has ended. Final bid: $${result.price?.toFixed(2) ?? '0.00'}`,
           `/items/${result.item.id}`,
           'OPERATIONAL'
         ).catch(err => console.warn('[auctionJob] Failed to create organizer notification:', err));

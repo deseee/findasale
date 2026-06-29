@@ -463,7 +463,7 @@ router.post('/visual', searchLimiter, upload.single('photo'), async (req: Reques
     try {
       const allLabels = await getVisionLabels(file.buffer.toString('base64'));
       // Take top 5 labels with high confidence
-      labels = allLabels.slice(0, 5);
+      labels = allLabels.labels.slice(0, 5);
     } catch (err) {
       console.error('Vision API error:', err);
       return res.status(500).json({ error: 'Failed to analyze image' });
