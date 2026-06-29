@@ -172,3 +172,6 @@ claude_docs/audits/secrets-audit-*.md
 
 # centralized local secrets for scheduled tasks (never commit)
 .secrets.env
+
+# Local DB/infra backups — 619MB, must never enter git history
+backups/
