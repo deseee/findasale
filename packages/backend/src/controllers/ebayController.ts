@@ -4535,7 +4535,7 @@ async function getAcceptedConditionsForCategory(categoryId: string): Promise<Set
  * If the policy call fails, returns desired unchanged (eBay will reject at publish
  * if invalid — logged for diagnosis).
  */
-async function ensureConditionValidForCategory(
+export async function ensureConditionValidForCategory(
   desired: string,
   categoryId: string
 ): Promise<string> {
