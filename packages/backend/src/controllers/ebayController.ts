@@ -2995,6 +2995,7 @@ export const publishItemOffer = async (req: AuthRequest, res: Response) => {
         createdAt: true,
         costBasis: true,
         roomTag: true,
+        condition: true,
         sale: { select: { organizerId: true, address: true, city: true, state: true, zip: true } },
       },
     });
