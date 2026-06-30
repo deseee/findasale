@@ -17,8 +17,13 @@ export async function runDeliverabilityMonitor(): Promise<void> {
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
   // Count email suppressions (bounces + complaints) in the last 7 days
+  // Exclude COMPETITOR_DOMAIN entries — proactive domain blocks, not real mail bounces.
+  // Counting them inflates the reported bounce rate and fires false-positive alerts.
   const recentSuppressions = await prisma.emailSuppression.count({
-    where: { suppressedAt: { gte: sevenDaysAgo } },
+    where: {
+      suppressedAt: { gte: sevenDaysAgo },
+      suppressionReason: { not: 'COMPETITOR_DOMAIN' },
+    },
   });
 
   // Count successful sends in the last 7 days
