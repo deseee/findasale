@@ -3123,7 +3123,8 @@ export const publishItemOffer = async (req: AuthRequest, res: Response) => {
           // USED_GOOD (eBay's universal "Used") and other USED variants before falling
           // back to NEW_OTHER. Prevents auto-listing used items as NEW_OTHER just
           // because that came first alphabetically in the fallback list.
-          const isUsedFamily = typeof invBody.condition === 'string' && invBody.condition.startsWith('USED_');
+          const isUsedFamily = item.condition === 'USED' || item.condition === 'PARTS_OR_REPAIR'
+            || (typeof invBody.condition === 'string' && invBody.condition.startsWith('USED_'));
           const retryOrder = (isUsedFamily
             ? ['USED_GOOD', 'USED_VERY_GOOD', 'USED_EXCELLENT', 'USED_ACCEPTABLE', 'FOR_PARTS_OR_NOT_WORKING', 'NEW_OTHER', 'NEW']
             : ['NEW_OTHER', 'NEW', 'NEW_WITH_DEFECTS', 'USED_EXCELLENT', 'USED_GOOD']
@@ -3243,6 +3244,75 @@ export const publishItemOffer = async (req: AuthRequest, res: Response) => {
               ebayListingId = publishData.listingId;
             }
           }
+        }
+      }
+
+      // 25101 self-heal (PublishNow path): eBay rejected the inventory item's
+      // packageType because it conflicts with the fulfillment policy's shipping services
+      // (e.g. PARCEL_OR_PADDED_ENVELOPE with a flat-rate-envelope policy).
+      // Fix: GET the current inventory item by canonical SKU, strip packageType from
+      // packageWeightAndSize, PUT it back, and retry publish. Mirrors the identical
+      // self-heal in pushSaleToEbay (Pass 3, ~line 2673).
+      if (!ebayListingId && publishError.includes('25101')) {
+        // Resolve canonical SKU from the live offer (same SKU-drift guard as 25002).
+        let canonicalSku25101 = sku;
+        const offerPath25101 = encodeURIComponent(`/sell/inventory/v1/offer/${item.ebayOfferId}`);
+        const offerGetRes25101 = await fetch(ebayProxyUrl(offerPath25101), {
+          headers: { ...ebayUserHeaders(accessToken), ...ebayProxyHeaders() },
+        });
+        if (offerGetRes25101.ok) {
+          const offerData25101 = (await offerGetRes25101.json()) as any;
+          if (offerData25101.sku) canonicalSku25101 = offerData25101.sku;
+        } else {
+          console.warn(`[eBay PublishNow 25101] offer GET failed (${offerGetRes25101.status}); falling back to buildCustomLabel SKU`);
+        }
+        const inventoryPath25101 = encodeURIComponent(`/sell/inventory/v1/inventory_item/${encodeURIComponent(canonicalSku25101)}`);
+        const inventoryUrl25101 = ebayProxyUrl(inventoryPath25101);
+        console.warn(`[eBay PublishNow 25101] sku=${canonicalSku25101} — stripping packageType and retrying`);
+        try {
+          const invGet25101 = await fetch(inventoryUrl25101, {
+            headers: { ...ebayUserHeaders(accessToken), ...ebayProxyHeaders() },
+          });
+          if (invGet25101.ok) {
+            const invBody25101 = (await invGet25101.json()) as any;
+            if (invBody25101.packageWeightAndSize) {
+              const pkg25101 = { ...(invBody25101.packageWeightAndSize as Record<string, unknown>) };
+              delete (pkg25101 as any).packageType;
+              invBody25101.packageWeightAndSize = pkg25101;
+            }
+            const retryInvRes25101 = await fetch(inventoryUrl25101, {
+              method: 'PUT',
+              headers: {
+                ...ebayUserHeaders(accessToken),
+                ...(proxySecret ? { 'X-Proxy-Secret': proxySecret } : {}),
+              },
+              body: JSON.stringify(invBody25101),
+            });
+            if (retryInvRes25101.ok || retryInvRes25101.status === 204) {
+              publishResponse = await fetch(publishUrl, {
+                method: 'POST',
+                headers: {
+                  ...ebayUserHeaders(accessToken),
+                  ...(proxySecret ? { 'X-Proxy-Secret': proxySecret } : {}),
+                },
+              });
+              if (publishResponse.ok) {
+                trackEbayCall();
+                const publishData25101 = (await publishResponse.json()) as any;
+                ebayListingId = publishData25101.listingId;
+                console.log(`[eBay PublishNow 25101] ${canonicalSku25101}: succeeded after stripping packageType`);
+              } else {
+                const stillErr25101 = await publishResponse.clone().text();
+                console.warn(`[eBay PublishNow 25101] ${canonicalSku25101}: still failing after strip: ${stillErr25101.slice(0, 200)}`);
+              }
+            } else {
+              console.warn(`[eBay PublishNow 25101] inventory PUT (strip packageType) failed: ${retryInvRes25101.status}`);
+            }
+          } else {
+            console.warn(`[eBay PublishNow 25101] inventory GET failed: ${invGet25101.status}`);
+          }
+        } catch (err25101) {
+          console.error('[eBay PublishNow 25101] self-heal threw:', (err25101 as Error).message);
         }
       }
 

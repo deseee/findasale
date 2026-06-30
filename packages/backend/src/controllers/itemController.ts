@@ -1605,14 +1605,32 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
             }
           }
           if (condition !== undefined && updatedItem.condition) {
-            // Map FindA.Sale condition → eBay Inventory API condition enum
+            // Map FindA.Sale condition → eBay Inventory API condition enum.
+            // Then remap to a condition the item's eBay category actually accepts —
+            // flat USED_GOOD is rejected (25021) by categories that only accept
+            // USED_EXCELLENT (conditionId 3000), e.g. GPS category 156955.
+            // ensureConditionValidForCategory() calls eBay's Metadata API and walks
+            // the accepted-conditions list to find the closest valid match.
             const condMap: Record<string, string> = {
               NEW: 'NEW',
               USED: 'USED_GOOD',
               REFURBISHED: 'SELLER_REFURBISHED',
               PARTS_OR_REPAIR: 'FOR_PARTS_OR_NOT_WORKING',
             };
-            inventoryUpdates['condition'] = condMap[updatedItem.condition] ?? 'USED_GOOD';
+            const rawCondition = condMap[updatedItem.condition] ?? 'USED_GOOD';
+            // Use the updated ebayCategoryId if the organizer just changed it,
+            // otherwise fall back to the pre-update value from item (also selected above).
+            const categoryIdForCond = (updatedItem as any).ebayCategoryId ?? item.ebayCategoryId ?? null;
+            let finalCondition = rawCondition;
+            if (categoryIdForCond) {
+              try {
+                const { ensureConditionValidForCategory } = await import('../controllers/ebayController');
+                finalCondition = await ensureConditionValidForCategory(rawCondition, categoryIdForCond);
+              } catch (condErr) {
+                console.warn(`[eBay PushSync] ensureConditionValidForCategory failed (non-fatal): ${(condErr as Error).message}`);
+              }
+            }
+            inventoryUpdates['condition'] = finalCondition;
           }
 
           // Use the REAL SKU from the offer object (carries a date suffix) — not `FAS-${id}`.
