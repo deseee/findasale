@@ -1,0 +1,135 @@
+name: Overture/BrightQuery Enrichment (#556)
+
+# Monthly secondhand-business enrichment ingestion, aligned to the Overture Maps
+# monthly release cadence.
+#
+# ATTRIBUTION (CDLA Permissive 2.0):
+#   Source data is the Overture Maps Foundation "Places" theme, licensed under the
+#   Community Data License Agreement – Permissive, Version 2.0 (CDLA-Permissive-2.0).
+#   Commercial use permitted; the license text ships in NOTICE-overture.md.
+#
+# Two stages in one job:
+#   Stage A — Python + DuckDB queries the Overture Places parquet on AWS Open Data
+#             (anonymous us-west-2 S3, predicate pushdown) → candidates NDJSON.
+#             DuckDB lives ONLY here, never in the backend bundle.
+#   Stage B — npx tsx runOvertureEnrichment.ts reads the NDJSON and runs the
+#             existing classifier/dedup/ingest chain (batchUpsertScrapedOrganizers).
+#
+# Pacing: batched DB writes + the existing OUTREACH_DAILY_CAP send gate only.
+# State chunking is for memory bounding, NOT ban-avoidance (open S3, no ban risk).
+
+on:
+  schedule:
+    # 6th of each month, 06:00 UTC — a few days after Overture's monthly release
+    # lands, leaving margin for the release to propagate to the Open Data bucket.
+    - cron: '0 6 6 * *'
+  workflow_dispatch:
+    inputs:
+      release:
+        description: 'Overture release id (e.g. 2026-06-25.0). Required — see https://docs.overturemaps.org/release/'
+        required: true
+        type: string
+      states:
+        description: 'Comma-separated 2-letter states, or ALL'
+        required: false
+        default: 'ALL'
+        type: string
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  enrich:
+    name: Overture Enrichment
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Enable Corepack (provides pnpm@8.15.5 from package.json packageManager)
+        run: corepack enable
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install DuckDB (Stage A only — never added to backend deps)
+        run: pip install --quiet "duckdb>=1.0.0"
+
+      - name: Install Node dependencies
+        run: pnpm install --filter backend --filter database
+
+      - name: Generate Prisma client
+        run: cd packages/database && npx prisma generate
+        env:
+          DATABASE_URL: "postgresql://dummy:dummy@localhost:5432/dummy"
+
+      - name: Verify database connectivity
+        run: |
+          python3 -c "
+          import urllib.parse, socket, sys
+          url = '${{ secrets.DATABASE_URL }}'
+          if not url:
+              print('ERROR: DATABASE_URL secret is not set')
+              sys.exit(1)
+          parsed = urllib.parse.urlparse(url)
+          host = parsed.hostname
+          port = parsed.port or 5432
+          try:
+              sock = socket.create_connection((host, port), timeout=10)
+              sock.close()
+              print(f'DB connectivity OK: {host}:{port}')
+          except Exception as e:
+              print(f'ERROR: Cannot reach DB at {host}:{port} - {e}')
+              print('ACTION REQUIRED: The DATABASE_URL GitHub Actions secret may be stale.')
+              print('Fix: GitHub repo -> Settings -> Secrets and variables -> Actions -> DATABASE_URL -> Update')
+              sys.exit(1)
+          "
+
+      - name: Resolve Overture release id
+        id: release
+        run: |
+          if [ -n "${{ github.event.inputs.release }}" ]; then
+            echo "id=${{ github.event.inputs.release }}" >> "$GITHUB_OUTPUT"
+          else
+            # Scheduled run: derive the most recent monthly release from the date.
+            # Overture tags releases as YYYY-MM-DD.N; the exact day varies, so the
+            # scheduled path uses the env override if set, else falls back to the
+            # OVERTURE_RELEASE repo variable (kept current by Patrick / a bump PR).
+            REL="${{ vars.OVERTURE_RELEASE }}"
+            if [ -z "$REL" ]; then
+              echo "ERROR: No release id. Set the OVERTURE_RELEASE repo variable"
+              echo "(Settings -> Secrets and variables -> Actions -> Variables) to the"
+              echo "current Overture release, e.g. 2026-06-25.0. See https://docs.overturemaps.org/release/"
+              exit 1
+            fi
+            echo "id=$REL" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Stage A — extract Overture candidates (Python + DuckDB)
+        run: |
+          python3 scripts/overture/extract_overture.py \
+            --release "${{ steps.release.outputs.id }}" \
+            --states "${{ github.event.inputs.states || 'ALL' }}" \
+            --out "${{ runner.temp }}/overture-candidates.ndjson"
+
+      - name: Stage B — ingest candidates (classifier + dedup + upsert)
+        working-directory: packages/backend
+        env:
+          DATABASE_URL: "${{ secrets.DATABASE_URL }}?connection_limit=3&pool_timeout=20"
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
+          # Provided for parity with the other directory scrapers' auth env. Stage B
+          # writes directly via Prisma (DATABASE_URL), so the key is unused here.
+          INTERNAL_SCRAPER_KEY: ${{ secrets.INTERNAL_SCRAPER_KEY }}
+          OVERTURE_CANDIDATES_FILE: "${{ runner.temp }}/overture-candidates.ndjson"
+        run: npx tsx src/scripts/runOvertureEnrichment.ts "$OVERTURE_CANDIDATES_FILE"

@@ -419,6 +419,7 @@ model Organizer {
   directoryMostRecentAt       DateTime?
   hereBusinessId              String?                        @unique
   foursquareVenueId           String?                        @unique
+  overtureGersId              String?                        @unique // Overture Places GERS id (CDLA Permissive 2.0) — overtureEnrichmentJob monthly re-sync key
   osmNodeId                   String? // Format: "node/12345" or "way/12345"
   suppressOutreach            Boolean                        @default(false) // Quebec Bill 96 deferral for QC records
   directoryNextClaimEmailAt   DateTime?
