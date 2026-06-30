@@ -2198,19 +2198,34 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
         const resolvedDescription = routing.descriptionHtml
           ? applyDescTemplate(routing.descriptionHtml, sanitizedDescription)
           : sanitizedDescription;
+        // Resolve product.brand: prefer organizer-set item.brand, fall back to whatever
+        // fillRequiredAspects injected into aspects (AI/category-matched Brand).
+        // product.brand must be set alongside aspects.Brand or eBay rejects BrandMPN
+        // pair (errorId 25002, confirmed 2026-06-30: aspects.Brand alone is not enough).
+        const resolvedProductBrand: string | null = (() => {
+          if (item.brand && item.brand.trim()) return item.brand.trim();
+          if (aspects) {
+            const brandKey = Object.keys(aspects).find((k) => k.toLowerCase() === 'brand');
+            const val = brandKey ? aspects[brandKey]?.[0] : null;
+            if (val && val.toLowerCase() !== 'unbranded') return val;
+          }
+          return null;
+        })();
         const inventoryPayload: Record<string, unknown> = {
           product: {
             title: item.title.substring(0, 80),
             description: resolvedDescription,
             imageUrls: photos,
             ...(aspects ? { aspects } : {}),
-            ...(item.brand ? { brand: item.brand } : {}),
+            ...(resolvedProductBrand ? { brand: resolvedProductBrand } : {}),
             // Brand+MPN pairing: when brand is sent but no real MPN exists, send
             // 'Does Not Apply' (eBay's accepted placeholder). Sending brand alone
             // triggers errorId 25002 <BrandMPN> on Brand-requiring categories.
+            // Use resolvedProductBrand (not item.brand) so the fallback fires even
+            // when brand was sourced from aspects rather than item.brand directly.
             ...(item.mpn
               ? { mpn: item.mpn }
-              : item.brand
+              : resolvedProductBrand
                 ? { mpn: 'Does Not Apply' }
                 : {}),
             ...(item.upc ? { upc: [item.upc] } : {}),
@@ -2776,6 +2791,14 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
                   aspectsObj25002['Model'] = [modelVal25002];
                 }
                 invBody25002.product.aspects = aspectsObj25002;
+                // Mirror Brand into product.brand alongside aspects.Brand for BrandMPN pair.
+                // (confirmed 2026-06-30: aspects.Brand alone does not satisfy eBay BrandMPN).
+                if (!invBody25002.product.brand) {
+                  const injectedBrand25002 = aspectsObj25002['Brand']?.[0];
+                  invBody25002.product.brand = (injectedBrand25002 && injectedBrand25002.toLowerCase() !== 'unbranded')
+                    ? injectedBrand25002
+                    : (item.brand?.trim() || null);
+                }
                 if (!invBody25002.product.mpn) {
                   invBody25002.product.mpn = item.mpn?.trim() || 'Does Not Apply';
                 }
@@ -3185,6 +3208,14 @@ export const publishItemOffer = async (req: AuthRequest, res: Response) => {
             aspectsObj['Model'] = [modelVal];
           }
           invBody.product.aspects = aspectsObj;
+          // Mirror Brand into product.brand — required alongside aspects.Brand for BrandMPN
+          // pair validation (confirmed 2026-06-30: aspects.Brand alone is not sufficient).
+          if (!invBody.product.brand) {
+            const injectedBrand = aspectsObj['Brand']?.[0];
+            invBody.product.brand = (injectedBrand && injectedBrand.toLowerCase() !== 'unbranded')
+              ? injectedBrand
+              : (item.brand?.trim() || null);
+          }
           // Mirror the MPN into the top-level product field so the pair is complete.
           if (!invBody.product.mpn) {
             invBody.product.mpn = item.mpn?.trim() || 'Does Not Apply';

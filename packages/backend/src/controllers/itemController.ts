@@ -1650,6 +1650,20 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
                 invObject.condition = inventoryUpdates['condition'];
               }
 
+              // Ensure product.brand is set — missing product.brand causes 25002 BrandMPN
+              // on republish (confirmed 2026-06-30). Mirror from aspects if item.brand is null.
+              // This heals items that were originally pushed before Fix A was deployed.
+              const invProduct = invObject.product as Record<string, unknown> | undefined;
+              if (invProduct && !invProduct.brand) {
+                const invAspects = invProduct.aspects as Record<string, string[]> | undefined;
+                const aspectBrand = invAspects
+                  ? Object.entries(invAspects).find(([k]) => k.toLowerCase() === 'brand')?.[1]?.[0]
+                  : null;
+                if (aspectBrand && aspectBrand.toLowerCase() !== 'unbranded') {
+                  invProduct.brand = aspectBrand;
+                }
+              }
+
               const invRes = await fetch(
                 `${frontendUrl}/api/proxy/ebay?path=${encodeURIComponent(invPath)}`,
                 { method: 'PUT', headers: authHeaders, body: JSON.stringify(invObject) }
