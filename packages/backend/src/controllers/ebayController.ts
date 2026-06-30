@@ -2728,33 +2728,116 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
           }
 
           if (!ebayListingId) {
-            const is25005 = publishError.includes('25005');
-            if (is25005) {
-              await prisma.item.update({
-                where: { id: item.id },
-                data: { ebayNeedsReview: true },
+            // 25002 self-heal (BulkPush): GET inventory item, inject Brand+MPN aspects, PUT back, re-publish.
+            // Mirrors the same self-heal in the PublishNow path (~line 3061).
+            // The bulk-push aspect builder may have used stale Taxonomy data; the offer
+            // is not rebuilt on re-push, so aspects can be missing even after a successful
+            // inventory PUT. Inject them here and try once more before falling through to
+            // the generic PUBLISH_FAILED error.
+            const is25002 = publishError.includes('25002');
+            if (is25002) {
+              const invGet25002 = await fetch(inventoryUrl, {
+                headers: {
+                  ...ebayUserHeaders(accessToken),
+                  ...(proxySecret ? { 'X-Proxy-Secret': proxySecret } : {}),
+                },
               });
-              console.warn(`[eBay] Category review needed for ${sku} — organizer must set eBay category manually`);
-              results.push({
-                itemId: item.id,
-                sku,
-                ebayListingId: null,
-                status: 'category_review_needed',
-                error: 'CATEGORY_REVIEW_NEEDED',
-                message: 'eBay could not find a valid category for this item. Open the item editor, set the eBay Category, and push again.',
-              });
-            } else {
-              console.error(`[eBay] Publish failed and no listingId found: ${publishResponse.status} ${publishError}`);
-              results.push({
-                itemId: item.id,
-                sku,
-                ebayListingId: null,
-                status: 'error',
-                error: 'PUBLISH_FAILED',
-                message: `Failed to publish offer: ${publishResponse.status}`,
-              });
+              if (invGet25002.ok) {
+                const invBody25002 = (await invGet25002.json()) as any;
+                if (!invBody25002.product || typeof invBody25002.product !== 'object') {
+                  invBody25002.product = {};
+                }
+                const aspectsObj25002: Record<string, string[]> =
+                  invBody25002.product.aspects && typeof invBody25002.product.aspects === 'object'
+                    ? invBody25002.product.aspects
+                    : {};
+                const hasKey25002 = (key: string): boolean =>
+                  Object.keys(aspectsObj25002).some((k) => k.toLowerCase() === key.toLowerCase());
+                if (!hasKey25002('Brand')) {
+                  aspectsObj25002['Brand'] = item.brand && item.brand.trim() ? [item.brand.trim()] : ['Unbranded'];
+                }
+                if (!hasKey25002('MPN')) {
+                  aspectsObj25002['MPN'] = [item.mpn?.trim() || 'Does Not Apply'];
+                }
+                if (!hasKey25002('Model')) {
+                  const modelVal25002 =
+                    item.mpn?.trim() ||
+                    (item as any).title
+                      ?.replace(
+                        new RegExp(
+                          '\\b' + (item.brand || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b',
+                          'i'
+                        ),
+                        ''
+                      )
+                      .trim()
+                      .slice(0, 65) ||
+                    'Unspecified';
+                  aspectsObj25002['Model'] = [modelVal25002];
+                }
+                invBody25002.product.aspects = aspectsObj25002;
+                if (!invBody25002.product.mpn) {
+                  invBody25002.product.mpn = item.mpn?.trim() || 'Does Not Apply';
+                }
+                console.log(
+                  `[eBay BulkPush Retry25002] ${sku}: injecting Brand=${aspectsObj25002['Brand']?.[0]} + MPN=${aspectsObj25002['MPN']?.[0]} and re-publishing`
+                );
+                const retryInvRes25002 = await fetch(inventoryUrl, {
+                  method: 'PUT',
+                  headers: {
+                    ...ebayUserHeaders(accessToken),
+                    ...(proxySecret ? { 'X-Proxy-Secret': proxySecret } : {}),
+                  },
+                  body: JSON.stringify(invBody25002),
+                });
+                if (retryInvRes25002.ok || retryInvRes25002.status === 204) {
+                  publishResponse = await fetch(publishUrl, {
+                    method: 'POST',
+                    headers: {
+                      ...ebayUserHeaders(accessToken),
+                      ...(proxySecret ? { 'X-Proxy-Secret': proxySecret } : {}),
+                    },
+                  });
+                  if (publishResponse.ok) {
+                    trackEbayCall();
+                    const retryData25002 = (await publishResponse.json()) as any;
+                    ebayListingId = retryData25002.listingId;
+                  }
+                }
+              }
             }
-            continue;
+
+            // If 25002 self-heal succeeded, skip the error block and let the
+            // success path below handle the DB update.
+            if (!ebayListingId) {
+              const is25005 = publishError.includes('25005');
+              if (is25005) {
+                await prisma.item.update({
+                  where: { id: item.id },
+                  data: { ebayNeedsReview: true },
+                });
+                console.warn(`[eBay] Category review needed for ${sku} — organizer must set eBay category manually`);
+                results.push({
+                  itemId: item.id,
+                  sku,
+                  ebayListingId: null,
+                  status: 'category_review_needed',
+                  error: 'CATEGORY_REVIEW_NEEDED',
+                  message: 'eBay could not find a valid category for this item. Open the item editor, set the eBay Category, and push again.',
+                });
+              } else {
+                console.error(`[eBay] Publish failed and no listingId found: ${publishResponse.status} ${publishError}`);
+                results.push({
+                  itemId: item.id,
+                  sku,
+                  ebayListingId: null,
+                  status: 'error',
+                  error: 'PUBLISH_FAILED',
+                  message: `Failed to publish offer: ${publishResponse.status}`,
+                });
+              }
+              continue;
+            }
           }
         }
 
