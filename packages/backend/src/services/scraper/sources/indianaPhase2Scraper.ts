@@ -13,8 +13,7 @@
  * ADR-073: Directory Scraper Phase 2 — State business licensing data
  */
 
-import { getOrCreateScrapedOrganizer } from '../index';
-import { prisma } from '../../../lib/prisma';
+import { batchUpsertScrapedOrganizers, ScrapedOrganizerRow } from '../index';
 
 const PLA_SEARCH_URL = 'https://secure.in.gov/apps/pla/search/';
 const PLA_FORM_URL = 'https://secure.in.gov/apps/pla/search';
@@ -188,6 +187,9 @@ export async function runIndianaPhase2Scraper(): Promise<void> {
     const rows = await fetchPrefixResults(prefix);
     totalFetched += rows.length;
 
+    // Accumulate matched rows for this prefix (batch upsert after filtering)
+    const prefixRows: ScrapedOrganizerRow[] = [];
+
     for (const row of rows) {
       // Only ingest Active licenses
       if (row.status !== 'Active') {
@@ -209,49 +211,29 @@ export async function runIndianaPhase2Scraper(): Promise<void> {
 
       totalMatched++;
 
-      try {
-        const organizerId = await getOrCreateScrapedOrganizer(
-          row.name,
-          'IndianaPLA',
-          row.city || 'Indiana',
-          'IN',
-          undefined, // esnOrgId
-          undefined, // googlePlaceId
-          undefined, // foursquareVenueId
-          undefined, // hereBusinessId
-          'AUCTION_HOUSE', // businessCategory
-          undefined, // contactEmail
-          undefined, // phone
-          undefined, // website
-          undefined, // lat
-          undefined, // lng
-          true,      // isStateLicensed
-          'Indiana', // licenseState
-          row.licenseNumber, // licenseNumber
-          `Indiana PLA – ${row.licenseType}` // sourceLabel
-        );
-
-        if (organizerId) {
-          // Update licensing fields directly for richer data
-          await prisma.organizer.update({
-            where: { id: organizerId },
-            data: {
-              licenseNumber: row.licenseNumber,
-              licenseState: 'IN',
-              isStateLicensed: true,
-              directoryMostRecentSource: 'IndianaPLA',
-            },
-          });
-          totalUpserted++;
-        }
-
-        if (totalMatched % 100 === 0) {
-          console.log(`[IndianaPhase2] Progress: ${totalMatched} matched, ${totalUpserted} upserted`);
-        }
-      } catch (err) {
-        console.error(`[IndianaPhase2] Error processing ${row.name} (${row.licenseNumber}):`, err);
-      }
+      // licenseState passed as 'IN' (not 'Indiana') — consistent with schema string usage
+      prefixRows.push({
+        businessName:     row.name,
+        sourceName:       'IndianaPLA',
+        city:             row.city || 'Indiana',
+        state:            'IN',
+        businessCategory: 'AUCTION_HOUSE',
+        isStateLicensed:  true,
+        licenseState:     'IN',
+        licenseNumber:    row.licenseNumber,
+        sourceLabel:      `Indiana PLA – ${row.licenseType}`,
+      });
     }
+
+    // Batch upsert for this prefix: replaces serial getOrCreateScrapedOrganizer +
+    // prisma.organizer.update calls with a single chunked findMany+create+update pass.
+    // licenseNumber, licenseState, isStateLicensed are included in the row so
+    // batchUpsertScrapedOrganizers writes them directly — no second update needed.
+    console.log(`[IndianaPhase2] Prefix ${prefix}: ${prefixRows.length} rows to batch upsert`);
+    const ids = await batchUpsertScrapedOrganizers(prefixRows, 100);
+    const prefixUpserted = ids.filter((id) => id !== null).length;
+    totalUpserted += prefixUpserted;
+    console.log(`[IndianaPhase2] Prefix ${prefix}: ${prefixUpserted} upserted`);
 
     // Brief pause between prefix searches to be respectful
     if (LICENSE_PREFIXES.indexOf(prefix) < LICENSE_PREFIXES.length - 1) {

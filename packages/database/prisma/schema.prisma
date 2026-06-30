@@ -537,6 +537,7 @@ model Organizer {
   @@index([isUnmanagedListing, googlePlaceId]) // Sentry slow query: SELECT Organizer id+businessName+googlePlaceId... WHERE isUnmanagedListing=true AND googlePlaceId IS NULL (1114ms, 12x) — enrichment backfill job
   @@index([emailDiscoveryMethod]) // Sentry NODEJS-2N: outreachEmailsCron WHERE emailDiscoveryMethod IN (...) seq scan on Organizer
   @@index([emailDiscoveryConfidence]) // Sentry NODEJS-2N: outreachEmailsCron WHERE emailDiscoveryConfidence >= 0.5 seq scan on Organizer
+  @@index([emailDiscoveredAt]) // Sentry NODEJS-48: outreachEmailsCron WHERE emailDiscoveredAt >= 7d ago — 98 of 83k rows, seq scan 253ms S1046
 }
 
 // Feature #354: OrganizerHours — business hours per day of week

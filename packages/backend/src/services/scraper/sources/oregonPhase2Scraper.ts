@@ -12,7 +12,7 @@
  */
 
 import { defaultRateLimiter } from "../rateLimiter";
-import { getOrCreateScrapedOrganizer } from "../index";
+import { batchUpsertScrapedOrganizers, ScrapedOrganizerRow } from "../index";
 
 const OR_OPEN_DATA_CSV_URL =
   "https://data.oregon.gov/api/views/tckn-sxa6/rows.csv?accessType=DOWNLOAD";
@@ -224,6 +224,9 @@ export async function runOregonPhase2Scraper(): Promise<void> {
     totalFetched = lines.length - 1;
     console.log(`[OregonPhase2] CSV fetched — ${totalFetched} data rows`);
 
+    // Accumulate matched rows for batch upsert (ADR-073 perf: replaces serial N+1 per-row)
+    const batchRows: ScrapedOrganizerRow[] = [];
+
     for (let i = 1; i < lines.length; i++) {
       const line = lines[i].trim();
       if (!line) continue;
@@ -245,42 +248,26 @@ export async function runOregonPhase2Scraper(): Promise<void> {
 
         const registryNumber = iRegistryNumber >= 0 ? (fields[iRegistryNumber] || "").trim() : "";
         const city           = iCity           >= 0 ? (fields[iCity]           || "").trim() : "";
-        const zip            = iZip            >= 0 ? (fields[iZip]            || "").trim() : "";
-        const address1       = iAddress        >= 0 ? (fields[iAddress]        || "").trim() : "";
-
-        // dedupeKey: prefer registry number, fall back to slugified name
-        const slugifiedName = displayName
-          .toLowerCase()
-          .replace(/[^a-z0-9]/g, "-")
-          .replace(/-+/g, "-")
-          .slice(0, 40);
-        const dedupeKey      = `OR-SECONDARY-${registryNumber || slugifiedName}`;
         const businessCategory = mapCategory(displayName);
 
-        console.log(`[OregonPhase2] Matched: ${dedupeKey} — ${displayName}`);
-
-        const orgId = await getOrCreateScrapedOrganizer(
-          displayName,                  // businessName
-          "OregonPhase2",               // sourceName
-          city || "Oregon",             // city
-          "OR",                         // state
-          undefined,                    // esnOrgId
-          undefined,                    // googlePlaceId
-          undefined,                    // foursquareVenueId
-          undefined,                    // hereBusinessId
-          businessCategory,             // businessCategory
-          undefined,                    // contactEmail
-          undefined,                    // phone
-          undefined                     // website
-        );
-
-        if (orgId) {
-          totalUpserted++;
-        }
+        batchRows.push({
+          businessName:     displayName,
+          sourceName:       "OregonPhase2",
+          city:             city || "Oregon",
+          state:            "OR",
+          businessCategory,
+        });
       } catch (rowErr) {
         console.error(`[OregonPhase2] Error on row ${i}:`, rowErr);
       }
     }
+
+    console.log(`[OregonPhase2] Matched ${totalMatched} rows — running batch upsert (${batchRows.length} rows)`);
+
+    // Single batch upsert: replaces N serial getOrCreateScrapedOrganizer calls with
+    // chunked findMany + createMany + per-record update (no N+1 lookup queries).
+    const ids = await batchUpsertScrapedOrganizers(batchRows, 100);
+    totalUpserted = ids.filter((id) => id !== null).length;
 
     console.log(
       `[OregonPhase2] Done — fetched: ${totalFetched}, matched: ${totalMatched}, upserted: ${totalUpserted}`
