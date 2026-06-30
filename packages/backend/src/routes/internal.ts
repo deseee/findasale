@@ -7,7 +7,6 @@ import express from 'express';
 import { prisma } from '../lib/prisma';
 import { syncListedItemFieldsToEbay } from '../controllers/itemController'; // Bug #469: live-listing edit propagation
 import { ingestFromGitHubActions } from '../controllers/internalScraperController';
-import { runEnrichmentBackfill } from '../controllers/internalEnrichmentController';
 import {
   triggerSaleDetailEnrichment,
   getSaleDetailEnrichmentStatus,
@@ -153,8 +152,6 @@ const requireSecret = (req: express.Request, res: express.Response, next: expres
 // POST /api/internal/scraper/ingest — accept scraped items from GitHub Actions
 router.post('/scraper/ingest', ingestFromGitHubActions);
 
-// POST /api/internal/scraper/enrich-backfill — backfill Google Places data on unmanaged listings
-router.post('/scraper/enrich-backfill', requireSecret, runEnrichmentBackfill);
 
 // POST /api/internal/scraper/run-indiana-licensing
 router.post('/scraper/run-indiana-licensing', requireSecret, async (req: express.Request, res: express.Response) => {
