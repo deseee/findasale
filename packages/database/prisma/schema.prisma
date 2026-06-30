@@ -271,6 +271,7 @@ model User {
   @@index([fraudSuspect]) // Platform Safety #118: Fast fraud account filtering
   @@index([createdAt]) // Sentry slow User SELECT: adminController user list queries ORDER BY createdAt DESC (1327ms)
   @@index([roles]) // Sentry slow User SELECT: role-filtered user lookups (roles array GIN index)
+  @@index([role]) // Sentry NODEJS-49: leaderboard cron getShopperLeaderboard WHERE role='USER' seq scan 1220ms on 83k rows
 }
 
 model Organizer {
@@ -534,6 +535,8 @@ model Organizer {
   @@index([isUnmanagedListing, isStateLicensed]) // Sentry slow query fix 2026-06-06: websiteEnrichmentJob WHERE isUnmanagedListing=true AND isStateLicensed=true AND website IS NULL (1159ms)
   @@index([contactEmail, isUnmanagedListing]) // Sentry NODEJS-38: emailDiscoveryJob WHERE contactEmail IS NULL AND website IS NOT NULL AND isUnmanagedListing (composite replaces two single-column indexes)
   @@index([isUnmanagedListing, googlePlaceId]) // Sentry slow query: SELECT Organizer id+businessName+googlePlaceId... WHERE isUnmanagedListing=true AND googlePlaceId IS NULL (1114ms, 12x) — enrichment backfill job
+  @@index([emailDiscoveryMethod]) // Sentry NODEJS-2N: outreachEmailsCron WHERE emailDiscoveryMethod IN (...) seq scan on Organizer
+  @@index([emailDiscoveryConfidence]) // Sentry NODEJS-2N: outreachEmailsCron WHERE emailDiscoveryConfidence >= 0.5 seq scan on Organizer
 }
 
 // Feature #354: OrganizerHours — business hours per day of week
@@ -994,6 +997,7 @@ model Sale {
   @@index([city]) // Sentry slow query fix 2026-05-30: Sale SELECT (6298ms) — ILIKE city queries; note leading-wildcard ILIKE won't use index, but prefix matches benefit
   @@index([status, isInventoryContainer, endDate]) // Sentry NODEJS-3E: search.ts COUNT WHERE status=PUBLISHED AND isInventoryContainer=false AND endDate >= now (missing covering index)
   @@index([sourceName]) // Sentry slow query: SELECT Sale WHERE scrapedMetadata JSON path + sourceName (1115ms, 6x) — sourceName filter enables partition pruning before GIN eval
+  @@index([saleType, city, state]) // Sentry NODEJS-3F/2T/10: RETAIL dedup findFirst WHERE saleType+city+state — 138-row bitmap scan becomes index seek
   // Sentry NODEJS-10 fix (partial indexes — raw SQL only, Prisma @@index does not support WHERE predicates):
   //   Sale_status_endDate_autoclose_idx: (status, endDate) WHERE deletedAt IS NULL
   //     → saleAutoCloseCron was bitmap-scanning 14k PUBLISHED rows via wrong index; partial index → 0.046ms
