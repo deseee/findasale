@@ -2175,6 +2175,11 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
           sku,
           marketplaceId: 'EBAY_US',
           format: 'FIXED_PRICE',
+          // P1 fix (S1050 BQ): eBay defaults includeCatalogProductDetails to true and
+          // silently overrides organizer/app-computed Brand with its own catalog-matched
+          // product data (confirmed live: MXL microphone push got Brand="Access", wrong).
+          // Explicitly disabled so our computed item specifics always win.
+          includeCatalogProductDetails: false,
           pricingSummary: {
             price: {
               currency: 'USD',

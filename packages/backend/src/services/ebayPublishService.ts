@@ -445,11 +445,57 @@ const heal25021: Healer = async (ctx) => {
 };
 
 /**
- * 25002 — missing required item-specific (Brand / MPN / Model — BrandMPN pair).
- * GET the inventory item, inject Brand+MPN(+Model) into product.aspects, mirror
- * Brand/MPN onto the top-level product fields, PUT back, re-publish once.
+ * Parse the specific missing-aspect name(s) out of a 25002 error body's
+ * `errors[].parameters[].value` (P2 fix, S1050 BQ). eBay reports "BrandMPN" for the
+ * Brand/MPN pair requirement, or a literal aspect name (e.g. "Form Factor", confirmed
+ * via raw API test on category 29946) for any other missing required aspect.
  */
-const heal25002: Healer = async (ctx) => {
+function parseMissing25002AspectNames(errorBody: string): string[] {
+  try {
+    const parsed = JSON.parse(errorBody) as {
+      errors?: Array<{ errorId?: number; parameters?: Array<{ name?: string; value?: string }> }>;
+    };
+    const names: string[] = [];
+    for (const err of parsed.errors || []) {
+      if (err.errorId !== 25002) continue;
+      for (const p of err.parameters || []) {
+        if (p?.value) names.push(String(p.value));
+      }
+    }
+    return names;
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Pick a safe default value for a dynamically-resolved required aspect, mirroring the
+ * neutral-value preference in ebayController's fillRequiredAspects (never fabricate a
+ * specific-sounding value like an enum's first entry when a neutral option exists).
+ */
+function pickSafeAspectDefault(aspectSpec: RequiredAspect | undefined): string {
+  if (!aspectSpec || aspectSpec.enumValues.length === 0) return 'Does Not Apply';
+  const neutral = aspectSpec.enumValues.find((v) =>
+    /^(universal|other|not\s*specified|unspecified|any|multiple|n\/?a|various)$/i.test(v)
+  );
+  return neutral || aspectSpec.enumValues[0];
+}
+
+/**
+ * 25002 — missing required item-specific(s). GET the inventory item, inject
+ * Brand+MPN(+Model) into product.aspects (covers the common BrandMPN-pair case — safe
+ * to send even when eBay asked for something else), mirror Brand/MPN onto the
+ * top-level product fields, PUT back, re-publish once.
+ *
+ * P2 fix (S1050 BQ): previously ONLY Brand/MPN/Model were ever injected. If the
+ * primary pre-flight (fillRequiredAspects) missed a different required aspect (e.g.
+ * Form Factor, confirmed via raw API test on category 29946), eBay kept rejecting with
+ * 25002 for that named aspect and the self-heal loop's one-retry-per-errorId guard gave
+ * up — the item got permanently stuck. Now parses the missing aspect name(s) out of
+ * eBay's error `parameters` and, for any name not already covered by Brand/MPN/Model,
+ * dynamically resolves it via getRequiredAspectsForCategory and injects a safe default.
+ */
+const heal25002: Healer = async (ctx, errorBody) => {
   await refreshCanonicalSku(ctx);
   if (!ctx.sku) return { published: false, retry: false };
 
@@ -478,6 +524,22 @@ const heal25002: Healer = async (ctx) => {
       || 'Unspecified';
     aspectsObj['Model'] = [modelVal];
   }
+
+  // Dynamic fallback (P2 fix): inject any missing aspect eBay actually named that
+  // Brand/MPN/Model injection above didn't already cover.
+  const missingNames = parseMissing25002AspectNames(errorBody);
+  const dynamicNames = missingNames.filter((name) => !/^brand ?mpn$/i.test(name) && !hasKey(name));
+  if (dynamicNames.length > 0 && ctx.categoryId) {
+    const spec = await getRequiredAspectsForCategory(ctx.categoryId);
+    for (const name of dynamicNames) {
+      const aspectSpec = spec?.find((a) => a.name.toLowerCase() === name.toLowerCase());
+      const defaultValue = pickSafeAspectDefault(aspectSpec);
+      const finalName = aspectSpec?.name ?? name;
+      aspectsObj[finalName] = [defaultValue];
+      console.log(`[eBay SelfHeal 25002] ${ctx.sku}: dynamically injecting missing aspect "${finalName}"=${defaultValue}`);
+    }
+  }
+
   invBody.product.aspects = aspectsObj;
   // Mirror Brand into product.brand — required alongside aspects.Brand for the pair.
   if (!invBody.product.brand) {
@@ -564,6 +626,12 @@ const heal25005: Healer = async (ctx) => {
     for (const ro of ['offerId', 'status', 'listing', 'listingId', 'listingStatus', 'marketplaceId']) {
       delete updatedOffer[ro];
     }
+    // P1 fix (S1050 BQ): eBay defaults includeCatalogProductDetails to true on offer
+    // PUT/create and silently overrides our computed Brand with a catalog match. This
+    // recreate path rebuilds the offer from a GET (which never echoes the flag back),
+    // so it must be re-asserted explicitly — same fix as the primary offer-creation
+    // payload in ebayController.ts.
+    updatedOffer.includeCatalogProductDetails = false;
 
     let activeOfferId = ctx.offerId;
     const offerPutRes = await ebayFetch(`/sell/inventory/v1/offer/${ctx.offerId}`, ctx.accessToken, {
