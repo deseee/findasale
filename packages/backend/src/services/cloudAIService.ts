@@ -14,6 +14,7 @@ import axios from 'axios';
 import { regionConfig } from '../config/regionConfig';
 import { EBAY_L1_CATEGORIES } from '../config/ebayCategories';
 import { trackAITokens, estimateTokensForRequest, isAICostCeilingExceeded, trackVisionCall } from '../lib/aiCostTracker';
+import { findCatalogMatches, buildCatalogMatchContext, isCatalogMatchEnabled, CatalogMatch } from './imageMatchService';
 
 const GOOGLE_VISION_API_KEY = process.env.GOOGLE_VISION_API_KEY;
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
@@ -148,7 +149,8 @@ async function getHaikuAnalysis(
   mimeType: string,
   objectLabels: string[],
   detectedText: string[],
-  comps?: ComparableSale[]
+  comps?: ComparableSale[],
+  catalogMatches?: CatalogMatch[] | null
 ): Promise<AITagResult> {
   const labelContext =
     objectLabels.length > 0 || detectedText.length > 0
@@ -165,6 +167,14 @@ async function getHaikuAnalysis(
   const compsContext = comps && comps.length > 0
     ? `\n\nRecent comparable sales for this category: ${comps.map(c => `"${c.title}" sold for $${c.price}`).join('; ')}. Use these as your primary pricing reference.`
     : '';
+
+  // Reverse-Image Product Index (ADR 2026-07-01 §1): additional grounding evidence
+  // from a self-hosted catalog-match vector search, same conditional-inclusion
+  // pattern as labelContext/sparseImageNote/compsContext above. Empty string when
+  // there is no qualifying match (feature off, service down, or below threshold) —
+  // this coexists with the text-vs-shape evidence hierarchy in labelContext rather
+  // than replacing it; catalog match is a THIRD, independent evidence source.
+  const catalogMatchContext = buildCatalogMatchContext(catalogMatches);
 
   try {
     // Estimate tokens for cost tracking (#104)
@@ -192,7 +202,7 @@ Analyze this item photo and respond with ONLY valid JSON (no markdown, no explan
               },
               {
                 type: 'text',
-                text: `You are an expert secondary market cataloger for a ${regionConfig.city}, ${regionConfig.state} estate sale marketplace.${labelContext}${sparseImageNote}${compsContext}
+                text: `You are an expert secondary market cataloger for a ${regionConfig.city}, ${regionConfig.state} estate sale marketplace.${labelContext}${sparseImageNote}${compsContext}${catalogMatchContext}
 
 Analyze this item photo and respond with ONLY valid JSON (no markdown, no explanation).
 
@@ -488,18 +498,32 @@ export async function analyzeItemImage(
 
   const imageBase64 = buffer.toString('base64');
 
-  // Vision labels are best-effort — proceed without them if Vision API fails
+  // Vision labels are best-effort — proceed without them if Vision API fails.
+  // Reverse-Image Product Index (ADR 2026-07-01 §1): catalog-match vector search
+  // runs IN PARALLEL with Vision (both are pre-Haiku, independent of each other) —
+  // not sequentially after Vision — per the ADR's latency-budget principle.
+  // Category hint is unavailable at this point (no prior classification yet), so
+  // the search runs unscoped; isCatalogMatchEnabled() short-circuits to a no-op
+  // Promise when the feature flag is off or the embedding service isn't configured.
   let objectLabels: string[] = [];
   let detectedText: string[] = [];
-  try {
-    const visionResult = await getVisionLabels(imageBase64);
-    objectLabels = visionResult.objectLabels;
-    detectedText = visionResult.detectedText;
-  } catch {
-    // Vision API unavailable or quota exceeded — Haiku will analyse image alone
+  let catalogMatches: CatalogMatch[] | null = null;
+  const [visionSettled, catalogSettled] = await Promise.allSettled([
+    getVisionLabels(imageBase64),
+    isCatalogMatchEnabled() ? findCatalogMatches(buffer, mimeType) : Promise.resolve(null),
+  ]);
+  if (visionSettled.status === 'fulfilled') {
+    objectLabels = visionSettled.value.objectLabels;
+    detectedText = visionSettled.value.detectedText;
   }
+  // Vision API unavailable or quota exceeded — Haiku will analyse image alone (unchanged behavior)
+  if (catalogSettled.status === 'fulfilled') {
+    catalogMatches = catalogSettled.value;
+  }
+  // catalog match failure is silent/non-blocking — imageMatchService never throws,
+  // but Promise.allSettled is used defensively in case that contract ever changes
 
-  const result = await getHaikuAnalysis(imageBase64, mimeType, objectLabels, detectedText, comps);
+  const result = await getHaikuAnalysis(imageBase64, mimeType, objectLabels, detectedText, comps, catalogMatches);
 
   // Sprint 1: Add curated tag suggestions (non-blocking) — combined list is fine here,
   // this is just label→curated-tag mapping, not identification evidence weighting
@@ -572,6 +596,15 @@ export async function analyzeItemImages(
   let photoOrderIndices: number[] = Array.from({ length: buffers.length }, (_, i) => i);
   let objectLabels: string[] = [];
   let detectedText: string[] = [];
+  // Reverse-Image Product Index (ADR 2026-07-01 §1): catalog-match vector search
+  // runs IN PARALLEL with the per-photo Vision pass below (both are pre-Haiku,
+  // independent of each other) — not sequentially after Vision. Uses the FIRST
+  // buffer (primary photo) as the query image; no category hint is available yet
+  // at this point in the pipeline, so the search runs unscoped.
+  const catalogMatchPromise: Promise<CatalogMatch[] | null> = isCatalogMatchEnabled()
+    ? findCatalogMatches(buffers[0], types[0]).catch(() => null)
+    : Promise.resolve(null);
+
   try {
     const allVisionResults = await Promise.all(
       imageBase64Array.map((b64, idx) =>
@@ -607,8 +640,10 @@ export async function analyzeItemImages(
     // Vision pass failed — proceed with original order and no labels (non-blocking)
   }
 
+  const catalogMatches = await catalogMatchPromise;
+
   // Multi-image Haiku analysis (Phase 2: pass clusterPhotos for role context)
-  const result = await getHaikuAnalysisMultiImage(imageBase64Array, types, objectLabels, detectedText, comps, clusterPhotos);
+  const result = await getHaikuAnalysisMultiImage(imageBase64Array, types, objectLabels, detectedText, comps, clusterPhotos, catalogMatches);
 
   // Sprint 1: Add curated tag suggestions (non-blocking) — combined list is fine here,
   // this is just label→curated-tag mapping, not identification evidence weighting
@@ -678,7 +713,8 @@ async function getHaikuAnalysisMultiImage(
   objectLabels: string[],
   detectedText: string[],
   comps?: ComparableSale[],
-  clusterPhotos?: ClusterPhoto[]
+  clusterPhotos?: ClusterPhoto[],
+  catalogMatches?: CatalogMatch[] | null
 ): Promise<AITagResult> {
   const labelContext =
     objectLabels.length > 0 || detectedText.length > 0
@@ -695,6 +731,10 @@ async function getHaikuAnalysisMultiImage(
     ? `\n\nRecent comparable sales for this category: ${comps.map(c => `"${c.title}" sold for $${c.price}`).join('; ')}. Use these as your primary pricing reference.`
     : '';
 
+  // Reverse-Image Product Index (ADR 2026-07-01 §1): same conditional-inclusion
+  // evidence pattern as the single-image path in getHaikuAnalysis above.
+  const catalogMatchContext = buildCatalogMatchContext(catalogMatches);
+
   const roleContext = buildRoleContextPrompt(clusterPhotos);
 
   const imageCount = imageBase64Array.length;
@@ -703,7 +743,7 @@ async function getHaikuAnalysisMultiImage(
     : 'You are analyzing a photo of an item.';
 
   try {
-    const systemPrompt = `You are an expert secondary market cataloger for a ${regionConfig.city}, ${regionConfig.state} estate sale marketplace.${labelContext}
+    const systemPrompt = `You are an expert secondary market cataloger for a ${regionConfig.city}, ${regionConfig.state} estate sale marketplace.${labelContext}${catalogMatchContext}
 
 ${multiImagePrompt} Respond with ONLY valid JSON (no markdown, no explanation).`;
     const estimatedTokens = estimateTokensForRequest(systemPrompt, true);
@@ -726,7 +766,7 @@ ${multiImagePrompt} Respond with ONLY valid JSON (no markdown, no explanation).`
     // Add text prompt at the end
     contentArray.push({
       type: 'text',
-      text: `${multiImagePrompt} Use all images to determine the best title, category, condition grade, description, and estimated price. Pay particular attention to any brand labels, tags, or markings visible in any of the photos.${labelContext}${sparseImageNote}${compsContext}${roleContext}
+      text: `${multiImagePrompt} Use all images to determine the best title, category, condition grade, description, and estimated price. Pay particular attention to any brand labels, tags, or markings visible in any of the photos.${labelContext}${sparseImageNote}${compsContext}${catalogMatchContext}${roleContext}
 
 Analyze and respond with ONLY valid JSON (no markdown, no explanation).
 
