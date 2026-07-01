@@ -32,6 +32,7 @@ import { fetchEbayPriceComps } from './ebayController'; // Bug #326: live listin
 import { composeDescription, stripShippingPhrases, DescriptionSource } from '../services/descriptionMerger'; // Item Description Authoring Contract (2026-05-12)
 import { checkAndAward } from '../services/achievementService'; // Feature #58: Achievement tracking
 import { notifyFacebookExportedItemSold } from '../services/facebookNudgeService'; // Bug #461: FB nudge on single-item SOLD
+import { republishEbayOffer, ebayPublishWithSelfHeal, ensureConditionValidForCategory } from '../services/ebayPublishService'; // Phase 2 relocation + Phase 3 rewire (ADR 2026-06-30)
 
 /** Decode HTML entities from CSV/eBay data before writing to the DB. */
 function decodeHtmlEntities(str: string): string {
@@ -182,35 +183,8 @@ export async function syncListedItemFieldsToEbay(params: {
   }
 }
 
-/**
- * Bug #469: POST the offer publish endpoint so the live listing reflects pushed
- * inventory/offer changes. Best-effort, never throws. Returns true on any 2xx.
- */
-export async function republishEbayOffer(
-  ebayOfferId: string,
-  authHeaders: Record<string, string>,
-  frontendUrl: string,
-  logTag: string
-): Promise<boolean> {
-  try {
-    const publishPath = `/sell/inventory/v1/offer/${encodeURIComponent(ebayOfferId)}/publish`;
-    const res = await fetch(
-      `${frontendUrl}/api/proxy/ebay?path=${encodeURIComponent(publishPath)}`,
-      { method: 'POST', headers: authHeaders, body: JSON.stringify({}) }
-    );
-    if (res.ok) {
-      console.log(`${logTag}: republish ok (HTTP ${res.status})`);
-      return true;
-    }
-    let bodyText = '';
-    try { bodyText = await res.text(); } catch { /* ignore */ }
-    console.warn(`${logTag}: republish failed HTTP ${res.status} ${bodyText.slice(0, 300)}`);
-    return false;
-  } catch (err) {
-    console.warn(`${logTag}: republish failed:`, (err as Error).message);
-    return false;
-  }
-}
+// republishEbayOffer moved to services/ebayPublishService.ts (Phase 2 of the eBay
+// publish self-heal consolidation, ADR 2026-06-30). Imported at the top of this file.
 
 // Feature #408: Scan & Split — in-memory tracker for simultaneous QR scans on the same item.
 // Maps itemId → array of { userId, scannedAt } entries. TTL: 60 seconds.
@@ -1624,7 +1598,6 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
             let finalCondition = rawCondition;
             if (categoryIdForCond) {
               try {
-                const { ensureConditionValidForCategory } = await import('../controllers/ebayController');
                 finalCondition = await ensureConditionValidForCategory(rawCondition, categoryIdForCond);
               } catch (condErr) {
                 console.warn(`[eBay PushSync] ensureConditionValidForCategory failed (non-fatal): ${(condErr as Error).message}`);
@@ -1701,16 +1674,34 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
 
           // Bug #469: Republish the offer so the LIVE listing reflects the pushed
           // inventory/offer changes. Updating the inventory item / offer alone does
-          // NOT update what shoppers see — only a (re)publish does. Single republish
-          // after both the price and inventory PUTs reflects all changes at once.
+          // NOT update what shoppers see — only a (re)publish does.
+          // Phase 3 (ADR 2026-06-30): route the on-save republish through the
+          // consolidated self-heal loop instead of a bare POST. A live-item edit that
+          // trips 25101/25021/25002/25005 on republish now self-heals reactively
+          // instead of silently failing (the organizer edits a live item and would
+          // otherwise see nothing). isUsedFamily is derived from DB item.condition
+          // inside the loop; a 25005 heal recreates the offer and persists it.
           if (pushedFields.length > 0 && updatedItem.ebayOfferId) {
             console.log(`[eBay PushSync] Item ${id}: pushed ${pushedFields.join('/')} to eBay`);
-            await republishEbayOffer(
-              updatedItem.ebayOfferId,
-              authHeaders,
-              frontendUrl,
-              `[eBay PushSync] Item ${id}`
-            );
+            const healResult = await ebayPublishWithSelfHeal({
+              item: {
+                id: updatedItem.id,
+                title: updatedItem.title,
+                condition: updatedItem.condition,
+                brand: updatedItem.brand,
+                mpn: updatedItem.mpn,
+                ebayCategoryId: updatedItem.ebayCategoryId,
+                ebayCategoryName: updatedItem.ebayCategoryName,
+                ebayOfferId: updatedItem.ebayOfferId,
+                category: updatedItem.category,
+              },
+              accessToken,
+            });
+            if (!healResult.published) {
+              console.warn(
+                `[eBay PushSync] Item ${id}: republish did not publish (lastErrorId=${healResult.lastErrorId ?? 'none'})`
+              );
+            }
           }
 
           // ADR Part B: if the organizer changed a shipping-determining input

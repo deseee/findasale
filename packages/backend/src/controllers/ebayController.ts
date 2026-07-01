@@ -7,6 +7,18 @@ import { prisma } from '../lib/prisma';
 import { ebayProxyUrl, ebayProxyHeaders, ebayUserHeaders, getEbayAccessToken, refreshEbayAccessToken } from '../services/ebayHttp';
 // Re-export the OAuth helpers so existing external importers of these from './ebayController' keep resolving (Phase 1 relocation).
 export { getEbayAccessToken, refreshEbayAccessToken } from '../services/ebayHttp';
+// Phase 2 relocation: category/condition/aspect helpers now live in ebayPublishService.
+import {
+  getAcceptedConditionsForCategory,
+  ensureConditionValidForCategory,
+  getRequiredAspectsForCategory,
+  ebayPublishWithSelfHeal,
+  type RequiredAspect,
+} from '../services/ebayPublishService';
+// Re-export so external importers of ensureConditionValidForCategory / RequiredAspect from
+// './ebayController' keep resolving (same pattern S1048 used for the OAuth token fns).
+export { ensureConditionValidForCategory } from '../services/ebayPublishService';
+export type { RequiredAspect } from '../services/ebayPublishService';
 import { getWatermarkedUrl, getWatermarkedUrlWithQR } from '../utils/cloudinaryWatermark';
 import { canRemoveWatermark, WatermarkPolicyOrganizer } from '../utils/watermarkPolicy';
 import { classifyEbayShipping } from '../utils/ebayShippingClassifier';
@@ -2324,362 +2336,62 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
           data: { ebayOfferId: offerId },
         });
 
-        // Track which condition is currently committed to eBay's inventory item.
-        // Initially this matches what we PUT in Step 1 (ebayCondition). When the 25021
-        // retry succeeds with a new value, we update this so the 25101 retry uses the
-        // correct condition instead of reverting to the original payload's value.
-        let currentInventoryCondition: string = ebayCondition;
-
-        // Step 3: Publish offer LIVE (S725: DRAFT mode removed — broken-by-design)
-        const publishPath = encodeURIComponent(`/sell/inventory/v1/offer/${offerId}/publish`);
-        const publishUrl = `${frontendUrl}/api/proxy/ebay?path=${publishPath}`;
-
-        let publishResponse = await fetch(publishUrl, {
-          method: 'POST',
-          headers: {
-            ...ebayUserHeaders(accessToken),
-            ...(proxySecret ? { 'X-Proxy-Secret': proxySecret } : {}),
+        // Step 3: Publish offer LIVE via the consolidated self-heal loop.
+        // (Phase 3, ADR 2026-06-30) — replaces the inline 25021/25005/25101/25002
+        // passes. The loop attempts publish → parses eBay errorId → dispatches to the
+        // matching healer (which mutates live inventory/offer via shared ctx) → re-attempts,
+        // capped at 5 iterations. isUsedFamily is derived from DB item.condition inside
+        // the loop (canonical source of truth). currentCondition is threaded/excluded there.
+        const healResult = await ebayPublishWithSelfHeal({
+          item: {
+            id: item.id,
+            title: item.title,
+            condition: item.condition,
+            brand: item.brand,
+            mpn: item.mpn,
+            ebayCategoryId: item.ebayCategoryId,
+            ebayCategoryName: item.ebayCategoryName,
+            ebayOfferId: offerId,
+            category: item.category,
           },
+          accessToken,
+          sku,
         });
 
-        // Resolve listing ID — either from publish response or from existing offer
-        let ebayListingId: string | null = null;
+        let ebayListingId: string | null = healResult.listingId;
 
-        // 25021 retry: eBay sometimes rejects a condition even when the metadata
-        // API says it's accepted (stale inventory state, category transition edge
-        // cases). If we see 25021, walk the accepted-conditions list and retry
-        // the inventory PUT + publish with each candidate until one works or we
-        // exhaust the list.
-        // Pass 1: 25021 condition retry
-        if (!publishResponse.ok) {
-          const publishErrorText = await publishResponse.clone().text();
-          if (publishErrorText.includes('25021')) {
-            const accepted = await getAcceptedConditionsForCategory(categoryId ?? '99');
-            // Bias retry toward conditions that MATCH the item's current condition family
-            // (USED_* vs NEW_*). For a used item with USED_VERY_GOOD initially rejected,
-            // try USED_GOOD next, not NEW_OTHER (which is wrong for a used item).
-            const isUsedFamily = typeof ebayCondition === 'string' && ebayCondition.startsWith('USED_');
-            const retryOrder = (isUsedFamily
-              ? ['USED_GOOD', 'USED_VERY_GOOD', 'USED_EXCELLENT', 'USED_ACCEPTABLE', 'FOR_PARTS_OR_NOT_WORKING', 'NEW_OTHER', 'NEW']
-              : ['NEW_OTHER', 'NEW', 'NEW_WITH_DEFECTS', 'USED_EXCELLENT', 'USED_GOOD']
-            ).filter((c) => c !== ebayCondition && (!accepted || accepted.has(c)));
-
-            for (const retryCondition of retryOrder) {
-              console.log(
-                `[eBay Retry25021] ${sku}: ${ebayCondition} rejected — retrying with ${retryCondition}`
-              );
-              const retryInvPayload = { ...inventoryPayload, condition: retryCondition };
-              const retryInvRes = await fetch(inventoryUrl, {
-                method: 'PUT',
-                headers: {
-                  ...ebayUserHeaders(accessToken),
-                  ...(proxySecret ? { 'X-Proxy-Secret': proxySecret } : {}),
-                },
-                body: JSON.stringify(retryInvPayload),
-              });
-              if (!retryInvRes.ok && retryInvRes.status !== 204) {
-                const t = await retryInvRes.text();
-                console.warn(`[eBay Retry25021] inventory PUT failed: ${retryInvRes.status} ${t.slice(0, 200)}`);
-                continue;
-              }
-              publishResponse = await fetch(publishUrl, {
-                method: 'POST',
-                headers: {
-                  ...ebayUserHeaders(accessToken),
-                  ...(proxySecret ? { 'X-Proxy-Secret': proxySecret } : {}),
-                },
-              });
-              if (publishResponse.ok) {
-                console.log(`[eBay Retry25021] ${sku}: succeeded with condition=${retryCondition}`);
-                currentInventoryCondition = retryCondition;
-                break;
-              }
-              // Even if THIS publish ultimately fails with a different error (e.g. 25101),
-              // remember that the PUT succeeded with this condition — Pass 3 needs it.
-              currentInventoryCondition = retryCondition;
-              const retryErr = await publishResponse.clone().text();
-              if (!retryErr.includes('25021')) {
-                console.warn(`[eBay Retry25021] ${sku}: non-25021 error, stopping: ${retryErr.slice(0, 200)}`);
-                break;
-              }
-            }
-          }
-        }
-
-        // Pass 2: 25005 category-not-a-leaf retry (runs after 25021 pass or on initial 25005)
-        if (!publishResponse.ok) {
-          const currentErrorText = await publishResponse.clone().text();
-          if (currentErrorText.includes('25005')) {
-            // Clear the bad cached category so future pushes re-query
+        if (!healResult.published || !ebayListingId) {
+          // 25005 exhausted → surface the manual-category-review result (unchanged UX).
+          if (healResult.lastErrorId === '25005') {
             await prisma.item.update({
               where: { id: item.id },
-              data: { ebayCategoryId: null },
+              data: { ebayNeedsReview: true },
             });
-            const candidates = await getEbayCategoryCandidates(item.title);
-            const alreadyTried = new Set([categoryId ?? '']);
-            for (const candidate of candidates) {
-              if (alreadyTried.has(candidate.categoryId)) continue;
-              alreadyTried.add(candidate.categoryId);
-              console.log(
-                `[eBay Retry25005] ${sku}: category ${categoryId} not a leaf — retrying with ${candidate.categoryId} (${candidate.categoryName})`
-              );
-              // Fetch current offer to preserve all fields (PUT replaces entire object)
-              const existingOfferRes = await fetch(
-                `${frontendUrl}/api/proxy/ebay?path=${encodeURIComponent(`/sell/inventory/v1/offer/${offerId}`)}`,
-                {
-                  headers: {
-                    ...ebayUserHeaders(accessToken),
-                    ...(proxySecret ? { 'X-Proxy-Secret': proxySecret } : {}),
-                  },
-                }
-              );
-              if (!existingOfferRes.ok) {
-                console.warn(`[eBay Retry25005] could not fetch offer: ${existingOfferRes.status}`);
-                continue;
-              }
-              const existingOffer = (await existingOfferRes.json()) as any;
-              const updatedOffer = { ...existingOffer, categoryId: candidate.categoryId };
-              // Strip read-only fields eBay rejects on PUT
-              delete updatedOffer.offerId;
-              delete updatedOffer.offerState;
-              delete updatedOffer.listing;
-              const patchOfferRes = await fetch(
-                `${frontendUrl}/api/proxy/ebay?path=${encodeURIComponent(`/sell/inventory/v1/offer/${offerId}`)}`,
-                {
-                  method: 'PUT',
-                  headers: {
-                    ...ebayUserHeaders(accessToken),
-                    ...(proxySecret ? { 'X-Proxy-Secret': proxySecret } : {}),
-                  },
-                  body: JSON.stringify(updatedOffer),
-                }
-              );
-              if (!patchOfferRes.ok && patchOfferRes.status !== 204) {
-                const t = await patchOfferRes.text();
-                console.warn(`[eBay Retry25005] offer PUT failed: ${patchOfferRes.status} ${t.slice(0, 200)}`);
-                continue;
-              }
-              publishResponse = await fetch(publishUrl, {
-                method: 'POST',
-                headers: {
-                  ...ebayUserHeaders(accessToken),
-                  ...(proxySecret ? { 'X-Proxy-Secret': proxySecret } : {}),
-                },
-              });
-              if (publishResponse.ok) {
-                categoryId = candidate.categoryId;
-                await prisma.item.update({
-                  where: { id: item.id },
-                  // Persist name too so the retry-resolved category shows in edit-item.
-                  data: { ebayCategoryId: candidate.categoryId, ebayCategoryName: candidate.categoryName },
-                });
-                console.log(`[eBay Retry25005] ${sku}: succeeded with category=${candidate.categoryId}`);
-                break;
-              }
-              const retryErr = await publishResponse.clone().text();
-              if (!retryErr.includes('25005')) {
-                console.warn(`[eBay Retry25005] ${sku}: non-25005 error, stopping: ${retryErr.slice(0, 200)}`);
-                break;
-              }
-            }
-          }
-        }
-
-        // Pass 3: 25101 Invalid <ShippingPackage> retry — eBay rejected the
-        // item's packageType because the picked fulfillment policy's shipping
-        // services don't accept it (e.g. policy with USPS_FLAT_RATE_ENVELOPE
-        // services but item.packageType=MAILING_BOX or PARCEL_OR_PADDED_ENVELOPE).
-        // Defensive fix: strip packageType from the inventory payload and let
-        // eBay infer from weight/dims. Logs the event so the organizer-set
-        // packageType vs picked-policy mismatch is diagnosable.
-        if (!publishResponse.ok) {
-          const currentErrorText = await publishResponse.clone().text();
-          if (currentErrorText.includes('25101')) {
-            console.warn(`[eBay 25101 Retry] sku=${sku} pickedPolicy=${routing.fulfillmentPolicyId} itemPackageType="${item.packageType ?? 'null'}" currentCondition=${currentInventoryCondition} — stripping packageType and retrying`);
-            // Preserve whatever condition is currently on eBay's inventory item (which
-            // may have been updated by Pass 1's 25021 retry). Reverting to the original
-            // inventoryPayload.condition would re-trigger the 25021 we just resolved.
-            const stripped = { ...inventoryPayload, condition: currentInventoryCondition };
-            if ((stripped as any).packageWeightAndSize) {
-              const pkg = { ...((stripped as any).packageWeightAndSize as Record<string, unknown>) };
-              delete (pkg as any).packageType;
-              (stripped as any).packageWeightAndSize = pkg;
-            }
-            const retryInvRes = await fetch(inventoryUrl, {
-              method: 'PUT',
-              headers: {
-                ...ebayUserHeaders(accessToken),
-                ...(proxySecret ? { 'X-Proxy-Secret': proxySecret } : {}),
-              },
-              body: JSON.stringify(stripped),
+            console.warn(`[eBay] Category review needed for ${sku} — organizer must set eBay category manually`);
+            results.push({
+              itemId: item.id,
+              sku,
+              ebayListingId: null,
+              status: 'category_review_needed',
+              error: 'CATEGORY_REVIEW_NEEDED',
+              message: 'eBay could not find a valid category for this item. Open the item editor, set the eBay Category, and push again.',
             });
-            if (retryInvRes.ok || retryInvRes.status === 204) {
-              publishResponse = await fetch(publishUrl, {
-                method: 'POST',
-                headers: {
-                  ...ebayUserHeaders(accessToken),
-                  ...(proxySecret ? { 'X-Proxy-Secret': proxySecret } : {}),
-                },
-              });
-              if (publishResponse.ok) {
-                trackEbayCall();
-                console.log(`[eBay 25101 Retry] ${sku}: succeeded after stripping packageType`);
-              } else {
-                const stillErr = await publishResponse.clone().text();
-                console.warn(`[eBay 25101 Retry] ${sku}: still failing: ${stillErr.slice(0, 200)}`);
-              }
-            } else {
-              console.warn(`[eBay 25101 Retry] inventory PUT (strip packageType) failed: ${retryInvRes.status}`);
-            }
+          } else {
+            console.error(`[eBay] Publish failed and no listingId found (lastErrorId=${healResult.lastErrorId ?? 'none'})`);
+            results.push({
+              itemId: item.id,
+              sku,
+              ebayListingId: null,
+              status: 'error',
+              error: 'PUBLISH_FAILED',
+              message: `Failed to publish offer${healResult.lastErrorId ? ` (eBay error ${healResult.lastErrorId})` : ''}`,
+            });
           }
+          continue;
         }
+        trackEbayCall();
 
-        if (publishResponse.ok) {
-          trackEbayCall();
-          const publishData = (await publishResponse.json()) as any;
-          ebayListingId = publishData.listingId;
-        } else {
-          const publishError = await publishResponse.text();
-          console.warn(`[eBay] Publish returned ${publishResponse.status}: ${publishError}`);
-
-          // If already published, fetch listingId from the existing offer
-          const offerDetailRes = await fetch(
-            `${frontendUrl}/api/proxy/ebay?path=${encodeURIComponent(`/sell/inventory/v1/offer/${offerId}`)}`,
-            {
-              headers: {
-                ...ebayUserHeaders(accessToken),
-                ...(proxySecret ? { 'X-Proxy-Secret': proxySecret } : {}),
-              },
-            }
-          );
-          if (offerDetailRes.ok) {
-            const offerDetail = (await offerDetailRes.json()) as any;
-            ebayListingId = offerDetail.listing?.listingId || null;
-          }
-
-          if (!ebayListingId) {
-            // 25002 self-heal (BulkPush): GET inventory item, inject Brand+MPN aspects, PUT back, re-publish.
-            // Mirrors the same self-heal in the PublishNow path (~line 3061).
-            // The bulk-push aspect builder may have used stale Taxonomy data; the offer
-            // is not rebuilt on re-push, so aspects can be missing even after a successful
-            // inventory PUT. Inject them here and try once more before falling through to
-            // the generic PUBLISH_FAILED error.
-            const is25002 = publishError.includes('25002');
-            if (is25002) {
-              const invGet25002 = await fetch(inventoryUrl, {
-                headers: {
-                  ...ebayUserHeaders(accessToken),
-                  ...(proxySecret ? { 'X-Proxy-Secret': proxySecret } : {}),
-                },
-              });
-              if (invGet25002.ok) {
-                const invBody25002 = (await invGet25002.json()) as any;
-                if (!invBody25002.product || typeof invBody25002.product !== 'object') {
-                  invBody25002.product = {};
-                }
-                const aspectsObj25002: Record<string, string[]> =
-                  invBody25002.product.aspects && typeof invBody25002.product.aspects === 'object'
-                    ? invBody25002.product.aspects
-                    : {};
-                const hasKey25002 = (key: string): boolean =>
-                  Object.keys(aspectsObj25002).some((k) => k.toLowerCase() === key.toLowerCase());
-                if (!hasKey25002('Brand')) {
-                  aspectsObj25002['Brand'] = item.brand && item.brand.trim() ? [item.brand.trim()] : ['Unbranded'];
-                }
-                if (!hasKey25002('MPN')) {
-                  aspectsObj25002['MPN'] = [item.mpn?.trim() || 'Does Not Apply'];
-                }
-                if (!hasKey25002('Model')) {
-                  const modelVal25002 =
-                    item.mpn?.trim() ||
-                    (item as any).title
-                      ?.replace(
-                        new RegExp(
-                          '\\b' + (item.brand || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b',
-                          'i'
-                        ),
-                        ''
-                      )
-                      .trim()
-                      .slice(0, 65) ||
-                    'Unspecified';
-                  aspectsObj25002['Model'] = [modelVal25002];
-                }
-                invBody25002.product.aspects = aspectsObj25002;
-                // Mirror Brand into product.brand alongside aspects.Brand for BrandMPN pair.
-                // (confirmed 2026-06-30: aspects.Brand alone does not satisfy eBay BrandMPN).
-                if (!invBody25002.product.brand) {
-                  const injectedBrand25002 = aspectsObj25002['Brand']?.[0];
-                  invBody25002.product.brand = (injectedBrand25002 && injectedBrand25002.toLowerCase() !== 'unbranded')
-                    ? injectedBrand25002
-                    : (item.brand?.trim() || null);
-                }
-                if (!invBody25002.product.mpn) {
-                  invBody25002.product.mpn = item.mpn?.trim() || 'Does Not Apply';
-                }
-                console.log(
-                  `[eBay BulkPush Retry25002] ${sku}: injecting Brand=${aspectsObj25002['Brand']?.[0]} + MPN=${aspectsObj25002['MPN']?.[0]} and re-publishing`
-                );
-                const retryInvRes25002 = await fetch(inventoryUrl, {
-                  method: 'PUT',
-                  headers: {
-                    ...ebayUserHeaders(accessToken),
-                    ...(proxySecret ? { 'X-Proxy-Secret': proxySecret } : {}),
-                  },
-                  body: JSON.stringify(invBody25002),
-                });
-                if (retryInvRes25002.ok || retryInvRes25002.status === 204) {
-                  publishResponse = await fetch(publishUrl, {
-                    method: 'POST',
-                    headers: {
-                      ...ebayUserHeaders(accessToken),
-                      ...(proxySecret ? { 'X-Proxy-Secret': proxySecret } : {}),
-                    },
-                  });
-                  if (publishResponse.ok) {
-                    trackEbayCall();
-                    const retryData25002 = (await publishResponse.json()) as any;
-                    ebayListingId = retryData25002.listingId;
-                  }
-                }
-              }
-            }
-
-            // If 25002 self-heal succeeded, skip the error block and let the
-            // success path below handle the DB update.
-            if (!ebayListingId) {
-              const is25005 = publishError.includes('25005');
-              if (is25005) {
-                await prisma.item.update({
-                  where: { id: item.id },
-                  data: { ebayNeedsReview: true },
-                });
-                console.warn(`[eBay] Category review needed for ${sku} — organizer must set eBay category manually`);
-                results.push({
-                  itemId: item.id,
-                  sku,
-                  ebayListingId: null,
-                  status: 'category_review_needed',
-                  error: 'CATEGORY_REVIEW_NEEDED',
-                  message: 'eBay could not find a valid category for this item. Open the item editor, set the eBay Category, and push again.',
-                });
-              } else {
-                console.error(`[eBay] Publish failed and no listingId found: ${publishResponse.status} ${publishError}`);
-                results.push({
-                  itemId: item.id,
-                  sku,
-                  ebayListingId: null,
-                  status: 'error',
-                  error: 'PUBLISH_FAILED',
-                  message: `Failed to publish offer: ${publishResponse.status}`,
-                });
-              }
-              continue;
-            }
-          }
-        }
-
-        // Update item with eBay listing ID; auto-publish on FindA.Sale; clear any prior review flag
+                // Update item with eBay listing ID; auto-publish on FindA.Sale; clear any prior review flag
         await prisma.item.update({
           where: { id: item.id },
           data: {
@@ -2890,391 +2602,41 @@ export const publishItemOffer = async (req: AuthRequest, res: Response) => {
     // `FAS-${item.id}` 404s when the organizer has skuAppendDate/Cost/Location toggles
     // enabled. buildCustomLabel applies those toggles so the SKU matches eBay.
     const sku = buildCustomLabel(item.id, organizer, item);
-    const publishPath = encodeURIComponent(`/sell/inventory/v1/offer/${item.ebayOfferId}/publish`);
-    const publishUrl = `${frontendUrl}/api/proxy/ebay?path=${publishPath}`;
-
-    let publishResponse = await fetch(publishUrl, {
-      method: 'POST',
-      headers: {
-        ...ebayUserHeaders(accessToken),
-        ...(proxySecret ? { 'X-Proxy-Secret': proxySecret } : {}),
+    // Publish LIVE via the consolidated self-heal loop (Phase 3, ADR 2026-06-30).
+    // Replaces the inline 25021/25002/25101/25005 self-heal blocks. The loop parses
+    // eBay's errorId and dispatches to the matching healer (shared mutable ctx),
+    // re-attempting up to 5 times. isUsedFamily is derived from DB item.condition inside
+    // the loop; a 25005 heal may recreate the offer and persists the new offer/category.
+    const healResult = await ebayPublishWithSelfHeal({
+      item: {
+        id: item.id,
+        title: item.title,
+        condition: item.condition,
+        brand: item.brand,
+        mpn: item.mpn,
+        ebayCategoryId: item.ebayCategoryId,
+        ebayCategoryName: item.ebayCategoryName,
+        ebayOfferId: item.ebayOfferId,
+        category: item.category,
       },
+      accessToken,
+      sku,
     });
 
-    let ebayListingId: string | null = null;
+    const ebayListingId: string | null = healResult.listingId;
 
-    if (publishResponse.ok) {
-      trackEbayCall();
-      const publishData = (await publishResponse.json()) as any;
-      ebayListingId = publishData.listingId;
-    } else {
-      const publishError = await publishResponse.text();
-      console.warn(`[eBay PublishNow] offerId=${item.ebayOfferId} status=${publishResponse.status} body=${publishError.slice(0, 300)}`);
-
-      // 25021 retry path: walk accepted conditions and re-publish
-      if (publishError.includes('25021') && item.ebayCategoryId) {
-        // Resolve the canonical SKU from the live offer — buildCustomLabel may return a
-        // different string if item fields (roomTag, costBasis, createdAt) changed since
-        // the offer was first pushed.  The offer always stores the original SKU.
-        let canonicalSku25021 = sku;
-        const offerPath25021 = encodeURIComponent(`/sell/inventory/v1/offer/${item.ebayOfferId}`);
-        const offerGetRes25021 = await fetch(ebayProxyUrl(offerPath25021), {
-          headers: { ...ebayUserHeaders(accessToken), ...ebayProxyHeaders() },
-        });
-        if (offerGetRes25021.ok) {
-          const offerData25021 = (await offerGetRes25021.json()) as any;
-          if (offerData25021.sku) canonicalSku25021 = offerData25021.sku;
-        } else {
-          console.warn(`[eBay PublishNow 25021] offer GET failed (${offerGetRes25021.status}); falling back to buildCustomLabel SKU`);
-        }
-        const inventoryPath = encodeURIComponent(`/sell/inventory/v1/inventory_item/${encodeURIComponent(canonicalSku25021)}`);
-        const inventoryUrl = ebayProxyUrl(inventoryPath);
-        // Fetch the current inventory item so we have its payload shape
-        const invGet = await fetch(inventoryUrl, { headers: { ...ebayUserHeaders(accessToken), ...ebayProxyHeaders() } });
-        if (invGet.ok) {
-          const invBody = (await invGet.json()) as any;
-          const accepted = await getAcceptedConditionsForCategory(item.ebayCategoryId);
-          // Bias retry toward conditions that MATCH the item's current condition family
-          // (USED_* vs NEW_*). If the existing condition is a USED_* variant, prefer
-          // USED_GOOD (eBay's universal "Used") and other USED variants before falling
-          // back to NEW_OTHER. Prevents auto-listing used items as NEW_OTHER just
-          // because that came first alphabetically in the fallback list.
-          const isUsedFamily = item.condition === 'USED' || item.condition === 'PARTS_OR_REPAIR'
-            || (typeof invBody.condition === 'string' && invBody.condition.startsWith('USED_'));
-          const retryOrder = (isUsedFamily
-            ? ['USED_GOOD', 'USED_VERY_GOOD', 'USED_EXCELLENT', 'USED_ACCEPTABLE', 'FOR_PARTS_OR_NOT_WORKING', 'NEW_OTHER', 'NEW']
-            : ['NEW_OTHER', 'NEW', 'NEW_WITH_DEFECTS', 'USED_EXCELLENT', 'USED_GOOD']
-          ).filter((c) => c !== invBody.condition && (!accepted || accepted.has(c)));
-          for (const retryCondition of retryOrder) {
-            console.log(`[eBay PublishNow Retry25021] ${canonicalSku25021}: retrying with condition=${retryCondition}`);
-            const retryInvPayload = { ...invBody, condition: retryCondition };
-            const retryInvRes = await fetch(inventoryUrl, {
-              method: 'PUT',
-              headers: {
-                ...ebayUserHeaders(accessToken),
-                ...(proxySecret ? { 'X-Proxy-Secret': proxySecret } : {}),
-              },
-              body: JSON.stringify(retryInvPayload),
-            });
-            if (!retryInvRes.ok && retryInvRes.status !== 204) continue;
-            publishResponse = await fetch(publishUrl, {
-              method: 'POST',
-              headers: {
-                ...ebayUserHeaders(accessToken),
-                ...(proxySecret ? { 'X-Proxy-Secret': proxySecret } : {}),
-              },
-            });
-            if (publishResponse.ok) {
-              trackEbayCall();
-              const publishData = (await publishResponse.json()) as any;
-              ebayListingId = publishData.listingId;
-              break;
-            }
-          }
-        }
-      }
-
-      // 25002 self-heal path: a stale offer can have a missing required item-specific
-      // (most commonly Brand). The bulk-push aspect builder may have skipped it if the
-      // Taxonomy API failed at push time, and the publish path only re-publishes the
-      // existing offer — it never rebuilds aspects. So when publish fails with 25002,
-      // GET the inventory item, inject Brand (and MPN) from the organizer's current
-      // values into product.aspects, PUT it back, then re-publish once. Fall back to
-      // "Unbranded" (eBay's accepted no-brand value) when the organizer set no brand.
-      if (!ebayListingId && publishError.includes('25002')) {
-        // Resolve the canonical SKU from the live offer — same SKU-drift risk as 25021.
-        let canonicalSku25002 = sku;
-        const offerPath25002 = encodeURIComponent(`/sell/inventory/v1/offer/${item.ebayOfferId}`);
-        const offerGetRes25002 = await fetch(ebayProxyUrl(offerPath25002), {
-          headers: { ...ebayUserHeaders(accessToken), ...ebayProxyHeaders() },
-        });
-        if (offerGetRes25002.ok) {
-          const offerData25002 = (await offerGetRes25002.json()) as any;
-          if (offerData25002.sku) canonicalSku25002 = offerData25002.sku;
-        } else {
-          console.warn(`[eBay PublishNow 25002] offer GET failed (${offerGetRes25002.status}); falling back to buildCustomLabel SKU`);
-        }
-        const inventoryPath = encodeURIComponent(`/sell/inventory/v1/inventory_item/${encodeURIComponent(canonicalSku25002)}`);
-        const inventoryUrl = ebayProxyUrl(inventoryPath);
-        const invGet = await fetch(inventoryUrl, { headers: { ...ebayUserHeaders(accessToken), ...ebayProxyHeaders() } });
-        if (invGet.ok) {
-          const invBody = (await invGet.json()) as any;
-          if (!invBody.product || typeof invBody.product !== 'object') invBody.product = {};
-          const aspectsObj: Record<string, string[]> =
-            invBody.product.aspects && typeof invBody.product.aspects === 'object'
-              ? invBody.product.aspects
-              : {};
-          const hasKey = (key: string): boolean =>
-            Object.keys(aspectsObj).some((k) => k.toLowerCase() === key.toLowerCase());
-          if (!hasKey('Brand')) {
-            aspectsObj['Brand'] = item.brand && item.brand.trim() ? [item.brand.trim()] : ['Unbranded'];
-          }
-          // Brand+MPN pairing (evidence 2026-06-13, errorId 25002 param BrandMPN):
-          // this self-heal always sets a Brand aspect, so MPN MUST also be present
-          // or eBay re-rejects with the <BrandMPN> error. Inject MPN whenever the
-          // aspect is absent — use the organizer's real MPN or 'Does Not Apply'.
-          if (!hasKey('MPN')) {
-            aspectsObj['MPN'] = [item.mpn?.trim() || 'Does Not Apply'];
-          }
-          // Model aspect: required for many hardware/electronics categories (e.g. 47091).
-          // Use item.mpn as Model when organizer has set it; fall back to title-derived.
-          if (!hasKey('Model')) {
-            const modelVal = item.mpn?.trim()
-              || (item as any).title?.replace(new RegExp('\\b' + (item.brand || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'i'), '').trim().slice(0, 65)
-              || 'Unspecified';
-            aspectsObj['Model'] = [modelVal];
-          }
-          invBody.product.aspects = aspectsObj;
-          // Mirror Brand into product.brand — required alongside aspects.Brand for BrandMPN
-          // pair validation (confirmed 2026-06-30: aspects.Brand alone is not sufficient).
-          if (!invBody.product.brand) {
-            const injectedBrand = aspectsObj['Brand']?.[0];
-            invBody.product.brand = (injectedBrand && injectedBrand.toLowerCase() !== 'unbranded')
-              ? injectedBrand
-              : (item.brand?.trim() || null);
-          }
-          // Mirror the MPN into the top-level product field so the pair is complete.
-          if (!invBody.product.mpn) {
-            invBody.product.mpn = item.mpn?.trim() || 'Does Not Apply';
-          }
-          console.log(`[eBay PublishNow Retry25002] ${canonicalSku25002}: injecting Brand=${aspectsObj['Brand']?.[0]} + MPN=${aspectsObj['MPN']?.[0]} and re-publishing`);
-          const retryInvRes = await fetch(inventoryUrl, {
-            method: 'PUT',
-            headers: {
-              ...ebayUserHeaders(accessToken),
-              ...(proxySecret ? { 'X-Proxy-Secret': proxySecret } : {}),
-            },
-            body: JSON.stringify(invBody),
-          });
-          if (retryInvRes.ok || retryInvRes.status === 204) {
-            publishResponse = await fetch(publishUrl, {
-              method: 'POST',
-              headers: {
-                ...ebayUserHeaders(accessToken),
-                ...(proxySecret ? { 'X-Proxy-Secret': proxySecret } : {}),
-              },
-            });
-            if (publishResponse.ok) {
-              trackEbayCall();
-              const publishData = (await publishResponse.json()) as any;
-              ebayListingId = publishData.listingId;
-            }
-          }
-        }
-      }
-
-      // 25101 self-heal (PublishNow path): eBay rejected the inventory item's
-      // packageType because it conflicts with the fulfillment policy's shipping services
-      // (e.g. PARCEL_OR_PADDED_ENVELOPE with a flat-rate-envelope policy).
-      // Fix: GET the current inventory item by canonical SKU, strip packageType from
-      // packageWeightAndSize, PUT it back, and retry publish. Mirrors the identical
-      // self-heal in pushSaleToEbay (Pass 3, ~line 2673).
-      if (!ebayListingId && publishError.includes('25101')) {
-        // Resolve canonical SKU from the live offer (same SKU-drift guard as 25002).
-        let canonicalSku25101 = sku;
-        const offerPath25101 = encodeURIComponent(`/sell/inventory/v1/offer/${item.ebayOfferId}`);
-        const offerGetRes25101 = await fetch(ebayProxyUrl(offerPath25101), {
-          headers: { ...ebayUserHeaders(accessToken), ...ebayProxyHeaders() },
-        });
-        if (offerGetRes25101.ok) {
-          const offerData25101 = (await offerGetRes25101.json()) as any;
-          if (offerData25101.sku) canonicalSku25101 = offerData25101.sku;
-        } else {
-          console.warn(`[eBay PublishNow 25101] offer GET failed (${offerGetRes25101.status}); falling back to buildCustomLabel SKU`);
-        }
-        const inventoryPath25101 = encodeURIComponent(`/sell/inventory/v1/inventory_item/${encodeURIComponent(canonicalSku25101)}`);
-        const inventoryUrl25101 = ebayProxyUrl(inventoryPath25101);
-        console.warn(`[eBay PublishNow 25101] sku=${canonicalSku25101} — stripping packageType and retrying`);
-        try {
-          const invGet25101 = await fetch(inventoryUrl25101, {
-            headers: { ...ebayUserHeaders(accessToken), ...ebayProxyHeaders() },
-          });
-          if (invGet25101.ok) {
-            const invBody25101 = (await invGet25101.json()) as any;
-            if (invBody25101.packageWeightAndSize) {
-              const pkg25101 = { ...(invBody25101.packageWeightAndSize as Record<string, unknown>) };
-              delete (pkg25101 as any).packageType;
-              invBody25101.packageWeightAndSize = pkg25101;
-            }
-            const retryInvRes25101 = await fetch(inventoryUrl25101, {
-              method: 'PUT',
-              headers: {
-                ...ebayUserHeaders(accessToken),
-                ...(proxySecret ? { 'X-Proxy-Secret': proxySecret } : {}),
-              },
-              body: JSON.stringify(invBody25101),
-            });
-            if (retryInvRes25101.ok || retryInvRes25101.status === 204) {
-              publishResponse = await fetch(publishUrl, {
-                method: 'POST',
-                headers: {
-                  ...ebayUserHeaders(accessToken),
-                  ...(proxySecret ? { 'X-Proxy-Secret': proxySecret } : {}),
-                },
-              });
-              if (publishResponse.ok) {
-                trackEbayCall();
-                const publishData25101 = (await publishResponse.json()) as any;
-                ebayListingId = publishData25101.listingId;
-                console.log(`[eBay PublishNow 25101] ${canonicalSku25101}: succeeded after stripping packageType`);
-              } else {
-                const stillErr25101 = await publishResponse.clone().text();
-                console.warn(`[eBay PublishNow 25101] ${canonicalSku25101}: still failing after strip: ${stillErr25101.slice(0, 200)}`);
-              }
-            } else {
-              console.warn(`[eBay PublishNow 25101] inventory PUT (strip packageType) failed: ${retryInvRes25101.status}`);
-            }
-          } else {
-            console.warn(`[eBay PublishNow 25101] inventory GET failed: ${invGet25101.status}`);
-          }
-        } catch (err25101) {
-          console.error('[eBay PublishNow 25101] self-heal threw:', (err25101 as Error).message);
-        }
-      }
-
-         // 25005 self-heal: eBay category is invalid/deprecated.
-      // Strategy: GET the current offer from eBay, swap categoryId with a fresh taxonomy
-      // lookup, PUT it back (or delete+recreate if PUT fails), then republish.
-      if (!ebayListingId && publishError.includes('25005')) {
-        console.warn(`[eBay PublishNow 25005] ${sku}: invalid category — attempting full self-heal`);
-        try {
-          // 1. Get fresh category from eBay taxonomy
-          const freshCategory = await suggestEbayCategoryForTitle(item.title, (item as any).category ?? null);
-          const newCategoryId = freshCategory?.categoryId;
-
-          if (newCategoryId) {
-            // 2. GET the current offer payload from eBay
-            const offerPath = encodeURIComponent(`/sell/inventory/v1/offer/${item.ebayOfferId}`);
-            const offerGetRes = await fetch(ebayProxyUrl(offerPath), {
-              headers: { ...ebayUserHeaders(accessToken), ...ebayProxyHeaders() },
-            });
-
-            if (offerGetRes.ok) {
-              trackEbayCall();
-              const offerBody = (await offerGetRes.json()) as Record<string, unknown>;
-
-              // Build updated offer — swap category, strip eBay read-only fields
-              const updatedOffer: Record<string, unknown> = { ...offerBody, categoryId: newCategoryId };
-              for (const ro of ['offerId', 'status', 'listing', 'listingId', 'listingStatus', 'marketplaceId']) {
-                delete updatedOffer[ro];
-              }
-
-              // 3. Try PUT (update in place)
-              let activeOfferId: string = item.ebayOfferId as string;
-              const offerPutRes = await fetch(ebayProxyUrl(offerPath), {
-                method: 'PUT',
-                headers: { ...ebayUserHeaders(accessToken), ...ebayProxyHeaders() },
-                body: JSON.stringify(updatedOffer),
-              });
-
-              if (offerPutRes.ok || offerPutRes.status === 204) {
-                trackEbayCall();
-                console.log(`[eBay PublishNow 25005] offer PUT succeeded with category=${newCategoryId}`);
-                await prisma.item.update({
-                  where: { id: item.id },
-                  data: { ebayCategoryId: newCategoryId, ebayCategoryName: freshCategory.categoryName },
-                });
-              } else {
-                // 4. PUT failed — delete and recreate offer
-                const putErrText = await offerPutRes.text();
-                console.warn(`[eBay PublishNow 25005] PUT failed (${offerPutRes.status} ${putErrText.slice(0, 200)}) — deleting + recreating offer`);
-
-                await fetch(ebayProxyUrl(offerPath), {
-                  method: 'DELETE',
-                  headers: { ...ebayUserHeaders(accessToken), ...ebayProxyHeaders() },
-                });
-
-                // updatedOffer already has the new categoryId and no read-only fields
-                // marketplaceId is required for POST — add it back
-                updatedOffer.marketplaceId = 'EBAY_US';
-                const createRes = await fetch(
-                  `${frontendUrl}/api/proxy/ebay?path=/sell/inventory/v1/offer`,
-                  {
-                    method: 'POST',
-                    headers: { ...ebayUserHeaders(accessToken), ...ebayProxyHeaders() },
-                    body: JSON.stringify(updatedOffer),
-                  }
-                );
-
-                if (createRes.ok) {
-                  trackEbayCall();
-                  const createData = (await createRes.json()) as any;
-                  activeOfferId = createData.offerId;
-                  console.log(`[eBay PublishNow 25005] new offer created: offerId=${activeOfferId} category=${newCategoryId}`);
-                  await prisma.item.update({
-                    where: { id: item.id },
-                    data: {
-                      ebayOfferId: activeOfferId,
-                      ebayCategoryId: newCategoryId,
-                      ebayCategoryName: freshCategory.categoryName,
-                    },
-                  });
-                } else {
-                  const createErr = await createRes.text();
-                  console.error(`[eBay PublishNow 25005] offer recreate failed: ${createErr.slice(0, 300)}`);
-                }
-              }
-
-              // 5. Republish with the corrected offer
-              const republishPath = encodeURIComponent(`/sell/inventory/v1/offer/${activeOfferId}/publish`);
-              publishResponse = await fetch(`${frontendUrl}/api/proxy/ebay?path=${republishPath}`, {
-                method: 'POST',
-                headers: {
-                  ...ebayUserHeaders(accessToken),
-                  ...(proxySecret ? { 'X-Proxy-Secret': proxySecret } : {}),
-                },
-              });
-              if (publishResponse.ok) {
-                trackEbayCall();
-                const pubData = (await publishResponse.json()) as any;
-                ebayListingId = pubData.listingId ?? null;
-                console.log(`[eBay PublishNow 25005] self-heal published: listingId=${ebayListingId}`);
-              } else {
-                const pubErr = await publishResponse.text();
-                console.warn(`[eBay PublishNow 25005] re-publish failed: ${pubErr.slice(0, 300)}`);
-              }
-            } else {
-              console.warn(`[eBay PublishNow 25005] offer GET failed (${offerGetRes.status}) — cannot self-heal`);
-            }
-          } else {
-            console.warn(`[eBay PublishNow 25005] taxonomy returned no category for "${item.title.slice(0, 40)}" — cannot self-heal`);
-          }
-        } catch (healErr) {
-          console.error('[eBay PublishNow 25005] self-heal threw:', (healErr as Error).message);
-        }
-
-        // If still no listingId, clear the stale category so the next push re-resolves it
-        if (!ebayListingId) {
-          await prisma.item.update({
-            where: { id: item.id },
-            data: { ebayCategoryId: null, ebayCategoryName: null },
-          });
-          console.warn(`[eBay PublishNow 25005] self-heal failed — stale category cleared for next push`);
-        }
-      }
-
-            // If still no listingId, try fetching from the offer directly (in case it already published)
-      if (!ebayListingId) {
-        const offerDetailRes = await fetch(
-          `${frontendUrl}/api/proxy/ebay?path=${encodeURIComponent(`/sell/inventory/v1/offer/${item.ebayOfferId}`)}`,
-          { headers: { ...ebayUserHeaders(accessToken), ...(proxySecret ? { 'X-Proxy-Secret': proxySecret } : {}) } }
-        );
-        if (offerDetailRes.ok) {
-          const offerDetail = (await offerDetailRes.json()) as any;
-          ebayListingId = offerDetail.listing?.listingId || null;
-        }
-      }
-
-      if (!ebayListingId) {
-        return res.status(400).json({
-          code: 'PUBLISH_FAILED',
-          message: parseEbayErrorMessage(publishError) || `eBay rejected publish (status ${publishResponse.status})`,
-          ebayStatus: publishResponse.status,
-        });
-      }
+    if (!healResult.published || !ebayListingId) {
+      return res.status(400).json({
+        code: 'PUBLISH_FAILED',
+        message: healResult.lastErrorId
+          ? `eBay rejected publish (error ${healResult.lastErrorId})`
+          : 'eBay rejected publish',
+        ebayErrorId: healResult.lastErrorId ?? null,
+      });
     }
+    trackEbayCall();
 
-    // Success — persist listing ID and auto-publish on FindA.Sale
+        // Success — persist listing ID and auto-publish on FindA.Sale
     await prisma.item.update({
       where: { id: item.id },
       data: {
@@ -4260,215 +3622,13 @@ function mapGradeToInventoryCondition(grade: string | null | undefined, conditio
   }
 }
 
-/**
- * Cache of per-category accepted condition enums (eBay getItemConditionPolicies).
- * Key = categoryId, value = Set of valid condition enum strings for that category.
- * Cleared implicitly on server restart; eBay policies change rarely.
- */
-const CATEGORY_CONDITION_CACHE = new Map<string, Set<string>>();
-
-/**
- * Fetch accepted conditions for a given eBay category via the Metadata API.
- * Uses the app token (client credentials) — the sell.metadata scope is app-level.
- * Returns a Set of valid enum strings, or null if the call fails (caller falls
- * back to sending the default and letting eBay reject if wrong).
- */
-async function getAcceptedConditionsForCategory(categoryId: string): Promise<Set<string> | null> {
-  const cached = CATEGORY_CONDITION_CACHE.get(categoryId);
-  if (cached) return cached;
-
-  try {
-    const appToken = await getEbayAccessToken();
-    if (!appToken) return null;
-    // Metadata API: item condition policies per marketplace, filtered by categoryId
-    const path = encodeURIComponent(
-      `/sell/metadata/v1/marketplace/EBAY_US/get_item_condition_policies?filter=categoryIds:%7B${categoryId}%7D`
-    );
-    const res = await fetch(ebayProxyUrl(path), {
-      headers: {
-        'Authorization': `Bearer ${appToken}`,
-        'Accept': 'application/json',
-        'Accept-Language': 'en-US',
-        ...ebayProxyHeaders(),
-      },
-    });
-    if (!res.ok) {
-      const body = await res.text();
-      console.warn(`[eBay ConditionPolicies] ${res.status}: ${body.slice(0, 200)}`);
-      return null;
-    }
-    const data = (await res.json()) as {
-      itemConditionPolicies?: Array<{
-        categoryId: string;
-        itemConditions?: Array<{ conditionId: string; conditionDescription?: string }>;
-      }>;
-    };
-    const policy = data.itemConditionPolicies?.[0];
-    if (!policy?.itemConditions?.length) return null;
-    // Map numeric conditionId → Inventory API enum (same map as mapConditionIdToEbayCondition)
-    const idToEnum: Record<string, string> = {
-      '1000': 'NEW',
-      '1500': 'NEW_OTHER',
-      '1750': 'NEW_WITH_DEFECTS',
-      '2000': 'CERTIFIED_REFURBISHED',
-      '2010': 'EXCELLENT_REFURBISHED',
-      '2020': 'VERY_GOOD_REFURBISHED',
-      '2030': 'GOOD_REFURBISHED',
-      '2500': 'SELLER_REFURBISHED',
-      '2750': 'LIKE_NEW',
-      // eBay conditionId 3000 ("Used") maps to the Inventory API enum USED_EXCELLENT.
-      // Confirmed empirically 2026-05-13: category 22669 accepts conditionId 3000, and
-      // publishing succeeds ONLY when the inventory item's condition enum is USED_EXCELLENT
-      // (USED_GOOD = conditionId 5000, which 22669 does NOT accept → errorId 25021).
-      // This matches eBay's official condition-id-values table. The real prior bug was
-      // the phantom "accepted.add('USED_VERY_GOOD')" alias, now removed.
-      '3000': 'USED_EXCELLENT',
-      '4000': 'USED_VERY_GOOD',
-      '5000': 'USED_GOOD',
-      '6000': 'USED_ACCEPTABLE',
-      '7000': 'FOR_PARTS_OR_NOT_WORKING',
-    };
-    const accepted = new Set<string>();
-    for (const c of policy.itemConditions) {
-      const enumName = idToEnum[c.conditionId];
-      if (enumName) accepted.add(enumName);
-    }
-    CATEGORY_CONDITION_CACHE.set(categoryId, accepted);
-    console.log(
-      `[eBay ConditionPolicies] category ${categoryId} accepts: ${Array.from(accepted).join(', ')}`
-    );
-    return accepted;
-  } catch (err) {
-    console.error('[eBay ConditionPolicies] Error:', err);
-    return null;
-  }
-}
-
-/**
- * Remap a condition enum to one accepted by the target category.
- * If the desired condition is accepted, return it unchanged.
- * Otherwise pick the best-available substitute using a quality-ordered fallback.
- * If the policy call fails, returns desired unchanged (eBay will reject at publish
- * if invalid — logged for diagnosis).
- */
-export async function ensureConditionValidForCategory(
-  desired: string,
-  categoryId: string
-): Promise<string> {
-  const accepted = await getAcceptedConditionsForCategory(categoryId);
-  if (!accepted) return desired;
-  if (accepted.has(desired)) return desired;
-
-  // Ordered fallback — pick the closest accepted enum for the desired condition.
-  const fallbacksByDesired: Record<string, string[]> = {
-    'NEW':                      ['NEW_OTHER', 'NEW_WITH_DEFECTS', 'USED_VERY_GOOD', 'USED_GOOD'],
-    'LIKE_NEW':                 ['USED_VERY_GOOD', 'USED_EXCELLENT', 'USED_GOOD', 'NEW_OTHER'],
-    'USED_VERY_GOOD':           ['USED_EXCELLENT', 'USED_GOOD', 'USED_ACCEPTABLE', 'NEW_OTHER'],
-    'USED_EXCELLENT':           ['USED_VERY_GOOD', 'USED_GOOD', 'USED_ACCEPTABLE'],
-    'USED_GOOD':                ['USED_VERY_GOOD', 'USED_ACCEPTABLE', 'USED_EXCELLENT', 'NEW_OTHER'],  // never downgrade to FOR_PARTS unless organizer set PARTS_OR_REPAIR
-    'USED_ACCEPTABLE':          ['USED_GOOD', 'USED_VERY_GOOD', 'NEW_OTHER'],  // never downgrade to FOR_PARTS unless organizer set PARTS_OR_REPAIR
-    'FOR_PARTS_OR_NOT_WORKING': ['USED_ACCEPTABLE', 'USED_GOOD'],
-  };
-  const chain = fallbacksByDesired[desired] || ['USED_GOOD', 'USED_VERY_GOOD', 'NEW'];
-  for (const candidate of chain) {
-    if (accepted.has(candidate)) {
-      console.log(
-        `[eBay ConditionRemap] category ${categoryId}: ${desired} not accepted, using ${candidate}`
-      );
-      return candidate;
-    }
-  }
-  // Nothing matched — return the first accepted enum as a last resort.
-  const firstAccepted = Array.from(accepted)[0];
-  if (firstAccepted) {
-    console.log(
-      `[eBay ConditionRemap] category ${categoryId}: no chain match for ${desired}, using ${firstAccepted}`
-    );
-    return firstAccepted;
-  }
-  return desired;
-}
-
-/**
- * Per-category required-aspect metadata (eBay Taxonomy getItemAspectsForCategory).
- *   name        - aspect name as eBay returns it (e.g. "Type", "Brand", "Color")
- *   required    - true if eBay will reject the listing when this aspect is missing
- *   enumValues  - constrained picklist; empty array when the aspect is free-text
- *   mode        - SELECTION_ONLY means the value MUST come from enumValues
- *   cardinality - SINGLE or MULTI (how many values the aspect accepts)
- */
-interface RequiredAspect {
-  name: string;
-  required: boolean;
-  enumValues: string[];
-  cardinality: 'SINGLE' | 'MULTI';
-  mode: 'SELECTION_ONLY' | 'FREE_TEXT';
-}
-
-/**
- * Cache of per-category aspect definitions. Key = categoryId.
- * Cleared implicitly on server restart; eBay aspect specs change rarely.
- */
-const CATEGORY_ASPECTS_CACHE = new Map<string, RequiredAspect[]>();
-
-/**
- * Fetch required + recommended aspects for a given eBay category via the
- * Taxonomy API. Uses the app token (commerce.taxonomy.readonly is app-level).
- * Returns the parsed aspect list or null on failure.
- */
-async function getRequiredAspectsForCategory(categoryId: string): Promise<RequiredAspect[] | null> {
-  const cached = CATEGORY_ASPECTS_CACHE.get(categoryId);
-  if (cached) return cached;
-
-  try {
-    const appToken = await getEbayAccessToken();
-    if (!appToken) return null;
-    const treeId = '0'; // EBAY_US
-    const path = encodeURIComponent(
-      `/commerce/taxonomy/v1/category_tree/${treeId}/get_item_aspects_for_category?category_id=${categoryId}`
-    );
-    const res = await fetch(ebayProxyUrl(path), {
-      headers: {
-        'Authorization': `Bearer ${appToken}`,
-        'Accept': 'application/json',
-        'Accept-Language': 'en-US',
-        ...ebayProxyHeaders(),
-      },
-    });
-    if (!res.ok) {
-      const body = await res.text();
-      console.warn(`[eBay RequiredAspects] ${res.status}: ${body.slice(0, 200)}`);
-      return null;
-    }
-    const data = (await res.json()) as {
-      aspects?: Array<{
-        localizedAspectName: string;
-        aspectConstraint?: {
-          aspectRequired?: boolean;
-          aspectMode?: string;
-          itemToAspectCardinality?: string;
-        };
-        aspectValues?: Array<{ localizedValue: string }>;
-      }>;
-    };
-    const parsed: RequiredAspect[] = (data.aspects || []).map((a) => ({
-      name: a.localizedAspectName,
-      required: a.aspectConstraint?.aspectRequired === true,
-      enumValues: (a.aspectValues || []).map((v) => v.localizedValue),
-      cardinality: a.aspectConstraint?.itemToAspectCardinality === 'MULTI' ? 'MULTI' : 'SINGLE',
-      mode: a.aspectConstraint?.aspectMode === 'SELECTION_ONLY' ? 'SELECTION_ONLY' : 'FREE_TEXT',
-    }));
-    CATEGORY_ASPECTS_CACHE.set(categoryId, parsed);
-    const requiredNames = parsed.filter((a) => a.required).map((a) => a.name);
-    console.log(
-      `[eBay RequiredAspects] category ${categoryId}: ${requiredNames.length} required (${requiredNames.join(', ') || 'none'})`
-    );
-    return parsed;
-  } catch (err) {
-    console.error('[eBay RequiredAspects] Error:', err);
-    return null;
-  }
-}
+// ── Category/condition/aspect helpers moved to services/ebayPublishService.ts ──
+// (Phase 2 of the eBay publish self-heal consolidation, ADR 2026-06-30.)
+// getAcceptedConditionsForCategory / ensureConditionValidForCategory /
+// getRequiredAspectsForCategory + their caches + the RequiredAspect interface now
+// live in the publish service. They are imported below for this controller's
+// internal callers, and ensureConditionValidForCategory + RequiredAspect are
+// re-exported so existing external importers of them keep resolving.
 
 /**
  * Merge item.tags-derived aspects with auto-filled defaults for any REQUIRED
