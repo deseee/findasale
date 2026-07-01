@@ -423,7 +423,7 @@ const AddItemsDetailPage = () => {
       } else if (sortBy === 'date') {
         const dateA = new Date(a.createdAt || 0).getTime();
         const dateB = new Date(b.createdAt || 0).getTime();
-        comparison = dateB - dateA; // Default: newest first
+        comparison = dateA - dateB; // Ascending base; sortOrder flip below applies desc-default = newest first
       }
 
       return sortOrder === 'asc' ? comparison : -comparison;
