@@ -55,7 +55,7 @@ export const EBAY_L1_CATEGORIES: readonly string[] = [
  * Order matters: more specific patterns (e.g. video game consoles) are listed before
  * broader ones (e.g. generic toys) so the specific match wins.
  */
-const DOMAIN_KEYWORD_MAP: Array<{ pattern: RegExp; l1: string }> = [
+export const DOMAIN_KEYWORD_MAP: Array<{ pattern: RegExp; l1: string }> = [
   { pattern: /video game|console|xbox|playstation|nintendo/i, l1: 'Video Games & Consoles' },
   { pattern: /aquarium|aquatic|fish\s*tank|reptile|terrarium|pet|cat|dog|bird|hamster|aerator/i, l1: 'Pet Supplies' },
   { pattern: /guitar|amp|drum|keyboard|piano|violin|instrument|microphone|dj/i, l1: 'Musical Instruments & Gear' },

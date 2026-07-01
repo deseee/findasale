@@ -1030,6 +1030,28 @@ model SourcebookEntry {
   @@index([organizerId])
 }
 
+// Reverse-Image Product Index — pgvector MVP (ADR 2026-07-01)
+// One row per corpus reference image embedding (Open Images subset for MVP Phase 1;
+// FindA.Sale item photos + eBay comps blended in later phases per the ADR).
+// `embedding` is Unsupported("vector(768)") — Prisma Client cannot query/write this
+// column directly; use raw SQL ($queryRaw / $executeRaw) via imageMatchService.ts and
+// ingestOpenImagesCorpus.ts. Dimension 768 confirmed against the Marqo-Ecommerce-B
+// HuggingFace model card (not the L variant, which is 1024).
+model ProductReferenceEmbedding {
+  id             String   @id @default(cuid())
+  sourceDataset  String // 'open-images' | 'findasale-item' | 'ebay-comp'
+  sourceId       String // Open Images ImageID, or Item.id, or eBay comp ID
+  l1Category     String // maps to EBAY_L1_CATEGORIES for corpus filtering/scoping
+  label          String // human-readable label (Open Images class name, or item title)
+  embedding      Unsupported("vector(768)")
+  imageUrl       String?
+  createdAt      DateTime @default(now())
+
+  @@index([l1Category])
+  @@index([sourceDataset])
+  @@map("ProductReferenceEmbedding")
+}
+
 model Item {
   id                         String                 @id @default(cuid())
   title                      String

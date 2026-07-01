@@ -3,6 +3,7 @@ import { v2 as cloudinary } from 'cloudinary';
 import multer from 'multer';
 import axios from 'axios';
 import { analyzeItemImage, isCloudAIAvailable } from '../services/cloudAIService';
+import { findCatalogMatches, buildCatalogMatchContext, isCatalogMatchEnabled } from '../services/imageMatchService';
 import { enqueueProcessRapidDraft } from '../jobs/processRapidDraft';
 import { prisma } from '../lib/prisma';
 import { AuthRequest } from '../middleware/auth';
@@ -288,11 +289,24 @@ export const rapidBatchUpload = async (req: Request, res: Response): Promise<voi
 
             if (!ai) {
               // ── Ollama fallback ────────────────────────────────────────────────
+              // ADR 2026-07-01 §6: pass catalog-match evidence into the Ollama
+              // fallback prompt too, so even full-fallback mode (paid APIs down)
+              // benefits from the self-hosted reverse-image corpus. Best-effort —
+              // never blocks the fallback path if the embedding service is down.
               try {
                 const base64Image = file.buffer.toString('base64');
+                let catalogMatchContext = '';
+                if (isCatalogMatchEnabled()) {
+                  try {
+                    const matches = await findCatalogMatches(file.buffer, mimeType);
+                    catalogMatchContext = buildCatalogMatchContext(matches);
+                  } catch {
+                    // catalog match best-effort — proceed without it
+                  }
+                }
                 const aiResponse = await axios.post(
                   `${OLLAMA_URL}/api/generate`,
-                  { model: OLLAMA_VISION_MODEL, prompt: ollamaPrompt, images: [base64Image], stream: false },
+                  { model: OLLAMA_VISION_MODEL, prompt: ollamaPrompt + catalogMatchContext, images: [base64Image], stream: false },
                   { timeout: 45000 }
                 );
                 const raw = aiResponse.data.response.replace(/```json\n?|\n?```/g, '').trim();
@@ -365,9 +379,21 @@ export const analyzePhotoWithAI = async (req: Request, res: Response): Promise<v
   "suggestedPrice": 12.50
 }`;
 
+    // ADR 2026-07-01 §6: catalog-match evidence in the Ollama fallback prompt too.
+    // Best-effort — never blocks the fallback path if the embedding service is down.
+    let catalogMatchContext = '';
+    if (isCatalogMatchEnabled()) {
+      try {
+        const matches = await findCatalogMatches(file.buffer, mimeType);
+        catalogMatchContext = buildCatalogMatchContext(matches);
+      } catch {
+        // catalog match best-effort — proceed without it
+      }
+    }
+
     const response = await axios.post(
       `${OLLAMA_URL}/api/generate`,
-      { model: OLLAMA_VISION_MODEL, prompt, images: [base64Image], stream: false },
+      { model: OLLAMA_VISION_MODEL, prompt: prompt + catalogMatchContext, images: [base64Image], stream: false },
       { timeout: 30000 }
     );
 

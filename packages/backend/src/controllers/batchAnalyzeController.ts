@@ -28,6 +28,7 @@ import { getEbayAccessToken, suggestEbayCategoryForTitle } from './ebayControlle
 import { decodeBarcodeFromImage } from '../services/serverBarcodeDecoder';
 import { lookupByBarcode } from '../services/ebayCatalogLookup';
 import { enrichItem, planEnrichmentApply } from '../services/productEnrichment';
+import { findCatalogMatches, buildCatalogMatchContext, isCatalogMatchEnabled } from '../services/imageMatchService';
 
 const OLLAMA_URL = process.env.OLLAMA_URL || 'http://host.docker.internal:11434';
 const OLLAMA_VISION_MODEL = process.env.OLLAMA_VISION_MODEL || 'qwen3-vl:4b';
@@ -335,11 +336,25 @@ export const batchAnalyzeImages = async (req: AuthRequest, res: Response): Promi
 }`;
 
               const base64Images = clusterImages.map(img => img.buffer.toString('base64'));
+
+              // ADR 2026-07-01 §6: catalog-match evidence in the Ollama fallback
+              // prompt too, using the primary (first) cluster image. Best-effort —
+              // never blocks the fallback path if the embedding service is down.
+              let catalogMatchContext = '';
+              if (isCatalogMatchEnabled() && clusterImages.length > 0) {
+                try {
+                  const matches = await findCatalogMatches(clusterImages[0].buffer, clusterImages[0].mimeType);
+                  catalogMatchContext = buildCatalogMatchContext(matches);
+                } catch {
+                  // catalog match best-effort — proceed without it
+                }
+              }
+
               const aiResponse = await axios.post(
                 `${OLLAMA_URL}/api/generate`,
                 {
                   model: OLLAMA_VISION_MODEL,
-                  prompt: ollamaPrompt,
+                  prompt: ollamaPrompt + catalogMatchContext,
                   images: base64Images.slice(0, 1), // Ollama: use primary image only
                   stream: false,
                 },
