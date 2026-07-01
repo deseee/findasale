@@ -3650,6 +3650,16 @@ function mapGradeToInventoryCondition(grade: string | null | undefined, conditio
  *         "Unspecified" otherwise.
  * Prevents errorId 25002 "The item specific X is missing".
  */
+// Word-boundary substring match — plain .includes() false-positives on
+// short brand/identifier tokens embedded in unrelated words (e.g. enum value
+// "GE" matching inside the word "age"). Escapes regex metacharacters in the
+// needle since brand/MPN enum values can contain them (e.g. "AT&T").
+function matchesWholeWord(haystack: string, needle: string): boolean {
+  if (!needle) return false;
+  const escaped = needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`\\b${escaped}\\b`, 'i').test(haystack);
+}
+
 async function fillRequiredAspects(
   existing: Record<string, string[]> | undefined,
   categoryId: string,
@@ -3679,7 +3689,7 @@ async function fillRequiredAspects(
         // Keyword match in title/description
         for (const val of aspect.enumValues) {
           const vLower = val.toLowerCase();
-          if (vLower && (titleLower.includes(vLower) || descLower.includes(vLower))) {
+          if (vLower && (matchesWholeWord(titleLower, vLower) || matchesWholeWord(descLower, vLower))) {
             picked = val;
             source = 'keyword-match';
             break;
@@ -3715,7 +3725,7 @@ async function fillRequiredAspects(
         // Try keyword match
         for (const val of aspect.enumValues) {
           const vLower = val.toLowerCase();
-          if (vLower && (titleLower.includes(vLower) || descLower.includes(vLower))) {
+          if (vLower && (matchesWholeWord(titleLower, vLower) || matchesWholeWord(descLower, vLower))) {
             picked = val;
             source = 'keyword-match';
             break;
@@ -3775,7 +3785,7 @@ async function fillRequiredAspects(
       if (!picked) {
         for (const val of aspect.enumValues) {
           const vLower = val.toLowerCase();
-          if (vLower && (titleLower.includes(vLower) || descLower.includes(vLower))) {
+          if (vLower && (matchesWholeWord(titleLower, vLower) || matchesWholeWord(descLower, vLower))) {
             picked = val;
             source = 'keyword-match';
             break;
