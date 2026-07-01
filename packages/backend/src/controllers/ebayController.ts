@@ -1782,6 +1782,7 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
             ebayListingId: true,
             ebayListedAt: true,
             ebayCategoryId: true,
+            ebayCategoryName: true,
             ebayNeedsReview: true,
             ebayShippingClassification: true,
             packageWeightOz: true,
