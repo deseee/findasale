@@ -461,9 +461,11 @@ router.post('/visual', searchLimiter, upload.single('photo'), async (req: Reques
     // Call Google Vision API to extract labels
     let labels: string[] = [];
     try {
-      const allLabels = await getVisionLabels(file.buffer.toString('base64'));
-      // Take top 5 labels with high confidence
-      labels = allLabels.labels.slice(0, 5);
+      const visionResult = await getVisionLabels(file.buffer.toString('base64'));
+      // Visual search just needs search terms — combine object/shape labels and detected text.
+      // (The objectLabels/detectedText split matters for AI identification confidence in
+      // cloudAIService's Haiku prompts; it's not needed for this simple keyword search.)
+      labels = [...visionResult.detectedText, ...visionResult.objectLabels].slice(0, 5);
     } catch (err) {
       console.error('Vision API error:', err);
       return res.status(500).json({ error: 'Failed to analyze image' });

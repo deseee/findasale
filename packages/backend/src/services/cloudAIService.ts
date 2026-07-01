@@ -89,7 +89,7 @@ export function isAnthropicAvailable(): boolean {
 
 // ── Step 1: Google Vision label extraction ────────────────────────────────────
 
-export async function getVisionLabels(imageBase64: string): Promise<{ labels: string[]; qualityScore: number }> {
+export async function getVisionLabels(imageBase64: string): Promise<{ objectLabels: string[]; detectedText: string[]; qualityScore: number }> {
   try {
     const response = await axios.post(
       `https://vision.googleapis.com/v1/images:annotate?key=${GOOGLE_VISION_API_KEY}`,
@@ -127,13 +127,17 @@ export async function getVisionLabels(imageBase64: string): Promise<{ labels: st
     // Track Vision API cost for unified $50 ceiling
     await trackVisionCall(1);
 
-    // Objects first (more specific), then labels, then detected text — deduplicated
-    const combined = [...new Set([...objects, ...labels, ...detectedTexts])];
-    return { labels: combined.slice(0, 18), qualityScore };
+    // Objects + labels are shape/silhouette-based generic classification (lower reliability
+    // for visually-similar-but-functionally-different items). Detected text is kept SEPARATE —
+    // legible on-item text/marks are strong identification evidence and must not be flattened
+    // in with generic label guesses (see evidence-hierarchy instruction in the Haiku prompts).
+    const objectLabels = [...new Set([...objects, ...labels])].slice(0, 18);
+    const detectedText = [...new Set(detectedTexts)].slice(0, 18);
+    return { objectLabels, detectedText, qualityScore };
   } catch (error: any) {
     // Feature #109: Graceful degradation — return empty labels on Vision API failure
     console.warn('[cloudAIService] Google Vision API error:', error.message || error);
-    return { labels: [], qualityScore: 0.5 };
+    return { objectLabels: [], detectedText: [], qualityScore: 0.5 };
   }
 }
 
@@ -142,18 +146,19 @@ export async function getVisionLabels(imageBase64: string): Promise<{ labels: st
 async function getHaikuAnalysis(
   imageBase64: string,
   mimeType: string,
-  visionLabels: string[],
+  objectLabels: string[],
+  detectedText: string[],
   comps?: ComparableSale[]
 ): Promise<AITagResult> {
   const labelContext =
-    visionLabels.length > 0
-      ? `\n\nVision API detected these objects/labels: ${visionLabels.join(', ')}.`
+    objectLabels.length > 0 || detectedText.length > 0
+      ? `\n\n${detectedText.length > 0 ? `Text detected ON the item (labels, plates, engravings, printed marks): ${detectedText.join(', ')}.` : ''}${objectLabels.length > 0 ? `${detectedText.length > 0 ? ' ' : ''}General visual/shape classification (Vision API, lower reliability for close visual look-alikes): ${objectLabels.join(', ')}.` : ''}\n\nEvidence hierarchy — text overrides shape: You are given two separate categories of visual evidence. (1) Text detected ON the item (labels, plates, engravings, stamps, tags, printed or embossed marks) — this is HIGH-reliability evidence because it directly names or identifies the item. (2) General visual/shape classification from the Vision API (object and label detection) — this is LOWER-reliability evidence based only on silhouette, shape, and general appearance, and it frequently misidentifies items that look visually similar but are functionally different (for example: small dial or gauge instruments of different kinds, stackable containers made of different materials, or differently-shaped items within the same broad category). When the two categories conflict, ALWAYS trust the legible on-item text, brand mark, model plate, engraving, or printed label over the generic shape-based classification — override the shape-based guess with what the text actually says. This rule applies uniformly to every item category (furniture, pottery and ceramics, books and media, appliances, tools, clothing, toys, collectibles, and anything else) — do not special-case any single category.`
       : '';
 
   // Sparse-label fallback: if Vision returned very few/generic results, help Haiku reason visually
   const GENERIC_LABELS = new Set(['glass', 'black', 'darkness', 'white', 'transparent', 'product', 'still life', 'object']);
-  const specificLabels = visionLabels.filter(l => !GENERIC_LABELS.has(l.toLowerCase()));
-  const sparseImageNote = specificLabels.length < 3
+  const specificLabels = objectLabels.filter(l => !GENERIC_LABELS.has(l.toLowerCase()));
+  const sparseImageNote = specificLabels.length < 3 && detectedText.length === 0
     ? '\n\nNote: The image may contain a dark-colored or transparent/reflective item. Identify the object by its silhouette, shape, proportions, and any visible text, markings, or contextual clues rather than surface color or material appearance.'
     : '';
 
@@ -484,19 +489,22 @@ export async function analyzeItemImage(
   const imageBase64 = buffer.toString('base64');
 
   // Vision labels are best-effort — proceed without them if Vision API fails
-  let visionLabels: string[] = [];
+  let objectLabels: string[] = [];
+  let detectedText: string[] = [];
   try {
     const visionResult = await getVisionLabels(imageBase64);
-    visionLabels = visionResult.labels;
+    objectLabels = visionResult.objectLabels;
+    detectedText = visionResult.detectedText;
   } catch {
     // Vision API unavailable or quota exceeded — Haiku will analyse image alone
   }
 
-  const result = await getHaikuAnalysis(imageBase64, mimeType, visionLabels, comps);
+  const result = await getHaikuAnalysis(imageBase64, mimeType, objectLabels, detectedText, comps);
 
-  // Sprint 1: Add curated tag suggestions (non-blocking)
+  // Sprint 1: Add curated tag suggestions (non-blocking) — combined list is fine here,
+  // this is just label→curated-tag mapping, not identification evidence weighting
   try {
-    result.suggestedTags = await suggestCuratedTags(visionLabels);
+    result.suggestedTags = await suggestCuratedTags([...objectLabels, ...detectedText]);
   } catch {
     // Tag suggestion failed — set empty array (non-blocking)
     result.suggestedTags = [];
@@ -559,15 +567,17 @@ export async function analyzeItemImages(
   // Enhancement 2 + ADR-069 Phase 1: Single Vision pass per photo — derives both
   // quality score (for best-photo-first sorting) and labels (for Haiku context).
   // Previously: two separate Vision calls per photo (computePhotoQualityScore + getVisionLabels).
-  // Now: getVisionLabels() returns { labels, qualityScore } in one API call.
+  // Now: getVisionLabels() returns { objectLabels, detectedText, qualityScore } in one API call —
+  // kept separate (not flattened) so Haiku can weight on-item text above shape-based guesses.
   let photoOrderIndices: number[] = Array.from({ length: buffers.length }, (_, i) => i);
-  let visionLabels: string[] = [];
+  let objectLabels: string[] = [];
+  let detectedText: string[] = [];
   try {
     const allVisionResults = await Promise.all(
       imageBase64Array.map((b64, idx) =>
         getVisionLabels(b64)
-          .then(res => ({ index: idx, buffer: buffers[idx], mimeType: types[idx], qualityScore: res.qualityScore, labels: res.labels }))
-          .catch(() => ({ index: idx, buffer: buffers[idx], mimeType: types[idx], qualityScore: 0, labels: [] as string[] }))
+          .then(res => ({ index: idx, buffer: buffers[idx], mimeType: types[idx], qualityScore: res.qualityScore, objectLabels: res.objectLabels, detectedText: res.detectedText }))
+          .catch(() => ({ index: idx, buffer: buffers[idx], mimeType: types[idx], qualityScore: 0, objectLabels: [] as string[], detectedText: [] as string[] }))
       )
     );
 
@@ -588,19 +598,22 @@ export async function analyzeItemImages(
       imageBase64Array[i] = reorderedBuffers[i].toString('base64');
     }
 
-    // Collect deduplicated labels from all photos (cap at 20)
-    const allLabels: string[] = allVisionResults.flatMap(r => r.labels);
-    visionLabels = Array.from(new Set(allLabels)).slice(0, 20);
+    // Collect deduplicated object/shape labels and detected text separately from all photos (cap at 20 each)
+    const allObjectLabels: string[] = allVisionResults.flatMap(r => r.objectLabels);
+    const allDetectedText: string[] = allVisionResults.flatMap(r => r.detectedText);
+    objectLabels = Array.from(new Set(allObjectLabels)).slice(0, 20);
+    detectedText = Array.from(new Set(allDetectedText)).slice(0, 20);
   } catch {
     // Vision pass failed — proceed with original order and no labels (non-blocking)
   }
 
   // Multi-image Haiku analysis (Phase 2: pass clusterPhotos for role context)
-  const result = await getHaikuAnalysisMultiImage(imageBase64Array, types, visionLabels, comps, clusterPhotos);
+  const result = await getHaikuAnalysisMultiImage(imageBase64Array, types, objectLabels, detectedText, comps, clusterPhotos);
 
-  // Sprint 1: Add curated tag suggestions (non-blocking)
+  // Sprint 1: Add curated tag suggestions (non-blocking) — combined list is fine here,
+  // this is just label→curated-tag mapping, not identification evidence weighting
   try {
-    result.suggestedTags = await suggestCuratedTags(visionLabels);
+    result.suggestedTags = await suggestCuratedTags([...objectLabels, ...detectedText]);
   } catch {
     result.suggestedTags = [];
   }
@@ -662,18 +675,19 @@ function buildRoleContextPrompt(clusterPhotos?: ClusterPhoto[]): string {
 async function getHaikuAnalysisMultiImage(
   imageBase64Array: string[],
   mimeTypes: string[],
-  visionLabels: string[],
+  objectLabels: string[],
+  detectedText: string[],
   comps?: ComparableSale[],
   clusterPhotos?: ClusterPhoto[]
 ): Promise<AITagResult> {
   const labelContext =
-    visionLabels.length > 0
-      ? `\n\nVision API detected these objects/labels: ${visionLabels.join(', ')}.`
+    objectLabels.length > 0 || detectedText.length > 0
+      ? `\n\n${detectedText.length > 0 ? `Text detected ON the item (labels, plates, engravings, printed marks): ${detectedText.join(', ')}.` : ''}${objectLabels.length > 0 ? `${detectedText.length > 0 ? ' ' : ''}General visual/shape classification (Vision API, lower reliability for close visual look-alikes): ${objectLabels.join(', ')}.` : ''}\n\nEvidence hierarchy — text overrides shape: You are given two separate categories of visual evidence. (1) Text detected ON the item (labels, plates, engravings, stamps, tags, printed or embossed marks) — this is HIGH-reliability evidence because it directly names or identifies the item. (2) General visual/shape classification from the Vision API (object and label detection) — this is LOWER-reliability evidence based only on silhouette, shape, and general appearance, and it frequently misidentifies items that look visually similar but are functionally different (for example: small dial or gauge instruments of different kinds, stackable containers made of different materials, or differently-shaped items within the same broad category). When the two categories conflict, ALWAYS trust the legible on-item text, brand mark, model plate, engraving, or printed label over the generic shape-based classification — override the shape-based guess with what the text actually says. This rule applies uniformly to every item category (furniture, pottery and ceramics, books and media, appliances, tools, clothing, toys, collectibles, and anything else) — do not special-case any single category.`
       : '';
 
   const GENERIC_LABELS = new Set(['glass', 'black', 'darkness', 'white', 'transparent', 'product', 'still life', 'object']);
-  const specificLabels = visionLabels.filter(l => !GENERIC_LABELS.has(l.toLowerCase()));
-  const sparseImageNote = specificLabels.length < 3
+  const specificLabels = objectLabels.filter(l => !GENERIC_LABELS.has(l.toLowerCase()));
+  const sparseImageNote = specificLabels.length < 3 && detectedText.length === 0
     ? '\n\nNote: The image may contain a dark-colored or transparent/reflective item. Identify the object by its silhouette, shape, proportions, and any visible text, markings, or contextual clues rather than surface color or material appearance.'
     : '';
 
