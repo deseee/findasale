@@ -251,7 +251,7 @@ async function getHaikuAnalysis(
   // there is no qualifying match (feature off, service down, or below threshold) —
   // this coexists with the text-vs-shape evidence hierarchy in labelContext rather
   // than replacing it; catalog match is a THIRD, independent evidence source.
-  const catalogMatchContext = buildCatalogMatchContext(catalogMatches);
+  const catalogMatchContext = buildCatalogMatchContext(catalogMatches ?? null);
   const webDetectionContext = buildWebDetectionContext(webMatch ?? null);
 
   try {
@@ -829,7 +829,7 @@ async function getHaikuAnalysisMultiImage(
 
   // Reverse-Image Product Index (ADR 2026-07-01 §1): same conditional-inclusion
   // evidence pattern as the single-image path in getHaikuAnalysis above.
-  const catalogMatchContext = buildCatalogMatchContext(catalogMatches);
+  const catalogMatchContext = buildCatalogMatchContext(catalogMatches ?? null);
   const webDetectionContext = buildWebDetectionContext(webMatch ?? null);
 
   const roleContext = buildRoleContextPrompt(clusterPhotos);
