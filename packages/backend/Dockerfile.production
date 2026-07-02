@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-# cache-bust: 2026-07-02T15:30:00Z — force backend redeploy to pick up rate-limiter fail-open fix 826ca1f7 (stranded by SKIPPED deploy: push tip was a docs commit; Sentry FINDASALE-NODEJS-4F)
+# cache-bust: 2026-07-02T19:42:00Z — force backend build of e482941f (ops hardening: readiness healthcheck, rate-limiter Redis auto-recover, eBay+Stripe timeouts, JSON 404); prior deploy of tip 9d961740 hung on npx tsc and was cancelled, stranding e482941f (prod frozen at e2f5d05)
 FROM node:20-slim AS base
 
 # Install OpenSSL for Prisma
