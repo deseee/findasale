@@ -2999,8 +2999,10 @@ const AddItemsDetailPage = () => {
         confirmLabel="Delete"
         variant="danger"
         onConfirm={() => {
-          if (deleteConfirmId) handleDeleteDraft(deleteConfirmId);
-          setDeleteConfirmId(null);
+          // Persisted (saved) items must hit the API — handleDeleteDraft only
+          // mutates local rapidItems state, so saved items never actually deleted.
+          if (deleteConfirmId) deleteMutation.mutate(deleteConfirmId);
+          // deleteMutation.onSuccess clears deleteConfirmId; keep modal open until then.
           setDeleteConfirmTitle('');
         }}
         onCancel={() => {
