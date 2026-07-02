@@ -1,4 +1,4 @@
-// cache-bust: 2026-04-01
+// cache-bust: 2026-07-02T17:00Z — force Vercel build of add-items delete fix f61b7e23 (docs-tip push was skipped by Ignored Build Step)
 const { withSentryConfig } = require('@sentry/nextjs');
 
 const withPWA = require('next-pwa')({
