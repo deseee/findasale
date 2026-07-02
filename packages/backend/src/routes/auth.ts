@@ -296,10 +296,53 @@ router.post('/refresh', async (req: AuthRequest, res: Response) => {
       return res.status(500).json({ error: 'JWT_SECRET not configured' });
     }
 
+    // P2 Security Fix: in production, a missing dedicated refresh secret is a hard
+    // misconfiguration — never silently fall back to JWT_SECRET (token-confusion risk).
+    if (process.env.NODE_ENV === 'production' && !process.env.JWT_REFRESH_SECRET) {
+      console.error('[SECURITY] JWT_REFRESH_SECRET is not configured in production — refusing to mint tokens from a shared secret.');
+      return res.status(500).json({ error: 'Server misconfiguration' });
+    }
+
     const payload = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET || jwtSecret) as any;
 
-    const freshUser = await prisma.user.findUnique({ where: { id: payload.id }, select: { role: true, roles: true } });
+    // P2 Security Fix: mirror the `authenticate` middleware — enforce tokenVersion,
+    // organizerTokenVersion, and suspension so a stolen/old refresh token cannot keep
+    // minting valid access tokens after password reset / logout-all / suspension.
+    const freshUser = await prisma.user.findUnique({
+      where: { id: payload.id },
+      select: {
+        role: true,
+        roles: true,
+        tokenVersion: true,
+        suspendedAt: true,
+        organizer: { select: { tokenVersion: true } },
+      },
+    });
     if (!freshUser) return res.status(401).json({ error: 'User not found' });
+
+    // Suspended accounts must re-authenticate — fail closed and clear cookies.
+    if (freshUser.suspendedAt) {
+      res.clearCookie('accessToken', { path: '/' });
+      res.clearCookie('refreshToken', { path: '/' });
+      return res.status(401).json({ error: 'Session invalidated — please log in again.' });
+    }
+
+    // tokenVersion enforcement (matches authenticate): reject stale/invalidated sessions.
+    if (payload.tokenVersion === undefined ? freshUser.tokenVersion > 0 : payload.tokenVersion !== freshUser.tokenVersion) {
+      res.clearCookie('accessToken', { path: '/' });
+      res.clearCookie('refreshToken', { path: '/' });
+      return res.status(401).json({ error: 'Session invalidated — please log in again.' });
+    }
+
+    // organizerTokenVersion enforcement for organizers — invalidate stale tier claims.
+    const isOrganizer = freshUser.role === 'ORGANIZER' || freshUser.roles?.includes('ORGANIZER');
+    if (isOrganizer && payload.organizerTokenVersion !== undefined && freshUser.organizer) {
+      if (payload.organizerTokenVersion !== freshUser.organizer.tokenVersion) {
+        res.clearCookie('accessToken', { path: '/' });
+        res.clearCookie('refreshToken', { path: '/' });
+        return res.status(401).json({ error: 'Session invalidated — please log in again.' });
+      }
+    }
 
     const newAccessToken = jwt.sign(
       {
@@ -307,6 +350,8 @@ router.post('/refresh', async (req: AuthRequest, res: Response) => {
         email: payload.email,
         role: freshUser.role,
         roles: freshUser.roles || [freshUser.role],
+        tokenVersion: freshUser.tokenVersion,
+        organizerTokenVersion: freshUser.organizer?.tokenVersion ?? 0,
       },
       jwtSecret,
       { expiresIn: '1h' }

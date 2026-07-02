@@ -188,6 +188,73 @@ export async function refreshEbayAccessToken(organizerId: string): Promise<strin
   }
 }
 
+// ── eBay Notification Public Key Cache ──────────────────────────────────────
+// eBay signs Commerce Notification payloads with an ECDSA key identified by a
+// `kid` in the x-ebay-signature header. We fetch the matching PEM public key
+// (app-scoped) and cache it for 1 hour to avoid a proxy round-trip per event.
+interface CachedPublicKey {
+  pem: string;
+  expiresAt: number;
+}
+
+const ebayNotificationKeyCache = new Map<string, CachedPublicKey>();
+
+/**
+ * Resolve the eBay notification signing public key (PEM) for a given `kid`.
+ * Returns null on any failure — the caller treats null as verification-unavailable.
+ * CRITICAL: Railway cannot resolve api.ebay.com — routes through ebayProxyUrl().
+ */
+export async function getEbayNotificationPublicKey(kid: string): Promise<string | null> {
+  try {
+    // Return cached PEM if still valid
+    const cached = ebayNotificationKeyCache.get(kid);
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.pem;
+    }
+
+    const appToken = await getEbayAccessToken();
+    if (!appToken) {
+      console.warn('[eBay Notify] No app access token available for public-key fetch');
+      return null;
+    }
+
+    const res = await fetch(
+      ebayProxyUrl('commerce/notification/v1/public_key/' + encodeURIComponent(kid)),
+      {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${appToken}`,
+          ...ebayProxyHeaders(),
+        },
+        signal: AbortSignal.timeout(15000),
+      }
+    );
+
+    if (!res.ok) {
+      const body = await res.text().catch(() => '(unreadable)');
+      console.error(`[eBay Notify] Public-key fetch failed: ${res.status} — body: ${body.slice(0, 300)}`);
+      return null;
+    }
+
+    const data = (await res.json()) as any;
+    const pem = data?.key;
+    if (!pem || typeof pem !== 'string') {
+      console.error('[eBay Notify] Public-key response missing `key` field');
+      return null;
+    }
+
+    ebayNotificationKeyCache.set(kid, {
+      pem,
+      expiresAt: Date.now() + 60 * 60 * 1000, // 1-hour TTL
+    });
+
+    return pem;
+  } catch (error) {
+    console.error('[eBay Notify] Public-key fetch error:', error);
+    return null;
+  }
+}
+
 /**
  * Standard headers for all eBay REST API calls that require a user access token.
  * Accept-Language is required by eBay — omitting it or sending an invalid locale causes 400.

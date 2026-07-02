@@ -4,7 +4,7 @@ import express, { Request, Response } from 'express';
 import sanitizeHtml from 'sanitize-html';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
-import { ebayProxyUrl, ebayProxyHeaders, ebayUserHeaders, getEbayAccessToken, refreshEbayAccessToken } from '../services/ebayHttp';
+import { ebayProxyUrl, ebayProxyHeaders, ebayUserHeaders, getEbayAccessToken, refreshEbayAccessToken, getEbayNotificationPublicKey } from '../services/ebayHttp';
 // Re-export the OAuth helpers so existing external importers of these from './ebayController' keep resolving (Phase 1 relocation).
 export { getEbayAccessToken, refreshEbayAccessToken } from '../services/ebayHttp';
 // Phase 2 relocation: category/condition/aspect helpers now live in ebayPublishService.
@@ -1233,15 +1233,29 @@ export const connectEbayAccount = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ message: 'Organizer profile not found' });
     }
 
-    // Generate state parameter encoding organizerId + nonce
-    // This allows the callback (public endpoint) to identify the organizer
+    // Generate state parameter encoding organizerId + nonce.
+    // This allows the callback (public endpoint) to identify the organizer.
+    // SECURITY: the state is HMAC-signed with JWT_SECRET so it cannot be forged.
+    // The callback is a public route hit by eBay's browser redirect (no session
+    // cookie), so an unsigned state would let an attacker bind an arbitrary eBay
+    // account to any victim organizerId (account-linking IDOR/CSRF). Signing the
+    // exact payload bytes and verifying constant-time on the callback closes this.
+    // Encoding: `base64url(payloadStr).<sig>` — two dot-separated URL-safe parts,
+    // where sig = base64url(HMAC-SHA256(JWT_SECRET, payloadStr)).
+    const jwtSecret = process.env.JWT_SECRET;
+    if (!jwtSecret) {
+      console.error('[eBay] JWT_SECRET missing — cannot sign OAuth state');
+      return res.status(500).json({ message: 'Server misconfigured (missing JWT_SECRET)' });
+    }
     const nonce = crypto.randomBytes(16).toString('hex');
     const statePayload = {
       organizerId: organizer.id,
       nonce,
       iat: Date.now(),
     };
-    const stateToken = Buffer.from(JSON.stringify(statePayload)).toString('base64url');
+    const payloadStr = JSON.stringify(statePayload);
+    const stateSig = crypto.createHmac('sha256', jwtSecret).update(payloadStr).digest('base64url');
+    const stateToken = `${Buffer.from(payloadStr).toString('base64url')}.${stateSig}`;
 
     const clientId = process.env.EBAY_CLIENT_ID;
     const redirectUri = process.env.EBAY_OAUTH_REDIRECT_URI;
@@ -1292,14 +1306,44 @@ export const ebayOAuthCallback = async (req: Request, res: Response) => {
       return res.status(400).json({ message: 'State parameter missing' });
     }
 
+    // SECURITY: verify the HMAC signature BEFORE trusting any field in the state.
+    // Encoding (set in connectEbayAccount): `base64url(payloadStr).<sig>` where
+    // sig = base64url(HMAC-SHA256(JWT_SECRET, payloadStr)). Without this check the
+    // public callback would accept a forged state binding eBay tokens to any
+    // organizerId (account-linking IDOR/CSRF).
+    const jwtSecret = process.env.JWT_SECRET;
+    if (!jwtSecret) {
+      console.error('[eBay] JWT_SECRET missing — cannot verify OAuth state');
+      return res.status(500).json({ message: 'Server misconfigured (missing JWT_SECRET)' });
+    }
+    const dotIdx = state.lastIndexOf('.');
+    if (dotIdx <= 0 || dotIdx === state.length - 1) {
+      return res.status(400).json({ message: 'Invalid state parameter' });
+    }
+    const encodedPayload = state.slice(0, dotIdx);
+    const providedSig = state.slice(dotIdx + 1);
+
     // Decode state to get organizerId
     let statePayload: { organizerId: string; nonce: string; iat: number };
+    let payloadStr: string;
     try {
-      const decoded = Buffer.from(state, 'base64url').toString('utf-8');
-      statePayload = JSON.parse(decoded);
+      payloadStr = Buffer.from(encodedPayload, 'base64url').toString('utf-8');
+      statePayload = JSON.parse(payloadStr);
     } catch (e) {
       console.error('[eBay] Failed to decode state parameter:', e);
       return res.status(400).json({ message: 'Invalid state parameter' });
+    }
+
+    // Recompute the HMAC over the exact payload bytes and compare constant-time.
+    const expectedSig = crypto.createHmac('sha256', jwtSecret).update(payloadStr).digest('base64url');
+    const providedSigBuf = Buffer.from(providedSig);
+    const expectedSigBuf = Buffer.from(expectedSig);
+    if (
+      providedSigBuf.length !== expectedSigBuf.length ||
+      !crypto.timingSafeEqual(providedSigBuf, expectedSigBuf)
+    ) {
+      console.warn('[eBay] OAuth state signature mismatch — possible forgery attempt');
+      return res.status(400).json({ message: 'Invalid state signature' });
     }
 
     // Validate state freshness (max 10 minutes old)
@@ -4680,11 +4724,61 @@ export const handleEbayNotificationVerification = (req: express.Request, res: Re
  * When an item sells on eBay, mark it SOLD in FindA.Sale and withdraw the offer.
  */
 export const handleEbayNotification = async (req: express.Request, res: Response): Promise<void> => {
-  // Acknowledge immediately — eBay retries if we don't respond within 3s
+  // ── Signature gate (synchronous, BEFORE ACK) ──────────────────────────────
+  // The route is public; eBay signs each payload with SHA1withECDSA. Verify the
+  // signature over the RAW request bytes before acknowledging or processing.
+  // express.raw() makes req.body a Buffer — parse from that same buffer below.
+  const rawBody: Buffer = Buffer.isBuffer(req.body) ? req.body : Buffer.from((req.body as any) ?? '');
+
+  const sigHeader = req.header('x-ebay-signature');
+  if (!sigHeader) {
+    res.status(412).json({ error: 'missing signature' });
+    return;
+  }
+
+  let kid: string | undefined;
+  let signature: string | undefined;
+  try {
+    const decoded = JSON.parse(Buffer.from(sigHeader, 'base64').toString('utf8'));
+    kid = decoded?.kid;
+    signature = decoded?.signature;
+  } catch {
+    res.status(412).json({ error: 'malformed signature' });
+    return;
+  }
+  if (!kid || !signature) {
+    res.status(412).json({ error: 'incomplete signature' });
+    return;
+  }
+
+  const pem = await getEbayNotificationPublicKey(kid);
+  if (!pem) {
+    res.status(412).json({ error: 'verification unavailable' });
+    return;
+  }
+
+  let verified = false;
+  try {
+    verified = crypto.verify(
+      'sha1',
+      rawBody,
+      { key: pem, dsaEncoding: 'der' },
+      Buffer.from(signature, 'base64')
+    );
+  } catch (e: any) {
+    console.error('[eBay Notify] Signature verify threw:', e?.message);
+    verified = false;
+  }
+  if (!verified) {
+    res.status(412).json({ error: 'signature verification failed' });
+    return;
+  }
+
+  // Verified — acknowledge immediately (eBay retries if we don't respond within 3s)
   res.status(200).json({});
 
   try {
-    const body = req.body as any;
+    const body = JSON.parse(rawBody.toString('utf8'));
     const topic = body?.metadata?.topic;
 
     if (topic !== 'ORDER_CONFIRMATION') {

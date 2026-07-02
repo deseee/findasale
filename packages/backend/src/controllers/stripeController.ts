@@ -2332,7 +2332,7 @@ export const getPendingPayment = async (req: AuthRequest, res: Response) => {
 export const createRefund = async (req: AuthRequest, res: Response) => {
   try {
     const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
-    const isAdmin = req.user?.role === 'ADMIN';
+    const isAdmin = req.user?.roles?.includes('ADMIN') || req.user?.role === 'ADMIN';
     if (!req.user || (!hasOrganizerRole && !isAdmin)) {
       return res.status(403).json({ message: 'Organizer or admin access required' });
     }
@@ -2382,19 +2382,47 @@ export const createRefund = async (req: AuthRequest, res: Response) => {
     const { cappedAmount, wasCapped } = await applyFirstMonthRefundCap(purchase.userId ?? "", purchase.amount);
     const refundAmount = cappedAmount;
 
-    // Create Stripe refund with capped amount
-    await stripe().refunds.create({
-      payment_intent: purchase.stripePaymentIntentId,
-      amount: Math.round(refundAmount * 100) // Convert to cents
-    });
-
-    // Update purchase status
-    await prisma.purchase.update({
-      where: { id: purchaseId },
+    // P3 (TOCTOU lock): atomically claim the PAID->refund transition BEFORE calling Stripe.
+    // Purchase.status is a free String field (no Prisma enum — documented values PENDING, PAID,
+    // REFUNDED, FAILED, DISPUTED), so using an intermediate 'REFUNDING' marker needs NO schema
+    // change. The conditional updateMany only matches a row still in 'PAID', so exactly one
+    // concurrent request wins the claim; every other request sees count 0 and is rejected.
+    // Status is set to REFUNDED only after Stripe confirms; on Stripe failure it is reverted to
+    // PAID so the organizer can retry.
+    const claim = await prisma.purchase.updateMany({
+      where: { id: purchaseId, status: 'PAID' },
       data: {
-        status: 'REFUNDED',
+        status: 'REFUNDING',
         ...(wasCapped && { notes: `Refund capped: $${purchase.amount.toFixed(2)} → $${refundAmount.toFixed(2)} (first-month account)` })
       }
+    });
+    if (claim.count !== 1) {
+      return res.status(400).json({ message: 'Refund already in progress or not refundable' });
+    }
+
+    // Create Stripe refund with capped amount.
+    // P3 (idempotency): stable key keyed to the purchase collapses retries/concurrent
+    // requests to a single refund on Stripe's side.
+    try {
+      await stripe().refunds.create({
+        payment_intent: purchase.stripePaymentIntentId,
+        amount: Math.round(refundAmount * 100) // Convert to cents
+      }, {
+        idempotencyKey: `refund-${purchase.id}`
+      });
+    } catch (stripeErr) {
+      // Stripe failed — revert the claim back to PAID so the organizer can retry.
+      await prisma.purchase.updateMany({
+        where: { id: purchaseId, status: 'REFUNDING' },
+        data: { status: 'PAID' }
+      });
+      throw stripeErr;
+    }
+
+    // Stripe confirmed — finalize status to REFUNDED.
+    await prisma.purchase.update({
+      where: { id: purchaseId },
+      data: { status: 'REFUNDED' }
     });
 
     // Restore item to AVAILABLE if it exists

@@ -450,6 +450,9 @@ export const register = async (req: Request, res: Response) => {
         name: user.name,
         role: user.role,
         roles: userRoles,
+        // P2 Security Fix: embed version claims so /auth/refresh can enforce invalidation
+        tokenVersion: user.tokenVersion,
+        organizerTokenVersion: organizerProfile?.tokenVersion ?? 0,
       },
       process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET!,
       { expiresIn: '30d' } // S708: bumped from 7d — weekly users were getting booted
@@ -655,6 +658,9 @@ export const oauthLogin = async (req: Request, res: Response) => {
         name: user.name,
         role: user.role,
         roles: userRoles,
+        // P2 Security Fix: embed version claims so /auth/refresh can enforce invalidation
+        tokenVersion: user.tokenVersion,
+        organizerTokenVersion: organizerProfile?.tokenVersion ?? 0,
       },
       process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET!,
       { expiresIn: '30d' } // S708: bumped from 7d — weekly users were getting booted
@@ -861,6 +867,9 @@ export const login = async (req: Request, res: Response) => {
         name: user.name,
         role: user.role,
         roles: userRoles,
+        // P2 Security Fix: embed version claims so /auth/refresh can enforce invalidation
+        tokenVersion: user.tokenVersion,
+        organizerTokenVersion: organizerProfile?.tokenVersion ?? 0,
       },
       process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET!,
       { expiresIn: '30d' } // S708: bumped from 7d — weekly users were getting booted
@@ -1029,6 +1038,9 @@ export const redeemInvite = async (req: Request, res: Response) => {
         name: updatedUser.name,
         role: 'ORGANIZER',
         roles: userRoles,
+        // P2 Security Fix: embed version claims so /auth/refresh can enforce invalidation
+        tokenVersion: updatedUser.tokenVersion,
+        organizerTokenVersion: organizerProfile?.tokenVersion ?? 0,
       },
       process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET!,
       { expiresIn: '30d' } // S708: bumped from 7d — weekly users were getting booted
