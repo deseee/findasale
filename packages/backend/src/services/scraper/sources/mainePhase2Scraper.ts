@@ -42,7 +42,7 @@
  */
 
 import { defaultRateLimiter } from '../rateLimiter';
-import { getOrCreateScrapedOrganizer } from '../index';
+import { batchUpsertScrapedOrganizers, ScrapedOrganizerRow } from '../index';
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -401,6 +401,7 @@ function parseLicenseCsv(csvText: string): LicenseRecord[] {
  */
 async function upsertLicenseRecords(records: LicenseRecord[]): Promise<number> {
   let upserted = 0;
+  const batchRows: ScrapedOrganizerRow[] = [];
 
   for (const record of records) {
     // Skip non-active licenses
@@ -409,32 +410,22 @@ async function upsertLicenseRecords(records: LicenseRecord[]): Promise<number> {
       continue;
     }
 
-    try {
-      const orgId = await getOrCreateScrapedOrganizer(
-        record.name,                        // businessName
-        SOURCE_NAME,                        // sourceName
-        record.city || 'Maine',             // city
-        'ME',                               // state
-        undefined,                          // esnOrgId
-        undefined,                          // googlePlaceId
-        undefined,                          // foursquareVenueId
-        undefined,                          // hereBusinessId
-        'AUCTION_HOUSE',                    // businessCategory — all are licensed auctioneers
-        undefined,                          // contactEmail
-        undefined,                          // phone
-        undefined,                          // website
-        undefined,                          // lat
-        undefined,                          // lng
-        true,                               // isStateLicensed
-        'Maine',                            // licenseState
-        record.licenseNumber || undefined,  // licenseNumber
-        SOURCE_LABEL                        // sourceLabel
-      );
-      if (orgId) upserted++;
-    } catch (upsertErr) {
-      console.error(`[${SOURCE_NAME}] Upsert error for "${record.name}":`, upsertErr);
-    }
+    batchRows.push({
+      businessName: record.name,
+      sourceName: SOURCE_NAME,
+      city: record.city || 'Maine',
+      state: 'ME',
+      businessCategory: 'AUCTION_HOUSE', // all are licensed auctioneers
+      isStateLicensed: true,
+      licenseState: 'Maine',
+      licenseNumber: record.licenseNumber || undefined,
+      sourceLabel: SOURCE_LABEL,
+    });
   }
+
+  // Batch upsert (ADR-073 perf: replaces serial per-row upserts)
+  const ids = await batchUpsertScrapedOrganizers(batchRows, 100);
+  upserted = ids.filter((id) => id !== null).length;
 
   return upserted;
 }

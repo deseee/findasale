@@ -19,7 +19,7 @@
 
 import { defaultRateLimiter } from '../rateLimiter';
 import { prisma } from '../../../lib/prisma';
-import { getOrCreateScrapedOrganizer } from '../index';
+import { batchUpsertScrapedOrganizers, ScrapedOrganizerRow } from '../index';
 
 const DE_OPEN_DATA_CSV_URL =
   'https://data.delaware.gov/api/views/5zy2-grhr/rows.csv?accessType=DOWNLOAD';
@@ -64,7 +64,7 @@ export async function runDelawarePhase2Scraper(): Promise<void> {
   return;
 
   // Dead code below retained for when FOIA list is received and can be imported as CSV.
-  // To activate: obtain CSV from DSP, parse with parseCsvLine(), upsert via getOrCreateScrapedOrganizer().
+  // To activate: obtain CSV from DSP, parse with parseCsvLine(), upsert via batchUpsertScrapedOrganizers().
   // eslint-disable-next-line no-unreachable
   let totalFetched = 0;
   let totalPawn = 0;
@@ -124,6 +124,15 @@ export async function runDelawarePhase2Scraper(): Promise<void> {
     totalFetched = lines.length - 1;
     console.log(`[Delaware Phase2] CSV fetched — ${totalFetched} rows (excluding header)`);
 
+    // Phase 1 — accumulate pawn rows (keeps the custom DE-PAWN dedupeKey quirk intact)
+    const pawnEntries: {
+      businessName: string;
+      licenseNumber: string;
+      city: string;
+      address: string;
+      dedupeKey: string;
+    }[] = [];
+
     for (let i = 1; i < lines.length; i++) {
       const line = lines[i].trim();
       if (!line) continue;
@@ -163,18 +172,35 @@ export async function runDelawarePhase2Scraper(): Promise<void> {
         `[Delaware Phase2] Processing: ${businessName} (License ${licenseNumber || 'N/A'}) in ${city}, DE`
       );
 
-      try {
-        // Check for existing record by dedupeKey first
-        const existing = await prisma.organizer.findFirst({
-          where: { dedupeKey },
-          select: { id: true },
-        });
+      pawnEntries.push({ businessName, licenseNumber, city, address, dedupeKey });
 
-        if (existing) {
+      if (totalPawn % 25 === 0) {
+        console.log(
+          `[Delaware Phase2] Progress: ${totalPawn} pawn rows processed, ${pawnEntries.length} queued`
+        );
+      }
+    }
+
+    // Phase 2 — batch: one findMany on the custom DE-PAWN dedupeKeys, then split into
+    // existing (targeted update, same fields as before) vs new (batchUpsertScrapedOrganizers
+    // + the same field backfill the old per-row flow applied after create).
+    // Preserves the original DE-PAWN-<license> dedupe semantics exactly (ADR-073 perf).
+    const dedupeKeys = pawnEntries.map((e) => e.dedupeKey);
+    const existingRecords = await prisma.organizer.findMany({
+      where: { dedupeKey: { in: dedupeKeys } },
+      select: { id: true, dedupeKey: true },
+    });
+    const existingByKey = new Map(existingRecords.map((e) => [e.dedupeKey ?? '', e.id]));
+
+    const newEntries: typeof pawnEntries = [];
+    for (const entry of pawnEntries) {
+      const existingId = existingByKey.get(entry.dedupeKey);
+      if (existingId) {
+        try {
           await prisma.organizer.update({
-            where: { id: existing!.id },
+            where: { id: existingId },
             data: {
-              licenseNumber: licenseNumber || undefined,
+              licenseNumber: entry.licenseNumber || undefined,
               licenseState: 'DE',
               isStateLicensed: true,
               directoryMostRecentSource: 'DelawarePhase2',
@@ -182,44 +208,44 @@ export async function runDelawarePhase2Scraper(): Promise<void> {
             },
           });
           totalUpserted++;
-        } else {
-          const organizerId = await getOrCreateScrapedOrganizer(
-            businessName,
-            'DelawarePhase2',
-            city || 'Delaware',
-            'DE',
-            undefined, // esnOrgId
-            undefined, // googlePlaceId
-            undefined, // foursquareVenueId
-            undefined, // hereBusinessId
-            'PAWN_SHOP'
-          );
-
-          if (organizerId) {
-            await prisma.organizer.update({
-              where: { id: organizerId ?? undefined },
-              data: {
-                address: address || undefined,
-                licenseNumber: licenseNumber || undefined,
-                licenseState: 'DE',
-                isStateLicensed: true,
-                isUnmanagedListing: true,
-                dedupeKey,
-                directoryMostRecentSource: 'DelawarePhase2',
-                directoryMostRecentAt: new Date(),
-              },
-            });
-            totalUpserted++;
-          }
+        } catch (err) {
+          console.error(`[Delaware Phase2] Error updating ${entry.businessName}:`, err);
         }
+      } else {
+        newEntries.push(entry);
+      }
+    }
 
-        if (totalPawn % 25 === 0) {
-          console.log(
-            `[Delaware Phase2] Progress: ${totalPawn} pawn rows processed, ${totalUpserted} upserted`
-          );
-        }
+    const batchRows: ScrapedOrganizerRow[] = newEntries.map((e) => ({
+      businessName: e.businessName,
+      sourceName: 'DelawarePhase2',
+      city: e.city || 'Delaware',
+      state: 'DE',
+      businessCategory: 'PAWN_SHOP',
+    }));
+    const newIds = await batchUpsertScrapedOrganizers(batchRows, 100);
+
+    for (let n = 0; n < newEntries.length; n++) {
+      const organizerId = newIds[n];
+      if (!organizerId) continue;
+      const entry = newEntries[n];
+      try {
+        await prisma.organizer.update({
+          where: { id: organizerId },
+          data: {
+            address: entry.address || undefined,
+            licenseNumber: entry.licenseNumber || undefined,
+            licenseState: 'DE',
+            isStateLicensed: true,
+            isUnmanagedListing: true,
+            dedupeKey: entry.dedupeKey,
+            directoryMostRecentSource: 'DelawarePhase2',
+            directoryMostRecentAt: new Date(),
+          },
+        });
+        totalUpserted++;
       } catch (err) {
-        console.error(`[Delaware Phase2] Error processing ${businessName}:`, err);
+        console.error(`[Delaware Phase2] Error backfilling ${entry.businessName}:`, err);
       }
     }
 

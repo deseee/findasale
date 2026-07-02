@@ -10,7 +10,7 @@
  */
 
 import { defaultRateLimiter } from '../rateLimiter';
-import { getOrCreateScrapedOrganizer } from '../index';
+import { batchUpsertScrapedOrganizers, ScrapedOrganizerRow } from '../index';
 
 const TX_SOCRATA_BASE_URL = 'https://data.texas.gov/resource/7358-krk7.json';
 const TX_SOCRATA_DOMAIN = 'data.texas.gov';
@@ -154,6 +154,7 @@ function mapCategory(licenseType: string): string {
  */
 export async function runTexasPhase2Scraper(): Promise<void> {
   let totalFetched = 0;
+  const batchRows: ScrapedOrganizerRow[] = [];
   let totalMatched = 0;
   let totalUpserted = 0;
   let offset = 0;
@@ -281,29 +282,16 @@ export async function runTexasPhase2Scraper(): Promise<void> {
           const dedupeKey = `TX-SECONDARY-${licenseNumber || slugifiedName}`;
           const businessCategory = mapCategory(licenseTypeRaw);
 
-          const orgId = await getOrCreateScrapedOrganizer(
-            businessName,            // businessName
-            'TexasPhase2',           // sourceName
-            city || 'Texas',         // city
-            'TX',                    // state
-            undefined,               // esnOrgId
-            undefined,               // googlePlaceId
-            undefined,               // foursquareVenueId
-            undefined,               // hereBusinessId
-            businessCategory,        // businessCategory
-            undefined,               // contactEmail
-            undefined,               // phone
-            undefined,               // website
-            undefined,               // lat
-            undefined,               // lng
-            true,                    // isStateLicensed
-            'TX',                    // licenseState
-            licenseNumber || undefined // licenseNumber
-          );
-
-          if (orgId) {
-            totalUpserted++;
-          }
+          batchRows.push({
+            businessName,
+            sourceName: 'TexasPhase2',
+            city: city || 'Texas',
+            state: 'TX',
+            businessCategory,
+            isStateLicensed: true,
+            licenseState: 'TX',
+            licenseNumber: licenseNumber || undefined,
+          });
         } catch (rowErr) {
           console.error('[Texas Phase2] Error processing record:', rowErr);
         }
@@ -317,6 +305,10 @@ export async function runTexasPhase2Scraper(): Promise<void> {
 
       offset += PAGE_LIMIT;
     }
+
+    // Batch upsert (ADR-073 perf: replaces serial per-row upserts)
+    const ids = await batchUpsertScrapedOrganizers(batchRows, 100);
+    totalUpserted = ids.filter((id) => id !== null).length;
 
     console.log(
       `[Texas Phase2] Done — fetched: ${totalFetched}, matched: ${totalMatched}, upserted: ${totalUpserted}`

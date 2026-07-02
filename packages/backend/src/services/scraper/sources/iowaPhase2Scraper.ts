@@ -13,7 +13,7 @@
  */
 
 import { defaultRateLimiter } from '../rateLimiter';
-import { getOrCreateScrapedOrganizer } from '../index';
+import { batchUpsertScrapedOrganizers, ScrapedOrganizerRow } from '../index';
 
 const IA_SOCRATA_BASE = 'https://mydata.iowa.gov/resource/9k3w-7fwi.json';
 const IA_SOCRATA_DOMAIN = 'mydata.iowa.gov';
@@ -197,6 +197,7 @@ export async function runIowaPhase2Scraper(): Promise<void> {
     console.log(`[IowaPhase2] Broader NAICS rows fetched: ${broaderRows.length}`);
 
     // Process always-include rows
+    let batchRows: ScrapedOrganizerRow[] = [];
     for (const row of alwaysRows) {
       const businessName = (row.name_of_business || '').trim();
       if (!businessName) continue;
@@ -210,33 +211,28 @@ export async function runIowaPhase2Scraper(): Promise<void> {
       const naicsCode = (row.department_business_code || '').trim();
       const businessCategory = mapCategory(naicsCode, businessName);
 
-      const orgId = await getOrCreateScrapedOrganizer(
+      batchRows.push({
         businessName,
-        'IowaPhase2',
-        city || 'Iowa',
-        state || 'IA',
-        undefined,
-        undefined,
-        undefined,
-        undefined,
+        sourceName: 'IowaPhase2',
+        city: city || 'Iowa',
+        state: state || 'IA',
         businessCategory,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        true,
-        'IA',
-        licenseNumber || undefined
-      );
-      if (orgId) totalUpserted++;
+        isStateLicensed: true,
+        licenseState: 'IA',
+        licenseNumber: licenseNumber || undefined,
+      });
     }
+
+    // Batch upsert (ADR-073 perf: replaces serial per-row upserts)
+    const alwaysIds = await batchUpsertScrapedOrganizers(batchRows, 100);
+    totalUpserted = alwaysIds.filter((id) => id !== null).length;
 
     console.log(`[IowaPhase2] Always-include processed — matched: ${totalMatched}, upserted: ${totalUpserted}`);
 
     // Process broader NAICS rows — require keyword match
     let broaderMatched = 0;
     let broaderUpserted = 0;
+    batchRows = [];
 
     for (const row of broaderRows) {
       const businessName = (row.name_of_business || '').trim();
@@ -252,27 +248,21 @@ export async function runIowaPhase2Scraper(): Promise<void> {
       const naicsCode = (row.department_business_code || '').trim();
       const businessCategory = mapCategory(naicsCode, businessName);
 
-      const orgId = await getOrCreateScrapedOrganizer(
+      batchRows.push({
         businessName,
-        'IowaPhase2',
-        city || 'Iowa',
-        state || 'IA',
-        undefined,
-        undefined,
-        undefined,
-        undefined,
+        sourceName: 'IowaPhase2',
+        city: city || 'Iowa',
+        state: state || 'IA',
         businessCategory,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        true,
-        'IA',
-        licenseNumber || undefined
-      );
-      if (orgId) broaderUpserted++;
+        isStateLicensed: true,
+        licenseState: 'IA',
+        licenseNumber: licenseNumber || undefined,
+      });
     }
+
+    // Batch upsert (ADR-073 perf: replaces serial per-row upserts)
+    const broaderIds = await batchUpsertScrapedOrganizers(batchRows, 100);
+    broaderUpserted = broaderIds.filter((id) => id !== null).length;
 
     totalMatched += broaderMatched;
     totalUpserted += broaderUpserted;

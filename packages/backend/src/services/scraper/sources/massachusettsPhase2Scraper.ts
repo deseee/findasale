@@ -10,7 +10,7 @@
  */
 
 import { defaultRateLimiter } from '../rateLimiter';
-import { getOrCreateScrapedOrganizer } from '../index';
+import { batchUpsertScrapedOrganizers, ScrapedOrganizerRow } from '../index';
 
 const MA_API_BASE = 'https://licensing.api.secure.digital.mass.gov/v1/licenses';
 const MA_LEGACY_BASE = 'https://elicensing.mass.gov';
@@ -197,6 +197,7 @@ export async function runMassachusettsPhase2Scraper(): Promise<void> {
   let totalMatched = 0;
   let totalUpserted = 0;
   let usedFallback = false;
+  const batchRows: ScrapedOrganizerRow[] = [];
 
   console.log('[MA Phase2] Starting MA Division of Professional Licensure scraper');
   console.log(`[MA Phase2] Primary API: ${MA_API_BASE}`);
@@ -325,34 +326,28 @@ export async function runMassachusettsPhase2Scraper(): Promise<void> {
             'businessUrl'
           );
 
-          const orgId = await getOrCreateScrapedOrganizer(
-            businessName,                   // businessName
-            'MassachusettsPhase2',           // sourceName
-            city || 'Massachusetts',         // city
-            'MA',                            // state
-            undefined,                       // esnOrgId
-            undefined,                       // googlePlaceId
-            undefined,                       // foursquareVenueId
-            undefined,                       // hereBusinessId
-            query.category,                  // businessCategory
-            email || undefined,              // contactEmail
-            phone || undefined,              // phone
-            website || undefined,            // website
-            undefined,                       // lat
-            undefined,                       // lng
-            true,                            // isStateLicensed
-            'Massachusetts',                 // licenseState
-            licenseNumber || undefined        // licenseNumber
-          );
-
-          if (orgId) {
-            totalUpserted++;
-          }
+          batchRows.push({
+            businessName,
+            sourceName: 'MassachusettsPhase2',
+            city: city || 'Massachusetts',
+            state: 'MA',
+            businessCategory: query.category,
+            contactEmail: email || undefined,
+            phone: phone || undefined,
+            website: website || undefined,
+            isStateLicensed: true,
+            licenseState: 'Massachusetts',
+            licenseNumber: licenseNumber || undefined,
+          });
         } catch (rowErr) {
           console.error('[MA Phase2] Error processing record:', rowErr);
         }
       }
     }
+
+    // Batch upsert (ADR-073 perf: replaces serial per-row upserts)
+    const ids = await batchUpsertScrapedOrganizers(batchRows, 100);
+    totalUpserted = ids.filter((id) => id !== null).length;
 
     if (totalFetched === 0) {
       const msg =

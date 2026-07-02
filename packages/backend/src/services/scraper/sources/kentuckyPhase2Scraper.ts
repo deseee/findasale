@@ -17,7 +17,7 @@
  */
 
 import { defaultRateLimiter } from '../rateLimiter';
-import { getOrCreateScrapedOrganizer } from '../index';
+import { batchUpsertScrapedOrganizers, ScrapedOrganizerRow } from '../index';
 import { getRandomUserAgent } from '../userAgents';
 
 const OOP_URL = 'https://oop.ky.gov/lic_search.aspx';
@@ -447,6 +447,9 @@ export async function runKentuckyPhase2Scraper(): Promise<void> {
 
     console.log(`[KentuckyPhase2] Letter "${letter}": ${records.length} record(s)`);
 
+    // Accumulate rows for this letter — batch upsert after the loop (ADR-073 perf)
+    const letterRows: ScrapedOrganizerRow[] = [];
+
     for (const rec of records) {
       // Deduplicate by license number; fall back to name slug
       const dedupKey = rec.licenseNumber
@@ -492,31 +495,17 @@ export async function runKentuckyPhase2Scraper(): Promise<void> {
 
       const stateCode = (rec.state || 'KY').trim().toUpperCase().slice(0, 2) || 'KY';
 
-      try {
-        const orgId = await getOrCreateScrapedOrganizer(
-          organizerName,
-          SOURCE_ID,
-          city,
-          stateCode,
-          undefined,                       // esnOrgId
-          undefined,                       // googlePlaceId
-          undefined,                       // foursquareVenueId
-          undefined,                       // hereBusinessId
-          'AUCTION_HOUSE',                 // businessCategory
-          undefined,                       // contactEmail
-          undefined,                       // phone
-          undefined,                       // website
-          undefined,                       // lat
-          undefined,                       // lng
-          true,                            // isStateLicensed
-          'Kentucky',                      // licenseState
-          rec.licenseNumber || undefined,  // licenseNumber
-          SOURCE_ID                        // sourceLabel
-        );
-        if (orgId) upserted++;
-      } catch (upsertErr) {
-        console.error(`[KentuckyPhase2] Upsert error for "${organizerName}":`, upsertErr);
-      }
+      letterRows.push({
+        businessName: organizerName,
+        sourceName: SOURCE_ID,
+        city,
+        state: stateCode,
+        businessCategory: 'AUCTION_HOUSE',
+        isStateLicensed: true,
+        licenseState: 'Kentucky',
+        licenseNumber: rec.licenseNumber || undefined,
+        sourceLabel: SOURCE_ID,
+      });
 
       if (totalRecords % 25 === 0) {
         console.log(
@@ -525,6 +514,10 @@ export async function runKentuckyPhase2Scraper(): Promise<void> {
         );
       }
     }
+
+    // Batch upsert for this letter (ADR-073 perf: replaces serial per-row upserts)
+    const ids = await batchUpsertScrapedOrganizers(letterRows, 100);
+    upserted += ids.filter((id) => id !== null).length;
   }
 
   console.log(

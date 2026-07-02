@@ -15,7 +15,7 @@
  */
 
 import { defaultRateLimiter } from '../rateLimiter';
-import { getOrCreateScrapedOrganizer } from '../index';
+import { batchUpsertScrapedOrganizers, ScrapedOrganizerRow } from '../index';
 
 const OHIO_SOS_SEARCH_URL = 'https://businesssearch.ohiosos.gov/';
 const OHIO_SOS_DOMAIN = 'businesssearch.ohiosos.gov';
@@ -285,6 +285,7 @@ export async function runOhioPhase2Scraper(): Promise<void> {
 
   // Deduplicate across keyword searches by entity number
   const seenEntityNumbers = new Set<string>();
+  const batchRows: ScrapedOrganizerRow[] = [];
 
   try {
     for (const keyword of SALE_TYPE_KEYWORDS) {
@@ -345,30 +346,16 @@ export async function runOhioPhase2Scraper(): Promise<void> {
 
           console.log(`[OhioPhase2] Matched: ${scraperDedupeKey} — ${name} (${city})`);
 
-          try {
-            const orgId = await getOrCreateScrapedOrganizer(
-              name,                         // businessName
-              'OhioPhase2',                 // sourceName
-              city,                         // city
-              'OH',                         // state
-              undefined,                    // esnOrgId
-              undefined,                    // googlePlaceId
-              undefined,                    // foursquareVenueId
-              undefined,                    // hereBusinessId
-              category,                     // businessCategory
-              undefined,                    // contactEmail
-              undefined,                    // phone
-              undefined,                    // website
-              undefined,                    // lat
-              undefined,                    // lng
-              true,                         // isStateLicensed
-              'OH',                         // licenseState
-              biz.entityNumber || undefined // licenseNumber (entity number as proxy)
-            );
-            if (orgId) totalUpserted++;
-          } catch (upsertErr) {
-            console.error(`[OhioPhase2] Upsert error for "${name}":`, upsertErr);
-          }
+          batchRows.push({
+            businessName: name,
+            sourceName: 'OhioPhase2',
+            city,
+            state: 'OH',
+            businessCategory: category,
+            isStateLicensed: true,
+            licenseState: 'OH',
+            licenseNumber: biz.entityNumber || undefined, // entity number as proxy
+          });
         }
 
         hasMore = result.hasMore;
@@ -385,6 +372,10 @@ export async function runOhioPhase2Scraper(): Promise<void> {
         `[OhioPhase2] Keyword "${keyword}" done — fetched so far: ${totalFetched}, matched: ${totalMatched}`
       );
     }
+
+    // Batch upsert across all keywords (ADR-073 perf: replaces serial per-row upserts)
+    const ids = await batchUpsertScrapedOrganizers(batchRows, 100);
+    totalUpserted = ids.filter((id) => id !== null).length;
 
     console.log(
       `[OhioPhase2] Scraper complete — fetched: ${totalFetched}, matched: ${totalMatched}, upserted: ${totalUpserted}`

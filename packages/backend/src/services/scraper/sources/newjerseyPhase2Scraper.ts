@@ -19,7 +19,7 @@
  */
 
 import { defaultRateLimiter } from '../rateLimiter';
-import { getOrCreateScrapedOrganizer } from '../index';
+import { batchUpsertScrapedOrganizers, ScrapedOrganizerRow } from '../index';
 
 const NJ_BULK_URL = 'https://newjersey.mylicense.com/Verification_Bulk/';
 const NJ_DOBI_URL = 'https://www-dobi.nj.gov/DOBI_LicSearch/';
@@ -180,6 +180,7 @@ async function parseBulkCsv(csvText: string, professionLabel: string): Promise<n
   const iPhone = findColumn(headers, 'phone', 'phone number', 'business phone');
 
   let upserted = 0;
+  const batchRows: ScrapedOrganizerRow[] = [];
 
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i].trim();
@@ -216,32 +217,26 @@ async function parseBulkCsv(csvText: string, professionLabel: string): Promise<n
       const phone = iPhone >= 0 ? (fields[iPhone] || '').trim() : '';
       const businessCategory = mapCategory(licenseType);
 
-      const orgId = await getOrCreateScrapedOrganizer(
-        businessName,               // businessName
-        'NewJerseyPhase2',           // sourceName
-        city || 'New Jersey',        // city
-        'NJ',                        // state
-        undefined,                   // esnOrgId
-        undefined,                   // googlePlaceId
-        undefined,                   // foursquareVenueId
-        undefined,                   // hereBusinessId
-        businessCategory,            // businessCategory
-        undefined,                   // contactEmail
-        phone || undefined,          // phone
-        undefined,                   // website
-        undefined,                   // lat
-        undefined,                   // lng
-        true,                        // isStateLicensed
-        'New Jersey',                // licenseState
-        licenseNumber || undefined,  // licenseNumber
-        `NJ Consumer Affairs – ${professionLabel}`, // sourceLabel
-      );
-
-      if (orgId) upserted++;
+      batchRows.push({
+        businessName,
+        sourceName: 'NewJerseyPhase2',
+        city: city || 'New Jersey',
+        state: 'NJ',
+        businessCategory,
+        phone: phone || undefined,
+        isStateLicensed: true,
+        licenseState: 'New Jersey',
+        licenseNumber: licenseNumber || undefined,
+        sourceLabel: `NJ Consumer Affairs – ${professionLabel}`,
+      });
     } catch (rowErr) {
       console.error(`[NewJerseyPhase2] Error on CSV row ${i}:`, rowErr);
     }
   }
+
+  // Batch upsert (ADR-073 perf: replaces serial per-row upserts)
+  const ids = await batchUpsertScrapedOrganizers(batchRows, 100);
+  upserted = ids.filter((id) => id !== null).length;
 
   return upserted;
 }
@@ -508,6 +503,7 @@ function parseHtmlResultsTable(html: string, professionLabel: string): number {
 async function scrapeDobiPawnbrokers(): Promise<number> {
   console.log('[NewJerseyPhase2] Attempting DOBI pawnbroker fallback search');
   let upserted = 0;
+  const batchRows: ScrapedOrganizerRow[] = [];
 
   try {
     await defaultRateLimiter.waitBeforeRequest(NJ_DOBI_DOMAIN);
@@ -588,32 +584,22 @@ async function scrapeDobiPawnbrokers(): Promise<number> {
       const city = cells.length > 3 ? cells[3] : 'New Jersey';
       const licenseNum = cells.find((c) => /^[A-Z0-9]{4,}$/.test(c)) || '';
 
-      try {
-        const orgId = await getOrCreateScrapedOrganizer(
-          businessName,                // businessName
-          'NewJerseyPhase2',           // sourceName
-          city || 'New Jersey',        // city
-          'NJ',                        // state
-          undefined,                   // esnOrgId
-          undefined,                   // googlePlaceId
-          undefined,                   // foursquareVenueId
-          undefined,                   // hereBusinessId
-          'RESALE_SHOP',               // businessCategory
-          undefined,                   // contactEmail
-          undefined,                   // phone
-          undefined,                   // website
-          undefined,                   // lat
-          undefined,                   // lng
-          true,                        // isStateLicensed
-          'New Jersey',                // licenseState
-          licenseNum || undefined,     // licenseNumber
-          'NJ DOBI – Pawnbroker',      // sourceLabel
-        );
-        if (orgId) upserted++;
-      } catch (err) {
-        console.error('[NewJerseyPhase2] DOBI row error:', err);
-      }
+      batchRows.push({
+        businessName,
+        sourceName: 'NewJerseyPhase2',
+        city: city || 'New Jersey',
+        state: 'NJ',
+        businessCategory: 'RESALE_SHOP',
+        isStateLicensed: true,
+        licenseState: 'New Jersey',
+        licenseNumber: licenseNum || undefined,
+        sourceLabel: 'NJ DOBI – Pawnbroker',
+      });
     }
+
+    // Batch upsert (ADR-073 perf: replaces serial per-row upserts)
+    const ids = await batchUpsertScrapedOrganizers(batchRows, 100);
+    upserted = ids.filter((id) => id !== null).length;
 
     console.log(`[NewJerseyPhase2] DOBI fallback upserted: ${upserted}`);
   } catch (err) {

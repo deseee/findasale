@@ -14,7 +14,7 @@
  */
 
 import { defaultRateLimiter } from '../rateLimiter';
-import { getOrCreateScrapedOrganizer } from '../index';
+import { batchUpsertScrapedOrganizers, ScrapedOrganizerRow } from '../index';
 
 const WA_SOCRATA_CSV_URL = 'https://data.wa.gov/api/views/4wur-kfnr/rows.csv?accessType=DOWNLOAD';
 const WA_SOCRATA_DOMAIN = 'data.wa.gov';
@@ -164,6 +164,7 @@ function mapCategory(licenseType: string): string {
  */
 export async function runWashingtonPhase2Scraper(): Promise<void> {
   let totalFetched = 0;
+  const batchRows: ScrapedOrganizerRow[] = [];
   let totalMatched = 0;
   let totalUpserted = 0;
 
@@ -281,31 +282,24 @@ export async function runWashingtonPhase2Scraper(): Promise<void> {
         const dedupeKey = `WA-SECONDARY-${licenseNumber || slugifiedName}`;
         console.log(`[Washington Phase2] Matched: ${dedupeKey} — ${businessName} (${licenseTypeRaw})`);
 
-        const orgId = await getOrCreateScrapedOrganizer(
-          businessName,               // businessName
-          'WashingtonPhase2',         // sourceName
-          city || 'Washington',       // city
-          'WA',                       // state
-          undefined,                  // esnOrgId
-          undefined,                  // googlePlaceId
-          undefined,                  // foursquareVenueId
-          undefined,                  // hereBusinessId
-          businessCategory,           // businessCategory
-          undefined,                  // contactEmail
-          undefined,                  // phone
-          undefined,                  // website
-          undefined,                  // lat
-          undefined,                  // lng
-          true,                       // isStateLicensed
-          'WA',                       // licenseState
-          licenseNumber || undefined  // licenseNumber
-        );
-
-        if (orgId) totalUpserted++;
+        batchRows.push({
+          businessName,
+          sourceName: 'WashingtonPhase2',
+          city: city || 'Washington',
+          state: 'WA',
+          businessCategory,
+          isStateLicensed: true,
+          licenseState: 'WA',
+          licenseNumber: licenseNumber || undefined,
+        });
       } catch (rowErr) {
         console.error(`[Washington Phase2] Error on row ${i}:`, rowErr);
       }
     }
+
+    // Batch upsert (ADR-073 perf: replaces serial per-row upserts)
+    const ids = await batchUpsertScrapedOrganizers(batchRows, 100);
+    totalUpserted = ids.filter((id) => id !== null).length;
 
     console.log(
       `[Washington Phase2] Done — fetched: ${totalFetched}, matched: ${totalMatched}, upserted: ${totalUpserted}`

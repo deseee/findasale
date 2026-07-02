@@ -13,7 +13,7 @@
  */
 
 import { defaultRateLimiter } from '../rateLimiter';
-import { getOrCreateScrapedOrganizer } from '../index';
+import { batchUpsertScrapedOrganizers, ScrapedOrganizerRow } from '../index';
 
 const DPOR_DOMAIN = 'www.dpor.virginia.gov';
 const VA_OPEN_DATA_DOMAIN = 'data.virginia.gov';
@@ -252,6 +252,7 @@ async function processDporTabDelimited(
 
   let matched = 0;
   let upserted = 0;
+  const batchRows: ScrapedOrganizerRow[] = [];
 
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i].trim();
@@ -275,33 +276,24 @@ async function processDporTabDelimited(
       const licenseNumber = (iLicense >= 0 ? fields[iLicense] || '' : '').trim();
       const businessCategory = mapCategory(licenseTypeRaw);
 
-      const orgId = await getOrCreateScrapedOrganizer(
-        businessName,             // businessName
-        sourceName,               // sourceName
-        city || 'Virginia',       // city
-        'VA',                     // state
-        undefined,                // esnOrgId
-        undefined,                // googlePlaceId
-        undefined,                // foursquareVenueId
-        undefined,                // hereBusinessId
-        businessCategory,         // businessCategory
-        undefined,                // contactEmail
-        undefined,                // phone
-        undefined,                // website
-        undefined,                // lat
-        undefined,                // lng
-        true,                     // isStateLicensed
-        'VA',                     // licenseState
-        licenseNumber || undefined // licenseNumber
-      );
-
-      if (orgId) {
-        upserted++;
-      }
+      batchRows.push({
+        businessName,
+        sourceName,
+        city: city || 'Virginia',
+        state: 'VA',
+        businessCategory,
+        isStateLicensed: true,
+        licenseState: 'VA',
+        licenseNumber: licenseNumber || undefined,
+      });
     } catch (rowErr) {
       console.error(`[Virginia Phase2] ${sourceName}: Error on row ${i}:`, rowErr);
     }
   }
+
+  // Batch upsert (ADR-073 perf: replaces serial per-row upserts)
+  const ids = await batchUpsertScrapedOrganizers(batchRows, 100);
+  upserted = ids.filter((id) => id !== null).length;
 
   return { matched, upserted };
 }
@@ -333,6 +325,7 @@ async function processVaOpenDataCsv(
 
   let matched = 0;
   let upserted = 0;
+  const batchRows: ScrapedOrganizerRow[] = [];
 
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i].trim();
@@ -361,33 +354,24 @@ async function processVaOpenDataCsv(
       const licenseNumberOD = (iLicenseOD >= 0 ? fields[iLicenseOD] || '' : '').trim();
       const businessCategory = mapCategory(licenseTypeRaw);
 
-      const orgId = await getOrCreateScrapedOrganizer(
-        businessName,             // businessName
-        'VirginiaOpenData',       // sourceName
-        city || 'Virginia',       // city
-        'VA',                     // state
-        undefined,                // esnOrgId
-        undefined,                // googlePlaceId
-        undefined,                // foursquareVenueId
-        undefined,                // hereBusinessId
-        businessCategory,         // businessCategory
-        undefined,                // contactEmail
-        undefined,                // phone
-        undefined,                // website
-        undefined,                // lat
-        undefined,                // lng
-        true,                     // isStateLicensed
-        'VA',                     // licenseState
-        licenseNumberOD || undefined // licenseNumber
-      );
-
-      if (orgId) {
-        upserted++;
-      }
+      batchRows.push({
+        businessName,
+        sourceName: 'VirginiaOpenData',
+        city: city || 'Virginia',
+        state: 'VA',
+        businessCategory,
+        isStateLicensed: true,
+        licenseState: 'VA',
+        licenseNumber: licenseNumberOD || undefined,
+      });
     } catch (rowErr) {
       console.error(`[Virginia Phase2] VA Open Data: Error on row ${i}:`, rowErr);
     }
   }
+
+  // Batch upsert (ADR-073 perf: replaces serial per-row upserts)
+  const ids = await batchUpsertScrapedOrganizers(batchRows, 100);
+  upserted = ids.filter((id) => id !== null).length;
 
   return { matched, upserted };
 }

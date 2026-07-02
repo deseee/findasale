@@ -22,7 +22,7 @@
  */
 
 import { defaultRateLimiter } from '../rateLimiter';
-import { getOrCreateScrapedOrganizer } from '../index';
+import { batchUpsertScrapedOrganizers, ScrapedOrganizerRow } from '../index';
 
 const CO_SOS_URL = 'https://data.colorado.gov/resource/4ykn-tg5h.json';
 const CO_DOMAIN = 'data.colorado.gov';
@@ -124,6 +124,7 @@ export async function runColoradoPhase2Scraper(): Promise<void> {
   let offset = 0;
   let hasMore = true;
   let columnsLogged = false;
+  const batchRows: ScrapedOrganizerRow[] = [];
 
   console.log('[ColoradoPhase2] Starting — CO SOS entity registry via Socrata JSON API');
   console.log(`[ColoradoPhase2] Source: ${CO_SOS_URL}`);
@@ -186,17 +187,13 @@ export async function runColoradoPhase2Scraper(): Promise<void> {
 
           console.log(`[ColoradoPhase2] Matched: ${dedupeKey} — ${entityName} (${city})`);
 
-          const orgId = await getOrCreateScrapedOrganizer(
-            entityName,
-            'ColoradoPhase2',
+          batchRows.push({
+            businessName: entityName,
+            sourceName: 'ColoradoPhase2',
             city,
-            'CO',
-            undefined, undefined, undefined, undefined,
+            state: 'CO',
             businessCategory,
-            undefined, undefined, undefined
-          );
-
-          if (orgId) totalUpserted++;
+          });
         } catch (rowErr) {
           console.error('[ColoradoPhase2] Row error:', rowErr);
         }
@@ -205,6 +202,10 @@ export async function runColoradoPhase2Scraper(): Promise<void> {
       offset += rows.length;
       if (rows.length < PAGE_SIZE) hasMore = false;
     }
+
+    // Batch upsert (ADR-073 perf: replaces serial per-row upserts)
+    const ids = await batchUpsertScrapedOrganizers(batchRows, 100);
+    totalUpserted = ids.filter((id) => id !== null).length;
 
     console.log(
       `[ColoradoPhase2] Done — fetched: ${totalFetched}, matched: ${totalMatched}, upserted: ${totalUpserted}`

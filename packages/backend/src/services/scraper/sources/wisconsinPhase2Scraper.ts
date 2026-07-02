@@ -13,7 +13,7 @@
  */
 
 import { defaultRateLimiter } from '../rateLimiter';
-import { getOrCreateScrapedOrganizer } from '../index';
+import { batchUpsertScrapedOrganizers, ScrapedOrganizerRow } from '../index';
 import { getRandomUserAgent } from '../userAgents';
 
 const DSPS_AUCTIONEER_URL =
@@ -134,32 +134,27 @@ export async function runWisconsinPhase2Scraper(): Promise<void> {
     // --- Source: DSPS auctioneers ---
     console.log('[WisconsinPhase2] Fetching DSPS auctioneer records...');
     const auctioneers = await fetchDspsAuctioneers();
+    const batchRows: ScrapedOrganizerRow[] = [];
 
     for (const rec of auctioneers) {
       if (nameIsExcluded(rec.businessName)) continue;
       totalMatched++;
 
-      const orgId = await getOrCreateScrapedOrganizer(
-        rec.businessName,
-        'WisconsinPhase2',
-        rec.city || 'Wisconsin',
-        'WI',
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        'AUCTION_HOUSE',
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        true,
-        'WI',
-        rec.licenseNumber || undefined
-      );
-      if (orgId) totalUpserted++;
+      batchRows.push({
+        businessName: rec.businessName,
+        sourceName: 'WisconsinPhase2',
+        city: rec.city || 'Wisconsin',
+        state: 'WI',
+        businessCategory: 'AUCTION_HOUSE',
+        isStateLicensed: true,
+        licenseState: 'WI',
+        licenseNumber: rec.licenseNumber || undefined,
+      });
     }
+
+    // Batch upsert (ADR-073 perf: replaces serial per-row upserts)
+    const ids = await batchUpsertScrapedOrganizers(batchRows, 100);
+    totalUpserted = ids.filter((id) => id !== null).length;
 
     console.log(`[WisconsinPhase2] DSPS auctioneers done — ${auctioneers.length} records`);
     console.log(`[WisconsinPhase2] Complete — total matched: ${totalMatched}, total upserted: ${totalUpserted}`);

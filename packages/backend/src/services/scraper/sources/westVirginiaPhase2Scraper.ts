@@ -19,7 +19,7 @@
  */
 
 import { defaultRateLimiter } from '../rateLimiter';
-import { getOrCreateScrapedOrganizer } from '../index';
+import { batchUpsertScrapedOrganizers, ScrapedOrganizerRow } from '../index';
 import { getRandomUserAgent } from '../userAgents';
 
 const WVDA_DOMAIN = 'agriculture.wv.gov';
@@ -185,32 +185,19 @@ export async function runWestVirginiaPhase2Scraper(): Promise<void> {
 
     totalMatched = records.length;
 
-    for (const rec of records) {
-      try {
-        const orgId = await getOrCreateScrapedOrganizer(
-          rec.businessName,
-          'WestVirginiaPhase2',
-          rec.city || 'West Virginia',
-          'WV',
-          undefined,
-          undefined,
-          undefined,
-          undefined,
-          'AUCTION_HOUSE',
-          undefined,
-          undefined,
-          undefined,
-          undefined,
-          undefined,
-          true,
-          'WV',
-          rec.licenseNumber || undefined
-        );
-        if (orgId) totalUpserted++;
-      } catch (err) {
-        console.error(`[WestVirginiaPhase2] Error upserting ${rec.businessName}:`, err);
-      }
-    }
+    // Accumulate rows, then batch upsert (ADR-073 perf: replaces serial per-row upserts)
+    const batchRows: ScrapedOrganizerRow[] = records.map((rec) => ({
+      businessName: rec.businessName,
+      sourceName: 'WestVirginiaPhase2',
+      city: rec.city || 'West Virginia',
+      state: 'WV',
+      businessCategory: 'AUCTION_HOUSE',
+      isStateLicensed: true,
+      licenseState: 'WV',
+      licenseNumber: rec.licenseNumber || undefined,
+    }));
+    const ids = await batchUpsertScrapedOrganizers(batchRows, 100);
+    totalUpserted = ids.filter((id) => id !== null).length;
 
     console.log(
       `[WestVirginiaPhase2] Completed — Fetched: ${totalMatched}, Matched: ${totalMatched}, Upserted: ${totalUpserted}`

@@ -13,7 +13,7 @@
  */
 
 import { defaultRateLimiter } from '../rateLimiter';
-import { getOrCreateScrapedOrganizer } from '../index';
+import { batchUpsertScrapedOrganizers, ScrapedOrganizerRow } from '../index';
 
 const PA_SOCRATA_URL = 'https://data.pa.gov/resource/xvd7-5r2c.json';
 const PA_OPEN_DATA_DOMAIN = 'data.pa.gov';
@@ -122,6 +122,7 @@ export async function runPennsylvaniaPhase2Scraper(): Promise<void> {
   let offset = 0;
   let hasMore = true;
   let columnsLogged = false;
+  const batchRows: ScrapedOrganizerRow[] = [];
 
   console.log('[PennsylvaniaPhase2] Starting secondary sale scraper via PA Socrata JSON API');
   console.log(`[PennsylvaniaPhase2] Source: ${PA_SOCRATA_URL}`);
@@ -208,27 +209,16 @@ export async function runPennsylvaniaPhase2Scraper(): Promise<void> {
 
           console.log(`[PennsylvaniaPhase2] Matched: ${dedupeKey} — ${displayName} (${activity || 'keyword'})`);
 
-          const orgId = await getOrCreateScrapedOrganizer(
-            displayName,              // businessName
-            'PennsylvaniaPhase2',     // sourceName
-            city || 'Pennsylvania',   // city
-            'PA',                     // state
-            undefined,                // esnOrgId
-            undefined,                // googlePlaceId
-            undefined,                // foursquareVenueId
-            undefined,                // hereBusinessId
-            businessCategory,         // businessCategory
-            undefined,                // contactEmail
-            undefined,                // phone
-            undefined,                // website
-            undefined,                // lat
-            undefined,                // lng
-            true,                     // isStateLicensed
-            'PA',                     // licenseState
-            licenseNumber || undefined // licenseNumber
-          );
-
-          if (orgId) totalUpserted++;
+          batchRows.push({
+            businessName: displayName,
+            sourceName: 'PennsylvaniaPhase2',
+            city: city || 'Pennsylvania',
+            state: 'PA',
+            businessCategory,
+            isStateLicensed: true,
+            licenseState: 'PA',
+            licenseNumber: licenseNumber || undefined,
+          });
         } catch (rowErr) {
           console.error('[PennsylvaniaPhase2] Row error:', rowErr);
         }
@@ -237,6 +227,10 @@ export async function runPennsylvaniaPhase2Scraper(): Promise<void> {
       offset += rows.length;
       if (rows.length < PAGE_SIZE) hasMore = false;
     }
+
+    // Batch upsert (ADR-073 perf: replaces serial per-row upserts)
+    const ids = await batchUpsertScrapedOrganizers(batchRows, 100);
+    totalUpserted = ids.filter((id) => id !== null).length;
 
     console.log(
       `[PennsylvaniaPhase2] Done — fetched: ${totalFetched}, matched: ${totalMatched}, upserted: ${totalUpserted}`

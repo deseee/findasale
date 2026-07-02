@@ -8,7 +8,7 @@
  * ADR-073: Directory Scraper Phase 2 — Providence RI Open Data
  */
 
-import { getOrCreateScrapedOrganizer } from '../index';
+import { batchUpsertScrapedOrganizers, ScrapedOrganizerRow } from '../index';
 
 const SOCRATA_ENDPOINT = 'https://data.providenceri.gov/resource/ui7z-kv69.json';
 const SOURCE_NAME = 'RhodeIslandPhase2';
@@ -249,6 +249,7 @@ export async function runRhodeIslandPhase2Scraper(): Promise<void> {
   let processed = 0;
   let created = 0;
   let skipped = 0;
+  const batchRows: ScrapedOrganizerRow[] = [];
 
   for (const rec of uniqueRecords) {
     const businessName = (rec[nameField] ?? '').trim();
@@ -277,38 +278,27 @@ export async function runRhodeIslandPhase2Scraper(): Promise<void> {
     const city = cityField ? (rec[cityField] ?? '').trim() : 'Providence';
     const phone = phoneField ? (rec[phoneField] ?? '').trim() || undefined : undefined;
 
-    try {
-      const result = await getOrCreateScrapedOrganizer(
-        businessName,
-        SOURCE_NAME,
-        city || 'Providence',
-        'RI',
-        undefined,       // esnOrgId
-        undefined,       // googlePlaceId
-        undefined,       // foursquareVenueId
-        undefined,       // hereBusinessId
-        category,        // businessCategory
-        undefined,       // contactEmail
-        phone,           // phone
-        undefined,       // website
-        undefined,       // lat
-        undefined,       // lng
-        true,            // isStateLicensed
-        'RI',            // licenseState
-        undefined,       // licenseNumber
-        SOURCE_LABEL,    // sourceLabel
-      );
+    batchRows.push({
+      businessName,
+      sourceName: SOURCE_NAME,
+      city: city || 'Providence',
+      state: 'RI',
+      businessCategory: category,
+      phone,
+      isStateLicensed: true,
+      licenseState: 'RI',
+      sourceLabel: SOURCE_LABEL,
+    });
+    processed++;
 
-      processed++;
-      if (result) created++;
-
-      if (processed % 50 === 0) {
-        console.log(`[${SOURCE_NAME}] Progress: ${processed} processed, ${created} created, ${skipped} skipped`);
-      }
-    } catch (err) {
-      console.error(`[${SOURCE_NAME}] Error upserting "${businessName}":`, err);
+    if (processed % 50 === 0) {
+      console.log(`[${SOURCE_NAME}] Progress: ${processed} processed, ${created} created, ${skipped} skipped`);
     }
   }
+
+  // Batch upsert (ADR-073 perf: replaces serial per-row upserts)
+  const ids = await batchUpsertScrapedOrganizers(batchRows, 100);
+  created = ids.filter((id) => id !== null).length;
 
   console.log(`[${SOURCE_NAME}] Complete: ${processed} processed, ${created} created, ${skipped} skipped (false positives / empty names)`);
 

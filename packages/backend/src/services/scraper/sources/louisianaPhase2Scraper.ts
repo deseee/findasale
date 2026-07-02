@@ -12,7 +12,7 @@
  */
 
 import { defaultRateLimiter } from '../rateLimiter';
-import { getOrCreateScrapedOrganizer } from '../index';
+import { batchUpsertScrapedOrganizers, ScrapedOrganizerRow } from '../index';
 
 const NOLA_API_BASE = 'https://data.nola.gov/resource/hjcd-grvu.json';
 const NOLA_DOMAIN = 'data.nola.gov';
@@ -196,6 +196,7 @@ async function fetchSocrataPages(
 async function processNolaData(): Promise<{ matched: number; upserted: number }> {
   let matched = 0;
   let upserted = 0;
+  let batchRows: ScrapedOrganizerRow[] = [];
 
   // Always-include business types
   const alwaysTypes = [...NOLA_ALWAYS_INCLUDE_TYPES].map((t) => `'${t}'`).join(',');
@@ -221,27 +222,24 @@ async function processNolaData(): Promise<{ matched: number; upserted: number }>
     const lng = row.longitude ? parseFloat(row.longitude) : undefined;
     const businessCategory = mapCategoryFromNola(businessType, businessName);
 
-    const orgId = await getOrCreateScrapedOrganizer(
+    batchRows.push({
       businessName,
-      'LouisianaPhase2',
+      sourceName: 'LouisianaPhase2',
       city,
       state,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
       businessCategory,
-      undefined,
-      phone || undefined,
-      undefined,
-      lat && !isNaN(lat) ? lat : undefined,
-      lng && !isNaN(lng) ? lng : undefined,
-      true,
-      'LA',
-      licenseNumber || undefined
-    );
-    if (orgId) upserted++;
+      phone: phone || undefined,
+      lat: lat && !isNaN(lat) ? lat : undefined,
+      lng: lng && !isNaN(lng) ? lng : undefined,
+      isStateLicensed: true,
+      licenseState: 'LA',
+      licenseNumber: licenseNumber || undefined,
+    });
   }
+
+  // Batch upsert (ADR-073 perf: replaces serial per-row upserts)
+  const alwaysIds = await batchUpsertScrapedOrganizers(batchRows, 100);
+  upserted = alwaysIds.filter((id) => id !== null).length;
 
   console.log(`[LouisianaPhase2] NOLA always-include done — matched: ${matched}, upserted: ${upserted}`);
 
@@ -255,6 +253,7 @@ async function processNolaData(): Promise<{ matched: number; upserted: number }>
 
   let broaderMatched = 0;
   let broaderUpserted = 0;
+  batchRows = [];
 
   for (const row of broaderRows) {
     const businessName = (row.businessname || '').trim();
@@ -273,27 +272,24 @@ async function processNolaData(): Promise<{ matched: number; upserted: number }>
     const lng = row.longitude ? parseFloat(row.longitude) : undefined;
     const businessCategory = mapCategoryFromNola(businessType, businessName);
 
-    const orgId = await getOrCreateScrapedOrganizer(
+    batchRows.push({
       businessName,
-      'LouisianaPhase2',
+      sourceName: 'LouisianaPhase2',
       city,
       state,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
       businessCategory,
-      undefined,
-      phone || undefined,
-      undefined,
-      lat && !isNaN(lat) ? lat : undefined,
-      lng && !isNaN(lng) ? lng : undefined,
-      true,
-      'LA',
-      licenseNumber || undefined
-    );
-    if (orgId) broaderUpserted++;
+      phone: phone || undefined,
+      lat: lat && !isNaN(lat) ? lat : undefined,
+      lng: lng && !isNaN(lng) ? lng : undefined,
+      isStateLicensed: true,
+      licenseState: 'LA',
+      licenseNumber: licenseNumber || undefined,
+    });
   }
+
+  // Batch upsert (ADR-073 perf: replaces serial per-row upserts)
+  const broaderIds = await batchUpsertScrapedOrganizers(batchRows, 100);
+  broaderUpserted = broaderIds.filter((id) => id !== null).length;
 
   matched += broaderMatched;
   upserted += broaderUpserted;
@@ -308,6 +304,7 @@ async function processNolaData(): Promise<{ matched: number; upserted: number }>
 async function processBatonRougeData(): Promise<{ matched: number; upserted: number }> {
   let matched = 0;
   let upserted = 0;
+  let batchRows: ScrapedOrganizerRow[] = [];
 
   // Always-include NAICS
   const alwaysCodes = [...BR_ALWAYS_INCLUDE_NAICS].map((c) => `'${c}'`).join(',');
@@ -331,27 +328,23 @@ async function processBatonRougeData(): Promise<{ matched: number; upserted: num
     const lat = row.the_geom?.coordinates?.[1];
     const lng = row.the_geom?.coordinates?.[0];
 
-    const orgId = await getOrCreateScrapedOrganizer(
+    batchRows.push({
       businessName,
-      'LouisianaPhase2',
+      sourceName: 'LouisianaPhase2',
       city,
-      'LA',
-      undefined,
-      undefined,
-      undefined,
-      undefined,
+      state: 'LA',
       businessCategory,
-      undefined,
-      phone || undefined,
-      undefined,
-      lat && lat !== 0 ? lat : undefined,
-      lng && lng !== 0 ? lng : undefined,
-      true,
-      'LA',
-      undefined
-    );
-    if (orgId) upserted++;
+      phone: phone || undefined,
+      lat: lat && lat !== 0 ? lat : undefined,
+      lng: lng && lng !== 0 ? lng : undefined,
+      isStateLicensed: true,
+      licenseState: 'LA',
+    });
   }
+
+  // Batch upsert (ADR-073 perf: replaces serial per-row upserts)
+  const alwaysIds = await batchUpsertScrapedOrganizers(batchRows, 100);
+  upserted = alwaysIds.filter((id) => id !== null).length;
 
   console.log(`[LouisianaPhase2] BR always-include done — matched: ${matched}, upserted: ${upserted}`);
 
@@ -365,6 +358,7 @@ async function processBatonRougeData(): Promise<{ matched: number; upserted: num
 
   let broaderMatched = 0;
   let broaderUpserted = 0;
+  batchRows = [];
 
   for (const row of broaderRows) {
     const businessName = (row.business_name || '').trim();
@@ -381,27 +375,23 @@ async function processBatonRougeData(): Promise<{ matched: number; upserted: num
     const lat = row.the_geom?.coordinates?.[1];
     const lng = row.the_geom?.coordinates?.[0];
 
-    const orgId = await getOrCreateScrapedOrganizer(
+    batchRows.push({
       businessName,
-      'LouisianaPhase2',
+      sourceName: 'LouisianaPhase2',
       city,
-      'LA',
-      undefined,
-      undefined,
-      undefined,
-      undefined,
+      state: 'LA',
       businessCategory,
-      undefined,
-      phone || undefined,
-      undefined,
-      lat && lat !== 0 ? lat : undefined,
-      lng && lng !== 0 ? lng : undefined,
-      true,
-      'LA',
-      undefined
-    );
-    if (orgId) broaderUpserted++;
+      phone: phone || undefined,
+      lat: lat && lat !== 0 ? lat : undefined,
+      lng: lng && lng !== 0 ? lng : undefined,
+      isStateLicensed: true,
+      licenseState: 'LA',
+    });
   }
+
+  // Batch upsert (ADR-073 perf: replaces serial per-row upserts)
+  const broaderIds = await batchUpsertScrapedOrganizers(batchRows, 100);
+  broaderUpserted = broaderIds.filter((id) => id !== null).length;
 
   matched += broaderMatched;
   upserted += broaderUpserted;

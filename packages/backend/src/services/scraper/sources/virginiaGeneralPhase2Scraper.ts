@@ -23,7 +23,7 @@
  */
 
 import { defaultRateLimiter } from "../rateLimiter";
-import { getOrCreateScrapedOrganizer } from "../index";
+import { batchUpsertScrapedOrganizers, ScrapedOrganizerRow } from "../index";
 
 const VA_NORFOLK_SOCRATA_URL = "https://data.norfolk.gov/resource/dpi6-sct5.json";
 const VA_NORFOLK_DOMAIN = "data.norfolk.gov";
@@ -145,6 +145,7 @@ export async function runVirginiaGeneralPhase2Scraper(): Promise<void> {
   let offset = 0;
   let hasMore = true;
   let columnsLogged = false;
+  const batchRows: ScrapedOrganizerRow[] = [];
 
   console.log("[VirginiaGeneralPhase2] Starting secondary sale scraper — Norfolk City Socrata dataset");
   console.log(`[VirginiaGeneralPhase2] Source: ${VA_NORFOLK_SOCRATA_URL}`);
@@ -258,17 +259,13 @@ export async function runVirginiaGeneralPhase2Scraper(): Promise<void> {
             `[VirginiaGeneralPhase2] Matched: ${dedupeKey} — ${displayName} (${naicsRaw})`
           );
 
-          const orgId = await getOrCreateScrapedOrganizer(
-            displayName,
-            "VirginiaGeneralPhase2",
-            city || "Norfolk",
-            "VA",
-            undefined, undefined, undefined, undefined,
+          batchRows.push({
+            businessName: displayName,
+            sourceName: "VirginiaGeneralPhase2",
+            city: city || "Norfolk",
+            state: "VA",
             businessCategory,
-            undefined, undefined, undefined
-          );
-
-          if (orgId) totalUpserted++;
+          });
         } catch (rowErr) {
           console.error("[VirginiaGeneralPhase2] Row error:", rowErr);
         }
@@ -277,6 +274,10 @@ export async function runVirginiaGeneralPhase2Scraper(): Promise<void> {
       offset += rows.length;
       if (rows.length < PAGE_SIZE) hasMore = false;
     }
+
+    // Batch upsert (ADR-073 perf: replaces serial per-row upserts)
+    const ids = await batchUpsertScrapedOrganizers(batchRows, 100);
+    totalUpserted = ids.filter((id) => id !== null).length;
 
     console.log(
       `[VirginiaGeneralPhase2] Done — fetched: ${totalFetched}, matched: ${totalMatched}, upserted: ${totalUpserted}`

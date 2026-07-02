@@ -15,7 +15,7 @@
  */
 
 import { defaultRateLimiter } from "../rateLimiter";
-import { getOrCreateScrapedOrganizer } from "../index";
+import { batchUpsertScrapedOrganizers, ScrapedOrganizerRow } from "../index";
 
 const CT_SOCRATA_URL = "https://data.ct.gov/resource/fxib-2xng.json";
 const CT_OPEN_DATA_DOMAIN = "data.ct.gov";
@@ -132,6 +132,7 @@ export async function runConnecticutPhase2Scraper(): Promise<void> {
   let offset = 0;
   let hasMore = true;
   let columnsLogged = false;
+  const batchRows: ScrapedOrganizerRow[] = [];
 
   console.log("[ConnecticutPhase2] Starting secondary sale scraper via CT Socrata JSON API");
   console.log(`[ConnecticutPhase2] Source: ${CT_SOCRATA_URL}`);
@@ -228,19 +229,16 @@ export async function runConnecticutPhase2Scraper(): Promise<void> {
 
           console.log(`[ConnecticutPhase2] Matched: ${dedupeKey} — ${displayName} (${credentialType})`);
 
-          const orgId = await getOrCreateScrapedOrganizer(
-            displayName,
-            "ConnecticutPhase2",
-            city || "Connecticut",
-            "CT",
-            undefined, undefined, undefined, undefined,
+          batchRows.push({
+            businessName: displayName,
+            sourceName: "ConnecticutPhase2",
+            city: city || "Connecticut",
+            state: "CT",
             businessCategory,
-            undefined, undefined, undefined,
-            undefined, undefined,
-            true, "CT", licenseNumber || undefined
-          );
-
-          if (orgId) totalUpserted++;
+            isStateLicensed: true,
+            licenseState: "CT",
+            licenseNumber: licenseNumber || undefined,
+          });
         } catch (rowErr) {
           console.error("[ConnecticutPhase2] Row error:", rowErr);
         }
@@ -249,6 +247,10 @@ export async function runConnecticutPhase2Scraper(): Promise<void> {
       offset += rows.length;
       if (rows.length < PAGE_SIZE) hasMore = false;
     }
+
+    // Batch upsert (ADR-073 perf: replaces serial per-row upserts)
+    const ids = await batchUpsertScrapedOrganizers(batchRows, 100);
+    totalUpserted = ids.filter((id) => id !== null).length;
 
     console.log(
       `[ConnecticutPhase2] Done — fetched: ${totalFetched}, matched: ${totalMatched}, upserted: ${totalUpserted}`

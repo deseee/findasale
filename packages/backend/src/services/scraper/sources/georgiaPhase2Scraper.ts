@@ -19,8 +19,7 @@
  * ADR-073: Directory Scraper Phase 2 — State business licensing data
  */
 
-import { getOrCreateScrapedOrganizer } from '../index';
-import { prisma } from '../../../lib/prisma';
+import { batchUpsertScrapedOrganizers, ScrapedOrganizerRow } from '../index';
 
 /** Pause execution for the given number of milliseconds. */
 function sleep(ms: number): Promise<void> {
@@ -333,7 +332,9 @@ export async function runGeorgiaPhase2Scraper(): Promise<void> {
 
   totalFetched = rows.length;
 
-  // Ingest matched rows
+  // Ingest matched rows — accumulate, then batch upsert (ADR-073 perf)
+  const batchRows: ScrapedOrganizerRow[] = [];
+
   for (const row of rows) {
     // Only Active
     if (!/^Active/i.test(row.status)) continue;
@@ -343,48 +344,30 @@ export async function runGeorgiaPhase2Scraper(): Promise<void> {
 
     totalMatched++;
 
-    try {
-      const organizerId = await getOrCreateScrapedOrganizer(
-        row.name,
-        'GeorgiaSOS',
-        row.city || 'Georgia',
-        'GA',
-        undefined, // esnOrgId
-        undefined, // googlePlaceId
-        undefined, // foursquareVenueId
-        undefined, // hereBusinessId
-        'AUCTION_HOUSE', // businessCategory
-        undefined, // contactEmail
-        undefined, // phone
-        undefined, // website
-        undefined, // lat
-        undefined, // lng
-        true, // isStateLicensed
-        'Georgia', // licenseState
-        row.licenseNumber, // licenseNumber
-        'Georgia SOS – Auctioneer' // sourceLabel
-      );
+    // License fields + sourceLabel are set directly on the row — batchUpsertScrapedOrganizers
+    // writes them itself, so the old follow-up prisma.organizer.update is no longer needed.
+    // Final field values match the old two-step flow: licenseState 'GA',
+    // directoryMostRecentSource 'GeorgiaSOS'.
+    batchRows.push({
+      businessName: row.name,
+      sourceName: 'GeorgiaSOS',
+      city: row.city || 'Georgia',
+      state: 'GA',
+      businessCategory: 'AUCTION_HOUSE',
+      isStateLicensed: true,
+      licenseState: 'GA',
+      licenseNumber: row.licenseNumber,
+      sourceLabel: 'GeorgiaSOS',
+    });
 
-      if (organizerId) {
-        await prisma.organizer.update({
-          where: { id: organizerId },
-          data: {
-            licenseNumber: row.licenseNumber,
-            licenseState: 'GA',
-            isStateLicensed: true,
-            directoryMostRecentSource: 'GeorgiaSOS',
-          },
-        });
-        totalUpserted++;
-      }
-
-      if (totalMatched % 50 === 0) {
-        console.log(`[GeorgiaPhase2] Progress: ${totalMatched} matched, ${totalUpserted} upserted`);
-      }
-    } catch (err) {
-      console.error(`[GeorgiaPhase2] Error processing ${row.name} (${row.licenseNumber}):`, err);
+    if (totalMatched % 50 === 0) {
+      console.log(`[GeorgiaPhase2] Progress: ${totalMatched} matched, ${batchRows.length} queued`);
     }
   }
+
+  // Batch upsert (ADR-073 perf: replaces serial per-row upserts)
+  const ids = await batchUpsertScrapedOrganizers(batchRows, 100);
+  totalUpserted = ids.filter((id) => id !== null).length;
 
   console.log(`[GeorgiaPhase2] Completed.`);
   console.log(`[GeorgiaPhase2] Fetched: ${totalFetched}, Matched: ${totalMatched}, Upserted: ${totalUpserted}`);

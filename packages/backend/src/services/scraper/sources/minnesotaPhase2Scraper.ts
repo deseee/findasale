@@ -16,7 +16,7 @@
  */
 
 import { defaultRateLimiter } from '../rateLimiter';
-import { getOrCreateScrapedOrganizer } from '../index';
+import { batchUpsertScrapedOrganizers, ScrapedOrganizerRow } from '../index';
 
 const SOURCE_ID = 'MinnesotaPhase2';
 const PAGE_SIZE = 10000;
@@ -204,6 +204,7 @@ async function processDataset(
 ): Promise<{ matched: number; upserted: number }> {
   let matched = 0;
   let upserted = 0;
+  const batchRows: ScrapedOrganizerRow[] = [];
 
   const rows = await fetchSocrataPages(
     datasetUrl,
@@ -274,33 +275,27 @@ async function processDataset(
     const phone = phoneField ? (row[phoneField] || '').toString().trim() : undefined;
     const businessCategory = mapCategory(businessName + ' ' + businessType);
 
-    const orgId = await getOrCreateScrapedOrganizer(
+    batchRows.push({
       businessName,
-      SOURCE_ID,
-      cleanCity,
-      'MN',
-      undefined,   // esnOrgId
-      undefined,   // googlePlaceId
-      undefined,   // foursquareVenueId
-      undefined,   // hereBusinessId
+      sourceName: SOURCE_ID,
+      city: cleanCity,
+      state: 'MN',
       businessCategory,
-      undefined,   // contactEmail
-      phone || undefined,
-      undefined,   // website
-      undefined,   // lat
-      undefined,   // lng
-      true,        // isStateLicensed
-      'Minnesota', // licenseState
-      licenseNumber || undefined,
-      SOURCE_ID    // sourceLabel
-    );
-
-    if (orgId) upserted++;
+      phone: phone || undefined,
+      isStateLicensed: true,
+      licenseState: 'Minnesota',
+      licenseNumber: licenseNumber || undefined,
+      sourceLabel: SOURCE_ID,
+    });
 
     if (matched % 50 === 0) {
       console.log(`[MinnesotaPhase2:${datasetLabel}] Progress: ${matched} matched, ${upserted} upserted`);
     }
   }
+
+  // Batch upsert (ADR-073 perf: replaces serial per-row upserts)
+  const ids = await batchUpsertScrapedOrganizers(batchRows, 100);
+  upserted = ids.filter((id) => id !== null).length;
 
   console.log(`[MinnesotaPhase2:${datasetLabel}] Done — matched: ${matched}, upserted: ${upserted}`);
   return { matched, upserted };
@@ -313,6 +308,7 @@ async function processDataset(
 async function tryMnSosSearch(): Promise<{ matched: number; upserted: number }> {
   let matched = 0;
   let upserted = 0;
+  const batchRows: ScrapedOrganizerRow[] = [];
   const SOS_DOMAIN = 'mblsportal.sos.state.mn.us';
 
   // Search terms to find secondhand sale businesses
@@ -364,28 +360,16 @@ async function tryMnSosSearch(): Promise<{ matched: number; upserted: number }> 
         const cleanCity = city.replace(/,?\s*MN\b.*$/i, '').trim();
         const businessCategory = mapCategory(businessName);
 
-        const orgId = await getOrCreateScrapedOrganizer(
+        batchRows.push({
           businessName,
-          SOURCE_ID,
-          cleanCity,
-          'MN',
-          undefined,
-          undefined,
-          undefined,
-          undefined,
+          sourceName: SOURCE_ID,
+          city: cleanCity,
+          state: 'MN',
           businessCategory,
-          undefined,
-          undefined,
-          undefined,
-          undefined,
-          undefined,
-          false,       // SOS registration, not a professional license
-          'Minnesota',
-          undefined,
-          SOURCE_ID
-        );
-
-        if (orgId) upserted++;
+          isStateLicensed: false, // SOS registration, not a professional license
+          licenseState: 'Minnesota',
+          sourceLabel: SOURCE_ID,
+        });
       }
 
       console.log(`[MinnesotaPhase2:SOS] "${term}" — ${businesses.length} results, ${matched} total matched`);
@@ -393,6 +377,10 @@ async function tryMnSosSearch(): Promise<{ matched: number; upserted: number }> 
       console.log(`[MinnesotaPhase2:SOS] Search for "${term}" failed (non-fatal):`, err instanceof Error ? err.message : err);
     }
   }
+
+  // Batch upsert (ADR-073 perf: replaces serial per-row upserts)
+  const ids = await batchUpsertScrapedOrganizers(batchRows, 100);
+  upserted = ids.filter((id) => id !== null).length;
 
   return { matched, upserted };
 }

@@ -25,7 +25,7 @@
  */
 
 import { defaultRateLimiter } from '../rateLimiter';
-import { getOrCreateScrapedOrganizer } from '../index';
+import { batchUpsertScrapedOrganizers, ScrapedOrganizerRow } from '../index';
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -263,6 +263,7 @@ async function processNaicsCsv(
 
   let matched = 0;
   let upserted = 0;
+  const batchRows: ScrapedOrganizerRow[] = [];
 
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i].trim();
@@ -301,34 +302,24 @@ async function processNaicsCsv(
       const city = (iCity >= 0 ? fields[iCity] || '' : '').trim();
       const businessCategory = mapCategory(naicsCode, businessName);
 
-      try {
-        const orgId = await getOrCreateScrapedOrganizer(
-          businessName,
-          'AlaskaPhase2',
-          city || 'Alaska',
-          'AK',
-          undefined, // esnOrgId
-          undefined, // googlePlaceId
-          undefined, // foursquareVenueId
-          undefined, // hereBusinessId
-          businessCategory,
-          undefined, // contactEmail
-          undefined, // phone
-          undefined, // website
-          undefined, // lat
-          undefined, // lng
-          true,      // isStateLicensed
-          'AK',      // licenseState
-          licenseNumber || undefined // licenseNumber
-        );
-        if (orgId) upserted++;
-      } catch (upsertErr) {
-        console.error(`[Alaska Phase2] Upsert error for "${businessName}":`, upsertErr);
-      }
+      batchRows.push({
+        businessName,
+        sourceName: 'AlaskaPhase2',
+        city: city || 'Alaska',
+        state: 'AK',
+        businessCategory,
+        isStateLicensed: true,
+        licenseState: 'AK',
+        licenseNumber: licenseNumber || undefined,
+      });
     } catch (rowErr) {
       console.error(`[Alaska Phase2] Row ${i} parse error:`, rowErr);
     }
   }
+
+  // Batch upsert (ADR-073 perf: replaces serial per-row upserts)
+  const ids = await batchUpsertScrapedOrganizers(batchRows, 100);
+  upserted = ids.filter((id) => id !== null).length;
 
   return { matched, upserted };
 }
@@ -407,6 +398,8 @@ async function runMapServerFallback(): Promise<{ matched: number; upserted: numb
   let offset = 0;
   let hasMore = true;
 
+  const batchRows: ScrapedOrganizerRow[] = [];
+
   while (hasMore) {
     const page = await fetchMapServerPage(offset);
 
@@ -437,29 +430,26 @@ async function runMapServerFallback(): Promise<{ matched: number; upserted: numb
       const city = (a.PhysicalCity || '').trim();
       const businessCategory = mapCategory('', name);
 
-      try {
-        const orgId = await getOrCreateScrapedOrganizer(
-          name,
-          'AlaskaPhase2',
-          city || 'Alaska',
-          'AK',
-          undefined, undefined, undefined, undefined,
-          businessCategory,
-          undefined, undefined, undefined, undefined, undefined,
-          true,
-          'AK',
-          licenseNumber || undefined
-        );
-        if (orgId) upserted++;
-      } catch (upsertErr) {
-        console.error(`[Alaska Phase2] MapServer upsert error for "${name}":`, upsertErr);
-      }
+      batchRows.push({
+        businessName: name,
+        sourceName: 'AlaskaPhase2',
+        city: city || 'Alaska',
+        state: 'AK',
+        businessCategory,
+        isStateLicensed: true,
+        licenseState: 'AK',
+        licenseNumber: licenseNumber || undefined,
+      });
     }
 
     hasMore = page.exceededTransferLimit === true;
     offset += page.features.length;
     if (page.features.length < MAPSERVER_PAGE_SIZE) hasMore = false;
   }
+
+  // Batch upsert (ADR-073 perf: replaces serial per-row upserts)
+  const ids = await batchUpsertScrapedOrganizers(batchRows, 100);
+  upserted = ids.filter((id) => id !== null).length;
 
   console.log(
     `[Alaska Phase2] MapServer fallback done — fetched: ${totalFetched}, matched: ${matched}, upserted: ${upserted}`

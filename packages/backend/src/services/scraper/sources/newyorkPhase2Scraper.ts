@@ -17,7 +17,7 @@
  */
 
 import { defaultRateLimiter } from '../rateLimiter';
-import { getOrCreateScrapedOrganizer } from '../index';
+import { batchUpsertScrapedOrganizers, ScrapedOrganizerRow } from '../index';
 
 const NYC_DOMAIN = 'data.cityofnewyork.us';
 
@@ -269,39 +269,24 @@ export async function runNewYorkPhase2Scraper(): Promise<void> {
 
   console.log(`[NewYork Phase2] ${records.length} unique records to upsert`);
 
-  // Upsert all records
+  // Upsert all records — accumulate then batch (ADR-073 perf)
   let upserted = 0;
   let errors = 0;
+  const batchRows: ScrapedOrganizerRow[] = records.map((rec) => ({
+    businessName: rec.name,
+    sourceName: 'NewYorkPhase2',
+    city: rec.city,
+    state: 'New York',
+    businessCategory: rec.category,
+    phone: rec.phone,
+    isStateLicensed: true,
+    licenseState: 'NY',
+    licenseNumber: rec.licenseNumber || undefined,
+    sourceLabel: 'NYC Open Data',
+  }));
 
-  for (const rec of records) {
-    try {
-      const orgId = await getOrCreateScrapedOrganizer(
-        rec.name,                    // businessName
-        'NewYorkPhase2',             // sourceName
-        rec.city,                    // city
-        'New York',                  // state
-        undefined,                   // esnOrgId
-        undefined,                   // googlePlaceId
-        undefined,                   // foursquareVenueId
-        undefined,                   // hereBusinessId
-        rec.category,                // businessCategory
-        undefined,                   // contactEmail
-        rec.phone,                   // phone
-        undefined,                   // website
-        undefined,                   // lat
-        undefined,                   // lng
-        true,                        // isStateLicensed
-        'NY',                        // licenseState
-        rec.licenseNumber || undefined, // licenseNumber
-        'NYC Open Data'              // sourceLabel
-      );
-
-      if (orgId) upserted++;
-    } catch (rowErr) {
-      errors++;
-      console.error(`[NewYork Phase2] Error upserting "${rec.name}":`, rowErr);
-    }
-  }
+  const ids = await batchUpsertScrapedOrganizers(batchRows, 100);
+  upserted = ids.filter((id) => id !== null).length;
 
   console.log(
     `[NewYork Phase2] === Complete — upserted: ${upserted}, errors: ${errors}, total unique: ${records.length} ===`

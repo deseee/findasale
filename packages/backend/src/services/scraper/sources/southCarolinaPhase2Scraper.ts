@@ -18,7 +18,7 @@
  */
 
 import { defaultRateLimiter } from '../rateLimiter';
-import { getOrCreateScrapedOrganizer } from '../index';
+import { batchUpsertScrapedOrganizers, ScrapedOrganizerRow } from '../index';
 import { getRandomUserAgent } from '../userAgents';
 
 const SC_LLR_BASE = 'https://verify.llronline.com/LicLookup';
@@ -294,6 +294,7 @@ export async function runSouthCarolinaPhase2Scraper(): Promise<void> {
 
   // Deduplicate across divisions by license number
   const seenLicenses = new Set<string>();
+  const batchRows: ScrapedOrganizerRow[] = [];
 
   try {
     for (const div of DIVISION_TARGETS) {
@@ -342,35 +343,22 @@ export async function runSouthCarolinaPhase2Scraper(): Promise<void> {
           `[SouthCarolinaPhase2] Matched: ${div.label} — ${name} (${record.licenseNumber}) in ${city}`
         );
 
-        try {
-          const orgId = await getOrCreateScrapedOrganizer(
-            name,                             // businessName
-            'SouthCarolinaPhase2',            // sourceName
-            city,                             // city
-            'SC',                             // state
-            undefined,                        // esnOrgId
-            undefined,                        // googlePlaceId
-            undefined,                        // foursquareVenueId
-            undefined,                        // hereBusinessId
-            div.category,                     // businessCategory
-            undefined,                        // contactEmail
-            undefined,                        // phone
-            undefined,                        // website
-            undefined,                        // lat
-            undefined,                        // lng
-            true,                             // isStateLicensed (LLR = genuine state license)
-            'SC',                             // licenseState
-            record.licenseNumber || undefined // licenseNumber
-          );
-          if (orgId) totalUpserted++;
-        } catch (upsertErr) {
-          console.error(
-            `[SouthCarolinaPhase2] Upsert error for "${name}":`,
-            upsertErr
-          );
-        }
+        batchRows.push({
+          businessName: name,
+          sourceName: 'SouthCarolinaPhase2',
+          city,
+          state: 'SC',
+          businessCategory: div.category,
+          isStateLicensed: true, // LLR = genuine state license
+          licenseState: 'SC',
+          licenseNumber: record.licenseNumber || undefined,
+        });
       }
     }
+
+    // Batch upsert across all divisions (ADR-073 perf: replaces serial per-row upserts)
+    const ids = await batchUpsertScrapedOrganizers(batchRows, 100);
+    totalUpserted = ids.filter((id) => id !== null).length;
 
     console.log(
       `[SouthCarolinaPhase2] Complete — fetched: ${totalFetched}, matched: ${totalMatched}, upserted: ${totalUpserted}`

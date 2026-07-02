@@ -17,7 +17,7 @@
  */
 
 import { defaultRateLimiter } from '../rateLimiter';
-import { getOrCreateScrapedOrganizer } from '../index';
+import { batchUpsertScrapedOrganizers, ScrapedOrganizerRow } from '../index';
 import { getRandomUserAgent } from '../userAgents';
 
 const SEARCH_API_URL = 'https://alauc-search.kalmservices.net/api/search/licenses';
@@ -218,6 +218,9 @@ export async function runAlabamaPhase2Scraper(): Promise<void> {
       console.log(`[Alabama Phase2] Letter "${letter}": ${licensees.length} results`);
       totalFetched += licensees.length;
 
+      // Accumulate rows for this letter — batch upsert after the loop (ADR-073 perf)
+      const letterRows: ScrapedOrganizerRow[] = [];
+
       for (const lic of licensees) {
         // Deduplicate by LicenseNumber
         const licNum = (lic.LicenseNumber || '').trim();
@@ -252,35 +255,23 @@ export async function runAlabamaPhase2Scraper(): Promise<void> {
 
         totalMatched++;
 
-        try {
-          const orgId = await getOrCreateScrapedOrganizer(
-            businessName,               // businessName
-            'AlabamaPhase2',            // sourceName
-            city || 'Alabama',          // city
-            state,                      // state
-            undefined,                  // esnOrgId
-            undefined,                  // googlePlaceId
-            undefined,                  // foursquareVenueId
-            undefined,                  // hereBusinessId
-            'AUCTION_HOUSE',            // businessCategory
-            undefined,                  // contactEmail
-            phone,                      // phone
-            undefined,                  // website
-            undefined,                  // lat
-            undefined,                  // lng
-            true,                       // isStateLicensed
-            'Alabama',                  // licenseState
-            licNum,                     // licenseNumber
-            'Alabama Board of Auctioneers' // sourceLabel
-          );
-          if (orgId) totalUpserted++;
-        } catch (upsertErr) {
-          console.error(
-            `[Alabama Phase2] Upsert error for "${businessName}" (License ${licNum}):`,
-            upsertErr
-          );
-        }
+        letterRows.push({
+          businessName,
+          sourceName: 'AlabamaPhase2',
+          city: city || 'Alabama',
+          state,
+          businessCategory: 'AUCTION_HOUSE',
+          phone,
+          isStateLicensed: true,
+          licenseState: 'Alabama',
+          licenseNumber: licNum,
+          sourceLabel: 'Alabama Board of Auctioneers',
+        });
       }
+
+      // Batch upsert for this letter (ADR-073 perf: replaces serial per-row upserts)
+      const ids = await batchUpsertScrapedOrganizers(letterRows, 100);
+      totalUpserted += ids.filter((id) => id !== null).length;
 
       // Progress logging every 5 letters
       if ((ALPHABET.indexOf(letter) + 1) % 5 === 0) {

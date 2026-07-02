@@ -11,7 +11,7 @@
  */
 
 import { defaultRateLimiter } from '../rateLimiter';
-import { getOrCreateScrapedOrganizer } from '../index';
+import { batchUpsertScrapedOrganizers, ScrapedOrganizerRow } from '../index';
 
 // MS SOS portal uses a Dunn & Bradstreet-powered Angular app. The underlying
 // API is accessible at this endpoint for keyword searches.
@@ -289,6 +289,7 @@ export async function runMississippiPhase2Scraper(): Promise<void> {
   let totalUpserted = 0;
 
   const seenKeys = new Set<string>();
+  const batchRows: ScrapedOrganizerRow[] = [];
 
   try {
     for (const keyword of SALE_TYPE_KEYWORDS) {
@@ -347,33 +348,16 @@ export async function runMississippiPhase2Scraper(): Promise<void> {
 
           console.log(`[MississippiPhase2] Matched: ${scraperDedupeKey} — ${name}`);
 
-          try {
-            const orgId = await getOrCreateScrapedOrganizer(
-              name,                           // businessName
-              'MississippiPhase2',            // sourceName
-              city,                           // city
-              'MS',                           // state
-              undefined,                      // esnOrgId
-              undefined,                      // googlePlaceId
-              undefined,                      // foursquareVenueId
-              undefined,                      // hereBusinessId
-              category,                       // businessCategory
-              undefined,                      // contactEmail
-              undefined,                      // phone
-              undefined,                      // website
-              undefined,                      // lat
-              undefined,                      // lng
-              false,                          // isStateLicensed (SOS registration, not a license)
-              'MS',                           // licenseState
-              biz.entityNumber || undefined   // licenseNumber
-            );
-            if (orgId) totalUpserted++;
-          } catch (upsertErr) {
-            console.error(
-              `[MississippiPhase2] Upsert error for "${name}":`,
-              upsertErr
-            );
-          }
+          batchRows.push({
+            businessName: name,
+            sourceName: 'MississippiPhase2',
+            city,
+            state: 'MS',
+            businessCategory: category,
+            isStateLicensed: false, // SOS registration, not a license
+            licenseState: 'MS',
+            licenseNumber: biz.entityNumber || undefined,
+          });
         }
 
         hasMore = result.hasMore;
@@ -388,6 +372,10 @@ export async function runMississippiPhase2Scraper(): Promise<void> {
         }
       }
     }
+
+    // Batch upsert across all keywords (ADR-073 perf: replaces serial per-row upserts)
+    const ids = await batchUpsertScrapedOrganizers(batchRows, 100);
+    totalUpserted = ids.filter((id) => id !== null).length;
 
     console.log(
       `[MississippiPhase2] Complete — fetched: ${totalFetched}, matched: ${totalMatched}, upserted: ${totalUpserted}`

@@ -20,7 +20,7 @@
  */
 
 import { defaultRateLimiter } from '../rateLimiter';
-import { getOrCreateScrapedOrganizer } from '../index';
+import { batchUpsertScrapedOrganizers, ScrapedOrganizerRow } from '../index';
 
 // ---------------------------------------------------------------------------
 // Shared helpers
@@ -149,6 +149,7 @@ async function runFloridaAuctioneerSource(): Promise<void> {
   let totalActive = 0;
   let totalMatched = 0;
   let totalUpserted = 0;
+  const batchRows: ScrapedOrganizerRow[] = [];
 
   for (const line of lines) {
     const fields = parseCsvLine(line);
@@ -188,19 +189,21 @@ async function runFloridaAuctioneerSource(): Promise<void> {
 
     console.log(`[Florida Phase2] DBPR matched: ${dedupeKey} — ${name} (${licenseType})`);
 
-    try {
-      const orgId = await getOrCreateScrapedOrganizer(
-        name, 'FloridaPhase2', city, 'FL',
-        undefined, undefined, undefined, undefined,
-        category, undefined, undefined, undefined,
-        undefined, undefined, true, 'FL',
-        licenseNumber || undefined, undefined,
-      );
-      if (orgId) totalUpserted++;
-    } catch (upsertErr) {
-      console.error(`[Florida Phase2] DBPR upsert error for "${name}":`, upsertErr);
-    }
+    batchRows.push({
+      businessName: name,
+      sourceName: 'FloridaPhase2',
+      city,
+      state: 'FL',
+      businessCategory: category,
+      isStateLicensed: true,
+      licenseState: 'FL',
+      licenseNumber: licenseNumber || undefined,
+    });
   }
+
+  // Batch upsert (ADR-073 perf: replaces serial per-row upserts)
+  const ids = await batchUpsertScrapedOrganizers(batchRows, 100);
+  totalUpserted = ids.filter((id) => id !== null).length;
 
   console.log('[Florida Phase2] DBPR Board 48 summary ─────────────────────');
   console.log(`[Florida Phase2]  Rows processed : ${totalProcessed}`);
@@ -486,6 +489,7 @@ async function runFloridaPawnbrokerSource(): Promise<void> {
   }
 
   let totalUpserted = 0;
+  const fdacsRows: ScrapedOrganizerRow[] = [];
 
   for (const shop of pawnshops) {
     const dedupeKey = shop.licenseNumber
@@ -494,32 +498,22 @@ async function runFloridaPawnbrokerSource(): Promise<void> {
 
     console.log(`[Florida Phase2] Pawnshop: ${dedupeKey} — ${shop.name} (${shop.city})`);
 
-    try {
-      const orgId = await getOrCreateScrapedOrganizer(
-        shop.name,              // businessName
-        'FloridaPhase2',        // sourceName
-        shop.city || 'Florida', // city
-        'FL',                   // state
-        undefined,              // esnOrgId
-        undefined,              // googlePlaceId
-        undefined,              // foursquareVenueId
-        undefined,              // hereBusinessId
-        'RESALE_SHOP',          // businessCategory
-        undefined,              // contactEmail
-        shop.phone || undefined, // phone
-        undefined,              // website
-        undefined,              // lat
-        undefined,              // lng
-        true,                   // isStateLicensed
-        'FL',                   // licenseState
-        shop.licenseNumber || undefined, // licenseNumber
-        undefined,              // sourceLabel
-      );
-      if (orgId) totalUpserted++;
-    } catch (upsertErr) {
-      console.error(`[Florida Phase2] FDACS upsert error for "${shop.name}":`, upsertErr);
-    }
+    fdacsRows.push({
+      businessName: shop.name,
+      sourceName: 'FloridaPhase2',
+      city: shop.city || 'Florida',
+      state: 'FL',
+      businessCategory: 'RESALE_SHOP',
+      phone: shop.phone || undefined,
+      isStateLicensed: true,
+      licenseState: 'FL',
+      licenseNumber: shop.licenseNumber || undefined,
+    });
   }
+
+  // Batch upsert (ADR-073 perf: replaces serial per-row upserts)
+  const fdacsIds = await batchUpsertScrapedOrganizers(fdacsRows, 100);
+  totalUpserted = fdacsIds.filter((id) => id !== null).length;
 
   console.log('[Florida Phase2] FDACS Pawnshop summary ────────────────────');
   console.log(`[Florida Phase2]  Records found  : ${recordCount}`);

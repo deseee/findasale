@@ -20,7 +20,7 @@
 
 import https from 'https';
 import { defaultRateLimiter } from '../rateLimiter';
-import { getOrCreateScrapedOrganizer } from '../index';
+import { batchUpsertScrapedOrganizers, ScrapedOrganizerRow } from '../index';
 
 const DOMAIN = 'pr.mo.gov';
 const SOURCE_NAME = 'MissouriPhase2';
@@ -258,6 +258,8 @@ async function processDelimitedData(text: string): Promise<{ matched: number; up
 
   console.log(`[${SOURCE_NAME}] Column mapping — name:${iName}, first:${iFirstName}, last:${iLastName}, city:${iCity}, state:${iState}, license:${iLicenseNum}, phone:${iPhone}, email:${iEmail}, status:${iStatus}`);
 
+  const batchRows: ScrapedOrganizerRow[] = [];
+
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i].trim();
     if (!line) continue;
@@ -290,31 +292,26 @@ async function processDelimitedData(text: string): Promise<{ matched: number; up
       const phone = iPhone >= 0 ? (fields[iPhone] || '').trim() : '';
       const email = iEmail >= 0 ? (fields[iEmail] || '').trim() : '';
 
-      const orgId = await getOrCreateScrapedOrganizer(
-        displayName,              // businessName
-        SOURCE_NAME,              // sourceName
-        city || 'Missouri',       // city
-        state,                    // state
-        undefined,                // esnOrgId
-        undefined,                // googlePlaceId
-        undefined,                // foursquareVenueId
-        undefined,                // hereBusinessId
-        'AUCTION_HOUSE',          // businessCategory — all are licensed auctioneers
-        email || undefined,       // contactEmail
-        phone || undefined,       // phone
-        undefined,                // website
-        undefined,                // lat
-        undefined,                // lng
-        true,                     // isStateLicensed
-        'Missouri',               // licenseState
-        licenseNumber || undefined // licenseNumber
-      );
-
-      if (orgId) upserted++;
+      batchRows.push({
+        businessName: displayName,
+        sourceName: SOURCE_NAME,
+        city: city || 'Missouri',
+        state,
+        businessCategory: 'AUCTION_HOUSE', // all are licensed auctioneers
+        contactEmail: email || undefined,
+        phone: phone || undefined,
+        isStateLicensed: true,
+        licenseState: 'Missouri',
+        licenseNumber: licenseNumber || undefined,
+      });
     } catch (rowErr) {
       console.error(`[${SOURCE_NAME}] Row ${i} error:`, rowErr);
     }
   }
+
+  // Batch upsert (ADR-073 perf: replaces serial per-row upserts)
+  const ids = await batchUpsertScrapedOrganizers(batchRows, 100);
+  upserted = ids.filter((id) => id !== null).length;
 
   return { matched, upserted };
 }
@@ -346,6 +343,8 @@ async function processHtmlRows(rows: string[][]): Promise<{ matched: number; ups
   const iPhone = probe('phone', 'telephone');
   const iStatus = probe('status');
 
+  const batchRows: ScrapedOrganizerRow[] = [];
+
   for (let i = 1; i < rows.length; i++) {
     const cells = rows[i];
 
@@ -367,28 +366,22 @@ async function processHtmlRows(rows: string[][]): Promise<{ matched: number; ups
     const licenseNumber = iLicenseNum >= 0 ? (cells[iLicenseNum] || '').trim() : '';
     const phone = iPhone >= 0 ? (cells[iPhone] || '').trim() : '';
 
-    const orgId = await getOrCreateScrapedOrganizer(
-      displayName,
-      SOURCE_NAME,
-      city || 'Missouri',
+    batchRows.push({
+      businessName: displayName,
+      sourceName: SOURCE_NAME,
+      city: city || 'Missouri',
       state,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      'AUCTION_HOUSE',
-      undefined,
-      phone || undefined,
-      undefined,
-      undefined,
-      undefined,
-      true,
-      'Missouri',
-      licenseNumber || undefined
-    );
-
-    if (orgId) upserted++;
+      businessCategory: 'AUCTION_HOUSE',
+      phone: phone || undefined,
+      isStateLicensed: true,
+      licenseState: 'Missouri',
+      licenseNumber: licenseNumber || undefined,
+    });
   }
+
+  // Batch upsert (ADR-073 perf: replaces serial per-row upserts)
+  const ids = await batchUpsertScrapedOrganizers(batchRows, 100);
+  upserted = ids.filter((id) => id !== null).length;
 
   return { matched, upserted };
 }

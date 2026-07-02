@@ -15,7 +15,7 @@
  */
 
 import { defaultRateLimiter } from '../rateLimiter';
-import { getOrCreateScrapedOrganizer } from '../index';
+import { batchUpsertScrapedOrganizers, ScrapedOrganizerRow } from '../index';
 
 const IL_IDFPR_CSV_BASE = 'https://data.illinois.gov/resource/pzzh-kp68.csv';
 const IL_IDFPR_DOMAIN = 'data.illinois.gov';
@@ -209,6 +209,7 @@ async function fetchSocrataAllPages(baseUrl: string, domain: string): Promise<st
 async function processIdfprCsv(lines: string[]): Promise<{ matched: number; upserted: number }> {
   let matched = 0;
   let upserted = 0;
+  const batchRows: ScrapedOrganizerRow[] = [];
 
   if (lines.length < 2) return { matched, upserted };
 
@@ -269,31 +270,24 @@ async function processIdfprCsv(lines: string[]): Promise<{ matched: number; upse
       const dedupeKey = `IL-SECONDARY-${licenseNumber || displayName.toLowerCase().replace(/[^a-z0-9]/g, '-').slice(0, 30)}`;
       const businessCategory = mapCategory(licenseType);
 
-      const orgId = await getOrCreateScrapedOrganizer(
-        displayName,          // businessName
-        'IllinoisPhase2',     // sourceName
-        city || 'Illinois',   // city
-        state,                // state
-        undefined,            // esnOrgId
-        undefined,            // googlePlaceId
-        undefined,            // foursquareVenueId
-        undefined,            // hereBusinessId
-        businessCategory,     // businessCategory
-        undefined,            // contactEmail
-        undefined,            // phone
-        undefined,            // website
-        undefined,            // lat
-        undefined,            // lng
-        true,                 // isStateLicensed
-        state || 'IL',        // licenseState
-        licenseNumber || undefined // licenseNumber
-      );
-
-      if (orgId) upserted++;
+      batchRows.push({
+        businessName: displayName,
+        sourceName: 'IllinoisPhase2',
+        city: city || 'Illinois',
+        state,
+        businessCategory,
+        isStateLicensed: true,
+        licenseState: state || 'IL',
+        licenseNumber: licenseNumber || undefined,
+      });
     } catch (rowErr) {
       console.error(`[IllinoisPhase2] IDFPR row ${i} error:`, rowErr);
     }
   }
+
+  // Batch upsert (ADR-073 perf: replaces serial per-row upserts)
+  const ids = await batchUpsertScrapedOrganizers(batchRows, 100);
+  upserted = ids.filter((id) => id !== null).length;
 
   return { matched, upserted };
 }
@@ -306,6 +300,7 @@ async function processIdfprCsv(lines: string[]): Promise<{ matched: number; upse
 async function processChicagoCsv(lines: string[]): Promise<{ matched: number; upserted: number }> {
   let matched = 0;
   let upserted = 0;
+  const batchRows: ScrapedOrganizerRow[] = [];
 
   if (lines.length < 2) return { matched, upserted };
 
@@ -361,31 +356,24 @@ async function processChicagoCsv(lines: string[]): Promise<{ matched: number; up
       const licenseType = activity || 'RETAIL MERCHANT';
       const businessCategory = mapCategory(licenseType);
 
-      const orgId = await getOrCreateScrapedOrganizer(
-        businessName,                  // businessName
-        'IllinoisChicagoPhase2',       // sourceName
-        city || 'Chicago',             // city
-        state,                         // state
-        undefined,                     // esnOrgId
-        undefined,                     // googlePlaceId
-        undefined,                     // foursquareVenueId
-        undefined,                     // hereBusinessId
-        businessCategory,              // businessCategory
-        undefined,                     // contactEmail
-        undefined,                     // phone
-        undefined,                     // website
-        undefined,                     // lat
-        undefined,                     // lng
-        true,                          // isStateLicensed
-        state || 'IL',                 // licenseState
-        licenseNumber || undefined     // licenseNumber
-      );
-
-      if (orgId) upserted++;
+      batchRows.push({
+        businessName,
+        sourceName: 'IllinoisChicagoPhase2',
+        city: city || 'Chicago',
+        state,
+        businessCategory,
+        isStateLicensed: true,
+        licenseState: state || 'IL',
+        licenseNumber: licenseNumber || undefined,
+      });
     } catch (rowErr) {
       console.error(`[IllinoisPhase2] Chicago row ${i} error:`, rowErr);
     }
   }
+
+  // Batch upsert (ADR-073 perf: replaces serial per-row upserts)
+  const ids = await batchUpsertScrapedOrganizers(batchRows, 100);
+  upserted = ids.filter((id) => id !== null).length;
 
   return { matched, upserted };
 }

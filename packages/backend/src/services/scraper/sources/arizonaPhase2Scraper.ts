@@ -15,7 +15,7 @@
  * NOTE (BLOCKED): Tempe — https://data.tempe.gov or https://tempegov.socrata.com
  */
 
-import { getOrCreateScrapedOrganizer } from '../index';
+import { batchUpsertScrapedOrganizers, ScrapedOrganizerRow } from '../index';
 
 const SOCRATA_ENDPOINT = 'https://data.mesaaz.gov/resource/rg88-ausd.json';
 
@@ -142,6 +142,7 @@ export async function runArizonaPhase2Scraper(): Promise<void> {
   let totalDupes = 0;
   let totalUpserted = 0;
   const seenKey = new Set<string>();
+  const batchRows: ScrapedOrganizerRow[] = [];
 
   for (const record of records) {
     const name = record.business_dba_name?.trim();
@@ -168,32 +169,20 @@ export async function runArizonaPhase2Scraper(): Promise<void> {
 
     console.log(`[AZ-Phase2] Matched: "${name}" — ${city}, ${state} [${category}]`);
 
-    try {
-      const orgId = await getOrCreateScrapedOrganizer(
-        name,                // businessName
-        'MesaAZOpenData',    // sourceName
-        city,                // city
-        state,               // state
-        undefined,           // esnOrgId
-        undefined,           // googlePlaceId
-        undefined,           // foursquareVenueId
-        undefined,           // hereBusinessId
-        category,            // businessCategory
-        undefined,           // contactEmail
-        phone,               // phone
-        undefined,           // website
-        undefined,           // lat
-        undefined,           // lng
-        undefined,           // isStateLicensed
-        undefined,           // licenseState
-        undefined,           // licenseNumber
-        'Mesa AZ Open Data'  // sourceLabel
-      );
-      if (orgId) totalUpserted++;
-    } catch (upsertErr) {
-      console.error(`[AZ-Phase2] Upsert error for "${name}":`, upsertErr);
-    }
+    batchRows.push({
+      businessName: name,
+      sourceName: 'MesaAZOpenData',
+      city,
+      state,
+      businessCategory: category,
+      phone,
+      sourceLabel: 'Mesa AZ Open Data',
+    });
   }
+
+  // Batch upsert (ADR-073 perf: replaces serial per-row upserts)
+  const ids = await batchUpsertScrapedOrganizers(batchRows, 100);
+  totalUpserted = ids.filter((id) => id !== null).length;
 
   console.log(
     `[AZ-Phase2] Scraper completed: fetched=${records.length}, excluded=${totalExcluded}, dupes=${totalDupes}, upserted=${totalUpserted}`

@@ -28,7 +28,7 @@
  */
 
 import { defaultRateLimiter } from '../rateLimiter';
-import { getOrCreateScrapedOrganizer } from '../index';
+import { batchUpsertScrapedOrganizers, ScrapedOrganizerRow } from '../index';
 
 // ─── Los Angeles ────────────────────────────────────────────────────────────
 const LA_SOCRATA_URL = 'https://data.lacity.org/resource/6rrh-rzua.json';
@@ -137,6 +137,7 @@ async function runLASection(): Promise<{ fetched: number; matched: number; upser
   let totalFetched = 0;
   let totalMatched = 0;
   let totalUpserted = 0;
+  const batchRows: ScrapedOrganizerRow[] = [];
   let offset = 0;
   let hasMore = true;
   let columnsLogged = false;
@@ -207,17 +208,13 @@ async function runLASection(): Promise<{ fetched: number; matched: number; upser
 
         console.log(`[CaliforniaPhase2/LA] Matched: ${dedupeKey} — ${businessName} (NAICS ${naics})`);
 
-        const orgId = await getOrCreateScrapedOrganizer(
+        batchRows.push({
           businessName,
-          'CaliforniaPhase2',
+          sourceName: 'CaliforniaPhase2',
           city,
-          'CA',
-          undefined, undefined, undefined, undefined,
+          state: 'CA',
           businessCategory,
-          undefined, undefined, undefined
-        );
-
-        if (orgId) totalUpserted++;
+        });
       } catch (rowErr) {
         console.error('[CaliforniaPhase2/LA] Row error:', rowErr);
       }
@@ -226,6 +223,10 @@ async function runLASection(): Promise<{ fetched: number; matched: number; upser
     offset += rows.length;
     if (rows.length < PAGE_SIZE) hasMore = false;
   }
+
+  // Batch upsert (ADR-073 perf: replaces serial per-row upserts)
+  const ids = await batchUpsertScrapedOrganizers(batchRows, 100);
+  totalUpserted = ids.filter((id) => id !== null).length;
 
   return { fetched: totalFetched, matched: totalMatched, upserted: totalUpserted };
 }
@@ -236,6 +237,7 @@ async function runSFSection(): Promise<{ fetched: number; matched: number; upser
   let totalFetched = 0;
   let totalMatched = 0;
   let totalUpserted = 0;
+  const batchRows: ScrapedOrganizerRow[] = [];
   let offset = 0;
   let hasMore = true;
   let columnsLogged = false;
@@ -308,17 +310,13 @@ async function runSFSection(): Promise<{ fetched: number; matched: number; upser
 
         console.log(`[CaliforniaPhase2/SF] Matched: ${dedupeKey} — ${businessName} (${licCode || 'NAICS ' + naics})`);
 
-        const orgId = await getOrCreateScrapedOrganizer(
+        batchRows.push({
           businessName,
-          'CaliforniaPhase2',
-          'San Francisco',
-          'CA',
-          undefined, undefined, undefined, undefined,
+          sourceName: 'CaliforniaPhase2',
+          city: 'San Francisco',
+          state: 'CA',
           businessCategory,
-          undefined, undefined, undefined
-        );
-
-        if (orgId) totalUpserted++;
+        });
       } catch (rowErr) {
         console.error('[CaliforniaPhase2/SF] Row error:', rowErr);
       }
@@ -327,6 +325,10 @@ async function runSFSection(): Promise<{ fetched: number; matched: number; upser
     offset += rows.length;
     if (rows.length < 1000) hasMore = false;
   }
+
+  // Batch upsert (ADR-073 perf: replaces serial per-row upserts)
+  const ids = await batchUpsertScrapedOrganizers(batchRows, 100);
+  totalUpserted = ids.filter((id) => id !== null).length;
 
   return { fetched: totalFetched, matched: totalMatched, upserted: totalUpserted };
 }

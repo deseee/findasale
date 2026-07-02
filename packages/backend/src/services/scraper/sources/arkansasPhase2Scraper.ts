@@ -12,7 +12,7 @@
  */
 
 import { defaultRateLimiter } from '../rateLimiter';
-import { getOrCreateScrapedOrganizer } from '../index';
+import { batchUpsertScrapedOrganizers, ScrapedOrganizerRow } from '../index';
 
 const AR_SOS_SEARCH_URL = 'https://www.sos.arkansas.gov/corps/search_all.php';
 const AR_SOS_DOMAIN = 'www.sos.arkansas.gov';
@@ -267,6 +267,7 @@ export async function runArkansasPhase2Scraper(): Promise<void> {
 
   // Track seen entity numbers / name keys to deduplicate across keyword searches
   const seenKeys = new Set<string>();
+  const batchRows: ScrapedOrganizerRow[] = [];
 
   try {
     for (const keyword of SALE_TYPE_KEYWORDS) {
@@ -327,33 +328,16 @@ export async function runArkansasPhase2Scraper(): Promise<void> {
 
           console.log(`[ArkansasPhase2] Matched: ${scraperDedupeKey} — ${name}`);
 
-          try {
-            const orgId = await getOrCreateScrapedOrganizer(
-              name,                           // businessName
-              'ArkansasPhase2',               // sourceName
-              city,                           // city
-              'AR',                           // state
-              undefined,                      // esnOrgId
-              undefined,                      // googlePlaceId
-              undefined,                      // foursquareVenueId
-              undefined,                      // hereBusinessId
-              category,                       // businessCategory
-              undefined,                      // contactEmail
-              undefined,                      // phone
-              undefined,                      // website
-              undefined,                      // lat
-              undefined,                      // lng
-              false,                          // isStateLicensed (SOS registration, not a license)
-              'AR',                           // licenseState
-              biz.entityNumber || undefined   // licenseNumber
-            );
-            if (orgId) totalUpserted++;
-          } catch (upsertErr) {
-            console.error(
-              `[ArkansasPhase2] Upsert error for "${name}":`,
-              upsertErr
-            );
-          }
+          batchRows.push({
+            businessName: name,
+            sourceName: 'ArkansasPhase2',
+            city,
+            state: 'AR',
+            businessCategory: category,
+            isStateLicensed: false, // SOS registration, not a license
+            licenseState: 'AR',
+            licenseNumber: biz.entityNumber || undefined,
+          });
         }
 
         hasMore = result.hasMore;
@@ -368,6 +352,10 @@ export async function runArkansasPhase2Scraper(): Promise<void> {
         }
       }
     }
+
+    // Batch upsert across all keywords (ADR-073 perf: replaces serial per-row upserts)
+    const ids = await batchUpsertScrapedOrganizers(batchRows, 100);
+    totalUpserted = ids.filter((id) => id !== null).length;
 
     console.log(
       `[ArkansasPhase2] Complete — fetched: ${totalFetched}, matched: ${totalMatched}, upserted: ${totalUpserted}`

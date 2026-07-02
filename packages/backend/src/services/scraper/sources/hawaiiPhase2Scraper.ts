@@ -12,7 +12,7 @@
  */
 
 import { defaultRateLimiter } from '../rateLimiter';
-import { getOrCreateScrapedOrganizer } from '../index';
+import { batchUpsertScrapedOrganizers, ScrapedOrganizerRow } from '../index';
 
 // --- Sources ---
 // Honolulu business registrations
@@ -108,9 +108,10 @@ function mapCategory(name: string, licenseType: string): string {
 }
 
 /**
- * Process a single Socrata record — returns true if upserted.
+ * Process a single Socrata record — returns a ScrapedOrganizerRow to batch-upsert,
+ * or null if the record is filtered out.
  */
-async function processRecord(record: Record<string, string>, source: string): Promise<boolean> {
+async function processRecord(record: Record<string, string>, source: string): Promise<ScrapedOrganizerRow | null> {
   // Status filter — active only
   const status = (
     record['status'] ||
@@ -121,7 +122,7 @@ async function processRecord(record: Record<string, string>, source: string): Pr
   ).trim().toUpperCase();
 
   if (status && !['ACTIVE', 'ISSUED', 'CURRENT', 'REGISTERED', ''].includes(status)) {
-    return false;
+    return null;
   }
 
   // Resolve business name
@@ -135,7 +136,7 @@ async function processRecord(record: Record<string, string>, source: string): Pr
     ''
   ).trim();
 
-  if (!businessName || businessName.length < 3) return false;
+  if (!businessName || businessName.length < 3) return null;
 
   // Resolve license type
   const licenseTypeRaw = (
@@ -152,8 +153,8 @@ async function processRecord(record: Record<string, string>, source: string): Pr
   const alwaysInclude = licenseTypeRaw ? licenseTypeAlwaysInclude(licenseTypeRaw) : false;
   const keywordMatch = nameMatchesKeyword(businessName) || (licenseTypeRaw && nameMatchesKeyword(licenseTypeRaw));
 
-  if (!alwaysInclude && !keywordMatch) return false;
-  if (nameIsExcluded(businessName)) return false;
+  if (!alwaysInclude && !keywordMatch) return null;
+  if (nameIsExcluded(businessName)) return null;
 
   const licenseNumber = (
     record['license_number'] ||
@@ -174,27 +175,17 @@ async function processRecord(record: Record<string, string>, source: string): Pr
   const phone = (record['phone'] || record['telephone'] || '').trim() || undefined;
   const businessCategory = mapCategory(businessName, licenseTypeRaw);
 
-  const orgId = await getOrCreateScrapedOrganizer(
+  return {
     businessName,
-    source,
+    sourceName: source,
     city,
-    'HI',
-    undefined,  // esnOrgId
-    undefined,  // googlePlaceId
-    undefined,  // foursquareVenueId
-    undefined,  // hereBusinessId
+    state: 'HI',
     businessCategory,
-    undefined,  // contactEmail
     phone,
-    undefined,  // website
-    undefined,  // lat
-    undefined,  // lng
-    licenseNumber ? true : undefined, // isStateLicensed
-    licenseNumber ? 'Hawaii' : undefined, // licenseState
-    licenseNumber || undefined,
-  );
-
-  return orgId !== null;
+    isStateLicensed: licenseNumber ? true : undefined,
+    licenseState: licenseNumber ? 'Hawaii' : undefined,
+    licenseNumber: licenseNumber || undefined,
+  };
 }
 
 /**
@@ -210,6 +201,7 @@ async function fetchSocrataSource(
   let matched = 0;
   let upserted = 0;
   let offset = 0;
+  const batchRows: ScrapedOrganizerRow[] = [];
 
   // Server-side full-text filter
   const searchTerms = 'pawnbroker secondhand auctioneer consignment thrift antique vintage auction pawn resale flea';
@@ -273,8 +265,8 @@ async function fetchSocrataSource(
         if (!didMatch) continue;
         matched++;
 
-        const wasUpserted = await processRecord(record, sourceName);
-        if (wasUpserted) upserted++;
+        const row = await processRecord(record, sourceName);
+        if (row) batchRows.push(row);
       } catch (rowErr) {
         console.error(`[HawaiiPhase2] Error processing record from ${sourceName}:`, rowErr);
       }
@@ -283,6 +275,10 @@ async function fetchSocrataSource(
     if (records.length < PAGE_LIMIT) break;
     offset += PAGE_LIMIT;
   }
+
+  // Batch upsert (ADR-073 perf: replaces serial per-row upserts)
+  const ids = await batchUpsertScrapedOrganizers(batchRows, 100);
+  upserted = ids.filter((id) => id !== null).length;
 
   return { fetched, matched, upserted };
 }

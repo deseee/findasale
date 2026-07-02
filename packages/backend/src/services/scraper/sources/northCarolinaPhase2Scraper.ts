@@ -30,7 +30,7 @@
  */
 
 import { defaultRateLimiter } from '../rateLimiter';
-import { getOrCreateScrapedOrganizer } from '../index';
+import { batchUpsertScrapedOrganizers, ScrapedOrganizerRow } from '../index';
 import { getRandomUserAgent } from '../userAgents';
 
 // ---------------------------------------------------------------------------
@@ -286,6 +286,7 @@ export async function runNorthCarolinaPhase2Scraper(): Promise<void> {
   console.log('[NC Phase2] === Source 1: NCALB Auctioneer Licensing Board (ncalb.org) ===');
 
   const ncalbRecords = await fetchNcalbRecords();
+  const batchRows: ScrapedOrganizerRow[] = [];
 
   for (const record of ncalbRecords) {
     const { name, licenseNumber, city } = record;
@@ -294,32 +295,22 @@ export async function runNorthCarolinaPhase2Scraper(): Promise<void> {
 
     console.log(`[NC Phase2] NCALB upsert: ${dedupeKey} — ${name}`);
 
-    try {
-      const orgId = await getOrCreateScrapedOrganizer(
-        name,                       // businessName
-        'NorthCarolinaPhase2',      // sourceName
-        city || 'North Carolina',   // city
-        'NC',                       // state
-        undefined,                  // esnOrgId
-        undefined,                  // googlePlaceId
-        undefined,                  // foursquareVenueId
-        undefined,                  // hereBusinessId
-        category,                   // businessCategory
-        undefined,                  // contactEmail
-        undefined,                  // phone
-        undefined,                  // website
-        undefined,                  // lat
-        undefined,                  // lng
-        true,                       // isStateLicensed
-        'NC',                       // licenseState
-        licenseNumber || undefined, // licenseNumber
-        'NCALB'                     // sourceLabel
-      );
-      if (orgId) totalUpserted++;
-    } catch (err) {
-      console.error(`[NC Phase2] NCALB upsert error for "${name}":`, err);
-    }
+    batchRows.push({
+      businessName: name,
+      sourceName: 'NorthCarolinaPhase2',
+      city: city || 'North Carolina',
+      state: 'NC',
+      businessCategory: category,
+      isStateLicensed: true,
+      licenseState: 'NC',
+      licenseNumber: licenseNumber || undefined,
+      sourceLabel: 'NCALB',
+    });
   }
+
+  // Batch upsert (ADR-073 perf: replaces serial per-row upserts)
+  const ids = await batchUpsertScrapedOrganizers(batchRows, 100);
+  totalUpserted = ids.filter((id) => id !== null).length;
 
   console.log(`[NC Phase2] NCALB source complete — ${ncalbRecords.length} matched, ${totalUpserted} upserted so far`);
 

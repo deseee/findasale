@@ -21,7 +21,7 @@
 
 import * as cheerio from 'cheerio';
 import { defaultRateLimiter } from '../rateLimiter';
-import { getOrCreateScrapedOrganizer } from '../index';
+import { batchUpsertScrapedOrganizers, ScrapedOrganizerRow } from '../index';
 import { getRandomUserAgent } from '../userAgents';
 
 const OPLC_DOMAIN = 'forms.nh.gov';
@@ -316,39 +316,29 @@ export async function runNewHampshirePhase2Scraper(): Promise<void> {
     return;
   }
 
-  // Step 4 — Upsert each licensee
+  // Step 4 — Upsert licensees (accumulate, then batch)
   let totalUpserted = 0;
+  const batchRows: ScrapedOrganizerRow[] = [];
 
   for (const lic of licensees) {
     // Skip inactive
     if (lic.status && !/active|current/i.test(lic.status)) continue;
 
-    try {
-      const orgId = await getOrCreateScrapedOrganizer(
-        lic.name,                    // businessName
-        'NewHampshirePhase2',        // sourceName
-        lic.city,                    // city
-        'NH',                        // state
-        undefined,                   // esnOrgId
-        undefined,                   // googlePlaceId
-        undefined,                   // foursquareVenueId
-        undefined,                   // hereBusinessId
-        'AUCTION_HOUSE',             // businessCategory
-        undefined,                   // contactEmail
-        undefined,                   // phone
-        undefined,                   // website
-        undefined,                   // lat
-        undefined,                   // lng
-        true,                        // isStateLicensed
-        'New Hampshire',             // licenseState
-        lic.licenseNumber || undefined, // licenseNumber
-        undefined,                   // sourceLabel
-      );
-      if (orgId) totalUpserted++;
-    } catch (upsertErr) {
-      console.error(`[NewHampshirePhase2] Upsert error for "${lic.name}":`, upsertErr);
-    }
+    batchRows.push({
+      businessName: lic.name,
+      sourceName: 'NewHampshirePhase2',
+      city: lic.city,
+      state: 'NH',
+      businessCategory: 'AUCTION_HOUSE',
+      isStateLicensed: true,
+      licenseState: 'New Hampshire',
+      licenseNumber: lic.licenseNumber || undefined,
+    });
   }
+
+  // Batch upsert (ADR-073 perf: replaces serial per-row upserts)
+  const ids = await batchUpsertScrapedOrganizers(batchRows, 100);
+  totalUpserted = ids.filter((id) => id !== null).length;
 
   console.log('[NewHampshirePhase2] ─────────────────────────────────────────');
   console.log(`[NewHampshirePhase2]  Licensees found  : ${licensees.length}`);

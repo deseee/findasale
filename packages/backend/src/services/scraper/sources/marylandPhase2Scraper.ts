@@ -21,7 +21,7 @@
  */
 
 import { defaultRateLimiter } from '../rateLimiter';
-import { getOrCreateScrapedOrganizer } from '../index';
+import { batchUpsertScrapedOrganizers, ScrapedOrganizerRow } from '../index';
 import { getRandomUserAgent } from '../userAgents';
 
 const MD_LICENSE_BASE = 'https://jportal.mdcourts.gov/license';
@@ -194,6 +194,7 @@ export async function runMarylandPhase2Scraper(): Promise<void> {
   let totalMatched = 0;
   let totalUpserted = 0;
   let viewStateBlocked = false;
+  const batchRows: ScrapedOrganizerRow[] = [];
 
   try {
     for (const jurisdiction of MD_JURISDICTIONS) {
@@ -234,30 +235,16 @@ export async function runMarylandPhase2Scraper(): Promise<void> {
               ? 'PAWN_SHOP'
               : 'SECONDHAND_SHOP';
 
-          try {
-            const orgId = await getOrCreateScrapedOrganizer(
-              rec.businessName,
-              'MarylandPhase2',
-              rec.city || rec.county || 'Maryland',
-              'MD',
-              undefined,
-              undefined,
-              undefined,
-              undefined,
-              orgType as 'AUCTION_HOUSE' | 'PAWN_SHOP' | 'SECONDHAND_SHOP',
-              undefined,
-              undefined,
-              undefined,
-              undefined,
-              undefined,
-              true,
-              'MD',
-              rec.licenseNumber || undefined
-            );
-            if (orgId) totalUpserted++;
-          } catch (err) {
-            console.error(`[MarylandPhase2] Error upserting ${rec.businessName}:`, err);
-          }
+          batchRows.push({
+            businessName: rec.businessName,
+            sourceName: 'MarylandPhase2',
+            city: rec.city || rec.county || 'Maryland',
+            state: 'MD',
+            businessCategory: orgType,
+            isStateLicensed: true,
+            licenseState: 'MD',
+            licenseNumber: rec.licenseNumber || undefined,
+          });
         }
 
         if (records.length > 0) {
@@ -267,6 +254,10 @@ export async function runMarylandPhase2Scraper(): Promise<void> {
         }
       }
     }
+
+    // Batch upsert (ADR-073 perf: replaces serial per-row upserts)
+    const ids = await batchUpsertScrapedOrganizers(batchRows, 100);
+    totalUpserted = ids.filter((id) => id !== null).length;
 
     if (viewStateBlocked) {
       console.log(
