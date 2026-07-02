@@ -26,6 +26,25 @@ export interface EbayImageMatch {
   topCategoryId: string | null;
   priceRange: string | null; // e.g. "$12.99–$45.00" across the returned matches
   alternates: string[]; // up to 4 other visual-match titles
+
+  // Per-top-item enrichment (EXTENDED fieldgroup + item_summary fields). All optional /
+  // best-effort — eBay omits any of these freely, so every one is null-safe.
+  topEpid?: string | null; // eBay catalog product id, when the top match is a catalog product
+  topConditionId?: string | null; // e.g. "1000" (New), "3000" (Used)
+  topCondition?: string | null; // human label, e.g. "New", "Used"
+  leafCategoryId?: string | null; // precise leaf category — prefer over topCategoryId (broad)
+  shortDescription?: string | null; // only present with the EXTENDED fieldgroup
+
+  // Top-level consensus from the `refinement` container (fieldgroups: *_REFINEMENTS).
+  // These aggregate across the whole match set, so they are stronger identity signals
+  // than any single listing when many listings agree.
+  totalMatches?: number | null; // response.total — count of similar listings
+  dominantCategoryId?: string | null; // refinement.dominantCategoryId
+  brandConsensus?: { value: string; matchCount: number } | null;
+  colorConsensus?: { value: string; matchCount: number } | null;
+  materialConsensus?: { value: string; matchCount: number } | null;
+  categoryConsensus?: { categoryId: string; categoryName: string; matchCount: number } | null;
+  conditionConsensus?: { condition: string; conditionId: string | null; matchCount: number } | null;
 }
 
 // No server-side image downscaler is available in the backend (sharp/jimp are not
@@ -63,8 +82,13 @@ export async function getEbayImageMatch(imageBase64: string): Promise<EbayImageM
     const token = await getEbayAccessToken();
     if (!token) return null;
 
-    // limit=5 keeps the response small; best-match order is eBay's default.
-    const path = '/buy/browse/v1/item_summary/search_by_image?limit=5';
+    // limit=15 widens the sample so the refinement/consensus aggregates are meaningful;
+    // still one call per item. fieldgroups pull the EXTENDED item fields + the aspect /
+    // category / condition refinement containers used for consensus below. The FIXED_PRICE
+    // filter drops auctions so price/consensus reflect buy-it-now comps.
+    const fieldgroups = 'EXTENDED,ASPECT_REFINEMENTS,CATEGORY_REFINEMENTS,CONDITION_REFINEMENTS';
+    const filter = encodeURIComponent('buyingOptions:{FIXED_PRICE}');
+    const path = `/buy/browse/v1/item_summary/search_by_image?limit=15&fieldgroups=${fieldgroups}&filter=${filter}`;
     const res = await fetch(ebayProxyUrl(path), {
       method: 'POST',
       headers: {
@@ -83,7 +107,18 @@ export async function getEbayImageMatch(imageBase64: string): Promise<EbayImageM
     }
 
     const data = (await res.json()) as any;
-    const summaries: any[] = Array.isArray(data?.itemSummaries) ? data.itemSummaries : [];
+
+    // Evidence-first (§10b): surface any eBay warnings so a silently-degraded response
+    // is visible in logs rather than guessed at.
+    if (Array.isArray(data?.warnings)) {
+      for (const w of data.warnings) {
+        console.warn(`[ebayImageSearch] eBay warning: ${w?.message ?? JSON.stringify(w)}`);
+      }
+    }
+
+    const rawSummaries: any[] = Array.isArray(data?.itemSummaries) ? data.itemSummaries : [];
+    // Safety: never let an adult-only listing drive identification/category/price.
+    const summaries: any[] = rawSummaries.filter((s) => s?.adultOnly !== true);
     if (summaries.length === 0) return null;
 
     // Count the call only after a successful, non-empty response.
@@ -98,6 +133,20 @@ export async function getEbayImageMatch(imageBase64: string): Promise<EbayImageM
         ? String(top.categories[0].categoryId)
         : top?.categoryId
         ? String(top.categoryId)
+        : null;
+
+    // Precise leaf category (prefer this over the broad topCategoryId when present).
+    const leafCategoryId: string | null =
+      Array.isArray(top?.leafCategoryIds) && top.leafCategoryIds[0]
+        ? String(top.leafCategoryIds[0])
+        : null;
+
+    const topEpid: string | null = top?.epid ? String(top.epid) : null;
+    const topConditionId: string | null = top?.conditionId ? String(top.conditionId) : null;
+    const topCondition: string | null = top?.condition ? String(top.condition) : null;
+    const shortDescription: string | null =
+      typeof top?.shortDescription === 'string' && top.shortDescription.trim()
+        ? top.shortDescription.trim()
         : null;
 
     // Price range across the returned matches (best-effort — price may be absent on some).
@@ -118,7 +167,90 @@ export async function getEbayImageMatch(imageBase64: string): Promise<EbayImageM
       .map((s) => (s?.title ?? '').trim())
       .filter(Boolean);
 
-    return { topTitle, topCategoryId, priceRange, alternates };
+    // ---- Top-level consensus from the refinement container (best-effort, all null-safe) ----
+    const refinement: any = data?.refinement ?? {};
+    const totalMatches: number | null = Number.isFinite(data?.total) ? Number(data.total) : null;
+    const dominantCategoryId: string | null = refinement?.dominantCategoryId
+      ? String(refinement.dominantCategoryId)
+      : null;
+
+    // Highest-matchCount aspect value for a given localizedAspectName.
+    const aspectConsensus = (aspectName: string): { value: string; matchCount: number } | null => {
+      const dists: any[] = Array.isArray(refinement?.aspectDistributions)
+        ? refinement.aspectDistributions
+        : [];
+      const dist = dists.find((d) => d?.localizedAspectName === aspectName);
+      const values: any[] = Array.isArray(dist?.aspectValueDistributions)
+        ? dist.aspectValueDistributions
+        : [];
+      let best: { value: string; matchCount: number } | null = null;
+      for (const v of values) {
+        const value = v?.localizedAspectValue;
+        const mc = Number(v?.matchCount);
+        if (!value || !Number.isFinite(mc)) continue;
+        if (!best || mc > best.matchCount) best = { value: String(value), matchCount: mc };
+      }
+      return best;
+    };
+
+    const brandConsensus = aspectConsensus('Brand');
+    const colorConsensus = aspectConsensus('Color');
+    const materialConsensus = aspectConsensus('Material');
+
+    let categoryConsensus: { categoryId: string; categoryName: string; matchCount: number } | null = null;
+    {
+      const cats: any[] = Array.isArray(refinement?.categoryDistributions)
+        ? refinement.categoryDistributions
+        : [];
+      for (const c of cats) {
+        const mc = Number(c?.matchCount);
+        if (!c?.categoryId || !Number.isFinite(mc)) continue;
+        if (!categoryConsensus || mc > categoryConsensus.matchCount) {
+          categoryConsensus = {
+            categoryId: String(c.categoryId),
+            categoryName: String(c?.categoryName ?? ''),
+            matchCount: mc,
+          };
+        }
+      }
+    }
+
+    let conditionConsensus: { condition: string; conditionId: string | null; matchCount: number } | null = null;
+    {
+      const conds: any[] = Array.isArray(refinement?.conditionDistributions)
+        ? refinement.conditionDistributions
+        : [];
+      for (const c of conds) {
+        const mc = Number(c?.matchCount);
+        if (!c?.condition || !Number.isFinite(mc)) continue;
+        if (!conditionConsensus || mc > conditionConsensus.matchCount) {
+          conditionConsensus = {
+            condition: String(c.condition),
+            conditionId: c?.conditionId != null ? String(c.conditionId) : null,
+            matchCount: mc,
+          };
+        }
+      }
+    }
+
+    return {
+      topTitle,
+      topCategoryId,
+      priceRange,
+      alternates,
+      topEpid,
+      topConditionId,
+      topCondition,
+      leafCategoryId,
+      shortDescription,
+      totalMatches,
+      dominantCategoryId,
+      brandConsensus,
+      colorConsensus,
+      materialConsensus,
+      categoryConsensus,
+      conditionConsensus,
+    };
   } catch (err: any) {
     console.warn('[ebayImageSearch] error:', err?.message || err);
     return null;
@@ -134,8 +266,36 @@ export async function getEbayImageMatch(imageBase64: string): Promise<EbayImageM
 export function buildEbayMatchContext(match: EbayImageMatch | null): string {
   if (!match || !match.topTitle) return '';
   const parts: string[] = [`closest eBay listing: "${match.topTitle}"`];
-  if (match.topCategoryId) parts.push(`eBay category ${match.topCategoryId}`);
+
+  // Consensus signals (aggregated across the whole match set) come first — when many
+  // visual matches agree, that is a stronger identity cue than any single listing.
+  if (match.brandConsensus?.value) {
+    parts.push(`most visual matches are brand: ${match.brandConsensus.value}`);
+  }
+  // Category: prefer the aggregated consensus, then the dominant category, then the
+  // precise leaf, then the broad top category.
+  const categorySignal =
+    (match.categoryConsensus && (match.categoryConsensus.categoryName || match.categoryConsensus.categoryId)
+      ? `category consensus ${match.categoryConsensus.categoryName || ''} (${match.categoryConsensus.categoryId})`.trim()
+      : null) ||
+    (match.dominantCategoryId ? `dominant eBay category ${match.dominantCategoryId}` : null) ||
+    (match.leafCategoryId ? `eBay category ${match.leafCategoryId}` : null) ||
+    (match.topCategoryId ? `eBay category ${match.topCategoryId}` : null);
+  if (categorySignal) parts.push(categorySignal);
+
+  if (match.conditionConsensus?.condition) {
+    parts.push(`most matches listed as condition: ${match.conditionConsensus.condition}`);
+  }
+  if (match.colorConsensus?.value) parts.push(`common color: ${match.colorConsensus.value}`);
+  if (match.materialConsensus?.value) parts.push(`common material: ${match.materialConsensus.value}`);
+
   if (match.priceRange) parts.push(`similar listings priced ${match.priceRange}`);
+  if (typeof match.totalMatches === 'number' && match.totalMatches > 0) {
+    // More matches = stronger consensus — surfaced as a confidence cue for Haiku.
+    parts.push(`${match.totalMatches} similar listings found (more = stronger consensus)`);
+  }
+  if (match.shortDescription) parts.push(`listing description: "${match.shortDescription.slice(0, 200)}"`);
+
   if (match.alternates.length > 0) {
     parts.push(`other visual matches: ${match.alternates.slice(0, 3).map((t) => `"${t}"`).join(', ')}`);
   }

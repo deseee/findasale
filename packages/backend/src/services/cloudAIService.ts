@@ -645,6 +645,42 @@ export async function analyzeItemImage(
 }
 
 
+type VisionFrameResult = {
+  index: number;
+  buffer: Buffer;
+  mimeType: string;
+  qualityScore: number;
+  objectLabels: string[];
+  detectedText: string[];
+};
+
+/**
+ * Pick the best single frame to send to eBay searchByImage from the per-photo Vision
+ * results. eBay reverse-image match is far stronger on the frame with the most on-item
+ * TEXT (brand marks, model numbers, labels) than on an arbitrary primary photo, so we
+ * score each frame by the total character length of its detected-text tokens.
+ * Tiebreak: higher Vision qualityScore. Fallback: if NO frame has any detected text,
+ * return index 0 — preserving today's "primary photo" behavior for text-free items.
+ */
+function selectBestEbayFrame(allVisionResults: VisionFrameResult[]): string {
+  if (allVisionResults.length === 0) return '';
+  const textScore = (r: VisionFrameResult): number =>
+    (r.detectedText || []).reduce((sum, t) => sum + (typeof t === 'string' ? t.length : 0), 0);
+
+  let best = allVisionResults[0];
+  let bestScore = textScore(best);
+  for (const r of allVisionResults) {
+    const score = textScore(r);
+    if (score > bestScore || (score === bestScore && r.qualityScore > best.qualityScore)) {
+      best = r;
+      bestScore = score;
+    }
+  }
+  // No detected text anywhere → preserve legacy behavior (primary/index-0 frame).
+  const chosen = bestScore === 0 ? (allVisionResults.find((r) => r.index === 0) ?? allVisionResults[0]) : best;
+  return chosen.buffer.toString('base64');
+}
+
 /**
  * Analyze multiple photos of the same item using Google Vision + Claude Haiku.
  *
@@ -710,11 +746,12 @@ export async function analyzeItemImages(
   // the primary-photo base64 now, before any mutation. Internally gated — safe no-op when off.
   const webDetectionPromise: Promise<{ webEntities: string[]; bestGuessLabels: string[] } | null> =
     getWebDetectionMatch(imageBase64Array[0]).catch(() => null);
-  // eBay searchByImage on the PRIMARY photo only (once per item — not per photo). Captured before
-  // the reorder loop mutates imageBase64Array. Internally gated; safe no-op when disabled.
-  const ebayImageSearchPromise: Promise<EbayImageMatch | null> =
-    getEbayImageMatch(imageBase64Array[0]).catch(() => null);
-
+  // eBay searchByImage runs once per item on the BEST frame (most on-item text), chosen
+  // from the per-photo Vision results below. Deferred — kicked off inside the try after
+  // allVisionResults resolves but before the reorder loop mutates imageBase64Array, so it
+  // reads pre-reorder buffers (mutation-safe, same as catalog/web capturing the ORIGINAL
+  // primary). Internally gated; safe no-op when disabled.
+  let ebayImageSearchPromise: Promise<EbayImageMatch | null> = Promise.resolve(null);
   try {
     const allVisionResults = await Promise.all(
       imageBase64Array.map((b64, idx) =>
@@ -723,6 +760,13 @@ export async function analyzeItemImages(
           .catch(() => ({ index: idx, buffer: buffers[idx], mimeType: types[idx], qualityScore: 0, objectLabels: [] as string[], detectedText: [] as string[] }))
       )
     );
+
+    // eBay best-frame: choose the frame with the most on-item text and kick off the
+    // (internally gated) reverse-image lookup NOW — this reads allVisionResults buffers,
+    // which are the PRE-reorder buffers, so it is mutation-safe (the reorder loop below
+    // only mutates buffers/types/imageBase64Array in place). Awaited later alongside
+    // catalog/web so it does not serialize with the Haiku call.
+    ebayImageSearchPromise = getEbayImageMatch(selectBestEbayFrame(allVisionResults)).catch(() => null);
 
     // Sort by quality score (descending) — highest score first (best-photo-first)
     const photosWithScores = [...allVisionResults].sort((a, b) => b.qualityScore - a.qualityScore);
