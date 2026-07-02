@@ -265,6 +265,9 @@ const ReviewPage = () => {
   const [approvedIds, setApprovedIds] = useState<Set<string>>(new Set());
   const [showApproveAllModal, setShowApproveAllModal] = useState(false);
   const [showDiscardAllModal, setShowDiscardAllModal] = useState(false);
+  // Re-analyze: per-card loading + inline error state for the "Re-run Smart tagging" control
+  const [reanalyzingIds, setReanalyzingIds] = useState<Set<string>>(new Set());
+  const [reanalyzeErrors, setReanalyzeErrors] = useState<Map<string, string>>(new Map());
   const [zoomedPhoto, setZoomedPhoto] = useState<string | null>(null);
   const [addTagInputs, setAddTagInputs] = useState<Map<string, string>>(new Map());
 
@@ -679,6 +682,102 @@ const ReviewPage = () => {
     const updated = { ...state, [field]: value };
     editStates.set(itemId, updated);
     setEditStates(new Map(editStates));
+  };
+
+  /**
+   * Re-analyze: re-run the Smart tagging pipeline on the item's ALREADY-STORED photos
+   * (no re-upload) and refresh the suggested fields in place. Price is never touched.
+   * Overwrites title/description/category/condition/tags — the confirm dialog in
+   * requestReanalyze() warns the organizer first so manual edits aren't lost silently.
+   */
+  const handleReanalyze = async (item: Item) => {
+    if (reanalyzingIds.has(item.id)) return;
+
+    setReanalyzeErrors((prev) => {
+      const next = new Map(prev);
+      next.delete(item.id);
+      return next;
+    });
+    setReanalyzingIds((prev) => new Set(prev).add(item.id));
+
+    try {
+      const res = await api.post(`/items/${item.id}/reanalyze`);
+      const updated = res.data?.item;
+
+      if (updated) {
+        // Update the visible card fields in place from the fresh suggestions.
+        const state = getEditState(item);
+        const normalizeCondition = (c: string | null | undefined): string => {
+          if (!c) return state.condition;
+          const up = c.toUpperCase().trim().replace(/\s+/g, '_');
+          const valid = ['NEW', 'USED', 'REFURBISHED', 'PARTS_OR_REPAIR'];
+          if (valid.includes(up)) return up;
+          const legacy: Record<string, string> = { LIKE_NEW: 'NEW', EXCELLENT: 'NEW', GOOD: 'USED', FAIR: 'USED', POOR: 'PARTS_OR_REPAIR' };
+          return legacy[up] || state.condition;
+        };
+        const next: ItemEditState = {
+          ...state,
+          title: updated.title ?? state.title,
+          description: updated.description ?? state.description,
+          category: updated.category ?? state.category,
+          condition: normalizeCondition(updated.condition),
+          conditionGrade: updated.conditionGrade ?? state.conditionGrade,
+          tags: Array.isArray(updated.tags) ? updated.tags : state.tags,
+          ebayCategoryId: updated.ebayCategoryId ?? state.ebayCategoryId,
+          ebayCategoryName: updated.ebayCategoryName ?? state.ebayCategoryName,
+          brand: updated.brand ?? state.brand,
+          mpn: updated.mpn ?? state.mpn,
+          upc: updated.upc ?? state.upc,
+          // Price is intentionally NOT changed — organizer pricing always wins.
+        };
+        editStates.set(item.id, next);
+        setEditStates(new Map(editStates));
+      }
+
+      // Pull fresh server values (confidence chip, persisted fields) into the cache.
+      if (saleId) {
+        await queryClient.invalidateQueries({ queryKey: ['items', saleId, 'review'] });
+      }
+      showToast('Suggestions refreshed from your photos.', 'success');
+    } catch (err: any) {
+      const code = err?.response?.data?.code;
+      let message = err?.response?.data?.message || 'Re-analyze failed. Try again.';
+      if (code === 'AI_QUOTA_EXCEEDED') {
+        message = err?.response?.data?.message || 'Monthly re-analyze limit reached.';
+      } else if (code === 'NO_PHOTOS') {
+        message = 'Add a photo before re-analyzing.';
+      } else if (code === 'AI_UNAVAILABLE') {
+        message = 'Smart tagging is temporarily unavailable. Try again shortly.';
+      } else if (code === 'PHOTO_DOWNLOAD_FAILED') {
+        message = "We couldn't load this item's photos. Try again in a moment.";
+      }
+      setReanalyzeErrors((prev) => new Map(prev).set(item.id, message));
+    } finally {
+      setReanalyzingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(item.id);
+        return next;
+      });
+    }
+  };
+
+  /**
+   * Gate the re-analyze behind a confirm so the organizer knows the current
+   * suggested title/description/category/condition/tags will be refreshed.
+   * Their typed price is preserved either way.
+   */
+  const requestReanalyze = (item: Item) => {
+    if (reanalyzingIds.has(item.id)) return;
+    setConfirmState({
+      open: true,
+      title: 'Re-run Smart tagging?',
+      message:
+        'This refreshes the suggested title, description, category, condition, and tags from this item\u2019s photos. Any edits you made to those fields will be replaced. Your price is kept.',
+      onConfirm: () => {
+        setConfirmState((s) => ({ ...s, open: false }));
+        handleReanalyze(item);
+      },
+    });
   };
 
   const handleSaveItem = async (item: Item) => {
@@ -1318,12 +1417,50 @@ const ReviewPage = () => {
                           </svg>
                           Smart
                         </span>
-                        {item.isAiTagged && item.aiConfidence != null && (
-                          <span className="text-[10px] font-mono tracking-wide text-[rgba(26,24,20,0.4)] dark:text-[#B8B8BA]">
-                            {Math.round(item.aiConfidence * 100)}% confidence
-                          </span>
-                        )}
+                        <div className="flex items-center gap-2 sm:gap-3">
+                          {item.isAiTagged && item.aiConfidence != null && (
+                            <span className="text-[10px] font-mono tracking-wide text-[rgba(26,24,20,0.4)] dark:text-[#B8B8BA]">
+                              {Math.round(item.aiConfidence * 100)}% confidence
+                            </span>
+                          )}
+                          {/* Re-analyze: re-run Smart tagging on this item's stored photos (no re-upload) */}
+                          <button
+                            type="button"
+                            onClick={() => requestReanalyze(item)}
+                            disabled={reanalyzingIds.has(item.id) || item.photoUrls.length === 0}
+                            title={item.photoUrls.length === 0 ? 'Add a photo to re-analyze' : 'Re-run Smart tagging on this item\u2019s photos'}
+                            className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-black/12 dark:border-[#3A3A3C] text-[11px] font-medium text-[rgba(26,24,20,0.62)] dark:text-[#F5F5F0] hover:bg-black/5 dark:hover:bg-[#3A3A3C] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                            aria-label="Re-analyze item"
+                          >
+                            {reanalyzingIds.has(item.id) ? (
+                              <>
+                                <svg className="animate-spin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                  <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                                </svg>
+                                Re-analyzing
+                              </>
+                            ) : (
+                              <>
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                  <path d="M23 4v6h-6" />
+                                  <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+                                </svg>
+                                Re-analyze
+                              </>
+                            )}
+                          </button>
+                        </div>
                       </div>
+                      {reanalyzeErrors.has(item.id) && (
+                        <div className="-mt-2 mb-3 flex items-start gap-1.5 text-[11px] text-red-500 dark:text-red-400" role="alert">
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mt-px flex-shrink-0" aria-hidden="true">
+                            <circle cx="12" cy="12" r="10" />
+                            <line x1="12" y1="8" x2="12" y2="12" />
+                            <line x1="12" y1="16" x2="12.01" y2="16" />
+                          </svg>
+                          <span>{reanalyzeErrors.get(item.id)}</span>
+                        </div>
+                      )}
 
                       {/* Desktop layout: photo | fields | price rail — stacks on mobile */}
                       <div className="flex flex-col sm:flex-row gap-4 sm:gap-5">

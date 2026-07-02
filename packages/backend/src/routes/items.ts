@@ -42,6 +42,7 @@ import { accountAgeGate } from '../middleware/accountAgeGate'; // #93: Account a
 import { bidRateLimiter } from '../middleware/bidRateLimiter'; // #95: Bidding velocity limits
 import { itemEndpointLimiter, bulkItemsLimiter } from '../middleware/rateLimiter'; // #111: Bot rate limiting, P0-S3: Bulk operations rate limiting
 import { getSingleItemLabel } from '../controllers/labelController'; // W2
+import { reanalyzeItemForOrganizer } from '../controllers/reanalyzeController'; // Re-analyze: re-run Smart tagging on stored photos
 import { searchItemsHandler, getItemCategoriesHandler } from '../controllers/searchController'; // Sprint 4a
 import { getItemValuation, generateItemValuation } from '../controllers/valuationController'; // Feature #30: AI Item Valuation
 
@@ -815,6 +816,8 @@ router.get('/:id/bids', optionalAuthenticate, getBids);
 router.post('/:id/bids', authenticate, bidRateLimiter, accountAgeGate, placeBid);
 router.get('/:id/ebay-comps', getItemEbayComps);
 router.post('/:id/analyze', authenticate, analyzeItemTags);
+// Re-analyze: organizer re-runs the Smart tagging pipeline on the item's stored photos (no re-upload), updates suggested fields in place
+router.post('/:id/reanalyze', authenticate, reanalyzeItemForOrganizer);
 router.post('/:itemId/close-auction', authenticate, closeAuctionEndpoint);
 
 // Phase 16: Photo management

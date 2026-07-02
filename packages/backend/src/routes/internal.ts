@@ -5,7 +5,7 @@
 
 import express from 'express';
 import { prisma } from '../lib/prisma';
-import { syncListedItemFieldsToEbay } from '../controllers/itemController'; // Bug #469: live-listing edit propagation
+import { reanalyzeItem } from '../services/reanalyzeService'; // Re-analyze: shared Smart-tagging pipeline (internal + organizer)
 import { ingestFromGitHubActions } from '../controllers/internalScraperController';
 import {
   triggerSaleDetailEnrichment,
@@ -132,10 +132,6 @@ import { runTennesseePhase2Scraper } from '../services/scraper/sources/tennessee
 import { runVermontPhase2Scraper } from '../services/scraper/sources/vermontPhase2Scraper';
 import { runWestVirginiaPhase2Scraper } from '../services/scraper/sources/westVirginiaPhase2Scraper';
 import * as Sentry from '@sentry/node';
-import axios from 'axios';
-import { analyzeItemImages } from '../services/cloudAIService';
-import { enrichItem, planEnrichmentApply } from '../services/productEnrichment';
-import { suggestEbayCategoryForTitle } from '../controllers/ebayController';
 import { resyncShippingDriftSweep } from '../jobs/resyncShippingDrift'; // ADR shipping-resync Phase 3 / Part C: bulk rate-drift re-pin
 
 const router = express.Router();
@@ -1055,232 +1051,29 @@ router.post('/reanalyze-item', requireSecret, async (req: express.Request, res: 
       return;
     }
 
-    const item = await prisma.item.findUnique({
-      where: { id: itemId },
-      select: {
-        id: true,
-        title: true,
-        description: true,
-        category: true,
-        condition: true,
-        conditionGrade: true,
-        price: true,
-        tags: true,
-        photoUrls: true,
-        ebayCategoryId: true,
-        ebayCategoryName: true,
-        brand: true,
-        mpn: true,
-        upc: true,
-        ean: true,
-        isbn: true,
-        ebayEpid: true,
-        packageWeightOz: true,
-        packageLengthIn: true,
-        packageWidthIn: true,
-        packageHeightIn: true,
-        packageConfirmedByOrganizer: true,
-        userEditedFields: true,
-        ebayOfferId: true,
-        sale: { select: { id: true, organizerId: true } },
-      },
-    });
+    // Single shared pipeline (reanalyzeService) — same orchestration the organizer
+    // "Re-analyze" button uses. Dry-run by default; apply=true writes fields (price excluded).
+    const result = await reanalyzeItem(itemId, { apply });
 
-    if (!item) {
-      res.status(404).json({ error: 'item not found' });
-      return;
-    }
-
-    if (!item.photoUrls || item.photoUrls.length === 0) {
-      res.status(400).json({ error: 'no photos' });
-      return;
-    }
-
-    // Download up to the first 5 photos into Buffers (skip failures).
-    const buffers: Buffer[] = [];
-    const mimeTypes: string[] = [];
-    for (const url of item.photoUrls.slice(0, 5)) {
-      try {
-        const resp = await axios.get(url, { responseType: 'arraybuffer', timeout: 10000 });
-        buffers.push(Buffer.from(resp.data));
-        mimeTypes.push('image/jpeg');
-      } catch (err: any) {
-        console.error(`[Reanalyze] photo download failed (${url}):`, err?.message || err);
+    if (!result.ok) {
+      switch (result.code) {
+        case 'ITEM_NOT_FOUND':
+          res.status(404).json({ error: 'item not found' });
+          return;
+        case 'NO_PHOTOS':
+          res.status(400).json({ error: 'no photos' });
+          return;
+        case 'PHOTO_DOWNLOAD_FAILED':
+          res.status(502).json({ error: 'photo download failed' });
+          return;
+        case 'AI_UNAVAILABLE':
+        default:
+          res.status(503).json({ error: 'AI unavailable' });
+          return;
       }
     }
 
-    if (buffers.length === 0) {
-      res.status(502).json({ error: 'photo download failed' });
-      return;
-    }
-
-    let result;
-    try {
-      result = await analyzeItemImages(buffers, mimeTypes);
-    } catch (err: any) {
-      console.error('[Reanalyze] analyzeItemImages threw:', err?.message || err);
-      res.status(503).json({ error: 'AI unavailable' });
-      return;
-    }
-
-    if (!result) {
-      res.status(503).json({ error: 'AI unavailable' });
-      return;
-    }
-
-    // Re-resolve eBay category (best-effort; tolerate null).
-    let cat: { categoryId: string; categoryName: string } | null = null;
-    try {
-      cat = await suggestEbayCategoryForTitle(
-        result.title || item.title,
-        result.category || item.category
-      );
-    } catch (err: any) {
-      console.warn('[Reanalyze] eBay category resolve failed:', err?.message || err);
-    }
-
-    // Catalog enrichment (ADR 2026-06-14): best-effort identifier/dims fill from the
-    // AI title + brand + visible model number. HIGH (>=0.85) auto-fills empty fields
-    // (organizer values win); lower confidence becomes a catalogSuggestions write.
-    let merged: Record<string, { value: string | number; source: string; confidence: number }> = {};
-    try {
-      const out = await enrichItem(
-        {
-          title: result.title || item.title,
-          brand: item.brand ?? result.brand ?? null,
-          mpn: item.mpn ?? result.mpn ?? null,
-          upc: item.upc ?? null,
-          ean: item.ean ?? null,
-          isbn: item.isbn ?? null,
-          tags: (result.tags && result.tags.length ? result.tags : result.suggestedTags) ?? null,
-        },
-        { aiResult: result },
-      );
-      merged = out.merged;
-    } catch (err: any) {
-      console.warn('[Reanalyze] enrichment cascade failed:', err?.message || err);
-    }
-
-    // Build the catalog apply/suggestion payload (shared by `after` + the apply write).
-    const plan = planEnrichmentApply(merged, {
-      brand: item.brand ?? null,
-      mpn: item.mpn ?? null,
-      upc: item.upc ?? null,
-      ean: item.ean ?? null,
-      isbn: item.isbn ?? null,
-      ebayEpid: item.ebayEpid ?? null,
-      ebayCategoryId: item.ebayCategoryId ?? null,
-      packageWeightOz: item.packageWeightOz ?? null,
-      packageLengthIn: item.packageLengthIn ?? null,
-      packageWidthIn: item.packageWidthIn ?? null,
-      packageHeightIn: item.packageHeightIn ?? null,
-      packageConfirmedByOrganizer: item.packageConfirmedByOrganizer ?? null,
-      userEditedFields: item.userEditedFields ?? [],
-    });
-    const catalogApply: Record<string, any> = plan.apply;
-    const catalogSuggestionWrite: any = plan.suggestion;
-    // Sources observed across the merged cascade result (for the `after` payload).
-    const enrichmentSources = Array.from(new Set(Object.values(merged).map((m) => m.source)));
-
-    const before = {
-      title: item.title,
-      description: item.description,
-      category: item.category,
-      condition: item.condition,
-      conditionGrade: item.conditionGrade,
-      price: item.price,
-      tags: item.tags,
-      ebayCategoryId: item.ebayCategoryId,
-      ebayCategoryName: item.ebayCategoryName,
-    };
-
-    const after = {
-      title: result.title ?? null,
-      description: result.description ?? null,
-      category: result.category ?? null,
-      condition: result.condition ?? null,
-      conditionGrade: result.suggestedConditionGrade ?? null,
-      // suggestedPrice shown for visibility only — price is NEVER overwritten.
-      suggestedPrice: result.suggestedPrice ?? null,
-      tags: (result.tags && result.tags.length ? result.tags : result.suggestedTags) ?? null,
-      ebayCategoryId: cat?.categoryId ?? null,
-      ebayCategoryName: cat?.categoryName ?? null,
-      aiConfidence: result.confidence ?? null,
-      // Enrichment cascade outcome (ADR 2026-06-14): merged per-field result with sources,
-      // which fields WOULD auto-apply, and the suggestion that would be written.
-      catalogEnrichment: Object.keys(merged).length > 0
-        ? {
-            sources: enrichmentSources,
-            merged,
-            wouldApply: catalogApply,
-            suggestion: catalogSuggestionWrite ?? null,
-          }
-        : null,
-    };
-
-    if (apply) {
-      const data: Record<string, any> = {};
-      if (result.title) data.title = result.title;
-      if (result.description) data.description = result.description;
-      if (result.category) data.category = result.category;
-      if (result.condition) data.condition = result.condition;
-      if (result.suggestedConditionGrade) data.conditionGrade = result.suggestedConditionGrade;
-      const nextTags = (result.tags && result.tags.length ? result.tags : result.suggestedTags);
-      if (nextTags && nextTags.length) data.tags = nextTags;
-      if (cat?.categoryId) {
-        data.ebayCategoryId = cat.categoryId;
-        data.ebayCategoryName = cat.categoryName;
-      }
-      // Catalog enrichment writes (HIGH auto-fill empties + suggestion). Organizer values win.
-      Object.assign(data, catalogApply);
-      if (catalogSuggestionWrite !== undefined) data.catalogSuggestions = catalogSuggestionWrite;
-      // Price intentionally excluded — organizer pricing always wins.
-      if (Object.keys(data).length > 0) {
-        await prisma.item.update({ where: { id: itemId }, data });
-      }
-    }
-
-    // Bug #469: if this item is LIVE on eBay, propagate the applied title/description/
-    // condition changes to the live listing (GET-merge-PUT inventory item + republish).
-    // Non-fatal: a sync error must NEVER fail the reanalyze response. eBay locks the
-    // primary category on active listings, so category drift is reported, not pushed.
-    let ebaySynced = false;
-    let ebaySyncReason: string | undefined;
-    let ebayCategoryLocked: { changed: boolean; from: string | null; to: string | null } | undefined;
-    if (apply && item.ebayOfferId) {
-      try {
-        // Map FindA.Sale condition → eBay Inventory API condition enum (mirrors PushSync).
-        const condMap: Record<string, string> = {
-          NEW: 'NEW',
-          USED: 'USED_GOOD',
-          REFURBISHED: 'SELLER_REFURBISHED',
-          PARTS_OR_REPAIR: 'FOR_PARTS_OR_NOT_WORKING',
-        };
-        const conditionEnum = result.condition ? (condMap[result.condition] ?? 'USED_GOOD') : null;
-        const syncResult = await syncListedItemFieldsToEbay({
-          organizerId: item.sale!.organizerId,
-          ebayOfferId: item.ebayOfferId,
-          title: result.title ?? null,
-          description: result.description ?? null,
-          conditionEnum,
-          logTag: `[Reanalyze eBay] item ${itemId}`,
-        });
-        ebaySynced = syncResult.synced && syncResult.published;
-        ebaySyncReason = syncResult.reason;
-        // Category is locked on active listings — note drift, do not attempt to change it.
-        const newCatId = cat?.categoryId ?? null;
-        if (newCatId && item.ebayCategoryId && newCatId !== item.ebayCategoryId) {
-          ebayCategoryLocked = { changed: true, from: item.ebayCategoryId, to: newCatId };
-        }
-      } catch (syncErr: any) {
-        console.warn(`[Reanalyze eBay] non-fatal sync error for item ${itemId}:`, syncErr?.message || syncErr);
-        ebaySynced = false;
-        ebaySyncReason = 'exception';
-      }
-    }
-
-    console.log(`[Reanalyze] item=${itemId} applied=${apply} ebaySynced=${ebaySynced} title="${(result.title || item.title || '').slice(0, 80)}"`);
-
+    const { before, after, ebaySynced, ebaySyncReason, ebayCategoryLocked } = result;
     res.json({ itemId, applied: apply, before, after, ebaySynced, ebaySyncReason, ebayCategoryLocked });
   } catch (err: any) {
     console.error('[Reanalyze] route error:', err?.message || err);
