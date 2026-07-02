@@ -8,15 +8,21 @@
  * response. Every model call is isolated in try/catch so one failure cannot kill
  * the others, and the whole harness is wrapped by the caller in try/catch too.
  *
- * Gated entirely behind the AI_TAG_BAKEOFF env flag (default OFF). When OFF the
- * harness is never invoked and zero extra API calls are made.
+ * Triggered per-request only (no env flag): the caller passes a `bakeoff` option
+ * into reanalyzeItem, driven by `?bakeoff=1` / `{ bakeoff: true }` on the request.
+ * When not triggered the harness is never invoked and zero extra API calls are made.
  *
  * NO new npm dependencies:
  *   - Claude models call the existing Anthropic REST endpoint via global fetch,
  *     reusing process.env.ANTHROPIC_API_KEY (same key/pattern as cloudAIService).
- *   - Gemini models call the Google Generative Language REST endpoint via global
- *     fetch. If no Gemini-capable key is configured, the Gemini rows log SKIPPED.
+ *   - Gemini models call Vertex AI generateContent via global fetch, authenticated
+ *     with an OAuth access token minted from the EXISTING GOOGLE_SERVICE_ACCOUNT_JSON
+ *     service account (google.auth.GoogleAuth from the already-present googleapis dep).
+ *     No new env var and no GEMINI_API_KEY are required. An optional GEMINI_API_KEY
+ *     fast-path is honored only if that var happens to already be set.
  */
+
+import { google } from 'googleapis';
 
 // ---------------------------------------------------------------------------
 // Config
@@ -25,13 +31,65 @@
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 
 /**
- * Gemini key resolution. The dedicated var is GEMINI_API_KEY (Google AI Studio).
- * We do NOT reuse GG_API_KEY (that is a GitGuardian token, prefix "gg_pat") and we
- * do NOT assume GOOGLE_VISION_API_KEY works for generativelanguage — but if Patrick
- * has explicitly pointed GOOGLE_GENAI_API_KEY at a Gemini key we honor it too.
+ * Gemini auth resolution.
+ *  - DEFAULT (no new env): mint a Vertex AI OAuth access token from the EXISTING
+ *    GOOGLE_SERVICE_ACCOUNT_JSON service-account credentials and call Vertex AI in
+ *    the service account's own project (project_id read from that JSON), us-central1.
+ *  - OPTIONAL fast-path: if GEMINI_API_KEY happens to already be set, use the Google
+ *    Generative Language REST endpoint with that key instead. Never required.
  */
-const GEMINI_API_KEY =
-  process.env.GEMINI_API_KEY || process.env.GOOGLE_GENAI_API_KEY || '';
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
+const GOOGLE_SERVICE_ACCOUNT_JSON = process.env.GOOGLE_SERVICE_ACCOUNT_JSON || '';
+
+interface ServiceAccountCreds {
+  client_email: string;
+  private_key: string;
+  project_id: string;
+}
+
+/** Parse GOOGLE_SERVICE_ACCOUNT_JSON once; null (with a one-line skip log) on any problem. */
+function parseServiceAccount(): ServiceAccountCreds | null {
+  if (!GOOGLE_SERVICE_ACCOUNT_JSON) return null;
+  try {
+    const c = JSON.parse(GOOGLE_SERVICE_ACCOUNT_JSON);
+    if (c && c.client_email && c.private_key && c.project_id) {
+      return { client_email: c.client_email, private_key: c.private_key, project_id: c.project_id };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+const SERVICE_ACCOUNT = parseServiceAccount();
+
+// Cache the Vertex OAuth token across the 2 Gemini models in a single bake-off run.
+let cachedVertexToken: { token: string; expiresAt: number } | null = null;
+
+/** Mint (and briefly cache) a cloud-platform OAuth access token from the service account. */
+async function getVertexAccessToken(): Promise<string> {
+  const now = Date.now();
+  if (cachedVertexToken && cachedVertexToken.expiresAt > now + 60_000) {
+    return cachedVertexToken.token;
+  }
+  if (!SERVICE_ACCOUNT) throw new Error('no service account');
+  const auth = new google.auth.GoogleAuth({
+    credentials: {
+      client_email: SERVICE_ACCOUNT.client_email,
+      private_key: SERVICE_ACCOUNT.private_key,
+    },
+    scopes: ['https://www.googleapis.com/auth/cloud-platform'],
+  });
+  const client = await auth.getClient();
+  const tokenResp = await client.getAccessToken();
+  const token = typeof tokenResp === 'string' ? tokenResp : tokenResp?.token;
+  if (!token) throw new Error('empty access token');
+  // Google access tokens live ~1h; cache conservatively for 50 min.
+  cachedVertexToken = { token, expiresAt: now + 50 * 60 * 1000 };
+  return token;
+}
+
+const VERTEX_LOCATION = 'us-central1';
 
 interface BakeoffModel {
   name: string; // log label
@@ -69,11 +127,6 @@ interface BakeoffParsed {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-/** True when the bake-off flag is explicitly enabled. */
-export function isBakeoffEnabled(): boolean {
-  return process.env.AI_TAG_BAKEOFF === 'true';
-}
 
 /** Defensive JSON parse — models may wrap output in code fences or add prose. */
 function parseModelJson(text: string): BakeoffParsed | null {
@@ -159,22 +212,42 @@ async function callGemini(
   imagesBase64: string[],
   mimeTypes: string[],
 ): Promise<BakeoffParsed | null> {
-  if (!GEMINI_API_KEY) throw new Error('no Gemini API key');
-
   const parts: any[] = imagesBase64.map((data, i) => ({
     inline_data: { mime_type: mimeTypes[i] || 'image/jpeg', data },
   }));
   parts.push({ text: BAKEOFF_PROMPT });
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${GEMINI_API_KEY}`;
-  const resp = await fetch(url, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      contents: [{ role: 'user', parts }],
-      generationConfig: { maxOutputTokens: 400, temperature: 0.2 },
-    }),
+  const requestBody = JSON.stringify({
+    contents: [{ role: 'user', parts }],
+    generationConfig: { maxOutputTokens: 400, temperature: 0.2 },
   });
+
+  let resp: Response;
+  if (GEMINI_API_KEY) {
+    // Optional fast-path: Generative Language REST with an API key (only if set).
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${GEMINI_API_KEY}`;
+    resp = await fetch(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: requestBody,
+    });
+  } else {
+    // DEFAULT: Vertex AI with a service-account OAuth Bearer token — no new env.
+    if (!SERVICE_ACCOUNT) throw new Error('no service account');
+    const token = await getVertexAccessToken();
+    const url =
+      `https://${VERTEX_LOCATION}-aiplatform.googleapis.com/v1/projects/` +
+      `${SERVICE_ACCOUNT.project_id}/locations/${VERTEX_LOCATION}/publishers/google/models/` +
+      `${modelId}:generateContent`;
+    resp = await fetch(url, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${token}`,
+        'content-type': 'application/json',
+      },
+      body: requestBody,
+    });
+  }
 
   if (!resp.ok) {
     const body = await resp.text().catch(() => '');
@@ -182,7 +255,7 @@ async function callGemini(
   }
   const json: any = await resp.json();
   const text: string =
-    json?.candidates?.[0]?.content?.parts?.map((p: any) => p?.text || '').join('') ?? '';
+    json?.candidates?.[0]?.content?.parts?.map((pp: any) => pp?.text || '').join('') ?? '';
   return parseModelJson(text);
 }
 
@@ -206,8 +279,12 @@ export async function runModelBakeoff(
   mimeTypes: string[],
 ): Promise<void> {
   try {
-    if (!isBakeoffEnabled()) return;
     if (!buffers || buffers.length === 0) return;
+    if (!GEMINI_API_KEY && !SERVICE_ACCOUNT) {
+      console.log(
+        `[bakeoff] item=${itemId} Gemini SKIPPED: GOOGLE_SERVICE_ACCOUNT_JSON missing/unparseable and no GEMINI_API_KEY — running Claude models only`,
+      );
+    }
 
     const imagesBase64 = buffers.map((b) => b.toString('base64'));
     const mimes = buffers.map((_, i) => mimeTypes[i] || 'image/jpeg');
@@ -217,10 +294,11 @@ export async function runModelBakeoff(
 
     await Promise.all(
       BAKEOFF_MODELS.map(async (m) => {
-        // Gemini rows are skipped (not called) when no Gemini key is configured.
-        if (m.provider === 'gemini' && !GEMINI_API_KEY) {
+        // Gemini rows are skipped only when neither the service account nor an
+        // optional API key is available; otherwise they run via Vertex AI.
+        if (m.provider === 'gemini' && !GEMINI_API_KEY && !SERVICE_ACCOUNT) {
           console.log(
-            `[bakeoff] item=${itemId} model=${m.name} SKIPPED: no Gemini API key (set GEMINI_API_KEY)`,
+            `[bakeoff] item=${itemId} model=${m.name} SKIPPED: no Google service account or GEMINI_API_KEY`,
           );
           return;
         }

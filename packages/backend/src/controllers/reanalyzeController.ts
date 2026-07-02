@@ -76,7 +76,11 @@ export const reanalyzeItemForOrganizer = async (req: AuthRequest, res: Response)
       });
     }
 
-    const result = await reanalyzeItem(id, { apply: true });
+    // Per-request bake-off trigger (observability-only): ?bakeoff=1 or { bakeoff: true }.
+    // Never affects the reanalyze result — just logs a multi-model comparison.
+    const bakeoff = req.query?.bakeoff === '1' || req.body?.bakeoff === true;
+
+    const result = await reanalyzeItem(id, { apply: true, bakeoff });
 
     if (!result.ok) {
       switch (result.code) {

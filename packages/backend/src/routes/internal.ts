@@ -1045,6 +1045,7 @@ router.post('/reanalyze-item', requireSecret, async (req: express.Request, res: 
   try {
     const itemId = typeof req.body?.itemId === 'string' ? req.body.itemId.trim() : '';
     const apply = req.body?.apply === true;
+    const bakeoff = req.query?.bakeoff === '1' || req.body?.bakeoff === true;
 
     if (!itemId) {
       res.status(400).json({ error: 'itemId is required' });
@@ -1053,7 +1054,7 @@ router.post('/reanalyze-item', requireSecret, async (req: express.Request, res: 
 
     // Single shared pipeline (reanalyzeService) — same orchestration the organizer
     // "Re-analyze" button uses. Dry-run by default; apply=true writes fields (price excluded).
-    const result = await reanalyzeItem(itemId, { apply });
+    const result = await reanalyzeItem(itemId, { apply, bakeoff });
 
     if (!result.ok) {
       switch (result.code) {

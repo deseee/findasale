@@ -24,7 +24,7 @@ import { analyzeItemImages } from './cloudAIService';
 import { enrichItem, planEnrichmentApply } from './productEnrichment';
 import { suggestEbayCategoryForTitle } from '../controllers/ebayController';
 import { syncListedItemFieldsToEbay } from '../controllers/itemController';
-import { runModelBakeoff, isBakeoffEnabled } from './modelBakeoffService';
+import { runModelBakeoff } from './modelBakeoffService';
 
 export type ReanalyzeErrorCode =
   | 'ITEM_NOT_FOUND'
@@ -95,10 +95,11 @@ export interface ReanalyzeResult {
  */
 export async function reanalyzeItem(
   itemId: string,
-  opts: { apply: boolean; syncEbay?: boolean } = { apply: false },
+  opts: { apply: boolean; syncEbay?: boolean; bakeoff?: boolean } = { apply: false },
 ): Promise<ReanalyzeResult | ReanalyzeError> {
   const apply = opts.apply === true;
   const syncEbay = opts.syncEbay !== false;
+  const bakeoff = opts.bakeoff === true;
 
   const item = await prisma.item.findUnique({
     where: { id: itemId },
@@ -306,10 +307,10 @@ export async function reanalyzeItem(
     }
   }
 
-  // Observability-only model bake-off (AI_TAG_BAKEOFF flag). Runs AFTER the applied
-  // result above is fully computed, on the SAME already-downloaded image buffers.
-  // Awaited but fully error-swallowed — it NEVER affects the reanalyze response.
-  if (isBakeoffEnabled()) {
+  // Observability-only model bake-off (per-request trigger via opts.bakeoff). Runs
+  // AFTER the applied result above is fully computed, on the SAME already-downloaded
+  // image buffers. Awaited but fully error-swallowed — it NEVER affects the response.
+  if (bakeoff) {
     try {
       await runModelBakeoff(itemId, buffers, mimeTypes);
     } catch (bakeoffErr: any) {
