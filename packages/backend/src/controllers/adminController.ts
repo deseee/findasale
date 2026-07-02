@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
-import { getMonthlyAICost, resetMonthlyAICost } from '../lib/aiCostTracker';
+import { getMonthlyAICost, resetMonthlyAICost, getMonthlyWebDetectionCost } from '../lib/aiCostTracker';
 import { getMonthlyCloudinaryEstimate, getBandwidthThreshold, getTodayCloudinaryUsage, resetTodayCloudinaryUsage } from '../lib/cloudinaryBandwidthTracker';
 import { getEbayRateLimitStatus } from '../lib/ebayRateLimiter';
 import { emailService } from '../lib/emailService';
@@ -813,6 +813,10 @@ export const getAIUsage = async (req: AuthRequest, res: Response) => {
     const usage = await getMonthlyAICost();
     const costPercentage = (usage.estimatedCost / usage.ceiling) * 100;
 
+    // Web Detection: separate line item, separate ceiling — ADR-web-detection-hard-gating-2026-07-01
+    const webDetection = await getMonthlyWebDetectionCost();
+    const webDetectionCostPercentage = webDetection.ceiling > 0 ? (webDetection.estimatedCost / webDetection.ceiling) * 100 : 0;
+
     res.json({
       monthKey: usage.monthKey,
       tokensUsed: usage.tokensUsed,
@@ -820,6 +824,16 @@ export const getAIUsage = async (req: AuthRequest, res: Response) => {
       ceiling: usage.ceiling,
       costPercentage: parseFloat(costPercentage.toFixed(1)),
       status: usage.estimatedCost >= usage.ceiling ? 'EXCEEDED' : 'NORMAL',
+      webDetection: {
+        enabled: webDetection.enabled,
+        monthKey: webDetection.monthKey,
+        callsThisMonth: webDetection.callsThisMonth,
+        estimatedCost: parseFloat(webDetection.estimatedCost.toFixed(2)),
+        ceiling: webDetection.ceiling,
+        costPercentage: parseFloat(webDetectionCostPercentage.toFixed(1)),
+        dailyCapRemaining: webDetection.dailyCapRemaining,
+        status: webDetection.estimatedCost >= webDetection.ceiling ? 'EXCEEDED' : 'NORMAL',
+      },
     });
   } catch (error) {
     console.error('Error fetching AI usage:', error);

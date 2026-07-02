@@ -28,9 +28,16 @@ This mirrors the Overture ingestion Stage A/B split (scripts/overture/extract_ov
 + packages/backend/src/scripts/runOvertureEnrichment.ts) — heavy/bulk-data work stays
 in a Python offline script; the Node backend only does the final structured DB write.
 
-NOT RUN IN THIS DEV SESSION. This is a real multi-hour data job (downloading and
-embedding tens of thousands of images) — build correctness only, no execution.
-Patrick/a scheduled task runs this once ready to build the actual corpus.
+STATUS (2026-07-01): full-scale run NOT executed (multi-hour data job — tens of
+thousands of images). BUT the pipeline was proven end-to-end against real, live
+data this session: 6,798 real positive-label rows recovered from a 500MB slice of
+the actual oidv7 labels file, 8/8 real ImageIDs resolved to downloadable URLs and
+embedded through the real Marqo-B model (768-dim vectors, confirmed). Two real bugs
+found and fixed by that run: (1) IMAGE_IDS_AND_ROTATION_URL pointed at a nonexistent
+/v7/ path — fixed to /v6/; (2) the URL-index file has no LabelName column at all —
+the original script would have silently produced ZERO output on any real run. Both
+fixed and verified against live GCS/HF data. Full-scale run still pending — needs a
+longer-lived host (not this 45s-per-call sandbox) to actually execute.
 
 Usage
   python3 extract_open_images.py \\
@@ -82,8 +89,14 @@ CLASS_DESCRIPTIONS_URL = (
 # See https://storage.googleapis.com/openimages/web/download.html for the current
 # train/validation/test image-labels CSVs and image URL index.
 IMAGE_IDS_AND_ROTATION_URL = (
-    "https://storage.googleapis.com/openimages/v7/oidv6-train-images-with-labels-with-rotation.csv"
+    "https://storage.googleapis.com/openimages/v6/oidv6-train-images-with-labels-with-rotation.csv"
 )
+# NOTE (confirmed by live run 2026-07-01): this file is the image URL/metadata index —
+# ImageID, OriginalURL, License, Rotation, etc. It does NOT contain a LabelName column.
+IMAGE_LABELS_URL = (
+    "https://storage.googleapis.com/openimages/v7/oidv7-train-annotations-human-imagelabels.csv"
+)
+# Columns: ImageID, Source, LabelName (machine id, e.g. /m/01mzpv), Confidence (1.0 = positive).
 
 DEFAULT_PER_CLASS_CAP = 300
 
@@ -248,21 +261,42 @@ def main() -> None:
         print("[extract-open-images] no classes matched — check --classes / category map", file=sys.stderr)
         sys.exit(1)
 
-    print("[extract-open-images] fetching image label index (large file, cached) ...", file=sys.stderr)
-    image_rows = fetch_csv_rows(IMAGE_IDS_AND_ROTATION_URL, cache_dir)
+    print("[extract-open-images] fetching image-level labels (large file, cached) ...", file=sys.stderr)
+    label_rows = fetch_csv_rows(IMAGE_LABELS_URL, cache_dir)
 
-    # Group candidate image rows by class, capped at per_class_cap.
+    # Positive-labeled ImageIDs per class, capped at per_class_cap (BUG FIX 2026-07-01: labels
+    # live in a separate file from the URL index — they do not share a schema, must be joined
+    # on ImageID). Only Confidence == "1.0" rows count as a positive label.
     per_class_counts: dict[str, int] = {cid: 0 for cid in class_id_to_name}
-    candidates: list[Candidate] = []
-    for row in image_rows:
+    image_id_to_label: dict[str, str] = {}
+    for row in label_rows:
         label_id = row.get("LabelName") or row.get("label_name")
         if label_id not in class_id_to_name:
             continue
+        if row.get("Confidence") not in ("1.0", "1"):
+            continue
         if per_class_counts[label_id] >= args.per_class_cap:
             continue
-        image_url = row.get("OriginalURL") or row.get("original_url") or row.get("Thumbnail300KURL")
         image_id = row.get("ImageID") or row.get("image_id")
-        if not image_url or not image_id:
+        if not image_id or image_id in image_id_to_label:
+            continue
+        image_id_to_label[image_id] = label_id
+        per_class_counts[label_id] += 1
+
+    print(f"[extract-open-images] {len(image_id_to_label)} positively-labeled candidate ImageIDs found", file=sys.stderr)
+
+    print("[extract-open-images] fetching image URL index (large file, cached) ...", file=sys.stderr)
+    image_rows = fetch_csv_rows(IMAGE_IDS_AND_ROTATION_URL, cache_dir)
+
+    # Resolve each labeled ImageID to a downloadable URL via the separate URL-index file.
+    candidates: list[Candidate] = []
+    for row in image_rows:
+        image_id = row.get("ImageID") or row.get("image_id")
+        if image_id not in image_id_to_label:
+            continue
+        label_id = image_id_to_label[image_id]
+        image_url = row.get("OriginalURL") or row.get("original_url") or row.get("Thumbnail300KURL")
+        if not image_url:
             continue
         candidates.append(
             Candidate(
@@ -272,7 +306,6 @@ def main() -> None:
                 image_url=image_url,
             )
         )
-        per_class_counts[label_id] += 1
 
     print(f"[extract-open-images] {len(candidates)} candidate images selected (cap={args.per_class_cap}/class)", file=sys.stderr)
 

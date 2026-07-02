@@ -171,3 +171,133 @@ export function estimateTokensForRequest(inputText: string, hasImage: boolean = 
   const responseTokens = 300; // Conservative estimate for typical response
   return textTokens + imageTokens + responseTokens;
 }
+
+
+// ── Web Detection: dedicated hard-gating (ADR-web-detection-hard-gating-2026-07-01) ─────────
+// Deliberately SEPARATE from the Anthropic/Vision ceiling above. Web Detection is priced at
+// $3.50/1,000 units (vs ~$1.50/1,000 for the existing Label/Object/Text combo — confirmed
+// cloud.google.com/vision/pricing 2026-07-01), and this is a fresh Google API surface after
+// the May 2026 Places API billing incident — it gets its own budget, its own daily cap, and its
+// own kill switch rather than sharing the general $50 ceiling.
+
+const WEB_DETECTION_COST_PER_1000 = 3.5; // $3.50 per 1,000 units, confirmed cloud.google.com/vision/pricing
+const WEB_DETECTION_CEILING_USD = parseFloat(process.env.WEB_DETECTION_COST_CEILING_USD || '5');
+const WEB_DETECTION_DAILY_CAP = parseInt(process.env.WEB_DETECTION_DAILY_CAP || '200', 10);
+
+function getWebDetectionMonthKey(): string {
+  const now = new Date();
+  return `webdetection:cost:${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function getWebDetectionDayKey(): string {
+  const now = new Date();
+  const day = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  return `webdetection:calls:${day}`;
+}
+
+/**
+ * Layer 0 — kill switch. Mirrors bulkEmailEnabled() in utils/bulkEmailGate.ts exactly.
+ * Default OFF — must be explicitly set to 'true' in Railway before Web Detection ever fires.
+ */
+export function webDetectionEnabled(): boolean {
+  return process.env.WEB_DETECTION_ENABLED === 'true';
+}
+
+/**
+ * Layer 1 — dedicated pre-flight cost ceiling for Web Detection specifically.
+ * MUST be called and checked BEFORE the Vision API request fires, not after — the existing
+ * getVisionLabels() only tracks cost post-hoc (see trackVisionCall call site), which is a real
+ * gap this feature does not inherit.
+ */
+export async function isWebDetectionCeilingExceeded(): Promise<boolean> {
+  const key = getWebDetectionMonthKey();
+  try {
+    const count = await getTokenCount(key); // reuses existing Redis/in-memory helper — value here is USD*1000, see trackWebDetectionCall
+    const estimatedCost = count / 1000;
+    return estimatedCost >= WEB_DETECTION_CEILING_USD;
+  } catch {
+    return false; // fail open — consistent with isAICostCeilingExceeded, never blocks on Redis outage
+  }
+}
+
+/**
+ * Layer 2 — daily hard call-count cap. Pure bug-catcher: at current FindA.Sale volume this is
+ * never remotely approached by real usage. Exists to stop a loop/retry bug from running up
+ * hundreds of calls in a single day before anyone notices — same failure shape as the May 2026
+ * Places API cron incident.
+ * @returns true if under the daily cap (safe to proceed), false if the cap is hit.
+ */
+export async function isWebDetectionDailyCapAvailable(): Promise<boolean> {
+  const key = getWebDetectionDayKey();
+  try {
+    const raw = await redis.get(key);
+    const count = raw !== null ? parseInt(raw, 10) : (memoryFallback.get(key) ?? 0);
+    return count < WEB_DETECTION_DAILY_CAP;
+  } catch {
+    const count = memoryFallback.get(key) ?? 0;
+    return count < WEB_DETECTION_DAILY_CAP;
+  }
+}
+
+/**
+ * Records one Web Detection call for both the monthly cost ceiling and the daily cap.
+ * Call this immediately after a successful Web Detection request.
+ */
+export async function trackWebDetectionCall(): Promise<void> {
+  // Monthly cost tracking (stored as USD*1000 integer to keep the same string-count storage shape
+  // as the rest of this file, avoids float-precision drift across many increments).
+  const monthKey = getWebDetectionMonthKey();
+  const currentCostUnits = await getTokenCount(monthKey);
+  await setTokenCount(monthKey, currentCostUnits + WEB_DETECTION_COST_PER_1000);
+
+  // Daily call count
+  const dayKey = getWebDetectionDayKey();
+  const DAY_TTL_SECONDS = 2 * 24 * 60 * 60; // 2 days — auto-expires, always outlives the day it counts
+  try {
+    const raw = await redis.get(dayKey);
+    const current = raw !== null ? parseInt(raw, 10) : 0;
+    const updated = current + 1;
+    memoryFallback.set(dayKey, updated);
+    await redis.setex(dayKey, DAY_TTL_SECONDS, String(updated));
+  } catch {
+    const current = memoryFallback.get(dayKey) ?? 0;
+    memoryFallback.set(dayKey, current + 1);
+  }
+}
+
+/**
+ * Layer 5 — visibility. Same shape as getMonthlyAICost(), surfaced separately in /admin so Web
+ * Detection spend is never a surprise-bill-shaped blind spot again.
+ */
+export async function getMonthlyWebDetectionCost(): Promise<{
+  monthKey: string;
+  callsThisMonth: number;
+  estimatedCost: number;
+  ceiling: number;
+  dailyCapRemaining: number;
+  enabled: boolean;
+}> {
+  const key = getWebDetectionMonthKey();
+  const costUnits = await getTokenCount(key);
+  const estimatedCost = costUnits / 1000;
+  const callsThisMonth = Math.round(costUnits / WEB_DETECTION_COST_PER_1000);
+  const monthKey = key.replace('webdetection:cost:', '');
+
+  const dayKey = getWebDetectionDayKey();
+  let dailyCount = 0;
+  try {
+    const raw = await redis.get(dayKey);
+    dailyCount = raw !== null ? parseInt(raw, 10) : (memoryFallback.get(dayKey) ?? 0);
+  } catch {
+    dailyCount = memoryFallback.get(dayKey) ?? 0;
+  }
+
+  return {
+    monthKey,
+    callsThisMonth,
+    estimatedCost,
+    ceiling: WEB_DETECTION_CEILING_USD,
+    dailyCapRemaining: Math.max(0, WEB_DETECTION_DAILY_CAP - dailyCount),
+    enabled: webDetectionEnabled(),
+  };
+}

@@ -13,7 +13,8 @@
 import axios from 'axios';
 import { regionConfig } from '../config/regionConfig';
 import { EBAY_L1_CATEGORIES } from '../config/ebayCategories';
-import { trackAITokens, estimateTokensForRequest, isAICostCeilingExceeded, trackVisionCall } from '../lib/aiCostTracker';
+import { trackAITokens, estimateTokensForRequest, isAICostCeilingExceeded, trackVisionCall,
+  webDetectionEnabled, isWebDetectionCeilingExceeded, isWebDetectionDailyCapAvailable, trackWebDetectionCall } from '../lib/aiCostTracker';
 import { findCatalogMatches, buildCatalogMatchContext, isCatalogMatchEnabled, CatalogMatch } from './imageMatchService';
 
 const GOOGLE_VISION_API_KEY = process.env.GOOGLE_VISION_API_KEY;
@@ -139,6 +140,63 @@ export async function getVisionLabels(imageBase64: string): Promise<{ objectLabe
     // Feature #109: Graceful degradation — return empty labels on Vision API failure
     console.warn('[cloudAIService] Google Vision API error:', error.message || error);
     return { objectLabels: [], detectedText: [], qualityScore: 0.5 };
+  }
+}
+
+// ── Web Detection (ADR-web-detection-hard-gating-2026-07-01) ──────────────────
+// Deliberately a SEPARATE function from getVisionLabels() — never merged into that call — so
+// that Web Detection being disabled, rate-capped, or erroring can never affect the existing,
+// already-legitimate Label/Object/Text pipeline. Gated behind 3 checks, in order, ALL of which
+// must pass before the network call fires:
+//   1. webDetectionEnabled()            — kill switch, default OFF
+//   2. isWebDetectionDailyCapAvailable() — daily call-count breaker (bug-catcher)
+//   3. isWebDetectionCeilingExceeded()   — dedicated monthly cost ceiling, checked PRE-flight
+// Call this ONLY from the real-time per-photo tagging request path. Never from a cron/job/backfill
+// script — see ADR Layer 3. On any gate failing or any error, returns null (graceful degradation);
+// callers must treat a null return as "no web-match evidence available," not as an error to surface.
+export async function getWebDetectionMatch(imageBase64: string): Promise<{ webEntities: string[]; bestGuessLabels: string[] } | null> {
+  if (!webDetectionEnabled()) {
+    console.log('[cloudAIService] Web Detection skipped — WEB_DETECTION_ENABLED is not \'true\'');
+    return null;
+  }
+  if (!(await isWebDetectionDailyCapAvailable())) {
+    console.warn('[cloudAIService] Web Detection skipped — daily call cap reached (WEB_DETECTION_DAILY_CAP)');
+    return null;
+  }
+  if (await isWebDetectionCeilingExceeded()) {
+    console.warn('[cloudAIService] Web Detection skipped — monthly cost ceiling reached (WEB_DETECTION_COST_CEILING_USD)');
+    return null;
+  }
+
+  try {
+    const response = await axios.post(
+      `https://vision.googleapis.com/v1/images:annotate?key=${GOOGLE_VISION_API_KEY}`,
+      {
+        requests: [
+          {
+            image: { content: imageBase64 },
+            features: [{ type: 'WEB_DETECTION', maxResults: 10 }],
+          },
+        ],
+      },
+      { timeout: 15000 }
+    );
+
+    // Track the call AFTER success — same shape as trackVisionCall for the existing features.
+    await trackWebDetectionCall();
+
+    const webDetection = response.data.responses?.[0]?.webDetection;
+    const webEntities: string[] = (webDetection?.webEntities ?? [])
+      .filter((e: any) => e.description)
+      .map((e: any) => e.description);
+    const bestGuessLabels: string[] = (webDetection?.bestGuessLabels ?? [])
+      .map((l: any) => l.label)
+      .filter(Boolean);
+
+    return { webEntities: [...new Set(webEntities)].slice(0, 10), bestGuessLabels: [...new Set(bestGuessLabels)].slice(0, 5) };
+  } catch (error: any) {
+    console.warn('[cloudAIService] Google Vision Web Detection error:', error.message || error);
+    return null;
   }
 }
 

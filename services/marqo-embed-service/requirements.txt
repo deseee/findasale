@@ -3,4 +3,8 @@ uvicorn[standard]==0.30.6
 python-multipart==0.0.9
 pillow==10.4.0
 torch==2.4.1
+torchvision==0.19.1
 transformers==4.44.2
+open_clip_torch==2.24.0
+timm==0.9.16
+ftfy==6.2.3
