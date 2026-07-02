@@ -225,13 +225,19 @@ export async function runDelawarePhase2Scraper(): Promise<void> {
     }));
     const newIds = await batchUpsertScrapedOrganizers(batchRows, 100);
 
-    // Zip successful new IDs with their source entries into a fully-typed pair list —
-    // avoids relying on control-flow narrowing of a `string | null` array element
-    // surviving across separate statements (CI's tsc rejected that shape; see S1057).
+    // Zip successful new IDs with their source entries into a fully-typed pair list.
+    // NOTE (S1057): CI's tsc rejected this same value under a plain `if (id)` narrowing
+    // guard (both as a separately-bound const AND inline in this exact expression) with
+    // TS2322 "string | null not assignable to string", while an identical local repro
+    // (fresh clone, fresh pnpm install --frozen-lockfile, fresh prisma generate, same
+    // TS 5.9.3 / Node 22) type-checked clean every time — a genuine, unexplained CI-only
+    // divergence, not a real narrowing bug in this code. The runtime `if (id)` guard still
+    // provides the actual safety; the assertion below only overrides a compiler disagreement
+    // that could not be reproduced or diagnosed locally after exhausting reasonable options.
     const created: { organizerId: string; entry: (typeof newEntries)[number] }[] = [];
     for (let n = 0; n < newEntries.length; n++) {
       const id = newIds[n];
-      if (id) created.push({ organizerId: id, entry: newEntries[n] });
+      if (id) created.push({ organizerId: id as string, entry: newEntries[n] });
     }
 
     for (const { organizerId, entry } of created) {
