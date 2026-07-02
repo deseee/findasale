@@ -288,9 +288,39 @@ export async function getEbayImageMatch(imageBase64: string): Promise<EbayImageM
  * when there is no qualifying match — coexists with the text-vs-shape hierarchy and
  * the other evidence sources as an independent hint, never a replacement.
  */
+/**
+ * Experiment flag — controls whether the eBay searchByImage TOP-MATCH TITLE is
+ * presented to Haiku as this item's IDENTITY.
+ *
+ *   unset / anything but 'true' (NEW DEFAULT) = "demoted" — the matched title is
+ *     reframed as a visually-similar marketplace listing that MAY be a different
+ *     product; Haiku is told NOT to treat it as this item's identity, only as a
+ *     weak category/condition hint. (searchByImage anchors ambiguous items toward
+ *     the wrong identity — e.g. a trivet titled "lid" — because the visual match is
+ *     approximate; Haiku is multimodal and Web Detection also feeds in, so we test
+ *     removing the title as an identity signal.)
+ *   'true' = "anchored" — restores the prior behavior where the matched title leads
+ *     the context as "closest eBay listing" and is called a strong identification hint.
+ *
+ * Category / condition / brand / color / material consensus and price comps are
+ * UNCHANGED in both modes — only the TITLE's framing differs. Instantly reversible
+ * from Railway env with no code deploy. Mirrors the `=== 'true'` gate pattern.
+ */
+function ebayMatchTitleAsIdentity(): boolean {
+  return process.env.EBAY_MATCH_TITLE_AS_ID === 'true';
+}
+
 export function buildEbayMatchContext(match: EbayImageMatch | null): string {
   if (!match || !match.topTitle) return '';
-  const parts: string[] = [`closest eBay listing: "${match.topTitle}"`];
+  const titleAsIdentity = ebayMatchTitleAsIdentity();
+  console.log(`[ebayTitleAnchor] mode=${titleAsIdentity ? 'anchored' : 'demoted'}`);
+
+  // In "anchored" mode the matched title leads as the item's likely identity.
+  // In "demoted" mode (default) it is reframed as a visually-similar listing that
+  // may be a DIFFERENT product — a weak category/condition hint only, never identity.
+  const parts: string[] = titleAsIdentity
+    ? [`closest eBay listing: "${match.topTitle}"`]
+    : [`a visually-similar marketplace listing (MAY be a different product): "${match.topTitle}"`];
 
   // Consensus signals (aggregated across the whole match set) come first — when many
   // visual matches agree, that is a stronger identity cue than any single listing.
@@ -324,5 +354,8 @@ export function buildEbayMatchContext(match: EbayImageMatch | null): string {
   if (match.alternates.length > 0) {
     parts.push(`other visual matches: ${match.alternates.slice(0, 3).map((t) => `"${t}"`).join(', ')}`);
   }
-  return `\n\neBay image-search match: ${parts.join('; ')}. This comes from matching the photo against live eBay listings — treat it as a strong hint for identification and category, but never let it override legible on-item text or brand marks, and verify against what you can actually see in the photo.`;
+  const closing = titleAsIdentity
+    ? 'This comes from matching the photo against live eBay listings — treat it as a strong hint for identification and category, but never let it override legible on-item text or brand marks, and verify against what you can actually see in the photo.'
+    : "This comes from matching the photo against live eBay listings, which can return a DIFFERENT product that merely looks similar — do NOT treat the matched listing title as this item's identity. Use it only as a weak category/condition hint. Identify the item from what you can actually SEE in the photos (shape, function, on-item text, brand marks) and from the category/condition/brand/price signals above.";
+  return `\n\neBay image-search match: ${parts.join('; ')}. ${closing}`;
 }
