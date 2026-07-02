@@ -19,8 +19,9 @@ import { postF } from './posts/estate-sale-listing-page-convert-ad-traffic';
 import { postG } from './posts/estate-sale-buyer-discovery-vs-organizer-tools';
 import { postH } from './posts/free-estate-sale-cataloging-software-estimint-alternative';
 import { postI } from './posts/digital-buyers-expect-more-than-a-listing';
+import { postJ } from './posts/when-buyers-browse-free-what-makes-managed-sale-worth-it';
 
-export const posts: BlogPost[] = [postA, postB, postC, postD, postE, postF, postG, postH, postI];
+export const posts: BlogPost[] = [postA, postB, postC, postD, postE, postF, postG, postH, postI, postJ];
 
 export function getPostBySlug(slug: string): BlogPost | undefined {
   return posts.find((p) => p.slug === slug);
