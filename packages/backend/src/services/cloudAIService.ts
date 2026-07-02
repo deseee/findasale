@@ -797,6 +797,11 @@ export async function analyzeItemImages(
   const catalogMatches = await catalogMatchPromise;
   const webMatch = await webDetectionPromise;
   const ebayMatch = await ebayImageSearchPromise;
+  console.log(
+    ebayMatch
+      ? `[ebayImageSearch] passed into Haiku call — matched title="${ebayMatch.topTitle}"`
+      : '[ebayImageSearch] no eBay match passed into Haiku call (ebayMatch=null)'
+  );
 
   // Multi-image Haiku analysis (Phase 2: pass clusterPhotos for role context)
   const result = await getHaikuAnalysisMultiImage(imageBase64Array, types, objectLabels, detectedText, comps, clusterPhotos, catalogMatches, webMatch, ebayMatch);

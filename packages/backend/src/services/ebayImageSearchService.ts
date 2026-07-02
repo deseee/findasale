@@ -63,7 +63,10 @@ const MAX_BASE64_LEN = 3_500_000;
  */
 export async function getEbayImageMatch(imageBase64: string): Promise<EbayImageMatch | null> {
   // Layer 0 — kill switch (default OFF).
-  if (!ebayImageSearchEnabled()) return null;
+  if (!ebayImageSearchEnabled()) {
+    console.log("[ebayImageSearch] skipped — kill switch off (EBAY_IMAGE_SEARCH_ENABLED!=='true')");
+    return null;
+  }
 
   // Layer 1 — daily call cap (protects the shared ~5k/day Browse quota that price
   // comps also draw from; searchByImage itself is free, so there is no $ ceiling).
@@ -72,7 +75,10 @@ export async function getEbayImageMatch(imageBase64: string): Promise<EbayImageM
     return null;
   }
 
-  if (!imageBase64) return null;
+  if (!imageBase64) {
+    console.warn('[ebayImageSearch] skipped — empty imageBase64 (no primary photo supplied)');
+    return null;
+  }
   if (imageBase64.length > MAX_BASE64_LEN) {
     console.warn(`[ebayImageSearch] skipped — image too large for proxy POST (${imageBase64.length} b64 chars)`);
     return null;
@@ -80,7 +86,10 @@ export async function getEbayImageMatch(imageBase64: string): Promise<EbayImageM
 
   try {
     const token = await getEbayAccessToken();
-    if (!token) return null;
+    if (!token) {
+      console.warn('[ebayImageSearch] skipped — no eBay app token (getEbayAccessToken returned empty)');
+      return null;
+    }
 
     // limit=15 widens the sample so the refinement/consensus aggregates are meaningful;
     // still one call per item. fieldgroups pull the EXTENDED item fields + the aspect /
@@ -120,14 +129,20 @@ export async function getEbayImageMatch(imageBase64: string): Promise<EbayImageM
     const rawSummaries: any[] = Array.isArray(data?.itemSummaries) ? data.itemSummaries : [];
     // Safety: never let an adult-only listing drive identification/category/price.
     const summaries: any[] = rawSummaries.filter((s) => s?.adultOnly !== true);
-    if (summaries.length === 0) return null;
+    if (summaries.length === 0) {
+      console.log('[ebayImageSearch] eBay returned 0 visual matches');
+      return null;
+    }
 
     // Count the call only after a successful, non-empty response.
     await trackEbayImageSearchCall();
 
     const top = summaries[0];
     const topTitle: string = (top?.title ?? '').trim();
-    if (!topTitle) return null;
+    if (!topTitle) {
+      console.log('[ebayImageSearch] top match had no title — treating as no match');
+      return null;
+    }
 
     const topCategoryId: string | null =
       Array.isArray(top?.categories) && top.categories[0]?.categoryId
@@ -233,6 +248,15 @@ export async function getEbayImageMatch(imageBase64: string): Promise<EbayImageM
         }
       }
     }
+
+    console.log(
+      `[ebayImageSearch] match: title="${topTitle}" ` +
+        `category=${categoryConsensus?.categoryId ?? leafCategoryId ?? topCategoryId ?? 'n/a'} ` +
+        `"${categoryConsensus?.categoryName ?? ''}" ` +
+        `condition="${conditionConsensus?.condition ?? topCondition ?? 'n/a'}" ` +
+        `brand="${brandConsensus?.value ?? 'n/a'}" ` +
+        `(from${summaries.length} summaries)`
+    );
 
     return {
       topTitle,
