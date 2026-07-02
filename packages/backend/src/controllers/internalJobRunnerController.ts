@@ -24,7 +24,7 @@
 import { Request, Response } from 'express';
 import { sendOutreachEmails, syncLeadTierGroups } from '../jobs/outreachEmailsCron';
 import { runLeadScoringBackfill } from '../services/leadScoringService';
-import { runWebsiteEnrichmentJob } from '../jobs/websiteEnrichmentJob';
+import { runWebsiteEnrichmentBackfill } from '../jobs/websiteEnrichmentJob';
 import { emailDiscoveryJob } from '../jobs/emailDiscoveryJob';
 import { runOrganizerWebsiteAddressEnrichment } from '../jobs/organizerWebsiteAddressCron';
 import { runAutoSeedOutreach } from '../jobs/autoSeedOutreachCron';
@@ -42,7 +42,16 @@ const JOB_MAP: Record<string, () => Promise<unknown>> = {
   'outreach-emails': sendOutreachEmails,
   'sync-lead-tier-groups': syncLeadTierGroups,
   'lead-scoring': runLeadScoringBackfill,
-  'website-enrichment': runWebsiteEnrichmentJob,
+  // S1058: was runWebsiteEnrichmentJob (hardcoded enrichBatch(0), single 50-row
+  // slice per invocation — permanently stuck rescanning the same unenrichable head
+  // once the in-process Sunday cron was removed and this dispatcher became the ONLY
+  // automated trigger, run daily). Backfill paginates the full remaining pool each
+  // run (up to MAX_BACKFILL_BATCHES) and is safe here: this endpoint responds 202
+  // immediately (setImmediate, no HTTP timeout risk) and the runningJobs lock above
+  // prevents overlapping runs if one day's backfill is still working when the next
+  // day's cron fires. runWebsiteEnrichmentJob() is left in websiteEnrichmentJob.ts,
+  // unused, as a still-valid single-batch primitive if ever needed again.
+  'website-enrichment': runWebsiteEnrichmentBackfill,
   'email-discovery': emailDiscoveryJob,
   'organizer-website-address': runOrganizerWebsiteAddressEnrichment,
   'auto-seed-outreach': runAutoSeedOutreach,
