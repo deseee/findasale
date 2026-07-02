@@ -42,15 +42,16 @@ const JOB_MAP: Record<string, () => Promise<unknown>> = {
   'outreach-emails': sendOutreachEmails,
   'sync-lead-tier-groups': syncLeadTierGroups,
   'lead-scoring': runLeadScoringBackfill,
-  // S1058: was runWebsiteEnrichmentJob (hardcoded enrichBatch(0), single 50-row
-  // slice per invocation — permanently stuck rescanning the same unenrichable head
-  // once the in-process Sunday cron was removed and this dispatcher became the ONLY
-  // automated trigger, run daily). Backfill paginates the full remaining pool each
-  // run (up to MAX_BACKFILL_BATCHES) and is safe here: this endpoint responds 202
-  // immediately (setImmediate, no HTTP timeout risk) and the runningJobs lock above
-  // prevents overlapping runs if one day's backfill is still working when the next
-  // day's cron fires. runWebsiteEnrichmentJob() is left in websiteEnrichmentJob.ts,
-  // unused, as a still-valid single-batch primitive if ever needed again.
+  // S1058: the earlier single-batch website-enrichment function hardcoded
+  // enrichBatch(0) — a single 50-row slice per invocation that permanently
+  // rescanned the same unenrichable head once the in-process Sunday cron was
+  // removed and this dispatcher became the ONLY automated trigger (run daily).
+  // Backfill paginates the full remaining pool each run (up to
+  // MAX_BACKFILL_BATCHES) and is safe here: this endpoint responds 202
+  // immediately (setImmediate, no HTTP timeout risk) and the runningJobs lock
+  // above prevents overlapping runs if one day's backfill is still working when
+  // the next day's cron fires. The old single-batch function has since been
+  // removed; runWebsiteEnrichmentBackfill is the sole website-enrichment entry.
   'website-enrichment': runWebsiteEnrichmentBackfill,
   'email-discovery': emailDiscoveryJob,
   'organizer-website-address': runOrganizerWebsiteAddressEnrichment,

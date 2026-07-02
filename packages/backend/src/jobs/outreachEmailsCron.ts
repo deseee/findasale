@@ -1,6 +1,4 @@
-import cron from 'node-cron';
 import { google } from 'googleapis';
-import { cronGuard } from '../utils/cronGuard';
 import { v4 as uuid } from 'uuid';
 import jwt from 'jsonwebtoken';
 import { prisma } from '../lib/prisma';
@@ -886,7 +884,7 @@ const sendOutreachEmailsInner = async (): Promise<void> => {
  *   - have a non-null, non-ENTERPRISE leadTier
  *   - were scored in the past 7 days (lastScoredAt > now - 7d)
  *
- * Runs weekly on Sundays at 04:00 UTC via initOutreachEmailsCron.
+ * Runs weekly on Sundays at 04:00 UTC (scheduled via GitHub Actions → JOB_MAP).
  */
 export async function syncLeadTierGroups(): Promise<void> {
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
@@ -936,28 +934,4 @@ export async function startupCatchUp(): Promise<void> {
   } catch (err: any) {
     console.error('[OutreachEmails] Startup catch-up failed:', err.message);
   }
-}
-
-/**
- * initOutreachEmailsCron — registers outreach email jobs in the cron scheduler.
- *
- * sendOutreachEmails: runs every 4 hours (6 windows/day) to distribute the daily quota.
- * syncLeadTierGroups: runs weekly on Sundays at 04:00 UTC.
- *
- * Both gates on OUTREACH_ENABLED=true.
- */
-export function initOutreachEmailsCron(): void {
-  if (process.env.OUTREACH_ENABLED !== 'true') {
-    console.log('[OutreachCron] Disabled — set OUTREACH_ENABLED=true to activate');
-    return;
-  }
-
-  // sendOutreachEmails scheduling removed — GitHub Actions is the durable trigger (S725 Step 3)
-  console.log('[OutreachCron] sendOutreachEmails scheduling removed — GitHub Actions is the durable trigger (S725 Step 3)');
-
-  // Weekly Sunday 04:00 UTC — sync lead tiers to MailerLite groups (offset from scoring at 02:00 to avoid race)
-  cron.schedule('0 4 * * 0', cronGuard({ jobName: 'sync-lead-tier-groups' }, async () => {
-    await syncLeadTierGroups();
-  }), { timezone: 'UTC' });
-  console.log('[OutreachCron] syncLeadTierGroups registered — runs Sundays 04:00 UTC');
 }

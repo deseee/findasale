@@ -11,7 +11,6 @@
  * Gate: WEBSITE_ENRICHMENT_ENABLED=true
  */
 
-import * as cron from 'node-cron';
 import { prisma } from '../lib/prisma';
 import { discoverEmail } from '../services/emailDiscoveryService';
 import { registrableDomain, domainMatchesBusiness, FAMOUS_UNRELATED_DOMAINS } from '../services/emailProvenance';
@@ -176,18 +175,6 @@ async function enrichBatch(skip: number): Promise<number> {
   return organizers.length; // return count fetched (for cursor advancement)
 }
 
-// ─── Single-batch job (cron use) ─────────────────────────────────────────────
-
-export async function runWebsiteEnrichmentJob(): Promise<void> {
-  if (process.env.WEBSITE_ENRICHMENT_ENABLED !== 'true') {
-    console.log('[WebsiteEnrichment] Skipped — WEBSITE_ENRICHMENT_ENABLED not set');
-    return;
-  }
-  console.log('[WebsiteEnrichment] Starting single-batch website enrichment run');
-  await enrichBatch(0);
-  console.log('[WebsiteEnrichment] Single-batch run complete');
-}
-
 // ─── Full backfill (manual trigger) ──────────────────────────────────────────
 
 export async function runWebsiteEnrichmentBackfill(): Promise<void> {
@@ -210,17 +197,3 @@ export async function runWebsiteEnrichmentBackfill(): Promise<void> {
   console.log(`[WebsiteEnrichment] Backfill complete — ${batchCount} batch(es) processed`);
 }
 
-// ─── Cron registration ────────────────────────────────────────────────────────
-
-export function initWebsiteEnrichmentCron(): void {
-  // Sundays 01:00 UTC — runs before emailDiscoveryCron (03:00 UTC)
-  cron.schedule('0 1 * * 0', async () => {
-    console.log('[WebsiteEnrichment] Cron triggered');
-    try {
-      await runWebsiteEnrichmentJob();
-    } catch (err) {
-      console.error('[WebsiteEnrichment] Cron error:', err);
-    }
-  });
-  console.log('[WebsiteEnrichment] Cron registered — Sundays 01:00 UTC');
-}

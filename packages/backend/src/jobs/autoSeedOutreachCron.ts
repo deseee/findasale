@@ -13,7 +13,6 @@
  * Idempotent: skips organizers that already have a DirectoryClaimEmail row.
  */
 
-import cron from 'node-cron';
 import { v4 as uuid } from 'uuid';
 import crypto from 'crypto';
 import { prisma } from '../lib/prisma';
@@ -245,18 +244,4 @@ export async function runAutoSeedOutreach(): Promise<void> {
   } catch (err) {
     console.error('[AutoSeedCron] Error:', err instanceof Error ? err.message : String(err));
   }
-}
-
-export function initAutoSeedOutreachCron(): void {
-  if (process.env.OUTREACH_ENABLED !== 'true') {
-    console.log('[AutoSeedCron] OUTREACH_ENABLED is not set to true — skipping cron registration');
-    return;
-  }
-
-  // Run daily at 06:00 UTC — after email discovery (03:00) and lead scoring (02:00)
-  cron.schedule('0 6 * * *', async () => {
-    await runAutoSeedOutreach();
-  });
-
-  console.log('[AutoSeedCron] Registered — daily at 06:00 UTC');
 }

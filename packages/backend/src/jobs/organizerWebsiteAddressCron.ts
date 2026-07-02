@@ -12,10 +12,8 @@
  * page fetches.
  */
 
-import cron from 'node-cron';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
-import { cronGuard } from '../utils/cronGuard';
 import { RateLimiter } from '../services/scraper/rateLimiter';
 import {
   scrapeOrganizerWebsiteAddress,
@@ -140,18 +138,4 @@ export async function runOrganizerWebsiteAddressEnrichment(): Promise<{
     `[${JOB_NAME}] Complete — processed=${candidates.length}, filled=${filled}, missed=${missed}`
   );
   return { processed: candidates.length, filled, missed };
-}
-
-/**
- * Schedule the organizer-website address enrichment cron.
- * Tuesdays + Fridays 04:00 UTC. Called from index.ts during boot.
- */
-export function scheduleOrganizerWebsiteAddressCron(): void {
-  cron.schedule(
-    '0 4 * * 2,5',
-    cronGuard({ jobName: JOB_NAME }, async () => {
-      await runOrganizerWebsiteAddressEnrichment();
-    })
-  );
-  console.log(`[${JOB_NAME}] Scheduled for Tuesdays + Fridays 04:00 UTC`);
 }
