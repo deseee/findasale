@@ -226,8 +226,9 @@ export async function runDelawarePhase2Scraper(): Promise<void> {
     const newIds = await batchUpsertScrapedOrganizers(batchRows, 100);
 
     for (let n = 0; n < newEntries.length; n++) {
-      const organizerId = newIds[n];
-      if (!organizerId) continue;
+      const rawOrganizerId = newIds[n];
+      if (!rawOrganizerId) continue;
+      const organizerId: string = rawOrganizerId;
       const entry = newEntries[n];
       try {
         await prisma.organizer.update({
