@@ -767,6 +767,13 @@ app.get('/api/protected', authenticate, (req, res) => {
   res.json({ message: 'This is a protected route', user: (req as any).user });
 });
 
+// JSON 404 — catch-all for genuinely unmatched routes. Placed AFTER every route
+// registration and BEFORE the eBay webhook error guard / Sentry / global error handler.
+// This is a normal (non-error) middleware, so only requests that matched no route reach
+// it; thrown errors skip it and go straight to the 4-arg error handlers below. Returns the
+// app's JSON error shape instead of Express's default HTML 404.
+app.use((req, res) => res.status(404).json({ message: 'Not found' }));
+
 // eBay webhook stream guard — must run BEFORE Sentry's error handler so it never records this noise.
 // express.json() (global body parser) throws `stream is not readable` (raw-body type: stream.not.readable)
 // when eBay's delivery infrastructure closes the HTTP connection before body-parse finishes reading.

@@ -98,6 +98,7 @@ export async function getEbayImageMatch(imageBase64: string): Promise<EbayImageM
         ...ebayProxyHeaders(),
       },
       body: JSON.stringify({ image: imageBase64 }),
+      signal: AbortSignal.timeout(15000), // 15s per-call timeout (Node 20); AbortError caught by surrounding try/catch
     });
 
     if (!res.ok) {

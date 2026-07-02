@@ -40,9 +40,9 @@ COPY . .
 # Generate Prisma client (writes into node_modules/.pnpm virtual store)
 RUN cd packages/database && npx prisma generate
 
-# S1027: backend still has ~100+ pre-existing type errors (scraper sources). tsc still EMITS
-# valid JS, so allow non-zero exit so the prod build proceeds. Completeness gate below catches
-# OOM/partial emits. Drop `|| true` once the scraper type-debt is cleared and CI typecheck gates.
+# Typecheck gate ENFORCED: backend tsc is at 0 project errors (verified against a freshly
+# regenerated Prisma client; tsconfig has skipLibCheck). A non-zero tsc exit ABORTS the build.
+# tsc also emits the JS to dist/. The scraper type-debt referenced in earlier revisions is cleared.
 RUN cd packages/backend && npx tsc
 
 # Build completeness gate: fail Docker build if tsc OOM'd and produced <75% of source files

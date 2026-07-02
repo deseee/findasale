@@ -67,6 +67,7 @@ export async function getAcceptedConditionsForCategory(categoryId: string): Prom
         'Accept-Language': 'en-US',
         ...ebayProxyHeaders(),
       },
+      signal: AbortSignal.timeout(15000), // 15s per-call timeout (Node 20); AbortError caught by surrounding try/catch
     });
     if (!res.ok) {
       const body = await res.text();
@@ -210,6 +211,7 @@ export async function getRequiredAspectsForCategory(categoryId: string): Promise
         'Accept-Language': 'en-US',
         ...ebayProxyHeaders(),
       },
+      signal: AbortSignal.timeout(15000), // 15s per-call timeout (Node 20); AbortError caught by surrounding try/catch
     });
     if (!res.ok) {
       const body = await res.text();
@@ -264,7 +266,7 @@ export async function republishEbayOffer(
     const publishPath = `/sell/inventory/v1/offer/${encodeURIComponent(ebayOfferId)}/publish`;
     const res = await fetch(
       `${frontendUrl}/api/proxy/ebay?path=${encodeURIComponent(publishPath)}`,
-      { method: 'POST', headers: authHeaders, body: JSON.stringify({}) }
+      { method: 'POST', headers: authHeaders, body: JSON.stringify({}), signal: AbortSignal.timeout(15000) }
     );
     if (res.ok) {
       console.log(`${logTag}: republish ok (HTTP ${res.status})`);
@@ -300,9 +302,10 @@ export async function ebayFetch(
     ...ebayUserHeaders(accessToken),
     ...(proxySecret ? { 'X-Proxy-Secret': proxySecret } : {}),
   };
-  const reqInit: { method: string; headers: Record<string, string>; body?: string } = {
+  const reqInit: { method: string; headers: Record<string, string>; body?: string; signal?: AbortSignal } = {
     method: init.method ?? 'GET',
     headers,
+    signal: AbortSignal.timeout(15000), // 15s per-call timeout (Node 20)
   };
   if (init.body !== undefined) {
     reqInit.body = typeof init.body === 'string' ? init.body : JSON.stringify(init.body);

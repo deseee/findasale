@@ -62,6 +62,7 @@ export async function getEbayAccessToken(): Promise<string | null> {
       {
         method: 'POST',
         headers: ebayProxyHeaders(),
+        signal: AbortSignal.timeout(15000), // 15s per-call timeout (Node 20); AbortError caught by surrounding try/catch
       }
     );
 
@@ -144,6 +145,7 @@ export async function refreshEbayAccessToken(organizerId: string): Promise<strin
           ...ebayProxyHeaders(),
         },
         body: params.toString(),
+        signal: AbortSignal.timeout(15000), // 15s per-call timeout (Node 20); AbortError caught by surrounding try/catch
       }
     );
 

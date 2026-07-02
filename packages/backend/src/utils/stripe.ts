@@ -23,6 +23,8 @@ export const getStripe = (): Stripe => {
     stripe = new Stripe(stripeKey, {
       apiVersion: '2023-10-16',
       appInfo: APP_INFO,
+      timeout: 20000, // 20s network timeout — don't hang a request thread on a stalled Stripe call
+      maxNetworkRetries: 2, // retry idempotent Stripe calls twice on network failure
     });
   }
   return stripe;
@@ -37,6 +39,8 @@ export const getTestStripe = (): Stripe => {
     testStripeInstance = new Stripe(testKey, {
       apiVersion: '2023-10-16',
       appInfo: APP_INFO,
+      timeout: 20000,
+      maxNetworkRetries: 2,
     });
   }
   return testStripeInstance;

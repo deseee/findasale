@@ -14,7 +14,7 @@ startCommand = "node /app/packages/backend/dist/index.js"
 
 # Shorter timeout surfaces broken starts in <2 min instead of <5 min.
 # Tune up only if a legitimate cold-start consistently exceeds 120s.
-healthcheckPath = "/"
+healthcheckPath = "/health/ready"
 healthcheckTimeout = 120
 
 # Fail fast: one retry then abort. Avoids masking repeated crash-loops.

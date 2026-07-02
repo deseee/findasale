@@ -17,8 +17,11 @@ export async function initCouponRateLimiter() {
   try {
     redisClient = createClient({ url: process.env.REDIS_URL });
     redisClient.on('error', (err) => {
+      // Do NOT null the client here — node-redis auto-reconnects; nulling our
+      // reference permanently disables the limiter until a process restart.
+      // The middleware guards on client.isReady instead, so it auto-recovers
+      // when Redis returns. (Mirrors index.ts rate-limit client pattern.)
       console.error('[couponRateLimiter] Redis error:', err);
-      redisClient = null; // graceful degradation
     });
     await redisClient.connect();
     console.log('[couponRateLimiter] Redis connected');
@@ -41,8 +44,10 @@ export const couponRateLimiter = async (req: AuthRequest, res: Response, next: N
       return res.status(401).json({ message: 'Authentication required' });
     }
 
-    // If Redis is not available, gracefully allow the validation
-    if (!redisClient || !redisClient.isOpen) {
+    // If Redis is not ready, gracefully allow the validation. Guard on isReady
+    // (not isOpen) so a client mid-reconnect is treated as unavailable, and
+    // so a later request auto-recovers once Redis is ready again.
+    if (!redisClient || !redisClient.isReady) {
       console.warn('[couponRateLimiter] Redis unavailable — allowing validation (graceful degradation)');
       return next();
     }

@@ -17,8 +17,11 @@ export async function initBidRateLimiter() {
   try {
     redisClient = createClient({ url: process.env.REDIS_URL });
     redisClient.on('error', (err) => {
+      // Do NOT null the client here — node-redis auto-reconnects; nulling our
+      // reference permanently disables the limiter until a process restart.
+      // The middleware guards on client.isReady instead, so it auto-recovers
+      // when Redis returns. (Mirrors index.ts rate-limit client pattern.)
       console.error('[bidRateLimiter] Redis error:', err);
-      redisClient = null; // graceful degradation
     });
     await redisClient.connect();
     console.log('[bidRateLimiter] Redis connected');
@@ -40,8 +43,10 @@ export const bidRateLimiter = async (req: AuthRequest, res: Response, next: Next
       return res.status(401).json({ message: 'Authentication required' });
     }
 
-    // If Redis is not available, gracefully allow the bid
-    if (!redisClient || !redisClient.isOpen) {
+    // If Redis is not ready, gracefully allow the bid. Guard on isReady
+    // (not isOpen) so a client mid-reconnect is treated as unavailable, and
+    // so a later request auto-recovers once Redis is ready again.
+    if (!redisClient || !redisClient.isReady) {
       console.warn('[bidRateLimiter] Redis unavailable — allowing bid (graceful degradation)');
       return next();
     }
