@@ -16,6 +16,7 @@ import { EBAY_L1_CATEGORIES } from '../config/ebayCategories';
 import { trackAITokens, estimateTokensForRequest, isAICostCeilingExceeded, trackVisionCall,
   webDetectionEnabled, isWebDetectionCeilingExceeded, isWebDetectionDailyCapAvailable, trackWebDetectionCall } from '../lib/aiCostTracker';
 import { findCatalogMatches, buildCatalogMatchContext, isCatalogMatchEnabled, CatalogMatch } from './imageMatchService';
+import { getEbayImageMatch, buildEbayMatchContext, EbayImageMatch } from './ebayImageSearchService';
 
 const GOOGLE_VISION_API_KEY = process.env.GOOGLE_VISION_API_KEY;
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
@@ -227,7 +228,8 @@ async function getHaikuAnalysis(
   detectedText: string[],
   comps?: ComparableSale[],
   catalogMatches?: CatalogMatch[] | null,
-  webMatch?: { webEntities: string[]; bestGuessLabels: string[] } | null
+  webMatch?: { webEntities: string[]; bestGuessLabels: string[] } | null,
+  ebayMatch?: EbayImageMatch | null
 ): Promise<AITagResult> {
   const labelContext =
     objectLabels.length > 0 || detectedText.length > 0
@@ -253,6 +255,9 @@ async function getHaikuAnalysis(
   // than replacing it; catalog match is a THIRD, independent evidence source.
   const catalogMatchContext = buildCatalogMatchContext(catalogMatches ?? null);
   const webDetectionContext = buildWebDetectionContext(webMatch ?? null);
+  // eBay searchByImage live match (ADR-ebay-searchbyimage-tagging-2026-07-02): independent
+  // evidence source, same conditional-inclusion shape as catalog/web-detection above.
+  const ebayMatchContext = buildEbayMatchContext(ebayMatch ?? null);
 
   try {
     // Estimate tokens for cost tracking (#104)
@@ -280,7 +285,7 @@ Analyze this item photo and respond with ONLY valid JSON (no markdown, no explan
               },
               {
                 type: 'text',
-                text: `You are an expert secondary market cataloger for a ${regionConfig.city}, ${regionConfig.state} estate sale marketplace.${labelContext}${sparseImageNote}${compsContext}${catalogMatchContext}${webDetectionContext}
+                text: `You are an expert secondary market cataloger for a ${regionConfig.city}, ${regionConfig.state} estate sale marketplace.${labelContext}${sparseImageNote}${compsContext}${catalogMatchContext}${webDetectionContext}${ebayMatchContext}
 
 Analyze this item photo and respond with ONLY valid JSON (no markdown, no explanation).
 
@@ -587,14 +592,18 @@ export async function analyzeItemImage(
   let detectedText: string[] = [];
   let catalogMatches: CatalogMatch[] | null = null;
   let webMatch: { webEntities: string[]; bestGuessLabels: string[] } | null = null;
+  let ebayMatch: EbayImageMatch | null = null;
   // Web Detection (ADR-web-detection-hard-gating-2026-07-01): runs in the same parallel batch as
   // Vision + catalog-match. getWebDetectionMatch() is internally gated (kill switch, daily cap,
   // monthly ceiling) and returns null on any gate failure or error — safe to always include here,
   // it is a fast no-op when WEB_DETECTION_ENABLED is not 'true'.
-  const [visionSettled, catalogSettled, webDetectionSettled] = await Promise.allSettled([
+  // eBay searchByImage (ADR-ebay-searchbyimage-tagging-2026-07-02): same parallel pre-Haiku batch.
+  // Internally gated (kill switch + daily cap) — fast no-op when EBAY_IMAGE_SEARCH_ENABLED is not 'true'.
+  const [visionSettled, catalogSettled, webDetectionSettled, ebaySettled] = await Promise.allSettled([
     getVisionLabels(imageBase64),
     isCatalogMatchEnabled() ? findCatalogMatches(buffer, mimeType) : Promise.resolve(null),
     getWebDetectionMatch(imageBase64),
+    getEbayImageMatch(imageBase64),
   ]);
   if (visionSettled.status === 'fulfilled') {
     objectLabels = visionSettled.value.objectLabels;
@@ -609,9 +618,12 @@ export async function analyzeItemImage(
   if (webDetectionSettled.status === 'fulfilled') {
     webMatch = webDetectionSettled.value;
   }
+  if (ebaySettled.status === 'fulfilled') {
+    ebayMatch = ebaySettled.value;
+  }
   // getWebDetectionMatch() never throws (returns null on error) — allSettled defensive as above
 
-  const result = await getHaikuAnalysis(imageBase64, mimeType, objectLabels, detectedText, comps, catalogMatches, webMatch);
+  const result = await getHaikuAnalysis(imageBase64, mimeType, objectLabels, detectedText, comps, catalogMatches, webMatch, ebayMatch);
 
   // Sprint 1: Add curated tag suggestions (non-blocking) — combined list is fine here,
   // this is just label→curated-tag mapping, not identification evidence weighting
@@ -698,6 +710,10 @@ export async function analyzeItemImages(
   // the primary-photo base64 now, before any mutation. Internally gated — safe no-op when off.
   const webDetectionPromise: Promise<{ webEntities: string[]; bestGuessLabels: string[] } | null> =
     getWebDetectionMatch(imageBase64Array[0]).catch(() => null);
+  // eBay searchByImage on the PRIMARY photo only (once per item — not per photo). Captured before
+  // the reorder loop mutates imageBase64Array. Internally gated; safe no-op when disabled.
+  const ebayImageSearchPromise: Promise<EbayImageMatch | null> =
+    getEbayImageMatch(imageBase64Array[0]).catch(() => null);
 
   try {
     const allVisionResults = await Promise.all(
@@ -736,9 +752,10 @@ export async function analyzeItemImages(
 
   const catalogMatches = await catalogMatchPromise;
   const webMatch = await webDetectionPromise;
+  const ebayMatch = await ebayImageSearchPromise;
 
   // Multi-image Haiku analysis (Phase 2: pass clusterPhotos for role context)
-  const result = await getHaikuAnalysisMultiImage(imageBase64Array, types, objectLabels, detectedText, comps, clusterPhotos, catalogMatches, webMatch);
+  const result = await getHaikuAnalysisMultiImage(imageBase64Array, types, objectLabels, detectedText, comps, clusterPhotos, catalogMatches, webMatch, ebayMatch);
 
   // Sprint 1: Add curated tag suggestions (non-blocking) — combined list is fine here,
   // this is just label→curated-tag mapping, not identification evidence weighting
@@ -810,7 +827,8 @@ async function getHaikuAnalysisMultiImage(
   comps?: ComparableSale[],
   clusterPhotos?: ClusterPhoto[],
   catalogMatches?: CatalogMatch[] | null,
-  webMatch?: { webEntities: string[]; bestGuessLabels: string[] } | null
+  webMatch?: { webEntities: string[]; bestGuessLabels: string[] } | null,
+  ebayMatch?: EbayImageMatch | null
 ): Promise<AITagResult> {
   const labelContext =
     objectLabels.length > 0 || detectedText.length > 0
@@ -831,6 +849,9 @@ async function getHaikuAnalysisMultiImage(
   // evidence pattern as the single-image path in getHaikuAnalysis above.
   const catalogMatchContext = buildCatalogMatchContext(catalogMatches ?? null);
   const webDetectionContext = buildWebDetectionContext(webMatch ?? null);
+  // eBay searchByImage live match (ADR-ebay-searchbyimage-tagging-2026-07-02): independent
+  // evidence source, same conditional-inclusion shape as catalog/web-detection above.
+  const ebayMatchContext = buildEbayMatchContext(ebayMatch ?? null);
 
   const roleContext = buildRoleContextPrompt(clusterPhotos);
 
@@ -840,7 +861,7 @@ async function getHaikuAnalysisMultiImage(
     : 'You are analyzing a photo of an item.';
 
   try {
-    const systemPrompt = `You are an expert secondary market cataloger for a ${regionConfig.city}, ${regionConfig.state} estate sale marketplace.${labelContext}${catalogMatchContext}${webDetectionContext}
+    const systemPrompt = `You are an expert secondary market cataloger for a ${regionConfig.city}, ${regionConfig.state} estate sale marketplace.${labelContext}${catalogMatchContext}${webDetectionContext}${ebayMatchContext}
 
 ${multiImagePrompt} Respond with ONLY valid JSON (no markdown, no explanation).`;
     const estimatedTokens = estimateTokensForRequest(systemPrompt, true);
@@ -863,7 +884,7 @@ ${multiImagePrompt} Respond with ONLY valid JSON (no markdown, no explanation).`
     // Add text prompt at the end
     contentArray.push({
       type: 'text',
-      text: `${multiImagePrompt} Use all images to determine the best title, category, condition grade, description, and estimated price. Pay particular attention to any brand labels, tags, or markings visible in any of the photos.${labelContext}${sparseImageNote}${compsContext}${catalogMatchContext}${webDetectionContext}${roleContext}
+      text: `${multiImagePrompt} Use all images to determine the best title, category, condition grade, description, and estimated price. Pay particular attention to any brand labels, tags, or markings visible in any of the photos.${labelContext}${sparseImageNote}${compsContext}${catalogMatchContext}${webDetectionContext}${ebayMatchContext}${roleContext}
 
 Analyze and respond with ONLY valid JSON (no markdown, no explanation).
 

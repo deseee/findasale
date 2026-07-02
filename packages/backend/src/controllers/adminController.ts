@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
-import { getMonthlyAICost, resetMonthlyAICost, getMonthlyWebDetectionCost } from '../lib/aiCostTracker';
+import { getMonthlyAICost, resetMonthlyAICost, getMonthlyWebDetectionCost, getEbayImageSearchUsage } from '../lib/aiCostTracker';
 import { getMonthlyCloudinaryEstimate, getBandwidthThreshold, getTodayCloudinaryUsage, resetTodayCloudinaryUsage } from '../lib/cloudinaryBandwidthTracker';
 import { getEbayRateLimitStatus } from '../lib/ebayRateLimiter';
 import { emailService } from '../lib/emailService';
@@ -817,6 +817,10 @@ export const getAIUsage = async (req: AuthRequest, res: Response) => {
     const webDetection = await getMonthlyWebDetectionCost();
     const webDetectionCostPercentage = webDetection.ceiling > 0 ? (webDetection.estimatedCost / webDetection.ceiling) * 100 : 0;
 
+    // eBay searchByImage: free (client-credentials Browse quota) — quota usage only, no $ ceiling.
+    // ADR-ebay-searchbyimage-tagging-2026-07-02
+    const ebayImageSearch = await getEbayImageSearchUsage();
+
     res.json({
       monthKey: usage.monthKey,
       tokensUsed: usage.tokensUsed,
@@ -833,6 +837,13 @@ export const getAIUsage = async (req: AuthRequest, res: Response) => {
         costPercentage: parseFloat(webDetectionCostPercentage.toFixed(1)),
         dailyCapRemaining: webDetection.dailyCapRemaining,
         status: webDetection.estimatedCost >= webDetection.ceiling ? 'EXCEEDED' : 'NORMAL',
+      },
+      ebayImageSearch: {
+        enabled: ebayImageSearch.enabled,
+        callsToday: ebayImageSearch.callsToday,
+        dailyCap: ebayImageSearch.dailyCap,
+        dailyCapRemaining: ebayImageSearch.dailyCapRemaining,
+        status: ebayImageSearch.dailyCapRemaining <= 0 ? 'CAP_REACHED' : 'NORMAL',
       },
     });
   } catch (error) {

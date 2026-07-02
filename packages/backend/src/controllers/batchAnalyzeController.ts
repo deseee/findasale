@@ -29,6 +29,7 @@ import { decodeBarcodeFromImage } from '../services/serverBarcodeDecoder';
 import { lookupByBarcode } from '../services/ebayCatalogLookup';
 import { enrichItem, planEnrichmentApply } from '../services/productEnrichment';
 import { findCatalogMatches, buildCatalogMatchContext, isCatalogMatchEnabled } from '../services/imageMatchService';
+import { getEbayImageMatch, buildEbayMatchContext } from '../services/ebayImageSearchService';
 
 const OLLAMA_URL = process.env.OLLAMA_URL || 'http://host.docker.internal:11434';
 const OLLAMA_VISION_MODEL = process.env.OLLAMA_VISION_MODEL || 'qwen3-vl:4b';
@@ -350,11 +351,15 @@ export const batchAnalyzeImages = async (req: AuthRequest, res: Response): Promi
                 }
               }
 
+              let ebayMatchContext = '';
+              try {
+                if (base64Images.length > 0) ebayMatchContext = buildEbayMatchContext(await getEbayImageMatch(base64Images[0]));
+              } catch { /* eBay image-search best-effort (ADR-ebay-searchbyimage-tagging-2026-07-02) */ }
               const aiResponse = await axios.post(
                 `${OLLAMA_URL}/api/generate`,
                 {
                   model: OLLAMA_VISION_MODEL,
-                  prompt: ollamaPrompt + catalogMatchContext,
+                  prompt: ollamaPrompt + catalogMatchContext + ebayMatchContext,
                   images: base64Images.slice(0, 1), // Ollama: use primary image only
                   stream: false,
                 },

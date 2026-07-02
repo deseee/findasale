@@ -301,3 +301,85 @@ export async function getMonthlyWebDetectionCost(): Promise<{
     enabled: webDetectionEnabled(),
   };
 }
+
+
+// ── eBay searchByImage: daily quota-protection cap (ADR-ebay-searchbyimage-tagging-2026-07-02) ──
+// searchByImage is FREE — it uses the client-credentials Browse quota FindA.Sale already consumes
+// for price comps, so there is deliberately NO dollar ceiling here. The only breaker is a daily
+// CALL cap: it stops a batch-upload spike or a loop/retry bug from starving the shared ~5k/day
+// Browse quota that price comps also draw from. Kill switch is default OFF, same posture as
+// webDetectionEnabled() above.
+const EBAY_IMAGE_SEARCH_DAILY_CAP = parseInt(process.env.EBAY_IMAGE_SEARCH_DAILY_CAP || '500', 10);
+
+function getEbayImageSearchDayKey(): string {
+  const now = new Date();
+  const day = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  return `ebayimagesearch:calls:${day}`;
+}
+
+/**
+ * Kill switch. Default OFF — must be explicitly set to 'true' in Railway before the eBay
+ * image-search call ever fires. Mirrors webDetectionEnabled().
+ */
+export function ebayImageSearchEnabled(): boolean {
+  return process.env.EBAY_IMAGE_SEARCH_ENABLED === 'true';
+}
+
+/**
+ * Daily hard call-count cap. @returns true if under the cap (safe to proceed), false if hit.
+ */
+export async function canCallEbayImageSearch(): Promise<boolean> {
+  const key = getEbayImageSearchDayKey();
+  try {
+    const raw = await redis.get(key);
+    const count = raw !== null ? parseInt(raw, 10) : (memoryFallback.get(key) ?? 0);
+    return count < EBAY_IMAGE_SEARCH_DAILY_CAP;
+  } catch {
+    const count = memoryFallback.get(key) ?? 0;
+    return count < EBAY_IMAGE_SEARCH_DAILY_CAP;
+  }
+}
+
+/**
+ * Records one successful searchByImage call for the daily cap. Call immediately after a
+ * successful, non-empty eBay response.
+ */
+export async function trackEbayImageSearchCall(): Promise<void> {
+  const dayKey = getEbayImageSearchDayKey();
+  const DAY_TTL_SECONDS = 2 * 24 * 60 * 60; // 2 days — auto-expires, always outlives the day it counts
+  try {
+    const raw = await redis.get(dayKey);
+    const current = raw !== null ? parseInt(raw, 10) : 0;
+    const updated = current + 1;
+    memoryFallback.set(dayKey, updated);
+    await redis.setex(dayKey, DAY_TTL_SECONDS, String(updated));
+  } catch {
+    const current = memoryFallback.get(dayKey) ?? 0;
+    memoryFallback.set(dayKey, current + 1);
+  }
+}
+
+/**
+ * Visibility for /admin/ai-usage. No cost fields — the call is free; only quota usage matters.
+ */
+export async function getEbayImageSearchUsage(): Promise<{
+  enabled: boolean;
+  callsToday: number;
+  dailyCapRemaining: number;
+  dailyCap: number;
+}> {
+  const dayKey = getEbayImageSearchDayKey();
+  let callsToday = 0;
+  try {
+    const raw = await redis.get(dayKey);
+    callsToday = raw !== null ? parseInt(raw, 10) : (memoryFallback.get(dayKey) ?? 0);
+  } catch {
+    callsToday = memoryFallback.get(dayKey) ?? 0;
+  }
+  return {
+    enabled: ebayImageSearchEnabled(),
+    callsToday,
+    dailyCapRemaining: Math.max(0, EBAY_IMAGE_SEARCH_DAILY_CAP - callsToday),
+    dailyCap: EBAY_IMAGE_SEARCH_DAILY_CAP,
+  };
+}

@@ -4,6 +4,7 @@ import multer from 'multer';
 import axios from 'axios';
 import { analyzeItemImage, isCloudAIAvailable } from '../services/cloudAIService';
 import { findCatalogMatches, buildCatalogMatchContext, isCatalogMatchEnabled } from '../services/imageMatchService';
+import { getEbayImageMatch, buildEbayMatchContext } from '../services/ebayImageSearchService';
 import { enqueueProcessRapidDraft } from '../jobs/processRapidDraft';
 import { prisma } from '../lib/prisma';
 import { AuthRequest } from '../middleware/auth';
@@ -304,9 +305,13 @@ export const rapidBatchUpload = async (req: Request, res: Response): Promise<voi
                     // catalog match best-effort — proceed without it
                   }
                 }
+                let ebayMatchContext = '';
+                try {
+                  ebayMatchContext = buildEbayMatchContext(await getEbayImageMatch(base64Image));
+                } catch { /* eBay image-search best-effort (ADR-ebay-searchbyimage-tagging-2026-07-02) */ }
                 const aiResponse = await axios.post(
                   `${OLLAMA_URL}/api/generate`,
-                  { model: OLLAMA_VISION_MODEL, prompt: ollamaPrompt + catalogMatchContext, images: [base64Image], stream: false },
+                  { model: OLLAMA_VISION_MODEL, prompt: ollamaPrompt + catalogMatchContext + ebayMatchContext, images: [base64Image], stream: false },
                   { timeout: 45000 }
                 );
                 const raw = aiResponse.data.response.replace(/```json\n?|\n?```/g, '').trim();
@@ -391,9 +396,13 @@ export const analyzePhotoWithAI = async (req: Request, res: Response): Promise<v
       }
     }
 
+    let ebayMatchContext = '';
+    try {
+      ebayMatchContext = buildEbayMatchContext(await getEbayImageMatch(base64Image));
+    } catch { /* eBay image-search best-effort (ADR-ebay-searchbyimage-tagging-2026-07-02) */ }
     const response = await axios.post(
       `${OLLAMA_URL}/api/generate`,
-      { model: OLLAMA_VISION_MODEL, prompt: prompt + catalogMatchContext, images: [base64Image], stream: false },
+      { model: OLLAMA_VISION_MODEL, prompt: prompt + catalogMatchContext + ebayMatchContext, images: [base64Image], stream: false },
       { timeout: 30000 }
     );
 
