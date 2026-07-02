@@ -225,11 +225,16 @@ export async function runDelawarePhase2Scraper(): Promise<void> {
     }));
     const newIds = await batchUpsertScrapedOrganizers(batchRows, 100);
 
+    // Zip successful new IDs with their source entries into a fully-typed pair list —
+    // avoids relying on control-flow narrowing of a `string | null` array element
+    // surviving across separate statements (CI's tsc rejected that shape; see S1057).
+    const created: { organizerId: string; entry: (typeof newEntries)[number] }[] = [];
     for (let n = 0; n < newEntries.length; n++) {
-      const rawOrganizerId = newIds[n];
-      if (!rawOrganizerId) continue;
-      const organizerId: string = rawOrganizerId;
-      const entry = newEntries[n];
+      const id = newIds[n];
+      if (id) created.push({ organizerId: id, entry: newEntries[n] });
+    }
+
+    for (const { organizerId, entry } of created) {
       try {
         await prisma.organizer.update({
           where: { id: organizerId },
