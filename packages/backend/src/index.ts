@@ -344,8 +344,10 @@ if (process.env.REDIS_URL) {
   try {
     redisRateLimitClient = createClient({ url: process.env.REDIS_URL });
     redisRateLimitClient.on('error', (err) => {
+      // Do NOT null the client here — node-redis auto-reconnects; nulling our
+      // reference permanently defeats recovery, leaving the limiter dead until a
+      // process restart. The store closure guards on isReady instead.
       console.error('[rateLimit] Redis error:', err);
-      redisRateLimitClient = null; // graceful degradation
     });
     redisRateLimitClient.connect().catch((err) => {
       console.error('[rateLimit] Failed to connect to Redis:', err);
@@ -361,11 +363,30 @@ if (process.env.REDIS_URL) {
 const createRateLimitStore = () => {
   if (redisRateLimitClient && redisRateLimitClient.isOpen) {
     return new RedisStore({
-      sendCommand: (...args: string[]) => redisRateLimitClient!.sendCommand(args),
+      sendCommand: (...args: string[]) => {
+        const c = redisRateLimitClient;
+        if (!c || !c.isReady) return Promise.reject(new Error('redis-unavailable'));
+        return c.sendCommand(args);
+      },
     });
   }
   return undefined; // Falls back to default in-memory store
 };
+
+// Fail-open wrapper: if the rate-limit store errors (e.g. Redis drop mid-life),
+// proceed instead of 500ing. Over-limit still returns 429 (express-rate-limit
+// sends it itself and never calls this callback). Incident: Sentry
+// FINDASALE-NODEJS-4F (2026-07-02) — the RedisStore closure NPE'd on a Redis drop
+// and 500'd every rate-limited request; store now fails open + the client
+// reference is no longer nulled so Redis-backed limiting self-restores on reconnect.
+const resilientLimiter = (limiter: express.RequestHandler): express.RequestHandler =>
+  (req, res, next) => limiter(req, res, (err?: unknown) => {
+    if (err) {
+      console.error('[rateLimit] store error — failing open:', err instanceof Error ? err.message : err);
+      return next();
+    }
+    next();
+  });
 
 // IP whitelist — comma-separated IPs in RATE_LIMIT_WHITELIST_IPS env var bypass all rate limits
 // Usage: set RATE_LIMIT_WHITELIST_IPS=203.0.113.1,203.0.113.2 in Railway environment variables
@@ -406,7 +427,7 @@ const globalLimiter = rateLimit({
   skip: (req) => req.path.startsWith('/api/viewers') || req.path === '/api/health/latency' || isWhitelistedIP(req),
   store: createRateLimitStore(),
 });
-app.use(globalLimiter);
+app.use(resilientLimiter(globalLimiter));
 
 // Viewer ping limiter — higher limit, short window, exempt from global limiter
 const viewerLimiter = rateLimit({
@@ -558,7 +579,7 @@ app.get('/health/ready', async (req, res) => {
 });
 
 // Routes
-app.use('/api/auth', authLimiter, authRoutes); // stricter rate limit on auth
+app.use('/api/auth', resilientLimiter(authLimiter), authRoutes); // stricter rate limit on auth
 app.use('/api/auth/passkey', passkeyRoutes); // Feature #19: Passkey/WebAuthn routes (authLimiter already applied via /api/auth mount above)
 app.use('/api/sales', saleRoutes);
 app.use('/api/items', itemRoutes);
