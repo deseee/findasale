@@ -24,6 +24,7 @@ import { analyzeItemImages } from './cloudAIService';
 import { enrichItem, planEnrichmentApply } from './productEnrichment';
 import { suggestEbayCategoryForTitle } from '../controllers/ebayController';
 import { syncListedItemFieldsToEbay } from '../controllers/itemController';
+import { runModelBakeoff, isBakeoffEnabled } from './modelBakeoffService';
 
 export type ReanalyzeErrorCode =
   | 'ITEM_NOT_FOUND'
@@ -302,6 +303,17 @@ export async function reanalyzeItem(
       console.warn(`[Reanalyze eBay] non-fatal sync error for item ${itemId}:`, syncErr?.message || syncErr);
       ebaySynced = false;
       ebaySyncReason = 'exception';
+    }
+  }
+
+  // Observability-only model bake-off (AI_TAG_BAKEOFF flag). Runs AFTER the applied
+  // result above is fully computed, on the SAME already-downloaded image buffers.
+  // Awaited but fully error-swallowed — it NEVER affects the reanalyze response.
+  if (isBakeoffEnabled()) {
+    try {
+      await runModelBakeoff(itemId, buffers, mimeTypes);
+    } catch (bakeoffErr: any) {
+      console.warn('[bakeoff] harness invocation error (non-fatal):', bakeoffErr?.message || bakeoffErr);
     }
   }
 
