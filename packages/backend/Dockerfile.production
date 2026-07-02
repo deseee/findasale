@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-# cache-bust: 2026-06-28T14:10:00Z — force backend redeploy to pick up /api/index/metros (Weekend Sale Index route stranded by SKIPPED deploy)
+# cache-bust: 2026-07-02T15:30:00Z — force backend redeploy to pick up rate-limiter fail-open fix 826ca1f7 (stranded by SKIPPED deploy: push tip was a docs commit; Sentry FINDASALE-NODEJS-4F)
 FROM node:20-slim AS base
 
 # Install OpenSSL for Prisma
