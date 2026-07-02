@@ -158,14 +158,17 @@ export async function getVisionLabels(imageBase64: string): Promise<{ objectLabe
 export async function getWebDetectionMatch(imageBase64: string): Promise<{ webEntities: string[]; bestGuessLabels: string[] } | null> {
   if (!webDetectionEnabled()) {
     console.log('[cloudAIService] Web Detection skipped — WEB_DETECTION_ENABLED is not \'true\'');
+    console.log('[webDetection] skipped early return: kill switch off (WEB_DETECTION_ENABLED != true)');
     return null;
   }
   if (!(await isWebDetectionDailyCapAvailable())) {
     console.warn('[cloudAIService] Web Detection skipped — daily call cap reached (WEB_DETECTION_DAILY_CAP)');
+    console.warn('[webDetection] skipped early return: daily call cap reached (WEB_DETECTION_DAILY_CAP)');
     return null;
   }
   if (await isWebDetectionCeilingExceeded()) {
     console.warn('[cloudAIService] Web Detection skipped — monthly cost ceiling reached (WEB_DETECTION_COST_CEILING_USD)');
+    console.warn('[webDetection] skipped early return: monthly cost ceiling exceeded (WEB_DETECTION_COST_CEILING_USD)');
     return null;
   }
 
@@ -193,6 +196,14 @@ export async function getWebDetectionMatch(imageBase64: string): Promise<{ webEn
     const bestGuessLabels: string[] = (webDetection?.bestGuessLabels ?? [])
       .map((l: any) => l.label)
       .filter(Boolean);
+
+    if (!webDetection) {
+      console.warn('[webDetection] Vision returned no webDetection block — returning empty match');
+    } else if (webEntities.length === 0 && bestGuessLabels.length === 0) {
+      console.warn('[webDetection] Vision returned empty results (no webEntities, no bestGuessLabels)');
+    } else {
+      console.log(`[webDetection] match: bestGuess=[${bestGuessLabels.slice(0, 5).join(', ')}] webEntities=[${webEntities.slice(0, 5).join(', ')}]`);
+    }
 
     return { webEntities: [...new Set(webEntities)].slice(0, 10), bestGuessLabels: [...new Set(bestGuessLabels)].slice(0, 5) };
   } catch (error: any) {
@@ -801,6 +812,11 @@ export async function analyzeItemImages(
     ebayMatch
       ? `[ebayImageSearch] passed into Haiku call — matched title="${ebayMatch.topTitle}"`
       : '[ebayImageSearch] no eBay match passed into Haiku call (ebayMatch=null)'
+  );
+  console.log(
+    webMatch
+      ? `[webDetection] passed into Haiku call — bestGuess=[${webMatch.bestGuessLabels.slice(0, 5).join(', ')}]`
+      : '[webDetection] no web match passed into Haiku call (webMatch=null)'
   );
 
   // Multi-image Haiku analysis (Phase 2: pass clusterPhotos for role context)
