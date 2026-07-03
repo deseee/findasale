@@ -1121,6 +1121,50 @@ interface Step3Props {
   photoUrls: string[];
   setPhotoUrls: React.Dispatch<React.SetStateAction<string[]>>;
 }
+// Bug fix (2026-07-03 follow-up): Vercel's serverless-function proxy that fronts
+// /api/* has a hard, non-configurable ~4.5MB request body cap. The prior fix routed this
+// step through POST /api/upload/sale-photos correctly, but bundled every selected file
+// into ONE multipart request -- a handful of full-resolution iPhone photos (commonly
+// 3-8MB each) blows past that combined limit and Vercel rejects the whole request with
+// FUNCTION_PAYLOAD_TOO_LARGE (HTTP 413) before it ever reaches our backend. Confirmed via
+// direct curl against the live rewrite: a 3MB file returns 403 (reaches Express, auth
+// fails as expected for an unauthenticated probe); a 4.5MB+ file returns 413 with a plain
+// -text Vercel error page (no JSON body) -- which is why the generic "check your
+// connection" fallback message showed regardless of the real cause.
+// Fix: (1) downscale every photo client-side via canvas before upload -- mirrors the same
+// canvas-resize approach already used in pages/organizer/add-items/[saleId].tsx -- so a
+// single file is virtually always well under 1MB; (2) upload one file per request instead
+// of bundling the whole batch, matching the one-file-per-call pattern every other working
+// upload surface in this app already uses, so the combined-payload ceiling can't recur
+// even for photos that don't compress well.
+const MAX_UPLOAD_DIMENSION = 1920;
+const UPLOAD_JPEG_QUALITY = 0.85;
+
+function resizeImageFile(file: File): Promise<Blob> {
+  return new Promise((resolve) => {
+    const objectUrl = URL.createObjectURL(file);
+    const img = new window.Image();
+    img.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      let { width, height } = img;
+      if (width > MAX_UPLOAD_DIMENSION || height > MAX_UPLOAD_DIMENSION) {
+        const scale = MAX_UPLOAD_DIMENSION / Math.max(width, height);
+        width = Math.round(width * scale);
+        height = Math.round(height * scale);
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) { resolve(file); return; }
+      ctx.drawImage(img, 0, 0, width, height);
+      canvas.toBlob((blob) => resolve(blob || file), 'image/jpeg', UPLOAD_JPEG_QUALITY);
+    };
+    img.onerror = () => { URL.revokeObjectURL(objectUrl); resolve(file); }; // fall back to original file if decode fails
+    img.src = objectUrl;
+  });
+}
+
 function Step3({ c, photoUrls, setPhotoUrls }: Step3Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
@@ -1130,30 +1174,32 @@ function Step3({ c, photoUrls, setPhotoUrls }: Step3Props) {
     if (!files || files.length === 0) return;
     setUploading(true);
     try {
-      // Bug fix (2026-07-03): this previously uploaded directly from the browser to
-      // Cloudinary using an unsigned preset ('findasale_unsigned') that does not exist
-      // on the account (confirmed via a direct API call: Cloudinary returns
-      // {"error":{"message":"Upload preset not found"}}, HTTP 400) — every photo upload
-      // on this step failed for every organizer. Every other upload surface in the app
-      // (add-items, edit-item, review, SmartInventoryUpload, useUploadQueue, etc.) goes
-      // through our own authenticated backend endpoint POST /api/upload/sale-photos
-      // instead, which performs the real Cloudinary upload server-side with the account's
-      // API key/secret plus server-side file-signature validation. This now matches that
-      // established, working pattern.
       const uploads = Array.from(files).slice(0, 20 - photoUrls.length);
-      const fd = new FormData();
-      uploads.forEach(file => fd.append('photos', file));
-      const res = await api.post('/upload/sale-photos', fd, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
-      const urls: string[] = res.data?.urls || [];
-      if (res.data?.partialErrors?.length) {
-        showToast(`Some photos failed to upload: ${res.data.partialErrors.join('; ')}`, 'error');
+      const uploadResults = await Promise.allSettled(
+        uploads.map(async (file) => {
+          const resized = await resizeImageFile(file);
+          const fd = new FormData();
+          fd.append('photos', resized, file.name.replace(/\.\w+$/, '.jpg'));
+          const res = await api.post('/upload/sale-photos', fd, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+          });
+          const url: string | undefined = res.data?.urls?.[0];
+          if (!url) throw new Error('No URL returned');
+          return url;
+        })
+      );
+
+      const urls = uploadResults
+        .filter((r): r is PromiseFulfilledResult<string> => r.status === 'fulfilled')
+        .map(r => r.value);
+      const failedCount = uploadResults.filter(r => r.status === 'rejected').length;
+
+      if (failedCount > 0) {
+        showToast(`${failedCount} photo${failedCount !== 1 ? 's' : ''} failed to upload. The rest were added -- try the failed one${failedCount !== 1 ? 's' : ''} again.`, 'error');
       }
       setPhotoUrls(prev => [...prev, ...urls].slice(0, 20));
-    } catch (err: any) {
-      const serverMsg = err?.response?.data?.error || err?.response?.data?.message;
-      showToast(serverMsg ? `Upload failed: ${serverMsg}` : 'Photo upload failed. Check your connection and try again.', 'error');
+    } catch {
+      showToast('Photo upload failed. Check your connection and try again.', 'error');
     } finally {
       setUploading(false);
     }
