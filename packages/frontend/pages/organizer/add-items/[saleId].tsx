@@ -392,6 +392,47 @@ const AddItemsDetailPage = () => {
   // Ref to track current append target — avoids stale closure in async processAndUploadRapidPhoto
   // This ref is read at upload time, not capture time, so it always has the latest value
   const addingToItemIdRef = useRef<string | null>(null);
+  // Bug fix (2026-07-03): rapidfire's "+" (append to item) races against that same
+  // item's own creation. Tapping + on an item whose real DB id hasn't arrived yet (still
+  // showing its temp- placeholder) captures a photo whose append target is baked in as
+  // that STALE temp- string; by the time the append request fires, "temp-..." was never
+  // a real item, so POST /items/temp-xxx/photos 404s ("Item not found or access denied").
+  // Confirmed via Sentry on a live production event: appendToItemId was literally
+  // "temp-1783114597417-nv35i". The existing "update the ref to the real ID" logic below
+  // only fixes FUTURE captures -- it can't retroactively fix a call already in flight
+  // with the stale id as a parameter. Fix: track a resolvable promise per temp id created
+  // for a new item; any append call targeting a temp- id awaits that specific item's
+  // real id before firing, instead of racing it.
+  const tempItemResolvers = useRef<Record<string, { promise: Promise<string>; resolve: (id: string) => void }>>({});
+
+  const registerTempItem = (tempId: string) => {
+    let resolveFn!: (id: string) => void;
+    const promise = new Promise<string>((resolve) => { resolveFn = resolve; });
+    tempItemResolvers.current[tempId] = { promise, resolve: resolveFn };
+  };
+
+  const resolveTempItem = (tempId: string, realId: string) => {
+    tempItemResolvers.current[tempId]?.resolve(realId);
+    delete tempItemResolvers.current[tempId];
+  };
+
+  // Resolves a possibly-still-temporary append target to its real item id before use.
+  // Waits up to 20s for the underlying item's own creation to finish; if there's nothing
+  // to wait on (already failed/removed) or it never resolves in time, throws instead of
+  // attempting a request that would just 404.
+  const resolveAppendTargetId = async (appendToItemId: string): Promise<string> => {
+    if (!appendToItemId.startsWith('temp-')) return appendToItemId;
+    const pending = tempItemResolvers.current[appendToItemId];
+    if (!pending) {
+      throw new Error('The item you were adding this photo to is no longer available.');
+    }
+    return Promise.race([
+      pending.promise,
+      new Promise<string>((_, reject) =>
+        setTimeout(() => reject(new Error('Timed out waiting for the item to finish creating.')), 20000)
+      ),
+    ]);
+  };
   const { queue, enqueue, uploadingCount } = useUploadQueue(saleId as string);
 
   // Phase 3.5: Tiered lighting quality system state
@@ -1048,6 +1089,7 @@ const AddItemsDetailPage = () => {
         ...prev,
         { id: tempId, thumbnailUrl: capturedPhotos[0].previewUrl, draftStatus: 'DRAFT' },
       ]);
+      registerTempItem(tempId); // only new-item creations can later be an append target
     }
     // Append mode: skip temp entry — target item is already in rapidItems
 
@@ -1120,6 +1162,9 @@ const AddItemsDetailPage = () => {
 
       // 5. Upload
       if (appendToItemId) {
+        // Bug fix (2026-07-03): wait for the target item's real id if it's still a
+        // temp- placeholder instead of racing it (see tempItemResolvers doc above).
+        const resolvedAppendId = await resolveAppendTargetId(appendToItemId);
         // Append photo to existing item
         const fd = new FormData();
         fd.append('photos', processedBlob, 'rapidfire.jpg');
@@ -1130,13 +1175,13 @@ const AddItemsDetailPage = () => {
         const urls: string[] = uploadRes.data?.urls || uploadRes.data || [];
         if (urls[0]) {
           // Append URL to existing item
-          await api.post(`/items/${appendToItemId}/photos`, { url: urls[0] });
+          await api.post(`/items/${resolvedAppendId}/photos`, { url: urls[0] });
           // Update target item's photo count and remove the orphan temp entry
           setRapidItems((prev) =>
             prev
               .filter((item) => item.id !== tempId)
               .map((item) =>
-                item.id === appendToItemId
+                item.id === resolvedAppendId
                   ? { ...item, photoUrls: [...(item.photoUrls || []), urls[0]] }
                   : item
               )
@@ -1163,6 +1208,7 @@ const AddItemsDetailPage = () => {
               : item
           )
         );
+        resolveTempItem(tempId, itemId); // unblocks any append call already waiting on this temp id
 
         // If user tapped + on this item while it was still temp-, update the ref to the real ID
         if (addingToItemIdRef.current === tempId) {
@@ -1294,6 +1340,9 @@ const AddItemsDetailPage = () => {
 
       // 5. Upload
       if (pendingQualityAppendId) {
+        // Bug fix (2026-07-03): same temp-id race as processAndUploadRapidPhoto — wait
+        // for the real item id instead of racing it.
+        const resolvedAppendId = await resolveAppendTargetId(pendingQualityAppendId);
         // Append photo to existing item
         const fd = new FormData();
         fd.append('photos', pendingQualityBlob, 'rapidfire.jpg');
@@ -1303,10 +1352,10 @@ const AddItemsDetailPage = () => {
         });
         const urls: string[] = uploadRes.data?.urls || uploadRes.data || [];
         if (urls[0]) {
-          await api.post(`/items/${pendingQualityAppendId}/photos`, { url: urls[0] });
+          await api.post(`/items/${resolvedAppendId}/photos`, { url: urls[0] });
           setRapidItems((prev) =>
             prev.map((item) =>
-              item.id === pendingQualityAppendId
+              item.id === resolvedAppendId
                 ? { ...item, photoUrls: [...(item.photoUrls || []), urls[0]] }
                 : item
             )
@@ -1333,13 +1382,19 @@ const AddItemsDetailPage = () => {
               : item
           )
         );
+        if (pendingQualityTempId) resolveTempItem(pendingQualityTempId, itemId);
 
         queryClient.invalidateQueries({ queryKey: ['items', saleId] });
         pollForAI(itemId);
       }
     } catch (err: any) {
-      if (process.env.NODE_ENV !== 'production') console.error('[quality] Resume upload failed:', err);
-      showToast('Upload failed. Please try again.', 'error');
+      console.error('[quality] Resume upload failed:', err);
+      Sentry.captureException(err, {
+        tags: { feature: 'rapidfire-upload-quality-resume' },
+        extra: { status: err?.response?.status, responseData: err?.response?.data, hasResponse: !!err?.response },
+      });
+      const msg = err?.response?.data?.message || err?.message;
+      showToast(msg ? `Upload failed: ${msg}` : 'Upload failed. Please try again.', 'error');
     } finally {
       setPendingQualityBlob(null);
       setPendingQualityTempId(null);
@@ -1382,6 +1437,9 @@ const AddItemsDetailPage = () => {
       // Resume upload from phase 5 (face detection passed)
       // 5. Upload
       if (pendingFaceAppendId) {
+        // Bug fix (2026-07-03): same temp-id race as processAndUploadRapidPhoto — wait
+        // for the real item id instead of racing it.
+        const resolvedAppendId = await resolveAppendTargetId(pendingFaceAppendId);
         // Append photo to existing item
         const fd = new FormData();
         fd.append('photos', pendingFaceBlob, 'rapidfire.jpg');
@@ -1391,10 +1449,10 @@ const AddItemsDetailPage = () => {
         });
         const urls: string[] = uploadRes.data?.urls || uploadRes.data || [];
         if (urls[0]) {
-          await api.post(`/items/${pendingFaceAppendId}/photos`, { url: urls[0] });
+          await api.post(`/items/${resolvedAppendId}/photos`, { url: urls[0] });
           setRapidItems((prev) =>
             prev.map((item) =>
-              item.id === pendingFaceAppendId
+              item.id === resolvedAppendId
                 ? { ...item, photoUrls: [...(item.photoUrls || []), urls[0]] }
                 : item
             )
@@ -1421,13 +1479,19 @@ const AddItemsDetailPage = () => {
               : item
           )
         );
+        if (pendingFaceTempId) resolveTempItem(pendingFaceTempId, itemId);
 
         queryClient.invalidateQueries({ queryKey: ['items', saleId] });
         pollForAI(itemId);
       }
     } catch (err: any) {
-      if (process.env.NODE_ENV !== 'production') console.error('[face detection] Resume upload failed:', err);
-      showToast('Upload failed. Please try again.', 'error');
+      console.error('[face detection] Resume upload failed:', err);
+      Sentry.captureException(err, {
+        tags: { feature: 'rapidfire-upload-face-resume' },
+        extra: { status: err?.response?.status, responseData: err?.response?.data, hasResponse: !!err?.response },
+      });
+      const msg = err?.response?.data?.message || err?.message;
+      showToast(msg ? `Upload failed: ${msg}` : 'Upload failed. Please try again.', 'error');
     } finally {
       setPendingFaceBlob(null);
       setPendingFaceTempId(null);
@@ -2093,6 +2157,9 @@ const AddItemsDetailPage = () => {
                   ...prev,
                   { id: tempId, thumbnailUrl: photo.previewUrl, draftStatus: 'DRAFT' },
                 ]);
+                if (!addingToItemIdRef.current) {
+                  registerTempItem(tempId); // only new-item creations can later be an append target
+                }
                 // Start background upload pipeline (non-blocking)
                 // Read from ref instead of state to avoid stale closure after auto-analysis completes
                 processAndUploadRapidPhoto(photo, tempId, addingToItemIdRef.current);
