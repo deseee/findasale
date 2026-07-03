@@ -74,12 +74,12 @@ export default function BlogIndexPage({ posts }: BlogIndexProps) {
         <title>Blog | FindA.Sale</title>
         <meta
           name="description"
-          content="Tips, guides, and news for estate sale and yard sale organizers — and the shoppers who love them."
+          content="Tips, guides, and news for estate sale, yard sale, auction, flea market, and consignment organizers, and the shoppers who love them."
         />
         <meta property="og:title" content="Blog | FindA.Sale" />
         <meta
           property="og:description"
-          content="Tips, guides, and news for estate sale and yard sale organizers."
+          content="Tips, guides, and news for organizers of estate sales, yard sales, auctions, flea markets, and consignment events."
         />
         <meta property="og:url" content="https://finda.sale/blog" />
         <meta property="og:image" content="https://finda.sale/og-default.png" />
@@ -94,7 +94,7 @@ export default function BlogIndexPage({ posts }: BlogIndexProps) {
               Blog
             </h1>
             <p className="text-body-lg text-warm-500 dark:text-warm-400">
-              Tips, guides, and perspective for estate sale organizers.
+              Tips, guides, and perspective for sale organizers: estate sales, yard sales, auctions, flea markets, and more.
             </p>
           </div>
         </div>

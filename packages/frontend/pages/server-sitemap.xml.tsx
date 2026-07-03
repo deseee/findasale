@@ -1,5 +1,6 @@
 import { getServerSideSitemapLegacy as getServerSideSitemap } from 'next-sitemap';
 import api from '../lib/api';
+import { posts as blogPosts } from '../data/blog/index';
 
 export async function getServerSideProps(ctx: any) {
   try {
@@ -38,6 +39,7 @@ export async function getServerSideProps(ctx: any) {
       { path: '/contact', priority: 0.5, changefreq: 'monthly' },
       { path: '/faq', priority: 0.5, changefreq: 'monthly' },
       { path: '/leaderboard', priority: 0.6, changefreq: 'weekly' },
+      { path: '/blog', priority: 0.7, changefreq: 'daily' },
       { path: '/pricing', priority: 0.7, changefreq: 'monthly' },
       { path: '/terms', priority: 0.4, changefreq: 'monthly' },
       { path: '/privacy', priority: 0.4, changefreq: 'monthly' },
@@ -232,6 +234,14 @@ export async function getServerSideProps(ctx: any) {
       // Graceful fallback — encyclopedia URLs are optional
     }
 
+    // Blog post URLs (data/blog/index.ts is a local static module — no API call needed)
+    const blogUrls = blogPosts.map((post) => ({
+      loc: `${baseUrl}/blog/${post.slug}`,
+      lastmod: post.updatedDate ?? post.publishDate,
+      changefreq: 'weekly',
+      priority: 0.6,
+    }));
+
     // Combine all URL sets
     // Note: /items/{id} URLs intentionally excluded — ~10k SSR leaf pages
     // exhaust crawl budget, crowding out city/sale/guide pages. ISR conversion pending.
@@ -251,6 +261,7 @@ export async function getServerSideProps(ctx: any) {
       ...guideUrls,
       ...categoryUrls,
       ...encyclopediaUrls,
+      ...blogUrls,
     ];
 
     return getServerSideSitemap(ctx, fields);
