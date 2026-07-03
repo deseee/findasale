@@ -1217,6 +1217,10 @@ model Item {
   mpn                        String?
   brand                      String?
   ebayEpid                   String?
+  // ADR grounded-identification-production-2026-07-02: winning grounded product identity
+  groundedIdentity           String?  // e.g. "Tupperware CoolSpot Trivet — trivet"
+  groundedConfidence         Float?   // 0.0–1.0 confidence of the gated grounded winner
+  groundedSource             String?  // "text-grounded" | "visual-consensus" | "visual-single"
   // ADR Catalog Enrichment (2026-06-14): low-confidence catalog suggestions for one-click accept in edit UI
   catalogSuggestions         Json?
   // ADR eBay Parity Phase B: Rich condition

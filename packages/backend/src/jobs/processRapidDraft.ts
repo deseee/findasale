@@ -8,6 +8,7 @@ import { getEbayAccessToken } from '../controllers/ebayController';
 import { decodeBarcodeFromImage } from '../services/serverBarcodeDecoder';
 import { lookupByBarcode } from '../services/ebayCatalogLookup';
 import { enrichItem, planEnrichmentApply } from '../services/productEnrichment';
+import { runGroundedIdentityAsync } from '../services/groundedIdentityService';
 
 /**
  * processRapidDraft — Background job for Rapidfire Mode Phase 2A
@@ -394,6 +395,22 @@ export async function processRapidDraft(itemId: string): Promise<void> {
       } else {
         console.log(`[rapidfire] Item ${itemId} processed successfully. Status: PENDING_REVIEW`);
       }
+
+      // PRODUCTION grounded identity (ADR grounded-identification-production-2026-07-02).
+      // FIRE-AND-FORGET: never blocks this job's completion / the upload response. Fully gated +
+      // error-swallowed inside the service; master switch OFF => no-op. Patches the item row when
+      // a gated winner lands (the review card picks it up on its next refetch).
+      runGroundedIdentityAsync({
+        itemId,
+        buffers: photoBuffers,
+        mimeTypes,
+        baseResult: {
+          confidence: typeof aiResult.confidence === 'number' ? aiResult.confidence : undefined,
+          brand: item.brand ?? aiResult.brand ?? undefined,
+          title: aiResult.title ?? item.title ?? undefined,
+          category: aiResult.category ?? item.category ?? undefined,
+        },
+      });
     } catch (aiError) {
       // AI processing failed — log error to aiErrorLog, keep DRAFT status
       const errorMessage = aiError instanceof Error ? aiError.message : String(aiError);

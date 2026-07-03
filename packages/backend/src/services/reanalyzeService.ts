@@ -25,6 +25,7 @@ import { enrichItem, planEnrichmentApply } from './productEnrichment';
 import { suggestEbayCategoryForTitle } from '../controllers/ebayController';
 import { syncListedItemFieldsToEbay } from '../controllers/itemController';
 import { runModelBakeoff, runGroundedResolution, runVisualResolution } from './modelBakeoffService';
+import { resolveGroundedIdentityInline } from './groundedIdentityService';
 
 export type ReanalyzeErrorCode =
   | 'ITEM_NOT_FOUND'
@@ -355,6 +356,28 @@ export async function reanalyzeItem(
     } catch (visualErr: any) {
       console.warn('[visual] pass invocation error (non-fatal):', visualErr?.message || visualErr);
     }
+  }
+
+  // PRODUCTION grounded identity (ADR grounded-identification-production-2026-07-02).
+  // Runs INLINE here (reanalyzeService is already async), fully gated + error-swallowed inside
+  // the service. Master switch OFF => no-op. persist follows apply (test-image runs never write).
+  // Skips re-grounding if the item already has a strong grounded winner.
+  try {
+    await resolveGroundedIdentityInline({
+      itemId,
+      buffers,
+      mimeTypes,
+      baseResult: {
+        confidence: typeof result.confidence === 'number' ? result.confidence : undefined,
+        brand: item.brand ?? result.brand ?? undefined,
+        title: result.title ?? item.title ?? undefined,
+        category: result.category ?? item.category ?? undefined,
+      },
+      persist: apply,
+      skipIfAlreadyGrounded: true,
+    });
+  } catch (groundingErr: any) {
+    console.warn('[grounding] inline pass invocation error (non-fatal):', groundingErr?.message || groundingErr);
   }
 
   console.log(`[Reanalyze] item=${itemId} applied=${apply} ebaySynced=${ebaySynced} title="${(result.title || item.title || '').slice(0, 80)}"`);

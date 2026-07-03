@@ -383,3 +383,168 @@ export async function getEbayImageSearchUsage(): Promise<{
     dailyCap: EBAY_IMAGE_SEARCH_DAILY_CAP,
   };
 }
+// ── Grounded Identity: dedicated cost-control block (ADR grounded-identification-production-2026-07-02) ──
+// Mirrors the Web Detection hard-gating pattern above. Grounding fans out to paid OpenRouter
+// models (perplexity/sonar, gemini/gpt visual :online, sonar-pro on escalation), so it gets its
+// OWN monthly $ ceiling, its OWN daily call cap, its OWN master + sub kill switches, and its OWN
+// rollout percentage — all env-driven so cost can be dialed from Railway with no deploy. With the
+// master switch OFF (the default) NOTHING here ever fires and the pipeline is byte-for-byte
+// unchanged (Phase 0).
+
+const GROUNDING_COST_CEILING_USD = parseFloat(process.env.GROUNDING_COST_CEILING_USD || '40');
+const GROUNDING_DAILY_CAP = parseInt(process.env.GROUNDING_DAILY_CAP || '1000', 10);
+
+function getGroundingMonthKey(): string {
+  const now = new Date();
+  return `grounding:cost:${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function getGroundingDayKey(): string {
+  const now = new Date();
+  const day = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  return `grounding:calls:${day}`;
+}
+
+/**
+ * Layer 0 — MASTER kill switch. Default OFF — must be explicitly 'true' in Railway before any
+ * grounding call ever fires. Mirrors webDetectionEnabled().
+ */
+export function groundingEnabled(): boolean {
+  return process.env.GROUNDING_ENABLED === 'true';
+}
+
+/**
+ * Independent sub-switches. Each DEFAULTS to following the master switch (so flipping the master
+ * on turns both on), but can be independently forced off by setting the sub var to 'false', or
+ * independently forced on by setting it to 'true'.
+ */
+export function groundingTextEnabled(): boolean {
+  const v = process.env.GROUNDING_TEXT_ENABLED;
+  if (v === 'true') return true;
+  if (v === 'false') return false;
+  return groundingEnabled();
+}
+
+export function groundingVisualEnabled(): boolean {
+  const v = process.env.GROUNDING_VISUAL_ENABLED;
+  if (v === 'true') return true;
+  if (v === 'false') return false;
+  return groundingEnabled();
+}
+
+/**
+ * Rollout percentage (0–100). Only this % of eligible items actually run grounding. Default 0 —
+ * so even with the master switch flipped on, nothing runs until the rollout is dialed up. The
+ * caller passes a stable-ish random draw (Math.random()*100) and we compare against the pct.
+ */
+export function groundingRolloutPct(): number {
+  const n = parseInt(process.env.GROUNDING_ROLLOUT_PCT || '0', 10);
+  if (Number.isNaN(n)) return 0;
+  return Math.max(0, Math.min(100, n));
+}
+
+/** Per-item spend ceiling — the orchestrator aborts remaining calls for an item once exceeded. */
+export function groundingPerItemCeilingUsd(): number {
+  const n = parseFloat(process.env.GROUNDING_PER_ITEM_COST_CEILING_USD || '0.08');
+  return Number.isNaN(n) ? 0.08 : n;
+}
+
+/**
+ * Layer 1 — dedicated PRE-FLIGHT monthly cost ceiling. Checked BEFORE any paid grounding call
+ * fires. Fail-open on Redis outage (consistent with isAICostCeilingExceeded / isWebDetectionCeilingExceeded).
+ */
+export async function isGroundingCeilingExceeded(): Promise<boolean> {
+  const key = getGroundingMonthKey();
+  try {
+    const costUnits = await getTokenCount(key); // stored as USD*1000 integer units, see trackGroundingCall
+    const estimatedCost = costUnits / 1000;
+    return estimatedCost >= GROUNDING_COST_CEILING_USD;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Layer 2 — daily hard call-count cap. @returns true if under the cap (safe to proceed), false if hit.
+ */
+export async function isGroundingDailyCapAvailable(): Promise<boolean> {
+  const key = getGroundingDayKey();
+  try {
+    const raw = await redis.get(key);
+    const count = raw !== null ? parseInt(raw, 10) : (memoryFallback.get(key) ?? 0);
+    return count < GROUNDING_DAILY_CAP;
+  } catch {
+    const count = memoryFallback.get(key) ?? 0;
+    return count < GROUNDING_DAILY_CAP;
+  }
+}
+
+/**
+ * Records one grounding model call: adds its actual $ cost to the monthly ceiling and increments
+ * the daily call count. Call after each paid grounding model call (best-effort cost estimate).
+ * @param costUsd estimated dollar cost of the single call just made.
+ */
+export async function trackGroundingCall(costUsd: number): Promise<void> {
+  const safeCost = Number.isFinite(costUsd) && costUsd > 0 ? costUsd : 0;
+
+  // Monthly cost (stored as USD*1000 integer units — same string-count storage shape as the rest
+  // of this file, avoids float drift across many increments).
+  const monthKey = getGroundingMonthKey();
+  const currentCostUnits = await getTokenCount(monthKey);
+  await setTokenCount(monthKey, currentCostUnits + safeCost * 1000);
+
+  // Daily call count
+  const dayKey = getGroundingDayKey();
+  const DAY_TTL_SECONDS = 2 * 24 * 60 * 60; // 2 days — auto-expires, always outlives the day it counts
+  try {
+    const raw = await redis.get(dayKey);
+    const current = raw !== null ? parseInt(raw, 10) : 0;
+    const updated = current + 1;
+    memoryFallback.set(dayKey, updated);
+    await redis.setex(dayKey, DAY_TTL_SECONDS, String(updated));
+  } catch {
+    const current = memoryFallback.get(dayKey) ?? 0;
+    memoryFallback.set(dayKey, current + 1);
+  }
+}
+
+/**
+ * Visibility for /admin/ai-usage — same shape family as getMonthlyWebDetectionCost().
+ */
+export async function getMonthlyGroundingCost(): Promise<{
+  monthKey: string;
+  estimatedCost: number;
+  ceiling: number;
+  dailyCap: number;
+  dailyCapRemaining: number;
+  rolloutPct: number;
+  enabled: boolean;
+  textEnabled: boolean;
+  visualEnabled: boolean;
+}> {
+  const key = getGroundingMonthKey();
+  const costUnits = await getTokenCount(key);
+  const estimatedCost = costUnits / 1000;
+  const monthKey = key.replace('grounding:cost:', '');
+
+  const dayKey = getGroundingDayKey();
+  let dailyCount = 0;
+  try {
+    const raw = await redis.get(dayKey);
+    dailyCount = raw !== null ? parseInt(raw, 10) : (memoryFallback.get(dayKey) ?? 0);
+  } catch {
+    dailyCount = memoryFallback.get(dayKey) ?? 0;
+  }
+
+  return {
+    monthKey,
+    estimatedCost,
+    ceiling: GROUNDING_COST_CEILING_USD,
+    dailyCap: GROUNDING_DAILY_CAP,
+    dailyCapRemaining: Math.max(0, GROUNDING_DAILY_CAP - dailyCount),
+    rolloutPct: groundingRolloutPct(),
+    enabled: groundingEnabled(),
+    textEnabled: groundingTextEnabled(),
+    visualEnabled: groundingVisualEnabled(),
+  };
+}

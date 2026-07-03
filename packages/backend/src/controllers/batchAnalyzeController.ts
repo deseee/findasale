@@ -30,6 +30,7 @@ import { lookupByBarcode } from '../services/ebayCatalogLookup';
 import { enrichItem, planEnrichmentApply } from '../services/productEnrichment';
 import { findCatalogMatches, buildCatalogMatchContext, isCatalogMatchEnabled } from '../services/imageMatchService';
 import { getEbayImageMatch, buildEbayMatchContext } from '../services/ebayImageSearchService';
+import { runGroundedIdentityAsync } from '../services/groundedIdentityService';
 
 const OLLAMA_URL = process.env.OLLAMA_URL || 'http://host.docker.internal:11434';
 const OLLAMA_VISION_MODEL = process.env.OLLAMA_VISION_MODEL || 'qwen3-vl:4b';
@@ -559,6 +560,24 @@ export const batchAnalyzeImages = async (req: AuthRequest, res: Response): Promi
           } catch (err) {
             console.error(`Failed to update Item ${itemId}:`, err);
           }
+
+          // PRODUCTION grounded identity (ADR grounded-identification-production-2026-07-02).
+          // FIRE-AND-FORGET on the SAME already-downloaded cluster buffers — never blocks this
+          // batch response. Fully gated + error-swallowed inside the service; master switch OFF =>
+          // no-op. Patches the item row when a gated winner lands (review card refetch picks it up).
+          try {
+            runGroundedIdentityAsync({
+              itemId,
+              buffers: clusterImages.map(img => img.buffer),
+              mimeTypes: clusterImages.map(img => img.mimeType),
+              baseResult: {
+                confidence: typeof analysis?.confidence === 'number' ? analysis.confidence : undefined,
+                brand: analysis?.brand ?? undefined,
+                title: (analysis?.title ?? summary.suggestedTitle) ?? undefined,
+                category: (analysis?.category ?? summary.suggestedCategory) ?? undefined,
+              },
+            });
+          } catch { /* fire-and-forget — never affects the batch response */ }
 
           return summary;
         })

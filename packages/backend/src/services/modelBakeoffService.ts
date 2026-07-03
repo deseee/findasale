@@ -931,3 +931,261 @@ export async function runVisualResolution(
     console.log(`[visual] item=${itemId} HARNESS ERROR: ${shortErr(err)}`);
   }
 }
+// ===========================================================================
+// PRODUCTION grounded-identity candidate resolvers
+// (ADR grounded-identification-production-2026-07-02)
+// ===========================================================================
+//
+// The runGroundedResolution / runVisualResolution functions above are OBSERVABILITY-ONLY
+// (they log and return void). The functions below reuse the SAME proven call plumbing
+// (extractMarks*, resolveFromMarks, callVisualModel, parseModelJson, parseConfidence,
+// CONFIDENCE_GATE) but RETURN a gated candidate so the production groundedIdentityService
+// can act on it. They keep the same [resolve]/[visual] log-line style for continuity.
+//
+// Env-overridable rosters so cost can be dialed from Railway with no deploy. gemini-3.5-flash
+// is deliberately NOT in any default roster (slow / unreliable JSON — dropped per ADR).
+
+export interface GroundedCandidate {
+  identity: string;
+  confidence: number;
+  source: string; // "text-grounded" | "visual-consensus" | "visual-single"
+}
+
+/** Rough per-call cost estimates (USD) for the grounding ceiling accounting. Deliberately
+ *  conservative; exact billing lives on OpenRouter. */
+export const GROUNDING_CALL_COST = {
+  extractAnthropic: 0.006, // claude-sonnet-5 vision extract
+  extractOpenRouter: 0.002, // qwen3-vl extract
+  resolveText: 0.004, // perplexity/sonar
+  resolveTextPremium: 0.012, // perplexity/sonar-pro (escalation)
+  visual: 0.008, // gemini-2.5-flash:online / gpt-4o:online per image
+};
+
+function envList(name: string, fallback: string[]): string[] {
+  const raw = (process.env[name] || '').trim();
+  if (!raw) return fallback;
+  const parsed = raw.split(',').map((x) => x.trim()).filter(Boolean);
+  return parsed.length ? parsed : fallback;
+}
+
+// TIER 1 (VALUE): cheap text resolver + single cheap extractor + one cheap visual model.
+const TEXT_VALUE_MODEL = process.env.GROUNDING_TEXT_VALUE_MODEL || 'perplexity/sonar';
+const TEXT_PREMIUM_MODEL = process.env.GROUNDING_TEXT_PREMIUM_MODEL || 'perplexity/sonar-pro';
+const VALUE_EXTRACTOR_MODEL =
+  process.env.GROUNDING_VALUE_EXTRACTOR_MODEL || 'qwen/qwen3-vl-235b-a22b-instruct';
+
+const VISUAL_VALUE_MODELS = envList('GROUNDING_VISUAL_VALUE_MODELS', ['google/gemini-2.5-flash:online']);
+// TIER 2 (PREMIUM): adds a cross-lab visual model. gpt-4o:online.
+const VISUAL_PREMIUM_MODELS = envList('GROUNDING_VISUAL_PREMIUM_MODELS', ['openai/gpt-4o:online']);
+
+/** Fuzzy identity match for visual consensus — normalized token overlap (Jaccard-ish). */
+function identitiesAgree(a: string, b: string): boolean {
+  const norm = (x: string) =>
+    x.toLowerCase().replace(/[^a-z0-9 ]+/g, ' ').split(/\s+/).filter((t) => t.length > 2);
+  const ta = new Set(norm(a));
+  const tb = new Set(norm(b));
+  if (ta.size === 0 || tb.size === 0) return false;
+  let inter = 0;
+  for (const t of ta) if (tb.has(t)) inter++;
+  const union = new Set([...ta, ...tb]).size;
+  return union > 0 && inter / union >= 0.5;
+}
+
+/**
+ * TEXT-GROUNDED candidate. Runs the cheap value extractor (qwen via OpenRouter) to transcribe
+ * marks, then resolves them via the given text model (sonar value or sonar-pro premium). Returns
+ * a gated candidate (conf >= CONFIDENCE_GATE) or null.
+ *
+ * @param spend a mutable accumulator {usd} the caller uses for the per-item ceiling; each paid
+ *              call adds its estimated cost here AND is passed to onCall for the global ceiling.
+ * @param onCall async callback fired after each paid call with its cost (for trackGroundingCall).
+ * @param perItemCeilingUsd abort before a call that would exceed the per-item ceiling.
+ */
+export async function resolveTextGroundedCandidate(
+  itemId: string,
+  buffers: Buffer[],
+  mimeTypes: string[],
+  opts: {
+    premium: boolean;
+    spend: { usd: number };
+    perItemCeilingUsd: number;
+    onCall: (costUsd: number) => Promise<void>;
+    timeoutMs?: number;
+  },
+): Promise<GroundedCandidate | null> {
+  try {
+    if (!OPENROUTER_API_KEY || !buffers || buffers.length === 0) return null;
+    const imagesBase64 = buffers.map((b) => b.toString('base64'));
+    const mimes = buffers.map((_, i) => mimeTypes[i] || 'image/jpeg');
+    const timeoutMs = opts.timeoutMs ?? 8000;
+
+    // ---- Stage 1: extract marks (cheap value extractor) ----
+    if (opts.spend.usd + GROUNDING_CALL_COST.extractOpenRouter > opts.perItemCeilingUsd) {
+      console.log(`[grounding] item=${itemId} text SKIPPED extract: per-item ceiling`);
+      return null;
+    }
+    let extracted: ExtractParsed | null = null;
+    try {
+      extracted = await withTimeout(
+        extractMarksOpenRouter(VALUE_EXTRACTOR_MODEL, imagesBase64, mimes),
+        timeoutMs,
+      );
+    } catch (err: any) {
+      console.log(`[grounding] item=${itemId} text extract ERROR: ${shortErr(err)}`);
+      return null;
+    } finally {
+      opts.spend.usd += GROUNDING_CALL_COST.extractOpenRouter;
+      await opts.onCall(GROUNDING_CALL_COST.extractOpenRouter);
+    }
+    if (!extracted) return null;
+
+    const brand = truncate(extracted.brand, 80);
+    const modelNum = truncate(extracted.model_or_part_number, 80);
+    const otherText = truncate(extracted.other_text, 120);
+    const shapeGuess = truncate(extracted.raw_guess_type, 80);
+    // No usable marks -> nothing for the text resolver to ground on.
+    if (!brand && !modelNum && !otherText) {
+      console.log(`[grounding] item=${itemId} text: no marks extracted, shapeGuess="${shapeGuess}"`);
+      return null;
+    }
+
+    // ---- Stage 2: web-grounded resolve ----
+    const resolveModel = opts.premium ? TEXT_PREMIUM_MODEL : TEXT_VALUE_MODEL;
+    const callCost = opts.premium ? GROUNDING_CALL_COST.resolveTextPremium : GROUNDING_CALL_COST.resolveText;
+    if (opts.spend.usd + callCost > opts.perItemCeilingUsd) {
+      console.log(`[grounding] item=${itemId} text SKIPPED resolve: per-item ceiling`);
+      return null;
+    }
+    let resolved: ResolveParsed | null = null;
+    try {
+      resolved = await withTimeout(resolveFromMarks(resolveModel, brand, modelNum, otherText), timeoutMs);
+    } catch (err: any) {
+      console.log(`[grounding] item=${itemId} text resolver=${resolveModel} ERROR: ${shortErr(err)}`);
+      return null;
+    } finally {
+      opts.spend.usd += callCost;
+      await opts.onCall(callCost);
+    }
+    if (!resolved) return null;
+
+    const groundedProduct = truncate(resolved.product_name);
+    const groundedType = truncate(resolved.product_type, 60);
+    const confNum = parseConfidence(resolved.confidence);
+    const passesGate = confNum !== null && confNum >= CONFIDENCE_GATE && !!groundedProduct;
+    const identity = [groundedProduct, groundedType].filter(Boolean).join(' — ');
+    console.log(
+      `[grounding] item=${itemId} text resolver=${resolveModel} product="${identity}" ` +
+        `conf=${confNum === null ? 'n/a' : confNum} passesGate=${passesGate}`,
+    );
+    if (!passesGate) return null;
+    return { identity, confidence: confNum as number, source: 'text-grounded' };
+  } catch (err: any) {
+    console.log(`[grounding] item=${itemId} text HARNESS ERROR: ${shortErr(err)}`);
+    return null;
+  }
+}
+
+/**
+ * VISUAL candidate via CONSENSUS across web-grounded vision models on the PRIMARY image, with
+ * Google Vision Web Detection as a corroborator/tiebreaker only. Combine rule:
+ *   - if two visual models AGREE on identity (fuzzy) AND both conf >= gate -> strong consensus
+ *   - if they disagree, take the higher-conf ONLY if its conf >= 0.8
+ *   - a single model result passes only at conf >= 0.8 (guards against a lone confident hallucination)
+ * Returns a gated candidate or null.
+ */
+export async function resolveVisualCandidate(
+  itemId: string,
+  buffers: Buffer[],
+  mimeTypes: string[],
+  opts: {
+    models: string[];
+    spend: { usd: number };
+    perItemCeilingUsd: number;
+    onCall: (costUsd: number) => Promise<void>;
+    timeoutMs?: number;
+  },
+): Promise<GroundedCandidate | null> {
+  try {
+    if (!OPENROUTER_API_KEY || !buffers || buffers.length === 0) return null;
+    const primaryBase64 = buffers[0].toString('base64');
+    const primaryMime = mimeTypes[0] || 'image/jpeg';
+    const timeoutMs = opts.timeoutMs ?? 8000;
+
+    const results: { model: string; product: string; type: string; conf: number | null }[] = [];
+    for (const modelId of opts.models) {
+      if (opts.spend.usd + GROUNDING_CALL_COST.visual > opts.perItemCeilingUsd) {
+        console.log(`[grounding] item=${itemId} visual SKIPPED ${modelId}: per-item ceiling`);
+        break;
+      }
+      let parsed: VisualParsed | null = null;
+      try {
+        parsed = await withTimeout(callVisualModel(modelId, primaryBase64, primaryMime), timeoutMs);
+      } catch (err: any) {
+        console.log(`[grounding] item=${itemId} visual model=${modelId} ERROR: ${shortErr(err)}`);
+        opts.spend.usd += GROUNDING_CALL_COST.visual;
+        await opts.onCall(GROUNDING_CALL_COST.visual);
+        continue;
+      }
+      opts.spend.usd += GROUNDING_CALL_COST.visual;
+      await opts.onCall(GROUNDING_CALL_COST.visual);
+      if (!parsed) continue;
+      const product = truncate(parsed.product);
+      const type = truncate(parsed.type, 60);
+      const conf = parseConfidence(parsed.confidence);
+      if (!product) continue;
+      results.push({ model: modelId, product, type, conf });
+      console.log(
+        `[grounding] item=${itemId} visual model=${modelId} product="${product}" conf=${conf === null ? 'n/a' : conf}`,
+      );
+    }
+
+    if (results.length === 0) return null;
+
+    const idOf = (r: { product: string; type: string }) => [r.product, r.type].filter(Boolean).join(' — ');
+
+    // Consensus: any two models agreeing (fuzzy) with both conf >= gate.
+    for (let i = 0; i < results.length; i++) {
+      for (let j = i + 1; j < results.length; j++) {
+        const a = results[i];
+        const b = results[j];
+        if (
+          a.conf !== null && b.conf !== null &&
+          a.conf >= CONFIDENCE_GATE && b.conf >= CONFIDENCE_GATE &&
+          identitiesAgree(idOf(a), idOf(b))
+        ) {
+          const winner = a.conf >= b.conf ? a : b;
+          console.log(`[grounding] item=${itemId} visual CONSENSUS id="${idOf(winner)}" conf=${winner.conf}`);
+          return { identity: idOf(winner), confidence: winner.conf as number, source: 'visual-consensus' };
+        }
+      }
+    }
+
+    // Disagreement / single model: take the highest-conf, but only if conf >= 0.8.
+    let best = results[0];
+    for (const r of results) if ((r.conf ?? -1) > (best.conf ?? -1)) best = r;
+    if (best.conf !== null && best.conf >= 0.8) {
+      console.log(`[grounding] item=${itemId} visual SINGLE id="${idOf(best)}" conf=${best.conf} (>=0.8)`);
+      return { identity: idOf(best), confidence: best.conf, source: 'visual-single' };
+    }
+    console.log(`[grounding] item=${itemId} visual no gated candidate (best conf=${best.conf ?? 'n/a'})`);
+    return null;
+  } catch (err: any) {
+    console.log(`[grounding] item=${itemId} visual HARNESS ERROR: ${shortErr(err)}`);
+    return null;
+  }
+}
+
+/** Hard per-call timeout wrapper — rejects if the promise does not settle within ms. */
+function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error(`timeout ${ms}ms`)), ms);
+    p.then(
+      (v) => { clearTimeout(t); resolve(v); },
+      (e) => { clearTimeout(t); reject(e); },
+    );
+  });
+}
+
+// Re-export the value/premium visual roster resolvers so the orchestrator can pass them by tier.
+export const GROUNDING_VISUAL_VALUE_MODELS = VISUAL_VALUE_MODELS;
+export const GROUNDING_VISUAL_PREMIUM_MODELS = VISUAL_PREMIUM_MODELS;

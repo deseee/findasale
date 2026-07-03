@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
-import { getMonthlyAICost, resetMonthlyAICost, getMonthlyWebDetectionCost, getEbayImageSearchUsage } from '../lib/aiCostTracker';
+import { getMonthlyAICost, resetMonthlyAICost, getMonthlyWebDetectionCost, getEbayImageSearchUsage, getMonthlyGroundingCost } from '../lib/aiCostTracker';
 import { getMonthlyCloudinaryEstimate, getBandwidthThreshold, getTodayCloudinaryUsage, resetTodayCloudinaryUsage } from '../lib/cloudinaryBandwidthTracker';
 import { getEbayRateLimitStatus } from '../lib/ebayRateLimiter';
 import { emailService } from '../lib/emailService';
@@ -821,6 +821,10 @@ export const getAIUsage = async (req: AuthRequest, res: Response) => {
     // ADR-ebay-searchbyimage-tagging-2026-07-02
     const ebayImageSearch = await getEbayImageSearchUsage();
 
+    // Grounded identity: separate line item, separate ceiling — ADR grounded-identification-production-2026-07-02
+    const grounding = await getMonthlyGroundingCost();
+    const groundingCostPercentage = grounding.ceiling > 0 ? (grounding.estimatedCost / grounding.ceiling) * 100 : 0;
+
     res.json({
       monthKey: usage.monthKey,
       tokensUsed: usage.tokensUsed,
@@ -844,6 +848,19 @@ export const getAIUsage = async (req: AuthRequest, res: Response) => {
         dailyCap: ebayImageSearch.dailyCap,
         dailyCapRemaining: ebayImageSearch.dailyCapRemaining,
         status: ebayImageSearch.dailyCapRemaining <= 0 ? 'CAP_REACHED' : 'NORMAL',
+      },
+      grounding: {
+        enabled: grounding.enabled,
+        textEnabled: grounding.textEnabled,
+        visualEnabled: grounding.visualEnabled,
+        rolloutPct: grounding.rolloutPct,
+        monthKey: grounding.monthKey,
+        estimatedCost: parseFloat(grounding.estimatedCost.toFixed(2)),
+        ceiling: grounding.ceiling,
+        costPercentage: parseFloat(groundingCostPercentage.toFixed(1)),
+        dailyCap: grounding.dailyCap,
+        dailyCapRemaining: grounding.dailyCapRemaining,
+        status: grounding.estimatedCost >= grounding.ceiling ? 'EXCEEDED' : 'NORMAL',
       },
     });
   } catch (error) {
