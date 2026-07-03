@@ -407,3 +407,211 @@ export async function runModelBakeoff(
     console.log(`[bakeoff] item=${itemId} HARNESS ERROR: ${shortErr(err)}`);
   }
 }
+
+// ---------------------------------------------------------------------------
+// Grounded resolution (two-stage: extract read marks → web-grounded lookup)
+// ---------------------------------------------------------------------------
+//
+// The point the bake-off proved: VLMs READ the identifying marks (mold #, part #,
+// backstamp) but reason from SHAPE, so a Tupperware CoolSpot Trivet (mold #2828)
+// gets called a "lid." The fix is to (1) transcribe the marks only, then (2) run a
+// WEB-CONNECTED text lookup on those marks and let the lookup decide identity.
+//
+// Observability only — logs `[resolve] ...`, never mutates the item, never changes
+// the applied reanalyze result. Wrapped end-to-end in try/catch so it can never
+// break the response.
+
+const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
+const OPENROUTER_HEADERS = {
+  'content-type': 'application/json',
+  'HTTP-Referer': 'https://finda.sale',
+  'X-Title': 'FindaSale Resolve',
+};
+
+// Stage 1 — TRANSCRIBE ONLY. Do NOT ask it to identify; just read the marks + a
+// shape-based guess of type. Cheapest good extractor already wired for the bake-off.
+const EXTRACT_MODEL = 'google/gemini-2.5-flash-lite';
+const EXTRACT_PROMPT = `You are transcribing the identifying marks off a single secondhand item from the attached photos.
+Do NOT identify the product. Only transcribe what is legibly printed, molded, stamped, or embossed on it, plus a shape-based guess of what it appears to be.
+Read the brand name, any model/mold/part/style number, and any other legible text (backstamp, "Made in ...", recycling code, size, patent, etc.).
+If a field is not legibly present, use an empty string. Do not invent or infer anything not visibly written.
+
+Respond with STRICT JSON ONLY, no markdown, no commentary, exactly:
+{"brand":"","model_or_part_number":"","other_text":"","raw_guess_type":"your shape-based guess of what this object is"}`;
+
+// Stage 2 — the point. WEB-GROUNDED text lookup on the transcribed marks.
+//   - primary: perplexity/sonar (web-native, cheap)
+//   - fallback: EXTRACT_MODEL + ':online' (OpenRouter's web plugin)
+const RESOLVE_MODEL_PRIMARY = 'perplexity/sonar';
+const RESOLVE_MODEL_FALLBACK = `${EXTRACT_MODEL}:online`;
+
+interface ExtractParsed {
+  brand?: string;
+  model_or_part_number?: string;
+  other_text?: string;
+  raw_guess_type?: string;
+}
+
+interface ResolveParsed {
+  product_name?: string;
+  product_type?: string;
+  confidence?: number | string;
+  source_hint?: string;
+}
+
+/** Stage 1: one vision call that TRANSCRIBES marks only (no identification). */
+async function extractMarks(
+  imagesBase64: string[],
+  mimeTypes: string[],
+): Promise<ExtractParsed | null> {
+  if (!OPENROUTER_API_KEY) throw new Error('no OPENROUTER_API_KEY');
+
+  const content: any[] = [{ type: 'text', text: EXTRACT_PROMPT }];
+  imagesBase64.forEach((data, i) => {
+    const mime = mimeTypes[i] || 'image/jpeg';
+    content.push({ type: 'image_url', image_url: { url: `data:${mime};base64,${data}` } });
+  });
+
+  const resp = await fetch(OPENROUTER_URL, {
+    method: 'POST',
+    headers: { authorization: `Bearer ${OPENROUTER_API_KEY}`, ...OPENROUTER_HEADERS },
+    body: JSON.stringify({
+      model: EXTRACT_MODEL,
+      messages: [{ role: 'user', content }],
+      max_tokens: 400,
+      provider: { data_collection: 'deny' },
+    }),
+  });
+
+  if (!resp.ok) {
+    const body = await resp.text().catch(() => '');
+    throw new Error(`HTTP ${resp.status} ${truncate(body, 140)}`);
+  }
+  const json: any = await resp.json();
+  const text: string = json?.choices?.[0]?.message?.content ?? '';
+  return parseModelJson(text) as ExtractParsed | null;
+}
+
+/** Stage 2: one WEB-GROUNDED text call that resolves the real product from the marks. */
+async function resolveFromMarks(
+  modelId: string,
+  brand: string,
+  modelNum: string,
+  otherText: string,
+): Promise<ResolveParsed | null> {
+  if (!OPENROUTER_API_KEY) throw new Error('no OPENROUTER_API_KEY');
+
+  const prompt =
+    `Using web search, identify the EXACT product from these marks read off a secondhand item: ` +
+    `brand=${brand || 'unknown'}, model/part number=${modelNum || 'unknown'}, other text=${otherText || 'none'}. ` +
+    `Return STRICT JSON {"product_name","product_type","confidence","source_hint"}. ` +
+    `If the marks identify a specific catalogued item, name it and its type precisely ` +
+    `(e.g. distinguish trivet vs lid vs plate). If genuinely unresolvable, say so.`;
+
+  const resp = await fetch(OPENROUTER_URL, {
+    method: 'POST',
+    headers: { authorization: `Bearer ${OPENROUTER_API_KEY}`, ...OPENROUTER_HEADERS },
+    body: JSON.stringify({
+      model: modelId,
+      messages: [{ role: 'user', content: prompt }],
+      max_tokens: 500,
+      provider: { data_collection: 'deny' },
+    }),
+  });
+
+  if (!resp.ok) {
+    const body = await resp.text().catch(() => '');
+    throw new Error(`HTTP ${resp.status} ${truncate(body, 140)}`);
+  }
+  const json: any = await resp.json();
+  const text: string = json?.choices?.[0]?.message?.content ?? '';
+  return parseModelJson(text) as ResolveParsed | null;
+}
+
+/**
+ * Two-stage grounded resolution pass. Runs alongside the bake-off (same trigger),
+ * observability only. Returns void, never throws to the caller.
+ *
+ * @param itemId   the item being re-analyzed (for log correlation)
+ * @param buffers  the SAME image buffers already downloaded by reanalyzeItem
+ * @param mimeTypes parallel array of mime types for each buffer
+ */
+export async function runGroundedResolution(
+  itemId: string,
+  buffers: Buffer[],
+  mimeTypes: string[],
+): Promise<void> {
+  try {
+    if (!buffers || buffers.length === 0) return;
+    if (!OPENROUTER_API_KEY) {
+      console.log(`[resolve] item=${itemId} SKIPPED: no OPENROUTER_API_KEY`);
+      return;
+    }
+
+    const imagesBase64 = buffers.map((b) => b.toString('base64'));
+    const mimes = buffers.map((_, i) => mimeTypes[i] || 'image/jpeg');
+
+    // ---- Stage 1: extract read marks --------------------------------------
+    let extracted: ExtractParsed | null;
+    try {
+      extracted = await extractMarks(imagesBase64, mimes);
+    } catch (err: any) {
+      console.log(`[resolve] item=${itemId} stage=extract ERROR: ${shortErr(err)}`);
+      return;
+    }
+    if (!extracted) {
+      console.log(`[resolve] item=${itemId} stage=extract ERROR: unparseable JSON response`);
+      return;
+    }
+
+    const brand = truncate(extracted.brand, 80);
+    const modelNum = truncate(extracted.model_or_part_number, 80);
+    const otherText = truncate(extracted.other_text, 120);
+    const shapeGuess = truncate(extracted.raw_guess_type, 80);
+    console.log(
+      `[resolve] item=${itemId} extracted brand="${brand}" model="${modelNum}" ` +
+        `other="${otherText}" shapeGuess="${shapeGuess}"`,
+    );
+
+    // ---- Stage 2: web-grounded resolution ---------------------------------
+    const started = Date.now();
+    let resolved: ResolveParsed | null = null;
+    let groundingModel = RESOLVE_MODEL_PRIMARY;
+    try {
+      resolved = await resolveFromMarks(RESOLVE_MODEL_PRIMARY, brand, modelNum, otherText);
+    } catch (primaryErr: any) {
+      // Primary web model errored — fall back to the OpenRouter :online web plugin.
+      console.log(
+        `[resolve] item=${itemId} stage=resolve primary(${RESOLVE_MODEL_PRIMARY}) failed: ${shortErr(primaryErr)} — falling back to ${RESOLVE_MODEL_FALLBACK}`,
+      );
+      groundingModel = RESOLVE_MODEL_FALLBACK;
+      try {
+        resolved = await resolveFromMarks(RESOLVE_MODEL_FALLBACK, brand, modelNum, otherText);
+      } catch (fallbackErr: any) {
+        console.log(`[resolve] item=${itemId} stage=resolve ERROR: ${shortErr(fallbackErr)}`);
+        return;
+      }
+    }
+
+    const latencyMs = Date.now() - started;
+    if (!resolved) {
+      console.log(
+        `[resolve] item=${itemId} stage=resolve ERROR: unparseable JSON response latencyMs=${latencyMs}`,
+      );
+      return;
+    }
+
+    const conf =
+      typeof resolved.confidence === 'number' || typeof resolved.confidence === 'string'
+        ? resolved.confidence
+        : 'n/a';
+    console.log(
+      `[resolve] item=${itemId} GROUNDED product="${truncate(resolved.product_name)}" ` +
+        `type="${truncate(resolved.product_type, 60)}" conf=${conf} ` +
+        `source="${truncate(resolved.source_hint, 100)}" model=${groundingModel} latencyMs=${latencyMs}`,
+    );
+  } catch (err: any) {
+    // Absolutely never let the resolution pass affect the caller.
+    console.log(`[resolve] item=${itemId} HARNESS ERROR: ${shortErr(err)}`);
+  }
+}

@@ -24,7 +24,7 @@ import { analyzeItemImages } from './cloudAIService';
 import { enrichItem, planEnrichmentApply } from './productEnrichment';
 import { suggestEbayCategoryForTitle } from '../controllers/ebayController';
 import { syncListedItemFieldsToEbay } from '../controllers/itemController';
-import { runModelBakeoff } from './modelBakeoffService';
+import { runModelBakeoff, runGroundedResolution } from './modelBakeoffService';
 
 export type ReanalyzeErrorCode =
   | 'ITEM_NOT_FOUND'
@@ -315,6 +315,13 @@ export async function reanalyzeItem(
       await runModelBakeoff(itemId, buffers, mimeTypes);
     } catch (bakeoffErr: any) {
       console.warn('[bakeoff] harness invocation error (non-fatal):', bakeoffErr?.message || bakeoffErr);
+    }
+    // Two-stage grounded resolution (extract read marks -> web-grounded lookup).
+    // Observability only, same trigger, fully error-swallowed — NEVER affects the response.
+    try {
+      await runGroundedResolution(itemId, buffers, mimeTypes);
+    } catch (resolveErr: any) {
+      console.warn('[resolve] pass invocation error (non-fatal):', resolveErr?.message || resolveErr);
     }
   }
 
