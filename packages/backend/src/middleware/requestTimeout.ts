@@ -18,7 +18,12 @@ export const requestTimeout = (timeoutMs: number = 30000) => {
       req.path === '/' ||
       req.path === '/api/health' ||
       req.path.startsWith('/api/internal/') ||
-      req.path === '/api/upload/batch-analyze'
+      req.path === '/api/upload/batch-analyze' ||
+      // Sentry FINDASALE-NODEJS-4H: Smart-tag re-analyze pipeline (image download +
+      // Vision/Haiku + eBay category resolve + catalog enrichment) routinely exceeds
+      // 30s. Excluded here; given its own longer timeout at the route registration
+      // in index.ts (mirrors the batch-analyze pattern above).
+      /^\/api\/items\/[^/]+\/reanalyze$/.test(req.path)
     ) {
       return next();
     }

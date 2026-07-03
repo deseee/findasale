@@ -103,6 +103,10 @@ export const reanalyzeItemForOrganizer = async (req: AuthRequest, res: Response)
 
     const result = await reanalyzeItem(id, { apply: !dryRun, bakeoff, resolveOnly, testImageUrls });
 
+    // Defensive guard (Sentry FINDASALE-NODEJS-4H): the global/route timeout may have
+    // already responded (503) while this awaited above. Never write headers twice.
+    if (res.headersSent) return;
+
     if (!result.ok) {
       switch (result.code) {
         case 'ITEM_NOT_FOUND':
@@ -152,6 +156,7 @@ export const reanalyzeItemForOrganizer = async (req: AuthRequest, res: Response)
     });
   } catch (error: any) {
     console.error('[Reanalyze] organizer route error:', error?.message || error);
+    if (res.headersSent) return;
     return res.status(500).json({ message: 'Server error while re-analyzing item.' });
   }
 };

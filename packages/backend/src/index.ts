@@ -618,6 +618,11 @@ app.get('/health/ready', async (req, res) => {
 app.use('/api/auth', resilientLimiter(authLimiter), authRoutes); // stricter rate limit on auth
 app.use('/api/auth/passkey', passkeyRoutes); // Feature #19: Passkey/WebAuthn routes (authLimiter already applied via /api/auth mount above)
 app.use('/api/sales', saleRoutes);
+// Sentry FINDASALE-NODEJS-4H: re-analyze pipeline needs more than the global 30s
+// budget (image download + Vision/Haiku + eBay category resolve + catalog
+// enrichment). Excluded from the global timeout in requestTimeout.ts; given its
+// own longer timeout here, same pattern as /api/upload/batch-analyze below.
+app.post('/api/items/:id/reanalyze', requestTimeout(90000));
 app.use('/api/items', itemRoutes);
 app.use('/api/items', pricingSignalsRoutes);            // Pricing signals: sleeper patterns & brand premiums
 app.use('/api/pricing', pricingRoutes);                 // Phase S574: Multi-source pricing engine
