@@ -262,6 +262,55 @@ function extractText(payload: { mimeType?: string | null; body?: { data?: string
 }
 
 // ---------------------------------------------------------------------------
+// Paginated message listing
+// ---------------------------------------------------------------------------
+
+/**
+ * List ALL Gmail message IDs matching a query, following nextPageToken until
+ * exhausted (or maxPages is hit as a safety cap).
+ *
+ * BUG FIX (2026-07-03): both processBounces() and reclassifyBounces() previously
+ * called gmail.users.messages.list() once with maxResults: 100 and never read
+ * listResp.data.nextPageToken -- silently capping every run at the 100 NEWEST
+ * matching messages. During the 2026-06-16..06-21 send spike (899 sends, up to
+ * ~26% daily bounce rate) this produced well over 100 bounce DSNs; the one-time
+ * reclassify-bounces backfill (BQ S1020) only ever touched its first page, which
+ * is the direct cause of 125/151 EmailSuppression rows still having
+ * classifiedAt = NULL as of 2026-07-03. Fixing here, shared by both callers, so
+ * neither can silently truncate again.
+ */
+async function listAllMessageIds(
+  gmail: ReturnType<typeof google.gmail>,
+  query: string,
+  maxPages = 20 // safety cap: 20 pages * 100 = up to 2,000 messages per run
+): Promise<string[]> {
+  const ids: string[] = [];
+  let pageToken: string | undefined;
+  let page = 0;
+
+  do {
+    const listResp: any = await gmail.users.messages.list({
+      userId: 'me',
+      q: query,
+      maxResults: 100,
+      pageToken,
+    });
+    const batch = (listResp.data.messages ?? []).map((m: any) => m.id!).filter(Boolean);
+    ids.push(...batch);
+    pageToken = listResp.data.nextPageToken ?? undefined;
+    page++;
+  } while (pageToken && page < maxPages);
+
+  if (pageToken) {
+    console.warn(
+      `[bounceSuppressService] listAllMessageIds: hit maxPages=${maxPages} safety cap for query "${query}" -- more messages may remain unfetched.`
+    );
+  }
+
+  return ids;
+}
+
+// ---------------------------------------------------------------------------
 // Main export
 // ---------------------------------------------------------------------------
 
@@ -292,12 +341,10 @@ export const bounceSuppressService = {
     // providers vary the From) are still caught.
     let messageIds: string[] = [];
     try {
-      const listResp = await gmail.users.messages.list({
-        userId: 'me',
-        q: '(from:mailer-daemon OR from:postmaster OR subject:(delivery status OR undeliverable OR "mail delivery" OR "failure notice" OR "returned mail" OR "delivery has failed")) -in:trash',
-        maxResults: 100,
-      });
-      messageIds = (listResp.data.messages ?? []).map(m => m.id!).filter(Boolean);
+      messageIds = await listAllMessageIds(
+        gmail,
+        '(from:mailer-daemon OR from:postmaster OR subject:(delivery status OR undeliverable OR "mail delivery" OR "failure notice" OR "returned mail" OR "delivery has failed")) -in:trash'
+      );
     } catch (err: any) {
       result.errors.push(`Gmail list failed: ${err.message}`);
       console.error('[bounceSuppressService] Gmail list error:', err.message);
@@ -446,12 +493,10 @@ export const bounceSuppressService = {
 
     let messageIds: string[] = [];
     try {
-      const listResp = await gmail.users.messages.list({
-        userId: 'me',
-        q: '(from:mailer-daemon OR from:postmaster OR subject:(delivery status OR undeliverable OR "mail delivery" OR "failure notice" OR "returned mail")) in:anywhere',
-        maxResults: 100,
-      });
-      messageIds = (listResp.data.messages ?? []).map(m => m.id!).filter(Boolean);
+      messageIds = await listAllMessageIds(
+        gmail,
+        '(from:mailer-daemon OR from:postmaster OR subject:(delivery status OR undeliverable OR "mail delivery" OR "failure notice" OR "returned mail")) in:anywhere'
+      );
     } catch (err: any) {
       result.errors.push(`Gmail list failed: ${err.message}`);
       console.error('[bounceSuppressService] reclassify Gmail list error:', err.message);
