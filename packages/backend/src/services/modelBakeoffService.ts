@@ -41,6 +41,9 @@ const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
 const GOOGLE_SERVICE_ACCOUNT_JSON = process.env.GOOGLE_SERVICE_ACCOUNT_JSON || '';
 
+// OpenRouter — one key fans out to the broad multi-lab field via an OpenAI-compatible endpoint.
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || '';
+
 interface ServiceAccountCreds {
   client_email: string;
   private_key: string;
@@ -93,7 +96,7 @@ const VERTEX_LOCATION = 'us-central1';
 
 interface BakeoffModel {
   name: string; // log label
-  provider: 'anthropic' | 'gemini';
+  provider: 'anthropic' | 'gemini' | 'openrouter';
   modelId: string; // provider model id
 }
 
@@ -103,6 +106,13 @@ const BAKEOFF_MODELS: BakeoffModel[] = [
   { name: 'claude-opus-4.8', provider: 'anthropic', modelId: 'claude-opus-4-8' },
   { name: 'gemini-2.5-flash-lite', provider: 'gemini', modelId: 'gemini-2.5-flash-lite' },
   { name: 'gemini-3.5-flash', provider: 'gemini', modelId: 'gemini-3.5-flash' },
+  // OpenRouter — broad multi-lab field through a single key (best-guess slugs; each row
+  // is isolated in try/catch and simply logs-and-continues if the slug 404s / is unavailable).
+  { name: 'or/gemini-2.5-flash-lite', provider: 'openrouter', modelId: 'google/gemini-2.5-flash-lite' },
+  { name: 'or/gemini-3-pro', provider: 'openrouter', modelId: 'google/gemini-3-pro' },
+  { name: 'or/qwen3-vl-235b', provider: 'openrouter', modelId: 'qwen/qwen3-vl-235b-a22b-instruct' },
+  { name: 'or/glm-4.6v', provider: 'openrouter', modelId: 'z-ai/glm-4.6v' },
+  { name: 'or/llama-4-scout', provider: 'openrouter', modelId: 'meta-llama/llama-4-scout' },
 ];
 
 // Shared targeted prompt — "targeted, marks-first, say-unknown". Used for EVERY model.
@@ -259,6 +269,49 @@ async function callGemini(
   return parseModelJson(text);
 }
 
+async function callOpenRouter(
+  modelId: string,
+  imagesBase64: string[],
+  mimeTypes: string[],
+): Promise<BakeoffParsed | null> {
+  if (!OPENROUTER_API_KEY) throw new Error('no OPENROUTER_API_KEY');
+
+  // OpenAI-compatible multimodal content: the shared text prompt + one image_url per photo.
+  const content: any[] = [{ type: 'text', text: BAKEOFF_PROMPT }];
+  imagesBase64.forEach((data, i) => {
+    const mime = mimeTypes[i] || 'image/jpeg';
+    content.push({
+      type: 'image_url',
+      image_url: { url: `data:${mime};base64,${data}` },
+    });
+  });
+
+  const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      authorization: `Bearer ${OPENROUTER_API_KEY}`,
+      'content-type': 'application/json',
+      'HTTP-Referer': 'https://finda.sale',
+      'X-Title': 'FindaSale Bakeoff',
+    },
+    body: JSON.stringify({
+      model: modelId,
+      messages: [{ role: 'user', content }],
+      max_tokens: 800,
+      // Privacy: never route to providers that train on the input images.
+      provider: { data_collection: 'deny' },
+    }),
+  });
+
+  if (!resp.ok) {
+    const body = await resp.text().catch(() => '');
+    throw new Error(`HTTP ${resp.status} ${truncate(body, 140)}`);
+  }
+  const json: any = await resp.json();
+  const text: string = json?.choices?.[0]?.message?.content ?? '';
+  return parseModelJson(text);
+}
+
 // ---------------------------------------------------------------------------
 // Harness
 // ---------------------------------------------------------------------------
@@ -285,6 +338,9 @@ export async function runModelBakeoff(
         `[bakeoff] item=${itemId} Gemini SKIPPED: GOOGLE_SERVICE_ACCOUNT_JSON missing/unparseable and no GEMINI_API_KEY — running Claude models only`,
       );
     }
+    if (!OPENROUTER_API_KEY) {
+      console.log('[bakeoff] OpenRouter models SKIPPED: no OPENROUTER_API_KEY');
+    }
 
     const imagesBase64 = buffers.map((b) => b.toString('base64'));
     const mimes = buffers.map((_, i) => mimeTypes[i] || 'image/jpeg');
@@ -302,13 +358,19 @@ export async function runModelBakeoff(
           );
           return;
         }
+        if (m.provider === 'openrouter' && !OPENROUTER_API_KEY) {
+          // One-line summary skip already logged above; skip silently per-row.
+          return;
+        }
 
         const started = Date.now();
         try {
           const parsed =
             m.provider === 'anthropic'
               ? await callAnthropic(m.modelId, imagesBase64, mimes)
-              : await callGemini(m.modelId, imagesBase64, mimes);
+              : m.provider === 'openrouter'
+                ? await callOpenRouter(m.modelId, imagesBase64, mimes)
+                : await callGemini(m.modelId, imagesBase64, mimes);
 
           const latencyMs = Date.now() - started;
 
