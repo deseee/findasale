@@ -149,4 +149,45 @@ api.interceptors.response.use(
   }
 );
 
+/**
+ * POST with automatic retry -- but ONLY for a true network error (axios `error.response`
+ * is undefined, meaning no HTTP response was ever received at all -- the connection dropped
+ * before the server could reply, e.g. a mobile connectivity blip mid-request). This NEVER
+ * retries when the server DID respond (403, 404, 413, 500, etc.) -- those are deterministic
+ * failures a retry will not fix.
+ *
+ * IMPORTANT -- only use this for calls that are safe to send twice. Endpoints that CREATE a
+ * new database row with no idempotency key (e.g. POST /upload/rapidfire, which creates a new
+ * Item server-side) must NOT use this: if the first attempt actually succeeded on the server
+ * but the response was lost in the same connectivity drop, a retry would create a duplicate
+ * row. Safe candidates: uploads that only return URLs with no DB write (/upload/sale-photos),
+ * and appends to an existing record where a duplicate is low-harm (an extra photo URL).
+ *
+ * Bug fix (2026-07-03): added after a Sentry-confirmed "AxiosError: Network Error" (no HTTP
+ * response received) hit a rapidfire photo upload on a mobile connection drop. Default: up to
+ * 2 retries with a short backoff (1.5s, then 3s) before giving up and throwing the original
+ * error to the caller's catch block, unchanged.
+ */
+export const postWithRetry = async (
+  url: string,
+  data: any,
+  config?: Record<string, any>,
+  retries = 2,
+  backoffMs: number[] = [1500, 3000]
+): Promise<any> => {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      return await api.post(url, data, config);
+    } catch (err: any) {
+      const isTrueNetworkError = !err?.response; // no HTTP response received at all
+      if (!isTrueNetworkError || attempt === retries) throw err;
+      await new Promise((resolve) =>
+        setTimeout(resolve, backoffMs[attempt] ?? backoffMs[backoffMs.length - 1])
+      );
+    }
+  }
+  // Unreachable -- loop above always either returns or throws -- satisfies TS return type.
+  throw new Error('postWithRetry: exhausted retries without a terminal return or throw');
+};
+
 export default api;

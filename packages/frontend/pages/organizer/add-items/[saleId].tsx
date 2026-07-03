@@ -31,7 +31,7 @@ import NextImage from 'next/image';
 import { useRouter } from 'next/router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import * as Sentry from '@sentry/nextjs';
-import api from '../../../lib/api';
+import api, { postWithRetry } from '../../../lib/api';
 import { getItemImageUrl } from '../../../lib/imageUtils';
 import CSVImportModal from '../../../components/CSVImportModal';
 import SmartInventoryUpload from '../../../components/SmartInventoryUpload';
@@ -1169,13 +1169,13 @@ const AddItemsDetailPage = () => {
         const fd = new FormData();
         fd.append('photos', processedBlob, 'rapidfire.jpg');
         fd.append('saleId', saleId as string);
-        const uploadRes = await api.post('/upload/sale-photos', fd, {
+        const uploadRes = await postWithRetry('/upload/sale-photos', fd, {
           headers: { 'Content-Type': 'multipart/form-data' },
         });
         const urls: string[] = uploadRes.data?.urls || uploadRes.data || [];
         if (urls[0]) {
           // Append URL to existing item
-          await api.post(`/items/${resolvedAppendId}/photos`, { url: urls[0] });
+          await postWithRetry(`/items/${resolvedAppendId}/photos`, { url: urls[0] });
           // Update target item's photo count and remove the orphan temp entry
           setRapidItems((prev) =>
             prev
@@ -1232,12 +1232,12 @@ const AddItemsDetailPage = () => {
               const fd = new FormData();
               fd.append('photos', cappedBlob, 'regular-capture.jpg');
               fd.append('saleId', saleId as string);
-              const uploadRes = await api.post('/upload/sale-photos', fd, {
+              const uploadRes = await postWithRetry('/upload/sale-photos', fd, {
                 headers: { 'Content-Type': 'multipart/form-data' },
               });
               const urls: string[] = uploadRes.data?.urls || uploadRes.data || [];
               if (urls[0]) {
-                await api.post(`/items/${itemId}/photos`, { url: urls[0] });
+                await postWithRetry(`/items/${itemId}/photos`, { url: urls[0] });
               }
             } catch (addErr) {
               if (process.env.NODE_ENV !== 'production') console.error('[regular] Additional photo upload failed:', addErr);
@@ -1347,12 +1347,12 @@ const AddItemsDetailPage = () => {
         const fd = new FormData();
         fd.append('photos', pendingQualityBlob, 'rapidfire.jpg');
         fd.append('saleId', saleId as string);
-        const uploadRes = await api.post('/upload/sale-photos', fd, {
+        const uploadRes = await postWithRetry('/upload/sale-photos', fd, {
           headers: { 'Content-Type': 'multipart/form-data' },
         });
         const urls: string[] = uploadRes.data?.urls || uploadRes.data || [];
         if (urls[0]) {
-          await api.post(`/items/${resolvedAppendId}/photos`, { url: urls[0] });
+          await postWithRetry(`/items/${resolvedAppendId}/photos`, { url: urls[0] });
           setRapidItems((prev) =>
             prev.map((item) =>
               item.id === resolvedAppendId
@@ -1444,12 +1444,12 @@ const AddItemsDetailPage = () => {
         const fd = new FormData();
         fd.append('photos', pendingFaceBlob, 'rapidfire.jpg');
         fd.append('saleId', saleId as string);
-        const uploadRes = await api.post('/upload/sale-photos', fd, {
+        const uploadRes = await postWithRetry('/upload/sale-photos', fd, {
           headers: { 'Content-Type': 'multipart/form-data' },
         });
         const urls: string[] = uploadRes.data?.urls || uploadRes.data || [];
         if (urls[0]) {
-          await api.post(`/items/${resolvedAppendId}/photos`, { url: urls[0] });
+          await postWithRetry(`/items/${resolvedAppendId}/photos`, { url: urls[0] });
           setRapidItems((prev) =>
             prev.map((item) =>
               item.id === resolvedAppendId
@@ -1772,7 +1772,7 @@ const AddItemsDetailPage = () => {
                       try {
                         const uploadData = new FormData();
                         Array.from(files).forEach((f) => uploadData.append('photos', f));
-                        const res = await api.post('/upload/sale-photos', uploadData, {
+                        const res = await postWithRetry('/upload/sale-photos', uploadData, {
                           headers: { 'Content-Type': 'multipart/form-data' },
                         });
                         const urls: string[] = res.data?.urls || res.data || [];
