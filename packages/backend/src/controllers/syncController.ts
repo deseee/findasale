@@ -6,9 +6,10 @@
 import { Request, Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
+import { processCashSaleCore, CashSaleError } from './terminalController'; // #561 offline cash-checkout replay
 
 interface SyncOperation {
-  type: 'CREATE_ITEM' | 'UPDATE_ITEM' | 'DELETE_ITEM' | 'UPLOAD_PHOTO';
+  type: 'CREATE_ITEM' | 'UPDATE_ITEM' | 'DELETE_ITEM' | 'UPLOAD_PHOTO' | 'CHECKOUT_CASH';
   localId: string;
   itemId?: string;
   saleId: string;
@@ -28,6 +29,8 @@ interface FailedOperation {
   localId: string;
   error: string;
   retryable: boolean;
+  operationType?: string;
+  code?: string;
 }
 
 interface ServerItemChange {
@@ -88,6 +91,25 @@ export async function batchSync(req: AuthRequest, res: Response) {
           continue;
         }
 
+        // #561: tier gate moved here from the route (see routes/sync.ts comment). CHECKOUT_CASH
+        // is exempt — cash POS itself has no tier gate, so a queued cash sale must always be
+        // able to sync regardless of subscription tier. Item CRUD offline-sync stays PRO-only,
+        // preserving the existing behavior of this route before #561.
+        if (operation.type !== 'CHECKOUT_CASH') {
+          const tierRank: Record<string, number> = { SIMPLE: 0, PRO: 1, TEAMS: 2 };
+          const organizerTier = sale.organizer.subscriptionTier ?? 'SIMPLE';
+          if ((tierRank[organizerTier] ?? 0) < tierRank.PRO) {
+            failed.push({
+              localId: operation.localId,
+              error: 'Offline item sync requires the PRO plan or higher.',
+              retryable: false,
+              operationType: operation.type,
+              code: 'TIER_REQUIRED',
+            });
+            continue;
+          }
+        }
+
         // Process operation by type
         if (operation.type === 'CREATE_ITEM') {
           const result = await handleCreateItem(operation, organizerId);
@@ -119,6 +141,19 @@ export async function batchSync(req: AuthRequest, res: Response) {
             status: 'SUCCESS',
             serverTimestamp: new Date().toISOString(),
           });
+        } else if (operation.type === 'CHECKOUT_CASH') {
+          const result = await handleCheckoutCash(operation, sale.organizer);
+          if (result.message) {
+            failed.push({
+              localId: operation.localId,
+              error: result.message.message,
+              retryable: result.message.retryable,
+              operationType: operation.type,
+              code: result.message.code,
+            });
+          } else {
+            synced.push(result.data!);
+          }
         }
       } catch (error: any) {
         console.error(`[Sync] Error processing operation ${operation.localId}:`, error);
@@ -126,6 +161,7 @@ export async function batchSync(req: AuthRequest, res: Response) {
           localId: operation.localId,
           error: error.message || 'Internal server error',
           retryable: true,
+          operationType: operation.type,
         });
       }
     }
@@ -332,3 +368,63 @@ async function handleDeleteItem(operation: SyncOperation) {
     };
   }
 }
+
+/**
+ * Handle CHECKOUT_CASH operation (#561 offline POS cash-checkout queuing)
+ *
+ * Replays a queued offline cash sale through the same core logic as the live
+ * /api/stripe/terminal/cash-payment route (processCashSaleCore), keyed on the
+ * client-generated clientTransactionId for idempotent replay-safety.
+ *
+ * ITEM_UNAVAILABLE is the one failure this surfaces distinctly (code passed through
+ * to the response) — a genuine double-sell conflict (item sold elsewhere while this
+ * device was offline). Per ADR-offline-pos-queue-2026-07-03.md decision 1, this must
+ * NOT be silently dropped or auto-resolved; the frontend routes it to a "needs
+ * reconciliation" state instead of endless retry.
+ */
+async function handleCheckoutCash(
+  operation: SyncOperation,
+  organizer: { id: string; subscriptionTier: string | null }
+) {
+  const { payload } = operation;
+
+  try {
+    const result = await processCashSaleCore({
+      organizer,
+      saleId: operation.saleId,
+      items: payload?.items ?? [],
+      cashReceived: payload?.cashReceived ?? 0,
+      buyerEmail: payload?.buyerEmail,
+      clientTransactionId: payload?.clientTransactionId,
+    });
+
+    return {
+      data: {
+        localId: operation.localId,
+        // Same as UPLOAD_PHOTO: localId === itemId here on purpose so the frontend's
+        // synced-handling skips mapLocalToServerId (there's no local item to remap).
+        itemId: operation.itemId || operation.localId,
+        status: 'SUCCESS' as const,
+        serverTimestamp: new Date().toISOString(),
+        resolvedValues: { purchaseIds: result.purchaseIds, replay: result.replay },
+      },
+    };
+  } catch (error: any) {
+    if (error instanceof CashSaleError) {
+      return {
+        message: {
+          message: error.message,
+          retryable: error.retryable,
+          code: error.code,
+        },
+      };
+    }
+    return {
+      message: {
+        message: error.message || 'Failed to record cash sale',
+        retryable: true,
+      },
+    };
+  }
+}
+

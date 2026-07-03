@@ -1415,6 +1415,10 @@ model Purchase {
   source                String            @default("ONLINE") // ONLINE | POS
   buyerEmail            String? // POS only: optional email for receipt delivery
   isTestTransaction     Boolean           @default(false)
+  // #561 offline POS cash-checkout queuing: client-generated UUID set at queue-time.
+  // NOT @unique — one offline cart submission legitimately produces multiple Purchase
+  // rows (one per item) sharing the SAME clientTransactionId. Dedup via findMany, not a constraint.
+  clientTransactionId   String?
   // Outward Email Automations: shopper review-ask idempotency guard
   reviewAskSentAt       DateTime? // When the post-purchase "rate the organizer" email was sent
   digitalReceipt        DigitalReceipt?
@@ -1429,6 +1433,7 @@ model Purchase {
   @@index([itemId])
   @@index([saleId])
   @@index([affiliateLinkId])
+  @@index([clientTransactionId])
 }
 
 model SaleSubscriber {

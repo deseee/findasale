@@ -5,7 +5,7 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react';
 import axios from 'axios';
-import { getPendingSync, getPendingSyncCount, initOfflineDB, markSyncConfirmed, mapLocalToServerId, clearSyncedOperations, setLastSyncTime } from '../lib/offlineSync';
+import { getPendingSync, getPendingSyncCount, initOfflineDB, markSyncConfirmed, markNeedsReconciliation, mapLocalToServerId, clearSyncedOperations, setLastSyncTime } from '../lib/offlineSync';
 import { useToast } from '../components/ToastContext';
 
 export interface OfflineSyncState {
@@ -81,7 +81,10 @@ export function useOfflineSync() {
     if (syncInProgressRef.current) return;
     if (isOffline) return;
 
-    const pending = await getPendingSync();
+    // #561: only resend entries actually awaiting sync. NEEDS_RECONCILIATION entries
+    // (a CHECKOUT_CASH replay hit an already-sold item) must NOT be resent every retry —
+    // they wait for the organizer to review in SyncQueueModal.
+    const pending = (await getPendingSync()).filter((entry: any) => entry.status === 'PENDING');
     if (pending.length === 0) return;
 
     syncInProgressRef.current = true;
@@ -121,9 +124,30 @@ export function useOfflineSync() {
 
       // Handle failures
       if (failed && failed.length > 0) {
-        const failureMsg = failed.map((f: any) => `${f.localId}: ${f.error}`).join(', ');
-        setSyncError(`Failed to sync: ${failureMsg}`);
-        showToast(`Sync error: ${failureMsg}`, 'error');
+        // #561: a CHECKOUT_CASH replay that hit an already-sold item is a genuine double-sell
+        // conflict, not a transient sync error. Route it to "needs reconciliation" (stops the
+        // endless-retry loop non-retryable failures would otherwise cause) instead of lumping
+        // it into the generic failure toast.
+        const reconciliationNeeded = failed.filter(
+          (f: any) => f.operationType === 'CHECKOUT_CASH' && f.code === 'ITEM_UNAVAILABLE'
+        );
+        const otherFailures = failed.filter(
+          (f: any) => !(f.operationType === 'CHECKOUT_CASH' && f.code === 'ITEM_UNAVAILABLE')
+        );
+
+        if (reconciliationNeeded.length > 0) {
+          await markNeedsReconciliation(reconciliationNeeded.map((f: any) => f.localId));
+          showToast(
+            `${reconciliationNeeded.length} cash sale${reconciliationNeeded.length > 1 ? 's' : ''} need${reconciliationNeeded.length > 1 ? '' : 's'} reconciliation — item sold elsewhere while offline. Review in Offline Sync Queue.`,
+            'warning'
+          );
+        }
+
+        if (otherFailures.length > 0) {
+          const failureMsg = otherFailures.map((f: any) => `${f.localId}: ${f.error}`).join(', ');
+          setSyncError(`Failed to sync: ${failureMsg}`);
+          showToast(`Sync error: ${failureMsg}`, 'error');
+        }
       }
 
       // Notify user of conflicts or server-side changes

@@ -31,12 +31,28 @@ export interface SyncQueueEntry {
   seq: number;
   localId: string;
   itemId?: string;
-  operation: 'CREATE_ITEM' | 'UPDATE_ITEM' | 'DELETE_ITEM' | 'UPLOAD_PHOTO';
-  status: 'PENDING' | 'SENT' | 'CONFIRMED';
+  operation: 'CREATE_ITEM' | 'UPDATE_ITEM' | 'DELETE_ITEM' | 'UPLOAD_PHOTO' | 'CHECKOUT_CASH';
+  // NEEDS_RECONCILIATION (#561): a CHECKOUT_CASH replay found the item already sold
+  // elsewhere while this device was offline. Per ADR-offline-pos-queue-2026-07-03.md,
+  // this must never auto-resolve or silently drop — it stops retrying and surfaces in
+  // SyncQueueModal for the organizer to review manually.
+  status: 'PENDING' | 'SENT' | 'CONFIRMED' | 'NEEDS_RECONCILIATION';
   payload: any;
   saleId: string;
   timestamp: string;
   retryCount: number;
+}
+
+/**
+ * #561 offline POS cash-checkout queuing: payload shape for a queued CHECKOUT_CASH entry.
+ * clientTransactionId is generated on-device at queue-time (before network state is even
+ * known) so a replayed sync is idempotent — the backend dedupes on this id.
+ */
+export interface CashCheckoutPayload {
+  items: Array<{ itemId?: string; amount: number; label?: string }>;
+  cashReceived: number;
+  buyerEmail?: string;
+  clientTransactionId: string;
 }
 
 const DB_NAME = 'findASaleOffline';
@@ -193,6 +209,53 @@ export async function recordOfflineItemDelete(itemId: string, saleId: string): P
 }
 
 /**
+ * Record a queued offline cash checkout (#561 offline POS transaction queuing).
+ * Generates the client-side idempotency key at queue-time — this is what makes a later
+ * retry/replay safe even if the network request that triggered queuing partially landed.
+ */
+export async function recordOfflineCashCheckout(
+  saleId: string,
+  payload: Omit<CashCheckoutPayload, 'clientTransactionId'>
+): Promise<string> {
+  const db = await initOfflineDB();
+  const now = new Date().toISOString();
+  const clientTransactionId = generateClientTransactionId();
+
+  await saveToStore(db, 'syncQueue', {
+    localId: clientTransactionId,
+    operation: 'CHECKOUT_CASH' as const,
+    status: 'PENDING' as const,
+    saleId,
+    payload: { ...payload, clientTransactionId } as CashCheckoutPayload,
+    timestamp: now,
+    retryCount: 0,
+  });
+
+  return clientTransactionId;
+}
+
+/**
+ * Mark queue entries as needing manual reconciliation (#561) — used when a CHECKOUT_CASH
+ * replay finds the item already sold elsewhere. Distinct from CONFIRMED (never cleared
+ * automatically) and distinct from PENDING (stops being resent on every sync retry).
+ */
+export async function markNeedsReconciliation(localIds: string[]): Promise<void> {
+  const db = await initOfflineDB();
+  const entries = await getAllFromStore(db, 'syncQueue');
+  const now = new Date().toISOString();
+
+  for (const entry of entries) {
+    if (localIds.includes(entry.localId)) {
+      await saveToStore(db, 'syncQueue', {
+        ...entry,
+        status: 'NEEDS_RECONCILIATION',
+        timestamp: now,
+      });
+    }
+  }
+}
+
+/**
  * Record an offline photo for deferred upload
  */
 export async function recordOfflinePhoto(localItemId: string, photoUrl: string): Promise<OfflinePhoto> {
@@ -344,6 +407,18 @@ export async function setLastSyncTime(timestamp: string): Promise<void> {
  */
 function generateLocalId(): string {
   return `local-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+}
+
+/**
+ * Internal: Generate a client transaction id for #561 idempotent cash-checkout replay.
+ * Prefers crypto.randomUUID() (real UUID, matches the backend Purchase.clientTransactionId
+ * expectation); falls back to the same scheme as generateLocalId() on older browsers.
+ */
+function generateClientTransactionId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return generateLocalId();
 }
 
 /**

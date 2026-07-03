@@ -932,13 +932,43 @@ export default function POSPage() {
     setErrorMessage('');
     setSuccessMessage('');
 
-    try {
-      const items = cart.map(c => ({
-        ...(c.itemId ? { itemId: c.itemId } : {}),
-        amount: c.amount,
-        label: c.title,
-      }));
+    const items = cart.map(c => ({
+      ...(c.itemId ? { itemId: c.itemId } : {}),
+      amount: c.amount,
+      label: c.title,
+    }));
 
+    // #561 offline POS transaction queuing: queue the cash sale instead of hard-failing
+    // when there's no connectivity. Card (Stripe Terminal) swipes stay online-only —
+    // this only applies to the cash flow, which needs no live processor.
+    const queueOffline = async () => {
+      const { recordOfflineCashCheckout } = await import('../../lib/offlineSync');
+      await recordOfflineCashCheckout(selectedSaleId, {
+        items,
+        cashReceived,
+        ...(buyerEmail.trim() ? { buyerEmail: buyerEmail.trim() } : {}),
+      });
+      setPaymentStatus('success');
+      setSuccessMessage(
+        `📥 Offline — cash sale for $${cartTotal.toFixed(2)} queued. It will sync automatically once you're back online.`
+      );
+      showSurvey('OG-3');
+      clearCart();
+    };
+
+    // Already known offline — skip the network round-trip entirely and queue immediately.
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      try {
+        await queueOffline();
+      } catch (queueErr) {
+        console.error('[pos] Failed to queue offline cash sale:', queueErr);
+        setPaymentStatus('error');
+        setErrorMessage('Unable to queue cash sale offline. Please try again.');
+      }
+      return;
+    }
+
+    try {
       const response = await api.post<CashPaymentResponse>('/stripe/terminal/cash-payment', {
         items,
         cashReceived,
@@ -956,6 +986,18 @@ export default function POSPage() {
       showSurvey('OG-3');
       clearCart();
     } catch (err: any) {
+      // No response reached the server → connectivity failure, queue for offline retry.
+      // A server-returned error (4xx/5xx) means the request WAS received and rejected —
+      // that's a real failure (e.g. item already sold), not a connectivity issue, so it
+      // must still surface to the organizer rather than silently queue.
+      if (!err?.response) {
+        try {
+          await queueOffline();
+          return;
+        } catch (queueErr) {
+          console.error('[pos] Failed to queue offline cash sale:', queueErr);
+        }
+      }
       console.error('[pos] Cash payment error:', err);
       setPaymentStatus('error');
       const message =

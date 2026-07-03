@@ -73,6 +73,17 @@ export default function SyncQueueModal({ isOpen, onClose }: SyncQueueModalProps)
 
   const pendingCount = queueItems.filter(q => q.status === 'PENDING').length;
   const confirmedCount = queueItems.filter(q => q.status === 'CONFIRMED').length;
+  // #561: cash sales where a replay found the item already sold elsewhere while this
+  // device was offline. Never auto-resolved — organizer reviews manually.
+  const reconciliationCount = queueItems.filter(q => q.status === 'NEEDS_RECONCILIATION').length;
+
+  // #561: flag (never reject) any CHECKOUT_CASH entry that's been unsynced 24h+, per
+  // Patrick's decision — cash already collected in hand carries none of the card-auth
+  // staleness risk that would justify a hard expiry.
+  const isStaleCashEntry = (item: any) =>
+    item.operation === 'CHECKOUT_CASH' &&
+    (item.status === 'PENDING' || item.status === 'NEEDS_RECONCILIATION') &&
+    Date.now() - new Date(item.timestamp).getTime() > 24 * 60 * 60 * 1000;
 
   return (
     <AccessibleModal
@@ -87,6 +98,7 @@ export default function SyncQueueModal({ isOpen, onClose }: SyncQueueModalProps)
             <h2 id="sync-queue-modal-title" className="text-2xl font-bold text-gray-900">Offline Sync Queue</h2>
             <p className="text-sm text-gray-500 mt-1">
               {pendingCount} pending • {confirmedCount} confirmed
+              {reconciliationCount > 0 && ` • ${reconciliationCount} need${reconciliationCount > 1 ? '' : 's'} reconciliation`}
               {lastSyncTime && ` • Last sync: ${new Date(lastSyncTime).toLocaleTimeString()}`}
             </p>
           </div>
@@ -110,8 +122,20 @@ export default function SyncQueueModal({ isOpen, onClose }: SyncQueueModalProps)
             </div>
           ) : (
             <div className="space-y-4">
-              {queueItems.map((item, idx) => (
-                <div key={idx} className={`border rounded-lg p-4 ${item.status === 'PENDING' ? 'border-yellow-300 bg-yellow-50' : 'border-gray-300 bg-gray-50'}`}>
+              {queueItems.map((item, idx) => {
+                const needsReconciliation = item.status === 'NEEDS_RECONCILIATION';
+                const stale = isStaleCashEntry(item);
+                return (
+                <div
+                  key={idx}
+                  className={`border rounded-lg p-4 ${
+                    needsReconciliation
+                      ? 'border-red-300 bg-red-50'
+                      : item.status === 'PENDING'
+                        ? 'border-yellow-300 bg-yellow-50'
+                        : 'border-gray-300 bg-gray-50'
+                  }`}
+                >
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
                       <p className="font-semibold text-gray-900">{item.operation}</p>
@@ -124,18 +148,47 @@ export default function SyncQueueModal({ isOpen, onClose }: SyncQueueModalProps)
                           {item.payload.title && <p>Title: {item.payload.title}</p>}
                           {item.payload.price && <p>Price: ${(item.payload.price / 100).toFixed(2)}</p>}
                           {item.payload.category && <p>Category: {item.payload.category}</p>}
+                          {item.operation === 'CHECKOUT_CASH' && (
+                            <>
+                              <p>Cash sale: ${(item.payload.items || []).reduce((sum: number, i: any) => sum + (i.amount || 0), 0).toFixed(2)}</p>
+                              <p>Cash received: ${Number(item.payload.cashReceived || 0).toFixed(2)}</p>
+                            </>
+                          )}
                         </div>
+                      )}
+
+                      {needsReconciliation && (
+                        <p className="mt-2 text-sm text-red-700 flex items-start gap-1">
+                          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                          Needs reconciliation — one or more items in this sale were already sold elsewhere while this device was offline. This sale was NOT recorded; review manually before re-entering it.
+                        </p>
+                      )}
+
+                      {stale && (
+                        <p className="mt-2 text-xs font-medium text-amber-700 flex items-center gap-1">
+                          <AlertTriangle className="w-3.5 h-3.5" />
+                          Unsynced 24h+ — will keep retrying, will not expire
+                        </p>
                       )}
                     </div>
 
                     <div className="ml-4 text-right">
-                      <span className={`inline-block px-2 py-1 rounded text-xs font-medium ${item.status === 'PENDING' ? 'bg-yellow-200 text-yellow-800' : 'bg-green-200 text-green-800'}`}>
-                        {item.status}
+                      <span
+                        className={`inline-block px-2 py-1 rounded text-xs font-medium ${
+                          needsReconciliation
+                            ? 'bg-red-200 text-red-800'
+                            : item.status === 'PENDING'
+                              ? 'bg-yellow-200 text-yellow-800'
+                              : 'bg-green-200 text-green-800'
+                        }`}
+                      >
+                        {needsReconciliation ? 'NEEDS REVIEW' : item.status}
                       </span>
                     </div>
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

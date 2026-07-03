@@ -478,13 +478,252 @@ export const cancelTerminalPaymentIntent = async (req: AuthRequest, res: Respons
 };
 
 /**
+ * #561 offline POS cash-checkout queuing: typed error carrying HTTP status + retryability +
+ * a stable code so callers (live route vs. offline-sync replay) can react without string-matching.
+ */
+export class CashSaleError extends Error {
+  status: number;
+  retryable: boolean;
+  code: 'VALIDATION' | 'DUPLICATE_ITEMS' | 'ITEM_NOT_FOUND' | 'ITEM_UNAVAILABLE' | 'DRAFT_PENDING';
+  constructor(message: string, status: number, retryable: boolean, code: CashSaleError['code']) {
+    super(message);
+    this.status = status;
+    this.retryable = retryable;
+    this.code = code;
+  }
+}
+
+export interface CashSaleResult {
+  purchaseIds: string[];
+  totalAmount: number;
+  platformFee: number;
+  cashReceived: number;
+  change: number;
+  receiptSent: boolean;
+  cashFeeBalance: number;
+  cashFeeBalanceUpdatedAt: Date | null;
+  replay: boolean; // true = this was an idempotent replay of an already-synced clientTransactionId
+}
+
+/**
+ * Shared cash-sale core, used by both the live POST /api/stripe/terminal/cash-payment route
+ * and the offline-sync replay path (syncController.ts handleCheckoutCash). Sale ownership is
+ * verified by the caller before this runs (both callers already do that check their own way).
+ *
+ * Idempotency (#561 ADR-offline-pos-queue-2026-07-03.md): when clientTransactionId is provided
+ * and Purchase rows already exist for it, this is a replay of an already-synced offline entry —
+ * return the existing rows instead of creating new ones or re-touching item status.
+ */
+export async function processCashSaleCore(params: {
+  organizer: { id: string; subscriptionTier: string | null };
+  saleId: string;
+  items: Array<{ itemId?: string; amount: number; label?: string }>;
+  cashReceived: number;
+  buyerEmail?: string;
+  clientTransactionId?: string;
+}): Promise<CashSaleResult> {
+  const { organizer, saleId, items, cashReceived, buyerEmail, clientTransactionId } = params;
+
+  if (!items || !Array.isArray(items) || items.length === 0) {
+    throw new CashSaleError('items array is required and must be non-empty', 400, false, 'VALIDATION');
+  }
+  if (!items.every(i => typeof i.amount === 'number' && i.amount > 0)) {
+    throw new CashSaleError('Each item must have a positive amount', 400, false, 'VALIDATION');
+  }
+  if (typeof cashReceived !== 'number' || cashReceived < 0) {
+    throw new CashSaleError('cashReceived must be a non-negative number', 400, false, 'VALIDATION');
+  }
+
+  const totalAmount = items.reduce((sum, i) => sum + i.amount, 0);
+  if (cashReceived < totalAmount) {
+    throw new CashSaleError('Insufficient cash received', 400, false, 'VALIDATION');
+  }
+
+  // Idempotent replay check — must run BEFORE any item-availability check, since a genuine
+  // replay of an already-synced sale should never re-validate item state (the item may have
+  // legitimately moved on since the original sync).
+  if (clientTransactionId) {
+    const existing = await prisma.purchase.findMany({ where: { clientTransactionId } });
+    if (existing.length > 0) {
+      const existingTotal = existing.reduce((sum, p) => sum + p.amount, 0);
+      const existingFee = existing.reduce((sum, p) => sum + (p.platformFeeAmount ?? 0), 0);
+      const updatedOrganizer = await prisma.organizer.findUnique({
+        where: { id: organizer.id },
+        select: { cashFeeBalance: true, cashFeeBalanceUpdatedAt: true },
+      });
+      return {
+        purchaseIds: existing.map(p => p.id),
+        totalAmount: existingTotal,
+        platformFee: existingFee,
+        cashReceived,
+        change: cashReceived - existingTotal,
+        receiptSent: false, // not re-sent on replay
+        cashFeeBalance: updatedOrganizer?.cashFeeBalance ?? 0,
+        cashFeeBalanceUpdatedAt: updatedOrganizer?.cashFeeBalanceUpdatedAt ?? null,
+        replay: true,
+      };
+    }
+  }
+
+  // Fetch and validate all items with itemId
+  const itemIds = items.filter(i => i.itemId).map(i => i.itemId!);
+
+  // Reject duplicate itemIds — each physical item can only be charged once per transaction
+  if (itemIds.length !== new Set(itemIds).size) {
+    throw new CashSaleError('Duplicate items in cart. Each item can only be charged once per transaction.', 400, false, 'DUPLICATE_ITEMS');
+  }
+
+  let dbItems: Record<string, any> = {};
+  if (itemIds.length > 0) {
+    const fetched = await prisma.item.findMany({
+      where: { id: { in: itemIds }, saleId },
+      select: { id: true, title: true, status: true, draftStatus: true },
+    });
+    dbItems = Object.fromEntries(fetched.map(item => [item.id, item]));
+
+    for (const itemId of itemIds) {
+      if (!dbItems[itemId]) {
+        throw new CashSaleError('Item not found in this sale', 404, false, 'ITEM_NOT_FOUND');
+      }
+      if (dbItems[itemId].status !== 'AVAILABLE') {
+        // #561 double-sell conflict: for an offline replay this is the case the ADR calls out —
+        // do NOT silently drop the queued sale. The caller (handleCheckoutCash) surfaces this
+        // code so the frontend can flag "needs reconciliation" instead of retrying forever.
+        throw new CashSaleError(`"${dbItems[itemId].title}" is sold or unavailable`, 400, false, 'ITEM_UNAVAILABLE');
+      }
+      if (dbItems[itemId].draftStatus !== null && dbItems[itemId].draftStatus !== 'PUBLISHED') {
+        throw new CashSaleError(`"${dbItems[itemId].title}" is pending review and cannot be sold yet`, 400, false, 'DRAFT_PENDING');
+      }
+    }
+  }
+
+  // Fee: read from FeeStructure (same rate as card flow). Cash organizer collects full amount in person —
+  // platformFeeAmount is tracked for accounting; billing/collection is handled outside Stripe.
+  const feeStructure = await prisma.feeStructure.findFirst({ where: { listingType: '*' } });
+  const feeRate = feeStructure?.feeRate ?? getPlatformFeeRate(organizer.subscriptionTier as any);
+
+  // Create Purchase records immediately with status PAID
+  const purchaseIds: string[] = [];
+  for (const item of items) {
+    // Use a UUID placeholder for cash sales (stripePaymentIntentId is @unique — cannot be null)
+    const cashPIId = `cash_${randomUUID()}`;
+    const itemPlatformFeeAmount = Math.round(item.amount * feeRate * 100) / 100;
+
+    const purchase = await prisma.purchase.create({
+      data: {
+        itemId: item.itemId ?? null,
+        saleId,
+        amount: item.amount,
+        platformFeeAmount: itemPlatformFeeAmount,
+        stripePaymentIntentId: cashPIId,
+        status: 'PAID',
+        source: 'POS',
+        ...(clientTransactionId ? { clientTransactionId } : {}),
+        ...(buyerEmail ? { buyerEmail } : {}),
+      },
+    });
+    purchaseIds.push(purchase.id);
+  }
+
+  // Mark items SOLD
+  for (const item of items) {
+    if (item.itemId) {
+      await prisma.item.update({
+        where: { id: item.itemId },
+        data: { status: 'SOLD' },
+      });
+
+      // Fire-and-forget: end eBay listing if item was pushed there
+      endEbayListingIfExists(item.itemId).catch(err =>
+        console.error('[eBay] Failed to withdraw offer:', err)
+      );
+      notifyFacebookExportedItemSold(item.itemId).catch(err =>
+        console.warn(`[FB Nudge] failed for item ${item.itemId}:`, err.message)
+      );
+    }
+  }
+
+  // Accumulate platform fee to organizer's cash fee balance
+  const totalPlatformFees = items.reduce((sum, item) => {
+    const itemFee = Math.round(item.amount * feeRate * 100) / 100;
+    return sum + itemFee;
+  }, 0);
+  if (totalPlatformFees > 0) {
+    await prisma.organizer.update({
+      where: { id: organizer.id },
+      data: {
+        cashFeeBalance: { increment: totalPlatformFees },
+        cashFeeBalanceUpdatedAt: new Date(),
+      },
+    });
+  }
+
+  // Optionally send receipt email
+  let receiptSent = false;
+  if (buyerEmail) {
+    try {
+      const { buildEmail } = await import('../services/emailTemplateService');
+
+      const fromEmail = process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'find@outreach.finda.sale';
+
+      const itemsList = items
+        .map(i => `<li>${i.label ?? 'Item'}: $${i.amount.toFixed(2)}</li>`)
+        .join('');
+      const change = (cashReceived - totalAmount).toFixed(2);
+
+      const html = buildEmail({
+        preheader: `Receipt for your purchase`,
+        headline: 'Your receipt from FindA.Sale 🎉',
+        body: `<p>Thank you for your purchase!</p><ul>${itemsList}</ul><p><strong>Total: $${totalAmount.toFixed(2)}</strong></p><p>Cash received: $${cashReceived.toFixed(2)}</p><p>Change: $${change}</p>`,
+        ctaText: 'Visit FindA.Sale',
+        ctaUrl: process.env.FRONTEND_URL || 'https://finda.sale',
+        accentColor: '#10b981',
+      });
+
+      await transactionalEmailService.emails.send({
+        from: fromEmail,
+        to: buyerEmail,
+        subject: `Receipt: Your in-person purchase`,
+        html,
+      });
+      receiptSent = true;
+    } catch (emailErr) {
+      console.warn('[terminal] Failed to send cash sale receipt email:', emailErr);
+    }
+  }
+
+  const change = cashReceived - totalAmount;
+
+  // Fetch updated organizer balance to return in response
+  const updatedOrganizer = await prisma.organizer.findUnique({
+    where: { id: organizer.id },
+    select: { cashFeeBalance: true, cashFeeBalanceUpdatedAt: true },
+  });
+
+  return {
+    purchaseIds,
+    totalAmount,
+    platformFee: totalPlatformFees,
+    cashReceived,
+    change,
+    receiptSent,
+    cashFeeBalance: updatedOrganizer?.cashFeeBalance ?? 0,
+    cashFeeBalanceUpdatedAt: updatedOrganizer?.cashFeeBalanceUpdatedAt ?? null,
+    replay: false,
+  };
+}
+
+/**
  * POST /api/stripe/terminal/cash-payment
- * Body: { items: [{itemId?: string, amount: number, label?: string}], cashReceived: number, buyerEmail?: string, saleId: string }
+ * Body: { items: [{itemId?: string, amount: number, label?: string}], cashReceived: number, buyerEmail?: string, saleId: string, clientTransactionId?: string }
  *
  * Records a cash sale immediately without Stripe processing.
  * Creates Purchase records with status PAID and marks items SOLD.
  * Accumulates 10% platform fees into organizer.cashFeeBalance for later payout deduction.
  * platformFeeAmount tracks fee for accounting; collection is handled outside Stripe.
+ *
+ * clientTransactionId (#561): optional idempotency key. The offline-sync replay path
+ * (syncController.ts) always sends one; live in-person swipes may omit it.
  */
 export const cashPayment = async (req: AuthRequest, res: Response) => {
   try {
@@ -492,30 +731,13 @@ export const cashPayment = async (req: AuthRequest, res: Response) => {
     const organizer = await resolveOrganizer(req, res, { requireStripe: false });
     if (!organizer) return;
 
-    const { items, cashReceived, buyerEmail, saleId } = req.body as {
+    const { items, cashReceived, buyerEmail, saleId, clientTransactionId } = req.body as {
       items?: Array<{ itemId?: string; amount: number; label?: string }>;
       cashReceived?: number;
       buyerEmail?: string;
       saleId?: string;
+      clientTransactionId?: string;
     };
-
-    // Validate inputs
-    if (!items || !Array.isArray(items) || items.length === 0) {
-      return res.status(400).json({ message: 'items array is required and must be non-empty' });
-    }
-
-    if (!items.every(i => typeof i.amount === 'number' && i.amount > 0)) {
-      return res.status(400).json({ message: 'Each item must have a positive amount' });
-    }
-
-    if (typeof cashReceived !== 'number' || cashReceived < 0) {
-      return res.status(400).json({ message: 'cashReceived must be a non-negative number' });
-    }
-
-    const totalAmount = items.reduce((sum, i) => sum + i.amount, 0);
-    if (cashReceived < totalAmount) {
-      return res.status(400).json({ message: 'Insufficient cash received' });
-    }
 
     if (!saleId) {
       return res.status(400).json({ message: 'saleId is required' });
@@ -531,148 +753,20 @@ export const cashPayment = async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ message: 'Sale does not belong to your account' });
     }
 
-    // Fetch and validate all items with itemId
-    const itemIds = items.filter(i => i.itemId).map(i => i.itemId!);
-
-    // Reject duplicate itemIds — each physical item can only be charged once per transaction
-    if (itemIds.length !== new Set(itemIds).size) {
-      return res.status(400).json({ message: 'Duplicate items in cart. Each item can only be charged once per transaction.' });
-    }
-
-    let dbItems: Record<string, any> = {};
-    if (itemIds.length > 0) {
-      const fetched = await prisma.item.findMany({
-        where: { id: { in: itemIds }, saleId },
-        select: { id: true, title: true, status: true, draftStatus: true },
-      });
-      dbItems = Object.fromEntries(fetched.map(item => [item.id, item]));
-
-      for (const itemId of itemIds) {
-        if (!dbItems[itemId]) {
-          return res.status(404).json({ message: `Item not found in this sale` });
-        }
-        if (dbItems[itemId].status !== 'AVAILABLE') {
-          return res.status(400).json({ message: `"${dbItems[itemId].title}" is sold or unavailable` });
-        }
-        if (dbItems[itemId].draftStatus !== null && dbItems[itemId].draftStatus !== 'PUBLISHED') {
-          return res.status(400).json({ message: `"${dbItems[itemId].title}" is pending review and cannot be sold yet` });
-        }
-      }
-    }
-
-    // Fee: read from FeeStructure (same rate as card flow). Cash organizer collects full amount in person —
-    // platformFeeAmount is tracked for accounting; billing/collection is handled outside Stripe.
-    const feeStructure = await prisma.feeStructure.findFirst({ where: { listingType: '*' } });
-    const feeRate = feeStructure?.feeRate ?? getPlatformFeeRate(organizer.subscriptionTier as any);
-
-    // Create Purchase records immediately with status PAID
-    const purchaseIds: string[] = [];
-    for (const item of items) {
-      // Use a UUID placeholder for cash sales (stripePaymentIntentId is @unique — cannot be null)
-      const cashPIId = `cash_${randomUUID()}`;
-      const itemPlatformFeeAmount = Math.round(item.amount * feeRate * 100) / 100;
-
-      const purchase = await prisma.purchase.create({
-        data: {
-          itemId: item.itemId ?? null,
-          saleId,
-          amount: item.amount,
-          platformFeeAmount: itemPlatformFeeAmount,
-          stripePaymentIntentId: cashPIId,
-          status: 'PAID',
-          source: 'POS',
-          ...(buyerEmail ? { buyerEmail } : {}),
-        },
-      });
-      purchaseIds.push(purchase.id);
-    }
-
-    // Mark items SOLD
-    for (const item of items) {
-      if (item.itemId) {
-        await prisma.item.update({
-          where: { id: item.itemId },
-          data: { status: 'SOLD' },
-        });
-
-        // Fire-and-forget: end eBay listing if item was pushed there
-        endEbayListingIfExists(item.itemId).catch(err =>
-          console.error('[eBay] Failed to withdraw offer:', err)
-        );
-        notifyFacebookExportedItemSold(item.itemId).catch(err =>
-          console.warn(`[FB Nudge] failed for item ${item.itemId}:`, err.message)
-        );
-      }
-    }
-
-    // Accumulate platform fee to organizer's cash fee balance
-    const totalPlatformFees = items.reduce((sum, item) => {
-      const itemFee = Math.round(item.amount * feeRate * 100) / 100;
-      return sum + itemFee;
-    }, 0);
-    if (totalPlatformFees > 0) {
-      await prisma.organizer.update({
-        where: { id: organizer.id },
-        data: {
-          cashFeeBalance: { increment: totalPlatformFees },
-          cashFeeBalanceUpdatedAt: new Date(),
-        },
-      });
-    }
-
-    // Optionally send receipt email
-    let receiptSent = false;
-    if (buyerEmail) {
-      try {
-        const { buildEmail } = await import('../services/emailTemplateService');
-        
-        const fromEmail = process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'find@outreach.finda.sale';
-
-        const itemsList = items
-          .map(i => `<li>${i.label ?? 'Item'}: $${i.amount.toFixed(2)}</li>`)
-          .join('');
-        const change = (cashReceived - totalAmount).toFixed(2);
-
-        const html = buildEmail({
-          preheader: `Receipt for your purchase`,
-          headline: 'Your receipt from FindA.Sale 🎉',
-          body: `<p>Thank you for your purchase!</p><ul>${itemsList}</ul><p><strong>Total: $${totalAmount.toFixed(2)}</strong></p><p>Cash received: $${cashReceived.toFixed(2)}</p><p>Change: $${change}</p>`,
-          ctaText: 'Visit FindA.Sale',
-          ctaUrl: process.env.FRONTEND_URL || 'https://finda.sale',
-          accentColor: '#10b981',
-        });
-
-        await transactionalEmailService.emails.send({
-          from: fromEmail,
-          to: buyerEmail,
-          subject: `Receipt: Your in-person purchase`,
-          html,
-        });
-        receiptSent = true;
-      } catch (emailErr) {
-        console.warn('[terminal] Failed to send cash sale receipt email:', emailErr);
-      }
-    }
-
-    const change = cashReceived - totalAmount;
-
-    // Fetch updated organizer balance to return in response
-    const updatedOrganizer = await prisma.organizer.findUnique({
-      where: { id: organizer.id },
-      select: { cashFeeBalance: true, cashFeeBalanceUpdatedAt: true },
+    const result = await processCashSaleCore({
+      organizer,
+      saleId,
+      items: items ?? [],
+      cashReceived: cashReceived ?? 0,
+      buyerEmail,
+      clientTransactionId,
     });
 
-    res.json({
-      purchaseIds,
-      totalAmount,
-      platformFee: totalPlatformFees,
-      cashReceived,
-      change,
-      receiptSent,
-      cashFeeBalance: updatedOrganizer?.cashFeeBalance ?? 0,
-      cashFeeBalanceUpdatedAt: updatedOrganizer?.cashFeeBalanceUpdatedAt,
-    });
-  } catch (error) {
+    res.json(result);
+  } catch (error: any) {
+    if (error instanceof CashSaleError) {
+      return res.status(error.status).json({ message: error.message });
+    }
     console.error('[terminal] cashPayment error:', error);
     res.status(500).json({ message: 'Failed to record cash sale' });
   }
