@@ -158,7 +158,7 @@ export async function reanalyzeItem(
   for (const url of sourceUrls) {
     if (!/^https?:\/\//i.test(url)) continue;
     try {
-      const resp = await axios.get(url, { responseType: 'arraybuffer', timeout: 10000 });
+      const resp = await axios.get(url, { responseType: 'arraybuffer', timeout: 10000, headers: { 'User-Agent': 'FindaSale-ImageTagger/1.0 (+https://finda.sale; secondary-sale item tagging)' } });
       const contentType = String(resp.headers?.['content-type'] || '').split(';')[0].trim();
       buffers.push(Buffer.from(resp.data));
       mimeTypes.push(contentType.startsWith('image/') ? contentType : 'image/jpeg');
