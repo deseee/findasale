@@ -314,6 +314,52 @@ async function listAllMessageIds(
 // Main export
 // ---------------------------------------------------------------------------
 
+/**
+ * Self-limiting boot-time backfill trigger (2026-07-03, S1065).
+ *
+ * reclassifyBounces() was historically a manual one-off job (no scheduled
+ * trigger, no automatic cron) -- it required someone to hit
+ * POST /api/internal/jobs/run with job="reclassify-bounces" and the
+ * x-internal-secret header by hand. That's real friction for a job that only
+ * ever needs to run until the historical backlog is caught up.
+ *
+ * This wraps it in a cheap guard: on every server boot, count
+ * EmailSuppression rows with classifiedAt still NULL. If zero, do nothing
+ * (near-zero cost -- one indexed COUNT query). If any remain, run
+ * reclassifyBounces() once. Once the backlog is cleared this becomes a
+ * permanent no-op on every future boot, so it's safe to leave wired in
+ * rather than removing it after this one use.
+ *
+ * Fire-and-forget from index.ts's listen() callback -- never blocks server
+ * startup, and every internal error is caught here so a Gmail/API failure
+ * can't crash the process.
+ */
+export const bounceSuppressService_runReclassifyBackfillIfNeeded = async (): Promise<void> => {
+  try {
+    const unclassifiedCount = await prisma.emailSuppression.count({
+      where: { classifiedAt: null },
+    });
+
+    if (unclassifiedCount === 0) {
+      console.log('[bounceSuppressService] Boot check: no unclassified EmailSuppression rows -- skipping backfill.');
+      return;
+    }
+
+    console.log(
+      `[bounceSuppressService] Boot check: ${unclassifiedCount} EmailSuppression row(s) with classifiedAt=NULL -- running one-time reclassify backfill.`
+    );
+    const result = await bounceSuppressService.reclassifyBounces();
+    console.log(
+      `[bounceSuppressService] Boot backfill done. processed=${result.processed} updated=${result.suppressed} errors=${result.errors.length}`
+    );
+    if (result.errors.length > 0) {
+      console.warn('[bounceSuppressService] Boot backfill errors:', result.errors.slice(0, 5));
+    }
+  } catch (err: any) {
+    console.error('[bounceSuppressService] Boot backfill check failed (non-fatal, server continues):', err.message);
+  }
+};
+
 export const bounceSuppressService = {
   /**
    * Process bounce messages from the Gmail inbox.

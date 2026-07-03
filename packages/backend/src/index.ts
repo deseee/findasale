@@ -234,6 +234,7 @@ import { scheduleMarkdownCycleCron } from './jobs/markdownCycleCron'; // Feature
 import { scheduleGoogleMerchantFeedCron } from './jobs/googleMerchantFeedCron'; // Feature #463: Google Merchant Center feed
 import { scheduleQuotaResetCron, scheduleCircuitBreakerRecoveryCron } from './jobs/pricingEngineCron'; // Phase S574: Pricing engine quota + recovery
 import { startEbaySoldSyncCron } from './jobs/ebaySoldSyncCron'; // Feature #244 Phase 3: eBay sold sync
+import { bounceSuppressService_runReclassifyBackfillIfNeeded } from './services/bounceSuppressService'; // S1065: self-limiting boot backfill for historical bounce reclassification
 import { startEbayListingQueueCron } from './jobs/ebayListingQueueCron'; // eBay Queue Mode engine
 import { startEbayEndedListingsSyncCron } from './jobs/ebayEndedListingsSyncCron'; // Feature #244 Phase 3: eBay ended listings sync
 import { startEbayListingSyncCron } from './jobs/ebayListingSyncCron'; // Feature #244 Phase 4: eBay bidirectional listing sync
@@ -896,6 +897,9 @@ process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 // V1: Listen on the HTTP server (not app.listen) so Socket.io shares the same port
 httpServer.listen(PORT, '0.0.0.0', () => {
   console.log(`FindA.Sale backend running on port ${PORT} (HTTP + Socket.io)`);
+
+  // S1065: one-time (self-limiting) reclassify-bounces backfill check -- no-op once caught up
+  bounceSuppressService_runReclassifyBackfillIfNeeded();
 
   // Phase 2B: Register cleanup cron for stale DRAFT items
   scheduleCleanupCron();
