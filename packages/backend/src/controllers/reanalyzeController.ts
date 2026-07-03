@@ -80,7 +80,13 @@ export const reanalyzeItemForOrganizer = async (req: AuthRequest, res: Response)
     // Never affects the reanalyze result — just logs a multi-model comparison.
     const bakeoff = req.query?.bakeoff === '1' || req.body?.bakeoff === true;
 
-    const result = await reanalyzeItem(id, { apply: true, bakeoff });
+    // Dry-run trigger (observability-only): ?dryRun=1 or { dryRun: true }.
+    // When set, the bake-off + grounded resolution still run (they key off `bakeoff`),
+    // but reanalyzeItem writes NOTHING to the item and skips any eBay sync. This lets
+    // the bake-off run against ANY item — including published live listings — safely.
+    const dryRun = req.query?.dryRun === '1' || req.body?.dryRun === true;
+
+    const result = await reanalyzeItem(id, { apply: !dryRun, bakeoff });
 
     if (!result.ok) {
       switch (result.code) {
@@ -104,10 +110,11 @@ export const reanalyzeItemForOrganizer = async (req: AuthRequest, res: Response)
     }
 
     // Return the refreshed fields so the review card can update in place.
-    const { after, appliedData, ebaySynced, ebayCategoryLocked } = result;
+    // In dry-run mode nothing was written, so `applied` reflects the real state.
+    const { after, appliedData, ebaySynced, ebayCategoryLocked, applied } = result;
     return res.json({
       itemId: id,
-      applied: true,
+      applied,
       item: {
         title: appliedData.title ?? after.title,
         description: appliedData.description ?? after.description,
@@ -121,7 +128,7 @@ export const reanalyzeItemForOrganizer = async (req: AuthRequest, res: Response)
         mpn: after.mpn,
         upc: after.upc,
         aiConfidence: after.aiConfidence,
-        isAiTagged: true,
+        isAiTagged: applied,
       },
       // suggestedPrice returned for reference only — price is never written.
       suggestedPrice: after.suggestedPrice,
