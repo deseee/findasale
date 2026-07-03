@@ -12,13 +12,27 @@ set -uo pipefail
 ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || { echo "vercel-ignore: no git root -> BUILD"; exit 1; }
 cd "$ROOT"
 
-# No previous commit reachable (shallow clone / first commit) -> build to be safe.
-if ! git rev-parse HEAD^ >/dev/null 2>&1; then
-  echo "vercel-ignore: no previous commit reachable -> BUILD"
-  exit 1
+# Compare against the last DEPLOYED commit, not just HEAD^. A multi-commit
+# push (e.g. a code commit followed by a docs-only wrap commit) means HEAD^
+# is NOT "the last deploy" -- it's whatever commit happens to sit directly
+# below HEAD in this push. Diffing HEAD^..HEAD alone silently loses every
+# non-doc change from earlier commits in the same push (confirmed bug,
+# S1066 2026-07-03: a 20-workflow + 3-component fix landed in one commit
+# immediately followed by a STATE.md-only commit; Vercel built HEAD^..HEAD,
+# saw only STATE.md, and skipped the real deploy).
+PREV="${VERCEL_GIT_PREVIOUS_SHA:-}"
+if [ -z "$PREV" ] || ! git cat-file -e "${PREV}^{commit}" >/dev/null 2>&1; then
+  # No previous-deployment SHA available (first deploy, or Vercel didn't set
+  # it) -> fall back to HEAD^, but only if it's reachable.
+  if git rev-parse HEAD^ >/dev/null 2>&1; then
+    PREV="HEAD^"
+  else
+    echo "vercel-ignore: no previous commit reachable -> BUILD"
+    exit 1
+  fi
 fi
 
-changed_non_doc=$(git diff --name-only HEAD^ HEAD -- . \
+changed_non_doc=$(git diff --name-only "$PREV" HEAD -- . \
   ":(exclude,top)claude_docs" \
   ":(exclude,top)*.md" \
   ":(exclude,top)**/*.md")
