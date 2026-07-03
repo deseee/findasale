@@ -439,11 +439,20 @@ If a field is not legibly present, use an empty string. Do not invent or infer a
 Respond with STRICT JSON ONLY, no markdown, no commentary, exactly:
 {"brand":"","model_or_part_number":"","other_text":"","raw_guess_type":"your shape-based guess of what this object is"}`;
 
-// Stage 2 — the point. WEB-GROUNDED text lookup on the transcribed marks.
-//   - primary: perplexity/sonar (web-native, cheap)
-//   - fallback: EXTRACT_MODEL + ':online' (OpenRouter's web plugin)
-const RESOLVE_MODEL_PRIMARY = 'perplexity/sonar';
-const RESOLVE_MODEL_FALLBACK = `${EXTRACT_MODEL}:online`;
+// Stage 2 — the point. WEB-GROUNDED text lookup on the transcribed marks, run as a
+// RESOLUTION BAKE-OFF across a set of web-capable models in parallel. Each model gets
+// the SAME grounded prompt; each call is isolated in its own try/catch so one failure
+// (or an invalid/unavailable slug) never kills the others. Perplexity Sonar models are
+// natively web-connected; the `:online` suffix enables OpenRouter's web plugin on that
+// model. Slugs are NOT assumed to all work — a bad one just logs an error and is skipped.
+const RESOLVE_MODELS = [
+  'perplexity/sonar',
+  'perplexity/sonar-pro',
+  'perplexity/sonar-reasoning',
+  'google/gemini-2.5-flash-lite:online',
+  'google/gemini-3.5-flash:online',
+  'anthropic/claude-sonnet-5:online',
+];
 
 interface ExtractParsed {
   brand?: string;
@@ -573,43 +582,45 @@ export async function runGroundedResolution(
         `other="${otherText}" shapeGuess="${shapeGuess}"`,
     );
 
-    // ---- Stage 2: web-grounded resolution ---------------------------------
-    const started = Date.now();
-    let resolved: ResolveParsed | null = null;
-    let groundingModel = RESOLVE_MODEL_PRIMARY;
-    try {
-      resolved = await resolveFromMarks(RESOLVE_MODEL_PRIMARY, brand, modelNum, otherText);
-    } catch (primaryErr: any) {
-      // Primary web model errored — fall back to the OpenRouter :online web plugin.
-      console.log(
-        `[resolve] item=${itemId} stage=resolve primary(${RESOLVE_MODEL_PRIMARY}) failed: ${shortErr(primaryErr)} — falling back to ${RESOLVE_MODEL_FALLBACK}`,
-      );
-      groundingModel = RESOLVE_MODEL_FALLBACK;
-      try {
-        resolved = await resolveFromMarks(RESOLVE_MODEL_FALLBACK, brand, modelNum, otherText);
-      } catch (fallbackErr: any) {
-        console.log(`[resolve] item=${itemId} stage=resolve ERROR: ${shortErr(fallbackErr)}`);
-        return;
-      }
-    }
+    // ---- Stage 2: web-grounded RESOLUTION BAKE-OFF ------------------------
+    // Run the SAME grounded prompt across every model in RESOLVE_MODELS in
+    // parallel. Each model call is isolated in its own try/catch so one failure
+    // (bad slug, timeout, unparseable JSON) never aborts the others. One log line
+    // per model. Observability only — nothing here changes the applied result.
+    console.log(`[resolve] item=${itemId} resolve models=[${RESOLVE_MODELS.join(',')}]`);
 
-    const latencyMs = Date.now() - started;
-    if (!resolved) {
-      console.log(
-        `[resolve] item=${itemId} stage=resolve ERROR: unparseable JSON response latencyMs=${latencyMs}`,
-      );
-      return;
-    }
-
-    const conf =
-      typeof resolved.confidence === 'number' || typeof resolved.confidence === 'string'
-        ? resolved.confidence
-        : 'n/a';
-    console.log(
-      `[resolve] item=${itemId} GROUNDED product="${truncate(resolved.product_name)}" ` +
-        `type="${truncate(resolved.product_type, 60)}" conf=${conf} ` +
-        `source="${truncate(resolved.source_hint, 100)}" model=${groundingModel} latencyMs=${latencyMs}`,
+    await Promise.all(
+      RESOLVE_MODELS.map(async (resolveModel) => {
+        const started = Date.now();
+        try {
+          const resolved = await resolveFromMarks(resolveModel, brand, modelNum, otherText);
+          const latencyMs = Date.now() - started;
+          if (!resolved) {
+            console.log(
+              `[resolve] item=${itemId} model=${resolveModel} ERROR: unparseable JSON response latencyMs=${latencyMs}`,
+            );
+            return;
+          }
+          const conf =
+            typeof resolved.confidence === 'number' || typeof resolved.confidence === 'string'
+              ? resolved.confidence
+              : 'n/a';
+          console.log(
+            `[resolve] item=${itemId} model=${resolveModel} GROUNDED ` +
+              `product="${truncate(resolved.product_name)}" ` +
+              `type="${truncate(resolved.product_type, 60)}" conf=${conf} ` +
+              `source="${truncate(resolved.source_hint, 100)}" latencyMs=${latencyMs}`,
+          );
+        } catch (err: any) {
+          const latencyMs = Date.now() - started;
+          console.log(
+            `[resolve] item=${itemId} model=${resolveModel} ERROR: ${shortErr(err)} latencyMs=${latencyMs}`,
+          );
+        }
+      }),
     );
+
+    console.log(`[resolve] DONE item=${itemId}`);
   } catch (err: any) {
     // Absolutely never let the resolution pass affect the caller.
     console.log(`[resolve] item=${itemId} HARNESS ERROR: ${shortErr(err)}`);
