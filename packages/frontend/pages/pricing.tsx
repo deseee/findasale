@@ -317,7 +317,11 @@ const PricingPage = () => {
                   Photo to listing in seconds
                 </h3>
                 <p className="text-sm text-warm-700 dark:text-warm-300">
-                  Snap a photo. The app fills in title, description, tags, and estimated value. Confirm and publish.
+                  Snap a{' '}
+                  <Link href="/blog/estate-sale-photos-value-cataloging-tips" className="text-amber-600 dark:text-amber-400 underline hover:text-amber-700 dark:hover:text-amber-300">
+                    photo
+                  </Link>
+                  . The app fills in title, description, tags, and estimated value. Confirm and publish.
                 </p>
               </div>
 

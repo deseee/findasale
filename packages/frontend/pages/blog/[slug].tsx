@@ -6,6 +6,7 @@ import { posts, getPostBySlug, BlogPost } from '../../data/blog/index';
 
 interface BlogPostPageProps {
   post: BlogPost;
+  relatedPosts: BlogPost[];
 }
 
 export const getStaticPaths: GetStaticPaths = async () => {
@@ -26,11 +27,39 @@ export const getStaticProps: GetStaticProps<BlogPostPageProps> = async ({ params
     return { notFound: true };
   }
 
+  const relatedPosts = getRelatedPosts(post);
+
   return {
-    props: sanitize({ post }),
+    props: sanitize({ post, relatedPosts }),
     revalidate: 86400,
   };
 };
+
+// ── Related posts selection ────────────────────────────────────────────────
+// Same category first, then most recent by publishDate to fill remaining slots.
+function getRelatedPosts(current: BlogPost, count = 3): BlogPost[] {
+  const others = posts.filter((p) => p.slug !== current.slug);
+
+  const sameCategory = others
+    .filter((p) => p.category === current.category)
+    .sort((a, b) => new Date(b.publishDate).getTime() - new Date(a.publishDate).getTime());
+
+  const picked = sameCategory.slice(0, count);
+  const pickedSlugs = new Set(picked.map((p) => p.slug));
+
+  if (picked.length < count) {
+    const remaining = others
+      .filter((p) => !pickedSlugs.has(p.slug))
+      .sort((a, b) => new Date(b.publishDate).getTime() - new Date(a.publishDate).getTime());
+
+    for (const p of remaining) {
+      if (picked.length >= count) break;
+      picked.push(p);
+    }
+  }
+
+  return picked;
+}
 
 // ── Minimal markdown renderer ──────────────────────────────────────────────
 // Handles: ## h2, ### h3, - list items, 1. ordered list items, paragraphs.
@@ -174,7 +203,32 @@ function formatDate(dateStr: string): string {
   return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 }
 
-export default function BlogPostPage({ post }: BlogPostPageProps) {
+function RelatedPostCard({ post }: { post: BlogPost }) {
+  return (
+    <Link
+      href={`/blog/${post.slug}`}
+      className="block group rounded-card border border-warm-200 dark:border-warm-700 bg-white dark:bg-warm-800 p-5 shadow-card hover:shadow-card-hover transition-shadow"
+    >
+      <div className="flex items-center gap-3 mb-2 flex-wrap">
+        <CategoryBadge category={post.category} />
+        <span className="text-caption text-warm-500 dark:text-warm-400">
+          {formatDate(post.publishDate)}
+        </span>
+        <span className="text-caption text-warm-500 dark:text-warm-400">
+          {post.readingTimeMinutes} min read
+        </span>
+      </div>
+      <h3 className="text-body font-semibold text-warm-900 dark:text-warm-100 group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors leading-snug mb-2">
+        {post.title}
+      </h3>
+      <p className="text-body-sm text-warm-600 dark:text-warm-400 leading-relaxed">
+        {post.excerpt}
+      </p>
+    </Link>
+  );
+}
+
+export default function BlogPostPage({ post, relatedPosts }: BlogPostPageProps) {
   const canonical = `https://finda.sale/blog/${post.slug}`;
   const jsonLd = {
     '@context': 'https://schema.org',
@@ -246,6 +300,20 @@ export default function BlogPostPage({ post }: BlogPostPageProps) {
           <div className="bg-white dark:bg-warm-800 rounded-card shadow-card p-6 mb-8">
             <MarkdownBody body={post.body} />
           </div>
+
+          {/* Related posts */}
+          {relatedPosts.length > 0 && (
+            <div className="mb-8">
+              <h2 className="font-heading text-h3 font-semibold text-warm-900 dark:text-warm-100 mb-4">
+                You might also like
+              </h2>
+              <div className="flex flex-col gap-4">
+                {relatedPosts.map((related) => (
+                  <RelatedPostCard key={related.slug} post={related} />
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Back link */}
           <div className="mt-4">

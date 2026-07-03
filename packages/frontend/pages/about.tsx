@@ -1,5 +1,6 @@
 import React from 'react';
 import Head from 'next/head';
+import Link from 'next/link';
 
 const AboutPage = () => {
   const defaultCity = process.env.NEXT_PUBLIC_DEFAULT_CITY || 'your area';
@@ -62,8 +63,11 @@ const AboutPage = () => {
           <section className="mb-8">
             <h2 className="text-2xl font-semibold text-warm-800 dark:text-warm-200 mb-4">For Organizers</h2>
             <p className="text-warm-700 dark:text-warm-300 leading-relaxed mb-4">
-              We provide tools to manage inventory, track bids, and connect with shoppers
-              — without the need for expensive software or complex workflows.
+              We provide tools to{' '}
+              <Link href="/blog/estate-sale-photos-value-cataloging-tips" className="text-amber-600 dark:text-amber-400 underline hover:text-amber-700 dark:hover:text-amber-300">
+                manage inventory
+              </Link>
+              , track bids, and connect with shoppers, without the need for expensive software or complex workflows.
             </p>
             <ul className="list-disc list-inside text-warm-700 dark:text-warm-300 space-y-2">
               <li>Easy inventory management</li>
