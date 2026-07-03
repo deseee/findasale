@@ -2892,6 +2892,10 @@ export const getDraftItemsBySaleId = async (req: AuthRequest, res: Response) => 
         listingType: true,
         reverseDailyDrop: true,
         reverseFloorPrice: true,
+        // Feature #565: Grounded-identity provenance (behind GROUNDING_ENABLED flag)
+        groundedIdentity: true,
+        groundedConfidence: true,
+        groundedSource: true,
       },
       orderBy: { createdAt: 'desc' },
       skip: (pageNum - 1) * limitNum,

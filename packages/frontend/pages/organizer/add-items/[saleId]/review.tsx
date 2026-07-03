@@ -123,6 +123,10 @@ interface Item {
   brand?: string | null;
   mpn?: string | null;
   upc?: string | null;
+  // Feature #565: Grounded-identity provenance (display-only, never auto-applied to title)
+  groundedIdentity?: string | null;
+  groundedConfidence?: number | null;
+  groundedSource?: string | null;
 }
 
 // Track which items should be pushed to eBay
@@ -268,6 +272,9 @@ const ReviewPage = () => {
   // Re-analyze: per-card loading + inline error state for the "Re-run Smart tagging" control
   const [reanalyzingIds, setReanalyzingIds] = useState<Set<string>>(new Set());
   const [reanalyzeErrors, setReanalyzeErrors] = useState<Map<string, string>>(new Map());
+  // Feature #565: grounded-identity provenance returned by the last reanalyze call for
+  // each item, so the card updates in place before the background query refetch lands.
+  const [groundedOverrides, setGroundedOverrides] = useState<Map<string, { groundedIdentity: string | null; groundedConfidence: number | null; groundedSource: string | null }>>(new Map());
   const [zoomedPhoto, setZoomedPhoto] = useState<string | null>(null);
   const [addTagInputs, setAddTagInputs] = useState<Map<string, string>>(new Map());
 
@@ -733,6 +740,19 @@ const ReviewPage = () => {
         editStates.set(item.id, next);
         setEditStates(new Map(editStates));
       }
+
+      // Feature #565: capture grounded-identity provenance from this response so the
+      // card can show it immediately, without waiting on the invalidate/refetch below.
+      // Display-only - never written into the title/description edit state.
+      setGroundedOverrides((prev) => {
+        const next = new Map(prev);
+        next.set(item.id, {
+          groundedIdentity: updated?.groundedIdentity ?? null,
+          groundedConfidence: updated?.groundedConfidence ?? null,
+          groundedSource: updated?.groundedSource ?? null,
+        });
+        return next;
+      });
 
       // Pull fresh server values (confidence chip, persisted fields) into the cache.
       if (saleId) {
@@ -1449,8 +1469,52 @@ const ReviewPage = () => {
                               </>
                             )}
                           </button>
+                          {/* Feature #565: "Identify precisely" - same reanalyze flow (one API call),
+                              distinct label/icon so organizers understand it targets grounded-identity
+                              lookup specifically. Hidden once the item already has photos disabled. */}
+                          <button
+                            type="button"
+                            onClick={() => requestReanalyze(item)}
+                            disabled={reanalyzingIds.has(item.id) || item.photoUrls.length === 0}
+                            title={item.photoUrls.length === 0 ? 'Add a photo to identify precisely' : 'Look up this item\u2019s exact identity from its photos and markings'}
+                            className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-[#C8552B]/30 dark:border-[#C8552B]/40 text-[11px] font-medium text-[#C8552B] dark:text-[#E08A5F] hover:bg-[#C8552B]/5 dark:hover:bg-[#C8552B]/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                            aria-label="Identify item precisely"
+                          >
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                              <circle cx="11" cy="11" r="7" />
+                              <line x1="16.65" y1="16.65" x2="21" y2="21" />
+                            </svg>
+                            Identify precisely
+                          </button>
                         </div>
                       </div>
+                      {(() => {
+                        const groundedOverride = groundedOverrides.get(item.id);
+                        const groundedIdentity = groundedOverride ? groundedOverride.groundedIdentity : item.groundedIdentity;
+                        const groundedConfidence = groundedOverride ? groundedOverride.groundedConfidence : item.groundedConfidence;
+                        const groundedSource = groundedOverride ? groundedOverride.groundedSource : item.groundedSource;
+                        if (!groundedIdentity) return null;
+                        const sourceLabels: Record<string, string> = {
+                          'text-grounded': 'Identified from text/markings',
+                          'visual-consensus': 'Identified from photo match (high confidence)',
+                          'visual-single': 'Identified from photo match',
+                        };
+                        const sourceLabel = (groundedSource && sourceLabels[groundedSource]) || 'Identified from photos';
+                        const confidencePct = typeof groundedConfidence === 'number' ? Math.round(groundedConfidence * 100) : null;
+                        return (
+                          <div className="-mt-2 mb-3 flex items-start gap-1.5 text-[11px] text-[rgba(26,24,20,0.55)] dark:text-[#B8B8BA]">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mt-px flex-shrink-0" aria-hidden="true">
+                              <circle cx="11" cy="11" r="7" />
+                              <line x1="16.65" y1="16.65" x2="21" y2="21" />
+                            </svg>
+                            <span>
+                              <span className="font-medium text-[rgba(26,24,20,0.7)] dark:text-[#F5F5F0]">{groundedIdentity}</span>
+                              {confidencePct !== null && <span> &middot; {confidencePct}% confidence</span>}
+                              <span> &middot; {sourceLabel}</span>
+                            </span>
+                          </div>
+                        );
+                      })()}
                       {reanalyzeErrors.has(item.id) && (
                         <div className="-mt-2 mb-3 flex items-start gap-1.5 text-[11px] text-red-500 dark:text-red-400" role="alert">
                           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mt-px flex-shrink-0" aria-hidden="true">

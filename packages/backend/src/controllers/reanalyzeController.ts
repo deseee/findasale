@@ -148,6 +148,10 @@ export const reanalyzeItemForOrganizer = async (req: AuthRequest, res: Response)
         upc: after.upc,
         aiConfidence: after.aiConfidence,
         isAiTagged: applied,
+        // Feature #565: Grounded-identity provenance for the Review Queue card.
+        groundedIdentity: after.groundedIdentity,
+        groundedConfidence: after.groundedConfidence,
+        groundedSource: after.groundedSource,
       },
       // suggestedPrice returned for reference only — price is never written.
       suggestedPrice: after.suggestedPrice,

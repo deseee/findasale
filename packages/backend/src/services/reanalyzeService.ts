@@ -70,6 +70,9 @@ export interface ReanalyzeAfter {
     wouldApply: Record<string, any>;
     suggestion: any;
   } | null;
+  groundedIdentity: string | null;
+  groundedConfidence: number | null;
+  groundedSource: string | null;
 }
 
 export interface ReanalyzeResult {
@@ -362,8 +365,11 @@ export async function reanalyzeItem(
   // Runs INLINE here (reanalyzeService is already async), fully gated + error-swallowed inside
   // the service. Master switch OFF => no-op. persist follows apply (test-image runs never write).
   // Skips re-grounding if the item already has a strong grounded winner.
+  let groundedIdentity: string | null = null;
+  let groundedConfidence: number | null = null;
+  let groundedSource: string | null = null;
   try {
-    await resolveGroundedIdentityInline({
+    const groundingOutcome = await resolveGroundedIdentityInline({
       itemId,
       buffers,
       mimeTypes,
@@ -376,6 +382,11 @@ export async function reanalyzeItem(
       persist: apply,
       skipIfAlreadyGrounded: true,
     });
+    if (groundingOutcome && groundingOutcome.winner) {
+      groundedIdentity = groundingOutcome.winner.identity ?? null;
+      groundedConfidence = typeof groundingOutcome.winner.confidence === 'number' ? groundingOutcome.winner.confidence : null;
+      groundedSource = groundingOutcome.winner.source ?? null;
+    }
   } catch (groundingErr: any) {
     console.warn('[grounding] inline pass invocation error (non-fatal):', groundingErr?.message || groundingErr);
   }
@@ -388,7 +399,7 @@ export async function reanalyzeItem(
     applied: apply,
     organizerId: item.sale?.organizerId ?? null,
     before,
-    after,
+    after: { ...after, groundedIdentity, groundedConfidence, groundedSource },
     appliedData,
     ebaySynced,
     ebaySyncReason,
