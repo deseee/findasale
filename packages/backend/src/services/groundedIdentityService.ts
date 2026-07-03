@@ -148,28 +148,61 @@ async function orchestrate(input: GroundedIdentityInput): Promise<GroundedIdenti
       }
     }
 
-    // ---- Eligibility (conditional escalation) ----------------------------------
+    // ---- Gate evaluation (one structured decision log per attempt) --------------
+    // Each gate records a compact status token; we emit exactly ONE [grounding] gate
+    // line — whether we RUN or SKIP — so the ramp is self-diagnosing (you can see at a
+    // glance which gate stopped a grounding attempt). Gates short-circuit in cost order:
+    // eligibility (free) -> monthly ceiling -> daily cap -> rollout roll.
     const elig = await isEligible(input);
-    if (!elig.eligible) {
-      console.log(`[grounding] item=${itemId} NOT eligible: ${elig.reason}`);
-      return { ran: false, reason: elig.reason };
-    }
-    console.log(`[grounding] item=${itemId} eligible: ${elig.reason}`);
+    let ceilingTok = 'na';
+    let dailyCapTok = 'na';
+    let rolloutTok = 'na';
+    let decision: 'RUN' | 'SKIP' = 'SKIP';
+    let skipReason = elig.reason;
 
-    // ---- Cost gates BEFORE any paid call ---------------------------------------
-    if (await isGroundingCeilingExceeded()) {
-      console.log(`[grounding] item=${itemId} SKIPPED: monthly cost ceiling exceeded`);
-      return { ran: false, reason: 'monthly ceiling exceeded' };
-    }
-    if (!(await isGroundingDailyCapAvailable())) {
-      console.log(`[grounding] item=${itemId} SKIPPED: daily cap reached`);
-      return { ran: false, reason: 'daily cap reached' };
-    }
     const pct = groundingRolloutPct();
-    if (pct <= 0) return { ran: false, reason: 'rollout 0%' };
-    if (Math.random() * 100 >= pct) {
-      console.log(`[grounding] item=${itemId} SKIPPED: not in ${pct}% rollout sample`);
-      return { ran: false, reason: `outside ${pct}% rollout` };
+
+    if (!elig.eligible) {
+      decision = 'SKIP';
+      skipReason = `not-eligible: ${elig.reason}`;
+    } else if (await isGroundingCeilingExceeded()) {
+      ceilingTok = 'exceeded';
+      decision = 'SKIP';
+      skipReason = 'monthly ceiling exceeded';
+    } else if (!(await isGroundingDailyCapAvailable())) {
+      ceilingTok = 'ok';
+      dailyCapTok = 'hit';
+      decision = 'SKIP';
+      skipReason = 'daily cap reached';
+    } else if (pct <= 0) {
+      ceilingTok = 'ok';
+      dailyCapTok = 'ok';
+      rolloutTok = 'skip 0%';
+      decision = 'SKIP';
+      skipReason = 'rollout 0%';
+    } else if (Math.random() * 100 >= pct) {
+      ceilingTok = 'ok';
+      dailyCapTok = 'ok';
+      rolloutTok = `skip ${pct}%`;
+      decision = 'SKIP';
+      skipReason = `outside ${pct}% rollout`;
+    } else {
+      ceilingTok = 'ok';
+      dailyCapTok = 'ok';
+      rolloutTok = `hit ${pct}%`;
+      decision = 'RUN';
+    }
+
+    console.log(
+      `[grounding] item=${itemId} gate ` +
+        `enabled=t text=${textOn ? 't' : 'f'} visual=${visualOn ? 't' : 'f'} ` +
+        `eligible=${elig.eligible ? 't' : 'f'}:${elig.reason} ` +
+        `rollout=${rolloutTok} ceiling=${ceilingTok} dailyCap=${dailyCapTok} perItemBudget=ok ` +
+        `-> ${decision}${decision === 'SKIP' ? `(${skipReason})` : ''}`,
+    );
+
+    if (decision === 'SKIP') {
+      return { ran: false, reason: skipReason };
     }
 
     const perItemCeilingUsd = groundingPerItemCeilingUsd();
@@ -234,7 +267,10 @@ async function orchestrate(input: GroundedIdentityInput): Promise<GroundedIdenti
     }
 
     if (!winner) {
-      console.log(`[grounding] item=${itemId} DONE — no gated winner, base result unchanged (spend=$${spend.usd.toFixed(3)})`);
+      console.log(
+        `[grounding] item=${itemId} ran, no candidate passed 0.7 gate — base result kept ` +
+          `(spend=$${spend.usd.toFixed(3)})`,
+      );
       return { ran: true, reason: 'no gated winner', winner: null };
     }
 
@@ -266,12 +302,26 @@ function pickWinner(candidates: GroundedCandidate[]): GroundedCandidate | null {
   return best;
 }
 
-/** Split the grounded identity into a plausible title + brand for override. */
-function deriveFields(identity: string): { title: string; brand: string | null } {
-  const title = identity.split(' — ')[0]?.trim() || identity.trim();
-  // Best-effort brand = first token group (only used when the base brand is empty & unedited).
-  const brandGuess = title.split(/\s+/).slice(0, 2).join(' ').trim();
-  return { title, brand: brandGuess || null };
+/**
+ * Derive the override TITLE from the grounded identity string (the part before the " — type"
+ * suffix). Brand is NOT derived here — brand comes from the winner's dedicated clean brand
+ * field (the mark-extraction manufacturer name), never from slicing this description phrase
+ * (that produced the "Tupperware Cool" over-capture).
+ */
+function deriveTitle(identity: string): string {
+  return identity.split(' — ')[0]?.trim() || identity.trim();
+}
+
+/**
+ * Resolve the clean brand to override with. ONLY the winner's dedicated brand field is trusted —
+ * a clean manufacturer name the extractor read off the item (e.g. "Tupperware"). If that is
+ * missing (visual candidates, or no legible brand), return null so brand is left unchanged.
+ * We deliberately never fall back to slicing the identity/product phrase.
+ */
+function deriveBrand(winner: GroundedCandidate): string | null {
+  const b = typeof winner.brand === 'string' ? winner.brand.trim() : '';
+  if (!b || b.toLowerCase() === 'unknown') return null;
+  return b;
 }
 
 /**
@@ -305,13 +355,15 @@ async function applyWinner(
       return {};
     }
     const edited = item.userEditedFields ?? [];
-    const { title: groundedTitle, brand: groundedBrand } = deriveFields(winner.identity);
+    const groundedTitle = deriveTitle(winner.identity);
+    const groundedBrand = deriveBrand(winner); // clean manufacturer name, or null
 
     // title — overwrite only if organizer hasn't edited it.
     if (!edited.includes('title') && groundedTitle) {
       data.title = groundedTitle;
     }
     // brand — overwrite only if organizer hasn't edited it AND base brand is empty (mark rescue).
+    // groundedBrand is a clean manufacturer name (or null); never a phrase from the description.
     if (!edited.includes('brand') && !item.brand && groundedBrand) {
       data.brand = groundedBrand;
     }

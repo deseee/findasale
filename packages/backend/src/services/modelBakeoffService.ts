@@ -949,6 +949,10 @@ export interface GroundedCandidate {
   identity: string;
   confidence: number;
   source: string; // "text-grounded" | "visual-consensus" | "visual-single"
+  /** Clean manufacturer name straight from the mark-extraction JSON (e.g. "Tupperware"), when the
+   *  extractor read one off the item. NEVER a phrase sliced from the product description. Undefined
+   *  for visual candidates (no mark-extraction step) and for text candidates with no legible brand. */
+  brand?: string;
 }
 
 /** Rough per-call cost estimates (USD) for the grounding ceiling accounting. Deliberately
@@ -1078,7 +1082,10 @@ export async function resolveTextGroundedCandidate(
         `conf=${confNum === null ? 'n/a' : confNum} passesGate=${passesGate}`,
     );
     if (!passesGate) return null;
-    return { identity, confidence: confNum as number, source: 'text-grounded' };
+    // Clean manufacturer name from the extractor (e.g. "Tupperware"), if one was legibly read.
+    // "unknown"/empty -> undefined so the orchestrator never writes a placeholder brand.
+    const cleanBrand = brand && brand.trim() && brand.trim().toLowerCase() !== 'unknown' ? brand.trim() : undefined;
+    return { identity, confidence: confNum as number, source: 'text-grounded', brand: cleanBrand };
   } catch (err: any) {
     console.log(`[grounding] item=${itemId} text HARNESS ERROR: ${shortErr(err)}`);
     return null;
