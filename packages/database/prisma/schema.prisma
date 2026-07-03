@@ -5022,6 +5022,19 @@ model EmailQuotaLog {
   updatedAt   DateTime  @updatedAt
 }
 
+// Outreach-only daily attempt counter — separate from EmailQuotaLog (which is the
+// platform-wide Gmail-rail counter used by GMAIL_DAILY_HARD_LIMIT / gmailHealthCron).
+// outreachEmailsCron.ts gates OUTREACH_DAILY_CAP against THIS table so ordinary
+// transactional traffic (receipts, verification emails, etc.) can no longer silently
+// consume outreach's daily send budget. Every outreach send still ALSO increments the
+// global EmailQuotaLog via checkAndIncrementQuota() — that call is untouched and still
+// protects the true platform-wide Gmail hard limit.
+model OutreachQuotaLog {
+  date      String   @id // YYYY-MM-DD
+  count     Int      @default(0)
+  updatedAt DateTime @updatedAt
+}
+
 // Calculated-shipping package estimation — global lookup table of common secondary-sale
 // item types with realistic PACKED weights/dimensions for eBay calculated shipping.
 // Queried by ebayCategoryId → category → keyword (descending precision) to pre-fill

@@ -6,7 +6,7 @@ import { suppressionService, isEmailDomainBlocked } from '../services/suppressio
 import { isGenericEmail } from '../services/emailProvenance';
 import { domainCanReceiveMail } from '../lib/mxValidator';
 import { batchSyncLeadTiersToMailerLite } from '../services/mailerliteService';
-import { checkAndIncrementQuota, getDailyEmailCount, QuotaExceededError } from '../lib/emailService';
+import { checkAndIncrementQuota, getDailyEmailCount, QuotaExceededError, checkAndIncrementOutreachQuota, getOutreachDailyCount, pinOutreachQuotaToday } from '../lib/emailService';
 
 // Tier-specific T1 templates (strategy doc §2.1–2.3). T2–T4 are shared across tiers.
 // Token format: [Token Name] — replaced by renderTemplate() below.
@@ -238,15 +238,20 @@ const sendOutreachEmailsInner = async (): Promise<void> => {
   // outreach sender is reputation-throttled FAR below the hard limit, so the smaller
   // OUTREACH_DAILY_CAP (default 75) is what actually protects us (incident 2026-06-21).
   try {
-    const quota = await getDailyEmailCount();
+    // FIX 2026-07-03: was reading getDailyEmailCount() — the platform-wide Gmail-rail
+    // counter shared with every transactional send. Ordinary transactional volume
+    // could trip this abort even with zero outreach attempts that day. Now reads the
+    // outreach-only counter (OutreachQuotaLog) so OUTREACH_DAILY_CAP bounds only
+    // outreach send attempts.
+    const quota = await getOutreachDailyCount();
     const outreachCap = Math.max(1, parseInt(process.env.OUTREACH_DAILY_CAP || '75', 10));
     const hardLimit = parseInt(process.env.GMAIL_DAILY_HARD_LIMIT || '1500', 10);
     const bindingCap = Math.min(outreachCap, hardLimit);
     if (quota.sent >= bindingCap) {
-      console.error(`[OutreachCron] ABORT: daily attempts already at ${quota.sent}/${bindingCap} (outreachCap=${outreachCap}) — no sends this window`);
+      console.error(`[OutreachCron] ABORT: outreach attempts already at ${quota.sent}/${bindingCap} (outreachCap=${outreachCap}) — no sends this window`);
       return;
     }
-    console.log(`[OutreachCron] Quota check: ${quota.sent}/${bindingCap} attempts used`);
+    console.log(`[OutreachCron] Quota check: ${quota.sent}/${bindingCap} outreach attempts used`);
   } catch (err) {
     console.error('[OutreachCron] Quota pre-check failed — proceeding with caution:', err);
   }
@@ -283,12 +288,13 @@ const sendOutreachEmailsInner = async (): Promise<void> => {
     // also never above the warmup ramp.
     const dailyCap = Math.min(outreachDailyCap, gmailHardLimit, warmupQuota);
 
-    // How many sends have already been ATTEMPTED today (DB-backed, survives restarts).
-    // EmailQuotaLog.count is incremented on every attempt via checkAndIncrementQuota, so
-    // it reflects attempts across all 6 windows of the UTC day — not just this window.
+    // How many OUTREACH sends have already been ATTEMPTED today (DB-backed, survives
+    // restarts). OutreachQuotaLog.count is incremented only by outreach sends (see
+    // checkAndIncrementOutreachQuota below) — separate from the platform-wide
+    // EmailQuotaLog that transactional traffic also writes to (fixed 2026-07-03).
     let attemptsToday = 0;
     try {
-      const q = await getDailyEmailCount();
+      const q = await getOutreachDailyCount();
       attemptsToday = q.sent;
     } catch (err) {
       console.error('[OutreachCron] Could not read daily attempt count — assuming 0:', err);
@@ -777,8 +783,11 @@ const sendOutreachEmailsInner = async (): Promise<void> => {
           continue;
         }
 
-        // Quota gate — throws QuotaExceededError if daily hard limit reached.
-        // Must come before gmail.users.messages.send to prevent over-sending.
+        // Quota gate — throws QuotaExceededError if the platform-wide Gmail hard limit
+        // is reached. Must come before gmail.users.messages.send to prevent over-sending.
+        // This global counter is intentionally still incremented for every outreach send
+        // (it's also what gmailHealthCron reports on) — it is NOT what OUTREACH_DAILY_CAP
+        // gates against anymore.
         try {
           await checkAndIncrementQuota('outreachEmailsCron', toEmail);
         } catch (quotaErr) {
@@ -788,6 +797,9 @@ const sendOutreachEmailsInner = async (): Promise<void> => {
           }
           throw quotaErr;
         }
+        // Outreach-only counter — this is what OUTREACH_DAILY_CAP is actually gated
+        // against (fixed 2026-07-03; see attemptsToday / pre-run check above).
+        await checkAndIncrementOutreachQuota(toEmail);
 
         try {
           await gmail.users.messages.send({
@@ -806,14 +818,13 @@ const sendOutreachEmailsInner = async (): Promise<void> => {
           if (isOutreachLimitError(sendErr)) {
             console.warn(`[OutreachCron] Outreach send-limit hit (gmail) — backing off for the day (status=${sendStatus}, msg="${sendMsg}")`);
             try {
-              // Pin today's counter to the cap so under-cap checks block subsequent sends.
-              await prisma.emailQuotaLog.upsert({
-                where: { date: new Date().toISOString().slice(0, 10) },
-                update: { count: dailyCap },
-                create: { date: new Date().toISOString().slice(0, 10), count: dailyCap },
-              });
+              // Pin today's OUTREACH-ONLY counter to the cap so under-cap checks block
+              // subsequent sends. Switched from EmailQuotaLog (global) to OutreachQuotaLog
+              // 2026-07-03 — cap-checks now read the outreach-only counter, so pinning the
+              // global one no longer has any gating effect.
+              await pinOutreachQuotaToday(dailyCap);
             } catch (pinErr) {
-              console.error('[OutreachCron] Failed to pin EmailQuotaLog count on backoff:', pinErr);
+              console.error('[OutreachCron] Failed to pin OutreachQuotaLog count on backoff:', pinErr);
             }
             limitHit = true;
             break; // stop the send loop entirely

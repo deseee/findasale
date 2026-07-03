@@ -139,6 +139,51 @@ export async function getDailyEmailCount(): Promise<{ date: string; sent: number
   };
 }
 
+/**
+ * Outreach-only daily attempt counter (OutreachQuotaLog) — separate from the
+ * platform-wide EmailQuotaLog table above. Added 2026-07-03: outreachEmailsCron.ts
+ * was gating OUTREACH_DAILY_CAP against the SHARED global counter, which is
+ * incremented by every Gmail-rail send (transactional AND outreach). That let
+ * ordinary transactional volume silently eat into the outreach cap. This counter
+ * is incremented ONLY by outreach sends (see checkAndIncrementOutreachQuota calls
+ * in outreachEmailsCron.ts) and is what OUTREACH_DAILY_CAP should be compared
+ * against. It does NOT replace checkAndIncrementQuota() — that call must still run
+ * on every outreach send too, since it protects the true platform-wide
+ * GMAIL_DAILY_HARD_LIMIT and feeds gmailHealthCron's daily quota report, both of
+ * which correctly need to include outreach volume.
+ */
+export async function checkAndIncrementOutreachQuota(recipient: string): Promise<number> {
+  const { prisma } = await import('./prisma');
+  const date = getTodayKey();
+  const log = await prisma.outreachQuotaLog.upsert({
+    where: { date },
+    update: { count: { increment: 1 } },
+    create: { date, count: 1 },
+  });
+  console.log(`[EmailService] Outreach-only daily quota: ${log.count} (outreachEmailsCron → ${recipient})`);
+  return log.count;
+}
+
+/** Query current outreach-only daily attempt count from DB (OutreachQuotaLog). */
+export async function getOutreachDailyCount(): Promise<{ date: string; sent: number }> {
+  const { prisma } = await import('./prisma');
+  const date = getTodayKey();
+  const log = await prisma.outreachQuotaLog.findUnique({ where: { date } });
+  return { date, sent: log?.count ?? 0 };
+}
+
+/** Pin today's outreach-only counter to a fixed value (used by the send-limit backoff
+ * in outreachEmailsCron.ts to immediately block further sends for the rest of the day). */
+export async function pinOutreachQuotaToday(count: number): Promise<void> {
+  const { prisma } = await import('./prisma');
+  const date = getTodayKey();
+  await prisma.outreachQuotaLog.upsert({
+    where: { date },
+    update: { count },
+    create: { date, count },
+  });
+}
+
 function htmlToPlainText(html: string): string {
   return html
     .replace(/<br\s*\/?>/gi, '\n')
