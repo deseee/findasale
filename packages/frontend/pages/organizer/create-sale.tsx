@@ -181,6 +181,14 @@ const SALE_TYPE_TILES = [
     subs: [],
     hasCharityToggle: false,
   },
+  {
+    key: 'RETAIL' as SaleTypeKey,
+    label: 'Storefront',
+    desc: 'An always-on shop — no start or end date, just keep adding items.',
+    icon: '🏪',
+    subs: [],
+    hasCharityToggle: false,
+  },
 ];
 
 const TAG_OPTIONS = [
@@ -1660,6 +1668,21 @@ function Step5({
 }: Step5Props) {
   const typeLabel = SALE_TYPE_TILES.find(t => t.key === form.saleType)?.label || form.saleType;
 
+  // Bug fix (2026-07-03): "Publish options" rail was a hard-coded 2-column CSS grid
+  // (minmax(0,1fr) minmax(260px,340px)) with no responsive breakpoint anywhere in this
+  // component, forcing a 260px+ second column on iPhone-width viewports (~375-430px) and
+  // squeezing/overflowing the layout. Mirrors the existing mobile-detection pattern used
+  // in pages/organizer/dashboard.tsx (matchMedia at the 768px md breakpoint).
+  const [isMobileView, setIsMobileView] = useState(false);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const mediaQuery = window.matchMedia('(max-width: 767px)');
+    setIsMobileView(mediaQuery.matches);
+    const handler = (e: MediaQueryListEvent) => setIsMobileView(e.matches);
+    mediaQuery.addEventListener('change', handler);
+    return () => mediaQuery.removeEventListener('change', handler);
+  }, []);
+
   const summaryRows = [
     { icon: '🏷️', label: 'Sale type & title', value: `${typeLabel} · ${form.title || '(no title)'}` },
     {
@@ -1732,7 +1755,7 @@ function Step5({
 
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'minmax(0, 1fr) minmax(260px, 340px)',
+        gridTemplateColumns: isMobileView ? '1fr' : 'minmax(0, 1fr) minmax(260px, 340px)',
         gap: 24, alignItems: 'start',
       }}>
         {/* Summary card */}

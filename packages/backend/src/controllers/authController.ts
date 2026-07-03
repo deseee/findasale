@@ -557,6 +557,14 @@ export const oauthLogin = async (req: Request, res: Response) => {
             oauthProvider: provider,
             oauthId: providerId,
             referralCode: userReferralCode,
+            // Bug fix (2026-07-03): OAuth providers (Google, Facebook) already verify
+            // the user's email address as part of their own signup/login flow — that's
+            // the whole point of "Sign in with Google". Previously this fell through to
+            // the schema default emailVerified=false with no verification email ever
+            // sent (that flow only exists on the password-signup path), permanently
+            // blocking every OAuth organizer from createSale's EMAIL_NOT_VERIFIED gate.
+            emailVerified: true,
+            emailVerifiedAt: new Date(),
           },
         });
 
