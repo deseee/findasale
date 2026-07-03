@@ -95,11 +95,12 @@ export interface ReanalyzeResult {
  */
 export async function reanalyzeItem(
   itemId: string,
-  opts: { apply: boolean; syncEbay?: boolean; bakeoff?: boolean } = { apply: false },
+  opts: { apply: boolean; syncEbay?: boolean; bakeoff?: boolean; resolveOnly?: boolean } = { apply: false },
 ): Promise<ReanalyzeResult | ReanalyzeError> {
   const apply = opts.apply === true;
   const syncEbay = opts.syncEbay !== false;
   const bakeoff = opts.bakeoff === true;
+  const resolveOnly = opts.resolveOnly === true;
 
   const item = await prisma.item.findUnique({
     where: { id: itemId },
@@ -310,14 +311,19 @@ export async function reanalyzeItem(
   // Observability-only model bake-off (per-request trigger via opts.bakeoff). Runs
   // AFTER the applied result above is fully computed, on the SAME already-downloaded
   // image buffers. Awaited but fully error-swallowed — it NEVER affects the response.
+  // The big 10-model extract bake-off runs ONLY when `bakeoff` is true.
   if (bakeoff) {
     try {
       await runModelBakeoff(itemId, buffers, mimeTypes);
     } catch (bakeoffErr: any) {
       console.warn('[bakeoff] harness invocation error (non-fatal):', bakeoffErr?.message || bakeoffErr);
     }
-    // Two-stage grounded resolution (extract read marks -> web-grounded lookup).
-    // Observability only, same trigger, fully error-swallowed — NEVER affects the response.
+  }
+  // Grounded resolution (top-performers-only: two strong extractors -> Sonar-Pro -> gate).
+  // Runs under EITHER the full bake-off trigger OR the cheap resolve-only trigger, so we can
+  // run the focused resolution test without the expensive 10-model extract bake-off.
+  // Observability only, fully error-swallowed — NEVER affects the response.
+  if (bakeoff || resolveOnly) {
     try {
       await runGroundedResolution(itemId, buffers, mimeTypes);
     } catch (resolveErr: any) {

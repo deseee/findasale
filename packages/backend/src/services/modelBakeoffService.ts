@@ -428,9 +428,23 @@ const OPENROUTER_HEADERS = {
   'X-Title': 'FindaSale Resolve',
 };
 
-// Stage 1 — TRANSCRIBE ONLY. Do NOT ask it to identify; just read the marks + a
-// shape-based guess of type. Cheapest good extractor already wired for the bake-off.
-const EXTRACT_MODEL = 'google/gemini-2.5-flash-lite';
+// Stage 1 — TRANSCRIBE ONLY across TWO strong extractors. Do NOT ask them to identify;
+// just read the marks + a shape-based guess of type. We learned a single lite extractor
+// MISREADS thin marks (2828 -> 2628), which poisons resolution downstream. So we run two
+// stronger, independent readers and resolve EACH separately:
+//   - claude-sonnet-5 via the DIRECT Anthropic path (ANTHROPIC_API_KEY) — reads marks accurately.
+//   - qwen/qwen3-vl-235b via OpenRouter — OCR champion.
+interface Extractor {
+  name: string; // log label
+  provider: 'anthropic' | 'openrouter';
+  modelId: string;
+}
+
+const EXTRACTORS: Extractor[] = [
+  { name: 'claude-sonnet-5', provider: 'anthropic', modelId: 'claude-sonnet-5' },
+  { name: 'qwen/qwen3-vl-235b', provider: 'openrouter', modelId: 'qwen/qwen3-vl-235b-a22b-instruct' },
+];
+
 const EXTRACT_PROMPT = `You are transcribing the identifying marks off a single secondhand item from the attached photos.
 Do NOT identify the product. Only transcribe what is legibly printed, molded, stamped, or embossed on it, plus a shape-based guess of what it appears to be.
 Read the brand name, any model/mold/part/style number, and any other legible text (backstamp, "Made in ...", recycling code, size, patent, etc.).
@@ -439,20 +453,15 @@ If a field is not legibly present, use an empty string. Do not invent or infer a
 Respond with STRICT JSON ONLY, no markdown, no commentary, exactly:
 {"brand":"","model_or_part_number":"","other_text":"","raw_guess_type":"your shape-based guess of what this object is"}`;
 
-// Stage 2 — the point. WEB-GROUNDED text lookup on the transcribed marks, run as a
-// RESOLUTION BAKE-OFF across a set of web-capable models in parallel. Each model gets
-// the SAME grounded prompt; each call is isolated in its own try/catch so one failure
-// (or an invalid/unavailable slug) never kills the others. Perplexity Sonar models are
-// natively web-connected; the `:online` suffix enables OpenRouter's web plugin on that
-// model. Slugs are NOT assumed to all work — a bad one just logs an error and is skipped.
-const RESOLVE_MODELS = [
-  'perplexity/sonar',
-  'perplexity/sonar-pro',
-  'perplexity/sonar-reasoning',
-  'google/gemini-2.5-flash-lite:online',
-  'google/gemini-3.5-flash:online',
-  'anthropic/claude-sonnet-5:online',
-];
+// Stage 2 — the point. ONE web-grounded text lookup per extractor, using perplexity/sonar-pro
+// (fast, calibrated, honest). We deliberately dropped the rest: perplexity/sonar-reasoning is a
+// 404 (invalid slug); anthropic/claude-sonnet-5:online and google/gemini-3.5-flash:online return
+// unparseable JSON; google/gemini-2.5-flash-lite:online confidently HALLUCINATES on thin marks.
+const RESOLVE_MODEL = 'perplexity/sonar-pro';
+
+// Confidence gate: at or above this, we trust the grounded product identity; below it, we fall
+// back to the extractor's shape-based visual guess.
+const CONFIDENCE_GATE = 0.7;
 
 interface ExtractParsed {
   brand?: string;
@@ -468,8 +477,83 @@ interface ResolveParsed {
   source_hint?: string;
 }
 
-/** Stage 1: one vision call that TRANSCRIBES marks only (no identification). */
-async function extractMarks(
+/**
+ * Parse a grounded-confidence value into a 0-1 number.
+ * Handles numbers (0-1 or 0-100), numeric strings, and words like "high"/"medium"/"low".
+ * Returns null when nothing usable is present.
+ */
+function parseConfidence(raw: unknown): number | null {
+  if (typeof raw === 'number' && !Number.isNaN(raw)) {
+    return raw > 1 ? raw / 100 : raw;
+  }
+  if (typeof raw === 'string') {
+    const t = raw.trim().toLowerCase();
+    if (!t) return null;
+    const word: Record<string, number> = {
+      high: 0.9,
+      'very high': 0.95,
+      medium: 0.6,
+      moderate: 0.6,
+      low: 0.3,
+      'very low': 0.1,
+      none: 0,
+      unknown: 0,
+    };
+    if (t in word) return word[t];
+    const n = parseFloat(t.replace('%', ''));
+    if (!Number.isNaN(n)) return n > 1 ? n / 100 : n;
+  }
+  return null;
+}
+
+/** Stage 1 (Anthropic direct): TRANSCRIBE marks only via the Anthropic REST endpoint. */
+async function extractMarksAnthropic(
+  modelId: string,
+  imagesBase64: string[],
+  mimeTypes: string[],
+): Promise<ExtractParsed | null> {
+  if (!ANTHROPIC_API_KEY) throw new Error('no ANTHROPIC_API_KEY');
+
+  const content: any[] = imagesBase64.map((data, i) => ({
+    type: 'image',
+    source: {
+      type: 'base64',
+      media_type: (mimeTypes[i] || 'image/jpeg') as
+        | 'image/jpeg'
+        | 'image/png'
+        | 'image/gif'
+        | 'image/webp',
+      data,
+    },
+  }));
+  content.push({ type: 'text', text: EXTRACT_PROMPT });
+
+  const resp = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'x-api-key': ANTHROPIC_API_KEY,
+      'anthropic-version': '2023-06-01',
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: modelId,
+      max_tokens: 400,
+      messages: [{ role: 'user', content }],
+    }),
+  });
+
+  if (!resp.ok) {
+    const body = await resp.text().catch(() => '');
+    throw new Error(`HTTP ${resp.status} ${truncate(body, 140)}`);
+  }
+  const json: any = await resp.json();
+  const text: string = json?.content?.[0]?.text ?? '';
+  return parseModelJson(text) as ExtractParsed | null;
+}
+
+/** Stage 1 (OpenRouter): TRANSCRIBE marks only via an OpenAI-compatible vision call. */
+async function extractMarksOpenRouter(
+  modelId: string,
   imagesBase64: string[],
   mimeTypes: string[],
 ): Promise<ExtractParsed | null> {
@@ -485,7 +569,7 @@ async function extractMarks(
     method: 'POST',
     headers: { authorization: `Bearer ${OPENROUTER_API_KEY}`, ...OPENROUTER_HEADERS },
     body: JSON.stringify({
-      model: EXTRACT_MODEL,
+      model: modelId,
       messages: [{ role: 'user', content }],
       max_tokens: 400,
       provider: { data_collection: 'deny' },
@@ -499,6 +583,17 @@ async function extractMarks(
   const json: any = await resp.json();
   const text: string = json?.choices?.[0]?.message?.content ?? '';
   return parseModelJson(text) as ExtractParsed | null;
+}
+
+/** Dispatch one extractor by provider. */
+async function extractMarksFor(
+  ex: Extractor,
+  imagesBase64: string[],
+  mimeTypes: string[],
+): Promise<ExtractParsed | null> {
+  return ex.provider === 'anthropic'
+    ? extractMarksAnthropic(ex.modelId, imagesBase64, mimeTypes)
+    : extractMarksOpenRouter(ex.modelId, imagesBase64, mimeTypes);
 }
 
 /** Stage 2: one WEB-GROUNDED text call that resolves the real product from the marks. */
@@ -538,8 +633,14 @@ async function resolveFromMarks(
 }
 
 /**
- * Two-stage grounded resolution pass. Runs alongside the bake-off (same trigger),
- * observability only. Returns void, never throws to the caller.
+ * "Top performers only" grounded resolution pass. Runs alongside the bake-off (or
+ * independently via the resolve-only trigger), observability only. Returns void, never
+ * throws to the caller.
+ *
+ * For EACH strong extractor: transcribe marks -> resolve with perplexity/sonar-pro ->
+ * apply a confidence gate to pick the FINAL identity (grounded product if conf>=gate,
+ * else the extractor's shape-based visual guess). Everything is logged so we can see
+ * whether a strong extractor + Sonar-Pro + gate yields the correct specific identity.
  *
  * @param itemId   the item being re-analyzed (for log correlation)
  * @param buffers  the SAME image buffers already downloaded by reanalyzeItem
@@ -553,70 +654,89 @@ export async function runGroundedResolution(
   try {
     if (!buffers || buffers.length === 0) return;
     if (!OPENROUTER_API_KEY) {
-      console.log(`[resolve] item=${itemId} SKIPPED: no OPENROUTER_API_KEY`);
+      console.log(`[resolve] item=${itemId} SKIPPED: no OPENROUTER_API_KEY (needed for resolver + qwen extractor)`);
       return;
     }
 
     const imagesBase64 = buffers.map((b) => b.toString('base64'));
     const mimes = buffers.map((_, i) => mimeTypes[i] || 'image/jpeg');
 
-    // ---- Stage 1: extract read marks --------------------------------------
-    let extracted: ExtractParsed | null;
-    try {
-      extracted = await extractMarks(imagesBase64, mimes);
-    } catch (err: any) {
-      console.log(`[resolve] item=${itemId} stage=extract ERROR: ${shortErr(err)}`);
-      return;
-    }
-    if (!extracted) {
-      console.log(`[resolve] item=${itemId} stage=extract ERROR: unparseable JSON response`);
-      return;
-    }
-
-    const brand = truncate(extracted.brand, 80);
-    const modelNum = truncate(extracted.model_or_part_number, 80);
-    const otherText = truncate(extracted.other_text, 120);
-    const shapeGuess = truncate(extracted.raw_guess_type, 80);
     console.log(
-      `[resolve] item=${itemId} extracted brand="${brand}" model="${modelNum}" ` +
-        `other="${otherText}" shapeGuess="${shapeGuess}"`,
+      `[resolve] item=${itemId} extractors=[${EXTRACTORS.map((e) => e.name).join(',')}] resolver=${RESOLVE_MODEL} gate=${CONFIDENCE_GATE}`,
     );
 
-    // ---- Stage 2: web-grounded RESOLUTION BAKE-OFF ------------------------
-    // Run the SAME grounded prompt across every model in RESOLVE_MODELS in
-    // parallel. Each model call is isolated in its own try/catch so one failure
-    // (bad slug, timeout, unparseable JSON) never aborts the others. One log line
-    // per model. Observability only — nothing here changes the applied result.
-    console.log(`[resolve] item=${itemId} resolve models=[${RESOLVE_MODELS.join(',')}]`);
-
+    // Run each extractor's full (extract -> resolve -> gate) pipeline in parallel. Each is
+    // isolated so one extractor failing (or its resolver call failing) never kills the other.
     await Promise.all(
-      RESOLVE_MODELS.map(async (resolveModel) => {
-        const started = Date.now();
+      EXTRACTORS.map(async (ex) => {
+        // ---- Stage 1: extract read marks for THIS extractor ------------------
+        let extracted: ExtractParsed | null;
         try {
-          const resolved = await resolveFromMarks(resolveModel, brand, modelNum, otherText);
-          const latencyMs = Date.now() - started;
-          if (!resolved) {
-            console.log(
-              `[resolve] item=${itemId} model=${resolveModel} ERROR: unparseable JSON response latencyMs=${latencyMs}`,
-            );
-            return;
-          }
-          const conf =
-            typeof resolved.confidence === 'number' || typeof resolved.confidence === 'string'
-              ? resolved.confidence
-              : 'n/a';
-          console.log(
-            `[resolve] item=${itemId} model=${resolveModel} GROUNDED ` +
-              `product="${truncate(resolved.product_name)}" ` +
-              `type="${truncate(resolved.product_type, 60)}" conf=${conf} ` +
-              `source="${truncate(resolved.source_hint, 100)}" latencyMs=${latencyMs}`,
-          );
+          extracted = await extractMarksFor(ex, imagesBase64, mimes);
+        } catch (err: any) {
+          console.log(`[resolve] item=${itemId} extractor=${ex.name} stage=extract ERROR: ${shortErr(err)}`);
+          return;
+        }
+        if (!extracted) {
+          console.log(`[resolve] item=${itemId} extractor=${ex.name} stage=extract ERROR: unparseable JSON response`);
+          return;
+        }
+
+        const brand = truncate(extracted.brand, 80);
+        const modelNum = truncate(extracted.model_or_part_number, 80);
+        const otherText = truncate(extracted.other_text, 120);
+        const shapeGuess = truncate(extracted.raw_guess_type, 80);
+        console.log(
+          `[resolve] item=${itemId} extractor=${ex.name} brand="${brand}" model="${modelNum}" ` +
+            `other="${otherText}" shapeGuess="${shapeGuess}"`,
+        );
+
+        // ---- Stage 2: web-grounded resolution on THIS extractor's marks ------
+        const started = Date.now();
+        let resolved: ResolveParsed | null = null;
+        try {
+          resolved = await resolveFromMarks(RESOLVE_MODEL, brand, modelNum, otherText);
         } catch (err: any) {
           const latencyMs = Date.now() - started;
           console.log(
-            `[resolve] item=${itemId} model=${resolveModel} ERROR: ${shortErr(err)} latencyMs=${latencyMs}`,
+            `[resolve] item=${itemId} extractor=${ex.name} resolver=${RESOLVE_MODEL} ERROR: ${shortErr(err)} latencyMs=${latencyMs}`,
           );
+          // No grounded result -> fall back to the visual shape guess for FINAL.
+          console.log(
+            `[resolve] item=${itemId} extractor=${ex.name} FINAL id="${shapeGuess}" (via=visual-fallback)`,
+          );
+          return;
         }
+        const latencyMs = Date.now() - started;
+
+        if (!resolved) {
+          console.log(
+            `[resolve] item=${itemId} extractor=${ex.name} resolver=${RESOLVE_MODEL} ERROR: unparseable JSON response latencyMs=${latencyMs}`,
+          );
+          console.log(
+            `[resolve] item=${itemId} extractor=${ex.name} FINAL id="${shapeGuess}" (via=visual-fallback)`,
+          );
+          return;
+        }
+
+        const groundedProduct = truncate(resolved.product_name);
+        const groundedType = truncate(resolved.product_type, 60);
+        const confNum = parseConfidence(resolved.confidence);
+        const confLog = confNum === null ? 'n/a' : confNum;
+        console.log(
+          `[resolve] item=${itemId} extractor=${ex.name} resolver=${RESOLVE_MODEL} GROUNDED ` +
+            `product="${groundedProduct}" type="${groundedType}" conf=${confLog} ` +
+            `source="${truncate(resolved.source_hint, 100)}" latencyMs=${latencyMs}`,
+        );
+
+        // ---- Confidence gate + final decision --------------------------------
+        const passesGate = confNum !== null && confNum >= CONFIDENCE_GATE && !!groundedProduct;
+        const groundedId = [groundedProduct, groundedType].filter(Boolean).join(' — ');
+        const finalId = passesGate ? groundedId : shapeGuess;
+        const via = passesGate ? 'grounded' : 'visual-fallback';
+        console.log(
+          `[resolve] item=${itemId} extractor=${ex.name} FINAL id="${finalId}" (via=${via})`,
+        );
       }),
     );
 

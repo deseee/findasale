@@ -1046,6 +1046,9 @@ router.post('/reanalyze-item', requireSecret, async (req: express.Request, res: 
     const itemId = typeof req.body?.itemId === 'string' ? req.body.itemId.trim() : '';
     const apply = req.body?.apply === true;
     const bakeoff = req.query?.bakeoff === '1' || req.body?.bakeoff === true;
+    // Resolve-only trigger: run the grounded-resolution pipeline WITHOUT the full
+    // 10-model extract bake-off (cheap focused test). ?resolve=1 or { resolve: true }.
+    const resolveOnly = req.query?.resolve === '1' || req.body?.resolve === true;
 
     if (!itemId) {
       res.status(400).json({ error: 'itemId is required' });
@@ -1054,7 +1057,7 @@ router.post('/reanalyze-item', requireSecret, async (req: express.Request, res: 
 
     // Single shared pipeline (reanalyzeService) — same orchestration the organizer
     // "Re-analyze" button uses. Dry-run by default; apply=true writes fields (price excluded).
-    const result = await reanalyzeItem(itemId, { apply, bakeoff });
+    const result = await reanalyzeItem(itemId, { apply, bakeoff, resolveOnly });
 
     if (!result.ok) {
       switch (result.code) {
