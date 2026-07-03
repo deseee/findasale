@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../lib/api';
+import Skeleton from './Skeleton';
 
 interface CityHeatResponse {
   cities: Array<{
@@ -77,7 +78,21 @@ const CityHeatBanner: React.FC = () => {
     return R * c;
   };
 
-  if (loading || dismissed || !data || !data.cities || data.cities.length === 0) {
+  // Reserve layout space while loading so the banner popping in doesn't
+  // shift content below it (CLS fix — S1066).
+  if (loading) {
+    return (
+      <div className="mb-8 bg-warm-50 dark:bg-gray-800/40 border-l-4 border-warm-200 dark:border-gray-700 rounded-r-lg p-4 flex items-start gap-4">
+        <div className="flex-shrink-0 text-2xl opacity-0">🔥</div>
+        <div className="flex-grow space-y-2">
+          <Skeleton className="h-4 w-40" />
+          <Skeleton className="h-3 w-28" />
+        </div>
+      </div>
+    );
+  }
+
+  if (dismissed || !data || !data.cities || data.cities.length === 0) {
     return null;
   }
 

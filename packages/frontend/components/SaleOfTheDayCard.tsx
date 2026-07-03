@@ -109,11 +109,13 @@ const SaleOfTheDayCard: React.FC = () => {
       <Link href={`/sales/${sale.saleId}`}>
         <a className="flex flex-col sm:flex-row group">
           {/* Photo */}
-          <div className="relative w-full sm:w-52 h-44 sm:h-auto bg-warm-100 dark:bg-gray-700 flex-shrink-0 overflow-hidden">
+          <div className="relative w-full sm:w-52 h-44 bg-warm-100 dark:bg-gray-700 flex-shrink-0 overflow-hidden">
             {photoUrl ? (
               <img
                 src={photoUrl}
                 alt={sale.title}
+                width={208}
+                height={176}
                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
               />
             ) : (

@@ -9,6 +9,7 @@ import React, { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import api from '../lib/api';
 import { useAuth } from './AuthContext';
+import Skeleton from './Skeleton';
 
 interface TodayHunt {
   id: number;
@@ -43,6 +44,28 @@ const TreasureHuntBanner: React.FC = () => {
     },
     retry: 1,
   });
+
+  // Reserve layout space while loading so the banner popping in doesn't
+  // shift content below it (CLS fix — S1066).
+  if (isLoading && !isDismissed) {
+    return (
+      <div className="mb-8">
+        <div className="bg-warm-50 dark:bg-gray-800/40 border-l-4 border-warm-200 dark:border-gray-700 rounded-lg p-6 shadow-sm dark:shadow-lg">
+          <div className="flex items-center justify-between gap-2 mb-3">
+            <div className="flex items-center gap-2">
+              <span className="text-2xl opacity-0">🗺️</span>
+              <Skeleton className="h-6 w-48" />
+            </div>
+          </div>
+          <Skeleton className="h-4 w-3/4 mb-4" />
+          <div className="flex items-center justify-between">
+            <Skeleton className="h-6 w-24" />
+            <Skeleton className="h-4 w-32" />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // Graceful degradation: if load fails or no hunt data, render nothing
   if (isError || !hunt || isDismissed) return null;

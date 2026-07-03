@@ -55,6 +55,7 @@ jobs:
 
       - name: Run SwapmeetDirectory Scraper
         continue-on-error: true
+        id: run_scraper
         working-directory: packages/backend
         env:
           DATABASE_URL: "${{ secrets.DATABASE_URL }}?connection_limit=3&pool_timeout=20"
@@ -74,3 +75,10 @@ jobs:
             }
             })();
           '
+
+      - name: Notify on failure
+        if: steps.run_scraper.outcome == 'failure'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            console.error('SwapmeetDirectory scraper trigger failed')
