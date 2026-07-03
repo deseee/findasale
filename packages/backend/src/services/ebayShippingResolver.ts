@@ -64,9 +64,13 @@ export interface ShippingResolverItem {
 /** Parse the `$X.XX` (or `$X`) embedded in a flat-tier policy name → cents, or null. */
 function parsePolicyAmountCents(policyName: string | null | undefined): number | null {
   if (!policyName) return null;
-  const m = policyName.match(/\$(\d+(?:\.\d{1,2})?)/);
-  if (!m) return null;
-  const dollars = parseFloat(m[1]);
+  // Use the LAST dollar amount in the name, not the first. eBay envelope tiers are
+  // named like "1oz under $20 Ebay Std Env $1.03" -- "$20" is the envelope program's
+  // item-value eligibility cap, "$1.03" (trailing) is the real shipping price.
+  // Bug confirmed 2026-07-03: preview showed $20 instead of $1.03 for 1/2/3oz tiers.
+  const matches = [...policyName.matchAll(/\$(\d+(?:\.\d{1,2})?)/g)];
+  if (matches.length === 0) return null;
+  const dollars = parseFloat(matches[matches.length - 1][1]);
   if (!isFinite(dollars)) return null;
   return Math.round(dollars * 100);
 }

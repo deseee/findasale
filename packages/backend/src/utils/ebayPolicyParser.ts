@@ -185,8 +185,11 @@ export function toOunces(weight: number | { lb?: number; oz?: number }): number 
  */
 export function parsePriceFromPolicyName(name: string): number | null {
   if (!name) return null;
-  const match = name.match(/\$(\d+(?:\.\d{2})?)/);
-  if (!match) return null;
-  const value = parseFloat(match[1]);
+  // Use the LAST dollar amount, not the first -- envelope-tier policy names embed an
+  // eligibility disclaimer dollar figure before the real price, e.g.
+  // "1oz under $20 Ebay Std Env $1.03" (real price is the trailing $1.03, not $20).
+  const matches = [...name.matchAll(/\$(\d+(?:\.\d{2})?)/g)];
+  if (matches.length === 0) return null;
+  const value = parseFloat(matches[matches.length - 1][1]);
   return Number.isFinite(value) ? value : null;
 }
