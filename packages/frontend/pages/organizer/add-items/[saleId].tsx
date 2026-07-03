@@ -30,6 +30,7 @@ import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import NextImage from 'next/image';
 import { useRouter } from 'next/router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import * as Sentry from '@sentry/nextjs';
 import api from '../../../lib/api';
 import { getItemImageUrl } from '../../../lib/imageUtils';
 import CSVImportModal from '../../../components/CSVImportModal';
@@ -1199,7 +1200,24 @@ const AddItemsDetailPage = () => {
         }
       }
     } catch (err: any) {
-      if (process.env.NODE_ENV !== 'production') console.error('[rapidfire] Background upload failed:', err);
+      // Bug fix (2026-07-03): this previously only console.error'd in dev builds -- in
+      // production the real cause (status code, response body, network vs HTTP error)
+      // was completely invisible, which is why "2 items worked then it failed again"
+      // couldn't be diagnosed further without guessing. Sentry.captureException here
+      // (with replaysOnErrorSampleRate already at 1.0 in sentry.client.config.ts) means
+      // the next occurrence comes with a full session replay + real error details
+      // instead of another generic toast with no evidence behind it.
+      console.error('[rapidfire] Background upload failed:', err);
+      Sentry.captureException(err, {
+        tags: { feature: 'rapidfire-upload' },
+        extra: {
+          status: err?.response?.status,
+          responseData: err?.response?.data,
+          hasResponse: !!err?.response,
+          tempId,
+          appendToItemId: appendToItemId ?? null,
+        },
+      });
 
       // Determine error message based on error type
       let errorMessage = 'Upload failed';
@@ -1212,6 +1230,15 @@ const AddItemsDetailPage = () => {
         const tier = err.response?.data?.tier || 'your tier';
         const limit = err.response?.data?.limit || 0;
         errorMessage = `Photo limit reached for ${tier} (${limit} photos max per item). Upgrade to PRO for 10 photos per item.`;
+      } else if (err.response?.status === 413) {
+        // Bug fix (2026-07-03): should be rare now that autoEnhanceImage caps resolution
+        // before upload, but keep an honest message instead of the generic fallback if a
+        // device still somehow produces an oversized file.
+        errorMessage = 'Photo too large. Try a lower-detail shot or check your camera settings.';
+      } else if (!err.response) {
+        // No response at all = network-level failure (offline, DNS, request aborted) —
+        // distinct from a server error, worth telling the user which it was.
+        errorMessage = 'Network error — check your connection and try again';
       }
 
       setRapidItems((prev) =>
@@ -2080,6 +2107,11 @@ const AddItemsDetailPage = () => {
               }
               onAnalyze={captureMode === 'regular' ? handleRegularAnalyze : undefined}
               isAnalyzing={regularAnalyzing}
+              // Bug fix (2026-07-03): PreviewModal renders as a full-screen overlay on
+              // top of this still-live camera when a thumbnail is tapped -- tell it so it
+              // can re-assert play() on the live feed once that overlay is gone (see
+              // RapidCapture's isObscured prop doc for why this is needed).
+              isObscured={!!previewItemId}
               qualityOverlay={
                 qualityModalOpen && qualityResult
                   ? {

@@ -83,6 +83,21 @@ interface RapidCaptureProps {
   onAnalyze?: (photos: { blob: Blob; previewUrl: string }[]) => void | Promise<void>;
   /** Whether Analyze button is in loading state */
   isAnalyzing?: boolean;
+  /**
+   * Bug fix (2026-07-03): the parent page renders PreviewModal (thumbnail tap -> item
+   * review/delete) as a fixed full-screen overlay ON TOP of this component while it stays
+   * mounted underneath -- by design, so the camera doesn't have to restart between shots.
+   * Reported symptom: after opening that preview and deleting the item, the camera feed
+   * comes back frozen (stuck on the last frame) and only exiting the camera entirely
+   * unsticks it. A getUserMedia video element that becomes fully covered by another
+   * opaque element can have its decode/paint suspended by the browser (a known behavior,
+   * particularly on iOS Safari) and does not reliably resume on its own once uncovered --
+   * nothing in this component previously re-called videoRef.play() after that happens.
+   * Pass true while something is covering the live feed; false (or omitted) once it's
+   * gone -- this re-asserts play() on that transition instead of assuming the browser
+   * resumes decoding by itself.
+   */
+  isObscured?: boolean;
 }
 
 const RapidCapture: React.FC<RapidCaptureProps> = ({
@@ -104,6 +119,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
   faceDetectionOverlay,
   onAnalyze,
   isAnalyzing = false,
+  isObscured = false,
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -315,6 +331,20 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
     };
   }, [facingMode]);
 
+  // Bug fix (2026-07-03): re-assert play() when the live feed stops being covered by an
+  // external overlay (e.g. PreviewModal closing after thumbnail-tap review/delete). See
+  // the isObscured prop doc comment above for the full reasoning. play() is a safe no-op
+  // if the video is already playing, so this only matters on the true->false transition
+  // where the browser had actually suspended decode.
+  useEffect(() => {
+    if (isObscured) return;
+    if (videoRef.current && streamRef.current) {
+      videoRef.current.play().catch(() => {
+        // Autoplay can reject if the tab lost focus in the same tick — not fatal, the
+        // next user interaction (or the effect re-running) will retry.
+      });
+    }
+  }, [isObscured]);
 
   // Phase 3: Pre-capture quality check — sample video brightness every 2 seconds
   // Brightness sampling handled by BrightnessIndicator component
