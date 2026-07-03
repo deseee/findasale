@@ -1130,23 +1130,30 @@ function Step3({ c, photoUrls, setPhotoUrls }: Step3Props) {
     if (!files || files.length === 0) return;
     setUploading(true);
     try {
+      // Bug fix (2026-07-03): this previously uploaded directly from the browser to
+      // Cloudinary using an unsigned preset ('findasale_unsigned') that does not exist
+      // on the account (confirmed via a direct API call: Cloudinary returns
+      // {"error":{"message":"Upload preset not found"}}, HTTP 400) — every photo upload
+      // on this step failed for every organizer. Every other upload surface in the app
+      // (add-items, edit-item, review, SmartInventoryUpload, useUploadQueue, etc.) goes
+      // through our own authenticated backend endpoint POST /api/upload/sale-photos
+      // instead, which performs the real Cloudinary upload server-side with the account's
+      // API key/secret plus server-side file-signature validation. This now matches that
+      // established, working pattern.
       const uploads = Array.from(files).slice(0, 20 - photoUrls.length);
-      const uploadPromises = uploads.map(async (file) => {
-        const fd = new FormData();
-        fd.append('file', file);
-        fd.append('upload_preset', 'findasale_unsigned');
-        const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || 'db8yhzjdq';
-        const res = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
-          method: 'POST', body: fd,
-        });
-        if (!res.ok) throw new Error('Upload failed');
-        const data = await res.json();
-        return data.secure_url as string;
+      const fd = new FormData();
+      uploads.forEach(file => fd.append('photos', file));
+      const res = await api.post('/upload/sale-photos', fd, {
+        headers: { 'Content-Type': 'multipart/form-data' },
       });
-      const urls = await Promise.all(uploadPromises);
+      const urls: string[] = res.data?.urls || [];
+      if (res.data?.partialErrors?.length) {
+        showToast(`Some photos failed to upload: ${res.data.partialErrors.join('; ')}`, 'error');
+      }
       setPhotoUrls(prev => [...prev, ...urls].slice(0, 20));
-    } catch {
-      showToast('Photo upload failed. Check your connection and try again.', 'error');
+    } catch (err: any) {
+      const serverMsg = err?.response?.data?.error || err?.response?.data?.message;
+      showToast(serverMsg ? `Upload failed: ${serverMsg}` : 'Photo upload failed. Check your connection and try again.', 'error');
     } finally {
       setUploading(false);
     }
