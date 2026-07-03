@@ -1714,10 +1714,17 @@ interface Step5Props {
   canSchedule: boolean;
   tierLimitError: null | { current: number; tier: string; limit: number; upgradeUrl: string; message: string };
   onDismissTierError: () => void;
+  // Bug fix (2026-07-03): Retail Mode (permanent storefront) requires TEAMS tier.
+  // Previously a SIMPLE/PRO organizer who picked Storefront on Step 1 hit a dead-end
+  // toast on publish with no way forward except starting the whole wizard over.
+  retailTierError: null | { message: string; upgradeUrl: string };
+  onDismissRetailTierError: () => void;
+  onSwitchToFreeType: () => void;
 }
 function Step5({
   c, form, photoCount, onPublish, onSaveDraft, onSchedule,
   isSubmitting, canSchedule, tierLimitError, onDismissTierError,
+  retailTierError, onDismissRetailTierError, onSwitchToFreeType,
 }: Step5Props) {
   const typeLabel = SALE_TYPE_TILES.find(t => t.key === form.saleType)?.label || form.saleType;
 
@@ -1768,6 +1775,54 @@ function Step5({
         sub="Once you publish, the sale appears on the map, in search, and goes out to your followers. You can edit anything after."
         c={c}
       />
+
+      {/* Retail Mode tier gate — dead-end fix: give the organizer a way forward */}
+      {retailTierError && (
+        <div style={{
+          marginBottom: 20, padding: 18, borderRadius: 12,
+          background: '#FFF3CD', border: '1px solid #F5C542',
+          fontFamily: 'Inter, sans-serif',
+        }}>
+          <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 6, color: '#856404' }}>
+            Storefront requires TEAMS
+          </div>
+          <p style={{ fontSize: 13, color: '#664D03', marginBottom: 10 }}>
+            An always-on Storefront is a TEAMS-tier feature. Upgrade to keep this as a
+            Storefront, or switch to Yard Sale and publish immediately, free — one click,
+            no re-entering anything.
+          </p>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            <Link
+              href={retailTierError.upgradeUrl}
+              style={{
+                padding: '8px 16px', borderRadius: 8,
+                background: c.accent, color: c.accentInk,
+                fontWeight: 600, fontSize: 13, textDecoration: 'none',
+              }}
+            >Upgrade to TEAMS</Link>
+            <button
+              type="button"
+              onClick={onSwitchToFreeType}
+              disabled={isSubmitting}
+              style={{
+                padding: '8px 16px', borderRadius: 8,
+                background: 'transparent', border: '1px solid #856404',
+                color: '#856404', cursor: isSubmitting ? 'not-allowed' : 'pointer', fontSize: 13, fontWeight: 600,
+                opacity: isSubmitting ? 0.6 : 1,
+              }}
+            >{isSubmitting ? 'Publishing…' : 'Switch to Yard Sale & publish now →'}</button>
+            <button
+              type="button"
+              onClick={onDismissRetailTierError}
+              style={{
+                padding: '8px 12px', borderRadius: 8,
+                background: 'transparent', border: '1px solid #856404',
+                color: '#856404', cursor: 'pointer', fontSize: 13,
+              }}
+            >Dismiss</button>
+          </div>
+        </div>
+      )}
 
       {/* Tier limit error */}
       {tierLimitError && (
@@ -2123,6 +2178,7 @@ const CreateSalePage: React.FC = () => {
   const [tierLimitError, setTierLimitError] = useState<null | {
     current: number; tier: string; limit: number; upgradeUrl: string; message: string;
   }>(null);
+  const [retailTierError, setRetailTierError] = useState<null | { message: string; upgradeUrl: string }>(null);
   const [showProModal, setShowProModal] = useState(false);
   const [publishedSaleId, setPublishedSaleId] = useState<string | null>(null);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
@@ -2208,60 +2264,63 @@ const CreateSalePage: React.FC = () => {
     router.push('/organizer/dashboard');
   };
 
-  const buildPayload = () => {
-    const isRetail = form.saleType === 'RETAIL';
-    const { lat, lng, buyersPremiumPct, entranceLat, entranceLng, ...rest } = form;
+  const buildPayload = (overrideForm?: WizardFormData) => {
+    const f = overrideForm ?? form;
+    const isRetail = f.saleType === 'RETAIL';
+    const { lat, lng, buyersPremiumPct, entranceLat, entranceLng } = f;
 
     return {
-      title: form.title,
-      description: form.description || undefined,
-      saleType: form.saleType,
+      title: f.title,
+      description: f.description || undefined,
+      saleType: f.saleType,
       startDate: isRetail
         ? new Date().toISOString()
-        : form.startDate
-          ? new Date(`${form.startDate}T${form.startTime}`).toISOString()
+        : f.startDate
+          ? new Date(`${f.startDate}T${f.startTime}`).toISOString()
           : undefined,
       endDate: isRetail
-        ? new Date(Date.now() + form.retailAutoRenewDays * 24 * 60 * 60 * 1000).toISOString()
-        : form.endDate
-          ? new Date(`${form.endDate}T${form.endTime}`).toISOString()
+        ? new Date(Date.now() + f.retailAutoRenewDays * 24 * 60 * 60 * 1000).toISOString()
+        : f.endDate
+          ? new Date(`${f.endDate}T${f.endTime}`).toISOString()
           : undefined,
-      address: form.address || undefined,
-      city: form.city || undefined,
-      state: form.state || undefined,
-      zip: form.zip || undefined,
+      address: f.address || undefined,
+      city: f.city || undefined,
+      state: f.state || undefined,
+      zip: f.zip || undefined,
       ...(lat !== null ? { lat } : {}),
       ...(lng !== null ? { lng } : {}),
       photoUrls,
-      tags: form.tags,
-      notes: form.notes || undefined,
+      tags: f.tags,
+      notes: f.notes || undefined,
       ...(buyersPremiumPct !== null ? { buyersPremiumPct } : {}),
-      ...(form.locationId ? { locationId: form.locationId } : {}),
-      ...(form.entranceNote ? { entranceNote: form.entranceNote } : {}),
+      ...(f.locationId ? { locationId: f.locationId } : {}),
+      ...(f.entranceNote ? { entranceNote: f.entranceNote } : {}),
       ...(entranceLat !== null ? { entranceLat } : {}),
       ...(entranceLng !== null ? { entranceLng } : {}),
-      retailAutoRenewDays: form.retailAutoRenewDays,
-      isOnlineOnly: form.isOnlineOnly,
+      retailAutoRenewDays: f.retailAutoRenewDays,
+      isOnlineOnly: f.isOnlineOnly,
       // Feature #411: Dorm Dash Phase 2
-      ...(form.saleType === 'DORM_DASH' && form.dormBuilding ? { dormBuilding: form.dormBuilding } : {}),
-      ...(form.saleType === 'DORM_DASH' && form.moveOutDate ? { moveOutDate: new Date(`${form.moveOutDate}T23:59:59`).toISOString() } : {}),
+      ...(f.saleType === 'DORM_DASH' && f.dormBuilding ? { dormBuilding: f.dormBuilding } : {}),
+      ...(f.saleType === 'DORM_DASH' && f.moveOutDate ? { moveOutDate: new Date(`${f.moveOutDate}T23:59:59`).toISOString() } : {}),
       status: 'DRAFT',
     };
   };
 
-  const handlePublish = async () => {
-    if (!validateStep(currentStep)) return;
+  // Shared publish call — used by both the normal Step5 "Publish now" button and the
+  // one-click Retail-Mode-tier-gate recovery path below, so both go through identical
+  // success/error handling instead of duplicating it.
+  const publishSale = async (payload: ReturnType<typeof buildPayload>, saleTypeForAnalytics: string) => {
     setIsSubmitting(true);
     setTierLimitError(null);
+    setRetailTierError(null);
     try {
-      const payload = { ...buildPayload(), status: 'PUBLISHED' };
-      const response = await api.post('/sales', payload);
+      const response = await api.post('/sales', { ...payload, status: 'PUBLISHED' });
       const saleId = response.data.id;
       setPublishedSaleId(saleId);
 
       // GA4 #470: sale_created conversion event
       if (typeof window !== 'undefined' && window.gtag) {
-        window.gtag('event', 'sale_created', { sale_type: form.saleType.toLowerCase() });
+        window.gtag('event', 'sale_created', { sale_type: saleTypeForAnalytics.toLowerCase() });
       }
 
       // Clear draft from storage
@@ -2290,6 +2349,16 @@ const CreateSalePage: React.FC = () => {
           message: data.message ?? 'Tier limit exceeded',
         });
         showToast(data.message || 'Tier limit exceeded', 'error');
+      } else if (err.response?.status === 403 && err.response?.data?.code === 'RETAIL_MODE_REQUIRES_TEAMS') {
+        // Bug fix (2026-07-03): this used to fall through to the generic "Failed to
+        // create sale" toast with no way forward — organizer had no path to upgrade or
+        // pick a different sale type without restarting the wizard.
+        const data = err.response.data;
+        setRetailTierError({
+          message: data.message ?? 'Retail Mode requires TEAMS tier',
+          upgradeUrl: data.upgradeUrl ?? '/pricing',
+        });
+        showToast('Storefront requires TEAMS — upgrade or switch sale type below.', 'error');
       } else {
         const msg = err.response?.data?.message;
         showToast(msg || 'Failed to create sale', 'error');
@@ -2297,6 +2366,51 @@ const CreateSalePage: React.FC = () => {
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handlePublish = async () => {
+    if (!validateStep(currentStep)) return;
+    await publishSale(buildPayload(), form.saleType);
+  };
+
+  // Bug fix (2026-07-03, revised): Patrick pushed back on the first version of this fix —
+  // switching sale type and dropping the organizer back on Step 2 to refill dates before
+  // they could publish was still a dead end that would frustrate them, just a slower one.
+  // This is now a genuine single click: switch to Estate Sale, fill in the only fields
+  // Retail Mode never collects (start/end date — Step 2 already collects address/location
+  // regardless of sale type, so that data is already present) with a sensible default
+  // (the coming Saturday-Sunday, standard 9am-3pm hours), and publish immediately with
+  // that merged form — no navigation, no re-entering anything already filled in.
+  const getNextWeekendDates = (): { startDate: string; endDate: string } => {
+    const today = new Date();
+    const daysUntilSaturday = (6 - today.getDay() + 7) % 7 || 7;
+    const start = new Date(today);
+    start.setDate(today.getDate() + daysUntilSaturday);
+    const end = new Date(start);
+    end.setDate(start.getDate() + 1);
+    const fmt = (d: Date) => d.toISOString().split('T')[0];
+    return { startDate: fmt(start), endDate: fmt(end) };
+  };
+
+  const handleSwitchToFreeType = async () => {
+    const defaults = getNextWeekendDates();
+    const updatedForm: WizardFormData = {
+      ...form,
+      saleType: 'YARD',
+      saleSubtype: 'yard',
+      startDate: form.startDate || defaults.startDate,
+      endDate: form.endDate || defaults.endDate,
+      startTime: form.startTime || '09:00',
+      endTime: form.endTime || '15:00',
+    };
+    setForm(updatedForm);
+    showToast(
+      form.startDate
+        ? 'Switched to Yard Sale — publishing now…'
+        : `Switched to Yard Sale (defaulted to ${defaults.startDate} – ${defaults.endDate}, 9am–3pm — editable after publish) — publishing now…`,
+      'success'
+    );
+    await publishSale(buildPayload(updatedForm), 'YARD');
   };
 
   const handleSaveAsDraft = async () => {
@@ -2419,6 +2533,9 @@ const CreateSalePage: React.FC = () => {
                   canSchedule={canAccess('PRO')}
                   tierLimitError={tierLimitError}
                   onDismissTierError={() => setTierLimitError(null)}
+                  retailTierError={retailTierError}
+                  onDismissRetailTierError={() => setRetailTierError(null)}
+                  onSwitchToFreeType={handleSwitchToFreeType}
                 />
               )}
             </main>

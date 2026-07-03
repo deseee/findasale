@@ -67,23 +67,45 @@ const ENHANCE_ALL_ENABLED = process.env.NEXT_PUBLIC_ENABLE_ENHANCE_ALL === 'true
  * Phase 3: On-Device Image Processing Utilities
  */
 
+// Bug fix (2026-07-03): rapidfire captures were failing with a generic "Photo failed:
+// Upload failed" toast. Confirmed via direct testing against the live site: the /api/*
+// proxy (Vercel serverless function) has a hard, non-configurable ~4.5MB request body
+// cap (FUNCTION_PAYLOAD_TOO_LARGE / HTTP 413) -- same limit already found and fixed on
+// the create-sale Step 3 upload. This pipeline requests getUserMedia at
+// { width: { ideal: 1920 }, height: { ideal: 1440 } } (RapidCapture.tsx), but "ideal" is
+// only a hint -- browsers (iOS Safari in particular) don't always honor it, and
+// autoEnhanceImage/cropTo4x3 both re-encoded at whatever resolution the canvas actually
+// received (img.width/img.height, uncapped), so a device that delivered its native
+// higher-res stream could produce a JPEG north of the platform's ceiling. Since Vercel's
+// 413 response isn't JSON, that failure fell through to the generic fallback message
+// instead of surfacing anything useful. Capping the working resolution here guarantees
+// every upload stays well under the limit regardless of what the camera actually
+// delivered, rather than depending on a browser hint that isn't guaranteed.
+const MAX_CAPTURE_DIMENSION = 1920;
+
 async function autoEnhanceImage(blob: Blob): Promise<{ blob: Blob; enhanced: boolean }> {
   return new Promise((resolve) => {
     const img = new Image();
     const url = URL.createObjectURL(blob);
     img.onload = () => {
       try {
+        let { width, height } = img;
+        if (width > MAX_CAPTURE_DIMENSION || height > MAX_CAPTURE_DIMENSION) {
+          const scale = MAX_CAPTURE_DIMENSION / Math.max(width, height);
+          width = Math.round(width * scale);
+          height = Math.round(height * scale);
+        }
         const canvas = document.createElement('canvas');
-        canvas.width = img.width;
-        canvas.height = img.height;
+        canvas.width = width;
+        canvas.height = height;
         const ctx = canvas.getContext('2d')!;
-        ctx.drawImage(img, 0, 0);
+        ctx.drawImage(img, 0, 0, width, height);
         const offscreen = document.createElement('canvas');
-        offscreen.width = img.width;
-        offscreen.height = img.height;
+        offscreen.width = width;
+        offscreen.height = height;
         const octx = offscreen.getContext('2d')!;
         octx.filter = 'brightness(1.15) saturate(1.1)';
-        octx.drawImage(img, 0, 0);
+        octx.drawImage(img, 0, 0, width, height);
         URL.revokeObjectURL(url);
         offscreen.toBlob((enhanced) => {
           resolve({ blob: enhanced || blob, enhanced: !!enhanced });
@@ -96,6 +118,47 @@ async function autoEnhanceImage(blob: Blob): Promise<{ blob: Blob; enhanced: boo
     img.onerror = () => {
       URL.revokeObjectURL(url);
       resolve({ blob, enhanced: false });
+    };
+    img.src = url;
+  });
+}
+
+// Bug fix (2026-07-03): "additional photos" (regular-mode multi-photo items, appended
+// below) skip autoEnhanceImage/cropTo4x3 entirely by design -- they upload the raw
+// capture blob untouched. That path had zero size protection, so it shared the exact
+// same FUNCTION_PAYLOAD_TOO_LARGE risk fixed above, just with no processing to fix it
+// inside. Dimension-cap only (no filter, no crop) -- deliberately does not change the
+// visual treatment those photos already skip.
+async function capImageDimensions(blob: Blob): Promise<Blob> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    const url = URL.createObjectURL(blob);
+    img.onload = () => {
+      try {
+        let { width, height } = img;
+        if (width <= MAX_CAPTURE_DIMENSION && height <= MAX_CAPTURE_DIMENSION) {
+          URL.revokeObjectURL(url);
+          resolve(blob); // already small enough -- avoid a pointless re-encode
+          return;
+        }
+        const scale = MAX_CAPTURE_DIMENSION / Math.max(width, height);
+        width = Math.round(width * scale);
+        height = Math.round(height * scale);
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d')!;
+        ctx.drawImage(img, 0, 0, width, height);
+        URL.revokeObjectURL(url);
+        canvas.toBlob((resized) => resolve(resized || blob), 'image/jpeg', 0.92);
+      } catch {
+        URL.revokeObjectURL(url);
+        resolve(blob);
+      }
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      resolve(blob);
     };
     img.src = url;
   });
@@ -1118,8 +1181,9 @@ const AddItemsDetailPage = () => {
         if (additionalPhotos && additionalPhotos.length > 0) {
           for (const addPhoto of additionalPhotos) {
             try {
+              const cappedBlob = await capImageDimensions(addPhoto.blob);
               const fd = new FormData();
-              fd.append('photos', addPhoto.blob, 'regular-capture.jpg');
+              fd.append('photos', cappedBlob, 'regular-capture.jpg');
               fd.append('saleId', saleId as string);
               const uploadRes = await api.post('/upload/sale-photos', fd, {
                 headers: { 'Content-Type': 'multipart/form-data' },

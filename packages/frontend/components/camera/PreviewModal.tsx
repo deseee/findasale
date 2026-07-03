@@ -62,6 +62,17 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
   const [loading, setLoading] = useState(false);
   const [fullItem, setFullItem] = useState<any>(null);
   const [imgFailed, setImgFailed] = useState(false);
+  // Bug fix (2026-07-03): tapping a rapidfire thumbnail opens this modal ON TOP of the
+  // still-live camera view (RapidCapture stays mounted underneath by design). The Delete
+  // button used a native window.confirm(), which is a synchronous, JS-thread-blocking
+  // browser dialog -- interrupting a live getUserMedia video stream with one of those is
+  // a known trigger for the video element's render loop freezing (particularly on iOS
+  // Safari) and not reliably resuming once dismissed, which matches exactly what was
+  // reported: camera freezes on delete, only recoverable by exiting the camera entirely
+  // (which tears down and re-creates the stream from scratch). Replacing it with a
+  // normal React-rendered confirmation avoids ever blocking the main thread with a native
+  // dialog while the camera is live.
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   // Fetch full item data when modal opens to ensure we have AI-analyzed fields
   useEffect(() => {
@@ -117,10 +128,13 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
   };
 
   const handleDelete = () => {
-    if (confirm('Delete this item? This cannot be undone.')) {
-      onDelete(item.id);
-      onClose();
-    }
+    setShowDeleteConfirm(true);
+  };
+
+  const handleConfirmDelete = () => {
+    setShowDeleteConfirm(false);
+    onDelete(item.id);
+    onClose();
   };
 
   const handleVoiceExtraction = (result: {
@@ -445,27 +459,49 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
           </div>
 
           {/* Buttons */}
-          <div className="flex gap-3 pt-4 border-t border-warm-200 dark:border-gray-700">
-            <button
-              onClick={onClose}
-              className="px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg text-warm-700 dark:text-warm-300 hover:bg-warm-50 dark:hover:bg-gray-700 font-medium text-sm"
-            >
-              Back
-            </button>
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              className="flex-1 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-medium text-sm disabled:opacity-50"
-            >
-              {saving ? 'Saving...' : 'Done Reviewing'}
-            </button>
-            <button
-              onClick={handleDelete}
-              className="px-4 py-2 border border-red-300 dark:border-red-800 rounded-lg text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 font-medium text-sm"
-            >
-              Delete
-            </button>
-          </div>
+          {showDeleteConfirm ? (
+            <div className="pt-4 border-t border-warm-200 dark:border-gray-700 space-y-3">
+              <p className="text-sm text-warm-700 dark:text-warm-300">
+                Delete this item? This cannot be undone.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowDeleteConfirm(false)}
+                  className="flex-1 px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg text-warm-700 dark:text-warm-300 hover:bg-warm-50 dark:hover:bg-gray-700 font-medium text-sm"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleConfirmDelete}
+                  className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium text-sm"
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex gap-3 pt-4 border-t border-warm-200 dark:border-gray-700">
+              <button
+                onClick={onClose}
+                className="px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg text-warm-700 dark:text-warm-300 hover:bg-warm-50 dark:hover:bg-gray-700 font-medium text-sm"
+              >
+                Back
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className="flex-1 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-medium text-sm disabled:opacity-50"
+              >
+                {saving ? 'Saving...' : 'Done Reviewing'}
+              </button>
+              <button
+                onClick={handleDelete}
+                className="px-4 py-2 border border-red-300 dark:border-red-800 rounded-lg text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 font-medium text-sm"
+              >
+                Delete
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>
