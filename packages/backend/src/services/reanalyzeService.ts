@@ -285,6 +285,12 @@ export async function reanalyzeItem(
           suggestion: catalogSuggestionWrite ?? null,
         }
       : null,
+    // Populated below (computed after the grounded-identity pass runs); placeholder
+    // here only satisfies the ReanalyzeAfter type at declaration -- real values are
+    // merged in at the return statement.
+    groundedIdentity: null,
+    groundedConfidence: null,
+    groundedSource: null,
   };
 
   if (apply) {
