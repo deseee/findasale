@@ -24,7 +24,7 @@ import { analyzeItemImages } from './cloudAIService';
 import { enrichItem, planEnrichmentApply } from './productEnrichment';
 import { suggestEbayCategoryForTitle } from '../controllers/ebayController';
 import { syncListedItemFieldsToEbay } from '../controllers/itemController';
-import { runModelBakeoff, runGroundedResolution } from './modelBakeoffService';
+import { runModelBakeoff, runGroundedResolution, runVisualResolution } from './modelBakeoffService';
 
 export type ReanalyzeErrorCode =
   | 'ITEM_NOT_FOUND'
@@ -346,6 +346,14 @@ export async function reanalyzeItem(
       await runGroundedResolution(itemId, buffers, mimeTypes);
     } catch (resolveErr: any) {
       console.warn('[resolve] pass invocation error (non-fatal):', resolveErr?.message || resolveErr);
+    }
+    // Visual reverse-image resolution (Lens parity for visually-identified items). Sends the
+    // ACTUAL primary image to web-grounded VISION models + Google Vision Web Detection. Runs
+    // under the SAME gate, observability only, fully error-swallowed — NEVER affects the response.
+    try {
+      await runVisualResolution(itemId, buffers, mimeTypes);
+    } catch (visualErr: any) {
+      console.warn('[visual] pass invocation error (non-fatal):', visualErr?.message || visualErr);
     }
   }
 

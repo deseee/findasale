@@ -23,6 +23,7 @@
  */
 
 import { google } from 'googleapis';
+import { getWebDetectionMatch } from './cloudAIService';
 
 // ---------------------------------------------------------------------------
 // Config
@@ -744,5 +745,189 @@ export async function runGroundedResolution(
   } catch (err: any) {
     // Absolutely never let the resolution pass affect the caller.
     console.log(`[resolve] item=${itemId} HARNESS ERROR: ${shortErr(err)}`);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Visual reverse-image resolution (Lens parity for VISUALLY-identified items)
+// ---------------------------------------------------------------------------
+//
+// The grounded resolver above is TEXT-ONLY — it grounds on the marks the extractor
+// transcribed. That wins when identity is textual (coin date, comic issue, watch bezel
+// text) but FAILS when identity is visual: a Meissen crossed-swords mark reads as "XX",
+// a Depression-glass "Princess" pattern / cast-iron trivet / maki-e lacquer box have no
+// readable text at all. The fix is to send the ACTUAL IMAGE to a WEB-GROUNDED VISION
+// model (Gemini powers Google Lens, so a Gemini `:online` model that SEES the image AND
+// searches the web is the practical Lens equivalent), plus Google Vision Web Detection
+// as a first-party visual signal.
+//
+// Observability only — logs `[visual] ...`, never mutates the item, never changes the
+// applied reanalyze result. Whole stage + every call wrapped in try/catch; runs only on
+// downloaded buffers (no writes); dryRun-safe.
+
+// Web-grounded VISION models via OpenRouter's `:online` web plugin. Each is isolated in
+// its own try/catch; if a slug is invalid it simply error-logs and the others continue.
+const VISUAL_MODELS: { name: string; modelId: string }[] = [
+  { name: 'gemini-2.5-flash:online', modelId: 'google/gemini-2.5-flash:online' }, // primary — Gemini = Lens lineage
+  { name: 'gemini-3.5-flash:online', modelId: 'google/gemini-3.5-flash:online' },
+  { name: 'gpt-4o:online', modelId: 'openai/gpt-4o:online' }, // cross-lab check
+];
+
+const VISUAL_PROMPT = `You can SEE this image and SEARCH the web. Identify the EXACT specific item — maker, named pattern, model/reference number, variant, and era — reasoning from visual features AND reverse-image/web knowledge. If it is a specific catalogued item (a named glass pattern like 'Anchor Hocking Princess', a specific porcelain maker's mark like Meissen crossed-swords, a watch reference, a comic issue), name it precisely; if genuinely unidentifiable, say so. Return STRICT JSON only: {"product","type","confidence" (0-1 number),"evidence"}.`;
+
+interface VisualParsed {
+  product?: string;
+  type?: string;
+  confidence?: number | string;
+  evidence?: string;
+}
+
+/** One web-grounded VISION call: send the PRIMARY image + prompt to an OpenRouter `:online` model. */
+async function callVisualModel(
+  modelId: string,
+  primaryBase64: string,
+  primaryMime: string,
+): Promise<VisualParsed | null> {
+  if (!OPENROUTER_API_KEY) throw new Error('no OPENROUTER_API_KEY');
+
+  const content: any[] = [
+    { type: 'text', text: VISUAL_PROMPT },
+    { type: 'image_url', image_url: { url: `data:${primaryMime};base64,${primaryBase64}` } },
+  ];
+
+  const resp = await fetch(OPENROUTER_URL, {
+    method: 'POST',
+    headers: { authorization: `Bearer ${OPENROUTER_API_KEY}`, ...OPENROUTER_HEADERS },
+    body: JSON.stringify({
+      model: modelId,
+      messages: [{ role: 'user', content }],
+      max_tokens: 700,
+      // Privacy: never route to providers that train on the input images.
+      provider: { data_collection: 'deny' },
+    }),
+  });
+
+  if (!resp.ok) {
+    const body = await resp.text().catch(() => '');
+    throw new Error(`HTTP ${resp.status} ${truncate(body, 140)}`);
+  }
+  const json: any = await resp.json();
+  const text: string = json?.choices?.[0]?.message?.content ?? '';
+  return parseModelJson(text) as VisualParsed | null;
+}
+
+/**
+ * Visual reverse-image resolution pass. Runs under the SAME gate as runGroundedResolution
+ * (bakeoff || resolveOnly). Observability only — returns void, never throws to the caller.
+ *
+ * On the PRIMARY image (buffers[0]) it runs, in parallel and each in its own try/catch:
+ *   1. Web-grounded VISION models via OpenRouter `:online` (Gemini = Lens equivalent).
+ *   2. Google Vision Web Detection (existing getWebDetectionMatch) — first-party visual signal.
+ * Then it reconciles: picks the highest-confidence visual model result (VISUAL_BEST) and logs a
+ * FINAL_COMBINED line so it can be compared against the `[resolve] ... FINAL` lines for the same
+ * item. Never mutates anything; dryRun-safe (no writes).
+ *
+ * @param itemId   the item being re-analyzed (for log correlation)
+ * @param buffers  the SAME image buffers already downloaded by reanalyzeItem
+ * @param mimeTypes parallel array of mime types for each buffer
+ */
+export async function runVisualResolution(
+  itemId: string,
+  buffers: Buffer[],
+  mimeTypes: string[],
+): Promise<void> {
+  try {
+    if (!buffers || buffers.length === 0) return;
+
+    const primaryBase64 = buffers[0].toString('base64');
+    const primaryMime = mimeTypes[0] || 'image/jpeg';
+
+    if (!OPENROUTER_API_KEY) {
+      console.log(`[visual] item=${itemId} vision models SKIPPED: no OPENROUTER_API_KEY (web detection still attempted)`);
+    }
+
+    const modelNames = VISUAL_MODELS.map((m) => m.name).join(', ');
+    console.log(`[visual] item=${itemId} models=[${modelNames}] webDetection=on`);
+
+    // Accumulate visual-model outputs so we can pick the highest-confidence one afterward.
+    const visualResults: { name: string; product: string; type: string; conf: number | null }[] = [];
+
+    // ---- Run vision models + web detection IN PARALLEL, each isolated ----------
+    const modelTasks = OPENROUTER_API_KEY
+      ? VISUAL_MODELS.map(async (m) => {
+          const started = Date.now();
+          try {
+            const parsed = await callVisualModel(m.modelId, primaryBase64, primaryMime);
+            const latencyMs = Date.now() - started;
+            if (!parsed) {
+              console.log(`[visual] item=${itemId} model=${m.name} ERROR: unparseable JSON response latencyMs=${latencyMs}`);
+              return;
+            }
+            const product = truncate(parsed.product);
+            const type = truncate(parsed.type, 60);
+            const confNum = parseConfidence(parsed.confidence);
+            const confLog = confNum === null ? 'n/a' : confNum;
+            console.log(
+              `[visual] item=${itemId} model=${m.name} ` +
+                `product="${product}" type="${type}" conf=${confLog} latencyMs=${latencyMs}`,
+            );
+            visualResults.push({ name: m.name, product, type, conf: confNum });
+          } catch (err: any) {
+            const latencyMs = Date.now() - started;
+            console.log(`[visual] item=${itemId} model=${m.name} ERROR: ${shortErr(err)} latencyMs=${latencyMs}`);
+          }
+        })
+      : [];
+
+    const webDetectionTask = (async () => {
+      try {
+        const web = await getWebDetectionMatch(primaryBase64);
+        if (!web) {
+          console.log(`[visual] item=${itemId} webDetection ERROR: no result (gated/empty/unavailable)`);
+          return;
+        }
+        const bestGuess = web.bestGuessLabels.slice(0, 5).map((s) => truncate(s, 60)).join(', ');
+        const entities = web.webEntities.slice(0, 5).map((s) => truncate(s, 60)).join(', ');
+        console.log(`[visual] item=${itemId} webDetection bestGuess=[${bestGuess}] entities=[${entities}]`);
+      } catch (err: any) {
+        console.log(`[visual] item=${itemId} webDetection ERROR: ${shortErr(err)}`);
+      }
+    })();
+
+    await Promise.all([...modelTasks, webDetectionTask]);
+
+    // ---- Reconcile: highest-confidence visual model result = VISUAL_BEST -------
+    let best: { name: string; product: string; type: string; conf: number | null } | null = null;
+    for (const r of visualResults) {
+      if (!r.product) continue;
+      const rConf = r.conf ?? -1;
+      const bConf = best?.conf ?? -1;
+      if (!best || rConf > bConf) best = r;
+    }
+
+    if (!best) {
+      console.log(`[visual] item=${itemId} VISUAL_BEST none (no parseable vision-model product)`);
+      console.log(`[visual] item=${itemId} FINAL_COMBINED id="" (source=visual, gated at ${CONFIDENCE_GATE} -> no visual result to compare against [resolve] FINAL lines)`);
+      return;
+    }
+
+    const visualBestId = [best.product, best.type].filter(Boolean).join(' — ');
+    const bestConfLog = best.conf === null ? 'n/a' : best.conf;
+    console.log(
+      `[visual] item=${itemId} VISUAL_BEST product="${visualBestId}" conf=${bestConfLog} via=${best.name}`,
+    );
+
+    // The text-grounded best lives in runGroundedResolution's scope (logged as [resolve] ... FINAL
+    // for the same item). We surface VISUAL_BEST clearly here so it can be compared against those
+    // [resolve] FINAL lines; the gate note documents how the combined decision would be made.
+    const passesGate = best.conf !== null && best.conf >= CONFIDENCE_GATE && !!best.product;
+    console.log(
+      `[visual] item=${itemId} FINAL_COMBINED id="${visualBestId}" ` +
+        `(source=visual, gated at ${CONFIDENCE_GATE} -> ${passesGate ? 'grounded' : 'visual-fallback shapeGuess'}; ` +
+        `compare against [resolve] item=${itemId} FINAL lines for the text-grounded best)`,
+    );
+  } catch (err: any) {
+    // Absolutely never let the visual pass affect the caller.
+    console.log(`[visual] item=${itemId} HARNESS ERROR: ${shortErr(err)}`);
   }
 }
