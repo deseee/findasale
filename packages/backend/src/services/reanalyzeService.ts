@@ -95,12 +95,25 @@ export interface ReanalyzeResult {
  */
 export async function reanalyzeItem(
   itemId: string,
-  opts: { apply: boolean; syncEbay?: boolean; bakeoff?: boolean; resolveOnly?: boolean } = { apply: false },
+  opts: { apply: boolean; syncEbay?: boolean; bakeoff?: boolean; resolveOnly?: boolean; testImageUrls?: string[] } = { apply: false },
 ): Promise<ReanalyzeResult | ReanalyzeError> {
-  const apply = opts.apply === true;
+  // Test-image override: analyze arbitrary external image URLs instead of the item's
+  // stored photos (stress-testing identification on hard examples). When supplied, we
+  // FORCE apply=false so a test-image run can NEVER write fields back to the item.
+  const rawTestUrls = Array.isArray(opts.testImageUrls) ? opts.testImageUrls : [];
+  const testImageUrls = rawTestUrls
+    .filter((u): u is string => typeof u === 'string' && /^https?:\/\//i.test(u.trim()))
+    .map((u) => u.trim())
+    .slice(0, 6);
+  const usingTestImages = testImageUrls.length > 0;
+
+  const apply = usingTestImages ? false : opts.apply === true;
   const syncEbay = opts.syncEbay !== false;
   const bakeoff = opts.bakeoff === true;
   const resolveOnly = opts.resolveOnly === true;
+  if (usingTestImages) {
+    console.log(`[resolve] item=${itemId} USING testImageUrls (${testImageUrls.length} images) — apply forced false`);
+  }
 
   const item = await prisma.item.findUnique({
     where: { id: itemId },
@@ -134,18 +147,23 @@ export async function reanalyzeItem(
   });
 
   if (!item) return { ok: false, code: 'ITEM_NOT_FOUND' };
-  if (!item.photoUrls || item.photoUrls.length === 0) return { ok: false, code: 'NO_PHOTOS' };
+  if (!usingTestImages && (!item.photoUrls || item.photoUrls.length === 0)) return { ok: false, code: 'NO_PHOTOS' };
 
-  // Download up to the first 5 photos into Buffers (skip failures).
+  // Download images into Buffers (skip failures). When test-image URLs are supplied,
+  // download THOSE (capped at 6) instead of the item's stored photos; otherwise use the
+  // first 5 stored photoUrls. Only http(s) URLs are fetched (non-http already filtered above).
+  const sourceUrls = usingTestImages ? testImageUrls : item.photoUrls.slice(0, 5);
   const buffers: Buffer[] = [];
   const mimeTypes: string[] = [];
-  for (const url of item.photoUrls.slice(0, 5)) {
+  for (const url of sourceUrls) {
+    if (!/^https?:\/\//i.test(url)) continue;
     try {
       const resp = await axios.get(url, { responseType: 'arraybuffer', timeout: 10000 });
+      const contentType = String(resp.headers?.['content-type'] || '').split(';')[0].trim();
       buffers.push(Buffer.from(resp.data));
-      mimeTypes.push('image/jpeg');
+      mimeTypes.push(contentType.startsWith('image/') ? contentType : 'image/jpeg');
     } catch (err: any) {
-      console.error(`[Reanalyze] photo download failed (${url}):`, err?.message || err);
+      console.error(`[Reanalyze] image download failed (${url}):`, err?.message || err);
     }
   }
   if (buffers.length === 0) return { ok: false, code: 'PHOTO_DOWNLOAD_FAILED' };

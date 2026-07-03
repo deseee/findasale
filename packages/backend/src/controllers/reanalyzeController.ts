@@ -91,7 +91,17 @@ export const reanalyzeItemForOrganizer = async (req: AuthRequest, res: Response)
     // the bake-off run against ANY item — including published live listings — safely.
     const dryRun = req.query?.dryRun === '1' || req.body?.dryRun === true;
 
-    const result = await reanalyzeItem(id, { apply: !dryRun, bakeoff, resolveOnly });
+    // Test-image override (observability-only): analyze arbitrary external image URLs
+    // instead of this item's stored photos, for stress-testing identification on hard
+    // examples. The item id is still used for auth/ownership; the pipeline forces
+    // apply=false internally whenever test URLs are supplied, so nothing is written.
+    const testImageUrls = Array.isArray(req.body?.testImageUrls)
+      ? (req.body.testImageUrls as unknown[])
+          .filter((u): u is string => typeof u === 'string')
+          .slice(0, 6)
+      : undefined;
+
+    const result = await reanalyzeItem(id, { apply: !dryRun, bakeoff, resolveOnly, testImageUrls });
 
     if (!result.ok) {
       switch (result.code) {
