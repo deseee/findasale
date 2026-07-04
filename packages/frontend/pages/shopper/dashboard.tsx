@@ -546,7 +546,7 @@ const ShopperDashboard = () => {
                 className={`pb-2 font-medium whitespace-nowrap transition-colors ${
                   activeTab === tab.id
                     ? 'border-b-2 border-amber-600 text-amber-600'
-                    : 'text-warm-600 dark:text-warm-400 hover:text-warm-900'
+                    : 'text-warm-600 dark:text-warm-400 hover:text-warm-900 dark:hover:text-warm-200'
                 }`}
               >
                 {tab.label}

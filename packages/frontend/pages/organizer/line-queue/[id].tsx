@@ -35,10 +35,10 @@ const STATUS_LABEL: Record<LineEntry['status'], string> = {
   CANCELLED: 'Left',
 };
 const STATUS_COLOR: Record<LineEntry['status'], string> = {
-  WAITING: 'bg-amber-50 text-amber-800',
-  NOTIFIED: 'bg-blue-50 text-blue-800',
-  ENTERED: 'bg-green-50 text-green-700',
-  CANCELLED: 'bg-warm-100 text-warm-500',
+  WAITING: 'bg-amber-50 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300',
+  NOTIFIED: 'bg-blue-50 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
+  ENTERED: 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300',
+  CANCELLED: 'bg-warm-100 text-warm-500 dark:bg-gray-800 dark:text-gray-500',
 };
 
 const LineQueuePage = () => {
