@@ -281,6 +281,9 @@ interface SaleDetailPageProps {
   initialData?: InitialSaleData | null;
   eventSeriesData?: EventSeriesData | null;
   noindex?: boolean;
+  // S1071: Google unavailable_after date (YYYY-MM-DD) — endDate + 30 days for PUBLISHED
+  // sales with a real end date. Null for ENDED (noindex instead) and permanent storefronts.
+  unavailableAfter?: string | null;
 }
 
 /**
@@ -331,7 +334,7 @@ const GuestSaleAlert: React.FC<{ saleTitle: string; saleCity: string }> = ({ sal
   );
 };
 
-const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, eventSeriesData, noindex }) => {
+const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, eventSeriesData, noindex, unavailableAfter }) => {
   const router = useRouter();
   const { id } = router.query;
   const { user } = useAuth();
@@ -832,10 +835,17 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
     return (
       <>
         {ogHead}
-        {/* Bug #449/#457: noindex for ended/private sales — must render SSR so crawlers see it */}
+        {/* Bug #449/#457 + S1071: noindex for ALL ENDED sales — must render SSR so crawlers see it */}
         {noindex && (
           <Head>
             <meta name="robots" content="noindex" />
+          </Head>
+        )}
+        {/* S1071 staged deindex: PUBLISHED sales carry unavailable_after (endDate + 30d) so
+            Google drops the page naturally after the event closes — no 410s, no redirects. */}
+        {!noindex && unavailableAfter && (
+          <Head>
+            <meta name="robots" content={`unavailable_after: ${unavailableAfter}`} />
           </Head>
         )}
         {/* Bug #432: JSON-LD from SSR initialData — rendered server-side so crawlers receive it */}
@@ -1064,10 +1074,17 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
         ) : null
       )}
 
-      {/* Bug #449/#457: noindex for ended/private scraped sales — rendered in both SSR and CSR paths */}
+      {/* Bug #449/#457 + S1071: noindex for ALL ENDED sales — rendered in both SSR and CSR paths */}
       {noindex && (
         <Head>
           <meta name="robots" content="noindex" />
+        </Head>
+      )}
+
+      {/* S1071 staged deindex: unavailable_after (endDate + 30d) for PUBLISHED sales */}
+      {!noindex && unavailableAfter && (
+        <Head>
+          <meta name="robots" content={`unavailable_after: ${unavailableAfter}`} />
         </Head>
       )}
 
@@ -2549,7 +2566,7 @@ export const getStaticProps: GetStaticProps<SaleDetailPageProps> = async ({ para
 
   if (!apiUrl) {
     return {
-      props: { ogData: null, initialData: null, eventSeriesData: null, noindex: false },
+      props: { ogData: null, initialData: null, eventSeriesData: null, noindex: false, unavailableAfter: null },
       revalidate: 3600,
     };
   }
@@ -2566,7 +2583,7 @@ export const getStaticProps: GetStaticProps<SaleDetailPageProps> = async ({ para
         return { notFound: true, revalidate: 86400 };
       }
       return {
-        props: { ogData: null, initialData: null, eventSeriesData: null, noindex: false },
+        props: { ogData: null, initialData: null, eventSeriesData: null, noindex: false, unavailableAfter: null },
         revalidate: 3600,
       };
     }
@@ -2622,10 +2639,23 @@ export const getStaticProps: GetStaticProps<SaleDetailPageProps> = async ({ para
       },
     };
 
-    // GEO Phase 11a: suppress indexing of ENDED scraped (unclaimed) sale pages
-    const isScrapedSale = Boolean(sale.sourceUrl);
+    // S1071 staged deindex policy (supersedes GEO Phase 11a scraped-only rule):
+    //  - ANY ENDED sale (scraped or organic) → noindex. ~70K of 85K scraped sales are
+    //    ENDED zero-item event pages; keeping them indexable wastes crawl budget.
+    //  - PUBLISHED sales with a real end date → unavailable_after at endDate + 30 days,
+    //    so Google drops the page naturally after the event closes (no 410s per board).
+    //    Permanent storefronts (isOngoing / RETAIL) never expire → no directive.
     const isEnded = sale.status === 'ENDED';
-    const noindex = isScrapedSale && isEnded;
+    const noindex = isEnded;
+    let unavailableAfter: string | null = null;
+    const isPermanentStorefront = sale.isOngoing === true || sale.saleType === 'RETAIL';
+    if (!isEnded && sale.status === 'PUBLISHED' && sale.endDate && !isPermanentStorefront) {
+      const dropDate = new Date(sale.endDate);
+      if (!Number.isNaN(dropDate.getTime())) {
+        dropDate.setDate(dropDate.getDate() + 30);
+        unavailableAfter = dropDate.toISOString().slice(0, 10); // ISO 8601 date — accepted by Google
+      }
+    }
 
     // #450: Fetch EventSeries data for recurring organizers
     let eventSeriesData: EventSeriesData | null = null;
@@ -2655,14 +2685,14 @@ export const getStaticProps: GetStaticProps<SaleDetailPageProps> = async ({ para
     }
 
     return {
-      props: { ogData, initialData, eventSeriesData, noindex },
+      props: { ogData, initialData, eventSeriesData, noindex, unavailableAfter },
       revalidate: 86400,
     };
   } catch (err) {
     // Network/timeout/parse failure — render the shell, let the client fetch and ISR retry
    
     return {
-      props: { ogData: null, initialData: null, eventSeriesData: null, noindex: false },
+      props: { ogData: null, initialData: null, eventSeriesData: null, noindex: false, unavailableAfter: null },
       revalidate: 3600,
     };
   }

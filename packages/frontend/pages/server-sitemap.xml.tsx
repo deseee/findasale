@@ -68,54 +68,62 @@ export async function getServerSideProps(ctx: any) {
         }))
       : [];
 
-    // Fetch organizer profile pages for sitemap
-    let organizerUrls: any[] = [];
-    try {
-      const organizersResponse = await api.get('/leaderboard/organizers');
-      const organizers = organizersResponse.data.leaderboard || organizersResponse.data || [];
-      organizerUrls = organizers
-        .filter((org: any) => org.organizerId)
-        .map((org: any) => ({
-          loc: `${baseUrl}/organizers/${org.organizerId}`,
-          lastmod: STATIC_LASTMOD,
-          changefreq: 'weekly',
-          priority: 0.7,
-        }));
-    } catch {
-      // Endpoint may fail gracefully — organizer URLs are optional
-    }
+    // S1071 policy: /organizers/[id] profile stubs REMOVED from the sitemap.
+    // They were the single largest GSC crawled-not-indexed class (~60 of 226) —
+    // thin leaderboard-derived pages. Do not re-add without board sign-off.
 
-    // Fetch canonical city slugs (e.g. "grand-rapids-mi") from dedicated endpoint.
-    // Falls back to empty array if the endpoint isn't available yet.
-    let canonicalCitySlugs: string[] = [];
+    // Fetch canonical city slugs (e.g. "grand-rapids-mi") + per-type ACTIVE sale counts.
+    // S1071 crawl-budget policy: bare /city/[slug] hubs are ALWAYS included (all 200), but
+    // every city×type variant (/city/[slug]/[category], /this-weekend/, /estate-sales/,
+    // /yard-sales/, /auctions/, /flea-markets/) is emitted ONLY when that city has >= 3
+    // ACTIVE sales of the relevant type (this-weekend gate: >= 3 active of ANY type).
+    // Rationale: 200 cities × 11 variants = 2,200 mostly-empty URLs were the dominant
+    // GSC discovered-never-crawled class. Do not re-emit ungated variants.
+    type CityRow = { slug: string; activeCount: number; activeByType: Record<string, number> };
+    let cityRows: CityRow[] = [];
     try {
       const citySlugsResponse = await api.get('/sales/city-slugs');
       const raw = citySlugsResponse.data.slugs || citySlugsResponse.data || [];
-      canonicalCitySlugs = raw.map((item: any) => typeof item === 'string' ? item : item.slug).filter(Boolean);
+      cityRows = raw
+        .map((item: any) =>
+          typeof item === 'string'
+            ? { slug: item, activeCount: 0, activeByType: {} }
+            : {
+                slug: item.slug,
+                activeCount: Number(item.activeCount) || 0,
+                activeByType: item.activeByType || {},
+              }
+        )
+        .filter((row: CityRow) => Boolean(row.slug));
     } catch {
-      // Endpoint may not exist yet — skip canonical city+category URLs gracefully
+      // Endpoint may not exist yet — skip city URLs gracefully
     }
 
-    const SALE_CATEGORIES = [
-      'estate-sales',
-      'yard-sales',
-      'auctions',
-      'flea-markets',
-      'consignment',
-    ];
+    const MIN_ACTIVE_SALES_FOR_TYPE_PAGE = 3;
+    // Category slug → Sale.saleType enum (must match backend /sales/by-city categoryMap)
+    const SALE_CATEGORY_TYPE_MAP: Record<string, string> = {
+      'estate-sales': 'ESTATE',
+      'yard-sales': 'YARD',
+      'auctions': 'AUCTION',
+      'flea-markets': 'FLEA_MARKET',
+      'consignment': 'RETAIL',
+    };
+    const hasActiveOfType = (row: CityRow, saleType: string): boolean =>
+      (Number(row.activeByType?.[saleType]) || 0) >= MIN_ACTIVE_SALES_FOR_TYPE_PAGE;
 
-    // City+category URLs from canonical slugs (proper city-state format)
+    // Bare city hubs (all) + gated city+category URLs
     const cityCategoryUrls: any[] = [];
-    for (const slug of canonicalCitySlugs) {
+    for (const row of cityRows) {
       cityCategoryUrls.push({
-        loc: `${baseUrl}/city/${slug}`,
+        loc: `${baseUrl}/city/${row.slug}`,
         lastmod: STATIC_LASTMOD,
         changefreq: 'daily',
         priority: 0.75, // lowered from 0.8 — preserve crawl budget for core nav pages
       });
-      for (const category of SALE_CATEGORIES) {
+      for (const [category, saleType] of Object.entries(SALE_CATEGORY_TYPE_MAP)) {
+        if (!hasActiveOfType(row, saleType)) continue;
         cityCategoryUrls.push({
-          loc: `${baseUrl}/city/${slug}/${category}`,
+          loc: `${baseUrl}/city/${row.slug}/${category}`,
           lastmod: STATIC_LASTMOD,
           changefreq: 'daily',
           priority: 0.7,
@@ -123,49 +131,55 @@ export async function getServerSideProps(ctx: any) {
       }
     }
 
-    // /this-weekend/{city-slug} — high-intent "this weekend" discovery pages
-    const thisWeekendUrls = canonicalCitySlugs.map((slug: string) => ({
-      loc: `${baseUrl}/this-weekend/${slug}`,
-      lastmod: STATIC_LASTMOD,
-      changefreq: 'daily',
-      priority: 0.7, // lowered from 0.8 — reduce crawl budget drain on GEO variants
-    }));
+    // /this-weekend/{city-slug} — gated on >= 3 active sales of ANY type
+    const thisWeekendUrls = cityRows
+      .filter((row) => row.activeCount >= MIN_ACTIVE_SALES_FOR_TYPE_PAGE)
+      .map((row) => ({
+        loc: `${baseUrl}/this-weekend/${row.slug}`,
+        lastmod: STATIC_LASTMOD,
+        changefreq: 'daily',
+        priority: 0.7, // lowered from 0.8 — reduce crawl budget drain on GEO variants
+      }));
 
-    // /estate-sales/{city-slug} — dedicated estate-sales city landing pages (SEO3)
-    // Targets GSC cluster: "estate sales [city]" / "estate sale [city]"
-    const estateSalesUrls = canonicalCitySlugs.map((slug: string) => ({
-      loc: `${baseUrl}/estate-sales/${slug}`,
-      lastmod: STATIC_LASTMOD,
-      changefreq: 'daily',
-      priority: 0.75, // lower from 0.85 — was outcompeting core nav pages for crawl budget
-    }));
+    // /estate-sales/{city-slug} — gated on >= 3 active ESTATE sales (SEO3)
+    const estateSalesUrls = cityRows
+      .filter((row) => hasActiveOfType(row, 'ESTATE'))
+      .map((row) => ({
+        loc: `${baseUrl}/estate-sales/${row.slug}`,
+        lastmod: STATIC_LASTMOD,
+        changefreq: 'daily',
+        priority: 0.75, // lower from 0.85 — was outcompeting core nav pages for crawl budget
+      }));
 
-    // /yard-sales/{city-slug} — dedicated yard-sales city landing pages
-    // Targets GSC cluster: "yard sales [city]" / "garage sales [city]"
-    const yardSalesUrls = canonicalCitySlugs.map((slug: string) => ({
-      loc: `${baseUrl}/yard-sales/${slug}`,
-      lastmod: STATIC_LASTMOD,
-      changefreq: 'daily',
-      priority: 0.70,
-    }));
+    // /yard-sales/{city-slug} — gated on >= 3 active YARD sales
+    const yardSalesUrls = cityRows
+      .filter((row) => hasActiveOfType(row, 'YARD'))
+      .map((row) => ({
+        loc: `${baseUrl}/yard-sales/${row.slug}`,
+        lastmod: STATIC_LASTMOD,
+        changefreq: 'daily',
+        priority: 0.70,
+      }));
 
-    // /auctions/{city-slug} — dedicated auctions city landing pages
-    // Targets GSC cluster: "auctions in [city]" / "auction houses [city]"
-    const auctionsUrls = canonicalCitySlugs.map((slug: string) => ({
-      loc: `${baseUrl}/auctions/${slug}`,
-      lastmod: STATIC_LASTMOD,
-      changefreq: 'daily',
-      priority: 0.70,
-    }));
+    // /auctions/{city-slug} — gated on >= 3 active AUCTION sales
+    const auctionsUrls = cityRows
+      .filter((row) => hasActiveOfType(row, 'AUCTION'))
+      .map((row) => ({
+        loc: `${baseUrl}/auctions/${row.slug}`,
+        lastmod: STATIC_LASTMOD,
+        changefreq: 'daily',
+        priority: 0.70,
+      }));
 
-    // /flea-markets/{city-slug} — dedicated flea markets city landing pages
-    // Targets GSC cluster: "flea markets in [city]" / "flea market near me [city]"
-    const fleaMarketsUrls = canonicalCitySlugs.map((slug: string) => ({
-      loc: `${baseUrl}/flea-markets/${slug}`,
-      lastmod: STATIC_LASTMOD,
-      changefreq: 'daily',
-      priority: 0.70,
-    }));
+    // /flea-markets/{city-slug} — gated on >= 3 active FLEA_MARKET sales
+    const fleaMarketsUrls = cityRows
+      .filter((row) => hasActiveOfType(row, 'FLEA_MARKET'))
+      .map((row) => ({
+        loc: `${baseUrl}/flea-markets/${row.slug}`,
+        lastmod: STATIC_LASTMOD,
+        changefreq: 'daily',
+        priority: 0.70,
+      }));
 
     // Generate neighborhood URLs
     const neighborhoodUrls = neighborhoods.map((neighborhood: string) => ({
@@ -192,17 +206,44 @@ export async function getServerSideProps(ctx: any) {
     }));
 
     // Generate guide URLs (ADR-075 SEO Content Moat)
+    // S1071 quality gate: include only (a) all 50 pricing-guides (median 422 words) and
+    // (b) how-to guides with >= 350 words of real content. The other ~350 how-to entries
+    // are ~160-word city-template stubs — the GSC crawled-rejected /guide/ class.
+    // Word count is computed deterministically from data/seo-pages/index.json at
+    // request time (module require is cached), so regenerating guides updates the gate.
     let guideUrls: any[] = [];
     try {
-      const slugs = require('../data/seo-pages/slugs.json') as string[];
-      guideUrls = slugs.map((slug: string) => ({
-        loc: `${baseUrl}/guide/${slug}`,
-        lastmod: '2026-05-01',
-        changefreq: 'weekly',
-        priority: 0.7,
-      }));
+      const guideIndex = require('../data/seo-pages/index.json') as Array<{
+        slug: string;
+        type?: string;
+        content?: unknown;
+      }>;
+      const countWords = (node: unknown): number => {
+        if (typeof node === 'string') return node.split(/\s+/).filter(Boolean).length;
+        if (Array.isArray(node)) return node.reduce((sum: number, child) => sum + countWords(child), 0);
+        if (node && typeof node === 'object') {
+          return Object.values(node as Record<string, unknown>).reduce(
+            (sum: number, child) => sum + countWords(child),
+            0
+          );
+        }
+        return 0;
+      };
+      const MIN_HOWTO_WORDS = 350;
+      guideUrls = guideIndex
+        .filter(
+          (guide) =>
+            guide.type === 'pricing-guide' ||
+            (guide.type === 'how-to' && countWords(guide.content) >= MIN_HOWTO_WORDS)
+        )
+        .map((guide) => ({
+          loc: `${baseUrl}/guide/${guide.slug}`,
+          lastmod: '2026-05-01',
+          changefreq: 'weekly',
+          priority: 0.7,
+        }));
     } catch (err) {
-      console.error('[sitemap] Could not load guide slugs:', err);
+      console.error('[sitemap] Could not load guide index:', err);
     }
 
     // Category pages (hardcoded item categories)
@@ -248,7 +289,6 @@ export async function getServerSideProps(ctx: any) {
     const fields = [
       ...staticUrls,
       ...saleUrls,
-      ...organizerUrls,
       ...cityCategoryUrls,
       ...thisWeekendUrls,
       ...estateSalesUrls,

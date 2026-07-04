@@ -329,12 +329,42 @@ router.get('/city-slugs', async (req, res) => {
       LIMIT 200
     `;
 
-    const slugs = rows.map((r) => ({
-      slug: r.slug.replace(/\./g, ''),
-      city: r.city,
-      state: r.state,
-      count: Number(r.count),
-    }));
+    // S1071 crawl-budget: per-saleType ACTIVE counts per city, so the sitemap can emit
+    // city×type URLs only where real inventory exists. "Active" mirrors /sales/by-city:
+    // status='PUBLISHED' AND endDate >= NOW(). saleType values per schema.prisma:
+    // ESTATE | YARD | AUCTION | FLEA_MARKET | RETAIL.
+    const activeRows = await prisma.$queryRaw<Array<{ city: string; state: string; saleType: string; count: bigint }>>`
+      SELECT city, state, "saleType", COUNT(*) AS count
+      FROM "Sale"
+      WHERE status = 'PUBLISHED'
+        AND "endDate" >= NOW()
+        AND city IS NOT NULL
+        AND state IS NOT NULL
+      GROUP BY city, state, "saleType"
+    `;
+
+    const activeByCity = new Map<string, { total: number; byType: Record<string, number> }>();
+    for (const r of activeRows) {
+      const key = `${r.city.toLowerCase()}|${r.state.toLowerCase()}`;
+      const entry = activeByCity.get(key) ?? { total: 0, byType: {} };
+      const n = Number(r.count);
+      entry.total += n;
+      entry.byType[r.saleType] = (entry.byType[r.saleType] ?? 0) + n;
+      activeByCity.set(key, entry);
+    }
+
+    const slugs = rows.map((r) => {
+      const active = activeByCity.get(`${r.city.toLowerCase()}|${r.state.toLowerCase()}`);
+      return {
+        slug: r.slug.replace(/\./g, ''),
+        city: r.city,
+        state: r.state,
+        count: Number(r.count),
+        // S1071 additive fields — existing slug/city/state/count consumers are unaffected
+        activeCount: active?.total ?? 0,
+        activeByType: active?.byType ?? {},
+      };
+    });
 
     return res.json({ slugs, total: slugs.length });
   } catch (err) {

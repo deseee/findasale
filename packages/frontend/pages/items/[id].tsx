@@ -516,6 +516,12 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
     return (
       <>
         {ogHead}
+      {/* S1071: /items/[id] is unconditionally noindex — 44 of 226 GSC crawled-rejected
+          URLs were item leaf pages; board approved removing the class from the index.
+          Sitemap already excludes items. Pages stay fully functional for users. */}
+      <Head>
+        <meta name="robots" content="noindex" />
+      </Head>
         <div className="p-6">
           <Skeleton className="h-96 mb-6" />
           <Skeleton className="h-12 mb-4" />
@@ -584,6 +590,13 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
           canonicalUrl={`https://finda.sale/items/${item.id}`}
         />
       )}
+
+      {/* S1071: /items/[id] is unconditionally noindex — 44 of 226 GSC crawled-rejected
+          URLs were item leaf pages; board approved removing the class from the index.
+          Sitemap already excludes items. Pages stay fully functional for users. */}
+      <Head>
+        <meta name="robots" content="noindex" />
+      </Head>
 
       {/* Product schema.org + Offer JSON-LD */}
       {item && (
