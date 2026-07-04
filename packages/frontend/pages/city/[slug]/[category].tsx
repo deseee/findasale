@@ -10,6 +10,9 @@
 import { GetStaticProps, GetStaticPaths } from 'next';
 import Head from 'next/head';
 import Link from 'next/link';
+import { computeSaleStats, buildLiveDataFaqs } from '@/lib/seo/cityStats';
+import { buildFaqJsonLd } from '@/lib/seo/cityData';
+import CityLiveStats from '@/components/CityLiveStats';
 
 // Category slug → display label + saleType enum
 const CATEGORY_META: Record<string, { label: string; plural: string; saleType: string }> = {
@@ -46,6 +49,7 @@ interface CityCategoryPageProps {
   sales: SaleListing[];
   totalCount: number;
   allCategories: string[];
+  activeByType: Record<string, number>;
 }
 
 export default function CityCategoryPage({
@@ -58,6 +62,7 @@ export default function CityCategoryPage({
   sales,
   totalCount,
   allCategories,
+  activeByType,
 }: CityCategoryPageProps) {
   const title = `${categoryPlural} in ${cityName}, ${cityState} | FindA.Sale`;
   const description = `Browse ${totalCount} ${categoryPlural.toLowerCase()} in ${cityName}, ${cityState}. Find furniture, antiques, collectibles, and more on FindA.Sale.`;
@@ -112,6 +117,23 @@ export default function CityCategoryPage({
     ],
   };
 
+  // Live-data stats and FAQs, computed from real listings at build time.
+  // Scoped to this category within the city — currentTypeKey is the
+  // sale-type enum for this category, so the breakdown/FAQs cross-link
+  // to the OTHER sale types active in this city.
+  const currentTypeKey = CATEGORY_META[categorySlug]?.saleType ?? '';
+  const stats = computeSaleStats(sales);
+  const liveFaqs = buildLiveDataFaqs({
+    cityName,
+    stateCode: cityState,
+    typeSingular: categoryLabel.toLowerCase(),
+    typePlural: categoryPlural.toLowerCase(),
+    currentTypeKey,
+    stats,
+    activeByType,
+  });
+  const faqJsonLd = buildFaqJsonLd(liveFaqs);
+
   return (
     <>
       <Head>
@@ -135,6 +157,12 @@ export default function CityCategoryPage({
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
         />
+        {liveFaqs.length > 0 && (
+          <script
+            type="application/ld+json"
+            dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }}
+          />
+        )}
       </Head>
 
       <main className="min-h-screen bg-white dark:bg-slate-900">
@@ -162,6 +190,16 @@ export default function CityCategoryPage({
               : `No ${categoryPlural.toLowerCase()} currently listed`}
           </p>
         </div>
+
+        {/* Live inventory stats, real counts from build-time data */}
+        <CityLiveStats
+          citySlug={citySlug}
+          cityName={cityName}
+          typePluralLabel={categoryPlural.toLowerCase()}
+          currentTypeKey={currentTypeKey}
+          stats={stats}
+          activeByType={activeByType}
+        />
 
         {/* Category filter tabs */}
         {allCategories.length > 1 && (
@@ -290,6 +328,37 @@ export default function CityCategoryPage({
             </div>
           )}
 
+          {/* FAQ section — answered from live listing data */}
+          {liveFaqs.length > 0 && (
+            <div className="mt-6">
+              <h2 className="text-lg font-semibold text-warm-900 dark:text-warm-100 mb-4">
+                Frequently Asked Questions About {categoryPlural} in {cityName}
+              </h2>
+              <div className="space-y-4">
+                {liveFaqs.map((faq, i) => (
+                  <details
+                    key={i}
+                    className="group border border-warm-200 dark:border-slate-700 rounded-xl overflow-hidden"
+                  >
+                    <summary className="flex justify-between items-center p-4 cursor-pointer list-none bg-warm-50 dark:bg-slate-800 hover:bg-warm-100 dark:hover:bg-slate-700 transition-colors">
+                      <span className="font-medium text-warm-900 dark:text-warm-100 text-sm pr-4">
+                        {faq.question}
+                      </span>
+                      <span className="flex-shrink-0 text-warm-400 dark:text-warm-500 group-open:rotate-180 transition-transform text-lg leading-none">
+                        ›
+                      </span>
+                    </summary>
+                    <div className="p-4 pt-0 bg-white dark:bg-slate-900">
+                      <p className="text-warm-600 dark:text-warm-400 text-sm leading-relaxed pt-3 border-t border-warm-100 dark:border-slate-700">
+                        {faq.answer}
+                      </p>
+                    </div>
+                  </details>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Claim CTA */}
           <div className="mt-12 p-6 bg-amber-50 dark:bg-amber-900/20 rounded-xl text-center border border-amber-200 dark:border-amber-800">
             <h2 className="text-lg font-semibold text-warm-900 dark:text-warm-100 mb-2">
@@ -340,6 +409,7 @@ export const getStaticProps: GetStaticProps<CityCategoryPageProps> = async ({ pa
   let sales: SaleListing[] = [];
   let totalCount = 0;
   let allCategories: string[] = [];
+  let activeByType: Record<string, number> = {};
 
   try {
     const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000/api';
@@ -356,6 +426,23 @@ export const getStaticProps: GetStaticProps<CityCategoryPageProps> = async ({ pa
     }
   } catch (err) {
     console.error(`[city/category] fetch error for ${citySlug}/${categorySlug}:`, err);
+  }
+
+  // Per-type active counts for this city (drives the live stats block and FAQs)
+  try {
+    const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000/api';
+    const res = await fetch(`${apiBaseUrl}/sales/city-slugs`);
+    if (res.ok) {
+      const data = await res.json();
+      const row = (data.slugs ?? []).find(
+        (r: { slug: string; activeByType?: Record<string, number> }) => r.slug === citySlug
+      );
+      if (row && row.activeByType && typeof row.activeByType === 'object') {
+        activeByType = row.activeByType;
+      }
+    }
+  } catch (err) {
+    console.error(`[city/category] city-slugs fetch error for ${citySlug}:`, err);
   }
 
   // Parse display city name + state from slug
@@ -377,6 +464,7 @@ export const getStaticProps: GetStaticProps<CityCategoryPageProps> = async ({ pa
       sales,
       totalCount,
       allCategories,
+      activeByType,
     },
     revalidate: 86400, // ISR: 24 hours
   };
