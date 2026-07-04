@@ -65,6 +65,7 @@ import { csrfTokenCookie, validateCsrfToken } from './middleware/csrf';
 import authRoutes from './routes/auth';
 import passkeyRoutes from './routes/passkey';
 import saleRoutes from './routes/sales';
+import companyRoutes from './routes/companies'; // #567: hire-intent company directory
 import itemRoutes from './routes/items';
 import favoriteRoutes from './routes/favorites';
 import userRoutes from './routes/users';
@@ -638,6 +639,7 @@ app.use('/api/geocode', geocodeRoutes);
 app.post('/api/upload/batch-analyze', requestTimeout(120000)); // AI batch analysis needs up to 2 min
 app.use('/api/upload', uploadRoutes);
 app.use('/api/organizers', organizerRoutes);
+app.use('/api/companies', companyRoutes); // #567: hire-intent company directory (SEO)
 app.use('/api/contact', contactLimiter, contactRoutes); // M3: dedicated contact spam limiter
 app.use('/api/push', pushRoutes);
 app.use('/api/feed', feedRoutes); // Phase 28: personalized activity feed

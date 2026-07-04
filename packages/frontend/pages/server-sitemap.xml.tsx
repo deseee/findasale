@@ -181,6 +181,27 @@ export async function getServerSideProps(ctx: any) {
         priority: 0.70,
       }));
 
+    // /companies/{city-slug} -- hire-intent company directory (#567).
+    // Gated server-side: /companies/city-slugs only returns cities with >= 3
+    // qualifying companies (PUBLISHED ESTATE/AUCTION organizers with a real
+    // business name). Re-gated here on companyCount >= 3 for safety. Follows
+    // the S1071 policy: no ungated GEO variants, STATIC_LASTMOD for template pages.
+    let companiesUrls: any[] = [];
+    try {
+      const companySlugsResponse = await api.get('/companies/city-slugs');
+      const rawCompanySlugs = companySlugsResponse.data.slugs || [];
+      companiesUrls = rawCompanySlugs
+        .filter((row: any) => Boolean(row.slug) && (Number(row.companyCount) || 0) >= 3)
+        .map((row: any) => ({
+          loc: `${baseUrl}/companies/${row.slug}`,
+          lastmod: STATIC_LASTMOD,
+          changefreq: 'weekly',
+          priority: 0.7,
+        }));
+    } catch {
+      // Endpoint may not be deployed yet -- skip company URLs gracefully
+    }
+
     // Generate neighborhood URLs
     const neighborhoodUrls = neighborhoods.map((neighborhood: string) => ({
       loc: `${baseUrl}/neighborhoods/${neighborhood}`,
@@ -295,6 +316,7 @@ export async function getServerSideProps(ctx: any) {
       ...yardSalesUrls,
       ...auctionsUrls,
       ...fleaMarketsUrls,
+      ...companiesUrls,
       ...neighborhoodUrls,
       ...zipUrls,
       ...tagUrls,

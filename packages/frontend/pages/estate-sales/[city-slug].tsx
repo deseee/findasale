@@ -27,6 +27,8 @@ import {
   buildSeoDescription,
   getNearbyLinks,
 } from '@/lib/seo/cityData';
+import { computeSaleStats, buildLiveDataFaqs } from '@/lib/seo/cityStats';
+import CityLiveStats from '@/components/CityLiveStats';
 
 // ---------------------------------------------------------------------------
 // Prerender list — build-time static generation
@@ -84,6 +86,7 @@ interface EstateSalesCityPageProps {
   faqs: FaqItem[];
   sales: SaleListing[];
   totalCount: number;
+  activeByType: Record<string, number>;
 }
 
 export default function EstateSalesCityPage({
@@ -94,6 +97,7 @@ export default function EstateSalesCityPage({
   faqs,
   sales,
   totalCount,
+  activeByType,
 }: EstateSalesCityPageProps) {
   const title = buildSeoTitle(cityName, cityState, totalCount);
   const description = buildSeoDescription(cityName, cityState, totalCount);
@@ -153,7 +157,19 @@ export default function EstateSalesCityPage({
     })),
   };
 
-  const faqJsonLd = buildFaqJsonLd(faqs);
+  // Live-data stats and FAQs, computed from real listings at build time
+  const stats = computeSaleStats(sales);
+  const liveFaqs = buildLiveDataFaqs({
+    cityName,
+    stateCode: cityState,
+    typeSingular: 'estate sale',
+    typePlural: 'estate sales',
+    currentTypeKey: 'ESTATE',
+    stats,
+    activeByType,
+  });
+  const allFaqs = [...liveFaqs, ...faqs];
+  const faqJsonLd = buildFaqJsonLd(allFaqs);
 
   return (
     <>
@@ -221,6 +237,16 @@ export default function EstateSalesCityPage({
             {' — '} updated daily
           </p>
         </div>
+
+        {/* Live inventory stats, real counts from build-time data */}
+        <CityLiveStats
+          citySlug={citySlug}
+          cityName={cityName}
+          typePluralLabel="estate sales"
+          currentTypeKey="ESTATE"
+          stats={stats}
+          activeByType={activeByType}
+        />
 
         {/* Related sale-type links */}
         <div className="max-w-5xl mx-auto px-4 pb-4">
@@ -410,7 +436,7 @@ export default function EstateSalesCityPage({
               Frequently Asked Questions About Estate Sales in {cityName}
             </h2>
             <div className="space-y-4">
-              {faqs.map((faq, i) => (
+              {allFaqs.map((faq, i) => (
                 <details
                   key={i}
                   className="group border border-warm-200 dark:border-slate-700 rounded-xl overflow-hidden"
@@ -499,6 +525,7 @@ export const getStaticProps: GetStaticProps<EstateSalesCityPageProps> = async ({
 
   let sales: SaleListing[] = [];
   let totalCount = 0;
+  let activeByType: Record<string, number> = {};
 
   try {
     const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000/api';
@@ -516,6 +543,23 @@ export const getStaticProps: GetStaticProps<EstateSalesCityPageProps> = async ({
     console.error(`[estate-sales/[city-slug]] getStaticProps fetch error for ${citySlug}:`, err);
   }
 
+  // Per-type active counts for this city (drives the stats block and FAQ 3)
+  try {
+    const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000/api';
+    const res = await fetch(`${apiBaseUrl}/sales/city-slugs`);
+    if (res.ok) {
+      const data = await res.json();
+      const row = (data.slugs ?? []).find(
+        (s: { slug: string; activeByType?: Record<string, number> }) => s.slug === citySlug
+      );
+      if (row && row.activeByType && typeof row.activeByType === 'object') {
+        activeByType = row.activeByType;
+      }
+    }
+  } catch (err) {
+    console.error(`[estate-sales/[city-slug]] city-slugs fetch error for ${citySlug}:`, err);
+  }
+
   return {
     props: {
       citySlug,
@@ -525,6 +569,7 @@ export const getStaticProps: GetStaticProps<EstateSalesCityPageProps> = async ({
       faqs,
       sales,
       totalCount,
+      activeByType,
     },
     revalidate: 86400, // ISR: 24 hours
   };

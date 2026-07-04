@@ -29,6 +29,8 @@ import {
   buildSeoDescription,
   getNearbyLinks,
 } from '@/lib/seo/cityData';
+import { computeSaleStats, buildLiveDataFaqs } from '@/lib/seo/cityStats';
+import CityLiveStats from '@/components/CityLiveStats';
 
 // ---------------------------------------------------------------------------
 // Prerender list — build-time static generation
@@ -87,6 +89,7 @@ interface FleaMarketsCityPageProps {
   faqs: FaqItem[];
   sales: SaleListing[];
   totalCount: number;
+  activeByType: Record<string, number>;
 }
 
 export default function FleaMarketsCityPage({
@@ -98,6 +101,7 @@ export default function FleaMarketsCityPage({
   faqs,
   sales,
   totalCount,
+  activeByType,
 }: FleaMarketsCityPageProps) {
   const title = buildSeoTitle(cityName, cityState, totalCount, 'Flea Markets');
   const description = buildSeoDescription(cityName, cityState, totalCount, 'flea markets');
@@ -157,7 +161,19 @@ export default function FleaMarketsCityPage({
     })),
   };
 
-  const faqJsonLd = buildFaqJsonLd(faqs);
+  // Live-data stats and FAQs, computed from real listings at build time
+  const stats = computeSaleStats(sales);
+  const liveFaqs = buildLiveDataFaqs({
+    cityName,
+    stateCode: cityState,
+    typeSingular: 'flea market',
+    typePlural: 'flea markets',
+    currentTypeKey: 'FLEA_MARKET',
+    stats,
+    activeByType,
+  });
+  const allFaqs = [...liveFaqs, ...faqs];
+  const faqJsonLd = buildFaqJsonLd(allFaqs);
 
   return (
     <>
@@ -225,6 +241,16 @@ export default function FleaMarketsCityPage({
             {' — '} updated daily
           </p>
         </div>
+
+        {/* Live inventory stats, real counts from build-time data */}
+        <CityLiveStats
+          citySlug={citySlug}
+          cityName={cityName}
+          typePluralLabel="flea markets"
+          currentTypeKey="FLEA_MARKET"
+          stats={stats}
+          activeByType={activeByType}
+        />
 
         {/* Related sale-type links */}
         <div className="max-w-5xl mx-auto px-4 pb-4">
@@ -414,7 +440,7 @@ export default function FleaMarketsCityPage({
               Frequently Asked Questions About Flea Markets in {cityName}
             </h2>
             <div className="space-y-4">
-              {faqs.map((faq, i) => (
+              {allFaqs.map((faq, i) => (
                 <details
                   key={i}
                   className="group border border-warm-200 dark:border-slate-700 rounded-xl overflow-hidden"
@@ -504,6 +530,7 @@ export const getStaticProps: GetStaticProps<FleaMarketsCityPageProps> = async ({
 
   let sales: SaleListing[] = [];
   let totalCount = 0;
+  let activeByType: Record<string, number> = {};
 
   try {
     const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000/api';
@@ -521,6 +548,23 @@ export const getStaticProps: GetStaticProps<FleaMarketsCityPageProps> = async ({
     console.error(`[flea-markets/[city-slug]] getStaticProps fetch error for ${citySlug}:`, err);
   }
 
+  // Per-type active counts for this city (drives the stats block and FAQ 3)
+  try {
+    const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000/api';
+    const res = await fetch(`${apiBaseUrl}/sales/city-slugs`);
+    if (res.ok) {
+      const data = await res.json();
+      const row = (data.slugs ?? []).find(
+        (s: { slug: string; activeByType?: Record<string, number> }) => s.slug === citySlug
+      );
+      if (row && row.activeByType && typeof row.activeByType === 'object') {
+        activeByType = row.activeByType;
+      }
+    }
+  } catch (err) {
+    console.error(`[flea-markets/[city-slug]] city-slugs fetch error for ${citySlug}:`, err);
+  }
+
   return {
     props: {
       citySlug,
@@ -531,6 +575,7 @@ export const getStaticProps: GetStaticProps<FleaMarketsCityPageProps> = async ({
       faqs,
       sales,
       totalCount,
+      activeByType,
     },
     revalidate: 86400, // ISR: 24 hours
   };

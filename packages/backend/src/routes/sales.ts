@@ -80,7 +80,7 @@ const RETAIL_CLEAN_SUFFIXES = new Set([
 // Non-resale business keywords — suppress any RETAIL title containing these terms.
 // Catches residual junk inside otherwise-clean categories (e.g. dental center in Antique Mall).
 // Audit ref: §2 — heuristic blocklist used to classify 1,312 junk rows.
-const RETAIL_JUNK_KEYWORDS = [
+export const RETAIL_JUNK_KEYWORDS = [ // exported for #567 companyDirectoryController
   'real estate', 'realty', 'realtor', 'bienes raices',
   'brewing', 'brewery', 'brew',
   'barber', 'barbershop',

@@ -28,6 +28,12 @@ interface GuideContent {
   cta: string;
 }
 
+interface RelatedGuide {
+  slug: string;
+  title: string;
+  type: 'how-to' | 'pricing-guide';
+}
+
 interface GuidePageProps {
   slug: string;
   title: string;
@@ -42,6 +48,7 @@ interface GuidePageProps {
   metro: string;
   content: GuideContent;
   updatedAt: string;
+  relatedGuides: RelatedGuide[];
 }
 
 export default function GuidePage({
@@ -55,6 +62,7 @@ export default function GuidePage({
   state,
   content,
   updatedAt,
+  relatedGuides,
 }: GuidePageProps) {
   const canonicalUrl = `https://finda.sale/guide/${slug}`;
 
@@ -180,19 +188,19 @@ export default function GuidePage({
               Learn More
             </h3>
             <ul className="space-y-2 text-warm-700 dark:text-warm-300">
+              {(relatedGuides || []).map((guide) => (
+                <li key={guide.slug}>
+                  <Link
+                    href={`/guide/${guide.slug}`}
+                    className="text-amber-600 dark:text-amber-400 hover:underline"
+                  >
+                    {guide.title}
+                  </Link>
+                </li>
+              ))}
               <li>
-                <Link href="/about" className="text-amber-600 dark:text-amber-400 hover:underline">
-                  About FindA.Sale
-                </Link>
-              </li>
-              <li>
-                <Link href="/contact" className="text-amber-600 dark:text-amber-400 hover:underline">
-                  Contact & Support
-                </Link>
-              </li>
-              <li>
-                <Link href="/" className="text-amber-600 dark:text-amber-400 hover:underline">
-                  Browse All Sales
+                <Link href="/blog" className="text-amber-600 dark:text-amber-400 hover:underline">
+                  Read the FindA.Sale Blog
                 </Link>
               </li>
             </ul>
@@ -226,6 +234,62 @@ export async function getStaticPaths(): Promise<GetStaticPathsResult> {
   }
 }
 
+type GuideIndexEntry = Omit<GuidePageProps, 'relatedGuides'>;
+
+// Related guide selection.
+// Relevance by shared title/slug keywords with a same-type bonus. Ties are
+// broken by a deterministic hash of the slug pair so links spread across the
+// whole library instead of concentrating on the same few pages.
+const GUIDE_STOPWORDS = new Set([
+  'the', 'and', 'for', 'how', 'much', 'what', 'your', 'you', 'with', 'that',
+  'guide', 'pricing', 'prices', 'price', 'worth', 'values', 'value', '2026',
+  'estate', 'sale', 'sales',
+]);
+
+function guideTokens(entry: { slug: string; title: string }): Set<string> {
+  const raw = `${entry.title} ${entry.slug}`.toLowerCase();
+  const words = raw
+    .split(/[^a-z0-9]+/)
+    .filter((w) => w.length >= 3 && !GUIDE_STOPWORDS.has(w));
+  return new Set(words);
+}
+
+function hashPair(a: string, b: string): number {
+  const s = `${a}|${b}`;
+  let h = 5381;
+  for (let i = 0; i < s.length; i++) {
+    h = ((h << 5) + h + s.charCodeAt(i)) >>> 0;
+  }
+  return h;
+}
+
+function pickRelatedGuides(
+  all: GuideIndexEntry[],
+  current: GuideIndexEntry,
+  count = 3
+): RelatedGuide[] {
+  const currentTokens = guideTokens(current);
+
+  return all
+    .filter((entry) => entry.slug !== current.slug)
+    .map((entry) => {
+      const tokens = guideTokens(entry);
+      let overlap = 0;
+      tokens.forEach((t) => {
+        if (currentTokens.has(t)) overlap += 1;
+      });
+      const typeBonus = entry.type === current.type ? 1 : 0;
+      return {
+        entry,
+        score: overlap * 2 + typeBonus,
+        tiebreak: hashPair(current.slug, entry.slug),
+      };
+    })
+    .sort((a, b) => b.score - a.score || a.tiebreak - b.tiebreak)
+    .slice(0, count)
+    .map(({ entry }) => ({ slug: entry.slug, title: entry.title, type: entry.type }));
+}
+
 /**
  * Generate static props with guide content and SEO metadata
  */
@@ -240,7 +304,7 @@ export async function getStaticProps(
 
   try {
     // Import the index data
-    const indexData = require('../../data/seo-pages/index.json') as GuidePageProps[];
+    const indexData = require('../../data/seo-pages/index.json') as GuideIndexEntry[];
 
     // Find entry by slug
     const entry = indexData.find((e) => e.slug === slug);
@@ -250,7 +314,7 @@ export async function getStaticProps(
     }
 
     return {
-      props: entry,
+      props: { ...entry, relatedGuides: pickRelatedGuides(indexData, entry) },
       revalidate: 86400, // 24-hour ISR cache
     };
   } catch (error) {

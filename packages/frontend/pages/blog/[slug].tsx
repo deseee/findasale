@@ -35,30 +35,78 @@ export const getStaticProps: GetStaticProps<BlogPostPageProps> = async ({ params
   };
 };
 
-// ── Related posts selection ────────────────────────────────────────────────
-// Same category first, then most recent by publishDate to fill remaining slots.
+// Related reading selection.
+// Relevance by shared title/slug keywords, with same-category and recency
+// as tiebreakers. No external dependencies.
+const RELATED_STOPWORDS = new Set([
+  'the', 'and', 'for', 'you', 'your', 'are', 'this', 'that', 'with', 'what',
+  'when', 'why', 'how', 'here', 'there', 'than', 'then', 'not', 'its', 'can',
+  'will', 'more', 'estate', 'sale', 'sales',
+]);
+
+function keywordTokens(post: BlogPost): Set<string> {
+  const raw = `${post.title} ${post.slug}`.toLowerCase();
+  const words = raw
+    .split(/[^a-z0-9]+/)
+    .filter((w) => w.length >= 3 && !RELATED_STOPWORDS.has(w));
+  return new Set(words);
+}
+
 function getRelatedPosts(current: BlogPost, count = 3): BlogPost[] {
-  const others = posts.filter((p) => p.slug !== current.slug);
+  const currentTokens = keywordTokens(current);
 
-  const sameCategory = others
-    .filter((p) => p.category === current.category)
-    .sort((a, b) => new Date(b.publishDate).getTime() - new Date(a.publishDate).getTime());
+  const scored = posts
+    .filter((p) => p.slug !== current.slug)
+    .map((p) => {
+      const tokens = keywordTokens(p);
+      let overlap = 0;
+      tokens.forEach((t) => {
+        if (currentTokens.has(t)) overlap += 1;
+      });
+      const categoryBonus = p.category === current.category ? 1 : 0;
+      return { post: p, score: overlap * 2 + categoryBonus };
+    })
+    .sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      return new Date(b.post.publishDate).getTime() - new Date(a.post.publishDate).getTime();
+    });
 
-  const picked = sameCategory.slice(0, count);
-  const pickedSlugs = new Set(picked.map((p) => p.slug));
+  return scored.slice(0, count).map((s) => s.post);
+}
 
-  if (picked.length < count) {
-    const remaining = others
-      .filter((p) => !pickedSlugs.has(p.slug))
-      .sort((a, b) => new Date(b.publishDate).getTime() - new Date(a.publishDate).getTime());
+// Guides library cross-links.
+// Curated map from blog topic keywords to substantive /guide/ pages.
+interface GuideLink {
+  slug: string;
+  title: string;
+}
 
-    for (const p of remaining) {
-      if (picked.length >= count) break;
-      picked.push(p);
-    }
+const GUIDES: Record<string, GuideLink> = {
+  runSale: { slug: 'how-to-run-an-estate-sale', title: 'How to Run an Estate Sale Yourself: 7 Steps' },
+  pricing: { slug: 'estate-sale-pricing-guide', title: 'How to Price Estate Sale Items: Real Ranges' },
+  companyCosts: { slug: 'estate-sale-company-costs', title: 'How Much Do Estate Sale Companies Charge?' },
+  parents: { slug: 'selling-your-parents-belongings', title: "Selling Your Parents' Belongings: A Gentle Guide" },
+  software: { slug: 'estate-sale-software-guide', title: 'Estate Sale Software: What to Look For' },
+  furniture: { slug: 'mid-century-modern-furniture-pricing-guide-2026', title: 'Mid-Century Modern Furniture Values at Estate Sales' },
+  silver: { slug: 'sterling-silver-flatware-pricing-guide-2026', title: 'How Much Is Vintage Sterling Silver Flatware Worth?' },
+  jewelry: { slug: 'costume-jewelry-pricing-guide-2026', title: 'How Much Is Vintage Costume Jewelry Worth?' },
+};
+
+function guidesFor(post: BlogPost): GuideLink[] {
+  const text = `${post.title} ${post.slug}`.toLowerCase();
+  if (/software|catalog|tool|workflow/.test(text)) {
+    return [GUIDES.software, GUIDES.runSale, GUIDES.companyCosts];
   }
-
-  return picked;
+  if (/photo/.test(text)) {
+    return [GUIDES.pricing, GUIDES.jewelry, GUIDES.software];
+  }
+  if (/price|pricing|value|worth|revenue|earn/.test(text)) {
+    return [GUIDES.pricing, GUIDES.furniture, GUIDES.silver];
+  }
+  if (/buyer|listing|traffic|browse|discovery/.test(text)) {
+    return [GUIDES.runSale, GUIDES.pricing, GUIDES.parents];
+  }
+  return [GUIDES.runSale, GUIDES.pricing, GUIDES.companyCosts];
 }
 
 // ── Minimal markdown renderer ──────────────────────────────────────────────
@@ -305,7 +353,7 @@ export default function BlogPostPage({ post, relatedPosts }: BlogPostPageProps) 
           {relatedPosts.length > 0 && (
             <div className="mb-8">
               <h2 className="font-heading text-h3 font-semibold text-warm-900 dark:text-warm-100 mb-4">
-                You might also like
+                Related reading
               </h2>
               <div className="flex flex-col gap-4">
                 {relatedPosts.map((related) => (
@@ -314,6 +362,28 @@ export default function BlogPostPage({ post, relatedPosts }: BlogPostPageProps) 
               </div>
             </div>
           )}
+
+          {/* Guides library cross-links */}
+          <div className="mb-8 rounded-card border border-warm-200 dark:border-warm-700 bg-white dark:bg-warm-800 p-5 shadow-card">
+            <h2 className="font-heading text-h3 font-semibold text-warm-900 dark:text-warm-100 mb-1">
+              From the guides library
+            </h2>
+            <p className="text-body-sm text-warm-600 dark:text-warm-400 mb-3">
+              Practical, in-depth guides for organizers and sellers.
+            </p>
+            <ul className="space-y-2">
+              {guidesFor(post).map((g) => (
+                <li key={g.slug}>
+                  <Link
+                    href={`/guide/${g.slug}`}
+                    className="text-body-sm text-amber-600 dark:text-amber-400 hover:underline"
+                  >
+                    {g.title}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
 
           {/* Back link */}
           <div className="mt-4">

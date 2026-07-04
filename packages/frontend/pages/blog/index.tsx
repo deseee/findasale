@@ -106,6 +106,42 @@ export default function BlogIndexPage({ posts }: BlogIndexProps) {
               <BlogCard key={post.slug} post={post} />
             ))}
           </div>
+
+          {/* Guides library cross-links */}
+          <div className="mt-8 rounded-card border border-warm-200 dark:border-warm-700 bg-white dark:bg-warm-800 p-5 shadow-card">
+            <h2 className="text-body font-semibold text-warm-900 dark:text-warm-100 mb-1">
+              From the guides library
+            </h2>
+            <p className="text-body-sm text-warm-600 dark:text-warm-400 mb-3">
+              Step-by-step guides for planning, pricing, and running your sale.
+            </p>
+            <ul className="space-y-2">
+              <li>
+                <Link
+                  href="/guide/how-to-run-an-estate-sale"
+                  className="text-body-sm text-amber-600 dark:text-amber-400 hover:underline"
+                >
+                  How to Run an Estate Sale Yourself: 7 Steps
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href="/guide/estate-sale-pricing-guide"
+                  className="text-body-sm text-amber-600 dark:text-amber-400 hover:underline"
+                >
+                  How to Price Estate Sale Items: Real Ranges
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href="/guide/estate-sale-company-costs"
+                  className="text-body-sm text-amber-600 dark:text-amber-400 hover:underline"
+                >
+                  How Much Do Estate Sale Companies Charge?
+                </Link>
+              </li>
+            </ul>
+          </div>
         </div>
       </div>
     </>
