@@ -538,40 +538,52 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
       throw stripeError;
     }
 
-    const purchase = await prisma.purchase.create({
-      data: {
-        userId: req.user.id,
-        itemId: item.id,
-        saleId: item.sale!.id,
-        amount: finalPriceCents / 100,
-        platformFeeAmount: platformFeeAmount / 100,
-        stripePaymentIntentId: paymentIntent.id,
-        status: 'PENDING',
-        ...(affiliateLinkId ? { affiliateLinkId } : {})
-      }
+    // BUG 1 fix: the Stripe idempotencyKey (pi-${itemId}-${userId}${couponSuffix}) makes a
+    // duplicate createPaymentIntent call return the SAME PaymentIntent. Guard the Purchase
+    // create so a second call reuses the existing row instead of inserting a duplicate
+    // PENDING row (the webhook then flips both to PAID -> double Purchase). Defense-in-depth
+    // partial unique index on stripePaymentIntentId (WHERE NOT NULL) backs this at the DB level
+    // (migration 20260707120000_purchase_pi_partial_unique).
+    let purchase = await prisma.purchase.findFirst({
+      where: { stripePaymentIntentId: paymentIntent.id },
     });
 
-    await prisma.checkoutAttempt.upsert({
-      where: { paymentIntent: paymentIntent.id },
-      create: {
-        userId: req.user.id,
-        itemId: item.id,
-        paymentIntent: paymentIntent.id,
-      },
-      update: {},
-    }).catch(err => console.warn('[checkout-recovery] Failed to track checkout attempt:', err));
+    if (!purchase) {
+      purchase = await prisma.purchase.create({
+        data: {
+          userId: req.user.id,
+          itemId: item.id,
+          saleId: item.sale!.id,
+          amount: finalPriceCents / 100,
+          platformFeeAmount: platformFeeAmount / 100,
+          stripePaymentIntentId: paymentIntent.id,
+          status: 'PENDING',
+          ...(affiliateLinkId ? { affiliateLinkId } : {})
+        }
+      });
 
-    // Platform Safety #98: Save CheckoutEvidence for chargeback defense
-    const clientIp = getClientIp(req);
-    const acknowledgmentText = `I acknowledge the buyer premium of ${(BUYER_PREMIUM_RATE * 100).toFixed(0)}% will be added to my total purchase price.`;
-    prisma.checkoutEvidence.create({
-      data: {
-        purchaseId: purchase.id,
-        checkoutTimestamp: new Date(),
-        checkoutIp: clientIp !== 'unknown' ? clientIp : null,
-        acknowledgmentText: acknowledgmentText
-      }
-    }).catch(err => console.warn('[checkoutEvidence] Failed to save checkout evidence:', err));
+      await prisma.checkoutAttempt.upsert({
+        where: { paymentIntent: paymentIntent.id },
+        create: {
+          userId: req.user.id,
+          itemId: item.id,
+          paymentIntent: paymentIntent.id,
+        },
+        update: {},
+      }).catch(err => console.warn('[checkout-recovery] Failed to track checkout attempt:', err));
+
+      // Platform Safety #98: Save CheckoutEvidence for chargeback defense
+      const clientIp = getClientIp(req);
+      const acknowledgmentText = `I acknowledge the buyer premium of ${(BUYER_PREMIUM_RATE * 100).toFixed(0)}% will be added to my total purchase price.`;
+      prisma.checkoutEvidence.create({
+        data: {
+          purchaseId: purchase.id,
+          checkoutTimestamp: new Date(),
+          checkoutIp: clientIp !== 'unknown' ? clientIp : null,
+          acknowledgmentText: acknowledgmentText
+        }
+      }).catch(err => console.warn('[checkoutEvidence] Failed to save checkout evidence:', err));
+    }
 
     // Format sale dates for display
     const saleStartDate = item.sale!.startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });

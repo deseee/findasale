@@ -1427,6 +1427,9 @@ model Purchase {
   createdAt             DateTime          @default(now())
   updatedAt             DateTime          @updatedAt
 
+  // Partial UNIQUE index (WHERE "stripePaymentIntentId" IS NOT NULL) is created via raw
+  // SQL migration 20260707120000_purchase_pi_partial_unique. Prisma @@unique cannot express
+  // a partial index, so it is intentionally NOT declared here; this @@index remains for lookups.
   @@index([stripePaymentIntentId])
   @@index([isTestTransaction])
   @@index([userId])

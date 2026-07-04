@@ -767,7 +767,7 @@ const AdminDashboard = () => {
             <div className="space-y-3">
               {activity.recentPurchases.length > 0 ? (
                 activity.recentPurchases.slice(0, 5).map(purchase => (
-                  <Link key={purchase.id} href="/admin/users" className="block cursor-pointer hover:bg-warm-50 dark:hover:bg-gray-700/50 rounded transition">
+                  <Link key={purchase.id} href={purchase.itemId ? `/items/${purchase.itemId}` : (purchase.saleId ? `/sales/${purchase.saleId}` : '/admin/users')} className="block cursor-pointer hover:bg-warm-50 dark:hover:bg-gray-700/50 rounded transition">
                   <div className="border-b border-warm-200 dark:border-gray-700 pb-3 last:border-0 text-sm">
                     <div className="flex justify-between items-start">
                       <div>

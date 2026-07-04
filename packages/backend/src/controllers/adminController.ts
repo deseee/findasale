@@ -6,6 +6,18 @@ import { getMonthlyCloudinaryEstimate, getBandwidthThreshold, getTodayCloudinary
 import { getEbayRateLimitStatus } from '../lib/ebayRateLimiter';
 import { emailService } from '../lib/emailService';
 
+// BUG #2: role display helper — the scalar `user.role` (deprecated) can drift out of
+// sync with the canonical `user.roles[]` array. Compute the highest-precedence role
+// from the array (ADMIN > ORGANIZER > USER), falling back to the scalar when the
+// array is empty/missing. Used everywhere the admin UI renders a user's role badge.
+function displayRole(roles?: string[] | null, scalar?: string | null): string {
+  const arr = roles || [];
+  if (arr.includes('ADMIN')) return 'ADMIN';
+  if (arr.includes('ORGANIZER')) return 'ORGANIZER';
+  if (arr.includes('USER')) return 'USER';
+  return scalar || 'USER';
+}
+
 // GET /api/admin/stats — platform overview
 export const getStats = async (req: AuthRequest, res: Response) => {
   try {
@@ -371,7 +383,8 @@ export const getUsers = async (req: AuthRequest, res: Response) => {
     }
 
     if (role) {
-      where.role = role;
+      // BUG #2: filter on the canonical roles[] array so array-only organizers/admins match.
+      where.roles = { has: role };
     }
 
     // Filter out scraper-created accounts: users whose organizer has isUnmanagedListing=true
@@ -395,6 +408,7 @@ export const getUsers = async (req: AuthRequest, res: Response) => {
           email: true,
           name: true,
           role: true,
+          roles: true,
           createdAt: true,
           oauthProvider: true,
           emailVerified: true,
@@ -419,7 +433,7 @@ export const getUsers = async (req: AuthRequest, res: Response) => {
       id: user.id,
       email: user.email,
       name: user.name,
-      role: user.role,
+      role: displayRole(user.roles, user.role),
       createdAt: user.createdAt,
       oauthProvider: user.oauthProvider,
       emailVerified: user.emailVerified,
@@ -595,6 +609,8 @@ export const getUserById = async (req: AuthRequest, res: Response) => {
             amount: true,
             status: true,
             createdAt: true,
+            itemId: true, // BUG #3: enable admin click-through to the purchased item
+            saleId: true, // BUG #3: fallback link target when the purchase has no item
           },
           orderBy: { createdAt: 'desc' },
           take: 10,
@@ -730,6 +746,8 @@ export const getRecentActivity = async (req: AuthRequest, res: Response) => {
           amount: true,
           status: true,
           createdAt: true,
+          itemId: true, // BUG #3: enable dashboard click-through to the purchased item
+          saleId: true, // BUG #3: fallback link target when the purchase has no item
           user: { select: { name: true, email: true } },
           item: { select: { title: true } },
         },
@@ -743,6 +761,7 @@ export const getRecentActivity = async (req: AuthRequest, res: Response) => {
           email: true,
           name: true,
           role: true,
+          roles: true,
           createdAt: true,
         },
         orderBy: { createdAt: 'desc' },
@@ -761,9 +780,16 @@ export const getRecentActivity = async (req: AuthRequest, res: Response) => {
       }),
     ]);
 
+    // BUG #2: return a computed display role for New Sign-ups so array-only
+    // organizers/admins show the correct badge (the frontend renders `.role`).
+    const formattedRecentUsers = recentUsers.map((u: any) => ({
+      ...u,
+      role: displayRole(u.roles, u.role),
+    }));
+
     res.json({
       recentPurchases,
-      recentUsers,
+      recentUsers: formattedRecentUsers,
       recentSales,
     });
   } catch (error) {

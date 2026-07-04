@@ -555,6 +555,17 @@ export const createSale = async (req: AuthRequest, res: Response) => {
             address: '',
           }
         });
+
+        // Forward-sync user roles: this user is acting as an organizer but had no
+        // organizer profile yet. Ensure both the canonical roles[] array and the
+        // deprecated scalar role reflect ORGANIZER. Never downgrade an ADMIN — only
+        // promote a plain USER.
+        const currentRoles = req.user.roles || ['USER'];
+        const newRoles = Array.from(new Set([...currentRoles, 'ORGANIZER']));
+        await prisma.user.update({
+          where: { id: req.user.id },
+          data: { roles: newRoles, ...(req.user.role === 'USER' ? { role: 'ORGANIZER' } : {}) },
+        });
       }
       organizerId = organizerProfile.id;
       organizer = organizerProfile;

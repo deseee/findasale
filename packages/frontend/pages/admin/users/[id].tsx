@@ -9,6 +9,8 @@ interface Purchase {
   amount: number;
   status: string;
   createdAt: string;
+  itemId?: string | null;
+  saleId?: string | null;
 }
 
 interface OrganizerSale {
@@ -255,13 +257,19 @@ const AdminUserDetail = () => {
                 <h3 className="text-xs font-semibold text-warm-500 dark:text-warm-400 uppercase tracking-wide mb-2">Recent Sales</h3>
                 <ul className="space-y-1">
                   {userData.organizer.sales.map(s => (
-                    <li key={s.id} className="flex items-center justify-between text-xs">
-                      <span className="text-warm-700 dark:text-warm-300 truncate max-w-[200px]">{s.title}</span>
-                      <span className={`ml-2 shrink-0 ${
-                        s.status === 'PUBLISHED' ? 'text-green-600 dark:text-green-400' :
-                        s.status === 'ENDED' ? 'text-warm-400 dark:text-warm-500' :
-                        'text-warm-500 dark:text-warm-400'
-                      }`}>{s.status}</span>
+                    <li key={s.id}>
+                      {/* BUG #3: click a sale to open its storefront (works for DRAFT/PUBLISHED alike). */}
+                      <Link
+                        href={`/sales/${s.id}`}
+                        className="flex items-center justify-between text-xs -mx-2 px-2 py-1 rounded hover:bg-warm-50 dark:hover:bg-gray-700/50 transition"
+                      >
+                        <span className="text-amber-600 hover:underline truncate max-w-[200px]">{s.title}</span>
+                        <span className={`ml-2 shrink-0 ${
+                          s.status === 'PUBLISHED' ? 'text-green-600 dark:text-green-400' :
+                          s.status === 'ENDED' ? 'text-warm-400 dark:text-warm-500' :
+                          'text-warm-500 dark:text-warm-400'
+                        }`}>{s.status}</span>
+                      </Link>
                     </li>
                   ))}
                 </ul>
@@ -293,9 +301,16 @@ const AdminUserDetail = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-warm-100 dark:divide-gray-700">
-                {userData.purchases.map(p => (
-                  <tr key={p.id}>
-                    <td className="py-2 pr-4 text-warm-700 dark:text-warm-300">
+                {userData.purchases.map(p => {
+                  // BUG #3: click a purchase row to open the purchased item (fallback: the sale).
+                  const purchaseHref = p.itemId ? `/items/${p.itemId}` : (p.saleId ? `/sales/${p.saleId}` : null);
+                  return (
+                  <tr
+                    key={p.id}
+                    onClick={() => { if (purchaseHref) router.push(purchaseHref); }}
+                    className={purchaseHref ? 'cursor-pointer hover:bg-warm-50 dark:hover:bg-gray-700/50 transition' : ''}
+                  >
+                    <td className="py-2 pr-4 text-amber-600 hover:underline">
                       {new Date(p.createdAt).toLocaleDateString()}
                     </td>
                     <td className="py-2 pr-4 text-warm-700 dark:text-warm-300">
@@ -310,7 +325,8 @@ const AdminUserDetail = () => {
                       {p.status}
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>

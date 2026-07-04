@@ -239,7 +239,9 @@ router.post('/setup-organizer', authenticate, async (req: AuthRequest, res: Resp
       }),
       prisma.user.update({
         where: { id: req.user.id },
-        data: { roles: newRoles }
+        // Forward-sync the deprecated scalar role alongside the canonical roles array.
+        // Never downgrade an ADMIN — only promote a plain USER to ORGANIZER.
+        data: { roles: newRoles, ...(req.user.role === 'USER' ? { role: 'ORGANIZER' } : {}) }
       })
     ]);
 
