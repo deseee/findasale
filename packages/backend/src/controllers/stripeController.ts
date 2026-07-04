@@ -352,6 +352,7 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
         sale: {
           select: {
             id: true,
+            status: true, // Security: gate purchases to PUBLISHED sales only
             isAuctionSale: true,
             saleType: true,
             title: true,
@@ -384,6 +385,11 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
 
     if (item.sale!.organizer.userId === req.user.id) {
       return res.status(400).json({ message: 'You cannot purchase items from your own sale' });
+    }
+
+    // Security: block purchases against non-published (DRAFT/ENDED) sales
+    if (item.sale!.status !== 'PUBLISHED') {
+      return res.status(403).json({ message: 'This sale is not currently available for purchase.' });
     }
 
     // Determine if auction based on listingType (preferred) or fallback to auctionStartPrice

@@ -450,6 +450,11 @@ export const getSale = async (req: Request, res: Response) => {
     const isOrganizer = authReq.user?.id === sale.organizer.userId;
     const isAdmin = authReq.user?.role === 'ADMIN';
 
+    // Security: gate DRAFT/non-published sales to owner + admin only (anonymous → 404)
+    if (sale.status !== 'PUBLISHED' && !isOrganizer && !isAdmin) {
+      return res.status(404).json({ message: 'Sale not found' });
+    }
+
     if (!isOrganizer && !isAdmin && sale.status === 'PUBLISHED' && sale.publishedAt) {
       // Get user's rank (default INITIATE if unauthenticated)
       const userRank = authReq.user?.explorerRank || 'INITIATE';

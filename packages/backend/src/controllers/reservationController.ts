@@ -123,8 +123,15 @@ export const placeHold = async (req: AuthRequest, res: Response) => {
     const sale = (item.sale as any);
     const holdSettings = sale?.organizer?.holdSettings;
 
+    // Security: reject holds on items whose parent sale is not published
+    if (sale?.status !== 'PUBLISHED') {
+      return res.status(403).json({ message: 'This sale is not currently available for holds.' });
+    }
+
     // Organizers cannot place holds on their own sale's items
-    if (sale?.organizerId === req.user.id) {
+    // FIX: compare Organizer.userId (a User id) to req.user.id — the previous
+    // check compared sale.organizerId (an Organizer id) and never matched.
+    if (sale?.organizer?.userId === req.user.id) {
       return res.status(403).json({ message: 'You cannot place a hold on your own sale.' });
     }
 

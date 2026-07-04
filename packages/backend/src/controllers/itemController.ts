@@ -769,11 +769,19 @@ export const getItemById = async (req: Request, res: Response) => {
       if (inventoryOrganizer) isOwner = true;
     }
 
+    // Admin can always view any item
+    const isAdmin = authReq.user?.role === 'ADMIN';
+
+    // Security: gate items belonging to non-published (DRAFT/ENDED) sales.
+    // Owner and admin may still preview; anonymous/other users → 404.
+    if (!isOwner && !isAdmin && item.sale && item.sale.status !== 'PUBLISHED') {
+      return res.status(404).json({ message: 'Item not found' });
+    }
+
     // For everyone else, enforce public visibility rules: must be active.
     // Allow NULL draftStatus (legacy/seeded items pre-Rapidfire) and PUBLISHED items.
     // Only explicitly DRAFT items are blocked (Rapidfire items being AI-analyzed by organizer).
-    // Note: sale.status check removed (getSale endpoint doesn't enforce it either)
-    if (!isOwner && (!item.isActive || item.draftStatus === 'DRAFT')) {
+    if (!isOwner && !isAdmin && (!item.isActive || item.draftStatus === 'DRAFT')) {
       return res.status(404).json({ message: 'Item not found' });
     }
 
@@ -789,6 +797,20 @@ export const getItemsBySaleId = async (req: Request, res: Response) => {
     const { saleId, status: statusFilter, q: searchQuery, limit: limitParam } = req.query;
     // Try to get user from AuthRequest (optional — public endpoint)
     const user = (req as any).user;
+
+    // Security: gate items of non-published (DRAFT/ENDED) sales. Owner + admin may
+    // still preview their own draft sale's items; everyone else gets an empty list.
+    if (saleId && typeof saleId === 'string') {
+      const parentSale = await prisma.sale.findUnique({
+        where: { id: saleId },
+        select: { status: true, organizer: { select: { userId: true } } }
+      });
+      const isSaleOwner = !!user && parentSale?.organizer?.userId === user.id;
+      const isSaleAdmin = user?.role === 'ADMIN';
+      if (parentSale && parentSale.status !== 'PUBLISHED' && !isSaleOwner && !isSaleAdmin) {
+        return res.json([]);
+      }
+    }
 
     // Check if user has active Hunt Pass
     const hasHuntPass = user?.huntPassActive && user?.huntPassExpiry && user.huntPassExpiry > new Date();
@@ -2109,6 +2131,16 @@ export const placeBid = async (req: AuthRequest, res: Response) => {
     // Prevent self-bidding
     if (item.sale!.organizer.userId === req.user.id) {
       return res.status(403).json({ message: 'You cannot bid on your own items' });
+    }
+
+    // Security: reject bids on items whose parent sale is not published
+    if (item.sale!.status !== 'PUBLISHED') {
+      return res.status(403).json({ message: 'This sale is not currently available for bidding.' });
+    }
+
+    // Reject bids on auctions that have already closed
+    if (item.auctionClosed) {
+      return res.status(400).json({ message: 'This auction has closed.' });
     }
 
     // Validate bid amount: must be positive number
@@ -3611,10 +3643,14 @@ export const getSimilarItems = async (req: Request, res: Response) => {
 
     const similarItems = await prisma.item.findMany({
       where: {
+        // Spread PUBLIC_ITEM_FILTER first so draftStatus='PUBLISHED' gating applies
+        // (blocks PENDING_REVIEW / GRACE_LOCKED / inactive draft items from surfacing).
+        // Explicit status override kept AFTER the spread so the narrower
+        // AVAILABLE/PUBLISHED filter wins over the filter's status clause.
+        ...PUBLIC_ITEM_FILTER,
         category: currentItem.category,
         status: { in: ['AVAILABLE', 'PUBLISHED'] },
         id: { not: itemId },
-        isActive: true,
         saleId: { not: null },
         sale: { status: 'PUBLISHED' },
       },

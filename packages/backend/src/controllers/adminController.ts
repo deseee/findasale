@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import * as Sentry from '@sentry/node';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import { getMonthlyAICost, resetMonthlyAICost, getMonthlyWebDetectionCost, getEbayImageSearchUsage, getMonthlyGroundingCost } from '../lib/aiCostTracker';
@@ -455,6 +456,7 @@ export const getUsers = async (req: AuthRequest, res: Response) => {
     });
   } catch (error) {
     console.error('Error fetching users:', error);
+    Sentry.captureException(error); // Surface the still-open "Failed to load users" 500 in Sentry
     res.status(500).json({ message: 'Failed to fetch users' });
   }
 };
