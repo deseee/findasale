@@ -16,6 +16,7 @@ import { getPlatformFeeRate } from '../utils/feeCalculator'; // S388: Tier-aware
 import { endEbayListingIfExists } from './ebayController'; // Feature #244 Phase 2: eBay direct push — withdraw on sale
 import { notifyFacebookExportedItemSold } from '../services/facebookNudgeService';
 import { transactionalEmailService } from '../lib/transactionalEmailService';
+import { recordSuspectedSignal } from '../services/checkoutGuard'; // S1072 Finding #4: cash path is offsite — log-only, never blocked
 
 const stripe = () => getStripe();
 
@@ -746,7 +747,7 @@ export const cashPayment = async (req: AuthRequest, res: Response) => {
     // Verify sale belongs to organizer
     const sale = await prisma.sale.findUnique({
       where: { id: saleId },
-      select: { organizerId: true },
+      select: { organizerId: true, organizer: { select: { userId: true } } },
     });
 
     if (!sale || sale.organizerId !== organizer.id) {
@@ -761,6 +762,20 @@ export const cashPayment = async (req: AuthRequest, res: Response) => {
       buyerEmail,
       clientTransactionId,
     });
+
+    // S1072 Finding #4: cash/offsite sales have no verifiable buyer account (Purchase.userId
+    // is null for walk-in buyers), so identity-grade collusion cannot be checked or blocked
+    // here. Record a low-confidence, non-blocking signal against the organizer for admin
+    // review — this path must never reject a legitimate cash sale.
+    if (sale.organizer?.userId) {
+      recordSuspectedSignal({
+        prisma,
+        userId: sale.organizer.userId,
+        saleId,
+        signalType: 'SELF_DEALING',
+        notes: '[cashPayment] Cash sale recorded with no verifiable buyer account — offsite/unpreventable, logged for review only.',
+      }).catch(err => console.warn('[terminal] recordSuspectedSignal failed (non-fatal):', err));
+    }
 
     res.json(result);
   } catch (error: any) {

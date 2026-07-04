@@ -1737,3 +1737,93 @@ export const sendDirectMessageToUser = async (req: AuthRequest, res: Response) =
     res.status(500).json({ message: 'Failed to send message' });
   }
 };
+// ─── S1072 Finding #4: Global fraud-signal review (collusion/wash-trade + all FraudSignal rows) ─────
+// Admin-only. Distinct from /api/admin/referral-fraud-signals (ReferralFraudSignal model) and
+// /api/fraud/sale/:saleId (organizer PRO-tier, sale-scoped view of the same FraudSignal model).
+// This is the global, cross-sale admin queue.
+
+// GET /api/admin/fraud-signals — paginated, optional ?reviewOutcome= filter
+export const listAllFraudSignals = async (req: AuthRequest, res: Response) => {
+  try {
+    const { reviewOutcome, page = '1', limit = '50' } = req.query as {
+      reviewOutcome?: string;
+      page?: string;
+      limit?: string;
+    };
+
+    const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const limitNum = Math.min(200, Math.max(1, parseInt(limit, 10) || 50));
+    const skip = (pageNum - 1) * limitNum;
+
+    const where: any = {};
+    if (reviewOutcome && reviewOutcome !== 'ALL') {
+      where.reviewOutcome = reviewOutcome;
+    }
+
+    const [signals, total] = await Promise.all([
+      prisma.fraudSignal.findMany({
+        where,
+        include: {
+          user: { select: { id: true, email: true, name: true } },
+          item: { select: { id: true, title: true } },
+          sale: { select: { id: true, title: true } },
+        },
+        orderBy: [{ confidenceScore: 'desc' }, { detectedAt: 'desc' }],
+        skip,
+        take: limitNum,
+      }),
+      prisma.fraudSignal.count({ where }),
+    ]);
+
+    res.json({
+      signals,
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total,
+        pages: Math.ceil(total / limitNum),
+      },
+    });
+  } catch (error) {
+    console.error('[admin] listAllFraudSignals error:', error);
+    Sentry.captureException(error);
+    res.status(500).json({ message: 'Failed to list fraud signals' });
+  }
+};
+
+// PATCH /api/admin/fraud-signals/:id — set reviewOutcome + notes
+export const reviewFraudSignalAdmin = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ message: 'Unauthorized' });
+    }
+
+    const { id } = req.params;
+    const { reviewOutcome, notes } = req.body as { reviewOutcome?: string; notes?: string };
+
+    if (!reviewOutcome || !['PENDING', 'DISMISSED', 'CONFIRMED'].includes(reviewOutcome)) {
+      return res.status(400).json({ message: 'reviewOutcome must be one of PENDING, DISMISSED, CONFIRMED' });
+    }
+
+    const existing = await prisma.fraudSignal.findUnique({ where: { id } });
+    if (!existing) {
+      return res.status(404).json({ message: 'Fraud signal not found' });
+    }
+
+    const updated = await prisma.fraudSignal.update({
+      where: { id },
+      data: {
+        reviewOutcome,
+        notes: notes ?? existing.notes,
+        reviewedByAdminId: req.user.id,
+        reviewedAt: new Date(),
+      },
+    });
+
+    res.json({ signal: updated });
+  } catch (error) {
+    console.error('[admin] reviewFraudSignalAdmin error:', error);
+    Sentry.captureException(error);
+    res.status(500).json({ message: 'Failed to update fraud signal' });
+  }
+};

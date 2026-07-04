@@ -38,6 +38,8 @@ import {
   getOutreachOpens,
   getDrilldown,
   sendDirectMessageToUser,
+  listAllFraudSignals,
+  reviewFraudSignalAdmin,
 } from '../controllers/adminController';
 import {
   createInvite,
@@ -121,6 +123,11 @@ router.delete('/feature-flags/:id', deleteFeatureFlag);
 // D-XP-004 Phase 5: Referral fraud review endpoints
 router.get('/referral-fraud-signals', listFraudSignals);
 router.patch('/referral-fraud-signals/:signalId/review', reviewFraudSignal);
+
+// S1072 Finding #4: global collusion/wash-trade fraud-signal review (FraudSignal model,
+// cross-sale). Distinct from the ReferralFraudSignal routes above.
+router.get('/fraud-signals', listAllFraudSignals);
+router.patch('/fraud-signals/:id', reviewFraudSignalAdmin);
 
 // ADR-069 Phase 2: Curator review job — automated Encyclopedia promotion
 router.post('/curator/run', runCuratorReviewJob);

@@ -13,6 +13,7 @@ import { checkCrewInvasion } from '../services/crewInvasionService'; // Feature 
 import { emailService } from '../lib/emailService';
 import { suppressionService } from '../services/suppressionService';
 import { getPlatformFeeRate, SubscriptionTier } from '../utils/feeCalculator';
+import { assertCheckoutAllowed, CheckoutGuardError } from '../services/checkoutGuard'; // S1072 Finding #4: collusion/wash-trade guard
 import { createPaymentLinkInternal } from './posController'; // markSold settlement router: reuse Stripe Payment Link + QR
 
 // markSold settlement router (Decision A): settlement modes
@@ -133,6 +134,22 @@ export const placeHold = async (req: AuthRequest, res: Response) => {
     // check compared sale.organizerId (an Organizer id) and never matched.
     if (sale?.organizer?.userId === req.user.id) {
       return res.status(403).json({ message: 'You cannot place a hold on your own sale.' });
+    }
+
+    // S1072 Finding #4: collusion/wash-trade guard — identity-grade device/card fingerprint match
+    try {
+      await assertCheckoutAllowed({
+        buyerUserId: req.user.id,
+        saleId: sale.id,
+        itemId: item.id,
+        prisma,
+        context: 'placeHold',
+      });
+    } catch (guardError) {
+      if (guardError instanceof CheckoutGuardError) {
+        return res.status(403).json({ message: guardError.message });
+      }
+      throw guardError;
     }
 
     // Feature #121: Per-sale holdsEnabled toggle

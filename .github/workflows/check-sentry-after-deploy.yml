@@ -21,6 +21,10 @@ on:
     types: [completed]
     branches: [main]
 
+concurrency:
+  group: sentry-postdeploy-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   sentry-regression-check:
     name: Check Sentry for new issues (30-min window)

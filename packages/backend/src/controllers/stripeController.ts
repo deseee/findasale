@@ -30,6 +30,7 @@ import { markShopifyItemSold } from '../services/shopifyService'; // Feature: Sh
 import { sendConsignorItemSold } from '../services/consignorEmailService'; // Feature #309: Consignor email notifications
 import { applyFirstMonthRefundCap, logRefundProcessing } from '../services/refundService'; // P2-2: Refund cap + logging
 import { transactionalEmailService } from '../lib/transactionalEmailService';
+import { assertCheckoutAllowed, CheckoutGuardError } from '../services/checkoutGuard'; // S1072 Finding #4: collusion/wash-trade guard
 
 // Lazy — avoids crash when module loads before dotenv runs
 const stripe = () => getStripe();
@@ -390,6 +391,22 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
     // Security: block purchases against non-published (DRAFT/ENDED) sales
     if (item.sale!.status !== 'PUBLISHED') {
       return res.status(403).json({ message: 'This sale is not currently available for purchase.' });
+    }
+
+    // S1072 Finding #4: collusion/wash-trade guard — identity-grade device/card fingerprint match
+    try {
+      await assertCheckoutAllowed({
+        buyerUserId: req.user.id,
+        saleId: item.sale!.id,
+        itemId: item.id,
+        prisma,
+        context: 'createPaymentIntent',
+      });
+    } catch (guardError) {
+      if (guardError instanceof CheckoutGuardError) {
+        return res.status(403).json({ message: guardError.message });
+      }
+      throw guardError;
     }
 
     // Determine if auction based on listingType (preferred) or fallback to auctionStartPrice

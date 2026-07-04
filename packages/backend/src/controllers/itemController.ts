@@ -33,6 +33,7 @@ import { composeDescription, stripShippingPhrases, DescriptionSource } from '../
 import { checkAndAward } from '../services/achievementService'; // Feature #58: Achievement tracking
 import { notifyFacebookExportedItemSold } from '../services/facebookNudgeService'; // Bug #461: FB nudge on single-item SOLD
 import { republishEbayOffer, ebayPublishWithSelfHeal, ensureConditionValidForCategory } from '../services/ebayPublishService'; // Phase 2 relocation + Phase 3 rewire (ADR 2026-06-30)
+import { assertCheckoutAllowed, CheckoutGuardError } from '../services/checkoutGuard'; // S1072 Finding #4: collusion/wash-trade guard
 
 /** Decode HTML entities from CSV/eBay data before writing to the DB. */
 function decodeHtmlEntities(str: string): string {
@@ -2131,6 +2132,22 @@ export const placeBid = async (req: AuthRequest, res: Response) => {
     // Prevent self-bidding
     if (item.sale!.organizer.userId === req.user.id) {
       return res.status(403).json({ message: 'You cannot bid on your own items' });
+    }
+
+    // S1072 Finding #4: collusion/wash-trade guard — identity-grade device/card fingerprint match
+    try {
+      await assertCheckoutAllowed({
+        buyerUserId: req.user.id,
+        saleId: item.sale!.id,
+        itemId: item.id,
+        prisma,
+        context: 'placeBid',
+      });
+    } catch (guardError) {
+      if (guardError instanceof CheckoutGuardError) {
+        return res.status(403).json({ message: guardError.message });
+      }
+      throw guardError;
     }
 
     // Security: reject bids on items whose parent sale is not published

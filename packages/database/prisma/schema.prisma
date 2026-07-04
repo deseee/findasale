@@ -268,6 +268,7 @@ model User {
   @@index([xpExpiresAt]) // D-XP-002: For nightly expiry cron query
   @@index([lastXpActivityAt]) // D-XP-002: For tracking last activity
   @@index([deviceFingerprint]) // Platform Safety #118: Fast fraud detection lookups
+  @@index([stripeCardFingerprint]) // S1072 Finding #4: Fast card-fingerprint collusion lookups
   @@index([fraudSuspect]) // Platform Safety #118: Fast fraud account filtering
   @@index([createdAt]) // Sentry slow User SELECT: adminController user list queries ORDER BY createdAt DESC (1327ms)
   @@index([roles]) // Sentry slow User SELECT: role-filtered user lookups (roles array GIN index)
