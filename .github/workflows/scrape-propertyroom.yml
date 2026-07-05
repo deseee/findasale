@@ -1,5 +1,13 @@
 name: Scrape PropertyRoom Partners Directory
 
+# RE-ARMED 2026-07-05: schedule went silent after a GitHub Actions billing
+# block on 2026-06-24 (confirmed via the failed run's own annotation: "The
+# job was not started because recent account payments have failed or your
+# spending limit needs to be increased"). Billing was fixed the same window,
+# but this cron-only workflow's schedule never fired again on its own. This
+# is a trivial touch to force GitHub to re-register the cron trigger — if it
+# goes silent again after a future billing incident, repeat this.
+
 on:
   schedule:
     - cron: '0 7 * * 3'  # Wednesdays at 7:00 UTC (weekly — partner agency list, not live auctions)
