@@ -13,6 +13,13 @@ import { runEnrichmentBatch } from '../services/scraper/saleDetailEnrichment';
  */
 export async function triggerSaleDetailEnrichment(req: Request, res: Response): Promise<void> {
   try {
+    // Validate x-scraper-key header
+    const key = req.headers['x-scraper-key'];
+    if (!process.env.INTERNAL_SCRAPER_KEY || key !== process.env.INTERNAL_SCRAPER_KEY) {
+      res.status(401).json({ message: 'Unauthorized' });
+      return;
+    }
+
     // Count unenriched sales
     const unenrichedCount = await prisma.sale.count({
       where: {
@@ -65,6 +72,13 @@ export async function triggerSaleDetailEnrichment(req: Request, res: Response): 
  */
 export async function getSaleDetailEnrichmentStatus(req: Request, res: Response): Promise<void> {
   try {
+    // Validate x-scraper-key header
+    const key = req.headers['x-scraper-key'];
+    if (!process.env.INTERNAL_SCRAPER_KEY || key !== process.env.INTERNAL_SCRAPER_KEY) {
+      res.status(401).json({ message: 'Unauthorized' });
+      return;
+    }
+
     const unenrichedCount = await prisma.sale.count({
       where: {
         sourceName: 'EstateSalesNet',

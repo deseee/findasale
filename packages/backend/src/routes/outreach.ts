@@ -130,7 +130,7 @@ const handleUnsubscribe = async (req: express.Request, res: express.Response) =>
       if (!secret) {
         throw new Error('OUTREACH_SECRET environment variable is not configured');
       }
-      const decoded = jwt.verify(token, secret) as any;
+      const decoded = jwt.verify(token, secret, { algorithms: ['HS256'] }) as any;
       const { email, organizerId } = decoded;
       await suppressionService.processOptOut(email);
 

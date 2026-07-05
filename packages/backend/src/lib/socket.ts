@@ -57,7 +57,7 @@ export const initSocket = (httpServer: any, allowedOrigins: string[]): Server =>
     }
     if (token) {
       try {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET!) as any;
+        const decoded = jwt.verify(token, process.env.JWT_SECRET!, { algorithms: ['HS256'] }) as any;
         socket.data.userId = decoded.id;
         socket.data.role = decoded.role;
         // Auto-join authenticated users to their personal user room for direct notifications (POS payment requests, etc.)

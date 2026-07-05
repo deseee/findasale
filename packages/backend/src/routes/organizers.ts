@@ -1098,7 +1098,7 @@ router.get('/:id', publicDirectoryRateLimiter, async (req: Request, res: Respons
     if (authHeader?.startsWith('Bearer ')) {
       try {
         const jwt = require('jsonwebtoken');
-        const decoded: any = jwt.verify(authHeader.slice(7), process.env.JWT_SECRET!);
+        const decoded: any = jwt.verify(authHeader.slice(7), process.env.JWT_SECRET!, { algorithms: ['HS256'] });
         const follow = await prisma.follow.findUnique({
           where: { userId_organizerId: { userId: decoded.id, organizerId: organizer.id } },
         });
