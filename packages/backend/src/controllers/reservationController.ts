@@ -129,13 +129,10 @@ export const placeHold = async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ message: 'This sale is not currently available for holds.' });
     }
 
-    // Organizers cannot place holds on their own sale's items
-    // FIX: compare Organizer.userId (a User id) to req.user.id — the previous
-    // check compared sale.organizerId (an Organizer id) and never matched.
-    if (sale?.organizer?.userId === req.user.id) {
-      return res.status(403).json({ message: 'You cannot place a hold on your own sale.' });
-    }
-
+    // S1075: ad-hoc self-dealing check removed -- checkoutGuard's assertCheckoutAllowed
+    // (immediately below) is now the sole source of truth for self-dealing on this
+    // endpoint, matching placeBid/createPaymentIntent and ensuring a FraudSignal
+    // SELF_DEALING row is written (P3 Blocked Queue item, S1074/S1075).
     // S1072 Finding #4: collusion/wash-trade guard — identity-grade device/card fingerprint match
     try {
       await assertCheckoutAllowed({

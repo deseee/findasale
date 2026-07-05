@@ -2129,11 +2129,6 @@ export const placeBid = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ message: 'Item not found' });
     }
 
-    // Prevent self-bidding
-    if (item.sale!.organizer.userId === req.user.id) {
-      return res.status(403).json({ message: 'You cannot bid on your own items' });
-    }
-
     // S1072 Finding #4: collusion/wash-trade guard — identity-grade device/card fingerprint match
     try {
       await assertCheckoutAllowed({

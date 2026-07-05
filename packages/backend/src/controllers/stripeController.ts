@@ -384,10 +384,6 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: 'Organizer has not set up payment processing' });
     }
 
-    if (item.sale!.organizer.userId === req.user.id) {
-      return res.status(400).json({ message: 'You cannot purchase items from your own sale' });
-    }
-
     // Security: block purchases against non-published (DRAFT/ENDED) sales
     if (item.sale!.status !== 'PUBLISHED') {
       return res.status(403).json({ message: 'This sale is not currently available for purchase.' });
@@ -2991,11 +2987,27 @@ export const createCartCheckoutSession = async (req: AuthRequest, res: Response)
       return res.status(400).json({ error: 'All cart items must belong to the same sale' });
     }
     const saleId = saleIds[0]!;
-
-    // Prevent organizer from buying their own items
     const organizer = items[0].sale?.organizer;
-    if (organizer?.userId === req.user.id) {
-      return res.status(400).json({ error: 'You cannot purchase items from your own sale' });
+
+    // S1072/S1076 Finding #4: collusion/wash-trade guard — identity-grade device/card fingerprint match.
+    // Sole source of truth for self-dealing + shared-device/shared-card on this endpoint (matches
+    // placeHold/placeBid/createPaymentIntent, all fixed the same way this session) -- the ad-hoc
+    // organizer-self-check that used to live here was removed so a FraudSignal row always gets
+    // written and the wash-trade case (2 distinct colluding accounts) is caught here too, which the
+    // old ad-hoc check never covered.
+    try {
+      await assertCheckoutAllowed({
+        buyerUserId: req.user.id,
+        saleId,
+        itemId: items[0].id,
+        prisma,
+        context: 'createCartCheckoutSession',
+      });
+    } catch (guardError) {
+      if (guardError instanceof CheckoutGuardError) {
+        return res.status(403).json({ error: guardError.message });
+      }
+      throw guardError;
     }
 
     // Validate all items are AVAILABLE
