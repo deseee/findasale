@@ -310,6 +310,7 @@ Tags: 5–8 short search terms buyers type on Google or eBay. Prioritize: materi
 Confidence: REQUIRED FIELD. Rate your confidence in this identification from 0.0 to 1.0. Use 0.9+ only when item, brand/maker, and era are clearly identifiable. Use 0.7–0.89 when item type is clear but details are uncertain. Use 0.5–0.69 when image is unclear or item is generic. Use below 0.5 when you cannot identify the item. Always include a confidence number.
 Model number: If a model number or part number is actually VISIBLE on a label, plate, or marking in the photos (e.g. "Model AP-40", "Part No. 12345", "M/N: XR500"), capture it exactly as printed in the "mpn" field. Evidence-only: include mpn ONLY when you can literally read it from the item — never infer or guess a model number. If no model/part number is visible, set mpn to null or omit it.
 UPC: If a barcode or printed UPC/EAN digits are actually VISIBLE in the photos, read the digits exactly as shown and put them in the "upc" field. HARD RULE: never invent a UPC or exact dimensions from memory — a UPC must be visibly present in the photo (as a scannable barcode or printed digits) or omitted. If no UPC is visible, set upc to null or omit it.
+Brand: If a brand, maker, or manufacturer name is identifiable from a visible label, tag, stamp, engraving, or is confidently stated in the title/description above, capture it in the "brand" field as a short proper-noun string (e.g. "Cherub", "Pyrex", "McCoy"). Do not guess a brand with no supporting evidence — omit or set null if genuinely unidentifiable.
 Shipping package: Estimate the PACKED shipping weight (item + box + padding) in ounces, and the packed box outer dimensions (length, width, height) in inches. Pick the eBay packageType enum that best fits: PACKAGE_THICK_ENVELOPE (thin/flat <12oz), MAILING_BOX (most boxed items), LARGE_PACKAGE (over ~18in any side or heavy), USPS_FLAT_RATE_ENVELOPE (documents/flat). Rate packageConfidence 0.0-1.0 on how sure you are of weight + dimensions. If packageConfidence is below 0.5 (you cannot reasonably estimate size/weight), set estimatedWeightOz, estimatedDimensionsIn, and estimatedPackageType to null — do not guess.
 
 {
@@ -323,6 +324,7 @@ Shipping package: Estimate the PACKED shipping weight (item + box + padding) in 
   "confidence": 0.85,
   "mpn": null,
   "upc": null,
+  "brand": null,
   "estimatedWeightOz": 24,
   "estimatedDimensionsIn": { "length": 10, "width": 8, "height": 6 },
   "estimatedPackageType": "MAILING_BOX",
@@ -963,6 +965,7 @@ Tags: 5–8 short search terms buyers type on Google or eBay. Prioritize: materi
 Confidence: REQUIRED FIELD. Rate your confidence in this identification from 0.0 to 1.0. Use 0.9+ only when item, brand/maker, and era are clearly identifiable. Use 0.7–0.89 when item type is clear but details are uncertain. Use 0.5–0.69 when image is unclear or item is generic. Use below 0.5 when you cannot identify the item. Always include a confidence number.
 Model number: If a model number or part number is actually VISIBLE on a label, plate, or marking in any of the photos (e.g. "Model AP-40", "Part No. 12345", "M/N: XR500"), capture it exactly as printed in the "mpn" field. Evidence-only: include mpn ONLY when you can literally read it from the item — never infer or guess a model number. If no model/part number is visible, set mpn to null or omit it.
 UPC: If a barcode or printed UPC/EAN digits are actually VISIBLE in any of the photos, read the digits exactly as shown and put them in the "upc" field. HARD RULE: never invent a UPC or exact dimensions from memory — a UPC must be visibly present in the photo (as a scannable barcode or printed digits) or omitted. If no UPC is visible, set upc to null or omit it.
+Brand: If a brand, maker, or manufacturer name is identifiable from a visible label, tag, stamp, engraving, or is confidently stated in the title/description above, capture it in the "brand" field as a short proper-noun string (e.g. "Cherub", "Pyrex", "McCoy"). Do not guess a brand with no supporting evidence — omit or set null if genuinely unidentifiable.
 
 {
   "title": "short specific title",
@@ -974,7 +977,8 @@ UPC: If a barcode or printed UPC/EAN digits are actually VISIBLE in any of the p
   "tags": ["Tag1", "Tag2", "Tag3"],
   "confidence": 0.85,
   "mpn": null,
-  "upc": null
+  "upc": null,
+  "brand": null
 }`,
     });
 
