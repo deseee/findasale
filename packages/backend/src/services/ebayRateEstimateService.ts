@@ -61,55 +61,59 @@ const DIM_DIVISOR_FEDEX = 139;
 export const USPS_RATE_EFFECTIVE_DATE = '2026-04-26';
 export const USPS_RATE_SOURCE = 'Pirate Ship USPS Ground Advantage (below-commercial tier)';
 export const UPS_RATE_EFFECTIVE_DATE = '2026-07-05';
-export const UPS_RATE_SOURCE = 'Pirate Ship UPS Ground (live-quoted, real anchors across all 6 zone bands, 2026-07-05)';
+export const UPS_RATE_SOURCE = "eBay's own live shipping calculator (ebay.com/shp/calc/rates), Patrick's real seller account, UPS Ground service, 1lb anchors across all 6 zone bands, 2026-07-05";
 export const FEDEX_RATE_EFFECTIVE_DATE = '2026-07-05';
-export const FEDEX_RATE_SOURCE = 'Shippo FedEx Ground/Home Delivery (INTERIM — ratio-corrected from real UPS anchors + FedEx 2026 published list rate, not independently live-quoted; verify vs a real Shippo account when convenient)';
+export const FEDEX_RATE_SOURCE = "eBay's own live shipping calculator (ebay.com/shp/calc/rates), Patrick's real seller account, FedEx Ground/Home Delivery service specifically (NOT the cheaper FedEx Ground Economy tier), 1lb anchors across all 6 zone bands, 2026-07-05";
 
-// UPS: real-anchored 2026-07-05 — live Pirate Ship UPS Ground quotes pulled across all
-// 6 zone bands (origin 49503 Grand Rapids), 1lb anchors cross-checked against real
-// haversine distance using the same milesToZone bands coverageZoneForOrigin() uses live.
-// Remaining weight tiers scaled from the old estimate curve by the real/estimate ratio
-// observed at 1lb per zone (z12=0.612, z34=0.671, z5=0.66, z6=0.647, z7=0.59, z8=0.584).
+// UPS: real-anchored 2026-07-05 — pulled directly from eBay's own public shipping
+// calculator (ebay.com/shp/calc/rates) using Patrick's real connected eBay seller
+// account, so these are eBay's actual negotiated UPS Ground rates, not a third-party
+// reseller estimate. 1lb anchors per zone (origin 49503): z12 $7.22, z34 $7.23,
+// z5 $8.62, z6 $8.62 (eBay returned an identical real quote for z5/z6 test routes —
+// real carrier zone charts don't split evenly at our z5/z6 mile boundary), z7 $10.19,
+// z8 $10.88. Remaining weight tiers scaled from the prior curve shape by the
+// real/prior ratio observed at 1lb per zone.
 const RATE_TABLE_UPS: RateRow[] = [
-  { maxLb: 0.25,   z12: 6.61,  z34: 7.45,  z5: 7.52,  z6: 7.57,  z7: 7.14,  z8: 7.24  },
-  { maxLb: 0.5,    z12: 6.70,  z34: 7.55,  z5: 7.66,  z6: 7.73,  z7: 7.29,  z8: 7.45  },
-  { maxLb: 0.75,   z12: 6.79,  z34: 7.68,  z5: 7.82,  z6: 7.93,  z7: 7.49,  z8: 7.68  },
-  { maxLb: 0.9999, z12: 6.92,  z34: 7.85,  z5: 8.02,  z6: 8.15,  z7: 7.73,  z8: 7.91  },
-  { maxLb: 1,      z12: 7.10,  z34: 8.12,  z5: 8.38,  z6: 8.61,  z7: 8.23,  z8: 8.53  },
-  { maxLb: 2,      z12: 7.47,  z34: 8.69,  z5: 9.14,  z6: 9.54,  z7: 9.29,  z8: 9.81  },
-  { maxLb: 3,      z12: 7.89,  z34: 9.29,  z5: 9.93,  z6: 10.51, z7: 10.35, z8: 11.04 },
-  { maxLb: 5,      z12: 8.54,  z34: 10.20, z5: 11.19, z6: 12.10, z7: 12.07, z8: 12.96 },
-  { maxLb: 7,      z12: 9.12,  z34: 11.00, z5: 12.28, z6: 13.46, z7: 13.57, z8: 14.72 },
-  { maxLb: 10,     z12: 9.91,  z34: 12.08, z5: 13.46, z6: 14.75, z7: 14.87, z8: 16.00 },
-  { maxLb: 14,     z12: 11.02, z34: 13.42, z5: 15.05, z6: 16.43, z7: 16.46, z8: 17.75 },
-  { maxLb: 20,     z12: 12.48, z34: 15.43, z5: 17.56, z6: 19.54, z7: 19.94, z8: 21.84 },
-  { maxLb: 30,     z12: 15.54, z34: 19.46, z5: 23.10, z6: 26.53, z7: 27.73, z8: 30.95 },
-  { maxLb: 50,     z12: 22.03, z34: 28.85, z5: 34.98, z6: 40.76, z7: 43.07, z8: 48.47 },
-  { maxLb: 70,     z12: 28.76, z34: 38.25, z5: 46.20, z6: 53.70, z7: 56.64, z8: 63.66 },
+  { maxLb: 0.25,   z12: 6.72,  z34: 6.63,  z5: 7.74,  z6: 7.58,  z7: 8.84,  z8: 9.24  },
+  { maxLb: 0.5,    z12: 6.82,  z34: 6.72,  z5: 7.87,  z6: 7.75,  z7: 9.02,  z8: 9.50  },
+  { maxLb: 0.75,   z12: 6.91,  z34: 6.84,  z5: 8.04,  z6: 7.94,  z7: 9.28,  z8: 9.80  },
+  { maxLb: 0.9999, z12: 7.03,  z34: 6.99,  z5: 8.25,  z6: 8.17,  z7: 9.57,  z8: 10.10 },
+  { maxLb: 1,      z12: 7.22,  z34: 7.23,  z5: 8.62,  z6: 8.62,  z7: 10.19, z8: 10.88 },
+  { maxLb: 2,      z12: 7.59,  z34: 7.74,  z5: 9.40,  z6: 9.56,  z7: 11.50, z8: 12.52 },
+  { maxLb: 3,      z12: 8.03,  z34: 8.28,  z5: 10.22, z6: 10.53, z7: 12.82, z8: 14.08 },
+  { maxLb: 5,      z12: 8.68,  z34: 9.08,  z5: 11.50, z6: 12.12, z7: 14.94, z8: 16.54 },
+  { maxLb: 7,      z12: 9.27,  z34: 9.80,  z5: 12.62, z6: 13.48, z7: 16.80, z8: 18.78 },
+  { maxLb: 10,     z12: 10.08, z34: 10.76, z5: 13.85, z6: 14.78, z7: 18.41, z8: 20.42 },
+  { maxLb: 14,     z12: 11.20, z34: 11.95, z5: 15.48, z6: 16.46, z7: 20.38, z8: 22.65 },
+  { maxLb: 20,     z12: 12.70, z34: 13.74, z5: 18.05, z6: 19.57, z7: 24.69, z8: 27.87 },
+  { maxLb: 30,     z12: 15.81, z34: 17.33, z5: 23.76, z6: 26.57, z7: 34.33, z8: 39.50 },
+  { maxLb: 50,     z12: 22.41, z34: 25.69, z5: 35.97, z6: 40.83, z7: 53.32, z8: 61.85 },
+  { maxLb: 70,     z12: 29.25, z34: 34.06, z5: 47.51, z6: 53.79, z7: 70.12, z8: 81.23 },
 ];
 
-// FedEx: INTERIM correction 2026-07-05 — NOT independently live-quoted (Shippo's
-// calculator widget could not be automated in-session). Same per-zone ratio applied
-// to the old estimate curve as UPS, cross-checked only against a public FedEx 2026
-// list-rate reference point (~$11.99 zone2/1lb list, ~$7-9 real via Shippo per public
-// source). Lower confidence than UPS — verify against a real Shippo account quote when
-// convenient (findasale-shipping-rate-audit will keep flagging this until then).
+// FedEx: real-anchored 2026-07-05 — also pulled directly from eBay's own calculator,
+// same session as UPS. IMPORTANT correction vs the prior interim fix: eBay separates
+// "FedEx Ground Economy" (cheap, slow, ~$7 at 1lb) from "FedEx Ground / FedEx Home
+// Delivery" (the actual service this table models — faster, ~$17-21 at 1lb). The
+// prior interim table accidentally tracked the Economy tier's price level. 1lb anchors
+// per zone: z12 $17.59, z34 $18.30, z5 $19.81, z6 $19.81 (same real-quote-collision as
+// UPS), z7 $20.85, z8 $21.07.
 const RATE_TABLE_FEDEX: RateRow[] = [
-  { maxLb: 0.25,   z12: 6.49,  z34: 7.31,  z5: 7.39,  z6: 7.44,  z7: 6.99,  z8: 7.12  },
-  { maxLb: 0.5,    z12: 6.58,  z34: 7.41,  z5: 7.52,  z6: 7.60,  z7: 7.17,  z8: 7.33  },
-  { maxLb: 0.75,   z12: 6.67,  z34: 7.55,  z5: 7.69,  z6: 7.80,  z7: 7.38,  z8: 7.56  },
-  { maxLb: 0.9999, z12: 6.79,  z34: 7.72,  z5: 7.89,  z6: 8.02,  z7: 7.61,  z8: 7.80  },
-  { maxLb: 1,      z12: 6.98,  z34: 7.98,  z5: 8.25,  z6: 8.48,  z7: 8.11,  z8: 8.41  },
-  { maxLb: 2,      z12: 7.34,  z34: 8.56,  z5: 8.98,  z6: 9.35,  z7: 9.12,  z8: 9.64  },
-  { maxLb: 3,      z12: 7.74,  z34: 9.09,  z5: 9.74,  z6: 10.32, z7: 10.15, z8: 10.80 },
-  { maxLb: 5,      z12: 8.35,  z34: 9.96,  z5: 10.92, z6: 11.81, z7: 11.77, z8: 12.67 },
-  { maxLb: 7,      z12: 8.90,  z34: 10.74, z5: 11.98, z6: 13.13, z7: 13.25, z8: 14.37 },
-  { maxLb: 10,     z12: 9.67,  z34: 11.78, z5: 13.13, z6: 14.40, z7: 14.48, z8: 15.59 },
-  { maxLb: 14,     z12: 10.71, z34: 13.05, z5: 14.65, z6: 16.01, z7: 16.05, z8: 17.29 },
-  { maxLb: 20,     z12: 12.12, z34: 14.96, z5: 17.03, z6: 18.96, z7: 19.35, z8: 21.20 },
-  { maxLb: 30,     z12: 15.06, z34: 18.86, z5: 22.44, z6: 25.75, z7: 26.90, z8: 30.02 },
-  { maxLb: 50,     z12: 21.42, z34: 28.05, z5: 33.99, z6: 39.60, z7: 41.83, z8: 47.07 },
-  { maxLb: 70,     z12: 27.91, z34: 37.11, z5: 44.88, z6: 52.21, z7: 55.11, z8: 61.90 },
+  { maxLb: 0.25,   z12: 16.36, z34: 16.76, z5: 17.75, z6: 17.39, z7: 17.97, z8: 17.85  },
+  { maxLb: 0.5,    z12: 16.59, z34: 16.99, z5: 18.07, z6: 17.77, z7: 18.42, z8: 18.36  },
+  { maxLb: 0.75,   z12: 16.82, z34: 17.30, z5: 18.46, z6: 18.22, z7: 18.95, z8: 18.95  },
+  { maxLb: 0.9999, z12: 17.13, z34: 17.68, z5: 18.94, z6: 18.75, z7: 19.56, z8: 19.53  },
+  { maxLb: 1,      z12: 17.59, z34: 18.30, z5: 19.81, z6: 19.81, z7: 20.85, z8: 21.07  },
+  { maxLb: 2,      z12: 18.52, z34: 19.61, z5: 21.55, z6: 21.85, z7: 23.43, z8: 24.14  },
+  { maxLb: 3,      z12: 19.52, z34: 20.84, z5: 23.38, z6: 24.12, z7: 26.08, z8: 27.07  },
+  { maxLb: 5,      z12: 21.06, z34: 22.84, z5: 26.23, z6: 27.60, z7: 30.25, z8: 31.75  },
+  { maxLb: 7,      z12: 22.45, z34: 24.61, z5: 28.76, z6: 30.70, z7: 34.04, z8: 35.99  },
+  { maxLb: 10,     z12: 24.38, z34: 26.99, z5: 31.54, z6: 33.65, z7: 37.23, z8: 39.07  },
+  { maxLb: 14,     z12: 27.00, z34: 29.91, z5: 35.18, z6: 37.43, z7: 41.25, z8: 43.31  },
+  { maxLb: 20,     z12: 30.55, z34: 34.29, z5: 40.89, z6: 44.31, z7: 49.74, z8: 53.11  },
+  { maxLb: 30,     z12: 37.96, z34: 43.21, z5: 53.88, z6: 60.19, z7: 69.15, z8: 75.21  },
+  { maxLb: 50,     z12: 54.00, z34: 64.28, z5: 81.62, z6: 92.55, z7: 107.51, z8: 117.93 },
+  { maxLb: 70,     z12: 70.36, z34: 85.04, z5: 107.77, z6: 122.04, z7: 141.63, z8: 155.10 },
 ];
 
 /** All curated carrier tables + metadata, for the rate-staleness audit task. */
