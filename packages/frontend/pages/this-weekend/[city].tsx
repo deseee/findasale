@@ -69,7 +69,7 @@ export default function ThisWeekendPage({
   weekendEnd,
 }: ThisWeekendPageProps) {
   const title = `Sales This Weekend in ${cityName}, ${cityState} | FindA.Sale`;
-  const description = `Browse ${totalCount > 0 ? totalCount : ''} sales happening this weekend in ${cityName}, ${cityState}. Estate sales, yard sales, auctions and more.`.trim();
+  const description = `Browse ${totalCount > 0 ? totalCount : ''} sales happening this weekend in ${cityName}, ${cityState}. Estate sales, yard sales, auctions, flea markets, and consignment events.`.trim();
   const canonicalUrl = `https://finda.sale/this-weekend/${citySlug}`;
 
   const fridayDate = new Date(weekendStart);
