@@ -19,6 +19,20 @@
  * Rate limit: single-page fetch, minimal load. Still passes through RateLimiter
  * for consistency with the rest of the scraper fleet.
  *
+ * STATUS 2026-07-05: BLOCKED — bidspotter.com now sits behind AWS WAF Bot
+ * Control with a JavaScript challenge. A direct request confirms
+ * `x-amzn-waf-action: challenge` and a 1991-byte AwsWafIntegration
+ * challenge.js page instead of real HTML — the X-Requested-With header trick
+ * documented above no longer applies; this is a NEW site-side protection
+ * added since 2026-06-10, not a code regression. A cheerio/fetch-based
+ * scraper cannot solve a JS challenge. itemsFound has been 0 on every run
+ * since (confirmed via GH Actions logs), not just during the 2026-06-24
+ * billing-block incident. The workflow (scrape-bidspotter.yml) has been
+ * retired (schedule removed, workflow_dispatch only) rather than "fixed" —
+ * a real fix would require a headless browser (Playwright/Puppeteer) for a
+ * ~35-entry static directory, which isn't worth the added CI complexity and
+ * fragility. Re-test manually if bidspotter.com's WAF config ever changes.
+ *
  * ADR-073: Directory Scraper Phase 1
  */
 
