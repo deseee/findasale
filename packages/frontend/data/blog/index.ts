@@ -23,8 +23,9 @@ import { postJ } from './posts/when-buyers-browse-free-what-makes-managed-sale-w
 import { postK } from './posts/state-of-secondary-sales-in-america-2026';
 import { postL } from './posts/when-estate-sales-and-yard-sales-actually-happen';
 import { postM } from './posts/estate-sale-company-density-us-cities';
+import { postN } from './posts/why-cant-i-just-sell-it-myself';
 
-export const posts: BlogPost[] = [postA, postB, postC, postD, postE, postF, postG, postH, postI, postJ, postK, postL, postM];
+export const posts: BlogPost[] = [postA, postB, postC, postD, postE, postF, postG, postH, postI, postJ, postK, postL, postM, postN];
 
 export function getPostBySlug(slug: string): BlogPost | undefined {
   return posts.find((p) => p.slug === slug);
