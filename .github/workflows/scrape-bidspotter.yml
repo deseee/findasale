@@ -1,16 +1,21 @@
 name: Scrape BidSpotter Auctioneers Directory
 
-# RE-ARMED 2026-07-05: schedule went silent after a GitHub Actions billing
-# block on 2026-06-24 (confirmed via the failed run's own annotation: "The
-# job was not started because recent account payments have failed or your
-# spending limit needs to be increased"). Billing was fixed the same window,
-# but this cron-only workflow's schedule never fired again on its own. This
-# is a trivial touch to force GitHub to re-register the cron trigger — if it
-# goes silent again after a future billing incident, repeat this.
+# RETIRED 2026-07-05: bidspotter.com now sits behind AWS WAF Bot Control with a
+# JavaScript challenge (confirmed via direct request: response carries
+# `x-amzn-waf-action: challenge` and a 1991-byte AwsWafIntegration challenge.js
+# page instead of the auctioneers directory HTML). This is a NEW site-side
+# change since the scraper was written (2026-06-10 notes describe a simple
+# missing-header quirk, not a WAF challenge) — a static fetch/cheerio scraper
+# cannot solve a JS challenge, so this workflow has been returning
+# itemsFound: 0 on every run, including before the 2026-06-24 billing-block
+# incident. Re-verified live 2026-07-05: still challenged, still 0 results.
+# Not a code bug — the target is no longer scrapeable without a headless
+# browser (Playwright/Puppeteer), which is disproportionate engineering for a
+# ~35-entry static directory that rarely changes. Schedule removed; kept as
+# workflow_dispatch only in case bidspotter.com's WAF config changes later —
+# a manual run will immediately show whether it's still challenged.
 
 on:
-  schedule:
-    - cron: '0 10 * * 3'  # Wednesdays at 10:00 UTC (weekly — auction house directory)
   workflow_dispatch:
 
 jobs:
