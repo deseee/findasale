@@ -34,6 +34,14 @@ export interface ProviderResult {
   fields: Partial<Record<EnrichField, string | number>>;
   confidence: number;
   source: string;
+  /**
+   * Optional per-field confidence override. When a provider's overall `confidence` doesn't
+   * apply uniformly to every field it returns (e.g. aiEstimateProvider returning brand/mpn at
+   * the underlying AI vision confidence while weight/dims stay at a flat suggestion-only
+   * confidence), set the specific field here. Falls back to `confidence` when absent — fully
+   * backward-compatible, no other provider needs to set this.
+   */
+  fieldConfidence?: Partial<Record<EnrichField, number>>;
 }
 
 /** Minimal shape the cascade reads off an item. */
@@ -369,6 +377,7 @@ const aiEstimateProvider: EnrichmentProvider = {
       const ai = ctx.aiResult;
       if (!ai) return null;
       const fields: Partial<Record<EnrichField, string | number>> = {};
+      const fieldConfidence: Partial<Record<EnrichField, number>> = {};
       if (typeof ai.estimatedWeightOz === 'number' && ai.estimatedWeightOz > 0) {
         fields.weightOz = Math.round(ai.estimatedWeightOz);
       }
@@ -378,8 +387,28 @@ const aiEstimateProvider: EnrichmentProvider = {
         if (typeof dims.width === 'number' && dims.width > 0) fields.widthIn = dims.width;
         if (typeof dims.height === 'number' && dims.height > 0) fields.heightIn = dims.height;
       }
+      // Bug fix (S1076): brand/mpn read directly off visible labels/marks by the vision
+      // model were previously never surfaced by this cascade at all (only weight/dims were),
+      // so a correctly-identified brand/mpn could never reach Item.brand/Item.mpn through
+      // reanalyzeService.ts's Re-analyze path -- it silently required an external catalog/
+      // barcode hit instead. Surface them here at the AI'S OWN confidence (not the flat 0.5
+      // used for weight/dims, which is deliberately suggestion-only) so planEnrichmentApply's
+      // existing >=0.85 auto-apply bar is judged on the real identification confidence:
+      // a high-confidence read (e.g. 0.92) auto-applies into an empty field, a lower-confidence
+      // one still correctly falls through to catalogSuggestions instead of being discarded.
+      const aiConfidence = typeof ai.confidence === 'number' ? ai.confidence : 0.5;
+      const brand = typeof ai.brand === 'string' ? ai.brand.trim() : '';
+      if (brand) {
+        fields.brand = brand;
+        fieldConfidence.brand = aiConfidence;
+      }
+      const mpn = typeof ai.mpn === 'string' ? ai.mpn.trim() : '';
+      if (mpn) {
+        fields.mpn = mpn;
+        fieldConfidence.mpn = aiConfidence;
+      }
       if (Object.keys(fields).length === 0) return null;
-      return { fields, confidence: 0.5, source: 'aiEstimate' };
+      return { fields, confidence: 0.5, source: 'aiEstimate', fieldConfidence };
     } catch {
       return null;
     }
@@ -444,7 +473,8 @@ export async function enrichItem(
       for (const [field, value] of Object.entries(result.fields)) {
         if (value == null) continue;
         if (merged[field] !== undefined) continue; // first non-null wins
-        merged[field] = { value: value as string | number, source: result.source, confidence: result.confidence };
+        const confidence = result.fieldConfidence?.[field as EnrichField] ?? result.confidence;
+        merged[field] = { value: value as string | number, source: result.source, confidence };
       }
     } catch {
       // Provider isolation — one bad provider never breaks the cascade.

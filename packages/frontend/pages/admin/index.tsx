@@ -756,6 +756,11 @@ const AdminDashboard = () => {
           <h3 className="text-lg font-bold text-warm-900 dark:text-warm-100 mb-2">Confidence Scores</h3>
           <p className="text-warm-600 dark:text-warm-400 text-sm">Directory organizers sorted by data completeness score</p>
         </Link>
+
+        <Link href="/admin/ai-usage" className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 hover:shadow-lg hover:bg-violet-50 dark:bg-violet-900/20 border border-violet-100 transition">
+          <h3 className="text-lg font-bold text-warm-900 dark:text-warm-100 mb-2">AI Spend</h3>
+          <p className="text-warm-600 dark:text-warm-400 text-sm">Live cost tracking across tagging, web detection, eBay search, and grounding</p>
+        </Link>
       </div>
 
       {/* Recent Activity */}
