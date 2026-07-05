@@ -6,6 +6,14 @@ name: Scrape AuctionNinja Directory
 # HTTP request to AuctionNinja — bypassing Cloudflare's ASN-based bot block that
 # blocked GitHub Actions runners (AWS us-east-1/us-east-2) directly.
 # The endpoint returns 202 immediately and runs the scrape asynchronously.
+#
+# RE-ARMED 2026-07-05: schedule went silent after a GitHub Actions billing
+# block on 2026-06-24 (confirmed via the failed run's own annotation: "The
+# job was not started because recent account payments have failed or your
+# spending limit needs to be increased"). Billing was fixed the same window,
+# but this cron-only workflow's schedule never fired again on its own. This
+# is a trivial touch to force GitHub to re-register the cron trigger — if it
+# goes silent again after a future billing incident, repeat this.
 
 on:
   schedule:
