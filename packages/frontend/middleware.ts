@@ -77,7 +77,7 @@ export function middleware(request: NextRequest) {
     ).replace(/\/api$/, ''); // strip trailing /api — we append /api/crawler-log ourselves
     fetch(`${backendUrl}/api/crawler-log`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'x-scraper-key': process.env.INTERNAL_SCRAPER_KEY ?? '' },
       body: JSON.stringify({ userAgent: ua, path: pathname, ip }),
     }).catch(() => {
       // Intentionally silent — crawler analytics must never affect page delivery

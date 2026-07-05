@@ -39,6 +39,16 @@ function extractSaleId(path: string): string | null {
  * Response: 202 immediately — DB write is fire-and-forget.
  */
 router.post('/', async (req: Request, res: Response): Promise<void> => {
+  // Server-to-server call from Vercel edge middleware (Vercel serves the page,
+  // detects the bot, then POSTs here). CSRF is bypassed for this path in
+  // validateCsrfToken, so we authenticate with the same x-scraper-key shared
+  // secret used by /api/internal/* routes.
+  const scraperKey = req.headers['x-scraper-key'];
+  if (!process.env.INTERNAL_SCRAPER_KEY || scraperKey !== process.env.INTERNAL_SCRAPER_KEY) {
+    res.status(403).json({ error: 'forbidden' });
+    return;
+  }
+
   const { userAgent, path, ip } = req.body as {
     userAgent?: string;
     path?: string;
