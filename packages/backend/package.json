@@ -8,7 +8,8 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "db:generate": "prisma generate --schema=../database/prisma/schema.prisma",
-    "test": "jest"
+    "test": "jest",
+    "prune:scraped-sales:backfill": "tsx src/scripts/prune-scraped-sales-backfill.ts"
   },
   "jest": {
     "preset": "ts-jest",

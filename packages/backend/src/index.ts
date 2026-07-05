@@ -229,6 +229,7 @@ import { scheduleSaleAutoCloseCron } from './jobs/saleAutoCloseCron'; // Auto-cl
 import { schedulePhotoRetentionCron } from './jobs/photoRetentionCron'; // Feature #103: Photo retention + deletion
 import { scheduleWebhookEventPruneJob } from './jobs/webhookEventPruneJob'; // Webhook event pruning (30-day retention)
 import { scheduleLogRetentionCron } from './jobs/logRetentionCron'; // Operational-log retention sweep (60-day retention)
+import { scheduleScrapedSalePruneCron } from './jobs/pruneScrapedSales'; // Stale scraped ENDED-sale prune (volume reclaim, ADR 2026-07-05)
 import { scheduleArchivalCron, expireStaleVenueCron } from './jobs/archivalCron'; // #112: Soft-delete archival (quarterly) + daily stale venue expiry
 import { scheduleMarkdownCron } from './jobs/markdownCron'; // Feature #91: Auto-markdown (smart clearance)
 import { scheduleMarkdownCycleCron } from './jobs/markdownCycleCron'; // Feature: Automatic Markdown Cycles (PRO Tier)
@@ -924,6 +925,7 @@ httpServer.listen(PORT, '0.0.0.0', () => {
 
   // #112 daily: Expire stale scraped venue records (RETAIL/FLEA_MARKET) whose date window lapsed
   expireStaleVenueCron();
+  scheduleScrapedSalePruneCron(); // gated by PRUNE_ENABLED env
 
   // Feature #91: Register auto-markdown cron
   scheduleMarkdownCron();
