@@ -1,9 +1,16 @@
 name: Scrape GarageSaleFinder
 
+# RETIRED 2026-07-05: GarageSaleFinder is scraped daily by the backend's own
+# internal cron (scraperCron.ts, 06:00 UTC) via Railway env var
+# USE_GH_ACTIONS_GARAGESALEFINDER=false. This workflow's weekly schedule was
+# dead since 2026-06-24 (GitHub Actions billing block that day, confirmed via
+# the failed run's annotation) and never resumed — investigation confirmed via
+# direct DB query that GarageSaleFinder data flowed fine the entire time via
+# the backend cron, so this workflow was pure redundant monitoring noise.
+# Automatic schedule removed; kept as workflow_dispatch only for a manual
+# one-off run if ever needed.
+
 on:
-  schedule:
-    # Every Wednesday at 5:00 AM UTC
-    - cron: '0 5 * * 3'
   workflow_dispatch:
     inputs:
       metro:
