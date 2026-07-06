@@ -260,6 +260,8 @@ import { initCategorySyncCron } from './jobs/categorySyncCron'; // ADR-074 Phase
 import { scheduleSaleDetailEnrichmentCron } from './jobs/saleDetailEnrichmentCron'; // ADR-075: EstateSales.NET sale detail enrichment
 import { scheduleGeocodingAuditCron } from './jobs/geocodingAuditJob'; // ADR-073: Geocoding success rate audit cron
 import { scheduleOutwardEmailAutomationsCron } from './jobs/outwardEmailAutomationsJob'; // Outward Email Automations: recap + review/testimonial asks (daily 10:00 UTC)
+import socialPublisherRoutes from './routes/socialPublisher'; // ADR-077: In-house social publisher (admin-only)
+import { scheduleSocialPublisherCron } from './jobs/socialPublisherCron'; // ADR-077: Social publisher cron (every 10 min)
 import citiesRoutes from './routes/cities'; // ADR-074: Metro Sync city pages
 import categoriesRoutes from './routes/categories'; // ADR-074 Phase 2: Category trending items
 import internalRoutes from './routes/internal'; // ADR-076: Internal scraper endpoint
@@ -681,6 +683,7 @@ app.use('/api/routes', routeRoutes);            // D3: Map route planning
 app.use('/api/viewers', viewerLimiter, viewersRouter);         // Feature 34: Hype Meter viewer counts
 app.use('/api/export', exportRouter);                            // Sprint 2: Export features
 app.use('/api/social', socialRouter);                            // Sprint 2: Social template generator
+app.use('/api/social-publisher', socialPublisherRoutes);       // ADR-077: In-house social publisher (admin-only)
 app.use('/api/tags', tagRouter);                                 // Sprint 3: Tag-based SEO endpoints
 app.use(hubRoutes);                                              // Feature #40+#44: Sale Hubs & Neighborhood Sale Day
 app.use('/api/voice', voiceRoutes);                              // Feature #42: Voice-to-tag extraction
@@ -995,6 +998,9 @@ httpServer.listen(PORT, '0.0.0.0', () => {
 
   // Feature #405: Founding Organizer Badge — award first 500 real organizers (nightly 2 AM UTC)
   scheduleFoundingOrgBadgeCron();
+
+  // ADR-077: Register in-house social publisher cron (every 10 minutes)
+  scheduleSocialPublisherCron();
 
   // Features #58-59: Initialize achievements from code
   syncAchievements();

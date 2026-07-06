@@ -5083,3 +5083,97 @@ model EbayCategoryFee {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 }
+
+// ============================================================================
+// ADR-077 / ADR-077a — In-House Social Publisher (Phase 1a: foundation + X)
+// Additive only. Token columns store the AES-256-GCM envelope written/read
+// exclusively through packages/backend/src/services/social/tokenStore.ts.
+// ============================================================================
+
+enum SocialPlatform {
+  X
+  YOUTUBE
+  INSTAGRAM
+  FACEBOOK_PAGE
+  PINTEREST
+}
+
+enum SocialPostStatus {
+  DRAFT        // staged from an APPROVED markdown item, not yet due
+  SCHEDULED    // due window reached, queued for this run
+  PUBLISHING   // in-flight (guards against double-send)
+  PUBLISHED    // platform accepted, remote id stored
+  FAILED       // platform rejected after retries exhausted
+  SKIPPED      // e.g. rate-limit window hit; will retry next run
+}
+
+/// One connected brand account per platform. FindA.Sale-owned only (not per-organizer),
+/// so no organizer relation — this is the brand's own voice. Mirrors EbayConnection's
+/// token-storage shape (accessToken / refreshToken / tokenExpiresAt / lastError*).
+/// accessToken/refreshToken store the ENCRYPTED envelope `enc:v1:<iv>:<tag>:<ciphertext>`
+/// per ADR-077a — encrypt/decrypt happens only in tokenStore.ts. NEVER plaintext.
+model SocialAccount {
+  id       String         @id @default(cuid())
+  platform SocialPlatform @unique // exactly one brand account per platform
+
+  // OAuth tokens — ENCRYPTED at rest (ADR-077a). Ciphertext envelope, never plaintext.
+  accessToken    String // enc:v1:<iv>:<tag>:<ciphertext>
+  refreshToken   String? // enc:v1:... when present; X app-token / some flows have none
+  tokenExpiresAt DateTime? // NOT encrypted — non-secret metadata for refresh-skew check
+
+  // Platform identity (NOT encrypted — public identifiers / display handles)
+  platformUserId   String? // channel id / page id / account id
+  platformUsername String? // handle, for display in admin
+  pageId           String? // Facebook Page id / IG business account id
+
+  // Health / observability (mirrors EbayConnection.lastError* pattern)
+  connectedAt      DateTime  @default(now())
+  lastRefreshedAt  DateTime  @default(now())
+  lastErrorAt      DateTime?
+  lastErrorMessage String? // NEVER write a raw token here — scrub before storing
+  isActive         Boolean   @default(true)
+
+  posts     SocialPost[]
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  @@index([platform])
+}
+
+/// One row per (approved content item -> one target platform). A single markdown
+/// social-batch line targeting 3 platforms becomes 3 SocialPost rows.
+model SocialPost {
+  id        String         @id @default(cuid())
+  account   SocialAccount  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  accountId String
+  platform  SocialPlatform // denormalized for cheap filtering/index
+
+  // Source traceability back to the approval gate (build-spec §0)
+  sourceFile String // e.g. "content-pipeline/social-batch-2026-07-06.md"
+  sourceHash String? // hash of the approved line — detects post-approval edits
+
+  // Content
+  body      String   @db.Text
+  mediaUrls String[] // Cloudinary URLs (image) or video URL for Shorts
+  linkUrl   String?
+
+  // Scheduling + lifecycle
+  status       SocialPostStatus @default(DRAFT)
+  scheduledFor DateTime // when the publisher may send it
+  publishedAt  DateTime?
+  remotePostId String? // tweet id / video id / media id (idempotency)
+  permalink    String?
+
+  // Retry / failure (feeds Sentry via cronGuard)
+  attemptCount     Int       @default(0)
+  lastAttemptAt    DateTime?
+  lastErrorMessage String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([sourceFile, platform, body]) // idempotency: never double-create the same approved post per platform
+  @@index([status, scheduledFor]) // the publisher's hot query: due + not-yet-sent
+  @@index([accountId])
+  @@index([platform])
+}
