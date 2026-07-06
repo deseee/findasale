@@ -153,31 +153,74 @@ if ($behind -gt 0) {
 }
 
 
-# CREDENTIAL SCAN — block push if postgres URI found in committed docs
-Write-Host "[pre-push] Scanning committed docs for credentials..." -ForegroundColor Yellow
-$credPatterns = @("postgresql://", "postgres://", "rlwy.net", "railway.internal")
-$scanFiles = @("claude_docs/STATE.md", "claude_docs/patrick-dashboard.md")
-$credFound = $false
-foreach ($sf in $scanFiles) {
-    $exists = git cat-file -e "HEAD:$sf" 2>$null
-    if ($LASTEXITCODE -ne 0) { continue }
-    $fileContent = git show "HEAD:$sf" 2>$null
-    foreach ($pat in $credPatterns) {
-        if ($fileContent -match [regex]::Escape($pat)) {
-            Write-Host "  BLOCKED - Credential '$pat' found in $sf" -ForegroundColor Red
-            Write-Host "  Replace the connection string with a placeholder and recommit." -ForegroundColor Yellow
-            $credFound = $true
+# SECRET SCAN - block push if any credential/secret pattern is found in changed files.
+# Broadened 2026-07-06 (repo went public): scans the full set of changed/staged
+# files across all text types - not just STATE.md / patrick-dashboard.md - against
+# the same pattern set as the .githooks/pre-commit hook. Any real hit blocks the push.
+Write-Host "[pre-push] Scanning changed files for secrets..." -ForegroundColor Yellow
+
+# name = regex. Placeholder/example lines are excluded before a hit is recorded.
+$secretPatterns = [ordered]@{
+    "DB-connection-string"    = '(postgres(ql)?|mysql|mongodb(\+srv)?|redis|rediss)://[^ ''"@/]+:[^ ''"@/]+@'
+    "PGPASSWORD"              = 'PGPASSWORD\s*=\s*[^\s''"]+'
+    "GitHub-PAT-classic"      = 'ghp_[A-Za-z0-9]{20,}'
+    "GitHub-PAT-fine"         = 'github_pat_[A-Za-z0-9_]{20,}'
+    "Anthropic-key"           = 'sk-ant-[A-Za-z0-9_-]{20,}'
+    "OpenAI-key"              = 'sk-[A-Za-z0-9]{20,}'
+    "Google-API-key"          = 'AIza[0-9A-Za-z_-]{30,}'
+    "Google-OAuth-secret"     = 'GOCSPX-[A-Za-z0-9_-]{10,}'
+    "AWS-access-key"          = 'AKIA[0-9A-Z]{16}'
+    "Slack-bot-token"         = 'xoxb-[A-Za-z0-9-]{10,}'
+    "Slack-user-token"        = 'xoxp-[A-Za-z0-9-]{10,}'
+    "Sentry-user-token"       = 'sntryu_[A-Za-z0-9]{20,}'
+    "GitGuardian-PAT"         = 'gg_pat_[A-Za-z0-9]{20,}'
+    "Resend-key"              = 're_[A-Za-z0-9]{20,}'
+    "SendGrid-key"            = 'SG\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}'
+    "Stripe-live-secret"      = 'sk_live_[A-Za-z0-9]{10,}'
+    "Stripe-live-publishable" = 'pk_live_[A-Za-z0-9]{10,}'
+    "Stripe-live-restricted"  = 'rk_live_[A-Za-z0-9]{10,}'
+    "Stripe-webhook-secret"   = 'whsec_[A-Za-z0-9]{20,}'
+    "Twilio-account-sid"      = 'AC[0-9a-f]{32}'
+    "Private-key-block"       = '-----BEGIN (RSA |OPENSSH |EC )?PRIVATE KEY-----'
+    "Generic-JWT"             = 'eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}'
+}
+$placeholderRe = '(example|sample|placeholder|your-|your_|dummy|localhost|127\.0\.0\.1|REDACTED|redacted|xxxx|XXXX|<[A-Za-z_ -]+>|CHANGEME|changeme|test_key|fake)'
+$scanExt = @(".ts",".tsx",".js",".jsx",".py",".md",".json",".yml",".yaml",".sh",".ps1",".txt")
+
+# Build the candidate file list: staged + unstaged changes + committed-but-unpushed diff.
+$changed = @()
+$changed += (git diff --cached --name-only --diff-filter=ACM 2>$null)
+$changed += (git diff --name-only --diff-filter=ACM 2>$null)
+$changed += (git diff --name-only --diff-filter=ACM "@{u}..HEAD" 2>$null)
+$changed = $changed | Where-Object { $_ -and ($_.Trim().Length -gt 0) } | Sort-Object -Unique
+
+$secretFound = $false
+foreach ($cf in $changed) {
+    $ext = [System.IO.Path]::GetExtension($cf)
+    $hasExt = ($cf -match '\.[^\\/]+$')
+    if ($hasExt -and ($scanExt -notcontains $ext.ToLower())) { continue }  # skip unscanned extensions; extensionless in scope
+    if (-not (Test-Path -LiteralPath $cf)) { continue }
+    $lines = Get-Content -LiteralPath $cf -ErrorAction SilentlyContinue
+    if (-not $lines) { continue }
+    $lineNo = 0
+    foreach ($ln in $lines) {
+        $lineNo++
+        if ($ln -match $placeholderRe) { continue }
+        foreach ($name in $secretPatterns.Keys) {
+            if ($ln -match $secretPatterns[$name]) {
+                Write-Host "  BLOCKED - possible secret [$name] in ${cf}:${lineNo}" -ForegroundColor Red
+                $secretFound = $true
+            }
         }
     }
 }
-if ($credFound) {
+if ($secretFound) {
     Write-Host ""
-    Write-Host "Push blocked to prevent credential exposure." -ForegroundColor Red
-    Write-Host "Find the line, replace the value with: [Railway DATABASE_URL - copy from Railway dashboard]" -ForegroundColor DarkGray
-    Write-Host "Then: git add claude_docs/STATE.md (or patrick-dashboard.md) -> git commit --amend --no-edit -> .\push.ps1" -ForegroundColor DarkGray
+    Write-Host "Push blocked to prevent secret exposure." -ForegroundColor Red
+    Write-Host "Replace the value with a placeholder (or load it from env), re-stage, and re-run .\push.ps1" -ForegroundColor DarkGray
     exit 1
 }
-Write-Host "  OK - No credentials found in committed docs." -ForegroundColor Green
+Write-Host "  OK - No secrets found in changed files." -ForegroundColor Green
 
 # 5. Push
 Write-Host "[5/5] Pushing to origin/main..." -ForegroundColor Yellow

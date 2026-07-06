@@ -1,6 +1,7 @@
 #!/bin/sh
 # FindA.Sale pre-commit hook
-# Checks: no .env files staged, no console.log in staged backend files (except guarded)
+# Checks: no .env files staged, comprehensive secret scan on ALL staged text
+# file types, and a non-blocking console.log warning for backend routes.
 # Install: git config core.hooksPath .githooks (already set for pre-push)
 
 set -e
@@ -14,19 +15,78 @@ if [ -n "$STAGED_ENV" ]; then
   exit 1
 fi
 
-# ── 2. Block obvious secret patterns in staged files ───────────────────────
-STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.(ts|tsx|js|jsx)$' || true)
-if [ -n "$STAGED_FILES" ]; then
-  for file in $STAGED_FILES; do
-    if git show ":$file" 2>/dev/null | grep -qE '(sk_live_|pk_live_|rk_live_)[a-zA-Z0-9]{10,}'; then
-      echo "❌ Pre-commit blocked: possible Stripe live key in $file"
-      exit 1
+# ── 2. Comprehensive secret scan across ALL staged text file types ──────────
+# Scans .ts/.tsx/.js/.jsx/.py/.md/.json/.yml/.yaml/.sh/.ps1/.txt and
+# extensionless files (e.g. Dockerfile). Each pattern is matched against the
+# STAGED content of every candidate file. Placeholder/example lines are
+# excluded. Any real match reports file + line + pattern name and BLOCKS.
+
+PLACEHOLDER_RE='(example|sample|placeholder|your-|your_|dummy|localhost|127\.0\.0\.1|REDACTED|redacted|xxxx|XXXX|<[A-Za-z_ -]+>|CHANGEME|changeme|test_key|fake)'
+
+# Pattern table: one "NAME|ERE" per line. Blank lines ignored.
+SECRET_PATTERNS='DB-connection-string|(postgres(ql)?|mysql|mongodb(\+srv)?|redis|rediss)://[^ '"'"'"@/]+:[^ '"'"'"@/]+@
+PGPASSWORD|PGPASSWORD[[:space:]]*=[[:space:]]*[^[:space:]'"'"'"]+
+GitHub-PAT-classic|ghp_[A-Za-z0-9]{20,}
+GitHub-PAT-fine|github_pat_[A-Za-z0-9_]{20,}
+Anthropic-key|sk-ant-[A-Za-z0-9_-]{20,}
+OpenAI-key|sk-[A-Za-z0-9]{20,}
+Google-API-key|AIza[0-9A-Za-z_-]{30,}
+Google-OAuth-secret|GOCSPX-[A-Za-z0-9_-]{10,}
+AWS-access-key|AKIA[0-9A-Z]{16}
+Slack-bot-token|xoxb-[A-Za-z0-9-]{10,}
+Slack-user-token|xoxp-[A-Za-z0-9-]{10,}
+Sentry-user-token|sntryu_[A-Za-z0-9]{20,}
+GitGuardian-PAT|gg_pat_[A-Za-z0-9]{20,}
+Resend-key|re_[A-Za-z0-9]{20,}
+SendGrid-key|SG\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}
+Stripe-live-secret|sk_live_[A-Za-z0-9]{10,}
+Stripe-live-publishable|pk_live_[A-Za-z0-9]{10,}
+Stripe-live-restricted|rk_live_[A-Za-z0-9]{10,}
+Stripe-webhook-secret|whsec_[A-Za-z0-9]{20,}
+Twilio-account-sid|AC[0-9a-f]{32}
+Private-key-block|-----BEGIN (RSA |OPENSSH |EC )?PRIVATE KEY-----
+Generic-JWT|eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}'
+
+HIT_FILE="${TMPDIR:-/tmp}/.findasale_secret_hit.$$"
+rm -f "$HIT_FILE"
+
+STAGED_ALL=$(git diff --cached --name-only --diff-filter=ACM || true)
+
+for file in $STAGED_ALL; do
+  case "$file" in
+    *.ts|*.tsx|*.js|*.jsx|*.py|*.md|*.json|*.yml|*.yaml|*.sh|*.ps1|*.txt) ;;
+    *.*) continue ;;   # extension we don't scan
+    *) ;;              # extensionless — in scope
+  esac
+
+  CONTENT=$(git show ":$file" 2>/dev/null || true)
+  [ -z "$CONTENT" ] && continue
+
+  printf '%s\n' "$SECRET_PATTERNS" | while IFS='|' read -r NAME ERE; do
+    [ -z "$NAME" ] && continue
+    [ -z "$ERE" ] && continue
+    MATCHES=$(printf '%s\n' "$CONTENT" | grep -nE -e "$ERE" 2>/dev/null | grep -viE -e "$PLACEHOLDER_RE" || true)
+    if [ -n "$MATCHES" ]; then
+      echo "❌ Pre-commit blocked: possible secret [$NAME] in $file"
+      printf '%s\n' "$MATCHES" | while IFS= read -r line; do
+        echo "     line $(printf '%s' "$line" | cut -d: -f1)"
+      done
+      echo "hit" >> "$HIT_FILE"
     fi
   done
+done
+
+if [ -f "$HIT_FILE" ]; then
+  rm -f "$HIT_FILE"
+  echo ""
+  echo "   Commit blocked to prevent secret exposure."
+  echo "   Replace the value with a placeholder, or load it from env, then re-stage."
+  exit 1
 fi
 
 # ── 3. Warn (don't block) on unguarded console.log in backend routes/controllers ──
-BACKEND_STAGED=$(echo "$STAGED_FILES" | grep -E 'packages/backend/src/(routes|controllers)/' || true)
+STAGED_CODE=$(echo "$STAGED_ALL" | grep -E '\.(ts|tsx|js|jsx)$' || true)
+BACKEND_STAGED=$(echo "$STAGED_CODE" | grep -E 'packages/backend/src/(routes|controllers)/' || true)
 if [ -n "$BACKEND_STAGED" ]; then
   for file in $BACKEND_STAGED; do
     if git show ":$file" 2>/dev/null | grep -n 'console\.log' | grep -qv 'NODE_ENV\|DEV\|debug\|✅\|❌\|⚠️'; then
