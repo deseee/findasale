@@ -129,8 +129,12 @@ export function middleware(request: NextRequest) {
   return response;
 }
 
+// api/ is excluded below (2026-07-06, Vercel Edge Request hygiene pass):
+// crawler tracking only targets page paths (see isCrawlerPage prefixes) and
+// UTM/fsa_* capture only matters on page navigation. Running this middleware
+// on every /api/* call was doubling edge-request cost for no functional gain.
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|_next/data|favicon\\.ico|icons/|sw\\.js|workbox-|manifest\\.json|offline\\.html|.*\\.(?:png|jpg|jpeg|gif|svg|ico|webp|woff|woff2|ttf|eot|css|js)$).*)',
+    '/((?!_next/static|_next/image|_next/data|api/|favicon\\.ico|icons/|sw\\.js|workbox-|manifest\\.json|offline\\.html|.*\\.(?:png|jpg|jpeg|gif|svg|ico|webp|woff|woff2|ttf|eot|css|js)$).*)',
   ],
 };

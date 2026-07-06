@@ -12,36 +12,6 @@ interface ViewerData {
   color: string;
 }
 
-const getInitials = (name?: string): string => {
-  if (!name) return '?';
-  return name
-    .split(' ')
-    .map((n) => n[0])
-    .join('')
-    .toUpperCase()
-    .slice(0, 2);
-};
-
-const getColorForInitials = (name?: string): string => {
-  if (!name) return 'bg-gray-300';
-  const colors = [
-    'bg-blue-400',
-    'bg-red-400',
-    'bg-green-400',
-    'bg-yellow-400',
-    'bg-purple-400',
-    'bg-pink-400',
-    'bg-indigo-400',
-    'bg-cyan-400',
-  ];
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) {
-    hash = ((hash << 5) - hash) + name.charCodeAt(i);
-    hash = hash & hash; // Convert to 32bit integer
-  }
-  return colors[Math.abs(hash) % colors.length];
-};
-
 const HypeMeter: React.FC<HypeMeterProps> = ({ saleId }) => {
   const [viewerCount, setViewerCount] = useState(0);
   const [viewers, setViewers] = useState<ViewerData[]>([]);
@@ -55,51 +25,38 @@ const HypeMeter: React.FC<HypeMeterProps> = ({ saleId }) => {
     }
   }, []);
 
-  // Ping the backend every 30s to keep viewer session alive
+  // Ping the backend every 30s to keep viewer session alive. The ping
+  // response now also carries the current viewer count (2026-07-06: Vercel
+  // Edge Request hygiene pass), so this single call replaces what used to be
+  // two separate calls (a 30s ping + a 15s count poll) — same live-viewer
+  // freshness, one third the request volume. NOTE: the backend ping/count
+  // endpoints have never returned a `viewers` list of names for the avatar
+  // stack below (only `count`), so `viewers` state stays empty exactly as it
+  // did before this change — pre-existing gap, not something this pass
+  // introduced or fixed. See dev handoff notes.
   useEffect(() => {
     if (!viewerIdRef.current || !saleId) return;
 
-    const pingInterval = setInterval(() => {
+    const doPing = () => {
       api
         .post(`/viewers/${saleId}/ping`, {
           viewerId: viewerIdRef.current,
         })
-        .catch((err) => {
-          console.debug('[HypeMeter] Ping failed (non-fatal):', err.message);
-        });
-    }, 30000); // 30 seconds
-
-    return () => clearInterval(pingInterval);
-  }, [saleId]);
-
-  // Poll viewer count every 15s
-  useEffect(() => {
-    if (!saleId) return;
-
-    const pollInterval = setInterval(() => {
-      api
-        .get(`/viewers/${saleId}`)
         .then((res) => {
           const newCount = res.data.count || 0;
           setViewerCount(newCount);
           setIsVisible(newCount > 0);
-
-          // Process viewer data to extract initials and colors
-          const viewerList = res.data.viewers || [];
-          const viewerDataList: ViewerData[] = viewerList.map((viewer: any) => ({
-            id: viewer.id,
-            name: viewer.name,
-            initials: getInitials(viewer.name),
-            color: getColorForInitials(viewer.name),
-          }));
-          setViewers(viewerDataList);
         })
         .catch((err) => {
-          console.debug('[HypeMeter] Poll failed (non-fatal):', err.message);
+          console.debug('[HypeMeter] Ping failed (non-fatal):', err.message);
         });
-    }, 15000); // 15 seconds
+    };
 
-    return () => clearInterval(pollInterval);
+    doPing(); // Immediate ping on mount so the count appears without a 30s wait
+
+    const pingInterval = setInterval(doPing, 30000); // 30 seconds
+
+    return () => clearInterval(pingInterval);
   }, [saleId]);
 
   // Remove viewer on unmount

@@ -82,10 +82,20 @@ export const pingViewer = (req: Request, res: Response) => {
     lastPing: Date.now(),
   });
 
+  // Include the current viewer count in the ping response (2026-07-06: Vercel
+  // Edge Request hygiene pass). The frontend's HypeMeter previously ran a
+  // separate GET /viewers/:saleId poll every 15s purely to refresh this
+  // number; piggybacking it on the ping response (already sent every 30s)
+  // removes that second call entirely. Same >=2 display threshold as
+  // getViewerCount, kept in sync intentionally.
+  const count = viewers.size;
+  const displayCount = count >= 2 ? count : 0;
+
   res.json({
     saleId,
     viewerId,
     status: 'pinged',
+    count: displayCount,
   });
 };
 

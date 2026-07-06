@@ -265,7 +265,7 @@ function OnboardingShower() {
  * Feature #20: Monitor server degradation and update global state
  */
 function DegradationMonitor() {
-  useDegradationMode(); // Polls every 10s when authenticated
+  useDegradationMode(); // Polls every 3min when authenticated (2026-07-06: was 60s)
   return null;
 }
 

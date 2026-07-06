@@ -6,7 +6,7 @@ import { useAuth } from '../components/AuthContext';
 /**
  * Proactive Degradation Mode Hook (Feature #20)
  *
- * Polls `/api/health/latency` every 10 seconds when authenticated.
+ * Polls `/api/health/latency` every 3 minutes when authenticated.
  * Updates global degradation state based on server response.
  *
  * Returns: { isDegraded, latencyMs }
@@ -44,8 +44,11 @@ export function useDegradationMode() {
 
     fetchHealth();
 
-    // Poll every 60 seconds
-    const interval = setInterval(fetchHealth, 60000);
+    // Poll every 3 minutes (2026-07-06: lengthened from 60s — degradation
+    // mode does not need near-real-time detection, and this hook runs
+    // globally in _app.tsx for every authenticated user on every page,
+    // so shortening it directly multiplies Vercel Edge Request volume.
+    const interval = setInterval(fetchHealth, 180000);
 
     return () => clearInterval(interval);
   }, [user, setIsDegraded, setLatencyMs]);
