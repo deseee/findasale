@@ -3,7 +3,6 @@ name: Scrape NASMM Senior Move Manager Directory
 
 on:
   schedule:
-    - cron: '0 20 12 6 *'  # One-time: 2026-06-12 at 4:00 PM EDT — remove after run
     - cron: '0 10 1 */3 *'  # Quarterly: 1st of Jan/Apr/Jul/Oct at 10:00 UTC
   workflow_dispatch:
 

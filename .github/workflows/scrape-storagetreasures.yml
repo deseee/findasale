@@ -1,8 +1,7 @@
 name: Scrape StorageTreasures Directory
 
 on:
-  schedule:
-    - cron: '0 7 * * 4'  # Thursdays at 7:00 UTC — DISABLED (parked, see storageTreasuresScraper.ts)
+  # scheduled auto-run removed 2026-07-06 — scraper is parked/disabled (enabled:false); manual dispatch retained
   workflow_dispatch:
 
 # PARKED: StorageTreasures is a full Next.js SPA. Public API key is capped at 50 truncated

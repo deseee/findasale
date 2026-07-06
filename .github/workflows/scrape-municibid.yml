@@ -1,8 +1,7 @@
 name: Scrape Municibid Directory
 
 on:
-  schedule:
-    - cron: '0 8 * * 4'  # Thursdays at 8:00 UTC
+  # scheduled auto-run removed 2026-07-06 — scraper is parked/disabled (enabled:false); manual dispatch retained
   workflow_dispatch:
 
 jobs:
