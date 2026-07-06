@@ -176,6 +176,7 @@ export async function computePlatformStats(organizerId: string): Promise<Platfor
       ebayStoreUrl: true,
       shopifyEnabled: true,
       shopifyShopDomain: true,
+      facebook: true,
       facebookPageId: true,
       fbCatalogEnabled: true,
       ebayQueueMode: true,
@@ -331,8 +332,11 @@ export async function computePlatformStats(organizerId: string): Promise<Platfor
   // eBay: prefer the explicit store URL; fall back to the public seller page (My eBay World)
   const ebayStoreUrl: string | null =
     org.ebayStoreUrl ?? (org.ebayConnection ? `https://www.ebay.com/usr/${org.ebayConnection.ebayUserId}` : null);
-  // Facebook: Page ID resolves directly to a public facebook.com page URL
-  const facebookPageUrl: string | null = org.facebookPageId ? `https://www.facebook.com/${org.facebookPageId}` : null;
+  // Facebook: prefer the organizer-entered Page URL (Settings), fall back to the
+  // auto-enrichment Page ID (ADR-073) which is often unset for self-serve organizers.
+  const facebookPageUrl: string | null = org.facebook?.trim()
+    ? org.facebook.trim()
+    : (org.facebookPageId ? `https://www.facebook.com/${org.facebookPageId}` : null);
   // Shopify: shop domain is the public storefront
   const shopifyStoreUrl: string | null = org.shopifyShopDomain
     ? `https://${org.shopifyShopDomain}`

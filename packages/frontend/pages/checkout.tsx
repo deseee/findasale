@@ -1,178 +1,86 @@
 /**
- * /checkout — Facebook Commerce Manager cart injection
+ * /checkout — Facebook Commerce Manager checkout URL endpoint
  *
  * Facebook hits this URL when a shopper clicks "Buy on Website" from a
- * Facebook/Instagram Shop. Query string format:
+ * Facebook/Instagram Shop, and Meta's Commerce Manager also hits it directly
+ * (server-side, not necessarily executing client JS) when the seller runs the
+ * "test your checkout URL" flow in Commerce Manager settings. Query format:
  *
  *   /checkout?products=ITEM_ID:QUANTITY,ITEM_ID2:QUANTITY2&coupon=PROMO_CODE
  *
- * Client-side flow:
- *   1. Parse ALL item IDs from the products param
- *   2. Fetch each item from the backend (/api/items/:id) in parallel
- *   3. Determine the primary saleId (first successfully-fetched item)
- *   4. Filter to items from that same sale (single-sale cart constraint)
- *   5. Write them into localStorage cart (fas_shopper_cart)
- *      - Append if same saleId already in cart; replace if different saleId
- *      - Price stored in CENTS (multiply API dollars × 100) so ShopperCartDrawer
- *        can display with its standard `(price / 100).toFixed(2)` logic
- *   6. Redirect to /sales/:saleId where the cart drawer is accessible
+ * FIX (2026-07-06): This used to be a purely client-side page — it rendered a
+ * static "Adding to cart…" shell and only redirected after a useEffect ran in
+ * the browser. Meta's checkout-URL validator flagged ArtifactMI's shop with
+ * "issues with your checkout" — confirmed live that hitting the bare URL
+ * produces no observable server-level redirect, just a static shell. Any
+ * validator that doesn't execute client JS (or only inspects the HTTP
+ * response chain) sees nothing resembling a working checkout endpoint.
  *
- * Fallback: redirect to / on any parse / fetch error.
- *
- * Must be client-side — localStorage is not available server-side.
+ * Fix: resolve and redirect server-side via getServerSideProps, so the
+ * checkout URL always responds with a real HTTP redirect (307) to a
+ * concrete destination — either the sale page (valid products) or the
+ * homepage (invalid/missing products) — regardless of whether the caller
+ * runs JavaScript. The actual cart-building (localStorage write, since that
+ * API doesn't exist server-side) now happens on the destination sale page,
+ * which reads the forwarded `fbCheckout`/`coupon` query params. See
+ * pages/sales/[id].tsx for that half of the flow.
  */
 
-import { useEffect } from 'react';
-import { useRouter } from 'next/router';
+import type { GetServerSideProps } from 'next';
 
-const CART_KEY = 'fas_shopper_cart';
+// SSR only ever talks to the Railway API directly (server-to-server, no cookie
+// concerns) — mirrors the same pattern documented in lib/api.ts.
+const RAILWAY_API = (process.env.NEXT_PUBLIC_API_URL || 'https://api.finda.sale/api').replace(/\/$/, '');
 
-interface CartItem {
-  id: string;
-  title: string;
-  price: number | null;
-  photoUrl?: string;
-  saleId: string;
-}
+export const getServerSideProps: GetServerSideProps = async (context) => {
+  const { products, coupon } = context.query;
 
-interface CartState {
-  items: CartItem[];
-  saleId: string | null;
-}
+  if (!products || typeof products !== 'string') {
+    return { redirect: { destination: '/', permanent: false } };
+  }
 
-/** Convert a raw API item record to a CartItem with price in CENTS. */
-function toCartItem(item: Record<string, unknown>, saleId: string): CartItem {
-  return {
-    id: item.id as string,
-    title: item.title as string,
-    // API returns price in dollars; ShopperCartDrawer displays (price / 100)
-    price:
-      item.price != null ? Math.round(Number(item.price) * 100) : null,
-    photoUrl:
-      Array.isArray(item.photoUrls) && (item.photoUrls as unknown[]).length > 0
-        ? (item.photoUrls as string[])[0]
-        : undefined,
-    saleId,
-  };
-}
+  // Parse "ID:QTY,ID2:QTY2" — we only need the first item id to resolve the sale.
+  const firstEntry = products.split(',')[0];
+  const firstItemId = firstEntry ? firstEntry.split(':')[0].trim() : '';
 
-export default function CheckoutPage() {
-  const router = useRouter();
+  if (!firstItemId) {
+    return { redirect: { destination: '/', permanent: false } };
+  }
 
-  useEffect(() => {
-    // router.query is populated only after hydration
-    if (!router.isReady) return;
+  try {
+    const res = await fetch(`${RAILWAY_API}/items/${encodeURIComponent(firstItemId)}`);
+    if (!res.ok) {
+      return { redirect: { destination: '/', permanent: false } };
+    }
+    const item = await res.json();
+    const saleId: string | null = item?.saleId ?? item?.sale?.id ?? null;
 
-    const run = async () => {
-      const { products, coupon } = router.query;
+    if (!saleId) {
+      return { redirect: { destination: '/', permanent: false } };
+    }
 
-      if (!products || typeof products !== 'string') {
-        console.warn('[checkout] Missing or invalid products param — redirecting to /');
-        router.replace('/');
-        return;
-      }
+    const params = new URLSearchParams();
+    params.set('fbCheckout', products);
+    if (typeof coupon === 'string' && coupon.trim()) {
+      params.set('coupon', coupon.trim());
+    }
+    params.set('cart', 'open');
 
-      // Parse "ID:QTY,ID2:QTY2" — extract all item IDs
-      const entries = products.split(',');
-      const itemIds: string[] = entries
-        .map((e) => e.split(':')[0].trim())
-        .filter(Boolean);
-
-      if (itemIds.length === 0) {
-        console.warn('[checkout] Could not parse any itemIds — redirecting to /');
-        router.replace('/');
-        return;
-      }
-
-      try {
-        // Fetch all items in parallel
-        const results = await Promise.all(
-          itemIds.map((id) =>
-            fetch(`/api/items/${encodeURIComponent(id)}`, {
-              credentials: 'include',
-            }).then((res) =>
-              res.ok ? res.json() : Promise.reject(new Error(`HTTP ${res.status}`))
-            )
-          )
-        );
-
-        // Determine primary saleId from the first successfully-resolved item
-        const primaryItem = results[0] as Record<string, unknown> | undefined;
-        if (!primaryItem) {
-          console.warn('[checkout] No items returned — redirecting to /');
-          router.replace('/');
-          return;
-        }
-
-        const saleId: string | null =
-          (primaryItem.saleId as string | undefined) ??
-          ((primaryItem.sale as Record<string, unknown> | undefined)?.id as string | undefined) ??
-          null;
-
-        if (!saleId) {
-          console.warn('[checkout] Item has no saleId — redirecting to /');
-          router.replace('/');
-          return;
-        }
-
-        // Build cart items — only include items from the same sale
-        const newCartItems: CartItem[] = (results as Record<string, unknown>[])
-          .filter((item) => {
-            const itemSaleId =
-              (item.saleId as string | undefined) ??
-              ((item.sale as Record<string, unknown> | undefined)?.id as string | undefined);
-            return itemSaleId === saleId;
-          })
-          .map((item) => toCartItem(item, saleId));
-
-        if (newCartItems.length === 0) {
-          console.warn('[checkout] No valid cart items after sale filter — redirecting to /');
-          router.replace('/');
-          return;
-        }
-
-        // Read existing cart, merge or replace
-        let existing: CartState = { items: [], saleId: null };
-        try {
-          const stored = localStorage.getItem(CART_KEY);
-          if (stored) {
-            existing = JSON.parse(stored) as CartState;
-          }
-        } catch {
-          // Corrupt cart — start fresh
-        }
-
-        let updatedCart: CartState;
-        if (existing.saleId && existing.saleId !== saleId) {
-          // Different sale — replace entire cart with incoming items
-          updatedCart = { items: newCartItems, saleId };
-        } else {
-          // Same sale (or empty cart) — append items not already present
-          const existingIds = new Set(existing.items.map((i) => i.id));
-          const toAdd = newCartItems.filter((i) => !existingIds.has(i.id));
-          updatedCart = {
-            saleId,
-            items: [...existing.items, ...toAdd],
-          };
-        }
-
-        localStorage.setItem(CART_KEY, JSON.stringify(updatedCart));
-
-        // Store coupon for CheckoutModal to pre-fill (Facebook ?coupon= param)
-        if (coupon && typeof coupon === 'string' && coupon.trim()) {
-          localStorage.setItem('fas_pending_coupon', coupon.trim().toUpperCase());
-        }
-
-        router.replace(`/sales/${encodeURIComponent(saleId)}?cart=open`);
-      } catch (err) {
-        console.warn('[checkout] Unexpected error — redirecting to /:', err);
-        router.replace('/');
-      }
+    return {
+      redirect: {
+        destination: `/sales/${encodeURIComponent(saleId)}?${params.toString()}`,
+        permanent: false,
+      },
     };
+  } catch (err) {
+    console.warn('[checkout] SSR resolve failed — redirecting to /:', err);
+    return { redirect: { destination: '/', permanent: false } };
+  }
+};
 
-    run();
-  }, [router.isReady]); // eslint-disable-line react-hooks/exhaustive-deps
-
+// Reached only if Next.js somehow renders the page without following the
+// redirect above (shouldn't happen) — keep a minimal, honest fallback shell.
+export default function CheckoutPage() {
   return (
     <div
       style={{
@@ -185,7 +93,7 @@ export default function CheckoutPage() {
         color: '#666',
       }}
     >
-      Adding to cart…
+      Redirecting to checkout…
     </div>
   );
 }

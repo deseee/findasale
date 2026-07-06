@@ -401,6 +401,58 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
     }
   }, [id]);
 
+  // Facebook Commerce Manager: build the cart from a forwarded checkout link.
+  // /checkout (getServerSideProps) redirects here with fbCheckout=ITEM:QTY,ITEM2:QTY2
+  // and an optional coupon — this used to be done in checkout.tsx itself via a
+  // client-only useEffect, which meant the checkout URL never produced a real
+  // HTTP redirect (Meta's checkout-URL validator flagged this — 2026-07-06 fix).
+  useEffect(() => {
+    if (!router.isReady) return;
+    const { fbCheckout, coupon } = router.query;
+    if (!fbCheckout || typeof fbCheckout !== 'string') return;
+
+    const run = async () => {
+      const entries = fbCheckout.split(',');
+      const itemIds = entries.map((e) => e.split(':')[0].trim()).filter(Boolean);
+      if (itemIds.length === 0) return;
+
+      try {
+        const results = await Promise.all(
+          itemIds.map((itemId) => api.get(`/items/${encodeURIComponent(itemId)}`).then((res) => res.data))
+        );
+
+        const validItems = results.filter((item) => item && (item.saleId === id || item.sale?.id === id));
+        if (validItems.length === 0) return;
+
+        if (shopperCart.saleId && shopperCart.saleId !== id && typeof id === 'string') {
+          shopperCart.switchSale(id);
+        }
+
+        for (const item of validItems) {
+          shopperCart.addItem({
+            id: item.id,
+            title: item.title,
+            price: item.price != null ? Math.round(Number(item.price) * 100) : null,
+            photoUrl: Array.isArray(item.photoUrls) && item.photoUrls.length > 0 ? item.photoUrls[0] : undefined,
+            saleId: (item.saleId ?? item.sale?.id) as string,
+          });
+        }
+
+        if (typeof coupon === 'string' && coupon.trim()) {
+          localStorage.setItem('fas_pending_coupon', coupon.trim().toUpperCase());
+        }
+      } catch (err) {
+        console.warn('[fbCheckout] Failed to build cart from Facebook checkout link:', err);
+      } finally {
+        // Clean fbCheckout/coupon from the URL — cart=open (handled below) stays.
+        const { fbCheckout: _fb, coupon: _c, ...rest } = router.query;
+        void router.replace({ pathname: router.pathname, query: rest }, undefined, { shallow: true });
+      }
+    };
+
+    void run();
+  }, [router.isReady, id]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Facebook Commerce Manager: auto-open cart drawer when arriving from /checkout?cart=open
   useEffect(() => {
     if (!router.isReady) return;
