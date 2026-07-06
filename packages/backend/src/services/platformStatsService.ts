@@ -66,6 +66,7 @@ export interface PlatformCount {
   limitSource: 'KNOWN' | 'ESTIMATED' | 'UNKNOWN';
   overLimit: boolean;
   utilizationPct: number | null;
+  storeUrl: string | null; // Direct link to the organizer's page/store on this platform, when known
 }
 
 export interface GooglePlatformCount extends PlatformCount {
@@ -174,11 +175,12 @@ export async function computePlatformStats(organizerId: string): Promise<Platfor
       id: true,
       ebayStoreUrl: true,
       shopifyEnabled: true,
+      shopifyShopDomain: true,
       facebookPageId: true,
       fbCatalogEnabled: true,
       ebayQueueMode: true,
       ebayQueueRotation: true,
-      ebayConnection: { select: { id: true, accessToken: true, tokenExpiresAt: true } },
+      ebayConnection: { select: { id: true, accessToken: true, tokenExpiresAt: true, ebayUserId: true } },
     },
   });
 
@@ -325,6 +327,17 @@ export async function computePlatformStats(organizerId: string): Promise<Platfor
     },
   });
 
+  // ── Clickable platform links — organizer's actual store/page on each platform ──
+  // eBay: prefer the explicit store URL; fall back to the public seller page (My eBay World)
+  const ebayStoreUrl: string | null =
+    org.ebayStoreUrl ?? (org.ebayConnection ? `https://www.ebay.com/usr/${org.ebayConnection.ebayUserId}` : null);
+  // Facebook: Page ID resolves directly to a public facebook.com page URL
+  const facebookPageUrl: string | null = org.facebookPageId ? `https://www.facebook.com/${org.facebookPageId}` : null;
+  // Shopify: shop domain is the public storefront
+  const shopifyStoreUrl: string | null = org.shopifyShopDomain
+    ? `https://${org.shopifyShopDomain}`
+    : null;
+
   // eBay limit resolution
   const { limit: ebayLimit, limitSource, storeDetected } = resolveEbayLimit(org);
   const ebayFreeSlots = Math.max(0, ebayLimit - ebayListed);
@@ -360,6 +373,7 @@ export async function computePlatformStats(organizerId: string): Promise<Platfor
       freeSlots: ebayFreeSlots,
       warningLevel: ebayWarningLevel(ebayListed, ebayLimit),
       liveCountAvailable: ebayLiveCountAvailable,
+      storeUrl: ebayStoreUrl,
     },
 
     googleMerchant: {
@@ -372,6 +386,7 @@ export async function computePlatformStats(organizerId: string): Promise<Platfor
       eligible: googleEligible,
       ineligible: googleIneligible,
       ineligibilityBreakdown: breakdown,
+      storeUrl: null, // Google Merchant is a feed, not a public organizer-facing page
     },
 
     facebook: {
@@ -384,6 +399,7 @@ export async function computePlatformStats(organizerId: string): Promise<Platfor
       overLimit: false,
       utilizationPct: null,
       note: (org as any).fbCatalogEnabled ? 'COMMERCE_MANAGER' : 'EXPORT_ONLY',
+      storeUrl: facebookPageUrl,
     },
 
     shopify: {
@@ -393,6 +409,7 @@ export async function computePlatformStats(organizerId: string): Promise<Platfor
       limitSource: 'UNKNOWN',
       overLimit: false,
       utilizationPct: null,
+      storeUrl: shopifyStoreUrl,
     },
 
     totals: {

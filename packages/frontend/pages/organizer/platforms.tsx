@@ -34,6 +34,7 @@ interface EbayStats {
   freeSlots: number;
   warningLevel: 'ok' | 'warning' | 'critical' | 'over';
   liveCountAvailable: boolean;
+  storeUrl: string | null;
 }
 
 interface GoogleStats {
@@ -56,12 +57,14 @@ interface FacebookStats {
   listed: number;
   limit: null;
   note: 'EXPORT_ONLY';
+  storeUrl: string | null;
 }
 
 interface ShopifyStats {
   connected: boolean;
   listed: number;
   limit: null;
+  storeUrl: string | null;
 }
 
 interface PlatformStatsResponse {
@@ -356,12 +359,24 @@ export default function PlatformsPage() {
                     </button>
                   )}
 
-                  <button
-                    onClick={() => setGapPanel({ platform: 'ebay' })}
-                    className="mt-3 text-xs font-medium text-[#6b8f5e] dark:text-[#a8c49a] hover:text-[#87A878] transition-colors"
-                  >
-                    View {stats?.totals.totalUnlisted ?? 0} not listed &rarr;
-                  </button>
+                  <div className="mt-3 flex items-center gap-3 flex-wrap">
+                    {ebay.storeUrl && (
+                      <a
+                        href={ebay.storeUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs font-medium text-[#6b8f5e] dark:text-[#a8c49a] hover:text-[#87A878] transition-colors"
+                      >
+                        View my eBay Store &#x2197;
+                      </a>
+                    )}
+                    <button
+                      onClick={() => setGapPanel({ platform: 'ebay' })}
+                      className="text-xs font-medium text-[#6b8f5e] dark:text-[#a8c49a] hover:text-[#87A878] transition-colors"
+                    >
+                      View {stats?.totals.totalUnlisted ?? 0} not listed &rarr;
+                    </button>
+                  </div>
                 </>
               ) : (
                 <div className="mt-3">
@@ -457,6 +472,16 @@ export default function PlatformsPage() {
                   Connect Facebook &rarr;
                 </Link>
               )}
+              {facebook?.connected && facebook.storeUrl && (
+                <a
+                  href={facebook.storeUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-2 inline-block text-xs font-medium text-[#6b8f5e] dark:text-[#a8c49a] hover:text-[#87A878] transition-colors"
+                >
+                  View Facebook Page &#x2197;
+                </a>
+              )}
             </div>
 
             {/* Shopify Card */}
@@ -483,6 +508,16 @@ export default function PlatformsPage() {
                 <p className="text-xs text-warm-400 dark:text-warm-500 mt-2">
                   Shopify available on the TEAMS plan
                 </p>
+              )}
+              {shopify?.connected && shopify.storeUrl && (
+                <a
+                  href={shopify.storeUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-2 inline-block text-xs font-medium text-[#6b8f5e] dark:text-[#a8c49a] hover:text-[#87A878] transition-colors"
+                >
+                  View my Shopify Store &#x2197;
+                </a>
               )}
             </div>
           </div>
