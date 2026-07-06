@@ -8,6 +8,7 @@ import { sendHoldPlacedAlert, sendHoldPlacedToShopper, sendHoldStatusToShopper }
 import { checkForFraud, calculateConfidenceScore } from '../services/fraudDetectionService';
 import { getRankBenefits, calculateRankFromXp } from '../utils/rankUtils';
 import { endEbayListingIfExists } from './ebayController'; // Feature #244 Phase 2: eBay direct push — withdraw on sale
+import { markShopifyItemSold } from '../services/shopifyService';
 import { notifyFacebookExportedItemSold } from '../services/facebookNudgeService';
 import { checkCrewInvasion } from '../services/crewInvasionService'; // Feature #397: Crew Invasion flash discount
 import { emailService } from '../lib/emailService';
@@ -911,6 +912,9 @@ export const batchUpdateHolds = async (req: AuthRequest, res: Response) => {
         setImmediate(() => {
           Promise.allSettled(
             batchHolds.map((h) => endEbayListingIfExists(h.item.id))
+          ).catch(() => {});
+          Promise.allSettled(
+            batchHolds.map((h) => markShopifyItemSold(h.item.id))
           ).catch(() => {});
           Promise.allSettled(
             batchHolds.map((h) => notifyFacebookExportedItemSold(h.item.id))

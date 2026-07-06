@@ -19,6 +19,7 @@ import { prisma } from '../lib/prisma';
 import { cronGuard } from '../utils/cronGuard';
 import { refreshEbayAccessToken, endEbayListingIfExists } from '../controllers/ebayController';
 import { notifyFacebookExportedItemSold } from '../services/facebookNudgeService';
+import { markShopifyItemSold } from '../services/shopifyService';
 
 interface EbayItem {
   id: string;
@@ -256,6 +257,9 @@ export async function syncSoldItemsForOrganizer(organizerId: string): Promise<Sy
           // Withdraw the eBay listing only once it's fully sold out (fire-and-forget)
           endEbayListingIfExists(matchedItem.id).catch((err) =>
             console.warn(`[eBay Sync] withdraw failed for item ${matchedItem!.id}:`, err.message)
+          );
+          markShopifyItemSold(matchedItem.id).catch((err) =>
+            console.warn(`[Shopify] mark-sold failed for item ${matchedItem!.id}:`, err.message)
           );
           notifyFacebookExportedItemSold(matchedItem.id).catch((err) =>
             console.warn(`[FB Nudge] failed for item ${matchedItem!.id}:`, err.message)

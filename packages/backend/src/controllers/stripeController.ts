@@ -1246,6 +1246,9 @@ export const webhookHandler = async (req: Request, res: Response) => {
           endEbayListingIfExists(paymentIntent.metadata.itemId).catch(err =>
             console.error('[eBay] Failed to withdraw offer:', err)
           );
+          markShopifyItemSold(paymentIntent.metadata.itemId).catch(err =>
+            console.error('[Shopify] Failed to mark item sold:', err)
+          );
           notifyFacebookExportedItemSold(paymentIntent.metadata.itemId).catch(err =>
             console.warn(`[FB Nudge] failed for item ${paymentIntent.metadata.itemId}:`, err.message)
           );
@@ -1934,6 +1937,9 @@ export const webhookHandler = async (req: Request, res: Response) => {
                 posPaymentLink.itemIds!.map((itemId: string) => endEbayListingIfExists(itemId))
               ).catch(() => {});
               Promise.allSettled(
+                posPaymentLink.itemIds!.map((itemId: string) => markShopifyItemSold(itemId))
+              ).catch(() => {});
+              Promise.allSettled(
                 posPaymentLink.itemIds!.map((itemId: string) => notifyFacebookExportedItemSold(itemId))
               ).catch(() => {});
             });
@@ -2001,6 +2007,9 @@ export const webhookHandler = async (req: Request, res: Response) => {
             setImmediate(() => {
               Promise.allSettled(
                 cartItemIds.map((itemId: string) => endEbayListingIfExists(itemId))
+              ).catch(() => {});
+              Promise.allSettled(
+                cartItemIds.map((itemId: string) => markShopifyItemSold(itemId))
               ).catch(() => {});
               Promise.allSettled(
                 cartItemIds.map((itemId: string) => notifyFacebookExportedItemSold(itemId))
@@ -2115,6 +2124,9 @@ export const webhookHandler = async (req: Request, res: Response) => {
           setImmediate(() => {
             Promise.allSettled(
               holdInvoice.itemIds.map((itemId: string) => endEbayListingIfExists(itemId))
+            ).catch(() => {});
+            Promise.allSettled(
+              holdInvoice.itemIds.map((itemId: string) => markShopifyItemSold(itemId))
             ).catch(() => {});
             Promise.allSettled(
               holdInvoice.itemIds.map((itemId: string) => notifyFacebookExportedItemSold(itemId))

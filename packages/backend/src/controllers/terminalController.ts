@@ -14,6 +14,7 @@ import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import { getPlatformFeeRate } from '../utils/feeCalculator'; // S388: Tier-aware fee calculation
 import { endEbayListingIfExists } from './ebayController'; // Feature #244 Phase 2: eBay direct push — withdraw on sale
+import { markShopifyItemSold } from '../services/shopifyService';
 import { notifyFacebookExportedItemSold } from '../services/facebookNudgeService';
 import { transactionalEmailService } from '../lib/transactionalEmailService';
 import { recordSuspectedSignal } from '../services/checkoutGuard'; // S1072 Finding #4: cash path is offsite — log-only, never blocked
@@ -637,6 +638,9 @@ export async function processCashSaleCore(params: {
       // Fire-and-forget: end eBay listing if item was pushed there
       endEbayListingIfExists(item.itemId).catch(err =>
         console.error('[eBay] Failed to withdraw offer:', err)
+      );
+      markShopifyItemSold(item.itemId).catch(err =>
+        console.error('[Shopify] Failed to mark item sold:', err)
       );
       notifyFacebookExportedItemSold(item.itemId).catch(err =>
         console.warn(`[FB Nudge] failed for item ${item.itemId}:`, err.message)

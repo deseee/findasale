@@ -34,6 +34,7 @@ import {
   getSitemapItems,
 } from '../controllers/itemController';
 import { getComps, endEbayListingIfExists } from '../controllers/ebayController'; // Feature #229: eBay price comps; endEbayListingIfExists for withdraw-on-SOLD
+import { markShopifyItemSold } from '../services/shopifyService';
 import { notifyFacebookExportedItemSold } from '../services/facebookNudgeService';
 import { authenticate, optionalAuthenticate, AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
@@ -455,6 +456,9 @@ router.post('/bulk', authenticate, requireTier('SIMPLE'), bulkItemsLimiter, asyn
                 console.warn(`[eBay] bulk SOLD withdraw failed for item ${item.id}:`, err.message)
               );
             }
+            markShopifyItemSold(item.id).catch(err =>
+              console.warn(`[Shopify] bulk SOLD mark failed for item ${item.id}:`, err.message)
+            );
             notifyFacebookExportedItemSold(item.id).catch(err =>
               console.warn(`[FB Nudge] failed for item ${item.id}:`, err.message)
             );
