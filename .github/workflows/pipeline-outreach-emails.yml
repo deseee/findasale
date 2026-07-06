@@ -1,8 +1,8 @@
-# cache-bust: 2026-06-10 (force cron scheduler re-registration after S939 re-enable)
+# cache-bust: 2026-07-06 (restored every-4h cadence post-ramp cap raise to 10; S1080)
 name: Pipeline — Outreach Emails
 on:
   schedule:
-    - cron: '0 8 * * *'   # 1x/day while outreach paused (cap=1); was every-4h/6x — cuts Actions minutes
+    - cron: '0 */4 * * *'   # every-4h/6x restored 2026-07-06 (cap=10 ramp step; was 1x/day during pause)
   workflow_dispatch:
 concurrency:
   group: ${{ github.workflow }}
