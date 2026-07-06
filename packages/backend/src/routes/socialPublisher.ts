@@ -33,7 +33,7 @@ router.use(authenticate, requireAdmin);
 // Accounts
 router.get('/accounts', listAccounts);
 router.post('/connect', startConnect);
-router.get('/oauth/callback', oauthCallback);
+router.get('/oauth/callback/:platform', oauthCallback);
 router.post('/disconnect', disconnectAccount);
 
 // Posts / publish queue

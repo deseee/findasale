@@ -53,6 +53,28 @@ function isValidPlatform(v: unknown): v is SocialPlatform {
   return typeof v === 'string' && (VALID_PLATFORMS as string[]).includes(v);
 }
 
+// ── Provider-callback URL slug ⇄ SocialPlatform enum (SINGLE source of truth). ───────
+// Provider "Authorized redirect URI" fields require an EXACT string match and reject
+// query strings, so the callback is path-based: /oauth/callback/<slug>. The slug is a
+// lowercase, URL-safe segment; the authoritative platform is still resolved server-side
+// from the pendingOAuth state (the slug only satisfies the provider's exact-URI match).
+// Extensible: add INSTAGRAM/FACEBOOK_PAGE/PINTEREST here when their modules land.
+const PLATFORM_SLUGS: Record<SocialPlatform, string> = {
+  X: 'x',
+  YOUTUBE: 'youtube',
+  INSTAGRAM: 'instagram',
+  FACEBOOK_PAGE: 'facebook-page',
+  PINTEREST: 'pinterest',
+};
+
+const SLUG_TO_PLATFORM: Record<string, SocialPlatform> = Object.fromEntries(
+  (Object.entries(PLATFORM_SLUGS) as [SocialPlatform, string][]).map(([p, slug]) => [slug, p])
+) as Record<string, SocialPlatform>;
+
+function platformSlug(platform: SocialPlatform): string {
+  return PLATFORM_SLUGS[platform];
+}
+
 // ── Ephemeral OAuth state (PKCE verifier + platform), keyed by opaque `state`. ───────
 // Admin-only, short-lived connect flow. Entries expire after 10 minutes. Kept in
 // memory deliberately — a connect that spans a backend restart simply restarts.
@@ -73,8 +95,10 @@ function reapOAuth(): void {
 }
 
 function callbackRedirectUri(platform: SocialPlatform): string {
+  // QUERY-FREE, path-based — provider consoles require an exact-match redirect URI and
+  // reject any query string. Shape: <base>/api/social-publisher/oauth/callback/<slug>.
   const base = process.env.SOCIAL_OAUTH_CALLBACK_BASE || process.env.BACKEND_URL || '';
-  return `${base.replace(/\/$/, '')}/api/social-publisher/oauth/callback?platform=${platform}`;
+  return `${base.replace(/\/$/, '')}/api/social-publisher/oauth/callback/${platformSlug(platform)}`;
 }
 
 /**
@@ -123,27 +147,41 @@ export const startConnect = async (req: AuthRequest, res: Response) => {
 };
 
 /**
- * GET /api/social-publisher/oauth/callback?platform=&code=&state= — OAuth redirect target.
- * Exchanges the code, stores the ENCRYPTED tokens via tokenStore.
+ * GET /api/social-publisher/oauth/callback/:platform?code=&state= — OAuth redirect target.
+ * Query-free PATH form so provider consoles (Google/X/Meta) can register an exact-match
+ * redirect URI. Exchanges the code, stores the ENCRYPTED tokens via tokenStore.
+ *
+ * SECURITY (CSRF, unchanged): the AUTHORITATIVE platform is resolved server-side from
+ * the pendingOAuth entry keyed by `state` — NOT from the URL. The `:platform` path
+ * segment exists ONLY to satisfy the provider's exact-URI match; we assert it maps to
+ * the state-bound platform and reject on any mismatch. State single-use + PKCE
+ * (pending.codeVerifier) validation are preserved exactly as before.
  */
 export const oauthCallback = async (req: AuthRequest, res: Response) => {
   try {
-    const platform = req.query.platform;
+    const slug = req.params.platform;
     const code = req.query.code;
     const state = req.query.state;
 
-    if (!isValidPlatform(platform)) {
-      return res.status(400).json({ message: 'Invalid platform' });
-    }
     if (typeof code !== 'string' || typeof state !== 'string') {
       return res.status(400).json({ message: 'Missing code or state' });
     }
 
     reapOAuth();
     const pending = pendingOAuth.get(state);
-    if (!pending || pending.platform !== platform) {
+    if (!pending) {
       return res.status(400).json({ message: 'Invalid or expired OAuth state' });
     }
+
+    // AUTHORITATIVE platform comes from the state-bound pending entry — never the URL.
+    const platform = pending.platform;
+
+    // The URL slug only satisfies the provider's exact-URI match; it MUST agree with the
+    // state-bound platform or this is a tampered/mismatched callback — reject it.
+    if (typeof slug !== 'string' || SLUG_TO_PLATFORM[slug] !== platform) {
+      return res.status(400).json({ message: 'Invalid or expired OAuth state' });
+    }
+
     pendingOAuth.delete(state); // single-use
 
     const publisher = getPublisher(platform);
