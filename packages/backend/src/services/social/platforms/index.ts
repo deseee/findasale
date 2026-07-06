@@ -9,6 +9,7 @@
 import type { SocialPlatform } from '@prisma/client';
 import type { PlatformPublisher } from './types';
 import { xPublisher } from './x';
+import { youtubePublisher } from './youtube';
 
 /**
  * Registered publishers. Phase 1a ships X only; YOUTUBE / INSTAGRAM / FACEBOOK_PAGE /
@@ -16,7 +17,7 @@ import { xPublisher } from './x';
  */
 const PUBLISHERS: Partial<Record<SocialPlatform, PlatformPublisher>> = {
   X: xPublisher,
-  // YOUTUBE: youtubePublisher,       // Phase 1b
+  YOUTUBE: youtubePublisher,          // Phase 1b — YouTube Shorts
   // INSTAGRAM: metaPublisher,        // Phase 2
   // FACEBOOK_PAGE: metaPublisher,    // Phase 2
   // PINTEREST: pinterestPublisher,   // Phase 3
