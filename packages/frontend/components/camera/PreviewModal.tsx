@@ -29,6 +29,7 @@ export interface PreviewModalProps {
     description?: string;
     aiErrorLog?: object;
     aiConfidence?: number;
+    price?: number;
   };
   onClose: () => void;
   onSave: (edits: {
@@ -450,11 +451,23 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
               )}
             </div>
 
-            {/* Price (read-only note) */}
+            {/* Price (system suggestion, from AI capture analysis) */}
             <div className="bg-warm-50 dark:bg-gray-700 border border-warm-200 dark:border-gray-600 rounded-lg p-3">
-              <p className="text-xs text-warm-600 dark:text-warm-400">
-                Price will be set at the review stage before publishing.
-              </p>
+              {(() => {
+                const suggestedPrice = fullItem?.price ?? item.price;
+                return suggestedPrice ? (
+                  <p className="text-sm text-warm-700 dark:text-warm-300">
+                    Suggested price:{' '}
+                    <span className="font-semibold text-warm-900 dark:text-warm-100">
+                      {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(suggestedPrice)}
+                    </span>
+                  </p>
+                ) : (
+                  <p className="text-xs text-warm-600 dark:text-warm-400">
+                    Price will be set at the review stage before publishing.
+                  </p>
+                );
+              })()}
             </div>
           </div>
 
