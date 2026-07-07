@@ -2,7 +2,7 @@ name: Scrape StorageAuctions.com Directory
 
 on:
   schedule:
-    - cron: '0 7 * * 2'  # Tuesdays at 07:00 UTC (weekly — auction facility directory)
+    - cron: '23 7 * * 2'  # Tuesdays at 07:23 UTC (offset from :00 -- 5-workflow cluster at 7:00 was likely causing GitHub's scheduler to silently drop this low-frequency cron; missed 2026-06-30 and 2026-07-07 ticks)
   workflow_dispatch:
 
 jobs:
