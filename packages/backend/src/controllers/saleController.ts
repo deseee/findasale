@@ -207,7 +207,7 @@ export const listSales = async (req: Request, res: Response) => {
         orderBy: [{ isPinned: 'desc' }, { startDate: 'asc' }],
         include: {
           organizer: {
-            select: { id: true, businessName: true, phone: true, reputationTier: true, directoryConfidenceScore: true, user: { select: { customMapPin: true } } }
+            select: { id: true, businessName: true, reputationTier: true, directoryConfidenceScore: true, user: { select: { customMapPin: true } } }
           },
           _count: { select: { favorites: true } },
           trails: {
@@ -505,18 +505,34 @@ export const getSale = async (req: Request, res: Response) => {
       iconUrl: ub.badge.iconUrl, awardedAt: ub.awardedAt,
     })) || [];
 
-    const convertedSale = convertDecimalsToNumbers({
+    // Security: internal-ops Sale fields + organizer.phone are only for the owner/organizer or admin.
+    // Anonymous/non-owner/non-admin callers never see them (public GET /api/sales/:id is hit by
+    // anonymous users, the frontend, and the public MCP server at mcp.finda.sale).
+    const isPrivilegedViewer = isOrganizer || isAdmin;
+
+    const responseSale: any = {
       ...sale,
       locked: false,
       organizer: {
         id: organizer.id, userId: organizer.userId, businessName: organizer.businessName,
-        phone: organizer.phone, address: organizer.address, badges, avgRating,
+        ...(isPrivilegedViewer ? { phone: organizer.phone } : {}),
+        address: organizer.address, badges, avgRating,
         reviewCount,
         tier: organizer.tier, verificationStatus: organizer.verificationStatus, verificationSource: organizer.verificationSource,
         subscriptionTier: organizer.subscriptionTier, removeWatermarkEnabled: organizer.removeWatermarkEnabled,
         isClaimed: organizer.isClaimed, isUnmanagedListing: organizer.isUnmanagedListing,
       },
-    });
+    };
+
+    if (!isPrivilegedViewer) {
+      delete responseSale.cashFloat;
+      delete responseSale.settlementNotes;
+      delete responseSale.commissionRate;
+      delete responseSale.highValueThresholdUSD;
+      delete responseSale.autoFlagHighValue;
+    }
+
+    const convertedSale = convertDecimalsToNumbers(responseSale);
 
     res.json(convertedSale);
   } catch (error) {
