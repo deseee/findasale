@@ -36,6 +36,13 @@ export async function getLatencyStatus(req: Request, res: Response): Promise<voi
     // Determine degradation state: either latency spike OR module flag already set
     const degraded = latencyMs > 2000 || isDegraded;
 
+    // Perf/cost fix (2026-07-06): this endpoint is public/non-personalized (no auth
+    // middleware on the route, global isDegraded flag only) and is polled by every
+    // logged-in user's browser via useDegradationMode every 3 minutes, through the
+    // Vercel /api rewrite proxy — so each poll was a full uncached Edge Request +
+    // Function invocation + Railway round trip for identical data. A short public
+    // cache lets Vercel's edge absorb near-simultaneous polls into one origin hit.
+    res.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60');
     res.json({
       status: 'ok',
       latencyMs,
