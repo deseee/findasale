@@ -173,7 +173,11 @@ const nextConfig = {
       { protocol: 'https', hostname: 'i.ebayimg.com' },
       { protocol: 'https', hostname: 'images.unsplash.com' },
     ],
-    formats: ['image/avif', 'image/webp'],
+    formats: ['image/webp'],
+    // Vercel image-optimization cost guidance: photos are immutable once uploaded
+    // (Cloudinary/CF-proxy already serve stable URLs), so cache transforms for the
+    // max 31 days instead of the 60s default to cut repeat transformation+cache-write cost.
+    minimumCacheTTL: 2678400,
   },
 
   // Route aliases for backwards compatibility
