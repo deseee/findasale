@@ -101,6 +101,14 @@ function callbackRedirectUri(platform: SocialPlatform): string {
   return `${base.replace(/\/$/, '')}/api/social-publisher/oauth/callback/${platformSlug(platform)}`;
 }
 
+// After the OAuth handshake the admin's browser is redirected back to the frontend
+// admin page with a status query param (?connected=<slug> on success, ?error=<slug> on
+// failure) — never a raw JSON body. Same FRONTEND_URL pattern used across controllers.
+function adminSocialRedirect(params: string): string {
+  const frontendUrl = (process.env.FRONTEND_URL || 'https://finda.sale').replace(/\/$/, '');
+  return `${frontendUrl}/admin/social-accounts?${params}`;
+}
+
 /**
  * GET /api/social-publisher/accounts — list connected accounts (token fields excluded).
  */
@@ -158,19 +166,24 @@ export const startConnect = async (req: AuthRequest, res: Response) => {
  * (pending.codeVerifier) validation are preserved exactly as before.
  */
 export const oauthCallback = async (req: AuthRequest, res: Response) => {
+  // On BOTH success and failure this handler 302-REDIRECTS the admin's browser back to
+  // the frontend admin page with a status query param — it never returns raw JSON.
+  // (?connected=<slug> on success, ?error=<slug> on failure.) All security below —
+  // state single-use, PKCE (pending.codeVerifier), slug⇄state platform match, encrypted
+  // token persistence via tokenStore.upsertAccount — is preserved exactly as before.
+  const slug = typeof req.params.platform === 'string' ? req.params.platform : 'unknown';
   try {
-    const slug = req.params.platform;
     const code = req.query.code;
     const state = req.query.state;
 
     if (typeof code !== 'string' || typeof state !== 'string') {
-      return res.status(400).json({ message: 'Missing code or state' });
+      return res.redirect(302, adminSocialRedirect(`error=missing_code_or_state`));
     }
 
     reapOAuth();
     const pending = pendingOAuth.get(state);
     if (!pending) {
-      return res.status(400).json({ message: 'Invalid or expired OAuth state' });
+      return res.redirect(302, adminSocialRedirect(`error=invalid_or_expired_state`));
     }
 
     // AUTHORITATIVE platform comes from the state-bound pending entry — never the URL.
@@ -178,15 +191,18 @@ export const oauthCallback = async (req: AuthRequest, res: Response) => {
 
     // The URL slug only satisfies the provider's exact-URI match; it MUST agree with the
     // state-bound platform or this is a tampered/mismatched callback — reject it.
-    if (typeof slug !== 'string' || SLUG_TO_PLATFORM[slug] !== platform) {
-      return res.status(400).json({ message: 'Invalid or expired OAuth state' });
+    if (SLUG_TO_PLATFORM[slug] !== platform) {
+      return res.redirect(302, adminSocialRedirect(`error=invalid_or_expired_state`));
     }
 
     pendingOAuth.delete(state); // single-use
 
     const publisher = getPublisher(platform);
     if (!publisher) {
-      return res.status(400).json({ message: `Platform ${platform} not supported` });
+      return res.redirect(
+        302,
+        adminSocialRedirect(`error=platform_not_supported`),
+      );
     }
 
     const exchanged = await publisher.exchangeCode({
@@ -208,10 +224,11 @@ export const oauthCallback = async (req: AuthRequest, res: Response) => {
       platformUsername: exchanged.platformUsername ?? null,
     });
 
-    return res.json({ ok: true, platform, username: exchanged.platformUsername ?? null });
+    // Success — redirect to the admin page with ?connected=<slug> (e.g. youtube / x).
+    return res.redirect(302, adminSocialRedirect(`connected=${platformSlug(platform)}`));
   } catch (err) {
     console.error('[socialPublisher] oauthCallback error:', err instanceof Error ? scrubTokens(err.message) : err);
-    return res.status(500).json({ message: 'OAuth callback failed' });
+    return res.redirect(302, adminSocialRedirect(`error=callback_failed`));
   }
 };
 
