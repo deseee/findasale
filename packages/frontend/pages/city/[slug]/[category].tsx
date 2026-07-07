@@ -134,6 +134,13 @@ export default function CityCategoryPage({
   });
   const faqJsonLd = buildFaqJsonLd(liveFaqs);
 
+  // S1071 crawl-budget policy: this exact page is only emitted in the sitemap when
+  // activeByType[currentTypeKey] >= 3 (see server-sitemap.xml.tsx). Thin/gated
+  // city+category combos below that threshold must not tell crawlers to index them --
+  // otherwise the sitemap gate is cosmetic (internal links/direct nav still reach them).
+  const activeCountForCategory = activeByType[currentTypeKey] ?? 0;
+  const isGatedThin = activeCountForCategory < 3;
+
   return (
     <>
       <Head>
@@ -148,7 +155,7 @@ export default function CityCategoryPage({
         <meta name="twitter:card" content="summary_large_image" />
         <meta name="twitter:title" content={title} />
         <meta name="twitter:description" content={description} />
-        <meta name="robots" content="index, follow" />
+        <meta name="robots" content={isGatedThin ? 'noindex, follow' : 'index, follow'} />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(itemListJsonLd) }}
