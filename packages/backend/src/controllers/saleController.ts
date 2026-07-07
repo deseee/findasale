@@ -267,6 +267,18 @@ export const listSales = async (req: Request, res: Response) => {
 
     const convertedSales = sales.map((sale: any) => {
       const { _count, trails, ...rest } = convertDecimalsToNumbers(sale);
+      // Security: listSales is the primary public sale-browsing endpoint (homepage/map feed,
+      // hit by anonymous users at the highest volume of any sale endpoint) and has no
+      // privileged-viewer branch. Strip internal-ops Sale fields the same way
+      // getSale/searchSales do for non-owner/non-admin callers (S1084 follow-up — these
+      // fields were confirmed still leaking live on GET /api/sales after the S1083 pass
+      // only patched getSale + searchSales).
+      delete rest.cashFloat;
+      delete rest.settlementNotes;
+      delete rest.commissionRate;
+      delete rest.highValueThresholdUSD;
+      delete rest.autoFlagHighValue;
+      delete rest.lifecycleStage;
       const maxOrganizerDiscount = maxDiscountBySaleId.has(sale.id)
         ? maxDiscountBySaleId.get(sale.id)!
         : null;
@@ -530,6 +542,7 @@ export const getSale = async (req: Request, res: Response) => {
       delete responseSale.commissionRate;
       delete responseSale.highValueThresholdUSD;
       delete responseSale.autoFlagHighValue;
+      delete responseSale.lifecycleStage;
     }
 
     const convertedSale = convertDecimalsToNumbers(responseSale);
@@ -850,6 +863,7 @@ export const searchSales = async (req: Request, res: Response) => {
       delete converted.commissionRate;
       delete converted.highValueThresholdUSD;
       delete converted.autoFlagHighValue;
+      delete converted.lifecycleStage;
       return {
         ...converted,
         locked,
