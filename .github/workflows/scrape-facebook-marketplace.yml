@@ -10,7 +10,7 @@ name: Scrape Facebook Marketplace
 
 on:
   schedule:
-    - cron: '0 4 * * 2'  # Tuesdays at 04:00 UTC
+    - cron: '17 4 * * 2'  # Tuesdays at 04:17 UTC (offset from :00 -- 5-workflow cluster at 4:00 was likely causing GitHub's scheduler to silently drop this low-frequency cron; missed 2026-06-30 and 2026-07-07 ticks)
   workflow_dispatch:
 
 concurrency:
