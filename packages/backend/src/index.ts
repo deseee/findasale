@@ -115,6 +115,7 @@ import tagRouter from './routes/tags';                  // Sprint 3: Tag-based S
 import pricingRoutes from './routes/pricing';           // Phase S574: Multi-source pricing engine
 import pricingSignalsRoutes from './routes/pricingSignals'; // Pricing signals: sleeper patterns & brand premiums
 import hubRoutes from './routes/hubs';                  // Feature #40+#44: Sale Hubs & Neighborhood Sale Day
+import vendorBoothRoutes from './routes/vendorBooth';    // Vendor Booth Payments (2026-07-07, ADR-015/016/017): flea market multi-booth checkout
 import voiceRoutes from './routes/voice';                // Feature #42: Voice-to-tag extraction
 import reminderRoutes from './routes/reminders';        // Sale Reminders — email notifications
 import billingRoutes from './routes/billing';             // #65 Sprint 2: Stripe billing endpoints
@@ -686,6 +687,7 @@ app.use('/api/social', socialRouter);                            // Sprint 2: So
 app.use('/api/social-publisher', socialPublisherRoutes);       // ADR-077: In-house social publisher (admin-only)
 app.use('/api/tags', tagRouter);                                 // Sprint 3: Tag-based SEO endpoints
 app.use(hubRoutes);                                              // Feature #40+#44: Sale Hubs & Neighborhood Sale Day
+app.use(vendorBoothRoutes);                                      // Vendor Booth Payments (2026-07-07): flea market multi-booth checkout
 app.use('/api/voice', voiceRoutes);                              // Feature #42: Voice-to-tag extraction
 app.use('/api/billing', billingRoutes);                          // #65 Sprint 2: Stripe billing endpoints
 app.use('/api/points', pointsRoutes);                       // XP tracking: sale visits

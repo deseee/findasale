@@ -250,3 +250,196 @@ export async function assertCheckoutAllowed({
     }
   }
 }
+
+// ============================================================================
+// Vendor Booth Payments — assertBoothCartCheckoutAllowed (2026-07-07)
+// ADR-017 Fix #3 (P0): a new sibling guard, NOT a parameterization of
+// assertCheckoutAllowed. assertCheckoutAllowed resolves exactly one protected
+// party (sale.organizer.userId) and has a live production caller
+// (createPaymentIntent) that must not regress from a breaking signature change.
+// A BoothCartTransaction has no single saleId — it spans a hub and N vendor
+// booths — so it needs a distinct protected-party resolution shape (N parties,
+// not 1). Shares the same three-check primitive (SELF_DEALING, SHARED_DEVICE_FP,
+// SHARED_CARD_FP) conceptually, but does NOT write to FraudSignal because
+// FraudSignal.saleId is a required (non-nullable) FK and a booth cart has no
+// saleId to satisfy it — logging is console-only for this guard (flagged gap,
+// see Dev Handoff "Blocked / Flagged": FraudSignal has no hub-scoped variant yet).
+// ============================================================================
+
+export interface AssertBoothCartCheckoutAllowedParams {
+  buyerUserId: string;
+  hubId: string;
+  cartTransactionId: string;
+  boothsRepresented: string[];
+  cashierTeamMemberId?: string | null;
+  cashierBoothId?: string | null;
+  prisma: PrismaClientLike;
+  context: string; // e.g. 'boothCartCharge'
+}
+
+/**
+ * Best-effort, non-throwing console log for booth-cart collusion signals.
+ * FraudSignal cannot be used here (saleId is required, non-nullable, and a
+ * booth cart has no single sale). This is a real, documented gap relative to
+ * the sale-scoped guard's persisted-signal behavior — flagged in the Dev
+ * Handoff, not silently accepted as equivalent.
+ */
+function logBoothCartSignal(params: {
+  signalType: CollusionSignalType;
+  context: string;
+  hubId: string;
+  cartTransactionId: string;
+  buyerUserId: string;
+  notes: string;
+}): void {
+  console.error(
+    `[checkoutGuard][boothCart] ${params.signalType} — hub=${params.hubId} cart=${params.cartTransactionId} buyer=${params.buyerUserId} [${params.context}] ${params.notes}`
+  );
+}
+
+/**
+ * assertBoothCartCheckoutAllowed — HARD BLOCK guard for the roaming multi-booth
+ * cart charge endpoint. Throws CheckoutGuardError when identity-grade collusion
+ * is detected against ANY protected party. Callers must catch this and return a
+ * generic HTTP 403 — never leak which signal or which party fired.
+ *
+ * Protected parties resolved as:
+ *  - the hub's owning Organizer.userId (via SaleHub.organizerId -> Organizer.userId)
+ *  - the cashier's User.id, if a TeamMember rang up the cart (via
+ *    TeamMember.workspaceMemberId -> WorkspaceMember.userId/organizerId -> User)
+ *    — a booth-token cashier session (cashierBoothId set) has no separate
+ *    "cashier User" beyond its own booth's identity (next bullet)
+ *  - every VendorBooth.userId's User for each booth ID in boothsRepresented
+ *    (skip nulls — an unclaimed booth has no User yet, so has no identity
+ *    fingerprint to compare; per the 2026-07-07 decision log, unclaimed booths
+ *    are BLOCKED from checkout entirely at the cart add-items step, which closes
+ *    most of this residual gap in practice — this guard's null-skip is defense
+ *    in depth for any booth that becomes unclaimed between add-items and charge)
+ *
+ * Checks per protected party (identity-grade only, same as assertCheckoutAllowed):
+ *  SELF_DEALING (buyer === protected party's User.id), SHARED_DEVICE_FP, SHARED_CARD_FP.
+ *
+ * Cart-specific additional check: SELF_DEALING extends to cashierBoothId === any
+ * vendorBoothId in boothsRepresented — a booth-token session ringing up its own
+ * booth's items is self-dealing regardless of who the buyer is.
+ *
+ * Never reads or compares IP address — shared network/IP is explicitly out of scope,
+ * same as assertCheckoutAllowed.
+ */
+export async function assertBoothCartCheckoutAllowed({
+  buyerUserId,
+  hubId,
+  cartTransactionId,
+  boothsRepresented,
+  cashierTeamMemberId,
+  cashierBoothId,
+  prisma,
+  context,
+}: AssertBoothCartCheckoutAllowedParams): Promise<void> {
+  // Cart-specific: a booth-token cashier session ringing up its own booth is
+  // self-dealing regardless of buyer identity.
+  if (cashierBoothId && boothsRepresented.includes(cashierBoothId)) {
+    logBoothCartSignal({
+      signalType: 'SELF_DEALING',
+      context,
+      hubId,
+      cartTransactionId,
+      buyerUserId,
+      notes: `Booth-token cashier (boothId ${cashierBoothId}) rang up a cart containing its own booth's items.`,
+    });
+    throw new CheckoutGuardError();
+  }
+
+  // Resolve protected party User IDs: hub organizer + cashier (if TeamMember) + every
+  // represented booth's claiming User (skip unclaimed/null).
+  const protectedUserIds = new Set<string>();
+
+  const hub = await prisma.saleHub.findUnique({
+    where: { id: hubId },
+    select: { organizer: { select: { userId: true } } },
+  });
+  if (hub?.organizer?.userId) protectedUserIds.add(hub.organizer.userId);
+
+  if (cashierTeamMemberId) {
+    const cashier = await prisma.teamMember.findUnique({
+      where: { id: cashierTeamMemberId },
+      select: {
+        workspaceMember: { select: { userId: true, organizerId: true, organizer: { select: { userId: true } } } },
+      },
+    });
+    const cashierUserId =
+      cashier?.workspaceMember?.userId || cashier?.workspaceMember?.organizer?.userId || null;
+    if (cashierUserId) protectedUserIds.add(cashierUserId);
+  }
+
+  if (boothsRepresented.length > 0) {
+    const booths = await prisma.vendorBooth.findMany({
+      where: { id: { in: boothsRepresented } },
+      select: { userId: true },
+    });
+    for (const b of booths) {
+      if (b.userId) protectedUserIds.add(b.userId);
+    }
+  }
+
+  if (protectedUserIds.size === 0) return;
+
+  const buyer = await prisma.user.findUnique({
+    where: { id: buyerUserId },
+    select: { deviceFingerprint: true, stripeCardFingerprint: true },
+  });
+
+  for (const partyUserId of protectedUserIds) {
+    // (a) SELF-DEALING: buyer === protected party (User.id space)
+    if (buyerUserId === partyUserId) {
+      logBoothCartSignal({
+        signalType: 'SELF_DEALING',
+        context,
+        hubId,
+        cartTransactionId,
+        buyerUserId,
+        notes: `Buyer userId matches a protected party (hub organizer, cashier, or represented booth operator) userId ${partyUserId}.`,
+      });
+      throw new CheckoutGuardError();
+    }
+
+    const party = await prisma.user.findUnique({
+      where: { id: partyUserId },
+      select: { deviceFingerprint: true, stripeCardFingerprint: true },
+    });
+
+    // (b) SHARED DEVICE FINGERPRINT
+    if (
+      buyer?.deviceFingerprint != null &&
+      party?.deviceFingerprint != null &&
+      buyer.deviceFingerprint === party.deviceFingerprint
+    ) {
+      logBoothCartSignal({
+        signalType: 'SHARED_DEVICE_FP',
+        context,
+        hubId,
+        cartTransactionId,
+        buyerUserId,
+        notes: `Buyer device fingerprint matches protected party ${partyUserId}.`,
+      });
+      throw new CheckoutGuardError();
+    }
+
+    // (c) SHARED CARD FINGERPRINT
+    if (
+      buyer?.stripeCardFingerprint != null &&
+      party?.stripeCardFingerprint != null &&
+      buyer.stripeCardFingerprint === party.stripeCardFingerprint
+    ) {
+      logBoothCartSignal({
+        signalType: 'SHARED_CARD_FP',
+        context,
+        hubId,
+        cartTransactionId,
+        buyerUserId,
+        notes: `Buyer card fingerprint matches protected party ${partyUserId}.`,
+      });
+      throw new CheckoutGuardError();
+    }
+  }
+}

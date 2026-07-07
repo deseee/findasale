@@ -2311,6 +2311,45 @@ export const webhookHandler = async (req: Request, res: Response) => {
         } catch (err) {
           console.error(`[stripe-connect] Failed to update stripeOnboarded for account ${account.id}:`, err);
         }
+
+        // Vendor Booth Payments (2026-07-07, ADR-016/017): EXTEND this existing
+        // case with Consignor + VendorBooth dual-lookup — NOT a duplicate case
+        // block (a second `case 'account.updated':` in the same switch would be
+        // dead/unreachable code; ADR-017 corrected this from the original
+        // "write a new case" framing after re-verifying the case already exists).
+        // Uses findFirst/updateMany, not findUnique — Consignor.stripeAccountId
+        // and VendorBooth.stripeAccountId are NOT @@unique (confirmed via schema
+        // read), so the same physical Stripe account could legitimately match
+        // more than one row (e.g. Artifact operating as both an Organizer and a
+        // VendorBooth). Update whichever table(s) have a match; never assume
+        // exactly one.
+        try {
+          const consignorsUpdated = await prisma.consignor.updateMany({
+            where: { stripeAccountId: account.id },
+            data: { stripeOnboarded: isOnboarded },
+          });
+          if (consignorsUpdated.count > 0) {
+            console.log(`[stripe-connect] account.updated: stripeOnboarded set to ${isOnboarded} for ${consignorsUpdated.count} consignor(s)`);
+          }
+        } catch (err) {
+          console.error(`[stripe-connect] Failed to update Consignor.stripeOnboarded for account ${account.id}:`, err);
+        }
+
+        try {
+          const boothsUpdated = await prisma.vendorBooth.updateMany({
+            where: { stripeAccountId: account.id },
+            data: { stripeOnboarded: isOnboarded },
+          });
+          if (boothsUpdated.count > 0) {
+            console.log(`[stripe-connect] account.updated: stripeOnboarded set to ${isOnboarded} for ${boothsUpdated.count} vendor booth(s)`);
+          }
+        } catch (err) {
+          console.error(`[stripe-connect] Failed to update VendorBooth.stripeOnboarded for account ${account.id}:`, err);
+        }
+        // If none of Organizer/Consignor/VendorBooth match: no-op, not an error —
+        // an unrelated Stripe account's webhook firing is not a FindA.Sale event.
+        // Always return 200 regardless (handled by the shared res.json below);
+        // a non-2xx here would cause Stripe to retry indefinitely.
       }
       break;
     }

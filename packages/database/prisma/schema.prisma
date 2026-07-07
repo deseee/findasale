@@ -242,6 +242,10 @@ model User {
   showcases     UserShowcase[]
 
   workspaceMemberships WorkspaceMember[] @relation("UserWorkspaceMemberships")
+  // Vendor Booth Payments (2026-07-07, ADR-016): a User can operate VendorBooths in
+  // multiple different hubs simultaneously (not mutually exclusive with being an Organizer —
+  // see Artifact/Maple Lake Mall case). Nullable-until-claimed on the VendorBooth side.
+  vendorBooths VendorBooth[] @relation("VendorBoothUser")
 
   // Pre-wire: Agentic AI Scout — passive preference data from wishlist/save behavior
   tasteProfile Json?
@@ -1146,6 +1150,11 @@ model Item {
   consignorId                String? // FK to Consignor model (TEAMS)
   consignmentSplitPct        Decimal? // Legacy split pct field — superseded by Consignor.commissionRate
   consignor                  Consignor?             @relation("ConsignorItems", fields: [consignorId], references: [id], onDelete: SetNull)
+  // Vendor Booth Payments (2026-07-07, ADR-015/016/017): attribution to a flea-market VendorBooth.
+  // Sibling optional FK to consignorId — an item should never have both set (app-level guard in
+  // itemController, not a DB CHECK constraint per ADR-015 Consequences).
+  vendorBoothId               String? // FK to VendorBooth model (TEAMS, flea market hubs)
+  vendorBooth                 VendorBooth?           @relation("VendorBoothItems", fields: [vendorBoothId], references: [id], onDelete: SetNull)
   // #310: Color-tagged Discount Rules (TEAMS)
   tagColor                   String? // Hex or label e.g. "#EF4444" — ties to active DiscountRule
   // #311: Multi-Location Inventory (TEAMS)
@@ -1283,6 +1292,7 @@ model Item {
   @@index([isLegendary, legendaryVisibleAt]) // Phase 2b: Legendary early access query optimization
   @@index([locationId]) // #311: Multi-Location filter
   @@index([consignorId]) // #309: Consignor item lookup
+  @@index([vendorBoothId]) // Vendor Booth Payments 2026-07-07: booth item lookup
   @@index([tagColor]) // #310: Discount rule color tag lookup
   @@index([saleId])
   @@index([saleId, status]) // Sentry slow query: SELECT Item WHERE saleId+status (1351ms) — public item browse + POS organizer item search with optional status filter
@@ -1413,6 +1423,9 @@ model Purchase {
   stripePaymentIntentId String? // Not unique — one PI may have multiple Purchase rows (multi-item cart)
   affiliateLinkId       String?
   affiliateLink         AffiliateLink?    @relation(fields: [affiliateLinkId], references: [id], onDelete: SetNull)
+  // Vendor Booth Payments (2026-07-07): roaming multi-booth cart attribution.
+  boothCartTransactionId String?
+  boothCartTransaction   BoothCartTransaction? @relation(fields: [boothCartTransactionId], references: [id], onDelete: SetNull)
   source                String            @default("ONLINE") // ONLINE | POS
   buyerEmail            String? // POS only: optional email for receipt delivery
   isTestTransaction     Boolean           @default(false)
@@ -1438,6 +1451,7 @@ model Purchase {
   @@index([saleId])
   @@index([affiliateLinkId])
   @@index([clientTransactionId])
+  @@index([boothCartTransactionId])
 }
 
 model SaleSubscriber {
@@ -2994,6 +3008,11 @@ model SaleHub {
   updatedAt   DateTime            @updatedAt
   organizer   Organizer           @relation("OrganizerHubs", fields: [organizerId], references: [id], onDelete: Restrict)
   memberships SaleHubMembership[]
+  // Vendor Booth Payments (2026-07-07, ADR-015/016/017): flea market vendor booths + roaming
+  // multi-booth checkout + settlement, scoped to this hub.
+  vendorBooths      VendorBooth[]                @relation("VendorBooths")
+  cartTransactions  BoothCartTransaction[]        @relation("HubCartTransactions")
+  settlementBatches VendorBoothSettlementBatch[]  @relation("HubSettlementBatches")
 
   @@index([organizerId])
   @@index([lat, lng])
@@ -4167,6 +4186,8 @@ model TeamMember {
   performances       TeamMemberPerformance[]
   leaderboardEntries WorkspaceLeaderboardEntry[]
   saleAssignments    SaleAssignment[]            @relation("TeamMemberSaleAssignments")
+  // Vendor Booth Payments (2026-07-07): cashier attribution for booth cart transactions
+  cashierTransactions BoothCartTransaction[]      @relation("CashierTransactions")
   createdAt          DateTime                    @default(now())
   updatedAt          DateTime                    @updatedAt
 
@@ -5177,3 +5198,151 @@ model SocialPost {
   @@index([accountId])
   @@index([platform])
 }
+
+// ============================================================================
+// Vendor Booth Payments — Flea Market Multi-Booth Checkout (2026-07-07)
+// ADR-015 (base checkout mechanic) + ADR-016 (real vendor accounts + distributed
+// Stripe payments, supersedes ADR-015's manual-payout/no-account design) +
+// ADR-017 (security fixes: tenancy join via existing Organizer.workspace relation,
+// corrected Transfer source_transaction logic, assertBoothCartCheckoutAllowed guard).
+// Decision log 2026-07-07 "Flea Market Vendor Payments: Unclaimed-Booth Checkout
+// Block + Separate Env Flag" — unclaimed booths (userId IS NULL) are BLOCKED from
+// checkout (enforced in cart add-items controller, not schema); VENDOR_BOOTH_LIVE_TRANSFERS
+// is a separate, independently-toggleable env flag from STRIPE_CONNECT_LIVE_TRANSFERS.
+// DutyShift/DutyShiftClaim (ADR-015 Appendix) are explicitly OUT OF SCOPE — not built.
+// ============================================================================
+
+model VendorBooth {
+  id                  String   @id @default(cuid())
+  hubId               String
+  hub                 SaleHub  @relation("VendorBooths", fields: [hubId], references: [id], onDelete: Cascade)
+
+  // Real vendor identity (ADR-016) — nullable until claimed. Mirrors Organizer.userId
+  // exactly. A User can hold this role in addition to any other role (e.g. Artifact is
+  // already an Organizer and can also operate a VendorBooth in a different hub) — NOT
+  // capped to one hub at a time; a User may operate booths in multiple different hubs.
+  userId              String?
+  user                User?    @relation("VendorBoothUser", fields: [userId], references: [id], onDelete: SetNull)
+
+  boothNumber         String
+  vendorName          String
+  vendorEmail         String?
+  vendorPhone         String?
+
+  boothFee            Decimal  @default(0) @db.Decimal(10, 2)
+  revenueSharePercent Float    @default(0)
+
+  status              String   @default("PENDING") // PENDING|CONFIRMED|REJECTED|CANCELLED
+
+  // Stripe Connect Express identity for this booth's operator (ADR-016). Populated once
+  // the claiming User completes onboarding (same flow Organizer/Consignor already use).
+  stripeAccountId     String?
+  stripeOnboarded     Boolean  @default(false)
+
+  notes               String?
+
+  // Invite/claim mechanism (ADR-015 primary access → ADR-016 demoted to fallback only).
+  // A vendor who has NOT yet claimed the booth (userId IS NULL) uses this token to view
+  // booth details and complete account signup/claim. Once userId is set, normal login is
+  // the primary path; boothToken remains valid as a day-of-convenience fallback (e.g.
+  // shared physical QR code at the booth), but every write it authorizes is re-checked
+  // against booth CONFIRMED status same as today. Per the 2026-07-07 decision log entry,
+  // unclaimed booths (userId IS NULL) are blocked from checkout regardless of boothToken
+  // validity — claiming is a cheap identity gate, the cheapest fix for the wash-trade
+  // blind spot an unclaimed booth otherwise represents.
+  boothToken          String   @unique @default(cuid())
+
+  confirmedAt         DateTime?
+  rejectedAt          DateTime?
+  deletedAt           DateTime?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @default(now())
+
+  items               Item[]                 @relation("VendorBoothItems")
+  payouts             VendorBoothPayout[]
+  cashierTransactions BoothCartTransaction[]  @relation("CashierBoothTransactions")
+
+  @@unique([hubId, boothNumber])
+  @@index([hubId])
+  @@index([status])
+  @@index([boothToken])
+  @@index([userId])
+  @@index([stripeAccountId])
+}
+
+// Records one roaming/multi-booth cart transaction as a header row. Individual Purchase
+// rows link back via boothCartTransactionId. A single cart checkout can span items from
+// multiple VendorBooths in one hub — one Stripe charge on the organizer's stripeConnectId,
+// one Purchase row per item (mirrors posPaymentController.confirmPaymentRequest exactly).
+model BoothCartTransaction {
+  id                    String   @id @default(cuid())
+  hubId                 String
+  hub                   SaleHub  @relation("HubCartTransactions", fields: [hubId], references: [id], onDelete: Cascade)
+
+  // Who rang this up — exactly one of these two is set (enforced app-level, not DB-level)
+  cashierTeamMemberId   String?
+  cashierTeamMember     TeamMember?  @relation("CashierTransactions", fields: [cashierTeamMemberId], references: [id], onDelete: SetNull)
+  cashierBoothId        String?      // vendor covering the register, via boothToken session
+  cashierBooth          VendorBooth? @relation("CashierBoothTransactions", fields: [cashierBoothId], references: [id], onDelete: SetNull)
+
+  stripePaymentIntentId String?      // the ONE charge for the whole cart
+  totalAmount           Decimal      @default(0) @db.Decimal(10, 2)
+  boothsRepresented     String[]     // denormalized list of VendorBooth IDs in this cart, for fast audit queries + wash-trade guard resolution
+  status                String       @default("PENDING") // PENDING|COMPLETED|REFUNDED|FAILED
+  createdAt             DateTime     @default(now())
+
+  purchases             Purchase[]
+
+  @@index([hubId])
+  @@index([cashierTeamMemberId])
+  @@index([cashierBoothId])
+  @@index([stripePaymentIntentId])
+}
+
+model VendorBoothSettlementBatch {
+  id            String              @id @default(cuid())
+  hubId         String
+  hub           SaleHub             @relation("HubSettlementBatches", fields: [hubId], references: [id], onDelete: Cascade)
+  status        String              @default("DRAFT") // DRAFT|APPROVED|PROCESSING|PARTIAL|COMPLETED|FAILED
+  totalGross    Decimal             @default(0) @db.Decimal(10, 2)
+  totalPayouts  Decimal             @default(0) @db.Decimal(10, 2)
+  payouts       VendorBoothPayout[]
+  createdAt     DateTime            @default(now())
+  approvedAt    DateTime?
+
+  @@index([hubId])
+  @@index([status])
+}
+
+model VendorBoothPayout {
+  id                String                      @id @default(cuid())
+  vendorBoothId     String
+  vendorBooth       VendorBooth                 @relation(fields: [vendorBoothId], references: [id], onDelete: Cascade)
+  settlementBatchId String?
+  settlementBatch   VendorBoothSettlementBatch?  @relation(fields: [settlementBatchId], references: [id], onDelete: SetNull)
+
+  totalSales        Decimal                      @db.Decimal(10, 2)
+  boothFeeCharged   Decimal                      @db.Decimal(10, 2)
+  revenueShareOwed  Decimal                      @db.Decimal(10, 2)
+  // Pre-wire only — no tax logic implemented yet (Legal owns the future decision, tax
+  // collection is OFF platform-wide per S1006). Always 0 today; never read/written.
+  taxCollected      Decimal                      @default(0) @db.Decimal(10, 2)
+  netPayout         Decimal                      @db.Decimal(10, 2) // totalSales - boothFeeCharged - revenueShareOwed (taxCollected not yet subtracted)
+
+  // Automated Transfer fields (ADR-016/017) — populated once a Stripe Transfer succeeds.
+  stripeTransferId  String?
+  transferredAt     DateTime?
+
+  // Fallback for PENDING_STRIPE_ONBOARDING / organizer manual override, mirrors ConsignorPayout.method
+  method            String?                      // STRIPE_TRANSFER|CASH|CHECK|VENMO|ACH|OTHER
+  paidAt            DateTime?
+  notes             String?
+  status            String                       @default("PENDING") // PENDING|PENDING_STRIPE_ONBOARDING|SIMULATED|PROCESSING|COMPLETED|FAILED|MANUAL_CASH_CHECK
+  failureReason     String?
+  createdAt         DateTime                     @default(now())
+
+  @@index([vendorBoothId])
+  @@index([settlementBatchId])
+  @@index([stripeTransferId])
+}
+
