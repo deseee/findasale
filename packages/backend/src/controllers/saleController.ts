@@ -841,6 +841,15 @@ export const searchSales = async (req: Request, res: Response) => {
       const converted = convertDecimalsToNumbers(sale);
       const locked = isSaleLocked(sale.publishedAt, userRank);
       const minutesUntilUnlock = getMinutesUntilUnlock(sale.publishedAt, userRank);
+      // Security: searchSales has no privileged-viewer branch (no req.user gate) — every
+      // caller is effectively anonymous/public (this backs the public MCP search_sales tool
+      // too). Strip internal-ops Sale fields the same way listSales/getSale do for
+      // non-owner/non-admin callers.
+      delete converted.cashFloat;
+      delete converted.settlementNotes;
+      delete converted.commissionRate;
+      delete converted.highValueThresholdUSD;
+      delete converted.autoFlagHighValue;
       return {
         ...converted,
         locked,
