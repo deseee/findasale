@@ -183,24 +183,29 @@ export const chargeBoothCart = async (req: BoothAuthRequest, res: Response) => {
     }
 
     // Hard gate — must run before PaymentIntent creation, not optional hardening.
-    if (buyerUserId) {
-      try {
-        await assertBoothCartCheckoutAllowed({
-          buyerUserId,
-          hubId,
-          cartTransactionId,
-          boothsRepresented: cart.boothsRepresented,
-          cashierTeamMemberId: req.boothAuth.type === 'TEAM_MEMBER' ? req.boothAuth.teamMemberId : null,
-          cashierBoothId: req.boothAuth.type === 'BOOTH' ? req.boothAuth.vendorBoothId : null,
-          prisma,
-          context: 'boothCartCharge',
-        });
-      } catch (guardError) {
-        if (guardError instanceof CheckoutGuardError) {
-          return res.status(403).json({ error: guardError.message });
-        }
-        throw guardError;
+    // 2026-07-07 fix (findasale-hacker adversarial pass): this MUST run
+    // unconditionally, not just when buyerUserId is present. The cashier
+    // self-dealing check inside the guard does not depend on buyerUserId — gating
+    // the whole call on `if (buyerUserId)` let a colluding cashier bypass the guard
+    // entirely by simply omitting the optional buyerUserId field. buyerUserId is
+    // now optional in the guard itself; buyer-identity checks no-op when absent,
+    // but the cashier check always runs.
+    try {
+      await assertBoothCartCheckoutAllowed({
+        buyerUserId,
+        hubId,
+        cartTransactionId,
+        boothsRepresented: cart.boothsRepresented,
+        cashierTeamMemberId: req.boothAuth.type === 'TEAM_MEMBER' ? req.boothAuth.teamMemberId : null,
+        cashierBoothId: req.boothAuth.type === 'BOOTH' ? req.boothAuth.vendorBoothId : null,
+        prisma,
+        context: 'boothCartCharge',
+      });
+    } catch (guardError) {
+      if (guardError instanceof CheckoutGuardError) {
+        return res.status(403).json({ error: guardError.message });
       }
+      throw guardError;
     }
 
     const amountCents = Math.round(Number(cart.totalAmount) * 100);

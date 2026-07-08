@@ -267,7 +267,7 @@ export async function assertCheckoutAllowed({
 // ============================================================================
 
 export interface AssertBoothCartCheckoutAllowedParams {
-  buyerUserId: string;
+  buyerUserId?: string;
   hubId: string;
   cartTransactionId: string;
   boothsRepresented: string[];
@@ -348,6 +348,15 @@ export async function assertBoothCartCheckoutAllowed({
       notes: `Booth-token cashier (boothId ${cashierBoothId}) rang up a cart containing its own booth's items.`,
     });
     throw new CheckoutGuardError();
+  }
+
+  // 2026-07-07 fix (findasale-hacker adversarial pass): the buyer-identity checks
+  // below all require a real buyerUserId. A walk-in POS cart with no buyer account
+  // has none to check — that is expected and fine. This is an explicit, documented
+  // no-op, not a silent skip: the cashier self-dealing check above already ran
+  // unconditionally and is NOT affected by buyerUserId being absent.
+  if (!buyerUserId) {
+    return;
   }
 
   // Resolve protected party User IDs: hub organizer + cashier (if TeamMember) + every
