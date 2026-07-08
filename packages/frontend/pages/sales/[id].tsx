@@ -2736,9 +2736,13 @@ export const getStaticProps: GetStaticProps<SaleDetailPageProps> = async ({ para
       }
     }
 
+    // ISR write cost: ENDED sales are frozen content (won't change again) but were
+    // still regenerating on the same 24h cadence as live sales across 35K+ total sale
+    // pages -- the dominant driver of repeated 100% ISR-Writes free-tier warnings.
+    // Give ENDED pages a 30-day window; keep live/upcoming sales at 24h for accuracy.
     return {
       props: { ogData, initialData, eventSeriesData, noindex, unavailableAfter },
-      revalidate: 86400,
+      revalidate: isEnded ? 2592000 : 86400,
     };
   } catch (err) {
     // Network/timeout/parse failure — render the shell, let the client fetch and ISR retry
