@@ -6,8 +6,19 @@ import { useToast } from './ToastContext';
 // ADR-023: Login-time prompt for Organizers still on a Stripe Express account.
 // Framed as a Stripe account-requirements confirmation (accurate -- it genuinely
 // ends on Stripe's own hosted confirmation/ToS screen), not "we made a mistake."
-// One-click reuse via Stripe's Networked Onboarding -- no re-entered business,
-// bank, or identity data.
+// Reuse via Stripe's Networked Onboarding avoids RE-TYPING business/bank/identity
+// data -- it is NOT a single click; Stripe's own hosted UI still steps the
+// organizer through several confirm screens.
+//
+// ADR-024 CONFIRMED ROOT CAUSE (2026-07-08, reproduced live by Patrick, not
+// assumed): on Stripe's own identity-confirmation screen during this flow,
+// choosing "Sign in with Google" reliably fails with Stripe's own
+// "Multi region routing target not found" error. Choosing password login on
+// the SAME screen, SAME account, succeeds every time. This is a Stripe-side
+// bug in their Google auth path specifically -- there is no Stripe API
+// parameter to hide/disable that button (checked), so the only real mitigation
+// is telling the organizer which option to pick. The instruction text below
+// is not optional decoration -- it is the actual fix for most organizers.
 interface StripeMigrationBannerProps {
   needsStripeMigration?: boolean;
   migrationPending?: boolean;
@@ -52,12 +63,12 @@ const StripeMigrationBanner: React.FC<StripeMigrationBannerProps> = ({
 
   const handleClick = () => startMigration('reuse');
 
-  // ADR-024: if the reuse path got stuck on Stripe's "Multi region routing
-  // target not found" bug (root-caused 2026-07-08), a fresh one-click attempt
-  // on a BRAND NEW account object is tried FIRST -- the old "Continue" always
-  // re-links the same possibly-tainted account, so this is the first real
-  // test of whether the failure is account-specific or a hard block. Still
-  // zero re-entry if it works.
+  // ADR-024 CORRECTION (same session): forceNew does NOT fix the confirmed
+  // Google-auth root cause above -- it only creates a new account object,
+  // which does not change which login method Stripe's own screen offers.
+  // Kept as a secondary option (harmless, zero cost) in case a given failure
+  // turns out to be account-specific rather than the known Google-auth cause,
+  // but the password-login instruction below is the real fix.
   const handleTryFreshReuse = () => startMigration('reuse', true);
 
   // Manual entry stays the last resort -- only after a fresh reuse attempt
@@ -75,7 +86,12 @@ const StripeMigrationBanner: React.FC<StripeMigrationBannerProps> = ({
         <p className="text-sm text-amber-800 dark:text-amber-300 mt-0.5">
           {migrationPending
             ? 'Your Stripe confirmation is still in progress. Finish it to keep payouts running without interruption.'
-            : "Stripe has updated its account requirements. Confirm your account to keep payouts running without interruption -- it's a single confirmation, nothing to re-enter."}
+            : 'Stripe has updated its account requirements. Confirm your account to keep payouts running without interruption.'}
+        </p>
+        <p className="text-sm font-medium text-amber-900 dark:text-amber-200 mt-1.5 bg-amber-100 dark:bg-amber-900/40 rounded px-2 py-1.5">
+          Important: on Stripe&apos;s confirmation page, when asked to sign in, choose
+          &quot;log in with your password&quot; -- NOT &quot;Sign in with Google.&quot; The Google
+          option currently fails with a Stripe-side error; password login works.
         </p>
         <button
           onClick={handleClick}
