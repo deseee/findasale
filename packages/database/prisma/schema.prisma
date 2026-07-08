@@ -66,6 +66,14 @@ model User {
   huntPassCancelledAt          DateTime? // P0 Exploit Fix: timestamp when HP was cancelled, for XP redemption hold
   huntPassStripeCustomerId     String? // Stripe Customer for HP billing (shopper-side, separate from organizer)
   huntPassStripeSubscriptionId String? // Active HP Stripe Subscription ID; null = not subscribed
+  // ADR-020 follow-up (2026-07-08, real tsc error TS2353 caught by Patrick running
+  // native tsc -- confirmed via schema read, not guessed): a GENERIC platform Stripe
+  // Customer id for one-off shopper purchases (booth-cart QR/in-app checkout SetupIntent
+  // reuse across repeat carts). Deliberately separate from huntPassStripeCustomerId
+  // above, which is scoped to HuntPass SUBSCRIPTION billing -- reusing that field here
+  // would mix an unrelated Stripe Customer's metadata/webhook history with one-off POS
+  // purchases.
+  stripeCustomerId             String?
   userStreaks                  UserStreak[]
   wishlists                    Wishlist[]
   createdPools                 BuyingPool[]           @relation("CreatedPools")
