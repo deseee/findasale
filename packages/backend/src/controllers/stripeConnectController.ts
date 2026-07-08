@@ -5,6 +5,7 @@ import {
   createConnectAccount,
   createOnboardingLink,
   createStandardMigrationAccount,
+  createStandardMigrationAccountManual,
   getAccountStatus,
   payConsignorViaACH,
   updateConsignorOnboardingStatus,
@@ -260,6 +261,13 @@ export const startStandardMigration = async (req: AuthRequest, res: Response) =>
     const userId = req.user?.id;
     if (!userId) return res.status(401).json({ message: 'Unauthorized' });
 
+    // ADR-024: 'manual' is the non-reuse-eligible fallback -- see
+    // createStandardMigrationAccountManual for why this exists (Stripe-side
+    // bug in the reuse path's Google-account-linking step, root-caused
+    // 2026-07-08). Never trust an unexpected value -- default to the
+    // existing 'reuse' behavior.
+    const mode: 'reuse' | 'manual' = req.body?.mode === 'manual' ? 'manual' : 'reuse';
+
     const organizer = await prisma.organizer.findFirst({
       where: { userId },
     });
@@ -276,10 +284,41 @@ export const startStandardMigration = async (req: AuthRequest, res: Response) =>
     const returnUrl = `${frontendBaseUrl}/organizer/dashboard?stripeMigration=complete`;
     const refreshUrl = `${frontendBaseUrl}/organizer/dashboard?stripeMigration=refresh`;
 
-    // Already-in-flight migration: never spin up a second new account for the
-    // same organizer. Just re-check the pending account and hand back a fresh
-    // link (AccountLinks expire).
-    if (organizer.pendingStripeMigrationAccountId) {
+    // ADR-024: manual mode abandons any stuck reuse-path pending account first
+    // -- harmless, it was never linked to stripeConnectId and never touched
+    // money -- so the claim step below proceeds as if starting fresh.
+    if (mode === 'manual' && organizer.pendingStripeMigrationAccountId) {
+      await prisma.organizer.update({
+        where: { id: organizer.id },
+        data: { pendingStripeMigrationAccountId: null },
+      });
+      organizer.pendingStripeMigrationAccountId = null;
+    }
+
+    // ADR-024 addendum (Patrick pushback, 2026-07-08 -- correctly so: manual
+    // entry should never be the FIRST fallback when the whole point was zero
+    // re-entry): forceNew lets the organizer request a genuinely fresh
+    // one-click reuse attempt on a BRAND NEW account object instead of
+    // retrying the same possibly-tainted pending one. The prior "Continue"
+    // behavior always re-links the SAME stuck account (by design, to avoid
+    // orphaning accounts) -- so it could never test whether the Stripe-side
+    // error was specific to that one account object or a hard block on the
+    // whole reuse mechanism. This costs nothing to try (abandoned Stripe
+    // accounts are harmless, same precedent as the manual-mode abandon
+    // above) and preserves the full zero-re-entry promise if it works.
+    if (mode === 'reuse' && req.body?.forceNew && organizer.pendingStripeMigrationAccountId) {
+      await prisma.organizer.update({
+        where: { id: organizer.id },
+        data: { pendingStripeMigrationAccountId: null },
+      });
+      organizer.pendingStripeMigrationAccountId = null;
+    }
+
+    // Already-in-flight migration (reuse mode only -- manual mode always
+    // starts fresh via the abandon step above): never spin up a second new
+    // account for the same organizer. Just re-check the pending account and
+    // hand back a fresh link (AccountLinks expire).
+    if (mode === 'reuse' && organizer.pendingStripeMigrationAccountId) {
       const pendingStatus = await getAccountStatus(organizer.pendingStripeMigrationAccountId);
       if (pendingStatus.chargesEnabled && pendingStatus.payoutsEnabled) {
         // Webhook should cut this over shortly; nothing more for the client to do.
@@ -336,10 +375,9 @@ export const startStandardMigration = async (req: AuthRequest, res: Response) =>
     // the sentinel forever with no way to retry (a new failure mode the claim
     // itself would introduce if left unguarded).
     try {
-      const newAccountId = await createStandardMigrationAccount(
-        organizer.stripeConnectId,
-        organizer.id
-      );
+      const newAccountId = mode === 'manual'
+        ? await createStandardMigrationAccountManual(organizer.stripeConnectId, organizer.id)
+        : await createStandardMigrationAccount(organizer.stripeConnectId, organizer.id);
 
       await prisma.organizer.update({
         where: { id: organizer.id },

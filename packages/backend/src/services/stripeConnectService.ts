@@ -135,6 +135,65 @@ export const createStandardMigrationAccount = async (
 };
 
 /**
+ * ADR-024: Manual (non-reuse-eligible) fallback for the Networked Onboarding
+ * migration path above. Root-caused 2026-07-08: Stripe's own hosted
+ * account-linking step (triggered after SMS 2FA, when the account holder
+ * selects a Google account to confirm the reuse offer) fails with an
+ * undocumented "Multi region routing target not found" error -- confirmed
+ * Stripe-side (our request params match docs.stripe.com/connect/networked-onboarding
+ * exactly; the error occurs entirely within Stripe's hosted domain, no code
+ * of ours runs between account-link creation and the error). This function
+ * deliberately prefills `company.address` (copied live from the OLD account --
+ * never client-submitted) which per Stripe's own eligibility docs DISQUALIFIES
+ * the new account from the reuse offer, so the buggy Google-linking step is
+ * never shown at all. Trade-off: the organizer must manually re-enter their
+ * bank account afterward (Stripe never exposes full bank account numbers via
+ * the API, so that specific field can't be prefilled either way) -- a few
+ * minutes of manual entry instead of a permanent block.
+ */
+export const createStandardMigrationAccountManual = async (
+  oldAccountId: string,
+  organizerId: string
+) => {
+  try {
+    const oldAccount = await stripe().accounts.retrieve(oldAccountId);
+
+    const accountData: Stripe.AccountCreateParams = {
+      type: 'standard',
+      country: oldAccount.country || undefined,
+      business_type: oldAccount.business_type || undefined,
+      company: oldAccount.company
+        ? {
+            name: oldAccount.company.name || undefined,
+            address: oldAccount.company.address
+              ? {
+                  city: oldAccount.company.address.city || undefined,
+                  country: oldAccount.company.address.country || undefined,
+                  line1: oldAccount.company.address.line1 || undefined,
+                  line2: oldAccount.company.address.line2 || undefined,
+                  postal_code: oldAccount.company.address.postal_code || undefined,
+                  state: oldAccount.company.address.state || undefined,
+                }
+              : undefined,
+          }
+        : undefined,
+      email: oldAccount.email || undefined,
+      metadata: {
+        organizerId,
+        migrationFromAccountId: oldAccountId,
+        migrationType: 'express-to-standard-manual',
+      },
+    };
+
+    const newAccount = await stripe().accounts.create(accountData);
+    return newAccount.id;
+  } catch (error) {
+    console.error('Failed to create Stripe standard migration account (manual):', error);
+    throw error;
+  }
+};
+
+/**
  * Create a Stripe account onboarding link.
  * Returns the onboarding URL.
  */
