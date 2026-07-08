@@ -89,10 +89,9 @@ const BoothCartPage: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, hubId]);
 
-  if (!authLoading && !user) {
-    router.push('/login');
-    return null;
-  }
+  useEffect(() => {
+    if (!authLoading && !user) router.push('/login');
+  }, [authLoading, user, router]);
 
   const handleAddItem = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -288,6 +287,9 @@ const BoothCartPage: React.FC = () => {
 
   if (authLoading) {
     return <div className="p-8 text-center">Loading...</div>;
+  }
+  if (!user) {
+    return null;
   }
 
   return (
