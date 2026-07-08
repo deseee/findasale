@@ -40,8 +40,17 @@ export const getFullUrl = (url: string): string => {
 
 export const getLqipUrl = (url: string): string => {
   if (!url) return '';
-  if (!isCloudinaryUrl(url)) return url;
-  return insertTransform(url, 'w_30,q_20,f_auto,e_blur:400');
+  if (isCloudinaryUrl(url)) return insertTransform(url, 'w_30,q_20,f_auto,e_blur:400');
+  // Bug fix 2026-07-08 (found during live QA of the front-page image fix): this used
+  // to return non-Cloudinary URLs raw, so the LQIP blur backdrop for scraped/eBay
+  // images hotlinked hotlink-protected CDNs directly instead of going through the
+  // proxy worker like the main photo does (getSaleImageUrl) -- a guaranteed-to-fail
+  // request on any hotlink-protected source. Proxy those the same way.
+  if (isScrapedImageUrl(url) || isEbayImageUrl(url)) {
+    const proxyBase = getImageProxyUrl();
+    return `${proxyBase}?url=${encodeURIComponent(url)}`;
+  }
+  return url;
 };
 
 export const getLandscape4x3Url = (url: string): string => {
