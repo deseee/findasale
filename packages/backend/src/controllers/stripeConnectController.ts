@@ -83,6 +83,13 @@ export const initiateConsignorOnboarding = async (req: AuthRequest, res: Respons
     // Create account if it doesn't exist
     if (!accountId) {
       accountId = await createConnectAccount(consignor);
+      // 2026-07-08 fix (S1091): createConnectAccount no longer persists internally
+      // (it's shared with vendorBoothController.ts, which owns a different model) --
+      // this caller now persists the new accountId to the Consignor row itself.
+      await prisma.consignor.update({
+        where: { id: consignor.id },
+        data: { stripeAccountId: accountId },
+      });
     }
 
     // Build return/refresh URLs

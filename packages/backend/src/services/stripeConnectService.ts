@@ -45,12 +45,18 @@ export const createConnectAccount = async (consignor: {
 
     const account = await stripe().accounts.create(accountData);
 
-    // Store the account ID
-    await prisma.consignor.update({
-      where: { id: consignor.id },
-      data: { stripeAccountId: account.id },
-    });
-
+    // 2026-07-08 fix (found via live Railway logs during Maple Lake Mall E2E QA,
+    // S1091): this used to persist stripeAccountId to the Consignor table
+    // unconditionally, but createConnectAccount is shared by two callers with
+    // DIFFERENT owning models -- stripeConnectController.ts (real Consignor rows)
+    // and vendorBoothController.ts (VendorBooth rows, passing booth.id as the
+    // `id` field). Since no Consignor row exists with id === booth.id, the
+    // prisma.consignor.update() below threw P2025 "Record to update not found"
+    // for every VendorBooth onboarding attempt -- confirmed via real Railway
+    // deploy logs showing the exact PrismaClientKnownRequestError at this line.
+    // Persistence is now the CALLER's responsibility (each caller knows its own
+    // model). stripeConnectController.ts updated to persist to Consignor itself;
+    // vendorBoothController.ts already persisted to VendorBooth separately.
     return account.id;
   } catch (error) {
     console.error('Failed to create Stripe Connect account:', error);
