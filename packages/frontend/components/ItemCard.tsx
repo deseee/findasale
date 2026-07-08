@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { getOptimizedUrl, getLqipUrl, getThumbnailUrl, getItemImageUrl, getCloudinarySrcSet } from '../lib/imageUtils';
 import { formatCategoryLabel } from '../lib/itemConstants';
@@ -146,6 +146,7 @@ const ItemCard: React.FC<ItemCardProps> = ({
 }) => {
   const [imgLoaded, setImgLoaded] = useState(false);
   const [imgError, setImgError] = useState(false);
+  const imgRef = useRef<HTMLImageElement>(null);
   const { isLowBandwidth } = useNetworkQuality();
 
   // Feature 67: Fetch social proof metrics for this item
@@ -175,10 +176,19 @@ const ItemCard: React.FC<ItemCardProps> = ({
   }
 
   // Reset image loading state when the photo URL changes
-  // This ensures new images load even if the component instance is reused
+  // This ensures new images load even if the component instance is reused.
+  // Also covers the case where the image is already complete (loaded or
+  // failed) from browser cache by the time this effect runs — the native
+  // load/error event fired before onLoad/onError were attached, so we read
+  // .complete/.naturalWidth directly instead of relying solely on the event.
   useEffect(() => {
     setImgLoaded(false);
     setImgError(false);
+    const el = imgRef.current;
+    if (el && el.complete) {
+      if (el.naturalWidth > 0) setImgLoaded(true);
+      else setImgError(true);
+    }
   }, [optimizedUrl]);
 
   // Check if countdown should be displayed (within 24h of auction end)
@@ -270,6 +280,7 @@ const ItemCard: React.FC<ItemCardProps> = ({
           {primaryPhotoUrl && !imgError ? (
             <img
               key={optimizedUrl || primaryPhotoUrl}
+              ref={imgRef}
               src={optimizedUrl || primaryPhotoUrl}
               {...(srcSet ? { srcSet, sizes: '(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 280px' } : {})}
               alt={item.title}

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { format } from 'date-fns';
@@ -34,6 +34,7 @@ interface OrganizerSaleCardProps {
 const OrganizerSaleCard: React.FC<OrganizerSaleCardProps> = ({ sale }) => {
   const [imgLoaded, setImgLoaded] = useState(false);
   const [imgError, setImgError] = useState(false);
+  const imgRef = useRef<HTMLImageElement>(null);
   const [rsvpCount, setRsvpCount] = useState(0);
   const [isAttendeesModalOpen, setIsAttendeesModalOpen] = useState(false);
   const [attendanceCount, setAttendanceCount] = useState<number | null>(sale.attendanceCount ?? null);
@@ -63,10 +64,19 @@ const OrganizerSaleCard: React.FC<OrganizerSaleCardProps> = ({ sale }) => {
   const lqipUrl_calc = photoUrl ? getSaleImageUrl(photoUrl, 20) : null;
 
   // Reset image loading state when the photo URL changes
-  // This ensures new images load even if the component instance is reused
+  // This ensures new images load even if the component instance is reused.
+  // Also covers the case where the image is already complete (loaded or
+  // failed) from browser cache by the time this effect runs — the native
+  // load/error event fired before onLoad/onError were attached, so we read
+  // .complete/.naturalWidth directly instead of relying solely on the event.
   useEffect(() => {
     setImgLoaded(false);
     setImgError(false);
+    const el = imgRef.current;
+    if (el && el.complete) {
+      if (el.naturalWidth > 0) setImgLoaded(true);
+      else setImgError(true);
+    }
   }, [optimizedUrl]);
 
   const formatSaleDate = (dateString: string | null | undefined): string => {
@@ -123,6 +133,7 @@ const OrganizerSaleCard: React.FC<OrganizerSaleCardProps> = ({ sale }) => {
           {photoUrl && !imgError ? (
             <Image
               key={optimizedUrl}
+              ref={imgRef}
               src={optimizedUrl!}
               alt={sale.title}
               fill

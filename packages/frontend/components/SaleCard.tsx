@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 
 import { Lock } from 'lucide-react';
@@ -67,6 +67,7 @@ interface SaleCardProps {
 const SaleCard: React.FC<SaleCardProps> = ({ sale, priority = false }) => {
   const [imgLoaded, setImgLoaded] = useState(false);
   const [imgError, setImgError] = useState(false);
+  const imgRef = useRef<HTMLImageElement>(null);
   const [showToday, setShowToday] = useState(false); // false on SSR; computed client-side to avoid hydration mismatch
   const { isLowBandwidth } = useNetworkQuality();
 
@@ -92,6 +93,18 @@ const SaleCard: React.FC<SaleCardProps> = ({ sale, priority = false }) => {
   useEffect(() => {
     setImgLoaded(false);
     setImgError(false);
+    // Bug fix (front-page images stuck on blurred placeholder): if the image is
+    // already loaded/failed from the browser cache by the time this effect runs
+    // (common on fast/cached requests, and on SSR-hydrated <img> tags whose
+    // download can finish before React attaches onLoad/onError), the native
+    // 'load'/'error' event has already fired and will never fire again — so
+    // onLoad/onError alone leave imgLoaded stuck false forever. Read the DOM's
+    // own .complete/.naturalWidth state directly instead of relying on the event.
+    const el = imgRef.current;
+    if (el && el.complete) {
+      if (el.naturalWidth > 0) setImgLoaded(true);
+      else setImgError(true);
+    }
   }, [optimizedUrl]);
 
   // Compute "happening today" client-side only to avoid SSR/CSR date mismatch (hydration #418)
@@ -169,6 +182,7 @@ const SaleCard: React.FC<SaleCardProps> = ({ sale, priority = false }) => {
         {hasPhoto ? (
           <img
             key={optimizedUrl}
+            ref={imgRef}
             src={optimizedUrl!}
             {...(srcSet ? { srcSet, sizes: '(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 280px' } : {})}
             alt={sale.title}

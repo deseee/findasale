@@ -79,6 +79,11 @@ const SCRAPED_IMAGE_DOMAINS = [
   'p1.liveauctioneers.com',
   'p2.liveauctioneers.com',
   'photos.liveauctioneers.com',
+  // Hotlink-protected aggregator CDNs (confirmed 503 when loaded directly,
+  // unproxied, live 2026-07-08 — front-page image bug): covers subdomains like
+  // ysn.tlstatic.com, gsf.tlstatic.com, gsalr.tlstatic.com, eso-cdn.tlcdn.workers.dev
+  'tlstatic.com',
+  'tlcdn.workers.dev',
 ];
 
 const isScrapedImageUrl = (url: string): boolean => {
@@ -101,7 +106,12 @@ function getImageProxyUrl(): string {
 
 export const getItemImageUrl = (url: string | null | undefined): string | null => {
   if (!url) return null;
-  if (isEbayImageUrl(url)) {
+  // Bug fix 2026-07-08: this previously only proxied eBay URLs, so item photos
+  // from hotlink-protected scraped CDNs (estatesales.net, liveauctioneers.com,
+  // tlstatic.com/tlcdn.workers.dev aggregators) were requested directly and
+  // returned 503 from the origin. getSaleImageUrl already proxied these for
+  // sale-level photos; item-level photos (index.tsx search grid, ItemCard) did not.
+  if (isEbayImageUrl(url) || isScrapedImageUrl(url)) {
     const proxyBase = getImageProxyUrl();
     return `${proxyBase}?url=${encodeURIComponent(url)}`;
   }

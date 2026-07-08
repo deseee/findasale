@@ -743,6 +743,7 @@ const SocialLink = ({ href, label, children }: { href: string; label: string; ch
 const SaleCard = ({ sale }: { sale: Sale }) => {
   const [imgLoaded, setImgLoaded] = useState(false);
   const [imgError, setImgError] = useState(false);
+  const imgRef = useRef<HTMLImageElement>(null);
 
   const formatDate = (d: string) => {
     try {
@@ -753,6 +754,20 @@ const SaleCard = ({ sale }: { sale: Sale }) => {
   const photoUrl = sale.photoUrls?.[0] ?? null;
   const optimizedUrl = photoUrl ? getSaleImageUrl(photoUrl) : null;
   const lqipUrl = optimizedUrl; // proxy URL doubles as LQIP; CSS blur handles visual effect
+
+  // Reset image loading state when the photo URL changes, and cover the case
+  // where the image is already complete (loaded or failed) from browser cache
+  // by the time this effect runs — the native load/error event fired before
+  // onLoad/onError were attached, so read .complete/.naturalWidth directly.
+  useEffect(() => {
+    setImgLoaded(false);
+    setImgError(false);
+    const el = imgRef.current;
+    if (el && el.complete) {
+      if (el.naturalWidth > 0) setImgLoaded(true);
+      else setImgError(true);
+    }
+  }, [optimizedUrl]);
 
   const isToday = (): boolean => {
     try {
@@ -777,10 +792,11 @@ const SaleCard = ({ sale }: { sale: Sale }) => {
         )}
         {photoUrl && !imgError ? (
           <img
+            key={optimizedUrl}
             src={optimizedUrl!}
             alt={sale.title}
             className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${imgLoaded ? 'opacity-100' : 'opacity-0'}`}
-            ref={(el) => { if (el?.complete && el.naturalWidth > 0) setImgLoaded(true); }}
+            ref={imgRef}
             onLoad={() => setImgLoaded(true)}
             onError={() => setImgError(true)}
             loading="lazy"
