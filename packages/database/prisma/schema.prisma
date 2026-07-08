@@ -4518,6 +4518,9 @@ model Consignor {
   portalToken     String             @unique @default(cuid()) // capability URL token — permanent for MVP
   stripeAccountId String? // Stripe Connect account ID for consignor payouts
   stripeOnboarded Boolean            @default(false) // Whether consignor has completed Stripe onboarding
+  // ADR-020: mirrors VendorBooth.stripeAccountType — existing rows default to 'express'
+  // (the only type ever created before this migration); new onboarding sets 'standard'.
+  stripeAccountType String?          @default("express") // 'express' | 'standard'
   items           Item[]             @relation("ConsignorItems")
   payouts         ConsignorPayout[]
   createdAt       DateTime           @default(now())
@@ -5234,10 +5237,17 @@ model VendorBooth {
 
   status              String   @default("PENDING") // PENDING|CONFIRMED|REJECTED|CANCELLED
 
-  // Stripe Connect Express identity for this booth's operator (ADR-016). Populated once
-  // the claiming User completes onboarding (same flow Organizer/Consignor already use).
+  // Stripe Connect identity for this booth's operator (ADR-016, migrated to Standard
+  // accounts per ADR-020). Populated once the claiming User completes onboarding (same
+  // flow Organizer/Consignor already use).
   stripeAccountId     String?
   stripeOnboarded     Boolean  @default(false)
+  // ADR-020: which Stripe account type stripeAccountId actually is. Stripe does not allow
+  // changing an existing account's type, so this tracks it explicitly rather than assuming —
+  // existing rows default to 'express' (the only type ever created before this migration);
+  // new onboarding (startVendorBoothStripeOnboarding) sets 'standard'. Read by the refund
+  // controller and cart-charge flow to pick the correct charge/refund shape per booth.
+  stripeAccountType   String?  @default("express") // 'express' | 'standard'
 
   notes               String?
 
@@ -5261,6 +5271,7 @@ model VendorBooth {
   items               Item[]                 @relation("VendorBoothItems")
   payouts             VendorBoothPayout[]
   cashierTransactions BoothCartTransaction[]  @relation("CashierBoothTransactions")
+  cartLegs            BoothCartLeg[]          @relation("VendorBoothCartLegs")
 
   @@unique([hubId, boothNumber])
   @@index([hubId])
@@ -5292,11 +5303,39 @@ model BoothCartTransaction {
   createdAt             DateTime     @default(now())
 
   purchases             Purchase[]
+  legs                  BoothCartLeg[]
 
   @@index([hubId])
   @@index([cashierTeamMemberId])
   @@index([cashierBoothId])
   @@index([stripePaymentIntentId])
+}
+
+// ADR-020: one row per vendor booth "leg" of a roaming multi-booth cart checkout.
+// Each leg is its own Stripe PaymentIntent scoped to that booth's OWN Standard-account
+// stripeAccountId (Direct charge) — replaces the old single-PaymentIntent-per-cart model.
+// Terminal rail: capture_method manual, card_present, one physical tap per leg.
+// QR/in-app rail: capture_method manual also (for capture-all-or-cancel-all symmetry with
+// the Terminal rail), confirmed off_session using a PaymentMethod cloned from the shopper's
+// single SetupIntent on the platform account.
+model BoothCartLeg {
+  id                    String               @id @default(cuid())
+  cartTransactionId     String
+  cartTransaction       BoothCartTransaction @relation(fields: [cartTransactionId], references: [id], onDelete: Cascade)
+  vendorBoothId         String
+  vendorBooth           VendorBooth          @relation("VendorBoothCartLegs", fields: [vendorBoothId], references: [id], onDelete: Cascade)
+  stripeAccountId       String               // the booth's OWN connected account — the Direct-charge merchant of record for this leg
+  stripePaymentIntentId String               @unique
+  amountCents           Int
+  rail                  String               // 'TERMINAL' | 'QR'
+  status                String               @default("PENDING") // PENDING|REQUIRES_CAPTURE|CAPTURED|CANCELED|FAILED
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
+
+  @@index([cartTransactionId])
+  @@index([vendorBoothId])
+  @@index([stripePaymentIntentId])
+  @@index([status])
 }
 
 model VendorBoothSettlementBatch {

@@ -8,12 +8,15 @@ const stripe = () => getStripe();
  * Create a Stripe Express account for a consignor.
  * Returns the accountId.
  */
-export const createConnectAccount = async (consignor: {
-  id: string;
-  email?: string | null;
-  name: string;
-  workspaceId: string;
-}) => {
+export const createConnectAccount = async (
+  consignor: {
+    id: string;
+    email?: string | null;
+    name: string;
+    workspaceId: string;
+  },
+  accountType: 'standard' | 'express' = 'express'
+) => {
   try {
     // 2026-07-08 fix (findasale-hacker live QA, S1091): requesting `transfers` alone
     // was rejected live by Stripe -- confirmed via real Railway logs on a genuine
@@ -30,18 +33,38 @@ export const createConnectAccount = async (consignor: {
     // transfers-only approval for this platform account (removes the need for this
     // capability entirely) -- flagged for Patrick, not pursued here since it requires
     // Stripe's manual review and this unblocks onboarding today.
-    const accountData: Stripe.AccountCreateParams = {
-      type: 'express',
-      email: consignor.email || undefined,
-      capabilities: {
-        transfers: { requested: true },
-        card_payments: { requested: true },
-      },
-      metadata: {
-        consignorId: consignor.id,
-        workspaceId: consignor.workspaceId,
-      },
-    };
+    // ADR-020 (2026-07-07, Patrick-approved): Standard accounts make the
+    // connected account its own Direct-charge merchant of record — Stripe's own
+    // defaults for `type: 'standard'` already are `fees.payer: 'account'`,
+    // `stripe_dashboard.type: 'full'`, `requirement_collection: 'stripe'`,
+    // `losses.payments: 'stripe'` (all cited in ADR-018/019 against Stripe's own
+    // docs) — so `type: 'standard'` alone is sufficient, no `controller` block or
+    // `capabilities` request needed (capabilities are self-managed by the vendor's
+    // own full Stripe Dashboard on a Standard account, unlike Express). Express
+    // accounts keep the existing explicit capability request unchanged — this is
+    // an additive branch, not a rewrite of the working Express path.
+    const accountData: Stripe.AccountCreateParams =
+      accountType === 'standard'
+        ? {
+            type: 'standard',
+            email: consignor.email || undefined,
+            metadata: {
+              consignorId: consignor.id,
+              workspaceId: consignor.workspaceId,
+            },
+          }
+        : {
+            type: 'express',
+            email: consignor.email || undefined,
+            capabilities: {
+              transfers: { requested: true },
+              card_payments: { requested: true },
+            },
+            metadata: {
+              consignorId: consignor.id,
+              workspaceId: consignor.workspaceId,
+            },
+          };
 
     const account = await stripe().accounts.create(accountData);
 

@@ -348,16 +348,25 @@ export const startVendorBoothStripeOnboarding = async (req: AuthRequest, res: Re
 
     let accountId = booth.stripeAccountId;
     if (!accountId) {
-      accountId = await createConnectAccount({
-        id: booth.id,
-        email: booth.vendorEmail || req.user.email,
-        name: booth.vendorName,
-        workspaceId: booth.hubId,
-      });
+      // ADR-020 (2026-07-07, Patrick-approved): new VendorBooth onboarding creates a
+      // Standard account, not Express — each booth becomes its own Direct-charge
+      // merchant of record (Stripe files that booth's own 1099-K, not FindA.Sale).
+      accountId = await createConnectAccount(
+        {
+          id: booth.id,
+          email: booth.vendorEmail || req.user.email,
+          name: booth.vendorName,
+          workspaceId: booth.hubId,
+        },
+        'standard'
+      );
       // createConnectAccount is typed for Consignor's update call internally in the
       // original implementation's own persistence — VendorBooth needs its own write here
       // since createConnectAccount only persists to the Consignor table today.
-      await prisma.vendorBooth.update({ where: { id: booth.id }, data: { stripeAccountId: accountId } });
+      await prisma.vendorBooth.update({
+        where: { id: booth.id },
+        data: { stripeAccountId: accountId, stripeAccountType: 'standard' },
+      });
     }
 
     const defaultReturn = `${process.env.FRONTEND_URL || 'https://finda.sale'}/vendor-booth/${booth.boothToken}?onboarding=complete`;

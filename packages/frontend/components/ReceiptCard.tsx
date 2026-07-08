@@ -10,6 +10,10 @@ interface ReceiptItem {
   itemTitle: string;
   photoUrl?: string;
   price: number;
+  // ADR-020: present when this line item came from a vendor-booth roaming cart —
+  // shown under the item title so a multi-booth receipt's per-vendor breakdown is
+  // legible (matches the N separate charges the shopper's card statement shows).
+  vendorBoothName?: string;
 }
 
 interface ReceiptCardProps {
@@ -92,6 +96,9 @@ export default function ReceiptCard({ receipt, returnWindowHours = 48, saleEndDa
               )}
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{item.itemTitle}</p>
+                {item.vendorBoothName && (
+                  <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{item.vendorBoothName}</p>
+                )}
               </div>
               <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
                 ${item.price.toFixed(2)}

@@ -2430,7 +2430,16 @@ export const createRefund = async (req: AuthRequest, res: Response) => {
             organizer: { select: { userId: true, businessName: true } }
           }
         },
-        item: { select: { title: true } }
+        item: {
+          select: {
+            title: true,
+            // ADR-020: booth-cart purchases refund against the ITEM's own vendor
+            // booth's Standard account, not the platform/organizer account — each
+            // booth's leg is its own Direct charge (PaymentIntent) on its own
+            // stripeAccountId now, so the refund call must be scoped the same way.
+            vendorBooth: { select: { id: true, stripeAccountId: true, stripeAccountType: true, vendorName: true } },
+          },
+        },
       },
     });
 
@@ -2438,8 +2447,21 @@ export const createRefund = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ message: 'Purchase not found' });
     }
 
-    if (hasOrganizerRole && purchase.sale?.organizer?.userId !== req.user.id) {
+    // Booth-cart purchases have no purchase.saleId (a BoothCartTransaction spans a
+    // hub, not one Sale) — ownership for those is checked via the item's vendor
+    // booth's hub organizer below, not purchase.sale.organizer.
+    const isBoothCartPurchase = !!purchase.boothCartTransactionId;
+    if (hasOrganizerRole && !isBoothCartPurchase && purchase.sale?.organizer?.userId !== req.user.id) {
       return res.status(403).json({ message: 'You can only refund purchases from your own sales' });
+    }
+    if (hasOrganizerRole && isBoothCartPurchase) {
+      const cart = await prisma.boothCartTransaction.findUnique({
+        where: { id: purchase.boothCartTransactionId! },
+        select: { hub: { select: { organizer: { select: { userId: true } } } } },
+      });
+      if (cart?.hub?.organizer?.userId !== req.user.id) {
+        return res.status(403).json({ message: 'You can only refund purchases from your own hub' });
+      }
     }
 
     if (purchase.status !== 'PAID') {
@@ -2485,12 +2507,27 @@ export const createRefund = async (req: AuthRequest, res: Response) => {
     // Create Stripe refund with capped amount.
     // P3 (idempotency): stable key keyed to the purchase collapses retries/concurrent
     // requests to a single refund on Stripe's side.
+    //
+    // ADR-020 refund rework: booth-cart purchases (isBoothCartPurchase) live on
+    // their ITEM's vendor booth's own Standard account — the PaymentIntent was
+    // created there as a Direct charge, so the refund call must pass that same
+    // { stripeAccount } option or Stripe can't find the PaymentIntent at all (it
+    // doesn't exist on the platform account). Regular purchases are unaffected —
+    // createPaymentIntent uses transfer_data.destination (a destination charge that
+    // DOES live on the platform account), so no stripeAccount option for those,
+    // exactly as before this change.
+    const boothStripeAccountId = purchase.item?.vendorBooth?.stripeAccountId;
+    if (isBoothCartPurchase && !boothStripeAccountId) {
+      await prisma.purchase.updateMany({ where: { id: purchaseId, status: 'REFUNDING' }, data: { status: 'PAID' } });
+      return res.status(400).json({ message: 'This item\'s vendor booth has no Stripe account on file — cannot resolve which account to refund.' });
+    }
     try {
       await stripe().refunds.create({
         payment_intent: purchase.stripePaymentIntentId,
         amount: Math.round(refundAmount * 100) // Convert to cents
       }, {
-        idempotencyKey: `refund-${purchase.id}`
+        idempotencyKey: `refund-${purchase.id}`,
+        ...(isBoothCartPurchase ? { stripeAccount: boothStripeAccountId! } : {}),
       });
     } catch (stripeErr) {
       // Stripe failed — revert the claim back to PAID so the organizer can retry.

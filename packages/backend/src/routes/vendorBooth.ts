@@ -18,8 +18,13 @@ import {
 import {
   startBoothCart,
   addBoothCartItems,
-  chargeBoothCart,
-  confirmBoothCart,
+  getBoothCartSummary,
+  createBoothCartTerminalConnectionToken,
+  authorizeBoothCartTerminalLeg,
+  createBoothCartQrSetupIntent,
+  authorizeBoothCartQrLegs,
+  captureBoothCart,
+  cancelBoothCart,
   listBoothCartTransactions,
 } from '../controllers/vendorBoothCartController';
 import {
@@ -86,8 +91,20 @@ router.delete('/api/organizer/hubs/:hubId/vendor-booths/:boothId', authenticate,
 // still hard-401s if neither a valid booth token NOR an authenticated req.user is present.
 router.post('/api/organizer/hubs/:hubId/cart/start', optionalAuthenticate, requireBoothTokenOrTeamMember(), startBoothCart);
 router.post('/api/organizer/hubs/:hubId/cart/:cartTransactionId/items', optionalAuthenticate, requireBoothTokenOrTeamMember(), addBoothCartItems);
-router.post('/api/organizer/hubs/:hubId/cart/:cartTransactionId/charge', optionalAuthenticate, requireBoothTokenOrTeamMember(), chargeBoothCart);
-router.post('/api/organizer/hubs/:hubId/cart/:cartTransactionId/confirm', optionalAuthenticate, requireBoothTokenOrTeamMember(), confirmBoothCart);
+
+// ADR-020 (2026-07-07): sequential per-booth Standard-account checkout — replaces
+// the old single-PaymentIntent /charge + /confirm pair. Terminal rail: booth-scoped
+// connection token -> authorize (one physical tap per booth) -> shared /capture.
+// QR/in-app rail: one platform SetupIntent -> authorize (clones the PaymentMethod
+// into every booth's account, confirms all legs server-side) -> the SAME shared
+// /capture. /cancel is the whole-cart-cancel-and-restart path for either rail.
+router.get('/api/organizer/hubs/:hubId/cart/:cartTransactionId/summary', optionalAuthenticate, requireBoothTokenOrTeamMember(), getBoothCartSummary);
+router.post('/api/organizer/hubs/:hubId/cart/:cartTransactionId/terminal/connection-token', optionalAuthenticate, requireBoothTokenOrTeamMember(), createBoothCartTerminalConnectionToken);
+router.post('/api/organizer/hubs/:hubId/cart/:cartTransactionId/terminal/authorize', optionalAuthenticate, requireBoothTokenOrTeamMember(), authorizeBoothCartTerminalLeg);
+router.post('/api/organizer/hubs/:hubId/cart/:cartTransactionId/qr/setup-intent', optionalAuthenticate, requireBoothTokenOrTeamMember(), createBoothCartQrSetupIntent);
+router.post('/api/organizer/hubs/:hubId/cart/:cartTransactionId/qr/authorize', optionalAuthenticate, requireBoothTokenOrTeamMember(), authorizeBoothCartQrLegs);
+router.post('/api/organizer/hubs/:hubId/cart/:cartTransactionId/capture', optionalAuthenticate, requireBoothTokenOrTeamMember(), captureBoothCart);
+router.post('/api/organizer/hubs/:hubId/cart/:cartTransactionId/cancel', optionalAuthenticate, requireBoothTokenOrTeamMember(), cancelBoothCart);
 
 // Organizer-only audit view
 router.get('/api/organizer/hubs/:hubId/cart-transactions', authenticate, requireTier('TEAMS'), listBoothCartTransactions);

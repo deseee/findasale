@@ -21,6 +21,7 @@ export const getMyReceipts = async (req: AuthRequest, res: Response) => {
         amount: true,
         createdAt: true,
         stripePaymentIntentId: true,
+        boothCartTransactionId: true,
         sale: {
           select: {
             id: true,
@@ -37,6 +38,7 @@ export const getMyReceipts = async (req: AuthRequest, res: Response) => {
           select: {
             id: true,
             title: true,
+            vendorBooth: { select: { vendorName: true, boothNumber: true } },
           },
         },
       },
@@ -61,9 +63,17 @@ export const getMyReceipts = async (req: AuthRequest, res: Response) => {
       return piId;
     };
 
+    // ADR-020: booth-cart purchases now each carry a REAL, distinct per-booth
+    // PaymentIntent id (no more shared "{cartPiId}_{itemId}" composite to strip),
+    // so grouping by stripePaymentIntentId alone would split one cart into N
+    // separate receipt cards (one per vendor booth actually charged) — technically
+    // accurate to the N separate statement charges, but the receipt UI still wants
+    // ONE card per cart/checkout moment. Group by boothCartTransactionId FIRST when
+    // present (spans every booth in that cart); fall back to the existing
+    // PI-suffix-stripping grouping for everything else, unchanged.
     const transactionGroups = new Map<string, typeof purchases>();
     for (const p of purchases) {
-      const key = getBasePIId(p.stripePaymentIntentId) ?? p.id;
+      const key = p.boothCartTransactionId ?? getBasePIId(p.stripePaymentIntentId) ?? p.id;
       const group = transactionGroups.get(key) ?? [];
       group.push(p);
       transactionGroups.set(key, group);
@@ -81,6 +91,12 @@ export const getMyReceipts = async (req: AuthRequest, res: Response) => {
           itemTitle: p.item?.title ?? (p.sale?.title ? `${p.sale.title} — Purchase` : 'POS Purchase'),
           photoUrl: undefined,
           price: p.amount,
+          // ADR-020: itemized per-vendor label so a multi-booth cart receipt shows
+          // "Booth A (Booth 3)" under each item, matching the N separate statement
+          // charges instead of looking like one undifferentiated total.
+          vendorBoothName: p.item?.vendorBooth
+            ? `${p.item.vendorBooth.vendorName}${p.item.vendorBooth.boothNumber ? ` (Booth ${p.item.vendorBooth.boothNumber})` : ''}`
+            : undefined,
         })),
         purchase: first,
       };
