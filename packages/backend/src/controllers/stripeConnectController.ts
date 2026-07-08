@@ -304,22 +304,60 @@ export const startStandardMigration = async (req: AuthRequest, res: Response) =>
       return res.status(200).json({ alreadyMigrated: true });
     }
 
-    const newAccountId = await createStandardMigrationAccount(
-      organizer.stripeConnectId,
-      organizer.id
-    );
-
-    await prisma.organizer.update({
-      where: { id: organizer.id },
-      data: {
-        pendingStripeMigrationAccountId: newAccountId,
-        stripeAccountType: 'express',
-        stripeMigrationPromptedAt: new Date(),
-      },
+    // Race-condition fix (findasale-hacker P2 finding, 2026-07-08): two
+    // concurrent calls could both read pendingStripeMigrationAccountId as null
+    // above and both proceed to create a Stripe account, orphaning one. Claim
+    // the slot atomically first -- a single UPDATE ... WHERE pendingStripe...
+    // IS NULL either affects exactly one row (we won the race) or zero rows
+    // (someone else won it in between our read and this write). This uses the
+    // database's own atomicity as the compare-and-swap; no transaction or
+    // isolation-level change needed.
+    const claim = await prisma.organizer.updateMany({
+      where: { id: organizer.id, pendingStripeMigrationAccountId: null },
+      data: { pendingStripeMigrationAccountId: 'CLAIMING', stripeMigrationPromptedAt: new Date() },
     });
 
-    const url = await createOnboardingLink(newAccountId, returnUrl, refreshUrl);
-    return res.status(200).json({ onboardingUrl: url, migrationPending: true });
+    if (claim.count === 0) {
+      // Lost the race -- a concurrent request already claimed (or completed)
+      // this migration. Re-fetch and hand back whatever it produced instead of
+      // creating a second account.
+      const refreshed = await prisma.organizer.findUnique({ where: { id: organizer.id } });
+      if (refreshed?.pendingStripeMigrationAccountId && refreshed.pendingStripeMigrationAccountId !== 'CLAIMING') {
+        const url = await createOnboardingLink(refreshed.pendingStripeMigrationAccountId, returnUrl, refreshUrl);
+        return res.status(200).json({ onboardingUrl: url, migrationPending: true });
+      }
+      // Still mid-claim (very tight window) -- ask the client to retry shortly
+      // rather than proceed and risk a duplicate account.
+      return res.status(409).json({ message: 'Migration already starting -- please try again in a moment.' });
+    }
+
+    // From here on, release the 'CLAIMING' claim back to null on any failure --
+    // otherwise a Stripe API error mid-flow would leave the organizer stuck on
+    // the sentinel forever with no way to retry (a new failure mode the claim
+    // itself would introduce if left unguarded).
+    try {
+      const newAccountId = await createStandardMigrationAccount(
+        organizer.stripeConnectId,
+        organizer.id
+      );
+
+      await prisma.organizer.update({
+        where: { id: organizer.id },
+        data: {
+          pendingStripeMigrationAccountId: newAccountId,
+          stripeAccountType: 'express',
+        },
+      });
+
+      const url = await createOnboardingLink(newAccountId, returnUrl, refreshUrl);
+      return res.status(200).json({ onboardingUrl: url, migrationPending: true });
+    } catch (innerError) {
+      await prisma.organizer.updateMany({
+        where: { id: organizer.id, pendingStripeMigrationAccountId: 'CLAIMING' },
+        data: { pendingStripeMigrationAccountId: null },
+      });
+      throw innerError;
+    }
   } catch (error) {
     console.error('startStandardMigration error:', error);
     return res.status(500).json({ message: 'Failed to start Stripe account migration.' });
