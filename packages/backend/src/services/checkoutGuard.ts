@@ -289,11 +289,16 @@ function logBoothCartSignal(params: {
   context: string;
   hubId: string;
   cartTransactionId: string;
-  buyerUserId: string;
+  // 2026-07-08 fix (CI caught this, real TS error "string | undefined not
+  // assignable to string"): buyerUserId became optional on the outer function
+  // once the cashier self-dealing check (which has no buyer identity at all)
+  // was made to run unconditionally -- this log helper must accept that same
+  // optionality rather than requiring a value that may not exist yet.
+  buyerUserId?: string;
   notes: string;
 }): void {
   console.error(
-    `[checkoutGuard][boothCart] ${params.signalType} — hub=${params.hubId} cart=${params.cartTransactionId} buyer=${params.buyerUserId} [${params.context}] ${params.notes}`
+    `[checkoutGuard][boothCart] ${params.signalType} — hub=${params.hubId} cart=${params.cartTransactionId} buyer=${params.buyerUserId ?? '(none — cashier self-dealing check)'} [${params.context}] ${params.notes}`
   );
 }
 
