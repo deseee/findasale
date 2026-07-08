@@ -15,11 +15,27 @@ export const createConnectAccount = async (consignor: {
   workspaceId: string;
 }) => {
   try {
+    // 2026-07-08 fix (findasale-hacker live QA, S1091): requesting `transfers` alone
+    // was rejected live by Stripe -- confirmed via real Railway logs on a genuine
+    // account-creation attempt: StripeInvalidRequestError, "Your platform needs
+    // approval for accounts to have requested the `transfers` capability without the
+    // `card_payments` capability." This was NOT a new regression from the vendor-booth
+    // feature -- confirmed via DB query that 0 of the 2 existing Consignor rows have
+    // ever had a stripeAccountId set, meaning this shared function has never
+    // successfully created a real Connect account for anyone. Requesting both
+    // capabilities is Stripe's standard unblock; the connected account never actually
+    // processes a card charge itself (this platform always charges on the ORGANIZER's
+    // stripeConnectId, then Transfers out) so card_payments goes unused but satisfies
+    // Stripe's approval requirement. Alternative: contact Stripe support to request
+    // transfers-only approval for this platform account (removes the need for this
+    // capability entirely) -- flagged for Patrick, not pursued here since it requires
+    // Stripe's manual review and this unblocks onboarding today.
     const accountData: Stripe.AccountCreateParams = {
       type: 'express',
       email: consignor.email || undefined,
       capabilities: {
         transfers: { requested: true },
+        card_payments: { requested: true },
       },
       metadata: {
         consignorId: consignor.id,

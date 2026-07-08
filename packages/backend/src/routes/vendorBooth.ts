@@ -46,15 +46,22 @@ const router = Router();
 
 // --- Public / vendor-facing endpoints (no organizer auth) ---
 
+// Authenticated User's own booths across all hubs — MUST be defined before the
+// GET /:boothToken route immediately below, not just before /:vendorBoothId
+// further down. Express matches route registration order, and ":boothToken" is
+// a single-segment wildcard that matches the literal string "my-booths" just as
+// readily as a real token — so if this route were registered after, EVERY
+// GET /api/vendor-booth/my-booths request would be swallowed by getPublicBoothSummary
+// and always 404 with "Booth not found". Live-QA'd S1091: this was exactly the bug
+// (my-booths was registered after :boothToken, not just after :vendorBoothId) —
+// confirmed via a real authenticated call returning 404 before this fix.
+router.get('/api/vendor-booth/my-booths', authenticate, listMyVendorBooths);
+
 // Public, token-gated, read-only booth summary — field-whitelisted (ADR-017)
 router.get('/api/vendor-booth/:boothToken', getPublicBoothSummary);
 
 // Authenticated User claims a booth. userId derived exclusively from req.user.id.
 router.post('/api/vendor-booth/:boothToken/claim', authenticate, claimVendorBooth);
-
-// Authenticated User's own booths across all hubs — must be defined BEFORE
-// the /:vendorBoothId routes below to avoid Express treating "my-booths" as an ID param.
-router.get('/api/vendor-booth/my-booths', authenticate, listMyVendorBooths);
 
 // Booth owner only (req.user.id === VendorBooth.userId, enforced in controller)
 router.post('/api/vendor-booth/:vendorBoothId/stripe/onboard', authenticate, startVendorBoothStripeOnboarding);
