@@ -2300,8 +2300,18 @@ export const webhookHandler = async (req: Request, res: Response) => {
         const isOnboarded = account.charges_enabled && account.payouts_enabled;
 
         try {
+          // BUG FIX (2026-07-08, Patrick-reported flags-not-working investigation):
+          // this previously queried stripeConnectAccountId, a legacy column that is
+          // NEVER written by any code path in this codebase (confirmed via full-repo
+          // grep, 0 writes anywhere) -- the real, actually-used column for Organizer's
+          // Connect account id is stripeConnectId (set by createConnectAccount and read
+          // by every onboarding/checkout call site). The WHERE clause below could never
+          // match a real row, so this webhook silently no-op'd for every Organizer,
+          // every time, since the feature was built -- Artifact and Lopez Studio's
+          // stripeOnboarded flags were stuck at false despite being live-verified on
+          // Stripe. Fixed to match the column actually in use.
           const organizersUpdated = await prisma.organizer.updateMany({
-            where: { stripeConnectAccountId: account.id },
+            where: { stripeConnectId: account.id },
             data: { stripeOnboarded: isOnboarded }
           });
 
@@ -2346,6 +2356,47 @@ export const webhookHandler = async (req: Request, res: Response) => {
         } catch (err) {
           console.error(`[stripe-connect] Failed to update VendorBooth.stripeOnboarded for account ${account.id}:`, err);
         }
+        // ADR-023: Standard-migration cutover. Separate from the stripeOnboarded
+        // sync above -- this checks whether `account.id` is a PENDING migration
+        // target (a NEW Standard account created by startStandardMigration),
+        // and if it's now live, cuts the organizer's real money-routing field
+        // (stripeConnectId) over to it. This is the actual cutover moment --
+        // log it explicitly since it moves where real payouts land.
+        try {
+          const isOnboarded2 = account.charges_enabled && account.payouts_enabled;
+          const feesPayer = account.controller?.fees?.payer;
+          if (isOnboarded2 && feesPayer === 'account') {
+            const migratingOrganizer = await prisma.organizer.findFirst({
+              where: { pendingStripeMigrationAccountId: account.id },
+            });
+            if (migratingOrganizer) {
+              const oldAccountId = migratingOrganizer.stripeConnectId;
+              await prisma.organizer.update({
+                where: { id: migratingOrganizer.id },
+                data: {
+                  stripeConnectId: account.id,
+                  stripeAccountType: 'standard',
+                  pendingStripeMigrationAccountId: null,
+                  stripeOnboarded: true,
+                },
+              });
+              console.log(`[stripe-migration] cutover: organizer ${migratingOrganizer.id} ${oldAccountId} -> ${account.id}`);
+
+              if (oldAccountId) {
+                const boothsCutOver = await prisma.vendorBooth.updateMany({
+                  where: { stripeAccountId: oldAccountId },
+                  data: { stripeAccountId: account.id, stripeAccountType: 'standard' },
+                });
+                if (boothsCutOver.count > 0) {
+                  console.log(`[stripe-migration] cutover also applied to ${boothsCutOver.count} vendor booth(s) sharing the old account id`);
+                }
+              }
+            }
+          }
+        } catch (err) {
+          console.error(`[stripe-migration] Failed to process migration cutover for account ${account.id}:`, err);
+        }
+
         // If none of Organizer/Consignor/VendorBooth match: no-op, not an error —
         // an unrelated Stripe account's webhook firing is not a FindA.Sale event.
         // Always return 200 regardless (handled by the shared res.json below);

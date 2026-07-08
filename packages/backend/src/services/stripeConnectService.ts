@@ -15,7 +15,7 @@ export const createConnectAccount = async (
     name: string;
     workspaceId: string;
   },
-  accountType: 'standard' | 'express' = 'express'
+  accountType: 'standard' | 'express' = 'standard'
 ) => {
   try {
     // 2026-07-08 fix (findasale-hacker live QA, S1091): requesting `transfers` alone
@@ -88,6 +88,53 @@ export const createConnectAccount = async (
 };
 
 /**
+ * ADR-023: Create a NEW Standard account for an organizer currently on Express,
+ * eligible for Stripe's Networked Onboarding reuse offer -- so the account
+ * holder gets a one-click "use my existing verified info" option instead of
+ * re-entering business/bank/identity data.
+ *
+ * Eligibility rule (confirmed against docs.stripe.com/connect/networked-onboarding
+ * this session, ADR-022/023): prefilling the individual field, company.address,
+ * external_accounts, or any owners/directors/executives field on the NEW
+ * account DISQUALIFIES it from the reuse offer. This function therefore only
+ * prefills business_type/country/company.name -- deliberately NOT address,
+ * NOT individual, NOT bank details. Those get filled in by the one-click reuse
+ * itself once the account holder confirms on Stripe's hosted page.
+ *
+ * Caller is responsible for persisting the returned account id to
+ * Organizer.pendingStripeMigrationAccountId -- never to stripeConnectId
+ * directly (that cutover only happens once the webhook confirms the new
+ * account is actually live, see stripeController.ts account.updated).
+ */
+export const createStandardMigrationAccount = async (
+  oldAccountId: string,
+  organizerId: string
+) => {
+  try {
+    const oldAccount = await stripe().accounts.retrieve(oldAccountId);
+
+    const accountData: Stripe.AccountCreateParams = {
+      type: 'standard',
+      country: oldAccount.country || undefined,
+      business_type: oldAccount.business_type || undefined,
+      company: oldAccount.company?.name ? { name: oldAccount.company.name } : undefined,
+      email: oldAccount.email || undefined,
+      metadata: {
+        organizerId,
+        migrationFromAccountId: oldAccountId,
+        migrationType: 'express-to-standard',
+      },
+    };
+
+    const newAccount = await stripe().accounts.create(accountData);
+    return newAccount.id;
+  } catch (error) {
+    console.error('Failed to create Stripe standard migration account:', error);
+    throw error;
+  }
+};
+
+/**
  * Create a Stripe account onboarding link.
  * Returns the onboarding URL.
  */
@@ -123,6 +170,11 @@ export const getAccountStatus = async (accountId: string) => {
       payoutsEnabled: account.payouts_enabled ?? false,
       status: account.requirements?.current_deadline ? 'PENDING' : 'COMPLETE',
       requirements: account.requirements,
+      // ADR-021 (2026-07-08): the real Stripe account type (`'express'` |
+      // `'standard'` | ...) -- used by the VendorBooth account-reuse resolution
+      // to record what an existing (possibly-reused) account actually is, rather
+      // than defaulting/assuming.
+      accountType: account.type,
     };
   } catch (error) {
     console.error('Failed to get account status:', error);

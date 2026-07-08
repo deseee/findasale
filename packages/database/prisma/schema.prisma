@@ -316,6 +316,9 @@ model Organizer {
   stripeConnectAccountId      String? // Stripe Connect account ID (v2 onboarding)
   stripeConnectEnabled        Boolean                        @default(false) // Connect account fully onboarded
   stripeOnboarded             Boolean                        @default(false) // P2-1: Set true when account.updated webhook confirms charges_enabled && payouts_enabled
+  stripeAccountType           String?                        // ADR-023: 'express' | 'standard' -- cached display/routing hint only. Money-moving code paths must live-check Stripe directly, never trust this for authorization.
+  pendingStripeMigrationAccountId String?                    // ADR-023: new Standard account id while a Networked Onboarding migration is in flight
+  stripeMigrationPromptedAt   DateTime?                      // ADR-023: last time the migration banner was shown -- remind-later throttling only
   removeWatermarkEnabled      Boolean                        @default(false) // PRO: remove FindA.Sale watermark from exports
   // Phase 17: Reputation
   reputationTier              String                         @default("NEW") // NEW, TRUSTED, ESTATE_CURATOR

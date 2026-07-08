@@ -4,6 +4,7 @@ import { prisma } from '../lib/prisma';
 import {
   createConnectAccount,
   createOnboardingLink,
+  createStandardMigrationAccount,
   getAccountStatus,
   payConsignorViaACH,
   updateConsignorOnboardingStatus,
@@ -242,5 +243,85 @@ export const payConsignor = async (req: AuthRequest, res: Response) => {
   } catch (error) {
     console.error('payConsignor error:', error);
     return res.status(500).json({ message: 'Failed to process ACH payout.' });
+  }
+};
+
+// POST /api/organizers/me/stripe/start-standard-migration
+// ADR-023: Organizer-triggered migration from Express to Standard via Stripe's
+// Networked Onboarding reuse offer. Ownership-checked (organizer can only
+// migrate their OWN account -- never trust a client-passed id). Live-checks
+// the CURRENT account type before acting (ADR-021 pattern: never trust the
+// cached stripeAccountType for an action that creates/mutates a real Stripe
+// account -- that's exactly the gap that caused the Artifact duplicate-account
+// incident). Never creates a second pending account for the same organizer --
+// if one is already in flight, this reuses it and just issues a fresh link.
+export const startStandardMigration = async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+
+    const organizer = await prisma.organizer.findFirst({
+      where: { userId },
+    });
+
+    if (!organizer) {
+      return res.status(404).json({ message: 'Organizer not found.' });
+    }
+
+    if (!organizer.stripeConnectId) {
+      return res.status(400).json({ message: 'No Stripe account connected yet.' });
+    }
+
+    const frontendBaseUrl = process.env.FRONTEND_URL || 'https://finda.sale';
+    const returnUrl = `${frontendBaseUrl}/organizer/dashboard?stripeMigration=complete`;
+    const refreshUrl = `${frontendBaseUrl}/organizer/dashboard?stripeMigration=refresh`;
+
+    // Already-in-flight migration: never spin up a second new account for the
+    // same organizer. Just re-check the pending account and hand back a fresh
+    // link (AccountLinks expire).
+    if (organizer.pendingStripeMigrationAccountId) {
+      const pendingStatus = await getAccountStatus(organizer.pendingStripeMigrationAccountId);
+      if (pendingStatus.chargesEnabled && pendingStatus.payoutsEnabled) {
+        // Webhook should cut this over shortly; nothing more for the client to do.
+        return res.status(200).json({ alreadyMigrated: true });
+      }
+      const url = await createOnboardingLink(
+        organizer.pendingStripeMigrationAccountId,
+        returnUrl,
+        refreshUrl
+      );
+      return res.status(200).json({ onboardingUrl: url, migrationPending: true });
+    }
+
+    // Live-check the CURRENT account -- never act on the cached stripeAccountType.
+    const currentStatus = await getAccountStatus(organizer.stripeConnectId);
+    if (currentStatus.accountType === 'standard') {
+      // Already Standard (cache was just stale) -- sync it and stop.
+      await prisma.organizer.update({
+        where: { id: organizer.id },
+        data: { stripeAccountType: 'standard' },
+      });
+      return res.status(200).json({ alreadyMigrated: true });
+    }
+
+    const newAccountId = await createStandardMigrationAccount(
+      organizer.stripeConnectId,
+      organizer.id
+    );
+
+    await prisma.organizer.update({
+      where: { id: organizer.id },
+      data: {
+        pendingStripeMigrationAccountId: newAccountId,
+        stripeAccountType: 'express',
+        stripeMigrationPromptedAt: new Date(),
+      },
+    });
+
+    const url = await createOnboardingLink(newAccountId, returnUrl, refreshUrl);
+    return res.status(200).json({ onboardingUrl: url, migrationPending: true });
+  } catch (error) {
+    console.error('startStandardMigration error:', error);
+    return res.status(500).json({ message: 'Failed to start Stripe account migration.' });
   }
 };

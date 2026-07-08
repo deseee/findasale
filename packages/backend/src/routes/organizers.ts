@@ -17,6 +17,7 @@ import { getWatermarkSetting, updateWatermarkSetting } from '../controllers/wate
 import { emailService } from '../lib/emailService';
 import { suppressionService } from '../services/suppressionService';
 import { getPlatformStats, getPlatformGap, updateEbayQueueSettings, addToEbayQueue, removeFromEbayQueue } from '../controllers/platformStatsController';
+import { startStandardMigration } from '../controllers/stripeConnectController';
 
 const router = Router();
 
@@ -99,6 +100,8 @@ router.post('/me/ebay-queue', authenticate, addToEbayQueue);
 router.delete('/me/ebay-queue/:itemId', authenticate, removeFromEbayQueue);
 
 // Authenticated: get revenue analytics for the current organizer
+router.post('/me/stripe/start-standard-migration', authenticate, startStandardMigration);
+
 router.get('/me/analytics', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
@@ -555,6 +558,12 @@ router.get('/me', authenticate, checkTierLapse, async (req: AuthRequest, res: Re
       referralDiscountExpiry: discountExpiry ? discountExpiry.toISOString() : null,
       subscriptionLapsed,
       stripeConnected: !!(organizer as any).stripeConnectId,
+      // ADR-023: computed server-side so the frontend never has to infer the
+      // migration business rule from raw stripeAccountType/pendingStripe... fields.
+      needsStripeMigration:
+        (organizer as any).stripeAccountType === 'express' &&
+        !(organizer as any).pendingStripeMigrationAccountId,
+      migrationPending: !!(organizer as any).pendingStripeMigrationAccountId,
       subscriptionTier: organizer.subscriptionTier ?? 'SIMPLE',
       graceEndAt: (organizer as any).graceEndAt ? (organizer as any).graceEndAt.toISOString() : null,
       graceTierBefore: (organizer as any).graceTierBefore || null,
