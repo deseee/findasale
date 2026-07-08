@@ -118,6 +118,21 @@ const VendorBoothTokenPage: React.FC = () => {
     setOnboarding(true);
     try {
       const response = await api.post(`/vendor-booth/${myBoothId}/stripe/onboard`, {});
+      // ADR-021 (2026-07-08): when the claiming user already has a working
+      // Stripe Connect account (e.g. as an Organizer), the backend links it
+      // directly instead of sending them through onboarding a second time --
+      // there is no onboardingUrl in that case, so don't redirect.
+      if (response.data.linkedExistingAccount) {
+        showToast(
+          response.data.chargesEnabled && response.data.payoutsEnabled
+            ? 'Linked to your existing Stripe account — you can start taking payments.'
+            : 'Linked to your existing Stripe account. Finish setup in your organizer Stripe settings to enable payouts.',
+          'success'
+        );
+        setOnboarding(false);
+        fetchSummary();
+        return;
+      }
       window.location.href = response.data.onboardingUrl;
     } catch (error: any) {
       console.error('Error starting onboarding:', error);

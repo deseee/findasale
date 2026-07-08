@@ -347,10 +347,44 @@ export const startVendorBoothStripeOnboarding = async (req: AuthRequest, res: Re
     if (booth.userId !== req.user.id) return res.status(403).json({ error: 'You do not operate this booth' });
 
     let accountId = booth.stripeAccountId;
+
+    // ADR-021 (2026-07-08, Patrick-flagged real finding, not a hypothetical):
+    // a booth must NEVER force a real business through Stripe onboarding a
+    // second time when the claiming user already has a working Stripe Connect
+    // account as an Organizer. Resolve-existing-first, create-new only as a
+    // last resort. This check runs even if `accountId` is already set on the
+    // booth, so a booth stuck pointing at an orphaned/never-onboarded account
+    // (e.g. a stale test account) gets corrected the next time onboarding is
+    // attempted, instead of forever re-onboarding the wrong account.
     if (!accountId) {
-      // ADR-020 (2026-07-07, Patrick-approved): new VendorBooth onboarding creates a
-      // Standard account, not Express — each booth becomes its own Direct-charge
-      // merchant of record (Stripe files that booth's own 1099-K, not FindA.Sale).
+      const organizer = await prisma.organizer.findUnique({ where: { userId: booth.userId! } });
+      if (organizer?.stripeConnectId) {
+        // Read the REAL current state from Stripe -- never assume/default a
+        // reused account's type or onboarded status.
+        const liveStatus = await getAccountStatus(organizer.stripeConnectId);
+        accountId = organizer.stripeConnectId;
+        await prisma.vendorBooth.update({
+          where: { id: booth.id },
+          data: {
+            stripeAccountId: accountId,
+            stripeAccountType: liveStatus.accountType || 'express',
+            stripeOnboarded: liveStatus.chargesEnabled && liveStatus.payoutsEnabled,
+          },
+        });
+        // Already has a real, existing Stripe identity -- no onboarding
+        // redirect needed. The frontend should show "linked to your existing
+        // account" rather than sending them through Stripe's hosted flow again.
+        return res.status(200).json({ linkedExistingAccount: true, chargesEnabled: liveStatus.chargesEnabled, payoutsEnabled: liveStatus.payoutsEnabled });
+      }
+
+      // No existing Organizer/Stripe identity found -- genuinely new vendor.
+      // ADR-020 (2026-07-07, Patrick-approved): new-from-scratch onboarding
+      // creates a Standard account -- each such booth becomes its own
+      // Direct-charge merchant of record (Stripe files that booth's own
+      // 1099-K, not FindA.Sale). This benefit is scoped to genuinely new
+      // vendors only (ADR-021) -- it does not apply when an existing account
+      // was reused above, since Stripe does not support converting an
+      // existing account's type.
       accountId = await createConnectAccount(
         {
           id: booth.id,
