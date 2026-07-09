@@ -67,7 +67,12 @@ export function middleware(request: NextRequest) {
 
   // ── Crawler tracking (Flag 4 fix) ──────────────────────────────────────────
   // Fire-and-forget: never await, never block the response.
-  if (isCrawler(ua) && isCrawlerPage(pathname)) {
+  // Order matters for Fluid Active CPU cost: isCrawlerPage() is a cheap 4-item
+  // string-prefix check; isCrawler() runs 7 regexes against the UA string. This
+  // middleware runs on EVERY page request (35K+ dynamic pages). Checking the
+  // cheap prefix filter first lets JS short-circuit skip the regex work entirely
+  // for the majority of routes that aren't in CRAWLER_PAGE_PREFIXES.
+  if (isCrawlerPage(pathname) && isCrawler(ua)) {
     const ip =
       request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ??
       request.headers.get('x-real-ip') ??
