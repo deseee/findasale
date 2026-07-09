@@ -25,6 +25,21 @@
  * the sitemap INDEX with a `lastmod` computed at request time. Middleware runs before
  * static file serving, so this overrides the stale committed public/sitemap.xml
  * (frozen at lastmod 2026-05-24 because Vercel skips the next-sitemap postbuild hook).
+ *
+ * Matcher scoping (Fluid Active CPU root cause, fixed 2026-07-09):
+ * Live Vercel Usage dashboard showed Fluid Active CPU at ~196% of the Hobby free
+ * allocation (7h51m/4h) and Edge Requests + Function Invocations both approaching
+ * their caps (87%/72%). Root cause: the matcher below previously ran this function
+ * on EVERY page route sitewide (35K+ dynamic pages), even though its three concerns
+ * each only apply to a narrow slice of traffic — the sitemap rewrite needs exactly
+ * one path, crawler tracking only needs 4 path prefixes, and UTM/fsa_* capture only
+ * matters when one of 8 specific query params is present. Restructured `config.matcher`
+ * below into concern-scoped entries using Next.js's documented `has` matcher condition
+ * (https://nextjs.org/docs/app/api-reference/file-conventions/proxy#matcher — stable
+ * since v13.1) so Vercel's own routing layer skips invoking this function entirely for
+ * traffic that needs none of the three services, instead of invoking it and returning
+ * early from inside the function body. The in-function checks (isCrawlerPage/isCrawler
+ * order, the hasFsa/hasUtm early return) are kept as cheap defense-in-depth, not removed.
  */
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
@@ -134,12 +149,66 @@ export function middleware(request: NextRequest) {
   return response;
 }
 
-// api/ is excluded below (2026-07-06, Vercel Edge Request hygiene pass):
-// crawler tracking only targets page paths (see isCrawlerPage prefixes) and
-// UTM/fsa_* capture only matters on page navigation. Running this middleware
-// on every /api/* call was doubling edge-request cost for no functional gain.
+// NOTE on the repeated regex string below: Next.js requires config.matcher to
+// be fully inline/static — "matcher values need to be constants so they can be
+// statically analyzed at build-time... variables will be ignored" (Next.js
+// docs). A shared const or .map()/spread here would silently break the
+// matcher (falls back to running on every route — the exact problem this
+// restructuring fixes), so the same page-route regex is duplicated as a
+// literal in each entry below instead of being factored out. Do not refactor.
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|_next/data|api/|favicon\\.ico|icons/|sw\\.js|workbox-|manifest\\.json|offline\\.html|.*\\.(?:png|jpg|jpeg|gif|svg|ico|webp|woff|woff2|ttf|eot|css|js)$).*)',
+    // ── Sitemap rewrite: exactly one path, not every page ──────────────────
+    { source: '/sitemap.xml' },
+    // ── Crawler tracking: only the 4 tracked prefixes, not every page ──────
+    // Regex-in-parens source per Next.js docs — equivalent to OR-ing
+    // /sales/:path*, /city/:path*, /this-weekend/:path*, /organizers/:path*.
+    { source: '/(sales|city|this-weekend|organizers)/(.*)' },
+    // ── UTM/fsa_* capture: only when one of the 8 real attribution params is
+    // present in the URL, not on every page navigation site-wide (mirrors the
+    // exact set checked by hasFsa/hasUtm above — `ref` alone does NOT trigger
+    // capture today, matching existing runtime behavior, so it's intentionally
+    // not a 9th entry here). `has` array items are AND'd within one matcher
+    // entry; separate matcher array entries are OR'd.
+    {
+      source:
+        '/((?!_next/static|_next/image|_next/data|api/|favicon\\.ico|icons/|sw\\.js|workbox-|manifest\\.json|offline\\.html|.*\\.(?:png|jpg|jpeg|gif|svg|ico|webp|woff|woff2|ttf|eot|css|js)$).*)',
+      has: [{ type: 'query', key: 'fsa_src' }],
+    },
+    {
+      source:
+        '/((?!_next/static|_next/image|_next/data|api/|favicon\\.ico|icons/|sw\\.js|workbox-|manifest\\.json|offline\\.html|.*\\.(?:png|jpg|jpeg|gif|svg|ico|webp|woff|woff2|ttf|eot|css|js)$).*)',
+      has: [{ type: 'query', key: 'fsa_med' }],
+    },
+    {
+      source:
+        '/((?!_next/static|_next/image|_next/data|api/|favicon\\.ico|icons/|sw\\.js|workbox-|manifest\\.json|offline\\.html|.*\\.(?:png|jpg|jpeg|gif|svg|ico|webp|woff|woff2|ttf|eot|css|js)$).*)',
+      has: [{ type: 'query', key: 'fsa_cmp' }],
+    },
+    {
+      source:
+        '/((?!_next/static|_next/image|_next/data|api/|favicon\\.ico|icons/|sw\\.js|workbox-|manifest\\.json|offline\\.html|.*\\.(?:png|jpg|jpeg|gif|svg|ico|webp|woff|woff2|ttf|eot|css|js)$).*)',
+      has: [{ type: 'query', key: 'fsa_cnt' }],
+    },
+    {
+      source:
+        '/((?!_next/static|_next/image|_next/data|api/|favicon\\.ico|icons/|sw\\.js|workbox-|manifest\\.json|offline\\.html|.*\\.(?:png|jpg|jpeg|gif|svg|ico|webp|woff|woff2|ttf|eot|css|js)$).*)',
+      has: [{ type: 'query', key: 'utm_source' }],
+    },
+    {
+      source:
+        '/((?!_next/static|_next/image|_next/data|api/|favicon\\.ico|icons/|sw\\.js|workbox-|manifest\\.json|offline\\.html|.*\\.(?:png|jpg|jpeg|gif|svg|ico|webp|woff|woff2|ttf|eot|css|js)$).*)',
+      has: [{ type: 'query', key: 'utm_medium' }],
+    },
+    {
+      source:
+        '/((?!_next/static|_next/image|_next/data|api/|favicon\\.ico|icons/|sw\\.js|workbox-|manifest\\.json|offline\\.html|.*\\.(?:png|jpg|jpeg|gif|svg|ico|webp|woff|woff2|ttf|eot|css|js)$).*)',
+      has: [{ type: 'query', key: 'utm_campaign' }],
+    },
+    {
+      source:
+        '/((?!_next/static|_next/image|_next/data|api/|favicon\\.ico|icons/|sw\\.js|workbox-|manifest\\.json|offline\\.html|.*\\.(?:png|jpg|jpeg|gif|svg|ico|webp|woff|woff2|ttf|eot|css|js)$).*)',
+      has: [{ type: 'query', key: 'utm_content' }],
+    },
   ],
 };
