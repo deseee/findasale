@@ -12,6 +12,10 @@ const ALLOWED_DOMAINS = [
   'p1.liveauctioneers.com',
   'p2.liveauctioneers.com',
   'photos.liveauctioneers.com',
+  // Hotlink-protected aggregator CDNs (S1094 fix only updated frontend routing;
+  // this proxy's own allowlist was never updated, causing 403s post-fix — S1103b)
+  'tlstatic.com',
+  'tlcdn.workers.dev',
 ];
 
 // Rotating browser user-agents to avoid bot detection
