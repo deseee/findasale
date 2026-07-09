@@ -20,7 +20,7 @@ const CATEGORY_META: Record<string, { label: string; plural: string; saleType: s
   'yard-sales':    { label: 'Yard Sale',     plural: 'Yard Sales',    saleType: 'YARD'        },
   'auctions':      { label: 'Auction',       plural: 'Auctions',      saleType: 'AUCTION'     },
   'flea-markets':  { label: 'Flea Market',   plural: 'Flea Markets',  saleType: 'FLEA_MARKET' },
-  'consignment':   { label: 'Consignment',   plural: 'Consignment',   saleType: 'RETAIL'      },
+  'resale':        { label: 'Resale',         plural: 'Resale',        saleType: 'RETAIL'      },
 };
 
 // Hardcoded fallback slugs when API is unavailable

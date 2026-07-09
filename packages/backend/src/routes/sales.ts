@@ -198,7 +198,7 @@ router.get('/by-city/:citySlug', async (req, res) => {
       'yard-sales': 'YARD',
       'auctions': 'AUCTION',
       'flea-markets': 'FLEA_MARKET',
-      'consignment': 'RETAIL',
+      'resale': 'RETAIL',
     };
     const saleTypeFilter = category ? categoryMap[category] : undefined;
 

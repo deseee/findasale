@@ -56,9 +56,9 @@ export const SALE_TYPE_PAGES: Record<
     href: (citySlug) => `/flea-markets/${citySlug}`,
   },
   RETAIL: {
-    label: 'Consignment Listings',
-    singular: 'consignment listing',
-    href: (citySlug) => `/city/${citySlug}/consignment`,
+    label: 'Resale Listings',
+    singular: 'resale listing',
+    href: (citySlug) => `/city/${citySlug}/resale`,
   },
 };
 

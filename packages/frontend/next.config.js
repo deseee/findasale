@@ -201,6 +201,8 @@ const nextConfig = {
       // Hall of fame pages redirect to leaderboard (hall-of-fame feature is future-phase)
       { source: '/hall-of-fame', destination: '/leaderboard', permanent: true },
       { source: '/shopper/hall-of-fame', destination: '/leaderboard', permanent: true },
+      // S1: /consignment category renamed to /resale (RETAIL bucket was mislabeled) — 2026-07-09
+      { source: '/city/:slug/consignment', destination: '/city/:slug/resale', permanent: true },
     ];
   },
 

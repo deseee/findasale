@@ -106,7 +106,7 @@ export async function getServerSideProps(ctx: any) {
       'yard-sales': 'YARD',
       'auctions': 'AUCTION',
       'flea-markets': 'FLEA_MARKET',
-      'consignment': 'RETAIL',
+      'resale': 'RETAIL',
     };
     const hasActiveOfType = (row: CityRow, saleType: string): boolean =>
       (Number(row.activeByType?.[saleType]) || 0) >= MIN_ACTIVE_SALES_FOR_TYPE_PAGE;
