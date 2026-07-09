@@ -7,6 +7,7 @@ import dynamic from 'next/dynamic';
 import { useQuery } from '@tanstack/react-query';
 import api from '../lib/api';
 import { getItemImageUrl } from '../lib/imageUtils';
+import { getSubtypesFor } from '../lib/sale-subtypes';
 import SaleMap, { SalePin } from '../components/SaleMap';
 import SaleCard from '../components/SaleCard';
 import Skeleton from '../components/Skeleton';
@@ -37,6 +38,7 @@ interface Sale {
   tags?: string[];
   isAuctionSale?: boolean;
   saleType?: string;
+  saleSubtype?: string;
 }
 
 interface SearchItem {
@@ -100,6 +102,7 @@ const HomePage = ({ initialSalesData }: HomePageProps) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [dateFilter, setDateFilter] = useState<DateFilter>('all');
   const [saleTypeFilter, setSaleTypeFilter] = useState('');
+  const [saleSubtypeFilter, setSaleSubtypeFilter] = useState('');
   const [isSavingSearch, setIsSavingSearch] = useState(false);
   const resultsRef = useRef<HTMLHeadingElement>(null);
 
@@ -156,10 +159,11 @@ const HomePage = ({ initialSalesData }: HomePageProps) => {
 
   // Search API query — call backend FTS when searchQuery is >= 2 chars
   const { data: searchResults, isLoading: isSearching, isError: isSearchError } = useQuery({
-    queryKey: ['search', searchQuery, saleTypeFilter],
+    queryKey: ['search', searchQuery, saleTypeFilter, saleSubtypeFilter],
     queryFn: async () => {
       const params: any = { q: searchQuery, type: 'all', limit: 20 };
       if (saleTypeFilter) params.saleType = saleTypeFilter;
+      if (saleSubtypeFilter) params.saleSubtype = saleSubtypeFilter;
       const res = await api.get('/search', { params });
       return res.data as SearchResults;
     },
@@ -215,6 +219,10 @@ const HomePage = ({ initialSalesData }: HomePageProps) => {
       result = result.filter((s) => s.saleType === saleTypeFilter);
     }
 
+    if (saleSubtypeFilter) {
+      result = result.filter((s) => s.saleSubtype === saleSubtypeFilter);
+    }
+
     if (dateFilter !== 'all') {
       const now = new Date();
       const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -247,7 +255,7 @@ const HomePage = ({ initialSalesData }: HomePageProps) => {
     }
 
     return result;
-  }, [sales, searchQuery, saleTypeFilter, dateFilter]);
+  }, [sales, searchQuery, saleTypeFilter, saleSubtypeFilter, dateFilter]);
 
   const handleSaveSearch = async () => {
     if (!searchQuery.trim()) {
@@ -259,7 +267,7 @@ const HomePage = ({ initialSalesData }: HomePageProps) => {
     try {
       await api.post('/saved-searches', {
         name: searchQuery.trim(),
-        filters: { q: searchQuery.trim(), dateFilter, saleType: saleTypeFilter || undefined },
+        filters: { q: searchQuery.trim(), dateFilter, saleType: saleTypeFilter || undefined, saleSubtype: saleSubtypeFilter || undefined },
       });
       showToast('Search saved!', 'success');
     } catch (error: any) {
@@ -474,7 +482,7 @@ const HomePage = ({ initialSalesData }: HomePageProps) => {
               <span className="text-sm font-medium text-warm-600 dark:text-gray-400 whitespace-nowrap ml-2">Type:</span>
               <select
                 value={saleTypeFilter}
-                onChange={(e) => setSaleTypeFilter(e.target.value)}
+                onChange={(e) => { setSaleTypeFilter(e.target.value); setSaleSubtypeFilter(''); }}
                 className="px-3 py-2 rounded-full text-sm font-medium border border-warm-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-warm-700 dark:text-gray-300 hover:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-500 transition-colors"
                 aria-label="Filter sales by type"
               >
@@ -482,6 +490,19 @@ const HomePage = ({ initialSalesData }: HomePageProps) => {
                   <option key={opt.value} value={opt.value}>{opt.label}</option>
                 ))}
               </select>
+              {getSubtypesFor(saleTypeFilter).length > 0 && (
+                <select
+                  value={saleSubtypeFilter}
+                  onChange={(e) => setSaleSubtypeFilter(e.target.value)}
+                  className="px-3 py-2 rounded-full text-sm font-medium border border-warm-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-warm-700 dark:text-gray-300 hover:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-500 transition-colors"
+                  aria-label="Filter sales by subtype"
+                >
+                  <option value="">All Subtypes</option>
+                  {getSubtypesFor(saleTypeFilter).map((opt) => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              )}
             </div>
           </section>
 
@@ -614,7 +635,7 @@ const HomePage = ({ initialSalesData }: HomePageProps) => {
                   </div>
                 ) : (
                   <div>
-                    {dateFilter !== 'all' || saleTypeFilter ? (
+                    {dateFilter !== 'all' || saleTypeFilter || saleSubtypeFilter ? (
                       <div>
                         <EmptyState
                           icon="🏷️"
@@ -624,7 +645,7 @@ const HomePage = ({ initialSalesData }: HomePageProps) => {
                         <div className="flex justify-center mt-6">
                           <button
                             type="button"
-                            onClick={() => { setSearchQuery(''); setDateFilter('all'); setSaleTypeFilter(''); }}
+                            onClick={() => { setSearchQuery(''); setDateFilter('all'); setSaleTypeFilter(''); setSaleSubtypeFilter(''); }}
                             className="px-6 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-medium transition-colors"
                           >
                             Clear all filters

@@ -132,21 +132,26 @@ function extractFbEventId(url: string): string | null {
  * misclassified because the keyword check keyed on the title alone. The hint
  * never overrides an explicit auction/estate/yard/consignment signal in the text.
  */
-function inferSaleType(text: string, typeHint?: string): string {
+function inferSaleType(text: string, typeHint?: string): { saleType: string; saleSubtype?: string } {
   const lower = text.toLowerCase();
-  if (lower.includes('auction'))                              return 'AUCTION';
-  if (lower.includes('estate'))                              return 'ESTATE';
-  if (lower.includes('garage') || lower.includes('yard'))   return 'YARD';
-  if (lower.includes('moving') || lower.includes('downsizing')) return 'MOVING';
+  if (lower.includes('auction'))                                return { saleType: 'AUCTION', saleSubtype: 'auction' };
+  if (lower.includes('estate'))                                 return { saleType: 'ESTATE', saleSubtype: 'estate' };
+  if (lower.includes('garage') || lower.includes('yard'))       return { saleType: 'YARD', saleSubtype: 'yard' };
+  if (lower.includes('moving') || lower.includes('downsizing')) return { saleType: 'YARD', saleSubtype: 'moving' };
   // Broadened: scan title+snippet for flea/swap terms (not just "flea"), so flea
-  // events whose title omits the literal word still classify correctly.
-  if (lower.includes('flea') || lower.includes('swap meet') || lower.includes('swap-meet')) {
-    return 'FLEA_MARKET';
+  // events whose title omits the literal word still classify correctly. Swap-meet
+  // phrasing is checked first (more specific) so it maps to the swap_meet subtype;
+  // generic "flea" text maps to the flea subtype. Both share the FLEA_MARKET saleType.
+  if (lower.includes('swap meet') || lower.includes('swap-meet')) {
+    return { saleType: 'FLEA_MARKET', saleSubtype: 'swap_meet' };
+  }
+  if (lower.includes('flea')) {
+    return { saleType: 'FLEA_MARKET', saleSubtype: 'flea' };
   }
   // Fallback: if this result came from the flea/swap sub-query and nothing above
   // matched, trust the query intent rather than defaulting to ESTATE.
-  if (typeHint === 'FLEA_MARKET') return 'FLEA_MARKET';
-  return 'ESTATE';
+  if (typeHint === 'FLEA_MARKET') return { saleType: 'FLEA_MARKET', saleSubtype: 'flea' };
+  return { saleType: 'ESTATE', saleSubtype: 'estate' };
 }
 
 /**
@@ -329,6 +334,8 @@ function buildScrapedItem(
   const resolvedState   = slugParsed?.state   ?? metro.state;
   const resolvedZip     = slugParsed?.zip     ?? '';
 
+  const inferred = inferSaleType(combined, typeHint);
+
   return {
     title:         cleanTitle,
     address:       resolvedAddress,
@@ -341,7 +348,8 @@ function buildScrapedItem(
     organizerName: undefined,
     organizerEmail: undefined,
     photoUrls:     [],
-    saleType:      inferSaleType(combined, typeHint),
+    saleType:      inferred.saleType,
+    saleSubtype:   inferred.saleSubtype,
     sourceUrl:     url,
     sourceName:    'Facebook Events',
     sourceItemId:  `fb:events:${fbEventId}`,

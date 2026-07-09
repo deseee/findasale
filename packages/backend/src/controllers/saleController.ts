@@ -83,7 +83,10 @@ const saleQuerySchema = z.object({
   endDate: z.string().optional(),
   page: z.string().optional().default('1'),
   limit: z.string().optional().default('10'),
-  minConfidence: z.string().optional()
+  minConfidence: z.string().optional(),
+  // ADR-023 Phase 2: allow filtering the public sale-browsing feed by saleType/saleSubtype
+  saleType: z.string().optional(),
+  saleSubtype: z.string().optional()
 });
 
 const saleCreateSchema = z.object({
@@ -180,6 +183,15 @@ export const listSales = async (req: Request, res: Response) => {
 
     if (query.zip) {
       where.zip = query.zip;
+    }
+
+    // ADR-023 Phase 2: sale type / subtype filtering for the public sale-browsing feed
+    if (query.saleType) {
+      where.saleType = query.saleType;
+    }
+
+    if (query.saleSubtype) {
+      where.saleSubtype = query.saleSubtype;
     }
 
     if (query.startDate || query.endDate) {

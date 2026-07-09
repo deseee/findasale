@@ -3,6 +3,7 @@
  * Displays desktop sidebar and mobile slide-down UI with collapsible filters.
  */
 import React, { useState, useCallback, useRef, useEffect } from 'react';
+import { getSubtypesFor } from '../lib/sale-subtypes';
 
 export interface SearchFilters {
   priceMin: number | null;
@@ -12,6 +13,7 @@ export interface SearchFilters {
   saleStatus: 'all' | 'active' | 'upcoming';
   sortBy: 'recent' | 'price_asc' | 'price_desc' | 'ending_soon';
   saleType: string;
+  saleSubtype?: string;
 }
 
 interface SearchFilterPanelProps {
@@ -84,6 +86,7 @@ const SearchFilterPanel: React.FC<SearchFilterPanelProps> = ({
     filters.category ? 1 : 0,
     filters.saleStatus !== 'all' ? 1 : 0,
     filters.saleType ? 1 : 0,
+    filters.saleSubtype ? 1 : 0,
   ].reduce((a, b) => a + b, 0);
 
   const handlePriceMinChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -125,7 +128,11 @@ const SearchFilterPanel: React.FC<SearchFilterPanelProps> = ({
   };
 
   const handleSaleTypeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    onFiltersChange({ ...filters, saleType: e.target.value });
+    onFiltersChange({ ...filters, saleType: e.target.value, saleSubtype: '' });
+  };
+
+  const handleSaleSubtypeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    onFiltersChange({ ...filters, saleSubtype: e.target.value });
   };
 
   const handleClearFilters = () => {
@@ -139,6 +146,7 @@ const SearchFilterPanel: React.FC<SearchFilterPanelProps> = ({
       saleStatus: 'all',
       sortBy: 'recent',
       saleType: '',
+      saleSubtype: '',
     });
   };
 
@@ -228,6 +236,26 @@ const SearchFilterPanel: React.FC<SearchFilterPanelProps> = ({
           ))}
         </select>
       </div>
+
+      {/* Sale Subtype -- only shown when the selected sale type has subtypes */}
+      {getSubtypesFor(filters.saleType).length > 0 && (
+        <div>
+          <label htmlFor="salesubtype-select" className="font-semibold text-warm-900 dark:text-gray-200 mb-3 block">Subtype</label>
+          <select
+            id="salesubtype-select"
+            value={filters.saleSubtype || ''}
+            onChange={handleSaleSubtypeChange}
+            className="w-full px-3 py-2 border border-warm-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 text-sm bg-white dark:bg-gray-700 text-warm-900 dark:text-warm-100"
+          >
+            <option value="">All Subtypes</option>
+            {getSubtypesFor(filters.saleType).map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
 
       {/* Sale Status */}
       <div>

@@ -18,7 +18,8 @@ export interface ParsedListing {
   organizerWebsite?: string; // scraped website — fills organizer.website only if currently null
   description?: string;
   photoUrls?: string[];
-  saleType?: string; // ESTATE | YARD | AUCTION | FLEA_MARKET | RETAIL
+  saleType?: string; // ESTATE | YARD | AUCTION | FLEA_MARKET | RETAIL | DORM_DASH
+  saleSubtype?: string; // ADR-023: estate | yard | moving | auction | storage | flea | popup | downsizing | liquidation | swap_meet | storefront | consignment
   esnOrgId?: number; // EstateSales.NET numeric company ID
   googlePlaceId?: string; // ADR-077: Google Places ID — dedup key for business directory listings
   foursquareVenueId?: string; // ADR-077 Phase 2: Foursquare venue ID — cross-source dedup

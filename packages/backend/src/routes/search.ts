@@ -25,6 +25,8 @@ const searchQuerySchema = z.object({
   saleStatus: z.string().optional().default('all'),
   sortBy: z.string().optional().default('recent'),
   saleType: z.string().optional(),
+  // ADR-023 Phase 2: allow filtering /api/search sale results by saleSubtype, same pattern as saleType
+  saleSubtype: z.string().optional(),
 });
 
 const categoriesQuerySchema = z.object({
@@ -48,7 +50,7 @@ const randomQuerySchema = z.object({
 router.get('/', searchLimiter, async (req: Request, res: Response) => {
   try {
     const validatedQuery = searchQuerySchema.parse(req.query);
-    const { q, type, page, limit, priceMin, priceMax, condition, category, saleStatus, sortBy, saleType } = validatedQuery;
+    const { q, type, page, limit, priceMin, priceMax, condition, category, saleStatus, sortBy, saleType, saleSubtype } = validatedQuery;
     const skip = (page - 1) * limit;
 
     // Strip ", ST" state suffix so "san diego, CA" → "san diego" for city matching
@@ -115,7 +117,7 @@ router.get('/', searchLimiter, async (req: Request, res: Response) => {
     const [salesResult, itemsResult, itemSearchResult, organizerSearchResult] = await Promise.all([
       type !== 'items'
         ? prisma.sale.findMany({
-            where: { ...textWhere, status: 'PUBLISHED', deletedAt: null, isInventoryContainer: false, AND: [{ OR: [{ isOngoing: true }, { endDate: { gte: new Date() } }] }], ...(saleType ? { saleType } : {}) },
+            where: { ...textWhere, status: 'PUBLISHED', deletedAt: null, isInventoryContainer: false, AND: [{ OR: [{ isOngoing: true }, { endDate: { gte: new Date() } }] }], ...(saleType ? { saleType } : {}), ...(saleSubtype ? { saleSubtype } : {}) },
             select: {
               id: true,
               title: true,

@@ -24,6 +24,7 @@ import LocationSelector from '../../components/LocationSelector';
 import { useOrganizerTier } from '../../hooks/useOrganizerTier';
 import Head from 'next/head';
 import Link from 'next/link';
+import { getSubtypesFor } from '../../lib/sale-subtypes';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // DESIGN TOKENS (from fs-shared.jsx Session 3)
@@ -137,11 +138,7 @@ const SALE_TYPE_TILES = [
     label: 'Estate Sale',
     desc: 'A whole-house sale, often after a downsize or a passing.',
     icon: '🏠',
-    subs: [
-      { value: 'estate', label: 'Estate Sale' },
-      { value: 'downsizing', label: 'Downsizing Sale' },
-      { value: 'liquidation', label: 'Liquidation Sale' },
-    ],
+    subs: getSubtypesFor('ESTATE'),
     hasCharityToggle: true,
   },
   {
@@ -149,10 +146,7 @@ const SALE_TYPE_TILES = [
     label: 'Yard & Moving',
     desc: 'A weekend sale at your home — stuff you no longer need.',
     icon: '🏷️',
-    subs: [
-      { value: 'yard', label: 'Yard / Garage Sale' },
-      { value: 'moving', label: 'Moving Sale' },
-    ],
+    subs: getSubtypesFor('YARD'),
     hasCharityToggle: false,
   },
   {
@@ -160,10 +154,7 @@ const SALE_TYPE_TILES = [
     label: 'Auction',
     desc: 'Bidding event — live, online, or storage unit lots.',
     icon: '🔨',
-    subs: [
-      { value: 'auction', label: 'Auction House' },
-      { value: 'storage', label: 'Storage Auction' },
-    ],
+    subs: getSubtypesFor('AUCTION'),
     hasCharityToggle: false,
   },
   {
@@ -171,11 +162,7 @@ const SALE_TYPE_TILES = [
     label: 'Market & Pop-Up',
     desc: 'Recurring vendor market or temporary pop-up event.',
     icon: '🛍️',
-    subs: [
-      { value: 'flea', label: 'Flea Market' },
-      { value: 'popup', label: 'Pop-Up Event' },
-      { value: 'swap_meet', label: 'Swap Meet' },
-    ],
+    subs: getSubtypesFor('FLEA_MARKET'),
     hasCharityToggle: false,
   },
   {
@@ -183,7 +170,7 @@ const SALE_TYPE_TILES = [
     label: 'Dorm Dash',
     desc: 'College move-out sale — organize by room or area.',
     icon: '🎓',
-    subs: [],
+    subs: getSubtypesFor('DORM_DASH'),
     hasCharityToggle: false,
   },
   {
@@ -191,10 +178,7 @@ const SALE_TYPE_TILES = [
     label: 'Storefront',
     desc: 'An always-on shop — no start or end date, just keep adding items.',
     icon: '🏪',
-    subs: [
-      { value: 'storefront', label: 'Storefront' },
-      { value: 'consignment', label: 'Consignment Shop' },
-    ],
+    subs: getSubtypesFor('RETAIL'),
     hasCharityToggle: false,
   },
 ];

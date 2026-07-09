@@ -1244,6 +1244,7 @@ export async function ingestScrapedListing(
         description: listing.description ?? null,
         status: 'PUBLISHED',
         saleType: listing.saleType ?? 'ESTATE',
+        saleSubtype: listing.saleSubtype ?? null,
         isAuctionSale: listing.saleType === 'AUCTION',
         lat,
         lng,
