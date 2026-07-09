@@ -11,7 +11,7 @@
 
 import { redis } from './redis';
 
-const ANTHROPIC_COST_PER_M_TOKENS = 3.0; // $3.00 per 1M input tokens
+export const ANTHROPIC_COST_PER_M_TOKENS = 3.0; // $3.00 per 1M input tokens
 const DEFAULT_CEILING_USD = 50; // Default monthly ceiling
 const CEILING_USD = parseFloat(process.env.AI_COST_CEILING_USD || DEFAULT_CEILING_USD.toString());
 const REDIS_TTL_SECONDS = 35 * 24 * 60 * 60; // 35 days — auto-expires safely after month end

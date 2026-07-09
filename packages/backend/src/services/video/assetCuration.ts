@@ -124,7 +124,7 @@ async function curateFromSale(saleId: string, maxShots: number): Promise<AssetCu
     where: { id: saleId },
     include: {
       items: {
-        where: { isActive: true, deletedAt: null },
+        where: { isActive: true, deletedAt: null, status: 'AVAILABLE' },
         include: {
           photos: {
             orderBy: [{ isPrimary: 'desc' }, { orderIndex: 'asc' }],
@@ -136,6 +136,9 @@ async function curateFromSale(saleId: string, maxShots: number): Promise<AssetCu
 
   if (!sale) {
     throw new Error(`assetCuration: Sale ${saleId} not found`);
+  }
+  if (sale.status !== 'PUBLISHED') {
+    throw new Error(`assetCuration: Sale ${saleId} is not PUBLISHED (status=${sale.status}) — refusing to curate assets for a non-live sale`);
   }
 
   const candidates: Candidate[] = [];

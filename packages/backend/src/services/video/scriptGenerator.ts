@@ -32,7 +32,7 @@
  */
 
 import axios from 'axios';
-import { trackAITokens, estimateTokensForRequest, isAICostCeilingExceeded } from '../../lib/aiCostTracker';
+import { trackAITokens, estimateTokensForRequest, isAICostCeilingExceeded, ANTHROPIC_COST_PER_M_TOKENS } from '../../lib/aiCostTracker';
 
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5-20251001';
@@ -53,6 +53,12 @@ export interface TutorialScriptResult {
   scriptText: string;
   titleSuggestion: string;
   descriptionSuggestion: string;
+  /** Estimated spend for this single generation call, in cents — feeds VideoJob.costCents
+   *  (ADR-078: "costCents tracking is mandatory on every VideoJob... budget visibility
+   *  from day one"). Uses the same $/1M-token rate aiCostTracker.ts already applies to
+   *  the shared monthly ceiling, so this is consistent with that number, not a second
+   *  independent estimate. */
+  costCents: number;
 }
 
 /** Strip em dashes as a defensive backstop to the prompt instruction — brand-voice-
@@ -62,6 +68,23 @@ export interface TutorialScriptResult {
  *  guide's own suggested substitutes ("a comma... vary it like a human editor"). */
 function stripBannedFormatting(text: string): string {
   return text.replace(/—/g, ', ').replace(/ {2,}/g, ' ').trim();
+}
+
+/** Code-level backstop for the "never say AI/Artificial Intelligence" brand rule —
+ *  the prompt already instructs this, but per the Wave 2 code review this had no
+ *  verification, only prompt reliance. Throws (does not silently strip) so the
+ *  orchestrator can hold/retry the job rather than ship a brand-voice violation,
+ *  matching this module's existing "throw rather than fake" philosophy. */
+function assertBrandVoiceCompliant(result: TutorialScriptResult): void {
+  const combined = `${result.scriptText} ${result.titleSuggestion} ${result.descriptionSuggestion}`;
+  const bannedPatterns = [/\bAI\b/, /\bartificial intelligence\b/i];
+  for (const pattern of bannedPatterns) {
+    if (pattern.test(combined)) {
+      const err = new Error('BRAND_VOICE_VIOLATION: generated content mentions "AI"/"Artificial Intelligence", banned brand-wide per brand-voice-system.md Part 2');
+      (err as any).errorCode = 'BRAND_VOICE_VIOLATION';
+      throw err;
+    }
+  }
 }
 
 function buildSystemPrompt(input: TutorialScriptInput): string {
@@ -166,11 +189,18 @@ export async function generateTutorialScript(input: TutorialScriptInput): Promis
       throw err;
     }
 
-    return {
+    const costCents = Math.round(((estimatedTokens + responseTokens) / 1_000_000) * ANTHROPIC_COST_PER_M_TOKENS * 100);
+
+    const result: TutorialScriptResult = {
       scriptText: stripBannedFormatting(parsed.scriptText),
       titleSuggestion: stripBannedFormatting(parsed.titleSuggestion),
       descriptionSuggestion: stripBannedFormatting(parsed.descriptionSuggestion),
+      costCents,
     };
+
+    assertBrandVoiceCompliant(result);
+
+    return result;
   } catch (error: any) {
     if (error?.errorCode) throw error; // already tagged above (AI_PARSE_ERROR)
 
