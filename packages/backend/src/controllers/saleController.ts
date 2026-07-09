@@ -462,8 +462,11 @@ export const getSale = async (req: Request, res: Response) => {
     const isOrganizer = authReq.user?.id === sale.organizer.userId;
     const isAdmin = authReq.user?.role === 'ADMIN';
 
-    // Security: gate DRAFT/non-published sales to owner + admin only (anonymous → 404)
-    if (sale.status !== 'PUBLISHED' && !isOrganizer && !isAdmin) {
+    // Security: gate DRAFT/CANCELLED (and any future non-public status) to owner + admin only.
+    // ENDED is deliberately allowed through for anonymous viewers — the frontend's own S1071
+    // noindex policy handles SEO treatment for ended sales; 404ing here made that logic
+    // unreachable (S1099 fix — see claude_docs/STATE.md Blocked Queue history).
+    if (sale.status !== 'PUBLISHED' && sale.status !== 'ENDED' && !isOrganizer && !isAdmin) {
       return res.status(404).json({ message: 'Sale not found' });
     }
 

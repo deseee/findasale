@@ -773,9 +773,11 @@ export const getItemById = async (req: Request, res: Response) => {
     // Admin can always view any item
     const isAdmin = authReq.user?.role === 'ADMIN';
 
-    // Security: gate items belonging to non-published (DRAFT/ENDED) sales.
-    // Owner and admin may still preview; anonymous/other users → 404.
-    if (!isOwner && !isAdmin && item.sale && item.sale.status !== 'PUBLISHED') {
+    // Security: gate items belonging to non-public (DRAFT/CANCELLED) sales.
+    // Owner and admin may still preview. ENDED sales are allowed through for anonymous
+    // viewers (S1099) — matches the sale-level fix in saleController.getSale; frontend's
+    // own noindex policy handles SEO treatment, this endpoint just needs to not 404 first.
+    if (!isOwner && !isAdmin && item.sale && item.sale.status !== 'PUBLISHED' && item.sale.status !== 'ENDED') {
       return res.status(404).json({ message: 'Item not found' });
     }
 
@@ -808,7 +810,9 @@ export const getItemsBySaleId = async (req: Request, res: Response) => {
       });
       const isSaleOwner = !!user && parentSale?.organizer?.userId === user.id;
       const isSaleAdmin = user?.role === 'ADMIN';
-      if (parentSale && parentSale.status !== 'PUBLISHED' && !isSaleOwner && !isSaleAdmin) {
+      // S1099: ENDED sales allowed through (matches getSale/getItemById) — only DRAFT/CANCELLED
+      // (and any future non-public status) are hidden from non-owner/non-admin callers.
+      if (parentSale && parentSale.status !== 'PUBLISHED' && parentSale.status !== 'ENDED' && !isSaleOwner && !isSaleAdmin) {
         return res.json([]);
       }
     }
