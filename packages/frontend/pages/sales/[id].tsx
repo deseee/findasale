@@ -30,6 +30,7 @@ import FlashDealBanner from '../../components/FlashDealBanner';
 import PickupBookingCard from '../../components/PickupBookingCard';
 import FollowOrganizerButton from '../../components/FollowOrganizerButton'; // Phase 17
 import SaleOGMeta from '../../components/SaleOGMeta'; // Feature #43: OG Image Generator
+import { generateSaleOGImage } from '../../lib/ogImage'; // #GSC-fix: fallback image for Event JSON-LD
 import OrganizerReputation from '../../components/OrganizerReputation'; // #71: Organizer Reputation Score
 import VerifiedBadge from '../../components/VerifiedBadge'; // Feature #16
 import UGCPhotoGallery from '../../components/UGCPhotoGallery'; // Feature #47
@@ -909,7 +910,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
                 // Permanent storefronts emit Store (LocalBusiness) instead of a dated Event.
                 '@type': initialData.isOngoing ? 'Store' : 'Event',
                 'name': initialData.title,
-                'description': initialData.description || undefined,
+                'description': initialData.description || `${initialData.title} in ${initialData.city}, ${initialData.state}. Browse items, dates, and details on FindA.Sale.`,
                 'startDate': initialData.startDate,
                 ...(initialData.isOngoing ? {} : {
                   'endDate': initialData.endDate,
@@ -937,15 +938,25 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
                       : {}),
                   }
                 } : {}),
-                'url': `https://finda.sale/sales/${initialData.id}`,
-                ...(initialData.photoUrls && initialData.photoUrls[0] ? {
-                  'image': initialData.photoUrls[0]
+                ...(initialData.organizer && initialData.organizer.businessName ? {
+                  'performer': {
+                    '@type': 'PerformingGroup',
+                    'name': initialData.organizer.businessName,
+                  }
                 } : {}),
+                'url': `https://finda.sale/sales/${initialData.id}`,
+                'image': (initialData.photoUrls && initialData.photoUrls[0]) || generateSaleOGImage({
+                  cloudName: process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || 'db8yhzjdq',
+                  saleTitle: initialData.title,
+                  location: initialData.city && initialData.state ? `${initialData.city}, ${initialData.state}` : undefined,
+                }),
                 ...(initialData.items ? {
                   'offers': {
                     '@type': 'AggregateOffer',
                     'url': `https://finda.sale/sales/${initialData.id}`,
                     'priceCurrency': 'USD',
+                    'validFrom': initialData.startDate,
+                    'availability': 'https://schema.org/InStock',
                     'lowPrice': (() => { const ps = (initialData.items || []).map((i: any) => Number(i.price)).filter((p: number) => p > 0); return ps.length ? String(Math.min(...ps)) : '0'; })(),
                     'highPrice': (() => { const ps = (initialData.items || []).map((i: any) => Number(i.price)).filter((p: number) => p > 0); return ps.length ? String(Math.max(...ps)) : '0'; })(),
                     'offerCount': initialData.items.length || 0
@@ -1149,7 +1160,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
               // Permanent storefronts emit Store (LocalBusiness) instead of a dated Event.
               '@type': sale.isOngoing ? 'Store' : 'Event',
               'name': sale.title,
-              'description': sale.description || undefined,
+              'description': sale.description || `${sale.title} in ${sale.city}, ${sale.state}. Browse items, dates, and details on FindA.Sale.`,
               'startDate': sale.startDate,
               ...(sale.isOngoing ? {} : {
                 'endDate': sale.endDate,
@@ -1175,15 +1186,25 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
                   'url': `https://finda.sale/organizers/${sale.organizer.id}`
                 }
               } : {}),
-              'url': `https://finda.sale/sales/${sale.id}`,
-              ...(sale.photoUrls && sale.photoUrls[0] ? {
-                'image': sale.photoUrls[0]
+              ...(sale.organizer && sale.organizer.businessName ? {
+                'performer': {
+                  '@type': 'PerformingGroup',
+                  'name': sale.organizer.businessName,
+                }
               } : {}),
+              'url': `https://finda.sale/sales/${sale.id}`,
+              'image': (sale.photoUrls && sale.photoUrls[0]) || generateSaleOGImage({
+                cloudName: process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || 'db8yhzjdq',
+                saleTitle: sale.title,
+                location: sale.city && sale.state ? `${sale.city}, ${sale.state}` : undefined,
+              }),
               ...(sale.items ? {
                 'offers': {
                   '@type': 'AggregateOffer',
                   'url': `https://finda.sale/sales/${sale.id}`,
                   'priceCurrency': 'USD',
+                  'validFrom': sale.startDate,
+                  'availability': sale.status?.toUpperCase() === 'ENDED' ? 'https://schema.org/SoldOut' : 'https://schema.org/InStock',
                   'lowPrice': (() => { const ps = (sale.items || []).map((i: any) => Number(i.price)).filter((p: number) => p > 0); return ps.length ? String(Math.min(...ps)) : '0'; })(),
                   'highPrice': (() => { const ps = (sale.items || []).map((i: any) => Number(i.price)).filter((p: number) => p > 0); return ps.length ? String(Math.max(...ps)) : '0'; })(),
                   'offerCount': (sale as any)._count?.items || sale.items.length || 0
@@ -1195,12 +1216,10 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
               },
               'paymentAccepted': ['CreditCard', 'Cash', 'PaymentService'],
               ...(sale.status?.toUpperCase() === 'ENDED' ? {
+                // #GSC-fix: only override eventStatus here — 'offers' availability is
+                // already status-derived above, so we no longer clobber lowPrice/highPrice/
+                // offerCount/url/validFrom by replacing the whole offers object.
                 'eventStatus': 'https://schema.org/EventRescheduled',
-                'offers': {
-                  '@type': 'AggregateOffer',
-                  'availability': 'https://schema.org/SoldOut',
-                  'priceCurrency': 'USD',
-                }
               } : {})
             })
           }} />
