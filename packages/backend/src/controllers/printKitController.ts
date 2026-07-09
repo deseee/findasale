@@ -197,7 +197,7 @@ export const getPrintKit = async (req: AuthRequest, res: Response) => {
 
     try {
       const pageSticker = await browserSticker.newPage();
-      await pageSticker.setContent(stickerHtml, { waitUntil: 'networkidle0' });
+      await pageSticker.setContent(stickerHtml, { waitUntil: 'load' });
       const pdfStickers = await pageSticker.pdf({
         format: 'Letter',
         printBackground: true,
@@ -1150,7 +1150,7 @@ async function renderPriceSheet(saleId: string, saleTitle: string, frontendUrl: 
 
   try {
     const page = await browser.newPage();
-    await page.setContent(priceHtml, { waitUntil: 'networkidle0' });
+    await page.setContent(priceHtml, { waitUntil: 'load' });
     const pdfBuffer = await page.pdf({
       format: 'Letter',
       printBackground: true,

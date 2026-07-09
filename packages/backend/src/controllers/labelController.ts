@@ -116,7 +116,7 @@ export const getSingleItemLabel = async (req: AuthRequest, res: Response) => {
 
     try {
       const page = await browser.newPage();
-      await page.setContent(labelHtml, { waitUntil: 'networkidle0' });
+      await page.setContent(labelHtml, { waitUntil: 'load' });
       const pdfBuffer = await page.pdf({
         width: '4in',
         height: '3.333in',
@@ -295,7 +295,7 @@ export const getSaleLabels = async (req: AuthRequest, res: Response) => {
 
     try {
       const page = await browser.newPage();
-      await page.setContent(labelsHtml, { waitUntil: 'networkidle0' });
+      await page.setContent(labelsHtml, { waitUntil: 'load' });
       const pdfBuffer = await page.pdf({
         format: 'Letter',
         printBackground: true,
