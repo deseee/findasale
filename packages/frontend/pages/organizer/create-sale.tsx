@@ -137,7 +137,11 @@ const SALE_TYPE_TILES = [
     label: 'Estate Sale',
     desc: 'A whole-house sale, often after a downsize or a passing.',
     icon: '🏠',
-    subs: [{ value: 'estate', label: 'Estate Sale' }],
+    subs: [
+      { value: 'estate', label: 'Estate Sale' },
+      { value: 'downsizing', label: 'Downsizing Sale' },
+      { value: 'liquidation', label: 'Liquidation Sale' },
+    ],
     hasCharityToggle: true,
   },
   {
@@ -170,6 +174,7 @@ const SALE_TYPE_TILES = [
     subs: [
       { value: 'flea', label: 'Flea Market' },
       { value: 'popup', label: 'Pop-Up Event' },
+      { value: 'swap_meet', label: 'Swap Meet' },
     ],
     hasCharityToggle: false,
   },
@@ -186,7 +191,10 @@ const SALE_TYPE_TILES = [
     label: 'Storefront',
     desc: 'An always-on shop — no start or end date, just keep adding items.',
     icon: '🏪',
-    subs: [],
+    subs: [
+      { value: 'storefront', label: 'Storefront' },
+      { value: 'consignment', label: 'Consignment Shop' },
+    ],
     hasCharityToggle: false,
   },
 ];
@@ -2299,6 +2307,8 @@ const CreateSalePage: React.FC = () => {
       ...(entranceLng !== null ? { entranceLng } : {}),
       retailAutoRenewDays: f.retailAutoRenewDays,
       isOnlineOnly: f.isOnlineOnly,
+      saleSubtype: f.saleSubtype || undefined,
+      isCharitySale: f.isCharitySale,
       // Feature #411: Dorm Dash Phase 2
       ...(f.saleType === 'DORM_DASH' && f.dormBuilding ? { dormBuilding: f.dormBuilding } : {}),
       ...(f.saleType === 'DORM_DASH' && f.moveOutDate ? { moveOutDate: new Date(`${f.moveOutDate}T23:59:59`).toISOString() } : {}),

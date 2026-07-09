@@ -282,6 +282,7 @@ const OrganizerDashboard = () => {
           viewCount: number;
           holdCount: number;
           saleType: string;
+          saleSubtype?: string | null;
           itemCount: number;
           itemsSold: number;
         } | null;
@@ -1666,16 +1667,16 @@ const OrganizerDashboard = () => {
                 <>
                   {/* Widget Grid */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {isWidgetVisible(statsData?.activeSale?.saleType, 'SalePulse') && (
+                    {isWidgetVisible(statsData?.activeSale?.saleType, 'SalePulse', statsData?.activeSale?.saleSubtype) && (
                       <SalePulseWidget saleId={activeSale.id} />
                     )}
-                    {isWidgetVisible(statsData?.activeSale?.saleType, 'SmartBuyer') && (
+                    {isWidgetVisible(statsData?.activeSale?.saleType, 'SmartBuyer', statsData?.activeSale?.saleSubtype) && (
                       <SmartBuyerWidget saleId={activeSale.id} />
                     )}
-                    {isWidgetVisible(statsData?.activeSale?.saleType, 'HighValueTracker') && (
+                    {isWidgetVisible(statsData?.activeSale?.saleType, 'HighValueTracker', statsData?.activeSale?.saleSubtype) && (
                       <HighValueTrackerWidget saleId={activeSale.id} />
                     )}
-                    {isWidgetVisible(statsData?.activeSale?.saleType, 'EfficiencyCoaching') && (
+                    {isWidgetVisible(statsData?.activeSale?.saleType, 'EfficiencyCoaching', statsData?.activeSale?.saleSubtype) && (
                       <EfficiencyCoachingWidget />
                     )}
                   </div>

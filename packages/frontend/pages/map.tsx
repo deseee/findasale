@@ -36,7 +36,7 @@ interface Sale {
 }
 
 type DateFilter = 'all' | 'this-week' | 'this-weekend' | 'today';
-type SaleTypeFilter = 'all' | 'estate' | 'yard' | 'auction' | 'flea-market' | 'consignment' | 'retail' | 'booth';
+type SaleTypeFilter = 'all' | 'estate' | 'yard' | 'auction' | 'flea-market' | 'retail' | 'dorm-dash';
 
 interface TrailStop {
   id: string;
@@ -68,9 +68,8 @@ const MapPage = () => {
     if (t === 'YARD') return 'yard';
     if (t === 'AUCTION') return 'auction';
     if (t === 'FLEA_MARKET') return 'flea-market';
-    if (t === 'CONSIGNMENT') return 'consignment';
     if (t === 'RETAIL') return 'retail';
-    if (t === 'BOOTH') return 'booth';
+    if (t === 'DORM_DASH') return 'dorm-dash';
     return 'other';
   };
 
@@ -418,7 +417,7 @@ const MapPage = () => {
             ))}
 
             {/* Sale Type Filters */}
-            {(['all', 'estate', 'yard', 'auction', 'flea-market', 'consignment', 'retail', 'booth'] as SaleTypeFilter[]).map((type) => (
+            {(['all', 'estate', 'yard', 'auction', 'flea-market', 'retail', 'dorm-dash'] as SaleTypeFilter[]).map((type) => (
               <button
                 key={type}
                 type="button"
@@ -429,7 +428,7 @@ const MapPage = () => {
                     : 'bg-white dark:bg-gray-800 text-warm-700 dark:text-warm-300 border-warm-300 dark:border-gray-600 hover:border-blue-400 dark:hover:border-gray-500'
                 }`}
               >
-                {type === 'all' ? 'All Types' : type === 'estate' ? 'Estate' : type === 'yard' ? 'Yard' : type === 'auction' ? 'Auction' : type === 'flea-market' ? 'Flea Market' : type === 'consignment' ? 'Consignment' : type === 'retail' ? 'Retail Store' : 'Vendor Booth'}
+                {type === 'all' ? 'All Types' : type === 'estate' ? 'Estate' : type === 'yard' ? 'Yard' : type === 'auction' ? 'Auction' : type === 'flea-market' ? 'Flea Market' : type === 'retail' ? 'Resale' : 'Dorm Dash'}
               </button>
             ))}
           </div>

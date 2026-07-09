@@ -303,6 +303,8 @@ router.get('/stats', authenticate, async (req: AuthRequest, res: Response) => {
         title: activeSale.title,
         status: activeSale.status,
         saleType: activeSale.saleType ?? 'ESTATE',
+        saleSubtype: activeSale.saleSubtype ?? null,
+        isCharitySale: activeSale.isCharitySale ?? false,
         endDate: activeSale.endDate,
         viewCount: activeSale.qrScanCount ?? 0,
         holdCount,

@@ -109,6 +109,8 @@ export const getUserFavorites = async (req: AuthRequest, res: Response) => {
             state: true,
             photoUrls: true,
             saleType: true,
+            saleSubtype: true,
+            isCharitySale: true,
             organizer: { select: { id: true, businessName: true } },
           },
         },

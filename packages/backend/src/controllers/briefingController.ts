@@ -60,6 +60,8 @@ export const getBriefing = async (req: AuthRequest, res: Response) => {
         cashFloat: true,
         status: true,
         saleType: true,
+        saleSubtype: true,
+        isCharitySale: true,
       },
       orderBy: { startDate: 'asc' },
     });

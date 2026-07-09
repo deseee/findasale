@@ -102,9 +102,13 @@ const saleCreateSchema = z.object({
   isAuctionSale: z.boolean().optional().default(false), // Deprecated: use saleType instead
   // B1: Sale type — Feature #5: Strict validation for enum consistency
   // Allow all sale type options from frontend
-  saleType: z.enum(['ESTATE', 'YARD', 'AUCTION', 'FLEA_MARKET', 'CONSIGNMENT', 'CHARITY', 'BUSINESS_CORPORATE', 'RETAIL', 'GARAGE', 'MOVING', 'DOWNSIZING', 'SWAP_MEET', 'POPUP', 'LIQUIDATION', 'ONLINE', 'BOOTH', 'DORM_DASH'], {
-    errorMap: () => ({ message: 'Invalid sale type. Must be one of: ESTATE, YARD, AUCTION, FLEA_MARKET, CONSIGNMENT, CHARITY, BUSINESS_CORPORATE, RETAIL, GARAGE, MOVING, DOWNSIZING, SWAP_MEET, POPUP, LIQUIDATION, ONLINE, BOOTH, DORM_DASH' })
+  saleType: z.enum(['ESTATE', 'YARD', 'AUCTION', 'FLEA_MARKET', 'RETAIL', 'DORM_DASH'], {
+    errorMap: () => ({ message: 'Invalid sale type. Must be one of: ESTATE, YARD, AUCTION, FLEA_MARKET, RETAIL, DORM_DASH' })
   }).optional().default(SaleType.ESTATE),
+  // ADR-023: granular flavor under the parent saleType tile (e.g. 'consignment', 'moving', 'downsizing')
+  saleSubtype: z.string().optional(),
+  // ADR-023: charity overlay, orthogonal to saleType/saleSubtype
+  isCharitySale: z.boolean().optional().default(false),
   neighborhood: z.string().optional(), // U2
   // Feature 35: Front Door Locator
   entranceLat: z.number().optional(),
@@ -342,6 +346,8 @@ export const getMySales = async (req: AuthRequest, res: Response) => {
         photoUrls: true,
         tags: true,
         saleType: true,
+        saleSubtype: true,
+        isCharitySale: true,
         createdAt: true,
         updatedAt: true,
         organizerId: true,

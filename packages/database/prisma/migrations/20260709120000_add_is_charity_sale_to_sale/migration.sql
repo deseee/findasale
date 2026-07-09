@@ -1,0 +1,1 @@
+ALTER TABLE "Sale" ADD COLUMN "isCharitySale" BOOLEAN NOT NULL DEFAULT false;

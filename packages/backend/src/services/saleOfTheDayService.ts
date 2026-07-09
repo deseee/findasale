@@ -50,6 +50,8 @@ export async function selectSaleOfTheDay(): Promise<SaleOfTheDayResult | null> {
       city: true,
       state: true,
       saleType: true,
+      saleSubtype: true,
+      isCharitySale: true,
       photoUrls: true,
       organizer: {
         select: {

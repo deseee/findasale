@@ -356,6 +356,8 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
             status: true, // Security: gate purchases to PUBLISHED sales only
             isAuctionSale: true,
             saleType: true,
+            saleSubtype: true,
+            isCharitySale: true,
             title: true,
             address: true,
             city: true,

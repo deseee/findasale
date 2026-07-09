@@ -166,6 +166,8 @@ export async function handleListCities(): Promise<ListCitiesResponse> {
 
 export async function handleListSaleTypes(): Promise<ListSaleTypesResponse> {
   // Hardcoded per spec -- no backend call needed
+  // ADR-023: real 6-value saleType enum only. CONSIGNMENT is a saleSubtype
+  // under RETAIL now, not a top-level type.
   return {
     types: [
       {
@@ -193,10 +195,16 @@ export async function handleListSaleTypes(): Promise<ListSaleTypesResponse> {
         icon: 'flea_market',
       },
       {
-        id: 'CONSIGNMENT',
-        displayName: 'Consignment',
-        description: 'Items sold on behalf of consignors',
-        icon: 'consignment',
+        id: 'RETAIL',
+        displayName: 'Retail / Storefront',
+        description: 'Permanent storefront or resale shop',
+        icon: 'retail',
+      },
+      {
+        id: 'DORM_DASH',
+        displayName: 'Dorm Dash',
+        description: 'Student move-out sale of dorm items',
+        icon: 'dorm_dash',
       },
     ],
   };

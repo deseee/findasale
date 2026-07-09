@@ -17,6 +17,7 @@ import { getSaleTypeConfig } from '../lib/dashboard-sale-type-config';
 interface SettlementWizardProps {
   saleId: string;
   saleType: string;
+  saleSubtype?: string;
 }
 
 const WIZARD_STEPS = [
@@ -27,14 +28,14 @@ const WIZARD_STEPS = [
   { key: 'receipt', label: 'Receipt' },
 ];
 
-export default function SettlementWizard({ saleId, saleType }: SettlementWizardProps) {
+export default function SettlementWizard({ saleId, saleType, saleSubtype }: SettlementWizardProps) {
   const [step, setStep] = useState(0);
   const [showDonationModal, setShowDonationModal] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
   const [payoutAmount, setPayoutAmount] = useState<number | null>(null);
   const queryClient = useQueryClient();
   const { showToast } = useToast();
-  const config = getSaleTypeConfig(saleType);
+  const config = getSaleTypeConfig(saleType, saleSubtype);
   const isSimple = config.settlementType === 'SIMPLE_CARD';
 
   // Fetch organizer data for default commission rate

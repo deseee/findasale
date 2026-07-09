@@ -118,6 +118,7 @@ const SUBTYPE_OVERRIDES: Record<string, Pick<TypeConfig, 'label' | 'icon'>> = {
 export interface SaleTypeBadgeProps {
   saleType: string; // ESTATE | YARD | AUCTION | FLEA_MARKET | RETAIL
   saleSubtype?: string; // 'moving' | 'storage_auction' | 'pop_up' | 'benefit'
+  isCharitySale?: boolean; // ADR-023: replaces the never-set saleSubtype === 'benefit' check
   isOnlineOnly?: boolean;
   size?: 'sm' | 'md' | 'lg';
   theme?: 'dark' | 'light';
@@ -150,6 +151,7 @@ const THEME_MAP = {
 const SaleTypeBadge: React.FC<SaleTypeBadgeProps> = ({
   saleType,
   saleSubtype,
+  isCharitySale = false,
   isOnlineOnly = false,
   size = 'md',
   theme = 'light',
@@ -187,7 +189,7 @@ const SaleTypeBadge: React.FC<SaleTypeBadgeProps> = ({
   const override = saleSubtype ? SUBTYPE_OVERRIDES[saleSubtype] : null;
   const label = override?.label ?? base.label;
   const icon = override?.icon ?? base.icon;
-  const isCharity = saleSubtype === 'benefit';
+  const isCharity = isCharitySale; // ADR-023: saleSubtype === 'benefit' never fired (nothing sets it)
 
   return (
     <span

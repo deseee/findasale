@@ -66,16 +66,8 @@ const SALE_TYPE_OPTIONS = [
   { value: 'YARD', label: 'Yard Sale' },
   { value: 'AUCTION', label: 'Auction' },
   { value: 'FLEA_MARKET', label: 'Flea Market' },
-  { value: 'CONSIGNMENT', label: 'Consignment' },
-  { value: 'GARAGE', label: 'Garage Sale' },
-  { value: 'MOVING', label: 'Moving Sale' },
-  { value: 'DOWNSIZING', label: 'Downsizing Sale' },
-  { value: 'SWAP_MEET', label: 'Swap Meet' },
-  { value: 'POPUP', label: 'Pop-Up Sale' },
-  { value: 'LIQUIDATION', label: 'Liquidation Sale' },
-  { value: 'CHARITY', label: 'Charity Sale' },
-  { value: 'RETAIL', label: 'Retail Store' },
-  { value: 'ONLINE', label: 'Online Sale' },
+  { value: 'RETAIL', label: 'Resale' },
+  { value: 'DORM_DASH', label: 'Dorm Dash' },
 ];
 
 const SaleCardSkeleton = () => (

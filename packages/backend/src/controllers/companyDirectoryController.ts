@@ -87,6 +87,8 @@ export async function getCompaniesByCity(req: Request, res: Response) {
       select: {
         id: true,
         saleType: true,
+        saleSubtype: true,
+        isCharitySale: true,
         endDate: true,
         organizer: {
           select: {

@@ -99,6 +99,7 @@ export default function SettlementPage() {
           <SettlementWizard
             saleId={saleId as string}
             saleType={sale.saleType || 'ESTATE'}
+            saleSubtype={sale.saleSubtype || undefined}
           />
         </div>
       </div>

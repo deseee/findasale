@@ -96,6 +96,8 @@ export async function getPersonalizedFeed(
       status: true,
       isAuctionSale: true,
       saleType: true,
+      saleSubtype: true,
+      isCharitySale: true,
       qrScanCount: true,
       organizerId: true,
       createdAt: true,

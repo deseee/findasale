@@ -844,7 +844,8 @@ model Sale {
   saleType                    String                     @default("ESTATE") // B1: ESTATE | YARD | AUCTION | FLEA_MARKET | RETAIL
   // Design S703: Online-only + subtype (UI wired, schema lands here)
   isOnlineOnly                Boolean                    @default(false) // true = no physical address required; Online Only sales
-  saleSubtype                 String? // 'moving' | 'storage_auction' | 'pop_up' | 'benefit' | 'virtual'
+  saleSubtype                 String? // 'estate' | 'yard' | 'moving' | 'auction' | 'storage' | 'flea' | 'popup' | 'downsizing' | 'liquidation' | 'swap_meet' | 'storefront' | 'consignment'
+  isCharitySale                Boolean                    @default(false)
   qrScanCount                 Int                        @default(0)
   endingSoonNotified          Boolean                    @default(false) // Track if "Sale Ending Soon" notification has been sent
   // Feature #35: Front Door Locator — entrance/parking location

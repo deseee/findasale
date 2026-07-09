@@ -18,7 +18,7 @@ export const getSettlement = async (req: AuthRequest, res: Response) => {
     // Verify organizer owns this sale
     const sale = await prisma.sale.findFirst({
       where: { id: saleId, organizer: { userId } },
-      select: { id: true, title: true, saleType: true },
+      select: { id: true, title: true, saleType: true, saleSubtype: true, isCharitySale: true },
     });
     if (!sale) return res.status(404).json({ message: 'Sale not found or access denied.' });
 
@@ -406,7 +406,7 @@ export const getSettlementReceipt = async (req: AuthRequest, res: Response) => {
 
     const sale = await prisma.sale.findFirst({
       where: { id: saleId, organizer: { userId } },
-      select: { id: true, title: true, saleType: true, startDate: true, endDate: true, address: true, organizerId: true },
+      select: { id: true, title: true, saleType: true, saleSubtype: true, isCharitySale: true, startDate: true, endDate: true, address: true, organizerId: true },
     });
     if (!sale) return res.status(404).json({ message: 'Sale not found or access denied.' });
 

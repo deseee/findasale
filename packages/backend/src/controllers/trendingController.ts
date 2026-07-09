@@ -97,6 +97,7 @@ export const getTrendingSales = async (req: Request, res: Response) => {
         status: true,
         saleType: true,
         saleSubtype: true,
+        isCharitySale: true,
         isOnlineOnly: true,
         isOngoing: true,
         isPinned: true,
