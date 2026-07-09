@@ -995,6 +995,8 @@ model Sale {
   // Feature #397: Crew Invasion — organizer opt-in for group discount
   crewInvasionEnabled         Boolean                    @default(false)
   crewInvasionCodes           CrewInvasionCode[]
+  // ADR-078 Wave 1: Video Content Pipeline — jobs generated for/about this sale
+  videoJobs                   VideoJob[]
   createdAt                   DateTime                   @default(now())
   updatedAt                   DateTime                   @updatedAt
 
@@ -5184,6 +5186,10 @@ model SocialPost {
   accountId String
   platform  SocialPlatform // denormalized for cheap filtering/index
 
+  // ADR-078 Wave 1: Video Content Pipeline — optional link back to the VideoJob that produced this post
+  videoJobId String?
+  videoJob   VideoJob? @relation(fields: [videoJobId], references: [id])
+
   // Source traceability back to the approval gate (build-spec §0)
   sourceFile String // e.g. "content-pipeline/social-batch-2026-07-06.md"
   sourceHash String? // hash of the approved line — detects post-approval edits
@@ -5212,6 +5218,81 @@ model SocialPost {
   @@index([status, scheduledFor]) // the publisher's hot query: due + not-yet-sent
   @@index([accountId])
   @@index([platform])
+}
+
+// ============================================================================
+// ADR-078 Wave 1 — Video Content Pipeline (schema-only foundation)
+// Additive only. Generates short-form video content (tutorials, attention-grab
+// clips, promo) triggered by sale lifecycle events, guide-library topics, or
+// manual request. Pipeline stages tracked via VideoJobStatus; approved jobs may
+// fan out into one or more SocialPost rows for publishing.
+// ============================================================================
+
+enum VideoJobStatus {
+  QUEUED
+  CURATING_ASSETS
+  SCRIPTING
+  VOICEOVER
+  ASSEMBLING
+  CAPTIONING
+  THUMBNAIL
+  AWAITING_REVIEW
+  APPROVED
+  PUBLISHING
+  PUBLISHED
+  FAILED
+  REJECTED
+}
+
+enum VideoTriggerType {
+  SALE_LIVE
+  SALE_ENDING
+  GUIDE_LIBRARY
+  MANUAL
+}
+
+enum VideoPurpose {
+  TUTORIAL
+  ATTENTION
+  PROMO
+}
+
+/// One row per generated (or in-progress) video. Tracks the full pipeline from
+/// asset curation through scripting, voiceover, assembly, captioning, thumbnail
+/// generation, human review/staging, and publishing. Optional link to Sale for
+/// sale-triggered videos (SALE_LIVE / SALE_ENDING); null for GUIDE_LIBRARY / MANUAL
+/// videos not tied to a specific sale (guideTopic used instead).
+model VideoJob {
+  id          String            @id @default(cuid())
+  trigger     VideoTriggerType
+  purpose     VideoPurpose
+  saleId      String?
+  sale        Sale?             @relation(fields: [saleId], references: [id])
+  guideTopic  String?
+
+  status      VideoJobStatus    @default(QUEUED)
+
+  sourceAssetUrls String[]
+  scriptText      String?       @db.Text
+  voiceoverUrl    String?
+  rawVideoUrl     String?
+  captionedVideoUrl String?
+  thumbnailUrl    String?
+
+  stagedFile  String?
+  stagedHash  String?
+  reviewNotes String?
+
+  costCents   Int               @default(0)
+
+  posts       SocialPost[]
+
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  @@index([status])
+  @@index([trigger])
+  @@index([saleId])
 }
 
 // ============================================================================
