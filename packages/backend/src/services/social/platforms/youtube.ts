@@ -52,8 +52,25 @@ const YT_RESUMABLE_UPLOAD =
 const YT_CHANNELS_ENDPOINT =
   'https://www.googleapis.com/youtube/v3/channels?part=snippet&mine=true';
 
+// Comment monitoring (comment monitoring wave). commentThreads.list with
+// allThreadsRelatedToChannelId lists comments across every video on the channel in one
+// call, ordered by time — no need to enumerate videos individually. 1 unit/call against
+// the 10,000 unit/day free quota (idea 13, video-pipeline-automation-research-2026-07-09.md).
+const YT_COMMENT_THREADS_LIST = 'https://www.googleapis.com/youtube/v3/commentThreads';
+const YT_COMMENTS_INSERT = 'https://www.googleapis.com/youtube/v3/comments?part=snippet';
+
 // Upload-only scope (least privilege — cannot read/delete other videos).
-const YOUTUBE_SCOPES = ['https://www.googleapis.com/auth/youtube.upload'];
+// NOTE (comment monitoring wave): extended beyond the original upload-only scope to
+// include youtube.force-ssl, which YouTube's commentThreads.list / comments.insert
+// endpoints require. Upload-only tokens issued BEFORE this change do NOT carry the new
+// scope — the currently-connected production account (S1088) will need one manual
+// reconnect/re-consent (Connect YouTube again on /admin/social-accounts) before comment
+// read/reply calls succeed live; until then they will fail with a 403 insufficientPermissions,
+// which the monitor/staging code below surfaces as a normal caught error, not a crash.
+const YOUTUBE_SCOPES = [
+  'https://www.googleapis.com/auth/youtube.upload',
+  'https://www.googleapis.com/auth/youtube.force-ssl',
+];
 
 // YouTube snippet limits: title <= 100 chars, description <= 5000 chars.
 const YT_TITLE_MAX = 100;
@@ -303,6 +320,122 @@ async function publish(params: {
     remotePostId: videoId,
     permalink: `https://www.youtube.com/shorts/${videoId}`,
   };
+}
+
+/**
+ * One top-level comment/mention item returned by listRecentChannelComments(), shaped
+ * for commentMonitor.ts to draft a reply against and stage.
+ */
+export interface YouTubeCommentItem {
+  commentId: string;
+  videoId: string;
+  authorDisplayName: string;
+  authorChannelId: string | null;
+  textOriginal: string;
+  publishedAt: string;
+}
+
+/**
+ * List new top-level comments across the whole channel since `sinceIso`, most-recent
+ * first (order=time), stopping once results fall at/before the cursor. Excludes
+ * comments authored by the channel's own account (replies to ourselves are not
+ * "engagement" to respond to). Read-only — never posts anything.
+ *
+ * Uses allThreadsRelatedToChannelId rather than enumerating each video individually:
+ * one call covers every video on the channel, at 1 quota unit (video-pipeline-
+ * automation-research-2026-07-09.md idea 13's confirmed free-tier numbers).
+ */
+export async function listRecentChannelComments(params: {
+  accessToken: string;
+  channelId: string;
+  sinceIso?: string;
+  maxResults?: number;
+}): Promise<YouTubeCommentItem[]> {
+  const { accessToken, channelId, sinceIso, maxResults = 50 } = params;
+
+  const res = await axios.get(YT_COMMENT_THREADS_LIST, {
+    params: {
+      part: 'snippet',
+      allThreadsRelatedToChannelId: channelId,
+      order: 'time',
+      maxResults,
+      textFormat: 'plainText',
+    },
+    headers: { Authorization: `Bearer ${accessToken}` },
+    timeout: 20000,
+  });
+
+  const items: any[] = res.data?.items ?? [];
+  const sinceMs = sinceIso ? new Date(sinceIso).getTime() : null;
+
+  const results: YouTubeCommentItem[] = [];
+  for (const item of items) {
+    const top = item?.snippet?.topLevelComment;
+    const snippet = top?.snippet;
+    if (!top?.id || !snippet) continue;
+
+    const publishedAt: string = snippet.publishedAt;
+    if (sinceMs != null && new Date(publishedAt).getTime() <= sinceMs) {
+      // order=time is descending — once we hit an item at/before the cursor, every
+      // subsequent item is older still, so it is safe to stop here.
+      break;
+    }
+
+    const authorChannelId: string | null = snippet.authorChannelId?.value ?? null;
+    if (authorChannelId && authorChannelId === channelId) {
+      // Skip our own channel's comments (e.g. a prior reply) — not new engagement.
+      continue;
+    }
+
+    results.push({
+      commentId: top.id,
+      videoId: item.snippet.videoId,
+      authorDisplayName: snippet.authorDisplayName ?? 'a viewer',
+      authorChannelId,
+      textOriginal: snippet.textOriginal ?? '',
+      publishedAt,
+    });
+  }
+
+  return results;
+}
+
+/**
+ * Post a reply to an existing top-level YouTube comment (comments.insert with
+ * parentId). This is the ONLY function in this module that writes a comment — it is
+ * called exclusively by engagementReplyStaging.ts's postApprovedReplies(), which only
+ * ever invokes it for entries a human has hand-marked STATUS: APPROVED. Never called
+ * from the polling/drafting path.
+ */
+export async function postCommentReply(params: {
+  accessToken: string;
+  parentCommentId: string;
+  text: string;
+}): Promise<{ remoteReplyId: string }> {
+  const { accessToken, parentCommentId, text } = params;
+
+  const res = await axios.post(
+    YT_COMMENTS_INSERT,
+    {
+      snippet: {
+        parentId: parentCommentId,
+        textOriginal: text,
+      },
+    },
+    {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      timeout: 20000,
+    }
+  );
+
+  const remoteReplyId: string | undefined = res.data?.id;
+  if (!remoteReplyId) {
+    throw new Error('[youtube] comment reply insert returned no id');
+  }
+  return { remoteReplyId };
 }
 
 export const youtubePublisher: PlatformPublisher = {

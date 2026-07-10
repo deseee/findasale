@@ -215,6 +215,131 @@ async function publish(params: {
   return { remotePostId: tweetId, permalink };
 }
 
+/**
+ * One mention item returned by listRecentMentions(), shaped for xEngagementMonitor.ts
+ * to draft a reply against and stage. X scopes (tweet.read, users.read) already
+ * requested at connect time cover this read — no scope change needed, unlike YouTube's
+ * comment-monitoring addition.
+ */
+export interface XMentionItem {
+  tweetId: string;
+  authorUsername: string | null;
+  authorId: string | null;
+  text: string;
+  createdAt: string;
+}
+
+/** Resolve the connected account's own X user id, using the cached value from OAuth
+ *  connect if present (platformUserId) rather than an extra API call. */
+export async function getOwnUserId(params: {
+  accessToken: string;
+  account: SocialAccount;
+}): Promise<string> {
+  if (params.account.platformUserId) return params.account.platformUserId;
+
+  const me = await axios.get(X_ME_ENDPOINT, {
+    headers: { Authorization: `Bearer ${params.accessToken}` },
+    timeout: 15000,
+  });
+  const id: string | undefined = me.data?.data?.id;
+  if (!id) {
+    throw new Error('[x] could not resolve own user id (account.platformUserId missing and /users/me returned none)');
+  }
+  return id;
+}
+
+/**
+ * List mentions of the connected account since `sinceIso` (X API v2
+ * GET /2/users/:id/mentions, start_time filter). Read-only — never posts anything.
+ * Gated entirely by the caller (xEngagementMonitor.ts checks
+ * X_ENGAGEMENT_MONITORING_ENABLED before this is ever reached) — this function itself
+ * has no gate, matching how youtube.ts's listRecentChannelComments has no gate either;
+ * the kill switch lives one layer up, at the monitor-job entry point.
+ */
+export async function listRecentMentions(params: {
+  accessToken: string;
+  userId: string;
+  sinceIso?: string;
+  maxResults?: number;
+}): Promise<XMentionItem[]> {
+  const { accessToken, userId, sinceIso, maxResults = 50 } = params;
+
+  const query: Record<string, string | number> = {
+    max_results: Math.min(Math.max(maxResults, 5), 100), // X requires 5-100
+    'tweet.fields': 'created_at,author_id',
+    expansions: 'author_id',
+    'user.fields': 'username',
+  };
+  if (sinceIso) {
+    query.start_time = sinceIso;
+  }
+
+  const res = await axios.get(`https://api.twitter.com/2/users/${userId}/mentions`, {
+    params: query,
+    headers: { Authorization: `Bearer ${accessToken}` },
+    timeout: 20000,
+  });
+
+  const tweets: any[] = res.data?.data ?? [];
+  const users: any[] = res.data?.includes?.users ?? [];
+  const usernameById = new Map<string, string>(users.map((u) => [u.id, u.username]));
+
+  return tweets.map((t) => ({
+    tweetId: t.id,
+    authorUsername: t.author_id ? usernameById.get(t.author_id) ?? null : null,
+    authorId: t.author_id ?? null,
+    text: t.text ?? '',
+    createdAt: t.created_at,
+  }));
+}
+
+/**
+ * Post a reply to an existing tweet (POST /2/tweets with reply.in_reply_to_tweet_id).
+ * This is the ONLY function in this module that posts a reply-shaped tweet — called
+ * exclusively by engagementReplyStaging.ts's postApprovedReplies(), only for entries a
+ * human has hand-marked STATUS: APPROVED. Never called from the polling/drafting path.
+ */
+export async function postReplyTweet(params: {
+  accessToken: string;
+  inReplyToTweetId: string;
+  text: string;
+  account: SocialAccount;
+}): Promise<PublishResult> {
+  const { accessToken, inReplyToTweetId, account } = params;
+
+  let text = params.text ?? '';
+  if (text.length > X_MAX_TWEET_CHARS) {
+    text = text.slice(0, X_MAX_TWEET_CHARS);
+  }
+  if (!text.trim()) {
+    throw new Error('[x] refusing to post an empty reply');
+  }
+
+  const res = await axios.post(
+    X_TWEETS_ENDPOINT,
+    { text, reply: { in_reply_to_tweet_id: inReplyToTweetId } },
+    {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      timeout: 15000,
+    }
+  );
+
+  const tweetId: string | undefined = res.data?.data?.id;
+  if (!tweetId) {
+    throw new Error('[x] reply POST returned no id');
+  }
+
+  const username = account.platformUsername;
+  const permalink = username
+    ? `https://twitter.com/${username}/status/${tweetId}`
+    : `https://twitter.com/i/web/status/${tweetId}`;
+
+  return { remotePostId: tweetId, permalink };
+}
+
 export const xPublisher: PlatformPublisher = {
   platform: 'X',
   buildAuthorizeUrl,

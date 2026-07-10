@@ -29,6 +29,18 @@
 
 import { prisma } from '../../lib/prisma';
 
+/**
+ * ADR-079 (Motion Footage Extension): Cloudinary URLs are self-describing —
+ * an image upload URL contains `/image/upload/` and a video upload URL
+ * contains `/video/upload/` (confirmed against videoAssembly.ts's own
+ * `uploader.upload(filePath, { resource_type: 'video', ... })` call and
+ * Cloudinary's standard URL structure). No schema/DB field is needed to carry
+ * this — a substring check on the URL itself is sufficient and reliable.
+ */
+export function inferMediaTypeFromUrl(url: string): 'image' | 'video' {
+  return url.includes('/video/upload/') ? 'video' : 'image';
+}
+
 /** One curated shot in final video order. */
 export interface CuratedShot {
   itemId: string;
@@ -37,6 +49,26 @@ export interface CuratedShot {
   photoRole: string; // PhotoRole enum value, or 'LEGACY' when sourced from Item.photoUrls fallback (no Photo row)
   score: number;
   reason: string; // short human-readable justification — useful for the AWAITING_REVIEW staged file and QA
+  /**
+   * ADR-079: media type of `photoUrl`'s Cloudinary asset, inferred via
+   * inferMediaTypeFromUrl() above. Every shot produced by curateFromSale()/
+   * curateFromGuideTopic() today is 'image' — those paths only ever pull
+   * Photo.url / Item.photoUrls entries, which are always images. A 'video'
+   * shot is added to a shot list manually by a session (via the raw-footage/
+   * ingestion path, packages/backend/scripts/ingestRawFootage.ts) before
+   * calling assembleVideo() directly — this module does not yet generate
+   * video shots itself.
+   */
+  mediaType: 'image' | 'video';
+  /**
+   * ADR-079: required when mediaType==='video' — the exact number of seconds
+   * of the clip to feature (its own full length if short enough to feature in
+   * full, or a chosen trim window if longer). This is a curation-time
+   * decision, NOT something assembleVideo() infers or measures itself.
+   * Ignored for mediaType==='image' shots (their duration is computed from
+   * the remaining voiceover time budget instead — see videoAssembly.ts).
+   */
+  clipDuration?: number;
 }
 
 export interface CurateAssetsInput {
@@ -197,6 +229,10 @@ async function curateFromSale(saleId: string, maxShots: number): Promise<AssetCu
     photoRole: c.photoRole,
     score: Math.round(c.score * 100) / 100,
     reason: c.reason,
+    // ADR-079: always 'image' here — every candidate above is sourced from a
+    // real Photo.url or legacy Item.photoUrls entry, both of which are
+    // Cloudinary image uploads, never video.
+    mediaType: inferMediaTypeFromUrl(c.photoUrl),
   }));
 
   return {

@@ -226,18 +226,48 @@ export async function assembleVideo(input: VideoAssemblyInput): Promise<VideoAss
 
   try {
     // 1. Gather visual sources: optional title card + curated shots, in order.
+    //    ADR-079 (Motion Footage Extension): each shot may now be a still image
+    //    OR a video clip (CuratedShot.mediaType) — tracked in parallel arrays
+    //    alongside visualPaths so the ffmpeg input/filter construction below can
+    //    branch per-entry. The title card is always an 'image' (built locally,
+    //    never a curated clip).
     const visualPaths: string[] = [];
+    const visualMediaTypes: Array<'image' | 'video'> = [];
+    // Fixed duration (seconds) for 'video' entries, taken from the curated
+    // shot's own clipDuration — undefined for 'image' entries, which instead
+    // get an equal share of the remaining voiceover time budget (computed below).
+    const visualFixedDurations: Array<number | undefined> = [];
 
     if (titleSuggestion && titleSuggestion.trim()) {
       const titleCardPath = path.join(workDir, 'title.jpg');
       await buildTitleCardImage(titleSuggestion.trim(), titleCardPath);
       visualPaths.push(titleCardPath);
+      visualMediaTypes.push('image');
+      visualFixedDurations.push(undefined);
     }
 
     for (let i = 0; i < shots.length; i++) {
-      const shotPath = path.join(workDir, `shot-${i}.jpg`);
-      await downloadToFile(shots[i].photoUrl, shotPath);
+      const shot = shots[i];
+      const mediaType: 'image' | 'video' = shot.mediaType ?? 'image';
+      const ext = mediaType === 'video' ? 'mp4' : 'jpg';
+      const shotPath = path.join(workDir, `shot-${i}.${ext}`);
+      await downloadToFile(shot.photoUrl, shotPath);
       visualPaths.push(shotPath);
+      visualMediaTypes.push(mediaType);
+
+      if (mediaType === 'video') {
+        if (!shot.clipDuration || shot.clipDuration <= 0) {
+          const err = new Error(
+            `NO_CLIP_DURATION: video shot itemId=${shot.itemId} has mediaType='video' but no positive clipDuration set — ` +
+              `this is a curation-time decision (ADR-079 §1), assembleVideo() will not infer it`
+          );
+          (err as any).errorCode = 'NO_CLIP_DURATION';
+          throw err;
+        }
+        visualFixedDurations.push(shot.clipDuration);
+      } else {
+        visualFixedDurations.push(undefined);
+      }
     }
 
     // 2. Download the voiceover audio (real WAV from synthesizeVoiceover()).
@@ -256,21 +286,55 @@ export async function assembleVideo(input: VideoAssemblyInput): Promise<VideoAss
       console.warn('[videoAssembly] logo fetch failed, assembling without watermark:', err?.message ?? err);
     }
 
-    // 4. Duration math — voiceover audio drives the total length (see module doc).
+    // 4. Duration math — voiceover audio drives the total length (see module
+    //    doc). ADR-079 extension: video-clip shots contribute their own fixed
+    //    clipDuration instead of the computed per-shot share; the remaining
+    //    'image' entries (stills + title card) split whatever time is left
+    //    after subtracting the fixed clip durations, same crossfade-overlap
+    //    algebra as before.
     const n = visualPaths.length;
+    const numFixed = visualFixedDurations.filter((d) => d !== undefined).length;
+    const sumFixedDurations = visualFixedDurations.reduce((sum: number, d) => sum + (d ?? 0), 0);
+    const numFlex = n - numFixed;
+
     let crossfade = CROSSFADE_SECONDS;
-    let perShotDuration = (voiceoverDurationSeconds + (n - 1) * crossfade) / n;
-    if (perShotDuration < MIN_SHOT_SECONDS) {
+    let perShotDuration: number;
+    if (numFlex > 0) {
+      perShotDuration = (voiceoverDurationSeconds - sumFixedDurations + (n - 1) * crossfade) / numFlex;
+      if (perShotDuration < MIN_SHOT_SECONDS) {
+        perShotDuration = MIN_SHOT_SECONDS;
+        crossfade = Math.min(CROSSFADE_SECONDS, perShotDuration * 0.3);
+      }
+    } else {
+      // Edge case: every visual entry is a fixed-duration video clip (no
+      // stills/title card to flex). Total length is simply whatever the clips
+      // add up to — per ADR-079 §1, clip duration is a curation-time decision,
+      // not something assembleVideo() should pad or infer to hit the
+      // narration length exactly. perShotDuration is unused in this branch
+      // (kept defined only so TS sees it initialized).
       perShotDuration = MIN_SHOT_SECONDS;
-      crossfade = Math.min(CROSSFADE_SECONDS, perShotDuration * 0.3);
     }
 
-    const zoompanFrames = Math.max(1, Math.round(perShotDuration * FPS));
+    const durations: number[] = visualFixedDurations.map((fixed) => fixed ?? perShotDuration);
 
-    // 5. Build the ffmpeg command.
+    // 5. Build the ffmpeg command. Per-input branch on mediaType:
+    //      image — existing path, unchanged: `-loop 1 -t <duration> -i`, then
+    //        scale/crop/setsar/zoompan for the Ken Burns effect.
+    //      video — new path: no `-loop`; `-i <clip>` followed by a
+    //        `trim=duration=<duration>,setpts=PTS-STARTPTS` + the same
+    //        scale/crop/setsar fit-to-1080x1920 used for stills, but no
+    //        zoompan (the clip already has real motion — synthetic pan on top
+    //        of real motion looks wrong and is unnecessary, ADR-079 §1).
+    //    Both branches still feed the same `xfade` crossfade chain below —
+    //    xfade operates on the scaled/cropped [s{i}] output labels regardless
+    //    of whether the source was a still or a clip.
     const inputArgs: string[] = [];
-    for (const visualPath of visualPaths) {
-      inputArgs.push('-loop', '1', '-t', perShotDuration.toFixed(3), '-i', visualPath);
+    for (let i = 0; i < n; i++) {
+      if (visualMediaTypes[i] === 'video') {
+        inputArgs.push('-i', visualPaths[i]);
+      } else {
+        inputArgs.push('-loop', '1', '-t', durations[i].toFixed(3), '-i', visualPaths[i]);
+      }
     }
     const logoInputIndex = n; // logo (if present) is the input immediately after all visuals
     if (logoPath) inputArgs.push('-i', logoPath);
@@ -279,21 +343,30 @@ export async function assembleVideo(input: VideoAssemblyInput): Promise<VideoAss
 
     const filters: string[] = [];
     for (let i = 0; i < n; i++) {
-      filters.push(
-        `[${i}:v]scale=${VERTICAL_WIDTH}:${VERTICAL_HEIGHT}:force_original_aspect_ratio=increase,` +
-          `crop=${VERTICAL_WIDTH}:${VERTICAL_HEIGHT},setsar=1,` +
-          `zoompan=z='min(zoom+0.0012,1.15)':d=${zoompanFrames}:s=${VERTICAL_WIDTH}x${VERTICAL_HEIGHT}:fps=${FPS}[s${i}]`
-      );
+      if (visualMediaTypes[i] === 'video') {
+        filters.push(
+          `[${i}:v]trim=duration=${durations[i].toFixed(3)},setpts=PTS-STARTPTS,` +
+            `scale=${VERTICAL_WIDTH}:${VERTICAL_HEIGHT}:force_original_aspect_ratio=increase,` +
+            `crop=${VERTICAL_WIDTH}:${VERTICAL_HEIGHT},setsar=1[s${i}]`
+        );
+      } else {
+        const zoompanFrames = Math.max(1, Math.round(durations[i] * FPS));
+        filters.push(
+          `[${i}:v]scale=${VERTICAL_WIDTH}:${VERTICAL_HEIGHT}:force_original_aspect_ratio=increase,` +
+            `crop=${VERTICAL_WIDTH}:${VERTICAL_HEIGHT},setsar=1,` +
+            `zoompan=z='min(zoom+0.0012,1.15)':d=${zoompanFrames}:s=${VERTICAL_WIDTH}x${VERTICAL_HEIGHT}:fps=${FPS}[s${i}]`
+        );
+      }
     }
 
     let accLabel = 's0';
-    let accDuration = perShotDuration;
+    let accDuration = durations[0];
     for (let i = 1; i < n; i++) {
       const offset = accDuration - crossfade;
       const outLabel = i < n - 1 ? `x${i}` : 'vchain';
       filters.push(`[${accLabel}][s${i}]xfade=transition=fade:duration=${crossfade.toFixed(3)}:offset=${offset.toFixed(3)}[${outLabel}]`);
       accLabel = outLabel;
-      accDuration = accDuration + perShotDuration - crossfade;
+      accDuration = accDuration + durations[i] - crossfade;
     }
     // n === 1 edge case (defensive — normally there's always a title card plus
     // >=1 shot): no xfade chain ran, so the single shot's own label is the

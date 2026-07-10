@@ -264,6 +264,7 @@ import { scheduleOutwardEmailAutomationsCron } from './jobs/outwardEmailAutomati
 import socialPublisherRoutes from './routes/socialPublisher'; // ADR-077: In-house social publisher (admin-only)
 import videoPipelineAdminRoutes from './routes/videoPipelineAdmin'; // ADR-078 Wave 3: one-time ops trigger for video pipeline dry-run (admin-only, temporary)
 import { scheduleSocialPublisherCron } from './jobs/socialPublisherCron'; // ADR-077: Social publisher cron (every 10 min)
+import { scheduleEngagementMonitorCron } from './jobs/engagementMonitorCron'; // Comment/mention monitor (hourly) + approved-reply poster (every 30 min)
 import citiesRoutes from './routes/cities'; // ADR-074: Metro Sync city pages
 import categoriesRoutes from './routes/categories'; // ADR-074 Phase 2: Category trending items
 import internalRoutes from './routes/internal'; // ADR-076: Internal scraper endpoint
@@ -1005,6 +1006,9 @@ httpServer.listen(PORT, '0.0.0.0', () => {
 
   // ADR-077: Register in-house social publisher cron (every 10 minutes)
   scheduleSocialPublisherCron();
+
+  // Comment/mention engagement monitor (hourly YouTube/X polling) + approved-reply poster (every 30 min)
+  scheduleEngagementMonitorCron();
 
   // Features #58-59: Initialize achievements from code
   syncAchievements();

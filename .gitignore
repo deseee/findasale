@@ -175,3 +175,14 @@ claude_docs/audits/secrets-audit-*.md
 
 # Local DB/infra backups — 619MB, must never enter git history
 backups/
+
+# =========================
+# Raw footage (ADR-079) — large video binaries, must never enter git history
+# (mirrors the backups/ entry above). Contents ignored, folder structure kept
+# via .gitkeep so incoming/processed always exist for a fresh clone.
+# =========================
+raw-footage/*
+!raw-footage/incoming/
+!raw-footage/incoming/.gitkeep
+!raw-footage/processed/
+!raw-footage/processed/.gitkeep
