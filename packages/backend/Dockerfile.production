@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-# cache-bust: 2026-07-09T22:40:00Z — ADR-078 Addendum 2: bakes in ffmpeg + Piper TTS + pre-warmed Whisper STT cache (free/self-hosted video pipeline, JSON2Video/ZapCap vendor spend rejected)
+# cache-bust: 2026-07-10T02:20:00Z — S1106 fix: warm-whisper-cache.mjs pre-warm step is now non-fatal (exit 0 always) so a masked @xenova/transformers model-class fallback error can never fail the whole backend build/deploy again
 FROM node:20-slim AS base
 
 # Install OpenSSL for Prisma
