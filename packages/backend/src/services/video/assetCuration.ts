@@ -37,8 +37,23 @@ import { prisma } from '../../lib/prisma';
  * Cloudinary's standard URL structure). No schema/DB field is needed to carry
  * this — a substring check on the URL itself is sufficient and reliable.
  */
+const VIDEO_URL_EXTENSIONS = new Set(['.mp4', '.mov', '.m4v', '.webm', '.avi', '.mkv']);
+
 export function inferMediaTypeFromUrl(url: string): 'image' | 'video' {
-  return url.includes('/video/upload/') ? 'video' : 'image';
+  // Cloudinary URLs self-describe via their path segment — keep these two
+  // checks FIRST so existing DB-photo (Cloudinary) behavior is unchanged.
+  if (url.includes('/video/upload/')) return 'video';
+  if (url.includes('/image/upload/')) return 'image';
+  // ADR-079 R2 extension: raw footage now lives on Cloudflare R2, whose
+  // presigned GET URLs (and plain object keys) are NOT self-describing by path
+  // segment — infer by file extension instead. Strip any query string first so
+  // a presigned URL's ?X-Amz-... params don't defeat the extension match.
+  const qIndex = url.indexOf('?');
+  const pathPart = qIndex >= 0 ? url.slice(0, qIndex) : url;
+  const dot = pathPart.lastIndexOf('.');
+  const slash = pathPart.lastIndexOf('/');
+  const ext = dot > slash ? pathPart.slice(dot).toLowerCase() : '';
+  return VIDEO_URL_EXTENSIONS.has(ext) ? 'video' : 'image';
 }
 
 /** One curated shot in final video order. */

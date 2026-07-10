@@ -3,109 +3,56 @@
 /**
  * Raw Footage Ingestion Script — ADR-079 (Motion Footage Extension), §2
  *
- * One-off, session-triggered script (NOT a cron/watcher — ADR-079 explicitly
- * scopes day-one ingestion as manual, "keep it simple, day one"). Reads
- * whatever files Patrick has dropped into raw-footage/incoming/ (repo root,
- * gitignored — see root .gitignore and ADR-079 §2 for why this lives outside
- * claude_docs/), uploads each to Cloudinary using the SAME
- * cloudinary.uploader.upload pattern videoAssembly.ts already uses
- * (packages/backend/src/services/video/videoAssembly.ts's
- * uploadFileToCloudinary()) — same CLOUDINARY_* env vars, no new credentials,
- * no new vendor account. Video files (.mp4/.mov/.m4v/.webm/.avi/.mkv) upload
- * with resource_type: 'video'; anything else uploads with resource_type:
- * 'image'.
+ * REPURPOSED (raw footage moved off Cloudinary onto Cloudflare R2): this script
+ * no longer uploads local raw-footage/incoming/ files to Cloudinary. Raw footage
+ * now arrives in a separate, PRIVATE Cloudflare R2 bucket
+ * (`findasale-raw-footage`) that Patrick's phone auto-syncs clips into directly
+ * — so there is nothing for this backend to upload. Its job is now simply to
+ * LIST what's currently sitting in the R2 bucket and print, for each object, a
+ * short-TTL presigned GET URL plus its inferred mediaType, so a session can
+ * paste those straight into a CuratedShot list
+ * (packages/backend/src/services/video/assetCuration.ts) — mediaType: 'video'
+ * with a clipDuration (seconds) for clips — before calling assembleVideo()
+ * (packages/backend/src/services/video/videoAssembly.ts).
  *
- * After a successful upload, the source file is moved to
- * raw-footage/processed/ so re-running the script never re-uploads the same
- * file (simple filesystem idempotency — no DB bookkeeping needed for Phase 1
- * volume, per ADR-079 §2).
+ * It reads NOTHING from the local filesystem and uploads NOTHING. All R2 access
+ * goes through r2Client.ts, which reads the existing R2_* Railway env vars
+ * (R2_ENDPOINT / R2_BUCKET / R2_REGION / R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY)
+ * — no new credentials, no new vendor account, no Cloudinary image-credit spend.
  *
- * Prints each resulting secure_url + inferred mediaType so a session can paste
- * it directly into a CuratedShot entry
- * (packages/backend/src/services/video/assetCuration.ts) with
- * mediaType: 'video' and a clipDuration (seconds), when building/calling
- * assembleVideo() (packages/backend/src/services/video/videoAssembly.ts).
- * Cloudinary URLs self-describe media type via their /image/upload/ vs.
- * /video/upload/ path segment (ADR-079 §4) — matches assetCuration.ts's
- * inferMediaTypeFromUrl() helper exactly.
+ * After a video successfully assembles, the orchestrator
+ * (videoJobOrchestrator.ts) DELETES the consumed raw objects from R2 — footage
+ * is transient (ADR-079). This script does not delete anything; it only lists.
  *
  * Usage:
  *   cd packages/backend
  *   npx ts-node scripts/ingestRawFootage.ts
- *
- * Requires the same CLOUDINARY_CLOUD_NAME / CLOUDINARY_API_KEY /
- * CLOUDINARY_API_SECRET env vars already used elsewhere in this backend
- * (packages/backend/.env locally, or Railway env vars in production — this
- * script has no separate config path and creates no new credentials).
  */
 
-import { v2 as cloudinary } from 'cloudinary';
-import fs from 'fs/promises';
-import path from 'path';
-
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
-});
-
-// repo root is 3 levels up from packages/backend/scripts/
-const REPO_ROOT = path.resolve(__dirname, '..', '..', '..');
-const INCOMING_DIR = path.join(REPO_ROOT, 'raw-footage', 'incoming');
-const PROCESSED_DIR = path.join(REPO_ROOT, 'raw-footage', 'processed');
-
-const VIDEO_EXTENSIONS = new Set(['.mp4', '.mov', '.m4v', '.webm', '.avi', '.mkv']);
-
-function resourceTypeFor(fileName: string): 'video' | 'image' {
-  return VIDEO_EXTENSIONS.has(path.extname(fileName).toLowerCase()) ? 'video' : 'image';
-}
-
-function uploadFileToCloudinary(
-  filePath: string,
-  resourceType: 'video' | 'image',
-  folder: string
-): Promise<string> {
-  return new Promise((resolve, reject) => {
-    cloudinary.uploader.upload(filePath, { resource_type: resourceType, folder }, (error, result) => {
-      if (error || !result) return reject(error ?? new Error('No result from Cloudinary'));
-      resolve(result.secure_url);
-    });
-  });
-}
+import { listRawFootage } from '../src/services/video/r2Client';
 
 async function main(): Promise<void> {
-  await fs.mkdir(INCOMING_DIR, { recursive: true });
-  await fs.mkdir(PROCESSED_DIR, { recursive: true });
+  const objects = await listRawFootage();
 
-  const entries = await fs.readdir(INCOMING_DIR, { withFileTypes: true });
-  const files = entries.filter((e) => e.isFile() && !e.name.startsWith('.'));
-
-  if (files.length === 0) {
-    console.log(`[ingestRawFootage] No files found in ${INCOMING_DIR}. Nothing to do.`);
+  if (objects.length === 0) {
+    console.log('[ingestRawFootage] R2 raw-footage bucket is empty. Nothing to list.');
     return;
   }
 
-  console.log(`[ingestRawFootage] Found ${files.length} file(s) in ${INCOMING_DIR}.`);
+  console.log(`[ingestRawFootage] Found ${objects.length} object(s) in the R2 raw-footage bucket:\n`);
 
-  for (const entry of files) {
-    const fileName = entry.name;
-    const sourcePath = path.join(INCOMING_DIR, fileName);
-    const resourceType = resourceTypeFor(fileName);
-
-    try {
-      console.log(`[ingestRawFootage] Uploading ${fileName} (resource_type=${resourceType}) ...`);
-      const secureUrl = await uploadFileToCloudinary(sourcePath, resourceType, 'findasale/raw-footage');
-      console.log(`[ingestRawFootage]   -> ${secureUrl}  (mediaType=${resourceType})`);
-
-      const destPath = path.join(PROCESSED_DIR, fileName);
-      await fs.rename(sourcePath, destPath);
-      console.log(`[ingestRawFootage]   moved to ${destPath}`);
-    } catch (err: any) {
-      console.error(`[ingestRawFootage] FAILED for ${fileName}:`, err?.message ?? err);
-    }
+  for (const obj of objects) {
+    console.log(`  key:       ${obj.key}`);
+    console.log(`  mediaType: ${obj.mediaType}`);
+    console.log(`  url:       ${obj.url}`);
+    console.log('');
   }
 
-  console.log('[ingestRawFootage] Done.');
+  console.log(
+    '[ingestRawFootage] Paste each url into a CuratedShot.photoUrl (set mediaType, and\n' +
+      '  clipDuration in seconds for video clips), then call assembleVideo(). Presigned URLs\n' +
+      '  expire in ~1 hour — re-run this script if they lapse.'
+  );
 }
 
 main().catch((err) => {
