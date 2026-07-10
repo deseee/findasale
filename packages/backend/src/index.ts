@@ -262,6 +262,7 @@ import { scheduleSaleDetailEnrichmentCron } from './jobs/saleDetailEnrichmentCro
 import { scheduleGeocodingAuditCron } from './jobs/geocodingAuditJob'; // ADR-073: Geocoding success rate audit cron
 import { scheduleOutwardEmailAutomationsCron } from './jobs/outwardEmailAutomationsJob'; // Outward Email Automations: recap + review/testimonial asks (daily 10:00 UTC)
 import socialPublisherRoutes from './routes/socialPublisher'; // ADR-077: In-house social publisher (admin-only)
+import videoPipelineAdminRoutes from './routes/videoPipelineAdmin'; // ADR-078 Wave 3: one-time ops trigger for video pipeline dry-run (admin-only, temporary)
 import { scheduleSocialPublisherCron } from './jobs/socialPublisherCron'; // ADR-077: Social publisher cron (every 10 min)
 import citiesRoutes from './routes/cities'; // ADR-074: Metro Sync city pages
 import categoriesRoutes from './routes/categories'; // ADR-074 Phase 2: Category trending items
@@ -775,6 +776,7 @@ app.use('/api/crawler-stats', crawlerStatsRouter);                              
 app.use('/api/crawler-log', crawlerLogRouter);                                  // AI Crawler Log — SSR bot tracking
 app.use('/api/organizer/demand-signals', demandSignalsRouter);                  // #454 Organizer Demand Dashboard
 app.use('/api', aiScoreRouter);                                           // GEO Phase 3: Search Visibility Score
+app.use('/api/admin/video-pipeline', videoPipelineAdminRoutes);           // ADR-078 Wave 3: admin-only video pipeline dry-run trigger (temporary ops endpoint)
 
 // Protected route example
 app.get('/api/protected', authenticate, (req, res) => {
