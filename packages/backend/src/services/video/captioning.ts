@@ -273,3 +273,33 @@ export async function captionVideo(input: CaptioningInput): Promise<CaptioningRe
     await fs.rm(workDir, { recursive: true, force: true }).catch(() => {});
   }
 }
+
+
+/**
+ * Reusable local transcription of a video file already on disk (ADR-080 §5.1 —
+ * clipAnalysisService reuses the EXISTING Whisper transcriber; no new STT lib).
+ * Reuses this module's own getTranscriber() + extractAudioWav() + wavToFloat32()
+ * so there is exactly one Whisper code path in the backend. Returns the transcript
+ * text plus the word-level chunks. Best-effort by contract of its caller — it may
+ * throw on a genuinely undecodable file; clipAnalysisService wraps it in a catch.
+ */
+export interface LocalTranscriptResult {
+  text: string;
+  chunks: WhisperChunk[];
+}
+
+export async function transcribeLocalVideoFile(videoPath: string): Promise<LocalTranscriptResult> {
+  const workDir = await fs.mkdtemp(path.join(os.tmpdir(), 'clip-transcribe-'));
+  try {
+    const audioWavPath = path.join(workDir, 'audio.wav');
+    await extractAudioWav(videoPath, audioWavPath);
+    const audioFloat32 = await wavToFloat32(audioWavPath);
+    const transcriber = await getTranscriber();
+    const result = await transcriber(audioFloat32, { return_timestamps: 'word' });
+    const text: string = (result?.text ?? '').trim();
+    const chunks: WhisperChunk[] = Array.isArray(result?.chunks) ? result.chunks : [];
+    return { text, chunks };
+  } finally {
+    await fs.rm(workDir, { recursive: true, force: true }).catch(() => {});
+  }
+}

@@ -147,6 +147,25 @@ export async function deleteRawFootageObject(key: string): Promise<void> {
  * null for any URL that is NOT one of our R2 objects (e.g. a Cloudinary DB-photo
  * URL) — the caller uses that null to skip non-R2 shots safely.
  */
+/**
+ * Presigned GET URL for a SINGLE raw-footage object key (ADR-080 §5 clip download).
+ * clipAnalysisService downloads one clip at a time from R2 by key; regenerating a
+ * short-TTL presigned GET on demand avoids re-listing the whole bucket per clip
+ * (listRawFootage) and mirrors the exact presign shape used there. The bucket is
+ * private, so this is always a short-lived presigned GET — never a public URL.
+ */
+export async function getPresignedFootageUrl(
+  key: string,
+  ttlSeconds: number = PRESIGN_TTL_SECONDS,
+): Promise<string> {
+  const client = getClient();
+  return getSignedUrl(
+    client,
+    new GetObjectCommand({ Bucket: bucketName(), Key: key }),
+    { expiresIn: ttlSeconds },
+  );
+}
+
 export function extractR2KeyFromUrl(url: string): string | null {
   if (!R2_ENDPOINT || !R2_BUCKET) return null;
   try {

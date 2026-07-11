@@ -117,6 +117,14 @@ ENV LD_LIBRARY_PATH=/opt/piper
 COPY --from=builder /app/packages/backend/scripts/warm-whisper-cache.mjs ./packages/backend/scripts/warm-whisper-cache.mjs
 ENV WHISPER_CACHE_DIR=/opt/whisper-cache
 RUN node packages/backend/scripts/warm-whisper-cache.mjs
+
+# PaddleOCR caption engine (ppu-paddle-ocr, PP-OCRv6 small .ort models, MIT,
+# public unauthenticated source, no API key) — ADR-080 §5.1. Pre-warm the models
+# into ~/.cache/ppu-paddle-ocr so clipAnalysisService.ts makes no network call at
+# runtime (mirrors the Whisper warm-up above). Non-fatal: the service downloads
+# lazily on first real clip-analysis job if this step is skipped or flakes.
+COPY --from=builder /app/packages/backend/scripts/warm-paddle-ocr-cache.mjs ./packages/backend/scripts/warm-paddle-ocr-cache.mjs
+RUN node packages/backend/scripts/warm-paddle-ocr-cache.mjs
 # --- end ADR-078 Addendum 2 additions ---
 
 # Set Puppeteer to use system Chromium

@@ -36,6 +36,7 @@
 
 import { prisma } from '../../lib/prisma';
 import { listRawFootage } from './r2Client';
+import { classifyBatch } from './footageClassifyService';
 
 /** Result of one ingest reconciliation pass. */
 export interface FootageIngestResult {
@@ -241,12 +242,16 @@ export async function sealStaleFootageBatches(): Promise<FootageSealResult> {
           `(threshold ${sealMinutes} min)`
       );
 
-      // TODO (ADR-080 §3.1 / §4 handoff): a SEALED FootageBatch is the handoff
-      // point to the NEXT stage (per-clip ClipAnalysis -> format inference ->
-      // template assembly, which reuses the ADR-078 VideoJob pipeline via
-      // FootageBatch.videoJobId). That enqueue is deliberately NOT done here —
-      // Stage 1b ends at SEALED. Wire the analysis/VideoJob enqueue in the next
-      // stage's dispatch.
+      // ADR-080 §5/§6 handoff: a freshly SEALED batch is handed to the
+      // CLASSIFICATION stage (per-clip ClipAnalysis -> format inference ->
+      // confidence gate). Fire-and-forget + FAILURE-ISOLATED: classifyBatch owns
+      // its own status transitions (ANALYZING/ASSEMBLING/NEEDS_INPUT/FAILED) and
+      // must NEVER throw into the seal cron. A classify crash sets the batch to a
+      // FAILED status inside classifyBatch; this catch is the belt-and-suspenders
+      // backstop so an unexpected throw still cannot crash the sweep.
+      void classifyBatch(b.id).catch((err) => {
+        console.error(`[footage-seal] classifyBatch(${b.id}) crashed (isolated, cron continues):`, err?.message ?? err);
+      });
     }
   }
 
