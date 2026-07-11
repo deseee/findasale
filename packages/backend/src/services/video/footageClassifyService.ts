@@ -28,6 +28,7 @@ import axios from 'axios';
 import { prisma } from '../../lib/prisma';
 import { analyzeBatch, type ClipAnalysis, type ClipRole } from './clipAnalysisService';
 import { ALL_TEMPLATES, TEMPLATES_BY_ID, type Template } from './templates';
+import { renderBatch } from './templateRenderer';
 import {
   trackAITokens,
   estimateTokensForRequest,
@@ -353,20 +354,17 @@ export async function classifyBatch(batchId: string): Promise<ClassifyBatchResul
         `[footageClassify] Batch ${batchId} CLASSIFIED -> ${inference.templateId} ` +
           `(format conf ${inference.confidence}, ${analyses.length} clips, ${soft.length} soft-flagged). Ready for render stage.`
       );
-      // ===================================================================
-      // TODO (RENDER STAGE HANDOFF — ADR-080 §9/§5 assembly, NOT this stage):
-      //   A batch in ASSEMBLING is fully classified and ready to render. The
-      //   render stage should:
-      //     1. Load templateId via TEMPLATES_BY_ID and the persisted ClipAnalysis[]
-      //        (FootageAsset.analysisJson) for this batch.
-      //     2. Run the slot-fill algorithm (ADR-080 §9.2) to map clips -> SlotSpecs.
-      //     3. Render via Revideo (animated captions, price-pop overlays, music bed
-      //        loudnorm/duck, title/CTA end cards), feed into the existing
-      //        captioning/thumbnail steps, create the VideoJob, set FootageBatch.videoJobId.
-      //     4. writeStagedReviewFile() with per-clip OCR/role/confidence + soft-flags,
-      //        then move the batch SEALED-lineage -> AWAITING_REVIEW.
-      //   This stage deliberately stops at ASSEMBLING — no rendering here.
-      // ===================================================================
+      // RENDER STAGE (ADR-080 §9 — templateRenderer.ts). The batch is fully
+      // classified and ready to render. Trigger the render fire-and-forget AND
+      // failure-isolated: renderBatch never throws (on any error it sets the batch
+      // to FAILED + logs), so a render failure can never crash this classify path.
+      // It loads templateId + the persisted ClipAnalysis[], runs slot-fill (§9.2),
+      // assembles the finished 9:16 cut on the proven ffmpeg engine, creates the
+      // VideoJob, sets FootageBatch.videoJobId, stages the review markdown, and
+      // moves the batch -> AWAITING_REVIEW (or NEEDS_INPUT on missing required footage).
+      void renderBatch(batchId).catch((e) =>
+        console.error(`[footageClassify] renderBatch trigger error for ${batchId} (isolated):`, e?.message ?? e),
+      );
       return {
         batchId,
         status: 'ASSEMBLING',

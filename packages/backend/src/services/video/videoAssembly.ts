@@ -65,9 +65,9 @@ const BRAND_ORANGE = '#F97316';
 const BRAND_DARK = '#111111';
 const BRAND_LOGO_URL = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/icons/icon-512x512.png`;
 
-const VERTICAL_WIDTH = 1080;
-const VERTICAL_HEIGHT = 1920;
-const FPS = 25;
+export const VERTICAL_WIDTH = 1080;
+export const VERTICAL_HEIGHT = 1920;
+export const FPS = 25;
 
 // Matches assetCuration.ts's own "~4-5s/shot" comment on maxShots=12 — kept
 // exported so any caller that needs a rough ESTIMATE before a real duration is
@@ -123,7 +123,7 @@ function assertInput(input: VideoAssemblyInput): void {
   }
 }
 
-async function downloadToFile(url: string, destPath: string): Promise<void> {
+export async function downloadToFile(url: string, destPath: string): Promise<void> {
   const res = await axios.get<ArrayBuffer>(url, {
     responseType: 'arraybuffer',
     timeout: 30000,
@@ -168,7 +168,7 @@ function wrapHeadline(text: string, maxCharsPerLine = 20, maxLines = 3): string[
  *  background, orange accent bar, centered white headline. Verified this
  *  session: `sharp(Buffer.from(svgString)).jpeg().toFile(...)` produces a real
  *  1080x1920 JPEG. */
-async function buildTitleCardImage(headlineText: string, destPath: string): Promise<void> {
+export async function buildTitleCardImage(headlineText: string, destPath: string): Promise<void> {
   const lines = wrapHeadline(headlineText);
   const lineHeight = 90;
   const blockHeight = lines.length * lineHeight;
@@ -188,7 +188,7 @@ async function buildTitleCardImage(headlineText: string, destPath: string): Prom
   await sharp(Buffer.from(svg)).jpeg({ quality: 92 }).toFile(destPath);
 }
 
-function uploadFileToCloudinary(filePath: string, folder: string): Promise<string> {
+export function uploadFileToCloudinary(filePath: string, folder: string): Promise<string> {
   return new Promise((resolve, reject) => {
     cloudinary.uploader.upload(filePath, { resource_type: 'video', folder }, (error, result) => {
       if (error || !result) return reject(error ?? new Error('No result from Cloudinary'));
@@ -197,7 +197,7 @@ function uploadFileToCloudinary(filePath: string, folder: string): Promise<strin
   });
 }
 
-async function ffprobeDurationSeconds(filePath: string): Promise<number> {
+export async function ffprobeDurationSeconds(filePath: string): Promise<number> {
   const { stdout } = await execFileAsync('ffprobe', [
     '-v', 'error',
     '-show_entries', 'format=duration',
