@@ -5287,12 +5287,121 @@ model VideoJob {
 
   posts       SocialPost[]
 
+  // ADR-080 §4 — auto-classify footage pipeline. Per ADR-080's authoritative
+  // instruction ("Extend VideoJob with one nullable back-relation only"), the
+  // relation FK lives on FootageBatch.videoJobId; VideoJob gains only this
+  // back-relation. No new scalar column is added to the VideoJob table.
+  footageBatch FootageBatch?
+
   createdAt   DateTime          @default(now())
   updatedAt   DateTime          @updatedAt
 
   @@index([status])
   @@index([trigger])
   @@index([saleId])
+}
+
+// ============================================================================
+// Auto-Classify Video Pipeline — FootageBatch / FootageAsset (ADR-080, 2026-07-10)
+// Additive layer on top of VideoJob (ADR-078/079). Tracks a "shoot" from raw R2
+// upload -> per-clip ClipAnalysis (understanding) -> template assembly -> staged
+// approval -> retention. Migration: 20260710_add_footage_batch. See ADR-080 §4.
+// Raw footage is NEVER deleted before its batch is APPROVED + past retainUntil
+// (ADR-080 §7 — the premature-delete data-loss bug this ADR corrects).
+// ============================================================================
+
+enum FootageBatchStatus {
+  OPEN            // accepting clips; quiet-seal timer running
+  SEALED          // no more clips accepted; VideoJob enqueued
+  ANALYZING       // per-clip ClipAnalysis in progress
+  ASSEMBLING      // template selected, Revideo render running
+  AWAITING_REVIEW // staged markdown written; STATUS: AWAITING EDIT
+  NEEDS_INPUT     // ONE targeted question staged; blocked on human answer
+  APPROVED        // human flipped staged file to APPROVED
+  REJECTED        // human rejected; full stop, no retry
+  PUBLISHED       // downstream SocialPost fan-out completed
+  FAILED          // unrecoverable pipeline error
+  ARCHIVED        // retention window elapsed; raw assets deleted/archived
+}
+
+enum FootageAssetStatus {
+  UPLOADED        // present in R2 incoming/, row created by queue consumer
+  ANALYZED        // ClipAnalysis attached
+  USED            // baked into an assembled cut
+  UNUSABLE        // failed analysis / corrupt / no signal (kept, never silently dropped)
+}
+
+enum FootageRole {   // canonical clip roles (mirrored in the ClipAnalysis TS union, ADR-080 §5)
+  HOOK
+  FIND
+  PRICE_REVEAL
+  BEFORE
+  AFTER
+  MAP              // map screen-record beat
+  STYLING          // build / time-lapse
+  CTA
+  UNKNOWN          // classifier not confident enough (ADR-080 §6)
+}
+
+/// One raw clip uploaded to R2. Never deleted before its batch is APPROVED +
+/// past retention (ADR-080 §7).
+model FootageAsset {
+  id             String             @id @default(cuid())
+  batchId        String
+  batch          FootageBatch       @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  r2Key          String             @unique         // findasale-raw-footage/incoming/<clip> — the delete handle
+  mediaType      String             @default("video") // 'video' | 'image', inferred (r2Client.inferMediaTypeFromKey)
+  sizeBytes      Int?
+  durationMs     Int?                               // ffprobe-measured on first analysis
+  uploadedAt     DateTime           @default(now()) // from R2 event; drives batch correlation window
+  status         FootageAssetStatus @default(UPLOADED)
+
+  // ClipAnalysis (ADR-080 §5) persisted as typed columns for query + a JSON blob for the full contract
+  role           FootageRole        @default(UNKNOWN)
+  roleConfidence Float?                             // 0.0-1.0 (ADR-080 §6 thresholds)
+  ocrCaptions    String[]                           // raw YouCut on-screen caption lines, in time order
+  transcript     String?            @db.Text        // Whisper VO text
+  analysisJson   Json?                              // full ClipAnalysis contract (facts, ordering hints, per-signal confidence)
+
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  @@index([batchId])
+  @@index([status])
+}
+
+/// A "shoot" — a debounce-correlated group of clips that becomes one finished
+/// video (ADR-080 §3 batching, §4 model).
+model FootageBatch {
+  id                 String             @id @default(cuid())
+  organizerId        String?                             // correlation key; null = FindA.Sale house account
+  status             FootageBatchStatus @default(OPEN)
+
+  // Format inference result (ADR-080 §5.4 / §6)
+  templateId         String?                             // chosen Template.id (e.g. "season-B-resale-route")
+  templateConfidence Float?                              // 0.0-1.0 format-inference confidence
+
+  // The single targeted question when NEEDS_INPUT (ADR-080 §6). Never more than one.
+  openQuestion       String?            @db.Text
+  questionField      String?                             // machine key of what the answer resolves, e.g. "assetId:clip3.role"
+
+  // Lifecycle timestamps for retention (ADR-080 §7)
+  sealedAt           DateTime?
+  approvedAt         DateTime?
+  retainUntil        DateTime?                           // approvedAt + FOOTAGE_RETENTION_DAYS; deletion gate
+
+  videoJobId         String?            @unique          // the VideoJob this batch produces (reuses ADR-078 pipeline)
+  videoJob           VideoJob?          @relation(fields: [videoJobId], references: [id])
+
+  assets             FootageAsset[]
+  stagedFile         String?                             // content-pipeline/video-batch-YYYY-MM-DD.md
+  reviewNotes        String?
+
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  @@index([status])
+  @@index([organizerId])
 }
 
 // ============================================================================

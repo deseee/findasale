@@ -58,7 +58,6 @@ import { synthesizeVoiceover } from './voiceover';
 import { assembleVideo } from './videoAssembly';
 import { captionVideo } from './captioning';
 import { generateThumbnail } from './thumbnailGenerator';
-import { extractR2KeyFromUrl, deleteRawFootageObject } from './r2Client';
 
 /**
  * Grounded facts for the two Phase 1 pilot guideTopic slugs (per
@@ -282,32 +281,17 @@ export async function runVideoJobPipeline(jobId: string): Promise<RunVideoJobPip
     });
     await updateJob(jobId, { rawVideoUrl: assembly.rawVideoUrl });
 
-    // ADR-079: raw footage is TRANSIENT. Now that the clips are baked into the
-    // assembled video (assembleVideo() succeeded above), delete every raw R2
-    // object this job consumed so the private R2 free tier never fills. The
-    // consumed keys are recovered from the CuratedShot.photoUrl presigned URLs
-    // themselves (extractR2KeyFromUrl returns null for non-R2 URLs, e.g.
-    // Cloudinary DB photos, so those are skipped). ONLY runs on assembly
-    // success (never in the catch/FAILED path). Deletion is best-effort: a
-    // cleanup failure must not fail an already-successful assembly.
-    const consumedR2Keys = Array.from(
-      new Set(
-        curation.shots
-          .map((shot) => extractR2KeyFromUrl(shot.photoUrl))
-          .filter((key): key is string => key !== null)
-      )
-    );
-    for (const key of consumedR2Keys) {
-      try {
-        await deleteRawFootageObject(key);
-        console.log(`[videoJobOrchestrator] deleted consumed R2 raw footage: ${key}`);
-      } catch (cleanupErr: any) {
-        console.warn(
-          `[videoJobOrchestrator] non-fatal: failed to delete consumed R2 raw footage ${key}:`,
-          cleanupErr?.message ?? cleanupErr
-        );
-      }
-    }
+    // ADR-080 §7 — RETENTION FIX (premature-delete data-loss bug removed).
+    // Previously this point deleted every consumed R2 raw-footage object
+    // immediately after assembleVideo() succeeded — i.e. BEFORE the batch
+    // ever reached AWAITING_REVIEW, let alone APPROVED. That destroyed the
+    // source on any reject or re-cut request (confirmed data-loss bug).
+    // Raw footage MUST survive assembly -> AWAITING_REVIEW -> APPROVED and a
+    // configurable retention window (FOOTAGE_RETENTION_DAYS). The delete now
+    // happens ONLY post-approval, past retainUntil, via the event-driven
+    // retention sweep implemented in a later ADR-080 stage (§7.2-7.3) — NOT
+    // here. Do not re-add any deleteRawFootageObject() call to the assembly
+    // success path.
 
     // 5. CAPTIONING
     await updateJob(jobId, { status: 'CAPTIONING' });
