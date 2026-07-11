@@ -263,8 +263,10 @@ import { scheduleGeocodingAuditCron } from './jobs/geocodingAuditJob'; // ADR-07
 import { scheduleOutwardEmailAutomationsCron } from './jobs/outwardEmailAutomationsJob'; // Outward Email Automations: recap + review/testimonial asks (daily 10:00 UTC)
 import socialPublisherRoutes from './routes/socialPublisher'; // ADR-077: In-house social publisher (admin-only)
 import videoPipelineAdminRoutes from './routes/videoPipelineAdmin'; // ADR-078 Wave 3: one-time ops trigger for video pipeline dry-run (admin-only, temporary)
+import videoRoutes from './routes/video'; // ADR-080 Stage 1b: event-driven footage ingest (POST /api/video/footage-ingest)
 import { scheduleSocialPublisherCron } from './jobs/socialPublisherCron'; // ADR-077: Social publisher cron (every 10 min)
 import { scheduleEngagementMonitorCron } from './jobs/engagementMonitorCron'; // Comment/mention monitor (hourly) + approved-reply poster (every 30 min)
+import { scheduleFootageBatchSealCron } from './jobs/footageBatchSealJob'; // ADR-080 Stage 1b: quiet-seal OPEN FootageBatches (every 5 min)
 import citiesRoutes from './routes/cities'; // ADR-074: Metro Sync city pages
 import categoriesRoutes from './routes/categories'; // ADR-074 Phase 2: Category trending items
 import internalRoutes from './routes/internal'; // ADR-076: Internal scraper endpoint
@@ -778,6 +780,7 @@ app.use('/api/crawler-log', crawlerLogRouter);                                  
 app.use('/api/organizer/demand-signals', demandSignalsRouter);                  // #454 Organizer Demand Dashboard
 app.use('/api', aiScoreRouter);                                           // GEO Phase 3: Search Visibility Score
 app.use('/api/admin/video-pipeline', videoPipelineAdminRoutes);           // ADR-078 Wave 3: admin-only video pipeline dry-run trigger (temporary ops endpoint)
+app.use('/api/video', videoRoutes);                                       // ADR-080 Stage 1b: event-driven footage ingest (shared-secret auth)
 
 // Protected route example
 app.get('/api/protected', authenticate, (req, res) => {
@@ -1009,6 +1012,9 @@ httpServer.listen(PORT, '0.0.0.0', () => {
 
   // Comment/mention engagement monitor (hourly YouTube/X polling) + approved-reply poster (every 30 min)
   scheduleEngagementMonitorCron();
+
+  // ADR-080 Stage 1b: register footage-batch quiet-seal cron (every 5 min)
+  scheduleFootageBatchSealCron();
 
   // Features #58-59: Initialize achievements from code
   syncAchievements();
