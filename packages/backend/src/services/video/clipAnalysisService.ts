@@ -541,7 +541,7 @@ function fallbackClassify(signal: {
       isScreenRecording: signal.isScreenRecording,
     },
     ordering: {
-      isLikelyOpener: role === 'MAP' || role === 'BEFORE' || role === 'HOOK',
+      isLikelyOpener: role === 'MAP' || role === 'BEFORE',
       isLikelyCloser: role === 'CTA' || role === 'AFTER',
     },
     notes: 'Signal-only classification (language model unavailable this pass).',
