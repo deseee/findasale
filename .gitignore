@@ -186,3 +186,6 @@ raw-footage/*
 !raw-footage/incoming/.gitkeep
 !raw-footage/processed/
 !raw-footage/processed/.gitkeep
+
+# native footage->R2 uploader (contains rclone binary + R2 creds; never commit)
+.footage-sync/
