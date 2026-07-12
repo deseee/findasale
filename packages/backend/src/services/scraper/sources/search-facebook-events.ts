@@ -123,6 +123,57 @@ function extractFbEventId(url: string): string | null {
 }
 
 /**
+ * Non-sale content rejection (added 2026-07-12, advisory board decision after a
+ * full-scraper audit found 46/1,864 live-PUBLISHED Facebook Events "sales" were
+ * actually concerts, funerals, blood drives, career fairs, worship services, etc.
+ * — the search query can match a phrase anywhere on an indexed FB event page, not
+ * just on a genuinely on-topic listing, so search-engine relevance is not enough).
+ *
+ * Rule: reject when a HARD-NEGATIVE signal is present AND no STRONG SALE-OF-GOODS
+ * phrase is also present. This keeps real edge cases like "Garage Sale Fundraiser"
+ * (has "garage sale") while rejecting "Free Summer Concert" (has "concert", no
+ * sale phrase). Board explicitly rejected a plain keyword-blocklist without this
+ * allow-override, since fundraiser-framed real sales are common and legitimate.
+ */
+const HARD_NEGATIVE_SIGNALS = [
+  'concert', 'funeral', 'memorial', 'celebration of life', 'in loving memory',
+  'blood drive', 'job fair', 'career fair', '5k', 'marathon', 'fun run',
+  'worship', 'sermon', 'bible study', 'gala', 'seminar', 'workshop', 'webinar',
+  'graduation', 'prom', 'baby shower', 'gender reveal', 'birthday party',
+  'political rally', 'town hall', 'ballet', 'symphony', 'orchestra',
+  'film screening', 'movie premiere', 'petting farm', 'petting zoo',
+];
+
+const STRONG_SALE_PHRASES = [
+  'garage sale', 'yard sale', 'estate sale', 'moving sale', 'rummage sale',
+  'flea market', 'swap meet', 'swap-meet', 'consignment sale',
+  'estate auction', 'public auction', 'online auction',
+];
+
+function isRejectedNonSaleContent(title: string, combinedText: string): boolean {
+  const lowerCombined = combinedText.toLowerCase();
+  const hasHardNegative = HARD_NEGATIVE_SIGNALS.some((kw) => lowerCombined.includes(kw));
+  if (!hasHardNegative) return false;
+
+  // IMPORTANT (found live 2026-07-12, while shipping this exact fix): the
+  // strong-sale-phrase override must be checked against the TITLE ONLY, not the
+  // combined snippet. Google/Searlo's snippet extraction for Facebook event
+  // pages frequently pulls in verbatim text from an UNRELATED "related events"
+  // carousel on the same page — e.g. a real concert listing's snippet read
+  // "...Rock N Jock Charities...CCF Neighborhood Flea Market...796 5th Ave,
+  // Redwood City, CA..." where the flea-market name/address belongs to a
+  // completely different event. Spot-checking the override against combined
+  // title+snippet let 0/5 known-bad rows (concert, blood drive, gala, career
+  // fair, another concert) get rejected, because every one of their
+  // contaminated snippets happened to contain a strong-sale phrase from
+  // someone else's carousel listing. Title text does not show this
+  // contamination — anchoring the override there is the reliable signal.
+  const lowerTitle = title.toLowerCase();
+  const hasStrongSalePhraseInTitle = STRONG_SALE_PHRASES.some((kw) => lowerTitle.includes(kw));
+  return !hasStrongSalePhraseInTitle;
+}
+
+/**
  * Infer sale type from combined title + snippet text.
  *
  * `typeHint` carries the sale-type intent of the sub-query that surfaced this
@@ -131,11 +182,26 @@ function extractFbEventId(url: string): string | null {
  * (e.g. "Spring Swap Meet", "Vendor Market Day") — these were previously
  * misclassified because the keyword check keyed on the title alone. The hint
  * never overrides an explicit auction/estate/yard/consignment signal in the text.
+ *
+ * Returns null when NO positive sale-type signal matches at all (2026-07-12,
+ * advisory board decision) — previously this silently defaulted to ESTATE,
+ * which is how ambiguous/irrelevant content ended up published as a fake
+ * "estate sale". Callers must reject the item on a null return, not guess.
  */
-function inferSaleType(text: string, typeHint?: string): { saleType: string; saleSubtype?: string } {
+function inferSaleType(text: string, typeHint?: string): { saleType: string; saleSubtype?: string } | null {
   const lower = text.toLowerCase();
   if (lower.includes('auction'))                                return { saleType: 'AUCTION', saleSubtype: 'auction' };
   if (lower.includes('estate'))                                 return { saleType: 'ESTATE', saleSubtype: 'estate' };
+  // Consignment sales (a real, recognized subtype -- see schema.prisma
+  // Sale.saleSubtype comment, and this file's own subQueries which explicitly
+  // search "consignment sale" under the ESTATE typeHint) previously had NO
+  // explicit keyword check here and relied entirely on the old silent
+  // ESTATE default that was removed in the 2026-07-12 non-sale-content fix.
+  // Caught live before shipping: 15/21 "no positive signal" rejects in the
+  // cleanup dry-run were legitimate consignment sales (e.g. "Statemint
+  // Greenville | Fall 2026 | Adult Pop-up Consignment Sale", "Rhea Lana's ...
+  // Consignment Sale"). Restoring this as an explicit positive match.
+  if (lower.includes('consign'))                                return { saleType: 'ESTATE', saleSubtype: 'consignment' };
   if (lower.includes('garage') || lower.includes('yard'))       return { saleType: 'YARD', saleSubtype: 'yard' };
   if (lower.includes('moving') || lower.includes('downsizing')) return { saleType: 'YARD', saleSubtype: 'moving' };
   // Broadened: scan title+snippet for flea/swap terms (not just "flea"), so flea
@@ -151,39 +217,120 @@ function inferSaleType(text: string, typeHint?: string): { saleType: string; sal
   // Fallback: if this result came from the flea/swap sub-query and nothing above
   // matched, trust the query intent rather than defaulting to ESTATE.
   if (typeHint === 'FLEA_MARKET') return { saleType: 'FLEA_MARKET', saleSubtype: 'flea' };
-  return { saleType: 'ESTATE', saleSubtype: 'estate' };
+  // No positive signal at all — reject rather than guess (see doc comment above).
+  return null;
 }
 
 /**
- * Try to extract a date from a search snippet.
- * FB event snippets often contain: "May 10 · 8:00 AM", "Saturday, May 3"
- * Returns null if unparseable — caller defaults startDate to +7 days.
+ * Best-effort extraction of a business/host name from the FB event title +
+ * snippet, for organizer attribution (added 2026-07-12, advisory board decision
+ * — previously organizerName was always left undefined, so every Facebook
+ * Events sale piled onto the single generic system organizer, discarding real
+ * business names like "Queen Bee Estate Sales" that were visible in the raw
+ * scraped text the whole time). Two heuristic patterns, in priority order:
+ *   1. "... by/hosted by {Name}" — name follows an explicit attribution phrase.
+ *   2. "{Name} Estate Sale" / "{Name} - Estate Sale" — a capitalized phrase
+ *      immediately preceding a sale-type keyword in the title.
+ * Returns null (falls through to the system organizer, prior behavior) when no
+ * confident match is found — this never guesses a wrong name.
  */
-function parseDateFromSnippet(snippet: string): Date | null {
+function extractOrganizerName(title: string, snippet: string): string | null {
+  const combined = `${title} ${snippet}`;
+
+  const byMatch = combined.match(
+    /\b(?:hosted\s+)?by\s+([A-Z][A-Za-z0-9&'.\s]{2,40}?)(?:[.,!]|\s+on\s+|\s+at\s+|\s+in\s+|$)/
+  );
+  if (byMatch) {
+    const name = byMatch[1].trim();
+    if (name.length >= 3 && name.length <= 60) return name;
+  }
+
+  const saleKeywordPattern = /(estate sale|garage sale|yard sale|moving sale|flea market|swap meet|auction)/i;
+  const kwMatch = title.match(saleKeywordPattern);
+  if (kwMatch && kwMatch.index !== undefined && kwMatch.index > 0) {
+    const before = title.slice(0, kwMatch.index).replace(/[-–—|:]+\s*$/, '').trim();
+    // Require it look like a proper name/business — starts capitalized, not a
+    // bare number (street address) or a generic word like "The".
+    if (
+      before.length >= 3 &&
+      before.length <= 60 &&
+      /^[A-Z]/.test(before) &&
+      !/^\d/.test(before) &&
+      before.toLowerCase() !== 'the'
+    ) {
+      return before;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Result of classifying a date found (or not found) in a search snippet.
+ *   - 'none'  — no date pattern matched at all. Safe to default startDate to
+ *               a near-term guess (+7 days) — we simply don't know when it is.
+ *   - 'valid' — a date matched and falls inside the accepted window
+ *               (-7 days through +180 days). Use it as-is.
+ *   - 'stale' — a date matched (often with an EXPLICIT 4-digit year) but it is
+ *               clearly in the PAST beyond the window. This is NOT "unknown" —
+ *               it's a strong signal the underlying Facebook event page is
+ *               dead/expired (Facebook never removes past event pages, and
+ *               search engines keep indexing them indefinitely). Callers MUST
+ *               reject the item outright rather than defaulting to a fabricated
+ *               near-term date, which previously let stale events like a
+ *               "Friday, December 6 2024" listing get ingested as if new and
+ *               surfaced to real users on the organizer storefront page with
+ *               that literal year-old date baked into the AI-generated summary
+ *               (real incident, Sale cmqkp1k5n02fo5n9vwxqj2d1w, flagged by
+ *               Patrick 2026-07-12, see claude_docs/STATE.md Blocked Queue).
+ *   - 'future-out-of-range' — a date matched but is too far in the future
+ *               (>180 days out). Treated like 'none' (safe default), since a
+ *               far-future date is not evidence of a dead page, just an
+ *               imprecise/irrelevant match.
+ */
+type SnippetDateClassification =
+  | { kind: 'none' }
+  | { kind: 'valid'; date: Date }
+  | { kind: 'stale'; date: Date }
+  | { kind: 'future-out-of-range'; date: Date };
+
+function classifySnippetDate(snippet: string): SnippetDateClassification {
   try {
     const monthNames = [
       'january','february','march','april','may','june',
       'july','august','september','october','november','december',
     ];
     const pattern = new RegExp(
-      `(${monthNames.join('|')})\\s+(\\d{1,2})(?:,?\\s*(\\d{4}))?`,
+      `(${monthNames.join('|')})\s+(\d{1,2})(?:,?\s*(\d{4}))?`,
       'i'
     );
     const match = snippet.match(pattern);
-    if (!match) return null;
+    if (!match) return { kind: 'none' };
 
     const monthIdx = monthNames.indexOf(match[1].toLowerCase());
     const day      = parseInt(match[2], 10);
-    const year     = match[3] ? parseInt(match[3], 10) : new Date().getFullYear();
+    const explicitYear = match[3] !== undefined;
+    const year     = explicitYear ? parseInt(match[3], 10) : new Date().getFullYear();
     const d        = new Date(year, monthIdx, day, 9, 0, 0);
 
-    // Accept dates within ±7 days in past through +180 days future
     const now = Date.now();
     const ms  = d.getTime();
-    if (ms < now - 7 * 86_400_000 || ms > now + 180 * 86_400_000) return null;
-    return d;
+    const isPast   = ms < now - 7 * 86_400_000;
+    const isFuture = ms > now + 180 * 86_400_000;
+
+    if (!isPast && !isFuture) return { kind: 'valid', date: d };
+
+    // Only classify as 'stale' (reject) when the year was EXPLICIT in the text.
+    // Without an explicit year we defaulted to the current year ourselves, so an
+    // "isPast" result there just means today's date-of-month has passed for an
+    // event whose real year is ambiguous (e.g. "December 6" parsed in July) —
+    // that's a parsing artifact, not evidence the page itself is dead. Only an
+    // explicit stale year (e.g. "...2024" scraped in mid-2026) is a real signal.
+    if (isPast && explicitYear) return { kind: 'stale', date: d };
+    if (isFuture) return { kind: 'future-out-of-range', date: d };
+    return { kind: 'none' };
   } catch {
-    return null;
+    return { kind: 'none' };
   }
 }
 
@@ -321,7 +468,22 @@ function buildScrapedItem(
   if (!cleanTitle) return null;
 
   const combined   = `${cleanTitle} ${snippet}`;
-  const parsedStart = parseDateFromSnippet(snippet);
+
+  // Non-sale content rejection (2026-07-12 board decision) — must run before
+  // date/type classification so we never spend further work on obvious
+  // non-sale pages (concerts, funerals, blood drives, etc.).
+  if (isRejectedNonSaleContent(cleanTitle, combined)) return null;
+
+  const dateResult = classifySnippetDate(snippet);
+
+  // A 'stale' classification means the snippet contains an EXPLICIT past year
+  // (e.g. "...2024" scraped in mid-2026) — a strong signal the underlying
+  // Facebook event page is dead/expired, not a real upcoming sale. Reject the
+  // item outright rather than ingesting it with a fabricated near-term date;
+  // see classifySnippetDate() doc comment for the real incident this fixes.
+  if (dateResult.kind === 'stale') return null;
+
+  const parsedStart = dateResult.kind === 'valid' ? dateResult.date : null;
   const startDate  = parsedStart ?? new Date(Date.now() + 7 * 86_400_000);
   const endDate    = new Date(startDate.getTime() + 86_400_000);
 
@@ -335,6 +497,14 @@ function buildScrapedItem(
   const resolvedZip     = slugParsed?.zip     ?? '';
 
   const inferred = inferSaleType(combined, typeHint);
+  // No positive sale-type signal at all (2026-07-12 board decision) — reject
+  // rather than publish a guessed ESTATE classification for ambiguous content.
+  if (inferred === null) return null;
+
+  // Best-effort host/business name extraction for organizer attribution
+  // (2026-07-12 board decision). null falls through to the system organizer,
+  // same as prior behavior — this never guesses a wrong name.
+  const organizerName = extractOrganizerName(cleanTitle, snippet) ?? undefined;
 
   return {
     title:         cleanTitle,
@@ -345,7 +515,7 @@ function buildScrapedItem(
     startDate,
     endDate,
     description:   snippet || cleanTitle,
-    organizerName: undefined,
+    organizerName,
     organizerEmail: undefined,
     photoUrls:     [],
     saleType:      inferred.saleType,

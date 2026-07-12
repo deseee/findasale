@@ -319,9 +319,9 @@ export default function CityCategoryPage({
                       )}
 
                       <p className="text-xs text-warm-600 dark:text-warm-400">
-                        {start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                        {start.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })}
                         {' – '}
-                        {end.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                        {end.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })}
                       </p>
 
                       {sale.address && (
