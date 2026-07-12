@@ -12,6 +12,7 @@
 import { prisma } from '../lib/prisma';
 import { isAnthropicAvailable } from './cloudAIService';
 import axios from 'axios';
+import { isAICostCeilingExceeded, trackAITokens, estimateTokensForRequest, recordApiUsage, ANTHROPIC_COST_PER_M_TOKENS } from '../lib/aiCostTracker';
 
 // ── Vercel Proxy Helpers ────────────────────────────────────────────────────
 // Railway DNS cannot resolve api.ebay.com directly, so all eBay API calls route
@@ -213,6 +214,11 @@ export async function suggestIdentifiersFromItem(item: ItemIdentifiersInput): Pr
     return {};
   }
 
+  if (await isAICostCeilingExceeded()) {
+    console.warn('[ebayTaxonomy] AI cost ceiling exceeded, skipping');
+    return {};
+  }
+
   try {
     // Build context from item
     const titleContext = item.title ? `Title: ${item.title}` : '';
@@ -228,6 +234,7 @@ ${tagsContext}
 Return: { "brand": string | null, "mpn": string | null, "upc": string | null, "isbn": string | null, "ean": string | null }
 Only return identifiers that appear explicitly in the text. If unclear, return null for that field.`;
 
+    const estimatedTokens = estimateTokensForRequest(prompt, false);
     const response = await axios.post(
       'https://api.anthropic.com/v1/messages',
       {
@@ -251,6 +258,9 @@ Only return identifiers that appear explicitly in the text. If unclear, return n
     );
 
     const content: string = response.data.content?.[0]?.text ?? '';
+    const responseTokens = Math.ceil(content.length / 4) + 50;
+    await trackAITokens(estimatedTokens + responseTokens);
+    await recordApiUsage('anthropic:ebay_taxonomy', (estimatedTokens + responseTokens) / 1_000_000 * ANTHROPIC_COST_PER_M_TOKENS);
 
     // Parse JSON response (strip markdown if present)
     const raw = content.replace(/```json\n?|\n?```/g, '').trim();

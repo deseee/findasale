@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import axios from 'axios';
 import { regionConfig } from '../config/regionConfig';
-import { isAICostCeilingExceeded } from '../lib/aiCostTracker';
+import { isAICostCeilingExceeded, trackAITokens, estimateTokensForRequest, recordApiUsage, ANTHROPIC_COST_PER_M_TOKENS } from '../lib/aiCostTracker';
 
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5-20251001';
@@ -78,6 +78,7 @@ export async function handlePlannerChat(req: Request, res: Response): Promise<vo
     }));
 
     // Call Anthropic Claude Haiku API
+    const estimatedTokens = estimateTokensForRequest(SYSTEM_PROMPT + JSON.stringify(apiMessages), false);
     const response = await axios.post(
       'https://api.anthropic.com/v1/messages',
       {
@@ -97,6 +98,9 @@ export async function handlePlannerChat(req: Request, res: Response): Promise<vo
     );
 
     const reply: string = response.data.content?.[0]?.text ?? '';
+    const responseTokens = Math.ceil(reply.length / 4) + 50;
+    await trackAITokens(estimatedTokens + responseTokens);
+    await recordApiUsage('anthropic:support_planner_social', (estimatedTokens + responseTokens) / 1_000_000 * ANTHROPIC_COST_PER_M_TOKENS);
 
     if (!reply) {
       res.status(500).json({ message: 'No response from AI service' });

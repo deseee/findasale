@@ -24,6 +24,7 @@
 
 import { google } from 'googleapis';
 import { getWebDetectionMatch } from './cloudAIService';
+import { isAICostCeilingExceeded, trackAITokens, estimateTokensForRequest, recordApiUsage, ANTHROPIC_COST_PER_M_TOKENS } from '../lib/aiCostTracker';
 
 // ---------------------------------------------------------------------------
 // Config
@@ -180,6 +181,10 @@ async function callAnthropic(
   mimeTypes: string[],
 ): Promise<BakeoffParsed | null> {
   if (!ANTHROPIC_API_KEY) throw new Error('no ANTHROPIC_API_KEY');
+  if (await isAICostCeilingExceeded()) {
+    console.warn('[modelBakeoff] AI cost ceiling exceeded, skipping callAnthropic');
+    return null;
+  }
 
   const content: any[] = imagesBase64.map((data, i) => ({
     type: 'image',
@@ -215,6 +220,9 @@ async function callAnthropic(
   }
   const json: any = await resp.json();
   const text: string = json?.content?.[0]?.text ?? '';
+  const estimatedTokens = estimateTokensForRequest(text, true) ;
+  await trackAITokens(estimatedTokens);
+  await recordApiUsage('anthropic:model_bakeoff', (estimatedTokens / 1_000_000) * ANTHROPIC_COST_PER_M_TOKENS);
   return parseModelJson(text);
 }
 
@@ -514,6 +522,10 @@ async function extractMarksAnthropic(
   mimeTypes: string[],
 ): Promise<ExtractParsed | null> {
   if (!ANTHROPIC_API_KEY) throw new Error('no ANTHROPIC_API_KEY');
+  if (await isAICostCeilingExceeded()) {
+    console.warn('[modelBakeoff] AI cost ceiling exceeded, skipping extractMarksAnthropic');
+    return null;
+  }
 
   const content: any[] = imagesBase64.map((data, i) => ({
     type: 'image',
@@ -549,6 +561,9 @@ async function extractMarksAnthropic(
   }
   const json: any = await resp.json();
   const text: string = json?.content?.[0]?.text ?? '';
+  const estimatedTokens = estimateTokensForRequest(text, true) ;
+  await trackAITokens(estimatedTokens);
+  await recordApiUsage('anthropic:model_bakeoff', (estimatedTokens / 1_000_000) * ANTHROPIC_COST_PER_M_TOKENS);
   return parseModelJson(text) as ExtractParsed | null;
 }
 

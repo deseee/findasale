@@ -10,6 +10,7 @@
  */
 
 import { redis } from './redis';
+import { prisma } from './prisma';
 
 export const ANTHROPIC_COST_PER_M_TOKENS = 3.0; // $3.00 per 1M input tokens
 const DEFAULT_CEILING_USD = 50; // Default monthly ceiling
@@ -76,6 +77,36 @@ export async function trackAITokens(estimatedTokens: number): Promise<boolean> {
   }
 
   return isUnderCeiling;
+}
+
+/**
+ * Per-feature AI cost attribution — writes to the existing ApiUsageLog table
+ * (added S487, 2026-04-16) alongside whatever ceiling-tracking call already ran.
+ * Additive only: never gates or blocks a call, never replaces trackAITokens/
+ * trackVisionCall/trackWebDetectionCall/trackGroundingCall — always called
+ * next to one of those, never instead of it.
+ * See claude_docs/feature-notes/adr-ai-cost-attribution-2026-07-12.md.
+ *
+ * @param service Feature tag, e.g. "anthropic:listing_enrichment" — see ADR for the vocabulary.
+ * @param costUsd Estimated dollar cost of this call (or batch of `calls`).
+ * @param calls Number of calls this write represents (default 1).
+ */
+export async function recordApiUsage(service: string, costUsd: number, calls: number = 1): Promise<void> {
+  try {
+    const dateKey = new Date().toISOString().slice(0, 10); // YYYY-MM-DD, UTC
+    const safeCostCents = Number.isFinite(costUsd) ? Math.round(costUsd * 100) : 0;
+    await prisma.apiUsageLog.upsert({
+      where: { service_dateKey: { service, dateKey } },
+      create: { service, dateKey, callCount: calls, estimatedCostCents: safeCostCents },
+      update: {
+        callCount: { increment: calls },
+        estimatedCostCents: { increment: safeCostCents },
+      },
+    });
+  } catch (err) {
+    // Fail open — logging usage must never block or fail the underlying AI call.
+    console.warn('[recordApiUsage] Failed to write ApiUsageLog row:', (err as Error)?.message || err);
+  }
 }
 
 /**
@@ -148,6 +179,7 @@ export async function trackVisionCall(imageCount: number = 1): Promise<void> {
   // Convert to Anthropic-equivalent token units so the shared $50 ceiling counts Vision spend
   const equivalentTokens = Math.round((visionCostUsd / ANTHROPIC_COST_PER_M_TOKENS) * 1_000_000);
   await trackAITokens(equivalentTokens);
+  await recordApiUsage('google_vision:photo_tagging', visionCostUsd);
 }
 
 
@@ -249,6 +281,7 @@ export async function trackWebDetectionCall(): Promise<void> {
   const monthKey = getWebDetectionMonthKey();
   const currentCostUnits = await getTokenCount(monthKey);
   await setTokenCount(monthKey, currentCostUnits + WEB_DETECTION_COST_PER_1000);
+  await recordApiUsage('google_vision:web_detection', WEB_DETECTION_COST_PER_1000 / 1000);
 
   // Daily call count
   const dayKey = getWebDetectionDayKey();
@@ -492,6 +525,7 @@ export async function trackGroundingCall(costUsd: number): Promise<void> {
   const monthKey = getGroundingMonthKey();
   const currentCostUnits = await getTokenCount(monthKey);
   await setTokenCount(monthKey, currentCostUnits + safeCost * 1000);
+  await recordApiUsage('grounding:openrouter', safeCost);
 
   // Daily call count
   const dayKey = getGroundingDayKey();

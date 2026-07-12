@@ -28,6 +28,7 @@ import {
   estimateTokensForRequest,
   isAICostCeilingExceeded,
   ANTHROPIC_COST_PER_M_TOKENS,
+  recordApiUsage,
 } from '../../lib/aiCostTracker';
 
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
@@ -174,6 +175,7 @@ export async function draftCommentReply(
 
     const responseTokens = Math.ceil(content.length / 4) + 50;
     await trackAITokens(estimatedTokens + responseTokens);
+    await recordApiUsage('anthropic:social_engagement', (estimatedTokens + responseTokens) / 1_000_000 * ANTHROPIC_COST_PER_M_TOKENS);
 
     const raw = content.replace(/```json\n?|\n?```/g, '').trim();
     const parsed = JSON.parse(raw) as { replyText?: string };

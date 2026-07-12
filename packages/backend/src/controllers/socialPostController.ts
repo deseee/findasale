@@ -2,7 +2,7 @@ import { Response } from 'express';
 import axios from 'axios';
 import { prisma } from '../lib/prisma';
 import { AuthRequest } from '../middleware/auth';
-import { isAICostCeilingExceeded } from '../lib/aiCostTracker';
+import { isAICostCeilingExceeded, trackAITokens, estimateTokensForRequest, recordApiUsage, ANTHROPIC_COST_PER_M_TOKENS } from '../lib/aiCostTracker';
 import { getWatermarkedUrl } from '../utils/cloudinaryWatermark';
 import { canRemoveWatermark } from '../utils/watermarkPolicy';
 
@@ -130,6 +130,7 @@ ${highlights ? `\nOrganizer notes: ${highlights}` : ''}
 
 Write only the post text, no explanations.`;
 
+    const estimatedTokens = estimateTokensForRequest(prompt, false);
     const response = await axios.post(
       'https://api.anthropic.com/v1/messages',
       {
@@ -147,6 +148,9 @@ Write only the post text, no explanations.`;
     );
 
     const postText = (response.data.content[0] as { type: string; text: string }).text;
+    const responseTokens = Math.ceil(postText.length / 4) + 50;
+    await trackAITokens(estimatedTokens + responseTokens);
+    await recordApiUsage('anthropic:support_planner_social', (estimatedTokens + responseTokens) / 1_000_000 * ANTHROPIC_COST_PER_M_TOKENS);
 
     // Generate watermarked photo URL (tier-aware)
     let photoUrl: string | null = null;

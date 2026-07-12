@@ -56,6 +56,7 @@ import {
   estimateTokensForRequest,
   isAICostCeilingExceeded,
   ANTHROPIC_COST_PER_M_TOKENS,
+  recordApiUsage,
 } from '../../lib/aiCostTracker';
 
 // Single canonical ClipRole list — re-exported from templates/types so the
@@ -484,6 +485,7 @@ async function classifyWithHaiku(prompt: string): Promise<{ result: HaikuClassif
     const content: string = response.data.content?.[0]?.text ?? '';
     const responseTokens = Math.ceil(content.length / 4) + 50;
     await trackAITokens(estimatedTokens + responseTokens);
+    await recordApiUsage('anthropic:video_pipeline', (estimatedTokens + responseTokens) / 1_000_000 * ANTHROPIC_COST_PER_M_TOKENS);
 
     const raw = content.replace(/```json\n?|\n?```/g, '').trim();
     const parsed = JSON.parse(raw) as HaikuClassification;

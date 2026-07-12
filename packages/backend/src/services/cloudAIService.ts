@@ -14,7 +14,8 @@ import axios from 'axios';
 import { regionConfig } from '../config/regionConfig';
 import { EBAY_L1_CATEGORIES } from '../config/ebayCategories';
 import { trackAITokens, estimateTokensForRequest, isAICostCeilingExceeded, trackVisionCall,
-  webDetectionEnabled, isWebDetectionCeilingExceeded, isWebDetectionDailyCapAvailable, trackWebDetectionCall } from '../lib/aiCostTracker';
+  webDetectionEnabled, isWebDetectionCeilingExceeded, isWebDetectionDailyCapAvailable, trackWebDetectionCall,
+  recordApiUsage, ANTHROPIC_COST_PER_M_TOKENS } from '../lib/aiCostTracker';
 import { findCatalogMatches, buildCatalogMatchContext, isCatalogMatchEnabled, CatalogMatch } from './imageMatchService';
 import { getEbayImageMatch, buildEbayMatchContext, EbayImageMatch } from './ebayImageSearchService';
 
@@ -350,6 +351,7 @@ Shipping package: Estimate the PACKED shipping weight (item + box + padding) in 
     // Track token usage for cost ceiling (#104)
     const responseTokens = Math.ceil(content.length / 4) + 50; // rough estimate
     await trackAITokens(estimatedTokens + responseTokens);
+    await recordApiUsage('anthropic:cloud_ai_tagging', (estimatedTokens + responseTokens) / 1_000_000 * ANTHROPIC_COST_PER_M_TOKENS);
 
     const raw = content.replace(/```json\n?|\n?```/g, '').trim();
     const parsed = JSON.parse(raw) as AITagResult;
@@ -460,6 +462,7 @@ Return ONLY a JSON array of tags, no explanation. Example: ["mid-century-modern"
     // Track token usage for cost ceiling (#104)
     const responseTokens = Math.ceil(content.length / 4) + 25;
     await trackAITokens(estimatedTokens + responseTokens);
+    await recordApiUsage('anthropic:cloud_ai_tagging', (estimatedTokens + responseTokens) / 1_000_000 * ANTHROPIC_COST_PER_M_TOKENS);
 
     const raw = content.replace(/```json\n?|\n?```/g, '').trim();
     const parsed = JSON.parse(raw) as string[];
@@ -552,6 +555,7 @@ If the image is unclear or the item is partially obscured, default to B. Return 
     // Track token usage for cost ceiling (#104)
     const responseTokens = Math.ceil(content.length / 4) + 20;
     await trackAITokens(estimatedTokens + responseTokens);
+    await recordApiUsage('anthropic:cloud_ai_tagging', (estimatedTokens + responseTokens) / 1_000_000 * ANTHROPIC_COST_PER_M_TOKENS);
 
     const grade = content.trim().toUpperCase().charAt(0);
 
@@ -1009,6 +1013,7 @@ Brand: If a brand, maker, or manufacturer name is identifiable from a visible la
     // Track token usage for cost ceiling (#104)
     const responseTokens = Math.ceil(content.length / 4) + 50;
     await trackAITokens(estimatedTokens + responseTokens);
+    await recordApiUsage('anthropic:cloud_ai_tagging', (estimatedTokens + responseTokens) / 1_000_000 * ANTHROPIC_COST_PER_M_TOKENS);
 
     const raw = content.replace(/```json\n?|\n?```/g, '').trim();
     const parsed = JSON.parse(raw) as AITagResult;
@@ -1149,6 +1154,7 @@ Write a friendly, inviting description that shoppers will see on the listing. Us
     // Track token usage for cost ceiling (#104)
     const responseTokens = Math.ceil(text.length / 4) + 100;
     await trackAITokens(estimatedTokens + responseTokens);
+    await recordApiUsage('anthropic:cloud_ai_tagging', (estimatedTokens + responseTokens) / 1_000_000 * ANTHROPIC_COST_PER_M_TOKENS);
 
     return text.trim() || null;
   } catch (error: any) {
@@ -1260,6 +1266,7 @@ Base your price on actual secondary market demand, not retail pricing. Do not an
     // Track token usage for cost ceiling (#104)
     const responseTokens = Math.ceil(content.length / 4) + 75;
     await trackAITokens(estimatedTokens + responseTokens);
+    await recordApiUsage('anthropic:cloud_ai_tagging', (estimatedTokens + responseTokens) / 1_000_000 * ANTHROPIC_COST_PER_M_TOKENS);
 
     const raw = content.replace(/```json\n?|\n?```/g, '').trim();
     const parsed = JSON.parse(raw) as PriceSuggestion;
@@ -1507,6 +1514,7 @@ Confidence threshold: only cluster at >= 0.75. When in doubt, leave ungrouped.`;
     // Track token usage
     const responseTokens = Math.ceil(content.length / 4) + 50;
     await trackAITokens(estimatedTokens + responseTokens);
+    await recordApiUsage('anthropic:cloud_ai_tagging', (estimatedTokens + responseTokens) / 1_000_000 * ANTHROPIC_COST_PER_M_TOKENS);
 
     const raw = content.replace(/```json\n?|\n?```/g, '').trim();
     const parsed = JSON.parse(raw) as ClusterResult;

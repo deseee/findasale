@@ -9,7 +9,7 @@
 
 import axios from 'axios';
 import { prisma } from '../lib/prisma';
-import { isAICostCeilingExceeded } from '../lib/aiCostTracker';
+import { isAICostCeilingExceeded, trackAITokens, estimateTokensForRequest, recordApiUsage, ANTHROPIC_COST_PER_M_TOKENS } from '../lib/aiCostTracker';
 
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5-20251001';
@@ -75,6 +75,7 @@ Example output:
   "keywords": ["book", "novel", "vintage paperback", "hardcover", "tome", "volume"]
 }`;
 
+  const estimatedTokens = estimateTokensForRequest(prompt, false);
   const response = await axios.post(
     'https://api.anthropic.com/v1/messages',
     {
@@ -98,6 +99,9 @@ Example output:
   );
 
   const content: string = response.data.content?.[0]?.text ?? '';
+  const responseTokens = Math.ceil(content.length / 4) + 50;
+  await trackAITokens(estimatedTokens + responseTokens);
+  await recordApiUsage('anthropic:treasure_hunt', (estimatedTokens + responseTokens) / 1_000_000 * ANTHROPIC_COST_PER_M_TOKENS);
   const raw = content.replace(/```json\n?|\n?```/g, '').trim();
   return JSON.parse(raw) as GeneratedClue;
 }

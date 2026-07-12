@@ -33,6 +33,8 @@ import {
   trackAITokens,
   estimateTokensForRequest,
   isAICostCeilingExceeded,
+  recordApiUsage,
+  ANTHROPIC_COST_PER_M_TOKENS,
 } from '../../lib/aiCostTracker';
 
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
@@ -177,6 +179,7 @@ Respond with ONLY valid JSON: {"templateId":"<one id from the list>"}`;
     );
     const content: string = response.data.content?.[0]?.text ?? '';
     await trackAITokens(estimatedTokens + Math.ceil(content.length / 4) + 20);
+    await recordApiUsage('anthropic:video_pipeline', (estimatedTokens + Math.ceil(content.length / 4) + 20) / 1_000_000 * ANTHROPIC_COST_PER_M_TOKENS);
     const parsed = JSON.parse(content.replace(/```json\n?|\n?```/g, '').trim());
     const id = parsed?.templateId;
     return candidates.some((c) => c.template.id === id) ? id : null;

@@ -8,7 +8,7 @@
 
 import axios from 'axios';
 import { regionConfig } from '../config/regionConfig';
-import { trackAITokens, estimateTokensForRequest, isAICostCeilingExceeded } from '../lib/aiCostTracker';
+import { trackAITokens, estimateTokensForRequest, isAICostCeilingExceeded, recordApiUsage, ANTHROPIC_COST_PER_M_TOKENS } from '../lib/aiCostTracker';
 
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5-20251001';
@@ -229,6 +229,7 @@ Return ONLY JSON, no explanation.`;
     // Track token usage for cost ceiling
     const responseTokens = Math.ceil(content.length / 4) + 50;
     await trackAITokens(estimatedTokens + responseTokens);
+    await recordApiUsage('anthropic:listing_enrichment', (estimatedTokens + responseTokens) / 1_000_000 * ANTHROPIC_COST_PER_M_TOKENS);
 
     // Parse JSON response
     const raw = content.replace(/```json\n?|\n?```/g, '').trim();

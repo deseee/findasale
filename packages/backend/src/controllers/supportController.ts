@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import Anthropic from '@anthropic-ai/sdk';
-import { isAICostCeilingExceeded } from '../lib/aiCostTracker';
+import { isAICostCeilingExceeded, trackAITokens, recordApiUsage, ANTHROPIC_COST_PER_M_TOKENS } from '../lib/aiCostTracker';
 
 // In-memory rate limiting map: userId -> { count, resetTime }
 const chatRateLimitMap = new Map<string, { count: number; resetTime: number }>();
@@ -150,6 +150,14 @@ Focus on helping with:
     // Extract response text
     const responseText =
       message_obj.content[0].type === 'text' ? message_obj.content[0].text : 'Unable to generate response';
+
+    // Real usage from the SDK response (not an estimate) -- cost still priced at the shared
+    // Haiku rate for consistency with the rest of aiCostTracker.ts, even though this endpoint
+    // actually calls claude-3-5-sonnet-20241022, which costs more per token. Flagged to
+    // Architect: this undercounts true spend for this one call site.
+    const realTokens = (message_obj.usage?.input_tokens ?? 0) + (message_obj.usage?.output_tokens ?? 0);
+    await trackAITokens(realTokens);
+    await recordApiUsage('anthropic:support_planner_social', (realTokens / 1_000_000) * ANTHROPIC_COST_PER_M_TOKENS);
 
     const response: ChatResponse = {
       response: responseText,
