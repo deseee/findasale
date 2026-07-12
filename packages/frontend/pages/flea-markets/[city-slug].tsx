@@ -29,7 +29,7 @@ import {
   buildSeoDescription,
   getNearbyLinks,
 } from '@/lib/seo/cityData';
-import { computeSaleStats, buildLiveDataFaqs } from '@/lib/seo/cityStats';
+import { computeSaleStats, buildLiveDataFaqs, CitySaleStats } from '@/lib/seo/cityStats';
 import CityLiveStats from '@/components/CityLiveStats';
 
 // ---------------------------------------------------------------------------
@@ -90,6 +90,7 @@ interface FleaMarketsCityPageProps {
   sales: SaleListing[];
   totalCount: number;
   activeByType: Record<string, number>;
+  stats: CitySaleStats;
 }
 
 export default function FleaMarketsCityPage({
@@ -102,6 +103,7 @@ export default function FleaMarketsCityPage({
   sales,
   totalCount,
   activeByType,
+  stats,
 }: FleaMarketsCityPageProps) {
   const title = buildSeoTitle(cityName, cityState, totalCount, 'Flea Markets');
   const description = buildSeoDescription(cityName, cityState, totalCount, 'flea markets');
@@ -162,7 +164,6 @@ export default function FleaMarketsCityPage({
   };
 
   // Live-data stats and FAQs, computed from real listings at build time
-  const stats = computeSaleStats(sales);
   const liveFaqs = buildLiveDataFaqs({
     cityName,
     stateCode: cityState,
@@ -565,6 +566,8 @@ export const getStaticProps: GetStaticProps<FleaMarketsCityPageProps> = async ({
     console.error(`[flea-markets/[city-slug]] city-slugs fetch error for ${citySlug}:`, err);
   }
 
+  const stats = computeSaleStats(sales);
+
   return {
     props: {
       citySlug,
@@ -576,6 +579,7 @@ export const getStaticProps: GetStaticProps<FleaMarketsCityPageProps> = async ({
       sales,
       totalCount,
       activeByType,
+      stats,
     },
     revalidate: 86400, // ISR: 24 hours
   };

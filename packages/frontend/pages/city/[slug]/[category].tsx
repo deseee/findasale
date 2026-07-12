@@ -10,7 +10,7 @@
 import { GetStaticProps, GetStaticPaths } from 'next';
 import Head from 'next/head';
 import Link from 'next/link';
-import { computeSaleStats, buildLiveDataFaqs } from '@/lib/seo/cityStats';
+import { computeSaleStats, buildLiveDataFaqs, CitySaleStats } from '@/lib/seo/cityStats';
 import { buildFaqJsonLd } from '@/lib/seo/cityData';
 import CityLiveStats from '@/components/CityLiveStats';
 
@@ -50,6 +50,7 @@ interface CityCategoryPageProps {
   totalCount: number;
   allCategories: string[];
   activeByType: Record<string, number>;
+  stats: CitySaleStats;
 }
 
 export default function CityCategoryPage({
@@ -63,6 +64,7 @@ export default function CityCategoryPage({
   totalCount,
   allCategories,
   activeByType,
+  stats,
 }: CityCategoryPageProps) {
   const title = `${categoryPlural} in ${cityName}, ${cityState} | FindA.Sale`;
   const description = `Browse ${totalCount} ${categoryPlural.toLowerCase()} in ${cityName}, ${cityState}. Find furniture, antiques, collectibles, and more on FindA.Sale.`;
@@ -122,7 +124,6 @@ export default function CityCategoryPage({
   // sale-type enum for this category, so the breakdown/FAQs cross-link
   // to the OTHER sale types active in this city.
   const currentTypeKey = CATEGORY_META[categorySlug]?.saleType ?? '';
-  const stats = computeSaleStats(sales);
   const liveFaqs = buildLiveDataFaqs({
     cityName,
     stateCode: cityState,
@@ -460,6 +461,8 @@ export const getStaticProps: GetStaticProps<CityCategoryPageProps> = async ({ pa
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
     .join(' ');
 
+  const stats = computeSaleStats(sales);
+
   return {
     props: {
       citySlug,
@@ -472,6 +475,7 @@ export const getStaticProps: GetStaticProps<CityCategoryPageProps> = async ({ pa
       totalCount,
       allCategories,
       activeByType,
+      stats,
     },
     revalidate: 86400, // ISR: 24 hours
   };

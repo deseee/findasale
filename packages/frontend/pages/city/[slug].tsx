@@ -11,7 +11,7 @@ import { GetStaticProps, GetStaticPaths } from 'next';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
-import { computeSaleStats, buildLiveDataFaqs } from '@/lib/seo/cityStats';
+import { computeSaleStats, buildLiveDataFaqs, CitySaleStats } from '@/lib/seo/cityStats';
 import { buildFaqJsonLd } from '@/lib/seo/cityData';
 import CityLiveStats from '@/components/CityLiveStats';
 
@@ -52,6 +52,7 @@ interface CityPageProps {
   totalCount: number;
   allCategories: string[];
   activeByType: Record<string, number>;
+  stats: CitySaleStats;
 }
 
 export default function CityPage({
@@ -62,6 +63,7 @@ export default function CityPage({
   totalCount,
   allCategories,
   activeByType,
+  stats,
 }: CityPageProps) {
   // Client-only "now" for live/ended badges — avoids hydration mismatch on this
   // ISR page (revalidate: 86400). Server always renders with clientNow === null
@@ -126,7 +128,6 @@ export default function CityPage({
   // Live-data stats and FAQs, computed from real listings at build time.
   // This is the all-types city hub, so stats/FAQs cover every sale type
   // (no single currentTypeKey — the breakdown shows all types).
-  const stats = computeSaleStats(sales);
   const liveFaqs = buildLiveDataFaqs({
     cityName,
     stateCode: cityState,
@@ -445,6 +446,8 @@ export const getStaticProps: GetStaticProps<CityPageProps> = async ({ params }) 
     console.error(`[city/[slug]] city-slugs fetch error for ${citySlug}:`, err);
   }
 
+  const stats = computeSaleStats(sales);
+
   return {
     props: {
       citySlug,
@@ -454,6 +457,7 @@ export const getStaticProps: GetStaticProps<CityPageProps> = async ({ params }) 
       totalCount,
       allCategories,
       activeByType,
+      stats,
     },
     revalidate: 86400, // ISR: 24 hours
   };

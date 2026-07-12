@@ -27,7 +27,7 @@ import {
   buildSeoDescription,
   getNearbyLinks,
 } from '@/lib/seo/cityData';
-import { computeSaleStats, buildLiveDataFaqs } from '@/lib/seo/cityStats';
+import { computeSaleStats, buildLiveDataFaqs, CitySaleStats } from '@/lib/seo/cityStats';
 import CityLiveStats from '@/components/CityLiveStats';
 
 // ---------------------------------------------------------------------------
@@ -87,6 +87,7 @@ interface EstateSalesCityPageProps {
   sales: SaleListing[];
   totalCount: number;
   activeByType: Record<string, number>;
+  stats: CitySaleStats;
 }
 
 export default function EstateSalesCityPage({
@@ -98,6 +99,7 @@ export default function EstateSalesCityPage({
   sales,
   totalCount,
   activeByType,
+  stats,
 }: EstateSalesCityPageProps) {
   const title = buildSeoTitle(cityName, cityState, totalCount);
   const description = buildSeoDescription(cityName, cityState, totalCount);
@@ -158,7 +160,6 @@ export default function EstateSalesCityPage({
   };
 
   // Live-data stats and FAQs, computed from real listings at build time
-  const stats = computeSaleStats(sales);
   const liveFaqs = buildLiveDataFaqs({
     cityName,
     stateCode: cityState,
@@ -560,6 +561,8 @@ export const getStaticProps: GetStaticProps<EstateSalesCityPageProps> = async ({
     console.error(`[estate-sales/[city-slug]] city-slugs fetch error for ${citySlug}:`, err);
   }
 
+  const stats = computeSaleStats(sales);
+
   return {
     props: {
       citySlug,
@@ -570,6 +573,7 @@ export const getStaticProps: GetStaticProps<EstateSalesCityPageProps> = async ({
       sales,
       totalCount,
       activeByType,
+      stats,
     },
     revalidate: 86400, // ISR: 24 hours
   };

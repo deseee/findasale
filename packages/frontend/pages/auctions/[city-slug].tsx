@@ -29,7 +29,7 @@ import {
   buildSeoDescription,
   getNearbyLinks,
 } from '@/lib/seo/cityData';
-import { computeSaleStats, buildLiveDataFaqs } from '@/lib/seo/cityStats';
+import { computeSaleStats, buildLiveDataFaqs, CitySaleStats } from '@/lib/seo/cityStats';
 import CityLiveStats from '@/components/CityLiveStats';
 
 // ---------------------------------------------------------------------------
@@ -90,6 +90,7 @@ interface AuctionsCityPageProps {
   sales: SaleListing[];
   totalCount: number;
   activeByType: Record<string, number>;
+  stats: CitySaleStats;
 }
 
 export default function AuctionsCityPage({
@@ -102,6 +103,7 @@ export default function AuctionsCityPage({
   sales,
   totalCount,
   activeByType,
+  stats,
 }: AuctionsCityPageProps) {
   const title = buildSeoTitle(cityName, cityState, totalCount, 'Auctions');
   const description = buildSeoDescription(cityName, cityState, totalCount, 'auctions');
@@ -162,7 +164,6 @@ export default function AuctionsCityPage({
   };
 
   // Live-data stats and FAQs, computed from real listings at build time
-  const stats = computeSaleStats(sales);
   const liveFaqs = buildLiveDataFaqs({
     cityName,
     stateCode: cityState,
@@ -565,6 +566,8 @@ export const getStaticProps: GetStaticProps<AuctionsCityPageProps> = async ({ pa
     console.error(`[auctions/[city-slug]] city-slugs fetch error for ${citySlug}:`, err);
   }
 
+  const stats = computeSaleStats(sales);
+
   return {
     props: {
       citySlug,
@@ -576,6 +579,7 @@ export const getStaticProps: GetStaticProps<AuctionsCityPageProps> = async ({ pa
       sales,
       totalCount,
       activeByType,
+      stats,
     },
     revalidate: 86400, // ISR: 24 hours
   };
