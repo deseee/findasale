@@ -65,6 +65,19 @@ export function useOfflineSync() {
     setIsOffline(!navigator.onLine);
     updatePendingCount();
 
+    // Mount-time sync check: the 'online' event only fires on an actual offline->online
+    // transition. If the browser is ALREADY online on mount (e.g. organizer queued a sale
+    // offline, closed the tab, reopened later with wifi already back), no 'online' event
+    // ever fires and queued items sit stuck forever. Check for leftover pending items on
+    // mount and trigger sync using the same debounce timing as handleOnline.
+    if (navigator.onLine) {
+      getPendingSync().then((pending: any) => {
+        if (pending.length > 0) {
+          setTimeout(() => triggerSync(), 1000);
+        }
+      });
+    }
+
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);

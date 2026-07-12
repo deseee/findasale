@@ -10,6 +10,7 @@
 import { GetStaticProps, GetStaticPaths } from 'next';
 import Head from 'next/head';
 import Link from 'next/link';
+import { useState, useEffect } from 'react';
 import { computeSaleStats, buildLiveDataFaqs } from '@/lib/seo/cityStats';
 import { buildFaqJsonLd } from '@/lib/seo/cityData';
 import CityLiveStats from '@/components/CityLiveStats';
@@ -62,6 +63,14 @@ export default function CityPage({
   allCategories,
   activeByType,
 }: CityPageProps) {
+  // Client-only "now" for live/ended badges — avoids hydration mismatch on this
+  // ISR page (revalidate: 86400). Server always renders with clientNow === null
+  // (no badge); the real value is computed after mount, once hydration is safe.
+  const [clientNow, setClientNow] = useState<Date | null>(null);
+  useEffect(() => {
+    setClientNow(new Date());
+  }, []);
+
   const title = `Estate Sales, Auctions & More in ${cityName}, ${cityState} | FindA.Sale`;
   const description = `Browse ${totalCount} sales in ${cityName}, ${cityState}. Find estate sales, yard sales, auctions, flea markets and more on FindA.Sale.`;
   const canonicalUrl = `https://finda.sale/city/${citySlug}`;
@@ -240,9 +249,8 @@ export default function CityPage({
               {sales.map((sale) => {
                 const start = new Date(sale.startDate);
                 const end = new Date(sale.endDate);
-                const now = new Date();
-                const isActive = start <= now && now <= end;
-                const isEnded = now > end;
+                const isActive = clientNow !== null && start <= clientNow && clientNow <= end;
+                const isEnded = clientNow !== null && clientNow > end;
 
                 return (
                   <Link
