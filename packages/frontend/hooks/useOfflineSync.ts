@@ -4,7 +4,7 @@
  */
 
 import { useEffect, useState, useCallback, useRef } from 'react';
-import axios from 'axios';
+import api from '../lib/api';
 import { getPendingSync, getPendingSyncCount, initOfflineDB, markSyncConfirmed, markNeedsReconciliation, mapLocalToServerId, clearSyncedOperations, setLastSyncTime } from '../lib/offlineSync';
 import { useToast } from '../components/ToastContext';
 
@@ -114,7 +114,7 @@ export function useOfflineSync() {
         timestamp: entry.timestamp,
       }));
 
-      const response = await axios.post('/api/sync/batch', {
+      const response = await api.post('/sync/batch', {
         operations,
         clientState: {
           lastSyncAt: lastSyncTime,
