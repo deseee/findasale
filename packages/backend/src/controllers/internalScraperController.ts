@@ -4,7 +4,7 @@
  */
 
 import { Request, Response } from 'express';
-import { ingestScrapedListing, flushFreshnessTouches, ScrapedItem } from '../services/scraper/index';
+import { ingestScrapedListing, flushFreshnessTouches, flushScraperRevalidation, ScrapedItem } from '../services/scraper/index';
 
 export const ingestFromGitHubActions = async (req: Request, res: Response): Promise<void> => {
   // --- Validation phase (try/catch covers ONLY this section) ---
@@ -50,6 +50,7 @@ export const ingestFromGitHubActions = async (req: Request, res: Response): Prom
       else stats.failed++;
     }
     await flushFreshnessTouches();
+    await flushScraperRevalidation();
 
     console.log('[internalScraperController] Ingest complete:', stats);
     res.status(200).json({ stats });

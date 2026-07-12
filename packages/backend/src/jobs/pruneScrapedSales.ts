@@ -21,6 +21,7 @@
 import cron from 'node-cron';
 import { cronGuard } from '../utils/cronGuard';
 import { prisma } from '../lib/prisma';
+import { triggerRevalidation, citySlugFromCityState } from '../services/revalidationService';
 
 const CUTOFF_DAYS = 15;
 const BATCH_SIZE = 500;
@@ -99,7 +100,7 @@ export async function pruneScrapedSales(
 
     const rows = await prisma.sale.findMany({
       where,
-      select: { id: true },
+      select: { id: true, city: true, state: true },
       take,
       orderBy: { endDate: 'asc' },
     });
@@ -112,6 +113,21 @@ export async function pruneScrapedSales(
       await tx.affiliateLink.deleteMany({ where: { saleId: { in: ids } } });
       await tx.sale.deleteMany({ where: { id: { in: ids } } });
     });
+
+    // On-demand revalidation (ADR 2026-07-11): pruned sales' own /sales/[id] pages
+    // will 404 on next visit regardless (row is gone) — no need to revalidate those.
+    // The city listing pages that referenced them do need a refresh so the pruned
+    // sales disappear from /city/[slug] before the 24h timer would have caught it.
+    const affectedCitySlugs = new Set<string>();
+    for (const row of rows) {
+      const slug = citySlugFromCityState(row.city, row.state);
+      if (slug) affectedCitySlugs.add(slug);
+    }
+    if (affectedCitySlugs.size > 0) {
+      triggerRevalidation(Array.from(affectedCitySlugs).map((slug) => `/city/${slug}`)).catch((err) => {
+        console.error('[prune-scraped-sales] revalidation trigger failed:', err);
+      });
+    }
 
     deleted += ids.length;
     batches += 1;

@@ -16,6 +16,7 @@ import { generateSaleDescription, isAnthropicAvailable } from '../services/cloud
 import { PUBLIC_ITEM_FILTER } from '../helpers/itemQueries'; // Phase 1B: Rapidfire Mode public item filtering
 import { canRemoveWatermark } from '../utils/watermarkPolicy'; // #27b: iCal watermark footer
 import { invalidateCommandCenterCache } from '../services/commandCenterService'; // P2-3: Cache invalidation
+import { triggerSaleAndCityRevalidation, citySlugFromCityState } from '../services/revalidationService'; // ADR 2026-07-11: on-demand ISR revalidation
 import { notifyNearbyFavorites } from '../services/rippleService'; // Phase 5: #51 Sale Ripples
 import { getIO } from '../lib/socket'; // V1: Socket.io instance
 import { checkAlertsForNewSale } from '../services/wishlistAlertService'; // Feature #32: Wishlist Alerts
@@ -787,6 +788,14 @@ export const updateSale = async (req: AuthRequest, res: Response) => {
     }
 
     const sale = await prisma.sale.update({ where: { id }, data: saleData });
+
+    // ADR 2026-07-11: on-demand ISR revalidation — only PUBLISHED sales are on
+    // /sales/[id] or /city/[slug] today, so a DRAFT edit has nothing to revalidate.
+    if (sale.status === 'PUBLISHED') {
+      const citySlug = citySlugFromCityState(sale.city, sale.state);
+      triggerSaleAndCityRevalidation([sale.id], citySlug ? [citySlug] : []).catch(() => {});
+    }
+
     res.json(convertDecimalsToNumbers(sale));
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -818,6 +827,17 @@ export const deleteSale = async (req: AuthRequest, res: Response) => {
     
     await prisma.item.deleteMany({ where: { saleId: id } });
     await prisma.sale.delete({ where: { id } });
+
+    // ADR 2026-07-11: on-demand ISR revalidation — a deleted PUBLISHED sale's own
+    // /sales/[id] page will 404 on next visit regardless (row is gone); the city
+    // listing page still needs a refresh so it disappears from there immediately.
+    if (existingSale.status === 'PUBLISHED') {
+      const citySlug = citySlugFromCityState(existingSale.city, existingSale.state);
+      if (citySlug) {
+        triggerSaleAndCityRevalidation([], [citySlug]).catch(() => {});
+      }
+    }
+
     res.json({ message: 'Sale deleted successfully' });
   } catch (error) {
     console.error(error);
@@ -976,6 +996,13 @@ export const updateSaleStatus = async (req: AuthRequest, res: Response) => {
     }
 
     const updated = await prisma.sale.update({ where: { id }, data: updateData });
+
+    // ADR 2026-07-11: on-demand ISR revalidation — status changed to/from PUBLISHED
+    // means the sale's own page and its city listing page both need a refresh.
+    {
+      const citySlug = citySlugFromCityState(updated.city, updated.state);
+      triggerSaleAndCityRevalidation([updated.id], citySlug ? [citySlug] : []).catch(() => {});
+    }
 
     if (status === 'PUBLISHED' && existingSale.status === 'DRAFT') {
       // Notify organizer that sale is now live
@@ -1818,6 +1845,14 @@ export const cancelSale = async (req: AuthRequest, res: Response) => {
         cancellationReason: reason
       }
     });
+
+    // ADR 2026-07-11: on-demand ISR revalidation — a cancelled sale that was
+    // PUBLISHED needs to drop off its city listing page; its own /sales/[id]
+    // page also needs to reflect the CANCELLED state immediately.
+    if (existingSale.status === 'PUBLISHED') {
+      const citySlug = citySlugFromCityState(cancelled.city, cancelled.state);
+      triggerSaleAndCityRevalidation([cancelled.id], citySlug ? [citySlug] : []).catch(() => {});
+    }
 
     // #120: Audit alert — if created < 2h ago and has 100+ items on hold
     if (existingSale.status === 'PUBLISHED') {

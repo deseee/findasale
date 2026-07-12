@@ -231,6 +231,7 @@ import { schedulePhotoRetentionCron } from './jobs/photoRetentionCron'; // Featu
 import { scheduleWebhookEventPruneJob } from './jobs/webhookEventPruneJob'; // Webhook event pruning (30-day retention)
 import { scheduleLogRetentionCron } from './jobs/logRetentionCron'; // Operational-log retention sweep (60-day retention)
 import { scheduleScrapedSalePruneCron } from './jobs/pruneScrapedSales'; // Stale scraped ENDED-sale prune (volume reclaim, ADR 2026-07-05)
+import { scheduleStripeMigrationReconcileCron } from './jobs/stripeMigrationReconcileCron'; // ADR 1 2026-07-11: Stripe migration reconciliation backstop (daily, 04:30)
 import { scheduleArchivalCron, expireStaleVenueCron } from './jobs/archivalCron'; // #112: Soft-delete archival (quarterly) + daily stale venue expiry
 import { scheduleMarkdownCron } from './jobs/markdownCron'; // Feature #91: Auto-markdown (smart clearance)
 import { scheduleMarkdownCycleCron } from './jobs/markdownCycleCron'; // Feature: Automatic Markdown Cycles (PRO Tier)
@@ -937,6 +938,11 @@ httpServer.listen(PORT, '0.0.0.0', () => {
   // #112 daily: Expire stale scraped venue records (RETAIL/FLEA_MARKET) whose date window lapsed
   expireStaleVenueCron();
   scheduleScrapedSalePruneCron(); // gated by PRUNE_ENABLED env
+
+  // ADR 1 2026-07-11: Register daily Stripe migration reconciliation cron (04:30 server
+  // time, after the 04:00 prune job) — self-healing backstop for the account.updated
+  // webhook cutover, independent of webhook subscription/config correctness.
+  scheduleStripeMigrationReconcileCron();
 
   // Feature #91: Register auto-markdown cron
   scheduleMarkdownCron();

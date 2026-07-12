@@ -17,6 +17,7 @@ import {
   domainMatchesBusiness,
   FAMOUS_UNRELATED_DOMAINS,
 } from '../emailProvenance';
+import { triggerSaleAndCityRevalidation, citySlugFromCityState } from '../revalidationService';
 
 export interface ScrapeJob {
   source: string;
@@ -1083,6 +1084,38 @@ export async function flushFreshnessTouches(): Promise<void> {
   await flushFreshnessTouchBatch(batch);
 }
 
+// --- On-demand ISR revalidation batching (ADR 2026-07-11) ---
+// Mirrors the freshness-touch buffering pattern above: individual scraped-listing
+// creates/updates are buffered per scrape pass and flushed once, batched by
+// affected city, instead of firing one HTTP revalidation request per listing.
+const revalidationSaleIdBuffer: string[] = [];
+const revalidationCitySlugBuffer = new Set<string>();
+
+function enqueueRevalidationTouch(saleId: string | undefined, city: string | null | undefined, state: string | null | undefined): void {
+  if (saleId) revalidationSaleIdBuffer.push(saleId);
+  const citySlug = citySlugFromCityState(city, state);
+  if (citySlug) revalidationCitySlugBuffer.add(citySlug);
+}
+
+/**
+ * Flush any buffered scraper revalidation touches. Call at the end of every
+ * scrape pass (same call sites as flushFreshnessTouches()) so the run's
+ * affected /sales/[id] and /city/[slug] pages revalidate on-demand instead of
+ * waiting on the blanket time-based ISR fallback. Never throws — a
+ * revalidation failure must not fail the scrape run.
+ */
+export async function flushScraperRevalidation(): Promise<void> {
+  const saleIds = revalidationSaleIdBuffer.splice(0, revalidationSaleIdBuffer.length);
+  const citySlugs = Array.from(revalidationCitySlugBuffer);
+  revalidationCitySlugBuffer.clear();
+  if (saleIds.length === 0 && citySlugs.length === 0) return;
+  try {
+    await triggerSaleAndCityRevalidation(saleIds, citySlugs);
+  } catch (err) {
+    console.error('[scraper] flushScraperRevalidation failed:', err);
+  }
+}
+
 /**
  * Ingest a single scraped listing into the database.
  * Handles dedup, validation, and DB insertion.
@@ -1160,6 +1193,7 @@ export async function ingestScrapedListing(
           data: { ...updates, lastScrapedAt: new Date() },
         });
         
+        enqueueRevalidationTouch(existing.id, listing.city, listing.state);
         return {
           saleId: existing.id,
           status: 'updated',
@@ -1259,6 +1293,7 @@ export async function ingestScrapedListing(
       },
     });
 
+    enqueueRevalidationTouch(sale.id, listing.city, listing.state);
     return { saleId: sale.id, status: 'created' };
   } catch (error) {
     console.error('[scraper] Failed to ingest listing:', error);

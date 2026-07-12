@@ -6,7 +6,7 @@
  */
 
 import { RateLimiter } from '../rateLimiter';
-import { ingestScrapedListing, flushFreshnessTouches, ScrapedItem } from '../index';
+import { ingestScrapedListing, flushFreshnessTouches, flushScraperRevalidation, ScrapedItem } from '../index';
 import { getRandomUserAgent, getRandomReferer } from '../userAgents';
 import { getCachedHeaders, setCachedHeaders, fetchWithConditionalHeaders, extractCacheHeaders } from '../httpCache';
 
@@ -263,6 +263,7 @@ export async function scrapeEstateSalesNet(
       else stats.failed++;
     }
     await flushFreshnessTouches();
+    await flushScraperRevalidation();
 
     return stats;
   } catch (error) {

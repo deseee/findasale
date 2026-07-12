@@ -234,6 +234,13 @@ export const getAccountStatus = async (accountId: string) => {
       // to record what an existing (possibly-reused) account actually is, rather
       // than defaulting/assuming.
       accountType: account.type,
+      // ADR 1 (2026-07-11, stripe-migration-reconciliation): the live
+      // controller.fees.payer value -- needed by reconcileStripeMigration to
+      // match the EXACT eligibility condition the account.updated webhook's
+      // cutover block already uses (charges_enabled && payouts_enabled &&
+      // controller.fees.payer === 'account'). Additive field, no existing
+      // caller destructures this away.
+      feesPayer: account.controller?.fees?.payer,
     };
   } catch (error) {
     console.error('Failed to get account status:', error);
@@ -394,5 +401,109 @@ export const updateConsignorOnboardingStatus = async (
   } catch (error) {
     console.error('Failed to update onboarding status:', error);
     throw error;
+  }
+};
+/**
+ * ADR 1 (2026-07-11, stripe-migration-reconciliation-and-isr-revalidation-adr):
+ * Reconciliation-first fix for the Stripe `account.updated` webhook gap. Live-checks
+ * a pending Standard-migration account's REAL status via the Stripe API (never the
+ * cached DB fields) and, if eligible, performs the EXACT same cutover the webhook's
+ * `account.updated` handler already does (see stripeController.ts, the
+ * `[stripe-migration] cutover` block inside the `case 'account.updated':` switch arm).
+ * This function is not a parallel implementation of that cutover -- it is the same
+ * logic, decoupled from webhook delivery, so it works identically whether called by
+ * the daily reconciliation cron, a one-off manual invocation, or (later) directly by
+ * the webhook handler itself once Patrick approves subscribing to `account.updated`.
+ *
+ * Never throws for the "not yet eligible" case -- that is an expected, common state
+ * for an organizer mid-onboarding, not an error condition.
+ */
+export type ReconcileStripeMigrationResult =
+  | { status: 'no-pending-migration'; organizerId: string }
+  | { status: 'not-yet-eligible'; organizerId: string; pendingAccountId: string; chargesEnabled: boolean; payoutsEnabled: boolean; feesPayer: string | undefined }
+  | { status: 'organizer-not-found'; organizerId: string }
+  | { status: 'cutover-complete'; organizerId: string; oldAccountId: string | null; newAccountId: string; vendorBoothsCutOver: number }
+  | { status: 'error'; organizerId: string; message: string };
+
+export const reconcileStripeMigration = async (
+  organizerId: string
+): Promise<ReconcileStripeMigrationResult> => {
+  try {
+    const organizer = await prisma.organizer.findUnique({
+      where: { id: organizerId },
+    });
+
+    if (!organizer) {
+      return { status: 'organizer-not-found', organizerId };
+    }
+
+    if (!organizer.pendingStripeMigrationAccountId) {
+      return { status: 'no-pending-migration', organizerId };
+    }
+
+    // Defensive: the 'CLAIMING' sentinel (startStandardMigration's race-condition
+    // guard) is never a real Stripe account id -- nothing to live-check yet.
+    if (organizer.pendingStripeMigrationAccountId === 'CLAIMING') {
+      return { status: 'not-yet-eligible', organizerId, pendingAccountId: organizer.pendingStripeMigrationAccountId, chargesEnabled: false, payoutsEnabled: false, feesPayer: undefined };
+    }
+
+    const pendingAccountId = organizer.pendingStripeMigrationAccountId;
+
+    // REAL live API call -- never inferred from cached DB fields.
+    const liveStatus = await getAccountStatus(pendingAccountId);
+
+    // Same eligibility condition as the account.updated webhook's cutover block:
+    // charges_enabled && payouts_enabled && controller.fees.payer === 'account'.
+    const eligible =
+      liveStatus.chargesEnabled && liveStatus.payoutsEnabled && liveStatus.feesPayer === 'account';
+
+    if (!eligible) {
+      return {
+        status: 'not-yet-eligible',
+        organizerId,
+        pendingAccountId,
+        chargesEnabled: liveStatus.chargesEnabled,
+        payoutsEnabled: liveStatus.payoutsEnabled,
+        feesPayer: liveStatus.feesPayer,
+      };
+    }
+
+    // Same cutover the webhook performs: swap stripeConnectId to the new account,
+    // mark it 'standard', clear the pending marker, mark onboarded, and cut over
+    // any VendorBooth rows still sharing the OLD account id.
+    const oldAccountId = organizer.stripeConnectId;
+    await prisma.organizer.update({
+      where: { id: organizer.id },
+      data: {
+        stripeConnectId: pendingAccountId,
+        stripeAccountType: 'standard',
+        pendingStripeMigrationAccountId: null,
+        stripeOnboarded: true,
+      },
+    });
+    console.log(`[stripe-migration] reconcile cutover: organizer ${organizer.id} ${oldAccountId} -> ${pendingAccountId}`);
+
+    let vendorBoothsCutOver = 0;
+    if (oldAccountId) {
+      const boothsCutOver = await prisma.vendorBooth.updateMany({
+        where: { stripeAccountId: oldAccountId },
+        data: { stripeAccountId: pendingAccountId, stripeAccountType: 'standard' },
+      });
+      vendorBoothsCutOver = boothsCutOver.count;
+      if (vendorBoothsCutOver > 0) {
+        console.log(`[stripe-migration] reconcile cutover also applied to ${vendorBoothsCutOver} vendor booth(s) sharing the old account id`);
+      }
+    }
+
+    return {
+      status: 'cutover-complete',
+      organizerId,
+      oldAccountId,
+      newAccountId: pendingAccountId,
+      vendorBoothsCutOver,
+    };
+  } catch (error) {
+    console.error(`[stripe-migration] reconcileStripeMigration failed for organizer ${organizerId}:`, error);
+    return { status: 'error', organizerId, message: error instanceof Error ? error.message : String(error) };
   }
 };
