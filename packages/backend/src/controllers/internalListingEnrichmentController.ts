@@ -65,6 +65,13 @@ async function _runEnrichmentBatch(batchSize: number): Promise<void> {
   // SQL-level filter avoids the previous 3x over-fetch + JS JSON blob scanning.
   const sales = await prisma.sale.findMany({
     where: {
+      // deletedAt: null — added 2026-07-12. This query previously had NO
+      // soft-delete filter, meaning any soft-deleted scraped sale (e.g. a
+      // stale/expired Facebook Events page removed via the 2026-07-12 cleanup,
+      // see claude_docs/STATE.md Blocked Queue) would still get picked up and
+      // Haiku-enriched here even though it's supposed to be gone. Enrichment
+      // should never process a soft-deleted row.
+      deletedAt: null,
       scrapedMetadata: { not: Prisma.DbNull },
       description: { not: null },
       NOT: {
