@@ -713,21 +713,51 @@ export async function analyzeClip(input: AnalyzeClipInput): Promise<ClipAnalysis
   return analysis;
 }
 
+// Re-analysis skip threshold (ADR-080 §6 gate value, duplicated locally to avoid a
+// circular import with footageClassifyService.ts, which already imports FROM this
+// file). Same env var name so an operator only ever tunes one knob.
+function clipSkipReanalysisThreshold(): number {
+  const raw = process.env.FOOTAGE_CLIP_ASSEMBLE_THRESHOLD;
+  const parsed = raw ? parseFloat(raw) : NaN;
+  return Number.isFinite(parsed) ? parsed : 0.75;
+}
+
 /**
  * Analyze every asset in a batch (ADR-080 §5.2). Sequential to bound peak memory
  * and native ONNX thread contention (OCR + Whisper are both CPU/ONNX heavy). The
  * upload order (createdAt) is the fallback ordering hint per clip.
+ *
+ * SKIP-ALREADY-CONFIDENT (fix 2026-07-13): a clip that's already at/above the
+ * assemble-confidence threshold is NOT re-analyzed -- its stored analysisJson is
+ * reused (with role/roleConfidence merged from the live columns, not the stale
+ * JSON blob). Without this, every classifyBatch() re-run burned a full fresh
+ * Vision/Whisper/OCR pass on EVERY clip in the batch AND silently overwrote any
+ * human-confirmed role (set via the footage-batch/:id/answer admin endpoint,
+ * which marks roleConfidence=1.0) straight back to the AI's original -- often
+ * still low-confidence -- guess, regenerating the identical NEEDS_INPUT question
+ * forever. Found testing the real answer-a-question flow end-to-end.
  */
 export async function analyzeBatch(batchId: string): Promise<ClipAnalysis[]> {
   const assets = await prisma.footageAsset.findMany({
     where: { batchId },
     orderBy: { createdAt: 'asc' },
-    select: { id: true, r2Key: true },
+    select: { id: true, r2Key: true, analysisJson: true, role: true, roleConfidence: true },
   });
 
+  const threshold = clipSkipReanalysisThreshold();
   const analyses: ClipAnalysis[] = [];
   for (let i = 0; i < assets.length; i++) {
     const a = assets[i];
+    if (a.analysisJson && typeof a.roleConfidence === 'number' && a.roleConfidence >= threshold) {
+      const stored = a.analysisJson as unknown as ClipAnalysis;
+      analyses.push({
+        ...stored,
+        role: a.role as ClipRole, // live column wins -- carries any human correction (Prisma enum -> local union cast)
+        roleConfidence: a.roleConfidence,
+        ordering: { ...stored.ordering, uploadIndex: i },
+      });
+      continue;
+    }
     const analysis = await analyzeClip({ assetId: a.id, r2Key: a.r2Key, uploadIndex: i });
     analyses.push(analysis);
   }
