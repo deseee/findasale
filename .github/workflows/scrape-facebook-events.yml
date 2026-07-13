@@ -91,6 +91,10 @@ jobs:
           # FB_EVENTS_PROXY_URL is a repo Variable; FB_EVENTS_PROXY_TOKEN is a repo Secret.
           FB_EVENTS_PROXY_URL: ${{ vars.FB_EVENTS_PROXY_URL }}
           FB_EVENTS_PROXY_TOKEN: ${{ secrets.FB_EVENTS_PROXY_TOKEN }}
+          # ADR-082: self-hosted discovery via FB's own events/search through the
+          # proxy (structured start_timestamp/address, no paid SERP). Repo Variable —
+          # 'true' activates proxy discovery; unset/false keeps the SERP path.
+          FB_EVENTS_DISCOVERY_VIA_PROXY: ${{ vars.FB_EVENTS_DISCOVERY_VIA_PROXY }}
         run: |
           cd packages/backend
           npx ts-node src/scripts/run-search-facebook-events.ts
