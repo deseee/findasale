@@ -17,7 +17,7 @@ concurrency:
 jobs:
   scrape:
     runs-on: ubuntu-latest
-    timeout-minutes: 30  # ~43 metros/day with throttling + possible 60s 429 retry waits
+    timeout-minutes: 60  # 30 raised to 60: proxy page-fetch enrichment adds ~15-20 min overhead
 
     steps:
       - name: Checkout
