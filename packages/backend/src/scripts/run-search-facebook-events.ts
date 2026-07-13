@@ -25,6 +25,7 @@ import {
   getShardIndexForDate,
   SHARD_COUNT,
 } from '../services/scraper/sources/search-facebook-events';
+import { scrapeFacebookEventsForMetroViaProxy } from '../services/scraper/sources/facebook-events-discovery';
 import { jitterDelay } from '../services/scraper/userAgents';
 
 const INGEST_URL =
@@ -36,6 +37,10 @@ const BRAVE_KEY       = process.env.BRAVE_API_KEY;
 const SCALESERP_KEY   = process.env.SCALESERP_API_KEY;
 // SERPER_KEY removed — Serper is no longer used. See comment at top.
 const ORGANIZER_ID    = process.env.FB_EVENTS_ORGANIZER_ID;
+// ADR-082 cutover flag: when 'true', discovery runs via the Cloudflare proxy +
+// FB embedded-JSON parse (real dates, no paid SERP). Unset/false keeps the
+// existing SERP path unchanged (instant rollback). Default OFF.
+const USE_PROXY_DISCOVERY = process.env.FB_EVENTS_DISCOVERY_VIA_PROXY === 'true';
 
 /**
  * Send an out-of-band alert via Resend (matches gmailHealthCron.ts pattern).
@@ -94,6 +99,9 @@ async function main() {
   // full canonical list) so each daily run stays small and fast. Set
   // FB_EVENTS_ALL_METROS=true to bypass sharding and run the entire list — used
   // for manual backfills via workflow_dispatch.
+  console.log(
+    `[run-fb-events] Discovery path: ${USE_PROXY_DISCOVERY ? 'PROXY embedded-JSON (ADR-082)' : 'SERP (Searlo/Brave/ScaleSerp)'}`
+  );
   const runAll = process.env.FB_EVENTS_ALL_METROS === 'true';
   const metros = runAll ? SEARCH_METROS : getMetrosForToday();
   const shardIndex = getShardIndexForDate();
@@ -114,11 +122,15 @@ async function main() {
   // Scrape each metro sequentially with jitter to stay within rate limits
   for (const metro of metros) {
     try {
-      const items = await scrapeFacebookEventsForMetro(metro, {
-        searloKey:    SEARLO_KEY,
-        braveKey:     BRAVE_KEY,
-        scaleSerpKey: SCALESERP_KEY,
-      });
+      // ADR-082: proxy embedded-JSON discovery when flagged on; else the
+      // existing paid-SERP discovery (unchanged) as instant rollback.
+      const items = USE_PROXY_DISCOVERY
+        ? await scrapeFacebookEventsForMetroViaProxy(metro)
+        : await scrapeFacebookEventsForMetro(metro, {
+            searloKey:    SEARLO_KEY,
+            braveKey:     BRAVE_KEY,
+            scaleSerpKey: SCALESERP_KEY,
+          });
 
       for (const item of items) {
         if (item.sourceItemId && !seenIds.has(item.sourceItemId)) {

@@ -151,7 +151,7 @@ const STRONG_SALE_PHRASES = [
   'estate auction', 'public auction', 'online auction',
 ];
 
-function isRejectedNonSaleContent(title: string, combinedText: string): boolean {
+export function isRejectedNonSaleContent(title: string, combinedText: string): boolean {
   const lowerCombined = combinedText.toLowerCase();
   const hasHardNegative = HARD_NEGATIVE_SIGNALS.some((kw) => lowerCombined.includes(kw));
   if (!hasHardNegative) return false;
@@ -189,7 +189,7 @@ function isRejectedNonSaleContent(title: string, combinedText: string): boolean 
  * which is how ambiguous/irrelevant content ended up published as a fake
  * "estate sale". Callers must reject the item on a null return, not guess.
  */
-function inferSaleType(text: string, typeHint?: string): { saleType: string; saleSubtype?: string } | null {
+export function inferSaleType(text: string, typeHint?: string): { saleType: string; saleSubtype?: string } | null {
   const lower = text.toLowerCase();
   if (lower.includes('auction'))                                return { saleType: 'AUCTION', saleSubtype: 'auction' };
   if (lower.includes('estate'))                                 return { saleType: 'ESTATE', saleSubtype: 'estate' };
@@ -235,7 +235,7 @@ function inferSaleType(text: string, typeHint?: string): { saleType: string; sal
  * Returns null (falls through to the system organizer, prior behavior) when no
  * confident match is found — this never guesses a wrong name.
  */
-function extractOrganizerName(title: string, snippet: string): string | null {
+export function extractOrganizerName(title: string, snippet: string): string | null {
   const combined = `${title} ${snippet}`;
 
   const byMatch = combined.match(
