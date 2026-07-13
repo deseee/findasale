@@ -216,8 +216,22 @@ router.post('/footage-batch/:batchId/answer', async (req, res) => {
     }
     await prisma.footageBatch.update({
       where: { id: batchId },
-      data: { templateId: match.id },
+      // templateConfidence: 1.0 marks this as a human-confirmed, LOCKED answer --
+      // classifyBatch() reads this exact signal to skip re-inference so the
+      // answer can never be silently overwritten on the next classify pass
+      // (real bug found + fixed 2026-07-13: without this, the same template
+      // question re-asked itself forever no matter what was answered).
+      data: { templateId: match.id, templateConfidence: 1.0 },
     });
+  } else if (batch.questionField.startsWith('slot:')) {
+    // Shape 4: slot:<key> -- staged by templateRenderer.ts (render stage) when a
+    // template's REQUIRED slot has no matching footage. There is no data VALUE to
+    // apply here (unlike role/templateId) -- the only real fix is the human adding
+    // the missing clip to the batch before answering. The answer text itself is
+    // just an acknowledgement; any non-empty string proceeds. Falls through to the
+    // shared SEALED + classifyBatch() re-run below, which -- now that the missing
+    // footage presumably exists -- re-runs analyze/gate/render end-to-end.
+    console.log(`[videoPipelineAdmin] Batch ${batchId} acknowledged missing-slot question (${batch.questionField}); re-running.`);
   } else {
     return res.status(400).json({ message: `Unrecognized questionField: ${batch.questionField}` });
   }

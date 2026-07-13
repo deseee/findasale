@@ -361,6 +361,23 @@ export async function classifyBatch(batchId: string): Promise<ClassifyBatchResul
     return { batchId, status: 'SKIPPED', clipCount: 0, ambiguousCount: 0, softCount: 0 };
   }
 
+  // TEMPLATE LOCK (2026-07-13, real bug found via live test): read whatever
+  // templateId/templateConfidence is already on the row BEFORE doing any fresh
+  // inference. If it's already locked at confidence 1.0 -- because a human
+  // answered the 'batch.templateId' question (routes/videoPipelineAdmin.ts sets
+  // templateConfidence:1.0 there) or an earlier pass hit an unambiguous
+  // auto-detection -- inferTemplate() below is skipped entirely and this value
+  // is reused as-is. Before this fix, inferTemplate() recomputed from scratch on
+  // EVERY call with zero awareness of anything a human had just confirmed, so a
+  // human's answer to the template question was written to the DB and then
+  // immediately thrown away by the very next line -- the batch re-asked the
+  // identical question forever. This mirrors the identical-shape fix already
+  // applied to analyzeBatch() (clipAnalysisService.ts) for per-clip roles.
+  const lockedTemplate = await prisma.footageBatch.findUnique({
+    where: { id: batchId },
+    select: { templateId: true, templateConfidence: true },
+  });
+
   try {
     const analyses = await analyzeBatch(batchId);
 
@@ -379,7 +396,15 @@ export async function classifyBatch(batchId: string): Promise<ClassifyBatchResul
       return { batchId, status: 'NEEDS_INPUT', question: 'no analyzable clips', clipCount: 0, ambiguousCount: 0, softCount: 0 };
     }
 
-    const inference = await inferTemplate(analyses);
+    const inference: TemplateInference =
+      lockedTemplate?.templateId && lockedTemplate.templateConfidence === 1.0
+        ? {
+            templateId: lockedTemplate.templateId,
+            confidence: 1.0,
+            rationale: 'Template locked at confidence 1.0 (human-confirmed answer, or a prior unambiguous auto-detection) -- format inference skipped so it can never be silently overwritten.',
+            scores: { [lockedTemplate.templateId]: 1.0 },
+          }
+        : await inferTemplate(analyses);
     const decision = decideGate(analyses, inference);
     const ambiguous = ambiguousClips(analyses);
     const soft = softClips(analyses);
