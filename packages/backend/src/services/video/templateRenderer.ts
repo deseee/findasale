@@ -314,38 +314,53 @@ function orderedAnalyses(analyses: ClipAnalysis[]): ClipAnalysis[] {
 function slotFill(template: Template, analyses: ClipAnalysis[]): SlotFillResult {
   const ordered = orderedAnalyses(analyses);
   const used = new Set<string>();
-  const filled: FilledSlot[] = [];
   const missingRequired: SlotSpec[] = [];
+  const resultBySlot = new Map<SlotSpec, FilledSlot | null>();
 
-  for (const slot of template.slots) {
-    // Type the role variable as the full ClipRole union (never a narrowed literal)
-    // so acceptsRoles.includes(role) is a union-vs-union check — avoids TS2367.
+  // Type the role variable as the full ClipRole union (never a narrowed literal)
+  // so acceptsRoles.includes(role) is a union-vs-union check — avoids TS2367.
+  const tryFill = (slot: SlotSpec): FilledSlot | null => {
     const match = ordered.find((a) => {
       const role: ClipRole = a.role;
       return !used.has(a.assetId) && slot.acceptsRoles.includes(role);
     });
-
     if (match) {
       used.add(match.assetId);
-      filled.push({ slot, analysis: match, synthetic: null });
-      continue;
+      return { slot, analysis: match, synthetic: null };
     }
-
     // No clip matched. Title/CTA slots are synthesizable brand cards.
     const overlay = slot.overlay;
-    if (overlay === 'title_card') {
-      filled.push({ slot, analysis: null, synthetic: 'title_card' });
-      continue;
-    }
-    if (overlay === 'cta_card') {
-      filled.push({ slot, analysis: null, synthetic: 'cta_card' });
-      continue;
-    }
+    if (overlay === 'title_card') return { slot, analysis: null, synthetic: 'title_card' };
+    if (overlay === 'cta_card') return { slot, analysis: null, synthetic: 'cta_card' };
+    return null;
+  };
 
-    if (slot.required) {
-      missingRequired.push(slot);
-    }
+  // REQUIRED SLOTS GET FIRST PICK (real bug found + fixed 2026-07-13, confirmed
+  // via live test): filling strictly in template.slots array order let an
+  // OPTIONAL slot earlier in the array (e.g. Season C's 'story', which also
+  // accepts STYLING) greedily consume the only clip a REQUIRED slot LATER in
+  // the array needed (Season C's 'styling'). The batch then failed with
+  // "missing footage for its 'styling' beat" even though a real, correctly
+  // human-tagged STYLING clip existed -- it had just been stolen by the
+  // optional slot. Required slots are now resolved first, in template order;
+  // optional slots only compete for whatever clips are left over. Final output
+  // ordering still follows the original template.slots array (unaffected).
+  for (const slot of template.slots) {
+    if (!slot.required) continue;
+    const result = tryFill(slot);
+    resultBySlot.set(slot, result);
+    if (!result) missingRequired.push(slot);
+  }
+  for (const slot of template.slots) {
+    if (slot.required) continue;
+    resultBySlot.set(slot, tryFill(slot));
     // optional + unfilled -> simply skipped.
+  }
+
+  const filled: FilledSlot[] = [];
+  for (const slot of template.slots) {
+    const result = resultBySlot.get(slot);
+    if (result) filled.push(result);
   }
 
   const unused = ordered.filter((a) => !used.has(a.assetId));
