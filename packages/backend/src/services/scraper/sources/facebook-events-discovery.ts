@@ -18,7 +18,7 @@
  *   4. Map each Event -> ScrapedItem with a REAL date from `start_timestamp`
  *      (never the +7-day fabrication the SERP path fell back to), dropping past /
  *      stale / non-sale events, and reusing the SERP path's cleaned helpers
- *      (inferSaleType / isRejectedNonSaleContent / extractOrganizerName) on the
+ *      (inferSaleType / isRejectedNonSaleContent) on the
  *      event's OWN name -- a clean signal, free of the SERP snippet-carousel bleed.
  *   5. Dedupe on the numeric FB event id BEFORE returning.
  *
@@ -41,7 +41,6 @@ import {
   FbSearchOptions,
   inferSaleType,
   isRejectedNonSaleContent,
-  extractOrganizerName,
 } from './search-facebook-events';
 
 const FETCH_TIMEOUT_MS = 15_000;
@@ -181,6 +180,51 @@ function resolveEventDate(ev: any): { date: Date; approximate: boolean } | null 
 // event_place -> city/state best-effort parse
 // ---------------------------------------------------------------------------
 
+// US state + DC 2-letter codes -- validates a candidate token so we never treat
+// "US", "Rd", "St" etc. as a state.
+const US_STATE_CODES = new Set([
+  'AL', 'AK', 'AZ', 'AR', 'CA', 'CO', 'CT', 'DE', 'FL', 'GA', 'HI', 'ID', 'IL',
+  'IN', 'IA', 'KS', 'KY', 'LA', 'ME', 'MD', 'MA', 'MI', 'MN', 'MS', 'MO', 'MT',
+  'NE', 'NV', 'NH', 'NJ', 'NM', 'NY', 'NC', 'ND', 'OH', 'OK', 'OR', 'PA', 'RI',
+  'SC', 'SD', 'TN', 'TX', 'UT', 'VT', 'VA', 'WA', 'WV', 'WI', 'WY', 'DC',
+]);
+
+/**
+ * Extract the REAL city + 2-letter state from an event_place display string by
+ * locating a valid US state-code token and taking the comma-token immediately
+ * before it as the city. Pure + exported for unit testing.
+ *
+ * Handles both shapes that appear in live FB data:
+ *   - Page label:        "Renton, WA"                                    -> Renton, WA
+ *   - Page label:        "Clinton, CT"                                   -> Clinton, CT
+ *   - FreeformPlace addr: "1356 West Sweden Rd, Brockport, NY, United States, New York 14420" -> Brockport, NY
+ *   - FreeformPlace addr: "36 Linden St, Pittsfield, MA 01201-3212, United States"            -> Pittsfield, MA
+ *   - FreeformPlace addr: "470 Gold Rd, Jasper, TN 37347-6216, United States"                 -> Jasper, TN
+ *
+ * A state token is either an exact 2-letter uppercase code ("NY") OR a code
+ * followed by a ZIP ("MA 01201-3212" -> MA). Returns null when no valid US
+ * state code is present (e.g. a spelled-out "North Carolina", or an
+ * unparseable string) so the caller keeps its existing metro fallback.
+ */
+export function deriveCityStateFromDisplay(
+  display: string
+): { city: string; state: string } | null {
+  if (!display || typeof display !== 'string') return null;
+  const tokens = display
+    .split(',')
+    .map((t) => t.trim())
+    .filter(Boolean);
+  for (let i = 1; i < tokens.length; i++) {
+    // Exact "ST", or "ST 01201" / "ST 01201-3212" (state code + trailing ZIP).
+    const m = tokens[i].match(/^([A-Z]{2})(?:\s+\d{5}(?:-\d{4})?)?$/);
+    if (m && US_STATE_CODES.has(m[1])) {
+      const city = tokens[i - 1];
+      if (city) return { city, state: m[1] };
+    }
+  }
+  return null;
+}
+
 function parsePlace(
   ev: any,
   metro: MetroTarget
@@ -200,16 +244,28 @@ function parsePlace(
       (typeof place.contextual_name === 'string' && place.contextual_name) ||
       (typeof place.name === 'string' && place.name) ||
       '';
-    // Parse a trailing ", ST" out of a "City, ST" display string when we did not
-    // get structured fields.
-    const m = display.match(/,\s*([A-Z]{2})\b\s*$/);
-    if (m && (city === metro.city || state === metro.state)) {
-      state = m[1];
-      const cityPart = display.slice(0, m.index).split(',').pop();
-      if (cityPart && cityPart.trim()) city = cityPart.trim();
+    // Derive the REAL city/state from the display string. Handles both bare
+    // "City, ST" Page labels AND full FreeformPlace street addresses like
+    // "1356 West Sweden Rd, Brockport, NY, United States, ..." (the previous
+    // trailing-", ST"-only regex missed these, so out-of-metro events ingested
+    // under the wrong query-metro city). Only override when we did NOT already
+    // get authoritative structured city/state fields -- i.e. one still equals
+    // the query-metro default. If no valid US state code is present, keep the
+    // fallback (unchanged behaviour for spelled-out / unparseable strings).
+    if (city === metro.city || state === metro.state) {
+      const derived = deriveCityStateFromDisplay(display);
+      if (derived) {
+        state = derived.state;
+        city = derived.city;
+      }
     }
-    if (typeof place.address === 'string' && place.address.trim()) {
-      address = place.address.trim();
+    // Street address ONLY from a FreeformPlace, whose contextual_name is a real
+    // street string (e.g. "1356 West Sweden Rd, Brockport, NY, United States, ...").
+    // A Page event_place carries only a city/region label (e.g. "Renton, WA") --
+    // NOT a street address -- so it must never populate `address`. null place ->
+    // address stays empty. City/state derivation above is unchanged.
+    if (place.__typename === 'FreeformPlace' && display.trim()) {
+      address = display.trim();
     }
   }
 
@@ -283,10 +339,14 @@ function mapEventToScrapedItem(
 
   const { city, state, address } = parsePlace(ev, metro);
 
-  // Organizer: prefer a real host name from the JSON; else the SERP path's
-  // title-regex heuristic; else undefined (system organizer, prior behaviour).
-  const organizerName =
-    extractHostName(ev) ?? extractOrganizerName(rawName, '') ?? undefined;
+  // Organizer: the FB search JSON carries NO host/organizer NAME (only the
+  // is_viewer_host boolean), so we never derive one here. Do NOT re-add the
+  // title-regex heuristic -- it produces title fragments like "Garage/Moving/"
+  // that are worse than nothing. Leaving organizerName unset lets ingest fall
+  // back to the system "FindA.Sale Directory" organizer (same as the SERP null
+  // case). The REAL organizer is recovered later from the full event-page
+  // enrichment in facebook-events-page-fetch.ts, not from search results.
+  const organizerName = extractHostName(ev) ?? undefined;
 
   return {
     title: rawName,
