@@ -124,10 +124,20 @@ function assertInput(input: VideoAssemblyInput): void {
 }
 
 export async function downloadToFile(url: string, destPath: string): Promise<void> {
+  // 500MB + a longer timeout (real bug found + fixed 2026-07-13, confirmed via
+  // live test): this was capped at 100MB/30s while clipAnalysisService.ts's OWN
+  // downloadToFile() for the SAME source clips already uses 500MB/120s. A real
+  // 268MB test clip passed classification (same clip, higher limit there) but
+  // then failed here with "maxContentLength size of 104857600 exceeded" once it
+  // reached the render/assembly stage -- an inconsistent, needlessly low ceiling
+  // on this specific call site, not a fundamental size limitation. Matched to
+  // the classify stage's existing precedent so a clip that's good enough to
+  // analyze is also good enough to render.
   const res = await axios.get<ArrayBuffer>(url, {
     responseType: 'arraybuffer',
-    timeout: 30000,
-    maxContentLength: 100 * 1024 * 1024,
+    timeout: 120000,
+    maxContentLength: 500 * 1024 * 1024,
+    maxBodyLength: 500 * 1024 * 1024,
   });
   await fs.writeFile(destPath, Buffer.from(res.data));
 }
