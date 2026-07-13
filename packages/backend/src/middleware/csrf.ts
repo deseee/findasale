@@ -112,7 +112,14 @@ export const validateCsrfToken = (req: Request, res: Response, next: NextFunctio
   // Skip CSRF for webhooks and external server-to-server callbacks (they use signature verification instead)
   // /api/internal/* routes are server-to-server (e.g. scraper ingest from GitHub Actions) and authenticate
   // via x-scraper-key shared secret — same model as Stripe webhook signatures.
-  if (req.path.includes('/webhook') || req.path.includes('/resend-webhook') || req.path.includes('/stripe/webhook') || req.path.includes('/billing/webhook') || req.path.includes('/ebay/account-deletion') || req.path.includes('/api/internal/') || req.path.includes('/api/crawler-log')) {
+  // /api/video/footage-ingest is a machine-to-machine trigger from the native PC
+  // uploader (rclone + curl), authenticated via its own x-ingest-secret shared-secret
+  // middleware (requireIngestSecret in routes/video.ts) -- same pattern as /api/internal/*
+  // below. It has no browser session/cookie, so the CSRF double-submit check can never
+  // pass for it; without this bypass every real ping was silently rejected 403 before
+  // ever reaching requireIngestSecret (found 2026-07-12, confirmed via Railway http logs:
+  // real curl pings from the PC uploader, 403, never once reaching the route handler).
+  if (req.path.includes('/webhook') || req.path.includes('/resend-webhook') || req.path.includes('/stripe/webhook') || req.path.includes('/billing/webhook') || req.path.includes('/ebay/account-deletion') || req.path.includes('/api/internal/') || req.path.includes('/api/crawler-log') || req.path.includes('/video/footage-ingest')) {
     return next();
   }
 
