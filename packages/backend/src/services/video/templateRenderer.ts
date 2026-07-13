@@ -909,22 +909,38 @@ type PersistedAsset = {
 /** Rehydrate a ClipAnalysis from a persisted asset. Prefers the full analysisJson
  *  blob (ADR-080 §5 contract); falls back to the typed columns if it is missing. */
 function analysisFromAsset(asset: PersistedAsset, uploadIndex: number): ClipAnalysis | null {
+  // LIVE COLUMN WINS for role/roleConfidence (real bug found + fixed 2026-07-13,
+  // confirmed via a live test batch): POST /answer only ever updates the
+  // role/roleConfidence COLUMNS on FootageAsset when a human corrects a clip's
+  // role -- it never touches analysisJson, which stays frozen at whatever the
+  // very FIRST automated analyzeClip() pass guessed. Using analysisJson.role
+  // as-is here meant the render stage silently discarded every human
+  // correction: a live test batch had 3 of 4 clips human-corrected (to HOOK,
+  // STYLING, FIND) but analysisJson still said 'UNKNOWN' (0.2-0.25 confidence)
+  // for all three, so slotFill() saw UNKNOWN clips and reported required slots
+  // as "missing" even though correctly-tagged footage existed. Same fix shape
+  // as the analyzeBatch() clip-role fix and the classifyBatch() template-lock
+  // fix: the live column is the single source of truth for anything a human
+  // can correct; a cached blob must never silently override it.
+  const liveRole = (asset.role as ClipRole) || 'UNKNOWN';
+  const liveConfidence = asset.roleConfidence ?? 0;
+
   if (asset.analysisJson && typeof asset.analysisJson === 'object') {
     const parsed = asset.analysisJson as ClipAnalysis;
-    // Trust the persisted contract but guarantee the fields the renderer reads.
+    // Trust the persisted contract for everything EXCEPT role/roleConfidence,
+    // which the live columns always override.
     if (parsed && parsed.role && parsed.facts && parsed.ordering) {
-      return parsed;
+      return { ...parsed, role: liveRole, roleConfidence: liveConfidence };
     }
   }
   // Fallback: reconstruct a minimal ClipAnalysis from typed columns.
-  const role = (asset.role as ClipRole) || 'UNKNOWN';
   return {
     assetId: asset.id,
     r2Key: asset.r2Key,
     durationMs: asset.durationMs ?? 0,
     mediaType: asset.mediaType === 'image' ? 'image' : 'video',
-    role,
-    roleConfidence: asset.roleConfidence ?? 0,
+    role: liveRole,
+    roleConfidence: liveConfidence,
     facts: { prices: [], isScreenRecording: false },
     ordering: { uploadIndex, isLikelyOpener: false, isLikelyCloser: false },
     signals: { ocr: 0, whisper: 0, vision: 0 },
