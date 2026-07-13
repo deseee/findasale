@@ -123,7 +123,7 @@ function mapJsonLdToPageData(event: Record<string, any>): FbEventPageData {
  * common formats — long weekday, short weekday, and month-day-year with no
  * weekday. Returns null if no recognisable format is found or Date is invalid.
  */
-function parseDateFromOgDescription(text: string): Date | null {
+function parseDateFromOgDescription(text: string, url?: string): Date | null {
   const MONTHS_LONG: Record<string, number> = {
     January: 1, February: 2, March: 3, April: 4, May: 5, June: 6,
     July: 7, August: 8, September: 9, October: 10, November: 11, December: 12,
@@ -161,7 +161,10 @@ function parseDateFromOgDescription(text: string): Date | null {
   if (m0) {
     const [, month, day, year] = m0;
     const d = new Date(`${month} ${day}, ${year}`);
-    if (!isNaN(d.getTime())) return d;
+    if (!isNaN(d.getTime())) {
+      console.log(`[FB-Events-PageFetch] Pattern0 date extracted: ${d.toISOString()} from ${url || 'unknown'}`);
+      return d;
+    }
   }
 
   // Pattern 1 — full long-form weekday
@@ -173,7 +176,11 @@ function parseDateFromOgDescription(text: string): Date | null {
   let m = text.match(p1);
   if (m) {
     const monthNum = MONTHS_LONG[cap(m[1])];
-    if (monthNum) return buildDate(monthNum, parseInt(m[2], 10), parseInt(m[3], 10), m[4], m[5]);
+    if (monthNum) {
+      const d1 = buildDate(monthNum, parseInt(m[2], 10), parseInt(m[3], 10), m[4], m[5]);
+      if (d1) console.log(`[FB-Events-PageFetch] Pattern1 date extracted: ${d1.toISOString()} from ${url || 'unknown'}`);
+      return d1;
+    }
   }
 
   // Pattern 2 — short-form weekday
@@ -185,7 +192,11 @@ function parseDateFromOgDescription(text: string): Date | null {
   m = text.match(p2);
   if (m) {
     const monthNum = MONTHS_SHORT[cap(m[1])];
-    if (monthNum) return buildDate(monthNum, parseInt(m[2], 10), parseInt(m[3], 10), m[4], m[5]);
+    if (monthNum) {
+      const d2 = buildDate(monthNum, parseInt(m[2], 10), parseInt(m[3], 10), m[4], m[5]);
+      if (d2) console.log(`[FB-Events-PageFetch] Pattern2 date extracted: ${d2.toISOString()} from ${url || 'unknown'}`);
+      return d2;
+    }
   }
 
   // Pattern 3 — month-day-year, no weekday
@@ -197,7 +208,11 @@ function parseDateFromOgDescription(text: string): Date | null {
   m = text.match(p3);
   if (m) {
     const monthNum = MONTHS_LONG[cap(m[1])];
-    if (monthNum) return buildDate(monthNum, parseInt(m[2], 10), parseInt(m[3], 10), m[4], m[5]);
+    if (monthNum) {
+      const d3 = buildDate(monthNum, parseInt(m[2], 10), parseInt(m[3], 10), m[4], m[5]);
+      if (d3) console.log(`[FB-Events-PageFetch] Pattern3 date extracted: ${d3.toISOString()} from ${url || 'unknown'}`);
+      return d3;
+    }
   }
 
   return null;
@@ -273,7 +288,7 @@ export async function fetchFacebookEventPage(url: string): Promise<FbEventPageDa
 
     // If JSON-LD didn't give us a date, try parsing it from og:description
     if (!result.startDate && og.description) {
-      const ogDate = parseDateFromOgDescription(og.description);
+      const ogDate = parseDateFromOgDescription(og.description, url);
       if (ogDate) result.startDate = ogDate;
     }
 
