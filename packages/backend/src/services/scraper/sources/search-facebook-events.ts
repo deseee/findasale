@@ -29,6 +29,7 @@
 import * as cheerio from 'cheerio';
 import { ScrapedItem } from '../index';
 import { getRandomUserAgent, jitterDelay } from '../userAgents';
+import { fetchFacebookEventPage } from './facebook-events-page-fetch';
 import { GOOGLE_PLACES_METROS } from './scraperConfig';
 
 // ---------------------------------------------------------------------------
@@ -947,5 +948,26 @@ export async function scrapeFacebookEventsForMetro(
   }
 
   const items: ScrapedItem[] = Array.from(byEventId.values());
+
+  // ADR-081: direct page-fetch enrichment (feature-flagged, graceful fallback).
+  // Runs once per unique deduped event, never per sub-query, to minimize FB requests.
+  if (process.env.FB_EVENTS_DIRECT_FETCH_ENABLED === 'true') {
+    for (const item of items) {
+      if (!item.sourceUrl) continue;
+      const enrichment = await fetchFacebookEventPage(item.sourceUrl);
+      if (enrichment?.startDate) {
+        item.startDate = enrichment.startDate;
+        item.endDate = enrichment.endDate ?? item.endDate;
+        if (enrichment.address) item.address = enrichment.address;
+        if (enrichment.city) item.city = enrichment.city;
+        if (enrichment.state) item.state = enrichment.state;
+        if (enrichment.zip) item.zip = enrichment.zip;
+        if (enrichment.organizerName) item.organizerName = enrichment.organizerName;
+        if (item.scrapedMetadata) item.scrapedMetadata.dateApproximate = false;
+      }
+      await jitterDelay(1500, 3000);
+    }
+  }
+
   return items;
 }

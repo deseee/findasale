@@ -81,6 +81,11 @@ jobs:
           # runs the entire ~301-metro list (full backfill). Scheduled runs leave this
           # unset, so the scraper runs only today's ~43-metro shard.
           FB_EVENTS_ALL_METROS: ${{ inputs.all_metros }}
+          # ADR-081: direct page-fetch enrichment kill-switch. Repo Variable
+          # (not secret) — default unset/false runs pure-SERP behavior identical
+          # to pre-ADR-081. Set to 'true' only after a manual workflow_dispatch
+          # test run confirms real dates are being captured.
+          FB_EVENTS_DIRECT_FETCH_ENABLED: ${{ vars.FB_EVENTS_DIRECT_FETCH_ENABLED }}
         run: |
           cd packages/backend
           npx ts-node src/scripts/run-search-facebook-events.ts
