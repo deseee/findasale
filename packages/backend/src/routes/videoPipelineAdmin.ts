@@ -98,14 +98,18 @@ router.post('/dry-run', async (req, res) => {
 /**
  * GET /api/admin/video-pipeline/footage-batch/needs-input
  * ADR-080 Stage 2 handoff: lists every FootageBatch currently blocked on a human
- * answer (status NEEDS_INPUT), oldest-sealed-first. This is the only surface for
- * discovering open questions right now — there is no Phase 4 review UI yet
- * (correctly deferred, same rationale as the dry-run route above).
+ * (status NEEDS_INPUT -- a staged question -- OR status FAILED -- an unrecoverable
+ * error), oldest-sealed-first. Broadened 2026-07-13 to include FAILED alongside
+ * NEEDS_INPUT: both states need a human to look at the batch, and this is the
+ * same list the admin UI page reads. `status` is included per row so the caller
+ * can branch (NEEDS_INPUT -> answer/reject, FAILED -> retry/reject). This is the
+ * only surface for discovering open questions right now — there is no Phase 4
+ * review UI yet beyond the minimal admin page added alongside this route.
  */
 router.get('/footage-batch/needs-input', async (req, res) => {
   try {
     const batches = await prisma.footageBatch.findMany({
-      where: { status: 'NEEDS_INPUT' },
+      where: { status: { in: ['NEEDS_INPUT', 'FAILED'] } },
       orderBy: { sealedAt: 'asc' },
       include: { _count: { select: { assets: true } } },
     });
@@ -113,10 +117,12 @@ router.get('/footage-batch/needs-input', async (req, res) => {
       count: batches.length,
       batches: batches.map((b) => ({
         id: b.id,
+        status: b.status,
         openQuestion: b.openQuestion,
         questionField: b.questionField,
         templateId: b.templateId,
         templateConfidence: b.templateConfidence,
+        reviewNotes: b.reviewNotes,
         sealedAt: b.sealedAt,
         createdAt: b.createdAt,
         assetCount: b._count.assets,
@@ -229,6 +235,77 @@ router.post('/footage-batch/:batchId/answer', async (req, res) => {
   } catch (err: any) {
     console.error(`[videoPipelineAdmin] classifyBatch re-run failed for ${batchId}:`, err);
     return res.status(500).json({ ok: false, batchId, message: 'Re-classification failed', error: err?.message });
+  }
+});
+
+/**
+ * POST /api/admin/video-pipeline/footage-batch/:batchId/reject
+ * Body: { reason?: string }
+ *
+ * General-purpose reject, added 2026-07-13 to close a real gap: the ONLY reject
+ * path before this was the narrow 'batch.footage' dead-end inside the /answer
+ * route (no analyzable clips). This route rejects a batch regardless of WHY --
+ * bad footage, wrong sale, duplicate shoot, anything -- from either NEEDS_INPUT
+ * or FAILED. Terminal: REJECTED per schema comment means full stop, no retry.
+ */
+router.post('/footage-batch/:batchId/reject', async (req, res) => {
+  const { batchId } = req.params;
+  const reason = typeof req.body?.reason === 'string' ? req.body.reason.trim() : undefined;
+
+  const batch = await prisma.footageBatch.findUnique({ where: { id: batchId } });
+  if (!batch) {
+    return res.status(404).json({ message: `FootageBatch ${batchId} not found` });
+  }
+  if (batch.status !== 'NEEDS_INPUT' && batch.status !== 'FAILED') {
+    return res.status(400).json({
+      message: `Batch cannot be rejected from status=${batch.status} (only NEEDS_INPUT or FAILED).`,
+    });
+  }
+
+  const rejected = await prisma.footageBatch.update({
+    where: { id: batchId },
+    data: {
+      status: 'REJECTED',
+      openQuestion: null,
+      questionField: null,
+      reviewNotes: reason ? `Rejected: ${reason}` : batch.reviewNotes,
+    },
+  });
+  return res.status(200).json({ ok: true, batchId, status: rejected.status });
+});
+
+/**
+ * POST /api/admin/video-pipeline/footage-batch/:batchId/retry
+ *
+ * Closes the other real gap: before this, FAILED was a dead end with no way to
+ * retry short of a raw DB update. Only valid from FAILED. Hands the batch back
+ * to SEALED so classifyBatch()'s guarded claim (status:'SEALED' -> 'ANALYZING')
+ * can pick it up again, then awaits the real result (mirrors the /answer route's
+ * re-run pattern) rather than firing-and-forgetting, since this is a low-traffic
+ * admin action same as /answer.
+ */
+router.post('/footage-batch/:batchId/retry', async (req, res) => {
+  const { batchId } = req.params;
+
+  const batch = await prisma.footageBatch.findUnique({ where: { id: batchId } });
+  if (!batch) {
+    return res.status(404).json({ message: `FootageBatch ${batchId} not found` });
+  }
+  if (batch.status !== 'FAILED') {
+    return res.status(400).json({ message: `Batch is not FAILED (status=${batch.status}) -- nothing to retry.` });
+  }
+
+  await prisma.footageBatch.update({
+    where: { id: batchId },
+    data: { status: 'SEALED' },
+  });
+
+  try {
+    const result = await classifyBatch(batchId);
+    return res.status(200).json({ ok: true, batchId, result });
+  } catch (err: any) {
+    console.error(`[videoPipelineAdmin] classifyBatch retry failed for ${batchId}:`, err);
+    return res.status(500).json({ ok: false, batchId, message: 'Retry failed', error: err?.message });
   }
 });
 

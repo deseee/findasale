@@ -761,6 +761,11 @@ const AdminDashboard = () => {
           <h3 className="text-lg font-bold text-warm-900 dark:text-warm-100 mb-2">AI Spend</h3>
           <p className="text-warm-600 dark:text-warm-400 text-sm">Live cost tracking across tagging, web detection, eBay search, and grounding</p>
         </Link>
+
+        <Link href="/admin/video-pipeline" className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 hover:shadow-lg hover:bg-pink-50 dark:bg-pink-900/20 border border-pink-100 transition">
+          <h3 className="text-lg font-bold text-warm-900 dark:text-warm-100 mb-2">Video Pipeline</h3>
+          <p className="text-warm-600 dark:text-warm-400 text-sm">Footage batches needing an answer or stuck FAILED (ADR-080 Stage 2)</p>
+        </Link>
       </div>
 
       {/* Recent Activity */}
