@@ -117,6 +117,80 @@ function mapJsonLdToPageData(event: Record<string, any>): FbEventPageData {
 }
 
 /**
+ * Attempt to extract a Date from a Facebook event og:description string.
+ * Facebook event pages include the event date/time in og:description as
+ * human-readable text even when no JSON-LD block is present. Handles three
+ * common formats — long weekday, short weekday, and month-day-year with no
+ * weekday. Returns null if no recognisable format is found or Date is invalid.
+ */
+function parseDateFromOgDescription(text: string): Date | null {
+  const MONTHS_LONG: Record<string, number> = {
+    January: 1, February: 2, March: 3, April: 4, May: 5, June: 6,
+    July: 7, August: 8, September: 9, October: 10, November: 11, December: 12,
+  };
+  const MONTHS_SHORT: Record<string, number> = {
+    Jan: 1, Feb: 2, Mar: 3, Apr: 4, May: 5, Jun: 6,
+    Jul: 7, Aug: 8, Sep: 9, Oct: 10, Nov: 11, Dec: 12,
+  };
+
+  function buildDate(month: number, day: number, year: number, timeStr: string, ampm: string): Date | null {
+    const parts = timeStr.split(':');
+    let hours = parseInt(parts[0], 10);
+    const minutes = parts.length > 1 ? parseInt(parts[1], 10) : 0;
+    if (ampm.toUpperCase() === 'AM') {
+      if (hours === 12) hours = 0;
+    } else {
+      if (hours !== 12) hours += 12;
+    }
+    const d = new Date(year, month - 1, day, hours, minutes, 0, 0);
+    return isNaN(d.getTime()) ? null : d;
+  }
+
+  const cap = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+  const LONG_MONTHS = 'January|February|March|April|May|June|July|August|September|October|November|December';
+  const SHORT_MONTHS = 'Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec';
+  const TIME_PAT = '(\\d{1,2}(?::\\d{2})?)\\s*(AM|PM)';
+
+  // Pattern 1 — full long-form weekday
+  // e.g. "Saturday, July 19, 2025 at 9:00 AM UTC+01 · Jake's Ranch"
+  const p1 = new RegExp(
+    `(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday),\\s+(${LONG_MONTHS})\\s+(\\d{1,2}),\\s+(\\d{4})\\s+at\\s+${TIME_PAT}`,
+    'i'
+  );
+  let m = text.match(p1);
+  if (m) {
+    const monthNum = MONTHS_LONG[cap(m[1])];
+    if (monthNum) return buildDate(monthNum, parseInt(m[2], 10), parseInt(m[3], 10), m[4], m[5]);
+  }
+
+  // Pattern 2 — short-form weekday
+  // e.g. "Sat, Jul 19, 2025 at 9:00 AM – 2:00 PM CDT · Jake's Ranch"
+  const p2 = new RegExp(
+    `(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun),\\s+(${SHORT_MONTHS})\\s+(\\d{1,2}),\\s+(\\d{4})\\s+at\\s+${TIME_PAT}`,
+    'i'
+  );
+  m = text.match(p2);
+  if (m) {
+    const monthNum = MONTHS_SHORT[cap(m[1])];
+    if (monthNum) return buildDate(monthNum, parseInt(m[2], 10), parseInt(m[3], 10), m[4], m[5]);
+  }
+
+  // Pattern 3 — month-day-year, no weekday
+  // e.g. "July 19, 2025 at 9 AM · Jake's Ranch, Gilbert, Arizona"
+  const p3 = new RegExp(
+    `(${LONG_MONTHS})\\s+(\\d{1,2}),?\\s+(\\d{4})\\s+at\\s+${TIME_PAT}`,
+    'i'
+  );
+  m = text.match(p3);
+  if (m) {
+    const monthNum = MONTHS_LONG[cap(m[1])];
+    if (monthNum) return buildDate(monthNum, parseInt(m[2], 10), parseInt(m[3], 10), m[4], m[5]);
+  }
+
+  return null;
+}
+
+/**
  * Fetch and parse a single Facebook event page. Returns null on any failure
  * or if no usable date could be extracted — caller must fall back to the
  * existing SERP-derived guess in that case.
@@ -176,16 +250,26 @@ export async function fetchFacebookEventPage(url: string): Promise<FbEventPageDa
     const jsonLdEvent = extractJsonLdEvent(html);
     let result: FbEventPageData = jsonLdEvent ? mapJsonLdToPageData(jsonLdEvent) : {};
 
+    // Always extract OG tags — needed for both description fill and date parsing fallback
+    const og = extractOgTags(html);
+
     // Fill gaps from OG tags if JSON-LD was absent or incomplete
-    if (!result.description) {
-      const og = extractOgTags(html);
-      if (og.description) result.description = og.description;
+    if (!result.description && og.description) {
+      result.description = og.description;
+    }
+
+    // If JSON-LD didn't give us a date, try parsing it from og:description
+    if (!result.startDate && og.description) {
+      const ogDate = parseDateFromOgDescription(og.description);
+      if (ogDate) result.startDate = ogDate;
     }
 
     // No usable date extracted — treat as a failed enrichment, not a partial
     // success, since date accuracy is the primary reason this module exists.
     if (!result.startDate) {
-      console.warn(`[FB-Events-PageFetch] No parseable date found for ${url} — falling back to SERP guess`);
+      console.warn(
+        `[FB-Events-PageFetch] No parseable date found for ${url} — falling back to SERP guess | og.title=${og.title} | og.description=${og.description?.substring(0, 300)}`
+      );
       return null;
     }
 
