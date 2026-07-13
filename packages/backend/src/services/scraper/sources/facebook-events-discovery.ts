@@ -189,6 +189,16 @@ const US_STATE_CODES = new Set([
   'SC', 'SD', 'TN', 'TX', 'UT', 'VT', 'VA', 'WA', 'WV', 'WI', 'WY', 'DC',
 ]);
 
+// Canadian province + territory 2-letter codes. Disjoint from US_STATE_CODES,
+// so a bare 2-letter token unambiguously identifies its country. QC is included
+// here for DETECTION only -- Quebec listings are REJECTED at ingest (LOCKED
+// S1116, consistent with the S626 EU+QC exclusion posture); every other province
+// is accepted and relabelled to its true city + province.
+const CA_PROVINCE_CODES = new Set([
+  'AB', 'BC', 'MB', 'NB', 'NL', 'NS', 'NT', 'NU', 'ON', 'PE', 'QC', 'SK', 'YT',
+]);
+
+
 /**
  * Extract the REAL city + 2-letter state from an event_place display string by
  * locating a valid US state-code token and taking the comma-token immediately
@@ -201,25 +211,39 @@ const US_STATE_CODES = new Set([
  *   - FreeformPlace addr: "36 Linden St, Pittsfield, MA 01201-3212, United States"            -> Pittsfield, MA
  *   - FreeformPlace addr: "470 Gold Rd, Jasper, TN 37347-6216, United States"                 -> Jasper, TN
  *
- * A state token is either an exact 2-letter uppercase code ("NY") OR a code
- * followed by a ZIP ("MA 01201-3212" -> MA). Returns null when no valid US
- * state code is present (e.g. a spelled-out "North Carolina", or an
- * unparseable string) so the caller keeps its existing metro fallback.
+ * A US state token is an exact 2-letter uppercase code ("NY") OR a code followed
+ * by a ZIP ("MA 01201-3212" -> MA). A Canadian province token is an exact code
+ * ("BC") OR a code + postal ("BC V3G 2K1"); e.g.
+ * "..., Abbotsford, BC V3G 2K1, Canada" -> { Abbotsford, BC, CA }. The US and CA
+ * code sets are disjoint, so `country` is unambiguous. Returns null when no valid
+ * US/CA code is present (spelled-out province, or an unparseable string) so the
+ * caller keeps its existing metro fallback.
  */
 export function deriveCityStateFromDisplay(
   display: string
-): { city: string; state: string } | null {
+): { city: string; state: string; country: 'US' | 'CA' } | null {
   if (!display || typeof display !== 'string') return null;
   const tokens = display
     .split(',')
     .map((t) => t.trim())
     .filter(Boolean);
   for (let i = 1; i < tokens.length; i++) {
-    // Exact "ST", or "ST 01201" / "ST 01201-3212" (state code + trailing ZIP).
-    const m = tokens[i].match(/^([A-Z]{2})(?:\s+\d{5}(?:-\d{4})?)?$/);
-    if (m && US_STATE_CODES.has(m[1])) {
+    // US: exact "ST", or "ST 01201" / "ST 01201-3212" (state code + trailing ZIP).
+    const us = tokens[i].match(/^([A-Z]{2})(?:\s+\d{5}(?:-\d{4})?)?$/);
+    if (us && US_STATE_CODES.has(us[1])) {
       const city = tokens[i - 1];
-      if (city) return { city, state: m[1] };
+      if (city) return { city, state: us[1], country: 'US' };
+    }
+    // Canada: bare province code "BC", or province + postal "BC V3G 2K1"
+    // (as it appears in FreeformPlace addresses like
+    // "..., Abbotsford, BC V3G 2K1, Canada"). Province set is disjoint from the
+    // US set, so this never mis-claims a US token. City is the token before it.
+    const ca = tokens[i].match(
+      /^([A-Z]{2})(?:\s+[A-Za-z]\d[A-Za-z]\s?\d[A-Za-z]\d)?$/
+    );
+    if (ca && CA_PROVINCE_CODES.has(ca[1])) {
+      const city = tokens[i - 1];
+      if (city) return { city, state: ca[1], country: 'CA' };
     }
   }
   return null;
@@ -227,13 +251,24 @@ export function deriveCityStateFromDisplay(
 
 // How the returned city/state was resolved -- surfaced in scrapedMetadata so
 // downstream cleanup can find records that never got a real city/state.
-type CityStateSource = 'structured' | 'derived-address' | 'metro-fallback';
+type CityStateSource =
+  | 'structured'
+  | 'derived-address'
+  | 'derived-address-CA'
+  | 'metro-fallback';
 
 interface ParsedPlace {
   city: string;
   state: string;
   address: string;
   cityStateSource: CityStateSource;
+  /**
+   * Resolved country when city/state came from a parsed address ('US' or 'CA').
+   * null when it is still the query-metro fallback or came from structured
+   * fields. Stored in scrapedMetadata (there is NO `country` column on Sale --
+   * see SCHEMA NOTE in the handoff) and used to reject Quebec at ingest.
+   */
+  country: 'US' | 'CA' | null;
   /**
    * true when we have a REAL street address (FreeformPlace) but could NOT
    * resolve a confident US city/state from it -- i.e. the city/state we are
@@ -252,6 +287,7 @@ function parsePlace(ev: any, metro: MetroTarget): ParsedPlace {
   let state = metro.state;
   let address = '';
   let cityStateSource: CityStateSource = 'metro-fallback';
+  let country: 'US' | 'CA' | null = null;
 
   if (place && typeof place === 'object') {
     // Some result objects carry structured city/state; the lean typeahead objects
@@ -279,7 +315,9 @@ function parsePlace(ev: any, metro: MetroTarget): ParsedPlace {
       if (derived) {
         state = derived.state;
         city = derived.city;
-        cityStateSource = 'derived-address';
+        country = derived.country;
+        cityStateSource =
+          derived.country === 'CA' ? 'derived-address-CA' : 'derived-address';
       }
     }
     // Street address ONLY from a FreeformPlace, whose contextual_name is a real
@@ -297,7 +335,7 @@ function parsePlace(ev: any, metro: MetroTarget): ParsedPlace {
   // Casper,WY-vs-Abbotsford,BC bug). Flag it; do not silently trust the metro.
   const geoUnresolved = cityStateSource === 'metro-fallback' && address.length > 0;
 
-  return { city, state, address, cityStateSource, geoUnresolved };
+  return { city, state, address, cityStateSource, country, geoUnresolved };
 }
 
 // ---------------------------------------------------------------------------
@@ -365,7 +403,16 @@ function mapEventToScrapedItem(
     ? canonicalizeEventUrl(url)
     : `https://www.facebook.com/events/${fbEventId}/`;
 
-  const { city, state, address, cityStateSource, geoUnresolved } = parsePlace(ev, metro);
+  const { city, state, address, cityStateSource, country, geoUnresolved } =
+    parsePlace(ev, metro);
+
+  // LOCKED S1116: Canadian listings are IN -- EXCEPT Quebec, which is REJECTED
+  // at ingest (consistent with the EU+QC exclusion posture). Reject when the
+  // resolved province is QC, OR the parsed street address explicitly names
+  // Quebec/Quebec (spelled-out province with no 2-letter code token). No US
+  // state is 'QC' and metro.state is always a US state, so state==='QC' can only
+  // arise from a Canadian address parse -- this never rejects a US listing.
+  if (state === 'QC' || /\bqu[eé]bec\b/i.test(address)) return null;
 
   // Organizer: the FB search JSON carries NO host/organizer NAME (only the
   // is_viewer_host boolean), so we never derive one here. Do NOT re-add the
@@ -410,6 +457,10 @@ function mapEventToScrapedItem(
       // cleanup anchor. `city`/`state` above remain the query-metro fallback for
       // now -- the reject-vs-relabel decision is deferred (see DECISION NEEDED).
       ...(geoUnresolved ? { rawPlaceAddress: address } : {}),
+      // Resolved country when derived from a parsed address ('US' | 'CA'). There
+      // is NO `country` column on Sale, so this is the ONLY place a Canadian
+      // listing is distinguishable from a US one (see SCHEMA NOTE in handoff).
+      ...(country ? { country } : {}),
     },
   };
 }
