@@ -151,6 +151,19 @@ function parseDateFromOgDescription(text: string): Date | null {
   const SHORT_MONTHS = 'Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec';
   const TIME_PAT = '(\\d{1,2}(?::\\d{2})?)\\s*(AM|PM)';
 
+  // Pattern 0: Facebook og:description native format — "on Saturday, June 10 2017"
+  // (no time component, day before year with space not comma)
+  // e.g. "Event in Anchorage, AK by Southport Master Association on Saturday, June 10 2017 with 262 people interested"
+  // e.g. "Shopping event by Fairlamb Lavender Farm on Friday, July 30 2021"
+  // e.g. "Event by Jeremy Johnson on Sunday, September 29 201312 posts in the discussion."
+  const p0 = /on\s+(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday),\s+(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{1,2})\s+(\d{4})/i;
+  const m0 = text.match(p0);
+  if (m0) {
+    const [, month, day, year] = m0;
+    const d = new Date(`${month} ${day}, ${year}`);
+    if (!isNaN(d.getTime())) return d;
+  }
+
   // Pattern 1 — full long-form weekday
   // e.g. "Saturday, July 19, 2025 at 9:00 AM UTC+01 · Jake's Ranch"
   const p1 = new RegExp(
