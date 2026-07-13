@@ -26,6 +26,7 @@
 import axios from 'axios';
 
 import { prisma } from '../../lib/prisma';
+import { createNotification } from '../notificationService';
 import { analyzeBatch, type ClipAnalysis, type ClipRole } from './clipAnalysisService';
 import { ALL_TEMPLATES, TEMPLATES_BY_ID, type Template } from './templates';
 import { renderBatch } from './templateRenderer';
@@ -290,6 +291,47 @@ function decideGate(analyses: ClipAnalysis[], inference: TemplateInference): Gat
 // classifyBatch — the entry point wired to the seal sweep.
 // ---------------------------------------------------------------------------
 
+/**
+ * Alert every ADMIN user the moment a batch needs a human -- either a staged
+ * question (NEEDS_INPUT) or an unrecoverable error (FAILED). Added 2026-07-13:
+ * before this, the ONLY way to discover a blocked batch was to poll
+ * GET /api/admin/video-pipeline/footage-batch/needs-input by hand -- a batch
+ * could sit silently forever with zero signal to anyone. Fire-and-forget and
+ * failure-isolated (matches createNotification's own graceful-degradation
+ * contract): a notification failure must never fail classification.
+ *
+ * No admin UI page exists yet for this route (API-only, curl/fetch), so the
+ * notification link is intentionally omitted rather than pointing at a 404 --
+ * the batch id is in the body text so it can be looked up directly.
+ */
+async function notifyAdminsBatchNeedsAttention(
+  batchId: string,
+  kind: 'NEEDS_INPUT' | 'FAILED',
+  question?: string,
+): Promise<void> {
+  try {
+    const admins = await prisma.user.findMany({
+      where: { OR: [{ roles: { has: 'ADMIN' } }, { role: 'ADMIN' }] },
+      select: { id: true },
+    });
+    if (admins.length === 0) {
+      console.warn(`[footageClassify] No ADMIN users found -- batch ${batchId} (${kind}) has no one to notify`);
+      return;
+    }
+    const title = kind === 'FAILED' ? 'Video batch failed' : 'Video batch needs your input';
+    const body =
+      kind === 'FAILED'
+        ? `Footage batch ${batchId} hit an unrecoverable error during classification. Check Railway logs.`
+        : `Footage batch ${batchId}: ${question ?? 'a question is staged'}. Answer via POST /api/admin/video-pipeline/footage-batch/${batchId}/answer.`;
+    await Promise.all(
+      admins.map((a) => createNotification(a.id, 'video_batch_attention', title, body, undefined, 'OPERATIONAL')),
+    );
+  } catch (err: any) {
+    console.warn(`[footageClassify] Failed to notify admins for batch ${batchId} (${kind}):`, err?.message ?? err);
+  }
+}
+
+
 export interface ClassifyBatchResult {
   batchId: string;
   status: 'ASSEMBLING' | 'NEEDS_INPUT' | 'FAILED' | 'SKIPPED';
@@ -333,6 +375,7 @@ export async function classifyBatch(batchId: string): Promise<ClassifyBatchResul
           questionField: 'batch.footage',
         },
       });
+      await notifyAdminsBatchNeedsAttention(batchId, 'NEEDS_INPUT', 'no analyzable clips');
       return { batchId, status: 'NEEDS_INPUT', question: 'no analyzable clips', clipCount: 0, ambiguousCount: 0, softCount: 0 };
     }
 
@@ -394,6 +437,7 @@ export async function classifyBatch(batchId: string): Promise<ClassifyBatchResul
     console.log(
       `[footageClassify] Batch ${batchId} NEEDS_INPUT — one question staged (${decision.questionField}): ${decision.question}`
     );
+    await notifyAdminsBatchNeedsAttention(batchId, 'NEEDS_INPUT', decision.question);
     return {
       batchId,
       status: 'NEEDS_INPUT',
@@ -411,6 +455,7 @@ export async function classifyBatch(batchId: string): Promise<ClassifyBatchResul
     await prisma.footageBatch
       .update({ where: { id: batchId }, data: { status: 'FAILED', reviewNotes: `Analysis error: ${err?.message ?? String(err)}`.slice(0, 1000) } })
       .catch((e) => console.error(`[footageClassify] Could not mark batch ${batchId} FAILED:`, e?.message ?? e));
+    await notifyAdminsBatchNeedsAttention(batchId, 'FAILED');
     return { batchId, status: 'FAILED', clipCount: 0, ambiguousCount: 0, softCount: 0 };
   }
 }
