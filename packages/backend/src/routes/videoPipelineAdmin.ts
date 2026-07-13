@@ -29,6 +29,9 @@ import { Router } from 'express';
 import { authenticate, requireAdmin } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import { runVideoJobPipeline, GUIDE_TOPIC_FACTS } from '../services/video/videoJobOrchestrator';
+import { classifyBatch } from '../services/video/footageClassifyService';
+import { ALL_TEMPLATES } from '../services/video/templates';
+import { FootageRole } from '@prisma/client';
 
 const router = Router();
 
@@ -88,6 +91,144 @@ router.post('/dry-run', async (req, res) => {
       reviewNotes: finalJob?.reviewNotes ?? err?.message ?? 'Unknown pipeline failure',
       costCents: finalJob?.costCents ?? null,
     });
+  }
+});
+
+
+/**
+ * GET /api/admin/video-pipeline/footage-batch/needs-input
+ * ADR-080 Stage 2 handoff: lists every FootageBatch currently blocked on a human
+ * answer (status NEEDS_INPUT), oldest-sealed-first. This is the only surface for
+ * discovering open questions right now — there is no Phase 4 review UI yet
+ * (correctly deferred, same rationale as the dry-run route above).
+ */
+router.get('/footage-batch/needs-input', async (req, res) => {
+  try {
+    const batches = await prisma.footageBatch.findMany({
+      where: { status: 'NEEDS_INPUT' },
+      orderBy: { sealedAt: 'asc' },
+      include: { _count: { select: { assets: true } } },
+    });
+    return res.status(200).json({
+      count: batches.length,
+      batches: batches.map((b) => ({
+        id: b.id,
+        openQuestion: b.openQuestion,
+        questionField: b.questionField,
+        templateId: b.templateId,
+        templateConfidence: b.templateConfidence,
+        sealedAt: b.sealedAt,
+        createdAt: b.createdAt,
+        assetCount: b._count.assets,
+      })),
+    });
+  } catch (err: any) {
+    console.error('[videoPipelineAdmin] Failed to list needs-input batches:', err);
+    return res.status(500).json({ message: 'Failed to list needs-input batches', error: err?.message });
+  }
+});
+
+// ADR-080 §6 questionField shape 2 — "assetId:<id>.role"
+const ASSET_ROLE_QUESTION = /^assetId:(.+)\.role$/;
+
+/**
+ * POST /api/admin/video-pipeline/footage-batch/:batchId/answer
+ * Body: { answer: string }
+ *
+ * ADR-080 Stage 2 handoff: resolves the ONE staged question on a NEEDS_INPUT
+ * FootageBatch. questionField shapes are owned by footageClassifyService's
+ * decideGate() — this route only interprets and applies them:
+ *   1. 'batch.templateId'       -> answer resolves to a Template id or displayName
+ *   2. 'assetId:<id>.role'      -> answer resolves to a FootageRole value
+ *   3. 'batch.footage'          -> dead-end reject, no data value, no re-classify
+ *
+ * After applying (shapes 1 & 2 only), the batch is handed back to SEALED so
+ * classifyBatch()'s guarded claim (status:'SEALED' -> 'ANALYZING') can re-run it.
+ * Unlike the seal cron's fire-and-forget call, this is a low-traffic admin
+ * action, so we AWAIT classifyBatch() directly and return its real result
+ * (ASSEMBLING / a NEXT NEEDS_INPUT question / FAILED) in one round trip.
+ */
+router.post('/footage-batch/:batchId/answer', async (req, res) => {
+  const { batchId } = req.params;
+  const answer = req.body?.answer;
+
+  if (typeof answer !== 'string' || answer.trim().length === 0) {
+    return res.status(400).json({ message: 'Body must include a non-empty string "answer".' });
+  }
+
+  const batch = await prisma.footageBatch.findUnique({ where: { id: batchId } });
+  if (!batch) {
+    return res.status(404).json({ message: `FootageBatch ${batchId} not found` });
+  }
+  if (batch.status !== 'NEEDS_INPUT') {
+    return res.status(400).json({ message: `Batch is not awaiting input (status=${batch.status})` });
+  }
+  if (!batch.questionField) {
+    return res.status(400).json({ message: 'Batch has no questionField staged -- nothing to answer' });
+  }
+
+  // Shape 3: batch.footage -- dead-end reject, no data value, no re-classify.
+  if (batch.questionField === 'batch.footage') {
+    const rejected = await prisma.footageBatch.update({
+      where: { id: batchId },
+      data: { status: 'REJECTED', openQuestion: null, questionField: null },
+    });
+    return res.status(200).json({ ok: true, batchId, status: rejected.status });
+  }
+
+  // Shape 2: assetId:<id>.role
+  const assetMatch = batch.questionField.match(ASSET_ROLE_QUESTION);
+  if (assetMatch) {
+    const assetId = assetMatch[1];
+    const normalized = answer.trim().toUpperCase();
+    const validRoles = Object.values(FootageRole);
+    if (!validRoles.includes(normalized as FootageRole)) {
+      return res.status(400).json({
+        message: `"${answer}" is not a valid clip role.`,
+        validOptions: validRoles,
+      });
+    }
+    const asset = await prisma.footageAsset.findUnique({ where: { id: assetId } });
+    if (!asset || asset.batchId !== batchId) {
+      return res.status(400).json({ message: `Asset ${assetId} not found on batch ${batchId}` });
+    }
+    await prisma.footageAsset.update({
+      where: { id: assetId },
+      data: { role: normalized as FootageRole, roleConfidence: 1.0 },
+    });
+  } else if (batch.questionField === 'batch.templateId') {
+    // Shape 1: batch.templateId -- answer must resolve to a template id or displayName.
+    const normalized = answer.trim().toLowerCase();
+    const match = ALL_TEMPLATES.find(
+      (t) => t.id.toLowerCase() === normalized || t.displayName.toLowerCase() === normalized
+    );
+    if (!match) {
+      return res.status(400).json({
+        message: `"${answer}" does not match a known template.`,
+        validOptions: ALL_TEMPLATES.map((t) => ({ id: t.id, displayName: t.displayName })),
+      });
+    }
+    await prisma.footageBatch.update({
+      where: { id: batchId },
+      data: { templateId: match.id },
+    });
+  } else {
+    return res.status(400).json({ message: `Unrecognized questionField: ${batch.questionField}` });
+  }
+
+  // Clear the staged question and hand back to SEALED so classifyBatch's guarded
+  // claim can re-run it.
+  await prisma.footageBatch.update({
+    where: { id: batchId },
+    data: { status: 'SEALED', openQuestion: null, questionField: null },
+  });
+
+  try {
+    const result = await classifyBatch(batchId);
+    return res.status(200).json({ ok: true, batchId, result });
+  } catch (err: any) {
+    console.error(`[videoPipelineAdmin] classifyBatch re-run failed for ${batchId}:`, err);
+    return res.status(500).json({ ok: false, batchId, message: 'Re-classification failed', error: err?.message });
   }
 });
 
