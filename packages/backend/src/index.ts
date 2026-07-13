@@ -248,7 +248,6 @@ import { scheduleReferralRewardAgeGateCron } from './jobs/referralRewardAgeGateJ
 import { scheduleFoundingOrgBadgeCron } from './jobs/foundingOrgBadgeJob'; // Feature #405: Founding Organizer Badge — nightly award
 import { scheduleRetailAutoRenewCron } from './jobs/retailAutoRenewJob'; // Feature: Retail Mode auto-renewal
 import { scheduleConsignorExpiryNoticeCron } from './jobs/consignorExpiryNoticeJob'; // Feature #309: Consignor expiry notices
-import { scheduleListingEnrichmentCron } from './jobs/listingEnrichmentCron'; // Feature #651: Nightly AI enrichment for scraped listings (4 AM UTC)
 import { scheduleResyncShippingDriftCron } from './jobs/resyncShippingDrift'; // ADR shipping-resync Phase 3 / Part C: daily carrier-rate drift re-pin (4 AM UTC)
 import { scheduleReputationScoreCron } from './jobs/reputationScoreJob'; // Feature: Referral reputation score recomputation
 import './jobs/curatorReviewJob'; // ADR-069 Phase 2: Automated curator review for AUTO_GENERATED Encyclopedia entries
@@ -961,9 +960,6 @@ httpServer.listen(PORT, '0.0.0.0', () => {
   scheduleConsignorExpiryNoticeCron();
 
   scheduleOutwardEmailAutomationsCron();
-
-  // Feature #651: Register nightly AI listing enrichment cron (daily at 4 AM UTC)
-  scheduleListingEnrichmentCron();
 
   // ADR shipping-resync Phase 3 / Part C: Register daily carrier-rate drift re-pin sweep (4 AM UTC)
   scheduleResyncShippingDriftCron();
