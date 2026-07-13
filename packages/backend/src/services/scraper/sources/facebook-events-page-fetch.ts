@@ -6,9 +6,13 @@
  * values. Feature-flagged via FB_EVENTS_DIRECT_FETCH_ENABLED — if unset/false,
  * callers should skip this entirely and keep today's SERP-only behavior.
  *
- * Header posture mirrors facebook-marketplace.ts's direct-call fallback path
- * (getRandomUserAgent/getRandomReferer) — same pattern already running in
- * production for that source, not a new mechanism.
+ * Fetch routing (in priority order):
+ *   1. Cloudflare Worker proxy (FB_EVENTS_PROXY_URL + FB_EVENTS_PROXY_TOKEN set) —
+ *      routes through AS13335, bypassing Facebook's datacenter-IP block that causes
+ *      100% HTTP 400/403 from Railway and GitHub Actions egress IPs (confirmed live
+ *      test 2026-07-12, run #46). Same worker as fb-marketplace-proxy.
+ *   2. Direct fetch fallback — used when proxy env vars are absent. Works from
+ *      developer machines / Cowork sandbox (not blocked), broken from GH Actions.
  *
  * Graceful degradation is mandatory: any failure (non-200, timeout, no
  * parseable date) must return null so the caller falls back to the existing
@@ -121,23 +125,49 @@ export async function fetchFacebookEventPage(url: string): Promise<FbEventPageDa
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
 
+  // Proxy path: route through Cloudflare Worker (AS13335) when configured.
+  // Set FB_EVENTS_PROXY_URL to the same worker URL as FB_MARKETPLACE_PROXY_URL,
+  // and FB_EVENTS_PROXY_TOKEN to the same PROXY_TOKEN secret. The worker's
+  // /fb-event-page endpoint accepts GET ?url=<encoded> with Bearer auth.
+  const proxyBase  = process.env.FB_EVENTS_PROXY_URL;
+  const proxyToken = process.env.FB_EVENTS_PROXY_TOKEN;
+  const useProxy   = Boolean(proxyBase && proxyToken);
+
   try {
-    const response = await fetch(url, {
-      method: 'GET',
-      signal: controller.signal,
-      headers: {
-        'User-Agent': getRandomUserAgent(),
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.9',
-        'Referer': getRandomReferer() || 'https://www.google.com/',
-        'Sec-Fetch-Mode': 'navigate',
-        'Sec-Fetch-Site': 'cross-site',
-        'Sec-Fetch-Dest': 'document',
-      },
-    });
+    let fetchUrl: string;
+    let fetchInit: RequestInit;
+
+    if (useProxy) {
+      fetchUrl = `${proxyBase}/fb-event-page?url=${encodeURIComponent(url)}`;
+      fetchInit = {
+        method: 'GET',
+        signal: controller.signal,
+        headers: {
+          'Authorization': `Bearer ${proxyToken}`,
+        },
+      };
+      console.log(`[FB-Events-PageFetch] Using Cloudflare proxy for ${url}`);
+    } else {
+      fetchUrl = url;
+      fetchInit = {
+        method: 'GET',
+        signal: controller.signal,
+        headers: {
+          'User-Agent': getRandomUserAgent(),
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+          'Accept-Language': 'en-US,en;q=0.9',
+          'Referer': getRandomReferer() || 'https://www.google.com/',
+          'Sec-Fetch-Mode': 'navigate',
+          'Sec-Fetch-Site': 'cross-site',
+          'Sec-Fetch-Dest': 'document',
+        },
+      };
+    }
+
+    const response = await fetch(fetchUrl, fetchInit);
 
     if (!response.ok) {
-      console.warn(`[FB-Events-PageFetch] HTTP ${response.status} for ${url}`);
+      console.warn(`[FB-Events-PageFetch] HTTP ${response.status} for ${url} (proxy=${useProxy})`);
       return null;
     }
 

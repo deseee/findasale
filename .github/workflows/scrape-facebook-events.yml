@@ -86,6 +86,17 @@ jobs:
           # to pre-ADR-081. Set to 'true' only after a manual workflow_dispatch
           # test run confirms real dates are being captured.
           FB_EVENTS_DIRECT_FETCH_ENABLED: ${{ vars.FB_EVENTS_DIRECT_FETCH_ENABLED }}
+          # ADR-081 proxy: Cloudflare Worker routes page-fetches through AS13335,
+          # bypassing Facebook datacenter-IP block on GH Actions egress IPs.
+          # FB_EVENTS_PROXY_URL is a repo Variable; FB_EVENTS_PROXY_TOKEN is a repo Secret.
+          FB_EVENTS_PROXY_URL: ${{ vars.FB_EVENTS_PROXY_URL }}
+          FB_EVENTS_PROXY_TOKEN: ${{ secrets.FB_EVENTS_PROXY_TOKEN }}
+          # ADR-081 proxy: Cloudflare Worker routes page-fetches through AS13335,
+          # bypassing Facebook's datacenter-IP block on GH Actions egress IPs.
+          # FB_EVENTS_PROXY_URL is a repo Variable (non-sensitive URL).
+          # FB_EVENTS_PROXY_TOKEN is a repo Secret (same value as Railway FB_MARKETPLACE_PROXY_TOKEN).
+          FB_EVENTS_PROXY_URL: ${{ vars.FB_EVENTS_PROXY_URL }}
+          FB_EVENTS_PROXY_TOKEN: ${{ secrets.FB_EVENTS_PROXY_TOKEN }}
         run: |
           cd packages/backend
           npx ts-node src/scripts/run-search-facebook-events.ts
