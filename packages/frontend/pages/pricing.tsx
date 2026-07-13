@@ -7,6 +7,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { jsonLdSafe } from '@/lib/jsonLdSafe';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import Link from 'next/link';
@@ -205,7 +206,7 @@ const PricingPage = () => {
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
-            __html: JSON.stringify({
+            __html: jsonLdSafe({
               '@context': 'https://schema.org',
               '@type': 'WebPage',
               name: 'Pricing',

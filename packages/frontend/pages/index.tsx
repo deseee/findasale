@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { jsonLdSafe } from '@/lib/jsonLdSafe';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
@@ -296,7 +297,7 @@ const HomePage = ({ initialSalesData }: HomePageProps) => {
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
-            __html: JSON.stringify({
+            __html: jsonLdSafe({
               '@context': 'https://schema.org',
               '@type': 'Organization',
               name: 'FindA.Sale',
@@ -315,7 +316,7 @@ const HomePage = ({ initialSalesData }: HomePageProps) => {
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
-            __html: JSON.stringify({
+            __html: jsonLdSafe({
               '@context': 'https://schema.org',
               '@type': 'WebSite',
               name: 'FindA.Sale',
@@ -331,7 +332,7 @@ const HomePage = ({ initialSalesData }: HomePageProps) => {
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
-            __html: JSON.stringify({
+            __html: jsonLdSafe({
               '@context': 'https://schema.org',
               '@type': 'LocalBusiness',
               name: 'FindA.Sale',

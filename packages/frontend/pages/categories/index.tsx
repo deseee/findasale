@@ -3,6 +3,7 @@
  * Displays all available item categories with counts, linking to /categories/[category].
  */
 import React from 'react';
+import { jsonLdSafe } from '@/lib/jsonLdSafe';
 import Head from 'next/head';
 import Link from 'next/link';
 import type { GetStaticProps } from 'next';
@@ -572,7 +573,7 @@ const CategoriesIndexPage = ({ initialData }: Props) => {
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
-            __html: JSON.stringify({
+            __html: jsonLdSafe({
               '@context': 'https://schema.org',
               '@type': 'CollectionPage',
               name: 'Browse by Category',
@@ -584,7 +585,7 @@ const CategoriesIndexPage = ({ initialData }: Props) => {
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
-            __html: JSON.stringify({
+            __html: jsonLdSafe({
               '@context': 'https://schema.org',
               '@type': 'BreadcrumbList',
               itemListElement: [

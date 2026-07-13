@@ -6,6 +6,7 @@
  */
 
 import React from 'react';
+import { jsonLdSafe } from '@/lib/jsonLdSafe';
 import Head from 'next/head';
 import Link from 'next/link';
 import { GetServerSideProps } from 'next';
@@ -64,7 +65,7 @@ const NeighborhoodPage = ({ slug, name, description, sales, total }: Props) => {
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
-            __html: JSON.stringify({
+            __html: jsonLdSafe({
               '@context': 'https://schema.org',
               '@type': 'ItemList',
               name: `Sales in ${name}`,

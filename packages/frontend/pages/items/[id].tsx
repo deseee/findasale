@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { jsonLdSafe } from '@/lib/jsonLdSafe';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
@@ -602,7 +603,7 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
       {item && (
         <Head>
           <script type="application/ld+json" dangerouslySetInnerHTML={{
-            __html: JSON.stringify((() => {
+            __html: jsonLdSafe((() => {
               const schema: any = {
                 '@context': 'https://schema.org',
                 '@type': 'Product',

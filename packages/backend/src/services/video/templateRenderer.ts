@@ -1059,18 +1059,27 @@ export async function renderBatch(batchId: string): Promise<RenderBatchResult> {
     // Slot fill (ADR-080 §9.2).
     const fill = slotFill(template, analyses);
 
-    // Fail loud on a missing REQUIRED, non-synthesizable slot — never ship blank.
+    // Missing a REQUIRED, non-synthesizable slot. This is TERMINAL for this batch:
+    // there is no path to add a clip to an already-sealed batch (footageIngest only
+    // attaches new uploads to an OPEN batch), so staging an answerable question here
+    // produced an infinite re-ask loop (answer -> re-classify -> re-render -> same
+    // missing slot -> same question, forever). Fixed 2026-07-13: mark FAILED with an
+    // honest note instead. The human's only real resolutions are REJECT this batch or
+    // RE-UPLOAD the footage as a NEW batch (a fresh OPEN batch picks it up). The admin
+    // UI renders FAILED with reviewNotes + reject + retry. Never ship blank.
     if (fill.missingRequired.length > 0) {
       const first = fill.missingRequired[0];
-      const question =
-        `This "${template.displayName}" cut is missing footage for its "${first.key}" beat` +
-        `${first.note ? ` (${first.note})` : ''}. Add that clip, or reject this batch.`;
+      const note =
+        `Missing a required "${first.key}" clip for the "${template.displayName}" cut` +
+        `${first.note ? ` (${first.note})` : ''}. This batch cannot be completed as-is — ` +
+        `retrying will not help, because footage cannot be added to a sealed batch. ` +
+        `Reject this batch, or re-upload the footage as a new batch.`;
       await prisma.footageBatch.update({
         where: { id: batchId },
-        data: { status: 'NEEDS_INPUT', openQuestion: question, questionField: `slot:${first.key}` },
+        data: { status: 'FAILED', openQuestion: null, questionField: null, reviewNotes: note.slice(0, 1000) },
       });
-      console.log(`[templateRenderer] Batch ${batchId} NEEDS_INPUT — missing required slot "${first.key}"`);
-      return { batchId, status: 'NEEDS_INPUT', templateId: template.id, reason: `missing required slot ${first.key}` };
+      console.log(`[templateRenderer] Batch ${batchId} FAILED — missing required slot "${first.key}" (terminal; no add-clip path to a sealed batch)`);
+      return { batchId, status: 'FAILED', templateId: template.id, reason: `missing required slot ${first.key}` };
     }
 
     // Build + render. Use a non-null local (dir) for the render calls so the

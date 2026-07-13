@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { jsonLdSafe } from '@/lib/jsonLdSafe';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
@@ -905,7 +906,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
         {initialData && (
           <Head>
             <script type="application/ld+json" dangerouslySetInnerHTML={{
-              __html: JSON.stringify({
+              __html: jsonLdSafe({
                 '@context': 'https://schema.org',
                 // Permanent storefronts emit Store (LocalBusiness) instead of a dated Event.
                 '@type': initialData.isOngoing ? 'Store' : 'Event',
@@ -970,7 +971,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
               })
             }} />
             <script type="application/ld+json" dangerouslySetInnerHTML={{
-              __html: JSON.stringify({
+              __html: jsonLdSafe({
                 '@context': 'https://schema.org',
                 '@type': 'BreadcrumbList',
                 'itemListElement': [
@@ -1001,7 +1002,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
         {initialData && initialData.isClaimed && initialData.items.length > 0 && (
           <Head>
             <script type="application/ld+json" dangerouslySetInnerHTML={{
-              __html: JSON.stringify(
+              __html: jsonLdSafe(
                 initialData.items.map((item) => {
                   const conditionMap: Record<string, string> = {
                     NEW: 'https://schema.org/NewCondition',
@@ -1044,7 +1045,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
         {eventSeriesData && eventSeriesData.isRecurring && eventSeriesData.organizerName && initialData && (
           <Head>
             <script type="application/ld+json" dangerouslySetInnerHTML={{
-              __html: JSON.stringify({
+              __html: jsonLdSafe({
                 '@context': 'https://schema.org',
                 '@type': 'EventSeries',
                 'name': `${eventSeriesData.organizerName}'s ${
@@ -1155,7 +1156,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
       {sale && (
         <Head>
           <script type="application/ld+json" dangerouslySetInnerHTML={{
-            __html: JSON.stringify({
+            __html: jsonLdSafe({
               '@context': 'https://schema.org',
               // Permanent storefronts emit Store (LocalBusiness) instead of a dated Event.
               '@type': sale.isOngoing ? 'Store' : 'Event',
@@ -1224,7 +1225,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
             })
           }} />
           <script type="application/ld+json" dangerouslySetInnerHTML={{
-            __html: JSON.stringify({
+            __html: jsonLdSafe({
               '@context': 'https://schema.org',
               '@type': 'BreadcrumbList',
               'itemListElement': [
@@ -1256,7 +1257,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
       {initialData && initialData.isClaimed && initialData.items.length > 0 && (
         <Head>
           <script type="application/ld+json" dangerouslySetInnerHTML={{
-            __html: JSON.stringify(
+            __html: jsonLdSafe(
               initialData.items.map((item) => {
                 const conditionMap: Record<string, string> = {
                   NEW: 'https://schema.org/NewCondition',
@@ -1300,7 +1301,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
       {eventSeriesData && eventSeriesData.isRecurring && eventSeriesData.organizerName && initialData && (
         <Head>
           <script type="application/ld+json" dangerouslySetInnerHTML={{
-            __html: JSON.stringify({
+            __html: jsonLdSafe({
               '@context': 'https://schema.org',
               '@type': 'EventSeries',
               'name': `${eventSeriesData.organizerName}'s ${

@@ -7,6 +7,7 @@
  */
 
 import { GetStaticProps, GetStaticPaths } from 'next';
+import { jsonLdSafe } from '@/lib/jsonLdSafe';
 import Head from 'next/head';
 import Link from 'next/link';
 
@@ -141,11 +142,11 @@ export default function ThisWeekendPage({
         <meta name="twitter:description" content={description} />
         <script
           type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(itemListJsonLd) }}
+          dangerouslySetInnerHTML={{ __html: jsonLdSafe(itemListJsonLd) }}
         />
         <script
           type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
+          dangerouslySetInnerHTML={{ __html: jsonLdSafe(breadcrumbJsonLd) }}
         />
       </Head>
 

@@ -4,6 +4,7 @@
  */
 
 import React, { useState } from 'react';
+import { jsonLdSafe } from '@/lib/jsonLdSafe';
 import Head from 'next/head';
 import Link from 'next/link';
 
@@ -618,7 +619,7 @@ const FAQPage = () => {
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
-            __html: JSON.stringify({
+            __html: jsonLdSafe({
               '@context': 'https://schema.org',
               '@type': 'FAQPage',
               mainEntity: [
@@ -645,7 +646,7 @@ const FAQPage = () => {
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
-            __html: JSON.stringify({
+            __html: jsonLdSafe({
               '@context': 'https://schema.org',
               '@type': 'BreadcrumbList',
               itemListElement: [
@@ -668,7 +669,7 @@ const FAQPage = () => {
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
-            __html: JSON.stringify({
+            __html: jsonLdSafe({
               '@context': 'https://schema.org',
               '@type': 'WebPage',
               name: 'Frequently Asked Questions',

@@ -9,6 +9,7 @@
  */
 
 import Head from 'next/head';
+import { jsonLdSafe } from '@/lib/jsonLdSafe';
 import Link from 'next/link';
 import { GetServerSideProps, GetServerSidePropsContext } from 'next';
 
@@ -157,7 +158,7 @@ export default function MonthlyReportPage({ report, slug, error }: PageProps) {
         {/* JSON-LD */}
         <script
           type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+          dangerouslySetInnerHTML={{ __html: jsonLdSafe(jsonLd) }}
         />
       </Head>
 

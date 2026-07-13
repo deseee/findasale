@@ -4,6 +4,7 @@
  * ADR-074 Phase 2: Includes trending items from eBay by category.
  */
 import React from 'react';
+import { jsonLdSafe } from '@/lib/jsonLdSafe';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import Link from 'next/link';
@@ -167,7 +168,7 @@ const CategoryPage = ({ initialData }: CategoryPageProps) => {
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
-            __html: JSON.stringify({
+            __html: jsonLdSafe({
               '@context': 'https://schema.org',
               '@type': 'CollectionPage',
               name: label,
@@ -179,7 +180,7 @@ const CategoryPage = ({ initialData }: CategoryPageProps) => {
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
-            __html: JSON.stringify({
+            __html: jsonLdSafe({
               '@context': 'https://schema.org',
               '@type': 'BreadcrumbList',
               itemListElement: [

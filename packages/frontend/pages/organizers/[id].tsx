@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { jsonLdSafe } from '@/lib/jsonLdSafe';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
@@ -219,8 +220,8 @@ const OrganizerProfilePage = ({ organizer }: OrganizerPageProps) => {
         <meta property="og:description" content={`Estate sales, garage sales, auctions, and more from ${organizer.businessName}${locationSuffix}.`} />
         <meta property="og:type" content="business.business" />
         <meta property="og:url" content={`https://finda.sale/organizers/${organizer.id}`} />
-        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(localBusinessSchema) }} />
-        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }} />
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdSafe(localBusinessSchema) }} />
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdSafe(breadcrumbSchema) }} />
       </Head>
 
       {/* Trust bar — unclaimed only */}

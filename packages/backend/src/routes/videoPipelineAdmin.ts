@@ -224,14 +224,36 @@ router.post('/footage-batch/:batchId/answer', async (req, res) => {
       data: { templateId: match.id, templateConfidence: 1.0 },
     });
   } else if (batch.questionField.startsWith('slot:')) {
-    // Shape 4: slot:<key> -- staged by templateRenderer.ts (render stage) when a
-    // template's REQUIRED slot has no matching footage. There is no data VALUE to
-    // apply here (unlike role/templateId) -- the only real fix is the human adding
-    // the missing clip to the batch before answering. The answer text itself is
-    // just an acknowledgement; any non-empty string proceeds. Falls through to the
-    // shared SEALED + classifyBatch() re-run below, which -- now that the missing
-    // footage presumably exists -- re-runs analyze/gate/render end-to-end.
-    console.log(`[videoPipelineAdmin] Batch ${batchId} acknowledged missing-slot question (${batch.questionField}); re-running.`);
+    // Shape 4 (LEGACY): slot:<key> was staged by an older render stage when a
+    // template's REQUIRED slot had no matching footage. It is NOT answerable -- there
+    // is no path to add a clip to a sealed batch (footageIngest only attaches new
+    // uploads to an OPEN batch), so answering it re-ran classify -> render -> the same
+    // missing slot -> the same question, forever (real infinite loop fixed 2026-07-13).
+    // renderBatch no longer stages this question; any batch still carrying one is
+    // migrated here to the terminal FAILED state (retry/reject in the admin UI). The
+    // honest resolutions are REJECT, or RE-UPLOAD the footage as a NEW batch. Do NOT
+    // fall through to the SEALED + re-classify block below.
+    const slotKey = batch.questionField.slice('slot:'.length);
+    const failed = await prisma.footageBatch.update({
+      where: { id: batchId },
+      data: {
+        status: 'FAILED',
+        openQuestion: null,
+        questionField: null,
+        reviewNotes:
+          `Missing a required "${slotKey}" clip. This batch cannot be completed as-is -- ` +
+          `footage cannot be added to a sealed batch. Reject this batch, or re-upload the ` +
+          `footage as a new batch.`,
+      },
+    });
+    return res.status(200).json({
+      ok: true,
+      batchId,
+      status: failed.status,
+      message:
+        `This batch is missing a required "${slotKey}" clip and cannot be completed as-is. ` +
+        `Reject it, or re-upload the footage as a new batch.`,
+    });
   } else {
     return res.status(400).json({ message: `Unrecognized questionField: ${batch.questionField}` });
   }

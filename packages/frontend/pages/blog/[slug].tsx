@@ -1,4 +1,5 @@
 import React from 'react';
+import { jsonLdSafe } from '@/lib/jsonLdSafe';
 import Head from 'next/head';
 import Link from 'next/link';
 import { GetStaticProps, GetStaticPaths } from 'next';
@@ -303,7 +304,7 @@ export default function BlogPostPage({ post, relatedPosts }: BlogPostPageProps) 
         <link rel="canonical" href={canonical} key="canonical" />
         <script
           type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+          dangerouslySetInnerHTML={{ __html: jsonLdSafe(jsonLd) }}
         />
       </Head>
 

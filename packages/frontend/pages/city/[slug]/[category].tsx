@@ -8,6 +8,7 @@
  */
 
 import { GetStaticProps, GetStaticPaths } from 'next';
+import { jsonLdSafe } from '@/lib/jsonLdSafe';
 import Head from 'next/head';
 import Link from 'next/link';
 import { computeSaleStats, buildLiveDataFaqs, CitySaleStats } from '@/lib/seo/cityStats';
@@ -159,16 +160,16 @@ export default function CityCategoryPage({
         <meta name="robots" content={isGatedThin ? 'noindex, follow' : 'index, follow'} />
         <script
           type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(itemListJsonLd) }}
+          dangerouslySetInnerHTML={{ __html: jsonLdSafe(itemListJsonLd) }}
         />
         <script
           type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
+          dangerouslySetInnerHTML={{ __html: jsonLdSafe(breadcrumbJsonLd) }}
         />
         {liveFaqs.length > 0 && (
           <script
             type="application/ld+json"
-            dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }}
+            dangerouslySetInnerHTML={{ __html: jsonLdSafe(faqJsonLd) }}
           />
         )}
       </Head>

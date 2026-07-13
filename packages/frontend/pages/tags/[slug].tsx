@@ -12,6 +12,7 @@
  */
 
 import React from 'react';
+import { jsonLdSafe } from '@/lib/jsonLdSafe';
 import Head from 'next/head';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -77,7 +78,7 @@ export default function TagPage({ tag, itemCount, items, ogImageUrl }: TagPagePr
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
-            __html: JSON.stringify({
+            __html: jsonLdSafe({
               '@context': 'https://schema.org',
               '@type': 'ItemList',
               name: `${formattedTag} Items for Sale`,

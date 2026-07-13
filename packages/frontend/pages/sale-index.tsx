@@ -1,4 +1,5 @@
 import Head from 'next/head';
+import { jsonLdSafe } from '@/lib/jsonLdSafe';
 import Link from 'next/link';
 import type { GetStaticProps } from 'next';
 import MetroTable, { MetroRow } from '../components/sale-index/MetroTable';
@@ -98,7 +99,7 @@ export default function SaleIndexPage({
         <meta name="robots" content="index, follow" />
         <script
           type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(datasetJsonLd) }}
+          dangerouslySetInnerHTML={{ __html: jsonLdSafe(datasetJsonLd) }}
         />
       </Head>
 

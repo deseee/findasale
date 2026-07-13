@@ -225,20 +225,42 @@ export function deriveCityStateFromDisplay(
   return null;
 }
 
-function parsePlace(
-  ev: any,
-  metro: MetroTarget
-): { city: string; state: string; address: string } {
+// How the returned city/state was resolved -- surfaced in scrapedMetadata so
+// downstream cleanup can find records that never got a real city/state.
+type CityStateSource = 'structured' | 'derived-address' | 'metro-fallback';
+
+interface ParsedPlace {
+  city: string;
+  state: string;
+  address: string;
+  cityStateSource: CityStateSource;
+  /**
+   * true when we have a REAL street address (FreeformPlace) but could NOT
+   * resolve a confident US city/state from it -- i.e. the city/state we are
+   * about to store is still the query-metro fallback and therefore very likely
+   * a GEO MISMATCH (non-US address such as "..., BC V3G 2K1, Canada", or an
+   * unparseable/junk string). We only FLAG it here; whether such a listing is
+   * rejected, relabelled non-US, or kept-and-flagged is a removal-class product
+   * decision deferred to Patrick (see DECISION NEEDED in the handoff).
+   */
+  geoUnresolved: boolean;
+}
+
+function parsePlace(ev: any, metro: MetroTarget): ParsedPlace {
   const place = ev?.event_place;
   let city = metro.city;
   let state = metro.state;
   let address = '';
+  let cityStateSource: CityStateSource = 'metro-fallback';
 
   if (place && typeof place === 'object') {
     // Some result objects carry structured city/state; the lean typeahead objects
     // carry only a `contextual_name` / `name` display string.
-    if (typeof place.city === 'string' && place.city.trim()) city = place.city.trim();
-    if (typeof place.state === 'string' && place.state.trim()) state = place.state.trim();
+    const hasStructCity = typeof place.city === 'string' && place.city.trim();
+    const hasStructState = typeof place.state === 'string' && place.state.trim();
+    if (hasStructCity) city = place.city.trim();
+    if (hasStructState) state = place.state.trim();
+    if (hasStructCity && hasStructState) cityStateSource = 'structured';
 
     const display =
       (typeof place.contextual_name === 'string' && place.contextual_name) ||
@@ -257,6 +279,7 @@ function parsePlace(
       if (derived) {
         state = derived.state;
         city = derived.city;
+        cityStateSource = 'derived-address';
       }
     }
     // Street address ONLY from a FreeformPlace, whose contextual_name is a real
@@ -269,7 +292,12 @@ function parsePlace(
     }
   }
 
-  return { city, state, address };
+  // A real street address that STILL rides on the query-metro city/state means
+  // we placed a street-level location on the wrong metro (the confirmed
+  // Casper,WY-vs-Abbotsford,BC bug). Flag it; do not silently trust the metro.
+  const geoUnresolved = cityStateSource === 'metro-fallback' && address.length > 0;
+
+  return { city, state, address, cityStateSource, geoUnresolved };
 }
 
 // ---------------------------------------------------------------------------
@@ -337,7 +365,7 @@ function mapEventToScrapedItem(
     ? canonicalizeEventUrl(url)
     : `https://www.facebook.com/events/${fbEventId}/`;
 
-  const { city, state, address } = parsePlace(ev, metro);
+  const { city, state, address, cityStateSource, geoUnresolved } = parsePlace(ev, metro);
 
   // Organizer: the FB search JSON carries NO host/organizer NAME (only the
   // is_viewer_host boolean), so we never derive one here. Do NOT re-add the
@@ -369,6 +397,19 @@ function mapEventToScrapedItem(
       metro: `${metro.city}, ${metro.state}`,
       sourceApi: 'fb-proxy-discovery',
       dateApproximate: dateResolved.approximate,
+      // Geo provenance -- how city/state were resolved, so downstream cleanup can
+      // find listings still sitting on the query-metro fallback (geo mismatch).
+      cityStateSource,
+      geoConfidence: geoUnresolved
+        ? 'unresolved'
+        : cityStateSource === 'metro-fallback'
+          ? 'metro-fallback'
+          : 'high',
+      // When we could NOT resolve a confident US city/state from a real street
+      // address (non-US / unparseable), keep the raw address string as the
+      // cleanup anchor. `city`/`state` above remain the query-metro fallback for
+      // now -- the reject-vs-relabel decision is deferred (see DECISION NEEDED).
+      ...(geoUnresolved ? { rawPlaceAddress: address } : {}),
     },
   };
 }
