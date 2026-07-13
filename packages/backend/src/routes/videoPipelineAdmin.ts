@@ -323,4 +323,74 @@ router.post('/footage-batch/:batchId/retry', async (req, res) => {
   }
 });
 
+/**
+ * GET /api/admin/video-pipeline/footage-batch/awaiting-review
+ * ADR-080 render-stage handoff: lists every FootageBatch that finished
+ * rendering and is staged for human review (status AWAITING_REVIEW), newest
+ * first. `stagedFile` is the FULL review markdown content (real bug found +
+ * fixed 2026-07-13: this used to be an on-disk-only path on Railway's
+ * ephemeral filesystem, never committed to git, so a rendered batch's review
+ * content was completely unreachable after the fact -- see
+ * templateRenderer.ts's writeStagedBatchReviewFile). This is the only surface
+ * for reading that content now; there is still no separate Phase 4 review UI
+ * beyond the admin page added alongside this route.
+ */
+router.get('/footage-batch/awaiting-review', async (req, res) => {
+  try {
+    const batches = await prisma.footageBatch.findMany({
+      where: { status: 'AWAITING_REVIEW' },
+      orderBy: { updatedAt: 'desc' },
+      include: {
+        videoJob: { select: { id: true, rawVideoUrl: true, captionedVideoUrl: true, thumbnailUrl: true, status: true } },
+      },
+    });
+    return res.status(200).json({
+      count: batches.length,
+      batches: batches.map((b) => ({
+        id: b.id,
+        templateId: b.templateId,
+        templateConfidence: b.templateConfidence,
+        videoJobId: b.videoJobId,
+        videoUrl: b.videoJob?.captionedVideoUrl ?? b.videoJob?.rawVideoUrl ?? null,
+        thumbnailUrl: b.videoJob?.thumbnailUrl ?? null,
+        stagedContent: b.stagedFile,
+        updatedAt: b.updatedAt,
+      })),
+    });
+  } catch (err: any) {
+    console.error('[videoPipelineAdmin] Failed to list awaiting-review batches:', err);
+    return res.status(500).json({ message: 'Failed to list awaiting-review batches', error: err?.message });
+  }
+});
+
+/**
+ * POST /api/admin/video-pipeline/footage-batch/:batchId/approve
+ * Marks a rendered, staged batch as human-approved. Matches schema.prisma's
+ * documented FootageBatchStatus.APPROVED semantics ("human flipped staged
+ * file to APPROVED"). No downstream publish automation consumes this status
+ * yet (correctly out of scope here) -- this only records the decision.
+ */
+router.post('/footage-batch/:batchId/approve', async (req, res) => {
+  const { batchId } = req.params;
+
+  const batch = await prisma.footageBatch.findUnique({ where: { id: batchId } });
+  if (!batch) {
+    return res.status(404).json({ message: `FootageBatch ${batchId} not found` });
+  }
+  if (batch.status !== 'AWAITING_REVIEW') {
+    return res.status(400).json({ message: `Batch is not awaiting review (status=${batch.status})` });
+  }
+
+  const approved = await prisma.footageBatch.update({
+    where: { id: batchId },
+    data: { status: 'APPROVED', approvedAt: new Date() },
+  });
+  if (batch.videoJobId) {
+    await prisma.videoJob
+      .update({ where: { id: batch.videoJobId }, data: { status: 'APPROVED' } })
+      .catch((e) => console.warn(`[videoPipelineAdmin] could not mark VideoJob ${batch.videoJobId} APPROVED (non-fatal):`, e?.message ?? e));
+  }
+  return res.status(200).json({ ok: true, batchId, status: approved.status });
+});
+
 export default router;

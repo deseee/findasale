@@ -832,7 +832,6 @@ async function writeStagedBatchReviewFile(input: StageBatchInput): Promise<strin
   const shortId = input.batchId.slice(-6);
   const fileName = `video-batch-${dateStamp}-${shortId}.md`;
   const absolutePath = path.join(CONTENT_PIPELINE_DIR, fileName);
-  const relativePath = `claude_docs/marketing/content-pipeline/${fileName}`;
 
   const purposeToPlatform =
     input.template.purpose === 'TUTORIAL' ? 'YouTube' : 'TikTok / Reels (short-form vertical)';
@@ -885,9 +884,25 @@ line above to \`APPROVED\` by hand once reviewed. Raw footage is retained in R2
 through approval + the retention window (ADR-080 §7) — nothing is deleted here._
 `;
 
-  await fs.mkdir(CONTENT_PIPELINE_DIR, { recursive: true });
-  await fs.writeFile(absolutePath, body, 'utf8');
-  return relativePath;
+  // Best-effort local-disk copy for local/dev convenience -- non-fatal, wrapped
+  // so a read-only or ephemeral filesystem (Railway production) never blocks the
+  // real, durable persistence below.
+  await fs.mkdir(CONTENT_PIPELINE_DIR, { recursive: true }).catch((e) =>
+    console.warn(`[templateRenderer] could not create ${CONTENT_PIPELINE_DIR} (non-fatal):`, e?.message ?? e),
+  );
+  await fs.writeFile(absolutePath, body, 'utf8').catch((e) =>
+    console.warn(`[templateRenderer] could not write local staged file ${absolutePath} (non-fatal):`, e?.message ?? e),
+  );
+
+  // Return the FULL CONTENT, not the local path (real bug found + fixed
+  // 2026-07-13, confirmed via live test): Railway's filesystem is ephemeral and
+  // this file was never committed to git, so a batch rendered in production had
+  // real staged review content that was completely unreachable afterward -- not
+  // in this repo, not on GitHub, gone on the next deploy. The caller now persists
+  // this return value into FootageBatch.stagedFile (an unbounded Postgres text
+  // column, confirmed via schema.prisma -- no migration needed), so the admin
+  // API/UI can read the actual review content durably regardless of environment.
+  return body;
 }
 
 // ---------------------------------------------------------------------------
@@ -1104,8 +1119,11 @@ export async function renderBatch(batchId: string): Promise<RenderBatchResult> {
       select: { id: true },
     });
 
-    // Stage for approval + move the batch to AWAITING_REVIEW.
-    const stagedFile = await writeStagedBatchReviewFile({
+    // Stage for approval + move the batch to AWAITING_REVIEW. stagedContent is
+    // the FULL markdown body (see writeStagedBatchReviewFile's 2026-07-13 fix) --
+    // persisted directly into FootageBatch.stagedFile so it survives past this
+    // process regardless of environment.
+    const stagedContent = await writeStagedBatchReviewFile({
       batchId,
       jobId: job.id,
       template,
@@ -1122,7 +1140,7 @@ export async function renderBatch(batchId: string): Promise<RenderBatchResult> {
 
     await prisma.footageBatch.update({
       where: { id: batchId },
-      data: { status: 'AWAITING_REVIEW', videoJobId: job.id, stagedFile },
+      data: { status: 'AWAITING_REVIEW', videoJobId: job.id, stagedFile: stagedContent },
     });
     // Mark the consumed clips USED (they stay in R2 — retention per §7).
     await prisma.footageAsset
@@ -1131,7 +1149,9 @@ export async function renderBatch(batchId: string): Promise<RenderBatchResult> {
 
     console.log(
       `[templateRenderer] Batch ${batchId} RENDERED -> VideoJob ${job.id} (${template.id}, ` +
-        `${rendered.durationSeconds.toFixed(1)}s, ${plan.segments.length} segments). Staged: ${stagedFile}`,
+        `${rendered.durationSeconds.toFixed(1)}s, ${plan.segments.length} segments). ` +
+        `Staged review content persisted (${stagedContent.length} chars) -- readable via ` +
+        `GET /api/admin/video-pipeline/footage-batch/awaiting-review.`,
     );
 
     return {
@@ -1139,7 +1159,7 @@ export async function renderBatch(batchId: string): Promise<RenderBatchResult> {
       status: 'AWAITING_REVIEW',
       templateId: template.id,
       videoJobId: job.id,
-      stagedFile,
+      stagedFile: stagedContent,
       videoUrl,
       durationSeconds: rendered.durationSeconds,
     };

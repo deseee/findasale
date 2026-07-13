@@ -10,6 +10,13 @@
  *   POST /api/admin/video-pipeline/footage-batch/:id/answer
  *   POST /api/admin/video-pipeline/footage-batch/:id/reject
  *   POST /api/admin/video-pipeline/footage-batch/:id/retry
+ *   GET  /api/admin/video-pipeline/footage-batch/awaiting-review
+ *   POST /api/admin/video-pipeline/footage-batch/:id/approve
+ *
+ * The awaiting-review section (added same day) closes a second real gap: the
+ * render stage's staged review markdown used to live ONLY on Railway's
+ * ephemeral filesystem -- never committed to git, unreachable once written.
+ * It's now persisted in the DB and read straight from the API below.
  *
  * Mirrors the pattern in pages/admin/disputes.tsx (useAuth guard, useQuery +
  * useMutation, EmptyState, warm/amber palette, dark mode classes).
@@ -38,6 +45,17 @@ interface FootageBatchRow {
   assetCount: number;
 }
 
+interface AwaitingReviewBatchRow {
+  id: string;
+  templateId: string | null;
+  templateConfidence: number | null;
+  videoJobId: string | null;
+  videoUrl: string | null;
+  thumbnailUrl: string | null;
+  stagedContent: string | null;
+  updatedAt: string;
+}
+
 const AdminVideoPipelinePage = () => {
   const router = useRouter();
   const { user, isLoading } = useAuth();
@@ -46,6 +64,9 @@ const AdminVideoPipelinePage = () => {
   const [answerDrafts, setAnswerDrafts] = useState<Record<string, string>>({});
   const [rejectDrafts, setRejectDrafts] = useState<Record<string, string>>({});
   const [rejectingId, setRejectingId] = useState<string | null>(null);
+  const [expandedReviewId, setExpandedReviewId] = useState<string | null>(null);
+
+  const isAdmin = !!user?.id && (user?.roles?.includes('ADMIN') || user?.role === 'ADMIN');
 
   const { data, isLoading: isLoadingBatches } = useQuery({
     queryKey: ['admin-video-pipeline-needs-input'],
@@ -53,9 +74,19 @@ const AdminVideoPipelinePage = () => {
       const response = await api.get('/admin/video-pipeline/footage-batch/needs-input');
       return response.data;
     },
-    enabled: !!user?.id && (user?.roles?.includes('ADMIN') || user?.role === 'ADMIN'),
+    enabled: isAdmin,
     // Batches can also be answered/rejected via the raw API by hand (or by a
     // future automated flow) -- keep this list fresh without a manual refresh.
+    refetchInterval: 20000,
+  });
+
+  const { data: reviewData, isLoading: isLoadingReview } = useQuery({
+    queryKey: ['admin-video-pipeline-awaiting-review'],
+    queryFn: async () => {
+      const response = await api.get('/admin/video-pipeline/footage-batch/awaiting-review');
+      return response.data;
+    },
+    enabled: isAdmin,
     refetchInterval: 20000,
   });
 
@@ -113,6 +144,20 @@ const AdminVideoPipelinePage = () => {
     },
     onError: (err: any) => {
       showToast(err.response?.data?.message || 'Failed to retry batch', 'error');
+    },
+  });
+
+  const approveMutation = useMutation({
+    mutationFn: async (batchId: string) => {
+      const response = await api.post(`/admin/video-pipeline/footage-batch/${batchId}/approve`);
+      return response.data;
+    },
+    onSuccess: () => {
+      showToast('Batch approved', 'success');
+      queryClient.invalidateQueries({ queryKey: ['admin-video-pipeline-awaiting-review'] });
+    },
+    onError: (err: any) => {
+      showToast(err.response?.data?.message || 'Failed to approve batch', 'error');
     },
   });
 
@@ -283,6 +328,81 @@ const AdminVideoPipelinePage = () => {
                       Reject this batch
                     </button>
                   )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="mt-10 mb-4">
+            <h2 className="text-xl font-bold text-warm-900 dark:text-warm-100">Awaiting Review</h2>
+            <p className="text-warm-600 dark:text-warm-400 text-sm mt-1">
+              Batches that finished rendering. Review the video + staged notes, then approve or
+              reject. Approving only records the decision -- there is no automatic publish yet.
+            </p>
+          </div>
+
+          {isLoadingReview ? (
+            <div className="text-center py-12">
+              <div className="inline-block animate-spin">
+                <div className="w-8 h-8 border-4 border-warm-200 dark:border-gray-700 border-t-amber-600 rounded-full"></div>
+              </div>
+              <p className="mt-4 text-warm-600 dark:text-warm-400">Loading review queue...</p>
+            </div>
+          ) : (reviewData?.batches ?? []).length === 0 ? (
+            <EmptyState
+              heading="Nothing waiting on review"
+              subtext="No rendered batches are currently staged for approval."
+            />
+          ) : (
+            <div className="space-y-4">
+              {(reviewData?.batches as AwaitingReviewBatchRow[]).map((batch) => (
+                <div
+                  key={batch.id}
+                  className="bg-white dark:bg-gray-800 rounded-lg border border-warm-200 dark:border-gray-700 shadow-sm overflow-hidden px-6 py-4"
+                >
+                  <div className="flex items-center gap-3 mb-2">
+                    <span className="inline-block px-3 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-800">
+                      AWAITING_REVIEW
+                    </span>
+                    <span className="text-xs text-warm-500 dark:text-warm-400">
+                      {batch.templateId ?? 'unknown template'}
+                      {typeof batch.templateConfidence === 'number' ? ` · confidence ${batch.templateConfidence.toFixed(2)}` : ''}
+                    </span>
+                  </div>
+
+                  <div className="text-xs text-warm-500 dark:text-warm-400 mb-3 font-mono break-all">
+                    {batch.id}
+                  </div>
+
+                  {batch.videoUrl && (
+                    <video
+                      src={batch.videoUrl}
+                      poster={batch.thumbnailUrl ?? undefined}
+                      controls
+                      className="w-full max-w-xs rounded-lg mb-3 bg-black"
+                    />
+                  )}
+
+                  <button
+                    onClick={() => setExpandedReviewId(expandedReviewId === batch.id ? null : batch.id)}
+                    className="text-xs text-amber-600 hover:text-amber-700 font-medium mb-2 block"
+                  >
+                    {expandedReviewId === batch.id ? 'Hide staged review notes' : 'View staged review notes'}
+                  </button>
+
+                  {expandedReviewId === batch.id && (
+                    <pre className="whitespace-pre-wrap text-xs bg-warm-50 dark:bg-gray-900 border border-warm-200 dark:border-gray-700 rounded-lg p-3 mb-3 max-h-96 overflow-y-auto text-warm-800 dark:text-warm-200">
+                      {batch.stagedContent ?? '(no staged content recorded)'}
+                    </pre>
+                  )}
+
+                  <button
+                    onClick={() => approveMutation.mutate(batch.id)}
+                    disabled={approveMutation.isPending}
+                    className="px-4 py-2 bg-green-600 text-white font-medium rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition text-sm"
+                  >
+                    Approve
+                  </button>
                 </div>
               ))}
             </div>

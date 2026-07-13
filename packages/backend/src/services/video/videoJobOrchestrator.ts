@@ -171,7 +171,6 @@ async function writeStagedReviewFile(input: StageReviewFileInput): Promise<strin
   const dateStamp = todayDateStamp();
   const fileName = `video-batch-${dateStamp}.md`;
   const absolutePath = path.join(CONTENT_PIPELINE_DIR, fileName);
-  const relativePath = `claude_docs/marketing/content-pipeline/${fileName}`;
 
   const body = `STATUS: AWAITING EDIT
 
@@ -200,10 +199,24 @@ the generating code never sets STATUS to APPROVED. Change the STATUS line above 
 \`APPROVED\` by hand once reviewed, per media-pipeline-build-spec.md §0._
 `;
 
-  await fs.mkdir(CONTENT_PIPELINE_DIR, { recursive: true });
-  await fs.writeFile(absolutePath, body, 'utf8');
+  // Best-effort local-disk copy for local/dev convenience -- non-fatal, wrapped
+  // so a read-only or ephemeral filesystem (Railway production) never blocks the
+  // real, durable persistence below.
+  await fs.mkdir(CONTENT_PIPELINE_DIR, { recursive: true }).catch((e) =>
+    console.warn(`[videoJobOrchestrator] could not create ${CONTENT_PIPELINE_DIR} (non-fatal):`, e?.message ?? e),
+  );
+  await fs.writeFile(absolutePath, body, 'utf8').catch((e) =>
+    console.warn(`[videoJobOrchestrator] could not write local staged file ${absolutePath} (non-fatal):`, e?.message ?? e),
+  );
 
-  return relativePath;
+  // Return the FULL CONTENT, not the local path (same fix shape as
+  // templateRenderer.ts's writeStagedBatchReviewFile, 2026-07-13): Railway's
+  // filesystem is ephemeral and this file was never committed to git, so a job
+  // staged in production had real review content that was completely
+  // unreachable afterward. The caller now persists this return value into
+  // VideoJob.stagedFile (an unbounded Postgres text column, confirmed via
+  // schema.prisma -- no migration needed).
+  return body;
 }
 
 export interface RunVideoJobPipelineResult {
@@ -311,8 +324,10 @@ export async function runVideoJobPipeline(jobId: string): Promise<RunVideoJobPip
     });
     await updateJob(jobId, { thumbnailUrl: thumbnail.thumbnailUrl });
 
-    // 7. STAGE FOR REVIEW
-    const stagedFile = await writeStagedReviewFile({
+    // 7. STAGE FOR REVIEW -- stagedContent is the FULL markdown body (see
+    // writeStagedReviewFile's 2026-07-13 fix), persisted directly so it
+    // survives past this process regardless of environment.
+    const stagedContent = await writeStagedReviewFile({
       jobId,
       guideTopic,
       scriptText: scriptResult.scriptText,
@@ -321,9 +336,9 @@ export async function runVideoJobPipeline(jobId: string): Promise<RunVideoJobPip
       thumbnailUrl: thumbnail.thumbnailUrl,
       captionedVideoUrl: captioning.captionedVideoUrl,
     });
-    await updateJob(jobId, { status: 'AWAITING_REVIEW', stagedFile });
+    await updateJob(jobId, { status: 'AWAITING_REVIEW', stagedFile: stagedContent });
 
-    return { status: 'AWAITING_REVIEW', stagedFile };
+    return { status: 'AWAITING_REVIEW', stagedFile: stagedContent };
   } catch (error: any) {
     const message = error?.errorCode ? `${error.errorCode}: ${error.message}` : error?.message ?? String(error);
     try {
