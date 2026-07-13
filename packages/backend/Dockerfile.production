@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-# cache-bust: 2026-07-10T02:20:00Z — S1106 fix: warm-whisper-cache.mjs pre-warm step is now non-fatal (exit 0 always) so a masked @xenova/transformers model-class fallback error can never fail the whole backend build/deploy again
+# cache-bust: 2026-07-13T23:30:00Z — S1116: force backend redeploy for stranded fixes (Canada geo + Quebec reject, slot: clobber-loop -> terminal FAILED, FB geo-mismatch flagging) — earlier push tips were frontend/docs so Railway watchPattern skipped the backend service
 FROM node:20-slim AS base
 
 # Install OpenSSL for Prisma
