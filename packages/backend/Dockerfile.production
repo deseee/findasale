@@ -96,12 +96,14 @@ COPY --from=builder /app/packages/shared/package.json ./packages/shared/
 # from the public Hugging Face repo rhasspy/piper-voices. Verified this session:
 # piping text into this exact binary+model produces real, playable WAV audio.
 RUN mkdir -p /opt/piper && \
-    curl -sL https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_linux_x86_64.tar.gz \
-      | tar -xz -C /opt && \
+    curl -fSL --http1.1 --retry 5 --retry-all-errors --retry-delay 3 \
+      -o /tmp/piper.tar.gz \
+      https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_linux_x86_64.tar.gz && \
+    tar -xz -C /opt -f /tmp/piper.tar.gz && rm -f /tmp/piper.tar.gz && \
     mkdir -p /opt/piper/voices && \
-    curl -sL -o /opt/piper/voices/en_US-amy-medium.onnx \
+    curl -fSL --http1.1 --retry 5 --retry-all-errors --retry-delay 3 -o /opt/piper/voices/en_US-amy-medium.onnx \
       https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/amy/medium/en_US-amy-medium.onnx && \
-    curl -sL -o /opt/piper/voices/en_US-amy-medium.onnx.json \
+    curl -fSL --http1.1 --retry 5 --retry-all-errors --retry-delay 3 -o /opt/piper/voices/en_US-amy-medium.onnx.json \
       https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/amy/medium/en_US-amy-medium.onnx.json
 
 ENV PIPER_BIN_PATH=/opt/piper/piper
