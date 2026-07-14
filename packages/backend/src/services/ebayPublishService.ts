@@ -396,8 +396,8 @@ async function refreshCanonicalSku(ctx: EbayPublishContext): Promise<void> {
       const data = (await res.json()) as any;
       if (data?.sku) ctx.sku = data.sku;
     }
-  } catch {
-    /* non-fatal — fall back to the SKU already in ctx */
+  } catch (err) {
+    console.warn(`[eBay SelfHeal] refreshCanonicalSku: GET offer ${ctx.offerId} threw — falling back to existing ctx.sku (${ctx.sku ?? 'null'}). Error: ${(err as Error).message}`);
   }
 }
 
@@ -412,12 +412,21 @@ async function refreshCanonicalSku(ctx: EbayPublishContext): Promise<void> {
  * live on the inventory item) so the same rejected condition is never retried.
  */
 const heal25021: Healer = async (ctx) => {
-  if (!ctx.categoryId) return { published: false, retry: false };
+  if (!ctx.categoryId) {
+    console.warn(`[eBay SelfHeal 25021] item ${ctx.item.id} offer ${ctx.offerId}: bailing — ctx.categoryId is missing, cannot look up accepted conditions`);
+    return { published: false, retry: false };
+  }
   await refreshCanonicalSku(ctx);
-  if (!ctx.sku) return { published: false, retry: false };
+  if (!ctx.sku) {
+    console.warn(`[eBay SelfHeal 25021] item ${ctx.item.id} offer ${ctx.offerId}: bailing — SKU could not be resolved from eBay offer GET`);
+    return { published: false, retry: false };
+  }
 
   const invGet = await ebayFetch(`/sell/inventory/v1/inventory_item/${ctx.sku}`, ctx.accessToken, { method: 'GET' });
-  if (!invGet.ok) return { published: false, retry: false };
+  if (!invGet.ok) {
+    console.warn(`[eBay SelfHeal 25021] item ${ctx.item.id} sku ${ctx.sku}: bailing — inventory item GET failed (HTTP ${invGet.status})`);
+    return { published: false, retry: false };
+  }
   const invBody = (await invGet.json()) as any;
 
   const accepted = await getAcceptedConditionsForCategory(ctx.categoryId);
@@ -500,10 +509,16 @@ function pickSafeAspectDefault(aspectSpec: RequiredAspect | undefined): string {
  */
 const heal25002: Healer = async (ctx, errorBody) => {
   await refreshCanonicalSku(ctx);
-  if (!ctx.sku) return { published: false, retry: false };
+  if (!ctx.sku) {
+    console.warn(`[eBay SelfHeal 25002] item ${ctx.item.id} offer ${ctx.offerId}: bailing — SKU could not be resolved from eBay offer GET (aspect-injection repair never ran)`);
+    return { published: false, retry: false };
+  }
 
   const invGet = await ebayFetch(`/sell/inventory/v1/inventory_item/${ctx.sku}`, ctx.accessToken, { method: 'GET' });
-  if (!invGet.ok) return { published: false, retry: false };
+  if (!invGet.ok) {
+    console.warn(`[eBay SelfHeal 25002] item ${ctx.item.id} sku ${ctx.sku}: bailing — inventory item GET failed (HTTP ${invGet.status})`);
+    return { published: false, retry: false };
+  }
   const invBody = (await invGet.json()) as any;
   const item = ctx.item;
 
@@ -560,7 +575,10 @@ const heal25002: Healer = async (ctx, errorBody) => {
     method: 'PUT',
     body: invBody,
   });
-  if (!retryInvRes.ok && retryInvRes.status !== 204) return { published: false, retry: false };
+  if (!retryInvRes.ok && retryInvRes.status !== 204) {
+    console.warn(`[eBay SelfHeal 25002] item ${ctx.item.id} sku ${ctx.sku}: bailing — inventory item PUT (aspect injection) failed (HTTP ${retryInvRes.status})`);
+    return { published: false, retry: false };
+  }
   const pub = await attemptPublish(ctx);
   if (pub.ok) return { published: true, listingId: pub.listingId, retry: false };
   return { published: false, retry: true };
@@ -572,11 +590,17 @@ const heal25002: Healer = async (ctx, errorBody) => {
  */
 const heal25101: Healer = async (ctx) => {
   await refreshCanonicalSku(ctx);
-  if (!ctx.sku) return { published: false, retry: false };
+  if (!ctx.sku) {
+    console.warn(`[eBay SelfHeal 25101] item ${ctx.item.id} offer ${ctx.offerId}: bailing — SKU could not be resolved from eBay offer GET`);
+    return { published: false, retry: false };
+  }
   console.warn(`[eBay SelfHeal 25101] sku=${ctx.sku} — stripping packageType and retrying`);
   try {
     const invGet = await ebayFetch(`/sell/inventory/v1/inventory_item/${ctx.sku}`, ctx.accessToken, { method: 'GET' });
-    if (!invGet.ok) return { published: false, retry: false };
+    if (!invGet.ok) {
+      console.warn(`[eBay SelfHeal 25101] item ${ctx.item.id} sku ${ctx.sku}: bailing — inventory item GET failed (HTTP ${invGet.status})`);
+      return { published: false, retry: false };
+    }
     const invBody = (await invGet.json()) as any;
     if (invBody.packageWeightAndSize) {
       const pkg = { ...(invBody.packageWeightAndSize as Record<string, unknown>) };
@@ -587,7 +611,10 @@ const heal25101: Healer = async (ctx) => {
       method: 'PUT',
       body: invBody,
     });
-    if (!retryInvRes.ok && retryInvRes.status !== 204) return { published: false, retry: false };
+    if (!retryInvRes.ok && retryInvRes.status !== 204) {
+      console.warn(`[eBay SelfHeal 25101] item ${ctx.item.id} sku ${ctx.sku}: bailing — inventory item PUT (packageType strip) failed (HTTP ${retryInvRes.status})`);
+      return { published: false, retry: false };
+    }
     const pub = await attemptPublish(ctx);
     if (pub.ok) {
       console.log(`[eBay SelfHeal 25101] ${ctx.sku}: succeeded after stripping packageType`);
