@@ -4463,7 +4463,7 @@ model ApiUsageLog {
   service            String // "cloudinary", "google_vision", "anthropic", "ebay", "stripe", "resend"
   dateKey            String // "2026-04-16" ISO date
   callCount          Int      @default(0)
-  estimatedCostCents Int      @default(0)
+  estimatedCostCents Float    @default(0) // widened from Int 2026-07-14 — was rounding every sub-cent call to 0, see migration 20260714120000_widen_apiusagelog_cost_precision
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 

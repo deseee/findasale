@@ -94,7 +94,14 @@ export async function trackAITokens(estimatedTokens: number): Promise<boolean> {
 export async function recordApiUsage(service: string, costUsd: number, calls: number = 1): Promise<void> {
   try {
     const dateKey = new Date().toISOString().slice(0, 10); // YYYY-MM-DD, UTC
-    const safeCostCents = Number.isFinite(costUsd) ? Math.round(costUsd * 100) : 0;
+    // Do NOT Math.round() to a whole cent here — a single Haiku call is typically
+    // well under $0.01 (e.g. ~0.19 cents), so rounding per-call to an integer before
+    // accumulating silently threw away nearly all recorded cost (every row ended up
+    // estimatedCostCents = 0 despite correct callCount). Round to 4 decimal places
+    // instead, just to avoid floating-point noise accumulating over thousands of
+    // increments — never to a whole integer. See migration
+    // 20260714120000_widen_apiusagelog_cost_precision + schema.prisma Float column.
+    const safeCostCents = Number.isFinite(costUsd) ? Math.round(costUsd * 100 * 10000) / 10000 : 0;
     await prisma.apiUsageLog.upsert({
       where: { service_dateKey: { service, dateKey } },
       create: { service, dateKey, callCount: calls, estimatedCostCents: safeCostCents },

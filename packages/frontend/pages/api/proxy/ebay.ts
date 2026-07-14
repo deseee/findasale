@@ -13,6 +13,15 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import https from 'node:https';
 
+// Persistent keep-alive Agent — reused across invocations on the same warm
+// Fluid instance. Without this, every eBay call paid a full fresh TLS
+// handshake (real Active CPU cost from crypto ops), because 'connection: close'
+// below forced the socket closed after each response. Confirmed via Vercel
+// Observability (2026-07-14): /api/proxy/ebay was the single largest Active CPU
+// consumer among all Functions in a 12h sample (~80ms/call avg, highest total
+// of any route) despite having far fewer invocations than the SSR/ISR pages.
+const ebayAgent = new https.Agent({ keepAlive: true, keepAliveMsecs: 30000, maxSockets: 50 });
+
 const EBAY_HOST = 'api.ebay.com';
 const PROXY_UA = 'FindASale-Backend/1.0 (+https://finda.sale)';
 
@@ -60,7 +69,7 @@ function requestEbayOnce(
       'user-agent': PROXY_UA,
       accept: '*/*',
       'accept-encoding': 'identity', // disable response compression — keeps body parsing simple
-      connection: 'close',
+      // connection header intentionally omitted — the keep-alive Agent below sets it.
       ...headers,
       host: EBAY_HOST,
     };
@@ -78,6 +87,7 @@ function requestEbayOnce(
         servername: EBAY_HOST,
         family: 4,
         timeout: 25000,
+        agent: ebayAgent,
       },
       (res) => {
         const chunks: Buffer[] = [];
