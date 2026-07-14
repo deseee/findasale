@@ -21,6 +21,11 @@
 
 import * as cheerio from 'cheerio';
 import { getRandomUserAgent, getRandomReferer } from '../userAgents';
+import { extractEventObjects, extractFbEventIdFromUrl } from './facebook-json';
+import {
+  looksLikeStreetAddress,
+  extractPlaceFromEventObject,
+} from './facebook-address';
 
 export interface FbEventPageData {
   startDate?: Date;
@@ -31,6 +36,13 @@ export interface FbEventPageData {
   zip?: string;
   organizerName?: string;
   description?: string;
+  // Country resolved from a parsed US/CA street address (embedded Event JSON).
+  // There is no country column on Sale; the caller uses this only to reject QC.
+  country?: 'US' | 'CA';
+  // FreeformPlace text that FAILED looksLikeStreetAddress (bare ZIP, city
+  // fragment, placeholder). Preserved so the caller can keep it in
+  // scrapedMetadata rather than writing junk into address.
+  rawPlaceText?: string;
 }
 
 const FETCH_TIMEOUT_MS = 15_000;
@@ -223,9 +235,12 @@ function parseDateFromOgDescription(text: string, url?: string): Date | null {
  * or if no usable date could be extracted — caller must fall back to the
  * existing SERP-derived guess in that case.
  */
-export async function fetchFacebookEventPage(url: string): Promise<FbEventPageData | null> {
+export async function fetchFacebookEventPage(
+  url: string,
+  timeoutMs: number = FETCH_TIMEOUT_MS
+): Promise<FbEventPageData | null> {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
   // Proxy path: route through Cloudflare Worker (AS13335) when configured.
   // Set FB_EVENTS_PROXY_URL to the same worker URL as FB_MARKETPLACE_PROXY_URL,
@@ -290,6 +305,50 @@ export async function fetchFacebookEventPage(url: string): Promise<FbEventPageDa
     if (!result.startDate && og.description) {
       const ogDate = parseDateFromOgDescription(og.description, url);
       if (ogDate) result.startDate = ogDate;
+    }
+
+    // ADR-081 address upgrade: the individual event PAGE embeds the same FB
+    // Event JSON as the search surface, and its FreeformPlace.contextual_name
+    // frequently carries the FULL street address even when the lean search
+    // result only had a city-level Page label. Reuse the discovery guard +
+    // geo-derivation (facebook-address.ts) so behaviour is identical. Pure,
+    // best-effort: any failure leaves the JSON-LD/OG result untouched.
+    try {
+      const events = extractEventObjects(html);
+      if (events.length > 0) {
+        const wantId = extractFbEventIdFromUrl(url);
+        const chosen =
+          (wantId && events.find((e) => String(e?.id) === wantId && e?.event_place)) ||
+          events.find((e) => e?.event_place) ||
+          events[0];
+        const place = extractPlaceFromEventObject(chosen);
+        if (place.address) {
+          // Guard-passed real street address -- strictly better than JSON-LD/OG.
+          result.address = place.address;
+          if (place.city) result.city = place.city;
+          if (place.state) result.state = place.state;
+          if (place.country) result.country = place.country;
+        } else {
+          // No real street address on the page; still surface any city/state
+          // and preserve the rejected raw text for the caller.
+          if (!result.city && place.city) result.city = place.city;
+          if (!result.state && place.state) result.state = place.state;
+          if (place.rawPlaceText && !result.rawPlaceText) {
+            result.rawPlaceText = place.rawPlaceText;
+          }
+        }
+      }
+    } catch {
+      // Page may not embed parseable Event JSON -- keep JSON-LD/OG result.
+    }
+
+    // Final address guard: never emit a non-street-address string. If the only
+    // address we have (e.g. from JSON-LD/OG free text) is not a real street
+    // address, demote it to rawPlaceText so the caller keeps a city-level
+    // (empty-address) listing instead of publishing junk.
+    if (result.address && !looksLikeStreetAddress(result.address)) {
+      if (!result.rawPlaceText) result.rawPlaceText = result.address;
+      result.address = undefined;
     }
 
     // No usable date extracted — treat as a failed enrichment, not a partial

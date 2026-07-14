@@ -95,6 +95,13 @@ jobs:
           # proxy (structured start_timestamp/address, no paid SERP). Repo Variable —
           # 'true' activates proxy discovery; unset/false keeps the SERP path.
           FB_EVENTS_DISCOVERY_VIA_PROXY: ${{ vars.FB_EVENTS_DISCOVERY_VIA_PROXY }}
+          # ADR-082 Option A: per-event street-address enrichment in the proxy
+          # discovery path (second pass fetches each unique event page for its real
+          # street address; run-global cap + 10-min budget). Repo Variable — 'true'
+          # activates enrichment; unset/false is a no-op. Only meaningful when
+          # FB_EVENTS_DISCOVERY_VIA_PROXY is also 'true'. Requires FB_EVENTS_PROXY_URL
+          # to be the BARE worker origin (S1114) or the /fb-event-page fetch 404s.
+          FB_EVENTS_ADDRESS_FETCH: ${{ vars.FB_EVENTS_ADDRESS_FETCH }}
         run: |
           cd packages/backend
           npx ts-node src/scripts/run-search-facebook-events.ts

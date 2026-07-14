@@ -43,8 +43,49 @@ import {
   isRejectedNonSaleContent,
   extractOrganizerName,
 } from './search-facebook-events';
+import {
+  looksLikeStreetAddress,
+  deriveCityStateFromDisplay,
+} from './facebook-address';
+// Re-exported so existing importers of these guards from this module keep
+// working; the canonical definitions now live in facebook-address.ts.
+export { looksLikeStreetAddress, deriveCityStateFromDisplay };
+// ADR-082 Option A: per-event street-address enrichment. The individual FB event
+// PAGE frequently embeds the FULL street address even when the lean search-result
+// object only had a city-level Page label. fetchFacebookEventPage reuses the same
+// guards (facebook-address.ts) and never throws (returns null on any failure).
+// page-fetch imports only facebook-json / facebook-address / userAgents, so this
+// discovery -> page-fetch edge introduces NO import cycle.
+import { fetchFacebookEventPage } from './facebook-events-page-fetch';
 
 const FETCH_TIMEOUT_MS = 15_000;
+
+// ---------------------------------------------------------------------------
+// ADR-082 Option A -- per-event address enrichment budget (RUN-GLOBAL).
+// ---------------------------------------------------------------------------
+//
+// The metro loop calls scrapeFacebookEventsForMetroViaProxy ~43x per sharded
+// run. The cap + wall-clock budget below are RUN-GLOBAL (not per-metro), so they
+// are carried in a shared mutable AddressEnrichCtx threaded into every call.
+// Enrichment is serial (concurrency 1) with an 800-1500ms jittered delay between
+// fetches to stay well within FB's single-IP rate window through the proxy.
+const ADDR_FETCH_MAX_PER_RUN = 150;          // run-global fetch cap (NOT per metro)
+const ADDR_FETCH_TIME_BUDGET_MS = 10 * 60_000; // 10-min wall-clock enrichment ceiling
+const ADDR_FETCH_TIMEOUT_MS = 8_000;         // per-fetch timeout for this path
+
+/**
+ * Shared, mutable enrichment context threaded through EVERY metro call in a run
+ * so the cap (used) and wall-clock budget (startMs) are enforced run-globally.
+ * `skipUrls` is a fetch-once set (URLs already enriched/attempted, seeded from
+ * the DB by the runner and grown in-memory as this run fetches). `enabled` is the
+ * FB_EVENTS_ADDRESS_FETCH flag -- when false the entire second pass is a no-op.
+ */
+export interface AddressEnrichCtx {
+  enabled: boolean;
+  used: number;
+  startMs: number;
+  skipUrls: Set<string>;
+}
 
 // Reject events whose REAL parsed start is more than this far before "now".
 // Tightened from 30d -> ~2d grace (S1117): FB still serves old / recurring event
@@ -186,75 +227,6 @@ function resolveEventDate(ev: any): { date: Date; approximate: boolean } | null 
 // event_place -> city/state best-effort parse
 // ---------------------------------------------------------------------------
 
-// US state + DC 2-letter codes -- validates a candidate token so we never treat
-// "US", "Rd", "St" etc. as a state.
-const US_STATE_CODES = new Set([
-  'AL', 'AK', 'AZ', 'AR', 'CA', 'CO', 'CT', 'DE', 'FL', 'GA', 'HI', 'ID', 'IL',
-  'IN', 'IA', 'KS', 'KY', 'LA', 'ME', 'MD', 'MA', 'MI', 'MN', 'MS', 'MO', 'MT',
-  'NE', 'NV', 'NH', 'NJ', 'NM', 'NY', 'NC', 'ND', 'OH', 'OK', 'OR', 'PA', 'RI',
-  'SC', 'SD', 'TN', 'TX', 'UT', 'VT', 'VA', 'WA', 'WV', 'WI', 'WY', 'DC',
-]);
-
-// Canadian province + territory 2-letter codes. Disjoint from US_STATE_CODES,
-// so a bare 2-letter token unambiguously identifies its country. QC is included
-// here for DETECTION only -- Quebec listings are REJECTED at ingest (LOCKED
-// S1116, consistent with the S626 EU+QC exclusion posture); every other province
-// is accepted and relabelled to its true city + province.
-const CA_PROVINCE_CODES = new Set([
-  'AB', 'BC', 'MB', 'NB', 'NL', 'NS', 'NT', 'NU', 'ON', 'PE', 'QC', 'SK', 'YT',
-]);
-
-
-/**
- * Extract the REAL city + 2-letter state from an event_place display string by
- * locating a valid US state-code token and taking the comma-token immediately
- * before it as the city. Pure + exported for unit testing.
- *
- * Handles both shapes that appear in live FB data:
- *   - Page label:        "Renton, WA"                                    -> Renton, WA
- *   - Page label:        "Clinton, CT"                                   -> Clinton, CT
- *   - FreeformPlace addr: "1356 West Sweden Rd, Brockport, NY, United States, New York 14420" -> Brockport, NY
- *   - FreeformPlace addr: "36 Linden St, Pittsfield, MA 01201-3212, United States"            -> Pittsfield, MA
- *   - FreeformPlace addr: "470 Gold Rd, Jasper, TN 37347-6216, United States"                 -> Jasper, TN
- *
- * A US state token is an exact 2-letter uppercase code ("NY") OR a code followed
- * by a ZIP ("MA 01201-3212" -> MA). A Canadian province token is an exact code
- * ("BC") OR a code + postal ("BC V3G 2K1"); e.g.
- * "..., Abbotsford, BC V3G 2K1, Canada" -> { Abbotsford, BC, CA }. The US and CA
- * code sets are disjoint, so `country` is unambiguous. Returns null when no valid
- * US/CA code is present (spelled-out province, or an unparseable string) so the
- * caller keeps its existing metro fallback.
- */
-export function deriveCityStateFromDisplay(
-  display: string
-): { city: string; state: string; country: 'US' | 'CA' } | null {
-  if (!display || typeof display !== 'string') return null;
-  const tokens = display
-    .split(',')
-    .map((t) => t.trim())
-    .filter(Boolean);
-  for (let i = 1; i < tokens.length; i++) {
-    // US: exact "ST", or "ST 01201" / "ST 01201-3212" (state code + trailing ZIP).
-    const us = tokens[i].match(/^([A-Z]{2})(?:\s+\d{5}(?:-\d{4})?)?$/);
-    if (us && US_STATE_CODES.has(us[1])) {
-      const city = tokens[i - 1];
-      if (city) return { city, state: us[1], country: 'US' };
-    }
-    // Canada: bare province code "BC", or province + postal "BC V3G 2K1"
-    // (as it appears in FreeformPlace addresses like
-    // "..., Abbotsford, BC V3G 2K1, Canada"). Province set is disjoint from the
-    // US set, so this never mis-claims a US token. City is the token before it.
-    const ca = tokens[i].match(
-      /^([A-Z]{2})(?:\s+[A-Za-z]\d[A-Za-z]\s?\d[A-Za-z]\d)?$/
-    );
-    if (ca && CA_PROVINCE_CODES.has(ca[1])) {
-      const city = tokens[i - 1];
-      if (city) return { city, state: ca[1], country: 'CA' };
-    }
-  }
-  return null;
-}
-
 // How the returned city/state was resolved -- surfaced in scrapedMetadata so
 // downstream cleanup can find records that never got a real city/state.
 type CityStateSource =
@@ -293,31 +265,6 @@ interface ParsedPlace {
    * Preserved (never dropped) so downstream cleanup can inspect what FB had.
    */
   rawPlaceText: string;
-}
-
-/**
- * Heuristic "does this look like a REAL street address" guard for the
- * FreeformPlace label BEFORE it is ever written to Sale.address. FB's
- * FreeformPlace.contextual_name is a free-text field organizers type by hand, so
- * it is frequently NOT a street address at all -- observed junk includes a bare
- * ZIP ("35951"), a city fragment ("Dunlay tx"), and placeholders
- * ("TBD - Fairfax Vermont"). A real FB street label always LEADS with a house
- * number followed by a street-name word ("1356 West Sweden Rd, ...",
- * "36 Linden St, ...", "470 Gold Rd, ..."). We require exactly that shape and
- * reject a bare number / ZIP. Conservative by design: when unsure we return
- * false so the listing keeps an EMPTY address (address is optional) rather than
- * storing a wrong street string. Pure + exported for unit testing.
- */
-export function looksLikeStreetAddress(candidate: string): boolean {
-  if (!candidate || typeof candidate !== 'string') return false;
-  const t = candidate.trim();
-  if (!t) return false;
-  // A bare ZIP (or ZIP+4) alone is not a street address.
-  if (/^\d{5}(?:-\d{4})?$/.test(t)) return false;
-  // Must lead with a house number (1-6 digits) then an alphabetic street word.
-  // Rejects "Dunlay tx", "TBD - Fairfax Vermont", "35951"; accepts
-  // "1356 West Sweden Rd", "36 Linden St", "470 Gold Rd", "123 Broadway".
-  return /^\d{1,6}\s+[A-Za-z][A-Za-z0-9.'-]*/.test(t);
 }
 
 function parsePlace(ev: any, metro: MetroTarget): ParsedPlace {
@@ -564,7 +511,8 @@ function mapEventToScrapedItem(
  */
 export async function scrapeFacebookEventsForMetroViaProxy(
   metro: MetroTarget,
-  _opts: FbSearchOptions = {}
+  _opts: FbSearchOptions = {},
+  enrichCtx?: AddressEnrichCtx
 ): Promise<ScrapedItem[]> {
   const byEventId = new Map<string, ScrapedItem>();
 
@@ -608,6 +556,77 @@ export async function scrapeFacebookEventsForMetroViaProxy(
     // Light inter-query jitter -- one proxy request per phrase; the Worker + FB
     // tolerate this pacing across the sharded metro run.
     await jitterDelay(800, 1800);
+  }
+
+  // ------------------------------------------------------------------
+  // SECOND PASS (ADR-082 Option A) -- per-event street-address enrichment.
+  // Runs over the UNIQUE, post-dedupe events (byEventId.values()) so each event
+  // is fetched at most ONCE per run. Gated behind enrichCtx.enabled
+  // (FB_EVENTS_ADDRESS_FETCH); when off this whole block is skipped -> zero
+  // behavior change. Cap + wall-clock budget are RUN-GLOBAL via the shared
+  // enrichCtx. Any per-item failure is swallowed -- enrichment NEVER fails the run.
+  if (enrichCtx && enrichCtx.enabled) {
+    for (const item of byEventId.values()) {
+      // Run-global guards -- shared across all ~43 metro calls this run.
+      if (enrichCtx.used >= ADDR_FETCH_MAX_PER_RUN) break;
+      if (Date.now() - enrichCtx.startMs > ADDR_FETCH_TIME_BUDGET_MS) break;
+
+      // Already has a real street address -- nothing to upgrade.
+      if (looksLikeStreetAddress(item.address)) continue;
+
+      // Fetch-once: skip URLs already enriched/attempted (DB-seeded or this run).
+      if (enrichCtx.skipUrls.has(item.sourceUrl)) continue;
+
+      enrichCtx.used++;
+      enrichCtx.skipUrls.add(item.sourceUrl);
+
+      // Mark attempted UP FRONT so a re-fetch is never retried -- even if the
+      // fetch below returns null or throws (fetch-once semantics persist via
+      // scrapedMetadata, which ingest writes verbatim at CREATE time).
+      item.scrapedMetadata = {
+        ...(item.scrapedMetadata ?? {}),
+        addressFetchAttempted: true,
+        addressFetchAt: new Date().toISOString(),
+      };
+
+      try {
+        const page = await fetchFacebookEventPage(item.sourceUrl, ADDR_FETCH_TIMEOUT_MS);
+
+        // GUARDED WRITE-BACK -- only when the page yielded a REAL street address.
+        // We only reach here because item.address was NOT already a street, so
+        // this can never downgrade an existing street address.
+        if (page?.address && looksLikeStreetAddress(page.address)) {
+          // QC drop parity with mapEventToScrapedItem's ingest-time reject.
+          if (page.state === 'QC' || /\bqu[eé]bec\b/i.test(page.address)) {
+            byEventId.delete(item.sourceItemId ?? item.sourceUrl);
+          } else {
+            item.address = page.address;
+            if (page.city) item.city = page.city;
+            if (page.state) item.state = page.state;
+            item.scrapedMetadata = {
+              ...(item.scrapedMetadata ?? {}),
+              cityStateSource: 'page-fetch-address',
+              geoConfidence: 'high',
+              ...(page.country ? { country: page.country } : {}),
+            };
+          }
+        }
+      } catch (err) {
+        // A single enrichment error never fails the run -- keep city-level.
+        console.warn(
+          `[FB-Events-Discovery] address enrich failed for ${item.sourceUrl}:`,
+          err instanceof Error ? err.message : String(err)
+        );
+      }
+
+      // Serial throttle between fetches (concurrency 1).
+      await jitterDelay(800, 1500);
+    }
+
+    console.log(
+      `[FB-Events-Discovery] ${metro.city}, ${metro.state} -- address enrichment ` +
+        `used ${enrichCtx.used}/${ADDR_FETCH_MAX_PER_RUN} fetches (run-global)`
+    );
   }
 
   return Array.from(byEventId.values());

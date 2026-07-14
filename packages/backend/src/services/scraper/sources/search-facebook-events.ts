@@ -30,6 +30,7 @@ import * as cheerio from 'cheerio';
 import { ScrapedItem } from '../index';
 import { getRandomUserAgent, jitterDelay } from '../userAgents';
 import { fetchFacebookEventPage } from './facebook-events-page-fetch';
+import { looksLikeStreetAddress } from './facebook-address';
 import { GOOGLE_PLACES_METROS } from './scraperConfig';
 
 // ---------------------------------------------------------------------------
@@ -958,10 +959,64 @@ export async function scrapeFacebookEventsForMetro(
       if (enrichment?.startDate) {
         item.startDate = enrichment.startDate;
         item.endDate = enrichment.endDate ?? item.endDate;
-        if (enrichment.address) item.address = enrichment.address;
-        if (enrichment.city) item.city = enrichment.city;
-        if (enrichment.state) item.state = enrichment.state;
-        if (enrichment.zip) item.zip = enrichment.zip;
+
+        // Address enrichment: apply ONLY a real street address, and ONLY when
+        // it is strictly better than what the item already has (never clobber
+        // an existing real street address with a worse/city-level one). Quebec
+        // is rejected (LOCKED S1116): a QC-resolved location is never written.
+        const enrichedAddr = enrichment.address;
+        const enrichedIsReal =
+          !!enrichedAddr && looksLikeStreetAddress(enrichedAddr);
+        const currentIsReal = looksLikeStreetAddress(item.address || '');
+        const enrichedIsQuebec =
+          enrichment.state === 'QC' ||
+          /\bqu[e\u00e9]bec\b/i.test(enrichedAddr || '');
+
+        if (enrichedIsQuebec) {
+          // Never apply a Quebec location. Leave the item as-is; keep the raw
+          // text for downstream cleanup rather than writing it to address.
+          if (
+            item.scrapedMetadata &&
+            enrichment.rawPlaceText &&
+            !item.scrapedMetadata.rawPlaceText
+          ) {
+            item.scrapedMetadata.rawPlaceText = enrichment.rawPlaceText;
+          }
+        } else {
+          if (enrichedIsReal && !currentIsReal) {
+            // Preserve any weak/city-level text before overwriting address.
+            if (
+              item.address &&
+              item.scrapedMetadata &&
+              !item.scrapedMetadata.rawPlaceText
+            ) {
+              item.scrapedMetadata.rawPlaceText = item.address;
+            }
+            item.address = enrichedAddr as string;
+            // Real street address -> geo is high-confidence for directions.
+            if (item.scrapedMetadata) {
+              item.scrapedMetadata.geoConfidence = 'high';
+            }
+          } else if (
+            !currentIsReal &&
+            enrichment.rawPlaceText &&
+            item.scrapedMetadata &&
+            !item.scrapedMetadata.rawPlaceText
+          ) {
+            // No real street address available -- preserve the rejected raw
+            // FreeformPlace text (bare ZIP / city fragment / placeholder).
+            item.scrapedMetadata.rawPlaceText = enrichment.rawPlaceText;
+          }
+          // City/state/zip: fill the true values from the parsed address
+          // (Quebec already excluded above, so this never mislabels a QC row).
+          if (enrichment.city) item.city = enrichment.city;
+          if (enrichment.state) item.state = enrichment.state;
+          if (enrichment.zip) item.zip = enrichment.zip;
+          if (item.scrapedMetadata && enrichment.country) {
+            item.scrapedMetadata.country = enrichment.country;
+          }
+        }
+
         if (enrichment.organizerName) item.organizerName = enrichment.organizerName;
         if (item.scrapedMetadata) item.scrapedMetadata.dateApproximate = false;
       }

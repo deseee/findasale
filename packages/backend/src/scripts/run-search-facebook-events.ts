@@ -25,8 +25,12 @@ import {
   getShardIndexForDate,
   SHARD_COUNT,
 } from '../services/scraper/sources/search-facebook-events';
-import { scrapeFacebookEventsForMetroViaProxy } from '../services/scraper/sources/facebook-events-discovery';
+import {
+  scrapeFacebookEventsForMetroViaProxy,
+  AddressEnrichCtx,
+} from '../services/scraper/sources/facebook-events-discovery';
 import { jitterDelay } from '../services/scraper/userAgents';
+import { prisma } from '../lib/prisma';
 
 const INGEST_URL =
   (process.env.RAILWAY_BACKEND_URL || 'http://localhost:3001') +
@@ -41,6 +45,12 @@ const ORGANIZER_ID    = process.env.FB_EVENTS_ORGANIZER_ID;
 // FB embedded-JSON parse (real dates, no paid SERP). Unset/false keeps the
 // existing SERP path unchanged (instant rollback). Default OFF.
 const USE_PROXY_DISCOVERY = process.env.FB_EVENTS_DISCOVERY_VIA_PROXY === 'true';
+// ADR-082 Option A flag: when 'true', the proxy discovery path runs a SECOND
+// pass that fetches each unique event page for its REAL street address (free, no
+// geocoding), capped run-globally. Distinct from FB_EVENTS_DIRECT_FETCH_ENABLED.
+// Unset/false is a no-op -> zero behavior change. Only meaningful when
+// FB_EVENTS_DISCOVERY_VIA_PROXY is also on (enrichment lives in that path).
+const USE_ADDRESS_FETCH = process.env.FB_EVENTS_ADDRESS_FETCH === 'true';
 
 /**
  * Send an out-of-band alert via Resend (matches gmailHealthCron.ts pattern).
@@ -119,13 +129,51 @@ async function main() {
   let metroSuccess = 0;
   let metroFailed = 0;
 
+  // ADR-082 Option A: RUN-GLOBAL address-enrichment context, shared across every
+  // metro call so the fetch cap + wall-clock budget are enforced across the whole
+  // run (the metro loop calls the proxy discovery ~43x). enabled:false makes the
+  // discovery second pass a no-op, so this is a true no-op when the flag is off.
+  const enrichCtx: AddressEnrichCtx = {
+    enabled: USE_ADDRESS_FETCH,
+    used: 0,
+    startMs: Date.now(),
+    skipUrls: new Set<string>(),
+  };
+
+  // FETCH-ONCE skip-set: one indexed read (uses existing sourceName/sourceUrl +
+  // scrapedMetadata GIN indexes) of every Facebook Events sale that already has a
+  // street address OR was already address-fetch-attempted, so we never re-fetch a
+  // page across runs. On query failure we proceed with an empty skip-set -- the
+  // per-item addressFetchAttempted marker still prevents a same-run refetch.
+  if (USE_ADDRESS_FETCH) {
+    try {
+      const rows = await prisma.$queryRaw<Array<{ sourceUrl: string | null }>>`
+        SELECT "sourceUrl" FROM "Sale"
+        WHERE "sourceName" = 'Facebook Events'
+          AND "sourceUrl" IS NOT NULL
+          AND ("address" <> '' OR "scrapedMetadata" @> '{"addressFetchAttempted": true}'::jsonb)
+      `;
+      for (const r of rows) {
+        if (r.sourceUrl) enrichCtx.skipUrls.add(r.sourceUrl);
+      }
+      console.log(
+        `[run-fb-events] Address-fetch ON — skip-set loaded ${enrichCtx.skipUrls.size} already-enriched/attempted FB Event URLs`
+      );
+    } catch (err) {
+      console.warn(
+        '[run-fb-events] Address-fetch skip-set query failed — proceeding with empty skip-set:',
+        err instanceof Error ? err.message : String(err)
+      );
+    }
+  }
+
   // Scrape each metro sequentially with jitter to stay within rate limits
   for (const metro of metros) {
     try {
       // ADR-082: proxy embedded-JSON discovery when flagged on; else the
       // existing paid-SERP discovery (unchanged) as instant rollback.
       const items = USE_PROXY_DISCOVERY
-        ? await scrapeFacebookEventsForMetroViaProxy(metro)
+        ? await scrapeFacebookEventsForMetroViaProxy(metro, {}, enrichCtx)
         : await scrapeFacebookEventsForMetro(metro, {
             searloKey:    SEARLO_KEY,
             braveKey:     BRAVE_KEY,
@@ -282,10 +330,12 @@ async function main() {
 }
 
 main()
-  .then(() => {
+  .then(async () => {
+    await prisma.$disconnect().catch(() => undefined);
     process.exit(0);
   })
-  .catch((err) => {
+  .catch(async (err) => {
     console.error('[run-fb-events] Fatal:', err);
+    await prisma.$disconnect().catch(() => undefined);
     process.exit(1);
   });
