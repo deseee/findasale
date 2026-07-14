@@ -398,3 +398,54 @@ export const cancelPost = async (req: AuthRequest, res: Response) => {
     return res.status(500).json({ message: 'Failed to cancel post' });
   }
 };
+
+/**
+ * POST /api/social-publisher/posts/:id/confirm — the SECOND human gate for a STAGED
+ * post (ADR-078 Wave-4 video fan-out). A staged post is created status=DRAFT with a
+ * far-future `scheduledFor` sentinel so the publisher cron's due-query
+ * (status IN ('SCHEDULED','DRAFT') AND scheduledFor <= now) can NEVER select it; this
+ * endpoint is the ONLY promotion path. It moves the row DRAFT -> SCHEDULED and stamps
+ * a real `scheduledFor` (now, or an admin-supplied time), after which the publisher
+ * cron may send it. Admin-only (mounted behind requireAdmin in routes/socialPublisher).
+ * Accepts ONLY an optional `scheduledFor`; status is forced server-side and can never
+ * be client-supplied (NO-MASS-ASSIGNMENT).
+ */
+export const confirmPost = async (req: AuthRequest, res: Response) => {
+  try {
+    const id = req.params.id;
+    if (!id || typeof id !== 'string') {
+      return res.status(400).json({ message: 'Missing post id' });
+    }
+    const existing = await prisma.socialPost.findUnique({
+      where: { id },
+      select: { id: true, status: true },
+    });
+    if (!existing) {
+      return res.status(404).json({ message: 'Post not found' });
+    }
+    // Only a STAGED (DRAFT) post can be confirmed. A DRAFT is the only status the
+    // fan-out produces; SCHEDULED/PUBLISHING/PUBLISHED/FAILED/SKIPPED are not
+    // re-confirmable here (use cancel/retry paths instead).
+    if (existing.status !== 'DRAFT') {
+      return res
+        .status(409)
+        .json({ message: `Only a staged DRAFT post can be confirmed (status is ${existing.status})` });
+    }
+
+    const raw = req.body?.scheduledFor;
+    const scheduledFor = raw ? new Date(raw) : new Date();
+    if (Number.isNaN(scheduledFor.getTime())) {
+      return res.status(400).json({ message: 'scheduledFor is not a valid date' });
+    }
+
+    const updated = await prisma.socialPost.update({
+      where: { id },
+      data: { status: 'SCHEDULED', scheduledFor }, // status forced — never client-set
+      select: { id: true, status: true, scheduledFor: true },
+    });
+    return res.json({ post: updated });
+  } catch (err) {
+    console.error('[socialPublisher] confirmPost error:', err instanceof Error ? scrubTokens(err.message) : err);
+    return res.status(500).json({ message: 'Failed to confirm post' });
+  }
+};

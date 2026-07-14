@@ -29,6 +29,7 @@ import {
   listPosts,
   createPost,
   cancelPost,
+  confirmPost,
 } from '../controllers/socialPublisherController';
 
 const router = Router();
@@ -53,5 +54,7 @@ router.post('/disconnect', disconnectAccount);
 router.get('/posts', listPosts);
 router.post('/posts', createPost);
 router.post('/posts/:id/cancel', cancelPost);
+// Second human gate for a STAGED (DRAFT) fan-out post — the ONLY publish-promotion path.
+router.post('/posts/:id/confirm', confirmPost);
 
 export default router;

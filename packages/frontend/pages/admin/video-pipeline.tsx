@@ -56,6 +56,18 @@ interface AwaitingReviewBatchRow {
   updatedAt: string;
 }
 
+// A batch rendered BEFORE the 2026-07-13 notes-persistence fix stored only the
+// on-disk markdown PATH in stagedFile (the actual content lived on an ephemeral
+// server disk, now gone). Detect that legacy single-line path so the card can
+// explain it instead of showing a bare path as if it were the review notes.
+// Real notes always start with the multi-line "STATUS: AWAITING EDIT" body.
+const CONTENT_PIPELINE_PATH_RE = /^[\w./-]*content-pipeline\/[\w./-]+\.md$/;
+function looksLikeBareStagedPath(value: string | null): boolean {
+  if (!value) return false;
+  const trimmed = value.trim();
+  return !trimmed.includes('\n') && CONTENT_PIPELINE_PATH_RE.test(trimmed);
+}
+
 const AdminVideoPipelinePage = () => {
   const router = useRouter();
   const { user, isLoading } = useAuth();
@@ -64,6 +76,7 @@ const AdminVideoPipelinePage = () => {
   const [answerDrafts, setAnswerDrafts] = useState<Record<string, string>>({});
   const [rejectDrafts, setRejectDrafts] = useState<Record<string, string>>({});
   const [rejectingId, setRejectingId] = useState<string | null>(null);
+  const [rejectingReviewId, setRejectingReviewId] = useState<string | null>(null);
   const [expandedReviewId, setExpandedReviewId] = useState<string | null>(null);
 
   const isAdmin = !!user?.id && (user?.roles?.includes('ADMIN') || user?.role === 'ADMIN');
@@ -126,7 +139,9 @@ const AdminVideoPipelinePage = () => {
     onSuccess: () => {
       showToast('Batch rejected', 'success');
       setRejectingId(null);
+      setRejectingReviewId(null);
       queryClient.invalidateQueries({ queryKey: ['admin-video-pipeline-needs-input'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-video-pipeline-awaiting-review'] });
     },
     onError: (err: any) => {
       showToast(err.response?.data?.message || 'Failed to reject batch', 'error');
@@ -390,19 +405,72 @@ const AdminVideoPipelinePage = () => {
                     {expandedReviewId === batch.id ? 'Hide staged review notes' : 'View staged review notes'}
                   </button>
 
-                  {expandedReviewId === batch.id && (
-                    <pre className="whitespace-pre-wrap text-xs bg-warm-50 dark:bg-gray-900 border border-warm-200 dark:border-gray-700 rounded-lg p-3 mb-3 max-h-96 overflow-y-auto text-warm-800 dark:text-warm-200">
-                      {batch.stagedContent ?? '(no staged content recorded)'}
-                    </pre>
-                  )}
+                  {expandedReviewId === batch.id &&
+                    (looksLikeBareStagedPath(batch.stagedContent) ? (
+                      <div className="text-xs bg-warm-50 dark:bg-gray-900 border border-amber-200 dark:border-amber-900/40 rounded-lg p-3 mb-3 text-warm-700 dark:text-warm-300">
+                        Staged review notes were not saved for this batch. It was rendered before
+                        notes were persisted to the database (fixed 2026-07-13), so only the
+                        original file path remains —{' '}
+                        <span className="font-mono break-all">{batch.stagedContent}</span> — and
+                        that file lived on an ephemeral server disk that is now gone. Newly
+                        rendered batches show their full notes here; re-render this shoot as a new
+                        batch to regenerate them.
+                      </div>
+                    ) : (
+                      <pre className="whitespace-pre-wrap text-xs bg-warm-50 dark:bg-gray-900 border border-warm-200 dark:border-gray-700 rounded-lg p-3 mb-3 max-h-96 overflow-y-auto text-warm-800 dark:text-warm-200">
+                        {batch.stagedContent ?? '(no staged content recorded)'}
+                      </pre>
+                    ))}
 
-                  <button
-                    onClick={() => approveMutation.mutate(batch.id)}
-                    disabled={approveMutation.isPending}
-                    className="px-4 py-2 bg-green-600 text-white font-medium rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition text-sm"
-                  >
-                    Approve
-                  </button>
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => approveMutation.mutate(batch.id)}
+                      disabled={approveMutation.isPending}
+                      className="px-4 py-2 bg-green-600 text-white font-medium rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition text-sm"
+                    >
+                      Approve
+                    </button>
+                    {rejectingReviewId !== batch.id && (
+                      <button
+                        onClick={() => setRejectingReviewId(batch.id)}
+                        className="text-xs text-red-600 hover:text-red-700 font-medium"
+                      >
+                        Reject this batch
+                      </button>
+                    )}
+                  </div>
+
+                  {rejectingReviewId === batch.id && (
+                    <div className="flex gap-2 mt-3 border-t border-warm-200 dark:border-gray-700 pt-3">
+                      <input
+                        type="text"
+                        value={rejectDrafts[batch.id] ?? ''}
+                        onChange={(e) =>
+                          setRejectDrafts((prev) => ({ ...prev, [batch.id]: e.target.value }))
+                        }
+                        placeholder="Reason (optional)..."
+                        className="flex-1 px-3 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-900 dark:text-warm-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 text-sm"
+                      />
+                      <button
+                        onClick={() =>
+                          rejectMutation.mutate({
+                            batchId: batch.id,
+                            reason: (rejectDrafts[batch.id] ?? '').trim() || undefined,
+                          })
+                        }
+                        disabled={rejectMutation.isPending}
+                        className="px-4 py-2 bg-red-600 text-white font-medium rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition text-sm whitespace-nowrap"
+                      >
+                        Confirm Reject
+                      </button>
+                      <button
+                        onClick={() => setRejectingReviewId(null)}
+                        className="px-4 py-2 border border-warm-300 dark:border-gray-600 text-warm-700 dark:text-warm-300 font-medium rounded-lg hover:bg-warm-100 dark:hover:bg-gray-700 transition text-sm"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

@@ -25,6 +25,7 @@
  * services/video/videoJobOrchestrator.ts.
  */
 
+import crypto from 'crypto';
 import { Router } from 'express';
 import { authenticate, requireAdmin } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
@@ -292,9 +293,13 @@ router.post('/footage-batch/:batchId/reject', async (req, res) => {
   if (!batch) {
     return res.status(404).json({ message: `FootageBatch ${batchId} not found` });
   }
-  if (batch.status !== 'NEEDS_INPUT' && batch.status !== 'FAILED') {
+  if (
+    batch.status !== 'NEEDS_INPUT' &&
+    batch.status !== 'FAILED' &&
+    batch.status !== 'AWAITING_REVIEW'
+  ) {
     return res.status(400).json({
-      message: `Batch cannot be rejected from status=${batch.status} (only NEEDS_INPUT or FAILED).`,
+      message: `Batch cannot be rejected from status=${batch.status} (only NEEDS_INPUT, FAILED, or AWAITING_REVIEW).`,
     });
   }
 
@@ -386,11 +391,106 @@ router.get('/footage-batch/awaiting-review', async (req, res) => {
 });
 
 /**
+ * ADR-078 Wave-4 second-confirm fan-out sentinel.
+ *
+ * A staged fan-out SocialPost is created with status DRAFT and this far-future
+ * `scheduledFor`. The social publisher cron's due-query is
+ *   status IN ('SCHEDULED','DRAFT') AND scheduledFor <= now
+ * (socialPublisherService.publishDuePosts) -- a year-9999 timestamp can NEVER
+ * satisfy `scheduledFor <= now`, so NO cron can ever auto-publish a staged post.
+ * The ONLY path to publish is the explicit admin confirm action
+ * (POST /api/social-publisher/posts/:id/confirm), which sets a real scheduledFor.
+ * This is the SECOND human gate; video Approve (below) is the first.
+ */
+const NEVER_AUTO_PUBLISH = new Date('9999-12-31T00:00:00.000Z');
+
+/**
+ * ADR-078 Wave-4 fan-out (LOCKED 2026-07-13): stage a YouTube Short for a video
+ * batch that a human just APPROVED. STAGES ONLY -- never schedules, never posts.
+ *
+ * Reuses the existing ADR-077 SocialPost plumbing untouched: the row is created
+ * status=DRAFT with a far-future scheduledFor sentinel (see NEVER_AUTO_PUBLISH),
+ * so the publisher cron can never pick it up. It becomes publishable only after
+ * the second human confirm in the social scheduler (/admin/social-accounts).
+ *
+ * ADR-078 hard constraint honored: this only runs AFTER the VideoJob reaches
+ * APPROVED (asserted below), so it never creates a videoJobId-linked SocialPost
+ * from a not-yet-approved job. Best-effort + idempotent: a missing YouTube
+ * account or an already-staged post never blocks the approval.
+ */
+async function stageYoutubeShortForApprovedJob(
+  videoJobId: string,
+): Promise<{ staged: boolean; postId?: string; reason?: string }> {
+  const job = await prisma.videoJob.findUnique({
+    where: { id: videoJobId },
+    select: {
+      id: true,
+      status: true,
+      scriptText: true,
+      captionedVideoUrl: true,
+      rawVideoUrl: true,
+    },
+  });
+  if (!job) return { staged: false, reason: 'VideoJob not found' };
+  // ADR-078: only fan out from an APPROVED job.
+  if (job.status !== 'APPROVED') {
+    return { staged: false, reason: `VideoJob not APPROVED (status=${job.status})` };
+  }
+
+  const videoUrl = job.captionedVideoUrl ?? job.rawVideoUrl;
+  if (!videoUrl) return { staged: false, reason: 'VideoJob has no rendered video URL' };
+
+  // Brand-owned YouTube account (one per platform). No account connected -> skip.
+  const account = await prisma.socialAccount.findUnique({ where: { platform: 'YOUTUBE' } });
+  if (!account) {
+    return {
+      staged: false,
+      reason: 'No connected YouTube account -- connect one on /admin/social-accounts, then re-approve',
+    };
+  }
+
+  // Idempotency: never stage a second YouTube post for the same job.
+  const existing = await prisma.socialPost.findFirst({
+    where: { videoJobId: job.id, platform: 'YOUTUBE' },
+    select: { id: true },
+  });
+  if (existing) return { staged: true, postId: existing.id, reason: 'already staged' };
+
+  // youtube.ts derives title (first line) + description (rest) from `body`.
+  // templateRenderer already stores VideoJob.scriptText = `${title}
+
+${description}`.
+  const body = job.scriptText && job.scriptText.trim() ? job.scriptText : 'FindA.Sale';
+  const sourceFile = `video-job:${job.id}`;
+  const sourceHash = crypto.createHash('sha256').update(body).digest('hex');
+
+  const created = await prisma.socialPost.create({
+    data: {
+      accountId: account.id,
+      platform: 'YOUTUBE',
+      videoJobId: job.id,
+      sourceFile,
+      sourceHash,
+      body,
+      mediaUrls: [videoUrl],
+      status: 'DRAFT', // staged; NOT publishable until the confirm action
+      scheduledFor: NEVER_AUTO_PUBLISH, // cron can never select this
+    },
+    select: { id: true },
+  });
+  return { staged: true, postId: created.id };
+}
+
+/**
  * POST /api/admin/video-pipeline/footage-batch/:batchId/approve
- * Marks a rendered, staged batch as human-approved. Matches schema.prisma's
- * documented FootageBatchStatus.APPROVED semantics ("human flipped staged
- * file to APPROVED"). No downstream publish automation consumes this status
- * yet (correctly out of scope here) -- this only records the decision.
+ * Marks a rendered, staged batch as human-approved (schema.prisma
+ * FootageBatchStatus.APPROVED: "human flipped staged file to APPROVED"), then
+ * runs the ADR-078 Wave-4 fan-out: it STAGES a YouTube Short as a DRAFT
+ * SocialPost that STILL requires a second explicit human confirm in the social
+ * scheduler before it can ever publish (two gates: this Approve + that confirm).
+ * The staged post can never be auto-published by any cron -- see
+ * stageYoutubeShortForApprovedJob / NEVER_AUTO_PUBLISH above. Fan-out is
+ * best-effort: it never blocks or fails the approval.
  */
 router.post('/footage-batch/:batchId/approve', async (req, res) => {
   const { batchId } = req.params;
@@ -407,12 +507,28 @@ router.post('/footage-batch/:batchId/approve', async (req, res) => {
     where: { id: batchId },
     data: { status: 'APPROVED', approvedAt: new Date() },
   });
+
+  let youtubePost: { staged: boolean; postId?: string; reason?: string } = {
+    staged: false,
+    reason: 'no VideoJob linked to this batch',
+  };
   if (batch.videoJobId) {
+    // Mark the VideoJob APPROVED FIRST so the fan-out's APPROVED assertion holds
+    // (ADR-078: never create a videoJobId-linked SocialPost from a non-APPROVED job).
     await prisma.videoJob
       .update({ where: { id: batch.videoJobId }, data: { status: 'APPROVED' } })
       .catch((e) => console.warn(`[videoPipelineAdmin] could not mark VideoJob ${batch.videoJobId} APPROVED (non-fatal):`, e?.message ?? e));
+
+    try {
+      youtubePost = await stageYoutubeShortForApprovedJob(batch.videoJobId);
+    } catch (e: any) {
+      // Best-effort: a fan-out failure must never fail the approval itself.
+      console.warn(`[videoPipelineAdmin] YouTube fan-out staging failed for VideoJob ${batch.videoJobId} (non-fatal):`, e?.message ?? e);
+      youtubePost = { staged: false, reason: e?.message ?? 'fan-out staging error' };
+    }
   }
-  return res.status(200).json({ ok: true, batchId, status: approved.status });
+
+  return res.status(200).json({ ok: true, batchId, status: approved.status, youtubePost });
 });
 
 export default router;

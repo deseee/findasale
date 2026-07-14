@@ -41,6 +41,7 @@ import {
   FbSearchOptions,
   inferSaleType,
   isRejectedNonSaleContent,
+  extractOrganizerName,
 } from './search-facebook-events';
 
 const FETCH_TIMEOUT_MS = 15_000;
@@ -284,6 +285,39 @@ interface ParsedPlace {
    * decision deferred to Patrick (see DECISION NEEDED in the handoff).
    */
   geoUnresolved: boolean;
+  /**
+   * Raw FreeformPlace text that FAILED the real-street-address guard
+   * (looksLikeStreetAddress) and was therefore NOT written to `address` -- a
+   * bare ZIP, a city fragment, or a placeholder ("TBD - Fairfax Vermont").
+   * Empty string when the address was accepted or there was no FreeformPlace.
+   * Preserved (never dropped) so downstream cleanup can inspect what FB had.
+   */
+  rawPlaceText: string;
+}
+
+/**
+ * Heuristic "does this look like a REAL street address" guard for the
+ * FreeformPlace label BEFORE it is ever written to Sale.address. FB's
+ * FreeformPlace.contextual_name is a free-text field organizers type by hand, so
+ * it is frequently NOT a street address at all -- observed junk includes a bare
+ * ZIP ("35951"), a city fragment ("Dunlay tx"), and placeholders
+ * ("TBD - Fairfax Vermont"). A real FB street label always LEADS with a house
+ * number followed by a street-name word ("1356 West Sweden Rd, ...",
+ * "36 Linden St, ...", "470 Gold Rd, ..."). We require exactly that shape and
+ * reject a bare number / ZIP. Conservative by design: when unsure we return
+ * false so the listing keeps an EMPTY address (address is optional) rather than
+ * storing a wrong street string. Pure + exported for unit testing.
+ */
+export function looksLikeStreetAddress(candidate: string): boolean {
+  if (!candidate || typeof candidate !== 'string') return false;
+  const t = candidate.trim();
+  if (!t) return false;
+  // A bare ZIP (or ZIP+4) alone is not a street address.
+  if (/^\d{5}(?:-\d{4})?$/.test(t)) return false;
+  // Must lead with a house number (1-6 digits) then an alphabetic street word.
+  // Rejects "Dunlay tx", "TBD - Fairfax Vermont", "35951"; accepts
+  // "1356 West Sweden Rd", "36 Linden St", "470 Gold Rd", "123 Broadway".
+  return /^\d{1,6}\s+[A-Za-z][A-Za-z0-9.'-]*/.test(t);
 }
 
 function parsePlace(ev: any, metro: MetroTarget): ParsedPlace {
@@ -291,6 +325,7 @@ function parsePlace(ev: any, metro: MetroTarget): ParsedPlace {
   let city = metro.city;
   let state = metro.state;
   let address = '';
+  let rawPlaceText = '';
   let cityStateSource: CityStateSource = 'metro-fallback';
   let country: 'US' | 'CA' | null = null;
 
@@ -331,7 +366,16 @@ function parsePlace(ev: any, metro: MetroTarget): ParsedPlace {
     // NOT a street address -- so it must never populate `address`. null place ->
     // address stays empty. City/state derivation above is unchanged.
     if (place.__typename === 'FreeformPlace' && display.trim()) {
-      address = display.trim();
+      const candidate = display.trim();
+      if (looksLikeStreetAddress(candidate)) {
+        address = candidate;
+      } else {
+        // User-typed junk in the FreeformPlace label (bare ZIP, city fragment,
+        // or a placeholder like "TBD - Fairfax Vermont"). A wrong street string
+        // is worse than none, and address is optional -- so leave `address`
+        // empty (city-level fallback) but PRESERVE the raw text for cleanup.
+        rawPlaceText = candidate;
+      }
     }
   }
 
@@ -340,7 +384,7 @@ function parsePlace(ev: any, metro: MetroTarget): ParsedPlace {
   // Casper,WY-vs-Abbotsford,BC bug). Flag it; do not silently trust the metro.
   const geoUnresolved = cityStateSource === 'metro-fallback' && address.length > 0;
 
-  return { city, state, address, cityStateSource, country, geoUnresolved };
+  return { city, state, address, cityStateSource, country, geoUnresolved, rawPlaceText };
 }
 
 // ---------------------------------------------------------------------------
@@ -432,7 +476,7 @@ function mapEventToScrapedItem(
     ? canonicalizeEventUrl(url)
     : `https://www.facebook.com/events/${fbEventId}/`;
 
-  const { city, state, address, cityStateSource, country, geoUnresolved } =
+  const { city, state, address, cityStateSource, country, geoUnresolved, rawPlaceText } =
     parsePlace(ev, metro);
 
   // LOCKED S1116: Canadian listings are IN -- EXCEPT Quebec, which is REJECTED
@@ -443,14 +487,25 @@ function mapEventToScrapedItem(
   // arise from a Canadian address parse -- this never rejects a US listing.
   if (state === 'QC' || /\bqu[eé]bec\b/i.test(address)) return null;
 
-  // Organizer: the FB search JSON carries NO host/organizer NAME (only the
-  // is_viewer_host boolean), so we never derive one here. Do NOT re-add the
-  // title-regex heuristic -- it produces title fragments like "Garage/Moving/"
-  // that are worse than nothing. Leaving organizerName unset lets ingest fall
-  // back to the system "FindA.Sale Directory" organizer (same as the SERP null
-  // case). The REAL organizer is recovered later from the full event-page
-  // enrichment in facebook-events-page-fetch.ts, not from search results.
-  const organizerName = extractHostName(ev) ?? undefined;
+  // Organizer attribution -- resolved in priority order, never guessed:
+  //   1. A STRUCTURED host/creator NAME on the Event JSON (event_creator.name,
+  //      host.name, hosts[0].name) via extractHostName -- most reliable, though
+  //      the lean search-result objects frequently omit it.
+  //   2. Fall back to the SAME guarded title heuristic the SERP path uses
+  //      (extractOrganizerName): an explicit "hosted by X" / "by X" attribution,
+  //      or a capitalized business phrase immediately preceding a sale-type
+  //      keyword. It rejects bare numbers, "The", and <3-char fragments and
+  //      returns null when unsure -- so a confident real business name like
+  //      "Queen Bee Estate Sales" is captured while ambiguous titles fall
+  //      through to the system "FindA.Sale Directory" organizer (prior behavior).
+  //      We pass the event's OWN name as the title and an EMPTY snippet so the
+  //      name is never double-counted. (This supersedes the earlier
+  //      "do-not-derive" note: that warned against a cruder title-fragment grab;
+  //      extractOrganizerName is the guarded 2026-07-12 heuristic. The fuller
+  //      real organizer is still recovered later from event-page enrichment in
+  //      facebook-events-page-fetch.ts.)
+  const organizerName =
+    extractHostName(ev) ?? extractOrganizerName(rawName, '') ?? undefined;
 
   return {
     title: rawName,
@@ -486,6 +541,9 @@ function mapEventToScrapedItem(
       // cleanup anchor. `city`/`state` above remain the query-metro fallback for
       // now -- the reject-vs-relabel decision is deferred (see DECISION NEEDED).
       ...(geoUnresolved ? { rawPlaceAddress: address } : {}),
+      // Raw FreeformPlace text rejected by the real-street-address guard (not
+      // written to `address`). Preserved so cleanup can see what FB actually had.
+      ...(rawPlaceText ? { rawPlaceText } : {}),
       // Resolved country when derived from a parsed address ('US' | 'CA'). There
       // is NO `country` column on Sale, so this is the ONLY place a Canadian
       // listing is distinguishable from a US one (see SCHEMA NOTE in handoff).

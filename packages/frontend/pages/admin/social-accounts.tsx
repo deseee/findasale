@@ -221,6 +221,30 @@ const AdminSocialAccounts = () => {
     }
   };
 
+  // Second human gate for a STAGED (DRAFT) post — e.g. a video-Approve fan-out
+  // (ADR-078 Wave-4). Confirming promotes DRAFT -> SCHEDULED with a real
+  // scheduledFor (now), after which the publisher cron may send it. A DRAFT
+  // post is never published until this explicit action runs.
+  const handleConfirmPost = async (id: string) => {
+    setError('');
+    setNotice('');
+    if (
+      !window.confirm(
+        'Confirm this staged post? It will be scheduled to publish on the next publisher run (~10 min). This is the final human gate before it goes live.'
+      )
+    ) {
+      return;
+    }
+    try {
+      await api.post(`/social-publisher/posts/${id}/confirm`);
+      setNotice('Post confirmed — scheduled for the next publisher run.');
+      await loadPosts();
+    } catch (err: any) {
+      console.error('Confirm post error:', err);
+      setError(err?.response?.data?.message || 'Failed to confirm post');
+    }
+  };
+
   const connectedPlatforms = new Set(accounts.map((a) => a.platform));
 
   if (isLoading || (loading && accounts.length === 0 && posts.length === 0)) {
@@ -464,16 +488,29 @@ const AdminSocialAccounts = () => {
                       {p.lastErrorMessage || '—'}
                     </td>
                     <td className="px-6 py-4 text-sm text-right whitespace-nowrap">
-                      {cancellable ? (
-                        <button
-                          onClick={() => handleCancelPost(p.id)}
-                          className="px-3 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700 transition"
-                        >
-                          Cancel
-                        </button>
-                      ) : (
-                        <span className="text-warm-400 dark:text-gray-600">—</span>
-                      )}
+                      <div className="flex items-center justify-end gap-2">
+                        {p.status === 'DRAFT' && (
+                          <button
+                            onClick={() => handleConfirmPost(p.id)}
+                            className="px-3 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 transition"
+                            title="Confirm this staged post — the final human gate before it publishes"
+                          >
+                            Confirm &amp; schedule
+                          </button>
+                        )}
+                        {cancellable ? (
+                          <button
+                            onClick={() => handleCancelPost(p.id)}
+                            className="px-3 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700 transition"
+                          >
+                            Cancel
+                          </button>
+                        ) : (
+                          !(p.status === 'DRAFT') && (
+                            <span className="text-warm-400 dark:text-gray-600">—</span>
+                          )
+                        )}
+                      </div>
                     </td>
                   </tr>
                 );

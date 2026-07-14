@@ -44,6 +44,60 @@ export function normalizeAddress(addr: string): string {
 }
 
 /**
+ * Normalize a scraped event TITLE for address-independent dedup of recurring
+ * Facebook events (weekly flea markets, monthly swap meets, etc). Lowercases,
+ * strips punctuation, and removes the volatile tokens that differ between
+ * occurrences of the SAME recurring sale:
+ *   - month names, weekday names, years, and bare day numbers / ordinals,
+ *   - "annual", and filler ("the").
+ * So "1st Annual Wyoming Flea Market - July 2026" and
+ * "Wyoming Flea Market (August 5)" both normalize to "wyoming flea market".
+ * Pure + exported for unit testing.
+ */
+export function normalizeEventTitle(title: string): string {
+  if (!title) return '';
+  let s = title.toLowerCase();
+  // Month names (full + common abbreviations).
+  s = s.replace(
+    /\b(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec)\b\.?/g,
+    ' '
+  );
+  // Weekday names (full + abbreviations).
+  s = s.replace(
+    /\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday|mon|tue|tues|wed|thu|thurs|fri|sat|sun)\b\.?/g,
+    ' '
+  );
+  // Years, bare day numbers, and ordinals ("1st", "22nd").
+  s = s.replace(/\b\d{1,4}(?:st|nd|rd|th)?\b/g, ' ');
+  // "annual" and "the".
+  s = s.replace(/\bannual\b/g, ' ');
+  s = s.replace(/\bthe\b/g, ' ');
+  // Remaining punctuation -> space, then collapse whitespace.
+  s = s.replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ').trim();
+  return s;
+}
+
+// Generic sale-type / filler words. When a normalized title consists ONLY of
+// these, it names no specific sale and must NOT drive the title+city dedup tier.
+const GENERIC_TITLE_WORDS =
+  /\b(estate|garage|yard|moving|rummage|barn|multi|family|multifamily|community|neighborhood|neighbourhood|huge|big|giant|mega|sale|sales|flea|market|swap|meet|indoor|outdoor|auction|liquidation|downsizing|consignment|event)\b/g;
+
+/**
+ * True when a normalized title retains a DISTINCTIVE core after removing generic
+ * sale-type / filler words -- i.e. it names a specific business or market
+ * ("queen bee estate sale" -> core "queen bee"; "wyoming flea market" -> core
+ * "wyoming") rather than being a bare generic type ("estate sale" -> core "").
+ * The address-independent title+city dedup tier fires ONLY when this is true, so
+ * it can never collapse two unrelated generic-titled sales in the same city.
+ * Pure + exported for unit testing.
+ */
+export function hasDistinctiveTitleCore(normalizedTitle: string): boolean {
+  if (!normalizedTitle) return false;
+  const core = normalizedTitle.replace(GENERIC_TITLE_WORDS, ' ').replace(/\s+/g, ' ').trim();
+  return core.length >= 3;
+}
+
+/**
  * Check if a scraped listing is a duplicate of an existing sale
  *
  * Dedup strategy (in priority order):
@@ -52,6 +106,9 @@ export function normalizeAddress(addr: string): string {
  * 3. Exact address + city + state + date overlap
  * 4. Normalized address + city + state + date overlap (handles formatting variations)
  * 5. Geographic proximity (lat/lng within ~100m) + date overlap
+ * 6. Normalized title + city match within an overlapping window, address-independent,
+ *    SCOPED to Facebook Events + guarded to a distinctive title core (catches
+ *    recurring FB events that have no address and rotate their event id/url).
  */
 export async function checkDuplicate(
   listing: Partial<ParsedListing>,
@@ -176,6 +233,50 @@ export async function checkDuplicate(
               isDuplicate: true,
               existingSaleId: candidate.id,
               reason: `Location proximity match (~${distanceMeters}m away)`,
+            };
+          }
+        }
+      }
+    }
+
+    // 6. Address-independent title + city match (Facebook Events ONLY).
+    // ~71% of FB-Events listings carry no address, so tiers 3-5 (all of which
+    // require one) never fire for them -- a recurring weekly/monthly event
+    // therefore re-ingests as a brand-new sale each run unless the exact
+    // sourceUrl / sourceItemId also repeats (it often does not: FB rotates the
+    // event id per occurrence). This tier catches those via normalized title +
+    // city within an overlapping active window. It is deliberately SCOPED to
+    // Facebook-Events rows and guarded by hasDistinctiveTitleCore so it can only
+    // merge listings sharing a real business/market name -- never two generic
+    // "Estate Sale" / "Garage Sale" listings in the same city.
+    if (
+      sourceName === 'Facebook Events' &&
+      listing.title &&
+      listing.city &&
+      listing.state &&
+      listing.startDate &&
+      listing.endDate
+    ) {
+      const normalizedIncoming = normalizeEventTitle(listing.title);
+      if (hasDistinctiveTitleCore(normalizedIncoming)) {
+        const candidates = await prisma.sale.findMany({
+          where: {
+            sourceName: 'Facebook Events',
+            city: listing.city,
+            state: listing.state,
+            // Active-window overlap: existing sale still overlaps incoming window.
+            startDate: { lte: listing.endDate },
+            endDate: { gte: listing.startDate },
+          },
+          select: { id: true, title: true },
+        });
+
+        for (const candidate of candidates) {
+          if (candidate.title && normalizeEventTitle(candidate.title) === normalizedIncoming) {
+            return {
+              isDuplicate: true,
+              existingSaleId: candidate.id,
+              reason: 'Normalized title + city match (FB Events, address-independent)',
             };
           }
         }
