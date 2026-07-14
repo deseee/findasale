@@ -457,9 +457,7 @@ async function stageYoutubeShortForApprovedJob(
   if (existing) return { staged: true, postId: existing.id, reason: 'already staged' };
 
   // youtube.ts derives title (first line) + description (rest) from `body`.
-  // templateRenderer already stores VideoJob.scriptText = `${title}
-
-${description}`.
+  // templateRenderer already stores VideoJob.scriptText as the title, a blank line, then the description.
   const body = job.scriptText && job.scriptText.trim() ? job.scriptText : 'FindA.Sale';
   const sourceFile = `video-job:${job.id}`;
   const sourceHash = crypto.createHash('sha256').update(body).digest('hex');
