@@ -45,9 +45,14 @@ import {
 
 const FETCH_TIMEOUT_MS = 15_000;
 
-// Reject events whose real start is more than this far in the past -- deterministic
-// stale filter (replaces the SERP path's explicit-past-year snippet heuristic).
-const STALE_PAST_MS = 30 * 86_400_000;
+// Reject events whose REAL parsed start is more than this far before "now".
+// Tightened from 30d -> ~2d grace (S1117): FB still serves old / recurring event
+// pages whose real start_timestamp is years past; a wide window let those ingest
+// and render as "live now". A 2-day grace still admits genuinely same-weekend /
+// multi-day-ongoing sales (e.g. a Fri start viewed on Sun). Applies ONLY to a
+// real timestamp -- never to the day_time_sentence "approximate" path, which only
+// ever yields now / today / tomorrow and is disclosed via the approximate badge.
+const STALE_PAST_GRACE_MS = 2 * 86_400_000;
 
 // ---------------------------------------------------------------------------
 // Sale-type sub-queries -- FB free-text search phrases (NOT site: SERP clauses)
@@ -385,9 +390,33 @@ function mapEventToScrapedItem(
   const dateResolved = resolveEventDate(ev);
   if (!dateResolved) return null; // no trustworthy date -> skip, never fabricate
   const startDate = dateResolved.date;
-  if (startDate.getTime() < Date.now() - STALE_PAST_MS) return null; // stale
 
-  const endDate = new Date(startDate.getTime() + 86_400_000);
+  // STALE-DATE REJECT (S1117) -- ONLY for a REAL parsed start_timestamp. FB keeps
+  // serving old / recurring event pages whose real start is years past; without
+  // this they ingest with dateApproximate:false and render as "live now". The
+  // day_time_sentence "approximate" path (now / today / tomorrow) is exempt --
+  // it is never in the past and is separately disclosed via the approximate badge.
+  if (
+    !dateResolved.approximate &&
+    startDate.getTime() < Date.now() - STALE_PAST_GRACE_MS
+  ) {
+    return null;
+  }
+
+  // endDate: prefer the event's OWN real end_timestamp when it is a valid UNIX
+  // seconds value at/after the start (multi-day sales carry a genuine multi-day
+  // window). Fall back to start + 1 day only when there is no usable end. NEVER
+  // derive endDate from "now" -- that was the artifact that paired an ancient real
+  // start with a uniform ~week-out end and made dead events look live.
+  const endTs = ev?.end_timestamp;
+  const endFromEvent =
+    typeof endTs === 'number' && endTs > 0 ? new Date(endTs * 1000) : null;
+  const endDate =
+    endFromEvent &&
+    !isNaN(endFromEvent.getTime()) &&
+    endFromEvent.getTime() >= startDate.getTime()
+      ? endFromEvent
+      : new Date(startDate.getTime() + 86_400_000);
 
   // Numeric FB event id (dedup anchor) -- from ev.id, else from the url.
   const url = typeof ev?.url === 'string' ? ev.url : '';
