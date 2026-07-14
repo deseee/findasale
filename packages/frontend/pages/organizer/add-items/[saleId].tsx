@@ -31,6 +31,7 @@ import NextImage from 'next/image';
 import { useRouter } from 'next/router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import * as Sentry from '@sentry/nextjs';
+import axios from 'axios';
 import api, { postWithRetry } from '../../../lib/api';
 import { getItemImageUrl } from '../../../lib/imageUtils';
 import CSVImportModal from '../../../components/CSVImportModal';
@@ -404,6 +405,14 @@ const AddItemsDetailPage = () => {
   // for a new item; any append call targeting a temp- id awaits that specific item's
   // real id before firing, instead of racing it.
   const tempItemResolvers = useRef<Record<string, { promise: Promise<string>; resolve: (id: string) => void }>>({});
+  // Bug fix (2026-07-14): resolved values are kept here (not deleted) so a
+  // still-in-flight append call that reaches resolveAppendTargetId AFTER the item's
+  // own creation already resolved doesn't find a missing entry and wrongly throw
+  // "item no longer available". Root cause: the per-photo pipeline (auto-enhance ->
+  // crop -> quality check -> face detect) can take several seconds, during which a
+  // sibling photo's item-creation call can finish and delete the pending-promise
+  // entry first. Confirmed via Sentry FINDASALE-NEXTJS-Q, 2026-07-14.
+  const resolvedTempIds = useRef<Record<string, string>>({});
 
   const registerTempItem = (tempId: string) => {
     let resolveFn!: (id: string) => void;
@@ -412,6 +421,7 @@ const AddItemsDetailPage = () => {
   };
 
   const resolveTempItem = (tempId: string, realId: string) => {
+    resolvedTempIds.current[tempId] = realId;
     tempItemResolvers.current[tempId]?.resolve(realId);
     delete tempItemResolvers.current[tempId];
   };
@@ -422,6 +432,11 @@ const AddItemsDetailPage = () => {
   // attempting a request that would just 404.
   const resolveAppendTargetId = async (appendToItemId: string): Promise<string> => {
     if (!appendToItemId.startsWith('temp-')) return appendToItemId;
+    // Check the resolved-value cache first (see resolvedTempIds doc above) — the
+    // target item may have already finished creating even though this specific
+    // append call is only now reaching this point.
+    const alreadyResolved = resolvedTempIds.current[appendToItemId];
+    if (alreadyResolved) return alreadyResolved;
     const pending = tempItemResolvers.current[appendToItemId];
     if (!pending) {
       throw new Error('The item you were adding this photo to is no longer available.');
@@ -1281,9 +1296,19 @@ const AddItemsDetailPage = () => {
         // before upload, but keep an honest message instead of the generic fallback if a
         // device still somehow produces an oversized file.
         errorMessage = 'Photo too large. Try a lower-detail shot or check your camera settings.';
+      } else if (!axios.isAxiosError(err) && err instanceof Error && err.message) {
+        // Bug fix (2026-07-14): a plain client-thrown Error (not an HTTP/network
+        // failure) was previously falling into the "no response" branch below and
+        // getting relabeled "Network error — check your connection and try again",
+        // even on a fully healthy connection. These errors already carry an accurate,
+        // user-friendly message (e.g. "The item you were adding this photo to is no
+        // longer available.") — show that instead of a misleading network message.
+        // Confirmed via Sentry FINDASALE-NEXTJS-Q, 2026-07-14 (***REDACTED-TEST-ORGANIZER-EMAIL***).
+        errorMessage = err.message;
       } else if (!err.response) {
-        // No response at all = network-level failure (offline, DNS, request aborted) —
-        // distinct from a server error, worth telling the user which it was.
+        // No response at all on a real AxiosError = genuine network-level failure
+        // (offline, DNS, request aborted) — distinct from a server error or a plain
+        // client-side Error, worth telling the user which it was.
         errorMessage = 'Network error — check your connection and try again';
       }
 
