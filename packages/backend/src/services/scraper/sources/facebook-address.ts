@@ -100,10 +100,13 @@ export function looksLikeStreetAddress(candidate: string): boolean {
   if (!t) return false;
   // A bare ZIP (or ZIP+4) alone is not a street address.
   if (/^\d{5}(?:-\d{4})?$/.test(t)) return false;
-  // Must lead with a house number (1-6 digits) then an alphabetic street word.
-  // Rejects "Dunlay tx", "TBD - Fairfax Vermont", "35951"; accepts
-  // "1356 West Sweden Rd", "36 Linden St", "470 Gold Rd", "123 Broadway".
-  return /^\d{1,6}\s+[A-Za-z][A-Za-z0-9.'-]*/.test(t);
+  // Must lead with a house number (1-6 digits) then a street-name token that is
+  // either an alphabetic word ("Linden", "West") OR a numbered street
+  // ("72nd", "3rd", "42nd") -- numbered streets/avenues are extremely common
+  // in US addresses. Rejects "Dunlay tx", "TBD - Fairfax Vermont", "35951",
+  // "2130 72" (house + bare number); accepts "1356 West Sweden Rd",
+  // "36 Linden St", "2130 72nd Street Circle W", "100 3rd Ave".
+  return /^\d{1,6}\s+(?:[A-Za-z]|\d{1,3}(?:st|nd|rd|th)\b)/i.test(t);
 }
 
 /**
