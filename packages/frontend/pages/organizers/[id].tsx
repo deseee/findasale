@@ -4,7 +4,8 @@ import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { track } from '@vercel/analytics';
-import { GetServerSideProps } from 'next';
+import { GetStaticProps, GetStaticPaths } from 'next';
+import { useQuery } from '@tanstack/react-query';
 import api from '../../lib/api';
 import { getSaleImageUrl } from '../../lib/imageUtils';
 import BadgeDisplay from '../../components/BadgeDisplay';
@@ -13,6 +14,7 @@ import ReputationTier from '../../components/ReputationTier';
 import ReputationBadge from '../../components/ReputationBadge'; // Feature #71
 import Skeleton from '../../components/Skeleton';
 import ReviewsSection from '../../components/ReviewsSection';
+import { useAuth } from '../../components/AuthContext';
 
 interface ScrapedMetadata {
   aiEnriched?: {
@@ -111,29 +113,30 @@ interface OrganizerPageProps {
   organizer: OrganizerProfile | null;
 }
 
-const OrganizerProfilePage = ({ organizer }: OrganizerPageProps) => {
+const OrganizerProfilePage = ({ organizer: staticOrganizer }: OrganizerPageProps) => {
   const router = useRouter();
+  const { user } = useAuth();
   const [stickyVisible, setStickyVisible] = useState(false);
   const claimBtnRef = useRef<HTMLButtonElement>(null);
 
   // Log organizer page view to backend when arriving from outreach email
   useEffect(() => {
-    if (router.query.ref !== 'outreach' || !organizer?.id) return;
+    if (router.query.ref !== 'outreach' || !staticOrganizer?.id) return;
     fetch('/api/outreach/page-view', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        organizerId: organizer.id,
+        organizerId: staticOrganizer.id,
         touchNumber: router.query.utm_campaign
           ? parseInt((router.query.utm_campaign as string).replace('touch', '')) || null
           : null,
         tier: (router.query.utm_content as string) || null,
       }),
     }).catch(() => {}); // fire-and-forget
-  }, [organizer?.id, router.query.ref]);
+  }, [staticOrganizer?.id, router.query.ref]);
 
   useEffect(() => {
-    if (!organizer?.isUnmanagedListing || !claimBtnRef.current) return;
+    if (!staticOrganizer?.isUnmanagedListing || !claimBtnRef.current) return;
     const el = claimBtnRef.current;
     const obs = new IntersectionObserver(
       ([entry]) => setStickyVisible(!entry.isIntersecting),
@@ -141,7 +144,27 @@ const OrganizerProfilePage = ({ organizer }: OrganizerPageProps) => {
     );
     obs.observe(el);
     return () => obs.disconnect();
-  }, [organizer?.isUnmanagedListing]);
+  }, [staticOrganizer?.isUnmanagedListing]);
+
+  // ISR-1: isFollowing is per-viewer and cannot be baked into the statically
+  // generated page (getStaticProps below ships a safe `false` default). Correct it
+  // client-side, only when logged in, via the existing GET /organizers/:id/follow-status
+  // endpoint (same endpoint FollowOrganizerButton.tsx already uses on sales/[id].tsx --
+  // no new backend route was needed, it already existed and was simply unused here).
+  // Logged-out visitors never fire this request -- FollowButton renders null for them.
+  const { data: followStatusData } = useQuery({
+    queryKey: ['follow-status', staticOrganizer?.id],
+    queryFn: async () => {
+      const res = await api.get(`/organizers/${staticOrganizer!.id}/follow-status`);
+      return res.data as { isFollowing: boolean };
+    },
+    enabled: !!user && !!staticOrganizer?.id,
+    staleTime: 30_000,
+  });
+
+  const organizer = staticOrganizer
+    ? { ...staticOrganizer, isFollowing: followStatusData?.isFollowing ?? staticOrganizer.isFollowing }
+    : staticOrganizer;
 
   if (!organizer) return (
     <div className="min-h-screen flex items-center justify-center bg-warm-50 dark:bg-gray-900">
@@ -357,6 +380,7 @@ const OrganizerProfilePage = ({ organizer }: OrganizerPageProps) => {
               )}
               <div className="mb-3">
                 <FollowButton
+                  key={`${organizer.id}-${organizer.isFollowing}`}
                   organizerId={organizer.id}
                   initialFollowing={organizer.isFollowing}
                   initialCount={organizer.followerCount}
@@ -845,30 +869,98 @@ const SaleCard = ({ sale }: { sale: Sale }) => {
   );
 };
 
-export const getServerSideProps: GetServerSideProps<OrganizerPageProps> = async (context) => {
-  const { id } = context.params as { id: string };
+/**
+ * PERF-1: Converted from getServerSideProps → getStaticProps + ISR (fallback:'blocking')
+ * to match the working pattern in pages/sales/[id].tsx. getServerSideProps hit the
+ * backend/DB on every request and was confirmed the single highest per-call CPU cost
+ * among real-traffic routes (~366ms avg) — a major contributor to Vercel Fluid Active
+ * CPU exceeding the Hobby-tier cap. ISR caches the rendered page and revalidates on a
+ * fixed interval instead of re-fetching on every request.
+ *
+ * isFollowing is the one per-viewer field on this page (confirmed by grep across the
+ * whole file -- no other viewer-specific value exists: isClaimed/isUnmanagedListing/
+ * foundingOrgBadge/avgRating/reviewCount/followerCount are all organizer-owned or
+ * aggregate, identical for every visitor). isFollowing ships as a safe `false` default
+ * here and is corrected client-side (see the follow-status useQuery above in the
+ * component). followerCount is NOT per-viewer so it stays static -- no client-fetch
+ * needed for it.
+ */
+
+// Server-only API base. Prefer INTERNAL_API_URL (e.g. Railway internal) to avoid a
+// public round-trip during build/revalidation; fall back to the public API URL.
+// Mirrors pages/sales/[id].tsx's resolveApiBase().
+function resolveApiBase(): string | null {
+  return (
+    process.env.INTERNAL_API_URL ||
+    process.env.NEXT_PUBLIC_API_URL ||
+    null
+  );
+}
+
+export const getStaticPaths: GetStaticPaths = async () => {
+  // Organizer IDs are effectively unbounded -- do NOT pre-render any at build time.
+  // fallback:'blocking' renders on first request, then ISR caches it.
+  return {
+    paths: [],
+    fallback: 'blocking',
+  };
+};
+
+export const getStaticProps: GetStaticProps<OrganizerPageProps> = async ({ params }) => {
+  const id = params?.id as string;
 
   // Fast-fail malformed IDs (e.g. "cmoog3bkr000=" from malformed links/bots).
   // Cuid2 IDs are 24 alphanumeric chars. Anything outside [a-z0-9] at 20–30 chars
-  // is invalid — skip the API call entirely and return 404 immediately.
-  // This prevents the API error from triggering the axios interceptor on the server
-  // and stops the cascade that causes SW rejection + router invariant on the client.
+  // is invalid — skip the API call entirely and return 404 immediately. Preserved
+  // unchanged from the prior getServerSideProps guard (stops a specific bot/malformed
+  // link crash cascade).
   if (!id || !/^[a-z0-9]{20,30}$/.test(id)) {
-    return { notFound: true };
+    return { notFound: true, revalidate: 86400 };
   }
 
-  try {
-    const response = await api.get(`/organizers/${id}`);
-    return {
-      props: {
-        organizer: response.data,
-      },
-    };
-  } catch (error: any) {
-    // 404 from backend → organizer not found
-    // Any other error (500, network) → also 404 to avoid broken page render
-    return { notFound: true };
+  const apiUrl = resolveApiBase();
+  if (!apiUrl) {
+    // No API base configured at build/revalidation time. Throwing (rather than
+    // returning a null-organizer prop) tells Next.js ISR to keep serving the last
+    // successfully generated page instead of overwriting it with a broken render --
+    // unlike sales/[id].tsx, this page's full body comes from getStaticProps (only
+    // isFollowing is re-fetched client-side), so a null organizer here would render
+    // the "Organizer not found" empty state over a page that may just be temporarily
+    // unreachable.
+    throw new Error('resolveApiBase() returned null -- INTERNAL_API_URL/NEXT_PUBLIC_API_URL not set');
   }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 3000);
+  let res: Response;
+  try {
+    res = await fetch(`${apiUrl}/organizers/${id}`, { signal: controller.signal });
+  } finally {
+    clearTimeout(timeout);
+  }
+
+  if (res.status === 404) {
+    return { notFound: true, revalidate: 86400 };
+  }
+  if (!res.ok) {
+    // Non-404 error (500, etc.) -- throw so ISR retries instead of caching a broken page.
+    throw new Error(`GET /organizers/${id} returned ${res.status}`);
+  }
+
+  const organizer = await res.json();
+
+  if (!organizer?.id || !organizer?.businessName) {
+    // Empty/malformed body -- treat as deleted/missing -> proper HTTP 404.
+    return { notFound: true, revalidate: 86400 };
+  }
+
+  return {
+    props: {
+      // isFollowing is per-viewer -- ship a safe static default, corrected client-side.
+      organizer: { ...organizer, isFollowing: false },
+    },
+    revalidate: 86400,
+  };
 };
 
 export default OrganizerProfilePage;
