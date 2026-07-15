@@ -1,0 +1,113 @@
+import { Response } from 'express';
+import { AuthRequest } from '../middleware/auth';
+import { prisma } from '../lib/prisma';
+
+// Facebook Marketplace condition values. Mirrors mapConditionForFacebook() in
+// exportController.ts (kept in sync; trivial pure map — not worth a shared import).
+function toFacebookCondition(condition: string | null | undefined): string {
+  switch ((condition || '').toUpperCase()) {
+    case 'NEW': return 'New';
+    case 'REFURBISHED': return 'Used - Like New';
+    case 'PARTS_OR_REPAIR': return 'Used - Fair';
+    default: return 'Used - Good'; // USED and unknown
+  }
+}
+
+// Append the finda.sale backlink so Marketplace traffic returns home (ADR-084).
+function buildDescription(description: string | null | undefined, saleId: string): string {
+  const base = (description || '').trim();
+  const link = `View full listing: https://finda.sale/sales/${saleId}`;
+  return base ? `${base}\n\n${link}` : link;
+}
+
+// GET /api/extension/items — the organizer's listable items + Marketplace status.
+export const getExtensionItems = async (req: AuthRequest, res: Response): Promise<void> => {
+  const userId = req.user?.id;
+  if (!userId) { res.status(401).json({ message: 'Authentication required' }); return; }
+
+  const organizer = await prisma.organizer.findUnique({ where: { userId } });
+  if (!organizer) { res.status(404).json({ message: 'Organizer profile not found' }); return; }
+
+  const sales = await prisma.sale.findMany({
+    where: { organizerId: organizer.id },
+    select: { id: true, title: true },
+  });
+  const saleTitleById = new Map(sales.map((s) => [s.id, s.title]));
+
+  const items = await prisma.item.findMany({
+    where: { sale: { organizerId: organizer.id }, status: 'AVAILABLE' },
+    take: 2000,
+    select: {
+      id: true, saleId: true, title: true, description: true, price: true,
+      category: true, condition: true, photoUrls: true, createdAt: true,
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  const itemIds = items.map((i) => i.id);
+  const jobs = itemIds.length
+    ? await prisma.marketplaceListingJob.findMany({
+        where: { itemId: { in: itemIds } },
+        select: { itemId: true, action: true, status: true },
+      })
+    : [];
+  const postedByItem = new Set<string>();
+  const removedByItem = new Set<string>();
+  for (const j of jobs) {
+    if (j.action === 'POST' && j.status === 'POSTED') postedByItem.add(j.itemId);
+    if (j.action === 'REMOVE' && j.status === 'REMOVED') removedByItem.add(j.itemId);
+  }
+
+  const shaped = items.map((it) => ({
+    id: it.id,
+    saleId: it.saleId,
+    saleTitle: saleTitleById.get(it.saleId) || 'Sale',
+    title: it.title,
+    price: it.price != null ? Math.round(it.price) : null,
+    condition: toFacebookCondition(it.condition),
+    description: buildDescription(it.description, it.saleId),
+    category: it.category || null,
+    photoUrls: it.photoUrls || [],
+    marketplaceListed: postedByItem.has(it.id) && !removedByItem.has(it.id),
+  }));
+
+  res.json({ organizer: { businessName: organizer.businessName }, items: shaped });
+};
+
+// Verify an item belongs to the requesting organizer; returns the organizer id or null.
+async function assertItemOwned(userId: string, itemId: string): Promise<boolean> {
+  const organizer = await prisma.organizer.findUnique({ where: { userId }, select: { id: true } });
+  if (!organizer) return false;
+  const item = await prisma.item.findFirst({
+    where: { id: itemId, sale: { organizerId: organizer.id } },
+    select: { id: true },
+  });
+  return !!item;
+}
+
+// POST /api/extension/items/:id/listed — record that the organizer listed this item to Marketplace.
+export const markItemListed = async (req: AuthRequest, res: Response): Promise<void> => {
+  const userId = req.user?.id;
+  const itemId = req.params.id;
+  if (!userId) { res.status(401).json({ message: 'Authentication required' }); return; }
+  if (!(await assertItemOwned(userId, itemId))) { res.status(404).json({ message: 'Item not found' }); return; }
+
+  const remoteListingId = typeof req.body?.remoteListingId === 'string' ? req.body.remoteListingId : null;
+  await prisma.marketplaceListingJob.create({
+    data: { itemId, action: 'POST', status: 'POSTED', remoteListingId },
+  });
+  res.json({ ok: true });
+};
+
+// POST /api/extension/items/:id/removed — record that the organizer removed this item from Marketplace.
+export const markItemRemoved = async (req: AuthRequest, res: Response): Promise<void> => {
+  const userId = req.user?.id;
+  const itemId = req.params.id;
+  if (!userId) { res.status(401).json({ message: 'Authentication required' }); return; }
+  if (!(await assertItemOwned(userId, itemId))) { res.status(404).json({ message: 'Item not found' }); return; }
+
+  await prisma.marketplaceListingJob.create({
+    data: { itemId, action: 'REMOVE', status: 'REMOVED' },
+  });
+  res.json({ ok: true });
+};

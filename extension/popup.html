@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><link rel="stylesheet" href="popup.css"></head>
+<body>
+  <header><span class="brand">FindA<b>.</b>Sale</span> <span class="sub">Marketplace Autofill</span></header>
+  <div id="status" class="status"></div>
+  <div id="controls" class="controls" hidden>
+    <label class="chk"><input type="checkbox" id="hideListed" checked> Hide items already listed</label>
+    <div class="count"><span id="selCount">0</span> selected</div>
+  </div>
+  <div id="list" class="list"></div>
+  <footer id="footer" hidden>
+    <button id="listBtn" class="primary" disabled>List selected on Marketplace</button>
+    <p class="note">Opens Facebook's create form and fills each listing. <b>You review and click Publish.</b></p>
+  </footer>
+  <script src="config.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

@@ -67,6 +67,7 @@ import passkeyRoutes from './routes/passkey';
 import saleRoutes from './routes/sales';
 import companyRoutes from './routes/companies'; // #567: hire-intent company directory
 import itemRoutes from './routes/items';
+import extensionRoutes from './routes/extension'; // ADR-084: Marketplace Autofill browser extension
 import favoriteRoutes from './routes/favorites';
 import userRoutes from './routes/users';
 import stripeRoutes from './routes/stripe';
@@ -333,6 +334,18 @@ app.use((req, res, next) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    if (req.method === 'OPTIONS') { res.status(204).end(); return; }
+    return next();
+  }
+  // ADR-084: FindA.Sale Marketplace Autofill extension. Auth is Bearer-only (no
+  // cookie), so reflect the chrome-extension origin and allow the Authorization
+  // header without credentials — the token grants access, not the origin.
+  if (req.path.startsWith('/api/extension')) {
+    const extOrigin = req.headers.origin;
+    if (extOrigin) res.setHeader('Access-Control-Allow-Origin', extOrigin);
+    res.setHeader('Vary', 'Origin');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
     if (req.method === 'OPTIONS') { res.status(204).end(); return; }
     return next();
   }
@@ -630,6 +643,7 @@ app.get('/health/ready', async (req, res) => {
 app.use('/api/auth', resilientLimiter(authLimiter), authRoutes); // stricter rate limit on auth
 app.use('/api/auth/passkey', passkeyRoutes); // Feature #19: Passkey/WebAuthn routes (authLimiter already applied via /api/auth mount above)
 app.use('/api/sales', saleRoutes);
+app.use('/api/extension', extensionRoutes); // ADR-084: Marketplace Autofill browser extension
 // Sentry FINDASALE-NODEJS-4H: re-analyze pipeline needs more than the global 30s
 // budget (image download + Vision/Haiku + eBay category resolve + catalog
 // enrichment). Excluded from the global timeout in requestTimeout.ts; given its

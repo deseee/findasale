@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "FindA.Sale — Marketplace Autofill",
+  "short_name": "FindA.Sale",
+  "version": "1.0.0",
+  "description": "Fill your Facebook Marketplace listings from your FindA.Sale inventory — title, price, condition, description, and photos. You review and publish.",
+  "permissions": ["storage", "tabs", "cookies", "scripting"],
+  "host_permissions": [
+    "https://www.facebook.com/*",
+    "https://finda.sale/*",
+    "https://*.finda.sale/*",
+    "https://res.cloudinary.com/*",
+    "https://i.ebayimg.com/*"
+  ],
+  "action": { "default_popup": "popup.html", "default_title": "FindA.Sale Marketplace Autofill" },
+  "background": { "service_worker": "background.js" },
+  "content_scripts": [
+    {
+      "matches": ["https://www.facebook.com/marketplace/create/*"],
+      "js": ["fas-selectors.js", "fas-content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
