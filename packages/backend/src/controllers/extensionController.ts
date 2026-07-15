@@ -14,8 +14,9 @@ function toFacebookCondition(condition: string | null | undefined): string {
 }
 
 // Append the finda.sale backlink so Marketplace traffic returns home (ADR-084).
-function buildDescription(description: string | null | undefined, saleId: string): string {
+function buildDescription(description: string | null | undefined, saleId: string | null | undefined): string {
   const base = (description || '').trim();
+  if (!saleId) return base;
   const link = `View full listing: https://finda.sale/sales/${saleId}`;
   return base ? `${base}\n\n${link}` : link;
 }
@@ -61,7 +62,7 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
   const shaped = items.map((it) => ({
     id: it.id,
     saleId: it.saleId,
-    saleTitle: saleTitleById.get(it.saleId) || 'Sale',
+    saleTitle: saleTitleById.get(it.saleId || '') || 'Sale',
     title: it.title,
     price: it.price != null ? Math.round(it.price) : null,
     condition: toFacebookCondition(it.condition),
