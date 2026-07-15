@@ -4,24 +4,31 @@ import { prisma } from '../lib/prisma';
 /**
  * Bounce Suppression Service
  *
- * Polls the find@outreach.finda.sale Gmail mailbox for mailer-daemon / postmaster
- * delivery-failure notifications, extracts the bounced recipient address,
- * upserts it into EmailSuppression, and moves the processed message to Trash.
+ * Polls a Gmail mailbox for mailer-daemon / postmaster delivery-failure
+ * notifications, extracts the bounced recipient address, upserts it into
+ * EmailSuppression, and moves the processed message to Trash.
  *
- * MAILBOX ROUTING (confirmed root cause — ADR-bounce-suppression-mailbox-fix, 2026-06-13):
- *   Outreach is sent via the Gmail API. The bounce DSN / Return-Path is the
- *   AUTHENTICATED account's primary address, NOT the From header. Bounces for
- *   outreach therefore land at find@outreach.finda.sale (Google MX), which is the
- *   ONLY mailbox this poller must authenticate. Authenticating any other mailbox
- *   (e.g. outreach@finda.sale, whose inbound is ImprovMX-forwarded to a personal
- *   Gmail and is NOT a pollable Google mailbox) makes the list below return 0
- *   bounce messages on every run.
+ * MAILBOX ROUTING (UPDATED 2026-07-15 — see ADR-bounce-suppression-mailbox-fix.md
+ * status block dated 2026-06-23/24, S1025/S1030): the original plan below this
+ * paragraph (promote find@outreach.finda.sale to a full mailbox) was ABANDONED.
+ * The actually-implemented fix instead changed ImprovMX forwarding so
+ * outreach@finda.sale bounces route to outreach@outreach.finda.sale (a real
+ * Google Workspace inbox), and GMAIL_MAILBOX_REFRESH_TOKEN authenticates
+ * outreach@finda.sale (confirmed via users.getProfile 2026-07-15 and a live
+ * process-bounces trigger, both showing 0 bounce messages — consistent with
+ * clean recent sends, not a misconfigured mailbox). The EXPECTED_BOUNCE_MAILBOX
+ * constant below still says find@outreach.finda.sale for historical/self-doc
+ * reasons only — it does NOT reflect which account is actually authenticated
+ * and should not be used to diagnose a mailbox mismatch. Two Cowork sessions
+ * (2026-07-15) wrongly concluded the pipeline was broken from this stale
+ * comment before verifying live — don't repeat that; verify via a live
+ * process-bounces trigger + Railway logs instead of this paragraph.
  *
  *   The mailbox is selected purely by which refresh token is set in env:
- *   GMAIL_MAILBOX_REFRESH_TOKEN must be an OAuth2 token for find@outreach.finda.sale
- *   with gmail.modify scope (list + trash). OUTREACH_BOUNCE_MAILBOX is an OPTIONAL,
- *   self-documenting env var naming the expected mailbox — it is logged for
- *   diagnostics and does NOT change which credential is used.
+ *   GMAIL_MAILBOX_REFRESH_TOKEN currently holds a gmail.modify-scoped token for
+ *   outreach@finda.sale. OUTREACH_BOUNCE_MAILBOX is an OPTIONAL, self-documenting
+ *   env var naming the expected mailbox for logging — it is stale (still says
+ *   find@outreach.finda.sale) and does NOT change which credential is used.
  *
  * Auth pattern copied from lib/emailService.ts (createGmailClient).
  * Uses the same GMAIL_CLIENT_ID / GMAIL_CLIENT_SECRET. The refresh token is
