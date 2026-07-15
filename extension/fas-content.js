@@ -59,6 +59,39 @@
     }
   }
 
+  // Facebook's Category field renders AI-suggested chips (div[role="button"]), not the
+  // [role="option"] listbox selectCombo() expects — confirmed live 2026-07-15 (see
+  // fas-selectors.js chipsAfter/bestTextMatch). This tries the chip path first, falls back to
+  // the old listbox path in case FB shows a normal dropdown for some listing types, and — if
+  // neither finds a confident match — returns the live suggestion text so fillItem() can tell
+  // the organizer what to pick instead of silently leaving Category empty.
+  async function selectCategory(value) {
+    if (!value) return { ok: true };
+    const combo = SEL.comboByLabel(LABELS.category);
+    if (!combo) return { ok: false, suggestions: [] };
+    const chips = await SEL.chipsAfter(() => combo.click(), 500);
+    if (!chips.length) {
+      try {
+        const opt = await waitFor(() => SEL.optionByText(value), 2000);
+        opt.click();
+        await sleep(150);
+        return { ok: true };
+      } catch (e) {
+        document.body.click();
+        return { ok: false, suggestions: [] };
+      }
+    }
+    const match = SEL.bestTextMatch(chips, value);
+    if (match) {
+      match.click();
+      await sleep(150);
+      return { ok: true };
+    }
+    const suggestions = chips.map((c) => SEL.norm(c.textContent)).filter(Boolean);
+    document.body.click();
+    return { ok: false, suggestions };
+  }
+
   async function injectPhotos(urls) {
     if (!urls || !urls.length) return false;
     const resp = await chrome.runtime.sendMessage({ type: 'fetchPhotos', urls });
@@ -103,13 +136,19 @@
                       price: await fillText(LABELS.price, item.price),
                       description: await fillText(LABELS.description, item.description) };
     await selectCombo(LABELS.condition, item.condition);
-    if (item.category) await selectCombo(LABELS.category, item.category);
+    const catResult = await selectCategory(item.category);
     const photosOk = await injectPhotos(item.photoUrls);
 
     const failed = Object.keys(results).filter((k) => !results[k]);
     let warn = '';
     if (failed.length) warn = '<div style="color:#ffcf7a;margin-top:6px;font-size:12px">Facebook may have changed their form — couldn\'t fill: ' +
       failed.join(', ') + '. You can type these in manually.</div>';
+    if (!catResult.ok) {
+      const hint = catResult.suggestions.length
+        ? 'Facebook suggests: ' + catResult.suggestions.map(escapeHtml).join(', ') + '. Pick one.'
+        : 'Pick one manually.';
+      warn += '<div style="color:#ffcf7a;margin-top:6px;font-size:12px">Couldn\'t set Category — ' + hint + '</div>';
+    }
     if (!photosOk) warn += '<div style="color:#ffcf7a;margin-top:6px;font-size:12px">Photos didn\'t attach automatically — add them from the item photos.</div>';
 
     const more = index + 1 < total;

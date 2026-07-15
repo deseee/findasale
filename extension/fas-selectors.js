@@ -62,6 +62,39 @@
     );
   }
 
-  window.__FAS_SEL__ = { norm, fieldByLabel, comboByLabel, optionByText, photoInput,
+  // Facebook's Category field (confirmed live 2026-07-15) does NOT render a standard
+  // [role="option"] listbox — it shows up to a handful of AI-suggested category chips as
+  // div[role="button"] elements as soon as the combobox is clicked. Condition still uses the
+  // normal option/listbox pattern (untouched, confirmed working). Because the chips' DOM
+  // position varies and isn't reliably reachable via ancestor/sibling traversal, we diff
+  // div[role="button"] elements before/after the combobox opens to isolate just the new chips.
+  async function chipsAfter(openFn, settleMs) {
+    const before = new Set(document.querySelectorAll('div[role="button"]'));
+    openFn();
+    await new Promise((r) => setTimeout(r, settleMs));
+    return Array.from(document.querySelectorAll('div[role="button"]')).filter(
+      (b) => !before.has(b) && norm(b.textContent)
+    );
+  }
+
+  // Best-effort fuzzy match against a list of candidate elements: exact > substring
+  // (either direction) > word overlap. Returns null if nothing scores meaningfully —
+  // callers should never guess-click a low-confidence match.
+  function bestTextMatch(candidates, value) {
+    const want = norm(value);
+    const wantWords = want.split(' ').filter((w) => w.length > 2);
+    let best = null, bestScore = 0;
+    for (const el of candidates) {
+      const t = norm(el.textContent);
+      let score = 0;
+      if (t === want) score = 100;
+      else if (want.includes(t) || t.includes(want)) score = 50;
+      else score = wantWords.filter((w) => t.includes(w)).length * 10;
+      if (score > bestScore) { bestScore = score; best = el; }
+    }
+    return bestScore >= 10 ? best : null;
+  }
+
+  window.__FAS_SEL__ = { norm, fieldByLabel, comboByLabel, optionByText, photoInput, chipsAfter, bestTextMatch,
     LABELS: { title: 'Title', price: 'Price', description: 'Description', condition: 'Condition', category: 'Category' } };
 })();
