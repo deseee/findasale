@@ -453,6 +453,8 @@ model Organizer {
   // FB Commerce Manager catalog feed registration (migration 20260616000001)
   fbCatalogEnabled            Boolean   @default(false)
   fbCatalogRegisteredAt       DateTime?
+  // ADR-083: Marketplace Poster opt-in (Playwright, dedicated FindA.Sale-owned accounts)
+  marketplaceAutoPostEnabled  Boolean   @default(false)
   stripeIdentitySessionId     String?
   // ADR-073 Phase 2: ESN enrichment fields (migration 20260502000001)
   esnOrgId                    Int?
@@ -1293,6 +1295,8 @@ model Item {
   ebayQuantityAvailable      Int? // total units on the eBay listing (null/1 = single-unit)
   ebayQuantitySold           Int                    @default(0) // units sold via eBay, projected from EbaySoldEvent
   ebaySoldEvents             EbaySoldEvent[]
+  // ADR-083: Marketplace Poster jobs (post/remove) for this item
+  marketplaceJobs            MarketplaceListingJob[]
   createdAt                  DateTime               @default(now())
   updatedAt                  DateTime               @updatedAt
 
@@ -5120,6 +5124,81 @@ model EbayCategoryFee {
   notes           String?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+}
+
+// ============================================================================
+// ADR-083 — Facebook Marketplace Poster (In-House Playwright, Dedicated Accounts)
+// No official Marketplace API exists (confirmed 2026-07-14). Runs against a small
+// pool of FindA.Sale-owned "poster" Facebook accounts only -- never an organizer's
+// own account. sessionCookie reuses the tokenCrypto.ts AES-256-GCM envelope
+// pattern proven by SocialAccount (ADR-077a) -- same encrypt/decrypt chokepoint.
+// Additive only. See claude_docs/feature-notes/ADR-083-marketplace-poster.md.
+// ============================================================================
+
+enum MarketplacePosterAccountStatus {
+  ACTIVE
+  COOLDOWN // resting on a volume/pacing timer
+  FLAGGED  // hit a checkpoint/challenge, needs manual review before reuse
+  BANNED   // confirmed dead, excluded from rotation permanently
+}
+
+/// A FindA.Sale-owned, dedicated Facebook account used only for Marketplace
+/// posting -- never an organizer's own account (legal review 2026-07-14: caps
+/// ban blast radius to one disposable account instead of an organizer's
+/// Facebook presence). sessionCookie is the encrypted Playwright storageState
+/// envelope, written/read only through tokenCrypto.ts (same as SocialAccount).
+model MarketplacePosterAccount {
+  id                String                          @id @default(cuid())
+  label             String // internal name, e.g. "fas-poster-1" -- NEVER an organizer account
+  sessionCookie     String // enc:v1:... encrypted Playwright storageState JSON via tokenCrypto.ts
+  status            MarketplacePosterAccountStatus  @default(ACTIVE)
+  dailyPostCount    Int                             @default(0)
+  dailyCountResetAt DateTime                        @default(now())
+  lastUsedAt        DateTime?
+  lastErrorAt       DateTime?
+  lastErrorMessage  String?
+  jobs              MarketplaceListingJob[]
+  createdAt         DateTime                        @default(now())
+  updatedAt         DateTime                        @updatedAt
+
+  @@index([status])
+}
+
+enum MarketplaceJobAction {
+  POST
+  REMOVE
+}
+
+enum MarketplaceJobStatus {
+  QUEUED
+  RUNNING
+  POSTED
+  REMOVED
+  FAILED
+  SKIPPED
+}
+
+/// One row per (Item, action). Polled by marketplacePosterCron.ts (node-cron,
+/// same job-queue pattern as SocialPost). remoteListingId is required to later
+/// remove a listing -- captured from the Marketplace UI on successful POST.
+model MarketplaceListingJob {
+  id               String                     @id @default(cuid())
+  item             Item                       @relation(fields: [itemId], references: [id])
+  itemId           String
+  action           MarketplaceJobAction
+  status           MarketplaceJobStatus       @default(QUEUED)
+  account          MarketplacePosterAccount?  @relation(fields: [accountId], references: [id])
+  accountId        String?
+  remoteListingId  String? // Marketplace's own listing url/id -- required to remove later
+  attemptCount     Int                        @default(0)
+  lastAttemptAt    DateTime?
+  lastErrorMessage String?
+  scheduledFor     DateTime                   @default(now())
+  createdAt        DateTime                   @default(now())
+  updatedAt        DateTime                   @updatedAt
+
+  @@index([status, scheduledFor])
+  @@index([itemId])
 }
 
 // ============================================================================
