@@ -2,7 +2,7 @@ name: Scrape OSM Overpass API
 
 on:
   schedule:
-    - cron: '5 3 * * 1'   # Monday 3am UTC — weekly run
+    - cron: '5 3 1-7 1,4,7,10 1'   # Quarterly — first Monday of Jan/Apr/Jul/Oct at 3:05am UTC
   workflow_dispatch:
 
 concurrency:
