@@ -9,6 +9,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { useQuery } from '@tanstack/react-query';
 import api from '../lib/api';
+import { isCloudinaryUrl } from '../lib/imageUtils';
 
 const CATEGORIES = [
   'furniture', 'decor', 'vintage', 'textiles', 'collectibles',
@@ -230,6 +231,7 @@ const SurpriseMePage = () => {
                         fill
                         className="object-cover group-hover:scale-105 transition-transform duration-300"
                         sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+                        unoptimized={isCloudinaryUrl(item.photoUrls[0])}
                       />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center text-3xl text-warm-300">

@@ -2,7 +2,7 @@ import React from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import FavoriteButton from './FavoriteButton';
-import { getThumbnailUrl } from '../lib/imageUtils';
+import { getThumbnailUrl, isCloudinaryUrl } from '../lib/imageUtils';
 
 interface InspirationItem {
   id: string;
@@ -83,6 +83,7 @@ const InspirationGrid: React.FC<InspirationGridProps> = ({ items, isLoading = fa
                     sizes="(max-width: 768px) 50vw, 33vw"
                     priority={false}
                     onError={() => handleImageError(item.id)}
+                    unoptimized={isCloudinaryUrl(photoUrl)}
                   />
                   {/* Fallback placeholder shown if image fails to load */}
                   {imageErrors.has(item.id) && (

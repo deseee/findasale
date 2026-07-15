@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { format } from 'date-fns';
-import { getSaleImageUrl } from '../lib/imageUtils';
+import { getSaleImageUrl, isCloudinaryUrl } from '../lib/imageUtils';
 import Skeleton from './Skeleton';
 import api from '../lib/api';
 import RSVPAttendeesModal from './RSVPAttendeesModal';
@@ -145,6 +145,7 @@ const OrganizerSaleCard: React.FC<OrganizerSaleCardProps> = ({ sale }) => {
               onError={() => setImgError(true)}
               loading="lazy"
               priority={false}
+              unoptimized={isCloudinaryUrl(optimizedUrl!)}
             />
           ) : (!photoUrl || imgError) ? (
             <div className="absolute inset-0 flex items-center justify-center">

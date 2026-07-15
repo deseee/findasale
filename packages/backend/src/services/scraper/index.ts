@@ -1088,29 +1088,60 @@ export async function flushFreshnessTouches(): Promise<void> {
 // Mirrors the freshness-touch buffering pattern above: individual scraped-listing
 // creates/updates are buffered per scrape pass and flushed once, batched by
 // affected city, instead of firing one HTTP revalidation request per listing.
-const revalidationSaleIdBuffer: string[] = [];
-const revalidationCitySlugBuffer = new Set<string>();
+//
+// Lever #4 (2026-07-15, Vercel free-tier ISR-write reduction -- see
+// claude_docs/STATE.md Blocked Queue "Vercel Free-Tier Usage Caps"):
+// proactively revalidating every individual new /sales/[id] path here was
+// itself a major driver of the 252%+ ISR-write overage -- a single scraper
+// run can create hundreds of new Sale rows, and firing one revalidate() call
+// per row is as expensive as the "first visitor" writes it was meant to
+// avoid. Individual /sales/[id] pages are now left to their existing lazy
+// first-visit ISR behavior (lower traffic, and per-item revalidation would
+// explode call volume). Only a small, deduped, priority-ranked batch of
+// /city/[slug] paths -- the actual aggregation pages this run affects, and
+// the ones ADR-073 identified as the ISR-write-heavy path -- is proactively
+// revalidated per run, capped at MAX_SCRAPER_REVALIDATION_CITY_PATHS and
+// ranked by how many sales this run touched in that city (highest-value
+// first). Kill switch: POST_SCRAPE_REVALIDATION_ENABLED=false reverts to
+// pure lazy/time-based ISR with no proactive calls at all.
+const POST_SCRAPE_REVALIDATION_ENABLED = process.env.POST_SCRAPE_REVALIDATION_ENABLED !== 'false';
+const MAX_SCRAPER_REVALIDATION_CITY_PATHS = 25;
 
-function enqueueRevalidationTouch(saleId: string | undefined, city: string | null | undefined, state: string | null | undefined): void {
-  if (saleId) revalidationSaleIdBuffer.push(saleId);
+const revalidationCityTouchCounts = new Map<string, number>();
+
+function enqueueRevalidationTouch(_saleId: string | undefined, city: string | null | undefined, state: string | null | undefined): void {
   const citySlug = citySlugFromCityState(city, state);
-  if (citySlug) revalidationCitySlugBuffer.add(citySlug);
+  if (!citySlug) return;
+  revalidationCityTouchCounts.set(citySlug, (revalidationCityTouchCounts.get(citySlug) ?? 0) + 1);
 }
 
 /**
  * Flush any buffered scraper revalidation touches. Call at the end of every
- * scrape pass (same call sites as flushFreshnessTouches()) so the run's
- * affected /sales/[id] and /city/[slug] pages revalidate on-demand instead of
- * waiting on the blanket time-based ISR fallback. Never throws — a
- * revalidation failure must not fail the scrape run.
+ * scrape pass (same call sites as flushFreshnessTouches()) so this run's
+ * highest-value affected /city/[slug] pages revalidate on-demand instead of
+ * waiting on the blanket time-based ISR fallback -- bounded to a small batch
+ * (see MAX_SCRAPER_REVALIDATION_CITY_PATHS) so this itself never becomes a
+ * new source of ISR-write volume. Individual /sales/[id] pages are
+ * intentionally NOT proactively revalidated here (see comment above). Never
+ * throws -- a revalidation failure must not fail the scrape run.
  */
 export async function flushScraperRevalidation(): Promise<void> {
-  const saleIds = revalidationSaleIdBuffer.splice(0, revalidationSaleIdBuffer.length);
-  const citySlugs = Array.from(revalidationCitySlugBuffer);
-  revalidationCitySlugBuffer.clear();
-  if (saleIds.length === 0 && citySlugs.length === 0) return;
+  const touchedCities = Array.from(revalidationCityTouchCounts.entries());
+  revalidationCityTouchCounts.clear();
+  if (touchedCities.length === 0) return;
+
+  if (!POST_SCRAPE_REVALIDATION_ENABLED) {
+    console.log(`[scraper] flushScraperRevalidation skipped (POST_SCRAPE_REVALIDATION_ENABLED=false) -- ${touchedCities.length} city path(s) touched this run`);
+    return;
+  }
+
+  const citySlugs = touchedCities
+    .sort((a, b) => b[1] - a[1]) // highest-value (most sales touched this run) first
+    .slice(0, MAX_SCRAPER_REVALIDATION_CITY_PATHS)
+    .map(([slug]) => slug);
+
   try {
-    await triggerSaleAndCityRevalidation(saleIds, citySlugs);
+    await triggerSaleAndCityRevalidation([], citySlugs);
   } catch (err) {
     console.error('[scraper] flushScraperRevalidation failed:', err);
   }

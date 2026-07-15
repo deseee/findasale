@@ -396,7 +396,6 @@ export const getStaticProps: GetStaticProps<ThisWeekendPageProps> = async ({ par
       weekendStart: friday.toISOString(),
       weekendEnd: sunday.toISOString(),
     },
-    // ISR: 4 hours Thu–Sat (peak browsing days), twice/day Sun–Wed (off-peak)
-    revalidate: new Date().getDay() >= 4 ? 14400 : 43200,
+    revalidate: 86400, // ISR: 24 hours (matches city/category page pattern; was 4-12h day-of-week logic, disproportionately over ISR-write quota for its traffic)
   };
 };

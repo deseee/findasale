@@ -4,6 +4,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useState } from 'react';
 import { usePublicLootLog } from '../../../../hooks/useLootLog';
+import { isCloudinaryUrl } from '../../../../lib/imageUtils';
 
 export default function PublicLootLogPage() {
   const router = useRouter();
@@ -81,6 +82,7 @@ export default function PublicLootLogPage() {
                           layout="fill"
                           objectFit="cover"
                           className="group-hover:scale-105 transition"
+                          unoptimized={isCloudinaryUrl(purchase.item.imageUrl)}
                         />
                       ) : (
                         <div className="flex items-center justify-center w-full h-full bg-gradient-to-br from-warm-300 to-warm-400 text-white text-sm">

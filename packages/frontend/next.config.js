@@ -334,6 +334,63 @@ const nextConfig = {
           { key: 'Content-Type', value: 'application/javascript; charset=utf-8' },
         ],
       },
+      // ISR page routes — all revalidate at 86400s (24h; see each page's
+      // getStaticProps). CDN cache lifetime (s-maxage) is set to match so
+      // Vercel's edge serves cached HTML for the full ISR window instead of
+      // re-invoking the origin function on every hit, cutting Edge Request /
+      // Function-invocation volume. stale-while-revalidate=86400 lets the CDN
+      // serve a stale copy while ISR regenerates in the background rather than
+      // blocking the request. (/sales/:id has edge-case revalidate values —
+      // 3600 on fetch failure, 2592000 for ended sales — 86400 is its common
+      // live-sale case and the correct CDN baseline.)
+      {
+        source: '/sales/:id',
+        headers: [
+          { key: 'Cache-Control', value: 'public, s-maxage=86400, stale-while-revalidate=86400' },
+        ],
+      },
+      {
+        source: '/city/:slug',
+        headers: [
+          { key: 'Cache-Control', value: 'public, s-maxage=86400, stale-while-revalidate=86400' },
+        ],
+      },
+      {
+        source: '/city/:slug/:category',
+        headers: [
+          { key: 'Cache-Control', value: 'public, s-maxage=86400, stale-while-revalidate=86400' },
+        ],
+      },
+      {
+        source: '/estate-sales/:citySlug',
+        headers: [
+          { key: 'Cache-Control', value: 'public, s-maxage=86400, stale-while-revalidate=86400' },
+        ],
+      },
+      {
+        source: '/yard-sales/:citySlug',
+        headers: [
+          { key: 'Cache-Control', value: 'public, s-maxage=86400, stale-while-revalidate=86400' },
+        ],
+      },
+      {
+        source: '/auctions/:citySlug',
+        headers: [
+          { key: 'Cache-Control', value: 'public, s-maxage=86400, stale-while-revalidate=86400' },
+        ],
+      },
+      {
+        source: '/flea-markets/:citySlug',
+        headers: [
+          { key: 'Cache-Control', value: 'public, s-maxage=86400, stale-while-revalidate=86400' },
+        ],
+      },
+      {
+        source: '/this-weekend/:city',
+        headers: [
+          { key: 'Cache-Control', value: 'public, s-maxage=86400, stale-while-revalidate=86400' },
+        ],
+      },
     ];
   },
 };

@@ -17,6 +17,7 @@ import Head from 'next/head';
 import Link from 'next/link';
 import Image from 'next/image';
 import { GetStaticPropsContext, GetStaticPropsResult, GetStaticPathsResult } from 'next';
+import { isCloudinaryUrl } from '@/lib/imageUtils';
 
 interface ItemCard {
   id: string;
@@ -142,6 +143,7 @@ export default function TagPage({ tag, itemCount, items, ogImageUrl }: TagPagePr
                             fill
                             className="object-cover"
                             sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                            unoptimized={isCloudinaryUrl(item.thumbnailUrl!)}
                           />
                         ) : (
                           <div className="flex items-center justify-center h-full bg-warm-200 text-warm-500 dark:text-warm-400">

@@ -985,6 +985,7 @@ export const exportCommerceManagerFeed = async (
       'additional_image_link',
       'brand',
       'quantity_to_sell_on_facebook',
+      'google_product_category',
     ];
 
     const rows: string[] = [headers.join(',')];
@@ -1000,6 +1001,10 @@ export const exportCommerceManagerFeed = async (
       const additionalPhotos = extraPhotos.slice(0, 19).join('|');
 
       const brand = item.brand?.trim() || '';
+      // google_product_category: no static category→Google/FB taxonomy mapping exists yet.
+      // Left blank rather than a fabricated taxonomy ID (CLAUDE.md placeholder-value ban).
+      // Follow-up: build a real category→taxonomy-ID mapping table (out of scope here).
+      const googleProductCategory = '';
 
       const title = escapeCommerceFeedCSV(stripHtml(item.title));
       const description = escapeCommerceFeedCSV(
@@ -1020,6 +1025,7 @@ export const exportCommerceManagerFeed = async (
         escapeCommerceFeedCSV(additionalPhotos),
         escapeCommerceFeedCSV(brand),
         escapeCommerceFeedCSV(quantity),
+        escapeCommerceFeedCSV(googleProductCategory),
       ].join(',');
 
       rows.push(row);
@@ -1097,6 +1103,7 @@ export const exportOrganizerCommerceManagerFeed = async (
       'additional_image_link',
       'brand',
       'quantity_to_sell_on_facebook',
+      'google_product_category',
     ];
 
     const rows: string[] = [headers.join(',')];
@@ -1111,6 +1118,10 @@ export const exportOrganizerCommerceManagerFeed = async (
       const additionalPhotos = extraPhotos.slice(0, 19).join('|');
 
       const brand = item.brand?.trim() || '';
+      // google_product_category: no static category→Google/FB taxonomy mapping exists yet.
+      // Left blank rather than a fabricated taxonomy ID (CLAUDE.md placeholder-value ban).
+      // Follow-up: build a real category→taxonomy-ID mapping table (out of scope here).
+      const googleProductCategory = '';
       const quantity = item.status === 'SOLD' ? '0' : '1';
 
       const title = escapeCommerceFeedCSV(stripHtml(item.title));
@@ -1130,6 +1141,7 @@ export const exportOrganizerCommerceManagerFeed = async (
         escapeCommerceFeedCSV(additionalPhotos),
         escapeCommerceFeedCSV(brand),
         escapeCommerceFeedCSV(quantity),
+        escapeCommerceFeedCSV(googleProductCategory),
       ].join(',');
 
       rows.push(row);

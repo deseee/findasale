@@ -4,7 +4,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { useQuery } from '@tanstack/react-query';
 import api from '../lib/api';
-import { getSaleImageUrl, getItemImageUrl } from '../lib/imageUtils';
+import { getSaleImageUrl, getItemImageUrl, isCloudinaryUrl } from '../lib/imageUtils';
 import ItemCard from '../components/ItemCard';
 import { SkeletonCard, SkeletonSaleCard } from '../components/SkeletonCards';
 
@@ -92,6 +92,7 @@ export default function TrendingPage() {
                             alt={sale.title}
                             fill
                             className="object-cover group-hover:scale-105 transition-transform duration-300"
+                            unoptimized={isCloudinaryUrl(getSaleImageUrl(sale.photoUrls[0]) || sale.photoUrls[0])}
                           />
                         ) : (
                           <div className="h-full flex items-center justify-center text-4xl">🏠</div>

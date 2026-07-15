@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import Image from 'next/image';
-import { getItemImageUrl } from '../lib/imageUtils';
+import { getItemImageUrl, isCloudinaryUrl } from '../lib/imageUtils';
 
 interface TopFindItem {
   id: string;
@@ -57,6 +57,7 @@ export function CityTopFinds({ citySlug, items }: CityTopFindsProps) {
                     alt={item.title}
                     fill
                     className="object-cover group-hover:scale-105 transition-transform"
+                    unoptimized={isCloudinaryUrl(getItemImageUrl(item.photoUrl) || item.photoUrl || '')}
                   />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-slate-200 to-slate-300 dark:from-slate-600 dark:to-slate-700 text-slate-400 dark:text-slate-500">

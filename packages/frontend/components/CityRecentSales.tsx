@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import Image from 'next/image';
-import { getSaleImageUrl } from '../lib/imageUtils';
+import { getSaleImageUrl, isCloudinaryUrl } from '../lib/imageUtils';
 
 interface RecentSale {
   id: string;
@@ -83,6 +83,7 @@ export function CityRecentSales({ citySlug, sales }: CityRecentSalesProps) {
                       className="object-cover"
                       sizes="80px"
                       loading="lazy"
+                      unoptimized={isCloudinaryUrl(getSaleImageUrl(sale.photoUrl) || sale.photoUrl || '')}
                     />
                   </div>
                 ) : (

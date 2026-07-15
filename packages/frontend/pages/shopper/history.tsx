@@ -21,7 +21,7 @@ import { useAuth } from '../../components/AuthContext';
 import { useLootLog, useLootLogStats } from '../../hooks/useLootLog';
 import HaulPostCard from '../../components/HaulPostCard';
 import UGCPhotoSubmitButton from '../../components/UGCPhotoSubmitButton';
-import { getItemImageUrl } from '../../lib/imageUtils';
+import { getItemImageUrl, isCloudinaryUrl } from '../../lib/imageUtils';
 import { useToast } from '../../components/ToastContext';
 
 type ViewType = 'list' | 'gallery' | 'receipts' | 'disputes';
@@ -425,7 +425,7 @@ const PurchaseHistoryPage = () => {
                         <Link key={purchase.id} href={`/shopper/loot-log/${purchase.id}`} className="group cursor-pointer">
                           <div className="relative w-full h-48 bg-slate-200 dark:bg-gray-700 rounded-lg overflow-hidden mb-3">
                             {purchase.item.imageUrl ? (
-                              <Image src={purchase.item.imageUrl} alt={purchase.item.title} layout="fill" objectFit="cover" className="group-hover:scale-105 transition" />
+                              <Image src={purchase.item.imageUrl} alt={purchase.item.title} layout="fill" objectFit="cover" className="group-hover:scale-105 transition" unoptimized={isCloudinaryUrl(purchase.item.imageUrl)} />
                             ) : (
                               <div className="flex items-center justify-center w-full h-full bg-gradient-to-br from-slate-300 to-slate-400 text-white text-sm">No image</div>
                             )}

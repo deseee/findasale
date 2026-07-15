@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../../../components/AuthContext';
 import api from '../../../lib/api';
+import { isCloudinaryUrl } from '../../../lib/imageUtils';
 
 export default function PurchaseDetailPage() {
   const router = useRouter();
@@ -80,6 +81,7 @@ export default function PurchaseDetailPage() {
                     width={300}
                     height={300}
                     objectFit="cover"
+                    unoptimized={isCloudinaryUrl(purchase.item.imageUrl)}
                   />
                 ) : (
                   <div className="w-full h-80 flex items-center justify-center text-warm-400">

@@ -10,7 +10,7 @@
  * from any Cloudinary URL using on-the-fly transformations as a fallback.
  */
 
-const isCloudinaryUrl = (url: string): boolean =>
+export const isCloudinaryUrl = (url: string): boolean =>
   url.includes('res.cloudinary.com');
 
 const insertTransform = (url: string, transform: string): string => {
