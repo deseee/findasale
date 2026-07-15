@@ -3,6 +3,7 @@ import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import Anthropic from '@anthropic-ai/sdk';
 import { isAICostCeilingExceeded, trackAITokens, recordApiUsage, ANTHROPIC_COST_PER_M_TOKENS } from '../lib/aiCostTracker';
+import { isAnthropicCreditError, alertAnthropicCreditExhausted } from '../lib/anthropicError';
 
 // In-memory rate limiting map: userId -> { count, resetTime }
 const chatRateLimitMap = new Map<string, { count: number; resetTime: number }>();
@@ -169,8 +170,15 @@ Focus on helping with:
     return res.status(200).json(response);
   } catch (error: any) {
     console.error('Support chat error:', error);
+    if (isAnthropicCreditError(error)) {
+      await alertAnthropicCreditExhausted('support_chat');
+      return res.status(503).json({
+        message: 'Support assistant is temporarily unavailable. Please try again shortly or email support@finda.sale.',
+      });
+    }
+    // Never leak raw provider error text to the client.
     return res.status(500).json({
-      message: error.message || 'Internal server error',
+      message: 'Something went wrong. Please try again shortly or email support@finda.sale.',
     });
   }
 };

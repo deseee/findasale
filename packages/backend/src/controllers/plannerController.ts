@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import axios from 'axios';
 import { regionConfig } from '../config/regionConfig';
 import { isAICostCeilingExceeded, trackAITokens, estimateTokensForRequest, recordApiUsage, ANTHROPIC_COST_PER_M_TOKENS } from '../lib/aiCostTracker';
+import { isAnthropicCreditError, alertAnthropicCreditExhausted } from '../lib/anthropicError';
 
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5-20251001';
@@ -110,6 +111,12 @@ export async function handlePlannerChat(req: Request, res: Response): Promise<vo
     res.json({ reply });
   } catch (error) {
     console.error('Planner chat error:', error);
+
+    if (isAnthropicCreditError(error)) {
+      await alertAnthropicCreditExhausted('planner_chat');
+      res.status(503).json({ message: 'Assistant temporarily unavailable. Please try again shortly.' });
+      return;
+    }
 
     if (axios.isAxiosError(error)) {
       if (error.response?.status === 401) {

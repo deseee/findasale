@@ -1,6 +1,6 @@
 import { prisma } from '../lib/prisma';
 import { Prisma } from '@prisma/client';
-import { analyzeItemImage, analyzeItemImages, suggestPrice } from '../services/cloudAIService';
+import { analyzeItemImage, analyzeItemImages, suggestPrice, AITagResult } from '../services/cloudAIService';
 import { checkAITagLimit } from '../lib/tierEnforcement';
 import { composeDescription } from '../services/descriptionMerger'; // Item Description Authoring Contract (2026-05-12)
 import { suggestCategories } from '../services/ebayTaxonomyService';
@@ -9,6 +9,57 @@ import { decodeBarcodeFromImage } from '../services/serverBarcodeDecoder';
 import { lookupByBarcode } from '../services/ebayCatalogLookup';
 import { enrichItem, planEnrichmentApply } from '../services/productEnrichment';
 import { runGroundedIdentityAsync } from '../services/groundedIdentityService';
+import axios from 'axios';
+import { isAnthropicCreditError, alertAnthropicCreditExhausted } from '../lib/anthropicError';
+
+const OLLAMA_URL = process.env.OLLAMA_URL || 'http://host.docker.internal:11434';
+const OLLAMA_VISION_MODEL = process.env.OLLAMA_VISION_MODEL || 'qwen3-vl:4b';
+
+/**
+ * Ollama fallback for Rapidfire — mirrors the analyze-photo Ollama path in
+ * uploadController. Used when the cloud AI chain (Vision -> Claude Haiku) THROWS
+ * (e.g. Anthropic out of credit, HTTP 400). Returns an AITagResult on success, or
+ * null if Ollama also fails — so a Rapidfire item lands in PENDING_REVIEW with real
+ * tags instead of silently stalling in DRAFT. Fully self-contained / non-throwing.
+ */
+async function analyzeWithOllamaFallback(buffer: Buffer): Promise<AITagResult | null> {
+  try {
+    const base64Image = buffer.toString('base64');
+    const prompt = `You are an estate sale pricing assistant. Look at this image and respond with ONLY valid JSON (no markdown, no explanation) in this exact format:
+{
+  "title": "short descriptive item title",
+  "description": "1-2 sentence description mentioning condition and notable features",
+  "category": "one of: Furniture, Electronics, Clothing, Books, Kitchenware, Tools, Art, Jewelry, Toys, Sports, Collectibles, Other",
+  "condition": "one of: NEW, USED, REFURBISHED, PARTS_OR_REPAIR",
+  "suggestedPrice": 12.50
+}`;
+    const response = await axios.post(
+      `${OLLAMA_URL}/api/generate`,
+      { model: OLLAMA_VISION_MODEL, prompt, images: [base64Image], stream: false },
+      { timeout: 30000 }
+    );
+    const raw = (response.data?.response ?? '').replace(/```json\n?|\n?```/g, '').trim();
+    const parsed = JSON.parse(raw) as {
+      title?: string;
+      description?: string;
+      category?: string;
+      condition?: string;
+      suggestedPrice?: number;
+    };
+    if (!parsed || !parsed.title) return null;
+    return {
+      title: parsed.title,
+      description: parsed.description ?? '',
+      category: parsed.category,
+      condition: parsed.condition ?? 'USED',
+      suggestedPrice: typeof parsed.suggestedPrice === 'number' ? parsed.suggestedPrice : 0,
+      tags: [],
+    };
+  } catch (ollamaErr: any) {
+    console.error('[rapidfire] Ollama fallback failed:', ollamaErr?.message ?? ollamaErr);
+    return null;
+  }
+}
 
 /**
  * processRapidDraft — Background job for Rapidfire Mode Phase 2A
@@ -131,9 +182,24 @@ export async function processRapidDraft(itemId: string): Promise<void> {
       }
 
       // Call Vision → Haiku chain with all photos (or single if only one available)
-      const aiResult = photoBuffers.length === 1
-        ? await analyzeItemImage(photoBuffers[0], mimeTypes[0])
-        : await analyzeItemImages(photoBuffers, mimeTypes);
+      let aiResult: AITagResult | null;
+      try {
+        aiResult = photoBuffers.length === 1
+          ? await analyzeItemImage(photoBuffers[0], mimeTypes[0])
+          : await analyzeItemImages(photoBuffers, mimeTypes);
+      } catch (cloudErr: any) {
+        // Cloud AI (Vision → Claude Haiku) threw — e.g. Anthropic out of credit (HTTP 400).
+        // Mirror the upload paths' Ollama fallback so Rapidfire items don't stall in DRAFT.
+        if (isAnthropicCreditError(cloudErr)) {
+          await alertAnthropicCreditExhausted('rapidfire');
+        }
+        console.error(`[rapidfire] Cloud AI failed for item ${itemId}, attempting Ollama fallback:`, cloudErr?.message ?? cloudErr);
+        aiResult = await analyzeWithOllamaFallback(photoBuffers[0]);
+        if (!aiResult) {
+          // Ollama also failed — rethrow so the existing aiError handler logs + keeps DRAFT (recoverable).
+          throw cloudErr;
+        }
+      }
 
       if (!aiResult) {
         // Cloud AI unavailable — mark as PENDING_REVIEW without AI tags

@@ -3,6 +3,7 @@ import axios from 'axios';
 import { prisma } from '../lib/prisma';
 import { AuthRequest } from '../middleware/auth';
 import { isAICostCeilingExceeded, trackAITokens, estimateTokensForRequest, recordApiUsage, ANTHROPIC_COST_PER_M_TOKENS } from '../lib/aiCostTracker';
+import { isAnthropicCreditError, alertAnthropicCreditExhausted } from '../lib/anthropicError';
 import { getWatermarkedUrl } from '../utils/cloudinaryWatermark';
 import { canRemoveWatermark } from '../utils/watermarkPolicy';
 
@@ -168,6 +169,11 @@ Write only the post text, no explanations.`;
     res.json({ post: postText, platform, photoUrl });
   } catch (error) {
     console.error('generateSocialPost error:', error);
+    if (isAnthropicCreditError(error)) {
+      await alertAnthropicCreditExhausted('social_post');
+      res.status(503).json({ message: 'Post generation temporarily unavailable.' });
+      return;
+    }
     res.status(500).json({ message: 'Failed to generate post' });
   }
 };

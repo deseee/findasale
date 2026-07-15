@@ -10,6 +10,7 @@
 import axios from 'axios';
 import { prisma } from '../lib/prisma';
 import { isAICostCeilingExceeded, trackAITokens, estimateTokensForRequest, recordApiUsage, ANTHROPIC_COST_PER_M_TOKENS } from '../lib/aiCostTracker';
+import { isAnthropicCreditError, alertAnthropicCreditExhausted } from '../lib/anthropicError';
 
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5-20251001';
@@ -39,18 +40,24 @@ interface GeneratedClue {
  * Feature #104: Returns fallback clue if cost ceiling is exceeded.
  */
 export async function generateDailyClue(date: string): Promise<GeneratedClue> {
+  // Shared degraded-mode clue: returned whenever AI is unavailable (missing key,
+  // cost ceiling tripped, API error, or Anthropic out of credit) so the treasure
+  // hunt route always resolves a clue and never surfaces a 500 to shoppers.
+  const FALLBACK_CLUE: GeneratedClue = {
+    clue: 'Search for something colorful and decorative from a past era...',
+    category: 'art',
+    keywords: ['art', 'painting', 'decor', 'vintage', 'collectible'],
+  };
+
   if (!ANTHROPIC_API_KEY) {
-    throw new Error('ANTHROPIC_API_KEY not configured');
+    console.warn('[treasure-hunt] ANTHROPIC_API_KEY not configured, returning fallback clue');
+    return FALLBACK_CLUE;
   }
 
   // Feature #104: Cost ceiling check
   if (await isAICostCeilingExceeded()) {
     console.warn('[treasure-hunt] AI cost ceiling exceeded, returning fallback clue');
-    return {
-      clue: 'Search for something colorful and decorative from a past era...',
-      category: 'art',
-      keywords: ['art', 'painting', 'decor', 'vintage', 'collectible'],
-    };
+    return FALLBACK_CLUE;
   }
 
   const prompt = `Generate a fun, cryptic clue for an estate sale treasure hunt.
@@ -76,7 +83,8 @@ Example output:
 }`;
 
   const estimatedTokens = estimateTokensForRequest(prompt, false);
-  const response = await axios.post(
+  try {
+    const response = await axios.post(
     'https://api.anthropic.com/v1/messages',
     {
       model: ANTHROPIC_MODEL,
@@ -103,7 +111,16 @@ Example output:
   await trackAITokens(estimatedTokens + responseTokens);
   await recordApiUsage('anthropic:treasure_hunt', (estimatedTokens + responseTokens) / 1_000_000 * ANTHROPIC_COST_PER_M_TOKENS);
   const raw = content.replace(/```json\n?|\n?```/g, '').trim();
-  return JSON.parse(raw) as GeneratedClue;
+    return JSON.parse(raw) as GeneratedClue;
+  } catch (err: any) {
+    // Anthropic call (or JSON parse) failed — e.g. out of credit (HTTP 400).
+    // Degrade to the shared fallback clue so shoppers never see a 500.
+    if (isAnthropicCreditError(err)) {
+      await alertAnthropicCreditExhausted('treasure_hunt');
+    }
+    console.error('[treasure-hunt] Clue generation failed, returning fallback clue:', err?.message ?? err);
+    return FALLBACK_CLUE;
+  }
 }
 
 /**
