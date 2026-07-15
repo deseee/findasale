@@ -1,5 +1,6 @@
 import { prisma } from '../lib/prisma';
 import { createNotification } from './notificationService';
+import { enqueueMarketplaceRemoveJobIfPosted } from './marketplace/marketplacePosterService'; // ADR-083
 
 /**
  * If the item was previously exported to Facebook Marketplace,
@@ -8,6 +9,15 @@ import { createNotification } from './notificationService';
  */
 export async function notifyFacebookExportedItemSold(itemId: string): Promise<void> {
   try {
+    // ADR-083: if this item was auto-posted to Marketplace via the in-house poster,
+    // queue its removal. Independent of fbExportedAt below (that flag tracks the
+    // passive Commerce Manager CSV/XLSX export, a separate mechanism) -- fires on
+    // every one of the 11 existing sold-trigger call sites through this shared
+    // chokepoint, no per-call-site changes needed. Fire-and-forget, never throws.
+    enqueueMarketplaceRemoveJobIfPosted(itemId).catch((err) =>
+      console.warn(`[Marketplace Poster] Failed to enqueue REMOVE job for item ${itemId}:`, err)
+    );
+
     const item = await prisma.item.findUnique({
       where: { id: itemId },
       select: {

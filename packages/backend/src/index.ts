@@ -265,6 +265,8 @@ import socialPublisherRoutes from './routes/socialPublisher'; // ADR-077: In-hou
 import videoPipelineAdminRoutes from './routes/videoPipelineAdmin'; // ADR-078 Wave 3: one-time ops trigger for video pipeline dry-run (admin-only, temporary)
 import videoRoutes from './routes/video'; // ADR-080 Stage 1b: event-driven footage ingest (POST /api/video/footage-ingest)
 import { scheduleSocialPublisherCron } from './jobs/socialPublisherCron'; // ADR-077: Social publisher cron (every 10 min)
+import marketplacePosterRoutes from './routes/marketplacePoster'; // ADR-083: Marketplace Poster (admin-only)
+import { scheduleMarketplacePosterCron } from './jobs/marketplacePosterCron'; // ADR-083: Marketplace Poster cron (every 10 min)
 import { scheduleEngagementMonitorCron } from './jobs/engagementMonitorCron'; // Comment/mention monitor (hourly) + approved-reply poster (every 30 min)
 import { scheduleFootageBatchSealCron } from './jobs/footageBatchSealJob'; // ADR-080 Stage 1b: quiet-seal OPEN FootageBatches (every 5 min)
 import citiesRoutes from './routes/cities'; // ADR-074: Metro Sync city pages
@@ -689,6 +691,7 @@ app.use('/api/viewers', viewerLimiter, viewersRouter);         // Feature 34: Hy
 app.use('/api/export', exportRouter);                            // Sprint 2: Export features
 app.use('/api/social', socialRouter);                            // Sprint 2: Social template generator
 app.use('/api/social-publisher', socialPublisherRoutes);       // ADR-077: In-house social publisher (admin-only)
+app.use('/api/marketplace-poster', marketplacePosterRoutes);   // ADR-083: Marketplace Poster (admin-only)
 app.use('/api/tags', tagRouter);                                 // Sprint 3: Tag-based SEO endpoints
 app.use(hubRoutes);                                              // Feature #40+#44: Sale Hubs & Neighborhood Sale Day
 app.use(vendorBoothRoutes);                                      // Vendor Booth Payments (2026-07-07): flea market multi-booth checkout
@@ -1011,6 +1014,9 @@ httpServer.listen(PORT, '0.0.0.0', () => {
 
   // ADR-077: Register in-house social publisher cron (every 10 minutes)
   scheduleSocialPublisherCron();
+
+  // ADR-083: Register Marketplace Poster cron (every 10 minutes)
+  scheduleMarketplacePosterCron();
 
   // Comment/mention engagement monitor (hourly YouTube/X polling) + approved-reply poster (every 30 min)
   scheduleEngagementMonitorCron();

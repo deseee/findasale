@@ -28,6 +28,7 @@ import { evaluateAutoHighValueFlag, shouldRetainAutoFlag } from '../utils/highVa
 import { awardXp, XP_AWARDS, spendXp, getSpendableXp, checkMonthlyXpCap } from '../services/xpService'; // Phase 2a: XP awards
 import { getRankBenefits } from '../utils/rankUtils'; // Phase 2b: Legendary early access filtering
 import { enqueueFetchEbayComps } from '../jobs/fetchEbayComps'; // ADR-069 Phase 2: Async eBay comps
+import { enqueueMarketplacePostJob } from '../services/marketplace/marketplacePosterService'; // ADR-083
 import { fetchEbayPriceComps } from './ebayController'; // Bug #326: live listings for EbayCompTiles image grid
 import { composeDescription, stripShippingPhrases, DescriptionSource } from '../services/descriptionMerger'; // Item Description Authoring Contract (2026-05-12)
 import { checkAndAward } from '../services/achievementService'; // Feature #58: Achievement tracking
@@ -2751,6 +2752,9 @@ export const publishItem = async (req: AuthRequest, res: Response) => {
 
     // ADR-069 Phase 2: Queue async eBay comps fetch (non-blocking)
     enqueueFetchEbayComps(updatedItem.id);
+
+    // ADR-083: Queue Marketplace auto-post job if the organizer opted in (non-blocking)
+    enqueueMarketplacePostJob(updatedItem.id).catch((err) => console.warn('Marketplace poster enqueue error:', err));
 
     res.json(updatedItem);
 
