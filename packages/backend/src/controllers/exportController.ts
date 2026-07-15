@@ -86,19 +86,22 @@ export const exportEstatesalesCSV = async (
       return;
     }
 
-    // Platform Safety #99: Check export rate limit
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { lastExportAt: true }
-    });
+    // Platform Safety #99: Check export rate limit (PRO/TEAMS organizers are exempt — Patrick request 2026-07-14)
+    const isProOrTeamsExport = req.user?.effectiveTier === 'PRO' || req.user?.effectiveTier === 'TEAMS';
+    if (!isProOrTeamsExport) {
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { lastExportAt: true }
+      });
 
-    if (user) {
-      const { allowed, nextExportDate } = await checkExportRateLimit(userId, user.lastExportAt);
-      if (!allowed && nextExportDate) {
-        res.status(429).json({
-          message: `Export limit: 1 per month. Your next export is available on ${formatNextExportDate(nextExportDate)}.`
-        });
-        return;
+      if (user) {
+        const { allowed, nextExportDate } = await checkExportRateLimit(userId, user.lastExportAt);
+        if (!allowed && nextExportDate) {
+          res.status(429).json({
+            message: `Export limit: 1 per month. Your next export is available on ${formatNextExportDate(nextExportDate)}.`
+          });
+          return;
+        }
       }
     }
 
@@ -216,19 +219,22 @@ export const exportFacebookJSON = async (
       return;
     }
 
-    // Platform Safety #99: Check export rate limit
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { lastExportAt: true }
-    });
+    // Platform Safety #99: Check export rate limit (PRO/TEAMS organizers are exempt — Patrick request 2026-07-14)
+    const isProOrTeamsExport = req.user?.effectiveTier === 'PRO' || req.user?.effectiveTier === 'TEAMS';
+    if (!isProOrTeamsExport) {
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { lastExportAt: true }
+      });
 
-    if (user) {
-      const { allowed, nextExportDate } = await checkExportRateLimit(userId, user.lastExportAt);
-      if (!allowed && nextExportDate) {
-        res.status(429).json({
-          message: `Export limit: 1 per month. Your next export is available on ${formatNextExportDate(nextExportDate)}.`
-        });
-        return;
+      if (user) {
+        const { allowed, nextExportDate } = await checkExportRateLimit(userId, user.lastExportAt);
+        if (!allowed && nextExportDate) {
+          res.status(429).json({
+            message: `Export limit: 1 per month. Your next export is available on ${formatNextExportDate(nextExportDate)}.`
+          });
+          return;
+        }
       }
     }
 
@@ -342,19 +348,22 @@ export const exportCraigslistText = async (
       return;
     }
 
-    // Platform Safety #99: Check export rate limit
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { lastExportAt: true }
-    });
+    // Platform Safety #99: Check export rate limit (PRO/TEAMS organizers are exempt — Patrick request 2026-07-14)
+    const isProOrTeamsExport = req.user?.effectiveTier === 'PRO' || req.user?.effectiveTier === 'TEAMS';
+    if (!isProOrTeamsExport) {
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { lastExportAt: true }
+      });
 
-    if (user) {
-      const { allowed, nextExportDate } = await checkExportRateLimit(userId, user.lastExportAt);
-      if (!allowed && nextExportDate) {
-        res.status(429).json({
-          message: `Export limit: 1 per month. Your next export is available on ${formatNextExportDate(nextExportDate)}.`
-        });
-        return;
+      if (user) {
+        const { allowed, nextExportDate } = await checkExportRateLimit(userId, user.lastExportAt);
+        if (!allowed && nextExportDate) {
+          res.status(429).json({
+            message: `Export limit: 1 per month. Your next export is available on ${formatNextExportDate(nextExportDate)}.`
+          });
+          return;
+        }
       }
     }
 
@@ -482,19 +491,22 @@ export const exportOrganizer = async (
       return;
     }
 
-    // Platform Safety #99: Check export rate limit
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { lastExportAt: true }
-    });
+    // Platform Safety #99: Check export rate limit (PRO/TEAMS organizers are exempt — Patrick request 2026-07-14)
+    const isProOrTeamsExport = req.user?.effectiveTier === 'PRO' || req.user?.effectiveTier === 'TEAMS';
+    if (!isProOrTeamsExport) {
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { lastExportAt: true }
+      });
 
-    if (user) {
-      const { allowed, nextExportDate } = await checkExportRateLimit(userId, user.lastExportAt);
-      if (!allowed && nextExportDate) {
-        res.status(429).json({
-          message: `Export limit: 1 per month. Your next export is available on ${formatNextExportDate(nextExportDate)}.`
-        });
-        return;
+      if (user) {
+        const { allowed, nextExportDate } = await checkExportRateLimit(userId, user.lastExportAt);
+        if (!allowed && nextExportDate) {
+          res.status(429).json({
+            message: `Export limit: 1 per month. Your next export is available on ${formatNextExportDate(nextExportDate)}.`
+          });
+          return;
+        }
       }
     }
 
@@ -736,19 +748,22 @@ export const exportFacebookXLSX = async (
       return;
     }
 
-    // Platform Safety #99: Check export rate limit
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { lastExportAt: true }
-    });
+    // Platform Safety #99: Check export rate limit (PRO/TEAMS organizers are exempt — Patrick request 2026-07-14)
+    const isProOrTeamsExport = req.user?.effectiveTier === 'PRO' || req.user?.effectiveTier === 'TEAMS';
+    if (!isProOrTeamsExport) {
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { lastExportAt: true }
+      });
 
-    if (user) {
-      const { allowed, nextExportDate } = await checkExportRateLimit(userId, user.lastExportAt);
-      if (!allowed && nextExportDate) {
-        res.status(429).json({
-          message: `Export limit: 1 per month. Your next export is available on ${formatNextExportDate(nextExportDate)}.`
-        });
-        return;
+      if (user) {
+        const { allowed, nextExportDate } = await checkExportRateLimit(userId, user.lastExportAt);
+        if (!allowed && nextExportDate) {
+          res.status(429).json({
+            message: `Export limit: 1 per month. Your next export is available on ${formatNextExportDate(nextExportDate)}.`
+          });
+          return;
+        }
       }
     }
 
