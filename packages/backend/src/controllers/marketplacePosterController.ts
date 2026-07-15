@@ -41,7 +41,7 @@ export const listAccounts = async (_req: AuthRequest, res: Response) => {
  * email/password — it must never accept or log plaintext credentials.
  */
 export const registerAccount = async (req: AuthRequest, res: Response) => {
-  const { label, storageState } = req.body as { label?: string; storageState?: object };
+  const { label, storageState } = req.body as { label?: string; storageState?: Record<string, unknown> };
 
   if (!label || typeof label !== 'string') {
     return res.status(400).json({ message: 'label is required.' });
