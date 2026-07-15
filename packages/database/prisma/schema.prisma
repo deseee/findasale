@@ -5183,7 +5183,7 @@ enum MarketplaceJobStatus {
 /// remove a listing -- captured from the Marketplace UI on successful POST.
 model MarketplaceListingJob {
   id               String                     @id @default(cuid())
-  item             Item                       @relation(fields: [itemId], references: [id])
+  item             Item                       @relation(fields: [itemId], references: [id], onDelete: Cascade)
   itemId           String
   action           MarketplaceJobAction
   status           MarketplaceJobStatus       @default(QUEUED)
