@@ -702,6 +702,42 @@ const AddItemsDetailPage = () => {
     return () => window.removeEventListener('focus', handleFocus);
   }, [saleId, queryClient]);
 
+  // Client-side spin-timeout safety net (belt-and-suspenders): guarantees a Rapidfire
+  // thumbnail never spins forever, even if a backend status update is missed or the AI
+  // job never advances the item. If an item has been DRAFT (spinning, no aiError) longer
+  // than SPIN_TIMEOUT_MS, surface a needs-attention state so the spinner stops and the
+  // thumbnail becomes tappable for manual entry.
+  const draftSpinSinceRef = useRef<Record<string, number>>({});
+  useEffect(() => {
+    const SPIN_TIMEOUT_MS = 75_000;
+    const timer = setInterval(() => {
+      const now = Date.now();
+      setRapidItems((prev) => {
+        const seen = draftSpinSinceRef.current;
+        let changed = false;
+        const next = prev.map((it) => {
+          const spinning =
+            it.draftStatus === 'DRAFT' && !it.aiError && !it.id.startsWith('temp-');
+          if (!spinning) {
+            if (seen[it.id]) delete seen[it.id];
+            return it;
+          }
+          if (!seen[it.id]) {
+            seen[it.id] = now;
+            return it;
+          }
+          if (now - seen[it.id] > SPIN_TIMEOUT_MS) {
+            changed = true;
+            return { ...it, aiError: 'Auto-tagging timed out — tap to fill in manually' };
+          }
+          return it;
+        });
+        return changed ? next : prev;
+      });
+    }, 5000);
+    return () => clearInterval(timer);
+  }, []);
+
   // Polling for draft status updates
   useEffect(() => {
     const draftItems = rapidItems.filter(
@@ -717,11 +753,18 @@ const AddItemsDetailPage = () => {
         try {
           const res = await api.get(`/items/${item.id}/draft-status`);
           const data = res.data;
-          if (data.draftStatus !== 'DRAFT') {
+          // Map aiErrorLog → aiError so a failed item surfaces the error badge and stops
+          // spinning even if it is still (or stuck) in DRAFT. The draft-status endpoint
+          // returns aiErrorLog (array); the carousel UI checks the aiError string.
+          const derivedAiError =
+            Array.isArray(data.aiErrorLog) && data.aiErrorLog.length > 0
+              ? 'Auto-tagging failed — fill in manually'
+              : undefined;
+          if (data.draftStatus !== 'DRAFT' || derivedAiError) {
             setRapidItems((prev) =>
               prev.map((i) =>
                 i.id !== item.id ? i :
-                { ...i, ...data, thumbnailUrl: i.thumbnailUrl || data.thumbnailUrl }
+                { ...i, ...data, aiError: derivedAiError ?? i.aiError, thumbnailUrl: i.thumbnailUrl || data.thumbnailUrl }
               )
             );
           }
@@ -1535,6 +1578,21 @@ const AddItemsDetailPage = () => {
         const res = await api.get(`/items/${itemId}`);
         const item = res.data;
 
+        // Error: auto-analysis failed (aiErrorLog is set). Checked BEFORE the success
+        // branch: an AI-total-failure item now advances to PENDING_REVIEW with a diagnostic
+        // aiErrorLog and a placeholder title, so the success check alone would mis-report it
+        // as "Tagged". Keep it in the needs-attention (DRAFT + aiError) state so the ⚠ badge
+        // shows and the thumbnail is tappable for manual fill.
+        if (item.aiErrorLog && Array.isArray(item.aiErrorLog) && item.aiErrorLog.length > 0) {
+          clearInterval(poll);
+          setRapidItems((prev) =>
+            prev.map((i) =>
+              i.id === itemId ? { ...i, aiError: 'Auto-tagging failed — fill in manually' } : i
+            )
+          );
+          return;
+        }
+
         // Success: auto-analysis identified the item
         if (item.draftStatus === 'PENDING_REVIEW' && item.title) {
           clearInterval(poll);
@@ -1546,17 +1604,6 @@ const AddItemsDetailPage = () => {
             )
           );
           showToast(`Tagged: "${item.title}"`, 'success');
-          return;
-        }
-
-        // Error: auto-analysis failed (aiErrorLog is set)
-        if (item.aiErrorLog && Array.isArray(item.aiErrorLog) && item.aiErrorLog.length > 0) {
-          clearInterval(poll);
-          setRapidItems((prev) =>
-            prev.map((i) =>
-              i.id === itemId ? { ...i, aiError: 'Auto-tagging failed — fill in manually' } : i
-            )
-          );
           return;
         }
 

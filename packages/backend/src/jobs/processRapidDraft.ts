@@ -183,6 +183,7 @@ export async function processRapidDraft(itemId: string): Promise<void> {
 
       // Call Vision → Haiku chain with all photos (or single if only one available)
       let aiResult: AITagResult | null;
+      let aiUnavailableError: any = null;
       try {
         aiResult = photoBuffers.length === 1
           ? await analyzeItemImage(photoBuffers[0], mimeTypes[0])
@@ -196,17 +197,28 @@ export async function processRapidDraft(itemId: string): Promise<void> {
         console.error(`[rapidfire] Cloud AI failed for item ${itemId}, attempting Ollama fallback:`, cloudErr?.message ?? cloudErr);
         aiResult = await analyzeWithOllamaFallback(photoBuffers[0]);
         if (!aiResult) {
-          // Ollama also failed — rethrow so the existing aiError handler logs + keeps DRAFT (recoverable).
-          throw cloudErr;
+          // Both cloud AI and Ollama failed. Do NOT rethrow — rethrowing propagates to the
+          // outer aiError handler which leaves the item stranded in DRAFT (thumbnail spins
+          // forever). Capture the diagnostic and fall through to the graceful PENDING_REVIEW
+          // path below so the item becomes manually reviewable instead of stuck.
+          aiUnavailableError = cloudErr;
         }
       }
 
       if (!aiResult) {
-        // Cloud AI unavailable — mark as PENDING_REVIEW without AI tags
+        // Cloud AI (and Ollama fallback) unavailable — advance to PENDING_REVIEW for manual entry.
+        // Persist a diagnostic aiErrorLog entry (so ops can see AI was unavailable) in the SAME
+        // update that sets PENDING_REVIEW — never leave the item in DRAFT.
         console.log(`[rapidfire] Cloud AI unavailable for item ${itemId}; marking PENDING_REVIEW`);
+        const pendingReviewData: Record<string, unknown> = { draftStatus: 'PENDING_REVIEW' };
+        if (aiUnavailableError) {
+          const errorMessage = aiUnavailableError instanceof Error ? aiUnavailableError.message : String(aiUnavailableError);
+          const currentErrors = Array.isArray(item.aiErrorLog) ? item.aiErrorLog : [];
+          pendingReviewData.aiErrorLog = [...currentErrors, { error: errorMessage, timestamp: Date.now() }];
+        }
         await prisma.item.update({
           where: { id: itemId },
-          data: { draftStatus: 'PENDING_REVIEW' }
+          data: pendingReviewData,
         });
         return;
       }
