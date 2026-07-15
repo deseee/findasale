@@ -467,14 +467,27 @@ function parseMissing25002AspectNames(errorBody: string): string[] {
     const parsed = JSON.parse(errorBody) as {
       errors?: Array<{ errorId?: number; parameters?: Array<{ name?: string; value?: string }> }>;
     };
-    const names: string[] = [];
+    const names = new Set<string>();
     for (const err of parsed.errors || []) {
       if (err.errorId !== 25002) continue;
       for (const p of err.parameters || []) {
-        if (p?.value) names.push(String(p.value));
+        const value = p?.value ? String(p.value).trim() : '';
+        if (!value) continue;
+        // Garbage filter (S1122 fix): eBay's 25002 `parameters[]` entries are not
+        // reliably keyed by a semantic `name` like "aspectName" -- the real aspect
+        // name can arrive under a purely positional/numeric `name` (confirmed via
+        // the 07-14 camel-jacket fix, where the real aspect "Size Type" arrived
+        // paired with a numeric-index parameter). Some responses also carry the
+        // error's own full-sentence message duplicated into a parameter value
+        // (e.g. "Add at least 1 photo. More photos are better!"). A real aspect
+        // name is always a short label, never a bare number and never a sentence.
+        if (/^\d+$/.test(value)) continue; // numeric index leaked in as a value
+        const wordCount = value.split(/\s+/).filter(Boolean).length;
+        if (wordCount > 6 || value.length > 50 || /[.!?]/.test(value)) continue; // sentence-form message
+        names.add(value);
       }
     }
-    return names;
+    return Array.from(names);
   } catch {
     return [];
   }

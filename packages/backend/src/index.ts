@@ -229,6 +229,7 @@ import { scheduleCleanupCron } from './jobs/cleanupStaleDrafts'; // Phase 2B: Cl
 import { syncAchievements } from './services/achievementService'; // Features #58-59: Initialize achievements
 import { scheduleSaleAutoCloseCron } from './jobs/saleAutoCloseCron'; // Auto-close expired PUBLISHED scraped sales hourly
 import { schedulePhotoRetentionCron } from './jobs/photoRetentionCron'; // Feature #103: Photo retention + deletion
+import { scheduleFootageRetentionCron } from './jobs/footageRetentionCron'; // ADR-080 §7: raw R2 footage retention sweep
 import { scheduleWebhookEventPruneJob } from './jobs/webhookEventPruneJob'; // Webhook event pruning (30-day retention)
 import { scheduleLogRetentionCron } from './jobs/logRetentionCron'; // Operational-log retention sweep (60-day retention)
 import { scheduleScrapedSalePruneCron } from './jobs/pruneScrapedSales'; // Stale scraped ENDED-sale prune (volume reclaim, ADR 2026-07-05)
@@ -940,6 +941,7 @@ httpServer.listen(PORT, '0.0.0.0', () => {
 
   // Feature #103: Register photo retention cron
   schedulePhotoRetentionCron();
+  scheduleFootageRetentionCron(); // ADR-080 §7: raw R2 footage retention sweep
 
   // Webhook event pruning (30-day retention)
   scheduleWebhookEventPruneJob();

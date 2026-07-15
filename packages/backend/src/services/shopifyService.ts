@@ -201,6 +201,55 @@ export async function markShopifyItemSold(itemId: string): Promise<void> {
 }
 
 /**
+ * Remove/unpublish an item from Shopify — fires when an item is deleted (or otherwise
+ * pulled) on the FindA.Sale side so the Shopify listing doesn't dangle.
+ *
+ * Defaults to a soft unpublish (archives the product on Shopify — reversible, matches
+ * the ShopifyListing.status "REMOVED" state already modeled in schema.prisma) rather
+ * than a hard delete, mirroring markShopifyItemSold's non-destructive style. Pass
+ * hardDelete=true to permanently delete the Shopify product instead.
+ */
+export async function removeItemFromShopify(itemId: string, hardDelete = false): Promise<void> {
+  try {
+    const listing = await prisma.shopifyListing.findUnique({
+      where: { itemId },
+      include: { organizer: true },
+    });
+
+    if (!listing || !listing.organizer) {
+      // Item not listed on Shopify or organizer not found
+      return;
+    }
+
+    const client = getShopifyClient(listing.organizer);
+
+    if (hardDelete) {
+      await client.delete(`/products/${listing.shopifyProductId}.json`);
+    } else {
+      // Soft-unpublish: archive the product (removes it from the Online Store sales
+      // channel, reversible) rather than permanently deleting it.
+      await client.put(`/products/${listing.shopifyProductId}.json`, {
+        product: {
+          id: listing.shopifyProductId,
+          status: 'archived',
+        },
+      });
+    }
+
+    // Update listing status
+    await prisma.shopifyListing.update({
+      where: { itemId },
+      data: {
+        status: 'REMOVED',
+      },
+    });
+  } catch (error: any) {
+    // Log but don't throw — fire-and-forget, must never block the FindA.Sale-side action
+    console.error(`[Shopify] Failed to remove item ${itemId} from Shopify:`, error.message);
+  }
+}
+
+/**
  * Disconnect Shopify from an organizer
  */
 export async function disconnectShopify(organizerId: string): Promise<void> {

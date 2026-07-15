@@ -33,6 +33,7 @@ import { runVideoJobPipeline, GUIDE_TOPIC_FACTS } from '../services/video/videoJ
 import { classifyBatch } from '../services/video/footageClassifyService';
 import { ALL_TEMPLATES } from '../services/video/templates';
 import { FootageRole } from '@prisma/client';
+import { FOOTAGE_RETENTION_DAYS, FOOTAGE_REJECT_RETENTION_DAYS } from '../services/video/r2Client';
 
 const router = Router();
 
@@ -178,7 +179,12 @@ router.post('/footage-batch/:batchId/answer', async (req, res) => {
   if (batch.questionField === 'batch.footage') {
     const rejected = await prisma.footageBatch.update({
       where: { id: batchId },
-      data: { status: 'REJECTED', openQuestion: null, questionField: null },
+      data: {
+        status: 'REJECTED',
+        openQuestion: null,
+        questionField: null,
+        retainUntil: new Date(Date.now() + FOOTAGE_REJECT_RETENTION_DAYS * 24 * 60 * 60 * 1000),
+      },
     });
     return res.status(200).json({ ok: true, batchId, status: rejected.status });
   }
@@ -310,6 +316,8 @@ router.post('/footage-batch/:batchId/reject', async (req, res) => {
       openQuestion: null,
       questionField: null,
       reviewNotes: reason ? `Rejected: ${reason}` : batch.reviewNotes,
+      // ADR-080 §7: rejected footage gets a shorter retention window than approved.
+      retainUntil: new Date(Date.now() + FOOTAGE_REJECT_RETENTION_DAYS * 24 * 60 * 60 * 1000),
     },
   });
   return res.status(200).json({ ok: true, batchId, status: rejected.status });
@@ -501,9 +509,15 @@ router.post('/footage-batch/:batchId/approve', async (req, res) => {
     return res.status(400).json({ message: `Batch is not awaiting review (status=${batch.status})` });
   }
 
+  const now = new Date();
   const approved = await prisma.footageBatch.update({
     where: { id: batchId },
-    data: { status: 'APPROVED', approvedAt: new Date() },
+    data: {
+      status: 'APPROVED',
+      approvedAt: now,
+      // ADR-080 §7: raw R2 assets are deleted by footageRetentionCron once past this date.
+      retainUntil: new Date(now.getTime() + FOOTAGE_RETENTION_DAYS * 24 * 60 * 60 * 1000),
+    },
   });
 
   let youtubePost: { staged: boolean; postId?: string; reason?: string } = {

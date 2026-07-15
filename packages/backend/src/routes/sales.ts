@@ -243,6 +243,7 @@ router.get('/by-city/:citySlug', async (req, res) => {
         status: true,
         sourceUrl: true,
         sourceName: true,
+        scrapedMetadata: true,
         organizer: {
           select: {
             id: true,
@@ -255,11 +256,20 @@ router.get('/by-city/:citySlug', async (req, res) => {
     });
 
     // ---------------------------------------------------------------------------
-    // RETAIL suppression — applied post-query, no DB mutations (S934)
+    // Geo-mismatch suppression — exclude scraped rows whose city/state could NOT be
+    // confirmed to match the scraped address (geoConfidence='unresolved' in
+    // scrapedMetadata, set by facebook-events-discovery.ts parsePlace()). The flag was
+    // being written but nothing acted on it, so mismatched rows (e.g. a "Phoenix, AZ"
+    // sale whose real scraped address is in Modesto, CA) rendered on the wrong city
+    // page. Post-query, no DB mutation — same pattern as RETAIL suppression below.
+    // (claude_docs/STATE.md Blocked Queue — Facebook Events Scraper)
     // ---------------------------------------------------------------------------
-    let filteredSales = sales;
+    let filteredSales = sales.filter((s: any) => {
+      const meta = s.scrapedMetadata as Record<string, unknown> | null;
+      return !(meta && meta.geoConfidence === 'unresolved');
+    });
     if (isRetailQuery) {
-      filteredSales = sales.filter((s: any) => {
+      filteredSales = filteredSales.filter((s: any) => {
         // Only apply suppression to RETAIL rows; pass non-RETAIL through unchanged
         if (s.saleType !== 'RETAIL') return true;
         return !shouldSuppressRetailRow({ title: s.title, state: s.state });
@@ -285,17 +295,20 @@ router.get('/by-city/:citySlug', async (req, res) => {
           },
           select: { saleType: true },
         })
-      : sales;
+      : filteredSales;
 
     const categorySet = new Set<string>(allSalesForCategories.map((s: any) => s.saleType));
     const categories = Array.from(categorySet);
 
-    const serialized = capped.map((s: any) => ({
-      ...s,
-      startDate: s.startDate instanceof Date ? s.startDate.toISOString() : s.startDate,
-      endDate: s.endDate instanceof Date ? s.endDate.toISOString() : s.endDate,
-      photoUrl: s.photoUrls?.[0] ?? null,
-    }));
+    const serialized = capped.map((s: any) => {
+      const { scrapedMetadata, ...rest } = s;
+      return {
+        ...rest,
+        startDate: s.startDate instanceof Date ? s.startDate.toISOString() : s.startDate,
+        endDate: s.endDate instanceof Date ? s.endDate.toISOString() : s.endDate,
+        photoUrl: s.photoUrls?.[0] ?? null,
+      };
+    });
 
     return res.json({
       city: cityName,

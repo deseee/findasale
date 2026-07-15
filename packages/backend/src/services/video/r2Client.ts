@@ -38,6 +38,17 @@ const R2_REGION = process.env.R2_REGION || 'auto';
 const R2_ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID;
 const R2_SECRET_ACCESS_KEY = process.env.R2_SECRET_ACCESS_KEY;
 
+/**
+ * ADR-080 §7 retention window. A batch's raw R2 assets are kept until
+ * `retainUntil` (approvedAt/rejectedAt + these many days) so a human can still
+ * reopen/inspect recently-decided footage before it's gone for good. The daily
+ * footageRetentionCron sweep (footageRetentionCron.ts) is what actually deletes
+ * past this window -- these constants are read by both the approve/reject
+ * handlers (to SET retainUntil) and the sweep (to decide what's due).
+ */
+export const FOOTAGE_RETENTION_DAYS = parseInt(process.env.FOOTAGE_RETENTION_DAYS || '30', 10);
+export const FOOTAGE_REJECT_RETENTION_DAYS = parseInt(process.env.FOOTAGE_REJECT_RETENTION_DAYS || '7', 10);
+
 /** Presigned GET URL lifetime. Kept short (1h) — the bucket is private and a
  *  session only needs the URL long enough to paste it into a shot list and run
  *  an assembly. */

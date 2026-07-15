@@ -29,12 +29,13 @@ import { awardXp, XP_AWARDS, spendXp, getSpendableXp, checkMonthlyXpCap } from '
 import { getRankBenefits } from '../utils/rankUtils'; // Phase 2b: Legendary early access filtering
 import { enqueueFetchEbayComps } from '../jobs/fetchEbayComps'; // ADR-069 Phase 2: Async eBay comps
 import { enqueueMarketplacePostJob } from '../services/marketplace/marketplacePosterService'; // ADR-083
-import { fetchEbayPriceComps } from './ebayController'; // Bug #326: live listings for EbayCompTiles image grid
+import { fetchEbayPriceComps, endEbayListingIfExists } from './ebayController'; // Bug #326: live listings for EbayCompTiles image grid; endEbayListingIfExists: P2 S1122 withdraw-on-SOLD
 import { composeDescription, stripShippingPhrases, DescriptionSource } from '../services/descriptionMerger'; // Item Description Authoring Contract (2026-05-12)
 import { checkAndAward } from '../services/achievementService'; // Feature #58: Achievement tracking
 import { notifyFacebookExportedItemSold } from '../services/facebookNudgeService'; // Bug #461: FB nudge on single-item SOLD
 import { republishEbayOffer, ebayPublishWithSelfHeal, ensureConditionValidForCategory } from '../services/ebayPublishService'; // Phase 2 relocation + Phase 3 rewire (ADR 2026-06-30)
 import { assertCheckoutAllowed, CheckoutGuardError } from '../services/checkoutGuard'; // S1072 Finding #4: collusion/wash-trade guard
+import { removeItemFromShopify } from '../services/shopifyService'; // Cross-platform sync: unpublish Shopify listing on FindA.Sale item delete
 
 /** Decode HTML entities from CSV/eBay data before writing to the DB. */
 function decodeHtmlEntities(str: string): string {
@@ -1507,6 +1508,21 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
       );
     }
 
+    // P2 (S1122 BQ): withdraw the matching eBay listing when this item flips to
+    // SOLD via a non-eBay channel through this generic single-item edit path.
+    // Every other sold-trigger call site (POS/terminal, checkout, reservations,
+    // vendor-booth cart, bulk-items PUT) already calls endEbayListingIfExists --
+    // confirmed by diffing its call sites against notifyFacebookExportedItemSold's
+    // (which fires on all of them, including here). This updateItem path was the
+    // one gap. endEbayListingIfExists re-queries the item, self-guards on
+    // ebayOfferId being set (no-ops if never pushed to eBay), and never throws --
+    // fire-and-forget, same as the FB nudge above.
+    if (status === 'SOLD' && item.status !== 'SOLD') {
+      endEbayListingIfExists(id).catch(err =>
+        console.warn(`[eBay] withdraw-on-SOLD failed for item ${id}:`, err.message)
+      );
+    }
+
     // P2-3: Invalidate command center cache after item update
     invalidateCommandCenterCache(req.user.organizer!.id).catch((err) =>
       console.warn('Failed to invalidate command center cache:', err)
@@ -1980,6 +1996,11 @@ export const deleteItem = async (req: AuthRequest, res: Response) => {
         }
       }
     }
+
+    // Unpublish/remove the item from Shopify (if cross-listed) before deleting it
+    // locally — must run before the cascade delete removes the ShopifyListing row.
+    // Never throws/blocks: removeItemFromShopify swallows its own errors internally.
+    await removeItemFromShopify(id);
 
     await prisma.item.delete({
       where: { id }
