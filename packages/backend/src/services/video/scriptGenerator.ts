@@ -32,7 +32,7 @@
  */
 
 import axios from 'axios';
-import { trackAITokens, estimateTokensForRequest, isAICostCeilingExceeded, ANTHROPIC_COST_PER_M_TOKENS, recordApiUsage } from '../../lib/aiCostTracker';
+import { trackAITokens, estimateTokensForRequest, isAICostCeilingExceeded, ANTHROPIC_COST_PER_M_TOKENS, recordApiUsage, recordAnthropicUsageOrEstimate } from '../../lib/aiCostTracker';
 
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5-20251001';
@@ -177,9 +177,9 @@ export async function generateTutorialScript(input: TutorialScriptInput): Promis
 
     const content: string = response.data.content?.[0]?.text ?? '';
 
-    const responseTokens = Math.ceil(content.length / 4) + 50;
-    await trackAITokens(estimatedTokens + responseTokens);
-    await recordApiUsage('anthropic:video_pipeline', (estimatedTokens + responseTokens) / 1_000_000 * ANTHROPIC_COST_PER_M_TOKENS);
+    const responseTokens = Math.ceil(content.length / 4) + 50; // estimate fallback + costCents display
+    // Fix A: record REAL per-model usage (estimate fallback when usage absent).
+    await recordAnthropicUsageOrEstimate('anthropic:video_pipeline', ANTHROPIC_MODEL, response.data.usage, estimatedTokens + responseTokens);
 
     const raw = content.replace(/```json\n?|\n?```/g, '').trim();
     const parsed = JSON.parse(raw) as TutorialScriptResult;

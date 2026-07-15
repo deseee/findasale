@@ -12,7 +12,7 @@
 import { prisma } from '../lib/prisma';
 import { isAnthropicAvailable } from './cloudAIService';
 import axios from 'axios';
-import { isAICostCeilingExceeded, trackAITokens, estimateTokensForRequest, recordApiUsage, ANTHROPIC_COST_PER_M_TOKENS } from '../lib/aiCostTracker';
+import { isAICostCeilingExceeded, trackAITokens, estimateTokensForRequest, recordApiUsage, ANTHROPIC_COST_PER_M_TOKENS, recordAnthropicUsageOrEstimate, isAIDailyCallCapAvailable, trackAICall } from '../lib/aiCostTracker';
 
 // ── Vercel Proxy Helpers ────────────────────────────────────────────────────
 // Railway DNS cannot resolve api.ebay.com directly, so all eBay API calls route
@@ -219,6 +219,12 @@ export async function suggestIdentifiersFromItem(item: ItemIdentifiersInput): Pr
     return {};
   }
 
+  // Fix B: absolute daily AI call-count cap
+  if (!(await isAIDailyCallCapAvailable())) {
+    console.warn('[ebayTaxonomy] AI daily call cap reached (AI_DAILY_CALL_CAP), skipping');
+    return {};
+  }
+
   try {
     // Build context from item
     const titleContext = item.title ? `Title: ${item.title}` : '';
@@ -258,9 +264,9 @@ Only return identifiers that appear explicitly in the text. If unclear, return n
     );
 
     const content: string = response.data.content?.[0]?.text ?? '';
-    const responseTokens = Math.ceil(content.length / 4) + 50;
-    await trackAITokens(estimatedTokens + responseTokens);
-    await recordApiUsage('anthropic:ebay_taxonomy', (estimatedTokens + responseTokens) / 1_000_000 * ANTHROPIC_COST_PER_M_TOKENS);
+    const responseTokens = Math.ceil(content.length / 4) + 50; // estimate fallback only
+    await recordAnthropicUsageOrEstimate('anthropic:ebay_taxonomy', process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5-20251001', response.data.usage, estimatedTokens + responseTokens);
+    await trackAICall();
 
     // Parse JSON response (strip markdown if present)
     const raw = content.replace(/```json\n?|\n?```/g, '').trim();

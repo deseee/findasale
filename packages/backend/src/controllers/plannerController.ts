@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import axios from 'axios';
 import { regionConfig } from '../config/regionConfig';
-import { isAICostCeilingExceeded, trackAITokens, estimateTokensForRequest, recordApiUsage, ANTHROPIC_COST_PER_M_TOKENS } from '../lib/aiCostTracker';
+import { isAICostCeilingExceeded, trackAITokens, estimateTokensForRequest, recordApiUsage, ANTHROPIC_COST_PER_M_TOKENS, recordAnthropicUsageOrEstimate, isAIDailyCallCapAvailable, trackAICall } from '../lib/aiCostTracker';
 import { isAnthropicCreditError, alertAnthropicCreditExhausted } from '../lib/anthropicError';
 
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
@@ -72,6 +72,13 @@ export async function handlePlannerChat(req: Request, res: Response): Promise<vo
       return;
     }
 
+    // Fix B: absolute daily AI call-count cap
+    if (!(await isAIDailyCallCapAvailable())) {
+      console.warn('[planner-chat] AI daily call cap reached (AI_DAILY_CALL_CAP)');
+      res.status(503).json({ message: 'AI service temporarily unavailable due to resource limits. Please try again later.' });
+      return;
+    }
+
     // Build message payload for Anthropic
     const apiMessages = messages.map((msg) => ({
       role: msg.role,
@@ -99,9 +106,9 @@ export async function handlePlannerChat(req: Request, res: Response): Promise<vo
     );
 
     const reply: string = response.data.content?.[0]?.text ?? '';
-    const responseTokens = Math.ceil(reply.length / 4) + 50;
-    await trackAITokens(estimatedTokens + responseTokens);
-    await recordApiUsage('anthropic:support_planner_social', (estimatedTokens + responseTokens) / 1_000_000 * ANTHROPIC_COST_PER_M_TOKENS);
+    const responseTokens = Math.ceil(reply.length / 4) + 50; // estimate fallback only
+    await recordAnthropicUsageOrEstimate('anthropic:support_planner_social', ANTHROPIC_MODEL, response.data.usage, estimatedTokens + responseTokens);
+    await trackAICall();
 
     if (!reply) {
       res.status(500).json({ message: 'No response from AI service' });

@@ -9,7 +9,7 @@
 
 import axios from 'axios';
 import { prisma } from '../lib/prisma';
-import { isAICostCeilingExceeded, trackAITokens, estimateTokensForRequest, recordApiUsage, ANTHROPIC_COST_PER_M_TOKENS } from '../lib/aiCostTracker';
+import { isAICostCeilingExceeded, trackAITokens, estimateTokensForRequest, recordApiUsage, ANTHROPIC_COST_PER_M_TOKENS, recordAnthropicUsageOrEstimate, isAIDailyCallCapAvailable, trackAICall } from '../lib/aiCostTracker';
 import { isAnthropicCreditError, alertAnthropicCreditExhausted } from '../lib/anthropicError';
 
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
@@ -60,6 +60,12 @@ export async function generateDailyClue(date: string): Promise<GeneratedClue> {
     return FALLBACK_CLUE;
   }
 
+  // Fix B: absolute daily AI call-count cap
+  if (!(await isAIDailyCallCapAvailable())) {
+    console.warn('[treasure-hunt] AI daily call cap reached (AI_DAILY_CALL_CAP), returning fallback clue');
+    return FALLBACK_CLUE;
+  }
+
   const prompt = `Generate a fun, cryptic clue for an estate sale treasure hunt.
 The clue should hint at one of these item categories: ${ITEM_CATEGORIES.join(', ')}.
 
@@ -107,9 +113,9 @@ Example output:
   );
 
   const content: string = response.data.content?.[0]?.text ?? '';
-  const responseTokens = Math.ceil(content.length / 4) + 50;
-  await trackAITokens(estimatedTokens + responseTokens);
-  await recordApiUsage('anthropic:treasure_hunt', (estimatedTokens + responseTokens) / 1_000_000 * ANTHROPIC_COST_PER_M_TOKENS);
+  const responseTokens = Math.ceil(content.length / 4) + 50; // estimate fallback only
+  await recordAnthropicUsageOrEstimate('anthropic:treasure_hunt', ANTHROPIC_MODEL, response.data.usage, estimatedTokens + responseTokens);
+  await trackAICall();
   const raw = content.replace(/```json\n?|\n?```/g, '').trim();
     return JSON.parse(raw) as GeneratedClue;
   } catch (err: any) {

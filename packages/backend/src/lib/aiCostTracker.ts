@@ -20,6 +20,81 @@ const REDIS_TTL_SECONDS = 35 * 24 * 60 * 60; // 35 days — auto-expires safely 
 // In-memory fallback when Redis is unavailable
 const memoryFallback = new Map<string, number>();
 
+// ── Absolute daily AI call cap (Fix B) ─────────────────────────────────────────
+// A hard per-day call-count breaker for the core realtime AI vector (image tagging + the other
+// realtime Anthropic entry points). Mirrors the Web Detection daily-cap pattern below, but with a
+// crucial difference: it keeps a PER-PROCESS in-memory backstop that ALWAYS increments, so that
+// even if Redis is unavailable a single process still cannot exceed the cap. This is the fail-safe
+// that makes a Redis outage bounded instead of unlimited-spend (paired with isAICostCeilingExceeded).
+const AI_DAILY_CALL_CAP = parseInt(process.env.AI_DAILY_CALL_CAP || '5000', 10);
+let aiCallDay = '';        // YYYY-MM-DD the in-memory backstop counter belongs to
+let aiCallMemCount = 0;    // per-process calls counted today (independent of Redis health)
+
+function currentDayStr(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+}
+
+function getAICallDayKey(): string {
+  return `ai:calls:${currentDayStr()}`;
+}
+
+/** Roll the in-memory backstop over at day change. */
+function rollAiCallDay(): void {
+  const d = currentDayStr();
+  if (aiCallDay !== d) {
+    aiCallDay = d;
+    aiCallMemCount = 0;
+  }
+}
+
+/**
+ * True when the core AI vector is still under the absolute daily call cap. Checks the per-process
+ * in-memory backstop FIRST (so it bites even if Redis is lying/unavailable), then the shared Redis
+ * counter for cross-process accuracy. @returns true if safe to proceed, false if the cap is hit.
+ */
+export async function isAIDailyCallCapAvailable(): Promise<boolean> {
+  rollAiCallDay();
+  if (aiCallMemCount >= AI_DAILY_CALL_CAP) return false; // in-memory backstop — authoritative upward
+  const key = getAICallDayKey();
+  try {
+    const raw = await redis.get(key);
+    const count = raw !== null ? parseInt(raw, 10) : aiCallMemCount;
+    return count < AI_DAILY_CALL_CAP;
+  } catch {
+    return aiCallMemCount < AI_DAILY_CALL_CAP;
+  }
+}
+
+/** Increment the daily AI call count. Always bumps the in-memory backstop; best-effort to Redis. */
+export async function trackAICall(): Promise<void> {
+  rollAiCallDay();
+  aiCallMemCount += 1; // ALWAYS — this is the Redis-independent backstop
+  const key = getAICallDayKey();
+  const DAY_TTL_SECONDS = 2 * 24 * 60 * 60; // 2 days — auto-expires, always outlives the day it counts
+  try {
+    const raw = await redis.get(key);
+    const current = raw !== null ? parseInt(raw, 10) : 0;
+    await redis.setex(key, DAY_TTL_SECONDS, String(current + 1));
+  } catch {
+    // Redis unavailable — the in-memory backstop above already counted this call.
+  }
+}
+
+/** Visibility for /admin — current daily AI call count and remaining headroom. */
+export async function getAIDailyCallUsage(): Promise<{ callsToday: number; dailyCap: number; dailyCapRemaining: number }> {
+  rollAiCallDay();
+  const key = getAICallDayKey();
+  let callsToday = aiCallMemCount;
+  try {
+    const raw = await redis.get(key);
+    if (raw !== null) callsToday = Math.max(parseInt(raw, 10), aiCallMemCount);
+  } catch {
+    callsToday = aiCallMemCount;
+  }
+  return { callsToday, dailyCap: AI_DAILY_CALL_CAP, dailyCapRemaining: Math.max(0, AI_DAILY_CALL_CAP - callsToday) };
+}
+
 /**
  * Generate current month key (YYYY-MM)
  */
@@ -91,7 +166,7 @@ export async function trackAITokens(estimatedTokens: number): Promise<boolean> {
  * @param costUsd Estimated dollar cost of this call (or batch of `calls`).
  * @param calls Number of calls this write represents (default 1).
  */
-export async function recordApiUsage(service: string, costUsd: number, calls: number = 1): Promise<void> {
+async function writeApiUsageRow(service: string, costUsd: number, calls: number = 1): Promise<void> {
   try {
     const dateKey = new Date().toISOString().slice(0, 10); // YYYY-MM-DD, UTC
     // Do NOT Math.round() to a whole cent here — a single Haiku call is typically
@@ -117,18 +192,114 @@ export async function recordApiUsage(service: string, costUsd: number, calls: nu
 }
 
 /**
+ * Per-feature AI cost attribution (existing contract, unchanged). Thin wrapper over the shared
+ * upsert helper so both the legacy estimate-based path and the new per-model path
+ * (recordAnthropicUsage) write ApiUsageLog rows the exact same way.
+ */
+export async function recordApiUsage(service: string, costUsd: number, calls: number = 1): Promise<void> {
+  await writeApiUsageRow(service, costUsd, calls);
+}
+
+// ── Per-model Anthropic pricing (Fix A) ────────────────────────────────────────
+// Real, current Anthropic list prices — USD per 1,000,000 tokens, input and output separate.
+// The legacy flat ANTHROPIC_COST_PER_M_TOKENS ($3) undercounted true spend ~3-4x because it
+// ignored the large image + prompt token load and priced output at the input rate. Prefer
+// computeAnthropicCostUsd() + recordAnthropicUsage() over the flat constant everywhere real
+// usage is available on the response.
+interface AnthropicRate { inputPerM: number; outputPerM: number; }
+const HAIKU_45_RATE: AnthropicRate = { inputPerM: 1.0, outputPerM: 5.0 };
+const ANTHROPIC_RATES: { match: (m: string) => boolean; rate: AnthropicRate }[] = [
+  { match: (m) => m.startsWith('claude-3-5-haiku'),  rate: { inputPerM: 0.8,  outputPerM: 4.0 } },
+  { match: (m) => m.startsWith('claude-3-5-sonnet'), rate: { inputPerM: 3.0,  outputPerM: 15.0 } },
+  { match: (m) => m.startsWith('claude-haiku-4'),    rate: HAIKU_45_RATE },
+  { match: (m) => m.startsWith('claude-opus-4'),     rate: { inputPerM: 15.0, outputPerM: 75.0 } },
+  { match: (m) => m.startsWith('claude-sonnet-4'),   rate: { inputPerM: 3.0,  outputPerM: 15.0 } },
+  { match: (m) => m.startsWith('claude-sonnet-5'),   rate: { inputPerM: 3.0,  outputPerM: 15.0 } },
+];
+
+function resolveAnthropicRate(model: string): AnthropicRate {
+  const m = (model || '').toLowerCase();
+  for (const entry of ANTHROPIC_RATES) {
+    if (entry.match(m)) return entry.rate;
+  }
+  console.warn(`[aiCostTracker] Unknown Anthropic model "${model}" — pricing at Haiku-4.5 rates. Add it to ANTHROPIC_RATES so real spend surfaces.`);
+  return HAIKU_45_RATE;
+}
+
+/**
+ * Compute the real USD cost of one Anthropic call from its actual input/output token counts and
+ * the per-model rate table. Unknown models fall back to Haiku-4.5 rates (and log a warn).
+ */
+export function computeAnthropicCostUsd(model: string, inputTokens: number, outputTokens: number): number {
+  const rate = resolveAnthropicRate(model);
+  const inTok = Number.isFinite(inputTokens) && inputTokens > 0 ? inputTokens : 0;
+  const outTok = Number.isFinite(outputTokens) && outputTokens > 0 ? outputTokens : 0;
+  return (inTok / 1_000_000) * rate.inputPerM + (outTok / 1_000_000) * rate.outputPerM;
+}
+
+/**
+ * Record REAL Anthropic usage from a response (SDK `message.usage` or REST `response.data.usage`).
+ * Computes accurate per-model cost, writes the ApiUsageLog row (same upsert as recordApiUsage), and
+ * feeds the true (input + output) token count into the SAME monthly Redis ceiling counter that
+ * trackAITokens uses — so the $ ceiling reflects real token load, not the char/4 estimate.
+ */
+export async function recordAnthropicUsage(
+  service: string,
+  model: string,
+  inputTokens: number,
+  outputTokens: number
+): Promise<void> {
+  const costUsd = computeAnthropicCostUsd(model, inputTokens, outputTokens);
+  await writeApiUsageRow(service, costUsd, 1);
+  const inTok = Number.isFinite(inputTokens) && inputTokens > 0 ? inputTokens : 0;
+  const outTok = Number.isFinite(outputTokens) && outputTokens > 0 ? outputTokens : 0;
+  await trackAITokens(inTok + outTok);
+}
+
+/**
+ * Convenience used at call sites: record real usage when the response carries it, otherwise fall
+ * back to the pre-existing char/4 estimate priced at the flat legacy rate (behavior-preserving).
+ * `usage` is the Anthropic usage object (`{ input_tokens, output_tokens }`) or null/undefined.
+ */
+export async function recordAnthropicUsageOrEstimate(
+  service: string,
+  model: string,
+  usage: { input_tokens?: number; output_tokens?: number } | null | undefined,
+  estimatedTotalTokens: number
+): Promise<void> {
+  const inTok = usage?.input_tokens;
+  const outTok = usage?.output_tokens;
+  if (typeof inTok === 'number' && typeof outTok === 'number') {
+    await recordAnthropicUsage(service, model, inTok, outTok);
+  } else {
+    // No real usage on the response — preserve the legacy estimate path exactly.
+    await trackAITokens(estimatedTotalTokens);
+    await recordApiUsage(service, (estimatedTotalTokens / 1_000_000) * ANTHROPIC_COST_PER_M_TOKENS);
+  }
+}
+
+/**
  * Check if monthly AI cost is at or above ceiling.
  * Fail-open: returns false (not exceeded) if Redis is unavailable.
  */
 export async function isAICostCeilingExceeded(): Promise<boolean> {
   const key = getMonthKey();
   try {
-    const count = await getTokenCount(key);
+    const count = await getTokenCount(key); // uses in-memory fallback internally; does not throw on Redis outage
     const estimatedCost = (count / 1_000_000) * ANTHROPIC_COST_PER_M_TOKENS;
-    return estimatedCost >= CEILING_USD;
-  } catch {
-    // Fail open — don't block AI calls when cost tracker is unavailable
+    if (estimatedCost >= CEILING_USD) return true;
+    // Fail-SAFER (Fix B): a Redis blip can understate the monthly counter, so ALSO consult the
+    // Redis-independent in-memory daily call backstop. If this process alone has already blown the
+    // absolute daily call cap, treat the ceiling as exceeded — a Redis outage must never grant
+    // unlimited spend. Normal (Redis-up, under-cap) behavior is unchanged.
+    rollAiCallDay();
+    if (aiCallMemCount >= AI_DAILY_CALL_CAP) return true;
     return false;
+  } catch {
+    // Even in the unexpected throw case, do NOT fail open to unlimited spend — bite on the
+    // in-memory daily backstop instead of returning false unconditionally.
+    rollAiCallDay();
+    return aiCallMemCount >= AI_DAILY_CALL_CAP;
   }
 }
 

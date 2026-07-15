@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import Anthropic from '@anthropic-ai/sdk';
-import { isAICostCeilingExceeded, trackAITokens, recordApiUsage, ANTHROPIC_COST_PER_M_TOKENS } from '../lib/aiCostTracker';
+import { isAICostCeilingExceeded, trackAITokens, recordApiUsage, ANTHROPIC_COST_PER_M_TOKENS, recordAnthropicUsageOrEstimate, isAIDailyCallCapAvailable, trackAICall } from '../lib/aiCostTracker';
 import { isAnthropicCreditError, alertAnthropicCreditExhausted } from '../lib/anthropicError';
 
 // In-memory rate limiting map: userId -> { count, resetTime }
@@ -105,6 +105,15 @@ export const postSupportChat = async (req: AuthRequest, res: Response) => {
       });
     }
 
+    // Fix B: absolute daily AI call-count cap
+    if (!(await isAIDailyCallCapAvailable())) {
+      console.warn('[support-chat] AI daily call cap reached (AI_DAILY_CALL_CAP), returning fallback response');
+      return res.status(503).json({
+        message: 'Support chat is temporarily unavailable due to service maintenance. Please try again later.',
+        canChat: false,
+      });
+    }
+
     // Check if Anthropic API key is configured
     const apiKey = process.env.ANTHROPIC_API_KEY;
     if (!apiKey) {
@@ -152,13 +161,11 @@ Focus on helping with:
     const responseText =
       message_obj.content[0].type === 'text' ? message_obj.content[0].text : 'Unable to generate response';
 
-    // Real usage from the SDK response (not an estimate) -- cost still priced at the shared
-    // Haiku rate for consistency with the rest of aiCostTracker.ts, even though this endpoint
-    // actually calls claude-3-5-sonnet-20241022, which costs more per token. Flagged to
-    // Architect: this undercounts true spend for this one call site.
+    // Fix A: per-model pricing — this endpoint uses claude-3-5-sonnet-20241022 ($3/$15 per 1M),
+    // which the old flat-Haiku rate undercounted. Real input/output usage comes from the SDK response.
     const realTokens = (message_obj.usage?.input_tokens ?? 0) + (message_obj.usage?.output_tokens ?? 0);
-    await trackAITokens(realTokens);
-    await recordApiUsage('anthropic:support_planner_social', (realTokens / 1_000_000) * ANTHROPIC_COST_PER_M_TOKENS);
+    await recordAnthropicUsageOrEstimate('anthropic:support_planner_social', 'claude-3-5-sonnet-20241022', message_obj.usage, realTokens);
+    await trackAICall();
 
     const response: ChatResponse = {
       response: responseText,

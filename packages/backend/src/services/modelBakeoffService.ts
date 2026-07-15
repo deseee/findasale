@@ -24,7 +24,7 @@
 
 import { google } from 'googleapis';
 import { getWebDetectionMatch } from './cloudAIService';
-import { isAICostCeilingExceeded, trackAITokens, estimateTokensForRequest, recordApiUsage, ANTHROPIC_COST_PER_M_TOKENS } from '../lib/aiCostTracker';
+import { isAICostCeilingExceeded, trackAITokens, estimateTokensForRequest, recordApiUsage, ANTHROPIC_COST_PER_M_TOKENS, recordAnthropicUsageOrEstimate } from '../lib/aiCostTracker';
 
 // ---------------------------------------------------------------------------
 // Config
@@ -221,8 +221,9 @@ async function callAnthropic(
   const json: any = await resp.json();
   const text: string = json?.content?.[0]?.text ?? '';
   const estimatedTokens = estimateTokensForRequest(text, true) ;
-  await trackAITokens(estimatedTokens);
-  await recordApiUsage('anthropic:model_bakeoff', (estimatedTokens / 1_000_000) * ANTHROPIC_COST_PER_M_TOKENS);
+  // Fix A: these bakeoff rows are all real Anthropic models (modelId) — record REAL per-model usage
+  // from json.usage, falling back to the estimate only when usage is absent.
+  await recordAnthropicUsageOrEstimate('anthropic:model_bakeoff', modelId, json?.usage, estimatedTokens);
   return parseModelJson(text);
 }
 
@@ -562,8 +563,9 @@ async function extractMarksAnthropic(
   const json: any = await resp.json();
   const text: string = json?.content?.[0]?.text ?? '';
   const estimatedTokens = estimateTokensForRequest(text, true) ;
-  await trackAITokens(estimatedTokens);
-  await recordApiUsage('anthropic:model_bakeoff', (estimatedTokens / 1_000_000) * ANTHROPIC_COST_PER_M_TOKENS);
+  // Fix A: these bakeoff rows are all real Anthropic models (modelId) — record REAL per-model usage
+  // from json.usage, falling back to the estimate only when usage is absent.
+  await recordAnthropicUsageOrEstimate('anthropic:model_bakeoff', modelId, json?.usage, estimatedTokens);
   return parseModelJson(text) as ExtractParsed | null;
 }
 

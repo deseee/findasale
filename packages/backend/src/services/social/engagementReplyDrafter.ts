@@ -29,6 +29,9 @@ import {
   isAICostCeilingExceeded,
   ANTHROPIC_COST_PER_M_TOKENS,
   recordApiUsage,
+  recordAnthropicUsageOrEstimate,
+  isAIDailyCallCapAvailable,
+  trackAICall,
 } from '../../lib/aiCostTracker';
 
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
@@ -145,6 +148,13 @@ export async function draftCommentReply(
     throw err;
   }
 
+  // Fix B: absolute daily AI call-count cap (same errorCode so downstream handling is identical)
+  if (!(await isAIDailyCallCapAvailable())) {
+    const err = new Error('AI_DAILY_CALL_CAP_REACHED: daily AI call cap reached');
+    (err as any).errorCode = 'AI_COST_CEILING_EXCEEDED';
+    throw err;
+  }
+
   const systemPrompt = buildSystemPrompt(input);
   const estimatedTokens = estimateTokensForRequest(systemPrompt, false);
 
@@ -173,9 +183,10 @@ export async function draftCommentReply(
 
     const content: string = response.data.content?.[0]?.text ?? '';
 
-    const responseTokens = Math.ceil(content.length / 4) + 50;
-    await trackAITokens(estimatedTokens + responseTokens);
-    await recordApiUsage('anthropic:social_engagement', (estimatedTokens + responseTokens) / 1_000_000 * ANTHROPIC_COST_PER_M_TOKENS);
+    // Fix A: record REAL per-model usage. Fix B: count toward the daily AI call cap.
+    const responseTokens = Math.ceil(content.length / 4) + 50; // estimate fallback only
+    await recordAnthropicUsageOrEstimate('anthropic:social_engagement', ANTHROPIC_MODEL, response.data.usage, estimatedTokens + responseTokens);
+    await trackAICall();
 
     const raw = content.replace(/```json\n?|\n?```/g, '').trim();
     const parsed = JSON.parse(raw) as { replyText?: string };

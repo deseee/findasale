@@ -8,7 +8,7 @@
 
 import axios from 'axios';
 import { regionConfig } from '../config/regionConfig';
-import { trackAITokens, estimateTokensForRequest, isAICostCeilingExceeded, recordApiUsage, ANTHROPIC_COST_PER_M_TOKENS } from '../lib/aiCostTracker';
+import { trackAITokens, estimateTokensForRequest, isAICostCeilingExceeded, recordApiUsage, ANTHROPIC_COST_PER_M_TOKENS, recordAnthropicUsageOrEstimate, isAIDailyCallCapAvailable, trackAICall } from '../lib/aiCostTracker';
 
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5-20251001';
@@ -172,6 +172,12 @@ export async function enrichScrapedListing(
     return null;
   }
 
+  // Fix B: absolute daily AI call-count cap
+  if (!(await isAIDailyCallCapAvailable())) {
+    console.warn('[enrichment] AI daily call cap reached (AI_DAILY_CALL_CAP), skipping enrichment');
+    return null;
+  }
+
   // Try free extraction before paying for AI
   const freeResult = tryFreeExtraction(description, saleTitle);
   if (freeResult) {
@@ -226,10 +232,10 @@ Return ONLY JSON, no explanation.`;
 
     const content: string = response.data.content?.[0]?.text ?? '';
 
-    // Track token usage for cost ceiling
-    const responseTokens = Math.ceil(content.length / 4) + 50;
-    await trackAITokens(estimatedTokens + responseTokens);
-    await recordApiUsage('anthropic:listing_enrichment', (estimatedTokens + responseTokens) / 1_000_000 * ANTHROPIC_COST_PER_M_TOKENS);
+    // Fix A: record REAL per-model usage. Fix B: count toward the daily AI call cap.
+    const responseTokens = Math.ceil(content.length / 4) + 50; // estimate fallback only
+    await recordAnthropicUsageOrEstimate('anthropic:listing_enrichment', ANTHROPIC_MODEL, response.data.usage, estimatedTokens + responseTokens);
+    await trackAICall();
 
     // Parse JSON response
     const raw = content.replace(/```json\n?|\n?```/g, '').trim();

@@ -57,6 +57,7 @@ import {
   isAICostCeilingExceeded,
   ANTHROPIC_COST_PER_M_TOKENS,
   recordApiUsage,
+  recordAnthropicUsageOrEstimate,
 } from '../../lib/aiCostTracker';
 
 // Single canonical ClipRole list — re-exported from templates/types so the
@@ -483,9 +484,9 @@ async function classifyWithHaiku(prompt: string): Promise<{ result: HaikuClassif
     );
 
     const content: string = response.data.content?.[0]?.text ?? '';
-    const responseTokens = Math.ceil(content.length / 4) + 50;
-    await trackAITokens(estimatedTokens + responseTokens);
-    await recordApiUsage('anthropic:video_pipeline', (estimatedTokens + responseTokens) / 1_000_000 * ANTHROPIC_COST_PER_M_TOKENS);
+    const responseTokens = Math.ceil(content.length / 4) + 50; // estimate fallback + costCents display
+    // Fix A: record REAL per-model usage (estimate fallback when usage absent).
+    await recordAnthropicUsageOrEstimate('anthropic:video_pipeline', ANTHROPIC_MODEL, response.data.usage, estimatedTokens + responseTokens);
 
     const raw = content.replace(/```json\n?|\n?```/g, '').trim();
     const parsed = JSON.parse(raw) as HaikuClassification;

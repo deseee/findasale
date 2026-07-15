@@ -15,7 +15,8 @@ import { regionConfig } from '../config/regionConfig';
 import { EBAY_L1_CATEGORIES } from '../config/ebayCategories';
 import { trackAITokens, estimateTokensForRequest, isAICostCeilingExceeded, trackVisionCall,
   webDetectionEnabled, isWebDetectionCeilingExceeded, isWebDetectionDailyCapAvailable, trackWebDetectionCall,
-  recordApiUsage, ANTHROPIC_COST_PER_M_TOKENS } from '../lib/aiCostTracker';
+  recordApiUsage, ANTHROPIC_COST_PER_M_TOKENS,
+  recordAnthropicUsageOrEstimate, isAIDailyCallCapAvailable, trackAICall } from '../lib/aiCostTracker';
 import { findCatalogMatches, buildCatalogMatchContext, isCatalogMatchEnabled, CatalogMatch } from './imageMatchService';
 import { getEbayImageMatch, buildEbayMatchContext, EbayImageMatch } from './ebayImageSearchService';
 
@@ -348,10 +349,11 @@ Shipping package: Estimate the PACKED shipping weight (item + box + padding) in 
 
     const content: string = response.data.content?.[0]?.text ?? '';
 
-    // Track token usage for cost ceiling (#104)
-    const responseTokens = Math.ceil(content.length / 4) + 50; // rough estimate
-    await trackAITokens(estimatedTokens + responseTokens);
-    await recordApiUsage('anthropic:cloud_ai_tagging', (estimatedTokens + responseTokens) / 1_000_000 * ANTHROPIC_COST_PER_M_TOKENS);
+    // Fix A: record REAL per-model usage from the response (falls back to the char/4 estimate
+    // only when usage is absent). Fix B: count this call toward the absolute daily AI call cap.
+    const responseTokens = Math.ceil(content.length / 4) + 50; // estimate fallback only
+    await recordAnthropicUsageOrEstimate('anthropic:cloud_ai_tagging', ANTHROPIC_MODEL, response.data.usage, estimatedTokens + responseTokens);
+    await trackAICall();
 
     const raw = content.replace(/```json\n?|\n?```/g, '').trim();
     const parsed = JSON.parse(raw) as AITagResult;
@@ -567,6 +569,32 @@ If the image is unclear or the item is partially obscured, default to B. Return 
   }
 }
 
+/**
+ * Fix C: derive curated tags LOCALLY (no Anthropic call) by matching the CURATED_TAGS vocabulary
+ * against candidate terms (main-response tags + Vision object labels + detected text). Both sides
+ * are normalized (lowercased, non-alphanumerics stripped) so kebab-case vocabulary
+ * ('mid-century-modern') matches human-style tags ('Mid-Century Modern'). Capped at 5, matching the
+ * old suggestCuratedTags cap. Replaces the separate suggestCuratedTags() Anthropic call.
+ */
+function deriveCuratedTags(candidateTerms: string[]): string[] {
+  const { CURATED_TAGS } = require('../../shared/src/constants/tagVocabulary');
+  const norm = (v: string): string => (v || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const candidates = candidateTerms.map(norm).filter(Boolean);
+  const matched: string[] = [];
+  for (const tag of CURATED_TAGS as readonly string[]) {
+    const nt = norm(tag);
+    if (!nt) continue;
+    const hit = candidates.some(
+      (c) => c === nt || (nt.length >= 3 && c.includes(nt)) || (c.length >= 4 && nt.includes(c))
+    );
+    if (hit) {
+      matched.push(tag);
+      if (matched.length >= 5) break;
+    }
+  }
+  return matched;
+}
+
 // ── Public API ────────────────────────────────────────────────────────────────
 
 /**
@@ -593,6 +621,12 @@ export async function analyzeItemImage(
   // Feature #104: Cost ceiling check — graceful degradation
   if (await isAICostCeilingExceeded()) {
     console.warn('[cloudAI] AI cost ceiling exceeded, returning null for fallback');
+    return null;
+  }
+
+  // Fix B: absolute daily AI call-count cap — bounded even on a Redis outage (in-memory backstop)
+  if (!(await isAIDailyCallCapAvailable())) {
+    console.warn('[cloudAI] AI daily call cap reached (AI_DAILY_CALL_CAP), returning null for fallback');
     return null;
   }
 
@@ -642,20 +676,19 @@ export async function analyzeItemImage(
 
   const result = await getHaikuAnalysis(imageBase64, mimeType, objectLabels, detectedText, comps, catalogMatches, webMatch, ebayMatch);
 
-  // Sprint 1: Add curated tag suggestions (non-blocking) — combined list is fine here,
-  // this is just label→curated-tag mapping, not identification evidence weighting
+  // Fix C: curated tag suggestions derived LOCALLY (no extra Anthropic call). Match the curated
+  // vocabulary against the main-response tags + Vision object labels + detected text.
   try {
-    result.suggestedTags = await suggestCuratedTags([...objectLabels, ...detectedText]);
+    result.suggestedTags = deriveCuratedTags([...(result.tags ?? []), ...objectLabels, ...detectedText]);
   } catch {
-    // Tag suggestion failed — set empty array (non-blocking)
     result.suggestedTags = [];
   }
 
-  // #64: Add condition grade suggestion (non-blocking)
-  try {
-    result.suggestedConditionGrade = await suggestConditionGrade(imageBase64, mimeType);
-  } catch {
-    // Condition grade suggestion failed — leave undefined (non-blocking)
+  // Fix C: use the condition grade already returned by the main analysis call
+  // (parsed.suggestedConditionGrade in getHaikuAnalysis) instead of a second Anthropic call.
+  // Default 'B' when the model omitted it, matching the old suggestConditionGrade fallback.
+  if (!result.suggestedConditionGrade) {
+    result.suggestedConditionGrade = 'B';
   }
 
   return result;
@@ -727,6 +760,12 @@ export async function analyzeItemImages(
   // Feature #104: Cost ceiling check — graceful degradation
   if (await isAICostCeilingExceeded()) {
     console.warn('[cloudAI] AI cost ceiling exceeded, returning null for fallback');
+    return null;
+  }
+
+  // Fix B: absolute daily AI call-count cap — bounded even on a Redis outage (in-memory backstop)
+  if (!(await isAIDailyCallCapAvailable())) {
+    console.warn('[cloudAI] AI daily call cap reached (AI_DAILY_CALL_CAP), returning null for fallback');
     return null;
   }
 
@@ -828,19 +867,19 @@ export async function analyzeItemImages(
   // Multi-image Haiku analysis (Phase 2: pass clusterPhotos for role context)
   const result = await getHaikuAnalysisMultiImage(imageBase64Array, types, objectLabels, detectedText, comps, clusterPhotos, catalogMatches, webMatch, ebayMatch);
 
-  // Sprint 1: Add curated tag suggestions (non-blocking) — combined list is fine here,
-  // this is just label→curated-tag mapping, not identification evidence weighting
+  // Fix C: curated tag suggestions derived LOCALLY (no extra Anthropic call). Match the curated
+  // vocabulary against the main-response tags + Vision object labels + detected text.
   try {
-    result.suggestedTags = await suggestCuratedTags([...objectLabels, ...detectedText]);
+    result.suggestedTags = deriveCuratedTags([...(result.tags ?? []), ...objectLabels, ...detectedText]);
   } catch {
     result.suggestedTags = [];
   }
 
-  // #64: Add condition grade suggestion using primary photo (non-blocking)
-  try {
-    result.suggestedConditionGrade = await suggestConditionGrade(imageBase64Array[0], types[0]);
-  } catch {
-    // Condition grade suggestion failed — leave undefined
+  // Fix C: use the condition grade already returned by the main analysis call
+  // (parsed.suggestedConditionGrade in getHaikuAnalysisMultiImage) instead of a second Anthropic
+  // call. Default 'B' when the model omitted it, matching the old suggestConditionGrade fallback.
+  if (!result.suggestedConditionGrade) {
+    result.suggestedConditionGrade = 'B';
   }
 
   // Enhancement 2: Attach photo order indices for Photo.orderIndex field
@@ -1010,10 +1049,10 @@ Brand: If a brand, maker, or manufacturer name is identifiable from a visible la
 
     const content: string = response.data.content?.[0]?.text ?? '';
 
-    // Track token usage for cost ceiling (#104)
-    const responseTokens = Math.ceil(content.length / 4) + 50;
-    await trackAITokens(estimatedTokens + responseTokens);
-    await recordApiUsage('anthropic:cloud_ai_tagging', (estimatedTokens + responseTokens) / 1_000_000 * ANTHROPIC_COST_PER_M_TOKENS);
+    // Fix A: record REAL per-model usage. Fix B: count toward the daily AI call cap.
+    const responseTokens = Math.ceil(content.length / 4) + 50; // estimate fallback only
+    await recordAnthropicUsageOrEstimate('anthropic:cloud_ai_tagging', ANTHROPIC_MODEL, response.data.usage, estimatedTokens + responseTokens);
+    await trackAICall();
 
     const raw = content.replace(/```json\n?|\n?```/g, '').trim();
     const parsed = JSON.parse(raw) as AITagResult;
@@ -1094,6 +1133,12 @@ export async function generateSaleDescription(input: SaleDescriptionInput): Prom
     return null;
   }
 
+  // Fix B: absolute daily AI call-count cap
+  if (!(await isAIDailyCallCapAvailable())) {
+    console.warn('[cloudAI] AI daily call cap reached (AI_DAILY_CALL_CAP), returning null for sale description');
+    return null;
+  }
+
   try {
     const { title, tags = [], city = regionConfig.city, isAuctionSale = false, saleType, startDate, endDate } = input;
 
@@ -1151,10 +1196,10 @@ Write a friendly, inviting description that shoppers will see on the listing. Us
 
     const text: string = response.data.content?.[0]?.text ?? '';
 
-    // Track token usage for cost ceiling (#104)
-    const responseTokens = Math.ceil(text.length / 4) + 100;
-    await trackAITokens(estimatedTokens + responseTokens);
-    await recordApiUsage('anthropic:cloud_ai_tagging', (estimatedTokens + responseTokens) / 1_000_000 * ANTHROPIC_COST_PER_M_TOKENS);
+    // Fix A: record REAL per-model usage. Fix B: count toward the daily AI call cap.
+    const responseTokens = Math.ceil(text.length / 4) + 100; // estimate fallback only
+    await recordAnthropicUsageOrEstimate('anthropic:cloud_ai_tagging', ANTHROPIC_MODEL, response.data.usage, estimatedTokens + responseTokens);
+    await trackAICall();
 
     return text.trim() || null;
   } catch (error: any) {
@@ -1214,6 +1259,17 @@ export async function suggestPrice(
     };
   }
 
+  // Fix B: absolute daily AI call-count cap
+  if (!(await isAIDailyCallCapAvailable())) {
+    console.warn('[cloudAI] AI daily call cap reached (AI_DAILY_CALL_CAP), returning fallback price');
+    return {
+      low: 5,
+      high: 25,
+      suggested: 15,
+      reasoning: 'Manual pricing recommended (AI service temporarily unavailable)',
+    };
+  }
+
   try {
     const compsContext =
       comps && comps.length > 0
@@ -1263,10 +1319,10 @@ Base your price on actual secondary market demand, not retail pricing. Do not an
 
     const content: string = response.data.content?.[0]?.text ?? '';
 
-    // Track token usage for cost ceiling (#104)
-    const responseTokens = Math.ceil(content.length / 4) + 75;
-    await trackAITokens(estimatedTokens + responseTokens);
-    await recordApiUsage('anthropic:cloud_ai_tagging', (estimatedTokens + responseTokens) / 1_000_000 * ANTHROPIC_COST_PER_M_TOKENS);
+    // Fix A: record REAL per-model usage. Fix B: count toward the daily AI call cap.
+    const responseTokens = Math.ceil(content.length / 4) + 75; // estimate fallback only
+    await recordAnthropicUsageOrEstimate('anthropic:cloud_ai_tagging', ANTHROPIC_MODEL, response.data.usage, estimatedTokens + responseTokens);
+    await trackAICall();
 
     const raw = content.replace(/```json\n?|\n?```/g, '').trim();
     const parsed = JSON.parse(raw) as PriceSuggestion;
@@ -1376,6 +1432,19 @@ export async function clusterPhotos(imageBase64Array: string[]): Promise<Cluster
   // If only 1 photo, return it ungrouped (no clustering needed)
   if (imageBase64Array.length === 1) {
     return { clusters: [], ungrouped: [0] };
+  }
+
+  // Fix B: absolute daily AI call cap — degrade to one-item-per-photo (same as the error fallback)
+  if (!(await isAIDailyCallCapAvailable())) {
+    console.warn('[cloudAI] AI daily call cap reached (AI_DAILY_CALL_CAP), skipping clustering');
+    return {
+      clusters: [],
+      ungrouped: Array.from({ length: imageBase64Array.length }, (_, i) => ({
+        index: i,
+        photoRole: 'UNKNOWN' as const,
+        roleReasoning: 'Daily AI call cap reached; defaulted to UNKNOWN',
+      })),
+    };
   }
 
   try {
@@ -1511,10 +1580,10 @@ Confidence threshold: only cluster at >= 0.75. When in doubt, leave ungrouped.`;
 
     const content: string = response.data.content?.[0]?.text ?? '';
 
-    // Track token usage
-    const responseTokens = Math.ceil(content.length / 4) + 50;
-    await trackAITokens(estimatedTokens + responseTokens);
-    await recordApiUsage('anthropic:cloud_ai_tagging', (estimatedTokens + responseTokens) / 1_000_000 * ANTHROPIC_COST_PER_M_TOKENS);
+    // Fix A: record REAL per-model usage. Fix B: count toward the daily AI call cap.
+    const responseTokens = Math.ceil(content.length / 4) + 50; // estimate fallback only
+    await recordAnthropicUsageOrEstimate('anthropic:cloud_ai_tagging', ANTHROPIC_MODEL, response.data.usage, estimatedTokens + responseTokens);
+    await trackAICall();
 
     const raw = content.replace(/```json\n?|\n?```/g, '').trim();
     const parsed = JSON.parse(raw) as ClusterResult;
