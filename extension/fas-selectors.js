@@ -177,7 +177,28 @@
     });
   }
 
+  // Delivery step toggles (2026-07-16): FB replaced the single "pickup" listbox option with
+  // two independent toggles -- "Shipping" and "Local pickup" (both ON by default). Find a
+  // checkbox/switch by the heading text that leads its row.
+  function deliveryToggleByHeading(headingText) {
+    const want = norm(headingText);
+    const boxes = Array.from(document.querySelectorAll('[role="checkbox"], [role="switch"], input[type="checkbox"]'));
+    return boxes.find((b) => {
+      const al = norm(b.getAttribute('aria-label') || '');
+      if (al === want || al.startsWith(want)) return true;
+      let n = b;
+      for (let i = 0; i < 5 && n; i++) {
+        n = n.parentElement;
+        if (!n) break;
+        const t = norm(n.innerText || n.textContent || '');
+        if (t.startsWith(want) && t.length < 200) return true;
+      }
+      return false;
+    }) || null;
+  }
+  function isToggleOn(b) { return !!(b && (b.getAttribute('aria-checked') === 'true' || b.checked === true)); }
+
   window.__FAS_SEL__ = { norm, fieldByLabel, comboByLabel, optionByText, photoInput, chipsAfter, bestTextMatch,
-    elementByText, radioLabelByText, listingCardByTitle, realClick,
+    elementByText, radioLabelByText, listingCardByTitle, realClick, deliveryToggleByHeading, isToggleOn,
     LABELS: { title: 'Title', price: 'Price', description: 'Description', condition: 'Condition', category: 'Category' } };
 })();

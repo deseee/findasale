@@ -213,10 +213,18 @@
   // low-stakes guess like Category.
   async function fillDeliveryStep(item) {
     if (item.shippingOverride === 'LOCAL_PICKUP_ONLY') {
-      await waitThenClick(() => SEL.comboByLabel('Delivery method'), 'Delivery',
-        'Couldn\'t find the Delivery method control.', 8000);
-      await waitThenClick(() => SEL.optionByText('pickup'), 'Delivery',
-        'Couldn\'t find a local-pickup option in the Delivery method list -- Facebook\'s wording may have changed.', 4000);
+      // 2026-07-16 fix: FB's Delivery step no longer offers a single "pickup" listbox option
+      // (the old optionByText('pickup') always failed). It now shows two independent toggles,
+      // "Shipping" and "Local pickup", both ON by default. Local-pickup-only = turn OFF Shipping
+      // and leave Local pickup ON (verified live: unchecking Shipping enables "Next").
+      await waitFor(() => SEL.deliveryToggleByHeading('Shipping') || SEL.deliveryToggleByHeading('Local pickup'), 8000);
+      const shipToggle = SEL.deliveryToggleByHeading('Shipping');
+      const pickupToggle = SEL.deliveryToggleByHeading('Local pickup');
+      if (!shipToggle && !pickupToggle) {
+        throw hardError('Delivery', 'Couldn\'t find the Shipping / Local pickup toggles on the Delivery step -- Facebook\'s layout may have changed.');
+      }
+      if (SEL.isToggleOn(shipToggle)) { await SEL.realClick(shipToggle); await humanPause(300, 600); }
+      if (pickupToggle && !SEL.isToggleOn(pickupToggle)) { await SEL.realClick(pickupToggle); await humanPause(300, 600); }
       await humanPause(300, 600);
       return;
     }
