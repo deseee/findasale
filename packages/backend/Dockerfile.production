@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-# cache-bust: 2026-07-16T11:20:00Z — same stranded-deploy pattern again: Track B Phase 1 backend code (itemStockService.ts, ebayController.ts, ebaySoldSyncCron.ts, commit 49b7feb7) never deployed — Railway skipped it because the push tip (449bcfb9) was a docs-only commit
+# cache-bust: 2026-07-16T11:32:00Z — retry #2: prior cache-bust commit (b4f3d303) was ALSO marked SKIPPED despite touching this exact file (confirmed via git show --stat, disproves watchPatterns theory for that attempt) — forcing a genuinely new commit hash to see if it clears whatever queue/webhook state is stuck
 FROM node:20-slim AS base
 
 # Install OpenSSL for Prisma
