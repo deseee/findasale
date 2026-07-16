@@ -12,6 +12,21 @@
 
   function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
 
+  // A plain el.click() is not reliable against Facebook's custom radio/chip components --
+  // confirmed live 2026-07-15: the Package-weight radio buttons (div[role="radio"], not real
+  // <input> elements) never registered aria-checked=true from el.click() alone, on either the
+  // radio itself or its label wrapper, even when re-queried fresh immediately beforehand. A full
+  // synthetic pointer/mouse event sequence with real coordinates does register reliably. Used for
+  // every interactive click from here on instead of el.click().
+  function realClick(el) {
+    const rect = el.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'].forEach((type) => {
+      el.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, clientX: cx, clientY: cy, view: window }));
+    });
+  }
+
   function waitFor(getter, timeout = 12000) {
     return new Promise((resolve, reject) => {
       const first = getter();
@@ -49,15 +64,15 @@
     if (!value) return true;
     const combo = SEL.comboByLabel(labelText);
     if (!combo) return false;
-    combo.click();
+    realClick(combo);
     try {
       const opt = await waitFor(() => SEL.optionByText(value), 3000);
-      opt.click();
+      realClick(opt);
       await sleep(150);
       return true;
     } catch (e) {
       // Close the open listbox; category/condition is best-effort, never a blocker.
-      document.body.click();
+      realClick(document.body);
       return false;
     }
   }
@@ -71,16 +86,16 @@
   async function selectCategory(value) {
     const combo = SEL.comboByLabel(LABELS.category);
     if (!combo) return { ok: !value, suggestions: [] }; // structural miss only matters if FB actually requires a value we can't set
-    const chips = await SEL.chipsAfter(() => combo.click(), 500);
+    const chips = await SEL.chipsAfter(() => realClick(combo), 500);
     if (!chips.length) {
-      if (!value) { document.body.click(); return { ok: true }; }
+      if (!value) { realClick(document.body); return { ok: true }; }
       try {
         const opt = await waitFor(() => SEL.optionByText(value), 2000);
-        opt.click();
+        realClick(opt);
         await sleep(150);
         return { ok: true };
       } catch (e) {
-        document.body.click();
+        realClick(document.body);
         return { ok: false, suggestions: [] };
       }
     }
@@ -91,7 +106,7 @@
     // it empty -- an unconfident pick is still far better than a run that can never advance.
     const match = value ? SEL.bestTextMatch(chips, value) : null;
     const picked = match || chips[0];
-    picked.click();
+    realClick(picked);
     await sleep(150);
     return { ok: !!match, suggestions: match ? [] : chips.map((c) => SEL.norm(c.textContent)).filter(Boolean) };
   }
@@ -175,7 +190,7 @@
     }
     await humanPause(350, 800);
     const fresh = getter() || el;
-    fresh.click();
+    realClick(fresh);
     return fresh;
   }
 
