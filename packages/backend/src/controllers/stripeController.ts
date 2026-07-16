@@ -27,6 +27,7 @@ import { getPlatformFeeRate, SubscriptionTier } from '../utils/feeCalculator'; /
 import { endEbayListingIfExists } from './ebayController'; // Feature #244 Phase 2: eBay direct push — withdraw on sale
 import { notifyFacebookExportedItemSold } from '../services/facebookNudgeService';
 import { markShopifyItemSold } from '../services/shopifyService'; // Feature: Shopify Cross-Listing
+import { sellItemUnits, InsufficientStockError } from '../services/itemStockService'; // ADR-085 Track B Phase 1 Step 4
 import { sendConsignorItemSold } from '../services/consignorEmailService'; // Feature #309: Consignor email notifications
 import { applyFirstMonthRefundCap, logRefundProcessing } from '../services/refundService'; // P2-2: Refund cap + logging
 import { transactionalEmailService } from '../lib/transactionalEmailService';
@@ -297,10 +298,26 @@ export const recoverPaymentIntent = async (req: AuthRequest, res: Response) => {
         },
       });
 
-      const updatedItem = await prisma.item.update({
-        where: { id: itemId },
-        data: { status: 'SOLD' },
-      }).catch(err => console.warn('Failed to update item status during recovery:', err));
+      // ADR-085 Track B Phase 1 Step 4: atomic, race-safe stock decrement replaces the old
+      // unconditional status update. The live-feed socket push below only makes sense once
+      // the item is actually fully sold out, so it's now gated on that instead of on a bare
+      // successful update.
+      let updatedItem: { id: string; saleId: string | null; title: string; price: number | null } | null = null;
+      try {
+        const { fullySoldOut } = await sellItemUnits(itemId, 1);
+        if (fullySoldOut) {
+          updatedItem = await prisma.item.findUnique({
+            where: { id: itemId },
+            select: { id: true, saleId: true, title: true, price: true },
+          });
+        }
+      } catch (err) {
+        if (err instanceof InsufficientStockError) {
+          console.warn('Item already fully sold during recovery (not an error):', err.message);
+        } else {
+          console.warn('Failed to update item status during recovery:', err);
+        }
+      }
 
       if (updatedItem) {
         try {
@@ -753,24 +770,33 @@ export const webhookHandler = async (req: Request, res: Response) => {
                     },
                   });
 
-                  // Mark item as SOLD
-                  await prisma.item.update({
-                    where: { id: item.id },
-                    data: { status: 'SOLD' },
-                  });
+                  // ADR-085 Track B Phase 1 Step 4: atomic, race-safe stock decrement
+                  // replaces the old unconditional status update. Downstream cross-channel
+                  // removal hooks only fire once the item is actually fully sold out.
+                  let itemFullySoldOut: boolean;
+                  try {
+                    ({ fullySoldOut: itemFullySoldOut } = await sellItemUnits(item.id, 1));
+                  } catch (stockErr: any) {
+                    if (stockErr instanceof InsufficientStockError) {
+                      console.error(`[stripe] Oversold race on item ${item.id} despite captured payment:`, stockErr.message);
+                    }
+                    throw stockErr;
+                  }
 
-                  // Fire-and-forget: mark sold on Shopify if listed there
-                  markShopifyItemSold(item.id).catch(err =>
-                    console.error('[Shopify] Failed to mark item sold:', err)
-                  );
+                  if (itemFullySoldOut) {
+                    // Fire-and-forget: mark sold on Shopify if listed there
+                    markShopifyItemSold(item.id).catch(err =>
+                      console.error('[Shopify] Failed to mark item sold:', err)
+                    );
 
-                  // Fire-and-forget: end eBay listing if item was pushed there
-                  endEbayListingIfExists(item.id).catch(err =>
-                    console.error('[eBay] Failed to withdraw offer:', err)
-                  );
-                  notifyFacebookExportedItemSold(item.id).catch(err =>
-                    console.warn(`[FB Nudge] failed for item ${item.id}:`, err.message)
-                  );
+                    // Fire-and-forget: end eBay listing if item was pushed there
+                    endEbayListingIfExists(item.id).catch(err =>
+                      console.error('[eBay] Failed to withdraw offer:', err)
+                    );
+                    notifyFacebookExportedItemSold(item.id).catch(err =>
+                      console.warn(`[FB Nudge] failed for item ${item.id}:`, err.message)
+                    );
+                  }
 
                   // Update ItemReservation if exists
                   await prisma.itemReservation.updateMany({
@@ -1239,21 +1265,34 @@ export const webhookHandler = async (req: Request, res: Response) => {
             break;
           }
 
-          const soldItem = await prisma.item.update({
-            where: { id: paymentIntent.metadata.itemId },
-            data: { status: 'SOLD' },
-          });
+          // ADR-085 Track B Phase 1 Step 4: atomic, race-safe stock decrement replaces the
+          // old unconditional status update. Downstream cross-channel removal hooks only
+          // fire once the item is actually fully sold out.
+          let soldOut3: boolean;
+          try {
+            ({ fullySoldOut: soldOut3 } = await sellItemUnits(paymentIntent.metadata.itemId, 1));
+          } catch (stockErr: any) {
+            if (stockErr instanceof InsufficientStockError) {
+              console.warn(`CA3: item ${paymentIntent.metadata.itemId} already fully sold (race), not an error:`, stockErr.message);
+              soldOut3 = false;
+            } else {
+              throw stockErr;
+            }
+          }
+          const soldItem = soldOut3 ? await prisma.item.findUnique({ where: { id: paymentIntent.metadata.itemId } }) : null;
 
-          // Fire-and-forget: end eBay listing if item was pushed there
-          endEbayListingIfExists(paymentIntent.metadata.itemId).catch(err =>
-            console.error('[eBay] Failed to withdraw offer:', err)
-          );
-          markShopifyItemSold(paymentIntent.metadata.itemId).catch(err =>
-            console.error('[Shopify] Failed to mark item sold:', err)
-          );
-          notifyFacebookExportedItemSold(paymentIntent.metadata.itemId).catch(err =>
-            console.warn(`[FB Nudge] failed for item ${paymentIntent.metadata.itemId}:`, err.message)
-          );
+          if (soldOut3) {
+            // Fire-and-forget: end eBay listing if item was pushed there
+            endEbayListingIfExists(paymentIntent.metadata.itemId).catch(err =>
+              console.error('[eBay] Failed to withdraw offer:', err)
+            );
+            markShopifyItemSold(paymentIntent.metadata.itemId).catch(err =>
+              console.error('[Shopify] Failed to mark item sold:', err)
+            );
+            notifyFacebookExportedItemSold(paymentIntent.metadata.itemId).catch(err =>
+              console.warn(`[FB Nudge] failed for item ${paymentIntent.metadata.itemId}:`, err.message)
+            );
+          }
 
           if (soldItem) {
             try {
@@ -1883,6 +1922,7 @@ export const webhookHandler = async (req: Request, res: Response) => {
           where: { stripePaymentLinkId },
         });
 
+        let posLinkFullySoldOutIds: string[] = [];
         if (posPaymentLink && posPaymentLink.status !== 'COMPLETED') {
           await prisma.$transaction(async (tx) => {
             await tx.pOSPaymentLink.update({
@@ -1891,10 +1931,22 @@ export const webhookHandler = async (req: Request, res: Response) => {
             });
 
             if (posPaymentLink.itemIds?.length) {
-              await tx.item.updateMany({
-                where: { id: { in: posPaymentLink.itemIds } },
-                data: { status: 'SOLD' },
-              });
+              // ADR-085 Track B Phase 1 Step 4: atomic, race-safe stock decrement replaces the
+              // old unconditional updateMany. Collects which items are now fully sold out so
+              // downstream cross-channel removal hooks (fired outside this tx below) only
+              // touch those, not every item unconditionally.
+              for (const posItemId of posPaymentLink.itemIds) {
+                try {
+                  const { fullySoldOut } = await sellItemUnits(posItemId, 1, tx);
+                  if (fullySoldOut) posLinkFullySoldOutIds.push(posItemId);
+                } catch (stockErr: any) {
+                  if (stockErr instanceof InsufficientStockError) {
+                    console.error(`[stripe/pos-link] Oversold race on item ${posItemId}:`, stockErr.message);
+                  } else {
+                    throw stockErr;
+                  }
+                }
+              }
 
               const items = await tx.item.findMany({
                 where: { id: { in: posPaymentLink.itemIds } },
@@ -1932,17 +1984,18 @@ export const webhookHandler = async (req: Request, res: Response) => {
             }
           });
 
-          // Fire-and-forget: end eBay listings if items were marked SOLD
-          if (posPaymentLink.itemIds?.length) {
+          // Fire-and-forget: end eBay listings for items now fully sold out (not every item
+          // in the link unconditionally -- ADR-085 Track B Phase 1 Step 4)
+          if (posLinkFullySoldOutIds.length) {
             setImmediate(() => {
               Promise.allSettled(
-                posPaymentLink.itemIds!.map((itemId: string) => endEbayListingIfExists(itemId))
+                posLinkFullySoldOutIds.map((itemId: string) => endEbayListingIfExists(itemId))
               ).catch(() => {});
               Promise.allSettled(
-                posPaymentLink.itemIds!.map((itemId: string) => markShopifyItemSold(itemId))
+                posLinkFullySoldOutIds.map((itemId: string) => markShopifyItemSold(itemId))
               ).catch(() => {});
               Promise.allSettled(
-                posPaymentLink.itemIds!.map((itemId: string) => notifyFacebookExportedItemSold(itemId))
+                posLinkFullySoldOutIds.map((itemId: string) => notifyFacebookExportedItemSold(itemId))
               ).catch(() => {});
             });
           }
@@ -1958,6 +2011,7 @@ export const webhookHandler = async (req: Request, res: Response) => {
         const cartBuyerUserId = session.metadata.buyerUserId ?? null;
 
         if (cartItemIds.length > 0) {
+          const cartFullySoldOutIds: string[] = [];
           try {
             await prisma.$transaction(async (tx) => {
               // Fetch items to get current price and confirm they're still AVAILABLE
@@ -1977,11 +2031,21 @@ export const webhookHandler = async (req: Request, res: Response) => {
                 (cartSale?.organizer?.subscriptionTier ?? null) as SubscriptionTier
               );
 
-              // Mark all items SOLD
-              await tx.item.updateMany({
-                where: { id: { in: cartItemIds } },
-                data: { status: 'SOLD' },
-              });
+              // Mark all items SOLD -- ADR-085 Track B Phase 1 Step 4: atomic, race-safe
+              // stock decrement replaces the old unconditional updateMany. Collects which
+              // items are now fully sold out for the gated hooks fired outside this tx below.
+              for (const cartItemId of cartItemIds) {
+                try {
+                  const { fullySoldOut } = await sellItemUnits(cartItemId, 1, tx);
+                  if (fullySoldOut) cartFullySoldOutIds.push(cartItemId);
+                } catch (stockErr: any) {
+                  if (stockErr instanceof InsufficientStockError) {
+                    console.error(`[stripe/cart-checkout] Oversold race on item ${cartItemId}:`, stockErr.message);
+                  } else {
+                    throw stockErr;
+                  }
+                }
+              }
 
               // Create a Purchase record per item
               for (const cartItem of cartItems) {
@@ -2005,16 +2069,17 @@ export const webhookHandler = async (req: Request, res: Response) => {
               }
             });
 
-            // Fire-and-forget: end eBay listings for all sold items
+            // Fire-and-forget: end eBay listings for items now fully sold out (not every
+            // item in the cart unconditionally -- ADR-085 Track B Phase 1 Step 4)
             setImmediate(() => {
               Promise.allSettled(
-                cartItemIds.map((itemId: string) => endEbayListingIfExists(itemId))
+                cartFullySoldOutIds.map((itemId: string) => endEbayListingIfExists(itemId))
               ).catch(() => {});
               Promise.allSettled(
-                cartItemIds.map((itemId: string) => markShopifyItemSold(itemId))
+                cartFullySoldOutIds.map((itemId: string) => markShopifyItemSold(itemId))
               ).catch(() => {});
               Promise.allSettled(
-                cartItemIds.map((itemId: string) => notifyFacebookExportedItemSold(itemId))
+                cartFullySoldOutIds.map((itemId: string) => notifyFacebookExportedItemSold(itemId))
               ).catch(() => {});
             });
 
@@ -2052,6 +2117,7 @@ export const webhookHandler = async (req: Request, res: Response) => {
             break;
           }
 
+          const holdInvoiceFullySoldOutIds: string[] = [];
           // Idempotency check: if already paid, skip
           if (holdInvoice.status === 'PAID') {
             console.warn(`[hold-invoice] Invoice ${invoiceId} already paid, skipping duplicate webhook`);
@@ -2089,11 +2155,21 @@ export const webhookHandler = async (req: Request, res: Response) => {
               data: { status: 'CONFIRMED' },
             });
 
-            // Update ALL bundled items to SOLD (LOCKED DECISION #6)
-            await tx.item.updateMany({
-              where: { id: { in: holdInvoice.itemIds } },
-              data: { status: 'SOLD' },
-            });
+            // Update ALL bundled items to SOLD (LOCKED DECISION #6) -- ADR-085 Track B
+            // Phase 1 Step 4: atomic, race-safe stock decrement replaces the old unconditional
+            // updateMany. The bundling business decision (#6) is unchanged, only the mechanism.
+            for (const bundledItemId of holdInvoice.itemIds) {
+              try {
+                const { fullySoldOut } = await sellItemUnits(bundledItemId, 1, tx);
+                if (fullySoldOut) holdInvoiceFullySoldOutIds.push(bundledItemId);
+              } catch (stockErr: any) {
+                if (stockErr instanceof InsufficientStockError) {
+                  console.error(`[stripe/hold-invoice] Oversold race on item ${bundledItemId}:`, stockErr.message);
+                } else {
+                  throw stockErr;
+                }
+              }
+            }
 
             // LOCKED DECISION #5: Create notifications for shopper and organizer
             const itemList = bundledItems.length > 1
@@ -2122,16 +2198,17 @@ export const webhookHandler = async (req: Request, res: Response) => {
             });
           });
 
-          // Fire-and-forget: end eBay listings if items were marked SOLD
+          // Fire-and-forget: end eBay listings for items now fully sold out (not every
+          // bundled item unconditionally -- ADR-085 Track B Phase 1 Step 4)
           setImmediate(() => {
             Promise.allSettled(
-              holdInvoice.itemIds.map((itemId: string) => endEbayListingIfExists(itemId))
+              holdInvoiceFullySoldOutIds.map((itemId: string) => endEbayListingIfExists(itemId))
             ).catch(() => {});
             Promise.allSettled(
-              holdInvoice.itemIds.map((itemId: string) => markShopifyItemSold(itemId))
+              holdInvoiceFullySoldOutIds.map((itemId: string) => markShopifyItemSold(itemId))
             ).catch(() => {});
             Promise.allSettled(
-              holdInvoice.itemIds.map((itemId: string) => notifyFacebookExportedItemSold(itemId))
+              holdInvoiceFullySoldOutIds.map((itemId: string) => notifyFacebookExportedItemSold(itemId))
             ).catch(() => {});
           });
 
