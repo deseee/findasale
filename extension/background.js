@@ -141,6 +141,11 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   (async () => {
     try {
       if (msg.type === 'getItems') {
+        // Also check for sold-elsewhere Marketplace removals whenever the popup opens -- the
+        // 20-min alarm alone means a just-sold item can sit un-removed for up to 20 min. This
+        // makes removals fire on-demand (and makes the flow testable without waiting). Fire-and-
+        // forget so it never blocks the item list. (2026-07-16)
+        checkPendingRemovals().catch(() => {});
         sendResponse(await apiFetch('/extension/items'));
       } else if (msg.type === 'markListed') {
         sendResponse(await apiFetch('/extension/items/' + encodeURIComponent(msg.itemId) + '/listed',

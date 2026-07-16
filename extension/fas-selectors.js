@@ -177,28 +177,18 @@
     });
   }
 
-  // Delivery step toggles (2026-07-16): FB replaced the single "pickup" listbox option with
-  // two independent toggles -- "Shipping" and "Local pickup" (both ON by default). Find a
-  // checkbox/switch by the heading text that leads its row.
-  function deliveryToggleByHeading(headingText) {
-    const want = norm(headingText);
-    const boxes = Array.from(document.querySelectorAll('[role="checkbox"], [role="switch"], input[type="checkbox"]'));
-    return boxes.find((b) => {
-      const al = norm(b.getAttribute('aria-label') || '');
-      if (al === want || al.startsWith(want)) return true;
-      let n = b;
-      for (let i = 0; i < 5 && n; i++) {
-        n = n.parentElement;
-        if (!n) break;
-        const t = norm(n.innerText || n.textContent || '');
-        if (t.startsWith(want) && t.length < 200) return true;
-      }
-      return false;
-    }) || null;
+  // Delivery step (2026-07-16, DOM-verified live): FB's "Delivery method" combo, once opened,
+  // lists "Shipping" and "Local pickup" as role="menuitemcheckbox" items -- both aria-checked=true
+  // by default. They are NOT role="option" (so optionByText misses them) and NOT role="checkbox".
+  // Match by leading text ("Shipping" row text is "ShippingBuyers pay for shipping...").
+  function menuCheckboxByText(text) {
+    const want = norm(text);
+    const items = Array.from(document.querySelectorAll('[role="menuitemcheckbox"]'));
+    return items.find((o) => norm(o.textContent) === want || norm(o.textContent).startsWith(want)) || null;
   }
-  function isToggleOn(b) { return !!(b && (b.getAttribute('aria-checked') === 'true' || b.checked === true)); }
+  function isMenuChecked(el) { return !!(el && el.getAttribute('aria-checked') === 'true'); }
 
   window.__FAS_SEL__ = { norm, fieldByLabel, comboByLabel, optionByText, photoInput, chipsAfter, bestTextMatch,
-    elementByText, radioLabelByText, listingCardByTitle, realClick, deliveryToggleByHeading, isToggleOn,
+    elementByText, radioLabelByText, listingCardByTitle, realClick, menuCheckboxByText, isMenuChecked,
     LABELS: { title: 'Title', price: 'Price', description: 'Description', condition: 'Condition', category: 'Category' } };
 })();

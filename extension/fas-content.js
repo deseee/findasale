@@ -64,6 +64,81 @@
     }
   }
 
+  // Facebook REQUIRES Condition. The backend (extensionController.toFacebookCondition) already
+  // maps our enum to Facebook's exact option labels ("New" / "Used - Like New" / "Used - Good" /
+  // "Used - Fair"), so item.condition normally arrives pre-formatted. This map is a defensive,
+  // case-insensitive fallback in case a raw enum value (NEW / USED / USED_GOOD ...) ever reaches
+  // the extension directly, and it passes through already-formatted FB labels untouched.
+  const FB_CONDITIONS = ['New', 'Used - Like New', 'Used - Good', 'Used - Fair'];
+  function mapCondition(raw) {
+    const v = String(raw == null ? '' : raw).trim();
+    if (!v) return null;
+    const exact = FB_CONDITIONS.find((c) => c.toLowerCase() === v.toLowerCase());
+    if (exact) return exact;
+    switch (v.toUpperCase().replace(/[\s-]+/g, '_')) {
+      case 'NEW': return 'New';
+      case 'USED_LIKE_NEW':
+      case 'LIKE_NEW':
+      case 'REFURBISHED': return 'Used - Like New';
+      case 'USED_FAIR':
+      case 'FAIR':
+      case 'PARTS_OR_REPAIR': return 'Used - Fair';
+      case 'USED':
+      case 'USED_GOOD':
+      case 'GOOD': return 'Used - Good';
+      default: return 'Used - Good'; // unknown USED variant -> sensible default
+    }
+  }
+
+  // True once Facebook's Condition combo displays the chosen value (its floating "Condition"
+  // label persists and the selected text is appended to the trigger's accessible text).
+  function comboShowsValue(labelText, value) {
+    const combo = SEL.comboByLabel(labelText);
+    if (!combo) return false;
+    return SEL.norm(combo.textContent).includes(SEL.norm(value));
+  }
+
+  // Condition is a REQUIRED Facebook field, so it gets the fail-loud treatment (unlike Category,
+  // which is genuinely optional). Root cause of the intermittent stall (observed live 2026-07-16:
+  // same item filled "New" on one run, left blank on the next): selectCombo() opened the combo
+  // exactly once and, if Facebook's React hadn't attached the combobox's click handler yet OR the
+  // CDP open-click raced FB's own handlers, the listbox never rendered, optionByText timed out,
+  // and the miss was swallowed silently -- leaving Next disabled and the run dying LATER on a
+  // misleading "Category may still be unset" error at the step-transition check. This retries the
+  // open+select up to 3 times, waiting for the listbox to actually render each attempt (mirroring
+  // how the Delivery/weight steps wait), verifies the value took, and hard-errors HERE if it still
+  // can't be set -- stopping loudly at the right step instead of proceeding into a disabled Next.
+  async function selectConditionRequired(rawValue) {
+    const value = mapCondition(rawValue);
+    if (!value) {
+      throw hardError('Item details', 'This item has no condition set, but Facebook requires one -- set the item\'s condition in FindA.Sale, then try again.');
+    }
+    if (comboShowsValue(LABELS.condition, value)) return true; // already set (e.g. re-entry after a stop)
+    let clicked = false;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const combo = SEL.comboByLabel(LABELS.condition);
+      if (!combo) { await sleep(400); continue; } // combo not rendered yet -- wait and retry
+      await realClick(combo);
+      let opt = null;
+      try { opt = await waitFor(() => SEL.optionByText(value), 2500); } catch (e) { opt = null; }
+      if (opt) {
+        await realClick(opt);
+        clicked = true;
+        await sleep(250);
+        if (comboShowsValue(LABELS.condition, value)) return true; // confirmed set
+      }
+      // Missed this round -- close any open listbox before retrying so the next open is clean.
+      document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      await sleep(400);
+    }
+    // We clicked a rendered, matching option via trusted (CDP) input at least once but the trigger
+    // text couldn't be confirmed -- treat as set rather than risk a false stop on a listing that
+    // actually filled. Only a genuine never-opened / no-option-rendered case falls through to the
+    // hard error below (the exact silent-miss that caused the stall).
+    if (clicked) return true;
+    throw hardError('Item details', 'Couldn\'t set the required Condition ("' + value + '") -- the dropdown didn\'t open or had no matching option after several tries. Set the condition yourself, then reopen the extension to continue.');
+  }
+
   // Facebook's Category field renders AI-suggested chips (div[role="button"]), not the
   // [role="option"] listbox selectCombo() expects — confirmed live 2026-07-15 (see
   // fas-selectors.js chipsAfter/bestTextMatch). This tries the chip path first, falls back to
@@ -213,18 +288,22 @@
   // low-stakes guess like Category.
   async function fillDeliveryStep(item) {
     if (item.shippingOverride === 'LOCAL_PICKUP_ONLY') {
-      // 2026-07-16 fix: FB's Delivery step no longer offers a single "pickup" listbox option
-      // (the old optionByText('pickup') always failed). It now shows two independent toggles,
-      // "Shipping" and "Local pickup", both ON by default. Local-pickup-only = turn OFF Shipping
-      // and leave Local pickup ON (verified live: unchecking Shipping enables "Next").
-      await waitFor(() => SEL.deliveryToggleByHeading('Shipping') || SEL.deliveryToggleByHeading('Local pickup'), 8000);
-      const shipToggle = SEL.deliveryToggleByHeading('Shipping');
-      const pickupToggle = SEL.deliveryToggleByHeading('Local pickup');
-      if (!shipToggle && !pickupToggle) {
-        throw hardError('Delivery', 'Couldn\'t find the Shipping / Local pickup toggles on the Delivery step -- Facebook\'s layout may have changed.');
+      // 2026-07-16 fix (DOM-verified live): open FB's "Delivery method" dropdown, then UNCHECK the
+      // "Shipping" item (leaving "Local pickup" checked). FB renders these as role="menuitemcheckbox"
+      // items inside the opened combo -- NOT role="option" (old optionByText('pickup') never matched)
+      // and NOT role="checkbox". Both are aria-checked=true by default.
+      await waitThenClick(() => SEL.comboByLabel('Delivery method'), 'Delivery',
+        'Couldn\'t find the Delivery method control.', 8000);
+      await humanPause(300, 600); // let the dropdown menu render
+      const shipItem = await waitFor(() => SEL.menuCheckboxByText('Shipping'), 5000);
+      if (!shipItem) {
+        throw hardError('Delivery', 'Couldn\'t find the "Shipping" option in the Delivery method menu -- Facebook\'s layout may have changed.');
       }
-      if (SEL.isToggleOn(shipToggle)) { await SEL.realClick(shipToggle); await humanPause(300, 600); }
-      if (pickupToggle && !SEL.isToggleOn(pickupToggle)) { await SEL.realClick(pickupToggle); await humanPause(300, 600); }
+      if (SEL.isMenuChecked(shipItem)) { await SEL.realClick(shipItem); await humanPause(300, 600); }
+      const pickupItem = SEL.menuCheckboxByText('Local pickup');
+      if (pickupItem && !SEL.isMenuChecked(pickupItem)) { await SEL.realClick(pickupItem); await humanPause(300, 600); }
+      // Close the menu so the step's Next control is reachable again.
+      document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
       await humanPause(300, 600);
       return;
     }
@@ -263,7 +342,7 @@
     if (!results.title) throw hardError('Item details', 'Couldn\'t find the Title field.');
     if (!results.price) throw hardError('Item details', 'Couldn\'t find the Price field.');
 
-    await selectCombo(LABELS.condition, item.condition); // best-effort, never blocks (unchanged)
+    await selectConditionRequired(item.condition); // REQUIRED field: retries + verifies, hard-errors if unset (2026-07-16 flaky-stall fix)
     const catResult = await selectCategory(item.category); // auto-resolves to FB's top suggestion when ambiguous
     const photosOk = await injectPhotos(item.photoUrls);
 
