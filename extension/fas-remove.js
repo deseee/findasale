@@ -122,12 +122,17 @@
       await realClick(dialogConfirm);
     }
 
-    // Success signal: the card's own status text moves off "Active" (confirmed live 2026-07-15
-    // that live cards show "Active . Listed on ...") within a reasonable window.
-    const confirmed = await waitFor(() => (SEL.norm(match.cardEl.textContent).indexOf('active') === -1 ? true : null), 6000)
+    // Success signal (2026-07-16 fix): FB re-renders the "Your listings" row after "Mark as sold",
+    // DETACHING the original match.cardEl -- reading its stale textContent kept seeing the old
+    // "Active" text, so a genuinely-completed removal was recorded as a failure (no /removed call,
+    // so the item stayed "pending removal" and re-opened a tab on every check). Re-query the live
+    // grid instead: listingCardByTitle only returns a card that STILL exposes a "Mark as sold"
+    // button, so once this listing flips to Sold ("Mark as available"/"Relist") it returns null =
+    // confirmed removed.
+    const confirmed = await waitFor(() => (SEL.listingCardByTitle(item.title) ? null : true), 8000)
       .catch(() => false);
     if (!confirmed) {
-      return { ok: false, reason: 'Clicked "Mark as sold" but couldn\'t confirm the listing status changed -- check it manually.' };
+      return { ok: false, reason: 'Clicked "Mark as sold" but couldn\'t confirm the listing flipped to Sold -- check it manually.' };
     }
     return { ok: true };
   }
