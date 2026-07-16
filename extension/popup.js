@@ -77,7 +77,8 @@ async function startQueue() {
     packageWeightOz: it.packageWeightOz, aiPackageWeightOz: it.aiPackageWeightOz
   }));
   if (!queue.length) return;
-  await send({ type: 'setQueue', queue });
+  const autoPublish = $('autoPublish').checked;
+  await send({ type: 'setQueue', queue, autoPublish });
   chrome.tabs.create({ url: CFG.FB_CREATE_URL });
   window.close();
 }

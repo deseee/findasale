@@ -59,11 +59,11 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         for (const u of urls) { try { out.push(await fetchImageDataUrl(u)); } catch (e) { /* skip bad img */ } }
         sendResponse({ ok: true, dataUrls: out });
       } else if (msg.type === 'setQueue') {
-        await chrome.storage.local.set({ fasQueue: msg.queue || [], fasIndex: 0 });
+        await chrome.storage.local.set({ fasQueue: msg.queue || [], fasIndex: 0, fasAutoPublish: msg.autoPublish !== false });
         sendResponse({ ok: true });
       } else if (msg.type === 'getQueueItem') {
-        const { fasQueue = [], fasIndex = 0 } = await chrome.storage.local.get(['fasQueue', 'fasIndex']);
-        sendResponse({ ok: true, item: fasQueue[fasIndex] || null, index: fasIndex, total: fasQueue.length });
+        const { fasQueue = [], fasIndex = 0, fasAutoPublish = true } = await chrome.storage.local.get(['fasQueue', 'fasIndex', 'fasAutoPublish']);
+        sendResponse({ ok: true, item: fasQueue[fasIndex] || null, index: fasIndex, total: fasQueue.length, autoPublish: fasAutoPublish });
       } else if (msg.type === 'advanceQueue') {
         const st = await chrome.storage.local.get(['fasQueue', 'fasIndex']);
         const next = (st.fasIndex || 0) + 1;

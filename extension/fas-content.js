@@ -1,6 +1,9 @@
 /* FindA.Sale — content script on facebook.com/marketplace/create/*.
- * Fills the current queued item's fields + photos, then STOPS. The human reviews
- * and clicks Publish. ADR-084: NO auto-publish. Selectors come from fas-selectors.js.
+ * Fills each queued item and auto-advances through every Facebook step, clicking
+ * Publish itself unless the organizer unchecked "Publish automatically" in the popup
+ * (autoPublish flag, threaded from popup.js -> background.js storage -> here). Stops
+ * immediately on any hard error. ADR-084 amendment 2026-07-15. Selectors come from
+ * fas-selectors.js.
  */
 (function () {
   const SEL = window.__FAS_SEL__;
@@ -207,7 +210,7 @@
   // field or step-advance button genuinely not found on the page -- not on soft ambiguity like
   // an imperfect category match, which now auto-resolves to Facebook's own top suggestion
   // instead of blocking.
-  async function fillItem(item, index, total) {
+  async function fillItem(item, index, total, autoPublish) {
     overlay('<b>FindA.Sale</b> — filling listing ' + (index + 1) + ' of ' + total + '…');
     const results = { title: await fillText(LABELS.title, item.title),
                       price: await fillText(LABELS.price, item.price),
@@ -241,6 +244,24 @@
 
     await waitFor(() => SEL.elementByText('Publish'), 10000)
       .catch(() => { throw hardError('Audience', 'Groups/Publish step didn\'t load.'); });
+
+    if (!autoPublish) {
+      // Organizer unchecked "Publish automatically" in the popup -- everything up through
+      // Groups is still auto-filled (that's just navigation/admin, not the sensitive part),
+      // but the actual Publish click is the one irreversible action, so it waits for a human.
+      overlay('<b>FindA.Sale</b><div style="margin-top:6px">Ready to publish <b>' + escapeHtml(item.title) + '</b>.</div>' +
+        '<div style="margin-top:4px;font-size:12px;color:#cfe3d6">Review everything, then click Facebook\'s <b>Publish</b> yourself.</div>' +
+        (!catResult.ok ? '<div style="color:#ffcf7a;margin-top:6px;font-size:12px">Category: picked Facebook\'s best guess automatically -- worth a glance.</div>' : '') +
+        (!photosOk ? '<div style="color:#ffcf7a;margin-top:6px;font-size:12px">Photos may not have attached -- check this listing.</div>' : '') +
+        btn('fas-next', 'I published — next item ▶', true) + btn('fas-skip', 'Skip this one', false) +
+        '<div style="margin-top:8px;font-size:11px;color:#9fb6a8">Listing ' + (index + 1) + ' of ' + total + '</div>');
+      const nextBtn = document.getElementById('fas-next');
+      const skipBtn = document.getElementById('fas-skip');
+      if (nextBtn) nextBtn.onclick = async () => { await mark(item); await advanceAuto(); };
+      if (skipBtn) skipBtn.onclick = async () => { await advanceAuto(); };
+      return { catResult, photosOk, autoPublished: false };
+    }
+
     overlay('<b>FindA.Sale</b> — publishing <b>' + escapeHtml(item.title) + '</b>…');
     await humanPause(600, 1200);
     await clickButton('Publish', 'Audience');
@@ -254,12 +275,15 @@
       .catch(() => false);
     if (!publishedOk) throw hardError('Publish', 'Clicked Publish but couldn\'t confirm it went through -- check this listing manually.');
 
-    return { catResult, photosOk };
+    return { catResult, photosOk, autoPublished: true };
   }
 
-  async function runQueue(item, index, total) {
+  async function runQueue(item, index, total, autoPublish) {
     try {
-      const { catResult, photosOk } = await fillItem(item, index, total);
+      const result = await fillItem(item, index, total, autoPublish);
+      if (!result.autoPublished) return; // fillItem already rendered the manual review UI + wired its own buttons
+
+      const { catResult, photosOk } = result;
       await mark(item);
       let note = '';
       if (!catResult.ok) note += '<div style="color:#ffcf7a;margin-top:6px;font-size:12px">Category: picked Facebook\'s best guess automatically -- worth a glance.</div>';
@@ -298,7 +322,7 @@
     try {
       await waitFor(() => SEL.fieldByLabel(LABELS.title), 15000);
       await sleep(400);
-      await runQueue(q.item, q.index, q.total);
+      await runQueue(q.item, q.index, q.total, q.autoPublish !== false);
     } catch (e) {
       overlay('<b>FindA.Sale</b><div style="color:#ffcf7a;margin-top:6px;font-size:12px">Couldn\'t find Facebook\'s listing form. Make sure you\'re on the "Item for sale" create screen, then reopen the extension.</div>' + btn('fas-skip', 'Close', false));
       const s = document.getElementById('fas-skip'); if (s) s.onclick = () => bar.remove();
