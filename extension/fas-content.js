@@ -69,11 +69,11 @@
   // neither finds a confident match — returns the live suggestion text so fillItem() can tell
   // the organizer what to pick instead of silently leaving Category empty.
   async function selectCategory(value) {
-    if (!value) return { ok: true };
     const combo = SEL.comboByLabel(LABELS.category);
-    if (!combo) return { ok: false, suggestions: [] };
+    if (!combo) return { ok: !value, suggestions: [] }; // structural miss only matters if FB actually requires a value we can't set
     const chips = await SEL.chipsAfter(() => combo.click(), 500);
     if (!chips.length) {
+      if (!value) { document.body.click(); return { ok: true }; }
       try {
         const opt = await waitFor(() => SEL.optionByText(value), 2000);
         opt.click();
@@ -84,15 +84,16 @@
         return { ok: false, suggestions: [] };
       }
     }
-    const match = SEL.bestTextMatch(chips, value);
-    if (match) {
-      match.click();
-      await sleep(150);
-      return { ok: true };
-    }
-    const suggestions = chips.map((c) => SEL.norm(c.textContent)).filter(Boolean);
-    document.body.click();
-    return { ok: false, suggestions };
+    // Facebook REQUIRES a category to proceed past Item details -- confirmed live 2026-07-15
+    // (Next silently no-ops with a "Please select a category" inline prompt otherwise). Try to
+    // match our value against Facebook's own suggestion chips; if there's no value at all, or
+    // no confident match, fall back to Facebook's own top-ranked suggestion rather than leaving
+    // it empty -- an unconfident pick is still far better than a run that can never advance.
+    const match = value ? SEL.bestTextMatch(chips, value) : null;
+    const picked = match || chips[0];
+    picked.click();
+    await sleep(150);
+    return { ok: !!match, suggestions: match ? [] : chips.map((c) => SEL.norm(c.textContent)).filter(Boolean) };
   }
 
   async function injectPhotos(urls) {
@@ -173,6 +174,13 @@
     return el;
   }
 
+  // Confirm Facebook's own URL actually carries the expected ?step=... param -- the real
+  // signal that a Next click landed, not just "a Next button exists somewhere" (ambiguous,
+  // since several steps share that label -- see fillItem's step-transition comments).
+  function waitForStep(stepName, timeout) {
+    return waitFor(() => (location.href.indexOf('step=' + stepName) !== -1 ? true : null), timeout);
+  }
+
   // Delivery step: pick the weight bucket. Shipping carrier + Shipping option self-populate
   // with Facebook's own sensible defaults once a weight is set (confirmed live 2026-07-15 --
   // "Prepaid shipping label" and a real carrier quote both appear automatically) so no separate
@@ -230,20 +238,28 @@
 
     await clickButton('Next', 'Item details'); // -> Delivery
 
-    await waitFor(() => SEL.elementByText('Select shipping label') || SEL.elementByText('Next'), 10000)
-      .catch(() => { throw hardError('Delivery', 'Delivery step didn\'t load.'); });
+    // Verify the click actually advanced Facebook's own step (its URL carries ?step=... --
+    // confirmed live 2026-07-15) rather than just checking for a "Next" button, which exists
+    // on multiple steps and gave a false positive the first live run: Facebook silently blocks
+    // Next with an inline "Please select a category" prompt if Category is unset, so the old
+    // check was satisfied by the SAME page's own Next button and moved on into a step that
+    // never actually loaded.
+    await waitForStep('delivery', 10000)
+      .catch(() => { throw hardError('Item details', 'Facebook didn\'t move to the Delivery step -- a required field (often Category) may still be unset.'); });
     overlay('<b>FindA.Sale</b> — setting shipping for <b>' + escapeHtml(item.title) + '</b>…');
     await fillDeliveryStep(item);
     await clickButton('Next', 'Delivery'); // -> Offer
 
-    await waitFor(() => SEL.elementByText('Next'), 10000)
-      .catch(() => { throw hardError('Offer', 'Offer step didn\'t load.'); });
+    await waitForStep('offer', 10000)
+      .catch(() => { throw hardError('Delivery', 'Facebook didn\'t move to the Offer step.'); });
     overlay('<b>FindA.Sale</b> — reviewing offer settings…');
     await humanPause(400, 800);
     await clickButton('Next', 'Offer'); // -> Audience (groups left unchecked by design, see ADR-084 amendment)
 
+    await waitForStep('audience', 10000)
+      .catch(() => { throw hardError('Offer', 'Facebook didn\'t move to the Groups/Publish step.'); });
     await waitFor(() => SEL.elementByText('Publish'), 10000)
-      .catch(() => { throw hardError('Audience', 'Groups/Publish step didn\'t load.'); });
+      .catch(() => { throw hardError('Audience', 'Groups/Publish step loaded but no Publish button was found.'); });
 
     if (!autoPublish) {
       // Organizer unchecked "Publish automatically" in the popup -- everything up through
