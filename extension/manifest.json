@@ -4,7 +4,7 @@
   "short_name": "FindA.Sale",
   "version": "1.0.0",
   "description": "Fill your Facebook Marketplace listings from your FindA.Sale inventory — title, price, condition, description, and photos. You review and publish.",
-  "permissions": ["storage", "tabs", "cookies", "scripting"],
+  "permissions": ["storage", "tabs", "cookies", "scripting", "debugger"],
   "host_permissions": [
     "https://www.facebook.com/*",
     "https://finda.sale/*",

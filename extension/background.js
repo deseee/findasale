@@ -42,6 +42,52 @@ async function fetchImageDataUrl(url) {
   return 'data:' + type + ';base64,' + b64;
 }
 
+// ---- CDP (chrome.debugger) trusted-click support ----
+// Facebook's shipping-weight radio buttons and modal "Update" control (confirmed live
+// 2026-07-15) silently ignore JS-dispatched events (el.dispatchEvent(new MouseEvent(...)))
+// regardless of event sequence or coordinates -- Chrome marks script-dispatched events
+// isTrusted=false, and these specific controls require trusted input to actually commit a
+// selection. chrome.debugger's Input.dispatchMouseEvent produces input Chrome does not
+// distinguish from real user input. Content scripts cannot call chrome.debugger directly --
+// only the background service worker can -- so fas-content.js messages here for every click.
+// Attaching shows Chrome's own persistent "<extension> is debugging this browser" banner on
+// the tab for as long as it stays attached -- disclosed to the organizer in the popup/README,
+// not a silent capability.
+const fasDebuggedTabs = new Set();
+
+async function ensureDebuggerAttached(tabId) {
+  if (fasDebuggedTabs.has(tabId)) return;
+  await new Promise((resolve, reject) => {
+    chrome.debugger.attach({ tabId }, '1.3', () => {
+      if (chrome.runtime.lastError) { reject(new Error(chrome.runtime.lastError.message)); return; }
+      fasDebuggedTabs.add(tabId);
+      resolve();
+    });
+  });
+}
+
+async function cdpClick(tabId, x, y) {
+  await ensureDebuggerAttached(tabId);
+  const send = (params) => new Promise((resolve, reject) => {
+    chrome.debugger.sendCommand({ tabId }, 'Input.dispatchMouseEvent', params, () => {
+      if (chrome.runtime.lastError) { reject(new Error(chrome.runtime.lastError.message)); return; }
+      resolve();
+    });
+  });
+  await send({ type: 'mouseMoved', x, y, button: 'none' });
+  await send({ type: 'mousePressed', x, y, button: 'left', clickCount: 1 });
+  await send({ type: 'mouseReleased', x, y, button: 'left', clickCount: 1 });
+}
+
+// A tab closing, or Chrome/the organizer force-detaching (e.g. clicking "Cancel" on the
+// debugging banner), must not leave a stale fasDebuggedTabs entry that skips re-attach on
+// the next click -- both are handled so the extension self-heals rather than silently
+// failing every subsequent click on that tab.
+chrome.tabs.onRemoved.addListener((tabId) => { fasDebuggedTabs.delete(tabId); });
+chrome.debugger.onDetach.addListener((source) => {
+  if (source && typeof source.tabId === 'number') fasDebuggedTabs.delete(source.tabId);
+});
+
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   (async () => {
     try {
@@ -58,6 +104,11 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         const out = [];
         for (const u of urls) { try { out.push(await fetchImageDataUrl(u)); } catch (e) { /* skip bad img */ } }
         sendResponse({ ok: true, dataUrls: out });
+      } else if (msg.type === 'cdpClick') {
+        const tabId = sender.tab && sender.tab.id;
+        if (!tabId) { sendResponse({ ok: false, error: 'no_tab' }); return; }
+        await cdpClick(tabId, msg.x, msg.y);
+        sendResponse({ ok: true });
       } else if (msg.type === 'setQueue') {
         await chrome.storage.local.set({ fasQueue: msg.queue || [], fasIndex: 0, fasAutoPublish: msg.autoPublish !== false });
         sendResponse({ ok: true });

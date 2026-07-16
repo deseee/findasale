@@ -70,7 +70,7 @@
   // div[role="button"] elements before/after the combobox opens to isolate just the new chips.
   async function chipsAfter(openFn, settleMs) {
     const before = new Set(document.querySelectorAll('div[role="button"]'));
-    openFn();
+    await openFn(); // realClick() is now async (routes through chrome.debugger) -- await it before diffing
     await new Promise((r) => setTimeout(r, settleMs));
     return Array.from(document.querySelectorAll('div[role="button"]')).filter(
       (b) => !before.has(b) && norm(b.textContent)

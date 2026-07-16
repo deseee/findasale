@@ -12,16 +12,31 @@
 
   function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
 
-  // A plain el.click() is not reliable against Facebook's custom radio/chip components --
-  // confirmed live 2026-07-15: the Package-weight radio buttons (div[role="radio"], not real
-  // <input> elements) never registered aria-checked=true from el.click() alone, on either the
-  // radio itself or its label wrapper, even when re-queried fresh immediately beforehand. A full
-  // synthetic pointer/mouse event sequence with real coordinates does register reliably. Used for
-  // every interactive click from here on instead of el.click().
-  function realClick(el) {
+  // A plain el.click() -- and even a full synthetic pointerdown/mousedown/pointerup/mouseup/
+  // click MouseEvent sequence with real coordinates -- is NOT reliable against Facebook's
+  // custom radio/button components. Confirmed live 2026-07-15 on the Package-weight radio AND
+  // the "Change shipping method" modal's "Update" button: both silently ignored every synthetic
+  // event variant tried (plain .click(), full pointer sequence, real on-screen coordinates,
+  // freshly-requeried non-stale elements -- ruled out staleness, viewport visibility, and event
+  // completeness one at a time). Root cause isolated the same session: Chrome marks script-
+  // dispatched events isTrusted=false, and these specific controls require trusted input to
+  // actually commit a selection -- proven by manually driving the identical flow with real OS-
+  // level clicks (Chrome DevTools Protocol / a real mouse), which worked every time and
+  // completed a genuine live Facebook Marketplace publish. A content script cannot produce
+  // trusted input itself, so this now asks the background service worker to do it via
+  // chrome.debugger (CDP) -- see background.js cdpClick(). Falls back to the old synthetic
+  // sequence only if CDP is ever unavailable (e.g. debugger permission revoked), so a
+  // permission hiccup degrades gracefully instead of hard-failing every click; Category chips
+  // and the Condition dropdown are confirmed working via the synthetic path too, so this is a
+  // safety net, not the expected path.
+  async function realClick(el) {
     const rect = el.getBoundingClientRect();
-    const cx = rect.left + rect.width / 2;
-    const cy = rect.top + rect.height / 2;
+    const cx = Math.round(rect.left + rect.width / 2);
+    const cy = Math.round(rect.top + rect.height / 2);
+    try {
+      const resp = await chrome.runtime.sendMessage({ type: 'cdpClick', x: cx, y: cy });
+      if (resp && resp.ok) return;
+    } catch (e) { /* fall through to synthetic fallback */ }
     ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'].forEach((type) => {
       el.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, clientX: cx, clientY: cy, view: window }));
     });
@@ -64,15 +79,15 @@
     if (!value) return true;
     const combo = SEL.comboByLabel(labelText);
     if (!combo) return false;
-    realClick(combo);
+    await realClick(combo);
     try {
       const opt = await waitFor(() => SEL.optionByText(value), 3000);
-      realClick(opt);
+      await realClick(opt);
       await sleep(150);
       return true;
     } catch (e) {
       // Close the open listbox; category/condition is best-effort, never a blocker.
-      realClick(document.body);
+      await realClick(document.body);
       return false;
     }
   }
@@ -88,14 +103,14 @@
     if (!combo) return { ok: !value, suggestions: [] }; // structural miss only matters if FB actually requires a value we can't set
     const chips = await SEL.chipsAfter(() => realClick(combo), 500);
     if (!chips.length) {
-      if (!value) { realClick(document.body); return { ok: true }; }
+      if (!value) { await realClick(document.body); return { ok: true }; }
       try {
         const opt = await waitFor(() => SEL.optionByText(value), 2000);
-        realClick(opt);
+        await realClick(opt);
         await sleep(150);
         return { ok: true };
       } catch (e) {
-        realClick(document.body);
+        await realClick(document.body);
         return { ok: false, suggestions: [] };
       }
     }
@@ -106,7 +121,7 @@
     // it empty -- an unconfident pick is still far better than a run that can never advance.
     const match = value ? SEL.bestTextMatch(chips, value) : null;
     const picked = match || chips[0];
-    realClick(picked);
+    await realClick(picked);
     await sleep(150);
     return { ok: !!match, suggestions: match ? [] : chips.map((c) => SEL.norm(c.textContent)).filter(Boolean) };
   }
@@ -190,7 +205,7 @@
     }
     await humanPause(350, 800);
     const fresh = getter() || el;
-    realClick(fresh);
+    await realClick(fresh);
     return fresh;
   }
 
