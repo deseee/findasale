@@ -784,6 +784,10 @@ export const batchUpdateHolds = async (req: AuthRequest, res: Response) => {
 
       const validIds = validHolds.map((h) => h.id);
       const validItemIds = validHolds.map((h) => h.item.id);
+      // Collect items that ACTUALLY transitioned to fully SOLD on this markSold path.
+      // Only these should have their external listings (eBay/Shopify/FB) pulled — a
+      // multi-unit item that still has remaining stock stays listed.
+      const soldOutItemIds: string[] = [];
 
       if (action === 'release') {
         await tx.itemReservation.updateMany({
@@ -847,13 +851,15 @@ export const batchUpdateHolds = async (req: AuthRequest, res: Response) => {
           data: { status: 'CONFIRMED' },
         });
         // ADR-085 Track B Phase 1 Step 4: atomic, race-safe stock decrement replaces the
-        // old unconditional status update. (Note: the eBay/Shopify/FB removal hooks below
-        // this transaction, guarded by `action === 'sold'`, are pre-existing dead code for
-        // this markSold path -- the actual action value here is 'markSold', not 'sold' --
-        // flagged separately, left untouched, out of scope for this dispatch.)
+        // old unconditional status update. Capture which items became fully SOLD so the
+        // post-transaction eBay/Shopify/FB removal hooks only fire for those (a multi-unit
+        // item with remaining stock stays AVAILABLE and must keep its external listing).
         for (const itemId of validItemIds) {
           try {
-            await sellItemUnits(itemId, 1, tx);
+            const stockResult = await sellItemUnits(itemId, 1, tx);
+            if (stockResult.fullySoldOut) {
+              soldOutItemIds.push(itemId);
+            }
           } catch (stockErr: any) {
             if (stockErr instanceof InsufficientStockError) {
               console.error(`[reservations] Oversold race on item ${itemId} during markSold:`, stockErr.message);
@@ -887,10 +893,10 @@ export const batchUpdateHolds = async (req: AuthRequest, res: Response) => {
         });
       }
 
-      return { updated: validHolds.length, failed: ids.length - validHolds.length, holds: validHolds };
+      return { updated: validHolds.length, failed: ids.length - validHolds.length, holds: validHolds, soldOutItemIds };
     }).catch((err) => {
       if (err.message === 'No valid holds found') {
-        return { updated: 0, failed: ids.length, holds: [] };
+        return { updated: 0, failed: ids.length, holds: [], soldOutItemIds: [] };
       }
       throw err;
     });
@@ -919,23 +925,37 @@ export const batchUpdateHolds = async (req: AuthRequest, res: Response) => {
         });
       }
 
-      // Fire-and-forget: end eBay listings if items were marked SOLD
-      if (action === 'sold') {
-        setImmediate(() => {
-          Promise.allSettled(
-            batchHolds.map((h) => endEbayListingIfExists(h.item.id))
-          ).catch(() => {});
-          Promise.allSettled(
-            batchHolds.map((h) => markShopifyItemSold(h.item.id))
-          ).catch(() => {});
-          Promise.allSettled(
-            batchHolds.map((h) => notifyFacebookExportedItemSold(h.item.id))
-          ).catch(() => {});
+      // Fire-and-forget: pull external listings (eBay/Shopify/FB) for items actually
+      // marked SOLD on the RECORD markSold path. Bug fix: previously guarded by
+      // `action === 'sold'`, a value this endpoint never produces (valid actions are
+      // release | extend | markSold), so the hooks were dead code and cash/in-person
+      // sales never pulled the cross-channel listing. Fire only for items that fully
+      // sold out (soldOutItemIds) — a multi-unit item with remaining stock stays listed.
+      if (action === 'markSold') {
+        const soldOutIds = new Set<string>(((result as any).soldOutItemIds as string[]) ?? []);
+        const seen = new Set<string>();
+        const soldOutHolds = batchHolds.filter((h) => {
+          if (!soldOutIds.has(h.item.id) || seen.has(h.item.id)) return false;
+          seen.add(h.item.id);
+          return true;
         });
+        if (soldOutHolds.length > 0) {
+          setImmediate(() => {
+            Promise.allSettled(
+              soldOutHolds.map((h) => endEbayListingIfExists(h.item.id))
+            ).catch(() => {});
+            Promise.allSettled(
+              soldOutHolds.map((h) => markShopifyItemSold(h.item.id))
+            ).catch(() => {});
+            Promise.allSettled(
+              soldOutHolds.map((h) => notifyFacebookExportedItemSold(h.item.id))
+            ).catch(() => {});
+          });
+        }
       }
     }
 
-    const { holds: _holds, ...responseResult } = result as any;
+    const { holds: _holds, soldOutItemIds: _soldOutItemIds, ...responseResult } = result as any;
     // Include settlementMode for RECORD so the frontend can show the correct toast copy
     res.json(action === 'markSold' ? { ...responseResult, settlementMode: 'RECORD' } : responseResult);
   } catch (error) {

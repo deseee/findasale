@@ -52,10 +52,19 @@ export interface SellItemUnitsResult {
  * handle this (it means the caller's own earlier availability check was
  * stale, e.g. a race with another channel). Never silently no-ops.
  */
+// Prisma v5: prisma is $extends-wrapped, so the client `prisma.$transaction(cb)`
+// hands to `cb` is the EXTENDED transaction flavor
+// (Omit<typeof prisma, ITXClientDenyList>), which is NOT assignable to the plain
+// `Prisma.TransactionClient`. Accept either so every call site (base tx or the
+// extended tx from an interactive transaction) type-checks. Confirmed via CI, not guessed.
+type SellItemUnitsTx =
+  | Prisma.TransactionClient
+  | Omit<typeof prisma, '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'>;
+
 export async function sellItemUnits(
   itemId: string,
   unitsSold: number,
-  tx?: Prisma.TransactionClient
+  tx?: SellItemUnitsTx
 ): Promise<SellItemUnitsResult> {
   if (!Number.isInteger(unitsSold) || unitsSold < 1) {
     throw new Error(`sellItemUnits: unitsSold must be a positive integer, got ${unitsSold}`);
