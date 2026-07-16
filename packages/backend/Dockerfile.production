@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-# cache-bust: 2026-07-16T11:32:00Z — retry #2: prior cache-bust commit (b4f3d303) was ALSO marked SKIPPED despite touching this exact file (confirmed via git show --stat, disproves watchPatterns theory for that attempt) — forcing a genuinely new commit hash to see if it clears whatever queue/webhook state is stuck
+# cache-bust: 2026-07-16T20:30:00Z — S1129: force backend deploy of ADR-088 auth.ts header-fallback + index.ts /api/auth/refresh CORS + itemController stockSold read (push tip 14fd845 backend changes were SKIPPED because the a0d078c8 blog-fix tip was frontend-only, §10c deploy-skip trap)
 FROM node:20-slim AS base
 
 # Install OpenSSL for Prisma
