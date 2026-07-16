@@ -1032,7 +1032,12 @@ httpServer.listen(PORT, '0.0.0.0', () => {
   scheduleSocialPublisherCron();
 
   // ADR-083: Register Marketplace Poster cron (every 10 minutes)
-  scheduleMarketplacePosterCron();
+  // DISABLED 2026-07-16: ADR-083 server-side Marketplace poster is deprecated (ADR-084 -- no
+  // MarketplacePosterAccounts exist, FB has no removal API). This cron only ever marked QUEUED
+  // MarketplaceListingJob rows SKIPPED every 10 min, and it grabbed extension-owned REMOVE jobs
+  // before they were visible as "pending removal". Removal is now 100% extension-driven
+  // (checkPendingRemovals -> /extension/pending-removals). Leaving the schedule call off.
+  // scheduleMarketplacePosterCron();
 
   // Comment/mention engagement monitor (hourly YouTube/X polling) + approved-reply poster (every 30 min)
   scheduleEngagementMonitorCron();
