@@ -205,7 +205,7 @@ export async function reanalyzeItem(
         isbn: item.isbn ?? null,
         tags: (result.tags && result.tags.length ? result.tags : result.suggestedTags) ?? null,
       },
-      { aiResult: result },
+      { aiResult: result, categoryHint: { id: item.ebayCategoryId, name: item.ebayCategoryName } },
     );
     merged = out.merged;
   } catch (err: any) {

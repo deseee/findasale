@@ -43,6 +43,7 @@ export interface AITagResult {
   estimatedDimensionsIn?: { length: number; width: number; height: number }; // packed box dims in inches
   estimatedPackageType?: string; // eBay packageType enum (MAILING_BOX | PACKAGE_THICK_ENVELOPE | LARGE_PACKAGE | etc.)
   packageConfidence?: number; // 0.0-1.0 confidence in the package estimate
+  ocrIsbn?: string; // ADR-089: checksum-valid ISBN extracted from the full Vision OCR block (books)
 }
 
 /** Photo with its computed quality score for best-photo-first sorting */
@@ -92,9 +93,56 @@ export function isAnthropicAvailable(): boolean {
   return !!ANTHROPIC_API_KEY;
 }
 
+/**
+ * ADR-089 — extract a checksum-valid ISBN from a free-text OCR block.
+ * Returns a normalized ISBN-13 (13 digits, no separators) or null.
+ *  - ISBN-13: 978/979 + 10 digits, tolerant of hyphens/spaces and the EAN-13 barcode digit
+ *    grouping ("9 781419 756917"); validated against the mod-10 checksum.
+ *  - ISBN-10: 10 chars (final may be X), validated mod-11, converted to ISBN-13.
+ * Non-book barcodes and bad checksums are rejected — near-zero false positives (checksum + prefix).
+ */
+export function extractIsbnFromText(text: string | null | undefined): string | null {
+  if (!text || typeof text !== 'string') return null;
+
+  const isValidIsbn13 = (d: string): boolean => {
+    if (!/^\d{13}$/.test(d) || !/^(978|979)/.test(d)) return false;
+    let sum = 0;
+    for (let i = 0; i < 12; i++) sum += Number(d[i]) * (i % 2 === 0 ? 1 : 3);
+    return (10 - (sum % 10)) % 10 === Number(d[12]);
+  };
+  const isValidIsbn10 = (r: string): boolean => {
+    if (!/^\d{9}[\dX]$/.test(r)) return false;
+    let sum = 0;
+    for (let i = 0; i < 9; i++) sum += Number(r[i]) * (10 - i);
+    sum += r[9] === 'X' ? 10 : Number(r[9]);
+    return sum % 11 === 0;
+  };
+  const isbn10to13 = (r: string): string => {
+    const core = '978' + r.slice(0, 9);
+    let sum = 0;
+    for (let i = 0; i < 12; i++) sum += Number(core[i]) * (i % 2 === 0 ? 1 : 3);
+    return core + String((10 - (sum % 10)) % 10);
+  };
+
+  // ISBN-13 first — separators allowed between every digit so barcode grouping reconstructs.
+  const re13 = /9[\s-]?7[\s-]?[89](?:[\s-]?\d){10}/g;
+  let m: RegExpExecArray | null;
+  while ((m = re13.exec(text)) !== null) {
+    const digits = m[0].replace(/[-\s]/g, '');
+    if (digits.length === 13 && isValidIsbn13(digits)) return digits;
+  }
+  // ISBN-10 fallback (may carry an "ISBN" label prefix; final char may be X).
+  const re10 = /\b\d(?:[-\s]?\d){8}[-\s]?[\dXx]\b/g;
+  while ((m = re10.exec(text)) !== null) {
+    const raw = m[0].replace(/[-\s]/g, '').toUpperCase();
+    if (raw.length === 10 && isValidIsbn10(raw)) return isbn10to13(raw);
+  }
+  return null;
+}
+
 // ── Step 1: Google Vision label extraction ────────────────────────────────────
 
-export async function getVisionLabels(imageBase64: string): Promise<{ objectLabels: string[]; detectedText: string[]; qualityScore: number }> {
+export async function getVisionLabels(imageBase64: string): Promise<{ objectLabels: string[]; detectedText: string[]; qualityScore: number; ocrIsbn?: string }> {
   try {
     const response = await axios.post(
       `https://vision.googleapis.com/v1/images:annotate?key=${GOOGLE_VISION_API_KEY}`,
@@ -124,6 +172,11 @@ export async function getVisionLabels(imageBase64: string): Promise<{ objectLabe
       .map((t: any) => t.description?.trim())
       .filter((t: string) => t && t.length > 1 && t.length < 40); // skip single chars and long strings
 
+    // ADR-089: textAnnotations[0] is the FULL combined OCR block (skipped above for word tokens).
+    // A book's printed/barcode ISBN lives there — extract a checksum-valid ISBN before discarding it.
+    const fullOcrBlock: string = textAnnotations[0]?.description ?? '';
+    const ocrIsbn = extractIsbnFromText(fullOcrBlock) ?? undefined;
+
     // Derive quality score from max label confidence — replaces computePhotoQualityScore
     const qualityScore = labelAnnotations.length > 0
       ? Math.max(...labelAnnotations.map((l: any) => l.score ?? 0))
@@ -138,7 +191,7 @@ export async function getVisionLabels(imageBase64: string): Promise<{ objectLabe
     // in with generic label guesses (see evidence-hierarchy instruction in the Haiku prompts).
     const objectLabels = [...new Set([...objects, ...labels])].slice(0, 18);
     const detectedText = [...new Set(detectedTexts)].slice(0, 18);
-    return { objectLabels, detectedText, qualityScore };
+    return { objectLabels, detectedText, qualityScore, ocrIsbn };
   } catch (error: any) {
     // Feature #109: Graceful degradation — return empty labels on Vision API failure
     console.warn('[cloudAIService] Google Vision API error:', error.message || error);
@@ -641,6 +694,7 @@ export async function analyzeItemImage(
   // Promise when the feature flag is off or the embedding service isn't configured.
   let objectLabels: string[] = [];
   let detectedText: string[] = [];
+  let ocrIsbn: string | undefined;
   let catalogMatches: CatalogMatch[] | null = null;
   let webMatch: { webEntities: string[]; bestGuessLabels: string[] } | null = null;
   let ebayMatch: EbayImageMatch | null = null;
@@ -659,6 +713,7 @@ export async function analyzeItemImage(
   if (visionSettled.status === 'fulfilled') {
     objectLabels = visionSettled.value.objectLabels;
     detectedText = visionSettled.value.detectedText;
+    ocrIsbn = visionSettled.value.ocrIsbn;
   }
   // Vision API unavailable or quota exceeded — Haiku will analyse image alone (unchanged behavior)
   if (catalogSettled.status === 'fulfilled') {
@@ -675,6 +730,7 @@ export async function analyzeItemImage(
   // getWebDetectionMatch() never throws (returns null on error) — allSettled defensive as above
 
   const result = await getHaikuAnalysis(imageBase64, mimeType, objectLabels, detectedText, comps, catalogMatches, webMatch, ebayMatch);
+  if (ocrIsbn) result.ocrIsbn = ocrIsbn; // ADR-089: thread OCR-derived ISBN onto the analysis result
 
   // Fix C: curated tag suggestions derived LOCALLY (no extra Anthropic call). Match the curated
   // vocabulary against the main-response tags + Vision object labels + detected text.
@@ -788,6 +844,7 @@ export async function analyzeItemImages(
   let photoOrderIndices: number[] = Array.from({ length: buffers.length }, (_, i) => i);
   let objectLabels: string[] = [];
   let detectedText: string[] = [];
+  let ocrIsbn: string | undefined; // ADR-089: first checksum-valid ISBN across all photos
   // Reverse-Image Product Index (ADR 2026-07-01 §1): catalog-match vector search
   // runs IN PARALLEL with the per-photo Vision pass below (both are pre-Haiku,
   // independent of each other) — not sequentially after Vision. Uses the FIRST
@@ -812,8 +869,8 @@ export async function analyzeItemImages(
     const allVisionResults = await Promise.all(
       imageBase64Array.map((b64, idx) =>
         getVisionLabels(b64)
-          .then(res => ({ index: idx, buffer: buffers[idx], mimeType: types[idx], qualityScore: res.qualityScore, objectLabels: res.objectLabels, detectedText: res.detectedText }))
-          .catch(() => ({ index: idx, buffer: buffers[idx], mimeType: types[idx], qualityScore: 0, objectLabels: [] as string[], detectedText: [] as string[] }))
+          .then(res => ({ index: idx, buffer: buffers[idx], mimeType: types[idx], qualityScore: res.qualityScore, objectLabels: res.objectLabels, detectedText: res.detectedText, ocrIsbn: res.ocrIsbn as string | undefined }))
+          .catch(() => ({ index: idx, buffer: buffers[idx], mimeType: types[idx], qualityScore: 0, objectLabels: [] as string[], detectedText: [] as string[], ocrIsbn: undefined as string | undefined }))
       )
     );
 
@@ -846,6 +903,7 @@ export async function analyzeItemImages(
     const allDetectedText: string[] = allVisionResults.flatMap(r => r.detectedText);
     objectLabels = Array.from(new Set(allObjectLabels)).slice(0, 20);
     detectedText = Array.from(new Set(allDetectedText)).slice(0, 20);
+    ocrIsbn = allVisionResults.map(r => r.ocrIsbn).find((v): v is string => !!v);
   } catch {
     // Vision pass failed — proceed with original order and no labels (non-blocking)
   }
@@ -866,6 +924,7 @@ export async function analyzeItemImages(
 
   // Multi-image Haiku analysis (Phase 2: pass clusterPhotos for role context)
   const result = await getHaikuAnalysisMultiImage(imageBase64Array, types, objectLabels, detectedText, comps, clusterPhotos, catalogMatches, webMatch, ebayMatch);
+  if (ocrIsbn) result.ocrIsbn = ocrIsbn; // ADR-089: thread OCR-derived ISBN onto the analysis result
 
   // Fix C: curated tag suggestions derived LOCALLY (no extra Anthropic call). Match the curated
   // vocabulary against the main-response tags + Vision object labels + detected text.

@@ -329,6 +329,7 @@ export interface EbayPublishItem {
   ebayCategoryName?: string | null;
   ebayOfferId?: string | null;
   category?: string | null;
+  isbn?: string | null; // ADR-089: real ISBN for the Books item-specific aspect (heal25002)
 }
 
 /**
@@ -484,6 +485,12 @@ function parseMissing25002AspectNames(errorBody: string): string[] {
         if (/^\d+$/.test(value)) continue; // numeric index leaked in as a value
         const wordCount = value.split(/\s+/).filter(Boolean).length;
         if (wordCount > 6 || value.length > 50 || /[.!?]/.test(value)) continue; // sentence-form message
+        // ADR-089 tighten: eBay does NOT guarantee terminal punctuation, so a sentence like
+        // "The ISBN field is missing" (5 words, no period) passed the filters above and would be
+        // injected as a bogus aspect name. A real aspect label is <=2 words with no article/verb
+        // token — reject anything longer or containing one so only true labels survive.
+        if (wordCount > 2) continue;
+        if (/\b(the|a|an|is|are|was|were|field|missing|value|add)\b/.test(value)) continue;
         names.add(value);
       }
     }
@@ -560,14 +567,34 @@ const heal25002: Healer = async (ctx, errorBody) => {
   // Brand/MPN/Model injection above didn't already cover.
   const missingNames = parseMissing25002AspectNames(errorBody);
   const dynamicNames = missingNames.filter((name) => !/^brand ?mpn$/i.test(name) && !hasKey(name));
-  if (dynamicNames.length > 0 && ctx.categoryId) {
+  // ADR-089: ISBN is a REAL identifier aspect for Books — no safe default exists ("Does Not
+  // Apply" is rejected by eBay for ISBN). Inject the item's real ISBN when present; SKIP entirely
+  // when absent (a placeholder ISBN guarantees another 25002, so skipping lets the loop terminate
+  // with a diagnosable failure rather than a guaranteed-invalid retry).
+  if (dynamicNames.some((name) => /^isbn$/i.test(name))) {
+    const realIsbn = item.isbn && String(item.isbn).trim() ? String(item.isbn).trim() : '';
+    if (realIsbn) {
+      aspectsObj['ISBN'] = [realIsbn];
+      console.log(`[eBay SelfHeal 25002] ${ctx.sku}: injecting real ISBN=${realIsbn} from item`);
+    } else {
+      console.warn(`[eBay SelfHeal 25002] ${ctx.sku}: missing ISBN aspect but item has no ISBN — skipping (unhealable; needs auto-ISBN resolve)`);
+    }
+  }
+  // Non-ISBN dynamic aspects: only inject when the name resolves to a REAL category aspect
+  // (aspectSpec defined). A name matching no real aspect (e.g. a leaked sentence fragment) is
+  // discarded rather than injected under bogus text.
+  const nonIsbnNames = dynamicNames.filter((name) => !/^isbn$/i.test(name));
+  if (nonIsbnNames.length > 0 && ctx.categoryId) {
     const spec = await getRequiredAspectsForCategory(ctx.categoryId);
-    for (const name of dynamicNames) {
+    for (const name of nonIsbnNames) {
       const aspectSpec = spec?.find((a) => a.name.toLowerCase() === name.toLowerCase());
+      if (!aspectSpec) {
+        console.log(`[eBay SelfHeal 25002] ${ctx.sku}: discarding dynamic aspect "${name}" — no matching real category aspect`);
+        continue;
+      }
       const defaultValue = pickSafeAspectDefault(aspectSpec);
-      const finalName = aspectSpec?.name ?? name;
-      aspectsObj[finalName] = [defaultValue];
-      console.log(`[eBay SelfHeal 25002] ${ctx.sku}: dynamically injecting missing aspect "${finalName}"=${defaultValue}`);
+      aspectsObj[aspectSpec.name] = [defaultValue];
+      console.log(`[eBay SelfHeal 25002] ${ctx.sku}: dynamically injecting missing aspect "${aspectSpec.name}"=${defaultValue}`);
     }
   }
 
@@ -581,6 +608,10 @@ const heal25002: Healer = async (ctx, errorBody) => {
   }
   if (!invBody.product.mpn) {
     invBody.product.mpn = item.mpn?.trim() || 'Does Not Apply';
+  }
+  // ADR-089: mirror the real ISBN onto top-level product.isbn alongside the ISBN aspect.
+  if (aspectsObj['ISBN'] && !invBody.product.isbn) {
+    invBody.product.isbn = aspectsObj['ISBN'];
   }
 
   console.log(`[eBay SelfHeal 25002] ${ctx.sku}: injecting Brand=${aspectsObj['Brand']?.[0]} + MPN=${aspectsObj['MPN']?.[0]} and re-publishing`);

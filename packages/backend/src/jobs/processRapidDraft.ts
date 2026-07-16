@@ -349,7 +349,7 @@ export async function processRapidDraft(itemId: string): Promise<void> {
             isbn: item.isbn ?? null,
             tags: aiResult.tags ?? null,
           },
-          { decodedBarcode: rapidDecodedBarcode, aiResult },
+          { decodedBarcode: rapidDecodedBarcode, aiResult, categoryHint: { id: item.ebayCategoryId ?? ebayCategoryId ?? null, name: item.ebayCategoryName ?? ebayCategoryName ?? null } },
         );
         const plan = planEnrichmentApply(merged, {
           brand: item.brand ?? null,

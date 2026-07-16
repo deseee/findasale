@@ -19,6 +19,7 @@ import {
 // './ebayController' keep resolving (same pattern S1048 used for the OAuth token fns).
 export { ensureConditionValidForCategory } from '../services/ebayPublishService';
 export type { RequiredAspect } from '../services/ebayPublishService';
+import { resolveBookIsbn } from '../services/productEnrichment';
 import { getWatermarkedUrl, getWatermarkedUrlWithQR } from '../utils/cloudinaryWatermark';
 import { canRemoveWatermark, WatermarkPolicyOrganizer } from '../utils/watermarkPolicy';
 import { classifyEbayShipping } from '../utils/ebayShippingClassifier';
@@ -1724,6 +1725,8 @@ export function validateItemForEbayPublish(item: {
   packageWeightOz?: number | null;
   aiPackageWeightOz?: number | null;
   ebayShippingOverride?: string | null;
+  isbn?: string | null;
+  isBookCategory?: boolean;
 }): { code: string; message: string } | null {
   // Guard 1 — eBay minimum price ($0.99). Only reject an explicit sub-minimum
   // price; a null/0 price defaults to 0.99 upstream and must never be blocked.
@@ -1747,6 +1750,19 @@ export function validateItemForEbayPublish(item: {
       code: 'EBAY_NO_PACKAGE_WEIGHT',
       message:
         'eBay needs a package weight to calculate shipping. Add a package weight, or mark this item Local pickup only.',
+    };
+  }
+
+  // Guard 3 (ADR-089) — Books category with no ISBN. eBay's Books category (261186) requires a
+  // real ISBN item-specific; a missing ISBN fails with errorId 25002 and is structurally
+  // unhealable (no safe default for an identifier). The publish-path JIT resolve runs BEFORE this
+  // guard, so item.isbn is already populated if resolvable — reaching here means it couldn't be
+  // read from photos or found by title. Block with plain English (mirrors the S1128 guards).
+  if (item.isBookCategory && (item.isbn == null || String(item.isbn).trim() === '')) {
+    return {
+      code: 'EBAY_BOOK_NO_ISBN',
+      message:
+        "This book needs an ISBN to list on eBay — we couldn't read it from the photos or find it by title. Add the book's ISBN (usually near the barcode) and try again.",
     };
   }
 
@@ -2055,11 +2071,31 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
         // message BEFORE creating/publishing the offer. Validates the FINAL resolved
         // price (so a null price defaulting to 0.99 is never blocked). Records a
         // per-item error and skips, matching the existing routing-error pattern.
+        // ADR-089: JIT ISBN resolve for legacy Books items with no ISBN (covers items tagged
+        // before auto-ISBN). Fires only for Books-family categories with an empty ISBN.
+        const isBookCategory =
+          item.ebayCategoryId === '261186' ||
+          (typeof item.ebayCategoryName === 'string' && /book/i.test(item.ebayCategoryName));
+        if (isBookCategory && (item.isbn == null || String(item.isbn).trim() === '')) {
+          try {
+            const resolved = await resolveBookIsbn({ title: item.title, brand: item.brand, isbn: item.isbn, tags: item.tags });
+            if (resolved?.isbn) {
+              const catalogSuggestions = { source: 'openLibrarySearch', sources: ['openLibrarySearch'], fields: { isbn: { value: resolved.isbn, source: 'openLibrarySearch', confidence: resolved.confidence } }, suggestedAt: new Date().toISOString() };
+              await prisma.item.update({ where: { id: item.id }, data: { isbn: resolved.isbn, catalogSuggestions } });
+              item.isbn = resolved.isbn;
+              console.log('[auto-isbn] item=%s isbn=%s source=%s confidence=%s', item.id, resolved.isbn, 'openLibrarySearch', resolved.confidence);
+            }
+          } catch (e: any) {
+            console.warn('[auto-isbn] JIT resolve failed for item', item.id, e?.message || e);
+          }
+        }
         const prePublishError = validateItemForEbayPublish({
           price,
           packageWeightOz: item.packageWeightOz,
           aiPackageWeightOz: item.aiPackageWeightOz,
           ebayShippingOverride: item.ebayShippingOverride,
+          isbn: item.isbn,
+          isBookCategory,
         });
         if (prePublishError) {
           results.push({
@@ -2129,6 +2165,15 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
           if (hasAspect('Brand') && !hasAspect('MPN')) {
             aspects['MPN'] = [item.mpn?.trim() || 'Does Not Apply'];
           }
+        }
+        // ADR-089: ISBN is a REQUIRED item-specific aspect for eBay Books (category 261186).
+        // product.isbn alone does NOT satisfy it — the aspect must be set explicitly. This is
+        // the actual switch that clears errorId 25002 "The ISBN field is missing." Harmless on
+        // non-book categories that don't read the aspect; overrides any "Does Not Apply" default.
+        if (item.isbn && item.isbn.trim()) {
+          const isbnAspects: Record<string, string[]> = aspects ?? {};
+          isbnAspects['ISBN'] = [item.isbn.trim()];
+          aspects = isbnAspects;
         }
         const sanitizedDescription = sanitizeDescriptionForEbay(item.description);
         // Bug #424: replace ALL occurrences of {{DESCRIPTION}} in the organizer's template.
@@ -2647,6 +2692,7 @@ export const publishItemOffer = async (req: AuthRequest, res: Response) => {
         ebayListedAt: true,
         ebayCategoryId: true,
         ebayCategoryName: true,
+        isbn: true,
         draftStatus: true,
         title: true,
         category: true,
@@ -2726,11 +2772,30 @@ export const publishItemOffer = async (req: AuthRequest, res: Response) => {
     } else if (item.estimatedValue) {
       effectivePrice = Number(item.estimatedValue);
     }
+    // ADR-089: JIT ISBN resolve for legacy Books items with no ISBN.
+    const isBookCategory =
+      item.ebayCategoryId === '261186' ||
+      (typeof item.ebayCategoryName === 'string' && /book/i.test(item.ebayCategoryName));
+    if (isBookCategory && (item.isbn == null || String(item.isbn).trim() === '')) {
+      try {
+        const resolved = await resolveBookIsbn({ title: item.title, brand: item.brand, isbn: item.isbn });
+        if (resolved?.isbn) {
+          const catalogSuggestions = { source: 'openLibrarySearch', sources: ['openLibrarySearch'], fields: { isbn: { value: resolved.isbn, source: 'openLibrarySearch', confidence: resolved.confidence } }, suggestedAt: new Date().toISOString() };
+          await prisma.item.update({ where: { id: item.id }, data: { isbn: resolved.isbn, catalogSuggestions } });
+          item.isbn = resolved.isbn;
+          console.log('[auto-isbn] item=%s isbn=%s source=%s confidence=%s', item.id, resolved.isbn, 'openLibrarySearch', resolved.confidence);
+        }
+      } catch (e: any) {
+        console.warn('[auto-isbn] JIT resolve failed for item', item.id, e?.message || e);
+      }
+    }
     const prePublishError = validateItemForEbayPublish({
       price: effectivePrice,
       packageWeightOz: item.packageWeightOz,
       aiPackageWeightOz: item.aiPackageWeightOz,
       ebayShippingOverride: item.ebayShippingOverride,
+      isbn: item.isbn,
+      isBookCategory,
     });
     if (prePublishError) {
       return res.status(400).json({
@@ -2785,6 +2850,7 @@ export const publishItemOffer = async (req: AuthRequest, res: Response) => {
         ebayCategoryName: item.ebayCategoryName,
         ebayOfferId: item.ebayOfferId,
         category: item.category,
+        isbn: item.isbn,
       },
       accessToken,
       sku,

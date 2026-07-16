@@ -417,6 +417,7 @@ export const batchAnalyzeImages = async (req: AuthRequest, res: Response): Promi
               where: { id: itemId },
               select: {
                 description: true, userEditedFields: true, ebayCategoryId: true,
+                ebayCategoryName: true,
                 brand: true, mpn: true, upc: true, ean: true, isbn: true,
                 packageWeightOz: true, packageLengthIn: true, packageWidthIn: true,
                 packageHeightIn: true, packageConfirmedByOrganizer: true,
@@ -491,6 +492,7 @@ export const batchAnalyzeImages = async (req: AuthRequest, res: Response): Promi
               const { merged } = await enrichItem(enrichInput, {
                 decodedBarcode: batchDecodedBarcode,
                 aiResult: analysis,
+                categoryHint: { id: existing?.ebayCategoryId ?? ebayCategoryId ?? null, name: existing?.ebayCategoryName ?? ebayCategoryName ?? null },
               });
               const plan = planEnrichmentApply(merged, {
                 brand: existing?.brand ?? null,

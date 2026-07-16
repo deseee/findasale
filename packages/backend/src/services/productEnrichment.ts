@@ -58,6 +58,8 @@ export interface EnrichItemInput {
 export interface EnrichContext {
   decodedBarcode?: { code: string; type?: string };
   aiResult?: any;
+  /** ADR-089: category signal for book detection (openLibrarySearch gate). */
+  categoryHint?: { id?: string | null; name?: string | null };
 }
 
 export interface EnrichmentProvider {
@@ -155,6 +157,25 @@ const localBarcodeProvider: EnrichmentProvider = {
   },
 };
 
+// ── Provider 1b: ocrIdentifier (ADR-089) ────────────────────────────────────
+// A checksum-valid ISBN read from the full Vision OCR block (cloudAIService.extractIsbnFromText,
+// threaded onto aiResult.ocrIsbn). Barcode-grade, no network call. Always-on (not book-gated).
+
+const ocrIdentifierProvider: EnrichmentProvider = {
+  name: 'ocrIdentifier',
+  isEnabled: () => true,
+  appliesTo: (_item, ctx) => !!ctx.aiResult?.ocrIsbn,
+  async lookup(_item, ctx) {
+    try {
+      const raw = String(ctx.aiResult?.ocrIsbn || '').replace(/[-\s]/g, '').trim();
+      if (!raw || !isIsbnCode(raw)) return null;
+      return { fields: { isbn: raw }, confidence: 0.9, source: 'ocr' };
+    } catch {
+      return null;
+    }
+  },
+};
+
 // ── Provider 2: openLibrary ─────────────────────────────────────────────────
 // isbn → confirmed identifier (+ publisher mapped to brand). Free, no key.
 
@@ -184,6 +205,170 @@ const openLibraryProvider: EnrichmentProvider = {
     }
   },
 };
+
+// ── Provider 2b: openLibrarySearch (ADR-089) ────────────────────────────────
+// title/author -> ISBN via Open Library search.json (FREE, no key). Runs only when no
+// derivable identifier exists AND there is a book signal. A naive full-title query returns 0
+// for many books (verified: the Beeple book), so build a short, author-anchored query cascade,
+// most-specific first, and take the first dominant match. Every value is URL-encoded.
+
+/** Strip marketing/format noise from a raw item title to get the core book title. */
+function cleanBookTitle(title: string): string {
+  let t = title || '';
+  t = t.replace(/\bby\s+.+$/i, ' '); // drop trailing "by <author>" (captured separately)
+  t = t.replace(/\b(hardcover|paperback|hardback|softcover|mass market|library binding|book|novel|edition|illustrated|reprint|revised|deluxe|boxed set|volume|vol\.?)\b/gi, ' ');
+  t = t.replace(/[,:;\u2013\u2014-]+/g, ' ');
+  return t.replace(/\s+/g, ' ').trim();
+}
+
+/** True when a string looks like a person's name (2-4 capitalized tokens). */
+function looksLikePerson(sName: string): boolean {
+  const tokens = (sName || '').trim().split(/\s+/);
+  if (tokens.length < 2 || tokens.length > 4) return false;
+  return tokens.every((w) => /^[A-Z][A-Za-z.'\u2019-]+$/.test(w));
+}
+
+/** Extract an author from the item title ("... by Jane Doe") or a person-like brand. */
+function extractAuthor(item: EnrichItemInput): string | null {
+  const title = item.title || '';
+  const m = title.match(/\bby\s+([A-Za-z.'\u2019-]+(?:\s+[A-Za-z.'\u2019-]+){0,3})\s*$/i);
+  if (m && m[1] && looksLikePerson(m[1].trim())) return m[1].trim();
+  const brand = (item.brand || '').trim();
+  if (brand && looksLikePerson(brand)) return brand;
+  return null;
+}
+
+/** Pick a preferred ISBN-13 (978/979) from Open Library's merged isbn[] array. */
+function pickIsbn13(isbnArr: unknown): string | null {
+  if (!Array.isArray(isbnArr)) return null;
+  const clean = isbnArr
+    .map((x) => String(x || '').replace(/[-\s]/g, '').trim())
+    .filter((x) => /^\d{13}$/.test(x) || /^\d{9}[\dXx]$/.test(x));
+  const pref = clean.find((x) => /^(978|979)\d{10}$/.test(x));
+  if (pref) return pref;
+  return clean.find((x) => /^\d{13}$/.test(x)) || null;
+}
+
+interface OpenLibraryDoc { isbn?: string[]; author_name?: string[]; title?: string }
+
+/**
+ * Author-anchored Open Library query cascade -> a work ISBN-13, or null. Bounded: at most
+ * 3 requests, 8s timeout each, every interpolated value URL-encoded (no query injection).
+ * Confidence 0.9 for a single dominant match; 0.6 for a 2-3-result ambiguous match; null > 3.
+ */
+async function openLibrarySearchIsbn(
+  item: EnrichItemInput,
+): Promise<{ isbn: string; confidence: number } | null> {
+  const rawTitle = (item.title || '').trim();
+  if (!rawTitle) return null;
+  const author = extractAuthor(item);
+  const cleanedTitle = cleanBookTitle(rawTitle);
+  const firstToken = (item.brand?.trim() || cleanedTitle.split(/\s+/)[0] || '').trim();
+
+  const enc = encodeURIComponent;
+  const base = 'https://openlibrary.org/search.json';
+  const fields = '&fields=isbn,title,author_name&limit=5';
+  const urls: string[] = [];
+  if (cleanedTitle && author) urls.push(`${base}?title=${enc(cleanedTitle)}&author=${enc(author)}${fields}`);
+  if (firstToken && author)   urls.push(`${base}?q=${enc(`${firstToken} ${author}`)}${fields}`);
+  if (author)                 urls.push(`${base}?author=${enc(author)}${fields}`);
+  if (urls.length === 0) return null;
+
+  for (const url of urls.slice(0, 3)) {
+    try {
+      const res = await axios.get(url, { timeout: 8000, validateStatus: () => true });
+      if (res.status !== 200 || !res.data || typeof res.data !== 'object') continue;
+      const data: any = res.data;
+      const docs: OpenLibraryDoc[] = Array.isArray(data.docs) ? data.docs : [];
+      if (docs.length === 0) continue;
+      const numFound: number = typeof data.numFound === 'number' ? data.numFound
+        : typeof data.num_found === 'number' ? data.num_found : docs.length;
+
+      if (numFound === 1) {
+        const isbn = pickIsbn13(docs[0].isbn);
+        if (isbn) return { isbn, confidence: 0.9 };
+        continue;
+      }
+      if (numFound <= 3) {
+        const doc = docs.find((d) => pickIsbn13(d.isbn));
+        const isbn = doc ? pickIsbn13(doc.isbn) : null;
+        if (isbn) return { isbn, confidence: 0.6 };
+      }
+      // numFound > 3 -> too weak; more-specific queries were tried first, so give up.
+    } catch {
+      continue;
+    }
+  }
+  return null;
+}
+
+const openLibrarySearchProvider: EnrichmentProvider = {
+  name: 'openLibrarySearch',
+  isEnabled: () => true,
+  appliesTo: (item, ctx) => {
+    if (firstIsbn(item, ctx) || firstUpc(item, ctx)) return false; // already have an identifier
+    const hint = ctx.categoryHint;
+    const catBook = !!(hint && ((hint.id && String(hint.id) === '261186') || (hint.name && /book/i.test(hint.name))));
+    const text = `${item.title || ''} ${(item.tags || []).join(' ')}`.toLowerCase();
+    const textBook = /\b(book|hardcover|paperback|novel|isbn)\b/.test(text);
+    return catBook || textBook;
+  },
+  async lookup(item) {
+    try {
+      const r = await openLibrarySearchIsbn(item);
+      if (!r) return null;
+      return { fields: { isbn: r.isbn }, confidence: r.confidence, source: 'openLibrarySearch' };
+    } catch {
+      return null;
+    }
+  },
+};
+
+// ── Provider 2c: googleBooks (env-gated, DEFAULT OFF) ───────────────────────
+// Per-edition ISBNs (better format disambiguation) via Google Books volumes. Keyless access
+// is hard-blocked (HTTP 429, quota 0), so this lights up only when GOOGLE_BOOKS_API_KEY is set.
+// Never primary/required.
+const googleBooksProvider: EnrichmentProvider = {
+  name: 'googleBooks',
+  isEnabled: () => !!process.env.GOOGLE_BOOKS_API_KEY,
+  appliesTo: (item, ctx) => {
+    if (firstIsbn(item, ctx) || firstUpc(item, ctx)) return false;
+    const hint = ctx.categoryHint;
+    const catBook = !!(hint && ((hint.id && String(hint.id) === '261186') || (hint.name && /book/i.test(hint.name))));
+    const text = `${item.title || ''} ${(item.tags || []).join(' ')}`.toLowerCase();
+    return catBook || /\b(book|hardcover|paperback|novel|isbn)\b/.test(text);
+  },
+  async lookup(item) {
+    try {
+      const author = extractAuthor(item);
+      const cleaned = cleanBookTitle(item.title || '');
+      if (!cleaned) return null;
+      const q = author ? `${cleaned} ${author}` : cleaned;
+      const url = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(q)}&maxResults=3&key=${encodeURIComponent(process.env.GOOGLE_BOOKS_API_KEY || '')}`;
+      const res = await axios.get(url, { timeout: 8000, validateStatus: () => true });
+      if (res.status !== 200 || !res.data || typeof res.data !== 'object') return null;
+      const items: any[] = Array.isArray(res.data.items) ? res.data.items : [];
+      for (const vol of items) {
+        const ids: any[] = vol?.volumeInfo?.industryIdentifiers || [];
+        const hit = ids.find((i) => i?.type === 'ISBN_13' && /^(978|979)\d{10}$/.test(String(i.identifier || '').replace(/[-\s]/g, '')));
+        if (hit) return { fields: { isbn: String(hit.identifier).replace(/[-\s]/g, '') }, confidence: 0.6, source: 'googleBooks' };
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  },
+};
+
+/**
+ * Standalone publish-time JIT resolver (ADR-089 Decision 3.2). Covers legacy Books items
+ * tagged before auto-ISBN. Same author-anchored Open Library cascade as the provider.
+ */
+export async function resolveBookIsbn(
+  item: EnrichItemInput,
+): Promise<{ isbn: string; confidence: number } | null> {
+  return openLibrarySearchIsbn(item);
+}
 
 // ── Provider 3: openFoodFacts ───────────────────────────────────────────────
 // grocery upc → brand + net weight (product_quantity is grams). Free, no key.
@@ -420,7 +605,10 @@ const aiEstimateProvider: EnrichmentProvider = {
 /** Providers in priority order (first non-null per field wins). */
 const PROVIDERS: EnrichmentProvider[] = [
   localBarcodeProvider,
+  ocrIdentifierProvider,
   openLibraryProvider,
+  openLibrarySearchProvider,
+  googleBooksProvider,
   openFoodFactsProvider,
   ebayCatalogProvider,
   goUpcProvider,
@@ -497,7 +685,7 @@ export async function enrichItem(
  * Identifier fields (brand/mpn/upc/ean/isbn/epid/ebayCategory*) map to the matching
  * Item columns; weight/dims map to packageWeightOz / packageLengthIn/WidthIn/HeightIn.
  */
-const AUTHORITATIVE_SOURCES = new Set(['barcode', 'openLibrary', 'openFoodFacts', 'ebayCatalog', 'goUpc']);
+const AUTHORITATIVE_SOURCES = new Set(['barcode', 'ocr', 'openLibrary', 'openFoodFacts', 'ebayCatalog', 'goUpc']);
 
 export interface ApplyTargetItem {
   brand?: string | null;
