@@ -73,7 +73,8 @@ function updateCount() {
 async function startQueue() {
   const queue = ITEMS.filter((it) => selected.has(it.id)).map((it) => ({
     id: it.id, title: it.title, price: it.price, condition: it.condition,
-    description: it.description, category: it.category, photoUrls: it.photoUrls || []
+    description: it.description, category: it.category, photoUrls: it.photoUrls || [],
+    packageWeightOz: it.packageWeightOz, aiPackageWeightOz: it.aiPackageWeightOz
   }));
   if (!queue.length) return;
   await send({ type: 'setQueue', queue });

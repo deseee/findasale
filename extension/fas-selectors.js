@@ -95,6 +95,27 @@
     return bestScore >= 10 ? best : null;
   }
 
+  // Generic accessible-name clickable finder -- used for step "Next"/"Publish" buttons and
+  // modal triggers like "Select shipping label". Exact-trim match only (deliberately strict --
+  // a loose substring match risks clicking the wrong control on a page this dense with buttons).
+  function elementByText(text) {
+    const want = norm(text);
+    const nodes = Array.from(document.querySelectorAll('div[role="button"], button'));
+    return nodes.find((n) => norm(n.textContent) === want) || null;
+  }
+
+  // FB's Package weight step (Delivery) renders 6 fixed radio buckets -- confirmed live
+  // 2026-07-15: "Under 0.5 lbs" / "0.5-1 lbs" / "1-2 lbs" / "2-5 lbs" / "5-10 lbs" / "10-70 lbs".
+  // Unlike Category's dynamic AI chips this is a small fixed enumerable set, so a direct
+  // substring match against the radio's label text is reliable.
+  function radioLabelByText(text) {
+    const want = norm(text);
+    const radios = Array.from(document.querySelectorAll('[role="radio"], input[type="radio"]'));
+    const wrapped = radios.map((r) => r.closest('label') || r.parentElement);
+    return wrapped.find((label) => norm(label.textContent).includes(want)) || null;
+  }
+
   window.__FAS_SEL__ = { norm, fieldByLabel, comboByLabel, optionByText, photoInput, chipsAfter, bestTextMatch,
+    elementByText, radioLabelByText,
     LABELS: { title: 'Title', price: 'Price', description: 'Description', condition: 'Condition', category: 'Category' } };
 })();

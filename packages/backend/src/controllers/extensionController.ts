@@ -41,6 +41,7 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
     select: {
       id: true, saleId: true, title: true, description: true, price: true,
       category: true, condition: true, photoUrls: true, createdAt: true,
+      packageWeightOz: true, aiPackageWeightOz: true,
     },
     orderBy: { createdAt: 'desc' },
   });
@@ -69,6 +70,8 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
     description: buildDescription(it.description, it.saleId),
     category: it.category || null,
     photoUrls: it.photoUrls || [],
+    packageWeightOz: it.packageWeightOz,
+    aiPackageWeightOz: it.aiPackageWeightOz,
     marketplaceListed: postedByItem.has(it.id) && !removedByItem.has(it.id),
   }));
 
