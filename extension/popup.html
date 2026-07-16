@@ -12,7 +12,7 @@
   <footer id="footer" hidden>
     <label class="chk"><input type="checkbox" id="autoPublish" checked> Publish automatically</label>
     <button id="listBtn" class="primary" disabled>List selected on Marketplace</button>
-    <p class="note">Fills and publishes each listing on Facebook automatically. <b>Stops and asks for help if anything looks wrong.</b> Uncheck above to fill everything but stop before Publish so you can review it yourself first. While it's running, Chrome shows its own banner that this extension is debugging the tab &mdash; that's Chrome confirming the click is really happening on Facebook's page, not something to be concerned about. It closes on its own when the tab closes.</p>
+    <p class="note">Fills and publishes each listing automatically, pausing if anything looks off. Uncheck to fill but stop before Publish so you can review first. <span class="dim">(Chrome's &ldquo;debugging this tab&rdquo; banner is normal.)</span></p>
     <div class="removeSetting">
       <label class="chk" for="autoRemoveMode">When an item sells elsewhere</label>
       <select id="autoRemoveMode" class="select">
@@ -20,7 +20,7 @@
         <option value="silent">Remove automatically</option>
         <option value="off">Off</option>
       </select>
-      <p class="note">Facebook has no way for FindA.Sale to remove a listing itself &mdash; the extension checks every ~20 minutes for items sold on eBay, in person, or on your storefront, and removes the matching Facebook listing using the same automatic clicking as above. "Remove automatically" opens Facebook in a background tab on its own; "Notify me" waits for you to click the Chrome notification first.</p>
+      <p class="note">When an item sells elsewhere, the extension removes its Facebook listing (checked every ~20 min). &ldquo;Remove automatically&rdquo; runs in a background tab; &ldquo;Notify me&rdquo; waits for you to click the alert first.</p>
     </div>
   </footer>
   <script src="config.js"></script>

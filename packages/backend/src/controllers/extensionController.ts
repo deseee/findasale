@@ -38,7 +38,18 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
   const items = await prisma.item.findMany({
     // ADR-084 amendment 2026-07-15: exclude DONT_LIST items -- mirrors PostSaleEbayPanel's
     // auto-unselect on the eBay side, applied here at the query level instead of frontend-only.
-    where: { sale: { organizerId: organizer.id }, status: 'AVAILABLE', NOT: { ebayShippingOverride: 'DONT_LIST' } },
+    // 2026-07-16 fix: Prisma `NOT: { field: value }` compiles to `field <> value`, which SQL
+    // evaluates as NULL (row dropped) for the ~99% of items whose ebayShippingOverride IS NULL.
+    // That silently hid all but the rare non-null rows (extension showed only 1 of 126 items).
+    // The OR keeps NULL-override items while still excluding explicit DONT_LIST.
+    where: {
+      sale: { organizerId: organizer.id },
+      status: 'AVAILABLE',
+      OR: [
+        { ebayShippingOverride: null },
+        { ebayShippingOverride: { not: 'DONT_LIST' } },
+      ],
+    },
     take: 2000,
     select: {
       id: true, saleId: true, title: true, description: true, price: true,
