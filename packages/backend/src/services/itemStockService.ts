@@ -61,7 +61,14 @@ export async function sellItemUnits(
     throw new Error(`sellItemUnits: unitsSold must be a positive integer, got ${unitsSold}`);
   }
 
-  const client = tx ?? prisma;
+  // NOTE: explicit Prisma.TransactionClient annotation (not `const client = tx ?? prisma`)
+  // is required here -- letting TS infer a PrismaClient|Prisma.TransactionClient union on
+  // this variable causes a known Prisma v5 TS pitfall ("excessive stack depth comparing
+  // types ItemFindUniqueArgs<...>", "This expression is not callable") once it's used with
+  // $executeRaw/findUniqueOrThrow below. PrismaClient is structurally a superset of
+  // Prisma.TransactionClient (same query delegates, minus lifecycle methods we don't call
+  // here), so this cast is safe -- confirmed via GitHub Actions CI failure, not guessed.
+  const client: Prisma.TransactionClient = (tx ?? prisma) as Prisma.TransactionClient;
 
   // Guarded conditional update: only matches a row where the sale fits within
   // remaining capacity. Treats stockTotal IS NULL as "total = 1" via COALESCE,
