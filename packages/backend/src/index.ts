@@ -566,6 +566,18 @@ app.use(csrfTokenCookie);
 app.use((req: express.Request, res: express.Response, next: express.NextFunction) => {
   // Validate CSRF token on POST, PUT, PATCH, DELETE requests
   if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) {
+    // ADR-084 fix (2026-07-16): the Marketplace Autofill browser extension authenticates with a
+    // Bearer token (Authorization header), NOT the session cookie. Bearer-token requests are
+    // inherently CSRF-safe -- a forged cross-site request cannot attach the Authorization header the
+    // way the browser auto-attaches cookies. The global CSRF check (a cookie-session defense) was
+    // therefore blocking EVERY extension write (POST /api/extension/items/:id/listed and /removed),
+    // so the extension could read inventory but never record a listing as listed or removed. Skip
+    // CSRF only for Bearer-authenticated requests to /api/extension; a cookie-only request to the
+    // same path still gets validated.
+    const hasBearer = (req.headers.authorization || '').startsWith('Bearer ');
+    if (req.path.startsWith('/api/extension') && hasBearer) {
+      return next();
+    }
     return validateCsrfToken(req, res, next);
   }
   next();
