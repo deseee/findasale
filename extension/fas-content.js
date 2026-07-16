@@ -12,35 +12,7 @@
 
   function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
 
-  // A plain el.click() -- and even a full synthetic pointerdown/mousedown/pointerup/mouseup/
-  // click MouseEvent sequence with real coordinates -- is NOT reliable against Facebook's
-  // custom radio/button components. Confirmed live 2026-07-15 on the Package-weight radio AND
-  // the "Change shipping method" modal's "Update" button: both silently ignored every synthetic
-  // event variant tried (plain .click(), full pointer sequence, real on-screen coordinates,
-  // freshly-requeried non-stale elements -- ruled out staleness, viewport visibility, and event
-  // completeness one at a time). Root cause isolated the same session: Chrome marks script-
-  // dispatched events isTrusted=false, and these specific controls require trusted input to
-  // actually commit a selection -- proven by manually driving the identical flow with real OS-
-  // level clicks (Chrome DevTools Protocol / a real mouse), which worked every time and
-  // completed a genuine live Facebook Marketplace publish. A content script cannot produce
-  // trusted input itself, so this now asks the background service worker to do it via
-  // chrome.debugger (CDP) -- see background.js cdpClick(). Falls back to the old synthetic
-  // sequence only if CDP is ever unavailable (e.g. debugger permission revoked), so a
-  // permission hiccup degrades gracefully instead of hard-failing every click; Category chips
-  // and the Condition dropdown are confirmed working via the synthetic path too, so this is a
-  // safety net, not the expected path.
-  async function realClick(el) {
-    const rect = el.getBoundingClientRect();
-    const cx = Math.round(rect.left + rect.width / 2);
-    const cy = Math.round(rect.top + rect.height / 2);
-    try {
-      const resp = await chrome.runtime.sendMessage({ type: 'cdpClick', x: cx, y: cy });
-      if (resp && resp.ok) return;
-    } catch (e) { /* fall through to synthetic fallback */ }
-    ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'].forEach((type) => {
-      el.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, clientX: cx, clientY: cy, view: window }));
-    });
-  }
+  const realClick = SEL.realClick; // shared with fas-remove.js -- see fas-selectors.js
 
   function waitFor(getter, timeout = 12000) {
     return new Promise((resolve, reject) => {
@@ -227,7 +199,28 @@
   // with Facebook's own sensible defaults once a weight is set (confirmed live 2026-07-15 --
   // "Prepaid shipping label" and a real carrier quote both appear automatically) so no separate
   // fill is needed for those two fields.
+  //
+  // ADR-084 amendment 2026-07-15 (Part B) -- mirrors eBay's LOCAL_PICKUP_ONLY handling
+  // (Item.ebayShippingOverride, same field/values eBay already reads): when set, switch
+  // Facebook's own "Delivery method" dropdown (default "Shipping & local pickup", confirmed
+  // live) to its local-pickup option instead, and skip the weight/carrier sub-flow entirely --
+  // there is no shipping label to configure for a pickup-only item. Facebook's exact option
+  // wording was NOT live-verified this dispatch (creating a throwaway test listing to inspect
+  // it was correctly blocked as a real-world action) -- matched by fuzzy substring ("pickup")
+  // via the existing optionByText fallback rather than an exact hardcoded string, and this is a
+  // HARD ERROR (not an auto-resolve) if no matching option is found, since silently leaving an
+  // item shippable when the organizer marked it pickup-only is a real incorrect listing, not a
+  // low-stakes guess like Category.
   async function fillDeliveryStep(item) {
+    if (item.shippingOverride === 'LOCAL_PICKUP_ONLY') {
+      await waitThenClick(() => SEL.comboByLabel('Delivery method'), 'Delivery',
+        'Couldn\'t find the Delivery method control.', 8000);
+      await waitThenClick(() => SEL.optionByText('pickup'), 'Delivery',
+        'Couldn\'t find a local-pickup option in the Delivery method list -- Facebook\'s wording may have changed.', 4000);
+      await humanPause(300, 600);
+      return;
+    }
+
     await waitThenClick(() => SEL.elementByText('Select shipping label'), 'Delivery',
       'Couldn\'t find the shipping label control.', 8000);
     await humanPause(400, 700); // let the "Change shipping method" modal fully render

@@ -88,6 +88,55 @@ chrome.debugger.onDetach.addListener((source) => {
   if (source && typeof source.tabId === 'number') fasDebuggedTabs.delete(source.tabId);
 });
 
+// ---- Cross-channel auto-removal (ADR-084 amendment 2026-07-15, Part C) ----
+// Facebook has no API to withdraw a listing server-side the way endEbayListingIfExists() calls
+// eBay directly -- this polls GET /extension/pending-removals on a recurring alarm instead, and
+// either notifies the organizer (default) or opens a background tab to remove sold items itself,
+// per the fasAutoRemoveMode setting ('notify' | 'silent' | 'off', default 'notify').
+const FAS_REMOVAL_ALARM = 'fasCheckRemovals';
+
+async function ensureRemovalAlarm() {
+  const { fasAutoRemoveMode = 'notify' } = await chrome.storage.local.get(['fasAutoRemoveMode']);
+  if (fasAutoRemoveMode === 'off') { chrome.alarms.clear(FAS_REMOVAL_ALARM); return; }
+  chrome.alarms.create(FAS_REMOVAL_ALARM, { periodInMinutes: 20 });
+}
+chrome.runtime.onInstalled.addListener(ensureRemovalAlarm);
+chrome.runtime.onStartup.addListener(ensureRemovalAlarm);
+
+async function checkPendingRemovals() {
+  const { fasAutoRemoveMode = 'notify' } = await chrome.storage.local.get(['fasAutoRemoveMode']);
+  if (fasAutoRemoveMode === 'off') return;
+  const resp = await apiFetch('/extension/pending-removals');
+  const items = (resp.ok && resp.data && resp.data.items) || [];
+  if (!items.length) return;
+
+  await chrome.storage.local.set({ fasRemovalQueue: items, fasRemovalIndex: 0 });
+
+  if (fasAutoRemoveMode === 'silent') {
+    chrome.tabs.create({ url: 'https://www.facebook.com/marketplace/you/selling', active: false });
+    return;
+  }
+
+  // 'notify' -- Chrome notification; clicking it opens the removal page in an active tab
+  // (the content script picks up the already-stored queue on load, same as the listing flow
+  // never needing an open popup to run).
+  chrome.notifications.create('fasPendingRemovals', {
+    type: 'basic',
+    iconUrl: 'icon128.png',
+    title: 'FindA.Sale',
+    message: items.length === 1
+      ? '1 item sold elsewhere — remove it from Facebook Marketplace?'
+      : items.length + ' items sold elsewhere — remove them from Facebook Marketplace?',
+    priority: 1
+  });
+}
+chrome.alarms.onAlarm.addListener((alarm) => { if (alarm.name === FAS_REMOVAL_ALARM) checkPendingRemovals(); });
+chrome.notifications.onClicked.addListener((notifId) => {
+  if (notifId !== 'fasPendingRemovals') return;
+  chrome.notifications.clear(notifId);
+  chrome.tabs.create({ url: 'https://www.facebook.com/marketplace/you/selling', active: true });
+});
+
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   (async () => {
     try {
@@ -121,6 +170,20 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         await chrome.storage.local.set({ fasIndex: next });
         const item = (st.fasQueue || [])[next] || null;
         sendResponse({ ok: true, item, index: next, total: (st.fasQueue || []).length });
+      } else if (msg.type === 'getRemovalQueueItem') {
+        const { fasRemovalQueue = [], fasRemovalIndex = 0 } = await chrome.storage.local.get(['fasRemovalQueue', 'fasRemovalIndex']);
+        sendResponse({ ok: true, item: fasRemovalQueue[fasRemovalIndex] || null, index: fasRemovalIndex, total: fasRemovalQueue.length });
+      } else if (msg.type === 'advanceRemovalQueue') {
+        const st = await chrome.storage.local.get(['fasRemovalQueue', 'fasRemovalIndex']);
+        const next = (st.fasRemovalIndex || 0) + 1;
+        await chrome.storage.local.set({ fasRemovalIndex: next });
+        const item = (st.fasRemovalQueue || [])[next] || null;
+        sendResponse({ ok: true, item, index: next, total: (st.fasRemovalQueue || []).length });
+      } else if (msg.type === 'markItemRemovedByRemoval') {
+        sendResponse(await apiFetch('/extension/items/' + encodeURIComponent(msg.itemId) + '/removed', { method: 'POST', body: {} }));
+      } else if (msg.type === 'refreshRemovalAlarm') {
+        await ensureRemovalAlarm();
+        sendResponse({ ok: true });
       } else {
         sendResponse({ ok: false, error: 'unknown_message' });
       }

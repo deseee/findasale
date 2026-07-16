@@ -4,7 +4,7 @@
   "short_name": "FindA.Sale",
   "version": "1.0.0",
   "description": "Fill your Facebook Marketplace listings from your FindA.Sale inventory — title, price, condition, description, and photos. You review and publish.",
-  "permissions": ["storage", "tabs", "cookies", "scripting", "debugger"],
+  "permissions": ["storage", "tabs", "cookies", "scripting", "debugger", "alarms", "notifications"],
   "host_permissions": [
     "https://www.facebook.com/*",
     "https://finda.sale/*",
@@ -12,7 +12,8 @@
     "https://res.cloudinary.com/*",
     "https://i.ebayimg.com/*"
   ],
-  "action": { "default_popup": "popup.html", "default_title": "FindA.Sale Marketplace Autofill" },
+  "icons": { "16": "icon16.png", "48": "icon48.png", "128": "icon128.png" },
+  "action": { "default_popup": "popup.html", "default_title": "FindA.Sale Marketplace Autofill", "default_icon": { "16": "icon16.png", "48": "icon48.png", "128": "icon128.png" } },
   "background": { "service_worker": "background.js" },
   "web_accessible_resources": [
     {
@@ -24,6 +25,11 @@
     {
       "matches": ["https://www.facebook.com/marketplace/create/*"],
       "js": ["fas-selectors.js", "fas-content.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://www.facebook.com/marketplace/you/selling*"],
+      "js": ["fas-selectors.js", "fas-remove.js"],
       "run_at": "document_idle"
     }
   ]

@@ -36,12 +36,14 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
   const saleTitleById = new Map(sales.map((s) => [s.id, s.title]));
 
   const items = await prisma.item.findMany({
-    where: { sale: { organizerId: organizer.id }, status: 'AVAILABLE' },
+    // ADR-084 amendment 2026-07-15: exclude DONT_LIST items -- mirrors PostSaleEbayPanel's
+    // auto-unselect on the eBay side, applied here at the query level instead of frontend-only.
+    where: { sale: { organizerId: organizer.id }, status: 'AVAILABLE', NOT: { ebayShippingOverride: 'DONT_LIST' } },
     take: 2000,
     select: {
       id: true, saleId: true, title: true, description: true, price: true,
       category: true, condition: true, photoUrls: true, createdAt: true,
-      packageWeightOz: true, aiPackageWeightOz: true,
+      packageWeightOz: true, aiPackageWeightOz: true, ebayShippingOverride: true,
     },
     orderBy: { createdAt: 'desc' },
   });
@@ -72,6 +74,10 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
     photoUrls: it.photoUrls || [],
     packageWeightOz: it.packageWeightOz,
     aiPackageWeightOz: it.aiPackageWeightOz,
+    // Mirrors eBay's LOCAL_PICKUP_ONLY/SHIPPABLE handling (ADR-084 amendment 2026-07-15) --
+    // same DB field eBay's resolvePoliciesForItem() already reads, not Facebook-specific data
+    // despite the field's historical name.
+    shippingOverride: it.ebayShippingOverride,
     marketplaceListed: postedByItem.has(it.id) && !removedByItem.has(it.id),
   }));
 
@@ -114,4 +120,43 @@ export const markItemRemoved = async (req: AuthRequest, res: Response): Promise<
     data: { itemId, action: 'REMOVE', status: 'REMOVED' },
   });
   res.json({ ok: true });
+};
+
+// GET /api/extension/pending-removals — items that were listed to Marketplace by this
+// extension and have since sold via ANY channel (POS, storefront, eBay, anything that
+// flips Item.status to SOLD) but haven't been marked removed yet. ADR-084 amendment
+// 2026-07-15: Facebook has no API, so there's no server-to-Facebook withdraw call the way
+// endEbayListingIfExists() calls eBay directly -- this is a poll target for the extension's
+// own background alarm instead. Pure read composed from data every existing sale path
+// already updates (Item.status, MarketplaceListingJob) -- no new schema, no migration.
+export const getPendingRemovals = async (req: AuthRequest, res: Response): Promise<void> => {
+  const userId = req.user?.id;
+  if (!userId) { res.status(401).json({ message: 'Authentication required' }); return; }
+
+  const organizer = await prisma.organizer.findUnique({ where: { userId } });
+  if (!organizer) { res.status(404).json({ message: 'Organizer profile not found' }); return; }
+
+  const soldItems = await prisma.item.findMany({
+    where: { sale: { organizerId: organizer.id }, status: 'SOLD' },
+    select: { id: true, title: true },
+  });
+  if (!soldItems.length) { res.json({ items: [] }); return; }
+
+  const itemIds = soldItems.map((i) => i.id);
+  const jobs = await prisma.marketplaceListingJob.findMany({
+    where: { itemId: { in: itemIds } },
+    select: { itemId: true, action: true, status: true },
+  });
+  const postedByItem = new Set<string>();
+  const removedByItem = new Set<string>();
+  for (const j of jobs) {
+    if (j.action === 'POST' && j.status === 'POSTED') postedByItem.add(j.itemId);
+    if (j.action === 'REMOVE' && j.status === 'REMOVED') removedByItem.add(j.itemId);
+  }
+
+  const pending = soldItems
+    .filter((i) => postedByItem.has(i.id) && !removedByItem.has(i.id))
+    .map((i) => ({ id: i.id, title: i.title }));
+
+  res.json({ items: pending });
 };

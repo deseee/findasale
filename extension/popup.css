@@ -20,3 +20,5 @@ footer { padding: 10px 14px; border-top: 1px solid #26362d; }
 button.primary { width: 100%; padding: 10px; border: none; border-radius: 8px; background: #3c8c5a; color: #fff; font-weight: 700; cursor: pointer; }
 button.primary:disabled { background: #2a3a30; color: #6b7c72; cursor: default; }
 .note { font-size: 11px; color: #9fb6a8; margin: 8px 0 0; }
+.removeSetting { margin-top: 12px; padding-top: 10px; border-top: 1px solid #26362d; }
+.select { width: 100%; margin-top: 6px; padding: 7px 8px; border-radius: 6px; border: 1px solid #26362d; background: #1a2620; color: #eef3ee; font: inherit; }

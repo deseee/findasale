@@ -25,7 +25,21 @@ async function load() {
   $('footer').hidden = false;
   $('hideListed').onchange = render;
   $('listBtn').onclick = startQueue;
+  await loadAutoRemoveMode();
   render();
+}
+
+// "When an item sells elsewhere" setting (ADR-084 amendment 2026-07-15, Part C) -- stored
+// directly via chrome.storage.local (popup pages have direct access, no message roundtrip
+// needed) since it's a standing preference, not a per-queue-run flag like autoPublish.
+async function loadAutoRemoveMode() {
+  const { fasAutoRemoveMode = 'notify' } = await chrome.storage.local.get(['fasAutoRemoveMode']);
+  $('autoRemoveMode').value = fasAutoRemoveMode;
+  $('autoRemoveMode').onchange = async () => {
+    await chrome.storage.local.set({ fasAutoRemoveMode: $('autoRemoveMode').value });
+    await send({ type: 'refreshRemovalAlarm' });
+  };
+  await send({ type: 'refreshRemovalAlarm' }); // re-assert the alarm in case the worker never woke since install
 }
 
 function render() {
@@ -74,7 +88,8 @@ async function startQueue() {
   const queue = ITEMS.filter((it) => selected.has(it.id)).map((it) => ({
     id: it.id, title: it.title, price: it.price, condition: it.condition,
     description: it.description, category: it.category, photoUrls: it.photoUrls || [],
-    packageWeightOz: it.packageWeightOz, aiPackageWeightOz: it.aiPackageWeightOz
+    packageWeightOz: it.packageWeightOz, aiPackageWeightOz: it.aiPackageWeightOz,
+    shippingOverride: it.shippingOverride
   }));
   if (!queue.length) return;
   const autoPublish = $('autoPublish').checked;

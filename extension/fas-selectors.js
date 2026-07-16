@@ -115,7 +115,69 @@
     return wrapped.find((label) => norm(label.textContent).includes(want)) || null;
   }
 
+  // "Your listings" page (marketplace/you/selling) -- confirmed live 2026-07-15: each listing
+  // card exposes a direct "Mark as sold" clickable (not behind a menu), 4 DOM levels above a
+  // shared ancestor whose text contains the title + price + "$". No Facebook-assigned listing
+  // ID is available to match against (the extension never captures one at publish time -- see
+  // ADR-084 amendment "Flagged, not fixed" note) so cards are matched by title text instead.
+  // Deliberately does NOT use bestTextMatch's word-overlap fallback here -- an ambiguous match
+  // risks marking the WRONG live listing as sold, a materially worse failure than picking
+  // Facebook's second-best category suggestion, so this only returns a card on an exact or
+  // clean-substring title match, and returns null (caller must skip + flag) otherwise.
+  function listingCardByTitle(title) {
+    const want = norm(title);
+    if (!want) return null;
+    const soldButtons = Array.from(document.querySelectorAll('div[role="button"], button, span[role="button"], a[role="button"]'))
+      .filter((b) => norm(b.textContent) === 'mark as sold');
+    const candidates = [];
+    for (const btn of soldButtons) {
+      let el = btn, hops = 0, cardText = null, cardEl = null;
+      while (el && hops < 8) {
+        el = el.parentElement;
+        hops++;
+        if (!el) break;
+        const t = norm(el.textContent);
+        if (t.indexOf('$') !== -1 && t.length > 40) { cardText = t; cardEl = el; break; }
+      }
+      if (cardText && (cardText === want || cardText.indexOf(want) !== -1)) {
+        candidates.push({ button: btn, cardEl, cardText });
+      }
+    }
+    if (candidates.length === 1) return candidates[0];
+    return null; // zero or ambiguous (multiple) matches -- caller skips + flags, never guesses
+  }
+
+  // A plain el.click() -- and even a full synthetic pointerdown/mousedown/pointerup/mouseup/
+  // click MouseEvent sequence with real coordinates -- is NOT reliable against Facebook's
+  // custom radio/button components. Confirmed live 2026-07-15 on the Package-weight radio AND
+  // the "Change shipping method" modal's "Update" button: both silently ignored every synthetic
+  // event variant tried (plain .click(), full pointer sequence, real on-screen coordinates,
+  // freshly-requeried non-stale elements -- ruled out staleness, viewport visibility, and event
+  // completeness one at a time). Root cause isolated the same session: Chrome marks script-
+  // dispatched events isTrusted=false, and these specific controls require trusted input to
+  // actually commit a selection -- proven by manually driving the identical flow with real OS-
+  // level clicks (Chrome DevTools Protocol / a real mouse), which worked every time and
+  // completed a genuine live Facebook Marketplace publish. A content script cannot produce
+  // trusted input itself, so this now asks the background service worker to do it via
+  // chrome.debugger (CDP) -- see background.js cdpClick(). Falls back to the old synthetic
+  // sequence only if CDP is ever unavailable (e.g. debugger permission revoked), so a
+  // permission hiccup degrades gracefully instead of hard-failing every click; Category chips
+  // and the Condition dropdown are confirmed working via the synthetic path too, so this is a
+  // safety net, not the expected path.
+  async function realClick(el) {
+    const rect = el.getBoundingClientRect();
+    const cx = Math.round(rect.left + rect.width / 2);
+    const cy = Math.round(rect.top + rect.height / 2);
+    try {
+      const resp = await chrome.runtime.sendMessage({ type: 'cdpClick', x: cx, y: cy });
+      if (resp && resp.ok) return;
+    } catch (e) { /* fall through to synthetic fallback */ }
+    ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'].forEach((type) => {
+      el.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, clientX: cx, clientY: cy, view: window }));
+    });
+  }
+
   window.__FAS_SEL__ = { norm, fieldByLabel, comboByLabel, optionByText, photoInput, chipsAfter, bestTextMatch,
-    elementByText, radioLabelByText,
+    elementByText, radioLabelByText, listingCardByTitle, realClick,
     LABELS: { title: 'Title', price: 'Price', description: 'Description', condition: 'Condition', category: 'Category' } };
 })();
