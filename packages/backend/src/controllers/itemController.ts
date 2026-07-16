@@ -1166,7 +1166,7 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     }
 
     const { id } = req.params;
-    const { title, description, price, auctionStartPrice, auctionReservePrice, bidIncrement, auctionEndTime, status, category, condition, conditionGrade, shippingAvailable, shippingPrice, reverseAuction, reverseDailyDrop, reverseFloorPrice, reverseStartDate, listingType, isAiTagged, rarity, qrEmbedEnabled, tags, backgroundRemoved, draftStatus, isHighValue, estimatedValue, aiSuggestedPrice, aiConfidence, packageWeightOz, packageLengthIn, packageWidthIn, packageHeightIn, packageType, upc, ean, isbn, mpn, brand, ebayEpid, conditionNotes, allowBestOffer, bestOfferAutoAcceptAmt, bestOfferMinimumAmt, ebaySecondaryCategoryId, ebaySubtitle, ebayCategoryId, ebayCategoryName, isLegendary, lotNumber, costBasis, roomTag } = req.body;
+    const { title, description, price, auctionStartPrice, auctionReservePrice, bidIncrement, auctionEndTime, status, category, condition, conditionGrade, shippingAvailable, shippingPrice, reverseAuction, reverseDailyDrop, reverseFloorPrice, reverseStartDate, listingType, isAiTagged, rarity, qrEmbedEnabled, tags, backgroundRemoved, draftStatus, isHighValue, estimatedValue, aiSuggestedPrice, aiConfidence, quantity, ebayShippingOverride, packageWeightOz, packageLengthIn, packageWidthIn, packageHeightIn, packageType, packageConfirmedByOrganizer, packageEstimateSource, upc, ean, isbn, mpn, brand, ebayEpid, conditionNotes, allowBestOffer, bestOfferAutoAcceptAmt, bestOfferMinimumAmt, ebaySecondaryCategoryId, ebaySubtitle, ebayCategoryId, ebayCategoryName, isLegendary, lotNumber, costBasis, roomTag } = req.body;
 
     // #102: Validate price >= 0
     if (price !== undefined && price !== null) {
@@ -1204,6 +1204,27 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
       if (lotStr.length > 20) {
         return res.status(400).json({ message: 'Lot number must be 20 characters or less' });
       }
+    }
+
+    // ADR-085: Validate quantity if provided (was silently dropped -- never in
+    // updateData -- so organizer edits to "Quantity" never persisted, S1085)
+    if (quantity !== undefined && quantity !== null) {
+      const parsedQty = parseInt(quantity, 10);
+      if (isNaN(parsedQty) || parsedQty < 1) {
+        return res.status(400).json({ message: 'Quantity must be a positive whole number.' });
+      }
+    }
+
+    // ADR-085 follow-up: Validate ebayShippingOverride if provided via the generic
+    // update endpoint (was also silently dropped -- the edit-item page's "Local pickup
+    // only" checkbox relies on this endpoint but the field was never in updateData;
+    // the dedicated PATCH /ebay/organizer/items/:id/ebay-shipping endpoint remains the
+    // other valid way to set this and is unaffected by this fix)
+    const VALID_EBAY_SHIPPING_OVERRIDES = ['SHIPPABLE', 'LOCAL_PICKUP_ONLY', 'DONT_LIST'];
+    if (ebayShippingOverride !== undefined && ebayShippingOverride !== null && !VALID_EBAY_SHIPPING_OVERRIDES.includes(ebayShippingOverride)) {
+      return res.status(400).json({
+        message: `Invalid ebayShippingOverride "${ebayShippingOverride}". Must be one of: ${VALID_EBAY_SHIPPING_OVERRIDES.join(', ')}, or null`
+      });
     }
 
     // Fetch item to verify ownership
@@ -1345,6 +1366,19 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     if (costBasis !== undefined) updateData.costBasis = costBasis !== null && costBasis !== '' ? parseFloat(costBasis) : null;
     // Feature #411: Dorm Dash — room/area tag for college move-out sales
     if (roomTag !== undefined) updateData.roomTag = roomTag ? String(roomTag).trim() : null;
+    // ADR-085: Quantity was destructured nowhere and never written to updateData --
+    // organizer edits to the Quantity field silently no-opped (S1085, found via
+    // real-item investigation on Solenoid Valve Actuator, 18 physical units).
+    if (quantity !== undefined) updateData.quantity = quantity === null ? 1 : parseInt(quantity, 10);
+    // ADR-085 follow-up: same silent-drop bug for ebayShippingOverride (edit-item page's
+    // "Local pickup only" checkbox never actually persisted via this endpoint) and for
+    // packageConfirmedByOrganizer/packageEstimateSource (PostSaleEbayPanel's "confirm
+    // package details" action was silently no-opped -- organizer confirmations lost,
+    // meaning later AI estimates could keep overwriting confirmed values, defeating the
+    // field's whole purpose per its schema comment "never overwritten by estimates").
+    if (ebayShippingOverride !== undefined) updateData.ebayShippingOverride = ebayShippingOverride || null;
+    if (packageConfirmedByOrganizer !== undefined) updateData.packageConfirmedByOrganizer = packageConfirmedByOrganizer === true || packageConfirmedByOrganizer === 'true';
+    if (packageEstimateSource !== undefined) updateData.packageEstimateSource = packageEstimateSource || null;
 
     // D-006: Update userEditedFields array to track which fields organizer has explicitly set
     // This prevents AI results from overwriting organizer-set values during rapid processing

@@ -1119,6 +1119,7 @@ const EditItemPage = () => {
                 }
                 className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
               />
+              <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">Items bundled together in this lot (e.g. "set of 8"). Not your total stock count -- if you have several separate units of this item, create a separate item row for each one.</p>
             </div>
 
             <div>
