@@ -1661,6 +1661,28 @@ const EditItemPage = () => {
             {/* eBay Push Section — S725 three states: Live / Pending Publish / Push */}
             {tier !== 'SIMPLE' && (
               <div className="pt-4 border-t border-warm-200 dark:border-gray-700">
+                {/* Pre-publish hint (2026-07-16): warn about eBay 25016 (sub-$0.99)
+                    and 25101 (shippable item with no weight) BEFORE the organizer
+                    clicks Push/Publish. Backend guard is authoritative; this mirrors
+                    it for a friendlier upfront nudge. */}
+                {(() => {
+                  const priceNum = formData.price ? parseFloat(String(formData.price)) : NaN;
+                  const priceBelowMin = !Number.isNaN(priceNum) && priceNum > 0 && priceNum < 0.99;
+                  const weightNum = formData.packageWeightOz ? parseInt(String(formData.packageWeightOz), 10) : 0;
+                  const isLocalPickup = formData.ebayShippingOverride === 'LOCAL_PICKUP_ONLY';
+                  const missingWeight = !isLocalPickup && (!weightNum || weightNum <= 0);
+                  if (!priceBelowMin && !missingWeight) return null;
+                  return (
+                    <div className="mb-2 p-2 rounded bg-amber-50 dark:bg-amber-900/20 text-xs text-amber-700 dark:text-amber-300 space-y-1">
+                      {priceBelowMin && (
+                        <div>eBay requires a minimum listing price of $0.99. Raise this item&apos;s price to list it on eBay.</div>
+                      )}
+                      {missingWeight && (
+                        <div>eBay needs a package weight to calculate shipping. Add a weight above, or check &quot;Local pickup only&quot;.</div>
+                      )}
+                    </div>
+                  );
+                })()}
                 {item?.ebayListingId ? (
                   <div className="space-y-2">
                     <div className="inline-block bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-200 text-xs font-semibold px-2 py-1 rounded">

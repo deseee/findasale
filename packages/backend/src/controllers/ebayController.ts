@@ -1705,6 +1705,54 @@ export const getEbayPreview = async (req: AuthRequest, res: Response) => {
  * POST /api/organizer/sales/:saleId/ebay-push
  * Push selected items to eBay
  */
+/**
+ * Pre-publish validation guards (added 2026-07-16). eBay rejects certain items at
+ * the PUBLISH step with cryptic error codes that only surface as a brief toast:
+ *   - 25016: listing price is below eBay's $0.99 minimum (e.g. a $0.75 item).
+ *   - 25101: <ShippingPackage> invalid ("ParcelOrPaddedEnvelope") — a shippable
+ *     item with no package weight can't build a parcel for a calculated-shipping
+ *     fulfillment policy.
+ * These guards catch both conditions BEFORE the offer is created/published and
+ * return a clear, user-friendly message instead of the raw eBay error code.
+ *
+ * IMPORTANT — does NOT change the null-price default: a null/0 price still defaults
+ * to $0.99 upstream, so only an EXPLICIT price above 0 but below 0.99 is rejected.
+ * LOCAL_PICKUP_ONLY items are exempt from the package-weight check (no parcel needed).
+ */
+export function validateItemForEbayPublish(item: {
+  price?: number | null;
+  packageWeightOz?: number | null;
+  aiPackageWeightOz?: number | null;
+  ebayShippingOverride?: string | null;
+}): { code: string; message: string } | null {
+  // Guard 1 — eBay minimum price ($0.99). Only reject an explicit sub-minimum
+  // price; a null/0 price defaults to 0.99 upstream and must never be blocked.
+  const priceNum = item.price != null ? Number(item.price) : null;
+  if (priceNum != null && priceNum > 0 && priceNum < 0.99) {
+    return {
+      code: 'EBAY_PRICE_BELOW_MIN',
+      message:
+        "eBay requires a minimum listing price of $0.99. Raise this item's price to list it on eBay.",
+    };
+  }
+
+  // Guard 2 — shippable item with no usable package weight → eBay error 25101
+  // (calculated shipping can't build a parcel). Local-pickup items are exempt.
+  const isLocalPickup = item.ebayShippingOverride === 'LOCAL_PICKUP_ONLY';
+  const hasUsableWeight =
+    (item.packageWeightOz != null && Number(item.packageWeightOz) > 0) ||
+    (item.aiPackageWeightOz != null && Number(item.aiPackageWeightOz) > 0);
+  if (!isLocalPickup && !hasUsableWeight) {
+    return {
+      code: 'EBAY_NO_PACKAGE_WEIGHT',
+      message:
+        'eBay needs a package weight to calculate shipping. Add a package weight, or mark this item Local pickup only.',
+    };
+  }
+
+  return null;
+}
+
 export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
   try {
     const { saleId } = req.params;
@@ -1830,6 +1878,7 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
             ebayNeedsReview: true,
             ebayShippingClassification: true,
             packageWeightOz: true,
+            aiPackageWeightOz: true,
             packageLengthIn: true,
             packageWidthIn: true,
             packageHeightIn: true,
@@ -1999,6 +2048,28 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
           price = Number(item.aiSuggestedPrice);
         } else if (item.estimatedValue) {
           price = Number(item.estimatedValue);
+        }
+
+        // Pre-publish validation guards (2026-07-16): catch eBay 25016 (sub-$0.99)
+        // and 25101 (shippable item with no package weight) with a clear, upfront
+        // message BEFORE creating/publishing the offer. Validates the FINAL resolved
+        // price (so a null price defaulting to 0.99 is never blocked). Records a
+        // per-item error and skips, matching the existing routing-error pattern.
+        const prePublishError = validateItemForEbayPublish({
+          price,
+          packageWeightOz: item.packageWeightOz,
+          aiPackageWeightOz: item.aiPackageWeightOz,
+          ebayShippingOverride: item.ebayShippingOverride,
+        });
+        if (prePublishError) {
+          results.push({
+            itemId: item.id,
+            sku,
+            status: 'error',
+            code: prePublishError.code,
+            message: prePublishError.message,
+          });
+          continue;
         }
 
         // Prepare photo URLs
@@ -2585,6 +2656,15 @@ export const publishItemOffer = async (req: AuthRequest, res: Response) => {
         costBasis: true,
         roomTag: true,
         condition: true,
+        // Pre-publish validation guard inputs (2026-07-16): price + weight fields
+        // so publishItemOffer can reject sub-$0.99 / no-weight items with a clear
+        // message instead of letting eBay fail publish with 25016 / 25101.
+        price: true,
+        aiSuggestedPrice: true,
+        estimatedValue: true,
+        packageWeightOz: true,
+        aiPackageWeightOz: true,
+        ebayShippingOverride: true,
         sale: { select: { organizerId: true, address: true, city: true, state: true, zip: true } },
       },
     });
@@ -2631,6 +2711,31 @@ export const publishItemOffer = async (req: AuthRequest, res: Response) => {
         ebayItemUrl: `https://www.ebay.com/itm/${item.ebayListingId}`,
         alreadyPublished: true,
         shippingResynced,
+      });
+    }
+
+    // Pre-publish validation guards (2026-07-16): reject sub-$0.99 price (eBay 25016)
+    // and shippable-with-no-weight (eBay 25101) up front with a clear message. Runs
+    // AFTER the already-live idempotent return (never blocks a live item) and uses the
+    // same price-resolution as pushSaleToEbay so a null price still defaults to 0.99.
+    let effectivePrice = 0.99;
+    if (item.price && Number(item.price) > 0) {
+      effectivePrice = Number(item.price);
+    } else if (item.aiSuggestedPrice) {
+      effectivePrice = Number(item.aiSuggestedPrice);
+    } else if (item.estimatedValue) {
+      effectivePrice = Number(item.estimatedValue);
+    }
+    const prePublishError = validateItemForEbayPublish({
+      price: effectivePrice,
+      packageWeightOz: item.packageWeightOz,
+      aiPackageWeightOz: item.aiPackageWeightOz,
+      ebayShippingOverride: item.ebayShippingOverride,
+    });
+    if (prePublishError) {
+      return res.status(400).json({
+        code: prePublishError.code,
+        message: prePublishError.message,
       });
     }
 
