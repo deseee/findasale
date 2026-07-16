@@ -195,6 +195,19 @@
     await humanPause(300, 600);
     trigger.click();
 
+    // The "Change shipping method" modal opens with Package weight collapsed -- confirmed live
+    // 2026-07-15 -- its radio options only render after clicking the "Package weight" combobox
+    // row inside the modal. The first live run of this code skipped that click entirely and
+    // hard-errored on "couldn't find the weight option" because zero radios existed yet.
+    let weightCombo;
+    try {
+      weightCombo = await waitFor(() => SEL.comboByLabel('Package weight'), 5000);
+    } catch (e) {
+      throw hardError('Delivery', 'Couldn\'t find the Package weight control.');
+    }
+    await humanPause(300, 600);
+    weightCombo.click();
+
     const bucket = weightBucketLabel(
       item.packageWeightOz !== undefined && item.packageWeightOz !== null ? item.packageWeightOz : item.aiPackageWeightOz
     );
