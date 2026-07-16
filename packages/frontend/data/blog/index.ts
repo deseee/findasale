@@ -25,8 +25,9 @@ import { postL } from './posts/when-estate-sales-and-yard-sales-actually-happen'
 import { postM } from './posts/estate-sale-company-density-us-cities';
 import { postN } from './posts/why-cant-i-just-sell-it-myself';
 import { postO } from './posts/what-sells-collectibles-military-sports-memorabilia';
+import { postP } from './posts/cataloging-solved-discovery-isnt';
 
-export const posts: BlogPost[] = [postA, postB, postC, postD, postE, postF, postG, postH, postI, postJ, postK, postL, postM, postN, postO];
+export const posts: BlogPost[] = [postA, postB, postC, postD, postE, postF, postG, postH, postI, postJ, postK, postL, postM, postN, postO, postP];
 
 export function getPostBySlug(slug: string): BlogPost | undefined {
   return posts.find((p) => p.slug === slug);
