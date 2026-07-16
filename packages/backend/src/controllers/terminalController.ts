@@ -16,6 +16,7 @@ import { getPlatformFeeRate } from '../utils/feeCalculator'; // S388: Tier-aware
 import { endEbayListingIfExists } from './ebayController'; // Feature #244 Phase 2: eBay direct push — withdraw on sale
 import { markShopifyItemSold } from '../services/shopifyService';
 import { notifyFacebookExportedItemSold } from '../services/facebookNudgeService';
+import { sellItemUnits, InsufficientStockError } from '../services/itemStockService';
 import { transactionalEmailService } from '../lib/transactionalEmailService';
 import { recordSuspectedSignal } from '../services/checkoutGuard'; // S1072 Finding #4: cash path is offsite — log-only, never blocked
 
@@ -366,13 +367,18 @@ export const captureTerminalPaymentIntent = async (req: AuthRequest, res: Respon
       data: { status: 'PAID' },
     });
 
-    // Mark items SOLD
+    // Mark items SOLD -- ADR-085 Track B Phase 1 Step 4: atomic, race-safe stock decrement
+    // replaces the old unconditional status update.
     for (const p of purchases) {
       if (p.itemId) {
-        await prisma.item.update({
-          where: { id: p.itemId },
-          data: { status: 'SOLD' },
-        });
+        try {
+          await sellItemUnits(p.itemId, 1);
+        } catch (stockErr: any) {
+          if (stockErr instanceof InsufficientStockError) {
+            console.error(`[terminal] Oversold race on item ${p.itemId} despite captured payment:`, stockErr.message);
+          }
+          throw stockErr;
+        }
       }
     }
 
@@ -627,24 +633,33 @@ export async function processCashSaleCore(params: {
     purchaseIds.push(purchase.id);
   }
 
-  // Mark items SOLD
+  // Mark items SOLD -- ADR-085 Track B Phase 1 Step 4: atomic, race-safe stock decrement
+  // replaces the old unconditional status update. Downstream cross-channel-removal hooks
+  // only fire once the item is actually fully sold out, not on every partial sale.
   for (const item of items) {
     if (item.itemId) {
-      await prisma.item.update({
-        where: { id: item.itemId },
-        data: { status: 'SOLD' },
-      });
+      let fullySoldOut: boolean;
+      try {
+        ({ fullySoldOut } = await sellItemUnits(item.itemId, 1));
+      } catch (stockErr: any) {
+        if (stockErr instanceof InsufficientStockError) {
+          console.error(`[terminal] Oversold race on item ${item.itemId} despite captured payment:`, stockErr.message);
+        }
+        throw stockErr;
+      }
 
-      // Fire-and-forget: end eBay listing if item was pushed there
-      endEbayListingIfExists(item.itemId).catch(err =>
-        console.error('[eBay] Failed to withdraw offer:', err)
-      );
-      markShopifyItemSold(item.itemId).catch(err =>
-        console.error('[Shopify] Failed to mark item sold:', err)
-      );
-      notifyFacebookExportedItemSold(item.itemId).catch(err =>
-        console.warn(`[FB Nudge] failed for item ${item.itemId}:`, err.message)
-      );
+      if (fullySoldOut) {
+        // Fire-and-forget: end eBay listing if item was pushed there
+        endEbayListingIfExists(item.itemId).catch(err =>
+          console.error('[eBay] Failed to withdraw offer:', err)
+        );
+        markShopifyItemSold(item.itemId).catch(err =>
+          console.error('[Shopify] Failed to mark item sold:', err)
+        );
+        notifyFacebookExportedItemSold(item.itemId).catch(err =>
+          console.warn(`[FB Nudge] failed for item ${item.itemId}:`, err.message)
+        );
+      }
     }
   }
 

@@ -9,6 +9,7 @@ import { checkAndAward } from '../services/achievementService'; // Feature #58: 
 import { endEbayListingIfExists } from './ebayController'; // Feature #244 Phase 2: eBay direct push — withdraw on sale
 import { markShopifyItemSold } from '../services/shopifyService';
 import { notifyFacebookExportedItemSold } from '../services/facebookNudgeService';
+import { sellItemUnits, InsufficientStockError } from '../services/itemStockService';
 
 const stripe = () => getStripe();
 
@@ -932,22 +933,32 @@ export const confirmPaymentRequest = async (req: AuthRequest, res: Response) => 
           },
         });
 
-        // Mark item as SOLD
-        await prisma.item.update({
-          where: { id: item.id },
-          data: { status: 'SOLD' },
-        });
+        // ADR-085 Track B Phase 1 Step 4: atomic, race-safe stock decrement replaces the
+        // old unconditional status update. Downstream cross-channel-removal hooks only fire
+        // once the item is actually fully sold out (stockSold reached stockTotal) -- they
+        // previously fired unconditionally on every sale regardless of remaining stock.
+        let fullySoldOut: boolean;
+        try {
+          ({ fullySoldOut } = await sellItemUnits(item.id, 1));
+        } catch (stockErr: any) {
+          if (stockErr instanceof InsufficientStockError) {
+            console.error(`[pos-payment] Oversold race on item ${item.id} despite captured payment:`, stockErr.message);
+          }
+          throw stockErr;
+        }
 
-        // Fire-and-forget: end eBay listing if item was pushed there
-        endEbayListingIfExists(item.id).catch(err =>
-          console.error('[eBay] Failed to withdraw offer:', err)
-        );
-        markShopifyItemSold(item.id).catch(err =>
-          console.error('[Shopify] Failed to mark item sold:', err)
-        );
-        notifyFacebookExportedItemSold(item.id).catch(err =>
-          console.warn(`[FB Nudge] failed for item ${item.id}:`, err.message)
-        );
+        if (fullySoldOut) {
+          // Fire-and-forget: end eBay listing if item was pushed there
+          endEbayListingIfExists(item.id).catch(err =>
+            console.error('[eBay] Failed to withdraw offer:', err)
+          );
+          markShopifyItemSold(item.id).catch(err =>
+            console.error('[Shopify] Failed to mark item sold:', err)
+          );
+          notifyFacebookExportedItemSold(item.id).catch(err =>
+            console.warn(`[FB Nudge] failed for item ${item.id}:`, err.message)
+          );
+        }
 
         // Update ItemReservation if exists
         await prisma.itemReservation.updateMany({

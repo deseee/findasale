@@ -7,6 +7,7 @@ import { assertBoothCartCheckoutAllowed, CheckoutGuardError } from '../services/
 import { endEbayListingIfExists } from './ebayController';
 import { markShopifyItemSold } from '../services/shopifyService';
 import { notifyFacebookExportedItemSold } from '../services/facebookNudgeService';
+import { sellItemUnits, InsufficientStockError } from '../services/itemStockService';
 import { generateReceipt, sendBoothCartReceiptEmail } from '../services/receiptService';
 
 const stripe = () => getStripe();
@@ -888,13 +889,27 @@ export const captureBoothCart = async (req: BoothAuthRequest, res: Response) => 
           });
           purchaseIds.push(purchase.id);
 
-          await prisma.item.update({ where: { id: item.id }, data: { status: 'SOLD' } });
+          // ADR-085 Track B Phase 1 Step 4: atomic, race-safe stock decrement replaces the
+          // old unconditional status update. Downstream cross-channel-removal hooks only
+          // fire once the item is actually fully sold out (stockSold reached stockTotal) --
+          // previously they fired unconditionally on every sale regardless of remaining stock.
+          let fullySoldOut: boolean;
+          try {
+            ({ fullySoldOut } = await sellItemUnits(item.id, 1));
+          } catch (stockErr: any) {
+            if (stockErr instanceof InsufficientStockError) {
+              console.error(`[captureBoothCart] Oversold race on item ${item.id} despite captured payment:`, stockErr.message);
+            }
+            throw stockErr;
+          }
 
-          endEbayListingIfExists(item.id).catch((err) => console.error('[eBay] Failed to withdraw offer:', err));
-          markShopifyItemSold(item.id).catch((err) => console.error('[Shopify] Failed to mark item sold:', err));
-          notifyFacebookExportedItemSold(item.id).catch((err) =>
-            console.warn(`[FB Nudge] failed for item ${item.id}:`, err.message)
-          );
+          if (fullySoldOut) {
+            endEbayListingIfExists(item.id).catch((err) => console.error('[eBay] Failed to withdraw offer:', err));
+            markShopifyItemSold(item.id).catch((err) => console.error('[Shopify] Failed to mark item sold:', err));
+            notifyFacebookExportedItemSold(item.id).catch((err) =>
+              console.warn(`[FB Nudge] failed for item ${item.id}:`, err.message)
+            );
+          }
           generateReceipt(purchase.id).catch((err) => console.error('[receipt] Failed to generate receipt:', err));
         } catch (err: any) {
           console.error(`[captureBoothCart] Failed to finalize item ${item.id}:`, err);

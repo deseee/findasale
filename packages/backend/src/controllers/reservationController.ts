@@ -10,6 +10,7 @@ import { getRankBenefits, calculateRankFromXp } from '../utils/rankUtils';
 import { endEbayListingIfExists } from './ebayController'; // Feature #244 Phase 2: eBay direct push — withdraw on sale
 import { markShopifyItemSold } from '../services/shopifyService';
 import { notifyFacebookExportedItemSold } from '../services/facebookNudgeService';
+import { sellItemUnits, InsufficientStockError } from '../services/itemStockService';
 import { checkCrewInvasion } from '../services/crewInvasionService'; // Feature #397: Crew Invasion flash discount
 import { emailService } from '../lib/emailService';
 import { suppressionService } from '../services/suppressionService';
@@ -845,10 +846,21 @@ export const batchUpdateHolds = async (req: AuthRequest, res: Response) => {
           },
           data: { status: 'CONFIRMED' },
         });
-        await tx.item.updateMany({
-          where: { id: { in: validItemIds } },
-          data: { status: 'SOLD' },
-        });
+        // ADR-085 Track B Phase 1 Step 4: atomic, race-safe stock decrement replaces the
+        // old unconditional status update. (Note: the eBay/Shopify/FB removal hooks below
+        // this transaction, guarded by `action === 'sold'`, are pre-existing dead code for
+        // this markSold path -- the actual action value here is 'markSold', not 'sold' --
+        // flagged separately, left untouched, out of scope for this dispatch.)
+        for (const itemId of validItemIds) {
+          try {
+            await sellItemUnits(itemId, 1, tx);
+          } catch (stockErr: any) {
+            if (stockErr instanceof InsufficientStockError) {
+              console.error(`[reservations] Oversold race on item ${itemId} during markSold:`, stockErr.message);
+            }
+            throw stockErr;
+          }
+        }
         // Record the cash transaction for each sold item (RECORD mode).
         await tx.purchase.createMany({
           data: validHolds.map((h) => ({
