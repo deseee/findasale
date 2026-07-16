@@ -3033,7 +3033,15 @@ async function resolvePoliciesForItem(
   if (item.ebayShippingOverride === 'LOCAL_PICKUP_ONLY') {
     const returnPolicyId = mapping?.defaultReturnPolicyId || conn.returnPolicyId;
     const paymentPolicyId = mapping?.defaultPaymentPolicyId || conn.paymentPolicyId;
-    const allPolicies: any[] = (conn as any).fulfillmentPolicies || [];
+    // FIX 2026-07-16: previously read (conn as any).fulfillmentPolicies -- a field that does NOT
+    // exist on EbayConnection (schema has only the singular fulfillmentPolicyId), so allPolicies was
+    // ALWAYS [] and the "Local Pickup ONLY" policy was never found. LOCAL_PICKUP_ONLY therefore fell
+    // through to a shipping policy on EVERY item (then failed to publish with eBay 25101 for items
+    // with no package dims). Use the same lazy fetcher the rest of routing uses so the real synced
+    // eBay policies are actually searched.
+    const allPolicies: any[] = smartPickContext?.fetchFulfillmentPolicies
+      ? await smartPickContext.fetchFulfillmentPolicies()
+      : [];
     const localPickupPolicy = allPolicies.find(
       (p: any) => p.pickupDropOff === true || /local\s*pickup/i.test(p.name || '')
     );
