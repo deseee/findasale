@@ -159,19 +159,31 @@
     return '10-70 lbs';
   }
 
+  // Wait for `getter()` to find an element, pause (human-paced), then click it -- but re-run
+  // `getter()` fresh immediately before the click rather than reusing the element captured
+  // earlier. Confirmed live 2026-07-15: Facebook's React can replace a just-opened modal's
+  // contents shortly after it renders, so a reference captured by `waitFor` and clicked after
+  // even a few hundred ms can be silently detached -- the click fires, nothing happens, no
+  // error is thrown, and the run falsely believes it succeeded. Re-querying right before the
+  // click closes that gap.
+  async function waitThenClick(getter, step, detail, timeout) {
+    let el;
+    try {
+      el = await waitFor(getter, timeout || 8000);
+    } catch (e) {
+      throw hardError(step, detail);
+    }
+    await humanPause(350, 800);
+    const fresh = getter() || el;
+    fresh.click();
+    return fresh;
+  }
+
   // Click a step-advance button ("Next" / "Publish" / "Update") by its exact accessible text.
   // Not finding it within timeout is always a HARD ERROR per ADR-084's 2026-07-15 amendment --
   // there is no safe way to keep going if Facebook's own navigation control isn't where expected.
-  async function clickButton(text, step, timeout) {
-    let el;
-    try {
-      el = await waitFor(() => SEL.elementByText(text), timeout || 8000);
-    } catch (e) {
-      throw hardError(step, 'Couldn\'t find the "' + text + '" button.');
-    }
-    await humanPause(350, 800);
-    el.click();
-    return el;
+  function clickButton(text, step, timeout) {
+    return waitThenClick(() => SEL.elementByText(text), step, 'Couldn\'t find the "' + text + '" button.', timeout);
   }
 
   // Confirm Facebook's own URL actually carries the expected ?step=... param -- the real
@@ -186,39 +198,20 @@
   // "Prepaid shipping label" and a real carrier quote both appear automatically) so no separate
   // fill is needed for those two fields.
   async function fillDeliveryStep(item) {
-    let trigger;
-    try {
-      trigger = await waitFor(() => SEL.elementByText('Select shipping label'), 8000);
-    } catch (e) {
-      throw hardError('Delivery', 'Couldn\'t find the shipping label control.');
-    }
-    await humanPause(300, 600);
-    trigger.click();
+    await waitThenClick(() => SEL.elementByText('Select shipping label'), 'Delivery',
+      'Couldn\'t find the shipping label control.', 8000);
+    await humanPause(400, 700); // let the "Change shipping method" modal fully render
 
-    // The "Change shipping method" modal opens with Package weight collapsed -- confirmed live
-    // 2026-07-15 -- its radio options only render after clicking the "Package weight" combobox
-    // row inside the modal. The first live run of this code skipped that click entirely and
-    // hard-errored on "couldn't find the weight option" because zero radios existed yet.
-    let weightCombo;
-    try {
-      weightCombo = await waitFor(() => SEL.comboByLabel('Package weight'), 5000);
-    } catch (e) {
-      throw hardError('Delivery', 'Couldn\'t find the Package weight control.');
-    }
-    await humanPause(300, 600);
-    weightCombo.click();
+    // The modal opens with Package weight collapsed -- its radio options only render after
+    // clicking the "Package weight" combobox row inside it (confirmed live 2026-07-15).
+    await waitThenClick(() => SEL.comboByLabel('Package weight'), 'Delivery',
+      'Couldn\'t find the Package weight control.', 5000);
 
     const bucket = weightBucketLabel(
       item.packageWeightOz !== undefined && item.packageWeightOz !== null ? item.packageWeightOz : item.aiPackageWeightOz
     );
-    let weightLabel;
-    try {
-      weightLabel = await waitFor(() => SEL.radioLabelByText(bucket), 5000);
-    } catch (e) {
-      throw hardError('Delivery', 'Couldn\'t find the "' + bucket + '" weight option.');
-    }
-    await humanPause(300, 600);
-    weightLabel.click();
+    await waitThenClick(() => SEL.radioLabelByText(bucket), 'Delivery',
+      'Couldn\'t find the "' + bucket + '" weight option.', 5000);
     await humanPause(400, 800); // let Shipping carrier / Shipping option self-populate
 
     await clickButton('Update', 'Delivery');
