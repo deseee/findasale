@@ -53,12 +53,14 @@
 
   // Removes one item's Facebook listing: finds the matching "Your listings" card by title
   // (SEL.listingCardByTitle -- exact/clean-substring match ONLY, no fuzzy word-overlap) and
-  // clicks its "Mark as sold" control. Facebook's own button-text pairing ("Mark as sold" /
-  // "Mark as available", confirmed live 2026-07-15) suggests this is a direct single-click
-  // toggle, not a multi-step modal flow -- but that wasn't independently confirmed by actually
-  // completing one (only inferred from the button-list pattern), so this waits briefly for
-  // either a follow-up confirm dialog (handled if one appears) or the card's own status text to
-  // change, and treats "neither happened in time" as a skip, not a false "removed" mark.
+  // clicks its "Mark as sold" control. That control does NOT toggle the listing directly --
+  // DOM-verified live 2026-07-16 it opens a multi-step SURVEY modal ("Did you sell this item?"
+  // with four radio choices + a "Next" button disabled until one is picked). We pick "Yes, sold
+  // elsewhere" (accurate -- it sold on FindA.Sale, not on Facebook -- so we never inflate FB's
+  // "sold on Facebook" metric), click "Next", handle a possible final confirm step, then treat
+  // the card's own status text leaving "Active" as the only success signal. "Couldn't confirm
+  // in time" is a skip, never a false "removed" mark. Card matching stays single-confident-title
+  // only (listingCardByTitle returns null on zero/ambiguous) -- the wrong listing is never guessed.
   async function removeOne(item) {
     const match = SEL.listingCardByTitle(item.title);
     if (!match) {
@@ -66,12 +68,49 @@
     }
     await realClick(match.button);
 
-    // A follow-up confirm dialog, if Facebook shows one, is handled the same way clickButton
-    // handles Next/Publish elsewhere in this extension -- by exact accessible text.
+    // Facebook's "Mark as sold" opens a multi-step SURVEY modal (DOM-verified live 2026-07-16),
+    // NOT a single-click toggle. Wait for it: the "Did you sell this item?" prompt or any of the
+    // known option labels signals the survey step is up.
+    const surveyDialog = await waitFor(() => {
+      const dialog = document.querySelector('[role="dialog"]');
+      if (!dialog) return null;
+      const t = SEL.norm(dialog.textContent);
+      if (t.indexOf('did you sell this item') !== -1 ||
+          t.indexOf('sold elsewhere') !== -1 ||
+          t.indexOf('sold on facebook') !== -1) return dialog;
+      return null;
+    }, 6000).catch(() => null);
+
+    if (surveyDialog) {
+      // Pick "Yes, sold elsewhere" -- it sold on FindA.Sale, not on Facebook, so we must NOT
+      // inflate FB's "sold on Facebook" metric. Fall back to "Yes, sold on Facebook" ONLY if the
+      // accurate option is missing (FB copy change) -- never to "No"/"I'd rather not answer",
+      // which would not remove the listing.
+      let option = SEL.radioOptionByText('Yes, sold elsewhere') || SEL.radioOptionByText('Yes, sold on Facebook');
+      if (option) {
+        await humanPause(300, 600);
+        await realClick(option);
+        // "Next" enables once a choice is committed.
+        const nextBtn = await waitFor(() => {
+          const dialog = document.querySelector('[role="dialog"]');
+          if (!dialog) return null;
+          const btn = SEL.elementByText('Next');
+          return (btn && dialog.contains(btn)) ? btn : null;
+        }, 4000).catch(() => null);
+        if (nextBtn) {
+          await humanPause(300, 600);
+          await realClick(nextBtn);
+          await humanPause(500, 900); // let the survey advance before scanning for a final step
+        }
+      }
+    }
+
+    // A possible final confirm step after "Next" (or a plain confirm dialog if FB ever shows the
+    // simple toggle instead) -- handled the same way, by exact accessible text within the dialog.
     const dialogConfirm = await waitFor(() => {
       const dialog = document.querySelector('[role="dialog"]');
       if (!dialog) return null;
-      const candidates = ['Mark as sold', 'Confirm', 'Done', 'Save'];
+      const candidates = ['Done', 'Save', 'Confirm', 'Mark as sold', 'Next'];
       for (const text of candidates) {
         const found = SEL.elementByText(text);
         if (found && dialog.contains(found)) return found;

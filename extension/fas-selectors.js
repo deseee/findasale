@@ -188,7 +188,31 @@
   }
   function isMenuChecked(el) { return !!(el && el.getAttribute('aria-checked') === 'true'); }
 
+  // FB's "Mark as sold" survey modal (DOM-verified live 2026-07-16) is a multi-step dialog:
+  // header "Mark as sold", subtext "Did you sell this item? ...", then four choices --
+  // "Yes, sold on Facebook" / "Yes, sold elsewhere" / "No, haven't sold" / "I'd rather not
+  // answer" -- rendered as role="radio" rows, followed by a "Next" button that stays disabled
+  // until one is picked. FB does not consistently expose these as role="option" or plain
+  // <input type=radio>, so match by the option's visible text, SCOPED to the currently-open
+  // [role="dialog"] so it never grabs a same-text control elsewhere on this button-dense page:
+  // exact-trim on a role="radio" (or its label wrapper) first, then a role="radio" whose row
+  // text contains the label, then any clickable row (div[role=button]/menuitemradio/label)
+  // whose trimmed text equals the label. Returns the clickable element, or null if absent.
+  function radioOptionByText(text) {
+    const want = norm(text);
+    const dialog = document.querySelector('[role="dialog"]');
+    const scope = dialog || document;
+    const radios = Array.from(scope.querySelectorAll('[role="radio"], input[type="radio"]'));
+    const rowText = (r) => norm((r.closest('label') || r).textContent);
+    const exact = radios.find((r) => rowText(r) === want);
+    if (exact) return exact;
+    const contains = radios.find((r) => rowText(r).indexOf(want) !== -1);
+    if (contains) return contains;
+    const rows = Array.from(scope.querySelectorAll('div[role="button"], [role="menuitemradio"], label'));
+    return rows.find((n) => norm(n.textContent) === want) || null;
+  }
+
   window.__FAS_SEL__ = { norm, fieldByLabel, comboByLabel, optionByText, photoInput, chipsAfter, bestTextMatch,
-    elementByText, radioLabelByText, listingCardByTitle, realClick, menuCheckboxByText, isMenuChecked,
+    elementByText, radioLabelByText, listingCardByTitle, realClick, menuCheckboxByText, isMenuChecked, radioOptionByText,
     LABELS: { title: 'Title', price: 'Price', description: 'Description', condition: 'Condition', category: 'Category' } };
 })();
