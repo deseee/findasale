@@ -391,6 +391,15 @@ const nextConfig = {
           { key: 'Cache-Control', value: 'public, s-maxage=86400, stale-while-revalidate=86400' },
         ],
       },
+      {
+        // Same city-aggregation ISR shape as the routes above (revalidate: 86400 in
+        // getStaticProps) but was missed from this list on 2026-07-15 -- added
+        // 2026-07-16 as part of the Edge Requests overage follow-up.
+        source: '/companies/:citySlug',
+        headers: [
+          { key: 'Cache-Control', value: 'public, s-maxage=86400, stale-while-revalidate=86400' },
+        ],
+      },
     ];
   },
 };

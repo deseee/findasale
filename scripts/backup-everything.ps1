@@ -14,6 +14,7 @@ $projectRoot = "C:\Users\desee\ClaudeProjects\FindaSale"
 $backupRoot = "C:\Users\desee\ClaudeProjects\FindaSale\backups"
 $backupDir = "$backupRoot\$timestamp"
 $logFile = "$backupRoot\backup-log.txt"
+$errorLogFile = "$backupRoot\backup-log-error.txt"
 
 # Ensure backup root exists before anything else
 if (!(Test-Path $backupRoot)) { New-Item -ItemType Directory -Path $backupRoot -Force | Out-Null }
@@ -22,7 +23,30 @@ if (!(Test-Path $backupRoot)) { New-Item -ItemType Directory -Path $backupRoot -
 function Log($msg) {
     $line = "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') | $msg"
     Write-Host $line
-    Add-Content -Path $logFile -Value $line
+    # Robust write: retry a few times to survive transient locks (AV scan,
+    # OneDrive sync, a concurrent run), then fall back to a separate
+    # error-log file so a logging failure is never completely silent.
+    $writeOk = $false
+    for ($attempt = 1; $attempt -le 3; $attempt++) {
+        try {
+            Add-Content -Path $logFile -Value $line -ErrorAction Stop
+            $writeOk = $true
+            break
+        } catch {
+            if ($attempt -lt 3) {
+                Start-Sleep -Milliseconds (200 * $attempt)
+            }
+        }
+    }
+    if (-not $writeOk) {
+        # Best-effort fallback — must never throw and must never interrupt
+        # the actual backup steps, even if this write also fails.
+        try {
+            Add-Content -Path $errorLogFile -Value "$line [PRIMARY LOG WRITE FAILED after 3 attempts]" -ErrorAction Stop
+        } catch {
+            # Swallow — logging is best-effort only, never fatal to the backup.
+        }
+    }
 }
 
 function Safe-Copy($src, $dest) {
@@ -45,6 +69,14 @@ function Safe-CopyDir($src, $dest) {
         Log "  SKIP (not found): $src"
     }
 }
+
+# --- Top-level error trap ---
+# Ensures ANY terminating exception anywhere below gets a diagnostic write
+# to both log files and causes the script to exit 1 (so Task Scheduler's
+# "Last Run Result" reflects real failures instead of always showing success).
+$script:BackupFailureReason = $null
+
+try {
 
 # --- Start ---
 Log "=========================================="
@@ -354,3 +386,28 @@ Log "  Size: $zipSizeMB MB"
 Log "  Total backups: $($allBackups.Count) ($totalMB MB)"
 Log "  Retention: $RetentionDays days"
 Log "=========================================="
+
+}
+catch {
+    $script:BackupFailureReason = $_.Exception.Message
+    $diagLines = @(
+        "EXCEPTION: $($_.Exception.Message)",
+        "STACK TRACE: $($_.ScriptStackTrace)"
+    )
+    foreach ($d in $diagLines) {
+        try { Add-Content -Path $logFile -Value $d -ErrorAction Stop } catch {}
+        try { Add-Content -Path $errorLogFile -Value $d -ErrorAction Stop } catch {}
+    }
+    Log "  FATAL ERROR: $($_.Exception.Message)"
+}
+finally {
+    if ($script:BackupFailureReason) {
+        Log "RUN ENDED - FAILURE: $($script:BackupFailureReason)"
+    } else {
+        Log "RUN ENDED - SUCCESS"
+    }
+}
+
+if ($script:BackupFailureReason) {
+    exit 1
+}
