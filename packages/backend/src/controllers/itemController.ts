@@ -35,7 +35,7 @@ import { checkAndAward } from '../services/achievementService'; // Feature #58: 
 import { notifyFacebookExportedItemSold } from '../services/facebookNudgeService'; // Bug #461: FB nudge on single-item SOLD
 import { republishEbayOffer, ebayPublishWithSelfHeal, ensureConditionValidForCategory } from '../services/ebayPublishService'; // Phase 2 relocation + Phase 3 rewire (ADR 2026-06-30)
 import { assertCheckoutAllowed, CheckoutGuardError } from '../services/checkoutGuard'; // S1072 Finding #4: collusion/wash-trade guard
-import { removeItemFromShopify } from '../services/shopifyService'; // Cross-platform sync: unpublish Shopify listing on FindA.Sale item delete
+import { removeItemFromShopify, updateShopifyProductFields } from '../services/shopifyService'; // Cross-platform sync: unpublish on delete + propagate price/quantity edits
 
 /** Decode HTML entities from CSV/eBay data before writing to the DB. */
 function decodeHtmlEntities(str: string): string {
@@ -679,6 +679,11 @@ export const getItemById = async (req: Request, res: Response) => {
         // DB but the edit-item form always displayed stale/default values on reload,
         // making the fix look broken even though the write path was correct.
         quantity: true,
+        // ADR-087 P1: stockTotal must be in this read select so the edit-item form
+        // round-trips the saved "Units available" value on reload (same S1124 bug class
+        // as the quantity note above). stockSold intentionally NOT exposed here -- it is
+        // server-owned and not needed by the setter/warning (P2/D5 handles public display).
+        stockTotal: true,
         ebayShippingOverride: true,
         packageConfirmedByOrganizer: true,
         packageEstimateSource: true,
@@ -1174,7 +1179,7 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     }
 
     const { id } = req.params;
-    const { title, description, price, auctionStartPrice, auctionReservePrice, bidIncrement, auctionEndTime, status, category, condition, conditionGrade, shippingAvailable, shippingPrice, reverseAuction, reverseDailyDrop, reverseFloorPrice, reverseStartDate, listingType, isAiTagged, rarity, qrEmbedEnabled, tags, backgroundRemoved, draftStatus, isHighValue, estimatedValue, aiSuggestedPrice, aiConfidence, quantity, ebayShippingOverride, packageWeightOz, packageLengthIn, packageWidthIn, packageHeightIn, packageType, packageConfirmedByOrganizer, packageEstimateSource, upc, ean, isbn, mpn, brand, ebayEpid, conditionNotes, allowBestOffer, bestOfferAutoAcceptAmt, bestOfferMinimumAmt, ebaySecondaryCategoryId, ebaySubtitle, ebayCategoryId, ebayCategoryName, isLegendary, lotNumber, costBasis, roomTag } = req.body;
+    const { title, description, price, auctionStartPrice, auctionReservePrice, bidIncrement, auctionEndTime, status, category, condition, conditionGrade, shippingAvailable, shippingPrice, reverseAuction, reverseDailyDrop, reverseFloorPrice, reverseStartDate, listingType, isAiTagged, rarity, qrEmbedEnabled, tags, backgroundRemoved, draftStatus, isHighValue, estimatedValue, aiSuggestedPrice, aiConfidence, quantity, stockTotal, ebayShippingOverride, packageWeightOz, packageLengthIn, packageWidthIn, packageHeightIn, packageType, packageConfirmedByOrganizer, packageEstimateSource, upc, ean, isbn, mpn, brand, ebayEpid, conditionNotes, allowBestOffer, bestOfferAutoAcceptAmt, bestOfferMinimumAmt, ebaySecondaryCategoryId, ebaySubtitle, ebayCategoryId, ebayCategoryName, isLegendary, lotNumber, costBasis, roomTag } = req.body;
 
     // #102: Validate price >= 0
     if (price !== undefined && price !== null) {
@@ -1223,6 +1228,16 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
       }
     }
 
+    // ADR-087 P1 (D1): Validate stockTotal (organizer's real sellable unit count).
+    // Must be an integer >= 1. The < stockSold check runs after the item is fetched
+    // (stockSold is server-owned and never accepted from the client).
+    if (stockTotal !== undefined && stockTotal !== null) {
+      const parsedStockTotal = parseInt(stockTotal, 10);
+      if (isNaN(parsedStockTotal) || parsedStockTotal < 1) {
+        return res.status(400).json({ message: 'Units available must be a positive whole number.' });
+      }
+    }
+
     // ADR-085 follow-up: Validate ebayShippingOverride if provided via the generic
     // update endpoint (was also silently dropped -- the edit-item page's "Local pickup
     // only" checkbox relies on this endpoint but the field was never in updateData;
@@ -1247,6 +1262,16 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
 
     if (item.sale!.organizer.userId !== req.user.id) {
       return res.status(403).json({ message: 'Access denied. Not your sale.' });
+    }
+
+    // ADR-087 P1 (D1): stockTotal can never drop below units already sold. stockSold is
+    // server-owned -- it is intentionally NOT in the updateItem whitelist above, so a
+    // client can never set it; we compare the requested stockTotal against the DB value.
+    if (stockTotal !== undefined && stockTotal !== null) {
+      const parsedStockTotal = parseInt(stockTotal, 10);
+      if (parsedStockTotal < item.stockSold) {
+        return res.status(400).json({ message: `Units available (${parsedStockTotal}) cannot be less than the ${item.stockSold} unit(s) already sold.` });
+      }
     }
 
     // Build update object
@@ -1378,6 +1403,9 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     // organizer edits to the Quantity field silently no-opped (S1085, found via
     // real-item investigation on Solenoid Valve Actuator, 18 physical units).
     if (quantity !== undefined) updateData.quantity = quantity === null ? 1 : parseInt(quantity, 10);
+    // ADR-087 P1 (D1): stockTotal write (validated above: integer >= 1 and >= stockSold).
+    // stockSold is intentionally absent from the destructure/whitelist -- it stays server-owned.
+    if (stockTotal !== undefined) updateData.stockTotal = stockTotal === null ? 1 : parseInt(stockTotal, 10);
     // ADR-085 follow-up: same silent-drop bug for ebayShippingOverride (edit-item page's
     // "Local pickup only" checkbox never actually persisted via this endpoint) and for
     // packageConfirmedByOrganizer/packageEstimateSource (PostSaleEbayPanel's "confirm
@@ -1813,6 +1841,32 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
           console.warn(`[eBay PushSync] Non-fatal error pushing item ${id} to eBay:`, (err as Error).message);
         }
       })().catch(err => console.warn(`[eBay PushSync] Unhandled error for item ${id}:`, err));
+    }
+
+    // Shopify companion sync (ADR-086): propagate price/quantity edits to an
+    // already-pushed Shopify product. Fire-and-forget, self-guarding:
+    // updateShopifyProductFields re-queries the item's ShopifyListing and no-ops
+    // if the item was never cross-listed / the listing isn't ACTIVE, and never
+    // throws — mirrors removeItemFromShopify's call style above. Only fires when
+    // price or quantity ACTUALLY changed vs. the pre-update item, so an edit that
+    // leaves both untouched makes zero Shopify calls.
+    const shopifyPriceChanged =
+      price !== undefined && (updatedItem.price ?? null) !== (item.price ?? null);
+    const shopifyQuantityChanged =
+      quantity !== undefined && (updatedItem.quantity ?? null) !== (item.quantity ?? null);
+    if (shopifyPriceChanged || shopifyQuantityChanged) {
+      const shopifyFields: { price?: number; quantity?: number } = {};
+      if (shopifyPriceChanged && updatedItem.price !== null && updatedItem.price !== undefined) {
+        shopifyFields.price = updatedItem.price;
+      }
+      if (shopifyQuantityChanged && updatedItem.quantity !== null && updatedItem.quantity !== undefined) {
+        shopifyFields.quantity = updatedItem.quantity;
+      }
+      if (Object.keys(shopifyFields).length > 0) {
+        updateShopifyProductFields(id, shopifyFields).catch((err) =>
+          console.warn(`[Shopify PushSync] price/quantity propagation failed for item ${id}:`, err.message)
+        );
+      }
     }
   } catch (error) {
     console.error('Error updating item:', error);

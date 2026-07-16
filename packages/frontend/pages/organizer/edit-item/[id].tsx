@@ -51,6 +51,7 @@ const EditItemPage = () => {
     description: '',
     price: '',
     quantity: 1,
+    stockTotal: 1,
     category: '',
     ebayCategoryId: '',
     ebayCategoryName: '',
@@ -422,6 +423,7 @@ const EditItemPage = () => {
         description: item.description || '',
         price: item.price ? item.price.toString() : '',
         quantity: item.quantity ?? 1,
+        stockTotal: item.stockTotal ?? 1,
         category: normalizedCategory,
         ebayCategoryId: item.ebayCategoryId || '',
         ebayCategoryName: item.ebayCategoryName || '',
@@ -1107,7 +1109,7 @@ const EditItemPage = () => {
 
             <div>
               <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">
-                Quantity
+                Lot / bundle size
               </label>
               <input
                 type="number"
@@ -1119,7 +1121,31 @@ const EditItemPage = () => {
                 }
                 className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
               />
-              <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">Items bundled together in this lot (e.g. "set of 8"). Not your total stock count -- if you have several separate units of this item, create a separate item row for each one.</p>
+              <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">How many pieces are bundled together and sold as one lot (e.g. "set of 8" sold together). This is not your sellable stock count.</p>
+            </div>
+
+            {/* ADR-087 P1: "Units available" = the real independently-sellable stock pool (stockTotal). */}
+            <div>
+              <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">
+                Units available
+              </label>
+              <input
+                type="number"
+                min="1"
+                step="1"
+                value={formData.stockTotal}
+                onChange={(e) =>
+                  setFormData({ ...formData, stockTotal: Math.max(1, parseInt(e.target.value) || 1) })
+                }
+                className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
+              />
+              <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">How many separate units of this item you have to sell. Each sale &mdash; in person, at POS, or on a connected marketplace &mdash; draws one unit from this pool, and the item stays listed until every unit is gone. Leave at 1 for a single item.</p>
+              {formData.quantity > 1 && (formData.stockTotal ?? 1) <= 1 && (
+                <p className="text-xs text-amber-700 dark:text-amber-400 mt-1 flex items-start gap-1">
+                  <span aria-hidden="true">&#9888;</span>
+                  <span>This item&apos;s stock pool isn&apos;t set &mdash; shoppers and marketplaces will see only 1 available. Set &ldquo;Units available&rdquo; to your real number of units.</span>
+                </p>
+              )}
             </div>
 
             <div>

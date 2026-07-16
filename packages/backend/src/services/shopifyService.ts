@@ -250,6 +250,103 @@ export async function removeItemFromShopify(itemId: string, hardDelete = false):
 }
 
 /**
+ * Propagate FindA.Sale-side price and/or quantity edits to an already-pushed
+ * Shopify product. Fires from the item update path when an organizer changes an
+ * item's price or quantity on FindA.Sale and that item is cross-listed on Shopify.
+ *
+ * - price   -> updates the variant price (REST variant update).
+ * - quantity-> sets the available inventory level (same variant -> inventory_item_id
+ *   -> location_id resolution used by markShopifyItemSold).
+ *
+ * No-ops cleanly (returns early, never throws) when the item was never pushed to
+ * Shopify, the organizer is missing, or the listing is not ACTIVE (so a SOLD/REMOVED
+ * listing is never resurrected by a later price/quantity edit). Fire-and-forget:
+ * swallows its own errors so it can never block the FindA.Sale-side item save.
+ */
+export async function updateShopifyProductFields(
+  itemId: string,
+  fields: { price?: number; quantity?: number }
+): Promise<void> {
+  try {
+    // Nothing to push
+    if (
+      (fields.price === undefined || fields.price === null) &&
+      (fields.quantity === undefined || fields.quantity === null)
+    ) {
+      return;
+    }
+
+    const listing = await prisma.shopifyListing.findUnique({
+      where: { itemId },
+      include: { organizer: true },
+    });
+
+    // Item not listed on Shopify, organizer missing, or listing no longer active
+    if (!listing || !listing.organizer || listing.status !== 'ACTIVE') {
+      return;
+    }
+
+    const client = getShopifyClient(listing.organizer);
+
+    // 1. Push price to the variant (REST variant update — partial body is allowed
+    //    for variant updates, only product/inventory need full objects).
+    if (
+      fields.price !== undefined &&
+      fields.price !== null &&
+      listing.shopifyVariantId
+    ) {
+      await client.put(`/variants/${listing.shopifyVariantId}.json`, {
+        variant: {
+          id: listing.shopifyVariantId,
+          price: Number(fields.price).toFixed(2),
+        },
+      });
+    }
+
+    // 2. Push quantity to the inventory level. shopifyVariantId is a VARIANT id, not
+    //    an inventory_item_id, and inventory_levels requires both an inventory_item_id
+    //    and a location_id — resolve both at runtime exactly like markShopifyItemSold.
+    if (
+      fields.quantity !== undefined &&
+      fields.quantity !== null &&
+      listing.shopifyVariantId
+    ) {
+      const variantResp = await client.get(`/variants/${listing.shopifyVariantId}.json`);
+      const inventoryItemId = variantResp.data?.variant?.inventory_item_id;
+
+      const locationsResp = await client.get(`/locations.json`);
+      const locations = locationsResp.data?.locations || [];
+      const locationId =
+        locations.find((l: any) => l.active)?.id || locations[0]?.id;
+
+      if (inventoryItemId && locationId) {
+        await client.post(`/inventory_levels/set.json`, {
+          location_id: locationId,
+          inventory_item_id: inventoryItemId,
+          available: Math.max(0, Math.trunc(Number(fields.quantity))),
+        });
+      } else {
+        console.error(
+          `[Shopify] Could not resolve inventory_item_id (${inventoryItemId}) or location_id (${locationId}) for item ${itemId}`
+        );
+      }
+    }
+
+    // Touch syncedAt so status/getShopifyStatus reflect the propagation
+    await prisma.shopifyListing.update({
+      where: { itemId },
+      data: { syncedAt: new Date() },
+    });
+  } catch (error: any) {
+    // Log but don't throw — fire-and-forget, must never block the FindA.Sale-side save
+    console.error(
+      `[Shopify] Failed to propagate price/quantity for item ${itemId}:`,
+      error.message
+    );
+  }
+}
+
+/**
  * Disconnect Shopify from an organizer
  */
 export async function disconnectShopify(organizerId: string): Promise<void> {
