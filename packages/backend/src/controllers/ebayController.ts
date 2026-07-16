@@ -1850,6 +1850,8 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
             createdAt: true,
             costBasis: true,
             roomTag: true,
+            stockTotal: true,
+            stockSold: true,
           },
         },
       },
@@ -2110,7 +2112,11 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
           ...(buildConditionDescription(item) ? { conditionDescription: buildConditionDescription(item) } : {}),
           availability: {
             shipToLocationAvailability: {
-              quantity: 1,
+              // ADR-085 Track B: real remaining stock, not a hardcoded 1.
+              // Floors at 1 -- eBay's Inventory API rejects quantity 0 on an
+              // active/publishing offer; a fully-sold item is withdrawn via
+              // endEbayListingIfExists rather than pushed with quantity 0.
+              quantity: Math.max((item.stockTotal ?? 1) - item.stockSold, 1),
             },
           },
           ...(item.packageWeightOz ? {
@@ -2380,10 +2386,16 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
           offerId = createData.offerId;
         }
 
-        // Store offerId
+        // Store offerId + real remaining stock as ebayQuantityAvailable (ADR-085
+        // Track B: finishes the previously-dead half of the eBay multi-quantity
+        // system -- ebaySoldSyncCron.ts already correctly used this field, it was
+        // just never written until now).
         await prisma.item.update({
           where: { id: item.id },
-          data: { ebayOfferId: offerId },
+          data: {
+            ebayOfferId: offerId,
+            ebayQuantityAvailable: Math.max((item.stockTotal ?? 1) - item.stockSold, 1),
+          },
         });
 
         // Step 3: Publish offer LIVE via the consolidated self-heal loop.

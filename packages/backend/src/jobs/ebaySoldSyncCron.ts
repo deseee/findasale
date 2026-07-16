@@ -20,6 +20,7 @@ import { cronGuard } from '../utils/cronGuard';
 import { refreshEbayAccessToken, endEbayListingIfExists } from '../controllers/ebayController';
 import { notifyFacebookExportedItemSold } from '../services/facebookNudgeService';
 import { markShopifyItemSold } from '../services/shopifyService';
+import { sellItemUnits, InsufficientStockError } from '../services/itemStockService';
 
 interface EbayItem {
   id: string;
@@ -239,7 +240,8 @@ export async function syncSoldItemsForOrganizer(organizerId: string): Promise<Sy
           throw err;
         }
 
-        // Atomic increment so multiple unit sales in the same run stay correct.
+        // Atomic increment on the eBay-specific idempotency ledger (unchanged --
+        // this stays the source of truth for "X of Y sold on eBay" copy below).
         const updated = await prisma.item.update({
           where: { id: matchedItem.id },
           data: { ebayQuantitySold: { increment: unitQty } },
@@ -247,7 +249,34 @@ export async function syncSoldItemsForOrganizer(organizerId: string): Promise<Sy
         });
         const avail = updated.ebayQuantityAvailable ?? 1;
         const soldCount = updated.ebayQuantitySold;
-        const fullySold = soldCount >= avail;
+
+        // ADR-085 Track B: draw the SAME units down from the general cross-channel
+        // stock pool -- this is what makes an eBay sale and a POS/Stripe/etc. sale
+        // correctly share one inventory count instead of two disconnected counters.
+        // Its fullySoldOut (not the eBay-specific avail/soldCount above) is the
+        // authoritative signal for the status flip + "remove everywhere" hooks.
+        let fullySold = false;
+        try {
+          const stockResult = await sellItemUnits(matchedItem.id, unitQty);
+          fullySold = stockResult.fullySoldOut;
+        } catch (err) {
+          if (err instanceof InsufficientStockError) {
+            // Real money already changed hands on eBay -- the general pool
+            // disagreeing means it's stale/desynced (e.g. stockTotal was never
+            // set for this item), not that the sale didn't happen. Don't lose
+            // the sale: fall back to the eBay-specific ledger's own fullySold
+            // check so the listing doesn't stay phantom-available, but log
+            // loudly so the desync gets investigated.
+            console.error(
+              `[eBay Sync] STOCK POOL DESYNC for item ${matchedItem.id} ("${matchedItem.title}"): ` +
+              `eBay confirmed a real sale but the general stock pool shows no remaining units. ` +
+              `Falling back to eBay-ledger-only fullySold check. ${err.message}`
+            );
+            fullySold = soldCount >= avail;
+          } else {
+            throw err;
+          }
+        }
 
         if (fullySold && updated.status !== 'SOLD') {
           await prisma.item.update({

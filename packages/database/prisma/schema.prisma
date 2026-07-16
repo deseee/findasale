@@ -1290,6 +1290,14 @@ model Item {
   ebayQueuedAt               DateTime? // When item was added to eBay listing queue (null = not queued)
   ebayListedAt               DateTime? // When item was first listed on eBay (set on first push, never updated on relist)
   fbExportedAt               DateTime?
+  // ADR-085 Track B (2026-07-16): general, cross-channel stock pool. Distinct from
+  // `quantity` above (photos bundled into one lot) AND from the eBay-specific
+  // ebayQuantityAvailable/ebayQuantitySold pair below (that pair is an idempotent
+  // ledger keyed on eBay order/line-item IDs, not a general counter). stockSold is
+  // SERVER-OWNED ONLY -- never add to any client-facing update whitelist; written
+  // exclusively by itemStockService.sellItemUnits().
+  stockTotal                 Int?                   @default(1) // Total independently-sellable units across ALL channels. null/1 = single-unit (today's behavior, unchanged). Organizer-editable.
+  stockSold                  Int                    @default(0) // Units sold so far across ALL channels. SERVER-OWNED -- see comment above.
   // ADR ebay-multiquantity (2026-06-16): track eBay multi-quantity listing units.
   // NOTE: distinct from `quantity` above (which means "set of N sold as one lot").
   ebayQuantityAvailable      Int? // total units on the eBay listing (null/1 = single-unit)
