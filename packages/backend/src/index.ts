@@ -341,12 +341,19 @@ app.use((req, res, next) => {
   // ADR-084: FindA.Sale Marketplace Autofill extension. Auth is Bearer-only (no
   // cookie), so reflect the chrome-extension origin and allow the Authorization
   // header without credentials — the token grants access, not the origin.
-  if (req.path.startsWith('/api/extension')) {
-    const extOrigin = req.headers.origin;
-    if (extOrigin) res.setHeader('Access-Control-Allow-Origin', extOrigin);
+  // ADR-088: the extension SW also calls POST /api/auth/refresh with an explicit
+  // X-Refresh-Token header (SameSite=Lax blocks cookie auto-attach on the
+  // extension-origin fetch). That path needs the same origin-reflection + header
+  // allowance, but ONLY for the chrome-extension origin — the web app never sends a
+  // chrome-extension origin, so its credentialed cookie refresh still falls through
+  // to the generic cors() below byte-for-byte (no downgrade of the web-app path).
+  const extReqOrigin = req.headers.origin;
+  const isExtensionOrigin = !!extReqOrigin && extReqOrigin.startsWith('chrome-extension://');
+  if (req.path.startsWith('/api/extension') || (req.path === '/api/auth/refresh' && isExtensionOrigin)) {
+    if (extReqOrigin) res.setHeader('Access-Control-Allow-Origin', extReqOrigin);
     res.setHeader('Vary', 'Origin');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
+    res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type, X-Refresh-Token');
     if (req.method === 'OPTIONS') { res.status(204).end(); return; }
     return next();
   }

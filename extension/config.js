@@ -5,5 +5,6 @@ self.FAS_CONFIG = {
   API_BASE: 'https://finda.sale/api',
   COOKIE_URL: 'https://finda.sale',
   COOKIE_NAME: 'accessToken',
+  REFRESH_COOKIE_NAME: 'refreshToken',
   FB_CREATE_URL: 'https://www.facebook.com/marketplace/create/item'
 };

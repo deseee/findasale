@@ -286,7 +286,10 @@ router.post('/logout', (req: AuthRequest, res: Response) => {
 // P0 Security Fix: POST /auth/refresh
 router.post('/refresh', async (req: AuthRequest, res: Response) => {
   try {
-    const refreshToken = req.cookies?.refreshToken;
+    // ADR-088: cookie-FIRST (web app), X-Refresh-Token header FALLBACK (browser
+    // extension SW — SameSite=Lax blocks cookie auto-attach on the extension-origin
+    // fetch). Source only; ALL downstream checks run identically regardless of source.
+    const refreshToken = req.cookies?.refreshToken || req.header('X-Refresh-Token') || undefined;
     if (!refreshToken) {
       return res.status(401).json({ error: 'No refresh token' });
     }

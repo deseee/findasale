@@ -113,6 +113,8 @@ interface Item {
   markdownApplied?: boolean; // Feature #91: Auto-Markdown
   organizerDiscountAmount?: number; // D-XP-003: Organizer-funded item discount
   organizerDiscountXp?: number; // D-XP-003: XP cost of discount
+  stockTotal?: number | null; // ADR-087 P2: multi-unit stock pool total (null/1 = single-unit)
+  stockSold?: number; // ADR-087 P2: units sold so far across all channels (server-owned)
 }
 
 interface BidHistory {
@@ -549,6 +551,12 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
   const isReverseAuction = item.reverseAuction === true;
   const isSold = item.status === 'SOLD';
 
+  // ADR-087 P2 (D5): Multi-unit stock — units remaining for the public storefront.
+  // Single-unit items (stockTotal null/1) show nothing new — the 99% case, no regression.
+  const stockTotalUnits = item.stockTotal ?? 1;
+  const unitsRemaining = stockTotalUnits - (item.stockSold ?? 0);
+  const showUnitsAvailable = stockTotalUnits > 1 && !isAuction && !isReverseAuction && !isSold && unitsRemaining > 0;
+
   // Compute decayed price for reverse auction items.
   // price, reverseDailyDrop, and reverseFloorPrice are all returned in dollars (not cents) from the API.
   const reverseDecayedPrice = (() => {
@@ -758,6 +766,13 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
                     </div>
                   )}
                 </div>
+                {/* ADR-087 P2 (D5): Units-available indicator for genuine multi-unit stock. */}
+                {showUnitsAvailable && (
+                  <div className="inline-flex items-center gap-1.5 text-sm font-semibold text-green-700 dark:text-green-400 mb-2">
+                    <span className="w-2 h-2 rounded-full bg-green-500 dark:bg-green-400" />
+                    {unitsRemaining === 1 ? 'Only 1 left' : `${unitsRemaining} available`}
+                  </div>
+                )}
                 {isAuction && (
                   <div className="text-xs text-gray-500 dark:text-gray-400 mb-2">
                     <div>+ ${(currentPrice * 0.05).toFixed(2)} buyer premium (5%)</div>

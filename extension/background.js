@@ -11,8 +11,33 @@ async function getToken() {
   return cookie ? cookie.value : null;
 }
 
-async function apiFetch(path, opts = {}) {
-  const token = await getToken();
+// ADR-088: obtain a fresh access token when a Bearer call 401s. Reads the HttpOnly
+// refreshToken cookie VALUE (the chrome.cookies API can read HttpOnly values;
+// document.cookie cannot) and sends it in an explicit X-Refresh-Token header to the
+// existing /auth/refresh, which accepts it as a fallback behind the cookie. A RAW fetch
+// is used (NOT apiFetch) so a refresh can never recurse into another refresh.
+// SECURITY (ADR-088 §4): the refresh-token value must live ONLY inside this service
+// worker for the duration of this call — it is NEVER put in a sendMessage/sendResponse
+// payload, chrome.storage, the page DOM, or console.*. Returns the fresh ACCESS token
+// from the response body (data.token) — never the refresh token.
+async function refreshAccessToken() {
+  const cookie = await chrome.cookies.get({ url: CFG.COOKIE_URL, name: CFG.REFRESH_COOKIE_NAME });
+  if (!cookie || !cookie.value) return null;
+  try {
+    const res = await fetch(CFG.API_BASE + '/auth/refresh', {
+      method: 'POST',
+      headers: { 'X-Refresh-Token': cookie.value }
+    });
+    if (!res.ok) return null;
+    const data = await res.json().catch(() => null);
+    return data && data.token ? data.token : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+async function apiFetch(path, opts = {}, _retried = false, _token = null) {
+  const token = _token || await getToken();
   if (!token) return { ok: false, status: 401, error: 'not_signed_in' };
   const res = await fetch(CFG.API_BASE + path, {
     method: opts.method || 'GET',
@@ -22,6 +47,16 @@ async function apiFetch(path, opts = {}) {
     ),
     body: opts.body ? JSON.stringify(opts.body) : undefined
   });
+  // ADR-088: the 1h accessToken routinely expires mid-flow (multi-minute FB publish,
+  // ~20-min removal alarm), silently 401-ing /listed & /removed so no
+  // MarketplaceListingJob row is written. On a Bearer 401, refresh ONCE and retry the
+  // original request ONCE with the fresh token passed directly (not relying on
+  // cookie-jar propagation timing). _retried guarantees at most one refresh + one retry;
+  // a second 401 falls through and returns the failure — no loop.
+  if (res.status === 401 && !_retried) {
+    const fresh = await refreshAccessToken();
+    if (fresh) return apiFetch(path, opts, true, fresh);
+  }
   let data = null;
   try { data = await res.json(); } catch (e) {}
   return { ok: res.ok, status: res.status, data, error: res.ok ? null : (data && data.message) || 'request_failed' };

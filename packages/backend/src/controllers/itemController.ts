@@ -681,9 +681,11 @@ export const getItemById = async (req: Request, res: Response) => {
         quantity: true,
         // ADR-087 P1: stockTotal must be in this read select so the edit-item form
         // round-trips the saved "Units available" value on reload (same S1124 bug class
-        // as the quantity note above). stockSold intentionally NOT exposed here -- it is
-        // server-owned and not needed by the setter/warning (P2/D5 handles public display).
+        // as the quantity note above). ADR-087 P2/D5: stockSold is now also exposed so the
+        // public storefront can compute units remaining ((stockTotal ?? 1) - stockSold).
+        // Both are server-owned unit counts -- read-only exposure, no private-field leak.
         stockTotal: true,
+        stockSold: true,
         ebayShippingOverride: true,
         packageConfirmedByOrganizer: true,
         packageEstimateSource: true,
