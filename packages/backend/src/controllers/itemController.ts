@@ -674,6 +674,14 @@ export const getItemById = async (req: Request, res: Response) => {
         packageWidthIn: true,
         packageHeightIn: true,
         packageType: true,
+        // S1124 QA finding: these 4 fields are correctly write-whitelisted in updateItem
+        // (ADR-085 Track A) but were NEVER in this read select -- saves succeeded in the
+        // DB but the edit-item form always displayed stale/default values on reload,
+        // making the fix look broken even though the write path was correct.
+        quantity: true,
+        ebayShippingOverride: true,
+        packageConfirmedByOrganizer: true,
+        packageEstimateSource: true,
         brand: true,
         mpn: true,
         upc: true,
