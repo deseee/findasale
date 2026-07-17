@@ -133,10 +133,22 @@ const FAS_REMOVAL_ALARM = 'fasCheckRemovals';
 async function ensureRemovalAlarm() {
   const { fasAutoRemoveMode = 'notify' } = await chrome.storage.local.get(['fasAutoRemoveMode']);
   if (fasAutoRemoveMode === 'off') { chrome.alarms.clear(FAS_REMOVAL_ALARM); return; }
-  chrome.alarms.create(FAS_REMOVAL_ALARM, { periodInMinutes: 20 });
+  // Creating an alarm with an existing name CANCELS+REPLACES it, resetting the 20-min
+  // countdown. onInstalled/onStartup fire on every reload, so unconditionally recreating meant
+  // frequent dev/QA reloads kept resetting the timer and the alarm rarely reached 20 min.
+  // Only create when it doesn't already exist so the steady-state countdown is preserved.
+  const existing = await chrome.alarms.get(FAS_REMOVAL_ALARM);
+  if (!existing) chrome.alarms.create(FAS_REMOVAL_ALARM, { periodInMinutes: 20 });
 }
-chrome.runtime.onInstalled.addListener(ensureRemovalAlarm);
-chrome.runtime.onStartup.addListener(ensureRemovalAlarm);
+// Ensure the alarm AND run one immediate (throttled) check so a freshly-loaded worker doesn't
+// wait up to 20 min for its first poll. throttledCheckPendingRemovals internally no-ops when
+// mode === 'off', so this is safe regardless of the current setting.
+async function ensureRemovalAlarmAndCheck() {
+  await ensureRemovalAlarm();
+  await throttledCheckPendingRemovals();
+}
+chrome.runtime.onInstalled.addListener(ensureRemovalAlarmAndCheck);
+chrome.runtime.onStartup.addListener(ensureRemovalAlarmAndCheck);
 
 async function checkPendingRemovals() {
   const { fasAutoRemoveMode = 'notify' } = await chrome.storage.local.get(['fasAutoRemoveMode']);
@@ -165,7 +177,18 @@ async function checkPendingRemovals() {
     priority: 1
   });
 }
-chrome.alarms.onAlarm.addListener((alarm) => { if (alarm.name === FAS_REMOVAL_ALARM) checkPendingRemovals(); });
+// Shared 30s throttle for on-demand checks (popup open, startup/install, mode change) so
+// rapid reloads can't spawn duplicate removal tabs. The recurring 20-min alarm path below stays
+// unguarded so the steady-state poll always runs.
+async function throttledCheckPendingRemovals() {
+  try {
+    const { fasLastRemovalCheckAt = 0 } = await chrome.storage.local.get(['fasLastRemovalCheckAt']);
+    if (Date.now() - fasLastRemovalCheckAt < 30000) return;
+    await chrome.storage.local.set({ fasLastRemovalCheckAt: Date.now() });
+    await checkPendingRemovals();
+  } catch (e) {}
+}
+chrome.alarms.onAlarm.addListener((alarm) => { if (alarm.name === FAS_REMOVAL_ALARM) return checkPendingRemovals(); /* return the promise so MV3 keeps the SW alive until the poll+removal completes */ });
 chrome.notifications.onClicked.addListener((notifId) => {
   if (notifId !== 'fasPendingRemovals') return;
   chrome.notifications.clear(notifId);
@@ -182,14 +205,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         // forget so it never blocks the item list. Guarded by a 30s throttle so rapid popup
         // re-opens can't spawn duplicate removal tabs; the 20-min alarm path stays unguarded.
         // (2026-07-16)
-        (async () => {
-          try {
-            const { fasLastRemovalCheckAt = 0 } = await chrome.storage.local.get(['fasLastRemovalCheckAt']);
-            if (Date.now() - fasLastRemovalCheckAt < 30000) return;
-            await chrome.storage.local.set({ fasLastRemovalCheckAt: Date.now() });
-            await checkPendingRemovals();
-          } catch (e) {}
-        })();
+        throttledCheckPendingRemovals(); // fire-and-forget; shared 30s throttle
         sendResponse(await apiFetch('/extension/items'));
       } else if (msg.type === 'markListed') {
         sendResponse(await apiFetch('/extension/items/' + encodeURIComponent(msg.itemId) + '/listed',
@@ -232,6 +248,12 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         sendResponse(await apiFetch('/extension/items/' + encodeURIComponent(msg.itemId) + '/removed', { method: 'POST', body: {} }));
       } else if (msg.type === 'refreshRemovalAlarm') {
         await ensureRemovalAlarm();
+        sendResponse({ ok: true });
+      } else if (msg.type === 'removalModeChanged') {
+        // Mode just changed in the popup -- (re)ensure the alarm for the new mode and poll
+        // immediately (throttled) so switching to 'silent'/'notify' acts without waiting 20 min.
+        await ensureRemovalAlarm();
+        await throttledCheckPendingRemovals();
         sendResponse({ ok: true });
       } else {
         sendResponse({ ok: false, error: 'unknown_message' });

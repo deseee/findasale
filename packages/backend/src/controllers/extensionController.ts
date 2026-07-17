@@ -79,7 +79,7 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
     saleId: it.saleId,
     saleTitle: saleTitleById.get(it.saleId || '') || 'Sale',
     title: it.title,
-    price: it.price != null ? Math.round(it.price) : null,
+    price: it.price != null ? Number(it.price.toFixed(2)) : null,
     condition: toFacebookCondition(it.condition),
     description: buildDescription(it.description, it.saleId),
     category: it.category || null,

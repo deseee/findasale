@@ -37,7 +37,9 @@ async function loadAutoRemoveMode() {
   $('autoRemoveMode').value = fasAutoRemoveMode;
   $('autoRemoveMode').onchange = async () => {
     await chrome.storage.local.set({ fasAutoRemoveMode: $('autoRemoveMode').value });
-    await send({ type: 'refreshRemovalAlarm' });
+    // Tell the worker the mode changed so it (re)ensures the alarm AND polls immediately --
+    // switching to "Remove automatically" should act now, not on the next 20-min alarm.
+    await send({ type: 'removalModeChanged' });
   };
   await send({ type: 'refreshRemovalAlarm' }); // re-assert the alarm in case the worker never woke since install
 }
@@ -63,7 +65,7 @@ function row(it) {
   const d = document.createElement('div'); d.className = 'item';
   const img = it.photoUrls && it.photoUrls[0] ? '<img src="' + it.photoUrls[0] + '">' : '<img>';
   d.innerHTML = img +
-    '<div class="meta"><div class="t">' + esc(it.title) + '</div><div class="p">$' + (it.price != null ? it.price : '—') +
+    '<div class="meta"><div class="t">' + esc(it.title) + '</div><div class="p">$' + (it.price != null ? Number(it.price).toFixed(2) : '—') +
     ' · ' + esc(it.condition || '') + '</div></div>' +
     (it.marketplaceListed ? '<span class="badge">LISTED</span>' : '<input type="checkbox" class="cb">');
   const cb = d.querySelector('.cb');

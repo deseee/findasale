@@ -341,7 +341,7 @@
   //     cents: clamp(bestOfferMinimumAmt, ceil(50% of price), price - $0.01). Use bestOfferMinimumAmt
   //     when it already satisfies FB's rule; otherwise fall back to the 50% floor. If the price is so
   //     low that no valid minimum can exist (e.g. <= $0.01), turn Allow-offers OFF instead.
-  // item.price here is Facebook's own rounded listing price (backend sends Math.round(price)), so the
+  // item.price here is the item's real 2-decimal listing price (backend sends Number(price.toFixed(2))), so the
   // clamp is computed against the exact value FB validates. This never throws its own hard error --
   // it leaves the step in a valid state and lets the existing waitForStep('audience') guard below stay
   // the real check (keeps the fail-loud behavior if FB still blocks for some other reason).
