@@ -287,7 +287,7 @@
   // item shippable when the organizer marked it pickup-only is a real incorrect listing, not a
   // low-stakes guess like Category.
   async function fillDeliveryStep(item) {
-    if (item.shippingOverride === 'LOCAL_PICKUP_ONLY') {
+    if (item.shippingOverride === 'LOCAL_PICKUP_ONLY' || item.shippingAvailable === false) {
       // 2026-07-16 fix (DOM-verified live): open FB's "Delivery method" dropdown, then UNCHECK the
       // "Shipping" item (leaving "Local pickup" checked). FB renders these as role="menuitemcheckbox"
       // items inside the opened combo -- NOT role="option" (old optionByText('pickup') never matched)

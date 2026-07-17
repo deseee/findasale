@@ -150,7 +150,11 @@
         '<div style="margin-top:8px;font-size:11px;color:#9fb6a8">' + (index + 1) + ' of ' + total + '</div>');
     }
     await humanPause(1000, 1800);
-    const next = await chrome.runtime.sendMessage({ type: 'advanceRemovalQueue' }).catch(() => null);
+    let next = null;
+    // chrome.runtime.sendMessage throws SYNCHRONOUSLY when the extension context is invalidated
+    // (extension reloaded mid-run), so a trailing .catch() never fires. Mirror the try/catch used
+    // by start() below so a reload during removal ends the queue cleanly instead of throwing.
+    try { next = await chrome.runtime.sendMessage({ type: 'advanceRemovalQueue' }); } catch (e) { next = null; }
     if (next && next.ok && next.item) {
       await runRemovalQueue(next.item, next.index, next.total);
     } else {
