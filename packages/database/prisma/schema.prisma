@@ -1214,6 +1214,7 @@ model Item {
   // Feature #244 Phase 3: Post-sale eBay push — shipping classification
   ebayShippingClassification String                 @default("UNKNOWN") // SHIPPABLE | HEAVY_OVERSIZED | FRAGILE | UNKNOWN — auto-classified from category + tags
   ebayShippingOverride       String? // SHIPPABLE | LOCAL_PICKUP_ONLY | DONT_LIST — organizer override (null = use classification)
+  ebayFulfillmentPolicyOverrideId String? // Organizer-picked eBay fulfillment policy for THIS item; beats org-default + cascade. null = Auto.
   // D-XP-003: Organizer-funded item discounts
   organizerDiscountXp        Int?                   @default(0) // XP spent to create discount (0 = no discount)
   organizerDiscountAmount    Decimal?               @db.Decimal(10, 2) // Dollar amount of discount ($2, $4, or $5 max)

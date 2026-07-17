@@ -2029,6 +2029,7 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
             bestOfferMinimumAmt: true,
             draftStatus: true,
             ebayShippingOverride: true,
+            ebayFulfillmentPolicyOverrideId: true,
             createdAt: true,
             costBasis: true,
             roomTag: true,
@@ -2150,6 +2151,7 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
             ebayCategoryId: item.ebayCategoryId,
             category: item.category,
             ebayShippingOverride: item.ebayShippingOverride,
+            ebayFulfillmentPolicyOverrideId: item.ebayFulfillmentPolicyOverrideId,
           },
           { fetchFulfillmentPolicies: getFulfillmentPoliciesOnce, fromZip: sale.zip || null }
         );
@@ -2864,6 +2866,7 @@ export const publishItemOffer = async (req: AuthRequest, res: Response) => {
         aiPackageDimsJson: true,
         aiPackageConfidence: true,
         ebayShippingOverride: true,
+        ebayFulfillmentPolicyOverrideId: true,
         sale: { select: { organizerId: true, address: true, city: true, state: true, zip: true } },
       },
     });
@@ -3402,6 +3405,7 @@ async function resolvePoliciesForItem(
     ebayCategoryId?: string | null;
     category?: string | null;
     ebayShippingOverride?: string | null;
+    ebayFulfillmentPolicyOverrideId?: string | null;
   },
   smartPickContext?: {
     fetchFulfillmentPolicies?: () => Promise<any[]>;
@@ -3454,6 +3458,30 @@ async function resolvePoliciesForItem(
       };
     }
     console.warn(`[eBay ShippingPick] item=${item.id} LOCAL_PICKUP_ONLY requested but no local pickup policy found — falling through to normal routing`);
+  }
+
+  // Item-level fulfillment-policy override — organizer picked a specific eBay shipping
+  // policy for THIS item; it beats the org-default and the weight/category cascade below.
+  if (item.ebayFulfillmentPolicyOverrideId) {
+    const returnPolicyId = mapping?.defaultReturnPolicyId || conn.returnPolicyId;
+    const paymentPolicyId = mapping?.defaultPaymentPolicyId || conn.paymentPolicyId;
+    if (!returnPolicyId || !paymentPolicyId) {
+      return {
+        error: 'POLICIES_NOT_CONFIGURED',
+        code: 'POLICIES_NOT_CONFIGURED',
+        message: 'Please set default return and payment policies in eBay Settings.',
+      };
+    }
+    console.log(`[eBay ShippingPick] item=${item.id} policy="${item.ebayFulfillmentPolicyOverrideId}" reason="item-fulfillment-override"`);
+    return {
+      fulfillmentPolicyId: item.ebayFulfillmentPolicyOverrideId,
+      returnPolicyId,
+      paymentPolicyId,
+      descriptionHtml: mapping?.defaultDescriptionHtml ?? null,
+      pushAsDraft: mapping?.pushAsDraft ?? false,
+      merchantLocationSource: mapping?.merchantLocationSource || conn.merchantLocationSource || 'SALE_ADDRESS',
+      routingReason: 'item-fulfillment-override',
+    };
   }
 
   // Organizer-level explicit override beats every other rule.
@@ -3901,6 +3929,7 @@ export async function resyncItemShippingPolicy(
         ebayCategoryId: true,
         category: true,
         ebayShippingOverride: true,
+        ebayFulfillmentPolicyOverrideId: true,
         sale: {
           select: {
             zip: true,
@@ -3971,6 +4000,7 @@ export async function resyncItemShippingPolicy(
         ebayCategoryId: item.ebayCategoryId,
         category: item.category,
         ebayShippingOverride: item.ebayShippingOverride,
+        ebayFulfillmentPolicyOverrideId: item.ebayFulfillmentPolicyOverrideId,
       },
       { fetchFulfillmentPolicies, fromZip }
     );
@@ -3989,6 +4019,7 @@ export async function resyncItemShippingPolicy(
         packageWidthIn: item.packageWidthIn != null ? Number(item.packageWidthIn) : null,
         packageHeightIn: item.packageHeightIn != null ? Number(item.packageHeightIn) : null,
         ebayShippingOverride: item.ebayShippingOverride,
+        ebayFulfillmentPolicyOverrideId: item.ebayFulfillmentPolicyOverrideId,
       },
       fromZip,
     });
@@ -5298,6 +5329,7 @@ export const getUnsoldItems = async (req: AuthRequest, res: Response) => {
             ebayListingId: true,
             ebayShippingClassification: true,
             ebayShippingOverride: true,
+            ebayFulfillmentPolicyOverrideId: true,
             ebayCategoryId: true,
             // Phase B parity fields surfaced by the panel
             brand: true,
@@ -5478,6 +5510,7 @@ export const setEbayShippingOverride = async (req: AuthRequest, res: Response) =
         title: true,
         ebayShippingClassification: true,
         ebayShippingOverride: true,
+        ebayFulfillmentPolicyOverrideId: true,
         category: true,
         tags: true,
       },
@@ -5805,6 +5838,7 @@ export const getShippingNetPreview = async (req: AuthRequest, res: Response): Pr
     let itemPrice = body.itemPrice;
     let ebayCategoryId: string | null = body.ebayCategoryId ?? null;
     let saleZip: string | null = null;
+    let fulfillmentOverrideId: string | null = null;
 
     // If an itemId was passed, load real values (organizer-scoped).
     if (body.itemId) {
@@ -5812,6 +5846,7 @@ export const getShippingNetPreview = async (req: AuthRequest, res: Response): Pr
         where: { id: body.itemId, sale: { organizerId: organizer.id } },
         select: {
           price: true,
+          ebayFulfillmentPolicyOverrideId: true,
           packageWeightOz: true,
           packageLengthIn: true,
           packageWidthIn: true,
@@ -5834,6 +5869,7 @@ export const getShippingNetPreview = async (req: AuthRequest, res: Response): Pr
       }
       if (itemPrice == null && item.price != null) itemPrice = Number(item.price);
       if (ebayCategoryId == null) ebayCategoryId = item.ebayCategoryId ?? null;
+      fulfillmentOverrideId = item.ebayFulfillmentPolicyOverrideId ?? null;
     }
 
     if (weightOz == null || weightOz <= 0) {
@@ -5863,9 +5899,37 @@ export const getShippingNetPreview = async (req: AuthRequest, res: Response): Pr
         packageLengthIn: dims?.length ?? null,
         packageWidthIn: dims?.width ?? null,
         packageHeightIn: dims?.height ?? null,
+        ebayFulfillmentPolicyOverrideId: fulfillmentOverrideId,
       },
       fromZip: body.fromZip ?? saleZip,
     });
+    // Item uses a custom organizer-picked eBay fulfillment policy — the buyer's shipping
+    // is set by that eBay policy, not our calculated/flat model. Be honest: do not
+    // fabricate a buyer-shipping number or a net-margin dollar calc.
+    if (resolved.source === 'custom-override') {
+      return res.json({
+        buyerShipping: null,
+        net: null,
+        breakdown: null,
+        shippingMode: ship.shippingMode,
+        flatPolicy: null,
+        customPolicy: true,
+        message: 'Custom eBay policy selected — buyer shipping is set by your eBay policy.',
+        shippingEstimate: {
+          rate: ship.cheapestRate,
+          basis: ship.basis,
+          service: ship.carrier,
+          carrier: ship.carrier,
+          isEstimate: true,
+          source: 'custom_policy',
+          freeShippingOptIn,
+          labelCost: ship.labelCost,
+          netToSeller: null,
+          fvfOnShipping: null,
+          shippingCovered: null,
+        },
+      });
+    }
     const buyerShipping = resolved.buyerAmountCents / 100;
     const flatPolicy =
       resolved.source === 'weight-tier' || resolved.source === 'fvf-flat'
@@ -5949,12 +6013,14 @@ export const getSuggestedPriceForMargin = async (req: AuthRequest, res: Response
     let dims = body.dims;
     let ebayCategoryId: string | null = body.ebayCategoryId ?? null;
     let saleZip: string | null = null;
+    let fulfillmentOverrideId: string | null = null;
 
     if (body.itemId) {
       const item = await prisma.item.findFirst({
         where: { id: body.itemId, sale: { organizerId: organizer.id } },
         select: {
           packageWeightOz: true,
+          ebayFulfillmentPolicyOverrideId: true,
           packageLengthIn: true,
           packageWidthIn: true,
           packageHeightIn: true,
@@ -5975,6 +6041,7 @@ export const getSuggestedPriceForMargin = async (req: AuthRequest, res: Response
         };
       }
       if (ebayCategoryId == null) ebayCategoryId = item.ebayCategoryId ?? null;
+      fulfillmentOverrideId = item.ebayFulfillmentPolicyOverrideId ?? null;
     }
 
     if (weightOz == null || weightOz <= 0) {
@@ -6002,6 +6069,7 @@ export const getSuggestedPriceForMargin = async (req: AuthRequest, res: Response
         packageLengthIn: dims?.length ?? null,
         packageWidthIn: dims?.width ?? null,
         packageHeightIn: dims?.height ?? null,
+        ebayFulfillmentPolicyOverrideId: fulfillmentOverrideId,
       },
       fromZip: body.fromZip ?? saleZip,
     });

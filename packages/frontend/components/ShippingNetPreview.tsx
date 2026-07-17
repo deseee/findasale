@@ -27,9 +27,14 @@ interface Breakdown {
 }
 
 interface PreviewResponse {
+  // Normal responses always carry these; the custom-policy response (customPolicy=true)
+  // returns null for them but is handled by an early return before they are read.
   buyerShipping: number;
   net: number;
   breakdown: Breakdown;
+  /** True when the item uses a custom organizer-picked eBay fulfillment policy. */
+  customPolicy?: boolean;
+  message?: string | null;
   shippingMode?: 'FLAT_TIERS' | 'CALCULATED';
   flatPolicy?: { name: string; amount: number } | null;
   shippingEstimate: {
@@ -154,6 +159,17 @@ export const ShippingNetPreview: React.FC<ShippingNetPreviewProps> = ({
     return (
       <div className="rounded-lg border border-dashed border-warm-300 dark:border-gray-600 bg-warm-50 dark:bg-gray-800 p-3 text-sm text-warm-600 dark:text-warm-400">
         Add a package weight above to preview buyer shipping and your estimated net.
+      </div>
+    );
+  }
+
+  // Custom per-item eBay policy — buyer shipping is governed by the organizer's
+  // chosen eBay policy, not our calculated/flat model. Show an honest note instead
+  // of a fabricated shipping/net number.
+  if (!loading && data && data.customPolicy) {
+    return (
+      <div className="rounded-lg border border-warm-200 dark:border-gray-600 bg-warm-50 dark:bg-gray-800 p-3 text-sm text-warm-700 dark:text-warm-300">
+        {data.message || 'Custom eBay policy selected — buyer shipping is set by your eBay policy.'}
       </div>
     );
   }

@@ -26,7 +26,8 @@ export type ShippingResolutionSource =
   | 'fvf-flat'
   | 'calculated'
   | 'free'
-  | 'local-pickup';
+  | 'local-pickup'
+  | 'custom-override';
 
 export interface ResolveItemShippingResult {
   /** eBay fulfillment policy id when known (weight-tier match); null for preview-only paths. */
@@ -59,6 +60,8 @@ export interface ShippingResolverItem {
   packageWidthIn?: number | null;
   packageHeightIn?: number | null;
   ebayShippingOverride?: string | null;
+  /** Organizer-picked eBay fulfillment policy for THIS item (null = Auto). */
+  ebayFulfillmentPolicyOverrideId?: string | null;
 }
 
 /** Parse the `$X.XX` (or `$X`) embedded in a flat-tier policy name → cents, or null. */
@@ -114,6 +117,19 @@ export async function resolveItemShipping(input: {
     return { fulfillmentPolicyId: null, buyerAmountCents: 0, policyName: null, source: 'local-pickup' };
   }
 
+  // Item-level custom eBay fulfillment-policy override — the buyer's shipping is set
+  // by the organizer's chosen eBay policy, not our calculated/flat model. We don't
+  // know the buyer amount here, so surface 0 + the override source (the preview treats
+  // this as "set by your eBay policy" rather than fabricating a number).
+  if (item.ebayFulfillmentPolicyOverrideId) {
+    return {
+      fulfillmentPolicyId: item.ebayFulfillmentPolicyOverrideId,
+      buyerAmountCents: 0,
+      policyName: null,
+      source: 'custom-override',
+    };
+  }
+
   // Free-shipping opt-in — buyer pays $0, organizer absorbs the label.
   if (mapping?.freeShippingOptIn) {
     return { fulfillmentPolicyId: null, buyerAmountCents: 0, policyName: null, source: 'free' };
@@ -166,11 +182,9 @@ export async function resolveItemShipping(input: {
     return fvfFlat();
   }
 
-  // ── CALCULATED mode: buyer pays the real rate at checkout (representative number) ──
-  return {
-    fulfillmentPolicyId: null,
-    buyerAmountCents: dollarsToCents(cheapest.rate),
-    policyName: null,
-    source: 'calculated',
-  };
+  // ── CALCULATED mode: gross up the cheapest rate through the FVF-flat helper so the
+  // preview number equals what the buyer is actually charged. This mirrors the push
+  // path's ensureFvfFlatRatePolicy (roundUpToBucket(computeFvfFlatRate(cheapest.rate)))
+  // so preview == charged; returning the bare carrier rate here understated it. ──
+  return fvfFlat();
 }

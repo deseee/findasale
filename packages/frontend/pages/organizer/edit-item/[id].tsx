@@ -86,6 +86,8 @@ const EditItemPage = () => {
     bestOfferDeclinePct: '' as number | '',
     // eBay shipping override
     ebayShippingOverride: null as string | null,
+    // eBay per-item fulfillment-policy override (null = Auto)
+    ebayFulfillmentPolicyOverrideId: null as string | null,
   });
 
   const uploadInputRef = useRef<HTMLInputElement>(null);
@@ -120,6 +122,11 @@ const EditItemPage = () => {
 
   // Local pickup smart detection nudge
   const [showLocalPickupNudge, setShowLocalPickupNudge] = useState(false);
+  // eBay fulfillment policies for the per-item shipping-policy override select.
+  // Fetched from /ebay/setup-data; empty (select hidden) if not eBay-connected or fetch fails.
+  const [ebayFulfillmentPolicies, setEbayFulfillmentPolicies] = useState<
+    Array<{ fulfillmentPolicyId: string; name: string; classification?: string }>
+  >([]);
 
   const openDiscountModal = (xpToSpend: number) => {
     setPendingXpToSpend(xpToSpend);
@@ -251,6 +258,7 @@ const EditItemPage = () => {
         ? parseFloat((pushPrice * (1 - pushDeclinePct / 100)).toFixed(2))
         : null,
       ebayShippingOverride: formData.ebayShippingOverride || null,
+      ebayFulfillmentPolicyOverrideId: formData.ebayFulfillmentPolicyOverrideId || null,
       bestOfferAcceptPct: undefined,
       bestOfferDeclinePct: undefined,
     };
@@ -467,6 +475,7 @@ const EditItemPage = () => {
         })(),
         // eBay shipping override
         ebayShippingOverride: item.ebayShippingOverride || null,
+        ebayFulfillmentPolicyOverrideId: item.ebayFulfillmentPolicyOverrideId || null,
       });
     }
   }, [item]);
@@ -479,6 +488,34 @@ const EditItemPage = () => {
       setShowLocalPickupNudge(true);
     }
   }, [formData.description, (formData as any).conditionNotes, formData.ebayShippingOverride]);
+
+  // Load the organizer's eBay fulfillment policies for the per-item override select.
+  // Guarded: skip on SIMPLE tier / not connected; on any error leave the list empty so
+  // the select stays hidden rather than showing a broken control.
+  useEffect(() => {
+    if (tier === 'SIMPLE' || !ebayConnected) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await api.get('/ebay/setup-data');
+        const policies = res.data?.fulfillmentPolicies;
+        if (!cancelled && Array.isArray(policies)) {
+          setEbayFulfillmentPolicies(
+            policies.map((p: any) => ({
+              fulfillmentPolicyId: p.fulfillmentPolicyId,
+              name: p.name,
+              classification: p.classification,
+            }))
+          );
+        }
+      } catch {
+        if (!cancelled) setEbayFulfillmentPolicies([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [tier, ebayConnected]);
 
   const updateMutation = useMutation({
     mutationFn: async () => {
@@ -504,6 +541,7 @@ const EditItemPage = () => {
           ? parseFloat((price * (1 - declinePct / 100)).toFixed(2))
           : null,
         ebayShippingOverride: formData.ebayShippingOverride || null,
+        ebayFulfillmentPolicyOverrideId: formData.ebayFulfillmentPolicyOverrideId || null,
         // strip UI-only percentage fields
         bestOfferAcceptPct: undefined,
         bestOfferDeclinePct: undefined,
@@ -1415,6 +1453,30 @@ const EditItemPage = () => {
               <div className="pt-4 border-t border-warm-200 dark:border-gray-700">
                 <h3 className="text-sm font-semibold text-warm-700 dark:text-warm-300 mb-3">Shipping Dimensions</h3>
                 <div className="space-y-3">
+                  {ebayFulfillmentPolicies.length > 0 && (
+                    <div>
+                      <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-1">
+                        eBay Shipping Policy
+                      </label>
+                      <select
+                        value={formData.ebayFulfillmentPolicyOverrideId || ''}
+                        onChange={(e) =>
+                          setFormData({ ...formData, ebayFulfillmentPolicyOverrideId: e.target.value || null })
+                        }
+                        className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
+                      >
+                        <option value="">Auto (recommended)</option>
+                        {ebayFulfillmentPolicies.map((p) => (
+                          <option key={p.fulfillmentPolicyId} value={p.fulfillmentPolicyId}>
+                            {p.name}
+                          </option>
+                        ))}
+                      </select>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Auto uses your eBay Settings default. Pick a specific policy to set shipping for just this item.
+                      </p>
+                    </div>
+                  )}
                   <div>
                     <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-1">
                       Package Type

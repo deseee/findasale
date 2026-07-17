@@ -687,6 +687,7 @@ export const getItemById = async (req: Request, res: Response) => {
         stockTotal: true,
         stockSold: true,
         ebayShippingOverride: true,
+        ebayFulfillmentPolicyOverrideId: true,
         packageConfirmedByOrganizer: true,
         packageEstimateSource: true,
         brand: true,
@@ -1181,7 +1182,7 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     }
 
     const { id } = req.params;
-    const { title, description, price, auctionStartPrice, auctionReservePrice, bidIncrement, auctionEndTime, status, category, condition, conditionGrade, shippingAvailable, shippingPrice, reverseAuction, reverseDailyDrop, reverseFloorPrice, reverseStartDate, listingType, isAiTagged, rarity, qrEmbedEnabled, tags, backgroundRemoved, draftStatus, isHighValue, estimatedValue, aiSuggestedPrice, aiConfidence, quantity, stockTotal, ebayShippingOverride, packageWeightOz, packageLengthIn, packageWidthIn, packageHeightIn, packageType, packageConfirmedByOrganizer, packageEstimateSource, upc, ean, isbn, mpn, brand, ebayEpid, conditionNotes, allowBestOffer, bestOfferAutoAcceptAmt, bestOfferMinimumAmt, ebaySecondaryCategoryId, ebaySubtitle, ebayCategoryId, ebayCategoryName, isLegendary, lotNumber, costBasis, roomTag } = req.body;
+    const { title, description, price, auctionStartPrice, auctionReservePrice, bidIncrement, auctionEndTime, status, category, condition, conditionGrade, shippingAvailable, shippingPrice, reverseAuction, reverseDailyDrop, reverseFloorPrice, reverseStartDate, listingType, isAiTagged, rarity, qrEmbedEnabled, tags, backgroundRemoved, draftStatus, isHighValue, estimatedValue, aiSuggestedPrice, aiConfidence, quantity, stockTotal, ebayShippingOverride, ebayFulfillmentPolicyOverrideId, packageWeightOz, packageLengthIn, packageWidthIn, packageHeightIn, packageType, packageConfirmedByOrganizer, packageEstimateSource, upc, ean, isbn, mpn, brand, ebayEpid, conditionNotes, allowBestOffer, bestOfferAutoAcceptAmt, bestOfferMinimumAmt, ebaySecondaryCategoryId, ebaySubtitle, ebayCategoryId, ebayCategoryName, isLegendary, lotNumber, costBasis, roomTag } = req.body;
 
     // #102: Validate price >= 0
     if (price !== undefined && price !== null) {
@@ -1415,6 +1416,7 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     // meaning later AI estimates could keep overwriting confirmed values, defeating the
     // field's whole purpose per its schema comment "never overwritten by estimates").
     if (ebayShippingOverride !== undefined) updateData.ebayShippingOverride = ebayShippingOverride || null;
+    if (ebayFulfillmentPolicyOverrideId !== undefined) updateData.ebayFulfillmentPolicyOverrideId = ebayFulfillmentPolicyOverrideId || null;
     if (packageConfirmedByOrganizer !== undefined) updateData.packageConfirmedByOrganizer = packageConfirmedByOrganizer === true || packageConfirmedByOrganizer === 'true';
     if (packageEstimateSource !== undefined) updateData.packageEstimateSource = packageEstimateSource || null;
 
@@ -3054,6 +3056,7 @@ export const getDraftItemsBySaleId = async (req: AuthRequest, res: Response) => 
         packageWidthIn: true,
         packageHeightIn: true,
         ebayShippingOverride: true,
+        ebayFulfillmentPolicyOverrideId: true,
         // eBay product identifiers — required for review page Brand/MPN/UPC inputs
         brand: true,
         mpn: true,
