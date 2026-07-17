@@ -1,7 +1,7 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
-import { getWatermarkedUrl } from '../utils/cloudinaryWatermark';
+import { getWatermarkedUrlWithQR } from '../utils/cloudinaryWatermark';
 import { canRemoveWatermark } from '../utils/watermarkPolicy';
 
 // Facebook Marketplace condition values. Mirrors mapConditionForFacebook() in
@@ -33,7 +33,8 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
 
   // Apply the finda.sale watermark to photos unless this organizer is allowed to remove it
   // (TEAMS + toggle on). Mirrors export/social/eBay channels so Facebook is not the one
-  // channel leaking un-watermarked images. getWatermarkedUrl passes non-Cloudinary URLs through.
+  // channel leaking un-watermarked images. Adds the FindA.Sale text watermark + a QR code that
+  // links back to the finda.sale listing. getWatermarkedUrlWithQR passes non-Cloudinary URLs through.
   const applyWatermark = !canRemoveWatermark(organizer);
 
   const sales = await prisma.sale.findMany({
@@ -60,7 +61,7 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
     take: 2000,
     select: {
       id: true, saleId: true, title: true, description: true, price: true,
-      category: true, condition: true, photoUrls: true, createdAt: true,
+      category: true, condition: true, photoUrls: true, qrEmbedEnabled: true, createdAt: true,
       packageWeightOz: true, aiPackageWeightOz: true, ebayShippingOverride: true,
       allowBestOffer: true, bestOfferMinimumAmt: true,
     },
@@ -90,7 +91,7 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
     condition: toFacebookCondition(it.condition),
     description: buildDescription(it.description, it.saleId),
     category: it.category || null,
-    photoUrls: applyWatermark ? (it.photoUrls || []).map(getWatermarkedUrl) : (it.photoUrls || []),
+    photoUrls: applyWatermark ? (it.photoUrls || []).map((u) => getWatermarkedUrlWithQR(u, it.id, it.qrEmbedEnabled !== false)) : (it.photoUrls || []),
     packageWeightOz: it.packageWeightOz,
     aiPackageWeightOz: it.aiPackageWeightOz,
     // Mirrors eBay's LOCAL_PICKUP_ONLY/SHIPPABLE handling (ADR-084 amendment 2026-07-15) --
