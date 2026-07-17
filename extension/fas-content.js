@@ -154,10 +154,31 @@
   async function selectCategory(value) {
     const combo = SEL.comboByLabel(LABELS.category);
     if (!combo) return { ok: !value, suggestions: [] }; // structural miss only matters if FB actually requires a value we can't set
-    // Use categoryChips (union of persistent + newly-appeared chips) -- FB renders its top
-    // category suggestion as a PERSISTENT chip already present before the combo is clicked, which
-    // the old before/after diff (chipsAfter) missed, leaving Category UNSET and stalling the whole
-    // listing at "Item details" (confirmed live 2026-07-17, see fas-selectors.js categoryChips).
+    // PERSISTENT-CHIP-FIRST (confirmed live 2026-07-17): FB renders its top category suggestion as
+    // an always-visible div[role="button"] chip beneath the Category field. A DIRECT real click on
+    // that chip -- WITHOUT opening the combobox -- SETS the category and clears the "Please select
+    // a category" prompt (verified live: prompt gone, combo text became the category). Opening the
+    // combobox FIRST swaps the UI (category search field/modal), so the persistent chip is no
+    // longer a valid target and the pick fails -> Category stays unset -> FB blocks "Next". So we
+    // try the persistent chip BEFORE ever opening the combo.
+    const persistent = SEL.persistentCategoryChips(combo);
+    if (persistent.length) {
+      const pmatch = value ? SEL.bestTextMatch(persistent, value) : null;
+      const pick = pmatch || persistent[0]; // e.g. FB "Musical Instruments" for "Musical Instruments & Gear"
+      await realClick(pick); // direct CDP click -- combobox is NOT opened
+      await sleep(200);
+      if (!categoryPromptShowing()) {
+        // Category is set (prompt cleared). ok reflects whether it was a confident match vs. FB's
+        // own top guess (chips[0]) so fillItem can flag the "worth a glance" note for the latter.
+        return { ok: !!pmatch, suggestions: [] };
+      }
+      // Prompt still showing -- the direct click didn't register; fall through to opening the combo.
+    }
+    // FALLBACK: no persistent chip (or the direct click didn't take). Open the combo and use the
+    // union of persistent + newly-appeared chips -- FB renders its top category suggestion as a
+    // PERSISTENT chip already present before the combo is clicked, which the old before/after diff
+    // (chipsAfter) missed, leaving Category UNSET and stalling the whole listing at "Item details"
+    // (confirmed live 2026-07-17, see fas-selectors.js categoryChips).
     const chips = await SEL.categoryChips(combo, () => realClick(combo), 500);
     if (!chips.length) {
       if (!value) { await realClick(document.body); return { ok: true }; }

@@ -88,15 +88,17 @@
   // filters out the combobox itself and known non-chip controls (Next/Previous/Save draft/Add
   // photos/etc.), keeps only visible, enabled, short-label buttons, and orders chips that sit
   // AFTER the Category field in DOM order first (FB lists suggestions directly beneath it).
-  async function categoryChips(combo, openFn, settleMs) {
-    await openFn(); // realClick() routes through chrome.debugger -- await before scanning the DOM
-    await new Promise((r) => setTimeout(r, settleMs));
+  // Pure DOM scan for FB's category suggestion chips -- no open, no wait. Filters out the
+  // combobox itself + known non-chip controls, keeps visible/enabled/short-label buttons, and
+  // orders chips that sit AFTER the Category field first. Shared by categoryChips (scans AFTER
+  // opening) and persistentCategoryChips (scans the CURRENT DOM without opening).
+  function scanCategoryChips(combo) {
+    if (!combo) return [];
     const EXCLUDE = ['next', 'previous', 'back', 'publish', 'category', 'condition',
       'close', 'cancel', 'done', 'edit', 'remove', 'more'];
     const isVisible = (el) => !!(el.offsetParent || el.getClientRects().length);
     const nodes = Array.from(document.querySelectorAll('div[role="button"], span[role="button"]'));
     const candidates = nodes.filter((el) => {
-      if (!combo) return false;
       if (el === combo || combo.contains(el) || el.contains(combo)) return false;
       if (el.getAttribute('aria-disabled') === 'true') return false;
       if (!isVisible(el)) return false;
@@ -113,6 +115,23 @@
       ((combo.compareDocumentPosition(el) & 4) ? after : other).push(el);
     }
     return after.concat(other);
+  }
+
+  async function categoryChips(combo, openFn, settleMs) {
+    await openFn(); // realClick() routes through chrome.debugger -- await before scanning the DOM
+    await new Promise((r) => setTimeout(r, settleMs));
+    return scanCategoryChips(combo);
+  }
+
+  // Persistent suggestion chip(s) present BEFORE the combobox is opened -- FB renders its top
+  // category suggestion as an always-visible chip beneath the Category field. Confirmed live
+  // 2026-07-17: a DIRECT click on this chip (WITHOUT opening the combobox) SETS the category and
+  // clears the "Please select a category" prompt; opening the combobox first swaps the UI (search
+  // field/modal) and makes the chip an invalid target. Restricted to chips positioned AFTER the
+  // Category field so a closed-combobox scan can't grab unrelated page buttons.
+  function persistentCategoryChips(combo) {
+    if (!combo) return [];
+    return scanCategoryChips(combo).filter((el) => combo.compareDocumentPosition(el) & 4);
   }
 
   // Best-effort fuzzy match against a list of candidate elements: exact > substring
@@ -281,7 +300,7 @@
   }
   function isSwitchOn(el) { return !!(el && el.getAttribute('aria-checked') === 'true'); }
 
-  window.__FAS_SEL__ = { norm, fieldByLabel, comboByLabel, optionByText, photoInput, chipsAfter, categoryChips, bestTextMatch,
+  window.__FAS_SEL__ = { norm, fieldByLabel, comboByLabel, optionByText, photoInput, chipsAfter, categoryChips, persistentCategoryChips, bestTextMatch,
     elementByText, radioLabelByText, listingCardByTitle, realClick, menuCheckboxByText, isMenuChecked, isDisabled, radioOptionByText,
     switchByLabel, isSwitchOn,
     LABELS: { title: 'Title', price: 'Price', description: 'Description', condition: 'Condition', category: 'Category', offerToggle: 'negotiate', offerMinimum: 'Minimum price' } };
