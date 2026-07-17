@@ -38,7 +38,19 @@ export interface QueueState {
 // IndexedDB helpers inlined
 const openDatabase = (): Promise<IDBDatabase> => {
   return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, DB_VERSION);
+    // iOS Safari Private Browsing leaves `indexedDB` undefined; insecure/sandboxed
+    // contexts throw synchronously on `.open()`. Reject cleanly instead of throwing.
+    if (typeof indexedDB === 'undefined' || !indexedDB) {
+      reject(new Error('IndexedDB unavailable'));
+      return;
+    }
+    let request: IDBOpenDBRequest;
+    try {
+      request = indexedDB.open(DB_NAME, DB_VERSION);
+    } catch (err) {
+      reject(err);
+      return;
+    }
     request.onerror = () => reject(request.error);
     request.onsuccess = () => resolve(request.result);
     request.onupgradeneeded = (event) => {

@@ -58,6 +58,16 @@ export interface CashCheckoutPayload {
 const DB_NAME = 'findASaleOffline';
 const DB_VERSION = 1;
 
+/** True only when IndexedDB is usable in this context. iOS Safari Private Browsing
+ *  leaves `indexedDB` undefined; sandboxed/insecure contexts make `.open()` throw. */
+function isIndexedDBAvailable(): boolean {
+  try {
+    return typeof indexedDB !== 'undefined' && indexedDB !== null;
+  } catch {
+    return false;
+  }
+}
+
 let dbInstance: IDBDatabase | null = null;
 
 /**
@@ -66,8 +76,23 @@ let dbInstance: IDBDatabase | null = null;
 export async function initOfflineDB(): Promise<IDBDatabase> {
   if (dbInstance) return dbInstance;
 
+  // iOS Safari Private Browsing leaves `indexedDB` undefined and sandboxed/insecure
+  // contexts throw synchronously on `.open()`. Reject cleanly so nothing calls `.open()`
+  // on an unusable global and no unhandled rejection escapes.
+  if (!isIndexedDBAvailable()) {
+    return Promise.reject(new Error('IndexedDB unavailable'));
+  }
+
   return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, DB_VERSION);
+    let request: IDBOpenDBRequest;
+    try {
+      request = indexedDB.open(DB_NAME, DB_VERSION);
+    } catch (err) {
+      // A synchronous SecurityError (invalid security context) throws here — convert it
+      // into a clean rejection instead of letting it escape the executor.
+      reject(err);
+      return;
+    }
 
     request.onerror = () => reject(request.error);
     request.onsuccess = () => {
@@ -290,6 +315,9 @@ export async function recordOfflinePhoto(localItemId: string, photoUrl: string):
  * Get all pending sync operations
  */
 export async function getPendingSync(): Promise<SyncQueueEntry[]> {
+  // Degrade gracefully where IndexedDB is unavailable (iOS Private Browsing / insecure
+  // context) so callers on public pages never receive a rejection.
+  if (!isIndexedDBAvailable()) return [];
   const db = await initOfflineDB();
   return getAllFromStore(db, 'syncQueue');
 }
@@ -298,6 +326,8 @@ export async function getPendingSync(): Promise<SyncQueueEntry[]> {
  * Get pending sync count
  */
 export async function getPendingSyncCount(): Promise<number> {
+  // Degrade gracefully where IndexedDB is unavailable (see getPendingSync).
+  if (!isIndexedDBAvailable()) return 0;
   const db = await initOfflineDB();
   const entries = await getAllFromStore(db, 'syncQueue');
   return entries.filter(e => e.status === 'PENDING').length;

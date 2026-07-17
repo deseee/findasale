@@ -63,7 +63,7 @@ export function useOfflineSync() {
 
     // Initial state check
     setIsOffline(!navigator.onLine);
-    updatePendingCount();
+    updatePendingCount().catch(() => {});
 
     // Mount-time sync check: the 'online' event only fires on an actual offline->online
     // transition. If the browser is ALREADY online on mount (e.g. organizer queued a sale
@@ -75,7 +75,7 @@ export function useOfflineSync() {
         if (pending.length > 0) {
           setTimeout(() => triggerSync(), 1000);
         }
-      });
+      }).catch(() => {});
     }
 
     return () => {

@@ -17,7 +17,19 @@ export async function initPhotoQueue(): Promise<IDBDatabase> {
   if (dbInstance) return dbInstance;
 
   return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME);
+    // iOS Safari Private Browsing leaves `indexedDB` undefined; insecure/sandboxed
+    // contexts throw synchronously on `.open()`. Reject cleanly instead of throwing.
+    if (typeof indexedDB === 'undefined' || !indexedDB) {
+      reject(new Error('IndexedDB unavailable'));
+      return;
+    }
+    let request: IDBOpenDBRequest;
+    try {
+      request = indexedDB.open(DB_NAME);
+    } catch (err) {
+      reject(err);
+      return;
+    }
     request.onerror = () => reject(request.error);
     request.onsuccess = () => {
       dbInstance = request.result;
