@@ -150,9 +150,72 @@ async function ensureRemovalAlarmAndCheck() {
 chrome.runtime.onInstalled.addListener(ensureRemovalAlarmAndCheck);
 chrome.runtime.onStartup.addListener(ensureRemovalAlarmAndCheck);
 
+// ---- Silent-mode removal tab lifecycle (2026-07-16 fix) ----
+// Silent ("Remove automatically") mode used to open the "Your listings" page in a HIDDEN
+// background tab (active:false). Chrome throttles rendering in background tabs -- React
+// animations / requestAnimationFrame pause -- so Facebook's multi-step "Did you sell this
+// item?" survey modal never rendered/advanced within fas-remove.js's timeouts: the removal
+// silently timed out and skipped (no POST /removed), the item stayed "pending removal", and the
+// 20-min alarm opened ANOTHER background tab every cycle (tab-spam). Live proof it was the
+// hidden tab: focusing the same tab let the survey complete and the REMOVE row landed. Fix:
+// open the removal tab FOREGROUNDED so FB renders, remember the organizer's current tab, and
+// once fas-remove.js signals the queue is done, restore that tab's focus and auto-close the
+// removal tab so it doesn't clutter. silentRemovalInProgress() guards the alarm from opening a
+// second tab while one is mid-run.
+const FAS_REMOVAL_MAX_MS = 10 * 60 * 1000; // a run not finished in 10 min is treated as dead so removals never wedge forever
+
+function tabsGet(tabId) {
+  return new Promise((resolve) => chrome.tabs.get(tabId, (t) => { void chrome.runtime.lastError; resolve(t || null); }));
+}
+
+async function clearSilentRemovalState() {
+  await chrome.storage.local.remove(['fasRemovalTabId', 'fasRemovalPrevTabId', 'fasRemovalStartedAt']);
+}
+
+// True only when a silent-mode removal tab is genuinely still open and recent. Self-heals:
+// clears state and returns false if the organizer closed the tab or the run went stale, so the
+// legitimate "next check" behavior resumes once a prior attempt actually finished.
+async function silentRemovalInProgress() {
+  const { fasRemovalTabId = null, fasRemovalStartedAt = 0 } =
+    await chrome.storage.local.get(['fasRemovalTabId', 'fasRemovalStartedAt']);
+  if (!fasRemovalTabId) return false;
+  if (Date.now() - fasRemovalStartedAt > FAS_REMOVAL_MAX_MS) { await clearSilentRemovalState(); return false; }
+  const tab = await tabsGet(fasRemovalTabId);
+  if (!tab) { await clearSilentRemovalState(); return false; }
+  return true;
+}
+
+async function openSilentRemovalTab() {
+  // Remember the organizer's current tab so focus can be restored after the (brief) removal.
+  const activeTabs = await chrome.tabs.query({ active: true, currentWindow: true });
+  const prevTabId = activeTabs && activeTabs[0] ? activeTabs[0].id : null;
+  // active:true so Facebook actually RENDERS the survey modal (the whole point of this fix).
+  const tab = await chrome.tabs.create({ url: 'https://www.facebook.com/marketplace/you/selling', active: true });
+  await chrome.storage.local.set({ fasRemovalTabId: tab.id, fasRemovalPrevTabId: prevTabId, fasRemovalStartedAt: Date.now() });
+}
+
+// Called when fas-remove.js reports the removal queue is finished. Restores the organizer's
+// previous tab focus, then closes the auto-opened removal tab. No-ops in notify mode (which
+// never sets fasRemovalTabId), so it can never close a tab the organizer opened themselves.
+async function finishSilentRemoval() {
+  const { fasRemovalTabId = null, fasRemovalPrevTabId = null } =
+    await chrome.storage.local.get(['fasRemovalTabId', 'fasRemovalPrevTabId']);
+  await clearSilentRemovalState();
+  if (fasRemovalPrevTabId != null) {
+    await new Promise((resolve) => chrome.tabs.update(fasRemovalPrevTabId, { active: true }, () => { void chrome.runtime.lastError; resolve(); }));
+  }
+  if (fasRemovalTabId != null) {
+    await new Promise((resolve) => chrome.tabs.remove(fasRemovalTabId, () => { void chrome.runtime.lastError; resolve(); }));
+  }
+}
+
 async function checkPendingRemovals() {
   const { fasAutoRemoveMode = 'notify' } = await chrome.storage.local.get(['fasAutoRemoveMode']);
   if (fasAutoRemoveMode === 'off') return;
+  // Guard (silent mode only): don't poll/open another removal tab while one is mid-run. Also
+  // prevents overwriting fasRemovalQueue/fasRemovalIndex under an in-progress content script,
+  // which would corrupt its queue position. Notify mode never auto-creates a tab, so unaffected.
+  if (fasAutoRemoveMode === 'silent' && await silentRemovalInProgress()) return;
   const resp = await apiFetch('/extension/pending-removals');
   const items = (resp.ok && resp.data && resp.data.items) || [];
   if (!items.length) return;
@@ -160,7 +223,7 @@ async function checkPendingRemovals() {
   await chrome.storage.local.set({ fasRemovalQueue: items, fasRemovalIndex: 0 });
 
   if (fasAutoRemoveMode === 'silent') {
-    chrome.tabs.create({ url: 'https://www.facebook.com/marketplace/you/selling', active: false });
+    await openSilentRemovalTab();
     return;
   }
 
@@ -246,6 +309,11 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         sendResponse({ ok: true, item, index: next, total: (st.fasRemovalQueue || []).length });
       } else if (msg.type === 'markItemRemovedByRemoval') {
         sendResponse(await apiFetch('/extension/items/' + encodeURIComponent(msg.itemId) + '/removed', { method: 'POST', body: {} }));
+      } else if (msg.type === 'removalQueueDone') {
+        // fas-remove.js finished the queue -- restore the organizer's tab + close the auto-opened
+        // silent-mode removal tab. No-op in notify mode (no fasRemovalTabId tracked there).
+        await finishSilentRemoval();
+        sendResponse({ ok: true });
       } else if (msg.type === 'refreshRemovalAlarm') {
         await ensureRemovalAlarm();
         sendResponse({ ok: true });

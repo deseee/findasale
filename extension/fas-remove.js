@@ -79,7 +79,7 @@
           t.indexOf('sold elsewhere') !== -1 ||
           t.indexOf('sold on facebook') !== -1) return dialog;
       return null;
-    }, 6000).catch(() => null);
+    }, 12000).catch(() => null);
 
     if (surveyDialog) {
       // Pick "Yes, sold elsewhere" -- it sold on FindA.Sale, not on Facebook, so we must NOT
@@ -96,7 +96,7 @@
           if (!dialog) return null;
           const btn = SEL.elementByText('Next');
           return (btn && dialog.contains(btn)) ? btn : null;
-        }, 4000).catch(() => null);
+        }, 6000).catch(() => null);
         if (nextBtn) {
           await humanPause(300, 600);
           await realClick(nextBtn);
@@ -116,7 +116,7 @@
         if (found && dialog.contains(found)) return found;
       }
       return null;
-    }, 2500).catch(() => null);
+    }, 4000).catch(() => null);
     if (dialogConfirm) {
       await humanPause(300, 600);
       await realClick(dialogConfirm);
@@ -129,7 +129,7 @@
     // grid instead: listingCardByTitle only returns a card that STILL exposes a "Mark as sold"
     // button, so once this listing flips to Sold ("Mark as available"/"Relist") it returns null =
     // confirmed removed.
-    const confirmed = await waitFor(() => (SEL.listingCardByTitle(item.title) ? null : true), 8000)
+    const confirmed = await waitFor(() => (SEL.listingCardByTitle(item.title) ? null : true), 12000)
       .catch(() => false);
     if (!confirmed) {
       return { ok: false, reason: 'Clicked "Mark as sold" but couldn\'t confirm the listing flipped to Sold -- check it manually.' };
@@ -160,6 +160,10 @@
     } else {
       overlay('<b>FindA.Sale</b> — done removing sold items.');
       setTimeout(() => bar && bar.remove(), 4000);
+      // Tell the background the queue is finished so silent ("Remove automatically") mode can
+      // restore the organizer's previous tab and auto-close the removal tab it opened. Wrapped
+      // like the sendMessage above -- a context-invalidated throw here must not break the run.
+      try { await chrome.runtime.sendMessage({ type: 'removalQueueDone' }); } catch (e) {}
     }
   }
 
