@@ -161,18 +161,45 @@
     // combobox FIRST swaps the UI (category search field/modal), so the persistent chip is no
     // longer a valid target and the pick fails -> Category stays unset -> FB blocks "Next". So we
     // try the persistent chip BEFORE ever opening the combo.
+    // POLL for a persistent chip before concluding there is none. FB renders its suggested
+    // category chip a beat AFTER title/description are filled; snapshotting once can run before the
+    // chip exists (length 0) and wrongly fall through to opening the combo -- which swaps the UI
+    // and leaves Category unset (confirmed live 2026-07-17). Wait up to ~5s for the chip to appear.
+    const t0 = Date.now();
+    try {
+      await waitFor(() => SEL.persistentCategoryChips(combo).length > 0, 5000);
+    } catch (e) { /* timed out with no chip -- fall through to the combo path below */ }
     const persistent = SEL.persistentCategoryChips(combo);
+    console.info('[FAS category] persistent chip(s) found:', persistent.length, 'after', (Date.now() - t0) + 'ms');
     if (persistent.length) {
       const pmatch = value ? SEL.bestTextMatch(persistent, value) : null;
       const pick = pmatch || persistent[0]; // e.g. FB "Musical Instruments" for "Musical Instruments & Gear"
+      console.info('[FAS category] clicking persistent chip:', SEL.norm(pick.textContent), '(confident match:', !!pmatch, ')');
       await realClick(pick); // direct CDP click -- combobox is NOT opened
       await sleep(200);
       if (!categoryPromptShowing()) {
         // Category is set (prompt cleared). ok reflects whether it was a confident match vs. FB's
         // own top guess (chips[0]) so fillItem can flag the "worth a glance" note for the latter.
+        console.info('[FAS category] prompt cleared after first chip click -- category set');
         return { ok: !!pmatch, suggestions: [] };
       }
-      // Prompt still showing -- the direct click didn't register; fall through to opening the combo.
+      // Prompt still showing -- retry ONCE with a freshly-fetched chip (fresh coordinates) before
+      // opening the combo. The re-fetch matters: the first realClick scrolls the page, so the
+      // original element's cached rect is stale -- a second click on a re-scrolled chip often takes.
+      console.info('[FAS category] prompt still showing after first click -- retrying with fresh chip');
+      const persistent2 = SEL.persistentCategoryChips(combo);
+      if (persistent2.length) {
+        const pmatch2 = value ? SEL.bestTextMatch(persistent2, value) : null;
+        const pick2 = pmatch2 || persistent2[0];
+        await realClick(pick2);
+        await sleep(200);
+        if (!categoryPromptShowing()) {
+          console.info('[FAS category] prompt cleared after retry chip click -- category set');
+          return { ok: !!pmatch2, suggestions: [] };
+        }
+      }
+      // Both chip clicks failed to register; fall through to opening the combo.
+      console.info('[FAS category] chip clicks did not clear prompt -- falling back to combo path');
     }
     // FALLBACK: no persistent chip (or the direct click didn't take). Open the combo and use the
     // union of persistent + newly-appeared chips -- FB renders its top category suggestion as a

@@ -222,6 +222,12 @@
   // and the Condition dropdown are confirmed working via the synthetic path too, so this is a
   // safety net, not the expected path.
   async function realClick(el) {
+    // Scroll the target into view and let layout settle BEFORE reading coordinates, so the CDP
+    // click (which uses viewport coords from getBoundingClientRect) lands on the now-visible
+    // element instead of an off-screen/pre-scroll position -- confirmed cause of category-chip
+    // misses when the chip sat below the fold (2026-07-17). Benefits every realClick caller.
+    try { el.scrollIntoView({ block: 'center', inline: 'center' }); } catch (e) { /* non-fatal */ }
+    await new Promise((r) => requestAnimationFrame(() => setTimeout(r, 60)));
     const rect = el.getBoundingClientRect();
     const cx = Math.round(rect.left + rect.width / 2);
     const cy = Math.round(rect.top + rect.height / 2);
