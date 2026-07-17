@@ -86,8 +86,8 @@ export const AGGREGATOR_DOMAINS: ReadonlySet<string> = new Set([
 // ---------------------------------------------------------------------------
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-function ep(): typeof import('./emailProvenance') {
-  return require('./emailProvenance');
+function ep(): typeof import('../services/emailProvenance') {
+  return require('../services/emailProvenance');
 }
 
 /**
