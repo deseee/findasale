@@ -62,7 +62,7 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
     select: {
       id: true, saleId: true, title: true, description: true, price: true,
       category: true, condition: true, photoUrls: true, qrEmbedEnabled: true, createdAt: true,
-      packageWeightOz: true, aiPackageWeightOz: true, ebayShippingOverride: true,
+      packageWeightOz: true, aiPackageWeightOz: true, ebayShippingOverride: true, shippingAvailable: true,
       allowBestOffer: true, bestOfferMinimumAmt: true,
     },
     orderBy: { createdAt: 'desc' },
@@ -94,10 +94,16 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
     photoUrls: applyWatermark ? (it.photoUrls || []).map((u) => getWatermarkedUrlWithQR(u, it.id, it.qrEmbedEnabled !== false)) : (it.photoUrls || []),
     packageWeightOz: it.packageWeightOz,
     aiPackageWeightOz: it.aiPackageWeightOz,
-    // Mirrors eBay's LOCAL_PICKUP_ONLY/SHIPPABLE handling (ADR-084 amendment 2026-07-15) --
-    // same DB field eBay's resolvePoliciesForItem() already reads, not Facebook-specific data
-    // despite the field's historical name.
-    shippingOverride: it.ebayShippingOverride,
+    // FB shipping eligibility. Force LOCAL_PICKUP_ONLY when the item is not actually shippable:
+    // an explicit LOCAL_PICKUP_ONLY override, shippingAvailable=false, OR no usable package weight
+    // (FB cannot issue a prepaid label without a weight, so the extension would otherwise stall on
+    // the Delivery step). Otherwise pass the eBay override through (null = FB default ship+pickup).
+    shippingOverride:
+      it.ebayShippingOverride === 'LOCAL_PICKUP_ONLY' ||
+      it.shippingAvailable === false ||
+      (it.packageWeightOz == null && it.aiPackageWeightOz == null)
+        ? 'LOCAL_PICKUP_ONLY'
+        : it.ebayShippingOverride,
     // Mirror the item's existing eBay Best Offer settings onto Facebook's Offer step.
     // bestOfferMinimumAmt is a Prisma Decimal (stored in DOLLARS, same unit as price) --
     // coerce to a plain number so it serializes as JSON number, not a Decimal string.
