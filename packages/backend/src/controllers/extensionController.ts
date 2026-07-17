@@ -1,6 +1,8 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
+import { getWatermarkedUrl } from '../utils/cloudinaryWatermark';
+import { canRemoveWatermark } from '../utils/watermarkPolicy';
 
 // Facebook Marketplace condition values. Mirrors mapConditionForFacebook() in
 // exportController.ts (kept in sync; trivial pure map — not worth a shared import).
@@ -28,6 +30,11 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
 
   const organizer = await prisma.organizer.findUnique({ where: { userId } });
   if (!organizer) { res.status(404).json({ message: 'Organizer profile not found' }); return; }
+
+  // Apply the finda.sale watermark to photos unless this organizer is allowed to remove it
+  // (TEAMS + toggle on). Mirrors export/social/eBay channels so Facebook is not the one
+  // channel leaking un-watermarked images. getWatermarkedUrl passes non-Cloudinary URLs through.
+  const applyWatermark = !canRemoveWatermark(organizer);
 
   const sales = await prisma.sale.findMany({
     where: { organizerId: organizer.id },
@@ -83,7 +90,7 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
     condition: toFacebookCondition(it.condition),
     description: buildDescription(it.description, it.saleId),
     category: it.category || null,
-    photoUrls: it.photoUrls || [],
+    photoUrls: applyWatermark ? (it.photoUrls || []).map(getWatermarkedUrl) : (it.photoUrls || []),
     packageWeightOz: it.packageWeightOz,
     aiPackageWeightOz: it.aiPackageWeightOz,
     // Mirrors eBay's LOCAL_PICKUP_ONLY/SHIPPABLE handling (ADR-084 amendment 2026-07-15) --
