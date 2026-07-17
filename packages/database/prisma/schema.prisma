@@ -298,6 +298,7 @@ model Organizer {
   tagline                     String? // Short one-liner for organizer profile
   yearFounded                 Int? // Year organizer was established
   website                     String? // Business website URL
+  listingUrl                  String? // Source directory/listing URL (bid13, propertyroom, etc.) — NOT the org's own site; never fetched
   profilePhoto                String? // Profile photo URL (Cloudinary)
   facebook                    String? // Facebook page URL
   instagram                   String? // Instagram profile URL
@@ -443,6 +444,7 @@ model Organizer {
   claimStatus                 String                         @default("UNCLAIMED") // "UNCLAIMED" | "INVITED" | "CLAIMED" | "OPTED_OUT"
   isClaimed                   Boolean                        @default(true) // True for all organizer-managed listings; scrapers set false
   isUnmanagedListing          Boolean                        @default(false) // True for scraped/unverified listings not yet claimed
+  websiteEnrichmentExhausted  Boolean                        @default(false) // set when its website domain reaches TERMINAL fetch state
   isHiddenFromDirectory       Boolean                        @default(false) // True = hidden from public directory/search; set for scraped orgs, cleared on claim
   claimEmails                 DirectoryClaimEmail[]
   // ADR-073: Verified Organizer autofill sources (migration 20260430300000)
@@ -554,6 +556,7 @@ model Organizer {
   @@index([isUnmanagedListing, isStateLicensed]) // Sentry slow query fix 2026-06-06: websiteEnrichmentJob WHERE isUnmanagedListing=true AND isStateLicensed=true AND website IS NULL (1159ms)
   @@index([contactEmail, isUnmanagedListing]) // Sentry NODEJS-38: emailDiscoveryJob WHERE contactEmail IS NULL AND website IS NOT NULL AND isUnmanagedListing (composite replaces two single-column indexes)
   @@index([isUnmanagedListing, googlePlaceId]) // Sentry slow query: SELECT Organizer id+businessName+googlePlaceId... WHERE isUnmanagedListing=true AND googlePlaceId IS NULL (1114ms, 12x) — enrichment backfill job
+  @@index([isUnmanagedListing, websiteEnrichmentExhausted]) // Enrichment scheduler: skip organizers whose website domain reached TERMINAL fetch state
   @@index([emailDiscoveryMethod]) // Sentry NODEJS-2N: outreachEmailsCron WHERE emailDiscoveryMethod IN (...) seq scan on Organizer
   @@index([emailDiscoveryConfidence]) // Sentry NODEJS-2N: outreachEmailsCron WHERE emailDiscoveryConfidence >= 0.5 seq scan on Organizer
   @@index([emailDiscoveredAt]) // Sentry NODEJS-48: outreachEmailsCron WHERE emailDiscoveredAt >= 7d ago — 98 of 83k rows, seq scan 253ms S1046
@@ -968,6 +971,8 @@ model Sale {
   markdownCycles              MarkdownCycle[]
   // ADR-073: Scraped listing metadata (restored — fields already in DB via 20260501020000_scraper_phase1)
   sourceUrl                   String? // Source listing URL (EstateSalesNet, GooglePlaces, etc.)
+  sourceUrlFetchFailedAt      DateTime? // set when enrichment fetch permanently fails; excludes from re-selection
+  sourceUrlFetchAttempts      Int        @default(0)
   sourceName                  String? // Source identifier
   lastScrapedAt               DateTime? // Last time this listing appeared in a scrape
   scrapeVersion               Int? // Scrape update counter
@@ -1020,6 +1025,7 @@ model Sale {
   @@index([city]) // Sentry slow query fix 2026-05-30: Sale SELECT (6298ms) — ILIKE city queries; note leading-wildcard ILIKE won't use index, but prefix matches benefit
   @@index([status, isInventoryContainer, endDate]) // Sentry NODEJS-3E: search.ts COUNT WHERE status=PUBLISHED AND isInventoryContainer=false AND endDate >= now (missing covering index)
   @@index([sourceName]) // Sentry slow query: SELECT Sale WHERE scrapedMetadata JSON path + sourceName (1115ms, 6x) — sourceName filter enables partition pruning before GIN eval
+  @@index([sourceName, sourceUrlFetchFailedAt]) // Enrichment re-selection: exclude permanently-failed source URLs per source
   @@index([saleType, city, state]) // Sentry NODEJS-3F/2T/10: RETAIL dedup findFirst WHERE saleType+city+state — 138-row bitmap scan becomes index seek
   // Sentry NODEJS-10 fix (partial indexes — raw SQL only, Prisma @@index does not support WHERE predicates):
   //   Sale_status_endDate_autoclose_idx: (status, endDate) WHERE deletedAt IS NULL
@@ -5675,3 +5681,18 @@ model VendorBoothPayout {
   @@index([stripeTransferId])
 }
 
+
+// Directory/enrichment URL fetch health per registrable domain.
+// Circuit-breaker state so failing hosts are cooled down / terminated, not re-hammered.
+model DomainFetchState {
+  registrableDomain   String    @id
+  status              String    @default("OK") // OK | COOLDOWN | TERMINAL | BLOCKED
+  consecutiveFailures Int       @default(0)
+  lastOutcome         String?
+  lastAttemptAt       DateTime?
+  nextEligibleAt      DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  @@index([status, nextEligibleAt])
+}

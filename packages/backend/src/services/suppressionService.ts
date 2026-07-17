@@ -1,4 +1,5 @@
 import { prisma } from '../lib/prisma';
+import { AGGREGATOR_DOMAINS } from '../config/domainBlocklist';
 
 /**
  * Consecutive soft-bounce threshold for the BULK (marketing) suppression gate.
@@ -22,6 +23,9 @@ const SOFT_BOUNCE_THRESHOLD = 5;
 export const BLOCKED_DOMAINS: ReadonlySet<string> = new Set([
   'estatesales.net', // EstateSales.NET — direct competitor
   'estatesales.org', // EstateSales.ORG — same network
+  // Converged with the ingest/fetch gate so the send-suppression list and the
+  // aggregator/directory blocklist never drift (single source: config/domainBlocklist.ts).
+  ...AGGREGATOR_DOMAINS,
 ]);
 
 /**

@@ -14,6 +14,8 @@
  * where enrichment stored emails with NO provenance and NO validation.
  */
 
+import { SOCIAL_DOMAINS, AGGREGATOR_DOMAINS } from '../config/domainBlocklist';
+
 /**
  * Internal discovery-source labels used by calibrateConfidence.
  * (Distinct from the schema emailDiscoveryMethod values, which are mapped separately.)
@@ -58,7 +60,7 @@ export function isGenericEmail(email: string): boolean {
  * (e.g. a Disney Club 33 dining page got attached to "Club 33 Estate Sale Services").
  * These should NEVER be accepted as an organizer's website or as the source of a contact email.
  */
-export const FAMOUS_UNRELATED_DOMAINS = new Set([
+export const FAMOUS_UNRELATED_DOMAINS = new Set<string>([
   'disney.com',
   'disneyland.com',
   'disneyworld.com',
@@ -88,6 +90,10 @@ export const FAMOUS_UNRELATED_DOMAINS = new Set([
   'godaddy.com',
   'wordpress.com',
   'shopify.com',
+  // Converged base sets (single source of truth: config/domainBlocklist.ts) so the
+  // email-provenance domain-match guard also rejects social + aggregator/directory hosts.
+  ...SOCIAL_DOMAINS,
+  ...AGGREGATOR_DOMAINS,
 ]);
 
 /**
