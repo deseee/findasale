@@ -151,6 +151,29 @@
     return /please select a category/i.test((document.body && document.body.innerText) || '');
   }
 
+  // Independent positive confirmation that a category actually registered. Do NOT trust the
+  // document.body.innerText "please select a category" scan alone: clicking FB's description-field
+  // prompt briefly mutates page text enough to make that string vanish, faking success (confirmed
+  // live 2026-07-17). Returns the name of the positive signal that passed, or null if none did.
+  function categorySetSignal(combo, pickedText) {
+    const want = SEL.norm(pickedText || '');
+    // (a) the Category combobox now DISPLAYS the picked value (not just the bare "Category" label).
+    const comboTxt = SEL.norm((combo && combo.textContent) || '');
+    if (want && comboTxt !== 'category' && comboTxt.indexOf(want) !== -1) return 'combo-value';
+    // (b) alternative signal: Facebook's step "Next" button is no longer disabled.
+    const next = SEL.elementByText('Next');
+    if (next && !SEL.isDisabled(next)) return 'next-enabled';
+    return null;
+  }
+
+  // A category click counts as success ONLY when BOTH hold: (a) the "please select a category"
+  // prompt is gone, AND (b) an independent positive signal (categorySetSignal) confirms it.
+  // Returns the passing signal name (truthy) or null.
+  function categoryConfirmed(combo, pickedText) {
+    if (categoryPromptShowing()) return null;
+    return categorySetSignal(combo, pickedText);
+  }
+
   async function selectCategory(value) {
     const combo = SEL.comboByLabel(LABELS.category);
     if (!combo) return { ok: !value, suggestions: [] }; // structural miss only matters if FB actually requires a value we can't set
@@ -166,40 +189,55 @@
     // chip exists (length 0) and wrongly fall through to opening the combo -- which swaps the UI
     // and leaves Category unset (confirmed live 2026-07-17). Wait up to ~5s for the chip to appear.
     const t0 = Date.now();
-    try {
-      await waitFor(() => SEL.persistentCategoryChips(combo).length > 0, 5000);
-    } catch (e) { /* timed out with no chip -- fall through to the combo path below */ }
-    const persistent = SEL.persistentCategoryChips(combo);
-    console.info('[FAS category] persistent chip(s) found:', persistent.length, 'after', (Date.now() - t0) + 'ms');
-    if (persistent.length) {
-      const pmatch = value ? SEL.bestTextMatch(persistent, value) : null;
-      const pick = pmatch || persistent[0]; // e.g. FB "Musical Instruments" for "Musical Instruments & Gear"
-      console.info('[FAS category] clicking persistent chip:', SEL.norm(pick.textContent), '(confident match:', !!pmatch, ')');
-      await realClick(pick); // direct CDP click -- combobox is NOT opened
+    // Wait for the RIGHT persistent chip: poll (via waitFor's MutationObserver) until a CONFIDENT
+    // bestTextMatch against `value` appears. FB renders its real category chip a beat AFTER
+    // title/description fill; the junk description-field prompt renders first. We NEVER click
+    // persistent[0] blindly when we have a value to match -- that previously grabbed the
+    // "attract more interest..." prompt and faked success (confirmed live 2026-07-17).
+    let confidentPick = null;
+    if (value) {
+      try {
+        confidentPick = await waitFor(
+          () => SEL.bestTextMatch(SEL.persistentCategoryChips(combo), value), 6000);
+      } catch (e) { /* no confident chip in time -- fall through to the combo path below */ }
+    } else {
+      // No value to match against -- keep prior no-value behavior: click FB's own top persistent
+      // suggestion (persistent[0]) if one appears.
+      try { await waitFor(() => SEL.persistentCategoryChips(combo).length > 0, 5000); } catch (e) { /* none */ }
+      confidentPick = (SEL.persistentCategoryChips(combo) || [])[0] || null;
+    }
+    if (confidentPick) {
+      const pickText = SEL.norm(confidentPick.textContent);
+      console.info('[FAS category] persistent chip chosen:', JSON.stringify(pickText),
+        '(confident match:', !!value, ') after', (Date.now() - t0) + 'ms');
+      await realClick(confidentPick); // direct CDP click -- combobox is NOT opened
       await sleep(200);
-      if (!categoryPromptShowing()) {
-        // Category is set (prompt cleared). ok reflects whether it was a confident match vs. FB's
-        // own top guess (chips[0]) so fillItem can flag the "worth a glance" note for the latter.
-        console.info('[FAS category] prompt cleared after first chip click -- category set');
-        return { ok: !!pmatch, suggestions: [] };
+      let signal = value ? categoryConfirmed(combo, pickText)
+                         : (!categoryPromptShowing() ? 'prompt-cleared' : null);
+      if (signal) {
+        console.info('[FAS category] category SET -- confirmation signal:', signal);
+        return { ok: !!value, suggestions: [] };
       }
-      // Prompt still showing -- retry ONCE with a freshly-fetched chip (fresh coordinates) before
-      // opening the combo. The re-fetch matters: the first realClick scrolls the page, so the
-      // original element's cached rect is stale -- a second click on a re-scrolled chip often takes.
-      console.info('[FAS category] prompt still showing after first click -- retrying with fresh chip');
-      const persistent2 = SEL.persistentCategoryChips(combo);
-      if (persistent2.length) {
-        const pmatch2 = value ? SEL.bestTextMatch(persistent2, value) : null;
-        const pick2 = pmatch2 || persistent2[0];
-        await realClick(pick2);
+      // Not confirmed -- retry ONCE with a freshly-fetched chip (fresh coords; the first realClick
+      // scrolls the page, so the original element's cached rect can be stale).
+      console.info('[FAS category] confirmation failed after first click -- retrying with fresh chip');
+      const fresh = value ? SEL.bestTextMatch(SEL.persistentCategoryChips(combo), value)
+                          : ((SEL.persistentCategoryChips(combo) || [])[0] || null);
+      if (fresh) {
+        const freshText = SEL.norm(fresh.textContent);
+        await realClick(fresh);
         await sleep(200);
-        if (!categoryPromptShowing()) {
-          console.info('[FAS category] prompt cleared after retry chip click -- category set');
-          return { ok: !!pmatch2, suggestions: [] };
+        signal = value ? categoryConfirmed(combo, freshText)
+                       : (!categoryPromptShowing() ? 'prompt-cleared' : null);
+        if (signal) {
+          console.info('[FAS category] category SET on retry -- confirmation signal:', signal);
+          return { ok: !!value, suggestions: [] };
         }
       }
-      // Both chip clicks failed to register; fall through to opening the combo.
-      console.info('[FAS category] chip clicks did not clear prompt -- falling back to combo path');
+      // Chip path unconfirmed; fall through to opening the combo.
+      console.info('[FAS category] persistent chip clicks not confirmed -- falling back to combo path');
+    } else {
+      console.info('[FAS category] no confident persistent chip within timeout -- opening combo');
     }
     // FALLBACK: no persistent chip (or the direct click didn't take). Open the combo and use the
     // union of persistent + newly-appeared chips -- FB renders its top category suggestion as a
@@ -229,9 +267,11 @@
     const picked = match || chips[0];
     await realClick(picked);
     await sleep(200);
-    // Confirm FB's inline "Please select a category" prompt cleared. If it lingers (the click
-    // didn't register a selection), re-collect chips and try once more before giving up.
-    if (categoryPromptShowing()) {
+    // Confirm the pick registered -- do NOT trust the "please select a category" innerText scan
+    // alone (see categoryConfirmed). If unconfirmed (prompt lingering OR no positive signal),
+    // re-collect chips and try once more before giving up.
+    if (!categoryConfirmed(combo, SEL.norm(picked.textContent))) {
+      console.info('[FAS category] combo pick unconfirmed -- re-collecting chips and retrying once');
       const chips2 = await SEL.categoryChips(combo, () => realClick(combo), 500);
       if (chips2.length) {
         const retry = (value ? SEL.bestTextMatch(chips2, value) : null) || chips2[0];

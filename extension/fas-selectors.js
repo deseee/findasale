@@ -103,8 +103,14 @@
       if (el.getAttribute('aria-disabled') === 'true') return false;
       if (!isVisible(el)) return false;
       const t = norm(el.textContent);
-      if (!t || t.length > 60) return false;
+      if (!t || t.length > 40) return false; // real FB category labels are short ("Home & Garden")
       if (EXCLUDE.includes(t)) return false;
+      // Substring rejects for FB's description-field prompt junk -- a div[role="button"] reading
+      // "...attract more interest by including more details" (~58 chars) that sits AFTER the
+      // Category combo and survived the exact-match EXCLUDE, becoming persistent[0] and getting
+      // wrongly clicked (confirmed live 2026-07-17). EXCLUDE is exact-match only -- use substrings.
+      const JUNK = ['attract more interest', 'more detail', 'include more'];
+      if (JUNK.some((j) => t.indexOf(j) !== -1)) return false;
       if (t.startsWith('add photo') || t.startsWith('save draft')) return false;
       return true;
     });
