@@ -287,7 +287,7 @@
   // item shippable when the organizer marked it pickup-only is a real incorrect listing, not a
   // low-stakes guess like Category.
   async function fillDeliveryStep(item) {
-    if (item.shippingOverride === 'LOCAL_PICKUP_ONLY' || item.shippingAvailable === false) {
+    if (item.shippingOverride === 'LOCAL_PICKUP_ONLY') {
       // 2026-07-16 fix (DOM-verified live): open FB's "Delivery method" dropdown, then UNCHECK the
       // "Shipping" item (leaving "Local pickup" checked). FB renders these as role="menuitemcheckbox"
       // items inside the opened combo -- NOT role="option" (old optionByText('pickup') never matched)
@@ -305,7 +305,7 @@
       // Close the menu so the step's Next control is reachable again.
       document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
       await humanPause(300, 600);
-      return;
+      return 'pickup';
     }
 
     await waitThenClick(() => SEL.elementByText('Select shipping label'), 'Delivery',
@@ -326,6 +326,7 @@
 
     await clickButton('Update', 'Delivery');
     await humanPause(300, 600);
+    return 'shipping';
   }
 
   // Fills item details, then auto-advances through every remaining Facebook step (Delivery,
@@ -363,11 +364,26 @@
     await waitForStep('delivery', 10000)
       .catch(() => { throw hardError('Item details', 'Facebook didn\'t move to the Delivery step -- a required field (often Category) may still be unset.'); });
     overlay('<b>FindA.Sale</b> — setting shipping for <b>' + escapeHtml(item.title) + '</b>…');
-    await fillDeliveryStep(item);
+    const deliveryMode = await fillDeliveryStep(item);
     await clickButton('Next', 'Delivery'); // -> Offer
 
     await waitForStep('offer', 10000)
-      .catch(() => { throw hardError('Delivery', 'Facebook didn\'t move to the Offer step.'); });
+      .catch(() => {
+        // 2026-07-16: on the SHIPPING path Facebook leaves "Next" present but DISABLED when the
+        // estimated payout is negative -- i.e. the shipping label cost exceeds the item price
+        // (confirmed live with a $1 item: FB disables Next and the run used to stall on the
+        // generic message below). The pickup path never sets a shipping label, so this only
+        // applies when fillDeliveryStep took the shipping branch. Hard-error with an actionable
+        // message and STOP -- do not publish and do not silently switch to pickup; whether to
+        // mark the item pickup-only or raise its price is the organizer's decision.
+        if (deliveryMode === 'shipping') {
+          const next = SEL.elementByText('Next');
+          if (next && SEL.isDisabled(next)) {
+            throw hardError('Delivery', 'Facebook blocked this listing at the Delivery step. This usually means the item\'s price is too low to cover shipping. On FindA.Sale, check "Local pickup only (no shipping)" for this item, or raise its price, then re-list.');
+          }
+        }
+        throw hardError('Delivery', 'Facebook didn\'t move to the Offer step.');
+      });
     overlay('<b>FindA.Sale</b> — reviewing offer settings…');
     await humanPause(400, 800);
     await clickButton('Next', 'Offer'); // -> Audience (groups left unchecked by design, see ADR-084 amendment)

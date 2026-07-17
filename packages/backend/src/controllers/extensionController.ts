@@ -54,7 +54,7 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
     select: {
       id: true, saleId: true, title: true, description: true, price: true,
       category: true, condition: true, photoUrls: true, createdAt: true,
-      packageWeightOz: true, aiPackageWeightOz: true, ebayShippingOverride: true, shippingAvailable: true,
+      packageWeightOz: true, aiPackageWeightOz: true, ebayShippingOverride: true,
     },
     orderBy: { createdAt: 'desc' },
   });
@@ -89,7 +89,6 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
     // same DB field eBay's resolvePoliciesForItem() already reads, not Facebook-specific data
     // despite the field's historical name.
     shippingOverride: it.ebayShippingOverride,
-    shippingAvailable: it.shippingAvailable,
     marketplaceListed: postedByItem.has(it.id) && !removedByItem.has(it.id),
   }));
 

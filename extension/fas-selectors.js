@@ -188,6 +188,19 @@
   }
   function isMenuChecked(el) { return !!(el && el.getAttribute('aria-checked') === 'true'); }
 
+  // True when a control is present but disabled -- covers native <button disabled>, the
+  // `disabled` DOM property, and FB's custom div[role="button"] controls that signal
+  // disabled via aria-disabled="true". Used to distinguish FB's negative-payout block on the
+  // Delivery step (Next stays disabled when shipping cost exceeds the item price) from a
+  // generic step-transition failure.
+  function isDisabled(el) {
+    if (!el) return false;
+    if (el.getAttribute('aria-disabled') === 'true') return true;
+    if (el.hasAttribute('disabled')) return true;
+    if (el.disabled === true) return true;
+    return false;
+  }
+
   // FB's "Mark as sold" survey modal (DOM-verified live 2026-07-16) is a multi-step dialog:
   // header "Mark as sold", subtext "Did you sell this item? ...", then four choices --
   // "Yes, sold on Facebook" / "Yes, sold elsewhere" / "No, haven't sold" / "I'd rather not
@@ -213,6 +226,6 @@
   }
 
   window.__FAS_SEL__ = { norm, fieldByLabel, comboByLabel, optionByText, photoInput, chipsAfter, bestTextMatch,
-    elementByText, radioLabelByText, listingCardByTitle, realClick, menuCheckboxByText, isMenuChecked, radioOptionByText,
+    elementByText, radioLabelByText, listingCardByTitle, realClick, menuCheckboxByText, isMenuChecked, isDisabled, radioOptionByText,
     LABELS: { title: 'Title', price: 'Price', description: 'Description', condition: 'Condition', category: 'Category' } };
 })();
