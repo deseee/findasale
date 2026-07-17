@@ -55,7 +55,7 @@ import SmartSearchViewsCard from '../../components/SmartSearchViewsCard';
 import DemandSignalsCard from '../../components/DemandSignalsCard';
 import PlatformHighlightsWidget from '../../components/PlatformHighlightsWidget';
 
-// Selling Tools grid configuration (6 tools, tier-gated)
+// Selling Tools grid configuration (8 tools, tier-gated)
 const SELLING_TOOLS = [
   { label: 'Create Sale', icon: '📋', href: '/organizer/create-sale', requiredTier: null },
   { label: 'Add Items', icon: '📷', href: (saleId: string) => `/organizer/add-items/${saleId}`, requiredTier: null },
@@ -64,6 +64,7 @@ const SELLING_TOOLS = [
   { label: 'Print Inventory', icon: '🖨️', href: '/organizer/print-inventory', requiredTier: 'PRO' },
   { label: 'Analytics', icon: '📊', href: '/organizer/insights', requiredTier: 'SIMPLE' },
   { label: 'Platforms', icon: '🌐', href: '/organizer/platforms', requiredTier: null },
+  { label: 'FB Marketplace', icon: '🛒', href: '/organizer/marketplace-extension', requiredTier: 'PRO' },
 ];
 
 type DashboardState = 'new' | 'active' | 'between';
