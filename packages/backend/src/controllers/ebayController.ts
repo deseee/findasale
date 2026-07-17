@@ -1769,6 +1769,120 @@ export function validateItemForEbayPublish(item: {
   return null;
 }
 
+/**
+ * Auto-resolve an item's effective shipping package (weight + optional dims) at
+ * publish time — mirrors the ADR-089 JIT ISBN resolve. For a SHIPPABLE item (NOT
+ * LOCAL_PICKUP_ONLY) that has no confirmed/measured package weight, resolve one
+ * automatically BEFORE the offer is built so the listing always goes out with real
+ * shipping instead of a soft warning + weightless listing (S1130 bug):
+ *   a. use the AI estimate (aiPackageWeightOz + aiPackageDimsJson) when present, else
+ *   b. JIT-invoke estimatePackageProfile (category/keyword/AI/seed cascade — always
+ *      returns a usable weight).
+ * Resolved values are persisted back to the Item (reused on future pushes/resyncs) and
+ * returned. Returns null when nothing needs resolving (already has a weight, or
+ * LOCAL_PICKUP_ONLY) OR — should not happen — when no usable weight could be produced,
+ * in which case validateItemForEbayPublish hard-fails the item downstream.
+ */
+export async function resolvePublishPackageWeight(item: {
+  id: string;
+  title?: string | null;
+  category?: string | null;
+  ebayCategoryId?: string | null;
+  ebayShippingOverride?: string | null;
+  packageConfirmedByOrganizer?: boolean | null;
+  packageWeightOz?: number | null;
+  packageLengthIn?: number | null;
+  packageWidthIn?: number | null;
+  packageHeightIn?: number | null;
+  packageType?: string | null;
+  aiPackageWeightOz?: number | null;
+  aiPackageDimsJson?: unknown;
+  aiPackageConfidence?: number | null;
+}): Promise<{
+  weightOz: number;
+  lengthIn: number | null;
+  widthIn: number | null;
+  heightIn: number | null;
+  packageType: string | null;
+  source: string;
+} | null> {
+  // Local-pickup items intentionally carry no shipping weight — never touch them.
+  if (item.ebayShippingOverride === 'LOCAL_PICKUP_ONLY') return null;
+  // Already has a usable measured/confirmed weight — nothing to resolve.
+  if (item.packageWeightOz != null && Number(item.packageWeightOz) > 0) return null;
+
+  let weightOz: number | null = null;
+  let dims: { length?: number | null; width?: number | null; height?: number | null } | null = null;
+  let packageType: string | null = item.packageType ?? null;
+  let source = 'AI';
+
+  // a. Direct AI estimate wins first (aiPackageWeightOz + optional dims).
+  if (item.aiPackageWeightOz != null && Number(item.aiPackageWeightOz) > 0) {
+    weightOz = Math.round(Number(item.aiPackageWeightOz));
+    const d = item.aiPackageDimsJson as { length?: number; width?: number; height?: number } | null;
+    if (d && d.length != null && d.width != null && d.height != null) {
+      dims = { length: Number(d.length), width: Number(d.width), height: Number(d.height) };
+    }
+  } else {
+    // b. JIT full estimate — category/keyword/AI/seed cascade always returns a value.
+    try {
+      const est = await estimatePackageProfile({
+        id: item.id,
+        title: item.title,
+        category: item.category,
+        ebayCategoryId: item.ebayCategoryId,
+        packageConfirmedByOrganizer: item.packageConfirmedByOrganizer,
+        packageWeightOz: item.packageWeightOz,
+        packageLengthIn: item.packageLengthIn != null ? Number(item.packageLengthIn) : null,
+        packageWidthIn: item.packageWidthIn != null ? Number(item.packageWidthIn) : null,
+        packageHeightIn: item.packageHeightIn != null ? Number(item.packageHeightIn) : null,
+        packageType: item.packageType,
+        aiEstimatedWeightOz: item.aiPackageWeightOz ?? null,
+        aiEstimatedDimensions:
+          (item.aiPackageDimsJson as { length: number; width: number; height: number } | null) ?? null,
+        aiPackageConfidence: item.aiPackageConfidence != null ? Number(item.aiPackageConfidence) : null,
+      });
+      if (est && est.weightOz > 0) {
+        weightOz = Math.round(est.weightOz);
+        dims = est.dims;
+        packageType = est.packageType || packageType;
+        source = est.source;
+      }
+    } catch (e: any) {
+      console.warn('[eBay AutoWeight] estimatePackageProfile failed for item', item.id, e?.message || e);
+    }
+  }
+
+  if (weightOz == null || weightOz <= 0) return null;
+
+  const lengthIn = dims && dims.length != null ? Number(dims.length) : null;
+  const widthIn = dims && dims.width != null ? Number(dims.width) : null;
+  const heightIn = dims && dims.height != null ? Number(dims.height) : null;
+
+  // Persist so it's reused on future pushes/resyncs. Never overwrites an organizer
+  // weight — the early return above guarantees we only reach here when weight is missing.
+  try {
+    await prisma.item.update({
+      where: { id: item.id },
+      data: {
+        packageWeightOz: weightOz,
+        ...(lengthIn != null ? { packageLengthIn: lengthIn } : {}),
+        ...(widthIn != null ? { packageWidthIn: widthIn } : {}),
+        ...(heightIn != null ? { packageHeightIn: heightIn } : {}),
+        ...(packageType ? { packageType } : {}),
+        packageEstimateSource: source,
+      },
+    });
+  } catch (e: any) {
+    console.warn('[eBay AutoWeight] persist failed for item', item.id, e?.message || e);
+  }
+
+  console.log(
+    `[eBay AutoWeight] item=${item.id} resolved weightOz=${weightOz} dims=${lengthIn ?? '?'}x${widthIn ?? '?'}x${heightIn ?? '?'} source=${source}`
+  );
+  return { weightOz, lengthIn, widthIn, heightIn, packageType, source };
+}
+
 export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
   try {
     const { saleId } = req.params;
@@ -1899,6 +2013,9 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
             packageWidthIn: true,
             packageHeightIn: true,
             packageType: true,
+            packageConfirmedByOrganizer: true,
+            aiPackageDimsJson: true,
+            aiPackageConfidence: true,
             upc: true,
             ean: true,
             isbn: true,
@@ -1989,6 +2106,35 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
     for (const item of sale.items) {
       try {
         const sku = buildCustomLabel(item.id, organizer, item);
+
+        // Auto-resolve shipping weight/dims for a SHIPPABLE item missing a confirmed
+        // weight BEFORE routing + inventory build, so the listing always ships with a
+        // real weight (S1130: previously warned then listed weightless). Mutates the
+        // in-memory item so resolvePoliciesForItem, the inventory payload, and the
+        // pre-publish guard all see the resolved weight. Never touches LOCAL_PICKUP_ONLY.
+        const autoPkg = await resolvePublishPackageWeight({
+          id: item.id,
+          title: item.title,
+          category: item.category,
+          ebayCategoryId: item.ebayCategoryId,
+          ebayShippingOverride: item.ebayShippingOverride,
+          packageConfirmedByOrganizer: (item as any).packageConfirmedByOrganizer,
+          packageWeightOz: item.packageWeightOz,
+          packageLengthIn: item.packageLengthIn != null ? Number(item.packageLengthIn) : null,
+          packageWidthIn: item.packageWidthIn != null ? Number(item.packageWidthIn) : null,
+          packageHeightIn: item.packageHeightIn != null ? Number(item.packageHeightIn) : null,
+          packageType: item.packageType,
+          aiPackageWeightOz: item.aiPackageWeightOz,
+          aiPackageDimsJson: (item as any).aiPackageDimsJson,
+          aiPackageConfidence: (item as any).aiPackageConfidence,
+        });
+        if (autoPkg) {
+          (item as any).packageWeightOz = autoPkg.weightOz;
+          if (autoPkg.lengthIn != null) (item as any).packageLengthIn = autoPkg.lengthIn;
+          if (autoPkg.widthIn != null) (item as any).packageWidthIn = autoPkg.widthIn;
+          if (autoPkg.heightIn != null) (item as any).packageHeightIn = autoPkg.heightIn;
+          if (autoPkg.packageType) (item as any).packageType = autoPkg.packageType;
+        }
 
         // Resolve policies for this item based on organizer's routing configuration
         const routing = await resolvePoliciesForItem(
@@ -2710,6 +2856,13 @@ export const publishItemOffer = async (req: AuthRequest, res: Response) => {
         estimatedValue: true,
         packageWeightOz: true,
         aiPackageWeightOz: true,
+        packageLengthIn: true,
+        packageWidthIn: true,
+        packageHeightIn: true,
+        packageType: true,
+        packageConfirmedByOrganizer: true,
+        aiPackageDimsJson: true,
+        aiPackageConfidence: true,
         ebayShippingOverride: true,
         sale: { select: { organizerId: true, address: true, city: true, state: true, zip: true } },
       },
@@ -2789,6 +2942,32 @@ export const publishItemOffer = async (req: AuthRequest, res: Response) => {
         console.warn('[auto-isbn] JIT resolve failed for item', item.id, e?.message || e);
       }
     }
+    // Auto-resolve shipping weight/dims for a SHIPPABLE item missing a confirmed weight
+    // (mirror of pushSaleToEbay). Persists to the Item + mutates the in-memory item so
+    // the guard passes and the live-inventory weight backfill below sends real shipping.
+    const autoPkg = await resolvePublishPackageWeight({
+      id: item.id,
+      title: item.title,
+      category: item.category,
+      ebayCategoryId: item.ebayCategoryId,
+      ebayShippingOverride: item.ebayShippingOverride,
+      packageConfirmedByOrganizer: (item as any).packageConfirmedByOrganizer,
+      packageWeightOz: item.packageWeightOz,
+      packageLengthIn: (item as any).packageLengthIn != null ? Number((item as any).packageLengthIn) : null,
+      packageWidthIn: (item as any).packageWidthIn != null ? Number((item as any).packageWidthIn) : null,
+      packageHeightIn: (item as any).packageHeightIn != null ? Number((item as any).packageHeightIn) : null,
+      packageType: (item as any).packageType,
+      aiPackageWeightOz: item.aiPackageWeightOz,
+      aiPackageDimsJson: (item as any).aiPackageDimsJson,
+      aiPackageConfidence: (item as any).aiPackageConfidence,
+    });
+    if (autoPkg) {
+      (item as any).packageWeightOz = autoPkg.weightOz;
+      (item as any).packageLengthIn = autoPkg.lengthIn;
+      (item as any).packageWidthIn = autoPkg.widthIn;
+      (item as any).packageHeightIn = autoPkg.heightIn;
+      if (autoPkg.packageType) (item as any).packageType = autoPkg.packageType;
+    }
     const prePublishError = validateItemForEbayPublish({
       price: effectivePrice,
       packageWeightOz: item.packageWeightOz,
@@ -2834,6 +3013,52 @@ export const publishItemOffer = async (req: AuthRequest, res: Response) => {
     // `FAS-${item.id}` 404s when the organizer has skuAppendDate/Cost/Location toggles
     // enabled. buildCustomLabel applies those toggles so the SKU matches eBay.
     const sku = buildCustomLabel(item.id, organizer, item);
+    // If we just auto-resolved a weight for this item (autoPkg set), the existing eBay
+    // inventory item was likely created without one — merge the resolved weight+dims into
+    // the live inventory item BEFORE publish so calculated shipping can build a parcel
+    // (eBay 25101). Weight+dims only (no packageType) to avoid enum/LSAS conflicts; the
+    // 25101 self-heal still strips a stale packageType if one remains. Non-fatal.
+    if (autoPkg) {
+      try {
+        const invPath = encodeURIComponent(`/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`);
+        const invGet = await fetch(ebayProxyUrl(invPath), {
+          headers: { ...ebayUserHeaders(accessToken), ...ebayProxyHeaders() },
+        });
+        if (invGet.ok) {
+          const invBody = (await invGet.json()) as any;
+          const hasWeight =
+            invBody?.packageWeightAndSize?.weight?.value != null &&
+            Number(invBody.packageWeightAndSize.weight.value) > 0;
+          if (!hasWeight) {
+            invBody.packageWeightAndSize = {
+              weight: { unit: 'OUNCE', value: autoPkg.weightOz },
+              ...(autoPkg.lengthIn && autoPkg.widthIn && autoPkg.heightIn
+                ? {
+                    dimensions: {
+                      unit: 'INCH',
+                      length: autoPkg.lengthIn,
+                      width: autoPkg.widthIn,
+                      height: autoPkg.heightIn,
+                    },
+                  }
+                : {}),
+            };
+            const invPut = await fetch(ebayProxyUrl(invPath), {
+              method: 'PUT',
+              headers: { ...ebayUserHeaders(accessToken), ...ebayProxyHeaders() },
+              body: JSON.stringify(invBody),
+            });
+            if (invPut.ok || invPut.status === 204) {
+              console.log(`[eBay AutoWeight] sku=${sku} live inventory weight backfilled (${autoPkg.weightOz}oz)`);
+            } else {
+              console.warn(`[eBay AutoWeight] sku=${sku} inventory weight PUT failed HTTP ${invPut.status}`);
+            }
+          }
+        }
+      } catch (e: any) {
+        console.warn('[eBay AutoWeight] live inventory weight backfill threw:', e?.message || e);
+      }
+    }
     // Publish LIVE via the consolidated self-heal loop (Phase 3, ADR 2026-06-30).
     // Replaces the inline 25021/25002/25101/25005 self-heal blocks. The loop parses
     // eBay's errorId and dispatches to the matching healer (shared mutable ctx),
