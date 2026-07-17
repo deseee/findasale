@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-# cache-bust: 2026-07-16T20:30:00Z — S1129: force backend deploy of ADR-088 auth.ts header-fallback + index.ts /api/auth/refresh CORS + itemController stockSold read (push tip 14fd845 backend changes were SKIPPED because the a0d078c8 blog-fix tip was frontend-only, §10c deploy-skip trap)
+# cache-bust: 2026-07-17T04:40:00Z — S1130: force a CLEAN backend rebuild so the committed auto-resolve shipping-weight fix (7d2127a5 resolvePublishPackageWeight + aiPackageWeightOz-preferring item select) actually deploys — live verify showed the running build was stale (estimator ran + weight not persisted despite aiPackageWeightOz set), which the on-disk code cannot produce
 FROM node:20-slim AS base
 
 # Install OpenSSL for Prisma
