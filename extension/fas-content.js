@@ -141,14 +141,24 @@
 
   // Facebook's Category field renders AI-suggested chips (div[role="button"]), not the
   // [role="option"] listbox selectCombo() expects — confirmed live 2026-07-15 (see
-  // fas-selectors.js chipsAfter/bestTextMatch). This tries the chip path first, falls back to
+  // fas-selectors.js categoryChips/bestTextMatch). This tries the chip path first, falls back to
   // the old listbox path in case FB shows a normal dropdown for some listing types, and — if
   // neither finds a confident match — returns the live suggestion text so fillItem() can tell
   // the organizer what to pick instead of silently leaving Category empty.
+  // True while Facebook's inline "Please select a category" validation prompt is still on screen
+  // -- used to confirm the chip click actually registered a category before we advance.
+  function categoryPromptShowing() {
+    return /please select a category/i.test((document.body && document.body.innerText) || '');
+  }
+
   async function selectCategory(value) {
     const combo = SEL.comboByLabel(LABELS.category);
     if (!combo) return { ok: !value, suggestions: [] }; // structural miss only matters if FB actually requires a value we can't set
-    const chips = await SEL.chipsAfter(() => realClick(combo), 500);
+    // Use categoryChips (union of persistent + newly-appeared chips) -- FB renders its top
+    // category suggestion as a PERSISTENT chip already present before the combo is clicked, which
+    // the old before/after diff (chipsAfter) missed, leaving Category UNSET and stalling the whole
+    // listing at "Item details" (confirmed live 2026-07-17, see fas-selectors.js categoryChips).
+    const chips = await SEL.categoryChips(combo, () => realClick(combo), 500);
     if (!chips.length) {
       if (!value) { await realClick(document.body); return { ok: true }; }
       try {
@@ -164,12 +174,23 @@
     // Facebook REQUIRES a category to proceed past Item details -- confirmed live 2026-07-15
     // (Next silently no-ops with a "Please select a category" inline prompt otherwise). Try to
     // match our value against Facebook's own suggestion chips; if there's no value at all, or
-    // no confident match, fall back to Facebook's own top-ranked suggestion rather than leaving
-    // it empty -- an unconfident pick is still far better than a run that can never advance.
+    // no confident match, fall back to Facebook's own top-ranked suggestion (chips[0]) rather
+    // than leaving it empty -- an unconfident pick is still far better than a run that can never
+    // advance. For the confirmed single-visible-chip case this MUST click that chip.
     const match = value ? SEL.bestTextMatch(chips, value) : null;
     const picked = match || chips[0];
     await realClick(picked);
-    await sleep(150);
+    await sleep(200);
+    // Confirm FB's inline "Please select a category" prompt cleared. If it lingers (the click
+    // didn't register a selection), re-collect chips and try once more before giving up.
+    if (categoryPromptShowing()) {
+      const chips2 = await SEL.categoryChips(combo, () => realClick(combo), 500);
+      if (chips2.length) {
+        const retry = (value ? SEL.bestTextMatch(chips2, value) : null) || chips2[0];
+        await realClick(retry);
+        await sleep(200);
+      }
+    }
     return { ok: !!match, suggestions: match ? [] : chips.map((c) => SEL.norm(c.textContent)).filter(Boolean) };
   }
 

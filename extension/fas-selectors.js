@@ -77,6 +77,44 @@
     );
   }
 
+  // Category suggestion chips (confirmed live 2026-07-17). chipsAfter's before/after DIFF misses
+  // Facebook's TOP category suggestion because FB renders it as a PERSISTENT chip that already
+  // exists below the Category field BEFORE the combobox is clicked (verified: one visible
+  // div[role="button"] "Musical Instruments", aria-disabled=null, present pre-click) -- so the
+  // diff returned [] and selectCategory left Category unset, stalling the whole listing at
+  // "Item details". This collects the UNION of persistent + newly-appeared chips: it scans AFTER
+  // the combo opens (so the live DOM already contains both the still-present persistent chip and
+  // any freshly-rendered ones -- a single post-open querySelectorAll IS that union, de-duped),
+  // filters out the combobox itself and known non-chip controls (Next/Previous/Save draft/Add
+  // photos/etc.), keeps only visible, enabled, short-label buttons, and orders chips that sit
+  // AFTER the Category field in DOM order first (FB lists suggestions directly beneath it).
+  async function categoryChips(combo, openFn, settleMs) {
+    await openFn(); // realClick() routes through chrome.debugger -- await before scanning the DOM
+    await new Promise((r) => setTimeout(r, settleMs));
+    const EXCLUDE = ['next', 'previous', 'back', 'publish', 'category', 'condition',
+      'close', 'cancel', 'done', 'edit', 'remove', 'more'];
+    const isVisible = (el) => !!(el.offsetParent || el.getClientRects().length);
+    const nodes = Array.from(document.querySelectorAll('div[role="button"], span[role="button"]'));
+    const candidates = nodes.filter((el) => {
+      if (!combo) return false;
+      if (el === combo || combo.contains(el) || el.contains(combo)) return false;
+      if (el.getAttribute('aria-disabled') === 'true') return false;
+      if (!isVisible(el)) return false;
+      const t = norm(el.textContent);
+      if (!t || t.length > 60) return false;
+      if (EXCLUDE.includes(t)) return false;
+      if (t.startsWith('add photo') || t.startsWith('save draft')) return false;
+      return true;
+    });
+    // Prefer chips that come AFTER the Category combobox in document order; keep the rest as
+    // lower-priority fallbacks. DOCUMENT_POSITION_FOLLOWING === 4.
+    const after = [], other = [];
+    for (const el of candidates) {
+      ((combo.compareDocumentPosition(el) & 4) ? after : other).push(el);
+    }
+    return after.concat(other);
+  }
+
   // Best-effort fuzzy match against a list of candidate elements: exact > substring
   // (either direction) > word overlap. Returns null if nothing scores meaningfully —
   // callers should never guess-click a low-confidence match.
@@ -243,7 +281,7 @@
   }
   function isSwitchOn(el) { return !!(el && el.getAttribute('aria-checked') === 'true'); }
 
-  window.__FAS_SEL__ = { norm, fieldByLabel, comboByLabel, optionByText, photoInput, chipsAfter, bestTextMatch,
+  window.__FAS_SEL__ = { norm, fieldByLabel, comboByLabel, optionByText, photoInput, chipsAfter, categoryChips, bestTextMatch,
     elementByText, radioLabelByText, listingCardByTitle, realClick, menuCheckboxByText, isMenuChecked, isDisabled, radioOptionByText,
     switchByLabel, isSwitchOn,
     LABELS: { title: 'Title', price: 'Price', description: 'Description', condition: 'Condition', category: 'Category', offerToggle: 'negotiate', offerMinimum: 'Minimum price' } };
