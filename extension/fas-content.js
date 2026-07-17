@@ -534,27 +534,46 @@
     const deliveryMode = await fillDeliveryStep(item);
     await clickButton('Next', 'Delivery'); // -> Offer
 
-    await waitForStep('offer', 10000)
-      .catch(() => {
-        // 2026-07-16: on the SHIPPING path Facebook leaves "Next" present but DISABLED when the
-        // estimated payout is negative -- i.e. the shipping label cost exceeds the item price
-        // (confirmed live with a $1 item: FB disables Next and the run used to stall on the
-        // generic message below). The pickup path never sets a shipping label, so this only
-        // applies when fillDeliveryStep took the shipping branch. Hard-error with an actionable
-        // message and STOP -- do not publish and do not silently switch to pickup; whether to
-        // mark the item pickup-only or raise its price is the organizer's decision.
-        if (deliveryMode === 'shipping') {
-          const next = SEL.elementByText('Next');
-          if (next && SEL.isDisabled(next)) {
-            throw hardError('Delivery', 'Facebook blocked this listing at the Delivery step. This usually means the item\'s price is too low to cover shipping. On FindA.Sale, check "Local pickup only (no shipping)" for this item, or raise its price, then re-list.');
-          }
+    // After Delivery's Next, Facebook lands on EITHER the Offer step OR jumps straight to the
+    // Audience/Publish step -- for some listings (e.g. Local-pickup items) FB skips Offer entirely
+    // (confirmed live 2026-07-17: a pickup listing went Delivery -> Audience with a publish-ready
+    // page, but the old offer-only guard hard-errored on it). Race for whichever ?step=... appears
+    // first instead of demanding Offer, so a legitimately skipped Offer step is a success-path, not
+    // a false stall.
+    let landedStep;
+    try {
+      landedStep = await waitFor(() => {
+        if (location.href.indexOf('step=offer') !== -1) return 'offer';
+        if (location.href.indexOf('step=audience') !== -1) return 'audience';
+        return null;
+      }, 10000);
+    } catch (e) {
+      // Neither Offer nor Audience appeared -- Facebook STAYED on the Delivery step. That is the
+      // real failure, and it keeps its existing actionable hard error. 2026-07-16: on the SHIPPING
+      // path FB leaves "Next" present but DISABLED when the estimated payout is negative -- i.e. the
+      // shipping label cost exceeds the item price (confirmed live with a $1 item). The pickup path
+      // never sets a shipping label, so this only applies when fillDeliveryStep took the shipping
+      // branch. Hard-error with an actionable message and STOP -- do not publish and do not silently
+      // switch to pickup; whether to mark the item pickup-only or raise its price is the organizer's
+      // decision.
+      if (deliveryMode === 'shipping') {
+        const next = SEL.elementByText('Next');
+        if (next && SEL.isDisabled(next)) {
+          throw hardError('Delivery', 'Facebook blocked this listing at the Delivery step. This usually means the item\'s price is too low to cover shipping. On FindA.Sale, check "Local pickup only (no shipping)" for this item, or raise its price, then re-list.');
         }
-        throw hardError('Delivery', 'Facebook didn\'t move to the Offer step.');
-      });
-    overlay('<b>FindA.Sale</b> — reviewing offer settings…');
-    await humanPause(400, 800);
-    await configureOfferStep(item); // set a VALID Allow-offers state so FB's Next isn't blocked (2026-07-16)
-    await clickButton('Next', 'Offer'); // -> Audience (groups left unchecked by design, see ADR-084 amendment)
+      }
+      throw hardError('Delivery', 'Facebook didn\'t move past the Delivery step.');
+    }
+
+    if (landedStep === 'offer') {
+      console.info('[FAS offer] Offer step present -- configuring offer settings.');
+      overlay('<b>FindA.Sale</b> — reviewing offer settings…');
+      await humanPause(400, 800);
+      await configureOfferStep(item); // set a VALID Allow-offers state so FB's Next isn't blocked (2026-07-16)
+      await clickButton('Next', 'Offer'); // -> Audience (groups left unchecked by design, see ADR-084 amendment)
+    } else {
+      console.info('[FAS offer] Offer step skipped by Facebook (went straight to Audience/Publish) -- skipping offer config.');
+    }
 
     await waitForStep('audience', 10000)
       .catch(() => { throw hardError('Offer', 'Facebook didn\'t move to the Groups/Publish step.'); });
