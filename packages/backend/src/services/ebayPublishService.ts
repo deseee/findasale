@@ -423,7 +423,7 @@ const heal25021: Healer = async (ctx) => {
     return { published: false, retry: false };
   }
 
-  const invGet = await ebayFetch(`/sell/inventory/v1/inventory_item/${ctx.sku}`, ctx.accessToken, { method: 'GET' });
+  const invGet = await ebayFetch(`/sell/inventory/v1/inventory_item/${encodeURIComponent(ctx.sku)}`, ctx.accessToken, { method: 'GET' });
   if (!invGet.ok) {
     console.warn(`[eBay SelfHeal 25021] item ${ctx.item.id} sku ${ctx.sku}: bailing — inventory item GET failed (HTTP ${invGet.status})`);
     return { published: false, retry: false };
@@ -443,7 +443,7 @@ const heal25021: Healer = async (ctx) => {
 
   for (const retryCondition of retryOrder) {
     console.log(`[eBay SelfHeal 25021] ${ctx.sku}: retrying with condition=${retryCondition}`);
-    const retryInvRes = await ebayFetch(`/sell/inventory/v1/inventory_item/${ctx.sku}`, ctx.accessToken, {
+    const retryInvRes = await ebayFetch(`/sell/inventory/v1/inventory_item/${encodeURIComponent(ctx.sku)}`, ctx.accessToken, {
       method: 'PUT',
       body: { ...invBody, condition: retryCondition },
     });
@@ -534,7 +534,7 @@ const heal25002: Healer = async (ctx, errorBody) => {
     return { published: false, retry: false };
   }
 
-  const invGet = await ebayFetch(`/sell/inventory/v1/inventory_item/${ctx.sku}`, ctx.accessToken, { method: 'GET' });
+  const invGet = await ebayFetch(`/sell/inventory/v1/inventory_item/${encodeURIComponent(ctx.sku)}`, ctx.accessToken, { method: 'GET' });
   if (!invGet.ok) {
     console.warn(`[eBay SelfHeal 25002] item ${ctx.item.id} sku ${ctx.sku}: bailing — inventory item GET failed (HTTP ${invGet.status})`);
     return { published: false, retry: false };
@@ -615,7 +615,7 @@ const heal25002: Healer = async (ctx, errorBody) => {
   }
 
   console.log(`[eBay SelfHeal 25002] ${ctx.sku}: injecting Brand=${aspectsObj['Brand']?.[0]} + MPN=${aspectsObj['MPN']?.[0]} and re-publishing`);
-  const retryInvRes = await ebayFetch(`/sell/inventory/v1/inventory_item/${ctx.sku}`, ctx.accessToken, {
+  const retryInvRes = await ebayFetch(`/sell/inventory/v1/inventory_item/${encodeURIComponent(ctx.sku)}`, ctx.accessToken, {
     method: 'PUT',
     body: invBody,
   });
@@ -640,7 +640,7 @@ const heal25101: Healer = async (ctx) => {
   }
   console.warn(`[eBay SelfHeal 25101] sku=${ctx.sku} — stripping packageType and retrying`);
   try {
-    const invGet = await ebayFetch(`/sell/inventory/v1/inventory_item/${ctx.sku}`, ctx.accessToken, { method: 'GET' });
+    const invGet = await ebayFetch(`/sell/inventory/v1/inventory_item/${encodeURIComponent(ctx.sku)}`, ctx.accessToken, { method: 'GET' });
     if (!invGet.ok) {
       console.warn(`[eBay SelfHeal 25101] item ${ctx.item.id} sku ${ctx.sku}: bailing — inventory item GET failed (HTTP ${invGet.status})`);
       return { published: false, retry: false };
@@ -651,7 +651,7 @@ const heal25101: Healer = async (ctx) => {
       delete (pkg as any).packageType;
       invBody.packageWeightAndSize = pkg;
     }
-    const retryInvRes = await ebayFetch(`/sell/inventory/v1/inventory_item/${ctx.sku}`, ctx.accessToken, {
+    const retryInvRes = await ebayFetch(`/sell/inventory/v1/inventory_item/${encodeURIComponent(ctx.sku)}`, ctx.accessToken, {
       method: 'PUT',
       body: invBody,
     });
