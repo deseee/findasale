@@ -70,7 +70,7 @@
   // div[role="button"] elements before/after the combobox opens to isolate just the new chips.
   async function chipsAfter(openFn, settleMs) {
     const before = new Set(document.querySelectorAll('div[role="button"]'));
-    await openFn(); // realClick() is now async (routes through chrome.debugger) -- await it before diffing
+    await openFn(); // realClick() is async (dispatches a settle wait) -- await it before diffing
     await new Promise((r) => setTimeout(r, settleMs));
     return Array.from(document.querySelectorAll('div[role="button"]')).filter(
       (b) => !before.has(b) && norm(b.textContent)
@@ -124,7 +124,7 @@
   }
 
   async function categoryChips(combo, openFn, settleMs) {
-    await openFn(); // realClick() routes through chrome.debugger -- await before scanning the DOM
+    await openFn(); // realClick() is async (dispatches a settle wait) -- await before scanning the DOM
     await new Promise((r) => setTimeout(r, settleMs));
     return scanCategoryChips(combo);
   }
@@ -210,40 +210,44 @@
     return null; // zero or ambiguous (multiple) matches -- caller skips + flags, never guesses
   }
 
-  // A plain el.click() -- and even a full synthetic pointerdown/mousedown/pointerup/mouseup/
-  // click MouseEvent sequence with real coordinates -- is NOT reliable against Facebook's
-  // custom radio/button components. Confirmed live 2026-07-15 on the Package-weight radio AND
-  // the "Change shipping method" modal's "Update" button: both silently ignored every synthetic
-  // event variant tried (plain .click(), full pointer sequence, real on-screen coordinates,
-  // freshly-requeried non-stale elements -- ruled out staleness, viewport visibility, and event
-  // completeness one at a time). Root cause isolated the same session: Chrome marks script-
-  // dispatched events isTrusted=false, and these specific controls require trusted input to
-  // actually commit a selection -- proven by manually driving the identical flow with real OS-
-  // level clicks (Chrome DevTools Protocol / a real mouse), which worked every time and
-  // completed a genuine live Facebook Marketplace publish. A content script cannot produce
-  // trusted input itself, so this now asks the background service worker to do it via
-  // chrome.debugger (CDP) -- see background.js cdpClick(). Falls back to the old synthetic
-  // sequence only if CDP is ever unavailable (e.g. debugger permission revoked), so a
-  // permission hiccup degrades gracefully instead of hard-failing every click; Category chips
-  // and the Condition dropdown are confirmed working via the synthetic path too, so this is a
-  // safety net, not the expected path.
+  // Facebook's custom radio/button components (the Package-weight radio and the "Change
+  // shipping method" modal's "Update" button) DO respond to script-dispatched
+  // (isTrusted:false) events -- PROVEN LIVE 2026-07-17 on facebook.com/marketplace/create.
+  // The earlier belief that these controls required trusted (CDP / DevTools-driven) input was
+  // wrong: FB's handlers do NOT check isTrusted. The old synthetic fallback simply fired too
+  // few events -- it jumped straight to pointerdown without the hover/focus preamble FB's
+  // handlers wait for. The reliably-working sequence, dispatched on the target element with
+  // correct viewport coordinates, is:
+  //   pointerover -> pointerenter -> pointermove -> pointerdown -> mousedown -> focus
+  //   -> pointerup -> mouseup -> click
+  // using PointerEvent for pointer* (pointerId:1, isPrimary:true, buttons:1 while pressed),
+  // MouseEvent for mouse*/click, and FocusEvent for focus. No background service worker, no
+  // CDP, no "is debugging this browser" banner -- a plain content script does it all.
   async function realClick(el) {
-    // Scroll the target into view and let layout settle BEFORE reading coordinates, so the CDP
-    // click (which uses viewport coords from getBoundingClientRect) lands on the now-visible
-    // element instead of an off-screen/pre-scroll position -- confirmed cause of category-chip
-    // misses when the chip sat below the fold (2026-07-17). Benefits every realClick caller.
+    // Scroll the target into view and let layout settle BEFORE reading coordinates, so the click
+    // lands on the now-visible element instead of an off-screen/pre-scroll position -- confirmed
+    // cause of category-chip misses when the chip sat below the fold (2026-07-17). Benefits every
+    // realClick caller.
     try { el.scrollIntoView({ block: 'center', inline: 'center' }); } catch (e) { /* non-fatal */ }
     await new Promise((r) => requestAnimationFrame(() => setTimeout(r, 60)));
     const rect = el.getBoundingClientRect();
     const cx = Math.round(rect.left + rect.width / 2);
     const cy = Math.round(rect.top + rect.height / 2);
-    try {
-      const resp = await chrome.runtime.sendMessage({ type: 'cdpClick', x: cx, y: cy });
-      if (resp && resp.ok) return;
-    } catch (e) { /* fall through to synthetic fallback */ }
-    ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'].forEach((type) => {
-      el.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, clientX: cx, clientY: cy, view: window }));
-    });
+    const base = { bubbles: true, cancelable: true, composed: true, button: 0, view: window, clientX: cx, clientY: cy };
+    const pointer = (type, buttons) => new PointerEvent(type, Object.assign({}, base, { pointerId: 1, isPrimary: true, pointerType: 'mouse', buttons: buttons }));
+    const mouse = (type, buttons) => new MouseEvent(type, Object.assign({}, base, { buttons: buttons }));
+    // Hover/focus preamble (pointerover/enter/move) -> press (pointerdown/mousedown, buttons:1)
+    // -> focus -> release (pointerup/mouseup) -> click. FB's controls need the preamble to arm.
+    el.dispatchEvent(pointer('pointerover', 0));
+    el.dispatchEvent(pointer('pointerenter', 0));
+    el.dispatchEvent(pointer('pointermove', 0));
+    el.dispatchEvent(pointer('pointerdown', 1));
+    el.dispatchEvent(mouse('mousedown', 1));
+    try { if (typeof el.focus === 'function') el.focus(); } catch (e) { /* non-fatal */ }
+    el.dispatchEvent(new FocusEvent('focus', { bubbles: true, cancelable: true, composed: true, view: window }));
+    el.dispatchEvent(pointer('pointerup', 0));
+    el.dispatchEvent(mouse('mouseup', 0));
+    el.dispatchEvent(mouse('click', 0));
   }
 
   // Delivery step (2026-07-16, DOM-verified live): FB's "Delivery method" combo, once opened,

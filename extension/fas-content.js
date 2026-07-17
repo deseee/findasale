@@ -433,8 +433,22 @@
       'Couldn\'t find the "' + bucket + '" weight option.', 5000);
     await humanPause(400, 800); // let Shipping carrier / Shipping option self-populate
 
+    // The "Change shipping method" modal ([role="dialog"]) commits ASYNCHRONOUSLY: clicking
+    // "Update" fires a shipping-rate fetch and Facebook only closes the modal once that request
+    // returns (variable delay, sometimes >2.5s -- confirmed live 2026-07-17). A fixed pause
+    // raced that fetch and could continue while the modal was still open, stalling the Delivery
+    // step. Capture the open dialog, click Update, then POLL (every ~300ms, up to ~8s) for the
+    // modal to actually close before continuing. A timeout here is NOT fatal -- the downstream
+    // step=offer/audience wait is the real success signal -- so proceed either way afterward.
+    const shipModal = document.querySelector('[role="dialog"]');
     await clickButton('Update', 'Delivery');
-    await humanPause(300, 600);
+    if (shipModal) {
+      const deadline = Date.now() + 8000;
+      while (Date.now() < deadline && document.body.contains(shipModal) && shipModal.getClientRects().length > 0) {
+        await sleep(300);
+      }
+    }
+    await humanPause(300, 600); // small settle once the modal has closed
     return 'shipping';
   }
 
