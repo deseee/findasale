@@ -1678,7 +1678,7 @@ const EditItemPage = () => {
                         <div>eBay requires a minimum listing price of $0.99. Raise this item&apos;s price to list it on eBay.</div>
                       )}
                       {missingWeight && (
-                        <div>eBay needs a package weight to calculate shipping. Add a weight above, or check &quot;Local pickup only&quot;.</div>
+                        <div>No weight set — we&apos;ll auto-estimate shipping for you when you publish. To use your own weight instead, add one above or check &quot;Local pickup only&quot;.</div>
                       )}
                     </div>
                   );
