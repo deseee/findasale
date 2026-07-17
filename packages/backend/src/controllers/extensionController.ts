@@ -55,6 +55,7 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
       id: true, saleId: true, title: true, description: true, price: true,
       category: true, condition: true, photoUrls: true, createdAt: true,
       packageWeightOz: true, aiPackageWeightOz: true, ebayShippingOverride: true,
+      allowBestOffer: true, bestOfferMinimumAmt: true,
     },
     orderBy: { createdAt: 'desc' },
   });
@@ -89,6 +90,11 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
     // same DB field eBay's resolvePoliciesForItem() already reads, not Facebook-specific data
     // despite the field's historical name.
     shippingOverride: it.ebayShippingOverride,
+    // Mirror the item's existing eBay Best Offer settings onto Facebook's Offer step.
+    // bestOfferMinimumAmt is a Prisma Decimal (stored in DOLLARS, same unit as price) --
+    // coerce to a plain number so it serializes as JSON number, not a Decimal string.
+    allowBestOffer: it.allowBestOffer,
+    bestOfferMinimumAmt: it.bestOfferMinimumAmt != null ? Number(it.bestOfferMinimumAmt) : null,
     marketplaceListed: postedByItem.has(it.id) && !removedByItem.has(it.id),
   }));
 

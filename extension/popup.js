@@ -89,7 +89,8 @@ async function startQueue() {
     id: it.id, title: it.title, price: it.price, condition: it.condition,
     description: it.description, category: it.category, photoUrls: it.photoUrls || [],
     packageWeightOz: it.packageWeightOz, aiPackageWeightOz: it.aiPackageWeightOz,
-    shippingOverride: it.shippingOverride
+    shippingOverride: it.shippingOverride,
+    allowBestOffer: it.allowBestOffer, bestOfferMinimumAmt: it.bestOfferMinimumAmt
   }));
   if (!queue.length) return;
   const autoPublish = $('autoPublish').checked;

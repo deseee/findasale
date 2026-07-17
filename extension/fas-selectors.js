@@ -225,7 +225,26 @@
     return rows.find((n) => norm(n.textContent) === want) || null;
   }
 
+  // Offer step (2026-07-16, ADR-084): FB's "Allow offers" control is a role="switch"
+  // (aria-checked reflects on/off) sitting in a row whose descriptive text reads
+  // "Let buyers negotiate a price equal to or above the minimum price you set". Match the
+  // switch whose own/row/aria text contains the given fragment (pass a distinctive fragment
+  // like "negotiate"); fall back to the first role="switch" on the step. Returns the switch
+  // element or null when the Offer step has no such control (some listing types omit it).
+  function switchByLabel(fragment) {
+    const want = norm(fragment);
+    const switches = Array.from(document.querySelectorAll('[role="switch"]'));
+    for (const sw of switches) {
+      const row = sw.closest('label') || sw.parentElement;
+      const txt = norm((sw.getAttribute('aria-label') || '') + ' ' + ((row && row.textContent) || sw.textContent || ''));
+      if (want && txt.includes(want)) return sw;
+    }
+    return switches[0] || null;
+  }
+  function isSwitchOn(el) { return !!(el && el.getAttribute('aria-checked') === 'true'); }
+
   window.__FAS_SEL__ = { norm, fieldByLabel, comboByLabel, optionByText, photoInput, chipsAfter, bestTextMatch,
     elementByText, radioLabelByText, listingCardByTitle, realClick, menuCheckboxByText, isMenuChecked, isDisabled, radioOptionByText,
-    LABELS: { title: 'Title', price: 'Price', description: 'Description', condition: 'Condition', category: 'Category' } };
+    switchByLabel, isSwitchOn,
+    LABELS: { title: 'Title', price: 'Price', description: 'Description', condition: 'Condition', category: 'Category', offerToggle: 'negotiate', offerMinimum: 'Minimum price' } };
 })();

@@ -329,6 +329,64 @@
     return 'shipping';
   }
 
+  // Offer step (2026-07-16, ADR-084): Facebook pre-checks "Allow offers" and pre-fills
+  // "Minimum price you'll consider" with the LISTING PRICE, which is INVALID -- FB requires the
+  // minimum to be at least 50% of the price AND strictly below it -- so a red inline error shows,
+  // Next stays disabled, and the run used to stall here doing nothing. Mirror the item's existing
+  // eBay Best Offer settings (item.allowBestOffer / item.bestOfferMinimumAmt -- the same fields
+  // eBay already uses; Facebook has no auto-accept equivalent so bestOfferAutoAcceptAmt is ignored)
+  // onto FB's Offer step:
+  //   - allowBestOffer falsy -> turn FB's "Allow offers" switch OFF (no minimum needed -> valid).
+  //   - allowBestOffer true   -> ensure the switch is ON, then set a VALID minimum computed in whole
+  //     cents: clamp(bestOfferMinimumAmt, ceil(50% of price), price - $0.01). Use bestOfferMinimumAmt
+  //     when it already satisfies FB's rule; otherwise fall back to the 50% floor. If the price is so
+  //     low that no valid minimum can exist (e.g. <= $0.01), turn Allow-offers OFF instead.
+  // item.price here is Facebook's own rounded listing price (backend sends Math.round(price)), so the
+  // clamp is computed against the exact value FB validates. This never throws its own hard error --
+  // it leaves the step in a valid state and lets the existing waitForStep('audience') guard below stay
+  // the real check (keeps the fail-loud behavior if FB still blocks for some other reason).
+  async function configureOfferStep(item) {
+    const sw = SEL.switchByLabel(LABELS.offerToggle);
+    if (!sw) return; // Offer step has no such control for this listing type -- nothing to do
+
+    const priceNum = Number(item.price);
+    const wantOffers = item.allowBestOffer === true;
+
+    // Compute a valid minimum (dollars) or null when offers should be off / no valid min exists.
+    let minValue = null;
+    if (wantOffers && isFinite(priceNum) && priceNum > 0) {
+      const priceCents = Math.round(priceNum * 100);
+      const lowerCents = Math.ceil(priceCents * 0.5); // >= 50% of price
+      const upperCents = priceCents - 1;              // strictly below price
+      if (lowerCents <= upperCents) {
+        const raw = item.bestOfferMinimumAmt;
+        const desiredCents = raw != null && isFinite(Number(raw)) ? Math.round(Number(raw) * 100) : null;
+        const pick = desiredCents != null ? desiredCents : lowerCents;
+        const clamped = Math.min(Math.max(pick, lowerCents), upperCents);
+        minValue = clamped / 100;
+      }
+    }
+
+    if (minValue == null) {
+      // Turn Allow-offers OFF (covers allowBestOffer=false AND the too-low-price case).
+      if (SEL.isSwitchOn(sw)) { await realClick(sw); await sleep(250); }
+      return;
+    }
+
+    // Ensure Allow-offers is ON, then fill the minimum with a valid value.
+    if (!SEL.isSwitchOn(sw)) { await realClick(sw); await sleep(300); }
+    let minInput;
+    // The minimum input only renders while offers are on -- wait for it, then set it like any other
+    // React-controlled text field (setNativeValue) so FB registers the change and clears its error.
+    try { minInput = await waitFor(() => SEL.fieldByLabel(LABELS.offerMinimum), 4000); }
+    catch (e) { return; } // input never appeared -- leave FB's default; audience guard catches a real block
+    minInput.focus();
+    // Whole dollars -> integer string; otherwise a 2-decimal string (e.g. "0.50") so FB parses it.
+    const minStr = Number.isInteger(minValue) ? String(minValue) : minValue.toFixed(2);
+    setNativeValue(minInput, minStr);
+    await sleep(200);
+  }
+
   // Fills item details, then auto-advances through every remaining Facebook step (Delivery,
   // Offer, Groups/Audience) and clicks Publish itself. ADR-084 amendment 2026-07-15 (Patrick's
   // explicit direction, findasale-legal reviewed): stops ONLY on a hard error -- a required
@@ -386,6 +444,7 @@
       });
     overlay('<b>FindA.Sale</b> — reviewing offer settings…');
     await humanPause(400, 800);
+    await configureOfferStep(item); // set a VALID Allow-offers state so FB's Next isn't blocked (2026-07-16)
     await clickButton('Next', 'Offer'); // -> Audience (groups left unchecked by design, see ADR-084 amendment)
 
     await waitForStep('audience', 10000)
