@@ -43,7 +43,7 @@ export default function EmbedSaleIndex({ generatedAt, metros }: EmbedSaleIndexPr
           fontFamily:
             'system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif',
         }}
-        className="bg-white text-warm-900 p-4"
+        className="bg-white dark:bg-gray-900 text-warm-900 dark:text-warm-100 p-4"
       >
         <div className="mb-3">
           <h1 className="text-lg font-bold">The Weekend Sale Index</h1>

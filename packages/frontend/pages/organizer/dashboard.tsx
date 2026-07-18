@@ -1278,7 +1278,12 @@ const OrganizerDashboard = () => {
                   {/* Compact Holds Summary */}
                   <div className="mt-4 pt-4 border-t border-warm-200 dark:border-gray-700">
                     {(statsData?.activeSale?.holdCount ?? 0) === 0 ? (
-                      <p className="text-sm text-gray-500 dark:text-gray-400">No active holds</p>
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-sm text-gray-500 dark:text-gray-400">No active holds</p>
+                        <Link href={`/organizer/holds?saleId=${activeSale.id}`} className="text-sm text-amber-600 dark:text-amber-400 font-semibold hover:underline flex-shrink-0">
+                          View holds →
+                        </Link>
+                      </div>
                     ) : (
                       <div className="text-sm">
                         <p className="font-medium text-warm-900 dark:text-warm-100 mb-2">
