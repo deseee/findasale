@@ -1,6 +1,7 @@
 import { prisma } from '../index';
 import { getStripe } from '../utils/stripe';
 import { createNotification } from './notificationService';
+import { sellItemUnits, InsufficientStockError } from './itemStockService';
 
 /**
  * Close an auction and handle winner checkout flow.
@@ -111,13 +112,31 @@ export async function closeAuction(itemId: string): Promise<void> {
       // Continue anyway — notify winner of failure
     }
 
-    // Mark item as SOLD and auctionClosed
+    // ADR-087 D3: route through the shared stock pool instead of a raw status
+    // write, so a FindA.Sale-native auction win shares one consistent count with
+    // every other sale channel (POS/Stripe/eBay/etc). sellItemUnits() flips
+    // Item.status to SOLD itself once the pool is exhausted (matching today's
+    // single-unit auction behavior exactly). auctionClosed is a separate flag
+    // that already makes closeAuction idempotent per item (see the
+    // `if (item.auctionClosed)` early-return above), so no additional ledger is
+    // needed here -- unlike the eBay paths, which reconcile a re-deliverable
+    // external order and need the EbaySoldEvent ledger.
+    try {
+      await sellItemUnits(itemId, 1);
+    } catch (stockErr) {
+      if (stockErr instanceof InsufficientStockError) {
+        // Pool already exhausted (e.g. sold on another channel first). Log
+        // loudly but continue -- the winner still owes payment per the auction
+        // result, and there's nothing safe to write to the pool here.
+        console.error(`[auction] Stock pool already exhausted for item ${itemId} at auction close:`, stockErr.message);
+      } else {
+        throw stockErr;
+      }
+    }
+
     await prisma.item.update({
       where: { id: itemId },
-      data: {
-        auctionClosed: true,
-        status: 'SOLD'
-      }
+      data: { auctionClosed: true }
     });
 
     // Notify winner
