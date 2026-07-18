@@ -431,26 +431,37 @@
     );
     const weightWrapper = await waitThenClick(() => SEL.radioLabelByText(bucket), 'Delivery',
       'Couldn\'t find the "' + bucket + '" weight option.', 5000);
-    await humanPause(400, 800); // let Shipping carrier / Shipping option self-populate
 
-    // 2026-07-18 fix (Patrick live report, Hofnar tin cmrqpqatn005ul0sum3ij77kx): the
-    // waitThenClick above only proves a click event sequence was DISPATCHED at the matched
-    // radio -- not that Facebook's React component actually committed the selection (the same
-    // class of silent-no-op click that has bitten other custom FB controls in this file before,
-    // see realClick's history above). Verify the radio actually shows checked; if not, retry
-    // once against a freshly re-queried element (Facebook may re-render between find and
-    // click); if it's STILL not checked, hard-error immediately with an accurate message naming
-    // the bucket, instead of silently continuing to "Update" on an unconfirmed state and letting
-    // the real symptom only surface later as a misleading "price too low" error at the
-    // Delivery-step Next check below.
-    if (!SEL.isRadioChecked(weightWrapper)) {
+    // 2026-07-18 fix (Patrick live report + live DOM investigation, Hofnar tin
+    // cmrqpqatn005ul0sum3ij77kx): waitThenClick above only proves a click event sequence was
+    // DISPATCHED at the matched radio -- not that Facebook committed the selection. First fix
+    // attempt used a single short pause (400-800ms) then one immediate retry, which turned out
+    // to be the wrong theory: LIVE TESTING (javascript_tool against the real page, same day)
+    // proved this is NOT a broken click or a bucket-specific quirk -- Facebook's commit here is
+    // genuinely ASYNCHRONOUS and can take several seconds (it appears to fire a shipping-rate
+    // quote fetch on selection, the same class of async commit already documented below for the
+    // "Update" button's modal-close). A short fixed pause was seeing a false "not checked yet"
+    // reading moments before Facebook actually caught up. Fix: POLL for aria-checked to flip
+    // (mirrors the existing Update-button poll pattern in this same function) for up to ~6s
+    // before concluding it truly didn't register; only THEN retry the click once, poll again,
+    // and only hard-error if it's still unchecked after that second poll.
+    async function pollRadioChecked(wrapper, timeoutMs) {
+      const deadline = Date.now() + timeoutMs;
+      while (Date.now() < deadline) {
+        if (SEL.isRadioChecked(wrapper)) return true;
+        await sleep(300);
+      }
+      return SEL.isRadioChecked(wrapper);
+    }
+
+    if (!(await pollRadioChecked(weightWrapper, 6000))) {
       const retryWrapper = SEL.radioLabelByText(bucket);
       if (retryWrapper) await SEL.realClick(retryWrapper);
-      await humanPause(400, 800);
-      if (!SEL.isRadioChecked(SEL.radioLabelByText(bucket))) {
+      if (!(await pollRadioChecked(SEL.radioLabelByText(bucket) || retryWrapper, 6000))) {
         throw hardError('Delivery', 'Selected the "' + bucket + '" shipping weight option, but Facebook didn\'t register it as chosen after two tries -- try again, or set the weight manually on the Facebook tab.');
       }
     }
+    await humanPause(400, 800); // let Shipping carrier / Shipping option self-populate
 
     // The "Change shipping method" modal ([role="dialog"]) commits ASYNCHRONOUSLY: clicking
     // "Update" fires a shipping-rate fetch and Facebook only closes the modal once that request
@@ -650,7 +661,17 @@
       .catch(() => false);
     if (!publishedOk) throw hardError('Publish', 'Clicked Publish but couldn\'t confirm it went through -- check this listing manually.');
 
-    return { catResult, photosOk, autoPublished: true };
+    // ADR-086 prerequisite: capture Facebook's own post-publish URL as remoteListingId. The
+    // publishedOk check above already proves location.href moved off the create-flow -- this is
+    // that same real URL, stored AS-IS (no parsing/extraction of a numeric id out of it) so it's
+    // directly re-navigable later with zero assumptions about Facebook's URL/id format. Manual-
+    // publish path (autoPublish===false) never reaches here -- there's no reliable way to know if
+    // an organizer clicked Publish themselves, so its remoteListingId stays null (fail-closed,
+    // matches ADR-086's own design: an item without a captured remoteListingId is simply not
+    // eligible for price-sync later).
+    const remoteListingId = location.href;
+
+    return { catResult, photosOk, autoPublished: true, remoteListingId };
   }
 
   async function runQueue(item, index, total, autoPublish) {
@@ -658,8 +679,8 @@
       const result = await fillItem(item, index, total, autoPublish);
       if (!result.autoPublished) return; // fillItem already rendered the manual review UI + wired its own buttons
 
-      const { catResult, photosOk } = result;
-      await mark(item);
+      const { catResult, photosOk, remoteListingId } = result;
+      await mark(item, remoteListingId);
       let note = '';
       if (!catResult.ok) note += '<div style="color:#ffcf7a;margin-top:6px;font-size:12px">Category: picked Facebook\'s best guess automatically -- worth a glance.</div>';
       if (!photosOk) note += '<div style="color:#ffcf7a;margin-top:6px;font-size:12px">Photos may not have attached -- check this listing.</div>';
@@ -677,8 +698,8 @@
     }
   }
 
-  async function mark(item) {
-    try { await chrome.runtime.sendMessage({ type: 'markListed', itemId: item.id }); } catch (e) {}
+  async function mark(item, remoteListingId) {
+    try { await chrome.runtime.sendMessage({ type: 'markListed', itemId: item.id, remoteListingId: remoteListingId || null }); } catch (e) {}
   }
 
   async function advanceAuto() {
