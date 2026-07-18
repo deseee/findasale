@@ -1312,6 +1312,11 @@ model Item {
   ebaySoldEvents             EbaySoldEvent[]
   // ADR-083: Marketplace Poster jobs (post/remove) for this item
   marketplaceJobs            MarketplaceListingJob[]
+  // ADR-086: rounded price actually pushed to the live Facebook post at last successful
+  // list/sync. Compared against Math.round(price) to detect drift for the extension's
+  // pending-updates poll. Null = never listed, or listed before this field existed (falls
+  // back to "unknown, needs first sync").
+  marketplaceListedPrice     Int?
   createdAt                  DateTime               @default(now())
   updatedAt                  DateTime               @updatedAt
 
