@@ -261,6 +261,18 @@
   }
   function isMenuChecked(el) { return !!(el && el.getAttribute('aria-checked') === 'true'); }
 
+  // True when the [role="radio"]/input[type="radio"] inside a wrapper (as returned by
+  // radioLabelByText, which returns the label/parentElement ANCESTOR of the actual radio, not
+  // the radio itself) is checked. Confirms a click on FB's custom weight-bucket radio actually
+  // registered as a selection -- a dispatched click can find+click an element without Facebook's
+  // React component committing the change (2026-07-18 fix, see fas-content.js fillDeliveryStep).
+  function isRadioChecked(wrapper) {
+    if (!wrapper) return false;
+    const radio = wrapper.querySelector('[role="radio"], input[type="radio"]');
+    if (!radio) return false;
+    return radio.getAttribute('aria-checked') === 'true' || radio.checked === true;
+  }
+
   // True when a control is present but disabled -- covers native <button disabled>, the
   // `disabled` DOM property, and FB's custom div[role="button"] controls that signal
   // disabled via aria-disabled="true". Used to distinguish FB's negative-payout block on the
@@ -318,6 +330,6 @@
 
   window.__FAS_SEL__ = { norm, fieldByLabel, comboByLabel, optionByText, photoInput, chipsAfter, categoryChips, persistentCategoryChips, bestTextMatch,
     elementByText, radioLabelByText, listingCardByTitle, realClick, menuCheckboxByText, isMenuChecked, isDisabled, radioOptionByText,
-    switchByLabel, isSwitchOn,
+    switchByLabel, isSwitchOn, isRadioChecked,
     LABELS: { title: 'Title', price: 'Price', description: 'Description', condition: 'Condition', category: 'Category', offerToggle: 'negotiate', offerMinimum: 'Minimum price' } };
 })();

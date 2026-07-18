@@ -414,7 +414,7 @@
       // Close the menu so the step's Next control is reachable again.
       document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
       await humanPause(300, 600);
-      return 'pickup';
+      return { mode: 'pickup' };
     }
 
     await waitThenClick(() => SEL.elementByText('Select shipping label'), 'Delivery',
@@ -429,9 +429,28 @@
     const bucket = weightBucketLabel(
       item.packageWeightOz !== undefined && item.packageWeightOz !== null ? item.packageWeightOz : item.aiPackageWeightOz
     );
-    await waitThenClick(() => SEL.radioLabelByText(bucket), 'Delivery',
+    const weightWrapper = await waitThenClick(() => SEL.radioLabelByText(bucket), 'Delivery',
       'Couldn\'t find the "' + bucket + '" weight option.', 5000);
     await humanPause(400, 800); // let Shipping carrier / Shipping option self-populate
+
+    // 2026-07-18 fix (Patrick live report, Hofnar tin cmrqpqatn005ul0sum3ij77kx): the
+    // waitThenClick above only proves a click event sequence was DISPATCHED at the matched
+    // radio -- not that Facebook's React component actually committed the selection (the same
+    // class of silent-no-op click that has bitten other custom FB controls in this file before,
+    // see realClick's history above). Verify the radio actually shows checked; if not, retry
+    // once against a freshly re-queried element (Facebook may re-render between find and
+    // click); if it's STILL not checked, hard-error immediately with an accurate message naming
+    // the bucket, instead of silently continuing to "Update" on an unconfirmed state and letting
+    // the real symptom only surface later as a misleading "price too low" error at the
+    // Delivery-step Next check below.
+    if (!SEL.isRadioChecked(weightWrapper)) {
+      const retryWrapper = SEL.radioLabelByText(bucket);
+      if (retryWrapper) await SEL.realClick(retryWrapper);
+      await humanPause(400, 800);
+      if (!SEL.isRadioChecked(SEL.radioLabelByText(bucket))) {
+        throw hardError('Delivery', 'Selected the "' + bucket + '" shipping weight option, but Facebook didn\'t register it as chosen after two tries -- try again, or set the weight manually on the Facebook tab.');
+      }
+    }
 
     // The "Change shipping method" modal ([role="dialog"]) commits ASYNCHRONOUSLY: clicking
     // "Update" fires a shipping-rate fetch and Facebook only closes the modal once that request
@@ -449,7 +468,7 @@
       }
     }
     await humanPause(300, 600); // small settle once the modal has closed
-    return 'shipping';
+    return { mode: 'shipping', bucket };
   }
 
   // Offer step (2026-07-16, ADR-084): Facebook pre-checks "Allow offers" and pre-fills
@@ -570,10 +589,17 @@
       // branch. Hard-error with an actionable message and STOP -- do not publish and do not silently
       // switch to pickup; whether to mark the item pickup-only or raise its price is the organizer's
       // decision.
-      if (deliveryMode === 'shipping') {
+      if (deliveryMode.mode === 'shipping') {
         const next = SEL.elementByText('Next');
         if (next && SEL.isDisabled(next)) {
-          throw hardError('Delivery', 'Facebook blocked this listing at the Delivery step. This usually means the item\'s price is too low to cover shipping. On FindA.Sale, check "Local pickup only (no shipping)" for this item, or raise its price, then re-list.');
+          // 2026-07-18 fix: this used to unconditionally blame "price too low," but that's only
+          // ONE possible reason Next can stay disabled here -- and Part 1 above now already
+          // catches (with an accurate, specific message) the case where the weight selection
+          // itself never registered, so if we reach this point the selection WAS confirmed
+          // checked and this really is more likely a genuine negative-payout block. Still
+          // softened to acknowledge it could be something else Facebook is flagging, since we
+          // haven't independently confirmed the payout math -- only that Next stayed disabled.
+          throw hardError('Delivery', 'Facebook\'s Next button stayed disabled after setting the "' + deliveryMode.bucket + '" shipping option. This is usually a negative-payout block (item price too low to cover the shipping cost) -- on FindA.Sale, check "Local pickup only (no shipping)" for this item, or raise its price, then re-list. If the price already covers shipping, check the Facebook tab directly for what\'s blocking Next.');
         }
       }
       throw hardError('Delivery', 'Facebook didn\'t move past the Delivery step.');
