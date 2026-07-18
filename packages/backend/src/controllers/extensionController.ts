@@ -95,12 +95,22 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
     packageWeightOz: it.packageWeightOz,
     aiPackageWeightOz: it.aiPackageWeightOz,
     // FB shipping eligibility. Force LOCAL_PICKUP_ONLY when the item is not actually shippable:
-    // an explicit LOCAL_PICKUP_ONLY override, shippingAvailable=false, OR no usable package weight
-    // (FB cannot issue a prepaid label without a weight, so the extension would otherwise stall on
-    // the Delivery step). Otherwise pass the eBay override through (null = FB default ship+pickup).
+    // an explicit LOCAL_PICKUP_ONLY override, OR no usable package weight (FB cannot issue a
+    // prepaid label without a weight, so the extension would otherwise stall on the Delivery
+    // step). Otherwise pass the eBay override through (null = FB default ship+pickup).
+    // BUG FIX (2026-07-18, Patrick live report -- "Hofnar tin" cmrqpqatn005ul0sum3ij77kx):
+    // this used to ALSO force pickup-only whenever `shippingAvailable===false`, but
+    // `shippingAvailable` is a SEPARATE legacy field for FindA.Sale's own flat-rate native
+    // checkout shipping (organizer-toggled, defaults false, paired with `shippingPrice` --
+    // see stripeController.ts's shippingRequested gate) and has nothing to do with eBay/FB's
+    // real weight-based computed shipping. The Hofnar tin has packageWeightOz=4 and ships fine
+    // on eBay (ebayShippingOverride=null) but `shippingAvailable` was never toggled (still its
+    // default false) -- so the extension was wrongly force-picking pickup-only on FB for any
+    // item where the organizer simply never touched that unrelated legacy checkbox. Removed the
+    // `shippingAvailable` condition; shippability is now determined the same way eBay does:
+    // explicit override or missing weight only.
     shippingOverride:
       it.ebayShippingOverride === 'LOCAL_PICKUP_ONLY' ||
-      it.shippingAvailable === false ||
       (it.packageWeightOz == null && it.aiPackageWeightOz == null)
         ? 'LOCAL_PICKUP_ONLY'
         : it.ebayShippingOverride,
