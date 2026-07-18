@@ -11,6 +11,10 @@ export interface DedupeResult {
   isDuplicate: boolean;
   existingSaleId?: string;
   reason?: string;
+  /** 'rollForward' = caller should UPDATE the existing sale's dates/source
+   *  identifiers to the new occurrence instead of just touching lastScrapedAt.
+   *  Undefined/'skip' preserves all existing behavior for every other tier. */
+  action?: 'skip' | 'rollForward';
 }
 
 /**
@@ -96,6 +100,13 @@ export function hasDistinctiveTitleCore(normalizedTitle: string): boolean {
   const core = normalizedTitle.replace(GENERIC_TITLE_WORDS, ' ').replace(/\s+/g, ' ').trim();
   return core.length >= 3;
 }
+
+// Bounded gap (days) within which a distinctive-title+city match against an
+// ALREADY-ENDED FB Events row is treated as the SAME recurring listing's next
+// occurrence (roll the existing Sale forward) rather than an unrelated new sale
+// reusing a similar name. Covers weekly + monthly cadences with margin for the
+// 7-day metro-shard scrape cron. See STATE.md P2 "231 groups w/ 2+ copies".
+const RECURRING_ROLL_FORWARD_MAX_GAP_DAYS = 45;
 
 /**
  * Check if a scraped listing is a duplicate of an existing sale
@@ -264,20 +275,39 @@ export async function checkDuplicate(
             sourceName: 'Facebook Events',
             city: listing.city,
             state: listing.state,
-            // Active-window overlap: existing sale still overlaps incoming window.
-            startDate: { lte: listing.endDate },
-            endDate: { gte: listing.startDate },
           },
-          select: { id: true, title: true },
+          select: { id: true, title: true, startDate: true, endDate: true },
         });
 
         for (const candidate of candidates) {
-          if (candidate.title && normalizeEventTitle(candidate.title) === normalizedIncoming) {
+          if (!candidate.title || normalizeEventTitle(candidate.title) !== normalizedIncoming) continue;
+
+          const overlaps =
+            candidate.startDate <= listing.endDate && candidate.endDate >= listing.startDate;
+          if (overlaps) {
             return {
               isDuplicate: true,
               existingSaleId: candidate.id,
+              action: 'skip',
               reason: 'Normalized title + city match (FB Events, address-independent)',
             };
+          }
+
+          // Recurring-instance roll-forward: only when the existing row has ALREADY
+          // fully ended (never collapses a still-live/upcoming distinct listing) and
+          // the new occurrence falls within the bounded recurrence gap.
+          const alreadyEnded = candidate.endDate < new Date() && candidate.endDate < listing.startDate;
+          if (alreadyEnded) {
+            const gapMs = listing.startDate.getTime() - candidate.endDate.getTime();
+            const gapDays = gapMs / 86_400_000;
+            if (gapDays <= RECURRING_ROLL_FORWARD_MAX_GAP_DAYS) {
+              return {
+                isDuplicate: true,
+                existingSaleId: candidate.id,
+                action: 'rollForward',
+                reason: `Recurring FB Event — new occurrence ${gapDays.toFixed(1)}d after prior instance ended (title+city match)`,
+              };
+            }
           }
         }
       }
