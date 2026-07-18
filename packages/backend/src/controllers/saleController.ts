@@ -173,6 +173,7 @@ export const listSales = async (req: Request, res: Response) => {
     
     const where: any = {
       status: 'PUBLISHED',
+      deletedAt: null,
       isInventoryContainer: false,
       // Permanent storefronts (isOngoing) always count as current.
       OR: [{ isOngoing: true }, { endDate: { gte: new Date() } }],
@@ -1285,6 +1286,7 @@ export const getSalesByNeighborhood = async (req: Request, res: Response) => {
       where: {
         neighborhood: slug,
         status: 'PUBLISHED',
+        deletedAt: null,
         OR: [{ isOngoing: true }, { endDate: { gte: now } }],
       },
       select: {
@@ -1357,6 +1359,7 @@ export const getSalesByCity = async (req: Request, res: Response) => {
     const sales = await prisma.sale.findMany({
       where: {
         status: 'PUBLISHED',
+        deletedAt: null,
         OR: [{ isOngoing: true }, { endDate: { gte: now } }],
         city: { contains: citySlug, mode: 'insensitive' },
       },
@@ -1375,6 +1378,7 @@ export const getSalesByCity = async (req: Request, res: Response) => {
     const total = await prisma.sale.count({
       where: {
         status: 'PUBLISHED',
+        deletedAt: null,
         OR: [{ isOngoing: true }, { endDate: { gte: now } }],
         city: { contains: citySlug, mode: 'insensitive' },
       }
