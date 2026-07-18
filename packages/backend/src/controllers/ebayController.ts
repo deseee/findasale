@@ -25,6 +25,7 @@ import { canRemoveWatermark, WatermarkPolicyOrganizer } from '../utils/watermark
 import { classifyEbayShipping } from '../utils/ebayShippingClassifier';
 import { getIO } from '../lib/socket';
 import { isEbayRateLimited, trackEbayCall, getEbayRateLimitStatus } from '../lib/ebayRateLimiter';
+import { canCallEbayPriceComps, trackEbayPriceComps } from '../lib/aiCostTracker';
 import {
   parseWeightTiers,
   classifyPolicy,
@@ -251,6 +252,18 @@ async function getEbayPriceComps(
       return cached.result;
     }
 
+    // Daily quota-protection cap (Ops investigation 2026-07-18) — checked AFTER the cache lookup
+    // so a cache hit never consumes quota; only a real outbound eBay Browse call does. Not a kill
+    // switch (this feature is live and must keep working) — sized generously, see aiCostTracker.ts.
+    if (!(await canCallEbayPriceComps())) {
+      console.warn('[eBay] Price comps skipped — daily call cap reached (EBAY_PRICE_COMPS_DAILY_CAP)');
+      return {
+        min: 25, max: 75, median: 45, count: 0, suggestedPrice: 45,
+        compsRunAt: new Date().toISOString(), listings: [], isMockData: true,
+        message: 'Daily price comps limit reached — showing sample data',
+      };
+    }
+
     // Get OAuth token (reuses cached token from getEbayAccessToken)
     const token = await getEbayAccessToken();
     if (!token) {
@@ -311,6 +324,11 @@ async function getEbayPriceComps(
         'X-EBAY-C-MARKETPLACE-ID': 'EBAY_US',
       },
     });
+
+    // Real outbound call completed — track it now regardless of status (a 4xx/5xx still consumes
+    // eBay's shared Browse quota). No quota is charged for the cache-hit or cap-exceeded paths
+    // above, since neither one reaches this line.
+    await trackEbayPriceComps();
 
     if (!response.ok) {
       const errBody = await response.text().catch(() => '(unreadable)');

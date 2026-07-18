@@ -594,6 +594,88 @@ export async function getEbayImageSearchUsage(): Promise<{
     dailyCap: EBAY_IMAGE_SEARCH_DAILY_CAP,
   };
 }
+
+// ── eBay Price Comps: daily quota-protection cap (Ops investigation 2026-07-18, "Prospector eBay
+// Browse-API quota isolation") ──────────────────────────────────────────────────────────────────
+// getEbayPriceComps() (ebayController.ts — the organizer-facing "AI Price Comps" feature, LIVE
+// today) draws on the SAME shared eBay Browse API quota as searchByImage above (and the broader
+// ebayRateLimiter.ts global daily bucket used by listing publish/GetItem/etc), but had ZERO
+// call-count tracking of its own — invisible to every existing quota mechanism and every admin
+// panel. Unlike searchByImage, this is NOT gated by a kill switch: the feature is live and must
+// keep working unmodified. The cap is sized generously (8x the searchByImage cap, well under the
+// ~4,500-5,000/day shared Browse ceiling) so normal organizer usage never trips it — it exists
+// purely as a breaker against a retry/loop bug silently exhausting the shared Browse quota. A
+// cache hit in getEbayPriceComps() never reaches this cap (no outbound call = no quota consumed).
+const EBAY_PRICE_COMPS_DAILY_CAP = parseInt(process.env.EBAY_PRICE_COMPS_DAILY_CAP || '4000', 10);
+
+function getEbayPriceCompsDayKey(): string {
+  const now = new Date();
+  const day = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  return `ebaypricecomps:calls:${day}`;
+}
+
+/**
+ * Daily hard call-count cap for eBay price comps. @returns true if under the cap (safe to make a
+ * real outbound eBay Browse call), false if hit — caller falls back to mock/sample data exactly
+ * like any other eBay failure path in getEbayPriceComps().
+ */
+export async function canCallEbayPriceComps(): Promise<boolean> {
+  const key = getEbayPriceCompsDayKey();
+  try {
+    const raw = await redis.get(key);
+    const count = raw !== null ? parseInt(raw, 10) : (memoryFallback.get(key) ?? 0);
+    return count < EBAY_PRICE_COMPS_DAILY_CAP;
+  } catch {
+    const count = memoryFallback.get(key) ?? 0;
+    return count < EBAY_PRICE_COMPS_DAILY_CAP;
+  }
+}
+
+/**
+ * Records one real outbound eBay Browse call for the daily cap. Call immediately after the
+ * fetch() to eBay's Browse API completes (success OR non-2xx — both consume eBay's quota).
+ * Never call this on a cache hit; those never reach eBay at all.
+ */
+export async function trackEbayPriceComps(): Promise<void> {
+  const dayKey = getEbayPriceCompsDayKey();
+  const DAY_TTL_SECONDS = 2 * 24 * 60 * 60; // 2 days — auto-expires, always outlives the day it counts
+  try {
+    const raw = await redis.get(dayKey);
+    const current = raw !== null ? parseInt(raw, 10) : 0;
+    const updated = current + 1;
+    memoryFallback.set(dayKey, updated);
+    await redis.setex(dayKey, DAY_TTL_SECONDS, String(updated));
+  } catch {
+    const current = memoryFallback.get(dayKey) ?? 0;
+    memoryFallback.set(dayKey, current + 1);
+  }
+}
+
+/**
+ * Visibility parity function, mirrors getEbayImageSearchUsage(). Not yet wired into an /admin
+ * route (out of scope for this dispatch — flagged in handoff for a future admin-dashboard pass).
+ * No cost fields — the call itself is not separately billed; only shared Browse quota usage matters.
+ */
+export async function getEbayPriceCompsUsage(): Promise<{
+  callsToday: number;
+  dailyCapRemaining: number;
+  dailyCap: number;
+}> {
+  const dayKey = getEbayPriceCompsDayKey();
+  let callsToday = 0;
+  try {
+    const raw = await redis.get(dayKey);
+    callsToday = raw !== null ? parseInt(raw, 10) : (memoryFallback.get(dayKey) ?? 0);
+  } catch {
+    callsToday = memoryFallback.get(dayKey) ?? 0;
+  }
+  return {
+    callsToday,
+    dailyCapRemaining: Math.max(0, EBAY_PRICE_COMPS_DAILY_CAP - callsToday),
+    dailyCap: EBAY_PRICE_COMPS_DAILY_CAP,
+  };
+}
+
 // ── Grounded Identity: dedicated cost-control block (ADR grounded-identification-production-2026-07-02) ──
 // Mirrors the Web Detection hard-gating pattern above. Grounding fans out to paid OpenRouter
 // models (perplexity/sonar, gemini/gpt visual :online, sonar-pro on escalation), so it gets its
