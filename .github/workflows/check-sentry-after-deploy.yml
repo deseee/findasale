@@ -32,7 +32,7 @@ jobs:
     # Only run when CI passed — no point checking Sentry if the commit was already
     # known-broken. Also skip if SENTRY_TOKEN is not configured.
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
-    timeout-minutes: 5
+    timeout-minutes: 35  # S1137 fix: job sleeps 1800s (30min) by design before checking Sentry -- a 5min timeout guaranteed a Cancelled result on every single run, which Railway's deploy gate was reading as a failed check suite and blocking/stalling every backend deploy (2026-07-18)
 
     steps:
       - name: Wait 30 minutes for errors to surface
