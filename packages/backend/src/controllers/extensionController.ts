@@ -201,3 +201,83 @@ export const getPendingRemovals = async (req: AuthRequest, res: Response): Promi
 
   res.json({ items: pending });
 };
+
+// GET /api/extension/pending-updates — ADR-086: items whose FindA.Sale price has drifted from
+// the price last successfully synced to their live Facebook post. Same "poll, not push" pattern
+// as getPendingRemovals (Facebook has no API for a live edit either) -- pure read composed from
+// Item.price / Item.marketplaceListedPrice / MarketplaceListingJob, no queued job created.
+// FAIL-CLOSED per legal condition 2 (non-negotiable): any item without a confirmed
+// remoteListingId is skipped entirely, never returned here -- there is no acceptable fuzzy
+// fallback for a price EDIT the way removal has a title-match fallback (editing the wrong live
+// listing shows a real buyer the wrong price with no undo, a strictly worse failure mode).
+export const getPendingUpdates = async (req: AuthRequest, res: Response): Promise<void> => {
+  const userId = req.user?.id;
+  if (!userId) { res.status(401).json({ message: 'Authentication required' }); return; }
+
+  const organizer = await prisma.organizer.findUnique({ where: { userId } });
+  if (!organizer) { res.status(404).json({ message: 'Organizer profile not found' }); return; }
+
+  // Mirrors getExtensionItems' base item-list filter (status AVAILABLE, excluding DONT_LIST via
+  // the same NULL-safe OR -- see the 2026-07-16 fix comment above) so a sold/removed/do-not-list
+  // item can never surface here.
+  const items = await prisma.item.findMany({
+    where: {
+      sale: { organizerId: organizer.id },
+      status: 'AVAILABLE',
+      OR: [
+        { ebayShippingOverride: null },
+        { ebayShippingOverride: { not: 'DONT_LIST' } },
+      ],
+    },
+    select: { id: true, title: true, price: true, marketplaceListedPrice: true },
+  });
+  if (!items.length) { res.json({ items: [] }); return; }
+
+  const itemIds = items.map((i) => i.id);
+  const jobs = await prisma.marketplaceListingJob.findMany({
+    where: { itemId: { in: itemIds } },
+    select: { itemId: true, action: true, status: true, remoteListingId: true, createdAt: true },
+    orderBy: { createdAt: 'desc' },
+  });
+  const postedByItem = new Set<string>();
+  const removedByItem = new Set<string>();
+  const remoteListingIdByItem = new Map<string, string | null>();
+  for (const j of jobs) {
+    if (j.action === 'POST' && j.status === 'POSTED') {
+      postedByItem.add(j.itemId);
+      // jobs is ordered createdAt desc, so the first POST/POSTED row seen per item is the
+      // most recent one -- only set it once so an older job can't overwrite a newer remoteListingId.
+      if (!remoteListingIdByItem.has(j.itemId)) remoteListingIdByItem.set(j.itemId, j.remoteListingId);
+    }
+    if (j.action === 'REMOVE' && j.status === 'REMOVED') removedByItem.add(j.itemId);
+  }
+
+  const pending = items
+    .filter((it) => postedByItem.has(it.id) && !removedByItem.has(it.id))
+    .filter((it) => it.price != null && Math.round(it.price) !== it.marketplaceListedPrice)
+    .map((it) => ({ id: it.id, title: it.title, newPrice: Math.round(it.price as number), remoteListingId: remoteListingIdByItem.get(it.id) || null }))
+    // Fail-closed: skip any item without a confirmed remoteListingId (legal condition 2).
+    .filter((it) => !!it.remoteListingId);
+
+  res.json({ items: pending });
+};
+
+// POST /api/extension/items/:id/price-synced — ADR-086: record that this item's current price
+// was successfully pushed to its live Facebook post. Reads the item's price fresh from the DB
+// (never trusts a client-supplied value) and does not touch MarketplaceListingJob -- a price
+// sync is a recurring "is FB currently out of date" check, not a one-time queued job.
+export const markItemPriceSynced = async (req: AuthRequest, res: Response): Promise<void> => {
+  const userId = req.user?.id;
+  const itemId = req.params.id;
+  if (!userId) { res.status(401).json({ message: 'Authentication required' }); return; }
+  if (!(await assertItemOwned(userId, itemId))) { res.status(404).json({ message: 'Item not found' }); return; }
+
+  const item = await prisma.item.findUnique({ where: { id: itemId }, select: { price: true } });
+  if (!item || item.price == null) { res.status(404).json({ message: 'Item not found' }); return; }
+
+  await prisma.item.update({
+    where: { id: itemId },
+    data: { marketplaceListedPrice: Math.round(item.price) },
+  });
+  res.json({ ok: true });
+};
