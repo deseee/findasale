@@ -79,6 +79,8 @@ export async function getCsvExportHandler(req: AuthRequest, res: Response) {
         status: true,
         photoUrls: true,
         updatedAt: true,
+        stockTotal: true,
+        stockSold: true,
       },
       orderBy: { createdAt: 'asc' },
     });

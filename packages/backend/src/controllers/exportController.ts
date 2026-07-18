@@ -957,6 +957,8 @@ export const exportCommerceManagerFeed = async (
             brand: true,
             photoUrls: true,
             status: true,
+            stockTotal: true,
+            stockSold: true,
           },
         },
       },
@@ -1011,7 +1013,8 @@ export const exportCommerceManagerFeed = async (
         truncate(stripHtml(item.description), 9999)
       );
 
-      const quantity = item.status === 'SOLD' ? '0' : '1';
+      const remainingStock = Math.max((item.stockTotal ?? 1) - item.stockSold, 0);
+      const quantity = item.status === 'SOLD' ? '0' : String(remainingStock);
 
       const row = [
         escapeCommerceFeedCSV(item.id),
@@ -1087,6 +1090,8 @@ export const exportOrganizerCommerceManagerFeed = async (
         photoUrls: true,
         status: true,
         saleId: true,
+        stockTotal: true,
+        stockSold: true,
       },
     });
 
@@ -1122,7 +1127,8 @@ export const exportOrganizerCommerceManagerFeed = async (
       // Left blank rather than a fabricated taxonomy ID (CLAUDE.md placeholder-value ban).
       // Follow-up: build a real category→taxonomy-ID mapping table (out of scope here).
       const googleProductCategory = '';
-      const quantity = item.status === 'SOLD' ? '0' : '1';
+      const remainingStock = Math.max((item.stockTotal ?? 1) - item.stockSold, 0);
+      const quantity = item.status === 'SOLD' ? '0' : String(remainingStock);
 
       const title = escapeCommerceFeedCSV(stripHtml(item.title));
       const description = escapeCommerceFeedCSV(
