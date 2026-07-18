@@ -115,6 +115,45 @@ function extractHost(input: string): string | null {
 }
 
 // ---------------------------------------------------------------------------
+// Fallback fuzzy substring match (defense-in-depth for isBlockedWebsiteDomain).
+// Derived from SOCIAL_DOMAINS ∪ AGGREGATOR_DOMAINS so there is never a second
+// hardcoded brand list to drift out of sync with the primary sets above.
+//
+// IMPORTANT — boundary-aware, not a plain substring match. A live production-DB check
+// (S1135 backfill) proved plain substring matching is unusable at scale: 'estatesales.com'
+// alone false-positived on 2,976 legitimate organizer domains (e.g. "sterling-estatesales.com",
+// "ruftopestatesales.com" — real businesses whose own domain happens to END with that
+// aggregator's name), and 'x.com' hit 124 more (e.g. "ten-x.com"). Requiring the brand to be
+// preceded by a URL-structural boundary character — start of string, '.', '/', or ':' — and
+// never by a hyphen or other domain-label character cuts those to zero while still catching
+// every known malformed case, because a hostname label boundary in a real URL is always one of
+// those four positions, never a hyphen.
+// ---------------------------------------------------------------------------
+const KNOWN_BRAND_SUBSTRINGS: readonly string[] = [...SOCIAL_DOMAINS, ...AGGREGATOR_DOMAINS];
+
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+const KNOWN_BRAND_PATTERNS: readonly RegExp[] = KNOWN_BRAND_SUBSTRINGS.map(
+  (brand) => new RegExp(`(?:^|[./:])${escapeRegExp(brand)}`)
+);
+
+/**
+ * Return true if the raw (already-lowercased) input string contains a known social or
+ * aggregator brand domain as a boundary-anchored substring. This is a fuzzier, last-resort
+ * fallback for malformed URLs that defeat precise hostname parsing (see call site in
+ * isBlockedWebsiteDomain for examples and the residual false-positive tradeoff). Strips
+ * whitespace first because some scraped "website" values have stray spaces injected around
+ * dots (e.g. "http://www. facebook. com/pages/..."), which would otherwise defeat the match.
+ * Never throws.
+ */
+function containsKnownBrandDomain(rawLowered: string): boolean {
+  const compact = rawLowered.replace(/\s+/g, '');
+  return KNOWN_BRAND_PATTERNS.some((pattern) => pattern.test(compact));
+}
+
+// ---------------------------------------------------------------------------
 // Public API.
 // ---------------------------------------------------------------------------
 
@@ -151,6 +190,34 @@ export function isBlockedWebsiteDomain(url?: string | null): boolean {
       return true;
     }
   }
+
+  // Defense-in-depth fallback: the precise host/registrable-domain checks above missed a
+  // match. Some malformed input strings break new URL() hostname parsing entirely or fold
+  // garbage into the hostname — e.g. a missing slash before the path
+  // ("https://www.facebook.comjameswoodward3720190" parses to hostname
+  // "facebook.comjameswoodward3720190", which never equals "facebook.com") or a stray slash
+  // where a dot belongs ("https://www/facebook.com/trophyestatesales" parses to hostname
+  // "www", losing "facebook.com" into the path entirely). As a last-resort catch, check
+  // whether the raw lowercased input contains a known social/aggregator brand as a
+  // boundary-anchored substring (see containsKnownBrandDomain for why boundary-anchoring is
+  // required — plain substring matching was measured against the live production DB and
+  // false-positived on thousands of legitimate organizer domains). This is intentionally
+  // broader/fuzzier than the exact host match above, so it is used ONLY as a fallback here —
+  // never as a replacement for the precise check, and never reused by
+  // isAggregatorDomain/classifySocialHost, which need precise host matches.
+  // Residual false-positive risk: a legitimate organizer site whose own path or query string
+  // happens to contain "/facebook.com" or "?utm_source=facebook.com" etc. immediately after a
+  // structural boundary would still match (e.g. a tracking param literally reading
+  // "ref=facebook.com" preceded by '='  would NOT match since '=' isn't a boundary char, but
+  // "ref=/facebook.com" would). Measured against all 24,333 organizers with a website set
+  // (S1135 backfill, 2026-07-18): zero false positives found with this boundary-anchored
+  // design — the only fallback matches were the 3 known malformed-URL organizers plus
+  // genuine linktr.ee links (correctly classified). Re-run the backfill query if this fallback
+  // is ever extended to more brands or a broader scrape source.
+  if (containsKnownBrandDomain(trimmed.toLowerCase())) {
+    return true;
+  }
+
   return false;
 }
 
