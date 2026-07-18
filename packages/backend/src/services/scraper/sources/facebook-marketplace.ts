@@ -7,20 +7,20 @@
 import axios from 'axios';
 import { RateLimiter } from '../rateLimiter';
 import { ingestScrapedListing, getOrCreateSystemOrganizer, flushFreshnessTouches, flushScraperRevalidation, ScrapedItem } from '../index';
-import { jitterDelay, getRandomUserAgent, getRandomReferer } from '../userAgents';
+import { jitterDelay } from '../userAgents';
 
-const FB_GRAPHQL_ENDPOINT = 'https://www.facebook.com/api/graphql/';
 const FB_DOC_ID = '7111939778879383';
 
 /**
- * Cloudflare Worker proxy — bypasses Facebook's IP block on GCP/Railway ASNs.
- * Live test 2026-06-05: direct Railway call returns 0 listings (HTML response);
- * via CF Worker (AS13335) returns real GraphQL JSON. See
- * cloudflare/fb-marketplace-proxy/worker.js for the proxy implementation.
+ * Cloudflare Worker proxy — bypasses Facebook's IP block on GCP/Railway ASNs, and is
+ * now REQUIRED (S1134 B6, egress-isolation remediation). Live test 2026-06-05: direct
+ * Railway call returns 0 listings (HTML response); via CF Worker (AS13335) returns real
+ * GraphQL JSON. See cloudflare/fb-marketplace-proxy/worker.js for the proxy implementation.
  *
- * If both env vars are set, requests are routed through the Worker. Otherwise
- * the scraper falls back to direct Facebook calls (the historical behavior;
- * useful for local dev or if the Worker is unavailable).
+ * Fail-closed: the legacy direct-to-Facebook fallback (no proxy configured) has been
+ * REMOVED. If both env vars aren't set, queries are skipped rather than risking a direct
+ * Railway-egress request to Facebook (the exact pattern that triggered the 2026-07-17
+ * Railway abuse complaint for a different host, bid13.com).
  */
 const FB_PROXY_URL = process.env.FB_MARKETPLACE_PROXY_URL;
 const FB_PROXY_TOKEN = process.env.FB_MARKETPLACE_PROXY_TOKEN;
@@ -276,38 +276,30 @@ export async function scrapeFacebookMarketplace(
           },
         };
 
-        // Route through Cloudflare Worker when configured (bypasses GCP ASN block).
-        // The Worker forwards the same form-urlencoded body to Facebook from
-        // Cloudflare's edge IPs (AS13335). See worker.js for upstream headers —
-        // we only attach bearer auth here when proxying.
+        // REQUIRED: route through the Cloudflare Worker (bypasses GCP ASN block AND
+        // keeps this fetch off Railway's own IP). Fail-closed — no direct-to-Facebook
+        // fallback. See worker.js for upstream headers; we only attach bearer auth here.
+        if (!USE_FB_PROXY) {
+          console.warn(
+            `[FacebookMarketplace] Proxy not configured (FB_MARKETPLACE_PROXY_URL/FB_MARKETPLACE_PROXY_TOKEN unset) — skipping "${query}" in ${metro} rather than risk a direct Railway-egress call to Facebook.`
+          );
+          continue;
+        }
+
         const requestBody = `doc_id=${FB_DOC_ID}&variables=${JSON.stringify(variables)}`;
+        const targetUrl = FB_PROXY_URL as string;
         const requestHeaders: Record<string, string> = {
           'Content-Type': 'application/x-www-form-urlencoded',
+          'Authorization': `Bearer ${FB_PROXY_TOKEN}`,
         };
-        let targetUrl: string;
-        if (USE_FB_PROXY) {
-          targetUrl = FB_PROXY_URL as string;
-          requestHeaders['Authorization'] = `Bearer ${FB_PROXY_TOKEN}`;
-        } else {
-          targetUrl = FB_GRAPHQL_ENDPOINT;
-          // Direct-call browser-impersonation headers (legacy path; mostly blocked
-          // from Railway, retained for local dev fallback).
-          requestHeaders['sec-fetch-site'] = 'same-origin';
-          requestHeaders['User-Agent'] = getRandomUserAgent();
-          requestHeaders['Accept'] = '*/*';
-          requestHeaders['Origin'] = 'https://www.facebook.com';
-          requestHeaders['Referer'] =
-            getRandomReferer() || 'https://www.facebook.com/marketplace/';
-          requestHeaders['Accept-Encoding'] = 'gzip, deflate, br';
-        }
 
         const response = await axios.post<FBGraphQLResponse>(
           targetUrl,
           requestBody,
           {
             headers: requestHeaders,
-            // Slightly longer timeout when proxying — extra hop to CF edge.
-            timeout: USE_FB_PROXY ? 25000 : 20000,
+            // Extra hop to CF edge.
+            timeout: 25000,
           }
         );
 
@@ -399,7 +391,7 @@ export async function runFacebookMarketplaceScraper(organizerId?: string): Promi
     `[FacebookMarketplace] Starting full run — ${metros.length} metros, organizer: ${resolvedOrganizerId}`
   );
   console.log(
-    `[FacebookMarketplace] Transport: ${USE_FB_PROXY ? `CLOUDFLARE_WORKER (${FB_PROXY_URL})` : 'DIRECT (no proxy env vars set)'}`
+    `[FacebookMarketplace] Transport: ${USE_FB_PROXY ? `CLOUDFLARE_WORKER (${FB_PROXY_URL})` : 'SKIPPING ALL QUERIES — FB_MARKETPLACE_PROXY_URL/TOKEN unset, fail-closed (no direct fallback)'}`
   );
 
   const rateLimiter = new RateLimiter({ requestsPerSecond: 0.5, maxRetries: 2 });

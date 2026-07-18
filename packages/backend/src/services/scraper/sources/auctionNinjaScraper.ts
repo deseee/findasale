@@ -13,6 +13,7 @@ import { RateLimiter } from '../rateLimiter';
 import { getOrCreateScrapedOrganizer } from '../index';
 import { getRandomUserAgent } from '../userAgents';
 import { ScrapeStats } from '../sourceRegistry';
+import { safeFetch } from '../safeFetch';
 
 const AUCTION_NINJA_BASE_URL = 'https://www.auctionninja.com';
 const DIRECTORY_URL = 'https://www.auctionninja.com/hire-an-estate-sale-company';
@@ -76,14 +77,21 @@ async function fetchAuctionNinjaCompanies(
 
     let html: string;
     try {
-      const response = await fetch(url, {
+      const result = await safeFetch(url, {
         headers: {
           'User-Agent': getRandomUserAgent(),
           'Accept': 'text/html,application/xhtml+xml',
           'Accept-Language': 'en-US,en;q=0.9',
         },
-        signal: AbortSignal.timeout(20000),
+        requireProxy: true,
+        timeoutMs: 20000,
       });
+
+      if (result.status !== 'FETCHED') {
+        console.warn(`[AuctionNinja] safeFetch ${result.status} for ${url} — skipping`);
+        return companies;
+      }
+      const response = result.response!;
 
       if (response.status === 404) continue;
 
@@ -175,14 +183,21 @@ async function fetchDirectoryCompanies(
 
   let html: string;
   try {
-    const response = await fetch(DIRECTORY_URL, {
+    const result = await safeFetch(DIRECTORY_URL, {
       headers: {
         'User-Agent': getRandomUserAgent(),
         'Accept': 'text/html,application/xhtml+xml',
         'Accept-Language': 'en-US,en;q=0.9',
       },
-      signal: AbortSignal.timeout(30000),
+      requireProxy: true,
+      timeoutMs: 30000,
     });
+
+    if (result.status !== 'FETCHED') {
+      console.warn(`[AuctionNinja:Directory] safeFetch ${result.status} for ${DIRECTORY_URL} — skipping`);
+      return companies;
+    }
+    const response = result.response!;
 
     if (!response.ok) {
       console.warn(`[AuctionNinja:Directory] HTTP ${response.status} for ${DIRECTORY_URL}`);

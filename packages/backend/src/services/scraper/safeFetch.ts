@@ -37,6 +37,8 @@ export interface SafeFetchOptions {
   headers?: Record<string, string>;
   method?: string;
   body?: any;
+  /** Override the default 15s fetch timeout for callers with different SLAs. */
+  timeoutMs?: number;
 }
 
 export interface SafeFetchResult {
@@ -145,12 +147,12 @@ export async function safeFetch(
     fetchHeaders['Authorization'] = `Bearer ${proxyToken}`;
   }
 
-  // Execute the fetch with a hard 15s timeout.
+  // Execute the fetch with a hard timeout (caller-overridable, defaults to 15s).
   const response = await fetch(fetchUrl, {
     method: opts.method,
     headers: fetchHeaders,
     body: opts.body,
-    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    signal: AbortSignal.timeout(opts.timeoutMs ?? FETCH_TIMEOUT_MS),
   });
 
   // 5) Response handling + breaker bookkeeping (fail open on bookkeeping errors).

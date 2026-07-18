@@ -15,6 +15,7 @@ import { RateLimiter } from '../rateLimiter';
 import { parseGarageSalesFinderListing, parseGarageSalesFinderGallery, extractEmails } from '../htmlParser';
 import { ingestScrapedListing, flushFreshnessTouches, flushScraperRevalidation, ScrapedItem } from '../index';
 import { getRandomUserAgent, jitterDelay } from '../userAgents';
+import { safeFetch } from '../safeFetch';
 
 const GARAGE_SALES_BASE_URL = 'https://www.garagesalefinder.com';
 
@@ -50,10 +51,17 @@ export async function scrapeGarageSaleFinder(
       return stats;
     }
 
-    const response = await fetch(metroUrl, {
+    const result = await safeFetch(metroUrl, {
       headers: { 'User-Agent': getRandomUserAgent() },
-      signal: AbortSignal.timeout(20000),
+      requireProxy: true,
+      timeoutMs: 20000,
     });
+
+    if (result.status !== 'FETCHED') {
+      console.warn(`[GarageSaleFinder] safeFetch ${result.status} for ${metroUrl} — skipping`);
+      return stats;
+    }
+    const response = result.response!;
 
     if (!response.ok) {
       if (response.status === 429) {
@@ -148,10 +156,17 @@ export async function parseGarageSalesFinderSale(
       return null;
     }
 
-    const response = await fetch(saleUrl, {
+    const result = await safeFetch(saleUrl, {
       headers: { 'User-Agent': getRandomUserAgent() },
-      signal: AbortSignal.timeout(15000),
+      requireProxy: true,
+      timeoutMs: 15000,
     });
+
+    if (result.status !== 'FETCHED') {
+      console.warn(`[GarageSaleFinder] safeFetch ${result.status} for ${saleUrl} — skipping`);
+      return null;
+    }
+    const response = result.response!;
 
     if (!response.ok) {
       if (response.status === 429) {
@@ -182,13 +197,14 @@ export async function parseGarageSalesFinderSale(
           await jitterDelay(200, 800);
           await rateLimiter.waitBeforeRequest(domain);
 
-          const galleryResponse = await fetch(galleryUrl, {
+          const galleryResult = await safeFetch(galleryUrl, {
             headers: { 'User-Agent': getRandomUserAgent() },
-            signal: AbortSignal.timeout(10000),
+            requireProxy: true,
+            timeoutMs: 10000,
           });
 
-          if (galleryResponse.ok) {
-            const galleryHtml = await galleryResponse.text();
+          if (galleryResult.status === 'FETCHED' && galleryResult.response!.ok) {
+            const galleryHtml = await galleryResult.response!.text();
             galleryPhotos = parseGarageSalesFinderGallery(galleryHtml);
             console.log(`[GarageSaleFinder] Gallery fetched: ${galleryPhotos.length} photos from ${galleryUrl}`);
           }
