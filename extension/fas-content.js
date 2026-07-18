@@ -330,19 +330,18 @@
     return e;
   }
 
-  // FB's fixed weight-bucket radios (confirmed live 2026-07-15, see fas-selectors.js
-  // radioLabelByText). packageWeightOz is ounces; falls back to a mid-range bucket when the
-  // item has no weight data at all -- FB reconciles any difference against actual weight at
-  // ship time, so a mid-range guess here is low-stakes, not something worth a hard stop over.
-  function weightBucketLabel(oz) {
-    if (oz === undefined || oz === null || isNaN(oz)) return '1-2 lbs';
-    const lbs = oz / 16;
-    if (lbs < 0.5) return 'Under 0.5 lbs';
-    if (lbs <= 1) return '0.5-1 lbs';
-    if (lbs <= 2) return '1-2 lbs';
-    if (lbs <= 5) return '2-5 lbs';
-    if (lbs <= 10) return '5-10 lbs';
-    return '10-70 lbs';
+  // FB's Package weight step (Delivery) -- see fas-selectors.js weightExactLink /
+  // weightExactInputs. Converts raw ounces into whole lb + remaining oz for Facebook's
+  // exact-weight text inputs (2026-07-18 fix -- replaces the old fixed-bucket-radio approach,
+  // see fillDeliveryStep). Falls back to a mid-range default (24oz = 1lb 8oz) when the item has
+  // no weight data at all -- FB reconciles any difference against actual weight at ship time,
+  // so a mid-range guess here is low-stakes, not something worth a hard stop over (mirrors the
+  // old weightBucketLabel default of the "1-2 lbs" bucket).
+  function ozToLbOz(oz) {
+    const total = (oz === undefined || oz === null || isNaN(oz)) ? 24 : Math.max(0, Math.round(oz));
+    const lb = Math.floor(total / 16);
+    const remOz = total % 16;
+    return { lb: lb, oz: remOz, label: lb + ' lb ' + remOz + ' oz' };
   }
 
   // Wait for `getter()` to find an element, pause (human-paced), then click it -- but re-run
@@ -421,46 +420,50 @@
       'Couldn\'t find the shipping label control.', 8000);
     await humanPause(400, 700); // let the "Change shipping method" modal fully render
 
-    // The modal opens with Package weight collapsed -- its radio options only render after
-    // clicking the "Package weight" combobox row inside it (confirmed live 2026-07-15).
+    // The modal opens with Package weight collapsed -- its options only render after clicking
+    // the "Package weight" combobox row inside it (confirmed live 2026-07-15).
     await waitThenClick(() => SEL.comboByLabel('Package weight'), 'Delivery',
       'Couldn\'t find the Package weight control.', 5000);
 
-    const bucket = weightBucketLabel(
+    const weight = ozToLbOz(
       item.packageWeightOz !== undefined && item.packageWeightOz !== null ? item.packageWeightOz : item.aiPackageWeightOz
     );
-    const weightWrapper = await waitThenClick(() => SEL.radioLabelByText(bucket), 'Delivery',
-      'Couldn\'t find the "' + bucket + '" weight option.', 5000);
 
-    // 2026-07-18 fix (Patrick live report + live DOM investigation, Hofnar tin
-    // cmrqpqatn005ul0sum3ij77kx): waitThenClick above only proves a click event sequence was
-    // DISPATCHED at the matched radio -- not that Facebook committed the selection. First fix
-    // attempt used a single short pause (400-800ms) then one immediate retry, which turned out
-    // to be the wrong theory: LIVE TESTING (javascript_tool against the real page, same day)
-    // proved this is NOT a broken click or a bucket-specific quirk -- Facebook's commit here is
-    // genuinely ASYNCHRONOUS and can take several seconds (it appears to fire a shipping-rate
-    // quote fetch on selection, the same class of async commit already documented below for the
-    // "Update" button's modal-close). A short fixed pause was seeing a false "not checked yet"
-    // reading moments before Facebook actually caught up. Fix: POLL for aria-checked to flip
-    // (mirrors the existing Update-button poll pattern in this same function) for up to ~6s
-    // before concluding it truly didn't register; only THEN retry the click once, poll again,
-    // and only hard-error if it's still unchecked after that second poll.
-    async function pollRadioChecked(wrapper, timeoutMs) {
-      const deadline = Date.now() + timeoutMs;
-      while (Date.now() < deadline) {
-        if (SEL.isRadioChecked(wrapper)) return true;
-        await sleep(300);
-      }
-      return SEL.isRadioChecked(wrapper);
+    // 2026-07-18 fix (Patrick live report, Hofnar tin cmrqpqatn005ul0sum3ij77kx + full live DOM
+    // investigation): the 6 fixed weight-BUCKET radios (role="radio") genuinely require trusted
+    // (isTrusted:true) input -- confirmed by an isolated test (single realClick, then poll
+    // aria-checked for 20+ seconds doing nothing else) that never once registered. Two earlier
+    // same-day fix attempts (a short retry pause, then a 6s poll) both treated this as a timing
+    // problem and were both wrong -- it is not a timing problem, it is a hardened control.
+    // chrome.debugger is NOT an option here (Chrome Web Store readiness -- see ADR-084). The
+    // real fix, proven end-to-end live this session: Facebook's own "Enter exact weight" link
+    // swaps the radio list for two plain text inputs (lb/oz), which -- unlike the radio -- DO
+    // accept the standard React-controlled-input trick (setNativeValue, defined above). "Done"
+    // and "Update" are both plain div[role="button"] controls, not hardened like the radio, and
+    // both work fine with realClick (also confirmed live). Once a listing has been set via exact
+    // weight, Facebook remembers that mode and reopening Package weight goes straight to the
+    // inputs, skipping the link -- so check for the inputs first and only look for the link if
+    // they aren't already up.
+    let inputs = SEL.weightExactInputs();
+    if (!inputs.lbInput || !inputs.ozInput) {
+      await waitThenClick(() => SEL.weightExactLink(), 'Delivery',
+        'Couldn\'t find the "Enter exact weight" option -- Facebook\'s Package weight layout may have changed.', 5000);
+      inputs = await waitFor(() => {
+        const found = SEL.weightExactInputs();
+        return (found.lbInput && found.ozInput) ? found : null;
+      }, 5000).catch(() => {
+        throw hardError('Delivery', 'Clicked "Enter exact weight" but the weight input fields never appeared.');
+      });
     }
+    inputs.lbInput.focus();
+    setNativeValue(inputs.lbInput, String(weight.lb));
+    await sleep(150);
+    inputs.ozInput.focus();
+    setNativeValue(inputs.ozInput, String(weight.oz));
+    await sleep(150);
 
-    if (!(await pollRadioChecked(weightWrapper, 6000))) {
-      const retryWrapper = SEL.radioLabelByText(bucket);
-      if (retryWrapper) await SEL.realClick(retryWrapper);
-      if (!(await pollRadioChecked(SEL.radioLabelByText(bucket) || retryWrapper, 6000))) {
-        throw hardError('Delivery', 'Selected the "' + bucket + '" shipping weight option, but Facebook didn\'t register it as chosen after two tries -- try again, or set the weight manually on the Facebook tab.');
-      }
-    }
+    await waitThenClick(() => SEL.elementByText('Done'), 'Delivery',
+      'Couldn\'t find "Done" after entering the exact weight.', 5000);
     await humanPause(400, 800); // let Shipping carrier / Shipping option self-populate
 
     // The "Change shipping method" modal ([role="dialog"]) commits ASYNCHRONOUSLY: clicking
@@ -479,7 +482,7 @@
       }
     }
     await humanPause(300, 600); // small settle once the modal has closed
-    return { mode: 'shipping', bucket };
+    return { mode: 'shipping', bucket: weight.label };
   }
 
   // Offer step (2026-07-16, ADR-084): Facebook pre-checks "Allow offers" and pre-fills

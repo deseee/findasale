@@ -178,6 +178,34 @@
     return wrapped.find((label) => norm(label.textContent).includes(want)) || null;
   }
 
+  // Facebook's "Package weight" combo offers the fixed 6-bucket radio list above by default,
+  // but also an "Enter exact weight" link (a plain div[role="button"], confirmed live
+  // 2026-07-18 -- tag DIV, role="button", text "Enter exact weight" + a trailing chevron) that
+  // swaps in two text inputs -- see weightExactInputs. Once a listing has been set via exact
+  // weight, Facebook remembers that mode and reopening Package weight goes straight back to the
+  // exact-weight inputs, skipping this link entirely -- callers should check
+  // weightExactInputs() first and only look for this link if the inputs aren't already present.
+  function weightExactLink() {
+    const want = 'enter exact weight';
+    const nodes = Array.from(document.querySelectorAll('div[role="button"], span[role="button"], a, button'));
+    return nodes.find((n) => norm(n.textContent).indexOf(want) === 0) || null;
+  }
+
+  // The lb/oz text inputs inside Package weight's "Enter exact weight" sub-panel (confirmed
+  // live 2026-07-18): two plain input[type="text"] elements with no aria-label and only opaque
+  // auto-generated ids (e.g. "_r_9t_") -- distinguished instead by their immediate parent's own
+  // text content, which is exactly "lb" / "oz" (the unit renders as a sibling text node next to
+  // the input, not an aria-label on it). Returns {lbInput, ozInput}, either side null if not
+  // found -- both are only present once the exact-weight sub-panel is open (see weightExactLink).
+  function weightExactInputs() {
+    const boxes = Array.from(document.querySelectorAll('input[type="text"]')).filter((i) => {
+      const r = i.getBoundingClientRect();
+      return r.width > 0 && r.height > 0;
+    });
+    const byUnit = (unit) => boxes.find((b) => norm(b.parentElement && b.parentElement.textContent) === unit) || null;
+    return { lbInput: byUnit('lb'), ozInput: byUnit('oz') };
+  }
+
   // "Your listings" page (marketplace/you/selling) -- confirmed live 2026-07-15: each listing
   // card exposes a direct "Mark as sold" clickable (not behind a menu), 4 DOM levels above a
   // shared ancestor whose text contains the title + price + "$". No Facebook-assigned listing
@@ -210,14 +238,28 @@
     return null; // zero or ambiguous (multiple) matches -- caller skips + flags, never guesses
   }
 
-  // Facebook's custom radio/button components (the Package-weight radio and the "Change
-  // shipping method" modal's "Update" button) DO respond to script-dispatched
-  // (isTrusted:false) events -- PROVEN LIVE 2026-07-17 on facebook.com/marketplace/create.
-  // The earlier belief that these controls required trusted (CDP / DevTools-driven) input was
-  // wrong: FB's handlers do NOT check isTrusted. The old synthetic fallback simply fired too
-  // few events -- it jumped straight to pointerdown without the hover/focus preamble FB's
-  // handlers wait for. The reliably-working sequence, dispatched on the target element with
-  // correct viewport coordinates, is:
+  // Facebook's custom div[role="button"] controls (category chips, "Enter exact weight",
+  // "Done", the "Change shipping method" modal's "Update" button, etc.) DO respond to
+  // script-dispatched (isTrusted:false) events using the sequence below -- confirmed live
+  // repeatedly, most recently 2026-07-18. The hover/focus preamble (pointerover/enter/move)
+  // before pointerdown is what makes FB's handlers arm; a bare pointerdown->click without it
+  // is silently ignored.
+  //
+  // CORRECTION (2026-07-18, supersedes the 2026-07-17 claim below): the Package-weight RADIO
+  // buttons (role="radio", the 6 fixed weight-bucket options) are the ONE exception -- isolated
+  // live testing (a single realClick, then polling aria-checked for 20+ seconds with nothing
+  // else happening) proved they never register a synthetic click, regardless of event sequence
+  // or timing. That is a genuine trusted-input (isTrusted:true) requirement on this specific
+  // control, not a timing/sequence bug. chrome.debugger is NOT an acceptable fix (Chrome Web
+  // Store readiness -- see ADR-084) -- the real fix is to avoid the radio entirely: Facebook's
+  // own "Enter exact weight" link opens two plain text inputs (lb/oz) that DO accept synthetic
+  // input via the standard React-controlled-input trick (native value setter + input/change
+  // events -- see fas-content.js setNativeValue and fillDeliveryStep). See weightExactLink /
+  // weightExactInputs below. Every other control on this page, including "Done" and "Update" in
+  // this same modal, is NOT hardened like the radio and works fine with realClick.
+  //
+  // The reliably-working sequence, dispatched on the target element with correct viewport
+  // coordinates, is:
   //   pointerover -> pointerenter -> pointermove -> pointerdown -> mousedown -> focus
   //   -> pointerup -> mouseup -> click
   // using PointerEvent for pointer* (pointerId:1, isPrimary:true, buttons:1 while pressed),
@@ -330,6 +372,6 @@
 
   window.__FAS_SEL__ = { norm, fieldByLabel, comboByLabel, optionByText, photoInput, chipsAfter, categoryChips, persistentCategoryChips, bestTextMatch,
     elementByText, radioLabelByText, listingCardByTitle, realClick, menuCheckboxByText, isMenuChecked, isDisabled, radioOptionByText,
-    switchByLabel, isSwitchOn, isRadioChecked,
+    switchByLabel, isSwitchOn, isRadioChecked, weightExactLink, weightExactInputs,
     LABELS: { title: 'Title', price: 'Price', description: 'Description', condition: 'Condition', category: 'Category', offerToggle: 'negotiate', offerMinimum: 'Minimum price' } };
 })();
