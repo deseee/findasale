@@ -6,5 +6,6 @@ self.FAS_CONFIG = {
   COOKIE_URL: 'https://finda.sale',
   COOKIE_NAME: 'accessToken',
   REFRESH_COOKIE_NAME: 'refreshToken',
-  FB_CREATE_URL: 'https://www.facebook.com/marketplace/create/item'
+  FB_CREATE_URL: 'https://www.facebook.com/marketplace/create/item',
+  CL_POST_URL: 'https://post.craigslist.org/'
 };

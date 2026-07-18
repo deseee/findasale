@@ -10,7 +10,9 @@
     "https://finda.sale/*",
     "https://*.finda.sale/*",
     "https://res.cloudinary.com/*",
-    "https://i.ebayimg.com/*"
+    "https://i.ebayimg.com/*",
+    "https://post.craigslist.org/*",
+    "https://*.craigslist.org/*"
   ],
   "icons": { "16": "icon16.png", "48": "icon48.png", "128": "icon128.png" },
   "action": { "default_popup": "popup.html", "default_title": "FindA.Sale Marketplace Autofill", "default_icon": { "16": "icon16.png", "48": "icon48.png", "128": "icon128.png" } },
@@ -30,6 +32,11 @@
     {
       "matches": ["https://www.facebook.com/marketplace/you/selling*"],
       "js": ["fas-selectors.js", "fas-remove.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://post.craigslist.org/*"],
+      "js": ["fas-craigslist.js"],
       "run_at": "document_idle"
     }
   ]

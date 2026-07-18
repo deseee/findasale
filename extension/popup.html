@@ -10,9 +10,18 @@
   </div>
   <div id="list" class="list"></div>
   <footer id="footer" hidden>
-    <label class="chk"><input type="checkbox" id="autoPublish" checked> Publish automatically</label>
+    <div class="channelRow">
+      <label class="chk" for="channel">Post to</label>
+      <select id="channel" class="select">
+        <option value="facebook">Facebook Marketplace</option>
+        <option value="craigslist">Craigslist</option>
+        <option value="nextdoor" disabled>Nextdoor (coming soon)</option>
+      </select>
+    </div>
+    <label class="chk" id="autoPublishRow"><input type="checkbox" id="autoPublish" checked> Publish automatically</label>
     <button id="listBtn" class="primary" disabled>List selected on Marketplace</button>
-    <p class="note">Fills and publishes each listing automatically, pausing if anything looks off. Uncheck to fill but stop before Publish so you can review first. <span class="dim">(Chrome's &ldquo;debugging this tab&rdquo; banner is normal.)</span></p>
+    <p class="note" id="clPostNote" hidden>Opens Craigslist and fills each posting (for sale by owner) &mdash; title, price, description, and photos. You choose the location, complete any verification, and click <b>publish</b> yourself.</p>
+    <p class="note" id="fbPublishNote">Fills and publishes each listing automatically, pausing if anything looks off. Uncheck to fill but stop before Publish so you can review first. <span class="dim">(Chrome's &ldquo;debugging this tab&rdquo; banner is normal.)</span></p>
     <div class="removeSetting">
       <label class="chk" for="autoRemoveMode">When an item sells elsewhere</label>
       <select id="autoRemoveMode" class="select">

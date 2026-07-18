@@ -247,6 +247,24 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         await chrome.storage.local.set({ fasIndex: next });
         const item = (st.fasQueue || [])[next] || null;
         sendResponse({ ok: true, item, index: next, total: (st.fasQueue || []).length });
+      } else if (msg.type === 'setCraigslistQueue') {
+        // Craigslist channel (ADR-084 extension): store the queue and OPEN the posting tab here in
+        // the worker (parallel to the FB flow, which stores fasQueue then the popup opens the FB
+        // tab). fas-craigslist.js reads fasCraigslistQueue/fasCraigslistIndex via
+        // getCraigslistQueueItem once post.craigslist.org loads. Kept fully separate from the FB
+        // queue keys so the two channels never interfere.
+        await chrome.storage.local.set({ fasCraigslistQueue: msg.queue || [], fasCraigslistIndex: 0 });
+        chrome.tabs.create({ url: CFG.CL_POST_URL });
+        sendResponse({ ok: true });
+      } else if (msg.type === 'getCraigslistQueueItem') {
+        const { fasCraigslistQueue = [], fasCraigslistIndex = 0 } = await chrome.storage.local.get(['fasCraigslistQueue', 'fasCraigslistIndex']);
+        sendResponse({ ok: true, item: fasCraigslistQueue[fasCraigslistIndex] || null, index: fasCraigslistIndex, total: fasCraigslistQueue.length });
+      } else if (msg.type === 'advanceCraigslistQueue') {
+        const st = await chrome.storage.local.get(['fasCraigslistQueue', 'fasCraigslistIndex']);
+        const next = (st.fasCraigslistIndex || 0) + 1;
+        await chrome.storage.local.set({ fasCraigslistIndex: next });
+        const item = (st.fasCraigslistQueue || [])[next] || null;
+        sendResponse({ ok: true, item, index: next, total: (st.fasCraigslistQueue || []).length });
       } else if (msg.type === 'getRemovalQueueItem') {
         const { fasRemovalQueue = [], fasRemovalIndex = 0 } = await chrome.storage.local.get(['fasRemovalQueue', 'fasRemovalIndex']);
         sendResponse({ ok: true, item: fasRemovalQueue[fasRemovalIndex] || null, index: fasRemovalIndex, total: fasRemovalQueue.length });

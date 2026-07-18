@@ -25,6 +25,8 @@ async function load() {
   $('footer').hidden = false;
   $('hideListed').onchange = render;
   $('listBtn').onclick = startQueue;
+  $('channel').onchange = onChannelChange;
+  onChannelChange();
   await loadAutoRemoveMode();
   render();
 }
@@ -42,6 +44,21 @@ async function loadAutoRemoveMode() {
     await send({ type: 'removalModeChanged' });
   };
   await send({ type: 'refreshRemovalAlarm' }); // re-assert the alarm in case the worker never woke since install
+}
+
+function currentChannel() { const el = $('channel'); return el ? el.value : 'facebook'; }
+
+// Facebook publishes automatically and manages sold-elsewhere removal; Craigslist does neither
+// (the human owns the final publish + all verification), so hide the FB-only controls and show
+// the Craigslist explainer when Craigslist is the selected channel.
+function onChannelChange() {
+  const ch = currentChannel();
+  const fb = ch === 'facebook';
+  const apRow = $('autoPublishRow'); if (apRow) apRow.hidden = !fb;
+  const fbNote = $('fbPublishNote'); if (fbNote) fbNote.hidden = !fb;
+  const clNote = $('clPostNote'); if (clNote) clNote.hidden = fb;
+  const removeSetting = document.querySelector('.removeSetting'); if (removeSetting) removeSetting.hidden = !fb;
+  updateCount();
 }
 
 function render() {
@@ -83,7 +100,10 @@ function updateCount() {
   $('selCount').textContent = selected.size;
   const btn = $('listBtn');
   btn.disabled = selected.size === 0;
-  btn.textContent = selected.size ? 'List ' + selected.size + ' on Marketplace' : 'List selected on Marketplace';
+  const cl = currentChannel() === 'craigslist';
+  const verb = cl ? 'Post' : 'List';
+  const where = cl ? 'on Craigslist' : 'on Marketplace';
+  btn.textContent = selected.size ? verb + ' ' + selected.size + ' ' + where : (cl ? 'Post selected on Craigslist' : 'List selected on Marketplace');
 }
 
 async function startQueue() {
@@ -92,9 +112,21 @@ async function startQueue() {
     description: it.description, category: it.category, photoUrls: it.photoUrls || [],
     packageWeightOz: it.packageWeightOz, aiPackageWeightOz: it.aiPackageWeightOz,
     shippingOverride: it.shippingOverride,
-    allowBestOffer: it.allowBestOffer, bestOfferMinimumAmt: it.bestOfferMinimumAmt
+    allowBestOffer: it.allowBestOffer, bestOfferMinimumAmt: it.bestOfferMinimumAmt,
+    // Location passthrough (Craigslist geographic_area + postal). Whatever the backend supplies
+    // flows through; absent fields stay undefined and fas-craigslist.js simply leaves the
+    // corresponding field for the human to complete -- it never invents a city or ZIP.
+    city: it.city, geographicArea: it.geographicArea, saleCity: it.saleCity,
+    postal: it.postal, postalCode: it.postalCode, zip: it.zip, saleZip: it.saleZip
   }));
   if (!queue.length) return;
+  if (currentChannel() === 'craigslist') {
+    // Background stores the Craigslist queue AND opens post.craigslist.org; fas-craigslist.js
+    // picks the item up on load. Facebook behavior below is unchanged.
+    await send({ type: 'setCraigslistQueue', queue });
+    window.close();
+    return;
+  }
   const autoPublish = $('autoPublish').checked;
   await send({ type: 'setQueue', queue, autoPublish });
   chrome.tabs.create({ url: CFG.FB_CREATE_URL });
