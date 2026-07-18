@@ -1414,6 +1414,13 @@ export async function ingestScrapedListing(
         lastScrapedAt: new Date(),
         scrapeVersion: 1,
         scrapedMetadata: listing.scrapedMetadata ?? Prisma.JsonNull,
+        // Bug fix (566-row TODAY/Live badge bug, S1130 diagnostic): directory-style
+        // sources (Foursquare/HERE) set isOngoing on the ScrapedItem to flag
+        // always-live business listings. Non-RETAIL saleTypes are create-only on
+        // rescrape (dates never refresh), so without this flag the frozen
+        // scrape-time startDate/endDate window eventually reads as a nonsensical
+        // multi-month "TODAY"/"Live" badge as real time drifts past it.
+        isOngoing: listing.isOngoing ?? false,
       },
     });
 
