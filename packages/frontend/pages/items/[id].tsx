@@ -399,7 +399,7 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
   const handlePlaceBid = async () => {
     if (!user) {
       showToast('Please sign in to place a bid', 'warning');
-      router.push('/login');
+      router.push(`/login?redirect=${encodeURIComponent(router.asPath)}`);
       return;
     }
 
@@ -425,7 +425,7 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
   const handleBuyNow = async () => {
     if (!user) {
       showToast('Please log in to purchase items', 'warning');
-      router.push('/login');
+      router.push(`/login?redirect=${encodeURIComponent(router.asPath)}`);
       return;
     }
     // GA4 #465 Tier 2: checkout_initiated
@@ -440,7 +440,7 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
   const handleAddToSmartCart = (item: Item) => {
     if (!user) {
       showToast('Please log in to add items to cart', 'warning');
-      router.push('/login');
+      router.push(`/login?redirect=${encodeURIComponent(router.asPath)}`);
       return;
     }
 
@@ -477,7 +477,7 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
   const handleLike = () => {
     if (!user) {
       showToast('Please log in to save items', 'warning');
-      router.push('/login');
+      router.push(`/login?redirect=${encodeURIComponent(router.asPath)}`);
       return;
     }
 
@@ -890,7 +890,7 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
                 {!isSold && (
                 <button
                   onClick={handleLike}
-                  disabled={updateFavoriteMutation.isPending || !user}
+                  disabled={updateFavoriteMutation.isPending}
                   title={!user ? 'Sign in to save items' : ''}
                   className={`flex-1 py-2 px-4 rounded-lg font-semibold transition ${
                     isUserLiked
@@ -1008,7 +1008,7 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
                           {bidError && <p className="text-red-600 text-sm">{bidError}</p>}
                           <button
                             onClick={handlePlaceBid}
-                            disabled={isSubmittingBid || placeBidMutation.isPending || !user}
+                            disabled={isSubmittingBid || placeBidMutation.isPending}
                             title={!user ? 'Sign in to place a bid' : ''}
                             className={`w-full py-2 px-4 rounded-lg font-semibold transition ${
                               user
@@ -1042,7 +1042,6 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
                     <div className="space-y-2">
                       <button
                         onClick={handleBuyNow}
-                        disabled={!user}
                         title={!user ? 'Sign in to purchase' : ''}
                         className={`w-full py-2 px-4 rounded-lg font-semibold transition ${
                           user
@@ -1057,7 +1056,6 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
                       {item.status === 'AVAILABLE' && (
                         <button
                           onClick={() => handleAddToSmartCart(item)}
-                          disabled={!user}
                           title={!user ? 'Sign in to add to cart' : ''}
                           className={`w-full py-2 px-4 rounded-lg font-semibold transition ${
                             shopperCart.items.some((i) => i.id === item.id)
