@@ -69,7 +69,7 @@ export async function pushItemToShopify(
           {
             price: effectivePrice.toFixed(2),
             sku: item.sku || itemId,
-            inventory_quantity: 1,
+            inventory_quantity: Math.max((item.stockTotal ?? 1) - item.stockSold, 0),
             track_inventory: true,
             inventory_management: 'shopify',
           },

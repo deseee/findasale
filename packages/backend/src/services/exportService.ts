@@ -106,7 +106,7 @@ function formatEbayCsv(items: Item[], organizer: WatermarkPolicyOrganizer | null
       escapeCsvField(truncatedTitle), // Title
       escapeCsvField(''), // UPC (we don't have this)
       escapeCsvField(formattedPrice), // Price
-      escapeCsvField('1'), // Quantity
+      escapeCsvField(String(Math.max((item.stockTotal ?? 1) - item.stockSold, 0))), // Quantity
       escapeCsvField(photoUrl), // Item photo URL
       escapeCsvField(mapConditionToEbayString(item.condition)), // Condition
       escapeCsvField(cleanDescription), // Description
