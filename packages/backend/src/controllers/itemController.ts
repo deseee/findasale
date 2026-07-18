@@ -35,7 +35,7 @@ import { checkAndAward } from '../services/achievementService'; // Feature #58: 
 import { notifyFacebookExportedItemSold } from '../services/facebookNudgeService'; // Bug #461: FB nudge on single-item SOLD
 import { republishEbayOffer, ebayPublishWithSelfHeal, ensureConditionValidForCategory } from '../services/ebayPublishService'; // Phase 2 relocation + Phase 3 rewire (ADR 2026-06-30)
 import { assertCheckoutAllowed, CheckoutGuardError } from '../services/checkoutGuard'; // S1072 Finding #4: collusion/wash-trade guard
-import { removeItemFromShopify, updateShopifyProductFields } from '../services/shopifyService'; // Cross-platform sync: unpublish on delete + propagate price/quantity edits
+import { removeItemFromShopify, updateShopifyProductFields, markShopifyItemSold } from '../services/shopifyService'; // Cross-platform sync: unpublish on delete + propagate price/quantity edits + mark-sold-elsewhere
 
 /** Decode HTML entities from CSV/eBay data before writing to the DB. */
 function decodeHtmlEntities(str: string): string {
@@ -1594,6 +1594,20 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     if (status === 'SOLD' && item.status !== 'SOLD') {
       endEbayListingIfExists(id).catch(err =>
         console.warn(`[eBay] withdraw-on-SOLD failed for item ${id}:`, err.message)
+      );
+    }
+
+    // BUG (2026-07-18): this generic single-item edit path had the exact same
+    // gap for Shopify that S1122 found + fixed for eBay above -- every other
+    // sold-trigger call site (POS/terminal, checkout x4 Stripe sites,
+    // reservations, vendor-booth cart, bulk-items PUT) calls markShopifyItemSold
+    // alongside endEbayListingIfExists + notifyFacebookExportedItemSold; this
+    // path called the eBay+FB hooks but never the Shopify one. markShopifyItemSold
+    // re-queries the item's ShopifyListing, self-guards (no-ops if never pushed to
+    // Shopify), and never throws -- fire-and-forget, same as the hooks above.
+    if (status === 'SOLD' && item.status !== 'SOLD') {
+      markShopifyItemSold(id).catch(err =>
+        console.warn(`[Shopify] mark-sold-on-SOLD failed for item ${id}:`, err.message)
       );
     }
 

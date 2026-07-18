@@ -29,6 +29,51 @@
     });
   }
 
+  // Facebook's "Your listings" grid re-renders repeatedly during/after the "Mark as sold"
+  // survey flow -- independent of whether the listing actually flipped to Sold. During a
+  // re-render, the old "Mark as sold" button is briefly removed from the DOM before the new
+  // one mounts, so a getter like `() => (listingCardByTitle(title) ? null : true)` can return
+  // a FALSE "gone" reading for a single MutationObserver tick even though the SAME listing
+  // (still Active) reappears moments later. `waitFor` above resolves on the very first truthy
+  // read, so it was catching that transient absence and reporting a false "removed" success
+  // (S1128 finding). This variant requires the "absent" (falsy-getter) state to hold
+  // CONTINUOUSLY for `settleMs` before declaring success -- if the getter goes truthy again
+  // (card reappeared) before the settle window elapses, the settle timer is cancelled and
+  // polling resumes for the remainder of the overall `timeout` budget. Never resolves true off
+  // a single transient read.
+  function waitForStableAbsence(getter, { settleMs = 900, timeout = 12000 } = {}) {
+    return new Promise((resolve) => {
+      let settleTimer = null;
+      let done = false;
+      const finish = (result) => {
+        if (done) return;
+        done = true;
+        if (settleTimer) clearTimeout(settleTimer);
+        obs.disconnect();
+        clearTimeout(overallTimer);
+        resolve(result);
+      };
+      const check = () => {
+        if (done) return;
+        const stillPresent = getter();
+        if (stillPresent) {
+          // Card reappeared -- not a real removal yet. Cancel any pending settle timer.
+          if (settleTimer) { clearTimeout(settleTimer); settleTimer = null; }
+          return;
+        }
+        // Card absent on this read. Only start a NEW settle timer if one isn't already
+        // running -- otherwise every mutation during the settle window would keep resetting it.
+        if (!settleTimer) {
+          settleTimer = setTimeout(() => finish(true), settleMs);
+        }
+      };
+      const obs = new MutationObserver(check);
+      obs.observe(document.body, { childList: true, subtree: true });
+      const overallTimer = setTimeout(() => finish(false), timeout);
+      check(); // run once immediately in case it's already stably absent
+    });
+  }
+
   // ---- overlay UI (mirrors fas-content.js's bar, kept separate since the two content
   // scripts never run on the same page at the same time) ----
   let bar;
@@ -129,8 +174,13 @@
     // grid instead: listingCardByTitle only returns a card that STILL exposes a "Mark as sold"
     // button, so once this listing flips to Sold ("Mark as available"/"Relist") it returns null =
     // confirmed removed.
-    const confirmed = await waitFor(() => (SEL.listingCardByTitle(item.title) ? null : true), 12000)
-      .catch(() => false);
+    // S1128/S1136 fix: don't trust a single transient DOM read (see waitForStableAbsence
+    // comment above) -- require the card to be gone for a full settle window, not just gone
+    // on one MutationObserver tick, before declaring the removal confirmed.
+    const confirmed = await waitForStableAbsence(
+      () => SEL.listingCardByTitle(item.title),
+      { settleMs: 900, timeout: 12000 }
+    );
     if (!confirmed) {
       return { ok: false, reason: 'Clicked "Mark as sold" but couldn\'t confirm the listing flipped to Sold -- check it manually.' };
     }
