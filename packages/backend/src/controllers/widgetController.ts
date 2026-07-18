@@ -79,6 +79,7 @@ export async function getWidgetInventory(req: Request, res: Response): Promise<v
     where: {
       organizerId: organizerRecord.id,
       status: 'PUBLISHED',
+      deletedAt: null,
     },
     select: { id: true, title: true },
   });

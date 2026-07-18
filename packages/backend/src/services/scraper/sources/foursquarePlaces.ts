@@ -290,6 +290,12 @@ export async function scrapeFoursquareQuery(
       zip: place.location?.postcode ?? '',
       startDate: now,
       endDate,
+      // Bug fix (566-row TODAY/Live badge bug, S1130 diagnostic): this is a directory
+      // listing (antique mall, consignment shop, etc.), not a dated event — it never
+      // "ends." Without isOngoing, the frozen scrape-time startDate/endDate window
+      // eventually renders a nonsensical multi-month TODAY/Live badge as real time
+      // drifts past the frozen dates (non-RETAIL saleTypes are create-only on rescrape).
+      isOngoing: true,
       description: undefined,
       saleType: queryConfig.saleType,
       organizerName: place.name,

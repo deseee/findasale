@@ -204,7 +204,11 @@ router.get('/by-city/:citySlug', async (req, res) => {
 
     const whereClause: any = {
       status: 'PUBLISHED',
-      endDate: { gte: new Date() },
+      deletedAt: null,
+      // Permanent storefronts (isOngoing) always count as current — same pattern as
+      // discoveryService.ts / saleController.ts / search.ts / heatmapService.ts.
+      // Bug fix (566-row TODAY/Live badge bug, S1130 diagnostic).
+      OR: [{ isOngoing: true }, { endDate: { gte: new Date() } }],
       state: { equals: stateCode, mode: 'insensitive' },
     };
     // Problem C: expand city match to known borough/alias sets
@@ -241,6 +245,7 @@ router.get('/by-city/:citySlug', async (req, res) => {
         address: true,
         photoUrls: true,
         status: true,
+        isOngoing: true,
         sourceUrl: true,
         sourceName: true,
         scrapedMetadata: true,
@@ -290,6 +295,7 @@ router.get('/by-city/:citySlug', async (req, res) => {
       ? await prisma.sale.findMany({
           where: {
             status: 'PUBLISHED',
+            deletedAt: null,
             city: { equals: cityName, mode: 'insensitive' },
             state: { equals: stateCode, mode: 'insensitive' },
           },
@@ -394,6 +400,7 @@ router.get('/sitemap', async (req, res) => {
     const sales = await prisma.sale.findMany({
       where: {
         status: 'PUBLISHED',
+        deletedAt: null,
         isInventoryContainer: false,
       },
       select: {

@@ -51,6 +51,7 @@ interface Sale {
   minutesUntilUnlock?: number;
   sourceName?: string; // P2: Disclosure label for scraped sales
   scrapedMetadata?: Record<string, unknown> | null; // P3: scraped enrichment (e.g. dateApproximate)
+  isOngoing?: boolean; // Permanent-storefront model — always-live directory listing, no real end date
 }
 
 interface BadgeConfig {
@@ -109,6 +110,13 @@ const SaleCard: React.FC<SaleCardProps> = ({ sale, priority = false }) => {
 
   // Compute "happening today" client-side only to avoid SSR/CSR date mismatch (hydration #418)
   useEffect(() => {
+    // Bug fix (566-row TODAY/Live badge bug, S1130 diagnostic): permanent-storefront
+    // listings (isOngoing) are always-live directory listings, not one-day events —
+    // never badge them TODAY off their frozen scrape-time date window.
+    if (sale.isOngoing) {
+      setShowToday(false);
+      return;
+    }
     if (!sale.startDate || !sale.endDate) return;
     try {
       const now = new Date();
@@ -118,7 +126,7 @@ const SaleCard: React.FC<SaleCardProps> = ({ sale, priority = false }) => {
     } catch {
       setShowToday(false);
     }
-  }, [sale.startDate, sale.endDate]);
+  }, [sale.startDate, sale.endDate, sale.isOngoing]);
 
   const formatSaleDate = (dateString: string | null | undefined): string => {
     if (!dateString) return 'TBA';
@@ -264,7 +272,10 @@ const SaleCard: React.FC<SaleCardProps> = ({ sale, priority = false }) => {
             {sale.title}
           </h3>
           <p className="text-xs text-warm-600 dark:text-gray-400">
-            {formatSaleDate(sale.startDate)} – {formatSaleDate(sale.endDate)}&nbsp;·&nbsp;{sale.city}, {sale.state}
+            {sale.isOngoing
+              ? 'Always open'
+              : `${formatSaleDate(sale.startDate)} – ${formatSaleDate(sale.endDate)}`}
+            &nbsp;·&nbsp;{sale.city}, {sale.state}
           </p>
           {(sale.scrapedMetadata as { dateApproximate?: boolean } | null | undefined)?.dateApproximate === true && (
             <p className="text-[11px] text-warm-500 dark:text-gray-500 mt-0.5">

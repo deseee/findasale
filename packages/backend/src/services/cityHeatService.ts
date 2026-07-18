@@ -36,6 +36,7 @@ export const getCityHeatIndex = async (): Promise<CityHeat[]> => {
   const sales = await prisma.sale.findMany({
     where: {
       status: 'PUBLISHED',
+      deletedAt: null,
       startDate: {
         gte: thirtyDaysAgo,
       },
@@ -55,6 +56,7 @@ export const getCityHeatIndex = async (): Promise<CityHeat[]> => {
   const itemsByManySales = await prisma.sale.findMany({
     where: {
       status: 'PUBLISHED',
+      deletedAt: null,
       startDate: {
         gte: thirtyDaysAgo,
       },

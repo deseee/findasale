@@ -34,6 +34,7 @@ export async function selectSaleOfTheDay(): Promise<SaleOfTheDayResult | null> {
   const sales = await prisma.sale.findMany({
     where: {
       status: 'PUBLISHED',
+      deletedAt: null,
       startDate: {
         gte: now,
         lte: sevenDaysFromNow,

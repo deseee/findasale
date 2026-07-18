@@ -47,6 +47,7 @@ export const computeHeatmapTiles = async (
   const sales = await prisma.sale.findMany({
     where: {
       status: 'PUBLISHED',
+      deletedAt: null,
       startDate: {
         lte: new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000), // within next 14 days
       },

@@ -12,6 +12,12 @@ export interface ParsedListing {
   zip?: string;
   startDate: Date;
   endDate: Date;
+  // Bug fix (566-row TODAY/Live badge bug, S1130 diagnostic): directory-style listings
+  // (Foursquare/HERE Places) are always-live business listings, not dated events.
+  // isOngoing mirrors Sale.isOngoing (permanent-storefront model) — when true, the
+  // frontend suppresses the start/end date range and downstream create-only rescrape
+  // logic treats the sale as always current regardless of the frozen scrape-time dates.
+  isOngoing?: boolean;
   organizerName?: string;
   organizerEmail?: string;
   organizerPhone?: string;   // scraped phone — fills organizer.phone only if currently null

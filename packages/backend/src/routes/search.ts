@@ -219,6 +219,7 @@ router.get('/', searchLimiter, async (req: Request, res: Response) => {
           where: {
             id: { in: Array.from(saleIdsToFetch) },
             status: 'PUBLISHED',
+            deletedAt: null,
           },
           select: {
             id: true,

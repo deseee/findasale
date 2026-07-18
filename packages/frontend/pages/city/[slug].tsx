@@ -42,6 +42,7 @@ interface SaleListing {
   address: string;
   photoUrl: string | null;
   status: string;
+  isOngoing?: boolean; // Permanent-storefront model — always-live directory listing, no real end date
   organizer: { id: string; businessName: string } | null;
 }
 
@@ -251,8 +252,11 @@ export default function CityPage({
               {sales.map((sale) => {
                 const start = new Date(sale.startDate);
                 const end = new Date(sale.endDate);
-                const isActive = clientNow !== null && start <= clientNow && clientNow <= end;
-                const isEnded = clientNow !== null && clientNow > end;
+                // Bug fix (566-row TODAY/Live badge bug, S1130 diagnostic): permanent
+                // storefronts (isOngoing) are always-live directory listings — never
+                // gate their Live/Ended badge off the frozen scrape-time date window.
+                const isActive = sale.isOngoing || (clientNow !== null && start <= clientNow && clientNow <= end);
+                const isEnded = !sale.isOngoing && clientNow !== null && clientNow > end;
 
                 return (
                   <Link
@@ -301,9 +305,13 @@ export default function CityPage({
                       )}
 
                       <p className="text-xs text-warm-600 dark:text-warm-400">
-                        {start.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })}
-                        {' – '}
-                        {end.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })}
+                        {sale.isOngoing ? 'Always open' : (
+                          <>
+                            {start.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })}
+                            {' – '}
+                            {end.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })}
+                          </>
+                        )}
                       </p>
 
                       {sale.address && (
