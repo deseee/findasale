@@ -13,6 +13,7 @@ import { prisma } from '../../lib/prisma';
 import { getRandomUserAgent } from './userAgents';
 import { defaultRateLimiter } from './rateLimiter';
 import { getCachedHeaders, setCachedHeaders, extractCacheHeaders } from './httpCache';
+import { getBreakerDecision, recordOutcome } from './domainFetchState';
 import axios from 'axios';
 import { v2 as cloudinary } from 'cloudinary';
 import { chromium } from 'playwright-extra';
@@ -344,18 +345,46 @@ export async function enrichSaleDetails(saleId: string, sourceUrl: string): Prom
     if (DEBUG) console.log(`[SaleDetailEnrichment] Skipping sale ${saleId} — no sourceUrl`);
     return false;
   }
+
+  // Per-domain circuit breaker (STATE-ONLY, no denylist). estatesales.net is the designed
+  // ADR-075 source yet sits on the aggregator website denylist, so we must NOT use the
+  // denylist-aware shouldFetch() here — the breaker's own failure state is the right signal.
+  // It trips on dead hosts (bid13.com 403/404) while keeping ESN healthy.
+  const decision = await getBreakerDecision(sourceUrl);
+  if (decision === 'TERMINAL') {
+    // Host is permanently dead — permanently mark this sale so it stops re-qualifying.
+    await markSaleFetchFailed(saleId);
+    if (DEBUG) console.log(`[SaleDetailEnrichment] Domain TERMINAL — marked sale ${saleId} failed`);
+    return false;
+  }
+  if (decision === 'THROTTLED') {
+    // Active cooldown window — skip this run WITHOUT a permanent mark; retry once it elapses.
+    if (DEBUG) console.log(`[SaleDetailEnrichment] Domain cooling down — skipping sale ${saleId}`);
+    return false;
+  }
+
   try {
     await defaultRateLimiter.waitBeforeRequest(new URL(sourceUrl).hostname);
 
     const html = await fetchSalePageHTML(sourceUrl, saleId);
     if (!html) {
-      if (DEBUG) console.log(`[SaleDetailEnrichment] No HTML returned for sale ${saleId}`);
+      // Fetch failed (429 / 4xx / exhausted retries). Escalate the breaker and permanently
+      // mark this sale so it drops out of the enrichment selector (sourceUrl untouched).
+      await recordOutcome(sourceUrl, false);
+      await markSaleFetchFailed(saleId);
+      if (DEBUG) console.log(`[SaleDetailEnrichment] Fetch failed — marked sale ${saleId} failed`);
       return false;
     }
+
+    // Host responded (2xx) — reset the breaker for this domain.
+    await recordOutcome(sourceUrl, true);
 
     const { description, images } = extractSaleEventData(html);
 
     if (!description && images.length === 0) {
+      // Alive but no schema data — count the attempt and give up after N tries WITHOUT
+      // poisoning the shared breaker (the host itself is fine).
+      await bumpSaleFetchAttempts(saleId);
       if (DEBUG) console.log(`[SaleDetailEnrichment] No enrichment data found for sale ${saleId}`);
       return false;
     }
@@ -380,10 +409,66 @@ export async function enrichSaleDetails(saleId: string, sourceUrl: string): Prom
       return true;
     }
 
+    // Data was present but nothing writable was produced (e.g. all image mirrors failed).
+    await bumpSaleFetchAttempts(saleId);
     return false;
   } catch (error) {
     console.error(`[SaleDetailEnrichment] Error enriching sale ${saleId}:`, error);
+    // Treat an unexpected error as a fetch failure for breaker + selector purposes.
+    await recordOutcome(sourceUrl, false);
+    await markSaleFetchFailed(saleId);
     return false;
+  }
+}
+
+/** Number of alive-but-no-data attempts after which a sale is given up on permanently. */
+const SALE_ATTEMPT_GIVEUP = 3;
+
+/**
+ * Permanently mark a sale's sourceUrl fetch as failed so it stops re-qualifying for the
+ * enrichment selector. Sets sourceUrlFetchFailedAt + increments sourceUrlFetchAttempts.
+ * NEVER touches sourceUrl itself. Best-effort; never throws.
+ */
+async function markSaleFetchFailed(saleId: string): Promise<void> {
+  try {
+    await prisma.sale.update({
+      where: { id: saleId },
+      data: {
+        sourceUrlFetchFailedAt: new Date(),
+        sourceUrlFetchAttempts: { increment: 1 },
+      },
+    });
+  } catch (err) {
+    console.warn(
+      `[SaleDetailEnrichment] Failed to mark sale ${saleId} fetch-failed:`,
+      err instanceof Error ? err.message : String(err)
+    );
+  }
+}
+
+/**
+ * Increment a sale's fetch-attempt counter for the alive-but-no-data case. Once the counter
+ * reaches SALE_ATTEMPT_GIVEUP, permanently mark it failed so it stops re-qualifying — without
+ * poisoning the shared per-domain breaker (the host responded fine). NEVER touches sourceUrl.
+ */
+async function bumpSaleFetchAttempts(saleId: string): Promise<void> {
+  try {
+    const updated = await prisma.sale.update({
+      where: { id: saleId },
+      data: { sourceUrlFetchAttempts: { increment: 1 } },
+      select: { sourceUrlFetchAttempts: true },
+    });
+    if (updated.sourceUrlFetchAttempts >= SALE_ATTEMPT_GIVEUP) {
+      await prisma.sale.update({
+        where: { id: saleId },
+        data: { sourceUrlFetchFailedAt: new Date() },
+      });
+    }
+  } catch (err) {
+    console.warn(
+      `[SaleDetailEnrichment] Failed to bump sale ${saleId} fetch-attempts:`,
+      err instanceof Error ? err.message : String(err)
+    );
   }
 }
 
@@ -399,6 +484,9 @@ export async function runEnrichmentBatch(options: { limit?: number } = {}): Prom
       where: {
         sourceName: { not: null },
         sourceUrl: { not: null },
+        // Anti-abuse: exclude sales whose sourceUrl fetch has permanently failed so we never
+        // re-hammer dead/403/404 pages. sourceUrl itself is NEVER nulled — only this marker.
+        sourceUrlFetchFailedAt: null,
         OR: [
           { description: null },
           { photoUrls: { isEmpty: true } },

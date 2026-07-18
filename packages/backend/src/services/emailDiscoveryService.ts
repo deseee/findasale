@@ -7,6 +7,14 @@ import {
   calibrateConfidence as sharedCalibrateConfidence,
   type DiscoverySource,
 } from './emailProvenance';
+import { isBlockedWebsiteDomain } from '../config/domainBlocklist';
+import {
+  shouldFetch,
+  recordOutcome,
+  isTerminal,
+  createRunDedupGuard,
+  type RunDedupGuard,
+} from './scraper/domainFetchState';
 
 /**
  * Email Discovery Service — Free tier pipeline
@@ -274,9 +282,11 @@ export { GENERIC_PATTERNS, calibrateConfidence };
  * Stage 1: Website Contact Page Scraping
  * Extract mailto links and email patterns from contact pages
  */
-async function scrapeWebsiteEmails(domain: string): Promise<string[]> {
+async function scrapeWebsiteEmails(domain: string): Promise<{ emails: string[]; fetchOk: boolean }> {
   const contactPaths = ['/contact', '/contact-us', '/about', '/team', '/'];
   const emails: string[] = [];
+  // Tracks whether ANY path returned a 2xx response. False => dead/403/404 domain.
+  let fetchOk = false;
 
   for (const path of contactPaths) {
     try {
@@ -294,6 +304,7 @@ async function scrapeWebsiteEmails(domain: string): Promise<string[]> {
       clearTimeout(timeoutId);
 
       if (!response.ok) continue;
+      fetchOk = true;
 
       const html = await response.text();
       const $ = cheerio.load(html);
@@ -347,7 +358,7 @@ async function scrapeWebsiteEmails(domain: string): Promise<string[]> {
       !isJunkEmail(email)
   );
 
-  return filtered;
+  return { emails: filtered, fetchOk };
 }
 
 /**
@@ -456,7 +467,10 @@ function generateEmailPatterns(
  * Main discovery function
  * Returns discovered email or null. Updates organizer.contactEmail in DB if found.
  */
-export async function discoverEmail(organizerId: string): Promise<string | null> {
+export async function discoverEmail(
+  organizerId: string,
+  opts?: { dedup?: RunDedupGuard }
+): Promise<string | null> {
   try {
     const organizer = await prisma.organizer.findUnique({
       where: { id: organizerId },
@@ -471,8 +485,42 @@ export async function discoverEmail(organizerId: string): Promise<string | null>
       return null;
     }
 
+    const website = organizer.website;
+
+    // Anti-abuse gate 1: never fetch aggregator/social/mega-brand hosts wrongly stored as a
+    // "website". Mark the organizer exhausted so it stops re-qualifying for this pipeline.
+    if (isBlockedWebsiteDomain(website)) {
+      await markOrganizerWebsiteExhausted(organizerId, website);
+      return null;
+    }
+
+    // Anti-abuse gate 2: per-domain circuit breaker. A TERMINAL domain is permanently dead —
+    // mark the organizer exhausted and never fetch it again.
+    if (await isTerminal(domain)) {
+      await markOrganizerWebsiteExhausted(organizerId, website);
+      return null;
+    }
+
+    // Anti-abuse gate 3: in-run de-dup — fetch each domain at most once per run.
+    if (opts?.dedup && !opts.dedup.firstTime(domain)) {
+      return null;
+    }
+
+    // Anti-abuse gate 4: breaker cooldown — skip domains inside an active backoff window.
+    if (!(await shouldFetch(domain))) {
+      return null;
+    }
+
     // Stage 1: Website scraping
-    const scrapedEmails = await scrapeWebsiteEmails(domain);
+    const { emails: scrapedEmails, fetchOk } = await scrapeWebsiteEmails(domain);
+
+    // Record the fetch outcome. A dead/403/404 domain (no 2xx on any path) escalates the
+    // breaker; once TERMINAL, mark every organizer on this exact website exhausted.
+    const outcome = await recordOutcome(domain, fetchOk);
+    if (!fetchOk && outcome.status === 'TERMINAL') {
+      await markOrganizerWebsiteExhausted(organizerId, website);
+    }
+
     if (scrapedEmails.length > 0) {
       const bestEmail = scrapedEmails[0];
       const emailDomain = bestEmail.substring(bestEmail.indexOf('@') + 1).toLowerCase();
@@ -591,6 +639,34 @@ async function updateOrganizerEmail(
 }
 
 /**
+ * Mark an organizer (and any other organizer storing the exact same website URL) as having a
+ * permanently-exhausted website enrichment path, so it stops re-qualifying for the email
+ * discovery + website-address selectors. Best-effort; never throws.
+ */
+async function markOrganizerWebsiteExhausted(
+  organizerId: string,
+  website: string | null
+): Promise<void> {
+  try {
+    await prisma.organizer.update({
+      where: { id: organizerId },
+      data: { websiteEnrichmentExhausted: true },
+    });
+    if (website) {
+      await prisma.organizer.updateMany({
+        where: { website, websiteEnrichmentExhausted: false },
+        data: { websiteEnrichmentExhausted: true },
+      });
+    }
+  } catch (err) {
+    console.warn(
+      `[emailDiscoveryService] Failed to mark organizer ${organizerId} website exhausted:`,
+      err instanceof Error ? err.message : String(err)
+    );
+  }
+}
+
+/**
  * Extract domain from URL
  */
 function extractDomain(url: string): string | null {
@@ -615,6 +691,9 @@ export async function emailDiscoveryBatchJob(
   let discovered = 0;
   let skipped = 0;
 
+  // One de-dup guard for the whole batch — each website domain is fetched at most once per run.
+  const dedup = createRunDedupGuard();
+
   while (true) {
     try {
       const organizers = await prisma.organizer.findMany({
@@ -623,6 +702,7 @@ export async function emailDiscoveryBatchJob(
             { contactEmail: null },
             { website: { not: null } },
             { isUnmanagedListing: true },
+            { websiteEnrichmentExhausted: false },
           ],
         },
         take: batchSize,
@@ -633,7 +713,7 @@ export async function emailDiscoveryBatchJob(
       if (organizers.length === 0) break;
 
       for (const org of organizers) {
-        const email = await discoverEmail(org.id);
+        const email = await discoverEmail(org.id, { dedup });
         if (email) {
           discovered++;
         } else {

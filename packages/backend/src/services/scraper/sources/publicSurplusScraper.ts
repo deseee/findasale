@@ -390,9 +390,14 @@ export async function scrapePublicSurplus(
         'AUCTION_HOUSE',
         undefined, // contactEmail
         undefined, // phone
-        PS_BASE_URL, // website
+        undefined, // website (aggregator URL routed to listingUrl instead)
         undefined, // lat
-        undefined,  // lng
+        undefined, // lng
+        undefined, // isStateLicensed
+        undefined, // licenseState
+        undefined, // licenseNumber
+        undefined, // sourceLabel
+        PS_BASE_URL, // listingUrl (aggregator source — captured, never fetched)
       );
 
       if (orgId === null) {

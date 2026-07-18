@@ -155,6 +155,33 @@ export function isBlockedWebsiteDomain(url?: string | null): boolean {
 }
 
 /**
+ * Return true if the given URL's domain is a known AGGREGATOR / directory / marketplace host
+ * (bid13, propertyroom, publicsurplus, estatesales.*, etc.). These are third-party listing
+ * pages — never an organizer's own site — and belong in Organizer.listingUrl, never in
+ * Organizer.website (which the enrichment/re-fetch pipelines would then fetch). Checks both the
+ * registrable domain and the exact host. null / empty / malformed input -> false. Never throws.
+ */
+export function isAggregatorDomain(url?: string | null): boolean {
+  if (!url || typeof url !== 'string') return false;
+  const trimmed = url.trim();
+  if (!trimmed) return false;
+
+  let reg: string | null = null;
+  try {
+    reg = ep().registrableDomain(trimmed);
+  } catch {
+    reg = null;
+  }
+  const host = extractHost(trimmed);
+
+  for (const candidate of [reg, host]) {
+    if (!candidate) continue;
+    if (AGGREGATOR_DOMAINS.has(candidate)) return true;
+  }
+  return false;
+}
+
+/**
  * Map a social host to the correct EXISTING Organizer social column. Verified against
  * packages/database/prisma/schema.prisma (Organizer model): facebook, instagram, etsy,
  * twitterUrl, tiktokUrl, youtubeUrl, pinterestUrl, linkedInUrl. Hosts with no matching

@@ -22,6 +22,7 @@ import {
   domainMatchesBusiness,
   FAMOUS_UNRELATED_DOMAINS,
 } from '../services/emailProvenance';
+import { isBlockedWebsiteDomain } from '../config/domainBlocklist';
 
 const DEFAULT_BATCH_SIZE = 2000;
 
@@ -158,7 +159,7 @@ export async function runOrganizerContactBackfill(req: Request, res: Response): 
           const found = extractFromMeta(meta, ['website', 'websiteUrl', 'url', 'siteUrl']);
           if (found) {
             const dom = registrableDomain(found);
-            if (dom && !FAMOUS_UNRELATED_DOMAINS.has(dom) && domainMatchesBusiness(dom, organizer.businessName)) {
+            if (dom && !isBlockedWebsiteDomain(found) && !FAMOUS_UNRELATED_DOMAINS.has(dom) && domainMatchesBusiness(dom, organizer.businessName)) {
               patch.website = found;
               websiteFilled++;
               break;

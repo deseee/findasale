@@ -264,9 +264,14 @@ export async function scrapePropertyRoom(
         'AUCTION_HOUSE',
         undefined, // contactEmail
         undefined, // phone
-        'https://www.propertyroom.com', // website
+        undefined, // website (aggregator URL routed to listingUrl instead)
         undefined, // lat
-        undefined  // lng
+        undefined, // lng
+        undefined, // isStateLicensed
+        undefined, // licenseState
+        undefined, // licenseNumber
+        undefined, // sourceLabel
+        'https://www.propertyroom.com' // listingUrl (aggregator source — captured, never fetched)
       );
 
       if (orgId === null) {

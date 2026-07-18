@@ -17,6 +17,11 @@ import {
   domainMatchesBusiness,
   FAMOUS_UNRELATED_DOMAINS,
 } from '../emailProvenance';
+import {
+  isBlockedWebsiteDomain,
+  isAggregatorDomain,
+  classifySocialHost,
+} from '../../config/domainBlocklist';
 import { triggerSaleAndCityRevalidation, citySlugFromCityState } from '../revalidationService';
 
 export interface ScrapeJob {
@@ -224,6 +229,72 @@ function gateScrapedWebsite(website?: string, businessName?: string): string | n
 }
 
 /**
+ * Route a scraped "website" candidate to the destination it actually belongs in.
+ * Root cause of the Railway abuse complaint (2026-07): aggregator/social URLs were stored in
+ * Organizer.website, which the enrichment/re-fetch pipelines then hammered daily with 403/404s.
+ * Routing:
+ *   - our own finda.sale domain   -> dropped (never stored as an organizer website)
+ *   - social hosts (fb/ig/x/...)  -> the matching Organizer social column (never website)
+ *   - aggregator/directory hosts  -> listingUrl (captured, but never fetched as a website)
+ *   - a real business site         -> website (after the existing name-overlap gate)
+ * Only the destination that applies is returned; unusable candidates return {}.
+ */
+function routeScrapedWebsite(
+  candidate: string | undefined | null,
+  businessName?: string
+): { website?: string; listingUrl?: string; social?: { field: string; value: string } } {
+  if (!candidate) return {};
+  const trimmed = candidate.trim();
+  if (!trimmed) return {};
+
+  // Self-domain guard — never store our own finda.sale domain as an organizer website.
+  if (registrableDomain(trimmed) === 'finda.sale') {
+    console.warn(`[Ingest] Skipped website — self-domain (finda.sale): ${trimmed}`);
+    return {};
+  }
+
+  // Social host -> dedicated social column, never website.
+  const social = classifySocialHost(trimmed);
+  if (social) return { social };
+
+  // Aggregator / directory host -> listingUrl, never website (and never fetched).
+  if (isAggregatorDomain(trimmed)) return { listingUrl: trimmed };
+
+  // Any remaining blocklisted host (famous-unrelated mega-brand, social-without-column) -> drop.
+  if (isBlockedWebsiteDomain(trimmed)) {
+    console.warn(`[Ingest] Skipped website — blocklisted domain: ${trimmed}`);
+    return {};
+  }
+
+  // Real business site -> existing name-overlap gate.
+  const gated = gateScrapedWebsite(trimmed, businessName);
+  return gated ? { website: gated } : {};
+}
+
+/**
+ * Apply a routed scraped website onto a Prisma `updates` object. `website` only fills when the
+ * existing record has none (never overwrites a good site); a social URL is written to its column
+ * and an aggregator/`explicitListingUrl` is captured in listingUrl. Never lets a social/aggregator
+ * URL reach Organizer.website.
+ */
+function applyScrapedWebsite(
+  updates: Record<string, unknown>,
+  existingWebsite: string | null | undefined,
+  website: string | undefined,
+  businessName?: string,
+  explicitListingUrl?: string
+): void {
+  const routed = routeScrapedWebsite(website, businessName);
+  if (routed.website) {
+    if (!existingWebsite) updates.website = routed.website;
+  } else if (routed.social) {
+    updates[routed.social.field] = routed.social.value;
+  }
+  const listingUrl = routed.listingUrl ?? (explicitListingUrl ? explicitListingUrl.trim() : undefined);
+  if (listingUrl) updates.listingUrl = listingUrl;
+}
+
+/**
  * Gate a scraped contact email (from a directory listing) before storing it.
  * Rejects generic mailboxes (info@/admin@/…) and wrong-entity domains (no match to the
  * org website domain AND no token overlap with the business name). Directory-sourced
@@ -294,7 +365,8 @@ export async function getOrCreateScrapedOrganizer(
   isStateLicensed?: boolean,
   licenseState?: string,
   licenseNumber?: string,
-  sourceLabel?: string
+  sourceLabel?: string,
+  listingUrl?: string
 ): Promise<string | null> {
   // ADR-075: Validate businessCategory against allowlist
   const VALID_CATEGORIES = new Set([
@@ -353,8 +425,7 @@ export async function getOrCreateScrapedOrganizer(
         updates.emailDiscoveredAt = emailGate.emailDiscoveredAt;
       }
       if (phone && !byPlaceId.phone) updates.phone = phone;
-      const gatedWebsite = gateScrapedWebsite(website, businessName);
-      if (gatedWebsite && !byPlaceId.website) updates.website = gatedWebsite;
+      applyScrapedWebsite(updates, byPlaceId.website, website, businessName, listingUrl);
       if (lat !== undefined && lat !== null && !byPlaceId.lat) updates.lat = lat;
       if (lng !== undefined && lng !== null && !byPlaceId.lng) updates.lng = lng;
       if (isStateLicensed && !byPlaceId.isStateLicensed) updates.isStateLicensed = isStateLicensed;
@@ -407,8 +478,7 @@ export async function getOrCreateScrapedOrganizer(
         updates.emailDiscoveredAt = emailGate.emailDiscoveredAt;
       }
       if (phone && !byFoursquare.phone) updates.phone = phone;
-      const gatedWebsite = gateScrapedWebsite(website, businessName);
-      if (gatedWebsite && !byFoursquare.website) updates.website = gatedWebsite;
+      applyScrapedWebsite(updates, byFoursquare.website, website, businessName, listingUrl);
       if (lat !== undefined && lat !== null && !byFoursquare.lat) updates.lat = lat;
       if (lng !== undefined && lng !== null && !byFoursquare.lng) updates.lng = lng;
       if (isStateLicensed && !byFoursquare.isStateLicensed) updates.isStateLicensed = isStateLicensed;
@@ -461,8 +531,7 @@ export async function getOrCreateScrapedOrganizer(
         updates.emailDiscoveredAt = emailGate.emailDiscoveredAt;
       }
       if (phone && !byHere.phone) updates.phone = phone;
-      const gatedWebsite = gateScrapedWebsite(website, businessName);
-      if (gatedWebsite && !byHere.website) updates.website = gatedWebsite;
+      applyScrapedWebsite(updates, byHere.website, website, businessName, listingUrl);
       if (lat !== undefined && lat !== null && !byHere.lat) updates.lat = lat;
       if (lng !== undefined && lng !== null && !byHere.lng) updates.lng = lng;
       if (isStateLicensed && !byHere.isStateLicensed) updates.isStateLicensed = isStateLicensed;
@@ -517,8 +586,7 @@ export async function getOrCreateScrapedOrganizer(
       updates.emailDiscoveredAt = emailGate.emailDiscoveredAt;
     }
     if (phone && !byDedupeKey.phone) updates.phone = phone;
-    const gatedWebsite = gateScrapedWebsite(website, businessName);
-    if (gatedWebsite && !byDedupeKey.website) updates.website = gatedWebsite;
+    applyScrapedWebsite(updates, byDedupeKey.website, website, businessName, listingUrl);
     if (lat !== undefined && lat !== null && !byDedupeKey.lat) updates.lat = lat;
     if (lng !== undefined && lng !== null && !byDedupeKey.lng) updates.lng = lng;
     if (isStateLicensed && !byDedupeKey.isStateLicensed) updates.isStateLicensed = isStateLicensed;
@@ -579,8 +647,7 @@ export async function getOrCreateScrapedOrganizer(
       updates.emailDiscoveredAt = emailGate.emailDiscoveredAt;
     }
     if (phone && !existing.phone) updates.phone = phone;
-    const gatedWebsite = gateScrapedWebsite(website, businessName);
-    if (gatedWebsite && !existing.website) updates.website = gatedWebsite;
+    applyScrapedWebsite(updates, existing.website, website, businessName, listingUrl);
     if (lat !== undefined && lat !== null && !existing.lat) updates.lat = lat;
     if (lng !== undefined && lng !== null && !existing.lng) updates.lng = lng;
     if (isStateLicensed && !existing.isStateLicensed) updates.isStateLicensed = isStateLicensed;
@@ -632,7 +699,8 @@ export async function getOrCreateScrapedOrganizer(
     const validEmail = isValidExternalEmail(contactEmail);
     // Provenance + wrong-entity guards on initial create (bounce-incident fix).
     const emailGate = gateScrapedEmail(validEmail, website, businessName);
-    const gatedWebsite = gateScrapedWebsite(website, businessName);
+    const routedWebsite = routeScrapedWebsite(website, businessName);
+    const effectiveListingUrl = routedWebsite.listingUrl ?? (listingUrl ? listingUrl.trim() : undefined);
     const created = await prisma.user.create({
       data: {
         email: systemEmail,
@@ -655,7 +723,8 @@ export async function getOrCreateScrapedOrganizer(
             emailDiscoveryMethod: emailGate?.emailDiscoveryMethod ?? null,
             emailDiscoveryConfidence: emailGate?.emailDiscoveryConfidence ?? null,
             emailDiscoveredAt: emailGate?.emailDiscoveredAt ?? null,
-            website: gatedWebsite ?? null,
+            website: routedWebsite.website ?? null,
+            listingUrl: effectiveListingUrl ?? null,
             lat: lat ?? null,
             lng: lng ?? null,
             dedupeKey: generateDedupeKey(businessName, city),
@@ -673,6 +742,17 @@ export async function getOrCreateScrapedOrganizer(
       include: { organizer: { select: { id: true } } },
     });
     newOrgId = created.organizer!.id;
+    // Route a social URL captured at create time to its dedicated column (never website).
+    if (routedWebsite.social) {
+      try {
+        await prisma.organizer.update({
+          where: { id: newOrgId },
+          data: { [routedWebsite.social.field]: routedWebsite.social.value } as Prisma.OrganizerUpdateInput,
+        });
+      } catch (err) {
+        console.warn('[scraper] Failed to set social field on new organizer (non-blocking):', err);
+      }
+    }
   } catch (err: any) {
     // P2002 = unique constraint on email — the record already exists (race condition
     // or this business was previously ingested from the same source). Look up the
@@ -731,6 +811,7 @@ export interface ScrapedOrganizerRow {
   licenseState?: string;
   licenseNumber?: string;
   sourceLabel?: string;
+  listingUrl?: string;
 }
 
 /**
@@ -847,7 +928,7 @@ export async function batchUpsertScrapedOrganizers(
             row.esnOrgId, row.googlePlaceId, row.foursquareVenueId, row.hereBusinessId,
             row.businessCategory, row.contactEmail, row.phone, row.website,
             row.lat, row.lng, row.isStateLicensed, row.licenseState, row.licenseNumber,
-            row.sourceLabel,
+            row.sourceLabel, row.listingUrl,
           );
           results[originalIdx] = id;
           // Propagate id to in-batch duplicates
@@ -889,8 +970,7 @@ export async function batchUpsertScrapedOrganizers(
         updates.emailDiscoveredAt = emailGate.emailDiscoveredAt;
       }
       if (row.phone && !existingRecord.phone) updates.phone = row.phone;
-      const gatedWebsite = gateScrapedWebsite(row.website, row.businessName);
-      if (gatedWebsite && !existingRecord.website) updates.website = gatedWebsite;
+      applyScrapedWebsite(updates, existingRecord.website, row.website, row.businessName, row.listingUrl);
       if (row.lat != null && !existingRecord.lat) updates.lat = row.lat;
       if (row.lng != null && !existingRecord.lng) updates.lng = row.lng;
       if (row.isStateLicensed && !existingRecord.isStateLicensed) updates.isStateLicensed = row.isStateLicensed;

@@ -199,7 +199,7 @@ export async function scrapeBid13(
           const lngRaw = parseFloat(r.longitude ?? '');
           const lat = isNaN(latRaw) ? undefined : latRaw;
           const lng = isNaN(lngRaw) ? undefined : lngRaw;
-          const website = `https://bid13.com/node/${fid}`;
+          const listingUrl = `https://bid13.com/node/${fid}`;
 
           try {
             const orgId = await getOrCreateScrapedOrganizer(
@@ -214,13 +214,14 @@ export async function scrapeBid13(
               'AUCTION_HOUSE',
               undefined, // contactEmail
               undefined, // phone
-              website,
+              undefined, // website (aggregator URL routed to listingUrl instead)
               lat,
               lng,
               undefined, // isStateLicensed
               undefined, // licenseState
               undefined, // licenseNumber
-              SOURCE_NAME
+              SOURCE_NAME,
+              listingUrl // listingUrl (bid13 source page — captured, never fetched)
             );
 
             if (orgId) {

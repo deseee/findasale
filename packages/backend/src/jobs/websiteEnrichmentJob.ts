@@ -14,6 +14,7 @@
 import { prisma } from '../lib/prisma';
 import { discoverEmail } from '../services/emailDiscoveryService';
 import { registrableDomain, domainMatchesBusiness, FAMOUS_UNRELATED_DOMAINS } from '../services/emailProvenance';
+import { isBlockedWebsiteDomain } from '../config/domainBlocklist';
 import { updateDirectoryConfidenceScore } from '../services/directoryConfidenceService';
 
 const BATCH_SIZE = 50;
@@ -125,6 +126,14 @@ async function enrichBatch(skip: number): Promise<number> {
     // Website-assignment guard (bounce-incident fix): HERE/Foursquare return name-search
     // matches, NOT same-business verified links — they can be the wrong entity. Only attach
     // if the domain isn't a famous-unrelated mega-brand and shares a token with the name.
+    if (website) {
+      // Blocklist gate: never (re)introduce an aggregator/social/self-domain URL as a website —
+      // those are what the abuse-complaint re-fetch pipelines were hammering.
+      if (isBlockedWebsiteDomain(website)) {
+        console.warn(`[WebsiteEnrichment] Skipped website '${website}' for "${org.businessName}" — blocklisted (aggregator/social/self) domain`);
+        website = null;
+      }
+    }
     if (website) {
       const dom = registrableDomain(website);
       if (!dom || FAMOUS_UNRELATED_DOMAINS.has(dom) || !domainMatchesBusiness(dom, org.businessName)) {
