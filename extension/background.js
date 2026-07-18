@@ -163,6 +163,38 @@ async function finishSilentRemoval() {
   }
 }
 
+// ---- Price-sync detection (ADR-086, Phase A -- 2026-07-18) ----
+// Facebook has no API for a live price edit either (same gap as removal) -- this polls
+// GET /extension/pending-updates on the SAME alarm tick as checkPendingRemovals (per the ADR's
+// "fold into the existing ~20min poll cycle" decision, not a second poller). Phase A stops at
+// detection: it notifies the organizer that N item(s) have drifted, but does NOT open a tab or
+// attempt any edit -- Facebook's real edit-listing UI/selectors have not been live-verified via
+// Chrome MCP yet (ADR-086 explicitly forbids guessing them), so there is no Phase B action to
+// take yet. Phase B adds the actual edit action once that verification happens.
+async function checkPendingUpdates() {
+  // Gated by the SAME fasAutoRemoveMode setting as removal (ADR-086's "one combined toggle"
+  // design) -- 'off' opts out of cross-channel FB sync entirely, both removal and price-sync
+  // notifications. 'silent' has no Phase-A price-sync equivalent (no auto-edit action exists
+  // yet to run silently), so both 'notify' and 'silent' behave identically here until Phase B.
+  const { fasAutoRemoveMode = 'notify' } = await chrome.storage.local.get(['fasAutoRemoveMode']);
+  if (fasAutoRemoveMode === 'off') return;
+  const resp = await apiFetch('/extension/pending-updates');
+  const items = (resp.ok && resp.data && resp.data.items) || [];
+  if (!items.length) return;
+
+  // Phase A: notify only, matching the removal flow's 'notify' UX for a first-pass rollout --
+  // no silent/auto-edit mode exists yet because there's no edit action built to run silently.
+  chrome.notifications.create('fasPendingUpdates', {
+    type: 'basic',
+    iconUrl: 'icon128.png',
+    title: 'FindA.Sale',
+    message: items.length === 1
+      ? '1 item\'s price changed on FindA.Sale -- update it on Facebook Marketplace too.'
+      : items.length + ' items\' prices changed on FindA.Sale -- update them on Facebook Marketplace too.',
+    priority: 1
+  });
+}
+
 async function checkPendingRemovals() {
   const { fasAutoRemoveMode = 'notify' } = await chrome.storage.local.get(['fasAutoRemoveMode']);
   if (fasAutoRemoveMode === 'off') return;
@@ -203,9 +235,14 @@ async function throttledCheckPendingRemovals() {
     if (Date.now() - fasLastRemovalCheckAt < 30000) return;
     await chrome.storage.local.set({ fasLastRemovalCheckAt: Date.now() });
     await checkPendingRemovals();
+    await checkPendingUpdates().catch(() => {});
   } catch (e) {}
 }
-chrome.alarms.onAlarm.addListener((alarm) => { if (alarm.name === FAS_REMOVAL_ALARM) return checkPendingRemovals(); /* return the promise so MV3 keeps the SW alive until the poll+removal completes */ });
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name !== FAS_REMOVAL_ALARM) return;
+  // return the combined promise so MV3 keeps the SW alive until BOTH polls complete
+  return Promise.all([checkPendingRemovals(), checkPendingUpdates().catch(() => {})]);
+});
 chrome.notifications.onClicked.addListener((notifId) => {
   if (notifId !== 'fasPendingRemovals') return;
   chrome.notifications.clear(notifId);

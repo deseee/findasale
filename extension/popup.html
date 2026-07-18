@@ -23,13 +23,13 @@
     <p class="note" id="clPostNote" hidden>Opens Craigslist and fills each posting (for sale by owner) &mdash; title, price, description, and photos. You choose the location, complete any verification, and click <b>publish</b> yourself.</p>
     <p class="note" id="fbPublishNote">Fills and publishes each listing automatically, pausing if anything looks off. Uncheck to fill but stop before Publish so you can review first. <span class="dim">(Chrome's &ldquo;debugging this tab&rdquo; banner is normal.)</span></p>
     <div class="removeSetting">
-      <label class="chk" for="autoRemoveMode">When an item sells elsewhere</label>
+      <label class="chk" for="autoRemoveMode">Keep Facebook listings in sync</label>
       <select id="autoRemoveMode" class="select">
         <option value="notify">Notify me</option>
         <option value="silent">Remove automatically</option>
         <option value="off">Off</option>
       </select>
-      <p class="note">When an item sells elsewhere, the extension removes its Facebook listing (checked every ~20 min). &ldquo;Remove automatically&rdquo; runs in a background tab; &ldquo;Notify me&rdquo; waits for you to click the alert first.</p>
+      <p class="note">Checked every ~20 min. When an item sells elsewhere, the extension removes its Facebook listing &mdash; &ldquo;Remove automatically&rdquo; runs in a background tab, &ldquo;Notify me&rdquo; waits for you to click the alert first. When you change an item's price on FindA.Sale, you'll also get a notification to update it on Facebook yourself &mdash; automatic price updates aren't built yet, so this always just notifies for now, even in &ldquo;Remove automatically&rdquo; mode. &ldquo;Off&rdquo; turns off both.</p>
     </div>
   </footer>
   <script src="config.js"></script>
