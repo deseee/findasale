@@ -37,7 +37,6 @@ import {
 } from '../utils/ebayPolicyParser';
 import { getTierLimit, SubscriptionTier } from '../constants/tierLimits';
 import { domainToL1 } from '../config/ebayCategories';
-import { notifyFacebookExportedItemSold } from '../services/facebookNudgeService';
 import { ensureCalculatedFulfillmentPolicy } from '../services/ebayCalculatedPolicyService';
 import { ensureFvfFlatRatePolicy } from '../services/ebayFlatRatePolicyService';
 import {
@@ -5185,8 +5184,11 @@ export const handleEbayNotificationVerification = (req: express.Request, res: Re
 
 /**
  * POST /api/ebay/notifications
- * eBay Commerce Notification API — receive marketplace.order.paid events
- * When an item sells on eBay, mark it SOLD in FindA.Sale and withdraw the offer.
+ * eBay Commerce Notification API — receive ORDER_CONFIRMATION events.
+ * ACKNOWLEDGE-ONLY (ADR-087 D3): payload shape (orderId/lineItemId presence) is
+ * unconfirmed against a real eBay delivery, so this handler never mutates an item
+ * or decrements the stock pool. It logs the raw payload for future schema
+ * confirmation. Actual sale reconciliation is owned by ebaySoldSyncCron.ts.
  */
 export const handleEbayNotification = async (req: express.Request, res: Response): Promise<void> => {
   // ── Signature gate (synchronous, BEFORE ACK) ──────────────────────────────
@@ -5251,62 +5253,30 @@ export const handleEbayNotification = async (req: express.Request, res: Response
       return;
     }
 
-    const lineItems: Array<{ sku?: string; legacyItemId?: string; title?: string }> = body?.data?.lineItems || [];
-    if (lineItems.length === 0) return;
-
-    console.log(`[eBay Notify] Received ORDER_CONFIRMATION — ${lineItems.length} line item(s)`);
-
-    for (const lineItem of lineItems) {
-      const sku = lineItem.sku || '';
-      const legacyItemId = lineItem.legacyItemId || '';
-
-      // Match FindA.Sale item by SKU (FAS-{itemId}) or by legacyItemId (eBay listing ID)
-      let matchedItem: { id: string; title: string; saleId: string | null; ebayOfferId: string | null; sale: { organizerId: string; organizer: { userId: string } } | null } | null = null;
-
-      if (sku.startsWith('FAS-')) {
-        const itemId = sku.substring(4);
-        matchedItem = await prisma.item.findUnique({
-          where: { id: itemId },
-          select: { id: true, title: true, saleId: true, ebayOfferId: true, sale: { select: { organizerId: true, organizer: { select: { userId: true } } } } },
-        });
-      }
-
-      if (!matchedItem && legacyItemId) {
-        matchedItem = await prisma.item.findFirst({
-          where: { ebayListingId: legacyItemId, status: 'AVAILABLE' },
-          select: { id: true, title: true, saleId: true, ebayOfferId: true, sale: { select: { organizerId: true, organizer: { select: { userId: true } } } } },
-        });
-      }
-
-      if (!matchedItem) {
-        console.log(`[eBay Notify] No matching item for SKU="${sku}" legacyItemId="${legacyItemId}"`);
-        continue;
-      }
-
-      // Mark SOLD
-      await prisma.item.update({ where: { id: matchedItem.id }, data: { status: 'SOLD' } });
-      console.log(`[eBay Notify] Item ${matchedItem.id} ("${matchedItem.title}") marked SOLD via webhook`);
-
-      // Withdraw eBay listing (fire-and-forget — item is already sold, prevent double-sale)
-      endEbayListingIfExists(matchedItem.id).catch(err =>
-        console.warn(`[eBay Notify] withdraw failed for item ${matchedItem!.id}:`, err.message)
-      );
-      notifyFacebookExportedItemSold(matchedItem.id).catch(err =>
-        console.warn(`[FB Nudge] failed for item ${matchedItem!.id}:`, err.message)
-      );
-
-      // Notify organizer
-      await prisma.notification.create({
-        data: {
-          userId: matchedItem.sale!.organizer.userId,
-          type: 'SALE_UPDATE',
-          title: 'Item sold on eBay',
-          body: `"${matchedItem.title}" was purchased on eBay and has been marked as sold.`,
-          link: matchedItem.saleId ? `/organizer/sales/${matchedItem.saleId}` : '/organizer/inventory',
-          notificationChannel: 'IN_APP',
-        },
-      });
-    }
+    // --- ADR-087 D3 preflight (MANDATORY, see ADR-087 Architect Decisions S1126) ---
+    // We have never received a real ORDER_CONFIRMATION notification in production
+    // (STATE.md Blocked Queue #14 — still PENDING/CODE-ONLY as of S1126) and static
+    // analysis of eBay's Commerce Notification API docs could not confirm whether
+    // body.data carries an orderId or whether each lineItem carries a lineItemId.
+    // Per ADR-087 D3's mandatory preflight: if the payload shape cannot be confirmed,
+    // this handler MUST be acknowledge-only and MUST NOT decrement the stock pool or
+    // flip item status (an unguarded decrement here could double-count against the
+    // cron, or fire on an unconfirmed field mapping). Reconciliation is owned
+    // exclusively by ebaySoldSyncCron.ts, which polls the well-documented eBay
+    // Fulfillment API (confirmed orderId + lineItems[].lineItemId fields, live in
+    // production) every 15 minutes and safely decrements via sellItemUnits() behind
+    // the EbaySoldEvent(ebayOrderId, ebayLineItemId) idempotency ledger.
+    // DO NOT reintroduce a direct item mutation / pool decrement in this handler
+    // without first capturing and confirming a real payload's field names — the log
+    // line below exists specifically to capture that evidence the next time eBay
+    // actually delivers this notification.
+    const lineItems: unknown[] = Array.isArray(body?.data?.lineItems) ? body.data.lineItems : [];
+    console.log(
+      `[eBay Notify] Received ORDER_CONFIRMATION — ${lineItems.length} line item(s). ` +
+      'Acknowledge-only (ADR-087 D3 payload shape unconfirmed) — no item mutated, no stock decremented. ' +
+      'Sale reconciliation happens via ebaySoldSyncCron.ts (15-min poll).'
+    );
+    console.log('[eBay Notify] Raw ORDER_CONFIRMATION payload (captured for future D3 schema confirmation):', JSON.stringify(body));
   } catch (err: any) {
     console.error('[eBay Notify] Error processing notification:', err.message);
     // Response already sent — just log
