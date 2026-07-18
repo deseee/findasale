@@ -1258,6 +1258,31 @@ export async function ingestScrapedListing(
     );
 
     if (dupeResult.isDuplicate) {
+      if (dupeResult.action === 'rollForward' && dupeResult.existingSaleId) {
+        try {
+          await prisma.sale.update({
+            where: { id: dupeResult.existingSaleId },
+            data: {
+              startDate: listing.startDate,
+              endDate: listing.endDate,
+              sourceUrl: listing.sourceUrl,
+              lastScrapedAt: new Date(),
+              ...(listing.scrapedMetadata
+                ? { scrapedMetadata: listing.scrapedMetadata as Prisma.InputJsonValue }
+                : {}),
+            },
+          });
+          return {
+            saleId: dupeResult.existingSaleId,
+            status: 'updated',
+            reason: `Recurring event rolled forward: ${dupeResult.reason}`,
+          };
+        } catch (err) {
+          console.error('[scraper] roll-forward update failed, falling back to skip:', err);
+          // fall through to the normal skip path so a transient DB error never
+          // blocks the run or risks a duplicate insert
+        }
+      }
       // Buffer the lastScrapedAt touch — flushed in bulk via updateMany (Sentry fix 2026-06-18)
       if (dupeResult.existingSaleId) {
         await enqueueFreshnessTouch(dupeResult.existingSaleId);
