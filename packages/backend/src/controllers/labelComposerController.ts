@@ -342,7 +342,14 @@ export const printLabelBatch = async (req: AuthRequest, res: Response) => {
         qrDataUrls.push(''); // leading skip-slot — no QR, keeps index aligned with tags
         continue;
       }
-      const qrUrl = `${FRONTEND_URL}/t/${tag.tagId}`;
+      // Direct-resolve URL: item-specific tags link straight to the item page;
+      // price-only/misc tags link to POS quick-add (mirrors printKitController.ts
+      // patterns). The old `/t/${tagId}` short-link had no resolver route and no
+      // DB persistence (batchStore is in-memory, wiped on every restart/deploy) --
+      // removed in favor of these permanent, always-resolvable URLs.
+      const qrUrl = tag.itemId
+        ? `${FRONTEND_URL}/items/${tag.itemId}`
+        : `${FRONTEND_URL}/pos/${batch.saleId}?action=add-misc&price=${tag.price.toFixed(2)}`;
       const qrDataUrl = await QRCode.toDataURL(qrUrl, {
         type: 'image/png',
         width: QR_SIZE_LABEL,
