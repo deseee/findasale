@@ -210,11 +210,23 @@ function isValidExternalEmail(email?: string): string | null {
  * business — the guard that stops the wrong site (e.g. disney/club33) being scraped later.
  * Returns the website if acceptable, otherwise null (and logs the skip).
  */
-function gateScrapedWebsite(website?: string, businessName?: string): string | null {
+function gateScrapedWebsite(website?: string, businessName?: string, sourceOwnDomain?: string): string | null {
   if (!website) return null;
   const dom = registrableDomain(website);
   if (!dom) {
     console.warn(`[Ingest] Skipped website — unparseable domain: ${website}`);
+    return null;
+  }
+  // Defense-in-depth: reject any blocklisted host (aggregator / social / famous-unrelated)
+  // before the name-overlap check, so a blocked domain can never survive as a website even
+  // if a caller reaches this gate without first going through routeScrapedWebsite.
+  if (isBlockedWebsiteDomain(website)) {
+    console.warn(`[Ingest] Skipped website — blocklisted domain: ${dom}`);
+    return null;
+  }
+  // Self-domain guard: never store the source's own directory/aggregator domain as a website.
+  if (sourceOwnDomain && dom === sourceOwnDomain) {
+    console.warn(`[Ingest] Skipped website — source's own domain: ${dom}`);
     return null;
   }
   if (FAMOUS_UNRELATED_DOMAINS.has(dom)) {
@@ -241,7 +253,8 @@ function gateScrapedWebsite(website?: string, businessName?: string): string | n
  */
 function routeScrapedWebsite(
   candidate: string | undefined | null,
-  businessName?: string
+  businessName?: string,
+  sourceOwnDomain?: string
 ): { website?: string; listingUrl?: string; social?: { field: string; value: string } } {
   if (!candidate) return {};
   const trimmed = candidate.trim();
@@ -267,7 +280,7 @@ function routeScrapedWebsite(
   }
 
   // Real business site -> existing name-overlap gate.
-  const gated = gateScrapedWebsite(trimmed, businessName);
+  const gated = gateScrapedWebsite(trimmed, businessName, sourceOwnDomain);
   return gated ? { website: gated } : {};
 }
 

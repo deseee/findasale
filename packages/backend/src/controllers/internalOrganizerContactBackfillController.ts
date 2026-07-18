@@ -20,9 +20,8 @@ import {
   registrableDomain,
   emailDomain,
   domainMatchesBusiness,
-  FAMOUS_UNRELATED_DOMAINS,
 } from '../services/emailProvenance';
-import { isBlockedWebsiteDomain } from '../config/domainBlocklist';
+import { isBlockedWebsiteDomain, classifySocialHost } from '../config/domainBlocklist';
 
 const DEFAULT_BATCH_SIZE = 2000;
 
@@ -153,20 +152,27 @@ export async function runOrganizerContactBackfill(req: Request, res: Response): 
       }
 
       // --- Website (gated: bounce-incident fix) ---
+      // Route social hosts to their dedicated Organizer column; drop aggregator / social /
+      // self / famous-unrelated domains (isBlockedWebsiteDomain); only a real business site
+      // that shares a token with the business name survives as website.
       if (!organizer.website) {
         for (const sale of organizer.sales) {
           const meta = sale.scrapedMetadata as Record<string, unknown> | null;
           const found = extractFromMeta(meta, ['website', 'websiteUrl', 'url', 'siteUrl']);
-          if (found) {
-            const dom = registrableDomain(found);
-            if (dom && !isBlockedWebsiteDomain(found) && !FAMOUS_UNRELATED_DOMAINS.has(dom) && domainMatchesBusiness(dom, organizer.businessName)) {
-              patch.website = found;
-              websiteFilled++;
-              break;
-            } else {
-              console.warn(`[OrganizerContactBackfill] Skipped website '${found}' for ${organizer.id} — domain '${dom ?? 'unparseable'}' rejected`);
-            }
+          if (!found) continue;
+          // Social host -> matching Organizer social column, never website.
+          const social = classifySocialHost(found);
+          if (social) {
+            if (!patch[social.field]) patch[social.field] = social.value;
+            break;
           }
+          const dom = registrableDomain(found);
+          if (dom && !isBlockedWebsiteDomain(found) && domainMatchesBusiness(dom, organizer.businessName)) {
+            patch.website = found;
+            websiteFilled++;
+            break;
+          }
+          console.warn(`[OrganizerContactBackfill] Skipped website '${found}' for ${organizer.id} — domain '${dom ?? 'unparseable'}' rejected`);
         }
       }
 
