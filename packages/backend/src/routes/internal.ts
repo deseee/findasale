@@ -76,7 +76,6 @@ import { runTexasLicensingScraper } from '../services/scraper/sources/texasLicen
 import { runUtahLicensingScraper } from '../services/scraper/sources/utahLicensingScraper';
 import { runOsmScraper } from '../services/scraper/osmScraper';
 import { scrapeGarageSaleFinder } from '../services/scraper/sources/garageSaleFinder';
-import { runAuctionZipScraper } from '../services/scraper/sources/auctionZipScraper';
 import { runFacebookMarketplaceScraper } from '../services/scraper/sources/facebook-marketplace';
 import { scrapeNAADirectory } from '../services/scraper/sources/naaAuctioneerDirectory';
 import { runAlaskaPhase2Scraper } from '../services/scraper/sources/alaskaPhase2Scraper';
@@ -628,16 +627,6 @@ router.post('/scraper/run-garagesalefinder', requireSecret, async (req: express.
       console.error('[GarageSaleFinder] scraper error:', error);
     }
   })();
-});
-
-// POST /api/internal/scraper/run-auctionzip
-router.post('/scraper/run-auctionzip', requireSecret, async (req: express.Request, res: express.Response) => {
-  const letters = Array.isArray(req.body?.letters) ? req.body.letters : undefined;
-  res.status(202).json({ message: 'AuctionZip scraper started' });
-  runAuctionZipScraper(letters).catch(err => {
-    console.error('[AuctionZip] scraper error:', err);
-    Sentry.captureException(err, { tags: { scraper: '[AuctionZip]', type: 'scraper_failure' } });
-  });
 });
 
 // POST /api/internal/scraper/run-auction-ninja

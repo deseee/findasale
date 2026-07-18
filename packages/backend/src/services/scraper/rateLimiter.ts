@@ -1,6 +1,7 @@
 /**
  * Rate Limiter for scraper requests
- * Enforces 1 req/sec globally + robots.txt compliance + exponential backoff on 429
+ * Enforces per-host rate spacing (default 1 req/sec) with +/-30% jitter + robots.txt
+ * advisory checks + per-host exponential backoff on 429/503.
  */
 
 import robotsParser from 'robots-parser';
@@ -15,7 +16,7 @@ interface RateLimitConfig {
 }
 
 export class RateLimiter {
-  private lastRequestTime: number = 0;
+  private lastRequestTimes: Map<string, number> = new Map();
   private config: RateLimitConfig;
   private robotsTxt: Map<string, any> = new Map();
   private backoffDelays: Map<string, number> = new Map();
@@ -77,11 +78,14 @@ export class RateLimiter {
    */
   async waitBeforeRequest(domain: string): Promise<void> {
     const minInterval = 1000 / this.config.requestsPerSecond; // ms between requests
-    const timeSinceLastRequest = Date.now() - this.lastRequestTime;
+    const lastRequestTime = this.lastRequestTimes.get(domain) || 0;
+    const timeSinceLastRequest = Date.now() - lastRequestTime;
 
-    // Check for backoff delay
+    // Check for backoff delay (per-host)
     const backoffDelay = this.backoffDelays.get(domain) || 0;
-    const requiredWait = Math.max(minInterval, backoffDelay);
+    const baseWait = Math.max(minInterval, backoffDelay);
+    // Apply +/-30% random jitter so request cadence is not a detectable fixed metronome
+    const requiredWait = baseWait * (0.7 + Math.random() * 0.6);
 
     if (timeSinceLastRequest < requiredWait) {
       await new Promise((resolve) =>
@@ -89,7 +93,7 @@ export class RateLimiter {
       );
     }
 
-    this.lastRequestTime = Date.now();
+    this.lastRequestTimes.set(domain, Date.now());
   }
 
   /**

@@ -27,7 +27,6 @@ import { scrapeLockerFox } from './sources/lockerFoxScraper';
 import { scrapeStorageUnitAuctionList } from './sources/storageUnitAuctionListScraper';
 import { scrapeStorageBattles } from './sources/storageBattlesScraper';
 import { scrapeInvaluable } from './sources/invaluableAuctionHouseScraper';
-import { runAuctionZipScraper } from './sources/auctionZipScraper';
 import { scrapeProxibid } from './sources/proxibidScraper';
 import { scrapeFleamapket } from './sources/fleamapketScraper';
 import { scrapeEstateSalesOrg } from './sources/estatesalesOrgScraper';
@@ -280,7 +279,7 @@ export const SOURCE_REGISTRY: ScraperSourceDef[] = [
     displayName: 'Bid13.com',
     type: 'directory',
     runMode: 'national-once',
-    enabled: true, // ACTIVE — /api/v1/search.php JSON endpoint confirmed 2026-06-12.
+    enabled: false, // PARKED S1133 — bid13 formally objected (abuse complaint); do not re-enable until egress isolation + volume caps proven. Was ACTIVE — /api/v1/search.php JSON endpoint confirmed 2026-06-12.
     qualityTier: 'medium',
     legalNote: 'ToS CLEAR — no anti-scraping language (terms-of-service page reviewed 2026-06-12). robots.txt: /api/v1/ path not blocked, crawl-delay: 5 s (respected). API endpoint /api/v1/search.php discovered via bid13_search.js custom module. Confirmed returning live JSON facility data.',
     run: scrapeBid13,
@@ -326,25 +325,6 @@ export const SOURCE_REGISTRY: ScraperSourceDef[] = [
     qualityTier: 'high',
     legalNote: 'ToS GRAY — ToS page is JS-rendered (CSR-only), not accessible via static fetch. robots.txt blank (no Disallow rules). Public unauthenticated JSON REST API at /auction-houses endpoint linked from main nav. 8,158 US auction houses with name, city, state, phone, email, website. Same GRAY classification as StorageAuctions.com. Verified 2026-06-10.',
     run: scrapeInvaluable,
-  },
-  {
-    id: 'AuctionZip',
-    displayName: 'AuctionZip.com (Auctioneer Directory)',
-    type: 'directory',
-    runMode: 'national-once',
-    enabled: false, // DISABLED 2026-06-29 — Cloudflare IP-block on Railway egress; data covered by Invaluable.com
-    qualityTier: 'high',
-    legalNote: "ToS CLEAR — ToS Section 4 states content is public information usable for personal and commercial use. robots.txt disallows only /cgi-bin/*, /search, /my-account, /login, /bidNow — /Auctioneer-Directory/ explicitly allowed. Static HTML A–Z letter pages, ~25,000 US auction houses. Verified 2026-06-10.",
-    run: async (_metro: string, _organizerId: string, _rateLimiter: RateLimiter): Promise<ScrapeStats> => {
-      await runAuctionZipScraper();
-      return {
-        itemsFound: 0,
-        itemsCreated: 0,
-        itemsUpdated: 0,
-        itemsSkipped: 0,
-        itemsFailed: 0,
-      };
-    },
   },
   {
     id: 'Proxibid',

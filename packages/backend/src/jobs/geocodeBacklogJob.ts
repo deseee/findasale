@@ -259,6 +259,12 @@ async function runGeocodeBacklog(): Promise<void> {
         err instanceof Error ? err.message : String(err)
       );
     }
+
+    // Politeness delay between successive outbound geocode requests.
+    // OSM Nominatim policy is ~1 req/sec; enforce a minimum inter-request gap
+    // at the loop level so the actual outbound calls are throttled (the
+    // un-geocodeable `continue` skip above makes no outbound call and is exempt).
+    await sleep(MIN_REQUEST_INTERVAL_MS);
   }
 
   console.log(
