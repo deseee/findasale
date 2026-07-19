@@ -1128,6 +1128,7 @@ export const updateSaleStatus = async (req: AuthRequest, res: Response) => {
     if (status === 'ENDED') {
       syncOrganizerTier(updated.organizerId).catch((err) => {
         console.error('[tierService] Failed to sync tier for organizer:', updated.organizerId, err);
+      });
 
       // Roadmap #460: End-of-Sale Auto-Liquidation
       // Fire-and-forget: count AVAILABLE items and log them as queued for liquidation.
@@ -1147,7 +1148,6 @@ export const updateSaleStatus = async (req: AuthRequest, res: Response) => {
         // Query: items WHERE status='AVAILABLE' AND isActive=true AND sale.status='ENDED'
       }).catch((err) => {
         console.error('[liquidation] Failed to count liquidation items for sale:', updated.id, err);
-      });
       });
     }
 

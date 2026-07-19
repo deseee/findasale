@@ -194,10 +194,10 @@ router.post('/resend-webhook', express.raw({ type: 'application/json' }), async 
   try {
     const secret = process.env.RESEND_WEBHOOK_SECRET;
     if (!secret) {
-      console.warn('[OutreachWebhook] RESEND_WEBHOOK_SECRET not set — falling back to request body validation only. Set RESEND_WEBHOOK_SECRET for full signature verification.');
-      // Fall back to processing without signature verification (less secure but non-blocking)
-      const payload = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
-      return await handleResendWebhook(payload, res);
+      // Fail closed: never process an unsigned webhook payload. A missing secret
+      // means we cannot verify this request actually came from Resend.
+      console.error('[OutreachWebhook] RESEND_WEBHOOK_SECRET not set — rejecting webhook (fail-closed). Set RESEND_WEBHOOK_SECRET to enable this endpoint.');
+      return res.status(503).json({ error: 'Webhook not configured' });
     }
 
     const svixId = req.headers['svix-id'] as string;
