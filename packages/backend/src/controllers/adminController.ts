@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import * as Sentry from '@sentry/node';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
-import { getMonthlyAICost, resetMonthlyAICost, getMonthlyWebDetectionCost, getEbayImageSearchUsage, getMonthlyGroundingCost } from '../lib/aiCostTracker';
+import { getMonthlyAICost, getMonthlyAICostFromLog, resetMonthlyAICost, getMonthlyWebDetectionCost, getEbayImageSearchUsage, getMonthlyGroundingCost } from '../lib/aiCostTracker';
 import { getMonthlyCloudinaryEstimate, getBandwidthThreshold, getTodayCloudinaryUsage, resetTodayCloudinaryUsage } from '../lib/cloudinaryBandwidthTracker';
 import { getEbayRateLimitStatus } from '../lib/ebayRateLimiter';
 import { emailService } from '../lib/emailService';
@@ -841,6 +841,15 @@ export const getAIUsage = async (req: AuthRequest, res: Response) => {
     const usage = await getMonthlyAICost();
     const costPercentage = (usage.estimatedCost / usage.ceiling) * 100;
 
+    // Ground-truth comparison (2026-07-19): the Redis estimate above uses one flat per-token
+    // rate for every model, while ApiUsageLog is written with real per-model pricing -- these
+    // can diverge by 5x+ in a Haiku- or Opus-heavy month. Additive-only fields; nothing existing
+    // removed or renamed, so this stays backward-compatible for the current frontend.
+    const logCost = await getMonthlyAICostFromLog();
+    const costDivergencePct = logCost.actualCostFromLog > 0
+      ? parseFloat((((usage.estimatedCost - logCost.actualCostFromLog) / logCost.actualCostFromLog) * 100).toFixed(1))
+      : null;
+
     // Web Detection: separate line item, separate ceiling — ADR-web-detection-hard-gating-2026-07-01
     const webDetection = await getMonthlyWebDetectionCost();
     const webDetectionCostPercentage = webDetection.ceiling > 0 ? (webDetection.estimatedCost / webDetection.ceiling) * 100 : 0;
@@ -860,6 +869,9 @@ export const getAIUsage = async (req: AuthRequest, res: Response) => {
       ceiling: usage.ceiling,
       costPercentage: parseFloat(costPercentage.toFixed(1)),
       status: usage.estimatedCost >= usage.ceiling ? 'EXCEEDED' : 'NORMAL',
+      actualCostFromLog: parseFloat(logCost.actualCostFromLog.toFixed(2)),
+      callCountFromLog: logCost.callCountFromLog,
+      costDivergencePct,
       webDetection: {
         enabled: webDetection.enabled,
         monthKey: webDetection.monthKey,

@@ -42,6 +42,10 @@ interface AIUsage {
   ceiling: number;
   costPercentage: number;
   status: string;
+  // Ground-truth comparison against ApiUsageLog (2026-07-19) -- see aiCostTracker.ts getMonthlyAICostFromLog
+  actualCostFromLog: number;
+  callCountFromLog: number;
+  costDivergencePct: number | null;
   webDetection: WebDetectionUsage;
   ebayImageSearch: EbayImageSearchUsage;
   grounding: GroundingUsage;
@@ -155,6 +159,18 @@ export default function AIUsagePage() {
               <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mt-2">
                 {usage.costPercentage.toFixed(1)}% of ceiling
               </p>
+              {usage.callCountFromLog > 0 && (
+                <p className={`text-xs mt-2 ${
+                  usage.costDivergencePct !== null && Math.abs(usage.costDivergencePct) >= 10
+                    ? 'text-amber-600 dark:text-amber-400 font-medium'
+                    : 'text-gray-400 dark:text-gray-500'
+                }`}>
+                  Ledger: ${usage.actualCostFromLog.toFixed(2)} actual ({usage.callCountFromLog} logged calls)
+                  {usage.costDivergencePct !== null && Math.abs(usage.costDivergencePct) >= 10 && (
+                    <> &mdash; estimate differs by {usage.costDivergencePct > 0 ? '+' : ''}{usage.costDivergencePct}%</>
+                  )}
+                </p>
+              )}
             </div>
 
             {/* Web Detection */}

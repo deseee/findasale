@@ -229,12 +229,19 @@ function resolveAnthropicRate(model: string): AnthropicRate {
 /**
  * Compute the real USD cost of one Anthropic call from its actual input/output token counts and
  * the per-model rate table. Unknown models fall back to Haiku-4.5 rates (and log a warn).
+ *
+ * `isBatch` (Batch API — 2026-07-19): Anthropic's Message Batches API charges a flat 50% of
+ * standard synchronous pricing for every model (confirmed against platform.claude.com pricing
+ * table — Haiku 4.5 batch $0.50/$2.50 per MTok = exactly half the $1.00/$5.00 sync rate already
+ * in ANTHROPIC_RATES above). Applying a flat 0.5 multiplier here — instead of a separate batch
+ * rate table — means the discount stays correct even if ANTHROPIC_RATES is updated later.
  */
-export function computeAnthropicCostUsd(model: string, inputTokens: number, outputTokens: number): number {
+export function computeAnthropicCostUsd(model: string, inputTokens: number, outputTokens: number, isBatch: boolean = false): number {
   const rate = resolveAnthropicRate(model);
   const inTok = Number.isFinite(inputTokens) && inputTokens > 0 ? inputTokens : 0;
   const outTok = Number.isFinite(outputTokens) && outputTokens > 0 ? outputTokens : 0;
-  return (inTok / 1_000_000) * rate.inputPerM + (outTok / 1_000_000) * rate.outputPerM;
+  const cost = (inTok / 1_000_000) * rate.inputPerM + (outTok / 1_000_000) * rate.outputPerM;
+  return isBatch ? cost * 0.5 : cost;
 }
 
 /**
@@ -247,9 +254,10 @@ export async function recordAnthropicUsage(
   service: string,
   model: string,
   inputTokens: number,
-  outputTokens: number
+  outputTokens: number,
+  isBatch: boolean = false
 ): Promise<void> {
-  const costUsd = computeAnthropicCostUsd(model, inputTokens, outputTokens);
+  const costUsd = computeAnthropicCostUsd(model, inputTokens, outputTokens, isBatch);
   await writeApiUsageRow(service, costUsd, 1);
   const inTok = Number.isFinite(inputTokens) && inputTokens > 0 ? inputTokens : 0;
   const outTok = Number.isFinite(outputTokens) && outputTokens > 0 ? outputTokens : 0;
@@ -265,16 +273,20 @@ export async function recordAnthropicUsageOrEstimate(
   service: string,
   model: string,
   usage: { input_tokens?: number; output_tokens?: number } | null | undefined,
-  estimatedTotalTokens: number
+  estimatedTotalTokens: number,
+  isBatch: boolean = false
 ): Promise<void> {
   const inTok = usage?.input_tokens;
   const outTok = usage?.output_tokens;
   if (typeof inTok === 'number' && typeof outTok === 'number') {
-    await recordAnthropicUsage(service, model, inTok, outTok);
+    await recordAnthropicUsage(service, model, inTok, outTok, isBatch);
   } else {
-    // No real usage on the response — preserve the legacy estimate path exactly.
+    // No real usage on the response — preserve the legacy estimate path exactly, but still halve
+    // the estimate for batch calls so a missing-usage batch response doesn't silently overcount
+    // spend at the full synchronous rate (Batch API — 2026-07-19).
     await trackAITokens(estimatedTotalTokens);
-    await recordApiUsage(service, (estimatedTotalTokens / 1_000_000) * ANTHROPIC_COST_PER_M_TOKENS);
+    const perMRate = isBatch ? ANTHROPIC_COST_PER_M_TOKENS * 0.5 : ANTHROPIC_COST_PER_M_TOKENS;
+    await recordApiUsage(service, (estimatedTotalTokens / 1_000_000) * perMRate);
   }
 }
 
@@ -317,6 +329,43 @@ export async function getMonthlyAICost(): Promise<{
   const estimatedCost = (tokensUsed / 1_000_000) * ANTHROPIC_COST_PER_M_TOKENS;
   const monthKey = key.replace('ai:tokens:', '');
   return { monthKey, tokensUsed, estimatedCost, ceiling: CEILING_USD };
+}
+
+/**
+ * Get this month's ACTUAL spend from the durable ApiUsageLog table (ground truth, written by
+ * every real recordAnthropicUsage/writeApiUsageRow call), separate from getMonthlyAICost()'s
+ * Redis-estimate above. Investigation 2026-07-19 confirmed the two paths use DIFFERENT pricing
+ * math (this function's source is per-model-accurate; the Redis estimate uses one flat
+ * $3/M-token rate for every model), so they can diverge by 5x+ in an Opus- or Haiku-heavy month,
+ * not just "drift on a Redis flush." Scoped to the same anthropic:*-tagging + Vision surface the
+ * admin "Base AI Cost" card already covers (excludes Web Detection/Grounding/eBay, which have
+ * their own separate cards/ceilings).
+ */
+export async function getMonthlyAICostFromLog(): Promise<{
+  monthKey: string;
+  actualCostFromLog: number;
+  callCountFromLog: number;
+}> {
+  const now = new Date();
+  const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  try {
+    const rows = await prisma.apiUsageLog.findMany({
+      where: { dateKey: { startsWith: monthKey } },
+      select: { service: true, callCount: true, estimatedCostCents: true },
+    });
+    let costCents = 0;
+    let calls = 0;
+    for (const row of rows) {
+      if (row.service.startsWith('anthropic:') || row.service === 'google_vision:photo_tagging') {
+        costCents += row.estimatedCostCents;
+        calls += row.callCount;
+      }
+    }
+    return { monthKey, actualCostFromLog: costCents / 100, callCountFromLog: calls };
+  } catch (err) {
+    console.warn('[getMonthlyAICostFromLog] Failed to query ApiUsageLog:', (err as Error)?.message || err);
+    return { monthKey, actualCostFromLog: 0, callCountFromLog: 0 };
+  }
 }
 
 /**

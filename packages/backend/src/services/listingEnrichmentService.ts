@@ -152,6 +152,61 @@ function sanitizeForPostgres(value: string): string {
     .trim();
 }
 
+export function buildEnrichmentPrompt(description: string, saleTitle: string): string {
+  return `You are analyzing a secondary market sale listing for ${regionConfig.city}, ${regionConfig.state}.
+
+Sale Title: "${saleTitle}"
+Description: "${description}"
+
+Extract and respond with ONLY valid JSON (no markdown, no explanation):
+{
+  "categories": ["category1", "category2", "category3"],
+  "priceRange": "$X\u2013$Y" or "typically $X\u2013$Y",
+  "summary": "1-sentence description of featured items or typical prices"
+}
+
+Guidelines:
+- Categories: Extract 2-5 item types or categories mentioned (e.g., "furniture", "jewelry", "tools", "vintage"). If none clear, infer from description.
+- Price Range: Estimate typical price range for items mentioned. Use format "$5\u2013$50" or "typically $10\u2013$100". Base on secondary market values, not retail.
+- Summary: If description > 100 words, create a 1-sentence summary. Otherwise, summarize the key item types/themes. Max 15 words.
+
+Return ONLY JSON, no explanation.`;
+}
+
+/**
+ * Parse + validate + sanitize a raw Haiku text response into EnrichedListingData.
+ * Shared by both the synchronous single-call path and the Batch API path so the two
+ * never drift in validation/sanitization behavior.
+ */
+export function parseEnrichmentResponse(content: string): EnrichedListingData | null {
+  try {
+    const raw = content.replace(/```json\n?|\n?```/g, '').trim();
+    const parsed = JSON.parse(raw) as EnrichedListingData;
+
+    if (
+      !Array.isArray(parsed.categories) ||
+      typeof parsed.priceRange !== 'string' ||
+      typeof parsed.summary !== 'string'
+    ) {
+      console.warn('[enrichment] Invalid response structure:', parsed);
+      return null;
+    }
+
+    parsed.categories = parsed.categories
+      .slice(0, 5)
+      .map((c: string) => (typeof c === 'string' ? sanitizeForPostgres(c.slice(0, 50)) : ''))
+      .filter((c: string) => c.length > 0);
+
+    parsed.priceRange = sanitizeForPostgres(parsed.priceRange.slice(0, 100));
+    parsed.summary = sanitizeForPostgres(parsed.summary.slice(0, 150));
+
+    return parsed;
+  } catch (error: any) {
+    console.warn('[enrichment] Failed to parse enrichment response:', error.message || error);
+    return null;
+  }
+}
+
 export async function enrichScrapedListing(
   description: string,
   saleTitle: string
@@ -184,28 +239,10 @@ export async function enrichScrapedListing(
     return freeResult;
   }
 
-  console.log('[enrichment] Free extraction insufficient — calling Haiku for:', saleTitle.slice(0, 50));
+  console.log('[enrichment] Free extraction insufficient \u2014 calling Haiku for:', saleTitle.slice(0, 50));
 
   try {
-    const prompt = `You are analyzing a secondary market sale listing for ${regionConfig.city}, ${regionConfig.state}.
-
-Sale Title: "${saleTitle}"
-Description: "${description}"
-
-Extract and respond with ONLY valid JSON (no markdown, no explanation):
-{
-  "categories": ["category1", "category2", "category3"],
-  "priceRange": "$X–$Y" or "typically $X–$Y",
-  "summary": "1-sentence description of featured items or typical prices"
-}
-
-Guidelines:
-- Categories: Extract 2-5 item types or categories mentioned (e.g., "furniture", "jewelry", "tools", "vintage"). If none clear, infer from description.
-- Price Range: Estimate typical price range for items mentioned. Use format "$5–$50" or "typically $10–$100". Base on secondary market values, not retail.
-- Summary: If description > 100 words, create a 1-sentence summary. Otherwise, summarize the key item types/themes. Max 15 words.
-
-Return ONLY JSON, no explanation.`;
-
+    const prompt = buildEnrichmentPrompt(description, saleTitle);
     const estimatedTokens = estimateTokensForRequest(prompt, false);
 
     const response = await axios.post(
@@ -237,33 +274,257 @@ Return ONLY JSON, no explanation.`;
     await recordAnthropicUsageOrEstimate('anthropic:listing_enrichment', ANTHROPIC_MODEL, response.data.usage, estimatedTokens + responseTokens);
     await trackAICall();
 
-    // Parse JSON response
-    const raw = content.replace(/```json\n?|\n?```/g, '').trim();
-    const parsed = JSON.parse(raw) as EnrichedListingData;
-
-    // Validate structure
-    if (
-      !Array.isArray(parsed.categories) ||
-      typeof parsed.priceRange !== 'string' ||
-      typeof parsed.summary !== 'string'
-    ) {
-      console.warn('[enrichment] Invalid response structure:', parsed);
-      return null;
-    }
-
-    // Sanitize and cap arrays/strings
-    parsed.categories = parsed.categories
-      .slice(0, 5)
-      .map((c: string) => (typeof c === 'string' ? sanitizeForPostgres(c.slice(0, 50)) : ''))
-      .filter((c: string) => c.length > 0);
-
-    parsed.priceRange = sanitizeForPostgres(parsed.priceRange.slice(0, 100));
-    parsed.summary = sanitizeForPostgres(parsed.summary.slice(0, 150));
-
-    return parsed;
+    return parseEnrichmentResponse(content);
   } catch (error: any) {
     // Graceful degradation on error
     console.warn('[enrichment] Error enriching listing:', error.message || error);
     return null;
   }
+}
+
+// ---------------------------------------------------------------------------
+// Batch API path (2026-07-19) — nightly `listingEnrichmentCron` is a fully
+// background, non-organizer-facing job (GitHub Actions cron -> POST
+// /api/internal/enrich-listing-metadata -> fire-and-forget background processing).
+// Nothing waits synchronously on its result, so trading a few extra minutes of
+// latency for Anthropic's flat 50% Batch API discount is a clean win here —
+// it must NEVER be used on the realtime cloudAIService photo-tagging path, which
+// IS user-facing (organizer waiting on a thumbnail).
+//
+// Design deliberately avoids any new DB table/migration for tracking in-flight
+// batch ids: the whole submit -> poll -> collect cycle runs inside one bounded
+// background async call. If the Railway process restarts mid-poll (a real,
+// non-trivial risk — this backend redeploys frequently), the in-flight batch
+// is simply abandoned: those Sale rows are never written, so they still show
+// scrapedMetadata.aiEnriched = absent and the NEXT nightly run's "unenriched"
+// query naturally re-selects and re-submits them. Self-healing, no schema
+// needed — the only cost is the (bounded, small) wasted spend on an abandoned
+// in-flight batch, which is an acceptable trade-off flagged to Patrick.
+// ---------------------------------------------------------------------------
+
+const ANTHROPIC_API_VERSION = '2023-06-01';
+const BATCH_POLL_INTERVAL_MS = 30_000; // 30s between status checks
+const BATCH_MAX_WAIT_MS = 20 * 60 * 1000; // 20 min — most batches finish in minutes for this volume; if it runs longer we bail for tonight and let the next run's re-select retry naturally.
+
+interface AnthropicBatchRequest {
+  custom_id: string;
+  params: {
+    model: string;
+    max_tokens: number;
+    messages: Array<{ role: 'user'; content: string }>;
+  };
+}
+
+interface AnthropicBatchObject {
+  id: string;
+  processing_status: 'in_progress' | 'canceling' | 'ended';
+  results_url: string | null;
+}
+
+interface AnthropicBatchResultLine {
+  custom_id: string;
+  result: {
+    type: 'succeeded' | 'errored' | 'canceled' | 'expired';
+    message?: {
+      content?: Array<{ type: string; text?: string }>;
+      usage?: { input_tokens?: number; output_tokens?: number };
+    };
+    error?: { type?: string; message?: string };
+  };
+}
+
+function anthropicHeaders(): Record<string, string> {
+  return {
+    'x-api-key': ANTHROPIC_API_KEY as string,
+    'anthropic-version': ANTHROPIC_API_VERSION,
+    'content-type': 'application/json',
+  };
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+export interface BatchEnrichmentItem {
+  id: string;
+  description: string;
+  saleTitle: string;
+}
+
+/**
+ * Enrich many scraped listings in one Anthropic Message Batch (50% cheaper than the
+ * per-item /v1/messages calls in enrichScrapedListing). Returns a Map keyed by the
+ * input item's `id` -> EnrichedListingData, or null for items that were skipped,
+ * failed, or expired. Free-extraction still runs first per item — only listings
+ * that need Haiku are sent to Anthropic at all.
+ *
+ * Cost-ceiling / daily-cap / API-key gates are checked ONCE for the whole batch
+ * (same conservative behavior as the existing single-item gates — no per-item
+ * nuance is added here).
+ */
+export async function enrichScrapedListingsBatch(
+  items: BatchEnrichmentItem[]
+): Promise<Map<string, EnrichedListingData | null>> {
+  const results = new Map<string, EnrichedListingData | null>();
+
+  if (!ANTHROPIC_API_KEY) {
+    console.warn('[enrichment:batch] ANTHROPIC_API_KEY not configured, skipping enrichment');
+    return results;
+  }
+
+  const eligible = items.filter((item) => item.description && item.description.length > 50);
+
+  // Free extraction first — identical logic/order to the single-item path.
+  const needsAi: BatchEnrichmentItem[] = [];
+  for (const item of eligible) {
+    const freeResult = tryFreeExtraction(item.description, item.saleTitle);
+    if (freeResult) {
+      results.set(item.id, freeResult);
+    } else {
+      needsAi.push(item);
+    }
+  }
+
+  if (needsAi.length === 0) {
+    return results;
+  }
+
+  if (await isAICostCeilingExceeded()) {
+    console.warn('[enrichment:batch] AI cost ceiling exceeded, skipping Haiku batch for', needsAi.length, 'listings');
+    return results;
+  }
+
+  if (!(await isAIDailyCallCapAvailable())) {
+    console.warn('[enrichment:batch] AI daily call cap reached (AI_DAILY_CALL_CAP), skipping Haiku batch');
+    return results;
+  }
+
+  console.log(`[enrichment:batch] Submitting Anthropic Message Batch for ${needsAi.length} listings`);
+
+  const requests: AnthropicBatchRequest[] = needsAi.map((item) => ({
+    custom_id: item.id,
+    params: {
+      model: ANTHROPIC_MODEL,
+      max_tokens: 200,
+      messages: [{ role: 'user', content: buildEnrichmentPrompt(item.description, item.saleTitle) }],
+    },
+  }));
+
+  let batch: AnthropicBatchObject;
+  try {
+    const createResp = await axios.post(
+      'https://api.anthropic.com/v1/messages/batches',
+      { requests },
+      { headers: anthropicHeaders(), timeout: 20000 }
+    );
+    batch = createResp.data as AnthropicBatchObject;
+  } catch (error: any) {
+    // Batch submission itself failed (network/API error) — do NOT silently drop these
+    // listings for the whole night. Caller (internalListingEnrichmentController) falls back
+    // to the per-item enrichScrapedListing path when this function throws.
+    console.error('[enrichment:batch] Batch creation failed:', error.message || error);
+    throw error;
+  }
+
+  console.log(`[enrichment:batch] Batch ${batch.id} created, polling for completion...`);
+
+  const startedAt = Date.now();
+  while (batch.processing_status !== 'ended') {
+    if (Date.now() - startedAt >= BATCH_MAX_WAIT_MS) {
+      console.warn(
+        `[enrichment:batch] Batch ${batch.id} did not finish within ${BATCH_MAX_WAIT_MS / 60000}min \u2014 ` +
+        'giving up for tonight. Unenriched sales remain unenriched and will be re-selected + ' +
+        're-submitted by the next scheduled run (self-healing, no data loss).'
+      );
+      for (const item of needsAi) {
+        if (!results.has(item.id)) results.set(item.id, null);
+      }
+      return results;
+    }
+
+    await sleep(BATCH_POLL_INTERVAL_MS);
+
+    try {
+      const statusResp = await axios.get(
+        `https://api.anthropic.com/v1/messages/batches/${batch.id}`,
+        { headers: anthropicHeaders(), timeout: 20000 }
+      );
+      batch = statusResp.data as AnthropicBatchObject;
+    } catch (error: any) {
+      console.warn('[enrichment:batch] Poll request failed, will retry:', error.message || error);
+      // transient poll failure — keep looping until BATCH_MAX_WAIT_MS
+    }
+  }
+
+  console.log(`[enrichment:batch] Batch ${batch.id} ended, fetching results`);
+
+  const resultsUrl: string | null = batch.results_url;
+  if (!resultsUrl) {
+    console.error(`[enrichment:batch] Batch ${batch.id} ended with no results_url`);
+    for (const item of needsAi) {
+      if (!results.has(item.id)) results.set(item.id, null);
+    }
+    return results;
+  }
+
+  let resultsText: string;
+  try {
+    const resultsResp = await axios.get(resultsUrl, {
+      headers: anthropicHeaders(),
+      timeout: 60000,
+      responseType: 'text',
+      transformResponse: (r: any) => r, // keep raw JSONL text, do not let axios JSON-parse it
+    });
+    resultsText = resultsResp.data as string;
+  } catch (error: any) {
+    console.error('[enrichment:batch] Failed to fetch batch results:', error.message || error);
+    for (const item of needsAi) {
+      if (!results.has(item.id)) results.set(item.id, null);
+    }
+    return results;
+  }
+
+  const lines = resultsText.split('\n').map((l) => l.trim()).filter((l) => l.length > 0);
+
+  for (const line of lines) {
+    let parsedLine: AnthropicBatchResultLine;
+    try {
+      parsedLine = JSON.parse(line) as AnthropicBatchResultLine;
+    } catch {
+      console.warn('[enrichment:batch] Could not parse a results line, skipping');
+      continue;
+    }
+
+    const { custom_id, result } = parsedLine;
+
+    if (result.type === 'succeeded' && result.message) {
+      const text = result.message.content?.[0]?.text ?? '';
+      const enriched = parseEnrichmentResponse(text);
+      results.set(custom_id, enriched);
+
+      const usage = result.message.usage;
+      if (usage && typeof usage.input_tokens === 'number' && typeof usage.output_tokens === 'number') {
+        await recordAnthropicUsageOrEstimate(
+          'anthropic:listing_enrichment',
+          ANTHROPIC_MODEL,
+          usage,
+          0,
+          true // isBatch — halves the recorded cost to reflect the real 50% Batch API discount
+        );
+      }
+      await trackAICall();
+    } else {
+      // errored / canceled / expired — not billed by Anthropic, so record nothing.
+      // Not found -> stays unenriched -> naturally retried by the next scheduled run.
+      console.warn(`[enrichment:batch] Result for ${custom_id}: ${result.type}${result.error?.message ? ' - ' + result.error.message : ''}`);
+      results.set(custom_id, null);
+    }
+  }
+
+  // Anything submitted but missing from the results stream (shouldn't normally happen) -> null.
+  for (const item of needsAi) {
+    if (!results.has(item.id)) results.set(item.id, null);
+  }
+
+  return results;
 }

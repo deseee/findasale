@@ -1,14 +1,21 @@
 /**
  * Batch AI enrichment for scraped organizer listings.
  * Called by GitHub Actions on schedule — NOT triggered per-request.
- * Processes unenriched sales in batches with delay to stay under Haiku rate limits.
+ *
+ * Primary path (2026-07-19): submits the whole night's unenriched sales as ONE
+ * Anthropic Message Batch (enrichScrapedListingsBatch) — 50% cheaper than the old
+ * per-item /v1/messages loop, since this job is fully background/non-organizer-facing
+ * (nothing waits synchronously on scrapedMetadata.aiEnriched). If batch SUBMISSION
+ * itself fails (network/API error before any polling starts), falls back to the
+ * original sequential enrichScrapedListing loop with a 1500ms inter-call delay, so
+ * a Batch API outage never silently stops nightly enrichment.
  */
 
 import { Request, Response } from 'express';
 import * as Sentry from '@sentry/node';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
-import { enrichScrapedListing } from '../services/listingEnrichmentService';
+import { enrichScrapedListing, enrichScrapedListingsBatch } from '../services/listingEnrichmentService';
 
 const DEFAULT_BATCH_SIZE = 35;
 
@@ -56,11 +63,104 @@ function deepSanitizeViaJson(value: unknown): unknown {
   }
 }
 
-async function _runEnrichmentBatch(batchSize: number): Promise<void> {
-  let processed = 0;
+type UnenrichedSale = {
+  id: string;
+  title: string;
+  description: string | null;
+  scrapedMetadata: unknown;
+};
+
+/**
+ * Persist one enrichment result to Sale.scrapedMetadata.aiEnriched. Shared by both the
+ * Batch API path and the sequential-fallback path so the sanitize/Prisma-error handling
+ * never drifts between them.
+ * Returns 'enriched' | 'skipped' for the caller's counters.
+ */
+async function applyEnrichmentResult(
+  sale: UnenrichedSale,
+  result: { categories: string[]; priceRange: string; summary: string } | null | undefined
+): Promise<'enriched' | 'skipped'> {
+  if (!result) return 'skipped';
+
+  try {
+    const rawMetadata = (sale.scrapedMetadata as Record<string, unknown>) || {};
+    // Sanitize all string values then JSON round-trip for belt-and-suspenders encoding safety
+    const currentMetadata = deepSanitizeViaJson(
+      sanitizeMetadataStrings(rawMetadata)
+    ) as Record<string, unknown>;
+    const sanitizedResult = deepSanitizeViaJson(sanitizeMetadataStrings(result));
+
+    await prisma.sale.update({
+      where: { id: sale.id },
+      data: {
+        scrapedMetadata: {
+          ...currentMetadata,
+          aiEnriched: sanitizedResult,
+        },
+      },
+    });
+    console.log(`[ListingEnrichmentBatch] Enriched sale ${sale.id}`);
+    return 'enriched';
+  } catch (err: unknown) {
+    // Surface full Prisma error detail -- PrismaClientKnownRequestError.message
+    // is often empty in Sentry; the real signal is .code and .meta
+    if (err instanceof Prisma.PrismaClientKnownRequestError) {
+      if (err.code === 'P2025') {
+        // Sale was deleted between findMany and update -- expected race, not a bug
+        console.warn(`[ListingEnrichmentBatch] Sale ${sale.id} deleted mid-batch -- skipping (P2025)`);
+        return 'skipped';
+      }
+      console.error(
+        `[ListingEnrichmentBatch] Prisma error enriching sale ${sale.id}:`,
+        `code=${err.code}`,
+        `meta=${JSON.stringify(err.meta)}`,
+        `message=${err.message}`
+      );
+      Sentry.captureException(err, {
+        extra: { saleId: sale.id, prismaCode: err.code, prismaMeta: err.meta },
+      });
+    } else {
+      const errObj = err as { message?: string };
+      console.error(`[ListingEnrichmentBatch] Failed to enrich sale ${sale.id}:`, errObj.message ?? err);
+      Sentry.captureException(err, { extra: { saleId: sale.id } });
+    }
+    return 'skipped';
+  }
+}
+
+/**
+ * Original sequential path: one /v1/messages call per sale with a 1500ms delay between
+ * calls (Haiku rate-limit safety). Kept as the fallback for when Batch API submission
+ * itself fails, so a Batch API outage never silently stops nightly enrichment.
+ */
+async function _runEnrichmentSequential(unenriched: UnenrichedSale[]): Promise<{ enriched: number; skipped: number }> {
   let enriched = 0;
   let skipped = 0;
+  let processed = 0;
 
+  for (const sale of unenriched) {
+    processed++;
+    try {
+      const result = await enrichScrapedListing(sale.description!, sale.title);
+      const outcome = await applyEnrichmentResult(sale, result);
+      if (outcome === 'enriched') enriched++;
+      else skipped++;
+    } catch (err: unknown) {
+      console.error(`[ListingEnrichmentBatch] Failed to enrich sale ${sale.id}:`, (err as { message?: string })?.message ?? err);
+      Sentry.captureException(err, { extra: { saleId: sale.id } });
+      skipped++;
+    }
+
+    // 1500ms delay between calls to stay under Haiku rate limits
+    if (processed < unenriched.length) {
+      await new Promise((r) => setTimeout(r, 1500));
+    }
+  }
+
+  return { enriched, skipped };
+}
+
+async function _runEnrichmentBatch(batchSize: number): Promise<void> {
   // Fetch only unenriched sales: scrapedMetadata exists but aiEnriched key is absent.
   // SQL-level filter avoids the previous 3x over-fetch + JS JSON blob scanning.
   const sales = await prisma.sale.findMany({
@@ -95,67 +195,39 @@ async function _runEnrichmentBatch(batchSize: number): Promise<void> {
 
   console.log(`[ListingEnrichmentBatch] Processing ${unenriched.length} unenriched sales (batchSize=${batchSize})`);
 
-  for (const sale of unenriched) {
-    processed++;
-    try {
-      const result = await enrichScrapedListing(sale.description!, sale.title);
-
-      if (result) {
-        const rawMetadata = (sale.scrapedMetadata as Record<string, unknown>) || {};
-        // Sanitize all string values then JSON round-trip for belt-and-suspenders encoding safety
-        const currentMetadata = deepSanitizeViaJson(
-          sanitizeMetadataStrings(rawMetadata)
-        ) as Record<string, unknown>;
-        const sanitizedResult = deepSanitizeViaJson(sanitizeMetadataStrings(result));
-
-        await prisma.sale.update({
-          where: { id: sale.id },
-          data: {
-            scrapedMetadata: {
-              ...currentMetadata,
-              aiEnriched: sanitizedResult,
-            },
-          },
-        });
-        enriched++;
-        console.log(`[ListingEnrichmentBatch] Enriched sale ${sale.id}`);
-      } else {
-        skipped++;
-      }
-    } catch (err: unknown) {
-      // Surface full Prisma error detail -- PrismaClientKnownRequestError.message
-      // is often empty in Sentry; the real signal is .code and .meta
-      if (err instanceof Prisma.PrismaClientKnownRequestError) {
-        if (err.code === 'P2025') {
-          // Sale was deleted between findMany and update -- expected race, not a bug
-          console.warn(`[ListingEnrichmentBatch] Sale ${sale.id} deleted mid-batch -- skipping (P2025)`);
-          skipped++;
-          continue;
-        }
-        console.error(
-          `[ListingEnrichmentBatch] Prisma error enriching sale ${sale.id}:`,
-          `code=${err.code}`,
-          `meta=${JSON.stringify(err.meta)}`,
-          `message=${err.message}`
-        );
-        Sentry.captureException(err, {
-          extra: { saleId: sale.id, prismaCode: err.code, prismaMeta: err.meta },
-        });
-      } else {
-        const errObj = err as { message?: string };
-        console.error(`[ListingEnrichmentBatch] Failed to enrich sale ${sale.id}:`, errObj.message ?? err);
-        Sentry.captureException(err, { extra: { saleId: sale.id } });
-      }
-      skipped++;
-    }
-
-    // 1500ms delay between calls to stay under Haiku rate limits
-    if (processed < unenriched.length) {
-      await new Promise((r) => setTimeout(r, 1500));
-    }
+  if (unenriched.length === 0) {
+    console.log('[ListingEnrichmentBatch] Complete -- processed=0 enriched=0 skipped=0');
+    return;
   }
 
-  console.log(`[ListingEnrichmentBatch] Complete -- processed=${processed} enriched=${enriched} skipped=${skipped}`);
+  let enriched = 0;
+  let skipped = 0;
+
+  try {
+    // Primary path: one Anthropic Message Batch for the whole night's run (50% cheaper --
+    // see enrichScrapedListingsBatch doc comment for the latency/self-healing tradeoffs).
+    const resultMap = await enrichScrapedListingsBatch(
+      unenriched.map((sale) => ({ id: sale.id, description: sale.description ?? '', saleTitle: sale.title }))
+    );
+
+    for (const sale of unenriched) {
+      const outcome = await applyEnrichmentResult(sale, resultMap.get(sale.id));
+      if (outcome === 'enriched') enriched++;
+      else skipped++;
+    }
+  } catch (err: unknown) {
+    // Batch submission itself failed (not a per-item failure -- those come back as null
+    // results from enrichScrapedListingsBatch and are handled above). Fall back to the
+    // original sequential per-item path so nightly enrichment still runs tonight.
+    console.error('[ListingEnrichmentBatch] Batch API path failed, falling back to sequential:', (err as { message?: string })?.message ?? err);
+    Sentry.captureException(err, { extra: { context: 'listing-enrichment-batch-fallback', count: unenriched.length } });
+
+    const fallback = await _runEnrichmentSequential(unenriched);
+    enriched = fallback.enriched;
+    skipped = fallback.skipped;
+  }
+
+  console.log(`[ListingEnrichmentBatch] Complete -- processed=${unenriched.length} enriched=${enriched} skipped=${skipped}`);
 }
 
 export function runListingEnrichmentBatch(req: Request, res: Response): void {

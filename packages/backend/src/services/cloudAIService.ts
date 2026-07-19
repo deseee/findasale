@@ -406,7 +406,7 @@ Shipping package: Estimate the PACKED shipping weight (item + box + padding) in 
     // Fix A: record REAL per-model usage from the response (falls back to the char/4 estimate
     // only when usage is absent). Fix B: count this call toward the absolute daily AI call cap.
     const responseTokens = Math.ceil(content.length / 4) + 50; // estimate fallback only
-    await recordAnthropicUsageOrEstimate('anthropic:cloud_ai_tagging', ANTHROPIC_MODEL, response.data.usage, estimatedTokens + responseTokens);
+    await recordAnthropicUsageOrEstimate('anthropic:cloud_ai_tagging_single', ANTHROPIC_MODEL, response.data.usage, estimatedTokens + responseTokens);
     await trackAICall();
 
     const raw = content.replace(/```json\n?|\n?```/g, '').trim();
@@ -1112,7 +1112,7 @@ Brand: If a brand, maker, or manufacturer name is identifiable from a visible la
 
     // Fix A: record REAL per-model usage. Fix B: count toward the daily AI call cap.
     const responseTokens = Math.ceil(content.length / 4) + 50; // estimate fallback only
-    await recordAnthropicUsageOrEstimate('anthropic:cloud_ai_tagging', ANTHROPIC_MODEL, response.data.usage, estimatedTokens + responseTokens);
+    await recordAnthropicUsageOrEstimate('anthropic:cloud_ai_tagging_multi', ANTHROPIC_MODEL, response.data.usage, estimatedTokens + responseTokens);
     await trackAICall();
 
     const raw = content.replace(/```json\n?|\n?```/g, '').trim();
@@ -1259,7 +1259,7 @@ Write a friendly, inviting description that shoppers will see on the listing. Us
 
     // Fix A: record REAL per-model usage. Fix B: count toward the daily AI call cap.
     const responseTokens = Math.ceil(text.length / 4) + 100; // estimate fallback only
-    await recordAnthropicUsageOrEstimate('anthropic:cloud_ai_tagging', ANTHROPIC_MODEL, response.data.usage, estimatedTokens + responseTokens);
+    await recordAnthropicUsageOrEstimate('anthropic:cloud_ai_tagging_sale_description', ANTHROPIC_MODEL, response.data.usage, estimatedTokens + responseTokens);
     await trackAICall();
 
     return text.trim() || null;
@@ -1382,7 +1382,7 @@ Base your price on actual secondary market demand, not retail pricing. Do not an
 
     // Fix A: record REAL per-model usage. Fix B: count toward the daily AI call cap.
     const responseTokens = Math.ceil(content.length / 4) + 75; // estimate fallback only
-    await recordAnthropicUsageOrEstimate('anthropic:cloud_ai_tagging', ANTHROPIC_MODEL, response.data.usage, estimatedTokens + responseTokens);
+    await recordAnthropicUsageOrEstimate('anthropic:cloud_ai_tagging_price_suggestion', ANTHROPIC_MODEL, response.data.usage, estimatedTokens + responseTokens);
     await trackAICall();
 
     const raw = content.replace(/```json\n?|\n?```/g, '').trim();
@@ -1643,7 +1643,7 @@ Confidence threshold: only cluster at >= 0.75. When in doubt, leave ungrouped.`;
 
     // Fix A: record REAL per-model usage. Fix B: count toward the daily AI call cap.
     const responseTokens = Math.ceil(content.length / 4) + 50; // estimate fallback only
-    await recordAnthropicUsageOrEstimate('anthropic:cloud_ai_tagging', ANTHROPIC_MODEL, response.data.usage, estimatedTokens + responseTokens);
+    await recordAnthropicUsageOrEstimate('anthropic:cloud_ai_tagging_clustering', ANTHROPIC_MODEL, response.data.usage, estimatedTokens + responseTokens);
     await trackAICall();
 
     const raw = content.replace(/```json\n?|\n?```/g, '').trim();
