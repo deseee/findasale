@@ -54,6 +54,7 @@ const RegisterPage = () => {
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   const [turnstileWidgetId, setTurnstileWidgetId] = useState<string | null>(null);
   const [turnstileReady, setTurnstileReady] = useState(false);
+  const [turnstileLoadFailed, setTurnstileLoadFailed] = useState(false);
   const turnstileContainerRef = useRef<HTMLDivElement>(null);
 
   // Pre-fill referral codes and claim params from URL
@@ -94,6 +95,19 @@ const RegisterPage = () => {
     });
     setTurnstileWidgetId(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [turnstileReady]);
+
+  // P0 SECURITY FIX follow-up (found via live QA, 2026-07-18): if the Turnstile script never loads
+  // (blocked by an ad blocker/privacy extension, or a transient Cloudflare edge issue -- both
+  // observed live), turnstileReady never flips and Register stays disabled forever with zero
+  // explanation. Surface a visible message instead of a silent dead end. Deliberately does NOT
+  // bypass the check (fail-closed is the whole point) -- it only makes the failure visible.
+  useEffect(() => {
+    if (!TURNSTILE_SITE_KEY || turnstileReady) return;
+    const timer = setTimeout(() => {
+      if (!turnstileReady) setTurnstileLoadFailed(true);
+    }, 8000);
+    return () => clearTimeout(timer);
   }, [turnstileReady]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -639,8 +653,15 @@ const RegisterPage = () => {
 
           {/* P0 SECURITY FIX (2026-07-18): Cloudflare Turnstile CAPTCHA widget */}
           {TURNSTILE_SITE_KEY && (
-            <div className="flex justify-center">
+            <div className="flex flex-col items-center gap-2">
               <div ref={turnstileContainerRef} />
+              {turnstileLoadFailed && !turnstileToken && (
+                <p className="text-xs text-red-600 dark:text-red-400 text-center max-w-sm">
+                  The security check couldn't load. If you have an ad blocker or privacy extension
+                  enabled, please allow challenges.cloudflare.com and refresh the page, or try a
+                  different browser.
+                </p>
+              )}
             </div>
           )}
 
@@ -662,6 +683,7 @@ const RegisterPage = () => {
           src="https://challenges.cloudflare.com/turnstile/v0/api.js"
           strategy="afterInteractive"
           onLoad={() => setTurnstileReady(true)}
+          onError={() => setTurnstileLoadFailed(true)}
         />
         {/* Phase 31: Social login — always registers as Shopper (USER); upgrade in settings */}
         <div className="relative">
