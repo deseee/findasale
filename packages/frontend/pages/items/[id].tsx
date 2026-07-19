@@ -423,11 +423,10 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
   };
 
   const handleBuyNow = async () => {
-    if (!user) {
-      showToast('Please log in to purchase items', 'warning');
-      router.push(`/login?redirect=${encodeURIComponent(router.asPath)}`);
-      return;
-    }
+    // Guest checkout (single-item Buy It Now, 2026-07-18): no login gate — guests complete
+    // checkout via Stripe without a FindA.Sale account. CheckoutModal collects guest
+    // email/name when there is no logged-in user. Multi-item cart Add-to-Cart flow is
+    // UNCHANGED and still requires login — cart guest checkout is out of scope this pass.
     // GA4 #465 Tier 2: checkout_initiated
     if (typeof window !== 'undefined' && window.gtag) {
       window.gtag('event', 'checkout_initiated', { event_category: 'engagement', item_id: String(id) });
@@ -1042,14 +1041,9 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
                     <div className="space-y-2">
                       <button
                         onClick={handleBuyNow}
-                        title={!user ? 'Sign in to purchase' : ''}
-                        className={`w-full py-2 px-4 rounded-lg font-semibold transition ${
-                          user
-                            ? 'bg-green-600 text-white hover:bg-green-700'
-                            : 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 border border-green-300 dark:border-green-700 cursor-not-allowed'
-                        } disabled:opacity-50 disabled:cursor-not-allowed`}
+                        className="w-full py-2 px-4 rounded-lg font-semibold transition bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
-                        {user ? 'Buy It Now' : 'Sign in to buy'}
+                        Buy It Now
                       </button>
 
                       {/* Phase 1: Smart Cart — Add to cart button */}
