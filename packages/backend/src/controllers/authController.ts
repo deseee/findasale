@@ -10,6 +10,7 @@ import { processReferral } from '../services/referralService';
 import { awardXp, XP_AWARDS } from '../services/xpService';
 import { referralTrancheService } from '../services/referralTrancheService';
 import { checkRegistrationLimit, recordRegistration } from '../lib/registrationRateLimiter';
+import { verifyTurnstileToken } from '../lib/turnstileVerify';
 import { recordRegistration as recordFraudRegistration } from '../lib/fraudDetectionService';
 import { transactionalEmailService } from '../lib/transactionalEmailService';
 import { AuthRequest } from '../middleware/auth';
@@ -36,7 +37,7 @@ const isValidRedirectUri = (uri: string | null | undefined): boolean => {
 
 export const register = async (req: Request, res: Response) => {
   try {
-    const { email: rawEmail, password, name: rawName, role, referralCode, affiliateReferralCode, inviteCode, businessName, phone, businessAddress, consentOrganizer, consentShopper, deviceFingerprint, dateOfBirth, country, province } = req.body;
+    const { email: rawEmail, password, name: rawName, role, referralCode, affiliateReferralCode, inviteCode, businessName, phone, businessAddress, consentOrganizer, consentShopper, deviceFingerprint, dateOfBirth, country, province, turnstileToken } = req.body;
 
     // H3: Normalise email/name to prevent duplicate accounts from whitespace/case variations
     const email = rawEmail?.trim().toLowerCase();
@@ -44,7 +45,19 @@ export const register = async (req: Request, res: Response) => {
 
     // Security: IP-based rate limiting on registrations
     const clientIp = req.ip || req.headers['x-forwarded-for'] as string || 'unknown';
-    const rateLimitStatus = checkRegistrationLimit(clientIp);
+
+    // P0 SECURITY FIX (2026-07-18): Cloudflare Turnstile CAPTCHA — verified before rate limiting
+    // so a captcha failure never consumes/counts against the IP's rate-limit budget. Fails closed:
+    // any missing token or verification failure blocks registration with a 400.
+    const turnstileResult = await verifyTurnstileToken(turnstileToken, clientIp);
+    if (!turnstileResult.success) {
+      return res.status(400).json({
+        code: 'CAPTCHA_VERIFICATION_FAILED',
+        message: 'CAPTCHA verification failed. Please try again.',
+      });
+    }
+
+    const rateLimitStatus = await checkRegistrationLimit(clientIp);
     if (rateLimitStatus.limited) {
       return res.status(429).json({
         code: 'REGISTRATION_RATE_LIMITED',
@@ -282,7 +295,7 @@ export const register = async (req: Request, res: Response) => {
     }
 
     // Record this IP registration for rate limiting
-    recordRegistration(clientIp);
+    await recordRegistration(clientIp);
 
     // Security: Send email verification link (non-blocking)
     if (user.emailVerificationToken) {

@@ -1072,8 +1072,13 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
                       {/* Auction Item — Place Bid Button */}
                       {isAuction && item.status === 'AVAILABLE' && item.auctionEndTime && mounted && new Date(item.auctionEndTime) > new Date() && !item.auctionClosed && (
                         <button
-                          onClick={() => setBidModalOpen(true)}
-                          disabled={!user}
+                          onClick={() => {
+                            if (!user) {
+                              router.push(`/login?redirect=${encodeURIComponent(router.asPath)}`);
+                              return;
+                            }
+                            setBidModalOpen(true);
+                          }}
                           title={!user ? 'Sign in to place a bid' : ''}
                           className={`w-full py-2 px-4 rounded-lg font-semibold transition ${
                             user
