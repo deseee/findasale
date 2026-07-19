@@ -20,8 +20,18 @@ const MAX_REGISTRATIONS_PER_HOUR = 5;
 const WINDOW_SIZE_MS = 60 * 60 * 1000; // 1 hour in milliseconds
 const WINDOW_SIZE_SECONDS = WINDOW_SIZE_MS / 1000;
 
+// P0 fix (2026-07-19): the hourly window alone still allows ~120 accounts/day/IP
+// (5/hr x 24) indefinitely -- add an independent daily ceiling on top. Same
+// parseInt(env || default) pattern as EBAY_PRICE_COMPS_DAILY_CAP in aiCostTracker.ts.
+const MAX_REGISTRATIONS_PER_DAY = parseInt(process.env.MAX_REGISTRATIONS_PER_DAY || '20', 10);
+const DAILY_WINDOW_SECONDS = 24 * 60 * 60; // 24 hours, for the Redis key TTL
+
 function getKey(ip: string): string {
   return `regratelimit:${ip}`;
+}
+
+function getDailyKey(ip: string): string {
+  return `regratelimit:daily:${ip}`;
 }
 
 /**
@@ -68,10 +78,25 @@ export async function checkRegistrationLimit(ip: string): Promise<{
     ? new Date(Math.min(...timestamps) + WINDOW_SIZE_MS)
     : new Date(Date.now() + WINDOW_SIZE_MS);
 
+  // P0 fix (2026-07-19): independent daily ceiling — fails open on a Redis read error,
+  // same posture as the hourly check above (a Redis blip must never hard-block a real user).
+  let dailyCount = 0;
+  try {
+    const rawDaily = await redis.get(getDailyKey(ip));
+    dailyCount = rawDaily ? parseInt(rawDaily, 10) || 0 : 0;
+  } catch (err) {
+    console.error(
+      '[registrationRateLimiter] Failed to read daily Redis counter — treating as 0:',
+      (err as Error)?.message || err
+    );
+    dailyCount = 0;
+  }
+  const dailyLimited = dailyCount >= MAX_REGISTRATIONS_PER_DAY;
+
   return {
-    limited: count >= MAX_REGISTRATIONS_PER_HOUR,
-    count,
-    limit: MAX_REGISTRATIONS_PER_HOUR,
+    limited: count >= MAX_REGISTRATIONS_PER_HOUR || dailyLimited,
+    count: Math.max(count, dailyCount),
+    limit: dailyLimited ? MAX_REGISTRATIONS_PER_DAY : MAX_REGISTRATIONS_PER_HOUR,
     resetAt,
   };
 }
@@ -94,6 +119,28 @@ export async function recordRegistration(ip: string): Promise<void> {
     );
   }
 
+  // P0 fix (2026-07-19): increment the independent daily counter. This project's shared
+  // redis client (lib/redis.ts) only exposes get/setex/del/getDel (no incr/expire) — read,
+  // increment in application code, and re-write with setex, mirroring the exact read-then-
+  // setex pattern the hourly logic above already uses. The 24h TTL is refreshed on every
+  // write, same as the hourly counter's window-refresh behavior.
+  try {
+    const dailyKey = getDailyKey(ip);
+    const rawDaily = await redis.get(dailyKey);
+    const newDailyCount = (rawDaily ? parseInt(rawDaily, 10) || 0 : 0) + 1;
+    await redis.setex(dailyKey, DAILY_WINDOW_SECONDS, String(newDailyCount));
+    if (newDailyCount > MAX_REGISTRATIONS_PER_DAY) {
+      console.warn(
+        `[REGISTRATION_RATE_LIMIT] IP ${ip} exceeded DAILY registration limit (${newDailyCount} attempts in 24h)`
+      );
+    }
+  } catch (err) {
+    console.error(
+      '[registrationRateLimiter] Failed to persist daily Redis counter:',
+      (err as Error)?.message || err
+    );
+  }
+
   if (timestamps.length > MAX_REGISTRATIONS_PER_HOUR) {
     console.warn(
       `[REGISTRATION_RATE_LIMIT] IP ${ip} exceeded registration limit (${timestamps.length} attempts in 1 hour)`
@@ -107,7 +154,8 @@ export async function recordRegistration(ip: string): Promise<void> {
 export async function resetIpLimit(ip: string): Promise<void> {
   try {
     await redis.del(getKey(ip));
-    console.log(`[Registration Rate Limiter] Reset limit for IP ${ip}`);
+    await redis.del(getDailyKey(ip));
+    console.log(`[Registration Rate Limiter] Reset hourly + daily limit for IP ${ip}`);
   } catch (err) {
     console.error('[registrationRateLimiter] Failed to reset limit:', (err as Error)?.message || err);
   }
