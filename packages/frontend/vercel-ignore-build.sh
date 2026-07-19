@@ -1,9 +1,15 @@
 #!/usr/bin/env bash
 # Vercel "Ignored Build Step" — referenced by vercel.json "ignoreCommand".
 # Contract (Vercel): exit 1 => BUILD, exit 0 => SKIP the build.
-# Policy: SKIP only when a commit changed NOTHING outside documentation
-# (claude_docs/** and any *.md anywhere). Any non-doc change — including
-# backend, schema, or config — BUILDS. Any uncertainty BUILDS.
+# Policy: SKIP when a commit changed NOTHING outside documentation
+# (claude_docs/** and any *.md anywhere) OR outside paths with zero relation
+# to the frontend build (packages/backend/src, packages/backend's production
+# Dockerfile/jest config, packages/database/prisma, extension/, .github/,
+# scripts/, cloudflare/, services/, ai-config/, brand/, root *.sql files,
+# railway.toml, railway.staging.toml, push.ps1). Package manifests and
+# lockfiles (package.json at any level, pnpm-lock.yaml, pnpm-workspace.yaml)
+# are deliberately EXCLUDED from this skip list -- they always BUILD (see
+# ADR 2026-07-19). Any other non-doc change, or any uncertainty, BUILDS.
 set -uo pipefail
 
 # Anchor to the repo root so pathspecs are evaluated repo-wide, not from the
@@ -32,10 +38,32 @@ if [ -z "$PREV" ] || ! git cat-file -e "${PREV}^{commit}" >/dev/null 2>&1; then
   fi
 fi
 
+# NOTE (ADR 2026-07-19, Option A): package manifests/lockfiles must NEVER be
+# added to this exclude list. pnpm workspaces run a single
+# `pnpm install --frozen-lockfile` across the whole monorepo before building
+# any one package, so a manifest/lockfile change anywhere can affect the
+# frontend's install step even when no frontend source changed. Keep
+# package.json (root or any package), pnpm-lock.yaml, and pnpm-workspace.yaml
+# OUT of this exclude list -- they must always trigger a build.
 changed_non_doc=$(git diff --name-only "$PREV" HEAD -- . \
   ":(exclude,top)claude_docs" \
   ":(exclude,top)*.md" \
-  ":(exclude,top)**/*.md")
+  ":(exclude,top)**/*.md" \
+  ":(exclude,top)packages/backend/src" \
+  ":(exclude,top)packages/backend/Dockerfile.production" \
+  ":(exclude,top)packages/backend/jest.config*" \
+  ":(exclude,top)packages/database/prisma" \
+  ":(exclude,top)extension" \
+  ":(exclude,top).github" \
+  ":(exclude,top)scripts" \
+  ":(exclude,top)cloudflare" \
+  ":(exclude,top)services" \
+  ":(exclude,top)ai-config" \
+  ":(exclude,top)brand" \
+  ":(exclude,top)*.sql" \
+  ":(exclude,top)railway.toml" \
+  ":(exclude,top)railway.staging.toml" \
+  ":(exclude,top)push.ps1")
 
 if [ -z "$changed_non_doc" ]; then
   echo "vercel-ignore: only docs/markdown changed -> SKIP build"
