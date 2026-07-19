@@ -10,6 +10,7 @@ import { endEbayListingIfExists } from './ebayController'; // Feature #244 Phase
 import { markShopifyItemSold } from '../services/shopifyService';
 import { notifyFacebookExportedItemSold } from '../services/facebookNudgeService';
 import { sellItemUnits, InsufficientStockError } from '../services/itemStockService';
+import { syncMarketplaceStock } from '../services/marketplaceStockSyncService'; // ADR-087 Phase 4: revise-on-partial eBay quantity sync
 
 const stripe = () => getStripe();
 
@@ -938,8 +939,9 @@ export const confirmPaymentRequest = async (req: AuthRequest, res: Response) => 
         // once the item is actually fully sold out (stockSold reached stockTotal) -- they
         // previously fired unconditionally on every sale regardless of remaining stock.
         let fullySoldOut: boolean;
+        let remainingStock: number;
         try {
-          ({ fullySoldOut } = await sellItemUnits(item.id, 1));
+          ({ fullySoldOut, remainingStock } = await sellItemUnits(item.id, 1));
         } catch (stockErr: any) {
           if (stockErr instanceof InsufficientStockError) {
             console.error(`[pos-payment] Oversold race on item ${item.id} despite captured payment:`, stockErr.message);
@@ -957,6 +959,11 @@ export const confirmPaymentRequest = async (req: AuthRequest, res: Response) => 
           );
           notifyFacebookExportedItemSold(item.id).catch(err =>
             console.warn(`[FB Nudge] failed for item ${item.id}:`, err.message)
+          );
+        } else {
+          // ADR-087 Phase 4: partial sale — revise eBay listing quantity if linked.
+          syncMarketplaceStock(item.id, { fullySoldOut: false, remainingStock }).catch(err =>
+            console.error('[eBay ReviseQty] sync failed for item', item.id, err)
           );
         }
 

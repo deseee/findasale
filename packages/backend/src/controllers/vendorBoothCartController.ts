@@ -8,6 +8,7 @@ import { endEbayListingIfExists } from './ebayController';
 import { markShopifyItemSold } from '../services/shopifyService';
 import { notifyFacebookExportedItemSold } from '../services/facebookNudgeService';
 import { sellItemUnits, InsufficientStockError } from '../services/itemStockService';
+import { syncMarketplaceStock } from '../services/marketplaceStockSyncService'; // ADR-087 Phase 4: revise-on-partial eBay quantity sync
 import { generateReceipt, sendBoothCartReceiptEmail } from '../services/receiptService';
 
 const stripe = () => getStripe();
@@ -894,8 +895,9 @@ export const captureBoothCart = async (req: BoothAuthRequest, res: Response) => 
           // fire once the item is actually fully sold out (stockSold reached stockTotal) --
           // previously they fired unconditionally on every sale regardless of remaining stock.
           let fullySoldOut: boolean;
+          let remainingStock: number;
           try {
-            ({ fullySoldOut } = await sellItemUnits(item.id, 1));
+            ({ fullySoldOut, remainingStock } = await sellItemUnits(item.id, 1));
           } catch (stockErr: any) {
             if (stockErr instanceof InsufficientStockError) {
               console.error(`[captureBoothCart] Oversold race on item ${item.id} despite captured payment:`, stockErr.message);
@@ -908,6 +910,11 @@ export const captureBoothCart = async (req: BoothAuthRequest, res: Response) => 
             markShopifyItemSold(item.id).catch((err) => console.error('[Shopify] Failed to mark item sold:', err));
             notifyFacebookExportedItemSold(item.id).catch((err) =>
               console.warn(`[FB Nudge] failed for item ${item.id}:`, err.message)
+            );
+          } else {
+            // ADR-087 Phase 4: partial sale — revise eBay listing quantity if linked.
+            syncMarketplaceStock(item.id, { fullySoldOut: false, remainingStock }).catch((err) =>
+              console.error('[eBay ReviseQty] sync failed for item', item.id, err)
             );
           }
           generateReceipt(purchase.id).catch((err) => console.error('[receipt] Failed to generate receipt:', err));

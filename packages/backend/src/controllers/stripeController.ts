@@ -29,6 +29,7 @@ import { endEbayListingIfExists } from './ebayController'; // Feature #244 Phase
 import { notifyFacebookExportedItemSold } from '../services/facebookNudgeService';
 import { markShopifyItemSold } from '../services/shopifyService'; // Feature: Shopify Cross-Listing
 import { sellItemUnits, InsufficientStockError } from '../services/itemStockService'; // ADR-085 Track B Phase 1 Step 4
+import { syncMarketplaceStock } from '../services/marketplaceStockSyncService'; // ADR-087 Phase 4: revise-on-partial eBay quantity sync
 import { sendConsignorItemSold } from '../services/consignorEmailService'; // Feature #309: Consignor email notifications
 import { applyFirstMonthRefundCap, logRefundProcessing } from '../services/refundService'; // P2-2: Refund cap + logging
 import { transactionalEmailService } from '../lib/transactionalEmailService';
@@ -304,9 +305,11 @@ export const recoverPaymentIntent = async (req: AuthRequest, res: Response) => {
       // the item is actually fully sold out, so it's now gated on that instead of on a bare
       // successful update.
       let updatedItem: { id: string; saleId: string | null; title: string; price: number | null } | null = null;
+      let recoveryFullySoldOut: boolean | undefined;
+      let recoveryRemainingStock: number | undefined;
       try {
-        const { fullySoldOut } = await sellItemUnits(itemId, 1);
-        if (fullySoldOut) {
+        ({ fullySoldOut: recoveryFullySoldOut, remainingStock: recoveryRemainingStock } = await sellItemUnits(itemId, 1));
+        if (recoveryFullySoldOut) {
           updatedItem = await prisma.item.findUnique({
             where: { id: itemId },
             select: { id: true, saleId: true, title: true, price: true },
@@ -318,6 +321,15 @@ export const recoverPaymentIntent = async (req: AuthRequest, res: Response) => {
         } else {
           console.warn('Failed to update item status during recovery:', err);
         }
+      }
+
+      // ADR-087 Phase 4: partial sale (item not fully sold out) — revise the
+      // eBay listing's remaining quantity if the item is eBay-linked. Fire-and-
+      // forget, mirrors the fullySoldOut withdraw hook's shape exactly.
+      if (recoveryFullySoldOut === false && recoveryRemainingStock !== undefined) {
+        syncMarketplaceStock(itemId, { fullySoldOut: false, remainingStock: recoveryRemainingStock }).catch(err =>
+          console.error('[eBay ReviseQty] sync failed for item', itemId, err)
+        );
       }
 
       if (updatedItem) {
@@ -823,8 +835,9 @@ export const webhookHandler = async (req: Request, res: Response) => {
                   // replaces the old unconditional status update. Downstream cross-channel
                   // removal hooks only fire once the item is actually fully sold out.
                   let itemFullySoldOut: boolean;
+                  let itemRemainingStock: number;
                   try {
-                    ({ fullySoldOut: itemFullySoldOut } = await sellItemUnits(item.id, 1));
+                    ({ fullySoldOut: itemFullySoldOut, remainingStock: itemRemainingStock } = await sellItemUnits(item.id, 1));
                   } catch (stockErr: any) {
                     if (stockErr instanceof InsufficientStockError) {
                       console.error(`[stripe] Oversold race on item ${item.id} despite captured payment:`, stockErr.message);
@@ -844,6 +857,11 @@ export const webhookHandler = async (req: Request, res: Response) => {
                     );
                     notifyFacebookExportedItemSold(item.id).catch(err =>
                       console.warn(`[FB Nudge] failed for item ${item.id}:`, err.message)
+                    );
+                  } else {
+                    // ADR-087 Phase 4: partial sale — revise eBay listing quantity if linked.
+                    syncMarketplaceStock(item.id, { fullySoldOut: false, remainingStock: itemRemainingStock }).catch(err =>
+                      console.error('[eBay ReviseQty] sync failed for item', item.id, err)
                     );
                   }
 
@@ -1412,8 +1430,9 @@ export const webhookHandler = async (req: Request, res: Response) => {
           // old unconditional status update. Downstream cross-channel removal hooks only
           // fire once the item is actually fully sold out.
           let soldOut3: boolean;
+          let remainingStock3: number | undefined;
           try {
-            ({ fullySoldOut: soldOut3 } = await sellItemUnits(paymentIntent.metadata.itemId, 1));
+            ({ fullySoldOut: soldOut3, remainingStock: remainingStock3 } = await sellItemUnits(paymentIntent.metadata.itemId, 1));
           } catch (stockErr: any) {
             if (stockErr instanceof InsufficientStockError) {
               console.warn(`CA3: item ${paymentIntent.metadata.itemId} already fully sold (race), not an error:`, stockErr.message);
@@ -1434,6 +1453,14 @@ export const webhookHandler = async (req: Request, res: Response) => {
             );
             notifyFacebookExportedItemSold(paymentIntent.metadata.itemId).catch(err =>
               console.warn(`[FB Nudge] failed for item ${paymentIntent.metadata.itemId}:`, err.message)
+            );
+          } else if (remainingStock3 !== undefined) {
+            // ADR-087 Phase 4: partial sale — revise eBay listing quantity if linked.
+            // Guarded on remainingStock3 !== undefined so the InsufficientStockError
+            // race-fallback branch above (which sets soldOut3=false without a real
+            // remainingStock value) never fires a sync with a bogus number.
+            syncMarketplaceStock(paymentIntent.metadata.itemId, { fullySoldOut: false, remainingStock: remainingStock3 }).catch(err =>
+              console.error('[eBay ReviseQty] sync failed for item', paymentIntent.metadata.itemId, err)
             );
           }
 
@@ -2073,6 +2100,7 @@ export const webhookHandler = async (req: Request, res: Response) => {
         });
 
         let posLinkFullySoldOutIds: string[] = [];
+        const posLinkPartialSaleUpdates: { itemId: string; remainingStock: number }[] = [];
         if (posPaymentLink && posPaymentLink.status !== 'COMPLETED') {
           await prisma.$transaction(async (tx) => {
             await tx.pOSPaymentLink.update({
@@ -2087,8 +2115,9 @@ export const webhookHandler = async (req: Request, res: Response) => {
               // touch those, not every item unconditionally.
               for (const posItemId of posPaymentLink.itemIds) {
                 try {
-                  const { fullySoldOut } = await sellItemUnits(posItemId, 1, tx);
+                  const { fullySoldOut, remainingStock } = await sellItemUnits(posItemId, 1, tx);
                   if (fullySoldOut) posLinkFullySoldOutIds.push(posItemId);
+                  else posLinkPartialSaleUpdates.push({ itemId: posItemId, remainingStock });
                 } catch (stockErr: any) {
                   if (stockErr instanceof InsufficientStockError) {
                     console.error(`[stripe/pos-link] Oversold race on item ${posItemId}:`, stockErr.message);
@@ -2150,6 +2179,18 @@ export const webhookHandler = async (req: Request, res: Response) => {
             });
           }
 
+          // ADR-087 Phase 4: partial sales (not fully sold out) — revise eBay listing
+          // quantities for any eBay-linked items in this batch. Fire-and-forget.
+          if (posLinkPartialSaleUpdates.length) {
+            setImmediate(() => {
+              Promise.allSettled(
+                posLinkPartialSaleUpdates.map(({ itemId, remainingStock }) =>
+                  syncMarketplaceStock(itemId, { fullySoldOut: false, remainingStock })
+                )
+              ).catch(() => {});
+            });
+          }
+
           console.log(`[pos] Payment link completed via checkout: ${stripePaymentLinkId}`);
         }
       }
@@ -2162,6 +2203,7 @@ export const webhookHandler = async (req: Request, res: Response) => {
 
         if (cartItemIds.length > 0) {
           const cartFullySoldOutIds: string[] = [];
+          const cartPartialSaleUpdates: { itemId: string; remainingStock: number }[] = [];
           try {
             await prisma.$transaction(async (tx) => {
               // Fetch items to get current price and confirm they're still AVAILABLE
@@ -2186,8 +2228,9 @@ export const webhookHandler = async (req: Request, res: Response) => {
               // items are now fully sold out for the gated hooks fired outside this tx below.
               for (const cartItemId of cartItemIds) {
                 try {
-                  const { fullySoldOut } = await sellItemUnits(cartItemId, 1, tx);
+                  const { fullySoldOut, remainingStock } = await sellItemUnits(cartItemId, 1, tx);
                   if (fullySoldOut) cartFullySoldOutIds.push(cartItemId);
+                  else cartPartialSaleUpdates.push({ itemId: cartItemId, remainingStock });
                 } catch (stockErr: any) {
                   if (stockErr instanceof InsufficientStockError) {
                     console.error(`[stripe/cart-checkout] Oversold race on item ${cartItemId}:`, stockErr.message);
@@ -2233,6 +2276,18 @@ export const webhookHandler = async (req: Request, res: Response) => {
               ).catch(() => {});
             });
 
+            // ADR-087 Phase 4: partial sales (not fully sold out) — revise eBay listing
+            // quantities for any eBay-linked items in this cart. Fire-and-forget.
+            if (cartPartialSaleUpdates.length) {
+              setImmediate(() => {
+                Promise.allSettled(
+                  cartPartialSaleUpdates.map(({ itemId, remainingStock }) =>
+                    syncMarketplaceStock(itemId, { fullySoldOut: false, remainingStock })
+                  )
+                ).catch(() => {});
+              });
+            }
+
             console.log(
               `[cart-checkout] Completed — ${cartItemIds.length} items marked SOLD, saleId=${cartSaleId}`
             );
@@ -2268,6 +2323,7 @@ export const webhookHandler = async (req: Request, res: Response) => {
           }
 
           const holdInvoiceFullySoldOutIds: string[] = [];
+          const holdInvoicePartialSaleUpdates: { itemId: string; remainingStock: number }[] = [];
           // Idempotency check: if already paid, skip
           if (holdInvoice.status === 'PAID') {
             console.warn(`[hold-invoice] Invoice ${invoiceId} already paid, skipping duplicate webhook`);
@@ -2310,8 +2366,9 @@ export const webhookHandler = async (req: Request, res: Response) => {
             // updateMany. The bundling business decision (#6) is unchanged, only the mechanism.
             for (const bundledItemId of holdInvoice.itemIds) {
               try {
-                const { fullySoldOut } = await sellItemUnits(bundledItemId, 1, tx);
+                const { fullySoldOut, remainingStock } = await sellItemUnits(bundledItemId, 1, tx);
                 if (fullySoldOut) holdInvoiceFullySoldOutIds.push(bundledItemId);
+                else holdInvoicePartialSaleUpdates.push({ itemId: bundledItemId, remainingStock });
               } catch (stockErr: any) {
                 if (stockErr instanceof InsufficientStockError) {
                   console.error(`[stripe/hold-invoice] Oversold race on item ${bundledItemId}:`, stockErr.message);
@@ -2361,6 +2418,18 @@ export const webhookHandler = async (req: Request, res: Response) => {
               holdInvoiceFullySoldOutIds.map((itemId: string) => notifyFacebookExportedItemSold(itemId))
             ).catch(() => {});
           });
+
+          // ADR-087 Phase 4: partial sales (not fully sold out) — revise eBay listing
+          // quantities for any eBay-linked items in this bundle. Fire-and-forget.
+          if (holdInvoicePartialSaleUpdates.length) {
+            setImmediate(() => {
+              Promise.allSettled(
+                holdInvoicePartialSaleUpdates.map(({ itemId, remainingStock }) =>
+                  syncMarketplaceStock(itemId, { fullySoldOut: false, remainingStock })
+                )
+              ).catch(() => {});
+            });
+          }
 
           // Award XP to shopper (+15 guildXP for payment completion)
           try {

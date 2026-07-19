@@ -72,7 +72,7 @@ const FINDING_API_CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
  * Optional appends (organizer toggles): date, costBasis, roomTag
  * Format: "FAS-abc123 2026-05-20 $10.50 Living Room"
  */
-function buildCustomLabel(
+export function buildCustomLabel(
   itemId: string,
   organizer: { skuAppendDate?: boolean; skuAppendCost?: boolean; skuAppendLocation?: boolean },
   item: { createdAt?: Date | null; costBasis?: number | null; roomTag?: string | null }

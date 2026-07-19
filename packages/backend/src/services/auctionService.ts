@@ -2,6 +2,7 @@ import { prisma } from '../index';
 import { getStripe } from '../utils/stripe';
 import { createNotification } from './notificationService';
 import { sellItemUnits, InsufficientStockError } from './itemStockService';
+import { syncMarketplaceStock } from './marketplaceStockSyncService'; // ADR-087 Phase 4: revise-on-partial eBay quantity sync
 
 /**
  * Close an auction and handle winner checkout flow.
@@ -121,8 +122,19 @@ export async function closeAuction(itemId: string): Promise<void> {
     // `if (item.auctionClosed)` early-return above), so no additional ledger is
     // needed here -- unlike the eBay paths, which reconcile a re-deliverable
     // external order and need the EbaySoldEvent ledger.
+    // NOTE: this call site has no existing endEbayListingIfExists (P3
+    // withdraw-on-sellout) hook wired up at all -- a pre-existing gap
+    // confirmed by the ADR-087 Phase 4 architect review, out of scope for
+    // this pass (flagged, not silently fixed here). The P4 revise-on-partial
+    // hook below is still added per the hacker/architect review's explicit
+    // inclusion of this call site.
     try {
-      await sellItemUnits(itemId, 1);
+      const { fullySoldOut, remainingStock } = await sellItemUnits(itemId, 1);
+      if (!fullySoldOut) {
+        syncMarketplaceStock(itemId, { fullySoldOut: false, remainingStock }).catch(err =>
+          console.error('[eBay ReviseQty] sync failed for item', itemId, err)
+        );
+      }
     } catch (stockErr) {
       if (stockErr instanceof InsufficientStockError) {
         // Pool already exhausted (e.g. sold on another channel first). Log

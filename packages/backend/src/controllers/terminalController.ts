@@ -17,6 +17,7 @@ import { endEbayListingIfExists } from './ebayController'; // Feature #244 Phase
 import { markShopifyItemSold } from '../services/shopifyService';
 import { notifyFacebookExportedItemSold } from '../services/facebookNudgeService';
 import { sellItemUnits, InsufficientStockError } from '../services/itemStockService';
+import { syncMarketplaceStock } from '../services/marketplaceStockSyncService'; // ADR-087 Phase 4: revise-on-partial eBay quantity sync
 import { transactionalEmailService } from '../lib/transactionalEmailService';
 import { recordSuspectedSignal } from '../services/checkoutGuard'; // S1072 Finding #4: cash path is offsite — log-only, never blocked
 
@@ -372,7 +373,18 @@ export const captureTerminalPaymentIntent = async (req: AuthRequest, res: Respon
     for (const p of purchases) {
       if (p.itemId) {
         try {
-          await sellItemUnits(p.itemId, 1);
+          // NOTE: this call site has no existing endEbayListingIfExists (P3
+          // withdraw-on-sellout) hook wired up at all -- a pre-existing gap,
+          // out of scope for this ADR-087 Phase 4 pass (flagged, not fixed).
+          // The P4 revise-on-partial hook below is still added per the
+          // hacker/architect review's explicit inclusion of all 12 checkout
+          // call sites.
+          const { fullySoldOut, remainingStock } = await sellItemUnits(p.itemId, 1);
+          if (!fullySoldOut) {
+            syncMarketplaceStock(p.itemId, { fullySoldOut: false, remainingStock }).catch(err =>
+              console.error('[eBay ReviseQty] sync failed for item', p.itemId, err)
+            );
+          }
         } catch (stockErr: any) {
           if (stockErr instanceof InsufficientStockError) {
             console.error(`[terminal] Oversold race on item ${p.itemId} despite captured payment:`, stockErr.message);
@@ -639,8 +651,9 @@ export async function processCashSaleCore(params: {
   for (const item of items) {
     if (item.itemId) {
       let fullySoldOut: boolean;
+      let remainingStock: number;
       try {
-        ({ fullySoldOut } = await sellItemUnits(item.itemId, 1));
+        ({ fullySoldOut, remainingStock } = await sellItemUnits(item.itemId, 1));
       } catch (stockErr: any) {
         if (stockErr instanceof InsufficientStockError) {
           console.error(`[terminal] Oversold race on item ${item.itemId} despite captured payment:`, stockErr.message);
@@ -658,6 +671,11 @@ export async function processCashSaleCore(params: {
         );
         notifyFacebookExportedItemSold(item.itemId).catch(err =>
           console.warn(`[FB Nudge] failed for item ${item.itemId}:`, err.message)
+        );
+      } else {
+        // ADR-087 Phase 4: partial sale — revise eBay listing quantity if linked.
+        syncMarketplaceStock(item.itemId, { fullySoldOut: false, remainingStock }).catch(err =>
+          console.error('[eBay ReviseQty] sync failed for item', item.itemId, err)
         );
       }
     }

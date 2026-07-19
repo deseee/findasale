@@ -11,6 +11,7 @@ import { endEbayListingIfExists } from './ebayController'; // Feature #244 Phase
 import { markShopifyItemSold } from '../services/shopifyService';
 import { notifyFacebookExportedItemSold } from '../services/facebookNudgeService';
 import { sellItemUnits, InsufficientStockError } from '../services/itemStockService';
+import { syncMarketplaceStock } from '../services/marketplaceStockSyncService'; // ADR-087 Phase 4: revise-on-partial eBay quantity sync
 import { checkCrewInvasion } from '../services/crewInvasionService'; // Feature #397: Crew Invasion flash discount
 import { emailService } from '../lib/emailService';
 import { suppressionService } from '../services/suppressionService';
@@ -788,6 +789,9 @@ export const batchUpdateHolds = async (req: AuthRequest, res: Response) => {
       // Only these should have their external listings (eBay/Shopify/FB) pulled — a
       // multi-unit item that still has remaining stock stays listed.
       const soldOutItemIds: string[] = [];
+      // ADR-087 Phase 4: items that sold PARTIALLY (stock remains) on this markSold
+      // path — these need their live eBay listing quantity revised, not withdrawn.
+      const partialSaleUpdates: { itemId: string; remainingStock: number }[] = [];
 
       if (action === 'release') {
         await tx.itemReservation.updateMany({
@@ -859,6 +863,8 @@ export const batchUpdateHolds = async (req: AuthRequest, res: Response) => {
             const stockResult = await sellItemUnits(itemId, 1, tx);
             if (stockResult.fullySoldOut) {
               soldOutItemIds.push(itemId);
+            } else {
+              partialSaleUpdates.push({ itemId, remainingStock: stockResult.remainingStock });
             }
           } catch (stockErr: any) {
             if (stockErr instanceof InsufficientStockError) {
@@ -893,10 +899,10 @@ export const batchUpdateHolds = async (req: AuthRequest, res: Response) => {
         });
       }
 
-      return { updated: validHolds.length, failed: ids.length - validHolds.length, holds: validHolds, soldOutItemIds };
+      return { updated: validHolds.length, failed: ids.length - validHolds.length, holds: validHolds, soldOutItemIds, partialSaleUpdates };
     }).catch((err) => {
       if (err.message === 'No valid holds found') {
-        return { updated: 0, failed: ids.length, holds: [], soldOutItemIds: [] };
+        return { updated: 0, failed: ids.length, holds: [], soldOutItemIds: [], partialSaleUpdates: [] };
       }
       throw err;
     });
@@ -952,10 +958,24 @@ export const batchUpdateHolds = async (req: AuthRequest, res: Response) => {
             ).catch(() => {});
           });
         }
+
+        // ADR-087 Phase 4: partial sales (stock remains) — revise eBay listing
+        // quantities for any eBay-linked items in this batch. Fire-and-forget,
+        // mirrors the soldOutHolds shape above exactly.
+        const partialUpdatesList = ((result as any).partialSaleUpdates as { itemId: string; remainingStock: number }[]) ?? [];
+        if (partialUpdatesList.length > 0) {
+          setImmediate(() => {
+            Promise.allSettled(
+              partialUpdatesList.map(({ itemId, remainingStock }) =>
+                syncMarketplaceStock(itemId, { fullySoldOut: false, remainingStock })
+              )
+            ).catch(() => {});
+          });
+        }
       }
     }
 
-    const { holds: _holds, soldOutItemIds: _soldOutItemIds, ...responseResult } = result as any;
+    const { holds: _holds, soldOutItemIds: _soldOutItemIds, partialSaleUpdates: _partialSaleUpdates, ...responseResult } = result as any;
     // Include settlementMode for RECORD so the frontend can show the correct toast copy
     res.json(action === 'markSold' ? { ...responseResult, settlementMode: 'RECORD' } : responseResult);
   } catch (error) {
