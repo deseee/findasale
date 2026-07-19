@@ -227,6 +227,10 @@ const nextConfig = {
       beforeFiles: [
         { source: '/api/auth/login',               destination: `${railwayApi}/auth/login` },
         { source: '/api/auth/register',            destination: `${railwayApi}/auth/register` },
+        // P0 fix (2026-07-19): new PoW challenge endpoint fell into the NextAuth catch-all
+        // (returned 400 "not supported by NextAuth.js") until added here — same SH-020 class
+        // of conflict as every other backend /api/auth/* route above.
+        { source: '/api/auth/register-challenge', destination: `${railwayApi}/auth/register-challenge` },
         { source: '/api/auth/logout',              destination: `${railwayApi}/auth/logout` },
         { source: '/api/auth/refresh',             destination: `${railwayApi}/auth/refresh` },
         { source: '/api/auth/me',                  destination: `${railwayApi}/auth/me` },
