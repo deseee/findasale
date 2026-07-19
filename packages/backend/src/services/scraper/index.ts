@@ -1306,6 +1306,30 @@ export async function ingestScrapedListing(
       };
     }
 
+    // Sanity-check the scraped date window (C-2 fix, weekly-audit-2026-07-18.md).
+    // A malformed/mismatched start+end pair -- e.g. an old real FB `start_timestamp`
+    // (sometimes the series' original/other occurrence for a recurring event) paired
+    // with a much later `end_timestamp` -- has shipped multi-month "sale" windows that
+    // read as permanently "TODAY"/"Live" once the far-future end date is reached by
+    // "now" (566-row TODAY/Live badge bug, S1130; same defect class reproduced live
+    // 2026-07-19 across multiple sources, not just Facebook Events, hence the check
+    // lives here in the shared ingest path rather than only in the FB Events mapper).
+    // isOngoing listings (permanent storefronts -- Foursquare/HERE) are exempt: they
+    // intentionally use a rolling ~1-year window and are never a dated "sale" event.
+    // 45 days -- generous ceiling for even a multi-weekend estate/consignment clearance,
+    // with headroom above FacebookMarketplace's legitimate 30-day default window
+    // (facebook-marketplace.ts) so this never false-rejects real listings.
+    const MAX_SALE_DURATION_MS = 45 * 24 * 60 * 60 * 1000;
+    if (
+      !listing.isOngoing &&
+      listing.endDate.getTime() - listing.startDate.getTime() > MAX_SALE_DURATION_MS
+    ) {
+      return {
+        status: 'failed',
+        reason: `Implausible date window (${listing.startDate.toISOString()} -> ${listing.endDate.toISOString()}) exceeds 45-day sanity cap -- likely mismatched start/end fields, not ingested`,
+      };
+    }
+
     // RETAIL deduplication: check if same address already exists
     if (listing.saleType === 'RETAIL') {
       const existing = await prisma.sale.findFirst({
