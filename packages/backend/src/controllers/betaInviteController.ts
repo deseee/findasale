@@ -127,14 +127,23 @@ export const validateCode = async (req: Request, res: Response) => {
   }
 };
 
-// POST /invites/redeem — mark code as used during registration
-// Called by register endpoint after user creation
-export const redeemInvite = async (req: Request, res: Response) => {
+// POST /invites/redeem — mark code as used for the authenticated caller.
+// S1140 security fix: this used to take `userId` straight from req.body with
+// no ownership check, so any unauthenticated caller with a valid unused code
+// could bind it to an arbitrary victim's account (burning their one-time
+// invite slot) or to a userId of their own choosing. Route now requires auth
+// (see routes/invites.ts) and userId is always the authenticated caller's id.
+export const redeemInvite = async (req: AuthRequest, res: Response) => {
   try {
-    const { code, userId } = req.body;
+    const { code } = req.body;
+    const userId = req.user?.id;
 
-    if (!code || !userId) {
-      return res.status(400).json({ message: 'Code and userId are required' });
+    if (!userId) {
+      return res.status(401).json({ message: 'Not authenticated' });
+    }
+
+    if (!code) {
+      return res.status(400).json({ message: 'Code is required' });
     }
 
     const invite = await prisma.betaInvite.findUnique({

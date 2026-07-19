@@ -189,3 +189,10 @@ raw-footage/*
 
 # native footage->R2 uploader (contains rclone binary + R2 creds; never commit)
 .footage-sync/
+
+# Stray runtime-generated files in public/downloads (e.g. random-named temp
+# zips from ad-hoc test/download activity) -- keep only the two committed
+# downloadable deliverables. (S1140)
+packages/frontend/public/downloads/*
+!packages/frontend/public/downloads/findasale-marketplace-extension.zip
+!packages/frontend/public/downloads/sale-starter-kit.pdf

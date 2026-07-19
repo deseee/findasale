@@ -8,7 +8,9 @@ sourcesJson structure: [{ "sourceName": "FloridaPhase2", "sourceId": "...", "las
 
 Run from PowerShell:
   pip install psycopg2-binary
-  $env:DATABASE_URL="postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway"
+  # Get the current Railway DATABASE_URL from packages/database/.env or the Railway dashboard --
+  # never hardcode it here (S1140 security fix: this file used to have a real password baked in).
+  $env:DATABASE_URL="<paste the current Railway DATABASE_URL here>"
   python packages/backend/scripts/backfillDirectoryMostRecentSource.py
 
 Dry run (no writes):
@@ -23,10 +25,12 @@ from datetime import datetime
 
 DRY_RUN = '--dry-run' in sys.argv
 
-DATABASE_URL = os.environ.get(
-    'DATABASE_URL',
-    'postgresql://postgres:QvnUGsnsjujFVoeVyORLTusAovQkirAq@maglev.proxy.rlwy.net:13949/railway'
-)
+# S1140 security fix: no hardcoded fallback -- a real prod DB password was
+# committed here before. DATABASE_URL must be set explicitly in the environment.
+DATABASE_URL = os.environ.get('DATABASE_URL')
+if not DATABASE_URL:
+    print("ERROR: DATABASE_URL is not set. Set it to the current Railway connection string before running this script.")
+    sys.exit(1)
 
 conn = psycopg2.connect(DATABASE_URL)
 cur = conn.cursor()

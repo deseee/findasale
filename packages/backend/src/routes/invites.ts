@@ -4,6 +4,7 @@ import {
   validateCode,
   redeemInvite,
 } from '../controllers/betaInviteController';
+import { authenticate } from '../middleware/auth';
 
 const router = express.Router();
 
@@ -16,8 +17,11 @@ const inviteLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-// These endpoints are public (no auth required)
+// /validate is public (no auth required) -- just checks if a code is usable.
+// /redeem requires auth (S1140 security fix): it used to trust a client-supplied
+// userId with no ownership check, letting anyone burn another user's one-time
+// invite slot. Now it always redeems for the authenticated caller.
 router.post('/validate', inviteLimiter, validateCode);
-router.post('/redeem', inviteLimiter, redeemInvite);
+router.post('/redeem', inviteLimiter, authenticate, redeemInvite);
 
 export default router;
