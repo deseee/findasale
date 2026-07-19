@@ -22,7 +22,7 @@ import {
   cancelTerminalPaymentIntent,
   cashPayment,
 } from '../controllers/terminalController';
-import { authenticate } from '../middleware/auth';
+import { authenticate, optionalAuthenticate } from '../middleware/auth';
 import { paymentLimiter } from '../middleware/rateLimiter';
 
 const router = Router();
@@ -32,7 +32,10 @@ router.post('/create-connect-account', authenticate, createConnectAccount);
 router.get('/account-status', authenticate, getAccountStatus);
 
 // Buyer routes
-router.post('/create-payment-intent', authenticate, paymentLimiter, createPaymentIntent);
+// Guest checkout (single-item Buy It Now, 2026-07-18): optionalAuthenticate lets an
+// unauthenticated shopper create a PaymentIntent for one item. createCartCheckoutSession
+// (multi-item cart) is intentionally UNCHANGED — guest cart checkout is out of scope this pass.
+router.post('/create-payment-intent', optionalAuthenticate, paymentLimiter, createPaymentIntent);
 router.get('/pending-payment/:purchaseId', authenticate, getPendingPayment);
 // P2 Bug 2: Webhook failure recovery endpoint
 router.post('/recover-payment-intent', authenticate, paymentLimiter, recoverPaymentIntent);

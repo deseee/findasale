@@ -1465,7 +1465,9 @@ model Purchase {
   boothCartTransactionId String?
   boothCartTransaction   BoothCartTransaction? @relation(fields: [boothCartTransactionId], references: [id], onDelete: SetNull)
   source                String            @default("ONLINE") // ONLINE | POS
-  buyerEmail            String? // POS only: optional email for receipt delivery
+  buyerEmail            String? // Optional email for receipt delivery — POS walk-ins AND online guest checkout (no FindA.Sale account)
+  guestName             String? // Online guest checkout only: buyer-entered name (no FindA.Sale account, so no User.name to reference)
+  buyerCardFingerprint  String? // Stripe card fingerprint captured post-payment (guest + authenticated) — powers cross-purchase collusion detection that does not depend on a User relation (S1072 Finding #4 guest-checkout gap)
   isTestTransaction     Boolean           @default(false)
   // #561 offline POS cash-checkout queuing: client-generated UUID set at queue-time.
   // NOT @unique — one offline cart submission legitimately produces multiple Purchase
@@ -1490,6 +1492,7 @@ model Purchase {
   @@index([affiliateLinkId])
   @@index([clientTransactionId])
   @@index([boothCartTransactionId])
+  @@index([buyerCardFingerprint]) // guest-checkout collusion lookups (S1072 Finding #4 follow-up)
 }
 
 model SaleSubscriber {

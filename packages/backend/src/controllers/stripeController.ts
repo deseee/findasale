@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import crypto from 'crypto';
 import Stripe from 'stripe';
 import { getStripe, getTestStripe } from '../utils/stripe';
 import { AuthRequest } from '../middleware/auth';
@@ -31,7 +32,7 @@ import { sellItemUnits, InsufficientStockError } from '../services/itemStockServ
 import { sendConsignorItemSold } from '../services/consignorEmailService'; // Feature #309: Consignor email notifications
 import { applyFirstMonthRefundCap, logRefundProcessing } from '../services/refundService'; // P2-2: Refund cap + logging
 import { transactionalEmailService } from '../lib/transactionalEmailService';
-import { assertCheckoutAllowed, CheckoutGuardError } from '../services/checkoutGuard'; // S1072 Finding #4: collusion/wash-trade guard
+import { assertCheckoutAllowed, assertGuestCheckoutAllowed, recordConfirmedSignal, CheckoutGuardError } from '../services/checkoutGuard'; // S1072 Finding #4: collusion/wash-trade guard
 
 // Lazy — avoids crash when module loads before dotenv runs
 const stripe = () => getStripe();
@@ -354,14 +355,31 @@ export const recoverPaymentIntent = async (req: AuthRequest, res: Response) => {
 // Create a payment intent for purchasing an item
 export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
   try {
-    if (!req.user) {
-      return res.status(401).json({ message: 'Authentication required' });
-    }
-
-    const { itemId, affiliateLinkId, shippingRequested, couponCode } = req.body;
+    // Guest checkout (single-item Buy It Now, 2026-07-18): req.user is optional now that
+    // this route uses optionalAuthenticate. createCartCheckoutSession (multi-item cart) is
+    // UNCHANGED and still requires auth — guest cart checkout is out of scope this pass.
+    const { itemId, affiliateLinkId, shippingRequested, couponCode, guestEmail, guestName, deviceFingerprint } = req.body;
 
     if (!itemId) {
       return res.status(400).json({ message: 'Item ID is required' });
+    }
+
+    // Guests must provide contact info up front — there is no User row to email a receipt to.
+    let normalizedGuestEmail: string | null = null;
+    let normalizedGuestName: string | null = null;
+    if (!req.user) {
+      if (!guestEmail || typeof guestEmail !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(guestEmail.trim())) {
+        return res.status(400).json({ message: 'A valid email is required to check out as a guest.' });
+      }
+      if (!guestName || typeof guestName !== 'string' || !guestName.trim()) {
+        return res.status(400).json({ message: 'Your name is required to check out as a guest.' });
+      }
+      normalizedGuestEmail = guestEmail.trim().toLowerCase();
+      normalizedGuestName = guestName.trim().slice(0, 200);
+      // Basic per-email guest-checkout-attempt logging (Hacker P1 #4) — paymentLimiter
+      // (5 req/min, IP+user keyed via getKeyGenerator) already rate-limits this route;
+      // this is a cheap additional audit trail, not new infra.
+      console.log(`[guest-checkout] attempt itemId=${itemId} email=${normalizedGuestEmail}`);
     }
 
     const item = await prisma.item.findUnique({
@@ -408,15 +426,32 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ message: 'This sale is not currently available for purchase.' });
     }
 
-    // S1072 Finding #4: collusion/wash-trade guard — identity-grade device/card fingerprint match
+    // S1072 Finding #4: collusion/wash-trade guard — identity-grade device/card fingerprint match.
+    // Guests have no User row (no stored fingerprints for assertCheckoutAllowed to read) — run
+    // the guest-specific pre-payment guard instead (device fingerprint only; card fingerprint
+    // isn't known yet at PaymentIntent-creation time, so guest card-fingerprint self-dealing +
+    // cross-purchase collusion checks run post-payment in the webhook — see payment_intent.succeeded).
     try {
-      await assertCheckoutAllowed({
-        buyerUserId: req.user.id,
-        saleId: item.sale!.id,
-        itemId: item.id,
-        prisma,
-        context: 'createPaymentIntent',
-      });
+      if (req.user) {
+        await assertCheckoutAllowed({
+          buyerUserId: req.user.id,
+          saleId: item.sale!.id,
+          itemId: item.id,
+          prisma,
+          context: 'createPaymentIntent',
+        });
+      } else {
+        const hashedFp = deviceFingerprint && typeof deviceFingerprint === 'string'
+          ? crypto.createHash('sha256').update(deviceFingerprint).digest('hex')
+          : null;
+        await assertGuestCheckoutAllowed({
+          hashedDeviceFingerprint: hashedFp,
+          saleId: item.sale!.id,
+          itemId: item.id,
+          prisma,
+          context: 'createPaymentIntent-guest',
+        });
+      }
     } catch (guardError) {
       if (guardError instanceof CheckoutGuardError) {
         return res.status(403).json({ message: guardError.message });
@@ -487,6 +522,9 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
       organizerDiscountActive = true;
       discountAmount = Math.round(parseFloat(item.organizerDiscountAmount.toString()) * 100);
       discountAmount = Math.min(discountAmount, priceCents - 50); // Ensure price doesn't go below $0.50
+    } else if (couponCode && !req.user) {
+      // Coupons are earned per-account (XP rewards) — a guest can never have one.
+      return res.status(400).json({ message: 'Coupon codes require a FindA.Sale account. Sign in to use a coupon, or continue as a guest without one.' });
     } else if (couponCode) {
       // Organizer discount not active — allow shopper coupon
       const coupon = await prisma.coupon.findUnique({ where: { code: (couponCode as string).trim().toUpperCase() } });
@@ -513,7 +551,12 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
       : totalWithBuyerPremium - discountAmount;                      // Regular: item + shipping - discount only (platform fee from organizer payout)
 
     const couponSuffix = couponId ? `-c${couponId.slice(-6)}` : '';
-    const idempotencyKey = `pi-${itemId}-${req.user.id}${couponSuffix}`;
+    // Guests have no stable identity to key idempotency on across retries — use a per-request
+    // random suffix. A genuine double-submit (e.g. a network retry) is therefore NOT deduped
+    // for guests the way it is for authenticated buyers — known limitation, see Dev Handoff.
+    const idempotencyKey = req.user
+      ? `pi-${itemId}-${req.user.id}${couponSuffix}`
+      : `pi-${itemId}-guest-${crypto.randomUUID()}${couponSuffix}`;
 
     let paymentIntent;
     const stripeConnectId = item.sale!.organizer.stripeConnectId;
@@ -528,7 +571,7 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
       metadata: {
         itemId: item.id,
         saleId: item.sale!.id,
-        userId: req.user.id,
+        ...(req.user ? { userId: req.user.id } : { guestCheckout: 'true' }),
         ...(affiliateLinkId ? { affiliateLinkId } : {}),
         ...(shippingCost > 0 ? { shippingCost: String(shippingCost) } : {}),
         ...(couponId ? { couponId } : {}),
@@ -589,26 +632,32 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
     if (!purchase) {
       purchase = await prisma.purchase.create({
         data: {
-          userId: req.user.id,
+          userId: req.user?.id ?? null,
           itemId: item.id,
           saleId: item.sale!.id,
           amount: finalPriceCents / 100,
           platformFeeAmount: platformFeeAmount / 100,
           stripePaymentIntentId: paymentIntent.id,
           status: 'PENDING',
-          ...(affiliateLinkId ? { affiliateLinkId } : {})
+          ...(affiliateLinkId ? { affiliateLinkId } : {}),
+          ...(normalizedGuestEmail ? { buyerEmail: normalizedGuestEmail, guestName: normalizedGuestName } : {}),
         }
       });
 
-      await prisma.checkoutAttempt.upsert({
-        where: { paymentIntent: paymentIntent.id },
-        create: {
-          userId: req.user.id,
-          itemId: item.id,
-          paymentIntent: paymentIntent.id,
-        },
-        update: {},
-      }).catch(err => console.warn('[checkout-recovery] Failed to track checkout attempt:', err));
+      // CheckoutAttempt.userId is a required FK — guests have no User row, so
+      // cart-abandonment recovery tracking is skipped for guest checkouts (known gap,
+      // flagged in Dev Handoff Blocked/Flagged).
+      if (req.user) {
+        await prisma.checkoutAttempt.upsert({
+          where: { paymentIntent: paymentIntent.id },
+          create: {
+            userId: req.user.id,
+            itemId: item.id,
+            paymentIntent: paymentIntent.id,
+          },
+          update: {},
+        }).catch(err => console.warn('[checkout-recovery] Failed to track checkout attempt:', err));
+      }
 
       // Platform Safety #98: Save CheckoutEvidence for chargeback defense
       const clientIp = getClientIp(req);
@@ -969,28 +1018,122 @@ export const webhookHandler = async (req: Request, res: Response) => {
         },
       });
 
-      // Platform Safety #102: Capture and store payment method fingerprint
-      if (purchase?.user?.id && paymentIntent.payment_method) {
+      // Platform Safety #102: Capture and store payment method fingerprint (authenticated buyers)
+      // + S1072 Finding #4 guest-checkout follow-up: guest self-dealing / cross-purchase
+      // collusion detection (Hacker P0 #1, #2 — assertCheckoutAllowed can't run pre-payment
+      // for a guest since there's no User row to read stored fingerprints off of; this is the
+      // post-payment equivalent, gated to run BEFORE the item is marked SOLD below).
+      let guestFraudBlocked = false;
+      if (purchase && paymentIntent.payment_method) {
         try {
           const paymentMethod = await stripe().paymentMethods.retrieve(paymentIntent.payment_method as string);
-          if (paymentMethod.card?.fingerprint) {
-            // Check for duplicate payment methods across accounts
-            const { isDuplicate, otherUserIds } = await checkPaymentDuplicate(paymentMethod.card.fingerprint, purchase.user.id);
-            if (isDuplicate && otherUserIds.length > 0) {
-              logPaymentDuplicateWarning(purchase.user.id, paymentMethod.card.fingerprint, otherUserIds);
-              // CRITICAL FIX: Flag account for fraud review when shared card detected
-              await prisma.user.update({
-                where: { id: purchase.user.id },
-                data: { fraudSuspect: true }
-              });
-              console.warn(`[stripe] Fraud flag set for user ${purchase.user.id} — shared card fingerprint with users: ${otherUserIds.join(', ')}`);
+          const cardFp = paymentMethod.card?.fingerprint;
+
+          if (cardFp) {
+            // Persist on every purchase (guest AND authenticated) — this is what makes the
+            // cross-purchase collusion query below able to see guest rows, which the existing
+            // pre-payment checkoutGuard.ts check (User-relation-based) structurally cannot.
+            await prisma.purchase.updateMany({
+              where: { stripePaymentIntentId: paymentIntent.id },
+              data: { buyerCardFingerprint: cardFp },
+            }).catch(err => console.warn('[stripe] Failed to persist buyerCardFingerprint:', err));
+
+            if (purchase.userId && purchase.user?.id) {
+              // Existing authenticated-buyer flow — unchanged.
+              const { isDuplicate, otherUserIds } = await checkPaymentDuplicate(cardFp, purchase.user.id);
+              if (isDuplicate && otherUserIds.length > 0) {
+                logPaymentDuplicateWarning(purchase.user.id, cardFp, otherUserIds);
+                // CRITICAL FIX: Flag account for fraud review when shared card detected
+                await prisma.user.update({
+                  where: { id: purchase.user.id },
+                  data: { fraudSuspect: true }
+                });
+                console.warn(`[stripe] Fraud flag set for user ${purchase.user.id} — shared card fingerprint with users: ${otherUserIds.join(', ')}`);
+              }
+              // Store fingerprint on user account
+              await storePaymentFingerprint(purchase.user.id, cardFp);
             }
-            // Store fingerprint on user account
-            await storePaymentFingerprint(purchase.user.id, paymentMethod.card.fingerprint);
+
+            // Guest self-dealing check (P0 #1): guest card fingerprint === sale organizer's
+            // stored card fingerprint. Only meaningful for guest purchases — an authenticated
+            // buyer's self-dealing is already blocked pre-payment by assertCheckoutAllowed.
+            // purchase.sale.organizer.userId is already selected by the outer query above —
+            // no extra round-trip needed.
+            const organizerUserId = purchase.sale?.organizer?.userId ?? null;
+
+            if (!purchase.userId && organizerUserId) {
+              const organizerUser = await prisma.user.findUnique({
+                where: { id: organizerUserId },
+                select: { stripeCardFingerprint: true },
+              });
+              if (organizerUser?.stripeCardFingerprint && organizerUser.stripeCardFingerprint === cardFp) {
+                guestFraudBlocked = true;
+                await recordConfirmedSignal(prisma, {
+                  userId: organizerUserId,
+                  itemId: purchase.itemId,
+                  saleId: purchase.saleId!,
+                  signalType: 'SHARED_CARD_FP',
+                  notes: `[webhook-guest] Guest checkout payment card fingerprint matches sale organizer's card fingerprint (self-dealing via guest identity). PI ${paymentIntent.id}.`,
+                });
+              }
+            }
+
+            // Cross-purchase collusion check (P0 #2): any OTHER purchase on this same sale
+            // sharing this card fingerprint — matched directly via Purchase.buyerCardFingerprint
+            // (covers guest-vs-guest) OR via the related User's stored fingerprint (covers
+            // guest-vs-authenticated and authenticated-vs-authenticated). Runs for every
+            // purchase, not just guests, since this is the only point a guest row is visible
+            // to a collusion query at all.
+            if (!guestFraudBlocked) {
+              const collidingPurchase = await prisma.purchase.findFirst({
+                where: {
+                  saleId: purchase.saleId!,
+                  id: { not: purchase.id },
+                  OR: [
+                    { buyerCardFingerprint: cardFp },
+                    { user: { stripeCardFingerprint: cardFp } },
+                  ],
+                },
+                select: { id: true, userId: true },
+              });
+
+              if (collidingPurchase) {
+                guestFraudBlocked = true;
+                // Flag whichever side of the collision has a real account; if both sides are
+                // guests (no User to flag), fall back to the organizer as the sale-level flag
+                // point — FraudSignal.userId is a required FK, there is no "no user" option.
+                const flagUserId = purchase.userId ?? collidingPurchase.userId ?? organizerUserId;
+                if (flagUserId) {
+                  await recordConfirmedSignal(prisma, {
+                    userId: flagUserId,
+                    itemId: purchase.itemId,
+                    saleId: purchase.saleId!,
+                    signalType: 'SHARED_CARD_FP',
+                    notes: `[webhook-guest] Purchase ${purchase.id} shares a card fingerprint with purchase ${collidingPurchase.id} on the same sale (2-buyers-1-card pattern, guest-inclusive check). PI ${paymentIntent.id}.`,
+                  });
+                } else {
+                  console.error(`[checkoutGuard][guest] Card-fingerprint collusion detected between purchases ${purchase.id} and ${collidingPurchase.id} on sale ${purchase.saleId} — no User row on either side to flag.`);
+                }
+              }
+            }
           }
         } catch (err) {
-          console.warn('[stripe] Failed to capture payment method fingerprint:', err);
+          console.error('[checkoutGuard][guest] Failed to run guest/collusion fraud check (non-fatal — does not block fulfillment on an error, only on a confirmed match):', err);
         }
+      }
+
+      if (guestFraudBlocked && purchase) {
+        try {
+          await stripe().refunds.create({ payment_intent: paymentIntent.id });
+        } catch (refundErr) {
+          console.error(`[checkoutGuard][guest] Failed to auto-refund blocked guest PI ${paymentIntent.id}:`, refundErr);
+        }
+        await prisma.purchase.updateMany({
+          where: { stripePaymentIntentId: paymentIntent.id },
+          data: { status: 'REFUNDED' },
+        });
+        console.warn(`[checkoutGuard][guest] Blocked fulfillment + refunded PI ${paymentIntent.id} — collusion/self-dealing signal confirmed.`);
+        break;
       }
 
       if (purchase) {
@@ -1402,14 +1545,21 @@ export const webhookHandler = async (req: Request, res: Response) => {
           }).catch(err => console.error('[notification] Failed to create purchase notification:', err));
         }
 
-        if (!isPOS && purchase.user) {
+        // Guest checkout (2026-07-18): purchase.user is null for guests (no User row) —
+        // sendReceiptEmail only needs email/name strings, so guests get the same receipt
+        // using Purchase.buyerEmail/guestName captured at checkout time.
+        const receiptRecipient = purchase.user
+          ? { email: purchase.user.email, name: purchase.user.name }
+          : (purchase.buyerEmail ? { email: purchase.buyerEmail, name: purchase.guestName || 'there' } : null);
+
+        if (!isPOS && receiptRecipient) {
           // Platform Safety #97: Calculate itemized breakdown for receipt
           // We don't have full itemization data in webhook context, but we have the totals
           // Frontend-side reconstruction or enhanced tracking would improve this
           await sendReceiptEmail({
             id: purchase.id,
             amount: purchase.amount,
-            user: { email: purchase.user.email, name: purchase.user.name },
+            user: receiptRecipient,
             item: purchase.item,
             sale: purchase.sale,
             // Note: For full itemization, the frontend should include this in metadata

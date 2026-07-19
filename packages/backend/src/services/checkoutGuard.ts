@@ -37,7 +37,7 @@ interface AssertCheckoutAllowedParams {
  * Uses upsert against the @@unique([userId, itemId, signalType]) constraint so
  * logging never throws and never blocks the caller's real error response.
  */
-async function recordConfirmedSignal(
+export async function recordConfirmedSignal(
   prisma: PrismaClientLike,
   params: {
     userId: string;
@@ -248,6 +248,73 @@ export async function assertCheckoutAllowed({
       });
       throw new CheckoutGuardError();
     }
+  }
+}
+
+// ============================================================================
+// Guest Checkout (single-item Buy It Now, no FindA.Sale account) — 2026-07-18
+// assertCheckoutAllowed above requires a real buyerUserId (device/card fingerprint are
+// read off the User row) — a guest has none, so it cannot run pre-payment for guests.
+// assertGuestCheckoutAllowed is the pre-payment guest equivalent: it compares the raw
+// client-collected device fingerprint (hashed the same way authController.ts hashes it
+// at signup — SHA-256 of the raw signal string) directly against the sale organizer's
+// STORED (already-hashed) User.deviceFingerprint. This catches an organizer buying their
+// own item via a guest checkout on the same browser/device BEFORE any charge happens.
+// It cannot catch a shared-card-fingerprint match (no payment method exists yet at this
+// point in a PaymentIntent-based flow) — that half of guest wash-trade detection runs
+// post-payment in the webhook (payment_intent.succeeded), using recordConfirmedSignal
+// (exported above) directly against Purchase.buyerCardFingerprint / User.stripeCardFingerprint.
+// ============================================================================
+
+export interface AssertGuestCheckoutAllowedParams {
+  hashedDeviceFingerprint?: string | null; // already SHA-256 hashed by the caller
+  saleId: string;
+  itemId?: string;
+  prisma: PrismaClientLike;
+  context: string; // e.g. 'createPaymentIntent-guest'
+}
+
+/**
+ * assertGuestCheckoutAllowed — pre-payment guest self-dealing guard (device fingerprint only).
+ * Throws CheckoutGuardError when the guest's device fingerprint matches the sale organizer's
+ * stored device fingerprint. Null-safe: a missing/empty fingerprint on either side never
+ * blocks (fails open on missing signal, same posture as assertCheckoutAllowed's null checks).
+ * Never reads or compares IP address.
+ */
+export async function assertGuestCheckoutAllowed({
+  hashedDeviceFingerprint,
+  saleId,
+  itemId,
+  prisma,
+  context,
+}: AssertGuestCheckoutAllowedParams): Promise<void> {
+  if (!hashedDeviceFingerprint) return;
+
+  const sale = await prisma.sale.findUnique({
+    where: { id: saleId },
+    select: { organizer: { select: { userId: true } } },
+  });
+
+  if (!sale || !sale.organizer) return;
+
+  const organizerUserId = sale.organizer.userId;
+  const organizerUser = await prisma.user.findUnique({
+    where: { id: organizerUserId },
+    select: { deviceFingerprint: true },
+  });
+
+  if (
+    organizerUser?.deviceFingerprint != null &&
+    organizerUser.deviceFingerprint === hashedDeviceFingerprint
+  ) {
+    await recordConfirmedSignal(prisma, {
+      userId: organizerUserId,
+      itemId: itemId ?? null,
+      saleId,
+      signalType: 'SHARED_DEVICE_FP',
+      notes: `[${context}] Guest checkout device fingerprint matches sale organizer's stored device fingerprint (self-dealing via guest identity, pre-payment block).`,
+    });
+    throw new CheckoutGuardError();
   }
 }
 
