@@ -1,26 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Head from 'next/head';
-import Script from 'next/script';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { signIn } from 'next-auth/react';
 import api from '../lib/api';
 import { useAuth } from '../components/AuthContext';
 import { useToast } from '../components/ToastContext';
-
-// P0 SECURITY FIX (2026-07-18): Cloudflare Turnstile CAPTCHA on registration.
-// Ambient typing for the globally-loaded Turnstile script (loaded via next/script below).
-declare global {
-  interface Window {
-    turnstile?: {
-      render: (container: HTMLElement, options: Record<string, unknown>) => string;
-      reset: (widgetId?: string) => void;
-      remove: (widgetId?: string) => void;
-    };
-  }
-}
-
-const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || '';
 
 const RegisterPage = () => {
   const router = useRouter();
@@ -50,13 +35,6 @@ const RegisterPage = () => {
   const [claimOrganizerId, setClaimOrganizerId] = useState<string | null>(null);
   const errorRef = useRef<HTMLDivElement>(null);
 
-  // P0 SECURITY FIX (2026-07-18): Cloudflare Turnstile CAPTCHA state
-  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
-  const [turnstileWidgetId, setTurnstileWidgetId] = useState<string | null>(null);
-  const [turnstileReady, setTurnstileReady] = useState(false);
-  const [turnstileLoadFailed, setTurnstileLoadFailed] = useState(false);
-  const turnstileContainerRef = useRef<HTMLDivElement>(null);
-
   // Pre-fill referral codes and claim params from URL
   // ?ref= for shopper-to-shopper referral rewards (existing system)
   // ?aff= for organizer-to-organizer affiliate program (new system)
@@ -78,37 +56,6 @@ const RegisterPage = () => {
       setFormData(prev => ({ ...prev, role: 'ORGANIZER' }));
     }
   }, []);
-
-  // P0 SECURITY FIX (2026-07-18): Render the Turnstile widget once the script has loaded and the
-  // container is mounted. Explicit render() (rather than implicit data-sitekey markup) so we get
-  // a widgetId back for reset() after a failed submit — Turnstile tokens are single-use.
-  useEffect(() => {
-    if (!turnstileReady || !turnstileContainerRef.current || !TURNSTILE_SITE_KEY) return;
-    if (typeof window === 'undefined' || !window.turnstile) return;
-    if (turnstileWidgetId) return; // already rendered — avoid duplicate widgets on re-render
-
-    const id = window.turnstile.render(turnstileContainerRef.current, {
-      sitekey: TURNSTILE_SITE_KEY,
-      callback: (token: string) => setTurnstileToken(token),
-      'expired-callback': () => setTurnstileToken(null),
-      'error-callback': () => setTurnstileToken(null),
-    });
-    setTurnstileWidgetId(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [turnstileReady]);
-
-  // P0 SECURITY FIX follow-up (found via live QA, 2026-07-18): if the Turnstile script never loads
-  // (blocked by an ad blocker/privacy extension, or a transient Cloudflare edge issue -- both
-  // observed live), turnstileReady never flips and Register stays disabled forever with zero
-  // explanation. Surface a visible message instead of a silent dead end. Deliberately does NOT
-  // bypass the check (fail-closed is the whole point) -- it only makes the failure visible.
-  useEffect(() => {
-    if (!TURNSTILE_SITE_KEY || turnstileReady) return;
-    const timer = setTimeout(() => {
-      if (!turnstileReady) setTurnstileLoadFailed(true);
-    }, 8000);
-    return () => clearTimeout(timer);
-  }, [turnstileReady]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -196,14 +143,6 @@ const RegisterPage = () => {
       return;
     }
 
-    // P0 SECURITY FIX (2026-07-18): Require a completed CAPTCHA challenge before submitting.
-    // The backend independently re-verifies the token and fails closed — this is a UX guard only.
-    if (!turnstileToken) {
-      setError('Please complete the verification challenge before continuing.');
-      setLoading(false);
-      return;
-    }
-
     try {
       // Generate device fingerprint
       const deviceFingerprint = await generateDeviceFingerprint();
@@ -227,7 +166,6 @@ const RegisterPage = () => {
         affiliateReferralCode: formData.affiliateReferralCode || undefined,
         inviteCode: formData.inviteCode || undefined,
         deviceFingerprint, // Platform Safety #118: Include fingerprint
-        turnstileToken, // P0 SECURITY FIX (2026-07-18): CAPTCHA token, re-verified server-side
       };
       if (formData.role === 'ORGANIZER') {
         payload.businessName = formData.businessName;
@@ -283,11 +221,6 @@ const RegisterPage = () => {
       const msg = err.response?.data?.message || 'An error occurred during registration. Please try again.';
       setError(msg);
       showToast(msg, 'error');
-      // Turnstile tokens are single-use — reset the widget so the user can retry with a fresh one.
-      if (typeof window !== 'undefined' && window.turnstile && turnstileWidgetId) {
-        window.turnstile.reset(turnstileWidgetId);
-      }
-      setTurnstileToken(null);
       // Scroll the error into view so users don't miss it after submitting from the bottom of the form
       setTimeout(() => {
         errorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -651,20 +584,6 @@ const RegisterPage = () => {
             )}
           </div>
 
-          {/* P0 SECURITY FIX (2026-07-18): Cloudflare Turnstile CAPTCHA widget */}
-          {TURNSTILE_SITE_KEY && (
-            <div className="flex flex-col items-center gap-2">
-              <div ref={turnstileContainerRef} />
-              {turnstileLoadFailed && !turnstileToken && (
-                <p className="text-xs text-red-600 dark:text-red-400 text-center max-w-sm">
-                  The security check couldn't load. If you have an ad blocker or privacy extension
-                  enabled, please allow challenges.cloudflare.com and refresh the page, or try a
-                  different browser.
-                </p>
-              )}
-            </div>
-          )}
-
           <div className="text-xs text-warm-500 dark:text-warm-400 text-center">
             By creating an account, you agree to our <Link href="/terms" className="text-amber-600 hover:text-amber-500">Terms of Service</Link>
           </div>
@@ -672,19 +591,13 @@ const RegisterPage = () => {
           <div>
             <button
               type="submit"
-              disabled={loading || (formData.country === 'CA' && formData.province === 'QC') || (!!TURNSTILE_SITE_KEY && !turnstileToken)}
+              disabled={loading || (formData.country === 'CA' && formData.province === 'QC')}
               className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-amber-600 hover:bg-amber-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500 disabled:opacity-50"
             >
               {loading ? 'Creating account...' : 'Register'}
             </button>
           </div>
         </form>
-        <Script
-          src="https://challenges.cloudflare.com/turnstile/v0/api.js"
-          strategy="afterInteractive"
-          onLoad={() => setTurnstileReady(true)}
-          onError={() => setTurnstileLoadFailed(true)}
-        />
         {/* Phase 31: Social login — always registers as Shopper (USER); upgrade in settings */}
         <div className="relative">
           <div className="absolute inset-0 flex items-center">
