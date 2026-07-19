@@ -4,6 +4,7 @@ import { prisma } from '../lib/prisma';
 import { getWatermarkedUrl, getWatermarkedUrlWithQR } from '../utils/cloudinaryWatermark';
 import { canRemoveWatermark } from '../utils/watermarkPolicy';
 import archiver from 'archiver';
+import ExcelJS from 'exceljs';
 import { checkExportRateLimit, formatNextExportDate } from '../services/exportRateLimitService';
 
 /**
@@ -847,14 +848,14 @@ export const exportFacebookXLSX = async (
     // Note: truncation is communicated via the API response header, not in the file.
     // Adding a note row would cause Facebook to reject the spreadsheet as having too many items.
 
-    // Build workbook using SheetJS
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const XLSX = require('xlsx');
-    const ws = XLSX.utils.aoa_to_sheet(wsData);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Listings');
+    // Build workbook using exceljs (xlsx/SheetJS removed — GHSA prototype-pollution/ReDoS advisories, no npm-level fix)
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Listings');
+    for (const row of wsData) {
+      worksheet.addRow(row);
+    }
 
-    const xlsxBuffer: Buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+    const xlsxBuffer = Buffer.from(await workbook.xlsx.writeBuffer());
 
     // Set response headers
     res.setHeader(
