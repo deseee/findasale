@@ -26,6 +26,7 @@ const RegisterPage = () => {
     inviteCode: '',
     country: 'US',
     province: '',
+    website: '', // honeypot — real users never see or fill this; see P0 fix below
   });
   const [ageError, setAgeError] = useState('');
   const [organizerEmailConsent, setOrganizerEmailConsent] = useState(false);
@@ -34,6 +35,14 @@ const RegisterPage = () => {
   const [loading, setLoading] = useState(false);
   const [claimOrganizerId, setClaimOrganizerId] = useState<string | null>(null);
   const errorRef = useRef<HTMLDivElement>(null);
+
+  // P0 SECURITY FIX (2026-07-19): first-party proof-of-work challenge state — replaces
+  // removed Cloudflare Turnstile (blocked outright by standard ad-block). See ADR at
+  // claude_docs/feature-notes/adr-registration-pow-2026-07-19.md. Entirely same-origin —
+  // no third-party script, no visible widget, solved silently in the background.
+  const [challengeToken, setChallengeToken] = useState<string | null>(null);
+  const [challengeNonce, setChallengeNonce] = useState<string | null>(null);
+  const [challengeError, setChallengeError] = useState(false);
 
   // Pre-fill referral codes and claim params from URL
   // ?ref= for shopper-to-shopper referral rewards (existing system)
@@ -55,6 +64,66 @@ const RegisterPage = () => {
       setClaimOrganizerId(claim);
       setFormData(prev => ({ ...prev, role: 'ORGANIZER' }));
     }
+  }, []);
+
+  // P0 SECURITY FIX (2026-07-19): fetch + solve the first-party proof-of-work challenge.
+  // Runs silently in the background on mount — typically resolves in well under a second.
+  // Batches digest computations (WebCrypto SubtleCrypto, not a pure-JS hash) instead of
+  // awaiting one nonce at a time, to avoid per-iteration microtask overhead.
+  useEffect(() => {
+    let cancelled = false;
+
+    const base64UrlToJson = (b64url: string): { nonceSeed: string; issuedAt: number; difficulty: number } => {
+      const padLen = (4 - (b64url.length % 4)) % 4;
+      const b64 = b64url.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat(padLen);
+      return JSON.parse(atob(b64));
+    };
+
+    const sha256Hex = async (input: string): Promise<string> => {
+      const data = new TextEncoder().encode(input);
+      const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+      return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+    };
+
+    const BATCH_SIZE = 256;
+
+    const solveChallenge = async (isRetry = false) => {
+      try {
+        const res = await api.get('/auth/register-challenge');
+        const { token, difficulty } = res.data as { token: string; difficulty: number };
+        const [encodedPayload] = token.split('.');
+        const { nonceSeed } = base64UrlToJson(encodedPayload);
+        const requiredZeros = '0'.repeat(difficulty);
+
+        let nonce = 0;
+        let found: number | null = null;
+        while (found === null && !cancelled) {
+          const batch = Array.from({ length: BATCH_SIZE }, (_, i) => nonce + i);
+          const digests = await Promise.all(batch.map(n => sha256Hex(`${nonceSeed}:${n}`)));
+          const idx = digests.findIndex(d => d.startsWith(requiredZeros));
+          if (idx !== -1) {
+            found = batch[idx];
+          } else {
+            nonce += BATCH_SIZE;
+          }
+        }
+
+        if (found !== null && !cancelled) {
+          setChallengeToken(token);
+          setChallengeNonce(String(found));
+        }
+      } catch (err) {
+        if (!isRetry && !cancelled) {
+          setTimeout(() => solveChallenge(true), 1500);
+        } else if (!cancelled) {
+          console.error('[register] Failed to prepare verification challenge:', err);
+          setChallengeError(true);
+        }
+      }
+    };
+
+    solveChallenge();
+    return () => { cancelled = true; };
   }, []);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -143,6 +212,16 @@ const RegisterPage = () => {
       return;
     }
 
+    // P0 SECURITY FIX (2026-07-19): require a solved verification challenge before submitting.
+    // The backend independently re-verifies it and fails closed — this is a UX guard only.
+    if (!challengeToken || !challengeNonce) {
+      setError(challengeError
+        ? "Couldn't prepare the registration form. Please refresh the page and try again."
+        : 'Still preparing your registration — please try again in a moment.');
+      setLoading(false);
+      return;
+    }
+
     try {
       // Generate device fingerprint
       const deviceFingerprint = await generateDeviceFingerprint();
@@ -166,6 +245,9 @@ const RegisterPage = () => {
         affiliateReferralCode: formData.affiliateReferralCode || undefined,
         inviteCode: formData.inviteCode || undefined,
         deviceFingerprint, // Platform Safety #118: Include fingerprint
+        challengeToken, // P0 SECURITY FIX (2026-07-19): PoW challenge, re-verified server-side
+        challengeNonce,
+        website: formData.website, // honeypot — must stay empty; backend rejects if filled
       };
       if (formData.role === 'ORGANIZER') {
         payload.businessName = formData.businessName;
@@ -281,6 +363,19 @@ const RegisterPage = () => {
               </div>
             </div>
           )}
+          {/* P0 SECURITY FIX (2026-07-19): honeypot — visually hidden from real users, off the
+              accessibility tree and tab order. Bots that blanket-fill visible-looking inputs
+              trip it; the backend rejects silently without revealing why. */}
+          <input
+            type="text"
+            name="website"
+            value={formData.website}
+            onChange={handleChange}
+            className="absolute -left-[9999px] w-px h-px overflow-hidden"
+            tabIndex={-1}
+            autoComplete="off"
+            aria-hidden="true"
+          />
           <div className="rounded-md shadow-sm -space-y-px">
             <div>
               <label htmlFor="name" className="sr-only">
@@ -588,10 +683,15 @@ const RegisterPage = () => {
             By creating an account, you agree to our <Link href="/terms" className="text-amber-600 hover:text-amber-500">Terms of Service</Link>
           </div>
 
+          {challengeError && (
+            <p className="text-xs text-red-600 dark:text-red-400 text-center">
+              Couldn't prepare the registration form. Please refresh the page and try again.
+            </p>
+          )}
           <div>
             <button
               type="submit"
-              disabled={loading || (formData.country === 'CA' && formData.province === 'QC')}
+              disabled={loading || (formData.country === 'CA' && formData.province === 'QC') || !challengeToken}
               className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-amber-600 hover:bg-amber-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500 disabled:opacity-50"
             >
               {loading ? 'Creating account...' : 'Register'}

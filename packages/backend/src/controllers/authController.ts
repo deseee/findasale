@@ -10,6 +10,7 @@ import { processReferral } from '../services/referralService';
 import { awardXp, XP_AWARDS } from '../services/xpService';
 import { referralTrancheService } from '../services/referralTrancheService';
 import { checkRegistrationLimit, recordRegistration } from '../lib/registrationRateLimiter';
+import { issueChallenge, verifyChallenge } from '../lib/registrationChallenge';
 import { recordRegistration as recordFraudRegistration } from '../lib/fraudDetectionService';
 import { transactionalEmailService } from '../lib/transactionalEmailService';
 import { AuthRequest } from '../middleware/auth';
@@ -34,9 +35,23 @@ const isValidRedirectUri = (uri: string | null | undefined): boolean => {
   return allowed.some(allowedUri => uri.startsWith(allowedUri));
 };
 
+// P0 SECURITY FIX (2026-07-19): GET /auth/register-challenge — issues a stateless,
+// signed proof-of-work challenge (see claude_docs/feature-notes/adr-registration-pow-2026-07-19.md).
+// Public, unauthenticated, no rate limiting needed — cheap to issue, and the actual
+// registration this feeds into is already rate-limited.
+export const getRegistrationChallenge = async (req: Request, res: Response) => {
+  try {
+    const { token, difficulty } = issueChallenge();
+    res.json({ token, difficulty });
+  } catch (error) {
+    console.error('[auth] Failed to issue registration challenge:', error);
+    res.status(500).json({ message: 'Server misconfigured — could not issue verification challenge.' });
+  }
+};
+
 export const register = async (req: Request, res: Response) => {
   try {
-    const { email: rawEmail, password, name: rawName, role, referralCode, affiliateReferralCode, inviteCode, businessName, phone, businessAddress, consentOrganizer, consentShopper, deviceFingerprint, dateOfBirth, country, province } = req.body;
+    const { email: rawEmail, password, name: rawName, role, referralCode, affiliateReferralCode, inviteCode, businessName, phone, businessAddress, consentOrganizer, consentShopper, deviceFingerprint, dateOfBirth, country, province, challengeToken, challengeNonce, website } = req.body;
 
     // H3: Normalise email/name to prevent duplicate accounts from whitespace/case variations
     const email = rawEmail?.trim().toLowerCase();
@@ -44,6 +59,26 @@ export const register = async (req: Request, res: Response) => {
 
     // Security: IP-based rate limiting on registrations
     const clientIp = req.ip || req.headers['x-forwarded-for'] as string || 'unknown';
+
+    // P0 SECURITY FIX (2026-07-19): honeypot field — real users never see or fill this input
+    // (hidden off-screen in register.tsx). Non-empty means a bot filled every visible-looking
+    // field. Return the SAME generic validation-style error as a normal bad request — never
+    // reveal that a honeypot was tripped, or bots simply learn to leave it blank.
+    if (website) {
+      return res.status(400).json({ message: 'Registration could not be completed. Please check your information and try again.' });
+    }
+
+    // P0 SECURITY FIX (2026-07-19): first-party proof-of-work challenge, replaces removed
+    // Cloudflare Turnstile (blocked outright by standard ad-block — see ADR
+    // claude_docs/feature-notes/adr-registration-pow-2026-07-19.md). Verified before rate
+    // limiting so a failed challenge never consumes the IP's rate-limit budget. Fails closed.
+    const challengeResult = verifyChallenge(challengeToken, challengeNonce);
+    if (!challengeResult.valid) {
+      return res.status(400).json({
+        code: 'CHALLENGE_VERIFICATION_FAILED',
+        message: 'Verification failed. Please refresh and try again.',
+      });
+    }
 
     const rateLimitStatus = await checkRegistrationLimit(clientIp);
     if (rateLimitStatus.limited) {

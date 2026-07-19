@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { register, login, oauthLogin, redeemInvite, verifyEmail, oauthVerifyAge, linkOAuthProvider } from '../controllers/authController';
+import { register, login, oauthLogin, redeemInvite, verifyEmail, oauthVerifyAge, linkOAuthProvider, getRegistrationChallenge } from '../controllers/authController';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { prisma } from '../index';
 import bcrypt from 'bcryptjs';
@@ -88,6 +88,9 @@ const registerLimiter = rateLimit({
 
 const router = Router();
 
+// P0 SECURITY FIX (2026-07-19): first-party PoW challenge, replaces removed Turnstile CAPTCHA.
+// Stateless — no rate limiting needed here, registration itself is already rate-limited below.
+router.get('/register-challenge', getRegistrationChallenge);
 router.post('/register', registerLimiter, register);
 router.post('/login', loginLimiter, login);
 router.post('/oauth', loginLimiter, oauthLogin); // OAuth is authentication not registration; loginLimiter (skipSuccessfulRequests) is correct here
