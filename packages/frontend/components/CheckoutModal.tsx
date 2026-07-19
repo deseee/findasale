@@ -9,6 +9,7 @@ import {
 } from '@stripe/react-stripe-js';
 import api from '../lib/api';
 import AccessibleModal from './AccessibleModal';
+import { useAuth } from './AuthContext';
 
 // Lazy-initialize Stripe on client-side only to avoid SSR errors
 let stripePromise: Promise<Stripe | null> | null = null;
@@ -40,6 +41,7 @@ interface PaymentFormProps {
 
 const PaymentForm = ({ itemTitle, itemPrice, originalAmount, platformFee, discountApplied = 0, buyerPremium = 0, buyerPremiumRate = 0, isAuction = false, purchaseId, saleName, saleAddress, saleDates, onClose, onSuccess }: PaymentFormProps) => {
   const router = useRouter();
+  const { user } = useAuth();
   const stripe = useStripe();
   const elements = useElements();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -98,8 +100,12 @@ const PaymentForm = ({ itemTitle, itemPrice, originalAmount, platformFee, discou
   };
 
   const handleDone = () => {
-    // Redirect to persistent purchase confirmation page if purchaseId is available
-    if (purchaseId) {
+    // Guest checkout (2026-07-18): /purchases/[id] requires a logged-in session (it looks up
+    // the purchase via an authenticated endpoint) — redirecting a guest there would immediately
+    // bounce them to /login right after they just paid. Guests already saw the full inline
+    // confirmation screen above (item, total, sale info) and get an emailed receipt, so for
+    // guests "Done" just closes the modal. Authenticated buyers keep the persistent page.
+    if (purchaseId && user) {
       router.push(`/purchases/${purchaseId}`);
     } else {
       // Fallback: close modal and let parent handle redirect
@@ -295,6 +301,7 @@ interface CheckoutModalProps {
 }
 
 const CheckoutModal = ({ itemId, purchaseId: initialPurchaseId, itemTitle, listingType, onClose, onSuccess }: CheckoutModalProps) => {
+  const { user } = useAuth();
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [itemPrice, setItemPrice] = useState(0);
   const [originalAmount, setOriginalAmount] = useState<number | undefined>(undefined);
@@ -312,6 +319,47 @@ const CheckoutModal = ({ itemId, purchaseId: initialPurchaseId, itemTitle, listi
   // Sprint 3: Coupon entry phase — shown before calling create-payment-intent
   const [started, setStarted] = useState(!!initialPurchaseId); // auction resumption skips coupon step
   const [couponInput, setCouponInput] = useState('');
+
+  // Guest checkout (2026-07-18): email + name collected up front (before the PaymentIntent
+  // exists) since this is a plain PaymentIntent + Elements flow, not a hosted Stripe Checkout
+  // Session — there's no Stripe-native guest email step to lean on here. Coupons are
+  // per-account XP rewards, so guests never see the coupon field (mutually exclusive with it).
+  const [guestEmail, setGuestEmail] = useState('');
+  const [guestName, setGuestName] = useState('');
+  const [guestFieldError, setGuestFieldError] = useState<string | null>(null);
+  const isGuest = !user;
+
+  // Platform Safety #118 pattern (mirrors register.tsx's generateDeviceFingerprint) — same
+  // browser-signal fingerprint used at signup, reused here so a guest checkout can be
+  // pre-payment-compared against the sale organizer's stored device fingerprint
+  // (checkoutGuard.ts assertGuestCheckoutAllowed, S1072 Finding #4 follow-up).
+  const generateDeviceFingerprint = async (): Promise<string> => {
+    try {
+      const signals = [
+        navigator.userAgent,
+        screen.width + 'x' + screen.height,
+        Intl.DateTimeFormat().resolvedOptions().timeZone,
+        navigator.language,
+      ];
+      let canvasSignal = '';
+      try {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.textBaseline = 'top';
+          ctx.font = '12px Arial';
+          ctx.fillText('fingerprint', 2, 2);
+          canvasSignal = canvas.toDataURL();
+        }
+      } catch (e) {
+        // Canvas not available or blocked — no-op
+      }
+      if (canvasSignal) signals.push(canvasSignal);
+      return btoa(signals.join('|'));
+    } catch (error) {
+      return ''; // Don't block checkout if fingerprinting fails
+    }
+  };
 
   // Pre-fill coupon from Facebook Commerce Manager redirect (/checkout?coupon=CODE)
   useEffect(() => {
@@ -340,10 +388,12 @@ const CheckoutModal = ({ itemId, purchaseId: initialPurchaseId, itemTitle, listi
             ? sessionStorage.getItem('affiliateRef') ?? undefined
             : undefined;
           const trimmedCoupon = couponInput.trim().toUpperCase();
+          const deviceFingerprint = isGuest ? await generateDeviceFingerprint() : undefined;
           const response = await api.post('/stripe/create-payment-intent', {
             itemId,
             ...(affiliateLinkId ? { affiliateLinkId } : {}),
-            ...(trimmedCoupon ? { couponCode: trimmedCoupon } : {}),
+            ...(trimmedCoupon && !isGuest ? { couponCode: trimmedCoupon } : {}),
+            ...(isGuest ? { guestEmail: guestEmail.trim(), guestName: guestName.trim(), deviceFingerprint } : {}),
           });
           data = response.data;
           if (data.discountApplied > 0) {
@@ -399,25 +449,69 @@ const CheckoutModal = ({ itemId, purchaseId: initialPurchaseId, itemTitle, listi
         </button>
       </div>
 
-      {/* Sprint 3: Coupon entry step — shown before payment form loads */}
+      {/* Guest contact info (guests only) + Sprint 3 coupon entry (accounts only) —
+          shown before payment form loads. Coupons are per-account XP rewards, so a guest
+          never sees that field; a logged-in buyer never sees the guest fields. */}
       {!started && !purchaseId && (
         <div>
-          <div className="mb-5">
-            <label className="block text-sm font-medium text-warm-700 mb-1">
-              Have a coupon code? <span className="text-warm-400 font-normal">(optional)</span>
-            </label>
-            <input
-              type="text"
-              value={couponInput}
-              onChange={(e) => setCouponInput(e.target.value.toUpperCase())}
-              placeholder="e.g. A3F2C891"
-              maxLength={8}
-              className="w-full px-3 py-2 border border-warm-300 rounded-lg font-mono tracking-widest text-warm-900 dark:text-warm-100 focus:ring-2 focus:ring-amber-500 focus:border-transparent uppercase"
-              aria-label="Coupon code (optional)" />
-            <p className="text-xs text-warm-400 mt-1">
-              Coupons are issued after each completed purchase.
-            </p>
-          </div>
+          {isGuest ? (
+            <div className="mb-5 space-y-3">
+              <p className="text-xs text-warm-500">
+                Checking out as a guest — no account needed. We'll email your receipt.
+              </p>
+              <div>
+                <label className="block text-sm font-medium text-warm-700 mb-1">
+                  Email <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="email"
+                  value={guestEmail}
+                  onChange={(e) => { setGuestEmail(e.target.value); setGuestFieldError(null); }}
+                  placeholder="you@example.com"
+                  className="w-full px-3 py-2 border border-warm-300 rounded-lg text-warm-900 dark:text-warm-100 focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                  aria-label="Email address"
+                  autoComplete="email"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-warm-700 mb-1">
+                  Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={guestName}
+                  onChange={(e) => { setGuestName(e.target.value); setGuestFieldError(null); }}
+                  placeholder="Your name"
+                  className="w-full px-3 py-2 border border-warm-300 rounded-lg text-warm-900 dark:text-warm-100 focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                  aria-label="Your name"
+                  autoComplete="name"
+                />
+              </div>
+              {guestFieldError && (
+                <p className="text-xs text-red-600" role="alert">{guestFieldError}</p>
+              )}
+              <p className="text-xs text-warm-400">
+                Want to track orders and earn rewards? <a href="/register" className="underline hover:text-warm-900 dark:text-warm-100">Create an account</a> instead.
+              </p>
+            </div>
+          ) : (
+            <div className="mb-5">
+              <label className="block text-sm font-medium text-warm-700 mb-1">
+                Have a coupon code? <span className="text-warm-400 font-normal">(optional)</span>
+              </label>
+              <input
+                type="text"
+                value={couponInput}
+                onChange={(e) => setCouponInput(e.target.value.toUpperCase())}
+                placeholder="e.g. A3F2C891"
+                maxLength={8}
+                className="w-full px-3 py-2 border border-warm-300 rounded-lg font-mono tracking-widest text-warm-900 dark:text-warm-100 focus:ring-2 focus:ring-amber-500 focus:border-transparent uppercase"
+                aria-label="Coupon code (optional)" />
+              <p className="text-xs text-warm-400 mt-1">
+                Coupons are issued after each completed purchase.
+              </p>
+            </div>
+          )}
           <div className="flex gap-3">
             <button
               type="button"
@@ -428,7 +522,21 @@ const CheckoutModal = ({ itemId, purchaseId: initialPurchaseId, itemTitle, listi
             </button>
             <button
               type="button"
-              onClick={() => setStarted(true)}
+              onClick={() => {
+                if (isGuest) {
+                  const trimmedEmail = guestEmail.trim();
+                  const trimmedName = guestName.trim();
+                  if (!trimmedEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+                    setGuestFieldError('Please enter a valid email address.');
+                    return;
+                  }
+                  if (!trimmedName) {
+                    setGuestFieldError('Please enter your name.');
+                    return;
+                  }
+                }
+                setStarted(true);
+              }}
               className="flex-1 py-2 px-4 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded"
             >
               Continue to Pay
