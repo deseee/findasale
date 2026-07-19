@@ -4,7 +4,26 @@
  * Run with: npm test (after jest is configured in package.json)
  */
 
-import { normalizeAddress } from '../dedupe';
+import { normalizeAddress, checkDuplicate } from '../dedupe';
+import { prisma } from '../../../lib/prisma';
+
+// Mock the Prisma singleton so checkDuplicate() can be exercised without a
+// live database connection. Only the calls actually reached by the tier-6
+// recurring-event roll-forward tests below (sale.findMany) are used; other
+// tiers are avoided per-test by omitting sourceUrl/sourceItemId/address/lat/lng
+// from the listing fixture so those earlier tiers short-circuit before ever
+// touching Prisma.
+jest.mock('../../../lib/prisma', () => ({
+  prisma: {
+    sale: {
+      findFirst: jest.fn(),
+      findMany: jest.fn(),
+    },
+    $queryRaw: jest.fn(),
+  },
+}));
+
+const mockFindMany = prisma.sale.findMany as jest.Mock;
 
 describe('normalizeAddress', () => {
   test('normalizes street suffix: Street → st', () => {
@@ -102,8 +121,170 @@ describe('normalizeAddress', () => {
   });
 });
 
-// Note: Full checkDuplicate() tests require database mocking.
-// These tests focus on the normalizeAddress utility which is pure.
+// Tier 6: recurring Facebook Events roll-forward (S1138).
+// NOTE ON RECURRING_ROLL_FORWARD_MAX_GAP_DAYS: dedupe.ts defines this as a
+// hardcoded module-level `const = 45`, NOT read from `process.env` anywhere
+// in dedupe.ts or scraper/index.ts (confirmed via grep across
+// packages/backend/src). There is no env var to set in these tests — the
+// 45-day boundary below is exercised directly against that literal.
+describe('checkDuplicate — tier 6 recurring FB Events roll-forward', () => {
+  const DAY_MS = 24 * 60 * 60 * 1000;
+  const daysAgo = (days: number): Date => new Date(Date.now() - days * DAY_MS);
+  const daysFromNow = (days: number): Date => new Date(Date.now() + days * DAY_MS);
+
+  // Same recurring listing, two different weekly occurrences — the title
+  // carries a different month/day each time FB re-posts it, which is exactly
+  // what normalizeEventTitle() strips so the two are recognized as the same
+  // recurring sale.
+  const CANDIDATE_TITLE = 'Wyoming Flea Market - July 5';
+  const INCOMING_TITLE = 'Wyoming Flea Market - August 16';
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('candidate ended long ago (100-day gap, well over the 45-day max) — does NOT roll forward', async () => {
+    mockFindMany.mockResolvedValueOnce([
+      {
+        id: 'sale-old-1',
+        title: CANDIDATE_TITLE,
+        startDate: daysAgo(101),
+        endDate: daysAgo(100),
+      },
+    ]);
+
+    const result = await checkDuplicate(
+      {
+        title: INCOMING_TITLE,
+        city: 'Wyoming',
+        state: 'MI',
+        startDate: new Date(),
+        endDate: daysFromNow(1),
+      },
+      'Facebook Events',
+      ''
+    );
+
+    expect(result.isDuplicate).toBe(false);
+    expect(result.action).toBeUndefined();
+  });
+
+  test('candidate ended recently (10-day gap, within the 45-day max) — rolls forward', async () => {
+    mockFindMany.mockResolvedValueOnce([
+      {
+        id: 'sale-recent-1',
+        title: CANDIDATE_TITLE,
+        startDate: daysAgo(11),
+        endDate: daysAgo(10),
+      },
+    ]);
+
+    const result = await checkDuplicate(
+      {
+        title: INCOMING_TITLE,
+        city: 'Wyoming',
+        state: 'MI',
+        startDate: new Date(),
+        endDate: daysFromNow(1),
+      },
+      'Facebook Events',
+      ''
+    );
+
+    expect(result.isDuplicate).toBe(true);
+    expect(result.action).toBe('rollForward');
+    expect(result.existingSaleId).toBe('sale-recent-1');
+    expect(result.reason).toMatch(/Recurring FB Event/);
+  });
+
+  test('candidate is still ongoing/upcoming (not yet ended) — does NOT roll forward regardless of date proximity', async () => {
+    mockFindMany.mockResolvedValueOnce([
+      {
+        id: 'sale-live-1',
+        title: CANDIDATE_TITLE,
+        startDate: daysAgo(2),
+        endDate: daysFromNow(5), // still live — has not ended
+      },
+    ]);
+
+    // Incoming occurrence starts only 5 days after the candidate's end date
+    // (well inside the 45-day gap window) and does not date-overlap the
+    // candidate — proximity alone must not trigger roll-forward while the
+    // matched candidate is still ongoing/upcoming.
+    const result = await checkDuplicate(
+      {
+        title: INCOMING_TITLE,
+        city: 'Wyoming',
+        state: 'MI',
+        startDate: daysFromNow(10),
+        endDate: daysFromNow(11),
+      },
+      'Facebook Events',
+      ''
+    );
+
+    expect(result.isDuplicate).toBe(false);
+    expect(result.action).toBeUndefined();
+  });
+
+  test('boundary: gap of exactly 45.0 days rolls forward (comparison is inclusive <=)', async () => {
+    const listingStart = new Date();
+    mockFindMany.mockResolvedValueOnce([
+      {
+        id: 'sale-boundary-eq',
+        title: CANDIDATE_TITLE,
+        startDate: new Date(listingStart.getTime() - 46 * DAY_MS),
+        endDate: new Date(listingStart.getTime() - 45 * DAY_MS), // exactly 45 days before listing start
+      },
+    ]);
+
+    const result = await checkDuplicate(
+      {
+        title: INCOMING_TITLE,
+        city: 'Wyoming',
+        state: 'MI',
+        startDate: listingStart,
+        endDate: new Date(listingStart.getTime() + DAY_MS),
+      },
+      'Facebook Events',
+      ''
+    );
+
+    expect(result.isDuplicate).toBe(true);
+    expect(result.action).toBe('rollForward');
+    expect(result.existingSaleId).toBe('sale-boundary-eq');
+  });
+
+  test('boundary: gap of 45.5 days (just over the max) does NOT roll forward', async () => {
+    const listingStart = new Date();
+    mockFindMany.mockResolvedValueOnce([
+      {
+        id: 'sale-boundary-over',
+        title: CANDIDATE_TITLE,
+        startDate: new Date(listingStart.getTime() - 47 * DAY_MS),
+        endDate: new Date(listingStart.getTime() - 45.5 * DAY_MS), // 45.5 days before listing start
+      },
+    ]);
+
+    const result = await checkDuplicate(
+      {
+        title: INCOMING_TITLE,
+        city: 'Wyoming',
+        state: 'MI',
+        startDate: listingStart,
+        endDate: new Date(listingStart.getTime() + DAY_MS),
+      },
+      'Facebook Events',
+      ''
+    );
+
+    expect(result.isDuplicate).toBe(false);
+    expect(result.action).toBeUndefined();
+  });
+});
+
+// Note: Tiers 1-5 (sourceUrl/sourceItemId/address/geo-based matches) still
+// require full DB fixtures for integration-style testing.
 // For integration tests of checkDuplicate(), use a test database fixture.
 describe('checkDuplicate integration notes', () => {
   test('checkDuplicate() requires Prisma DB connection', () => {
