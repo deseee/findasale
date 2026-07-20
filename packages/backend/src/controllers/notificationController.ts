@@ -216,8 +216,15 @@ export const sendSMSUpdate = async (req: AuthRequest, res: Response) => {
   }
 };
 
+// Helper: extract a friendly first name from a possibly-messy name field
+const firstNameOf = (name: string | null | undefined): string => {
+  if (!name) return 'there';
+  const first = String(name).trim().split(/\s+/)[0];
+  return first && first.length > 0 ? first : 'there';
+};
+
 // Helper: build the HTML for a weekly digest email
-const buildDigestHtml = (userName: string, sales: any[], frontendUrl: string, unsubUrl: string): string => {
+const buildDigestHtml = (userName: string, sales: any[], frontendUrl: string, unsubUrl: string, nearYou: boolean): string => {
   const saleCards = sales.map((sale) => {
     const startDate = new Date(sale.startDate).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
     const endDate = new Date(sale.endDate).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
@@ -249,8 +256,8 @@ const buildDigestHtml = (userName: string, sales: any[], frontendUrl: string, un
 
     <!-- Greeting -->
     <p style="color:#374151;font-size:15px;margin-bottom:20px;">
-      Hi ${userName || 'there'},<br><br>
-      Here are the sales happening this weekend near you — estate sales, yard sales, auctions, flea markets, and more. Don't miss out!
+      Hi ${firstNameOf(userName)},<br><br>
+      Here are the sales happening this weekend${nearYou ? ' near you' : ''} — estate sales, yard sales, auctions, flea markets, and more. Don't miss out!
     </p>
 
     <!-- Sale cards -->
@@ -268,6 +275,44 @@ const buildDigestHtml = (userName: string, sales: any[], frontendUrl: string, un
   </div>
 </body>
 </html>`;
+};
+
+// Extract a usable {lat,lng,radius} from a user's saved searches, if any.
+// SavedSearch.filters is JSON: { q, category, radius, lat, lng, priceMin, ... }.
+const pickUserLocation = (
+  savedSearches: Array<{ filters: unknown }> | undefined | null,
+): { lat: number; lng: number; radius: number } | null => {
+  if (!savedSearches || savedSearches.length === 0) return null;
+  for (const entry of savedSearches) {
+    const f = ((entry && entry.filters) || {}) as Record<string, unknown>;
+    const lat = typeof f.lat === 'number' ? f.lat : parseFloat(String(f.lat));
+    const lng = typeof f.lng === 'number' ? f.lng : parseFloat(String(f.lng));
+    const radiusRaw = typeof f.radius === 'number' ? f.radius : parseFloat(String(f.radius));
+    if (Number.isFinite(lat) && Number.isFinite(lng)) {
+      const radius = Number.isFinite(radiusRaw) && radiusRaw > 0 ? radiusRaw : 40;
+      return { lat, lng, radius };
+    }
+  }
+  return null;
+};
+
+// In-memory bounding-box filter mirroring saleController's near-me logic
+// (radius / 111 deg per unit). Keeps units identical to the sale feed.
+const filterSalesWithinRadius = (
+  sales: any[],
+  loc: { lat: number; lng: number; radius: number },
+): any[] => {
+  const latDelta = loc.radius / 111;
+  const lngDelta = loc.radius / (111 * Math.cos((loc.lat * Math.PI) / 180));
+  return sales.filter((sale) => {
+    if (typeof sale.lat !== 'number' || typeof sale.lng !== 'number') return false;
+    return (
+      sale.lat >= loc.lat - latDelta &&
+      sale.lat <= loc.lat + latDelta &&
+      sale.lng >= loc.lng - lngDelta &&
+      sale.lng <= loc.lng + lngDelta
+    );
+  });
 };
 
 // Send weekly digest email to all users with upcoming sales this weekend
@@ -299,7 +344,7 @@ export const sendWeeklyDigest = async () => {
         },
       },
       orderBy: { startDate: 'asc' },
-      take: 10, // cap at 10 per digest
+      take: 500, // superset — filtered per-recipient by location below
     });
 
     if (upcomingSales.length === 0) {
@@ -309,7 +354,13 @@ export const sendWeeklyDigest = async () => {
 
     // Get all users with email addresses
     const users = await prisma.user.findMany({
-      select: { id: true, email: true, name: true, notificationPrefs: true },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        notificationPrefs: true,
+        savedSearches: { select: { filters: true } },
+      },
       where: {
         AND: [
           { email: { not: '' } },
@@ -347,12 +398,27 @@ export const sendWeeklyDigest = async () => {
           unsubUrl = `${frontendUrl}/unsubscribe?email=${encodeURIComponent(user.email)}`;
         }
 
-        const html = buildDigestHtml(user.name, upcomingSales, frontendUrl, unsubUrl);
+        // Location-relevant selection: filter the sale superset to the user's
+        // saved-search location (bounding box). Falls back to the global list
+        // when we have no location or no nearby sales — audience is unchanged,
+        // only relevance + honest copy vary.
+        const userLoc = pickUserLocation(user.savedSearches);
+        let salesForUser = upcomingSales.slice(0, 10);
+        let nearYou = false;
+        if (userLoc) {
+          const nearby = filterSalesWithinRadius(upcomingSales, userLoc);
+          if (nearby.length > 0) {
+            salesForUser = nearby.slice(0, 10);
+            nearYou = true;
+          }
+        }
+
+        const html = buildDigestHtml(user.name, salesForUser, frontendUrl, unsubUrl, nearYou);
 
         await emailService.emails.send({
           from: fromEmail,
           to: user.email,
-          subject: `🏷️ ${upcomingSales.length} sale${upcomingSales.length > 1 ? 's' : ''} near you this weekend`,
+          subject: `🏷️ ${salesForUser.length} sale${salesForUser.length > 1 ? 's' : ''}${nearYou ? ' near you' : ''} this weekend`,
           html,
           jobName: 'notificationController-weeklyDigest',
         });
