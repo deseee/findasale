@@ -31,6 +31,14 @@ const MAX_ATTEMPTS = 3;
  * right after a successful publish — fire-and-forget, never throws.
  */
 export async function enqueueMarketplacePostJob(itemId: string): Promise<void> {
+  // ADR-083's cron (scheduleMarketplacePosterCron) is intentionally disabled --
+  // see index.ts -- removal moved 100% to the ADR-084 extension (roadmap #579,
+  // S1128). Nothing ever calls processDueJobs() anymore, so any job queued here
+  // would sit QUEUED forever (confirmed live 2026-07-20: a real REMOVE job for
+  // this organizer had attemptCount=0/lastAttemptAt=null, meaning it was never
+  // even picked up). No-op until/unless ADR-083 is deliberately re-enabled.
+  return;
+  // eslint-disable-next-line no-unreachable
   try {
     const item = await prisma.item.findUnique({
       where: { id: itemId },
@@ -60,6 +68,10 @@ export async function enqueueMarketplacePostJob(itemId: string): Promise<void> {
  * Fire-and-forget, never throws.
  */
 export async function enqueueMarketplaceRemoveJobIfPosted(itemId: string): Promise<void> {
+  // Same reasoning as enqueueMarketplacePostJob above -- the consuming cron is
+  // disabled, so this would only create orphaned QUEUED rows. No-op.
+  return;
+  // eslint-disable-next-line no-unreachable
   try {
     const postedJob = await prisma.marketplaceListingJob.findFirst({
       where: { itemId, action: 'POST', status: 'POSTED' },
