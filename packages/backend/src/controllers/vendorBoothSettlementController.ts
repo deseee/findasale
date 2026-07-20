@@ -2,20 +2,28 @@ import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import { Decimal } from '@prisma/client/runtime/library';
-import { payVendorBoothViaTransfer } from '../services/stripeConnectService';
+import { getPlatformFeeRate } from '../utils/feeCalculator';
 
 /**
- * Vendor Booth Payments — Settlement Batches (2026-07-07)
- * Mirrors consignorSettlementController.ts's shape near-verbatim (intentional
- * duplication per ADR-015 Consequences — not a shared abstraction; revisit only
- * if a third payout-recipient type appears).
+ * Vendor Booth Payments — Settlement Batches (2026-07-07, re-scoped 2026-07-20 ADR-090 Phase 3)
  *
- * LIVE-TRANSFERS GATE: automated vendor Stripe Transfers only happen when
- * VENDOR_BOOTH_LIVE_TRANSFERS === 'true'. Defaults OFF — per the 2026-07-07
- * decision log, this is a SEPARATE, independently-toggleable env flag from
- * STRIPE_CONNECT_LIVE_TRANSFERS (Consignor payouts), so vendor-transfer dry-run
- * testing never touches the live Consignor payout switch or vice versa.
- * With the flag OFF, VendorBoothPayout.status resolves to 'SIMULATED'.
+ * ADR-090 Phase 3 rescoping: post-ADR-020 (Direct-charge-per-leg checkout), a vendor's
+ * sale proceeds already land on their OWN connected account at capture time, minus
+ * application_fee_amount (platform cut + hub-owner revenue-share cut, ADR-090 Phase 2).
+ * The vendor is never "owed" a Transfer from the platform for their sales -- they already
+ * have the money. That makes the ORIGINAL purpose of this settlement-batch system (compute
+ * and Transfer the vendor's net proceeds) vestigial for the sales/revenue-share portion.
+ * This module is therefore re-scoped to a READ-ONLY reconciliation report: it still shows
+ * gross sales and the flat boothFee per booth, but revenueShareOwed is always 0 (that's
+ * now handled entirely by Phase 2's real-time split, never by this settlement path) and
+ * "approving" a batch no longer fires any Stripe Transfer -- there is nothing left to pay
+ * the vendor via this mechanism, and paying them again here would be a double-pay. Actual
+ * flat booth-fee COLLECTION (charging the vendor, Transferring to the hub owner) is Phase
+ * 4's job, via the separate VendorBoothFeeCharge periodic-billing cron -- NOT this batch.
+ *
+ * payVendorBoothViaTransfer (stripeConnectService.ts) has been retired for the same reason
+ * -- see that file's removal comment. Retained here for reference: it doesn't apply once
+ * vendors are paid directly at capture time.
  */
 const vendorLiveTransfersEnabled = (): boolean =>
   process.env.VENDOR_BOOTH_LIVE_TRANSFERS === 'true';
@@ -36,10 +44,14 @@ function serializeBatch(batch: any) {
 }
 
 /**
- * Internal: group SOLD items for a hub by vendor booth and compute the money split.
- * netPayout = totalSales - boothFeeCharged - revenueShareOwed.
- * boothFeeCharged is the booth's flat boothFee (charged once per settlement run,
- * not per item). revenueShareOwed = totalSales * revenueSharePercent / 100.
+ * Internal: group SOLD items for a hub by vendor booth and compute a RECONCILIATION
+ * report (ADR-090 Phase 3 -- this no longer drives any money movement, see module
+ * header). netPayout = totalSales - boothFeeCharged only. revenueShareOwed is ALWAYS
+ * 0 here -- the hub owner's revenue-share cut is taken in real time at charge time
+ * (ADR-090 Phase 2, application_fee_amount) and Transferred immediately, never
+ * deducted again in this settlement pass. The field is kept (rather than removed)
+ * purely for API/response-shape backward compatibility with the existing frontend
+ * settlement preview table.
  */
 async function buildBoothSettlementLines(hubId: string) {
   const booths = await prisma.vendorBooth.findMany({
@@ -58,9 +70,10 @@ async function buildBoothSettlementLines(hubId: string) {
 
   const rows = booths.map((b) => {
     const gross = b.items.reduce((sum, item) => sum.plus(new Decimal(item.price || 0)), new Decimal(0));
-    const revenueShareOwed = gross.times(b.revenueSharePercent).dividedBy(100);
+    // ADR-090 Phase 3: no longer deducted here -- see function comment.
+    const revenueShareOwed = new Decimal(0);
     const boothFeeCharged = new Decimal(b.boothFee);
-    const netPayout = gross.minus(boothFeeCharged).minus(revenueShareOwed);
+    const netPayout = gross.minus(boothFeeCharged);
     totalGross = totalGross.plus(gross);
     totalNet = totalNet.plus(netPayout);
     return {
@@ -107,28 +120,32 @@ export const previewVendorBoothSettlement = async (req: AuthRequest, res: Respon
       select: { id: true, status: true },
     });
 
+    // ADR-090 Phase 3: platformFeePercent is now the organizer's REAL tier-based rate
+    // (getPlatformFeeRate) instead of a hardcoded "always 10%" display value -- that was
+    // already wrong for TEAMS-tier hubs (8%, per feeCalculator.ts) before this pass, since
+    // this settlement UI already required TEAMS. revenueShareOwed is always 0 now (Phase
+    // 2 takes it in real time) -- see buildBoothSettlementLines. payoutMethod is
+    // informational only: no Stripe Transfer is ever fired from this endpoint anymore
+    // (vendors already received their net proceeds directly at capture time).
     return res.status(200).json({
       hubId,
       liveTransfersEnabled: vendorLiveTransfersEnabled(),
       existingBatch,
       totalGross: lines.totalGross.toFixed(2),
       totalPayouts: lines.totalNet.toFixed(2),
-      // Fee disclosure requirement: itemize per-booth flat 10% platform fee +
-      // THIS booth's boothFee + THIS booth's revenueSharePercent — never a
-      // blended number, since one vendor can have different terms at different malls.
       booths: lines.rows.map((r) => ({
         vendorBoothId: r.vendorBoothId,
         boothNumber: r.boothNumber,
         vendorName: r.vendorName,
         itemCount: r.itemCount,
         gross: r.gross.toFixed(2),
-        platformFeePercent: 10, // locked flat 10% — never a different rate
+        platformFeePercent: Math.round(getPlatformFeeRate(organizer.subscriptionTier as any) * 100),
         boothFee: r.boothFeeCharged.toFixed(2),
         revenueSharePercent: r.revenueSharePercent,
         revenueShareOwed: r.revenueShareOwed.toFixed(2),
         net: r.netPayout.toFixed(2),
         stripeOnboarded: r.stripeOnboarded,
-        payoutMethod: r.stripeOnboarded ? 'STRIPE_TRANSFER' : 'MANUAL_CASH_CHECK',
+        payoutMethod: 'INFORMATIONAL_NO_TRANSFER',
       })),
     });
   } catch (error) {
@@ -232,16 +249,11 @@ export const getVendorBoothSettlementBatch = async (req: AuthRequest, res: Respo
 
 /**
  * POST /api/organizer/hubs/:hubId/settlement/batches/:batchId/approve
- * Transition DRAFT|PARTIAL|PROCESSING -> APPROVED and process per-booth payouts.
+ * Transition DRAFT|PARTIAL|PROCESSING -> APPROVED and close out per-booth payout rows.
  *
- * - VENDOR_BOOTH_LIVE_TRANSFERS OFF (default): each payout is SIMULATED (no money
- *   moves); batch -> COMPLETED.
- * - VENDOR_BOOTH_LIVE_TRANSFERS ON: loop booths, call payVendorBoothViaTransfer per
- *   booth (CORRECTED source_transaction logic — retrieves the real charge ID from
- *   the relevant BoothCartTransaction's PaymentIntent before setting
- *   source_transaction; never passes an account ID). Per-booth failures isolated;
- *   already-COMPLETED payouts skipped on re-run; PENDING_STRIPE_ONBOARDING payouts
- *   left untouched (retry-pending handles those once onboarded).
+ * ADR-090 Phase 3: no Stripe Transfer is ever fired here anymore (VENDOR_BOOTH_LIVE_TRANSFERS
+ * no longer gates any money movement in this function — see module header comment for the
+ * full rationale). Every payout resolves to COMPLETED / NO_TRANSFER_NEEDED.
  */
 export const approveVendorBoothSettlementBatch = async (req: AuthRequest, res: Response) => {
   try {
@@ -280,88 +292,30 @@ export const approveVendorBoothSettlementBatch = async (req: AuthRequest, res: R
       data: { status: 'PROCESSING', approvedAt: batch.approvedAt ?? new Date() },
     });
 
-    const live = vendorLiveTransfersEnabled();
-    let anyFailure = false;
+    const live = vendorLiveTransfersEnabled(); // kept only for the response payload's liveTransfersEnabled field below
+    const anyFailure = false;
 
+    // ADR-090 Phase 3: no Stripe Transfer is fired from this loop anymore. Vendors
+    // already received their net sale proceeds directly at capture time (Direct
+    // charge, ADR-020), and any hub-owner revenue share was already taken +
+    // Transferred in real time (ADR-090 Phase 2, application_fee_amount). This
+    // settlement batch is now a read-only reconciliation report -- "approving" it
+    // just closes out the payout rows, it does not move money. Flat booth-fee
+    // COLLECTION is handled separately by the periodic Vendor Booth Fee Billing
+    // cron (Phase 4, vendorBoothFeeBillingCron.ts), not by this batch.
     for (const payout of batch.payouts) {
       if (payout.status === 'COMPLETED') continue;
-
-      const booth = payout.vendorBooth;
-
-      // Defensive: a booth that lost onboarding becomes a manual flag, not a hard fail.
-      if (!booth.stripeOnboarded || !booth.stripeAccountId) {
-        await prisma.vendorBoothPayout.update({
-          where: { id: payout.id },
-          data: { status: 'PENDING_STRIPE_ONBOARDING', method: null },
-        });
-        continue;
-      }
-
-      if (!live) {
-        await prisma.vendorBoothPayout.update({
-          where: { id: payout.id },
-          data: {
-            status: 'SIMULATED',
-            method: 'STRIPE_TRANSFER',
-            notes: payout.notes
-              ? `${payout.notes} | simulated (VENDOR_BOOTH_LIVE_TRANSFERS OFF)`
-              : 'Simulated payout — VENDOR_BOOTH_LIVE_TRANSFERS OFF',
-          },
-        });
-        continue;
-      }
-
-      // LIVE MODE: find the BoothCartTransaction(s) whose boothsRepresented includes
-      // this vendorBoothId and whose PaymentIntent funded this payout's totalSales.
-      const cartTx = await prisma.boothCartTransaction.findFirst({
-        where: {
-          hubId,
+      await prisma.vendorBoothPayout.update({
+        where: { id: payout.id },
+        data: {
           status: 'COMPLETED',
-          boothsRepresented: { has: booth.id },
-          stripePaymentIntentId: { not: null },
+          method: 'NO_TRANSFER_NEEDED',
+          failureReason: null,
+          notes: payout.notes
+            ? `${payout.notes} | ADR-090: no transfer -- vendor already paid directly at capture time`
+            : 'ADR-090: no transfer needed -- vendor already received net proceeds via direct charge at capture time',
         },
-        orderBy: { createdAt: 'desc' },
-        select: { stripePaymentIntentId: true },
       });
-
-      if (!cartTx?.stripePaymentIntentId) {
-        anyFailure = true;
-        await prisma.vendorBoothPayout.update({
-          where: { id: payout.id },
-          data: { status: 'FAILED', failureReason: 'No completed cart transaction found to source the transfer from' },
-        });
-        continue;
-      }
-
-      const amountCents = Math.round(Number(payout.netPayout) * 100);
-
-      try {
-        const transfer = await payVendorBoothViaTransfer({
-          vendorBoothStripeAccountId: booth.stripeAccountId,
-          amountCents,
-          description: `Settlement ${batch.id} payout for booth ${booth.boothNumber} (${booth.vendorName})`,
-          organizerStripeConnectId,
-          cartPaymentIntentId: cartTx.stripePaymentIntentId,
-          transferGroup: batch.id,
-        });
-
-        await prisma.vendorBoothPayout.update({
-          where: { id: payout.id },
-          data: {
-            status: 'COMPLETED',
-            method: 'STRIPE_TRANSFER',
-            stripeTransferId: transfer.transferId,
-            transferredAt: new Date(),
-            failureReason: null,
-          },
-        });
-      } catch (err: any) {
-        anyFailure = true;
-        await prisma.vendorBoothPayout.update({
-          where: { id: payout.id },
-          data: { status: 'FAILED', failureReason: err?.message?.slice(0, 500) || 'Stripe transfer failed' },
-        });
-      }
     }
 
     const finalStatus = anyFailure ? 'PARTIAL' : 'COMPLETED';
@@ -418,65 +372,29 @@ export const retryPendingVendorBoothPayouts = async (req: AuthRequest, res: Resp
       return res.status(400).json({ error: 'Organizer Stripe account not configured' });
     }
 
-    const live = vendorLiveTransfersEnabled();
-    let anyFailure = false;
+    const live = vendorLiveTransfersEnabled(); // kept only for the response payload's liveTransfersEnabled field below
+    const anyFailure = false;
     let retried = 0;
 
+    // ADR-090 Phase 3: legacy cleanup only. Payouts can no longer land in
+    // PENDING_STRIPE_ONBOARDING or FAILED going forward (approveVendorBoothSettlementBatch
+    // marks everything COMPLETED unconditionally now, see that function's comment) -- this
+    // loop just closes out any rows left over from BEFORE that change. No Stripe Transfer
+    // is attempted; same no-transfer-needed rationale as approve.
     for (const payout of batch.payouts) {
       if (!['PENDING_STRIPE_ONBOARDING', 'FAILED'].includes(payout.status)) continue;
-      const booth = payout.vendorBooth;
-
-      if (!booth.stripeOnboarded || !booth.stripeAccountId) continue; // still not onboarded
-
       retried++;
-
-      if (!live) {
-        await prisma.vendorBoothPayout.update({
-          where: { id: payout.id },
-          data: { status: 'SIMULATED', method: 'STRIPE_TRANSFER', failureReason: null },
-        });
-        continue;
-      }
-
-      const cartTx = await prisma.boothCartTransaction.findFirst({
-        where: { hubId, status: 'COMPLETED', boothsRepresented: { has: booth.id }, stripePaymentIntentId: { not: null } },
-        orderBy: { createdAt: 'desc' },
-        select: { stripePaymentIntentId: true },
+      await prisma.vendorBoothPayout.update({
+        where: { id: payout.id },
+        data: {
+          status: 'COMPLETED',
+          method: 'NO_TRANSFER_NEEDED',
+          failureReason: null,
+          notes: payout.notes
+            ? `${payout.notes} | ADR-090: no transfer -- vendor already paid directly at capture time`
+            : 'ADR-090: no transfer needed -- vendor already received net proceeds via direct charge at capture time',
+        },
       });
-
-      if (!cartTx?.stripePaymentIntentId) {
-        anyFailure = true;
-        await prisma.vendorBoothPayout.update({
-          where: { id: payout.id },
-          data: { status: 'FAILED', failureReason: 'No completed cart transaction found to source the transfer from' },
-        });
-        continue;
-      }
-
-      try {
-        const transfer = await payVendorBoothViaTransfer({
-          vendorBoothStripeAccountId: booth.stripeAccountId,
-          amountCents: Math.round(Number(payout.netPayout) * 100),
-          description: `Settlement ${batch.id} retry payout for booth ${booth.boothNumber} (${booth.vendorName})`,
-          organizerStripeConnectId,
-          cartPaymentIntentId: cartTx.stripePaymentIntentId,
-          transferGroup: batch.id,
-        });
-
-        await prisma.vendorBoothPayout.update({
-          where: { id: payout.id },
-          data: {
-            status: 'COMPLETED', method: 'STRIPE_TRANSFER',
-            stripeTransferId: transfer.transferId, transferredAt: new Date(), failureReason: null,
-          },
-        });
-      } catch (err: any) {
-        anyFailure = true;
-        await prisma.vendorBoothPayout.update({
-          where: { id: payout.id },
-          data: { status: 'FAILED', failureReason: err?.message?.slice(0, 500) || 'Stripe transfer failed' },
-        });
-      }
     }
 
     const updated = await prisma.vendorBoothSettlementBatch.update({

@@ -234,6 +234,7 @@ import { scheduleWebhookEventPruneJob } from './jobs/webhookEventPruneJob'; // W
 import { scheduleLogRetentionCron } from './jobs/logRetentionCron'; // Operational-log retention sweep (60-day retention)
 import { scheduleScrapedSalePruneCron } from './jobs/pruneScrapedSales'; // Stale scraped ENDED-sale prune (volume reclaim, ADR 2026-07-05)
 import { scheduleStripeMigrationReconcileCron } from './jobs/stripeMigrationReconcileCron'; // ADR 1 2026-07-11: Stripe migration reconciliation backstop (daily, 04:30)
+import { scheduleVendorBoothFeeBillingCron } from './jobs/vendorBoothFeeBillingCron'; // ADR-090 Phase 4: flat VendorBooth.boothFee periodic billing (monthly, 1st @ 06:00 UTC)
 import { scheduleArchivalCron, expireStaleVenueCron } from './jobs/archivalCron'; // #112: Soft-delete archival (quarterly) + daily stale venue expiry
 import { scheduleMarkdownCron } from './jobs/markdownCron'; // Feature #91: Auto-markdown (smart clearance)
 import { scheduleMarkdownCycleCron } from './jobs/markdownCycleCron'; // Feature: Automatic Markdown Cycles (PRO Tier)
@@ -980,6 +981,12 @@ httpServer.listen(PORT, '0.0.0.0', () => {
   // time, after the 04:00 prune job) — self-healing backstop for the account.updated
   // webhook cutover, independent of webhook subscription/config correctness.
   scheduleStripeMigrationReconcileCron();
+
+  // ADR-090 Phase 4: Register monthly VendorBooth flat boothFee billing cron (1st of
+  // the month, 06:00 UTC) — charges each CONFIRMED booth's saved payment method and
+  // Transfers proceeds to the hub owner. Safe to run with no vendor payment methods
+  // on file yet (pre-wire state) — see vendorBoothFeeBillingCron.ts header.
+  scheduleVendorBoothFeeBillingCron();
 
   // Feature #91: Register auto-markdown cron
   scheduleMarkdownCron();

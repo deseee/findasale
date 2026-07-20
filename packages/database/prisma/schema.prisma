@@ -253,7 +253,7 @@ model User {
   // Vendor Booth Payments (2026-07-07, ADR-016): a User can operate VendorBooths in
   // multiple different hubs simultaneously (not mutually exclusive with being an Organizer —
   // see Artifact/Maple Lake Mall case). Nullable-until-claimed on the VendorBooth side.
-  vendorBooths VendorBooth[] @relation("VendorBoothUser")
+  vendorBooths         VendorBooth[]     @relation("VendorBoothUser")
 
   // Pre-wire: Agentic AI Scout — passive preference data from wishlist/save behavior
   tasteProfile Json?
@@ -288,208 +288,208 @@ model User {
 }
 
 model Organizer {
-  id                          String                         @id @default(cuid())
-  businessName                String
-  phone                       String?
-  address                     String
-  lat                         Float? // Geocoded latitude for map display
-  lng                         Float? // Geocoded longitude for map display
-  bio                         String? // Organizer bio/description (optional)
-  tagline                     String? // Short one-liner for organizer profile
-  yearFounded                 Int? // Year organizer was established
-  website                     String? // Business website URL
-  listingUrl                  String? // Source directory/listing URL (bid13, propertyroom, etc.) — NOT the org's own site; never fetched
-  profilePhoto                String? // Profile photo URL (Cloudinary)
-  facebook                    String? // Facebook page URL
-  instagram                   String? // Instagram profile URL
-  etsy                        String? // Etsy shop URL
-  twitterUrl                  String? // Twitter/X profile URL
-  tiktokUrl                   String? // TikTok profile URL
-  youtubeUrl                  String? // YouTube channel URL
-  pinterestUrl                String? // Pinterest profile URL
-  serviceAreas                String? // CSV or JSON of cities/zip codes served
-  pickupWindows               String? // Default pickup availability (JSON or text)
-  userId                      String                         @unique
-  user                        User                           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  sales                       Sale[]
-  saleTemplates               SaleTemplate[]
-  stripeConnectId             String?
-  stripeConnectAccountId      String? // Stripe Connect account ID (v2 onboarding)
-  stripeConnectEnabled        Boolean                        @default(false) // Connect account fully onboarded
-  stripeOnboarded             Boolean                        @default(false) // P2-1: Set true when account.updated webhook confirms charges_enabled && payouts_enabled
-  stripeAccountType           String?                        // ADR-023: 'express' | 'standard' -- cached display/routing hint only. Money-moving code paths must live-check Stripe directly, never trust this for authorization.
-  pendingStripeMigrationAccountId String?                    // ADR-023: new Standard account id while a Networked Onboarding migration is in flight
-  stripeMigrationPromptedAt   DateTime?                      // ADR-023: last time the migration banner was shown -- remind-later throttling only
-  removeWatermarkEnabled      Boolean                        @default(false) // PRO: remove FindA.Sale watermark from exports
+  id                              String                         @id @default(cuid())
+  businessName                    String
+  phone                           String?
+  address                         String
+  lat                             Float? // Geocoded latitude for map display
+  lng                             Float? // Geocoded longitude for map display
+  bio                             String? // Organizer bio/description (optional)
+  tagline                         String? // Short one-liner for organizer profile
+  yearFounded                     Int? // Year organizer was established
+  website                         String? // Business website URL
+  listingUrl                      String? // Source directory/listing URL (bid13, propertyroom, etc.) — NOT the org's own site; never fetched
+  profilePhoto                    String? // Profile photo URL (Cloudinary)
+  facebook                        String? // Facebook page URL
+  instagram                       String? // Instagram profile URL
+  etsy                            String? // Etsy shop URL
+  twitterUrl                      String? // Twitter/X profile URL
+  tiktokUrl                       String? // TikTok profile URL
+  youtubeUrl                      String? // YouTube channel URL
+  pinterestUrl                    String? // Pinterest profile URL
+  serviceAreas                    String? // CSV or JSON of cities/zip codes served
+  pickupWindows                   String? // Default pickup availability (JSON or text)
+  userId                          String                         @unique
+  user                            User                           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sales                           Sale[]
+  saleTemplates                   SaleTemplate[]
+  stripeConnectId                 String?
+  stripeConnectAccountId          String? // Stripe Connect account ID (v2 onboarding)
+  stripeConnectEnabled            Boolean                        @default(false) // Connect account fully onboarded
+  stripeOnboarded                 Boolean                        @default(false) // P2-1: Set true when account.updated webhook confirms charges_enabled && payouts_enabled
+  stripeAccountType               String? // ADR-023: 'express' | 'standard' -- cached display/routing hint only. Money-moving code paths must live-check Stripe directly, never trust this for authorization.
+  pendingStripeMigrationAccountId String? // ADR-023: new Standard account id while a Networked Onboarding migration is in flight
+  stripeMigrationPromptedAt       DateTime? // ADR-023: last time the migration banner was shown -- remind-later throttling only
+  removeWatermarkEnabled          Boolean                        @default(false) // PRO: remove FindA.Sale watermark from exports
   // Phase 17: Reputation
-  reputationTier              String                         @default("NEW") // NEW, TRUSTED, ESTATE_CURATOR
-  avgRating                   Float?
-  totalReviews                Int                            @default(0)
-  totalSales                  Int                            @default(0)
-  followers                   Follow[]
-  conversations               Conversation[]
+  reputationTier                  String                         @default("NEW") // NEW, TRUSTED, ESTATE_CURATOR
+  avgRating                       Float?
+  totalReviews                    Int                            @default(0)
+  totalSales                      Int                            @default(0)
+  followers                       Follow[]
+  conversations                   Conversation[]
   // Feature #32: Smart Follow — shoppers following this organizer for sale alerts
-  smartFollowers              SmartFollow[]
+  smartFollowers                  SmartFollow[]
   // Phase 31: Organizer Tier Rewards (BRONZE | SILVER | GOLD) — fee benefits based on activity
-  tier                        String                         @default("BRONZE")
-  tierUpdatedAt               DateTime?
+  tier                            String                         @default("BRONZE")
+  tierUpdatedAt                   DateTime?
   // Feature #16: Verified Organizer Badge
-  verificationStatus          String                         @default("NONE") // NONE | PENDING | VERIFIED | REJECTED
-  verificationNotes           String?
-  verifiedAt                  DateTime?
+  verificationStatus              String                         @default("NONE") // NONE | PENDING | VERIFIED | REJECTED
+  verificationNotes               String?
+  verifiedAt                      DateTime?
   // Feature #83: Estate Planning — executor account stub
-  executorUserId              String?
-  estateId                    String? // Pre-wire: Estate Planning Toolkit — references future Estate model
+  executorUserId                  String?
+  estateId                        String? // Pre-wire: Estate Planning Toolkit — references future Estate model
   // Onboarding wizard
-  onboardingComplete          Boolean                        @default(false)
+  onboardingComplete              Boolean                        @default(false)
   // Feature #11: Referral discount — fee waived for 3 months when referred by/referring another organizer
-  referralDiscountExpiry      DateTime?
+  referralDiscountExpiry          DateTime?
   // Cash POS: accumulated platform fees awaiting payout deduction
-  cashFeeBalance              Float                          @default(0)
-  cashFeeBalanceUpdatedAt     DateTime?
+  cashFeeBalance                  Float                          @default(0)
+  cashFeeBalanceUpdatedAt         DateTime?
   // #31 Brand Kit: organizer branding for sales and exports
-  brandLogoUrl                String? // Cloudinary URL for organizer logo
-  brandPrimaryColor           String? // Hex e.g. "#2563EB"
-  brandSecondaryColor         String? // Hex e.g. "#1E40AF"
-  customStorefrontSlug        String?                        @unique // Unique slug for organizer storefront e.g. "janes-estate-sales"
-  brandFontFamily             String? // Font family e.g. "Georgia" (PRO tier)
-  brandBannerImageUrl         String? // Cloudinary URL for organizer banner (PRO tier)
-  brandAccentColor            String? // Hex for accent color (PRO tier)
+  brandLogoUrl                    String? // Cloudinary URL for organizer logo
+  brandPrimaryColor               String? // Hex e.g. "#2563EB"
+  brandSecondaryColor             String? // Hex e.g. "#1E40AF"
+  customStorefrontSlug            String?                        @unique // Unique slug for organizer storefront e.g. "janes-estate-sales"
+  brandFontFamily                 String? // Font family e.g. "Georgia" (PRO tier)
+  brandBannerImageUrl             String? // Cloudinary URL for organizer banner (PRO tier)
+  brandAccentColor                String? // Hex for accent color (PRO tier)
   // Feature #65: Subscription Tiers
-  subscriptionTier            SubscriptionTier               @default(SIMPLE)
-  subscriptionStatus          String? // active, trialing, past_due, canceled, null
-  trialEndsAt                 DateTime?
-  stripeCustomerId            String?
-  stripeSubscriptionId        String?
+  subscriptionTier                SubscriptionTier               @default(SIMPLE)
+  subscriptionStatus              String? // active, trialing, past_due, canceled, null
+  trialEndsAt                     DateTime?
+  stripeCustomerId                String?
+  stripeSubscriptionId            String?
   // SECURITY FIX P0-1: Token version for invalidating tier JWTs on subscription upgrade
-  tokenVersion                Int                            @default(0) // Increment on tier upgrade to invalidate stale tier claims in JWT
+  tokenVersion                    Int                            @default(0) // Increment on tier upgrade to invalidate stale tier claims in JWT
   // Feature #40: Sale Hubs — hubs created by this organizer
-  hubs                        SaleHub[]                      @relation("OrganizerHubs")
+  hubs                            SaleHub[]                      @relation("OrganizerHubs")
   // Feature #13: TEAMS Multi-User Workspace relations
-  workspace                   OrganizerWorkspace?            @relation("WorkspaceOwner")
-  workspaceMemberships        WorkspaceMember[]              @relation("OrganizerWorkspaces")
+  workspace                       OrganizerWorkspace?            @relation("WorkspaceOwner")
+  workspaceMemberships            WorkspaceMember[]              @relation("OrganizerWorkspaces")
   // D-007: Enterprise account flag (unlimited team members, annual contracts)
-  isEnterpriseAccount         Boolean                        @default(false)
+  isEnterpriseAccount             Boolean                        @default(false)
   // Feature #121: Hold system settings
-  holdSettings                OrganizerHoldSettings?
+  holdSettings                    OrganizerHoldSettings?
   // Feature #228: Settlement Hub — default commission rate for estate/consignment/auction
-  defaultCommissionRate       Decimal?
+  defaultCommissionRate           Decimal?
   // Feature #235: Charity Close + Tax Receipt PDF
-  donations                   SaleDonation[]
+  donations                       SaleDonation[]
   // POS Upgrade: Open Cart sessions and payment links
-  posSessions                 POSSession[]
-  posPaymentLinks             POSPaymentLink[]
+  posSessions                     POSSession[]
+  posPaymentLinks                 POSPaymentLink[]
   // Feature #48: Treasure Trails — organizer-created discovery trails
-  trails                      TreasureTrail[]                @relation("OrganizerTrails")
+  trails                          TreasureTrail[]                @relation("OrganizerTrails")
   // Feature #244 Phase 2: eBay OAuth connection
-  ebayStoreUrl                String? // eBay store URL e.g. https://www.ebay.com/str/your-store-name
-  ebayConnection              EbayConnection?                @relation("OrganizerEbayConnection")
+  ebayStoreUrl                    String? // eBay store URL e.g. https://www.ebay.com/str/your-store-name
+  ebayConnection                  EbayConnection?                @relation("OrganizerEbayConnection")
   // Feature #244 Phase 2c: eBay Policy Routing — per-organizer weight-tier policy mappings
-  ebayPolicyMapping           EbayPolicyMapping?             @relation("OrganizerEbayPolicyMapping")
-  ebaySubscriptionId          String? // ORDER_CONFIRMATION subscription ID from eBay Notification API
-  ebayQueueMode               Boolean                        @default(false) // Opt-in: auto-manage eBay listing slots
-  ebayQueueRotation           Boolean                        @default(false) // Opt-in: cycle oldest listings when queue has waiting items
-  workspaceChatMessages       WorkspaceChatMessage[]         @relation("WorkspaceChatMessages")
+  ebayPolicyMapping               EbayPolicyMapping?             @relation("OrganizerEbayPolicyMapping")
+  ebaySubscriptionId              String? // ORDER_CONFIRMATION subscription ID from eBay Notification API
+  ebayQueueMode                   Boolean                        @default(false) // Opt-in: auto-manage eBay listing slots
+  ebayQueueRotation               Boolean                        @default(false) // Opt-in: cycle oldest listings when queue has waiting items
+  workspaceChatMessages           WorkspaceChatMessage[]         @relation("WorkspaceChatMessages")
   // Feature #S483: Organizer Signals — expansion + churn scoring
-  organizerScore              OrganizerScore?
+  organizerScore                  OrganizerScore?
   // Feature #XXX: First Sale Free PRO — Security Gates
-  firstSaleFreeProUsedAt      DateTime? // When organizer used their first-sale free PRO offer (null = not used yet)
-  aiTagsUsedThisMonth         Int                            @default(0) // Count of AI tags used this calendar month
-  aiTagsResetAt               DateTime? // When the monthly AI tag counter was last reset
+  firstSaleFreeProUsedAt          DateTime? // When organizer used their first-sale free PRO offer (null = not used yet)
+  aiTagsUsedThisMonth             Int                            @default(0) // Count of AI tags used this calendar month
+  aiTagsResetAt                   DateTime? // When the monthly AI tag counter was last reset
   // Feature #75: eBay Push Quota Tracking — monthly limit enforcement
-  ebayPushesThisMonth         Int                            @default(0) // Count of eBay pushes this calendar month
-  ebayPushesResetAt           DateTime? // When the monthly eBay push counter was last reset
+  ebayPushesThisMonth             Int                            @default(0) // Count of eBay pushes this calendar month
+  ebayPushesResetAt               DateTime? // When the monthly eBay push counter was last reset
   // eBay Push — publish-mode cascade + shipping smart-pick (organizer-level defaults)
   // @deprecated S725 — DRAFT mode removed; field unused, retained to avoid migration.
   // eBay Inventory API unpublished offers cannot be viewed/published from the
   // Seller Hub UI, making DRAFT mode broken-by-design. All pushes now go LIVE.
-  ebayDefaultPublishMode      EbayPublishMode                @default(DRAFT) // DEPRECATED S725 — unused
-  ebayDefaultShippingPolicyId String? // When set, used as the fulfillment policy on every push (overrides smart-pick). Null = use smart-pick.
+  ebayDefaultPublishMode          EbayPublishMode                @default(DRAFT) // DEPRECATED S725 — unused
+  ebayDefaultShippingPolicyId     String? // When set, used as the fulfillment policy on every push (overrides smart-pick). Null = use smart-pick.
   // eBay Custom Label append toggles
-  skuAppendDate               Boolean                        @default(false) // Append item creation date to eBay Custom Label
-  skuAppendCost               Boolean                        @default(false) // Append costBasis to eBay Custom Label
-  skuAppendLocation           Boolean                        @default(false) // Append roomTag to eBay Custom Label
+  skuAppendDate                   Boolean                        @default(false) // Append item creation date to eBay Custom Label
+  skuAppendCost                   Boolean                        @default(false) // Append costBasis to eBay Custom Label
+  skuAppendLocation               Boolean                        @default(false) // Append roomTag to eBay Custom Label
   // Feature: Graceful Tier Degradation — grace period fields
-  graceEndAt                  DateTime? // When grace period expires (7 days from downgrade)
-  graceTierBefore             String? // Tier before downgrade (PRO or TEAMS)
-  graceNotificationsCount     Int                            @default(0) // Count of grace period notifications sent (0-2)
+  graceEndAt                      DateTime? // When grace period expires (7 days from downgrade)
+  graceTierBefore                 String? // Tier before downgrade (PRO or TEAMS)
+  graceNotificationsCount         Int                            @default(0) // Count of grace period notifications sent (0-2)
   // Feature #314: Price Override Logging — organizer pricing calibration
   // Feature #XXX: Automatic Markdown Cycles (PRO Tier) — time-based price reductions
-  markdownCycles              MarkdownCycle[]
-  priceOverrideLogs           PriceOverrideLog[]
+  markdownCycles                  MarkdownCycle[]
+  priceOverrideLogs               PriceOverrideLog[]
   // Feature #XXX: Shopify Cross-Listing (TEAMS tier)
-  shopifyAccessToken          String?
-  shopifyShopDomain           String? // e.g. "myshop.myshopify.com"
-  shopifyEnabled              Boolean                        @default(false)
-  shopifyListings             ShopifyListing[]
+  shopifyAccessToken              String?
+  shopifyShopDomain               String? // e.g. "myshop.myshopify.com"
+  shopifyEnabled                  Boolean                        @default(false)
+  shopifyListings                 ShopifyListing[]
   // Directory Crawl Management — organizer lifecycle and claim outreach tracking
-  directoryStatus             String                         @default("ACTIVE") // "ACTIVE" | "UNCERTAIN" | "CLOSED" | "REOPENED"
-  directoryStatusSetAt        DateTime                       @default(now())
-  directoryStatusReason       String?
-  directoryNextCheckAt        DateTime?
-  directoryCheckIntervalDays  Int                            @default(90)
-  directoryLastCheckedAt      DateTime?
-  directoryLastCheckedSource  String?
-  directoryDataHash           String? // SHA256 of name|address|city|state for change detection
-  directoryHashUpdatedAt      DateTime?
-  directoryMostRecentSource   String? // Last source that updated this record
-  directoryMostRecentAt       DateTime?
-  hereBusinessId              String?                        @unique
-  foursquareVenueId           String?                        @unique
-  overtureGersId              String?                        @unique // Overture Places GERS id (CDLA Permissive 2.0) — overtureEnrichmentJob monthly re-sync key
-  osmNodeId                   String? // Format: "node/12345" or "way/12345"
-  suppressOutreach            Boolean                        @default(false) // Quebec Bill 96 deferral for QC records
-  directoryNextClaimEmailAt   DateTime?
-  claimEmailIntervalDays      Int                            @default(14)
-  claimStatus                 String                         @default("UNCLAIMED") // "UNCLAIMED" | "INVITED" | "CLAIMED" | "OPTED_OUT"
-  isClaimed                   Boolean                        @default(true) // True for all organizer-managed listings; scrapers set false
-  isUnmanagedListing          Boolean                        @default(false) // True for scraped/unverified listings not yet claimed
-  websiteEnrichmentExhausted  Boolean                        @default(false) // set when its website domain reaches TERMINAL fetch state
-  isHiddenFromDirectory       Boolean                        @default(false) // True = hidden from public directory/search; set for scraped orgs, cleared on claim
-  claimEmails                 DirectoryClaimEmail[]
+  directoryStatus                 String                         @default("ACTIVE") // "ACTIVE" | "UNCERTAIN" | "CLOSED" | "REOPENED"
+  directoryStatusSetAt            DateTime                       @default(now())
+  directoryStatusReason           String?
+  directoryNextCheckAt            DateTime?
+  directoryCheckIntervalDays      Int                            @default(90)
+  directoryLastCheckedAt          DateTime?
+  directoryLastCheckedSource      String?
+  directoryDataHash               String? // SHA256 of name|address|city|state for change detection
+  directoryHashUpdatedAt          DateTime?
+  directoryMostRecentSource       String? // Last source that updated this record
+  directoryMostRecentAt           DateTime?
+  hereBusinessId                  String?                        @unique
+  foursquareVenueId               String?                        @unique
+  overtureGersId                  String?                        @unique // Overture Places GERS id (CDLA Permissive 2.0) — overtureEnrichmentJob monthly re-sync key
+  osmNodeId                       String? // Format: "node/12345" or "way/12345"
+  suppressOutreach                Boolean                        @default(false) // Quebec Bill 96 deferral for QC records
+  directoryNextClaimEmailAt       DateTime?
+  claimEmailIntervalDays          Int                            @default(14)
+  claimStatus                     String                         @default("UNCLAIMED") // "UNCLAIMED" | "INVITED" | "CLAIMED" | "OPTED_OUT"
+  isClaimed                       Boolean                        @default(true) // True for all organizer-managed listings; scrapers set false
+  isUnmanagedListing              Boolean                        @default(false) // True for scraped/unverified listings not yet claimed
+  websiteEnrichmentExhausted      Boolean                        @default(false) // set when its website domain reaches TERMINAL fetch state
+  isHiddenFromDirectory           Boolean                        @default(false) // True = hidden from public directory/search; set for scraped orgs, cleared on claim
+  claimEmails                     DirectoryClaimEmail[]
   // ADR-073: Verified Organizer autofill sources (migration 20260430300000)
-  verificationSource          String?
-  googlePlaceId               String?                        @unique
-  facebookPageId              String?
-  yelpBusinessId              String?
+  verificationSource              String?
+  googlePlaceId                   String?                        @unique
+  facebookPageId                  String?
+  yelpBusinessId                  String?
   // FB Commerce Manager catalog feed registration (migration 20260616000001)
-  fbCatalogEnabled            Boolean   @default(false)
-  fbCatalogRegisteredAt       DateTime?
+  fbCatalogEnabled                Boolean                        @default(false)
+  fbCatalogRegisteredAt           DateTime?
   // ADR-083: Marketplace Poster opt-in (Playwright, dedicated FindA.Sale-owned accounts)
-  marketplaceAutoPostEnabled  Boolean   @default(false)
-  stripeIdentitySessionId     String?
+  marketplaceAutoPostEnabled      Boolean                        @default(false)
+  stripeIdentitySessionId         String?
   // ADR-073 Phase 2: ESN enrichment fields (migration 20260502000001)
-  esnOrgId                    Int?
-  linkedInUrl                 String?
-  esnMemberships              Json?
-  esnPackageType              String?
+  esnOrgId                        Int?
+  linkedInUrl                     String?
+  esnMemberships                  Json?
+  esnPackageType                  String?
   // ADR-073 Phase 2: Contact acquisition fields (migration 20260502000002)
-  contactEmail                String?
-  esnCompanyPageUrl           String?
+  contactEmail                    String?
+  esnCompanyPageUrl               String?
   // Scraper contact fields (migration 20260502000100)
-  scrapedEmail                String?
+  scrapedEmail                    String?
   // Google Places rating (migration 20260502010000)
-  googleRating                Decimal?
-  googleRatingCount           Int?
+  googleRating                    Decimal?
+  googleRatingCount               Int?
   // Business category from directory scraping (migration 20260502020000)
-  businessCategory            String?
+  businessCategory                String?
   // Organizer profile fields (migration 20260627000000)
-  timezone                    String?
-  byAppointment               Boolean                        @default(false)
-  organizerTypes              String[]                       @default([])
+  timezone                        String?
+  byAppointment                   Boolean                        @default(false)
+  organizerTypes                  String[]                       @default([])
   // Feature #356: Organizer broadcasts to followers
-  broadcasts                  OrganizerBroadcast[]
+  broadcasts                      OrganizerBroadcast[]
   // Feature #354: Business hours
-  hours                       OrganizerHours[]
+  hours                           OrganizerHours[]
   // Feature: Claim Requests — incoming claim requests for unmanaged listings
-  claimRequests               ClaimRequest[]
+  claimRequests                   ClaimRequest[]
   // Feature: Shopper Organizer Introductions — shoppers who introduced this organizer to FindA.Sale
-  shopperIntroductions        ShopperOrganizerIntroduction[] @relation("OrganizerIntroductions")
+  shopperIntroductions            ShopperOrganizerIntroduction[] @relation("OrganizerIntroductions")
   // CAN-SPAM Compliance: Audit log for outreach events
-  outreachAuditLogs           OutreachAuditLog[]             @relation("OutreachAuditLogs")
+  outreachAuditLogs               OutreachAuditLog[]             @relation("OutreachAuditLogs")
   // Sentry slow query fix 2026-05-30: denormalized backrelation for Review.organizerId
-  reviews                     Review[]                       @relation("OrganizerReviews")
-  testimonials                Testimonial[]                  @relation("OrganizerTestimonials")
+  reviews                         Review[]                       @relation("OrganizerReviews")
+  testimonials                    Testimonial[]                  @relation("OrganizerTestimonials")
 
   // Corroboration fields — merge conflict resolution
   sourceCount        Int     @default(1)
@@ -517,7 +517,7 @@ model Organizer {
   // S696: permanent badge for first 500 organizers
   foundingOrgBadge         Boolean   @default(false)
   // Feature #358: Follower count visibility — organizer can hide count from their storefront
-  showFollowerCount         Boolean   @default(true)
+  showFollowerCount        Boolean   @default(true)
   // S696: Cash-to-Digital Bridge POS nudge handles
   venmoHandle              String?
   zelleHandle              String?
@@ -850,7 +850,7 @@ model Sale {
   // Design S703: Online-only + subtype (UI wired, schema lands here)
   isOnlineOnly                Boolean                    @default(false) // true = no physical address required; Online Only sales
   saleSubtype                 String? // 'estate' | 'yard' | 'moving' | 'auction' | 'storage' | 'flea' | 'popup' | 'downsizing' | 'liquidation' | 'swap_meet' | 'storefront' | 'consignment'
-  isCharitySale                Boolean                    @default(false)
+  isCharitySale               Boolean                    @default(false)
   qrScanCount                 Int                        @default(0)
   endingSoonNotified          Boolean                    @default(false) // Track if "Sale Ending Soon" notification has been sent
   // Feature #35: Front Door Locator — entrance/parking location
@@ -972,7 +972,7 @@ model Sale {
   // ADR-073: Scraped listing metadata (restored — fields already in DB via 20260501020000_scraper_phase1)
   sourceUrl                   String? // Source listing URL (EstateSalesNet, GooglePlaces, etc.)
   sourceUrlFetchFailedAt      DateTime? // set when enrichment fetch permanently fails; excludes from re-selection
-  sourceUrlFetchAttempts      Int        @default(0)
+  sourceUrlFetchAttempts      Int                        @default(0)
   sourceName                  String? // Source identifier
   lastScrapedAt               DateTime? // Last time this listing appeared in a scrape
   scrapeVersion               Int? // Scrape update counter
@@ -1006,6 +1006,12 @@ model Sale {
   videoJobs                   VideoJob[]
   createdAt                   DateTime                   @default(now())
   updatedAt                   DateTime                   @updatedAt
+  // Sentry NODEJS-10 fix (partial indexes — raw SQL only, Prisma @@index does not support WHERE predicates):
+  //   Sale_status_endDate_autoclose_idx: (status, endDate) WHERE deletedAt IS NULL
+  //     → saleAutoCloseCron was bitmap-scanning 14k PUBLISHED rows via wrong index; partial index → 0.046ms
+  //   Sale_sourceName_sourceUrl_idx: (sourceName, sourceUrl) WHERE sourceName IS NOT NULL AND sourceUrl IS NOT NULL
+  //     → saleDetailEnrichmentController COUNT seqscan 49ms → 6ms index-only scan
+  //   Sale_scrapedMetadata_gin_idx: GIN index on scrapedMetadata for JSON path queries (raw SQL migration — Prisma cannot express GIN)
 
   @@index([deletedAt])
   @@index([lifecycleStage])
@@ -1027,12 +1033,6 @@ model Sale {
   @@index([sourceName]) // Sentry slow query: SELECT Sale WHERE scrapedMetadata JSON path + sourceName (1115ms, 6x) — sourceName filter enables partition pruning before GIN eval
   @@index([sourceName, sourceUrlFetchFailedAt]) // Enrichment re-selection: exclude permanently-failed source URLs per source
   @@index([saleType, city, state]) // Sentry NODEJS-3F/2T/10: RETAIL dedup findFirst WHERE saleType+city+state — 138-row bitmap scan becomes index seek
-  // Sentry NODEJS-10 fix (partial indexes — raw SQL only, Prisma @@index does not support WHERE predicates):
-  //   Sale_status_endDate_autoclose_idx: (status, endDate) WHERE deletedAt IS NULL
-  //     → saleAutoCloseCron was bitmap-scanning 14k PUBLISHED rows via wrong index; partial index → 0.046ms
-  //   Sale_sourceName_sourceUrl_idx: (sourceName, sourceUrl) WHERE sourceName IS NOT NULL AND sourceUrl IS NOT NULL
-  //     → saleDetailEnrichmentController COUNT seqscan 49ms → 6ms index-only scan
-  //   Sale_scrapedMetadata_gin_idx: GIN index on scrapedMetadata for JSON path queries (raw SQL migration — Prisma cannot express GIN)
 }
 
 // Feature #106: Crowdsourced Sourcebook — expert notes and appraisals on items/sales
@@ -1065,14 +1065,14 @@ model SourcebookEntry {
 // ingestOpenImagesCorpus.ts. Dimension 768 confirmed against the Marqo-Ecommerce-B
 // HuggingFace model card (not the L variant, which is 1024).
 model ProductReferenceEmbedding {
-  id             String   @id @default(cuid())
-  sourceDataset  String // 'open-images' | 'findasale-item' | 'ebay-comp'
-  sourceId       String // Open Images ImageID, or Item.id, or eBay comp ID
-  l1Category     String // maps to EBAY_L1_CATEGORIES for corpus filtering/scoping
-  label          String // human-readable label (Open Images class name, or item title)
-  embedding      Unsupported("vector(768)")
-  imageUrl       String?
-  createdAt      DateTime @default(now())
+  id            String                     @id @default(cuid())
+  sourceDataset String // 'open-images' | 'findasale-item' | 'ebay-comp'
+  sourceId      String // Open Images ImageID, or Item.id, or eBay comp ID
+  l1Category    String // maps to EBAY_L1_CATEGORIES for corpus filtering/scoping
+  label         String // human-readable label (Open Images class name, or item title)
+  embedding     Unsupported("vector(768)")
+  imageUrl      String?
+  createdAt     DateTime                   @default(now())
 
   @@index([l1Category])
   @@index([sourceDataset])
@@ -1080,245 +1080,245 @@ model ProductReferenceEmbedding {
 }
 
 model Item {
-  id                         String                 @id @default(cuid())
-  title                      String
-  sku                        String?
-  description                String?
-  price                      Float?
-  auctionStartPrice          Float?
-  auctionReservePrice        Float?
-  currentBid                 Float?
-  bidIncrement               Float?                 @default(1)
-  auctionEndTime             DateTime?
-  auctionClosed              Boolean                @default(false)
-  status                     String                 @default("AVAILABLE") // AVAILABLE, SOLD, RESERVED, INVOICE_ISSUED, AUCTION_ENDED, DONATED
-  category                   String? // eBay L1 category name (e.g. "Home & Garden") — used for shopper browse and wishlist matching
-  condition                  String? // NEW | USED | REFURBISHED | PARTS_OR_REPAIR
-  conditionGrade             String? // S | A | B | C | D — null for items not yet graded
-  rarity                     ItemRarity             @default(COMMON) // Feature #57: Shiny/Rare badges
-  photoUrls                  String[]
+  id                              String                  @id @default(cuid())
+  title                           String
+  sku                             String?
+  description                     String?
+  price                           Float?
+  auctionStartPrice               Float?
+  auctionReservePrice             Float?
+  currentBid                      Float?
+  bidIncrement                    Float?                  @default(1)
+  auctionEndTime                  DateTime?
+  auctionClosed                   Boolean                 @default(false)
+  status                          String                  @default("AVAILABLE") // AVAILABLE, SOLD, RESERVED, INVOICE_ISSUED, AUCTION_ENDED, DONATED
+  category                        String? // eBay L1 category name (e.g. "Home & Garden") — used for shopper browse and wishlist matching
+  condition                       String? // NEW | USED | REFURBISHED | PARTS_OR_REPAIR
+  conditionGrade                  String? // S | A | B | C | D — null for items not yet graded
+  rarity                          ItemRarity              @default(COMMON) // Feature #57: Shiny/Rare badges
+  photoUrls                       String[]
   // U1: Ollama nomic-embed-text 768-dim vector for semantic search
-  embedding                  Float[]
+  embedding                       Float[]
   // W1: Shipping
-  shippingAvailable          Boolean                @default(false)
-  shippingPrice              Float?
+  shippingAvailable               Boolean                 @default(false)
+  shippingPrice                   Float?
   // B1: Item listing/transaction type — FIXED | AUCTION | REVERSE_AUCTION | LIVE_DROP | POS
-  listingType                String                 @default("FIXED")
+  listingType                     String                  @default("FIXED")
   // CD2: Live Drop — item hidden until liveDropAt time
-  isLiveDrop                 Boolean                @default(false) // Deprecated: use listingType instead
-  liveDropAt                 DateTime?
+  isLiveDrop                      Boolean                 @default(false) // Deprecated: use listingType instead
+  liveDropAt                      DateTime?
   // B2: AI tagging disclosure — true when AI (Vision + Haiku) generated this item's fields
-  isAiTagged                 Boolean                @default(false)
+  isAiTagged                      Boolean                 @default(false)
   // CB5: AI-generated search tags from batchAnalyzeController
-  tags                       String[]               @default([])
+  tags                            String[]                @default([])
   // CD2 Phase 4: Reverse Auction — daily price decline until sold or floor hit
-  reverseAuction             Boolean                @default(false) // Deprecated: use listingType instead
-  reverseDailyDrop           Int? // cents per day
-  reverseFloorPrice          Int? // minimum price in cents
-  reverseStartDate           DateTime?
+  reverseAuction                  Boolean                 @default(false) // Deprecated: use listingType instead
+  reverseDailyDrop                Int? // cents per day
+  reverseFloorPrice               Int? // minimum price in cents
+  reverseStartDate                DateTime?
   // Bulk operations: hide/show item from sale listing
-  isActive                   Boolean                @default(true)
-  saleId                     String? // Feature #300: nullable — inventory items have no sale
-  lastSaleId                 String? // Feature #300: last sale item was in (for FlipReport union query)
-  returnedToInventoryAt      DateTime? // Feature #300: timestamp when returned from a sale
-  sale                       Sale?                  @relation(fields: [saleId], references: [id], onDelete: SetNull)
-  bids                       Bid[]
-  maxBids                    MaxBidByUser[] // ADR-013 Phase 2: Proxy bidding
-  purchases                  Purchase[]
-  favorites                  Favorite[]
-  reservation                ItemReservation?
-  bountyFulfillments         MissingListingBounty[]
-  bountySubmissions          BountySubmission[]     @relation("BountySubmissions")
-  treasureHuntFinds          TreasureHuntFind[]
-  treasureHuntQRScans        TreasureHuntQRScan[]   @relation("TreasureHuntQRScans")
-  flashDeals                 FlashDeal[]
-  wishlistItems              WishlistItem[]
-  buyingPools                BuyingPool[]
-  checkoutAttempts           CheckoutAttempt[]
-  waitlist                   ItemWaitlist[]
-  currency                   String                 @default("USD") // Batch 17: multi-currency groundwork
-  priceHistory               ItemPriceHistory[]
-  priceOverrideLogs          PriceOverrideLog[] // Feature #314: Organizer price change tracking
-  draftStatus                String                 @default("DRAFT") // DRAFT | PENDING_REVIEW | PUBLISHED — Rapidfire Mode item draft status
-  aiErrorLog                 Json? // Rapidfire Mode AI error logging (JSON array of errors)
-  optimisticLockVersion      Int                    @default(0) // Rapidfire Mode optimistic concurrency control
+  isActive                        Boolean                 @default(true)
+  saleId                          String? // Feature #300: nullable — inventory items have no sale
+  lastSaleId                      String? // Feature #300: last sale item was in (for FlipReport union query)
+  returnedToInventoryAt           DateTime? // Feature #300: timestamp when returned from a sale
+  sale                            Sale?                   @relation(fields: [saleId], references: [id], onDelete: SetNull)
+  bids                            Bid[]
+  maxBids                         MaxBidByUser[] // ADR-013 Phase 2: Proxy bidding
+  purchases                       Purchase[]
+  favorites                       Favorite[]
+  reservation                     ItemReservation?
+  bountyFulfillments              MissingListingBounty[]
+  bountySubmissions               BountySubmission[]      @relation("BountySubmissions")
+  treasureHuntFinds               TreasureHuntFind[]
+  treasureHuntQRScans             TreasureHuntQRScan[]    @relation("TreasureHuntQRScans")
+  flashDeals                      FlashDeal[]
+  wishlistItems                   WishlistItem[]
+  buyingPools                     BuyingPool[]
+  checkoutAttempts                CheckoutAttempt[]
+  waitlist                        ItemWaitlist[]
+  currency                        String                  @default("USD") // Batch 17: multi-currency groundwork
+  priceHistory                    ItemPriceHistory[]
+  priceOverrideLogs               PriceOverrideLog[] // Feature #314: Organizer price change tracking
+  draftStatus                     String                  @default("DRAFT") // DRAFT | PENDING_REVIEW | PUBLISHED — Rapidfire Mode item draft status
+  aiErrorLog                      Json? // Rapidfire Mode AI error logging (JSON array of errors)
+  optimisticLockVersion           Int                     @default(0) // Rapidfire Mode optimistic concurrency control
   // Camera Workflow v2 fields
-  aiConfidence               Float                  @default(0.5) // AI confidence score (0.0–1.0)
-  backgroundRemoved          Boolean                @default(false) // Background removal applied
-  faceDetected               Boolean                @default(false) // Face detected in image
-  autoEnhanced               Boolean                @default(false) // Auto-enhancement applied
-  userEditedFields           String[]               @default([]) // Fields explicitly edited by organizer (D-006: prevents AI overwrites)
-  photos                     Photo[] // Multi-photo support (forward-looking)
+  aiConfidence                    Float                   @default(0.5) // AI confidence score (0.0–1.0)
+  backgroundRemoved               Boolean                 @default(false) // Background removal applied
+  faceDetected                    Boolean                 @default(false) // Face detected in image
+  autoEnhanced                    Boolean                 @default(false) // Auto-enhancement applied
+  userEditedFields                String[]                @default([]) // Fields explicitly edited by organizer (D-006: prevents AI overwrites)
+  photos                          Photo[] // Multi-photo support (forward-looking)
   // Feature #25: Item Library — organizer-owned items across sales
-  libraryId                  String? // Links to future LibraryItem table; for now just namespace
-  inInventory                Boolean                @default(false) // Cached: is this item in organizer's inventory?
-  priceVariants              Json? // { saleId: price } for per-sale pricing (Phase 5)
-  organizerId                String? // Denormalized from sale.organizerId for library queries
+  libraryId                       String? // Links to future LibraryItem table; for now just namespace
+  inInventory                     Boolean                 @default(false) // Cached: is this item in organizer's inventory?
+  priceVariants                   Json? // { saleId: price } for per-sale pricing (Phase 5)
+  organizerId                     String? // Denormalized from sale.organizerId for library queries
   // Feature #29: Loyalty Passport — Hunt Pass early access embargo
-  earlyAccessUntil           DateTime? // Items hidden from non-Hunt-Pass shoppers until this time
+  earlyAccessUntil                DateTime? // Items hidden from non-Hunt-Pass shoppers until this time
   // Feature #47: UGC Photo Tags — user-generated content linked to items
-  ugcPhotos                  UGCPhoto[]
+  ugcPhotos                       UGCPhoto[]
   // Feature #17: Bid Bot Detector — fraud signals for this item
-  fraudSignals               FraudSignal[]
+  fraudSignals                    FraudSignal[]
   // Feature #48: Treasure Trail Route Builder — items highlighted on trails
-  trailHighlights            TrailHighlight[]
+  trailHighlights                 TrailHighlight[]
   // Feature #30: AI Item Valuation — comparable sales valuation
-  valuation                  ItemValuation?
+  valuation                       ItemValuation?
   // Feature #235: Charity Close + Tax Receipt PDF
-  donatedItems               DonatedItem[]
+  donatedItems                    DonatedItem[]
   // Feature #46: Treasure Typology Classifier — collector category classification
-  typology                   ItemTypology?
+  typology                        ItemTypology?
   // Feature #70 / #309: Consignment — consignorId now FKs Consignor model (migrated S533 from User pre-wire)
-  consignorId                String? // FK to Consignor model (TEAMS)
-  consignmentSplitPct        Decimal? // Legacy split pct field — superseded by Consignor.commissionRate
-  consignor                  Consignor?             @relation("ConsignorItems", fields: [consignorId], references: [id], onDelete: SetNull)
+  consignorId                     String? // FK to Consignor model (TEAMS)
+  consignmentSplitPct             Decimal? // Legacy split pct field — superseded by Consignor.commissionRate
+  consignor                       Consignor?              @relation("ConsignorItems", fields: [consignorId], references: [id], onDelete: SetNull)
   // Vendor Booth Payments (2026-07-07, ADR-015/016/017): attribution to a flea-market VendorBooth.
   // Sibling optional FK to consignorId — an item should never have both set (app-level guard in
   // itemController, not a DB CHECK constraint per ADR-015 Consequences).
-  vendorBoothId               String? // FK to VendorBooth model (TEAMS, flea market hubs)
-  vendorBooth                 VendorBooth?           @relation("VendorBoothItems", fields: [vendorBoothId], references: [id], onDelete: SetNull)
+  vendorBoothId                   String? // FK to VendorBooth model (TEAMS, flea market hubs)
+  vendorBooth                     VendorBooth?            @relation("VendorBoothItems", fields: [vendorBoothId], references: [id], onDelete: SetNull)
   // #310: Color-tagged Discount Rules (TEAMS)
-  tagColor                   String? // Hex or label e.g. "#EF4444" — ties to active DiscountRule
+  tagColor                        String? // Hex or label e.g. "#EF4444" — ties to active DiscountRule
   // #311: Multi-Location Inventory (TEAMS)
-  locationId                 String?
-  location                   Location?              @relation("LocationItems", fields: [locationId], references: [id], onDelete: SetNull)
+  locationId                      String?
+  location                        Location?               @relation("LocationItems", fields: [locationId], references: [id], onDelete: SetNull)
   // Feature #81: Persistent Inventory — items that recur across sales
-  persistentInventory        Boolean                @default(false) // Pre-wire: persistent inventory feature activation
-  isPersistent               Boolean                @default(false)
+  persistentInventory             Boolean                 @default(false) // Pre-wire: persistent inventory feature activation
+  isPersistent                    Boolean                 @default(false)
   // Feature #84: Master Item Library — canonical item definitions
-  masterItemLibraryId        String? // Pre-wire: FK to future MasterItemLibrary model
+  masterItemLibraryId             String? // Pre-wire: FK to future MasterItemLibrary model
   // Feature #136: QR Code Auto-Embedding in Photo Exports
-  qrEmbedEnabled             Boolean                @default(true) // Embed QR code linking to item in exported photos
+  qrEmbedEnabled                  Boolean                 @default(true) // Embed QR code linking to item in exported photos
   // Feature #103: Photo Retention — archive old photos, delete very old ones
-  archivedAt                 DateTime? // When photos were archived (90+ days after sale end)
-  deletedFromCloudinary      Boolean                @default(false) // Whether original photo was deleted from Cloudinary (365+ days)
+  archivedAt                      DateTime? // When photos were archived (90+ days after sale end)
+  deletedFromCloudinary           Boolean                 @default(false) // Whether original photo was deleted from Cloudinary (365+ days)
   // #112 Soft-Delete Archival + #121 Tiered Storage pre-wire
-  deletedAt                  DateTime?
-  storageArchive             Boolean                @default(false) // #121: Pre-wire for cold storage tier
+  deletedAt                       DateTime?
+  storageArchive                  Boolean                 @default(false) // #121: Pre-wire for cold storage tier
   // Feature #91: Auto-Markdown (Smart Clearance)
-  priceBeforeMarkdown        Float? // Original price before markdown applied
-  markdownApplied            Boolean                @default(false) // Whether auto-markdown has been applied
+  priceBeforeMarkdown             Float? // Original price before markdown applied
+  markdownApplied                 Boolean                 @default(false) // Whether auto-markdown has been applied
   // Feature #228: Settlement Hub — high-value item tracking + AI comp
-  isHighValue                Boolean                @default(false)
-  highValueThreshold         Decimal?
-  estimatedValue             Decimal?
-  aiSuggestedPrice           Decimal?
+  isHighValue                     Boolean                 @default(false)
+  highValueThreshold              Decimal?
+  estimatedValue                  Decimal?
+  aiSuggestedPrice                Decimal?
   // Feature #371: Auto High-Value Item Flagging
-  highValueSource            String?                @default("MANUAL") // "AUTO" | "MANUAL"
-  highValueFlaggedAt         DateTime?
-  isHighValueLocked          Boolean                @default(false) // Organizer locked decision, respect it
-  saleTransactions           SaleTransaction[]
+  highValueSource                 String?                 @default("MANUAL") // "AUTO" | "MANUAL"
+  highValueFlaggedAt              DateTime?
+  isHighValueLocked               Boolean                 @default(false) // Organizer locked decision, respect it
+  saleTransactions                SaleTransaction[]
   // Feature #244 Phase 2: eBay listing tracking
-  ebayListingId              String? // eBay listing ID after successful publish; used for Phase 3 sync
-  ebayOfferId                String? // eBay offer ID from Inventory API; used to withdraw listing when item sells on FindA.Sale
+  ebayListingId                   String? // eBay listing ID after successful publish; used for Phase 3 sync
+  ebayOfferId                     String? // eBay offer ID from Inventory API; used to withdraw listing when item sells on FindA.Sale
   // Feature #XXX: Shopify Cross-Listing
-  shopifyListing             ShopifyListing?
-  ebayCategoryId             String? // eBay numeric CategoryID captured on import from <PrimaryCategory><CategoryID> — used directly on push-back so 25021 (invalid condition for category) doesn't fire on leaf-only categories
-  ebayCategoryName           String? // eBay leaf category name (e.g. "Guitar Amplifiers") — user-friendly display name for eBay category selected
-  ebayNeedsReview            Boolean                @default(false) // Set true when all category suggestions fail 25005 — organizer must set category manually
-  listedOnEbayAt             DateTime? // Timestamp when item was pushed to eBay
+  shopifyListing                  ShopifyListing?
+  ebayCategoryId                  String? // eBay numeric CategoryID captured on import from <PrimaryCategory><CategoryID> — used directly on push-back so 25021 (invalid condition for category) doesn't fire on leaf-only categories
+  ebayCategoryName                String? // eBay leaf category name (e.g. "Guitar Amplifiers") — user-friendly display name for eBay category selected
+  ebayNeedsReview                 Boolean                 @default(false) // Set true when all category suggestions fail 25005 — organizer must set category manually
+  listedOnEbayAt                  DateTime? // Timestamp when item was pushed to eBay
   // Feature #244 Phase 3: Post-sale eBay push — shipping classification
-  ebayShippingClassification String                 @default("UNKNOWN") // SHIPPABLE | HEAVY_OVERSIZED | FRAGILE | UNKNOWN — auto-classified from category + tags
-  ebayShippingOverride       String? // SHIPPABLE | LOCAL_PICKUP_ONLY | DONT_LIST — organizer override (null = use classification)
+  ebayShippingClassification      String                  @default("UNKNOWN") // SHIPPABLE | HEAVY_OVERSIZED | FRAGILE | UNKNOWN — auto-classified from category + tags
+  ebayShippingOverride            String? // SHIPPABLE | LOCAL_PICKUP_ONLY | DONT_LIST — organizer override (null = use classification)
   ebayFulfillmentPolicyOverrideId String? // Organizer-picked eBay fulfillment policy for THIS item; beats org-default + cascade. null = Auto.
   // D-XP-003: Organizer-funded item discounts
-  organizerDiscountXp        Int?                   @default(0) // XP spent to create discount (0 = no discount)
-  organizerDiscountAmount    Decimal?               @db.Decimal(10, 2) // Dollar amount of discount ($2, $4, or $5 max)
+  organizerDiscountXp             Int?                    @default(0) // XP spent to create discount (0 = no discount)
+  organizerDiscountAmount         Decimal?                @db.Decimal(10, 2) // Dollar amount of discount ($2, $4, or $5 max)
   // Phase 2b: Legendary Early Access — Explorer's Guild rank perks
-  isLegendary                Boolean                @default(false) // Organizer marks item as Legendary (exclusive early access)
-  legendaryVisibleAt         DateTime? // When item becomes visible to all ranks (Sage+ see 4-6 hours earlier)
-  legendaryPublishedAt       DateTime? // When organizer published this item as Legendary (audit trail)
+  isLegendary                     Boolean                 @default(false) // Organizer marks item as Legendary (exclusive early access)
+  legendaryVisibleAt              DateTime? // When item becomes visible to all ranks (Sage+ see 4-6 hours earlier)
+  legendaryPublishedAt            DateTime? // When organizer published this item as Legendary (audit trail)
   // ADR eBay Parity Phase B: Package dimensions for calculated shipping
-  packageWeightOz            Int?
-  packageLengthIn            Decimal?               @db.Decimal(6, 2)
-  packageWidthIn             Decimal?               @db.Decimal(6, 2)
-  packageHeightIn            Decimal?               @db.Decimal(6, 2)
-  packageType                String? // BOX | LETTER | MAILING_TUBE | PACKAGE_THICK_ENVELOPE
+  packageWeightOz                 Int?
+  packageLengthIn                 Decimal?                @db.Decimal(6, 2)
+  packageWidthIn                  Decimal?                @db.Decimal(6, 2)
+  packageHeightIn                 Decimal?                @db.Decimal(6, 2)
+  packageType                     String? // BOX | LETTER | MAILING_TUBE | PACKAGE_THICK_ENVELOPE
   // eBay calculated-shipping package estimation (Phase: calculated shipping + net engine)
-  packageEstimateSource       String? // SEED | CATEGORY | KEYWORD | AI | ORGANIZER — provenance of package estimate
-  packageEstimateConfidence   Decimal?               @db.Decimal(3, 2) // 0.00–1.00 confidence of the package estimate
-  packageConfirmedByOrganizer Boolean                @default(false) // True once organizer reviews/confirms package details — never overwritten by estimates
+  packageEstimateSource           String? // SEED | CATEGORY | KEYWORD | AI | ORGANIZER — provenance of package estimate
+  packageEstimateConfidence       Decimal?                @db.Decimal(3, 2) // 0.00–1.00 confidence of the package estimate
+  packageConfirmedByOrganizer     Boolean                 @default(false) // True once organizer reviews/confirms package details — never overwritten by estimates
   // AI-estimated package profile (from cloudAI tagging pass — not organizer-confirmed)
   // Used by estimatePackageProfile step 4 when no PackageProfile keyword/category match exists.
-  aiPackageWeightOz           Int?                                        // packed weight estimate in ounces from cloudAI
-  aiPackageDimsJson           Json?                                       // { length, width, height } dims in inches from cloudAI
-  aiPackageConfidence         Decimal?               @db.Decimal(3, 2)   // 0.00–1.00; only written when >= 0.5 (cloudAIService gate)
+  aiPackageWeightOz               Int? // packed weight estimate in ounces from cloudAI
+  aiPackageDimsJson               Json? // { length, width, height } dims in inches from cloudAI
+  aiPackageConfidence             Decimal?                @db.Decimal(3, 2) // 0.00–1.00; only written when >= 0.5 (cloudAIService gate)
   // ADR eBay Parity Phase B: Product identifiers for catalog match
-  upc                        String?
-  ean                        String?
-  isbn                       String?
-  mpn                        String?
-  brand                      String?
-  ebayEpid                   String?
+  upc                             String?
+  ean                             String?
+  isbn                            String?
+  mpn                             String?
+  brand                           String?
+  ebayEpid                        String?
   // ADR grounded-identification-production-2026-07-02: winning grounded product identity
-  groundedIdentity           String?  // e.g. "Tupperware CoolSpot Trivet — trivet"
-  groundedConfidence         Float?   // 0.0–1.0 confidence of the gated grounded winner
-  groundedSource             String?  // "text-grounded" | "visual-consensus" | "visual-single"
+  groundedIdentity                String? // e.g. "Tupperware CoolSpot Trivet — trivet"
+  groundedConfidence              Float? // 0.0–1.0 confidence of the gated grounded winner
+  groundedSource                  String? // "text-grounded" | "visual-consensus" | "visual-single"
   // ADR Catalog Enrichment (2026-06-14): low-confidence catalog suggestions for one-click accept in edit UI
-  catalogSuggestions         Json?
+  catalogSuggestions              Json?
   // ADR eBay Parity Phase B: Rich condition
-  conditionNotes             String?
+  conditionNotes                  String?
   // ADR eBay Parity Phase B: Pricing flexibility
-  allowBestOffer             Boolean                @default(false)
-  bestOfferAutoAcceptAmt     Decimal?               @db.Decimal(10, 2)
-  bestOfferMinimumAmt        Decimal?               @db.Decimal(10, 2)
+  allowBestOffer                  Boolean                 @default(false)
+  bestOfferAutoAcceptAmt          Decimal?                @db.Decimal(10, 2)
+  bestOfferMinimumAmt             Decimal?                @db.Decimal(10, 2)
   // ADR eBay Parity Phase B: Listing extras
-  ebaySecondaryCategoryId    String?
-  ebaySubtitle               String?
+  ebaySecondaryCategoryId         String?
+  ebaySubtitle                    String?
   // ADR eBay Shipping Drift Detection: record applied policy/amount on the live offer
-  ebayFulfillmentPolicyId    String? // eBay fulfillment policy currently applied to the live offer
-  ebayShippingAmountCents    Int? // buyer shipping amount (cents) of the applied policy, for drift detection
-  ebayShippingRatedAt        DateTime? // when the applied shipping policy/amount was last computed
-  ebayRateVersion            String? // carrier-rate-table version string in effect when last rated
+  ebayFulfillmentPolicyId         String? // eBay fulfillment policy currently applied to the live offer
+  ebayShippingAmountCents         Int? // buyer shipping amount (cents) of the applied policy, for drift detection
+  ebayShippingRatedAt             DateTime? // when the applied shipping policy/amount was last computed
+  ebayRateVersion                 String? // carrier-rate-table version string in effect when last rated
   // Feature: Graceful Tier Degradation — grace lock status
-  graceLockedAt              DateTime? // When item was locked due to tier downgrade
-  graceLockedReason          String? // Reason for grace lock (e.g., "items_over_limit")
+  graceLockedAt                   DateTime? // When item was locked due to tier downgrade
+  graceLockedReason               String? // Reason for grace lock (e.g., "items_over_limit")
   // ADR-069 Phase 1: Burst Clustering
-  quantity                   Int?                   @default(1) // Items per cluster (e.g. "set of 8")
-  isSet                      Boolean                @default(false) // Haiku clustered this as a set
-  setRole                    String? // "primary" | "member" | null for solo items
-  clusterConfidence          Float? // 0.0–1.0 from Haiku clustering pass
+  quantity                        Int?                    @default(1) // Items per cluster (e.g. "set of 8")
+  isSet                           Boolean                 @default(false) // Haiku clustered this as a set
+  setRole                         String? // "primary" | "member" | null for solo items
+  clusterConfidence               Float? // 0.0–1.0 from Haiku clustering pass
   // ADR-069 Phase 2: eBay comp lookup cache
-  compLookup                 ItemCompLookup?
+  compLookup                      ItemCompLookup?
   // Feature #363: Auction Lot Number — identifier for auction items
-  lotNumber                  String?
+  lotNumber                       String?
   // ADR-073: scraped item dedup (restored — field already in DB via 20260501020000_scraper_phase1)
-  sourceItemId               String? // Source platform's item ID for dedup
+  sourceItemId                    String? // Source platform's item ID for dedup
   // Content Moderation: NSFW detection status
-  moderationStatus           String                 @default("APPROVED") // APPROVED | REJECTED
+  moderationStatus                String                  @default("APPROVED") // APPROVED | REJECTED
   // S696: what organizer paid for this item (for Flip Tracker ROI)
-  costBasis                  Float?
+  costBasis                       Float?
   // S696: room label for floor map routing (e.g., "Living Room", "Garage")
-  roomTag                    String?
+  roomTag                         String?
   // S696: ItemBundle relation
-  bundleId                   String?
-  bundle                     ItemBundle?            @relation("BundleItems", fields: [bundleId], references: [id])
+  bundleId                        String?
+  bundle                          ItemBundle?             @relation("BundleItems", fields: [bundleId], references: [id])
   // Feature: Facebook Export Tracking — stamped when item is included in FB Marketplace XLSX/JSON export
-  ebayQueuedAt               DateTime? // When item was added to eBay listing queue (null = not queued)
-  ebayListedAt               DateTime? // When item was first listed on eBay (set on first push, never updated on relist)
-  fbExportedAt               DateTime?
+  ebayQueuedAt                    DateTime? // When item was added to eBay listing queue (null = not queued)
+  ebayListedAt                    DateTime? // When item was first listed on eBay (set on first push, never updated on relist)
+  fbExportedAt                    DateTime?
   // ADR-085 Track B (2026-07-16): general, cross-channel stock pool. Distinct from
   // `quantity` above (photos bundled into one lot) AND from the eBay-specific
   // ebayQuantityAvailable/ebayQuantitySold pair below (that pair is an idempotent
   // ledger keyed on eBay order/line-item IDs, not a general counter). stockSold is
   // SERVER-OWNED ONLY -- never add to any client-facing update whitelist; written
   // exclusively by itemStockService.sellItemUnits().
-  stockTotal                 Int?                   @default(1) // Total independently-sellable units across ALL channels. null/1 = single-unit (today's behavior, unchanged). Organizer-editable.
-  stockSold                  Int                    @default(0) // Units sold so far across ALL channels. SERVER-OWNED -- see comment above.
+  stockTotal                      Int?                    @default(1) // Total independently-sellable units across ALL channels. null/1 = single-unit (today's behavior, unchanged). Organizer-editable.
+  stockSold                       Int                     @default(0) // Units sold so far across ALL channels. SERVER-OWNED -- see comment above.
   // ADR ebay-multiquantity (2026-06-16): track eBay multi-quantity listing units.
   // NOTE: distinct from `quantity` above (which means "set of N sold as one lot").
-  ebayQuantityAvailable      Int? // total units on the eBay listing (null/1 = single-unit)
-  ebayQuantitySold           Int                    @default(0) // units sold via eBay, projected from EbaySoldEvent
-  ebaySoldEvents             EbaySoldEvent[]
+  ebayQuantityAvailable           Int? // total units on the eBay listing (null/1 = single-unit)
+  ebayQuantitySold                Int                     @default(0) // units sold via eBay, projected from EbaySoldEvent
+  ebaySoldEvents                  EbaySoldEvent[]
   // ADR-083: Marketplace Poster jobs (post/remove) for this item
-  marketplaceJobs            MarketplaceListingJob[]
+  marketplaceJobs                 MarketplaceListingJob[]
   // ADR-086: rounded price actually pushed to the live Facebook post at last successful
   // list/sync. Compared against Math.round(price) to detect drift for the extension's
   // pending-updates poll. Null = never listed, or listed before this field existed (falls
   // back to "unknown, needs first sync").
-  marketplaceListedPrice     Int?
-  createdAt                  DateTime               @default(now())
-  updatedAt                  DateTime               @updatedAt
+  marketplaceListedPrice          Int?
+  createdAt                       DateTime                @default(now())
+  updatedAt                       DateTime                @updatedAt
 
   // @@unique([saleId, sku]) -- Feature #300: removed — NULLs defeat compound unique in Postgres
   @@index([draftStatus])
@@ -1344,9 +1344,9 @@ model EbaySoldEvent {
   id             String   @id @default(uuid())
   itemId         String
   item           Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
-  ebayListingId  String   // legacyItemId at time of sale
-  ebayOrderId    String   // eBay order id
-  ebayLineItemId String   // eBay line item id within the order
+  ebayListingId  String // legacyItemId at time of sale
+  ebayOrderId    String // eBay order id
+  ebayLineItemId String // eBay line item id within the order
   quantitySold   Int      @default(1) // units in this line item
   soldAt         DateTime @default(now())
   createdAt      DateTime @default(now())
@@ -1448,38 +1448,38 @@ model MaxBidByUser {
 }
 
 model Purchase {
-  id                    String            @id @default(cuid())
-  amount                Float
-  platformFeeAmount     Float?
-  status                String            @default("PENDING") // PENDING, PAID, REFUNDED, FAILED, DISPUTED
-  userId                String? // Nullable: POS walk-in buyers have no FindA.Sale account
-  user                  User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
-  itemId                String?
-  item                  Item?             @relation(fields: [itemId], references: [id], onDelete: SetNull)
-  saleId                String?
-  sale                  Sale?             @relation(fields: [saleId], references: [id], onDelete: SetNull)
-  stripePaymentIntentId String? // Not unique — one PI may have multiple Purchase rows (multi-item cart)
-  affiliateLinkId       String?
-  affiliateLink         AffiliateLink?    @relation(fields: [affiliateLinkId], references: [id], onDelete: SetNull)
+  id                     String                @id @default(cuid())
+  amount                 Float
+  platformFeeAmount      Float?
+  status                 String                @default("PENDING") // PENDING, PAID, REFUNDED, FAILED, DISPUTED
+  userId                 String? // Nullable: POS walk-in buyers have no FindA.Sale account
+  user                   User?                 @relation(fields: [userId], references: [id], onDelete: SetNull)
+  itemId                 String?
+  item                   Item?                 @relation(fields: [itemId], references: [id], onDelete: SetNull)
+  saleId                 String?
+  sale                   Sale?                 @relation(fields: [saleId], references: [id], onDelete: SetNull)
+  stripePaymentIntentId  String? // Not unique — one PI may have multiple Purchase rows (multi-item cart)
+  affiliateLinkId        String?
+  affiliateLink          AffiliateLink?        @relation(fields: [affiliateLinkId], references: [id], onDelete: SetNull)
   // Vendor Booth Payments (2026-07-07): roaming multi-booth cart attribution.
   boothCartTransactionId String?
   boothCartTransaction   BoothCartTransaction? @relation(fields: [boothCartTransactionId], references: [id], onDelete: SetNull)
-  source                String            @default("ONLINE") // ONLINE | POS
-  buyerEmail            String? // Optional email for receipt delivery — POS walk-ins AND online guest checkout (no FindA.Sale account)
-  guestName             String? // Online guest checkout only: buyer-entered name (no FindA.Sale account, so no User.name to reference)
-  buyerCardFingerprint  String? // Stripe card fingerprint captured post-payment (guest + authenticated) — powers cross-purchase collusion detection that does not depend on a User relation (S1072 Finding #4 guest-checkout gap)
-  isTestTransaction     Boolean           @default(false)
+  source                 String                @default("ONLINE") // ONLINE | POS
+  buyerEmail             String? // Optional email for receipt delivery — POS walk-ins AND online guest checkout (no FindA.Sale account)
+  guestName              String? // Online guest checkout only: buyer-entered name (no FindA.Sale account, so no User.name to reference)
+  buyerCardFingerprint   String? // Stripe card fingerprint captured post-payment (guest + authenticated) — powers cross-purchase collusion detection that does not depend on a User relation (S1072 Finding #4 guest-checkout gap)
+  isTestTransaction      Boolean               @default(false)
   // #561 offline POS cash-checkout queuing: client-generated UUID set at queue-time.
   // NOT @unique — one offline cart submission legitimately produces multiple Purchase
   // rows (one per item) sharing the SAME clientTransactionId. Dedup via findMany, not a constraint.
-  clientTransactionId   String?
+  clientTransactionId    String?
   // Outward Email Automations: shopper review-ask idempotency guard
-  reviewAskSentAt       DateTime? // When the post-purchase "rate the organizer" email was sent
-  digitalReceipt        DigitalReceipt?
-  returnRequests        ReturnRequest[]
-  checkoutEvidence      CheckoutEvidence? // Platform Safety #98: Chargeback defense documentation
-  createdAt             DateTime          @default(now())
-  updatedAt             DateTime          @updatedAt
+  reviewAskSentAt        DateTime? // When the post-purchase "rate the organizer" email was sent
+  digitalReceipt         DigitalReceipt?
+  returnRequests         ReturnRequest[]
+  checkoutEvidence       CheckoutEvidence? // Platform Safety #98: Chargeback defense documentation
+  createdAt              DateTime              @default(now())
+  updatedAt              DateTime              @updatedAt
 
   // Partial UNIQUE index (WHERE "stripePaymentIntentId" IS NOT NULL) is created via raw
   // SQL migration 20260707120000_purchase_pi_partial_unique. Prisma @@unique cannot express
@@ -3033,27 +3033,27 @@ model FraudSignal {
 
 // Feature #40: Sale Hubs — groups nearby sales into discoverable hubs
 model SaleHub {
-  id          String              @id @default(cuid())
-  name        String
-  slug        String              @unique
-  description String?
-  organizerId String
-  lat         Float
-  lng         Float
-  radiusKm    Float               @default(5.0)
-  isActive    Boolean             @default(true)
+  id                String                       @id @default(cuid())
+  name              String
+  slug              String                       @unique
+  description       String?
+  organizerId       String
+  lat               Float
+  lng               Float
+  radiusKm          Float                        @default(5.0)
+  isActive          Boolean                      @default(true)
   // Feature #44: Neighborhood Sale Day — coordinated event date
-  saleDate    DateTime?
-  eventName   String?
-  createdAt   DateTime            @default(now())
-  updatedAt   DateTime            @updatedAt
-  organizer   Organizer           @relation("OrganizerHubs", fields: [organizerId], references: [id], onDelete: Restrict)
-  memberships SaleHubMembership[]
+  saleDate          DateTime?
+  eventName         String?
+  createdAt         DateTime                     @default(now())
+  updatedAt         DateTime                     @updatedAt
+  organizer         Organizer                    @relation("OrganizerHubs", fields: [organizerId], references: [id], onDelete: Restrict)
+  memberships       SaleHubMembership[]
   // Vendor Booth Payments (2026-07-07, ADR-015/016/017): flea market vendor booths + roaming
   // multi-booth checkout + settlement, scoped to this hub.
   vendorBooths      VendorBooth[]                @relation("VendorBooths")
-  cartTransactions  BoothCartTransaction[]        @relation("HubCartTransactions")
-  settlementBatches VendorBoothSettlementBatch[]  @relation("HubSettlementBatches")
+  cartTransactions  BoothCartTransaction[]       @relation("HubCartTransactions")
+  settlementBatches VendorBoothSettlementBatch[] @relation("HubSettlementBatches")
 
   @@index([organizerId])
   @@index([lat, lng])
@@ -4217,20 +4217,20 @@ model WorkspaceRoleTemplate {
 
 // TeamMember — organizer team member linked to a WorkspaceMember
 model TeamMember {
-  id                 String                      @id @default(cuid())
-  workspaceMemberId  String                      @unique
-  workspaceMember    WorkspaceMember             @relation(fields: [workspaceMemberId], references: [id], onDelete: Cascade)
-  role               String                      @default("MEMBER") // "MANAGER", "MEMBER", "VIEWER"
-  department         String? // "Sales", "Operations", "Photography", etc.
-  primaryPhone       String?
-  availability       TeamMemberAvailability?
-  performances       TeamMemberPerformance[]
-  leaderboardEntries WorkspaceLeaderboardEntry[]
-  saleAssignments    SaleAssignment[]            @relation("TeamMemberSaleAssignments")
+  id                  String                      @id @default(cuid())
+  workspaceMemberId   String                      @unique
+  workspaceMember     WorkspaceMember             @relation(fields: [workspaceMemberId], references: [id], onDelete: Cascade)
+  role                String                      @default("MEMBER") // "MANAGER", "MEMBER", "VIEWER"
+  department          String? // "Sales", "Operations", "Photography", etc.
+  primaryPhone        String?
+  availability        TeamMemberAvailability?
+  performances        TeamMemberPerformance[]
+  leaderboardEntries  WorkspaceLeaderboardEntry[]
+  saleAssignments     SaleAssignment[]            @relation("TeamMemberSaleAssignments")
   // Vendor Booth Payments (2026-07-07): cashier attribution for booth cart transactions
   cashierTransactions BoothCartTransaction[]      @relation("CashierTransactions")
-  createdAt          DateTime                    @default(now())
-  updatedAt          DateTime                    @updatedAt
+  createdAt           DateTime                    @default(now())
+  updatedAt           DateTime                    @updatedAt
 
   @@index([workspaceMemberId])
 }
@@ -4548,24 +4548,24 @@ model PrepTask {
 // Consignors are third-parties who drop items at an organizer's sale and receive
 // a commission split. Portal URL is token-gated (no login required).
 model Consignor {
-  id              String             @id @default(cuid())
-  workspaceId     String
-  workspace       OrganizerWorkspace @relation("WorkspaceConsignors", fields: [workspaceId], references: [id], onDelete: Cascade)
-  name            String
-  email           String?
-  phone           String?
-  commissionRate  Decimal            @db.Decimal(5, 2) // e.g. 70.00 = organizer pays consignor 70%
-  notes           String?            @db.Text
-  portalToken     String             @unique @default(cuid()) // capability URL token — permanent for MVP
-  stripeAccountId String? // Stripe Connect account ID for consignor payouts
-  stripeOnboarded Boolean            @default(false) // Whether consignor has completed Stripe onboarding
+  id                String             @id @default(cuid())
+  workspaceId       String
+  workspace         OrganizerWorkspace @relation("WorkspaceConsignors", fields: [workspaceId], references: [id], onDelete: Cascade)
+  name              String
+  email             String?
+  phone             String?
+  commissionRate    Decimal            @db.Decimal(5, 2) // e.g. 70.00 = organizer pays consignor 70%
+  notes             String?            @db.Text
+  portalToken       String             @unique @default(cuid()) // capability URL token — permanent for MVP
+  stripeAccountId   String? // Stripe Connect account ID for consignor payouts
+  stripeOnboarded   Boolean            @default(false) // Whether consignor has completed Stripe onboarding
   // ADR-020: mirrors VendorBooth.stripeAccountType — existing rows default to 'express'
   // (the only type ever created before this migration); new onboarding sets 'standard'.
-  stripeAccountType String?          @default("express") // 'express' | 'standard'
-  items           Item[]             @relation("ConsignorItems")
-  payouts         ConsignorPayout[]
-  createdAt       DateTime           @default(now())
-  updatedAt       DateTime           @updatedAt
+  stripeAccountType String?            @default("express") // 'express' | 'standard'
+  items             Item[]             @relation("ConsignorItems")
+  payouts           ConsignorPayout[]
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
 
   @@index([workspaceId])
   @@index([portalToken])
@@ -4981,9 +4981,9 @@ model EmailSuppression {
   resendEventId   String?
   resendTimestamp DateTime?
 
-  bounceCategory   String?   // DEAD_MAILBOX | NO_MX | POLICY_BLOCK | TRANSIENT | COMPLAINT | UNKNOWN
-  bounceStatusCode String?   // SMTP enhanced status, e.g. "5.7.1"
-  diagnosticCode   String?   // raw remote-MTA / Google diagnostic text
+  bounceCategory   String? // DEAD_MAILBOX | NO_MX | POLICY_BLOCK | TRANSIENT | COMPLAINT | UNKNOWN
+  bounceStatusCode String? // SMTP enhanced status, e.g. "5.7.1"
+  diagnosticCode   String? // raw remote-MTA / Google diagnostic text
   retryAfter       DateTime? // temp-suppression cutoff for recoverable categories
   classifiedAt     DateTime?
 
@@ -5137,16 +5137,16 @@ model PackageProfile {
 // eBay final-value-fee rates by category (for net-proceeds engine). One null-category
 // default row covers everything; category overrides (media/books) take precedence.
 model EbayCategoryFee {
-  id              String   @id @default(cuid())
-  ebayCategoryId  String?  @unique // null = global default row
-  categoryLabel   String? // human label for admin clarity
-  fvfPercent      Decimal  @db.Decimal(5, 4) // e.g. 0.1360 = 13.60% final value fee
-  perOrderFeeCents Int     @default(40) // eBay per-order fixed fee (cents)
-  source          String   @default("MANUAL") // MANUAL | PUBLISHED_RATE | SETTLED
-  effectiveFrom   DateTime @default(now())
-  notes           String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id               String   @id @default(cuid())
+  ebayCategoryId   String?  @unique // null = global default row
+  categoryLabel    String? // human label for admin clarity
+  fvfPercent       Decimal  @db.Decimal(5, 4) // e.g. 0.1360 = 13.60% final value fee
+  perOrderFeeCents Int      @default(40) // eBay per-order fixed fee (cents)
+  source           String   @default("MANUAL") // MANUAL | PUBLISHED_RATE | SETTLED
+  effectiveFrom    DateTime @default(now())
+  notes            String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 }
 
 // ============================================================================
@@ -5161,8 +5161,8 @@ model EbayCategoryFee {
 enum MarketplacePosterAccountStatus {
   ACTIVE
   COOLDOWN // resting on a volume/pacing timer
-  FLAGGED  // hit a checkpoint/challenge, needs manual review before reuse
-  BANNED   // confirmed dead, excluded from rotation permanently
+  FLAGGED // hit a checkpoint/challenge, needs manual review before reuse
+  BANNED // confirmed dead, excluded from rotation permanently
 }
 
 /// A FindA.Sale-owned, dedicated Facebook account used only for Marketplace
@@ -5171,18 +5171,18 @@ enum MarketplacePosterAccountStatus {
 /// Facebook presence). sessionCookie is the encrypted Playwright storageState
 /// envelope, written/read only through tokenCrypto.ts (same as SocialAccount).
 model MarketplacePosterAccount {
-  id                String                          @id @default(cuid())
+  id                String                         @id @default(cuid())
   label             String // internal name, e.g. "fas-poster-1" -- NEVER an organizer account
   sessionCookie     String // enc:v1:... encrypted Playwright storageState JSON via tokenCrypto.ts
-  status            MarketplacePosterAccountStatus  @default(ACTIVE)
-  dailyPostCount    Int                             @default(0)
-  dailyCountResetAt DateTime                        @default(now())
+  status            MarketplacePosterAccountStatus @default(ACTIVE)
+  dailyPostCount    Int                            @default(0)
+  dailyCountResetAt DateTime                       @default(now())
   lastUsedAt        DateTime?
   lastErrorAt       DateTime?
   lastErrorMessage  String?
   jobs              MarketplaceListingJob[]
-  createdAt         DateTime                        @default(now())
-  updatedAt         DateTime                        @updatedAt
+  createdAt         DateTime                       @default(now())
+  updatedAt         DateTime                       @updatedAt
 
   @@index([status])
 }
@@ -5205,20 +5205,20 @@ enum MarketplaceJobStatus {
 /// same job-queue pattern as SocialPost). remoteListingId is required to later
 /// remove a listing -- captured from the Marketplace UI on successful POST.
 model MarketplaceListingJob {
-  id               String                     @id @default(cuid())
-  item             Item                       @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  id               String                    @id @default(cuid())
+  item             Item                      @relation(fields: [itemId], references: [id], onDelete: Cascade)
   itemId           String
   action           MarketplaceJobAction
-  status           MarketplaceJobStatus       @default(QUEUED)
-  account          MarketplacePosterAccount?  @relation(fields: [accountId], references: [id])
+  status           MarketplaceJobStatus      @default(QUEUED)
+  account          MarketplacePosterAccount? @relation(fields: [accountId], references: [id])
   accountId        String?
   remoteListingId  String? // Marketplace's own listing url/id -- required to remove later
-  attemptCount     Int                        @default(0)
+  attemptCount     Int                       @default(0)
   lastAttemptAt    DateTime?
   lastErrorMessage String?
-  scheduledFor     DateTime                   @default(now())
-  createdAt        DateTime                   @default(now())
-  updatedAt        DateTime                   @updatedAt
+  scheduledFor     DateTime                  @default(now())
+  createdAt        DateTime                  @default(now())
+  updatedAt        DateTime                  @updatedAt
 
   @@index([status, scheduledFor])
   @@index([itemId])
@@ -5239,12 +5239,12 @@ enum SocialPlatform {
 }
 
 enum SocialPostStatus {
-  DRAFT        // staged from an APPROVED markdown item, not yet due
-  SCHEDULED    // due window reached, queued for this run
-  PUBLISHING   // in-flight (guards against double-send)
-  PUBLISHED    // platform accepted, remote id stored
-  FAILED       // platform rejected after retries exhausted
-  SKIPPED      // e.g. rate-limit window hit; will retry next run
+  DRAFT // staged from an APPROVED markdown item, not yet due
+  SCHEDULED // due window reached, queued for this run
+  PUBLISHING // in-flight (guards against double-send)
+  PUBLISHED // platform accepted, remote id stored
+  FAILED // platform rejected after retries exhausted
+  SKIPPED // e.g. rate-limit window hit; will retry next run
 }
 
 /// One connected brand account per platform. FindA.Sale-owned only (not per-organizer),
@@ -5365,29 +5365,29 @@ enum VideoPurpose {
 /// sale-triggered videos (SALE_LIVE / SALE_ENDING); null for GUIDE_LIBRARY / MANUAL
 /// videos not tied to a specific sale (guideTopic used instead).
 model VideoJob {
-  id          String            @id @default(cuid())
-  trigger     VideoTriggerType
-  purpose     VideoPurpose
-  saleId      String?
-  sale        Sale?             @relation(fields: [saleId], references: [id])
-  guideTopic  String?
+  id         String           @id @default(cuid())
+  trigger    VideoTriggerType
+  purpose    VideoPurpose
+  saleId     String?
+  sale       Sale?            @relation(fields: [saleId], references: [id])
+  guideTopic String?
 
-  status      VideoJobStatus    @default(QUEUED)
+  status VideoJobStatus @default(QUEUED)
 
-  sourceAssetUrls String[]
-  scriptText      String?       @db.Text
-  voiceoverUrl    String?
-  rawVideoUrl     String?
+  sourceAssetUrls   String[]
+  scriptText        String?  @db.Text
+  voiceoverUrl      String?
+  rawVideoUrl       String?
   captionedVideoUrl String?
-  thumbnailUrl    String?
+  thumbnailUrl      String?
 
   stagedFile  String?
   stagedHash  String?
   reviewNotes String?
 
-  costCents   Int               @default(0)
+  costCents Int @default(0)
 
-  posts       SocialPost[]
+  posts SocialPost[]
 
   // ADR-080 §4 — auto-classify footage pipeline. Per ADR-080's authoritative
   // instruction ("Extend VideoJob with one nullable back-relation only"), the
@@ -5395,8 +5395,8 @@ model VideoJob {
   // back-relation. No new scalar column is added to the VideoJob table.
   footageBatch FootageBatch?
 
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([status])
   @@index([trigger])
@@ -5413,60 +5413,60 @@ model VideoJob {
 // ============================================================================
 
 enum FootageBatchStatus {
-  OPEN            // accepting clips; quiet-seal timer running
-  SEALED          // no more clips accepted; VideoJob enqueued
-  ANALYZING       // per-clip ClipAnalysis in progress
-  ASSEMBLING      // template selected, Revideo render running
+  OPEN // accepting clips; quiet-seal timer running
+  SEALED // no more clips accepted; VideoJob enqueued
+  ANALYZING // per-clip ClipAnalysis in progress
+  ASSEMBLING // template selected, Revideo render running
   AWAITING_REVIEW // staged markdown written; STATUS: AWAITING EDIT
-  NEEDS_INPUT     // ONE targeted question staged; blocked on human answer
-  APPROVED        // human flipped staged file to APPROVED
-  REJECTED        // human rejected; full stop, no retry
-  PUBLISHED       // downstream SocialPost fan-out completed
-  FAILED          // unrecoverable pipeline error
-  ARCHIVED        // retention window elapsed; raw assets deleted/archived
+  NEEDS_INPUT // ONE targeted question staged; blocked on human answer
+  APPROVED // human flipped staged file to APPROVED
+  REJECTED // human rejected; full stop, no retry
+  PUBLISHED // downstream SocialPost fan-out completed
+  FAILED // unrecoverable pipeline error
+  ARCHIVED // retention window elapsed; raw assets deleted/archived
 }
 
 enum FootageAssetStatus {
-  UPLOADED        // present in R2 incoming/, row created by queue consumer
-  ANALYZED        // ClipAnalysis attached
-  USED            // baked into an assembled cut
-  UNUSABLE        // failed analysis / corrupt / no signal (kept, never silently dropped)
+  UPLOADED // present in R2 incoming/, row created by queue consumer
+  ANALYZED // ClipAnalysis attached
+  USED // baked into an assembled cut
+  UNUSABLE // failed analysis / corrupt / no signal (kept, never silently dropped)
 }
 
-enum FootageRole {   // canonical clip roles (mirrored in the ClipAnalysis TS union, ADR-080 §5)
+enum FootageRole {
   HOOK
   FIND
   PRICE_REVEAL
   BEFORE
   AFTER
-  MAP              // map screen-record beat
-  STYLING          // build / time-lapse
+  MAP // map screen-record beat
+  STYLING // build / time-lapse
   CTA
-  UNKNOWN          // classifier not confident enough (ADR-080 §6)
+  UNKNOWN // classifier not confident enough (ADR-080 §6)
 }
 
 /// One raw clip uploaded to R2. Never deleted before its batch is APPROVED +
 /// past retention (ADR-080 §7).
 model FootageAsset {
-  id             String             @id @default(cuid())
-  batchId        String
-  batch          FootageBatch       @relation(fields: [batchId], references: [id], onDelete: Cascade)
-  r2Key          String             @unique         // findasale-raw-footage/incoming/<clip> — the delete handle
-  mediaType      String             @default("video") // 'video' | 'image', inferred (r2Client.inferMediaTypeFromKey)
-  sizeBytes      Int?
-  durationMs     Int?                               // ffprobe-measured on first analysis
-  uploadedAt     DateTime           @default(now()) // from R2 event; drives batch correlation window
-  status         FootageAssetStatus @default(UPLOADED)
+  id         String             @id @default(cuid())
+  batchId    String
+  batch      FootageBatch       @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  r2Key      String             @unique // findasale-raw-footage/incoming/<clip> — the delete handle
+  mediaType  String             @default("video") // 'video' | 'image', inferred (r2Client.inferMediaTypeFromKey)
+  sizeBytes  Int?
+  durationMs Int? // ffprobe-measured on first analysis
+  uploadedAt DateTime           @default(now()) // from R2 event; drives batch correlation window
+  status     FootageAssetStatus @default(UPLOADED)
 
   // ClipAnalysis (ADR-080 §5) persisted as typed columns for query + a JSON blob for the full contract
-  role           FootageRole        @default(UNKNOWN)
-  roleConfidence Float?                             // 0.0-1.0 (ADR-080 §6 thresholds)
-  ocrCaptions    String[]                           // raw YouCut on-screen caption lines, in time order
-  transcript     String?            @db.Text        // Whisper VO text
-  analysisJson   Json?                              // full ClipAnalysis contract (facts, ordering hints, per-signal confidence)
+  role           FootageRole @default(UNKNOWN)
+  roleConfidence Float? // 0.0-1.0 (ADR-080 §6 thresholds)
+  ocrCaptions    String[] // raw YouCut on-screen caption lines, in time order
+  transcript     String?     @db.Text // Whisper VO text
+  analysisJson   Json? // full ClipAnalysis contract (facts, ordering hints, per-signal confidence)
 
-  createdAt      DateTime           @default(now())
-  updatedAt      DateTime           @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([batchId])
   @@index([status])
@@ -5475,32 +5475,32 @@ model FootageAsset {
 /// A "shoot" — a debounce-correlated group of clips that becomes one finished
 /// video (ADR-080 §3 batching, §4 model).
 model FootageBatch {
-  id                 String             @id @default(cuid())
-  organizerId        String?                             // correlation key; null = FindA.Sale house account
-  status             FootageBatchStatus @default(OPEN)
+  id          String             @id @default(cuid())
+  organizerId String? // correlation key; null = FindA.Sale house account
+  status      FootageBatchStatus @default(OPEN)
 
   // Format inference result (ADR-080 §5.4 / §6)
-  templateId         String?                             // chosen Template.id (e.g. "season-B-resale-route")
-  templateConfidence Float?                              // 0.0-1.0 format-inference confidence
+  templateId         String? // chosen Template.id (e.g. "season-B-resale-route")
+  templateConfidence Float? // 0.0-1.0 format-inference confidence
 
   // The single targeted question when NEEDS_INPUT (ADR-080 §6). Never more than one.
-  openQuestion       String?            @db.Text
-  questionField      String?                             // machine key of what the answer resolves, e.g. "assetId:clip3.role"
+  openQuestion  String? @db.Text
+  questionField String? // machine key of what the answer resolves, e.g. "assetId:clip3.role"
 
   // Lifecycle timestamps for retention (ADR-080 §7)
-  sealedAt           DateTime?
-  approvedAt         DateTime?
-  retainUntil        DateTime?                           // approvedAt + FOOTAGE_RETENTION_DAYS; deletion gate
+  sealedAt    DateTime?
+  approvedAt  DateTime?
+  retainUntil DateTime? // approvedAt + FOOTAGE_RETENTION_DAYS; deletion gate
 
-  videoJobId         String?            @unique          // the VideoJob this batch produces (reuses ADR-078 pipeline)
-  videoJob           VideoJob?          @relation(fields: [videoJobId], references: [id])
+  videoJobId String?   @unique // the VideoJob this batch produces (reuses ADR-078 pipeline)
+  videoJob   VideoJob? @relation(fields: [videoJobId], references: [id])
 
-  assets             FootageAsset[]
-  stagedFile         String?                             // content-pipeline/video-batch-YYYY-MM-DD.md
-  reviewNotes        String?
+  assets      FootageAsset[]
+  stagedFile  String? // content-pipeline/video-batch-YYYY-MM-DD.md
+  reviewNotes String?
 
-  createdAt          DateTime           @default(now())
-  updatedAt          DateTime           @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([status])
   @@index([organizerId])
@@ -5520,40 +5520,53 @@ model FootageBatch {
 // ============================================================================
 
 model VendorBooth {
-  id                  String   @id @default(cuid())
-  hubId               String
-  hub                 SaleHub  @relation("VendorBooths", fields: [hubId], references: [id], onDelete: Cascade)
+  id    String  @id @default(cuid())
+  hubId String
+  hub   SaleHub @relation("VendorBooths", fields: [hubId], references: [id], onDelete: Cascade)
 
   // Real vendor identity (ADR-016) — nullable until claimed. Mirrors Organizer.userId
   // exactly. A User can hold this role in addition to any other role (e.g. Artifact is
   // already an Organizer and can also operate a VendorBooth in a different hub) — NOT
   // capped to one hub at a time; a User may operate booths in multiple different hubs.
-  userId              String?
-  user                User?    @relation("VendorBoothUser", fields: [userId], references: [id], onDelete: SetNull)
+  userId String?
+  user   User?   @relation("VendorBoothUser", fields: [userId], references: [id], onDelete: SetNull)
 
-  boothNumber         String
-  vendorName          String
-  vendorEmail         String?
-  vendorPhone         String?
+  boothNumber String
+  vendorName  String
+  vendorEmail String?
+  vendorPhone String?
 
-  boothFee            Decimal  @default(0) @db.Decimal(10, 2)
-  revenueSharePercent Float    @default(0)
+  boothFee            Decimal @default(0) @db.Decimal(10, 2)
+  revenueSharePercent Float   @default(0)
 
-  status              String   @default("PENDING") // PENDING|CONFIRMED|REJECTED|CANCELLED
+  status String @default("PENDING") // PENDING|CONFIRMED|REJECTED|CANCELLED
 
   // Stripe Connect identity for this booth's operator (ADR-016, migrated to Standard
   // accounts per ADR-020). Populated once the claiming User completes onboarding (same
   // flow Organizer/Consignor already use).
-  stripeAccountId     String?
-  stripeOnboarded     Boolean  @default(false)
+  stripeAccountId   String?
+  stripeOnboarded   Boolean @default(false)
   // ADR-020: which Stripe account type stripeAccountId actually is. Stripe does not allow
   // changing an existing account's type, so this tracks it explicitly rather than assuming —
   // existing rows default to 'express' (the only type ever created before this migration);
   // new onboarding (startVendorBoothStripeOnboarding) sets 'standard'. Read by the refund
   // controller and cart-charge flow to pick the correct charge/refund shape per booth.
-  stripeAccountType   String?  @default("express") // 'express' | 'standard'
+  stripeAccountType String? @default("express") // 'express' | 'standard'
 
-  notes               String?
+  // ADR-090 Phase 4 (pre-wire only, 2026-07-20): platform-account Stripe Customer +
+  // PaymentMethod for the vendor, so the flat boothFee can be charged off-session on a
+  // recurring cadence without touching the vendor's Connect balance. NOT the same Stripe
+  // identity as stripeAccountId above (that's the vendor's OWN connected account, the
+  // Direct-charge merchant of record for their sales) -- these are platform-account ids,
+  // analogous to how createBoothCartQrSetupIntent already saves a SHOPPER's card on a
+  // platform Customer. No collection UI exists yet to populate these -- vendorBoothFeeBillingCron
+  // skips (PENDING_PAYMENT_METHOD) any booth where either is null rather than silently
+  // dropping the charge. Mirrors the MasterItemLibrary pre-wire precedent (fields exist,
+  // feature intentionally unbuilt until a real onboarding flow is scoped).
+  vendorStripeCustomerId String?
+  vendorPaymentMethodId  String?
+
+  notes String?
 
   // Invite/claim mechanism (ADR-015 primary access → ADR-016 demoted to fallback only).
   // A vendor who has NOT yet claimed the booth (userId IS NULL) uses this token to view
@@ -5564,18 +5577,19 @@ model VendorBooth {
   // unclaimed booths (userId IS NULL) are blocked from checkout regardless of boothToken
   // validity — claiming is a cheap identity gate, the cheapest fix for the wash-trade
   // blind spot an unclaimed booth otherwise represents.
-  boothToken          String   @unique @default(cuid())
+  boothToken String @unique @default(cuid())
 
-  confirmedAt         DateTime?
-  rejectedAt          DateTime?
-  deletedAt           DateTime?
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @default(now())
+  confirmedAt DateTime?
+  rejectedAt  DateTime?
+  deletedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @default(now())
 
   items               Item[]                 @relation("VendorBoothItems")
   payouts             VendorBoothPayout[]
-  cashierTransactions BoothCartTransaction[]  @relation("CashierBoothTransactions")
-  cartLegs            BoothCartLeg[]          @relation("VendorBoothCartLegs")
+  cashierTransactions BoothCartTransaction[] @relation("CashierBoothTransactions")
+  cartLegs            BoothCartLeg[]         @relation("VendorBoothCartLegs")
+  feeCharges          VendorBoothFeeCharge[]
 
   @@unique([hubId, boothNumber])
   @@index([hubId])
@@ -5590,24 +5604,24 @@ model VendorBooth {
 // multiple VendorBooths in one hub — one Stripe charge on the organizer's stripeConnectId,
 // one Purchase row per item (mirrors posPaymentController.confirmPaymentRequest exactly).
 model BoothCartTransaction {
-  id                    String   @id @default(cuid())
-  hubId                 String
-  hub                   SaleHub  @relation("HubCartTransactions", fields: [hubId], references: [id], onDelete: Cascade)
+  id    String  @id @default(cuid())
+  hubId String
+  hub   SaleHub @relation("HubCartTransactions", fields: [hubId], references: [id], onDelete: Cascade)
 
   // Who rang this up — exactly one of these two is set (enforced app-level, not DB-level)
-  cashierTeamMemberId   String?
-  cashierTeamMember     TeamMember?  @relation("CashierTransactions", fields: [cashierTeamMemberId], references: [id], onDelete: SetNull)
-  cashierBoothId        String?      // vendor covering the register, via boothToken session
-  cashierBooth          VendorBooth? @relation("CashierBoothTransactions", fields: [cashierBoothId], references: [id], onDelete: SetNull)
+  cashierTeamMemberId String?
+  cashierTeamMember   TeamMember?  @relation("CashierTransactions", fields: [cashierTeamMemberId], references: [id], onDelete: SetNull)
+  cashierBoothId      String? // vendor covering the register, via boothToken session
+  cashierBooth        VendorBooth? @relation("CashierBoothTransactions", fields: [cashierBoothId], references: [id], onDelete: SetNull)
 
-  stripePaymentIntentId String?      // the ONE charge for the whole cart
-  totalAmount           Decimal      @default(0) @db.Decimal(10, 2)
-  boothsRepresented     String[]     // denormalized list of VendorBooth IDs in this cart, for fast audit queries + wash-trade guard resolution
-  status                String       @default("PENDING") // PENDING|COMPLETED|REFUNDED|FAILED
-  createdAt             DateTime     @default(now())
+  stripePaymentIntentId String? // the ONE charge for the whole cart
+  totalAmount           Decimal  @default(0) @db.Decimal(10, 2)
+  boothsRepresented     String[] // denormalized list of VendorBooth IDs in this cart, for fast audit queries + wash-trade guard resolution
+  status                String   @default("PENDING") // PENDING|COMPLETED|REFUNDED|FAILED
+  createdAt             DateTime @default(now())
 
-  purchases             Purchase[]
-  legs                  BoothCartLeg[]
+  purchases Purchase[]
+  legs      BoothCartLeg[]
 
   @@index([hubId])
   @@index([cashierTeamMemberId])
@@ -5628,30 +5642,44 @@ model BoothCartLeg {
   cartTransaction       BoothCartTransaction @relation(fields: [cartTransactionId], references: [id], onDelete: Cascade)
   vendorBoothId         String
   vendorBooth           VendorBooth          @relation("VendorBoothCartLegs", fields: [vendorBoothId], references: [id], onDelete: Cascade)
-  stripeAccountId       String               // the booth's OWN connected account — the Direct-charge merchant of record for this leg
+  stripeAccountId       String // the booth's OWN connected account — the Direct-charge merchant of record for this leg
   stripePaymentIntentId String               @unique
   amountCents           Int
-  rail                  String               // 'TERMINAL' | 'QR'
+  rail                  String // 'TERMINAL' | 'QR'
   status                String               @default("PENDING") // PENDING|REQUIRES_CAPTURE|CAPTURED|CANCELED|FAILED
   createdAt             DateTime             @default(now())
   updatedAt             DateTime             @updatedAt
+
+  // ADR-090 Phase 2: hub-owner revenue-share split. Taken via application_fee_amount
+  // at charge time (this leg's own PaymentIntent), then Transferred to the hub owner
+  // immediately after capture. hubOwnerShareAmount is null when this booth's
+  // revenueSharePercent is 0 (no split applies to this leg at all) -- distinct from a
+  // populated 0.00, which would mean "split applied, hub owner is owed $0". stripeTransferId
+  // doubles as an atomic claim sentinel ('CLAIMING') during the Transfer call, then holds the
+  // real Stripe Transfer id (tr_...) once it succeeds -- same compare-and-swap idiom already
+  // used elsewhere in this codebase (Organizer.pendingStripeMigrationAccountId claim, Purchase
+  // REFUNDING status claim). Refund-reversal logic (stripeController.ts createRefund) must
+  // check stripeTransferId is a real id (!== 'CLAIMING') before attempting a reversal.
+  hubOwnerShareAmount Decimal? @db.Decimal(10, 2)
+  stripeTransferId    String?
 
   @@index([cartTransactionId])
   @@index([vendorBoothId])
   @@index([stripePaymentIntentId])
   @@index([status])
+  @@index([stripeTransferId])
 }
 
 model VendorBoothSettlementBatch {
-  id            String              @id @default(cuid())
-  hubId         String
-  hub           SaleHub             @relation("HubSettlementBatches", fields: [hubId], references: [id], onDelete: Cascade)
-  status        String              @default("DRAFT") // DRAFT|APPROVED|PROCESSING|PARTIAL|COMPLETED|FAILED
-  totalGross    Decimal             @default(0) @db.Decimal(10, 2)
-  totalPayouts  Decimal             @default(0) @db.Decimal(10, 2)
-  payouts       VendorBoothPayout[]
-  createdAt     DateTime            @default(now())
-  approvedAt    DateTime?
+  id           String              @id @default(cuid())
+  hubId        String
+  hub          SaleHub             @relation("HubSettlementBatches", fields: [hubId], references: [id], onDelete: Cascade)
+  status       String              @default("DRAFT") // DRAFT|APPROVED|PROCESSING|PARTIAL|COMPLETED|FAILED
+  totalGross   Decimal             @default(0) @db.Decimal(10, 2)
+  totalPayouts Decimal             @default(0) @db.Decimal(10, 2)
+  payouts      VendorBoothPayout[]
+  createdAt    DateTime            @default(now())
+  approvedAt   DateTime?
 
   @@index([hubId])
   @@index([status])
@@ -5662,33 +5690,71 @@ model VendorBoothPayout {
   vendorBoothId     String
   vendorBooth       VendorBooth                 @relation(fields: [vendorBoothId], references: [id], onDelete: Cascade)
   settlementBatchId String?
-  settlementBatch   VendorBoothSettlementBatch?  @relation(fields: [settlementBatchId], references: [id], onDelete: SetNull)
+  settlementBatch   VendorBoothSettlementBatch? @relation(fields: [settlementBatchId], references: [id], onDelete: SetNull)
 
-  totalSales        Decimal                      @db.Decimal(10, 2)
-  boothFeeCharged   Decimal                      @db.Decimal(10, 2)
-  revenueShareOwed  Decimal                      @db.Decimal(10, 2)
+  totalSales       Decimal @db.Decimal(10, 2)
+  boothFeeCharged  Decimal @db.Decimal(10, 2)
+  revenueShareOwed Decimal @db.Decimal(10, 2)
   // Pre-wire only — no tax logic implemented yet (Legal owns the future decision, tax
   // collection is OFF platform-wide per S1006). Always 0 today; never read/written.
-  taxCollected      Decimal                      @default(0) @db.Decimal(10, 2)
-  netPayout         Decimal                      @db.Decimal(10, 2) // totalSales - boothFeeCharged - revenueShareOwed (taxCollected not yet subtracted)
+  taxCollected     Decimal @default(0) @db.Decimal(10, 2)
+  netPayout        Decimal @db.Decimal(10, 2) // totalSales - boothFeeCharged - revenueShareOwed (taxCollected not yet subtracted)
 
   // Automated Transfer fields (ADR-016/017) — populated once a Stripe Transfer succeeds.
-  stripeTransferId  String?
-  transferredAt     DateTime?
+  stripeTransferId String?
+  transferredAt    DateTime?
 
   // Fallback for PENDING_STRIPE_ONBOARDING / organizer manual override, mirrors ConsignorPayout.method
-  method            String?                      // STRIPE_TRANSFER|CASH|CHECK|VENMO|ACH|OTHER
-  paidAt            DateTime?
-  notes             String?
-  status            String                       @default("PENDING") // PENDING|PENDING_STRIPE_ONBOARDING|SIMULATED|PROCESSING|COMPLETED|FAILED|MANUAL_CASH_CHECK
-  failureReason     String?
-  createdAt         DateTime                     @default(now())
+  method        String? // STRIPE_TRANSFER|CASH|CHECK|VENMO|ACH|OTHER
+  paidAt        DateTime?
+  notes         String?
+  status        String    @default("PENDING") // PENDING|PENDING_STRIPE_ONBOARDING|SIMULATED|PROCESSING|COMPLETED|FAILED|MANUAL_CASH_CHECK
+  failureReason String?
+  createdAt     DateTime  @default(now())
 
   @@index([vendorBoothId])
   @@index([settlementBatchId])
   @@index([stripeTransferId])
 }
 
+// ADR-090 Phase 4: one row per booth per billing period for the flat, sale-independent
+// boothFee (rent) -- deliberately a SEPARATE model from VendorBoothPayout, not a reuse of
+// it. VendorBoothPayout models money the PLATFORM pays OUT to a vendor (their net sale
+// proceeds) -- a concept that's now vestigial post-ADR-020 since Direct charges already
+// deliver the vendor's proceeds instantly. VendorBoothFeeCharge models the OPPOSITE
+// direction: money charged FROM the vendor's saved payment method, then Transferred to the
+// hub owner. Reusing VendorBoothPayout's vendor-receives-money fields for a vendor-owes-money
+// charge would have been actively misleading.
+model VendorBoothFeeCharge {
+  id                    String      @id @default(cuid())
+  vendorBoothId         String
+  vendorBooth           VendorBooth @relation(fields: [vendorBoothId], references: [id], onDelete: Cascade)
+  hubId                 String
+  periodStart           DateTime
+  periodEnd             DateTime
+  amountCents           Int
+  // PENDING -> PROCESSING -> COMPLETED|FAILED, or PENDING_PAYMENT_METHOD (booth has no
+  // vendorStripeCustomerId/vendorPaymentMethodId on file yet -- never silently dropped) or
+  // PENDING_STRIPE_ONBOARDING (hub owner not onboarded -- mirrors the checkout-time block).
+  status                String      @default("PENDING")
+  // Platform-account charge (NOT scoped to any connected account -- the vendor's saved
+  // payment method lives on the platform's own Stripe Customer, see VendorBooth comment).
+  stripePaymentIntentId String?     @unique
+  // Platform -> hub-owner Transfer for this charge's full proceeds. Doubles as an atomic
+  // claim sentinel ('CLAIMING') the same way BoothCartLeg.stripeTransferId does.
+  stripeTransferId      String?
+  failureReason         String?
+  createdAt             DateTime    @default(now())
+  updatedAt             DateTime    @updatedAt
+
+  // One charge per booth per period -- the cron's own idempotent claim, independent of the
+  // Stripe-level idempotencyKey used on the actual charge/transfer calls.
+  @@unique([vendorBoothId, periodStart, periodEnd])
+  @@index([vendorBoothId])
+  @@index([hubId])
+  @@index([status])
+  @@index([stripeTransferId])
+}
 
 // Directory/enrichment URL fetch health per registrable domain.
 // Circuit-breaker state so failing hosts are cooled down / terminated, not re-hammered.

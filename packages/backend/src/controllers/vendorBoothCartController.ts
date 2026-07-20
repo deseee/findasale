@@ -10,8 +10,144 @@ import { notifyFacebookExportedItemSold } from '../services/facebookNudgeService
 import { sellItemUnits, InsufficientStockError } from '../services/itemStockService';
 import { syncMarketplaceStock } from '../services/marketplaceStockSyncService'; // ADR-087 Phase 4: revise-on-partial eBay quantity sync
 import { generateReceipt, sendBoothCartReceiptEmail } from '../services/receiptService';
+import { getPlatformFeeRate } from '../utils/feeCalculator'; // ADR-090 Phase 2: platform's normal cut formula
+import { Decimal } from '@prisma/client/runtime/library';
 
 const stripe = () => getStripe();
+
+// ADR-090 §6 (2026-07-20, Patrick "defaults based on industry standards"): server-enforced
+// ceiling on VendorBooth.revenueSharePercent. Also enforced at write-time in
+// vendorBoothController.ts (createVendorBooth/updateVendorBooth) -- clamped again here,
+// defense-in-depth, so a stale/bypassed value can never inflate a real charge.
+const REVENUE_SHARE_CAP_PERCENT = 30;
+
+/**
+ * ADR-090 Phase 2: compute one booth-cart leg's application_fee_amount (the
+ * platform's normal cut, using the SAME tier-based formula terminalController.ts
+ * already uses for POS/Terminal charges, plus the hub owner's revenue-share cut on
+ * top, clamped to REVENUE_SHARE_CAP_PERCENT) and, when a revenue share is actually
+ * owed, verify the hub owner can receive it. When revenueSharePercent is 0 this is a
+ * no-op pass-through (booth-fee-only or no split at all) -- never blocks checkout for
+ * a booth with no revenue-share agreement, even if the hub owner has no Stripe account.
+ *
+ * Returns `{ blocked: true, reason }` when a revenue share is owed but the hub owner
+ * is not connected + onboarded on a Standard account -- callers MUST 400 rather than
+ * silently dropping the hub owner's cut (ADR-090 §6 decision, mirrors the existing
+ * booth-not-onboarded block already in this file).
+ */
+async function computeLegFeeSplit(params: {
+  amountCents: number;
+  revenueSharePercent: number;
+  hubOwnerOrganizer: {
+    subscriptionTier: string | null;
+    stripeConnectId: string | null;
+    stripeOnboarded: boolean;
+    stripeAccountType: string | null;
+  } | null;
+}): Promise<
+  | { blocked: false; applicationFeeAmountCents: number; hubOwnerShareCents: number }
+  | { blocked: true; reason: string }
+> {
+  const { amountCents, revenueSharePercent, hubOwnerOrganizer } = params;
+  // as any: mirrors the existing cast terminalController.ts already uses at this
+  // exact call site (Prisma's generated SubscriptionTier enum vs. feeCalculator.ts's
+  // plain string-literal-union SubscriptionTier type are structurally distinct types).
+  const platformFeeCents = Math.round(
+    amountCents * getPlatformFeeRate((hubOwnerOrganizer?.subscriptionTier as any) ?? null)
+  );
+
+  const clampedRevenueSharePercent = Math.min(Math.max(revenueSharePercent || 0, 0), REVENUE_SHARE_CAP_PERCENT);
+  if (clampedRevenueSharePercent <= 0) {
+    return { blocked: false, applicationFeeAmountCents: platformFeeCents, hubOwnerShareCents: 0 };
+  }
+
+  const hubOwnerReady =
+    !!hubOwnerOrganizer &&
+    hubOwnerOrganizer.stripeAccountType === 'standard' &&
+    hubOwnerOrganizer.stripeOnboarded &&
+    !!hubOwnerOrganizer.stripeConnectId;
+
+  if (!hubOwnerReady) {
+    return {
+      blocked: true,
+      reason:
+        "This hub's owner has not completed Stripe onboarding yet — checkout is unavailable for booths with a revenue-share agreement until they do.",
+    };
+  }
+
+  const hubOwnerShareCents = Math.round(amountCents * (clampedRevenueSharePercent / 100));
+  return {
+    blocked: false,
+    applicationFeeAmountCents: platformFeeCents + hubOwnerShareCents,
+    hubOwnerShareCents,
+  };
+}
+
+/**
+ * ADR-090 Phase 2: fire the platform -> hub-owner Transfer for one captured leg's
+ * revenue-share slice. Atomic claim-before-Stripe-call (updateMany WHERE
+ * stripeTransferId IS NULL) + a stable idempotencyKey, mirroring
+ * stripeController.ts's createRefund claim pattern (PAID -> REFUNDING -> REFUNDED) —
+ * deliberately NOT the consignorSettlementController.ts pattern, which is a plain
+ * check-then-act read with no idempotencyKey at all (confirmed gap, ADR-090 §2).
+ * 'CLAIMING' is the same in-flight sentinel value already used elsewhere in this
+ * codebase (Organizer.pendingStripeMigrationAccountId) — refund-reversal logic must
+ * check stripeTransferId is a real id (!== 'CLAIMING') before attempting a reversal.
+ * Safe to call multiple times: no-ops once hubOwnerShareAmount is unset/zero or a
+ * transfer already exists.
+ */
+export async function transferHubOwnerShareForLeg(legId: string): Promise<void> {
+  const leg = await prisma.boothCartLeg.findUnique({
+    where: { id: legId },
+    include: { vendorBooth: { include: { hub: { include: { organizer: true } } } } },
+  });
+  if (!leg || !leg.hubOwnerShareAmount || Number(leg.hubOwnerShareAmount) <= 0) return;
+  if (leg.stripeTransferId) return; // already transferred (or a claim is already in flight)
+
+  const hubOwnerOrganizer = leg.vendorBooth.hub.organizer;
+  if (!hubOwnerOrganizer.stripeConnectId) {
+    console.error(
+      `[transferHubOwnerShareForLeg] Leg ${legId} has hubOwnerShareAmount but hub owner organizer ${hubOwnerOrganizer.id} has no stripeConnectId — cannot transfer. This should be unreachable (checkout already blocks this case) — flagging for manual reconciliation.`
+    );
+    return;
+  }
+
+  const claim = await prisma.boothCartLeg.updateMany({
+    where: { id: leg.id, stripeTransferId: null },
+    data: { stripeTransferId: 'CLAIMING' },
+  });
+  if (claim.count !== 1) return; // lost the race — another call already claimed/completed this transfer
+
+  const amountCents = Math.round(Number(leg.hubOwnerShareAmount) * 100);
+  try {
+    const transfer = await stripe().transfers.create(
+      {
+        amount: amountCents,
+        currency: 'usd',
+        destination: hubOwnerOrganizer.stripeConnectId,
+        description: `Hub owner revenue share — booth cart leg ${leg.id}`,
+        metadata: {
+          source: 'booth_cart_leg_hub_owner_share',
+          vendorBoothId: leg.vendorBoothId,
+          cartTransactionId: leg.cartTransactionId,
+          legId: leg.id,
+        },
+      },
+      { idempotencyKey: `hub-owner-transfer-${leg.id}` }
+    );
+    await prisma.boothCartLeg.update({ where: { id: leg.id }, data: { stripeTransferId: transfer.id } });
+  } catch (err) {
+    // Release the claim so a future retry (e.g. a manual reconciliation re-run) isn't
+    // permanently blocked by the sentinel.
+    await prisma.boothCartLeg
+      .updateMany({ where: { id: leg.id, stripeTransferId: 'CLAIMING' }, data: { stripeTransferId: null } })
+      .catch((revertErr) =>
+        console.error(`[transferHubOwnerShareForLeg] Failed to release claim after Stripe error for leg ${legId}:`, revertErr)
+      );
+    console.error(`[transferHubOwnerShareForLeg] Stripe transfer failed for leg ${legId}:`, err);
+    throw err;
+  }
+}
 
 /**
  * Vendor Booth Payments — Roaming Multi-Booth Cart (2026-07-07)
@@ -387,7 +523,10 @@ export const authorizeBoothCartTerminalLeg = async (req: BoothAuthRequest, res: 
       throw guardError;
     }
 
-    const booth = await prisma.vendorBooth.findFirst({ where: { id: vendorBoothId, hubId } });
+    const booth = await prisma.vendorBooth.findFirst({
+      where: { id: vendorBoothId, hubId },
+      include: { hub: { select: { organizer: { select: { subscriptionTier: true, stripeConnectId: true, stripeOnboarded: true, stripeAccountType: true } } } } },
+    });
     if (!booth) return res.status(404).json({ error: 'Booth not found' });
     if (!isTerminalSimulated()) {
       if (booth.stripeAccountType !== 'standard' || !booth.stripeOnboarded || !booth.stripeAccountId) {
@@ -399,6 +538,18 @@ export const authorizeBoothCartTerminalLeg = async (req: BoothAuthRequest, res: 
     const amountCents = Math.round(items.reduce((sum, i) => sum + (i.price || 0), 0) * 100);
     if (amountCents < 50) {
       return res.status(400).json({ error: `Booth "${booth.vendorName}"'s subtotal must be at least $0.50 to process payment` });
+    }
+
+    // ADR-090 Phase 2: platform cut + hub-owner revenue-share split, computed once
+    // per leg. Blocks checkout (400) if this booth owes a revenue share but its hub
+    // owner isn't onboarded — never silently drops the hub owner's cut.
+    const feeSplit = await computeLegFeeSplit({
+      amountCents,
+      revenueSharePercent: booth.revenueSharePercent,
+      hubOwnerOrganizer: booth.hub.organizer,
+    });
+    if (feeSplit.blocked) {
+      return res.status(400).json({ error: feeSplit.reason });
     }
 
     // Race-safe claim (findasale-hacker adversarial pass, 2026-07-08): the existingLeg
@@ -425,6 +576,7 @@ export const authorizeBoothCartTerminalLeg = async (req: BoothAuthRequest, res: 
           amountCents,
           rail: 'TERMINAL',
           status: 'PENDING',
+          hubOwnerShareAmount: feeSplit.hubOwnerShareCents > 0 ? new Decimal(feeSplit.hubOwnerShareCents / 100) : null,
         },
       });
     } catch (claimErr: any) {
@@ -439,6 +591,10 @@ export const authorizeBoothCartTerminalLeg = async (req: BoothAuthRequest, res: 
       currency: 'usd',
       payment_method_types: ['card_present'],
       capture_method: 'manual' as const,
+      // ADR-090 Phase 2: application_fee_amount only applies to a Direct/Destination
+      // charge on a connected account — simulated-mode PIs aren't scoped to one
+      // (mirrors terminalController.ts's own !isSimulated gate on this same field).
+      ...(!isTerminalSimulated() ? { application_fee_amount: feeSplit.applicationFeeAmountCents } : {}),
       metadata: {
         source: 'booth_cart_leg',
         rail: 'TERMINAL',
@@ -601,7 +757,10 @@ export const authorizeBoothCartQrLegs = async (req: BoothAuthRequest, res: Respo
       return res.status(400).json({ error: 'SetupIntent is missing a customer or payment method' });
     }
 
-    const booths = await prisma.vendorBooth.findMany({ where: { id: { in: cart.boothsRepresented } } });
+    const booths = await prisma.vendorBooth.findMany({
+      where: { id: { in: cart.boothsRepresented } },
+      include: { hub: { select: { organizer: { select: { subscriptionTier: true, stripeConnectId: true, stripeOnboarded: true, stripeAccountType: true } } } } },
+    });
     const alreadyLegged = await prisma.boothCartLeg.findMany({
       where: { cartTransactionId: cart.id, status: { in: ['PENDING', 'REQUIRES_CAPTURE', 'CAPTURED'] } },
       select: { vendorBoothId: true },
@@ -625,6 +784,20 @@ export const authorizeBoothCartQrLegs = async (req: BoothAuthRequest, res: Respo
         break;
       }
 
+      // ADR-090 Phase 2: platform cut + hub-owner revenue-share split (see Terminal
+      // rail's identical computation above for the full rationale). Whole-cart-fail
+      // like every other per-leg failure in this loop — never silently drops the
+      // hub owner's cut.
+      const feeSplit = await computeLegFeeSplit({
+        amountCents,
+        revenueSharePercent: booth.revenueSharePercent,
+        hubOwnerOrganizer: booth.hub.organizer,
+      });
+      if (feeSplit.blocked) {
+        failure = { vendorBoothId: booth.id, vendorName: booth.vendorName, message: feeSplit.reason };
+        break;
+      }
+
       // Race-safe claim (findasale-hacker adversarial pass, 2026-07-08): same
       // compare-and-swap technique as the Terminal rail's authorize endpoint -- the
       // alreadyLeggedIds snapshot computed above this loop is a plain read and can't
@@ -645,6 +818,7 @@ export const authorizeBoothCartQrLegs = async (req: BoothAuthRequest, res: Respo
             amountCents,
             rail: 'QR',
             status: 'PENDING',
+            hubOwnerShareAmount: feeSplit.hubOwnerShareCents > 0 ? new Decimal(feeSplit.hubOwnerShareCents / 100) : null,
           },
         });
       } catch (claimErr: any) {
@@ -673,6 +847,8 @@ export const authorizeBoothCartQrLegs = async (req: BoothAuthRequest, res: Respo
             capture_method: 'manual',
             confirm: true,
             off_session: true,
+            // ADR-090 Phase 2: platform cut + hub-owner revenue-share cut.
+            application_fee_amount: feeSplit.applicationFeeAmountCents,
             metadata: {
               source: 'booth_cart_leg',
               rail: 'QR',
@@ -922,6 +1098,20 @@ export const captureBoothCart = async (req: BoothAuthRequest, res: Response) => 
           console.error(`[captureBoothCart] Failed to finalize item ${item.id}:`, err);
         }
       }
+    }
+
+    // ADR-090 Phase 2: fire the hub-owner Transfer for each captured leg carrying a
+    // revenue-share slice. Runs once per LEG (not per item/Purchase row) -- the
+    // application_fee_amount and its resulting hub-owner cut were computed once per
+    // leg at authorize time. Best-effort/non-blocking like the receipt email below:
+    // a Transfer failure here must never roll back an already-captured payment: the
+    // shopper was already charged and items already marked SOLD. Failures are logged
+    // for manual reconciliation -- no automated retry endpoint exists yet.
+    for (const leg of captured) {
+      if (!leg.hubOwnerShareAmount || Number(leg.hubOwnerShareAmount) <= 0) continue;
+      await transferHubOwnerShareForLeg(leg.id).catch((err) =>
+        console.error(`[captureBoothCart] Hub-owner Transfer failed for leg ${leg.id} — flagged for manual reconciliation:`, err)
+      );
     }
 
     await prisma.boothCartTransaction.update({ where: { id: cart.id }, data: { status: 'COMPLETED' } });

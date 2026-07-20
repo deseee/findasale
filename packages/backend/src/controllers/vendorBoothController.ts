@@ -19,6 +19,20 @@ async function getOrganizerWorkspace(userId: string): Promise<{ organizer: any; 
   return workspace ? { organizer, workspace } : null;
 }
 
+// ADR-090 §2.2 (2026-07-20): server-enforced ceiling on revenueSharePercent, at both
+// create and update. Mirrored (defense-in-depth) in vendorBoothCartController.ts's
+// computeLegFeeSplit, which clamps again at charge time regardless of what's stored.
+const REVENUE_SHARE_CAP_PERCENT = 30;
+
+function clampRevenueSharePercent(raw: unknown): number | { error: string } {
+  const parsed = parseFloat(raw as string);
+  if (Number.isNaN(parsed)) return { error: 'revenueSharePercent must be a number' };
+  if (parsed < 0 || parsed > REVENUE_SHARE_CAP_PERCENT) {
+    return { error: `revenueSharePercent must be between 0 and ${REVENUE_SHARE_CAP_PERCENT}` };
+  }
+  return parsed;
+}
+
 function serializeBooth(booth: any) {
   return {
     ...booth,
@@ -91,6 +105,13 @@ export const createVendorBooth = async (req: AuthRequest, res: Response) => {
       return res.status(409).json({ error: 'A booth with this number already exists in this hub' });
     }
 
+    let clampedRevenueSharePercent = 0;
+    if (revenueSharePercent !== undefined) {
+      const clamped = clampRevenueSharePercent(revenueSharePercent);
+      if (typeof clamped === 'object') return res.status(400).json({ error: clamped.error });
+      clampedRevenueSharePercent = clamped;
+    }
+
     const booth = await prisma.vendorBooth.create({
       data: {
         hubId,
@@ -99,7 +120,7 @@ export const createVendorBooth = async (req: AuthRequest, res: Response) => {
         vendorEmail: vendorEmail || null,
         vendorPhone: vendorPhone || null,
         boothFee: boothFee !== undefined ? new Decimal(boothFee) : new Decimal(0),
-        revenueSharePercent: revenueSharePercent !== undefined ? parseFloat(revenueSharePercent) : 0,
+        revenueSharePercent: clampedRevenueSharePercent,
         notes: notes || null,
         status: 'PENDING',
       },
@@ -176,7 +197,11 @@ export const updateVendorBooth = async (req: AuthRequest, res: Response) => {
     if (vendorPhone !== undefined) updateData.vendorPhone = vendorPhone;
     if (notes !== undefined) updateData.notes = notes;
     if (boothFee !== undefined) updateData.boothFee = new Decimal(boothFee);
-    if (revenueSharePercent !== undefined) updateData.revenueSharePercent = parseFloat(revenueSharePercent);
+    if (revenueSharePercent !== undefined) {
+      const clamped = clampRevenueSharePercent(revenueSharePercent);
+      if (typeof clamped === 'object') return res.status(400).json({ error: clamped.error });
+      updateData.revenueSharePercent = clamped;
+    }
 
     if (status !== undefined) {
       const validStatuses = ['PENDING', 'CONFIRMED', 'REJECTED', 'CANCELLED'];
@@ -272,6 +297,20 @@ export const claimVendorBooth = async (req: AuthRequest, res: Response) => {
 
     const booth = await prisma.vendorBooth.findUnique({ where: { boothToken } });
     if (!booth || booth.deletedAt) return res.status(404).json({ error: 'Booth not found' });
+
+    // ADR-090 §2.3: same-identity self-dealing block (ACTOR≠TARGET-FOR-VALUE
+    // invariant). If this booth's hub is owned by an Organizer whose own User
+    // account is the SAME User attempting to claim the booth, block outright --
+    // that single actor would otherwise control both the "pays revenue share"
+    // side (vendor) and the "receives revenue share" side (hub owner) of the
+    // ADR-090 split, and could wash-trade against themselves.
+    const hub = await prisma.saleHub.findUnique({
+      where: { id: booth.hubId },
+      select: { organizer: { select: { userId: true } } },
+    });
+    if (hub?.organizer?.userId === req.user.id) {
+      return res.status(403).json({ error: 'You cannot claim a booth in a hub you own' });
+    }
 
     if (!['PENDING', 'CONFIRMED'].includes(booth.status)) {
       return res.status(409).json({ error: `Booth cannot be claimed in status ${booth.status}` });

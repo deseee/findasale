@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
+import { getStripe } from '../utils/stripe';
 import {
   createConnectAccount,
   createOnboardingLink,
@@ -11,6 +12,8 @@ import {
   updateConsignorOnboardingStatus,
 } from '../services/stripeConnectService';
 import { Decimal } from '@prisma/client/runtime/library';
+
+const stripe = () => getStripe();
 
 // GET /api/stripe-connect/status/:consignorId
 export const getConsignorPayoutStatus = async (req: AuthRequest, res: Response) => {
@@ -399,5 +402,125 @@ export const startStandardMigration = async (req: AuthRequest, res: Response) =>
   } catch (error) {
     console.error('startStandardMigration error:', error);
     return res.status(500).json({ message: 'Failed to start Stripe account migration.' });
+  }
+};
+
+
+/**
+ * ADR-090 Phase 1: hub-owner Stripe Connect onboarding. Reuses Organizer.stripeConnectId
+ * (no second Connect identity per organizer, ADR-090 §1) — the same legal
+ * entity/bank account whether an Organizer is earning from their own listed items or
+ * from hub-owner revenue-share cuts. Requires a Standard account (mirrors the
+ * VendorBooth/Consignor ADR-020 migration): checkout-time revenue-share Transfers
+ * (vendorBoothCartController.ts computeLegFeeSplit) only fire when
+ * stripeAccountType === 'standard' && stripeOnboarded, so onboarding here creates
+ * that exact shape, never an Express account.
+ *
+ * ADR-090 §2.7: any new hub-payout-related endpoint needs the same ownership check
+ * pattern used elsewhere, verified explicitly — never assumed inherited from
+ * middleware. Both endpoints below explicitly confirm the requester owns at least
+ * one SaleHub before doing anything.
+ */
+
+// GET /api/organizers/me/hub-owner/stripe/status
+export const getHubOwnerStripeStatus = async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+
+    const organizer = await prisma.organizer.findFirst({ where: { userId } });
+    if (!organizer) return res.status(404).json({ message: 'Organizer not found.' });
+
+    const ownsHub = await prisma.saleHub.findFirst({ where: { organizerId: organizer.id }, select: { id: true } });
+    if (!ownsHub) return res.status(404).json({ message: 'You do not own a hub yet.' });
+
+    if (!organizer.stripeConnectId) {
+      return res.json({ onboarded: false, needsAccount: true, needsStandardUpgrade: false, stripeAccountType: null });
+    }
+
+    const liveStatus = await getAccountStatus(organizer.stripeConnectId);
+    const readyForHubOwnerPayouts =
+      organizer.stripeAccountType === 'standard' && liveStatus.chargesEnabled && liveStatus.payoutsEnabled;
+
+    return res.json({
+      onboarded: readyForHubOwnerPayouts,
+      needsAccount: false,
+      needsStandardUpgrade: organizer.stripeAccountType !== 'standard',
+      stripeAccountType: organizer.stripeAccountType,
+      chargesEnabled: liveStatus.chargesEnabled,
+      payoutsEnabled: liveStatus.payoutsEnabled,
+    });
+  } catch (error) {
+    console.error('getHubOwnerStripeStatus error:', error);
+    return res.status(500).json({ message: 'Failed to fetch hub owner Stripe status.' });
+  }
+};
+
+// POST /api/organizers/me/hub-owner/stripe/onboard
+export const initiateHubOwnerStripeOnboarding = async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+
+    const organizer = await prisma.organizer.findFirst({ where: { userId } });
+    if (!organizer) return res.status(404).json({ message: 'Organizer not found.' });
+
+    const ownsHub = await prisma.saleHub.findFirst({ where: { organizerId: organizer.id }, select: { id: true } });
+    if (!ownsHub) return res.status(404).json({ message: 'You do not own a hub yet.' });
+
+    const frontendBaseUrl = process.env.FRONTEND_URL || 'https://finda.sale';
+    const returnUrl = `${frontendBaseUrl}/organizer/hubs?stripeOnboarding=complete`;
+    const refreshUrl = `${frontendBaseUrl}/organizer/hubs?stripeOnboarding=refresh`;
+
+    if (organizer.stripeConnectId && organizer.stripeAccountType === 'standard') {
+      // Already a Standard account — resume onboarding if incomplete, else hand back
+      // a dashboard login link (mirrors stripeController.ts createConnectAccount's
+      // own login-link-first branch for the Organizer's own Sale-payout account).
+      const liveStatus = await getAccountStatus(organizer.stripeConnectId);
+      if (liveStatus.chargesEnabled && liveStatus.payoutsEnabled) {
+        try {
+          const loginLink = await stripe().accounts.createLoginLink(organizer.stripeConnectId);
+          return res.json({ onboardingUrl: loginLink.url, alreadyOnboarded: true });
+        } catch (loginErr) {
+          console.warn('initiateHubOwnerStripeOnboarding: login link failed, falling back to a fresh onboarding link:', loginErr);
+        }
+      }
+      const url = await createOnboardingLink(organizer.stripeConnectId, returnUrl, refreshUrl);
+      return res.json({ onboardingUrl: url, alreadyOnboarded: false });
+    }
+
+    if (organizer.stripeConnectId && organizer.stripeAccountType !== 'standard') {
+      // Needs the EXISTING express->standard migration flow — do not duplicate its
+      // claim/race-condition logic here (see stripeConnectController.ts
+      // startStandardMigration, already mounted at
+      // POST /api/organizers/me/stripe/start-standard-migration).
+      return res.status(409).json({
+        message: 'Your existing Stripe account needs to be upgraded to a Standard account before you can receive hub owner payouts.',
+        needsStandardMigration: true,
+        migrationEndpoint: '/api/organizers/me/stripe/start-standard-migration',
+      });
+    }
+
+    // No Stripe account at all yet — create a fresh Standard account, same
+    // 'standard' branch createConnectAccount already uses for Consignor/VendorBooth
+    // onboarding (ADR-020). Organizer has no workspaceId concept (unlike Consignor),
+    // so this calls stripe().accounts.create directly rather than routing through
+    // the shared createConnectAccount() helper.
+    const account = await stripe().accounts.create({
+      type: 'standard',
+      email: req.user!.email,
+      metadata: { organizerId: organizer.id, source: 'hub_owner_onboarding' },
+    });
+
+    await prisma.organizer.update({
+      where: { id: organizer.id },
+      data: { stripeConnectId: account.id, stripeAccountType: 'standard' },
+    });
+
+    const url = await createOnboardingLink(account.id, returnUrl, refreshUrl);
+    return res.json({ onboardingUrl: url, alreadyOnboarded: false });
+  } catch (error) {
+    console.error('initiateHubOwnerStripeOnboarding error:', error);
+    return res.status(500).json({ message: 'Failed to start hub owner Stripe onboarding.' });
   }
 };

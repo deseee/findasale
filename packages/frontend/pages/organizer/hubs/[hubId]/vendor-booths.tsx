@@ -16,6 +16,7 @@ import { useAuth } from '../../../../components/AuthContext';
 import { useToast } from '../../../../components/ToastContext';
 import TierGate from '../../../../components/TierGate';
 import ConfirmDialog from '../../../../components/ConfirmDialog';
+import HubOwnerStripeOnboarding from '../../../../components/HubOwnerStripeOnboarding';
 import { Trash2, Edit2, Copy, Check, DollarSign } from 'lucide-react';
 
 interface VendorBooth {
@@ -240,6 +241,10 @@ const VendorBoothsPage: React.FC = () => {
               </button>
             </div>
           </div>
+
+          {/* ADR-090 Phase 1: prompts the hub owner to connect Stripe when a booth's
+              revenue-share agreement needs it -- renders nothing once already onboarded. */}
+          <HubOwnerStripeOnboarding />
 
           {loading ? (
             <div className="text-center py-12">

@@ -317,68 +317,26 @@ export const payConsignorViaACH = async (
 };
 
 /**
- * Pay a VendorBooth via Stripe Transfer, drawing from the organizer's connected
- * account balance (2026-07-07, ADR-016/017).
+ * REMOVED (ADR-090 Phase 3, 2026-07-20): payVendorBoothViaTransfer used to pay a
+ * VendorBooth's net sale proceeds via a platform/organizer-account -> vendor
+ * Transfer, back when booth-cart checkout was ONE PaymentIntent on the ORGANIZER's
+ * account (pre-ADR-020). It was already broken by the time ADR-020 shipped (Direct
+ * charges per-booth-leg): it looked for the charge on the ORGANIZER's account (wrong
+ * -- each leg's charge lives on the VENDOR's own Standard account) and transferred
+ * organizer -> vendor (wrong direction -- the vendor already has 100% of their
+ * sale's money via the Direct charge, they were never owed a Transfer from anyone).
  *
- * CORRECTED source_transaction logic (ADR-017): retrieves the real charge ID
- * from the PaymentIntent BEFORE setting source_transaction — never passes an
- * account ID. This is the pattern payConsignorViaACH should have used from the
- * start; written as a new function (not a clone of payConsignorViaACH) per
- * ADR-017 Dev Instructions #4 since VendorBooth needs this from day one while
- * payConsignorViaACH's existing callers are fixed separately/non-blockingly above.
- *
- * The Transfer is created WITH the { stripeAccount: organizerStripeConnectId }
- * request option — it originates from the ORGANIZER's connected-account balance
- * (where the cart charge actually landed, confirmed via posPaymentController read),
- * not the platform's balance. This matches Stripe's documented "separate charges
- * and transfers" pattern for one customer charge fanning out to multiple
- * connected accounts (confirmed via docs.stripe.com/connect/separate-charges-and-transfers).
+ * Post-ADR-090-Phase-2, this function's original PURPOSE (pay the vendor their net
+ * sale proceeds) is genuinely dead, not just buggy: the vendor's net proceeds
+ * (gross minus application_fee_amount, which now also carries the hub owner's
+ * revenue-share cut) already land on the vendor's own account automatically at
+ * capture time. There is nothing left for a settlement-time Transfer to pay them.
+ * See vendorBoothSettlementController.ts's module header for the full rescoping.
+ * Flat booth-fee collection (a genuinely separate, vendor-owes-hub-owner flow) is
+ * handled by vendorBoothFeeBillingCron.ts (ADR-090 Phase 4), which charges the
+ * vendor's saved platform payment method and Transfers proceeds to the hub owner --
+ * it does not call this function or need anything like it.
  */
-export const payVendorBoothViaTransfer = async (params: {
-  vendorBoothStripeAccountId: string;
-  amountCents: number;
-  description: string;
-  organizerStripeConnectId: string;
-  cartPaymentIntentId: string; // the BoothCartTransaction's stripePaymentIntentId
-  transferGroup?: string;
-}) => {
-  const {
-    vendorBoothStripeAccountId,
-    amountCents,
-    description,
-    organizerStripeConnectId,
-    cartPaymentIntentId,
-    transferGroup,
-  } = params;
-
-  // Retrieve the real charge ID from the PaymentIntent BEFORE setting
-  // source_transaction. NEVER pass an account ID (organizerStripeConnectId) as
-  // source_transaction — that is the exact bug this function exists to avoid.
-  const pi = await stripe().paymentIntents.retrieve(cartPaymentIntentId, {
-    stripeAccount: organizerStripeConnectId,
-  });
-  const chargeId = typeof pi.latest_charge === 'string' ? pi.latest_charge : pi.latest_charge?.id;
-
-  const transferData: Stripe.TransferCreateParams = {
-    amount: amountCents,
-    currency: 'usd',
-    destination: vendorBoothStripeAccountId,
-    description,
-    ...(transferGroup ? { transfer_group: transferGroup } : {}),
-    ...(chargeId ? { source_transaction: chargeId } : {}),
-  };
-
-  const transfer = await stripe().transfers.create(transferData, {
-    stripeAccount: organizerStripeConnectId,
-  });
-
-  return {
-    transferId: transfer.id,
-    status: (transfer as any).status,
-    amountCents: transfer.amount,
-    amountFormatted: (transfer.amount / 100).toFixed(2),
-  };
-};
 
 /**
  * Update consignor onboarding status based on Stripe account status.

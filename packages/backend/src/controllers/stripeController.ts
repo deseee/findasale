@@ -2893,6 +2893,46 @@ export const createRefund = async (req: AuthRequest, res: Response) => {
       data: { status: 'REFUNDED' }
     });
 
+    // ADR-090 Phase 2 refund clawback: a plain PaymentIntent refund does NOT claw
+    // back a completed platform -> hub-owner Transfer (they're separate money
+    // movements) — so booth-cart purchases whose leg received a hub-owner
+    // revenue-share Transfer must have that Transfer reversed here, proportional to
+    // how much of the LEG's total this specific item's refund represents (one leg's
+    // PaymentIntent can fund multiple Purchase rows for a multi-item booth leg).
+    // No-ops cleanly if the leg never had a revenue share or the Transfer never
+    // completed (stripeTransferId null or still the 'CLAIMING' claim sentinel —
+    // never attempt a reversal against a non-real Transfer id). Never fatal: the
+    // buyer-facing refund above already succeeded and must not be rolled back over a
+    // hub-owner-side reconciliation issue — failures are logged for manual follow-up.
+    if (isBoothCartPurchase && purchase.stripePaymentIntentId) {
+      try {
+        const leg = await prisma.boothCartLeg.findUnique({ where: { stripePaymentIntentId: purchase.stripePaymentIntentId } });
+        if (
+          leg?.stripeTransferId &&
+          leg.stripeTransferId !== 'CLAIMING' &&
+          leg.hubOwnerShareAmount &&
+          Number(leg.hubOwnerShareAmount) > 0 &&
+          leg.amountCents > 0
+        ) {
+          const refundedCents = Math.round(refundAmount * 100);
+          const hubOwnerShareCents = Math.round(Number(leg.hubOwnerShareAmount) * 100);
+          const reversalCents = Math.min(
+            hubOwnerShareCents,
+            Math.round(hubOwnerShareCents * (refundedCents / leg.amountCents))
+          );
+          if (reversalCents > 0) {
+            await stripe().transfers.createReversal(
+              leg.stripeTransferId,
+              { amount: reversalCents },
+              { idempotencyKey: `hub-owner-transfer-reversal-${purchase.id}` }
+            );
+          }
+        }
+      } catch (reversalErr) {
+        console.error(`[createRefund] Failed to reverse hub-owner Transfer for purchase ${purchaseId}:`, reversalErr);
+      }
+    }
+
     // Restore item to AVAILABLE if it exists
     if (purchase.itemId) {
       await prisma.item.update({

@@ -17,7 +17,7 @@ import { getWatermarkSetting, updateWatermarkSetting } from '../controllers/wate
 import { emailService } from '../lib/emailService';
 import { suppressionService } from '../services/suppressionService';
 import { getPlatformStats, getPlatformGap, updateEbayQueueSettings, addToEbayQueue, removeFromEbayQueue } from '../controllers/platformStatsController';
-import { startStandardMigration } from '../controllers/stripeConnectController';
+import { startStandardMigration, getHubOwnerStripeStatus, initiateHubOwnerStripeOnboarding } from '../controllers/stripeConnectController';
 
 const router = Router();
 
@@ -101,6 +101,11 @@ router.delete('/me/ebay-queue/:itemId', authenticate, removeFromEbayQueue);
 
 // Authenticated: get revenue analytics for the current organizer
 router.post('/me/stripe/start-standard-migration', authenticate, startStandardMigration);
+
+// ADR-090 Phase 1: hub-owner Stripe Connect onboarding (Standard account, reuses
+// Organizer.stripeConnectId — see stripeConnectController.ts for full rationale).
+router.get('/me/hub-owner/stripe/status', authenticate, getHubOwnerStripeStatus);
+router.post('/me/hub-owner/stripe/onboard', authenticate, initiateHubOwnerStripeOnboarding);
 
 router.get('/me/analytics', authenticate, async (req: AuthRequest, res: Response) => {
   try {
