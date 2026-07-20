@@ -28,6 +28,11 @@ jobs:
         working-directory: packages/backend
         run: pnpm install --frozen-lockfile
 
+      - name: Generate Prisma client
+        run: cd packages/database && npx prisma generate
+        env:
+          DATABASE_URL: "postgresql://dummy:dummy@localhost:5432/dummy"
+
       - name: Run EstateSale.com Scraper
         continue-on-error: true
         id: run_scraper
