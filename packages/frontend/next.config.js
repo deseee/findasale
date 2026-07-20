@@ -6,6 +6,12 @@ const withPWA = require('next-pwa')({
   register: false,
   skipWaiting: true,
   disable: process.env.NODE_ENV === 'development',
+  // Merges worker/index.js into the generated public/sw.js on every build
+  // (Workbox's runtimeCaching below is unaffected -- see worker/index.js's
+  // header comment for the full explanation). Fixes Feature #69 offline
+  // mode + push notifications both silently never surviving a real build.
+  // S1141, 2026-07-20.
+  customWorkerDir: 'worker',
   // Disable dynamic start-url re-fetching on every navigation.
   // When true (the default), next-pwa injects a cacheOnFrontEndNav helper into
   // main.js that calls fetch('/') on every history.pushState/replaceState.

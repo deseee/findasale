@@ -1,6 +1,19 @@
-# next-pwa build artifacts — generated at build time, must not be committed
-# public/sw.js — removed from ignore: now a manually-written file (#69 offline mode)
+# next-pwa build artifacts -- fully generated at build time, must not be
+# committed. public/sw.js is back in this list as of S1141 (2026-07-20):
+# it was previously hand-written (Feature #69) with a carve-out removing it
+# from this ignore list, but that hand-written version was silently
+# overwritten by every real build anyway (no swSrc/customWorkerDir was
+# configured, so next-pwa's GenerateSW always regenerates it from scratch).
+# The real, build-surviving source of custom SW logic is now
+# packages/frontend/worker/index.js (see next.config.js's customWorkerDir),
+# which next-pwa bundles into public/worker-*.js and auto-merges into this
+# generated sw.js. public/sw-cache.js and public/sw-push.js below are
+# pre-existing untracked local files (confirmed via git ls-files -- never
+# actually committed) from an earlier, never-wired-up attempt at the same
+# thing; their real logic has been ported into worker/index.js.
+public/sw.js
 public/sw-cache.js
 public/sw-push.js
+public/worker-*.js
 public/workbox-*.js
 public/fallback-*.js
