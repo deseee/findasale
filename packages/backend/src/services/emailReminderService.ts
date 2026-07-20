@@ -226,7 +226,7 @@ export const processReminderEmails = async (): Promise<void> => {
               title: `Tomorrow: ${sale.title}`,
               body: `${sale.address}, ${sale.city} — starts tomorrow`,
               url: saleUrl,
-            }).catch(err => console.warn(`Push failed for user ${subscriber.userId}:`, err.message));
+            }, { userId: subscriber.userId, type: 'SALE_REMINDER_ONE_DAY' }).catch(err => console.warn(`Push failed for user ${subscriber.userId}:`, err.message));
           }
         }
       }
@@ -287,7 +287,7 @@ export const processReminderEmails = async (): Promise<void> => {
               title: `Starting soon: ${sale.title}`,
               body: `${sale.address}, ${sale.city} — starts in about 2 hours`,
               url: saleUrl,
-            }).catch(err => console.warn(`Push failed for user ${subscriber.userId}:`, err.message));
+            }, { userId: subscriber.userId, type: 'SALE_REMINDER_TWO_HOURS' }).catch(err => console.warn(`Push failed for user ${subscriber.userId}:`, err.message));
           }
         }
       }

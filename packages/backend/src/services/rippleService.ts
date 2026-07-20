@@ -273,7 +273,8 @@ export const notifyNearbyFavorites = async (saleId: string, io: Server): Promise
                 title: 'New Sale Nearby!',
                 body: `${sale.title} just went live near you`,
                 url: `/sales/${saleId}`,
-              }
+              },
+              { userId: fav.userId, type: 'NEARBY_SALE_RIPPLE' }
             );
             console.log(`[rippleService] notified userId ${fav.userId} about sale ${saleId}`);
           } catch (err) {

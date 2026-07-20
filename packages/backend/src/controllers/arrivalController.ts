@@ -8,6 +8,7 @@
 import { Response } from 'express';
 import { prisma } from '../index';
 import { AuthRequest } from '../middleware/auth';
+import { sendPushNotification } from '../utils/webpush';
 
 /**
  * GET /api/sales/:saleId/approach-notes
@@ -225,6 +226,31 @@ export const sendApproachNotification = async (req: AuthRequest, res: Response) 
         )
       );
       notifications.push(...chunkResults);
+
+      // Bug fix: this endpoint previously only wrote a PushNotificationLog row (for the
+      // 24h dedup check above) and never actually delivered a browser push — organizers
+      // were told "notifications sent" but shoppers received nothing. Fetch each user's
+      // real PushSubscription rows and deliver the push for real. The log row above is
+      // the single source of truth for dedup, so no logInfo is passed here (would double-log).
+      const chunkSubscriptions = await prisma.pushSubscription.findMany({
+        where: { userId: { in: chunk } },
+      });
+      await Promise.all(
+        chunkSubscriptions.map(ps =>
+          sendPushNotification(ps, {
+            title: `Approach notes: ${sale.title}`,
+            body: sale.entranceNote
+              ? sale.entranceNote.slice(0, 120)
+              : `Parking and entrance info for ${sale.title}`,
+            url: `/sales/${sale.id}`,
+          }).catch(err =>
+            console.warn(
+              `[arrivalController] Approach-notes push failed for user ${ps.userId}:`,
+              err?.message
+            )
+          )
+        )
+      );
     }
 
     res.json({

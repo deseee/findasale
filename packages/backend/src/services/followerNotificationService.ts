@@ -97,7 +97,7 @@ await emailService.emails.send({
             title: `New sale: ${sale.title}`,
             body:  `${organizer.businessName} · ${sale.city}, ${sale.state} · ${formattedDate}`,
             url:   saleUrl,
-          }).catch((err: any) =>
+          }, { userId: follow.user.id, type: 'NEW_SALE_FOLLOW' }).catch((err: any) =>
             console.warn(
               `⚠ Follow push failed for user ${follow.user.id}:`,
               err?.message

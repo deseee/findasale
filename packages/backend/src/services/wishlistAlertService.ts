@@ -277,7 +277,7 @@ export const checkAlertsForNewSale = async (saleId: string): Promise<void> => {
             title: `Wishlist Match: ${alert.name}`,
             body: `${sale.title} · ${sale.city}, ${sale.state}`,
             url: saleUrl,
-          }).catch((err: any) =>
+          }, { userId: alert.user.id, type: 'WISHLIST_MATCH' }).catch((err: any) =>
             console.warn(`⚠ Wishlist push failed for user ${alert.user.id}:`, err?.message)
           );
         }

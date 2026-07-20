@@ -192,6 +192,7 @@ export const checkPassportMatchForNewSale = async (saleId: string): Promise<void
 
       if (passport.notifyPush && passport.user.pushSubscriptions.length > 0) {
         sendMatchNotificationPush(
+          passport.user.id,
           passport.user.pushSubscriptions,
           matchedItems,
           sale
@@ -299,6 +300,7 @@ const sendMatchNotificationEmail = async (
  * Send push notification to collector about matching items
  */
 const sendMatchNotificationPush = async (
+  userId: string,
   pushSubscriptions: any[],
   matchedItems: any[],
   sale: any
@@ -314,7 +316,7 @@ const sendMatchNotificationPush = async (
   };
 
   for (const subscription of pushSubscriptions) {
-    await sendPushNotification(subscription, message).catch((err) => {
+    await sendPushNotification(subscription, message, { userId, type: 'COLLECTOR_PASSPORT_MATCH' }).catch((err) => {
       console.error('[collectorPassport] Push notification failed:', err);
     });
   }

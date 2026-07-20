@@ -168,7 +168,7 @@ export const processSaleEndingSoonNotifications = async (): Promise<void> => {
                     hour12: true,
                   })}`,
                   url: saleUrl,
-                }).catch((err) =>
+                }, { userId: subscriber.userId, type: 'SALE_ENDING_SOON' }).catch((err) =>
                   console.warn(
                     `Sale ending soon push failed for user ${subscriber.userId}:`,
                     err?.message

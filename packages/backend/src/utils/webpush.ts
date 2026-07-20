@@ -13,6 +13,8 @@
  *   pnpm --filter backend add -D @types/web-push
  */
 
+import { prisma } from '../lib/prisma';
+
 let _webpush: any = null;
 
 const getWebPush = () => {
@@ -44,9 +46,17 @@ export interface PushPayload {
   url?: string;
 }
 
+// Optional — when provided, a real send attempt is recorded in PushNotificationLog
+// (userId + type identify who/why; the sentAt column is set by the DB default).
+export interface PushLogInfo {
+  userId: string;
+  type: string;
+}
+
 export const sendPushNotification = async (
   subscription: { endpoint: string; p256dh: string; auth: string },
-  payload: PushPayload
+  payload: PushPayload,
+  logInfo?: PushLogInfo
 ): Promise<void> => {
   const wp = getWebPush();
   if (!wp) return;
@@ -58,4 +68,18 @@ export const sendPushNotification = async (
     },
     JSON.stringify(payload)
   );
+
+  if (logInfo) {
+    try {
+      await prisma.pushNotificationLog.create({
+        data: {
+          userId: logInfo.userId,
+          type: logInfo.type,
+          payload: { title: payload.title, body: payload.body, url: payload.url ?? null },
+        },
+      });
+    } catch (err) {
+      console.warn('[webpush] Failed to write PushNotificationLog:', err);
+    }
+  }
 };

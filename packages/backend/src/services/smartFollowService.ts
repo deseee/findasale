@@ -160,7 +160,7 @@ export const checkFollowsForNewSale = async (sale: SaleInfo): Promise<void> => {
             title: `New sale from ${organizer.businessName}`,
             body: `${sale.title} · ${sale.city}, ${sale.state}`,
             url: saleUrl,
-          }).catch((err: any) =>
+          }, { userId: follow.user.id, type: 'SMART_FOLLOW_NEW_SALE' }).catch((err: any) =>
             console.warn(
               `⚠ Smart follow push failed for user ${follow.user.id}:`,
               err?.message
