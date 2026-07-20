@@ -37,27 +37,11 @@ export async function enqueueMarketplacePostJob(itemId: string): Promise<void> {
   // would sit QUEUED forever (confirmed live 2026-07-20: a real REMOVE job for
   // this organizer had attemptCount=0/lastAttemptAt=null, meaning it was never
   // even picked up). No-op until/unless ADR-083 is deliberately re-enabled.
+  // (Dead try/catch body removed 2026-07-20 -- unreachable code was still fully
+  // type-checked by tsc, and its postedJob/remoteListingId null-narrowing broke
+  // CI once this return made it unreachable. See git history for the old body
+  // if ADR-083 is ever re-enabled.)
   return;
-  // eslint-disable-next-line no-unreachable
-  try {
-    const item = await prisma.item.findUnique({
-      where: { id: itemId },
-      select: {
-        id: true,
-        sale: { select: { organizer: { select: { marketplaceAutoPostEnabled: true } } } },
-      },
-    });
-
-    if (!item?.sale?.organizer?.marketplaceAutoPostEnabled) {
-      return; // opt-in feature — do nothing unless the organizer has turned it on
-    }
-
-    await prisma.marketplaceListingJob.create({
-      data: { itemId, action: 'POST', status: 'QUEUED' },
-    });
-  } catch (err) {
-    console.warn(`[marketplace-poster] Failed to enqueue POST job for item ${itemId}:`, err);
-  }
 }
 
 /**
@@ -70,35 +54,9 @@ export async function enqueueMarketplacePostJob(itemId: string): Promise<void> {
 export async function enqueueMarketplaceRemoveJobIfPosted(itemId: string): Promise<void> {
   // Same reasoning as enqueueMarketplacePostJob above -- the consuming cron is
   // disabled, so this would only create orphaned QUEUED rows. No-op.
+  // (Dead try/catch body removed 2026-07-20 -- see enqueueMarketplacePostJob's
+  // comment above; same unreachable-code CI break, same fix.)
   return;
-  // eslint-disable-next-line no-unreachable
-  try {
-    const postedJob = await prisma.marketplaceListingJob.findFirst({
-      where: { itemId, action: 'POST', status: 'POSTED' },
-      orderBy: { createdAt: 'desc' },
-    });
-
-    if (!postedJob || !postedJob.remoteListingId) {
-      return; // never auto-posted (or posted but no remote id captured) — nothing to remove
-    }
-
-    // Avoid double-queueing a REMOVE for the same posted job
-    const existingRemove = await prisma.marketplaceListingJob.findFirst({
-      where: { itemId, action: 'REMOVE', status: { in: ['QUEUED', 'RUNNING', 'REMOVED'] } },
-    });
-    if (existingRemove) return;
-
-    await prisma.marketplaceListingJob.create({
-      data: {
-        itemId,
-        action: 'REMOVE',
-        status: 'QUEUED',
-        remoteListingId: postedJob.remoteListingId,
-      },
-    });
-  } catch (err) {
-    console.warn(`[marketplace-poster] Failed to enqueue REMOVE job for item ${itemId}:`, err);
-  }
 }
 
 /** The engine the cron calls each run. Processes all currently-due QUEUED jobs. */
