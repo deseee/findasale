@@ -74,6 +74,18 @@ const OAuthCallbackPage = () => {
         }
       }
 
+      // NOTE (2026-07-20): claimOrganizerId (Feature #443 claim flow) is intentionally
+      // NOT handled here. It's handled once, authoritatively, in _app.tsx's OAuthBridge —
+      // which is mounted globally and fires on every page after any OAuth login with a
+      // pending oauthProfile, already sequenced correctly (JWT exchange completes first,
+      // then the claim call fires with a real Authorization header). An earlier version of
+      // this fix added a second, independent claim-oauth call here too, keyed off raw
+      // NextAuth session status rather than the app's own auth state — that call could fire
+      // (and consume the sessionStorage key) before OAuthBridge's exchange had actually
+      // finished, i.e. before valid auth existed for it, racing against the correct handler.
+      // Removed rather than synchronized: one authoritative caller is simpler than two
+      // coordinated ones.
+
       // Redirect to dashboard or home
       const redirectTo = router.query.returnTo || '/organizer/dashboard';
       router.push(redirectTo as string);

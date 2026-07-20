@@ -51,7 +51,7 @@ export const getRegistrationChallenge = async (req: Request, res: Response) => {
 
 export const register = async (req: Request, res: Response) => {
   try {
-    const { email: rawEmail, password, name: rawName, role, referralCode, affiliateReferralCode, inviteCode, businessName, phone, businessAddress, consentOrganizer, consentShopper, deviceFingerprint, dateOfBirth, country, province, challengeToken, challengeNonce, website } = req.body;
+    const { email: rawEmail, password, name: rawName, role, referralCode, affiliateReferralCode, inviteCode, businessName, phone, businessAddress, consentOrganizer, consentShopper, deviceFingerprint, dateOfBirth, country, province, challengeToken, challengeNonce, website, claimOrganizerId } = req.body;
 
     // H3: Normalise email/name to prevent duplicate accounts from whitespace/case variations
     const email = rawEmail?.trim().toLowerCase();
@@ -197,7 +197,13 @@ export const register = async (req: Request, res: Response) => {
         }
       }
 
-      if (effectiveRole === 'ORGANIZER') {
+      // BUG FIX (2026-07-20): when arriving via the organizer-profile "Claim This
+      // Profile" flow (?claim=<organizerId>), do NOT auto-create a blank Organizer here —
+      // that always collided with the follow-up POST /organizers/:id/claim-oauth call
+      // (its existingOrg check saw the just-created blank profile and rejected the real
+      // claim with 409 ALREADY_ORGANIZER, silently, 100% of the time). Skip creation and
+      // let claim-oauth attach this user to the real existing listing instead.
+      if (effectiveRole === 'ORGANIZER' && !claimOrganizerId) {
         await tx.organizer.create({
           data: {
             userId: newUser.id,

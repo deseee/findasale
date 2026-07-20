@@ -46,7 +46,13 @@ const ClaimListingBanner: React.FC<ClaimListingBannerProps> = ({ saleId, cityNam
     if (typeof window !== 'undefined') {
       sessionStorage.setItem('claimOrganizerId', organizerId);
     }
-    signIn(provider);
+    // BUG FIX (2026-07-20): this call had no callbackUrl, so NextAuth used its default
+    // post-OAuth redirect instead of /auth/oauth-callback — the only page that actually
+    // reads claimOrganizerId back out of sessionStorage and calls claim-oauth. The claim
+    // intent was set here and then never picked up anywhere; the OAuth login itself
+    // "worked" (matching the old S762 evidence: "buttons trigger OAuth flows"), which is
+    // why this passed QA even though no claim ever completed.
+    signIn(provider, { callbackUrl: '/auth/oauth-callback' });
   };
 
   const totalLabel = loading || stats === null

@@ -2100,8 +2100,34 @@ router.get('/claim/verify/:token', async (req: Request, res: Response) => {
 });
 
 
-// Feature #443: POST /organizers/:id/claim-oauth — 1-click OAuth claim for ghost listings
-router.post('/:id/claim-oauth', authenticate, async (req: AuthRequest, res: Response) => {
+// BUG FIX (2026-07-20): lightweight, non-blocking ownership signal for 1-click claims.
+// Doesn't block the claim (that would reintroduce the multi-day manual-review friction
+// the old /claim page had, which killed conversion on its own) — just records whether the
+// claiming user's email domain matches a domain already on file for this business, so
+// unverified claims are visible/reviewable instead of indistinguishable from verified ones.
+function domainOf(value: string | null | undefined): string | null {
+  if (!value) return null;
+  try {
+    const raw = value.includes('@') ? value.split('@').pop()! : value;
+    const withScheme = raw.startsWith('http') ? raw : `http://${raw}`;
+    let host = new URL(withScheme).hostname.toLowerCase();
+    if (host.startsWith('www.')) host = host.slice(4);
+    return host || null;
+  } catch {
+    return null;
+  }
+}
+
+// Feature #443: POST /organizers/:id/claim-oauth — 1-click claim for ghost listings
+// SECURITY FIX (findasale-hacker pass, 2026-07-20): the sibling manual-review claim
+// endpoint (POST /:id/claim, line ~1939) already carries publicDirectoryRateLimiter;
+// this one didn't. The per-account blast radius is already capped at exactly one
+// successful claim (Organizer.userId is @unique, and the existingOrg check blocks a
+// second claim from the same account), so this isn't an unbounded attack surface, but
+// there was nothing throttling how fast a single account could probe/attempt claims
+// against different organizer ids before hitting that wall. Added for consistency and
+// defense-in-depth, not because a critical hole was open.
+router.post('/:id/claim-oauth', authenticate, publicDirectoryRateLimiter, async (req: AuthRequest, res: Response) => {
   try {
     const id = req.params.id;
 
@@ -2130,6 +2156,24 @@ router.post('/:id/claim-oauth', authenticate, async (req: AuthRequest, res: Resp
     const currentRoles = req.user.roles || ['USER'];
     const newRoles = [...new Set([...currentRoles, 'ORGANIZER'])];
 
+    // Ownership signal (non-blocking) — does the claiming user's email domain match
+    // any domain already on file for this business?
+    const claimantDomain = domainOf(req.user.email);
+    const knownDomains = [domainOf(organizer.website), domainOf(organizer.scrapedEmail), domainOf(organizer.contactEmail)];
+    const domainMatch = claimantDomain !== null && knownDomains.includes(claimantDomain);
+    const PERSONAL_EMAIL_DOMAINS = new Set(['gmail.com', 'yahoo.com', 'icloud.com', 'hotmail.com', 'aol.com', 'outlook.com', 'comcast.net', 'msn.com', 'live.com', 'me.com']);
+    // Personal-provider domains (gmail/yahoo/etc.) never count as a verifying match —
+    // matching on "gmail.com" proves nothing about which gmail account it is.
+    // SECURITY FIX (findasale-hacker pass, 2026-07-20): a domain match alone is not proof
+    // of ownership if the registering email was never verified — email/password signup
+    // does not require verifying the address before this check runs (emailVerified starts
+    // false and only flips via a link the user may never click), so anyone could type
+    // owner@targetbusiness.com at registration and claim that business with an instant
+    // "VERIFIED" badge without ever proving they control that inbox. OAuth signups are
+    // exempt from this extra gate because the provider (Google/Facebook) already verified
+    // the email before authController.ts ever sees it (emailVerified: true at creation).
+    const isVerifiedMatch = domainMatch && claimantDomain !== null && !PERSONAL_EMAIL_DOMAINS.has(claimantDomain) && req.user.emailVerified === true;
+
     // Atomic claim transaction with optimistic lock (where: { id, isClaimed: false })
     await prisma.$transaction([
       prisma.organizer.update({
@@ -2140,6 +2184,8 @@ router.post('/:id/claim-oauth', authenticate, async (req: AuthRequest, res: Resp
           isHiddenFromDirectory: false,
           claimStatus: 'CLAIMED',
           userId: req.user.id,
+          verificationStatus: isVerifiedMatch ? 'VERIFIED' : 'PENDING',
+          verificationSource: isVerifiedMatch ? 'email_domain_match' : 'self_attested_unverified',
         },
       }),
       prisma.user.update({
@@ -2148,7 +2194,7 @@ router.post('/:id/claim-oauth', authenticate, async (req: AuthRequest, res: Resp
       }),
     ])
 
-    return res.json({ success: true, organizerId: id });
+    return res.json({ success: true, organizerId: id, verified: isVerifiedMatch });
   } catch (error: any) {
     // P2025 = Prisma record not found (optimistic lock failed — race condition)
     if (error?.code === 'P2025') {

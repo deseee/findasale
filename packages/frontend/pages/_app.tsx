@@ -128,6 +128,7 @@ function OAuthBridge() {
   const { login } = useAuth();
   const router = useRouter();
   const [exchanging, setExchanging] = useState(false);
+  const { showToast } = useToast();
 
   useEffect(() => {
     const oauthProfile = (session as any)?.oauthProfile;
@@ -188,17 +189,34 @@ function OAuthBridge() {
               : null;
             if (claimOrganizerId) {
               sessionStorage.removeItem('claimOrganizerId');
+              // BUG FIX (2026-07-20): this previously only caught network-level throws —
+              // fetch() does NOT reject on a non-2xx response (e.g. 409 ALREADY_ORGANIZER /
+              // ALREADY_CLAIMED), so a failed claim fell straight through to the unconditional
+              // "?claimed=true" redirect below with no error ever surfaced. This is the most
+              // likely real-world path for the claim flow (fires on every OAuth login with a
+              // pending claim, regardless of which page NextAuth returns to), so this was
+              // almost certainly the dominant silent-failure site.
+              let claimOk = false;
               try {
-                await fetch(`/api/organizers/${claimOrganizerId}/claim-oauth`, {
+                const claimRes = await fetch(`/api/organizers/${claimOrganizerId}/claim-oauth`, {
                   method: 'POST',
                   headers: { Authorization: `Bearer ${data.token}` },
                   credentials: 'include',
                 });
+                claimOk = claimRes.ok;
+                if (!claimRes.ok) {
+                  const claimErrData = await claimRes.json().catch(() => ({}));
+                  console.error('[claim-oauth] failed:', claimRes.status, claimErrData);
+                }
               } catch (e) {
-                // Non-fatal — user is logged in, claim failed silently
                 console.error('[claim-oauth] failed:', e);
               }
-              router.replace('/organizer/dashboard?claimed=true');
+              if (claimOk) {
+                router.replace('/organizer/dashboard?claimed=true');
+              } else {
+                showToast("Your account was created, but claiming this listing didn't go through. Contact support@finda.sale and we'll sort it out.", 'error');
+                router.replace('/organizer/dashboard');
+              }
               signOut({ redirect: false });
               return;
             }

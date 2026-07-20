@@ -254,6 +254,12 @@ const RegisterPage = () => {
         payload.phone = formData.phone;
         payload.businessAddress = formData.businessAddress;
         payload.consentOrganizer = organizerEmailConsent;
+        // BUG FIX (2026-07-20): tell the backend this signup is claiming an existing
+        // listing so it doesn't auto-create a colliding blank Organizer profile — see
+        // authController.ts register(). Read fresh from sessionStorage (not just the
+        // claimOrganizerId state var) since this is the same value set on mount.
+        const pendingClaimId = sessionStorage.getItem('claimOrganizerId');
+        if (pendingClaimId) payload.claimOrganizerId = pendingClaimId;
       }
       if (formData.role === 'USER') {
         payload.consentShopper = shopperEmailConsent;
@@ -291,8 +297,19 @@ const RegisterPage = () => {
           sessionStorage.removeItem('claimOrganizerId');
           try {
             await api.post(`/organizers/${storedClaimId}/claim-oauth`);
-          } catch (_) { /* non-fatal — user is logged in, claim failed silently */ }
-          router.push('/organizer/dashboard?claimed=true');
+            router.push('/organizer/dashboard?claimed=true');
+          } catch (claimErr: any) {
+            // BUG FIX (2026-07-20): this used to be swallowed silently — the user landed
+            // on the dashboard believing they'd claimed their listing when they hadn't.
+            // Account creation still succeeded (they're logged in), so don't block that —
+            // but tell them the claim itself didn't go through instead of hiding it.
+            console.error('[register] claim-oauth failed:', claimErr);
+            const claimMsg = claimErr?.response?.data?.error === 'ALREADY_CLAIMED'
+              ? 'This listing was just claimed by someone else. Contact support@finda.sale if that seems wrong.'
+              : "Your account was created, but claiming this listing didn't go through. Contact support@finda.sale and we'll sort it out.";
+            showToast(claimMsg, 'error');
+            router.push('/organizer/dashboard');
+          }
           return;
         }
         router.push('/organizer/dashboard');
