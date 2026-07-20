@@ -141,8 +141,12 @@ export async function geocodeAddress(
     console.error('[geocodingService] Strategy 2 (Nominatim free-text) error:', err instanceof Error ? err.message : err);
   }
 
-  // Strategy 3: US Census Geocoder (US-only — skip for Canadian/non-US states)
-  if (isNonUsState(state)) {
+  // Strategy 3: US Census Geocoder (US-only — skip for Canadian/non-US states,
+  // and skip when there's no street — the Census structured /address endpoint
+  // requires `street` and 400s outright without it, rather than returning an
+  // empty match list. Confirmed via live Railway logs 2026-07-20 (mirrors the
+  // same fix in geocodeBacklogJob.ts's copy of this strategy chain).
+  if (isNonUsState(state) || !(address || '').trim()) {
     return null;
   }
   try {
