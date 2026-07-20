@@ -21,7 +21,13 @@ export async function runDeliverabilityMonitor(): Promise<void> {
   // Counting them inflates the reported bounce rate and fires false-positive alerts.
   const recentSuppressions = await prisma.emailSuppression.count({
     where: {
-      suppressedAt: { gte: sevenDaysAgo },
+      // Use createdAt (true bounce-event time), NOT suppressedAt/updatedAt - those get
+      // re-touched by the daily reclassify-bounces backfill and bounceSuppressService
+      // re-processing, which re-dates old bounces into the "recent" window and inflates
+      // this alert (confirmed 2026-07-20: a 07-19 alert reported 4.4%/4 bounces when the
+      // true createdAt-basis rate was 2.2%/2 - two 07-10 bounces were double-counted after
+      // a 07-13 backfill touched their suppressedAt). See CLAUDE.md D2 INCIDENT LOG.
+      createdAt: { gte: sevenDaysAgo },
       suppressionReason: { not: 'COMPETITOR_DOMAIN' },
     },
   });

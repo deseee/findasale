@@ -451,6 +451,12 @@ importers:
       typescript:
         specifier: ^5
         version: 5.9.3
+      workbox-precaching:
+        specifier: ^6.6.0
+        version: 6.6.0
+      workbox-routing:
+        specifier: ^6.6.0
+        version: 6.6.0
       zod:
         specifier: ^3.22.4
         version: 3.25.76
