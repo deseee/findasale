@@ -17,3 +17,11 @@ public/sw-push.js
 public/worker-*.js
 public/workbox-*.js
 public/fallback-*.js
+
+# next-sitemap postbuild output (package.json "postbuild": "next-sitemap" runs
+# on every `next build`, including every Vercel deploy) -- these are fully
+# regenerated every build, same class as public/sw.js above. Found untracked
+# 2026-07-20 after a native build; server-sitemap.xml is NOT here -- that's a
+# real committed Next.js page (pages/server-sitemap.xml.tsx), not a build artifact.
+public/sitemap.xml
+public/sitemap-*.xml
