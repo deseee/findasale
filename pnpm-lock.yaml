@@ -376,6 +376,9 @@ importers:
       axios:
         specifier: ^1.18.1
         version: 1.18.1
+      babel-loader:
+        specifier: ^8.4.1
+        version: 8.4.1(@babel/core@7.29.7)(webpack@5.108.4(postcss@8.5.16))
       date-fns:
         specifier: ^2.30.0
         version: 2.30.0
