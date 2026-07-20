@@ -12,7 +12,7 @@ import { useAuth } from '../components/AuthContext';
  *   4. Run: npx web-push generate-vapid-keys
  */
 
-const urlBase64ToUint8Array = (base64String: string) => {
+export const urlBase64ToUint8Array = (base64String: string) => {
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
   const rawData = atob(base64);
@@ -33,6 +33,10 @@ export const usePushSubscription = () => {
 
     const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
     if (!publicKey) return; // Push not configured yet
+
+    // Respect an explicit user opt-out — don't silently re-subscribe someone
+    // who disabled push notifications from the settings page.
+    if (localStorage.getItem('findasale_push_disabled') === 'true') return;
 
     const subscribe = async () => {
       try {

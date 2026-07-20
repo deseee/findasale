@@ -15,6 +15,7 @@ import { useAuth } from '../../components/AuthContext';
 import { useToast } from '../../components/ToastContext';
 import { useFeedbackSurvey } from '../../hooks/useFeedbackSurvey';
 import { useTheme } from '../../hooks/useTheme';
+import { urlBase64ToUint8Array } from '../../hooks/usePushSubscription';
 import { useOrganizerTier } from '../../hooks/useOrganizerTier';
 import { useNetworkQuality } from '../../hooks/useNetworkQuality';
 import Tooltip from '../../components/Tooltip';
@@ -76,6 +77,7 @@ const OrganizerSettingsPage = () => {
   const [fontSize, setFontSize] = useState(16);
   const [isSimpleMode, setIsSimpleMode] = useState(false);
   const [aiAssistanceEnabled, setAiAssistanceEnabled] = useState(true);
+  const [pushSubscribed, setPushSubscribed] = useState<boolean | null>(null);
   const [isFeedbackMenuOpen, setIsFeedbackMenuOpen] = useState(false);
   const { highContrast, setHighContrast } = useTheme();
   const queryClient = useQueryClient();
@@ -449,6 +451,23 @@ const OrganizerSettingsPage = () => {
     const aiAssistanceSaved = localStorage.getItem('findasale_ai_assistance_enabled');
     if (aiAssistanceSaved === 'false') {
       setAiAssistanceEnabled(false);
+    }
+
+    // Reflect the REAL push subscription state, not just browser permission
+    // (permission can be 'granted' forever even after the user unsubscribes).
+    if ('serviceWorker' in navigator && 'PushManager' in window) {
+      navigator.serviceWorker.getRegistration()
+        .then(async (reg) => {
+          if (!reg) {
+            setPushSubscribed(false);
+            return;
+          }
+          const sub = await reg.pushManager.getSubscription();
+          setPushSubscribed(!!sub);
+        })
+        .catch(() => setPushSubscribed(false));
+    } else {
+      setPushSubscribed(false);
     }
 
     // Set active tab from query param (e.g. /organizer/settings?tab=profile)
@@ -1137,7 +1156,7 @@ const OrganizerSettingsPage = () => {
                 </label>
                 <div className="border-t border-warm-100 dark:border-gray-700 pt-4 mt-2">
                   <p className="text-sm font-medium text-warm-800 dark:text-gray-200 mb-3">Push Notifications</p>
-                  {typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted' ? (
+                  {pushSubscribed ? (
                     <div className="flex items-center justify-between">
                       <span className="text-warm-700 dark:text-gray-300 text-sm">Push notifications are enabled</span>
                       <button
@@ -1150,6 +1169,8 @@ const OrganizerSettingsPage = () => {
                               if (sub) {
                                 await sub.unsubscribe();
                                 await api.delete('/push/unsubscribe', { data: { endpoint: sub.endpoint } });
+                                localStorage.setItem('findasale_push_disabled', 'true');
+                                setPushSubscribed(false);
                                 showToast('Push notifications disabled', 'success');
                               }
                             }
@@ -1170,11 +1191,31 @@ const OrganizerSettingsPage = () => {
                         onClick={async () => {
                           try {
                             const permission = await Notification.requestPermission();
-                            if (permission === 'granted') {
-                              showToast('Push notifications enabled', 'success');
-                            } else {
+                            if (permission !== 'granted') {
                               showToast('Permission denied — check your browser settings', 'error');
+                              return;
                             }
+
+                            const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+                            if (!publicKey) {
+                              showToast('Push notifications not configured', 'error');
+                              return;
+                            }
+
+                            const reg = await navigator.serviceWorker.ready;
+                            const subscription = await reg.pushManager.subscribe({
+                              userVisibleOnly: true,
+                              applicationServerKey: urlBase64ToUint8Array(publicKey) as any,
+                            });
+                            const { endpoint, keys } = subscription.toJSON() as {
+                              endpoint: string;
+                              keys: { p256dh: string; auth: string };
+                            };
+                            await api.post('/push/subscribe', { endpoint, keys });
+
+                            localStorage.removeItem('findasale_push_disabled');
+                            setPushSubscribed(true);
+                            showToast('Push notifications enabled', 'success');
                           } catch {
                             showToast('Push notifications not supported on this browser', 'error');
                           }
