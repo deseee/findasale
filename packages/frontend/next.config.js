@@ -411,8 +411,10 @@ const nextConfig = {
 module.exports = withSentryConfig(withPWA(nextConfig), {
   // Suppress non-essential Sentry CLI output during builds
   silent: true,
-  // Hide source maps from client bundle (security)
-  hideSourceMaps: true,
+  // hideSourceMaps removed in Sentry SDK v9/v10 -- no replacement needed.
+  // The SDK now emits client bundles without a sourceMappingURL by default,
+  // so hidden source maps are the automatic behavior. (Verified via Sentry
+  // docs during the v8->v10 bump, S1141 2026-07-20.)
   // Tree-shake Sentry logger in production
   disableLogger: true,
   // Source map upload requires SENTRY_AUTH_TOKEN — skipped until configured
