@@ -146,6 +146,18 @@ const nextConfig = {
   reactStrictMode: true,
   swcMinify: true,
 
+  // Limit static-generation worker parallelism to 1. Default spawns a worker
+  // per available CPU core, each a separate Node process with its own V8
+  // heap -- with 300+ prerendered pages (47-market city/estate-sales/
+  // yard-sales/auctions/flea-markets/this-weekend/companies pages) this can
+  // exceed available system memory (confirmed 2026-07-20: native build hit
+  // "FATAL ERROR: Zone Allocation failed - process out of memory" right
+  // after "Collecting page data" succeeded; GC log showed the JS heap itself
+  // was tiny (13-31MB), so --max-old-space-size did NOT help -- this is an
+  // OS-level allocation failure from too many concurrent workers, not a V8
+  // heap ceiling). Trades build time for memory; safe, no runtime effect.
+  experimental: { cpus: 1 },
+
   // Prevent Vercel's edge layer from issuing a trailing-slash redirect that
   // would strip query params (including UTM params) before Next.js sees them.
   // Without this, a request to /trending?utm_source=outreach can be redirected
