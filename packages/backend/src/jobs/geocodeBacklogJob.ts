@@ -97,7 +97,8 @@ async function geocodeSaleAddress(
   address: string,
   city: string,
   state: string,
-  zip: string
+  zip: string,
+  saleId: string
 ): Promise<GeoResult | null> {
   // Strategy 1: Structured Nominatim query
   try {
@@ -116,7 +117,7 @@ async function geocodeSaleAddress(
       };
     }
   } catch (err) {
-    console.warn('[geocodeBacklog] Strategy 1 (Nominatim structured) error:', (err as Error).message);
+    console.warn(`[geocodeBacklog] Strategy 1 (Nominatim structured) error for sale ${saleId}:`, (err as Error).message);
   }
 
   // Strategy 2: Nominatim free-text fallback
@@ -133,7 +134,7 @@ async function geocodeSaleAddress(
       };
     }
   } catch (err) {
-    console.warn('[geocodeBacklog] Strategy 2 (Nominatim free-text) error:', (err as Error).message);
+    console.warn(`[geocodeBacklog] Strategy 2 (Nominatim free-text) error for sale ${saleId}:`, (err as Error).message);
   }
 
   // Strategy 3: US Census Geocoder (US-only — skip for Canadian/non-US states,
@@ -170,7 +171,7 @@ async function geocodeSaleAddress(
       };
     }
   } catch (err) {
-    console.warn('[geocodeBacklog] Strategy 3 (US Census) error:', (err as Error).message);
+    console.warn(`[geocodeBacklog] Strategy 3 (US Census) error for sale ${saleId} (street="${address}", zip="${zip}"):`, (err as Error).message);
   }
 
   return null;
@@ -233,7 +234,8 @@ async function runGeocodeBacklog(): Promise<void> {
         sale.address ?? '',
         sale.city ?? '',
         sale.state ?? '',
-        sale.zip ?? ''
+        sale.zip ?? '',
+        sale.id
       );
 
       if (result) {
