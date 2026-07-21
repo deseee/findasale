@@ -20,27 +20,38 @@
 export const EBAY_SHIPPING_FVF_RATE = 0.136;
 
 /**
- * Pirate Ship USPS Ground Advantage rates, effective 2026-04-26 (below-commercial tier).
- * eBay uses the same USPS Connect eCommerce rate tier. These rates are ±5-10% of eBay
- * label costs. Zone columns are averages of USPS zones 1+2 (z12), 3+4 (z34), 5, 6, 7, 8.
+ * USPS Ground Advantage rates, real-anchored 2026-07-21 — pulled directly from eBay's
+ * own live shipping calculator (ebay.com/shp/calc/rates) using Patrick's real connected
+ * eBay seller account, so these are eBay's actual negotiated USPS Ground Advantage
+ * rates, not a third-party reseller estimate. Same sourcing method as the UPS/FedEx
+ * tables below. 1lb anchors per zone, origin ZIP 49079 (Paw Paw MI, real ship-from
+ * address): z12 $6.56 (Chicago IL 60601, 92mi), z34 $7.02 (Nashville TN 37201, 419mi),
+ * z5 $7.90 (Dallas TX 75201, 882mi), z6 $8.75 (Albuquerque NM 87101, 1219mi), z7 $9.02
+ * (Phoenix AZ 85001, 1544mi), z8 $10.13 (Quilcene WA 98365, 1830mi — replaces the prior
+ * 90210 Beverly Hills anchor; 98365 is the actual farthest-CONUS-corner test point).
+ * Remaining weight tiers scaled from the prior curve shape by the real/prior ratio
+ * observed at 1lb per zone. Replaces the 2026-04-26 Pirate Ship-sourced table, which
+ * predated USPS's 2026-07-12 Ground Advantage Commercial rate increase (~11.8%, 7.8%
+ * avg) and dimensional-divisor change (166→139, see DIM_DIVISOR_USPS below).
+ * Zone columns are averages of USPS zones 1+2 (z12), 3+4 (z34), 5, 6, 7, 8.
  * maxLb = inclusive upper bound in pounds. All prices in USD.
  */
 const RATE_TABLE: Array<{ maxLb: number; z12: number; z34: number; z5: number; z6: number; z7: number; z8: number }> = [
-  { maxLb: 0.25,   z12: 5.54,  z34: 5.68,  z5: 5.83,   z6: 6.00,   z7: 6.13,   z8: 6.36  },  // 1–4 oz
-  { maxLb: 0.5,    z12: 6.09,  z34: 6.24,  z5: 6.36,   z6: 6.44,   z7: 6.56,   z8: 6.74  },  // 5–8 oz
-  { maxLb: 0.75,   z12: 6.21,  z34: 6.36,  z5: 6.52,   z6: 6.74,   z7: 6.90,   z8: 7.13  },  // 9–12 oz
-  { maxLb: 0.9999, z12: 6.94,  z34: 7.38,  z5: 7.69,   z6: 7.86,   z7: 8.07,   z8: 8.40  },  // 13–15.99 oz
-  { maxLb: 1,      z12: 7.65,  z34: 8.08,  z5: 8.74,   z6: 9.63,   z7: 9.98,   z8: 10.67 },  // 1 lb
-  { maxLb: 2,      z12: 8.04,  z34: 8.39,  z5: 9.95,   z6: 11.58,  z7: 12.00,  z8: 12.87 },
-  { maxLb: 3,      z12: 8.65,  z34: 9.41,  z5: 11.57,  z6: 13.59,  z7: 14.36,  z8: 15.75 },
-  { maxLb: 5,      z12: 9.73,  z34: 10.58, z5: 13.48,  z6: 15.89,  z7: 17.12,  z8: 19.19 },
-  { maxLb: 7,      z12: 9.99,  z34: 11.26, z5: 14.90,  z6: 17.65,  z7: 19.23,  z8: 21.83 },
-  { maxLb: 10,     z12: 12.09, z34: 13.81, z5: 16.76,  z6: 19.94,  z7: 21.97,  z8: 25.34 },
-  { maxLb: 14,     z12: 14.90, z34: 16.47, z5: 20.38,  z6: 24.14,  z7: 26.99,  z8: 31.53 },
-  { maxLb: 20,     z12: 16.76, z34: 18.85, z5: 24.93,  z6: 30.32,  z7: 34.67,  z8: 40.39 },
-  { maxLb: 30,     z12: 30.92, z34: 41.10, z5: 59.28,  z6: 71.88,  z7: 84.24,  z8: 96.60 },
-  { maxLb: 50,     z12: 44.92, z34: 59.80, z5: 89.60,  z6: 109.94, z7: 129.95, z8: 150.27 },
-  { maxLb: 70,     z12: 55.48, z34: 71.67, z5: 110.97, z6: 137.46, z7: 163.73, z8: 191.31 },
+  { maxLb: 0.25,   z12: 4.75,  z34: 4.93,  z5: 5.27,   z6: 5.45,   z7: 5.54,   z8: 6.04  },
+  { maxLb: 0.5,    z12: 5.22,  z34: 5.42,  z5: 5.75,   z6: 5.85,   z7: 5.93,   z8: 6.40  },
+  { maxLb: 0.75,   z12: 5.33,  z34: 5.53,  z5: 5.89,   z6: 6.12,   z7: 6.24,   z8: 6.77  },
+  { maxLb: 0.9999, z12: 5.95,  z34: 6.41,  z5: 6.95,   z6: 7.14,   z7: 7.29,   z8: 7.97  },
+  { maxLb: 1,      z12: 6.56,  z34: 7.02,  z5: 7.90,   z6: 8.75,   z7: 9.02,   z8: 10.13 },
+  { maxLb: 2,      z12: 6.89,  z34: 7.29,  z5: 8.99,   z6: 10.52,  z7: 10.85,  z8: 12.22 },
+  { maxLb: 3,      z12: 7.42,  z34: 8.18,  z5: 10.46,  z6: 12.35,  z7: 12.98,  z8: 14.95 },
+  { maxLb: 5,      z12: 8.34,  z34: 9.19,  z5: 12.18,  z6: 14.44,  z7: 15.47,  z8: 18.22 },
+  { maxLb: 7,      z12: 8.57,  z34: 9.78,  z5: 13.47,  z6: 16.04,  z7: 17.38,  z8: 20.73 },
+  { maxLb: 10,     z12: 10.37, z34: 12.00, z5: 15.15,  z6: 18.12,  z7: 19.86,  z8: 24.06 },
+  { maxLb: 14,     z12: 12.78, z34: 14.31, z5: 18.42,  z6: 21.93,  z7: 24.39,  z8: 29.93 },
+  { maxLb: 20,     z12: 14.37, z34: 16.38, z5: 22.53,  z6: 27.55,  z7: 31.34,  z8: 38.35 },
+  { maxLb: 30,     z12: 26.51, z34: 35.71, z5: 53.58,  z6: 65.31,  z7: 76.14,  z8: 91.71 },
+  { maxLb: 50,     z12: 38.52, z34: 51.95, z5: 80.99,  z6: 99.89,  z7: 117.45, z8: 142.66 },
+  { maxLb: 70,     z12: 47.58, z34: 62.27, z5: 100.30, z6: 124.90, z7: 147.98, z8: 181.63 },
 ];
 
 const round2 = (n: number): number => Math.round(n * 100) / 100;
@@ -54,12 +65,12 @@ export type ZoneKey = 'z12' | 'z34' | 'z5' | 'z6' | 'z7' | 'z8';
 type RateRow = { maxLb: number; z12: number; z34: number; z5: number; z6: number; z7: number; z8: number };
 
 // Per-carrier dimensional divisors (cubic inches per pound).
-const DIM_DIVISOR_USPS = 166;
+const DIM_DIVISOR_USPS = 139; // USPS switched from 166 to 139 for packages over 1 cubic foot, effective 2026-07-12 (now matches UPS/FedEx)
 const DIM_DIVISOR_UPS = 139;
 const DIM_DIVISOR_FEDEX = 139;
 
-export const USPS_RATE_EFFECTIVE_DATE = '2026-04-26';
-export const USPS_RATE_SOURCE = 'Pirate Ship USPS Ground Advantage (below-commercial tier)';
+export const USPS_RATE_EFFECTIVE_DATE = '2026-07-21';
+export const USPS_RATE_SOURCE = "eBay's own live shipping calculator (ebay.com/shp/calc/rates), Patrick's real seller account, USPS Ground Advantage service, origin ZIP 49079, 1lb anchors across all 6 zone bands, 2026-07-21";
 export const UPS_RATE_EFFECTIVE_DATE = '2026-07-05';
 export const UPS_RATE_SOURCE = "eBay's own live shipping calculator (ebay.com/shp/calc/rates), Patrick's real seller account, UPS Ground service, 1lb anchors across all 6 zone bands, 2026-07-05";
 export const FEDEX_RATE_EFFECTIVE_DATE = '2026-07-05';
