@@ -96,5 +96,57 @@ if [ -n "$BACKEND_STAGED" ]; then
   done
 fi
 
+
+# ── 4. Public Repo Discipline guard — claude_docs/ + legal-risk narrative + real infra hostnames ──
+# See CLAUDE.md §10d. Blocks re-introduction of internal docs or risk-admission
+# narrative into this public repo, and blocks accidentally-committed real
+# infra hostnames (Cloudflare Worker subdomains) outside placeholder form.
+# Origin: S1145 (2026-07-21) — claude_docs/ was fully tracked+pushed to this
+# public repo for months; a real Worker hostname was also hardcoded in a test
+# script comment. This guard makes that recurrence impossible to do silently.
+
+CLAUDE_DOCS_STAGED=$(echo "$STAGED_ALL" | grep -E '^claude_docs/' || true)
+if [ -n "$CLAUDE_DOCS_STAGED" ]; then
+  echo "❌ Pre-commit blocked: claude_docs/ path(s) staged — this directory is intentionally untracked (CLAUDE.md §10d):"
+  echo "$CLAUDE_DOCS_STAGED"
+  echo "   If this is genuinely intentional, resolve with Patrick + findasale-records first — do not force-add."
+  echo "hit" >> "$HIT_FILE"
+fi
+
+NARRATIVE_PATTERNS='Risk-admission-narrative|never formally resolved
+Risk-admission-narrative|shipped anyway
+Risk-admission-narrative|flagged CRITICAL
+Risk-admission-narrative|ToS PROHIBITED.{0,80}(Facebook|Municibid|IronPlanet|GovDeals|Proxibid|Liquidity Services|Ritchie Bros)
+Real-worker-hostname|[a-z0-9][a-z0-9-]*\.workers\.dev'
+
+WORKER_PLACEHOLDER_RE='(your-worker|<worker>|<your-worker>|example-worker|my-worker)\.workers\.dev'
+
+for file in $STAGED_ALL; do
+  case "$file" in
+    *.ts|*.tsx|*.js|*.jsx|*.py|*.md|*.json|*.yml|*.yaml|*.sh|*.ps1|*.txt) ;;
+    *.*) continue ;;
+    *) ;;
+  esac
+
+  CONTENT=$(git show ":$file" 2>/dev/null || true)
+  [ -z "$CONTENT" ] && continue
+
+  printf '%s\n' "$NARRATIVE_PATTERNS" | while IFS='|' read -r NAME ERE; do
+    [ -z "$NAME" ] && continue
+    [ -z "$ERE" ] && continue
+    MATCHES=$(printf '%s\n' "$CONTENT" | grep -niE -e "$ERE" 2>/dev/null || true)
+    if [ "$NAME" = "Real-worker-hostname" ] && [ -n "$MATCHES" ]; then
+      MATCHES=$(printf '%s\n' "$MATCHES" | grep -viE -e "$WORKER_PLACEHOLDER_RE" || true)
+    fi
+    if [ -n "$MATCHES" ]; then
+      echo "❌ Pre-commit blocked: possible public-repo-sensitive content [$NAME] in $file"
+      printf '%s\n' "$MATCHES" | while IFS= read -r line; do
+        echo "     line $(printf '%s' "$line" | cut -d: -f1)"
+      done
+      echo "hit" >> "$HIT_FILE"
+    fi
+  done
+done
+
 echo "✅ Pre-commit checks passed."
 exit 0
