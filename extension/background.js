@@ -177,10 +177,11 @@ async function checkPendingUpdates() {
   // notifications. 'silent' has no Phase-A price-sync equivalent (no auto-edit action exists
   // yet to run silently), so both 'notify' and 'silent' behave identically here until Phase B.
   const { fasAutoRemoveMode = 'notify' } = await chrome.storage.local.get(['fasAutoRemoveMode']);
-  if (fasAutoRemoveMode === 'off') return;
+  if (fasAutoRemoveMode === 'off') return 'off';
   const resp = await apiFetch('/extension/pending-updates');
-  const items = (resp.ok && resp.data && resp.data.items) || [];
-  if (!items.length) return;
+  if (!resp.ok) return 'error:' + (resp.error || resp.status);
+  const items = (resp.data && resp.data.items) || [];
+  if (!items.length) return 'no_items';
 
   // Phase A: notify only, matching the removal flow's 'notify' UX for a first-pass rollout --
   // no silent/auto-edit mode exists yet because there's no edit action built to run silently.
@@ -193,24 +194,26 @@ async function checkPendingUpdates() {
       : items.length + ' items\' prices changed on FindA.Sale -- update them on Facebook Marketplace too.',
     priority: 1
   });
+  return 'notified:' + items.length;
 }
 
 async function checkPendingRemovals() {
   const { fasAutoRemoveMode = 'notify' } = await chrome.storage.local.get(['fasAutoRemoveMode']);
-  if (fasAutoRemoveMode === 'off') return;
+  if (fasAutoRemoveMode === 'off') return 'off';
   // Guard (silent mode only): don't poll/open another removal tab while one is mid-run. Also
   // prevents overwriting fasRemovalQueue/fasRemovalIndex under an in-progress content script,
   // which would corrupt its queue position. Notify mode never auto-creates a tab, so unaffected.
-  if (fasAutoRemoveMode === 'silent' && await silentRemovalInProgress()) return;
+  if (fasAutoRemoveMode === 'silent' && await silentRemovalInProgress()) return 'skipped_in_progress';
   const resp = await apiFetch('/extension/pending-removals');
-  const items = (resp.ok && resp.data && resp.data.items) || [];
-  if (!items.length) return;
+  if (!resp.ok) return 'error:' + (resp.error || resp.status);
+  const items = (resp.data && resp.data.items) || [];
+  if (!items.length) return 'no_items';
 
   await chrome.storage.local.set({ fasRemovalQueue: items, fasRemovalIndex: 0 });
 
   if (fasAutoRemoveMode === 'silent') {
     await openSilentRemovalTab();
-    return;
+    return 'silent_removal_started:' + items.length;
   }
 
   // 'notify' -- Chrome notification; clicking it opens the removal page in an active tab
@@ -225,6 +228,7 @@ async function checkPendingRemovals() {
       : items.length + ' items sold elsewhere — remove them from Facebook Marketplace?',
     priority: 1
   });
+  return 'notified:' + items.length;
 }
 // Shared 30s throttle for on-demand checks (popup open, startup/install, mode change) so
 // rapid reloads can't spawn duplicate removal tabs. The recurring 20-min alarm path below stays
@@ -234,14 +238,49 @@ async function throttledCheckPendingRemovals() {
     const { fasLastRemovalCheckAt = 0 } = await chrome.storage.local.get(['fasLastRemovalCheckAt']);
     if (Date.now() - fasLastRemovalCheckAt < 30000) return;
     await chrome.storage.local.set({ fasLastRemovalCheckAt: Date.now() });
-    await checkPendingRemovals();
-    await checkPendingUpdates().catch(() => {});
+    const removalOutcome = await checkPendingRemovals().catch((e) => 'error:' + String((e && e.message) || e));
+    const updateOutcome = await checkPendingUpdates().catch((e) => 'error:' + String((e && e.message) || e));
+    // (2026-07-21) Same instrumentation as the alarm path, under separate keys -- lets the popup
+    // tell "an automatic 20-min alarm tick did this" apart from "a manual/opportunistic trigger
+    // (popup open, window refocus) did this", which is exactly the distinction needed to diagnose
+    // "it only works when I open the extension" reports.
+    await chrome.storage.local.set({
+      fasLastManualCheckAt: Date.now(),
+      fasLastManualRemovalOutcome: removalOutcome,
+      fasLastManualUpdateOutcome: updateOutcome
+    });
   } catch (e) {}
 }
+// (2026-07-21) Alarm-fire instrumentation: every tick of the automatic 20-min removal alarm
+// persists a timestamp + outcome to storage, surfaced in the popup as "last automatic check".
+// Added because there was previously NO way to tell "did the alarm actually fire" from "it fired
+// but found nothing to do" without opening the service worker's DevTools console -- a
+// stuck/never-firing alarm was indistinguishable from a healthy one with nothing pending.
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name !== FAS_REMOVAL_ALARM) return;
   // return the combined promise so MV3 keeps the SW alive until BOTH polls complete
-  return Promise.all([checkPendingRemovals(), checkPendingUpdates().catch(() => {})]);
+  return Promise.all([
+    checkPendingRemovals().catch((e) => 'error:' + String((e && e.message) || e)),
+    checkPendingUpdates().catch((e) => 'error:' + String((e && e.message) || e))
+  ]).then(([removalOutcome, updateOutcome]) => chrome.storage.local.set({
+    fasLastAlarmFiredAt: Date.now(),
+    fasLastAlarmRemovalOutcome: removalOutcome,
+    fasLastAlarmUpdateOutcome: updateOutcome
+  }));
+});
+
+// (2026-07-21) Opportunistic secondary trigger -- backstops the 20-min alarm, doesn't replace it.
+// Uses chrome.windows (already available, no extra manifest permission needed) so a pending
+// removal also gets caught whenever the organizer actually comes back to Chrome -- switches into
+// it from another app, wakes the laptop and clicks in -- instead of relying solely on the alarm
+// landing while the service worker happens to already be awake. throttledCheckPendingRemovals is
+// already 30s-throttled so this is safe to call freely. Also re-asserts the alarm itself in case
+// it was ever silently cleared (e.g. by an extension reload) -- self-healing rather than waiting
+// for the next onInstalled/onStartup to notice.
+chrome.windows.onFocusChanged.addListener((windowId) => {
+  if (windowId === chrome.windows.WINDOW_ID_NONE) return; // Chrome lost focus entirely, not gained
+  ensureRemovalAlarm();
+  throttledCheckPendingRemovals();
 });
 chrome.notifications.onClicked.addListener((notifId) => {
   if (notifId !== 'fasPendingRemovals') return;

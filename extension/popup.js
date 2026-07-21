@@ -42,8 +42,39 @@ async function loadAutoRemoveMode() {
     // Tell the worker the mode changed so it (re)ensures the alarm AND polls immediately --
     // switching to "Remove automatically" should act now, not on the next 20-min alarm.
     await send({ type: 'removalModeChanged' });
+    await renderRemovalDiag();
   };
   await send({ type: 'refreshRemovalAlarm' }); // re-assert the alarm in case the worker never woke since install
+  await renderRemovalDiag();
+}
+
+// (2026-07-21) Surfaces the alarm-fire instrumentation added in background.js so "is the
+// automatic 20-min check actually running" is visible right here instead of requiring the
+// service worker's DevTools console. Shows the alarm-driven check separately from this popup's
+// own manual/opportunistic trigger so "it only works when I open the extension" is diagnosable
+// at a glance, not guessed at.
+function timeAgo(ts) {
+  if (!ts) return 'never';
+  const mins = Math.round((Date.now() - ts) / 60000);
+  if (mins < 1) return 'just now';
+  if (mins === 1) return '1 min ago';
+  if (mins < 60) return mins + ' min ago';
+  const hrs = Math.round(mins / 60);
+  return hrs === 1 ? '1 hour ago' : hrs + ' hours ago';
+}
+
+async function renderRemovalDiag() {
+  const el = $('removalDiag');
+  if (!el) return;
+  const st = await chrome.storage.local.get([
+    'fasLastAlarmFiredAt', 'fasLastAlarmRemovalOutcome',
+    'fasLastManualCheckAt', 'fasLastManualRemovalOutcome'
+  ]);
+  const alarmPart = 'Automatic (~20-min) check: ' + timeAgo(st.fasLastAlarmFiredAt) +
+    (st.fasLastAlarmRemovalOutcome ? ' (' + st.fasLastAlarmRemovalOutcome + ')' : '');
+  const manualPart = 'Last opened/refocused check: ' + timeAgo(st.fasLastManualCheckAt) +
+    (st.fasLastManualRemovalOutcome ? ' (' + st.fasLastManualRemovalOutcome + ')' : '');
+  el.textContent = alarmPart + ' \u00b7 ' + manualPart;
 }
 
 function currentChannel() { const el = $('channel'); return el ? el.value : 'facebook'; }
