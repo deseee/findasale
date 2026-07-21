@@ -25,6 +25,20 @@ const withPWA = require('next-pwa')({
   // again, regardless of whether the orphaned file itself still exists on
   // disk (device_bash cannot delete files in this environment).
   publicExcludes: ['!noprecache/**/*', '!offline.html'],
+  // S1145 continued, 2026-07-21: found via a live install re-test after the
+  // offline.html fix above -- the SW STILL failed to install, because a
+  // SECOND, independent precache entry was also 404ing: _next/dynamic-css-
+  // manifest.json. Confirmed via direct fetch (x-matched-path: /404, same
+  // signature as the offline.html bug) that Next.js 15.5.20's build simply
+  // does not generate this file at all -- it's not a page-route collision
+  // like offline.html was, it's next-pwa (unmaintained since 2022-08,
+  // flagged as a compat risk in STATE.md when the Next 15 bump shipped
+  // S1142) still assuming a Next-14-era build-manifest file exists that
+  // Next 15's build pipeline no longer produces. buildExcludes (next-pwa's
+  // equivalent of publicExcludes, but for files it expects under .next/
+  // rather than public/) stops Workbox from precaching a file that will
+  // never exist, the same way publicExcludes above does for offline.html.
+  buildExcludes: [/dynamic-css-manifest\.json$/],
   // Disable dynamic start-url re-fetching on every navigation.
   // When true (the default), next-pwa injects a cacheOnFrontEndNav helper into
   // main.js that calls fetch('/') on every history.pushState/replaceState.
