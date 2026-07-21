@@ -5756,6 +5756,24 @@ model VendorBoothFeeCharge {
   @@index([stripeTransferId])
 }
 
+
+// ADR-091: persistent centroid cache for city-slug -> lat/lng, so /sales/by-city can
+// do a radius query against Sale.lat/Sale.lng instead of an exact city-string match.
+// Distinct from geocodingService.ts's in-memory address cache (7-day TTL, resets on
+// deploy) -- city centroids never change, so this is a permanent, small (bounded by
+// number of distinct city-slugs ever requested) lookup table.
+model CityCoordinate {
+  slug       String   @id // e.g. "foley-al" -- matches the page route param
+  city       String
+  state      String
+  lat        Float
+  lng        Float
+  source     String   // 'nominatim-structured' | 'nominatim-freetext' | 'census' (mirrors GeocodedResult.source)
+  geocodedAt DateTime @default(now())
+
+  @@index([state])
+}
+
 // Directory/enrichment URL fetch health per registrable domain.
 // Circuit-breaker state so failing hosts are cooled down / terminated, not re-hammered.
 model DomainFetchState {

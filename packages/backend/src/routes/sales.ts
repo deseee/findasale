@@ -39,6 +39,7 @@ import { toggleSaleRSVP, removeRSVP, getRSVPCount, getMyRSVPStatus, getRSVPAtten
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { requireOrganizer } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
+import { geocodeCityState } from '../services/geocodingService'; // ADR-091: radius-aware city pages
 import { requireTier } from '../middleware/requireTier'; // Feature #91: PRO tier gate
 import { getSaleOgBuyerCount } from '../services/badgeService'; // Feature #404: OG Buyer count
 
@@ -174,6 +175,67 @@ router.get('/city/:city', getSalesByCity); // Bug fix: City page route
 
 // SEO: GET /sales/by-city/:citySlug — city landing page data
 // citySlug format: "grand-rapids-mi", "chicago-il", etc.
+//
+// ADR-091 (2026-07-21): radius-aware. The old exact city-string match missed real
+// nearby inventory whenever a scraped Sale's `city` field didn't exactly equal the
+// searched town (e.g. real EstateSalesNet listings tagged "Fairhope"/"Daphne"/"Mobile"
+// never matched a "foley-al" page even though they're 20-30mi away). Sale.lat/lng are
+// 98.7%+ populated (verified live 2026-07-21) so a haversine radius query against the
+// city-slug's geocoded centroid surfaces that inventory instead. Falls back to the
+// original exact-match behavior if the city-slug cannot be geocoded at all (network
+// failure, Nominatim down) so the page still renders something rather than erroring.
+const RADIUS_MILES = 35;
+const EARTH_RADIUS_MILES = 3959;
+
+function haversineMiles(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return EARTH_RADIUS_MILES * c;
+}
+
+// Resolve a city-slug to a lat/lng centroid: persistent-cache hit, else geocode + persist.
+// Returns null if geocoding fails entirely (caller falls back to exact-match).
+async function resolveCityCoordinate(
+  slug: string,
+  cityName: string,
+  stateCode: string
+): Promise<{ lat: number; lng: number } | null> {
+  const cached = await prisma.cityCoordinate.findUnique({ where: { slug } });
+  if (cached) return { lat: cached.lat, lng: cached.lng };
+
+  const geocoded = await geocodeCityState(cityName, stateCode);
+  if (!geocoded) return null;
+
+  try {
+    await prisma.cityCoordinate.upsert({
+      where: { slug },
+      create: {
+        slug,
+        city: cityName,
+        state: stateCode,
+        lat: geocoded.lat,
+        lng: geocoded.lng,
+        source: geocoded.source,
+      },
+      update: {
+        lat: geocoded.lat,
+        lng: geocoded.lng,
+        source: geocoded.source,
+        geocodedAt: new Date(),
+      },
+    });
+  } catch (err) {
+    // Non-fatal — worst case we re-geocode next request instead of hitting cache.
+    console.error('[sales/by-city] CityCoordinate persist error (non-fatal):', err);
+  }
+
+  return { lat: geocoded.lat, lng: geocoded.lng };
+}
+
 router.get('/by-city/:citySlug', async (req, res) => {
   try {
     const { citySlug } = req.params;
@@ -202,63 +264,118 @@ router.get('/by-city/:citySlug', async (req, res) => {
     };
     const saleTypeFilter = category ? categoryMap[category] : undefined;
 
-    const whereClause: any = {
-      status: 'PUBLISHED',
-      deletedAt: null,
-      // Permanent storefronts (isOngoing) always count as current — same pattern as
-      // discoveryService.ts / saleController.ts / search.ts / heatmapService.ts.
-      // Bug fix (566-row TODAY/Live badge bug, S1130 diagnostic).
-      OR: [{ isOngoing: true }, { endDate: { gte: new Date() } }],
-      state: { equals: stateCode, mode: 'insensitive' },
-    };
-    // Problem C: expand city match to known borough/alias sets
+    // Problem C: expand city match to known borough/alias sets — still used as the
+    // fallback path when geocoding is unavailable.
     const cityAliases: Record<string, string[]> = {
       'New York': ['New York City', 'NYC', 'Brooklyn', 'Queens', 'Bronx', 'Staten Island', 'Manhattan'],
       'Los Angeles': ['LA', 'Los Angeles City'],
       'Chicago': ['Chicago City'],
     };
-    const aliases = cityAliases[cityName] ?? [];
-    if (aliases.length > 0) {
-      whereClause.city = { in: [cityName, ...aliases], mode: 'insensitive' };
+
+    const centroid = await resolveCityCoordinate(citySlug, cityName, stateCode);
+
+    // Base "active" condition, same convention as /sales/city-slugs's activeRows query.
+    const activeDateClause = { OR: [{ isOngoing: true }, { endDate: { gte: new Date() } }] };
+
+    let candidateSales: Array<Record<string, any>>;
+    let usedRadiusMatch = false;
+
+    if (centroid) {
+      usedRadiusMatch = true;
+      // Bounding-box prefilter (cheap, indexable) before the precise haversine cut.
+      // 1 degree latitude ≈ 69 miles everywhere; 1 degree longitude ≈ 69*cos(lat) miles.
+      const latDelta = RADIUS_MILES / 69;
+      const lngDelta = RADIUS_MILES / (69 * Math.max(Math.cos((centroid.lat * Math.PI) / 180), 0.1));
+
+      candidateSales = await prisma.sale.findMany({
+        where: {
+          status: 'PUBLISHED',
+          deletedAt: null,
+          ...activeDateClause,
+          lat: { gte: centroid.lat - latDelta, lte: centroid.lat + latDelta },
+          lng: { gte: centroid.lng - lngDelta, lte: centroid.lng + lngDelta },
+        },
+        select: {
+          id: true,
+          title: true,
+          saleType: true,
+          startDate: true,
+          endDate: true,
+          city: true,
+          state: true,
+          address: true,
+          photoUrls: true,
+          status: true,
+          isOngoing: true,
+          sourceUrl: true,
+          sourceName: true,
+          scrapedMetadata: true,
+          lat: true,
+          lng: true,
+          organizer: { select: { id: true, businessName: true } },
+        },
+        take: 2000, // bounding box can be broad in dense metros; trimmed by haversine + fetchLimit below
+      });
+
+      candidateSales = candidateSales.filter(
+        (s) => s.lat != null && s.lng != null && haversineMiles(centroid.lat, centroid.lng, s.lat as number, s.lng as number) <= RADIUS_MILES
+      );
     } else {
-      whereClause.city = { equals: cityName, mode: 'insensitive' };
+      // Fallback: original exact-string-match behavior (geocoding failed entirely).
+      const aliases = cityAliases[cityName] ?? [];
+      const whereClause: any = {
+        status: 'PUBLISHED',
+        deletedAt: null,
+        ...activeDateClause,
+        state: { equals: stateCode, mode: 'insensitive' },
+      };
+      if (aliases.length > 0) {
+        whereClause.city = { in: [cityName, ...aliases], mode: 'insensitive' };
+      } else {
+        whereClause.city = { equals: cityName, mode: 'insensitive' };
+      }
+
+      candidateSales = await prisma.sale.findMany({
+        where: whereClause,
+        select: {
+          id: true,
+          title: true,
+          saleType: true,
+          startDate: true,
+          endDate: true,
+          city: true,
+          state: true,
+          address: true,
+          photoUrls: true,
+          status: true,
+          isOngoing: true,
+          sourceUrl: true,
+          sourceName: true,
+          scrapedMetadata: true,
+          organizer: { select: { id: true, businessName: true } },
+        },
+        take: 2000,
+      });
     }
-    if (saleTypeFilter) {
-      whereClause.saleType = saleTypeFilter;
+
+    // activeByType — computed from this SAME radius (or fallback exact-match) set,
+    // across ALL sale types, so gating (noindex) and rendering (what's shown) never
+    // disagree. Mirrors /sales/city-slugs's activeRows definition (PUBLISHED + active date).
+    const activeByType: Record<string, number> = {};
+    for (const s of candidateSales) {
+      activeByType[s.saleType] = (activeByType[s.saleType] ?? 0) + 1;
     }
+
+    const saleTypeScoped = saleTypeFilter ? candidateSales.filter((s) => s.saleType === saleTypeFilter) : candidateSales;
 
     // Fetch more rows when RETAIL is in scope so post-suppression result set is still
     // populated after junk is removed (audit: ~55% of RETAIL rows are suppressed).
     const isRetailQuery = saleTypeFilter === 'RETAIL' || !saleTypeFilter;
     const fetchLimit = isRetailQuery ? 300 : 50;
 
-    const sales = await prisma.sale.findMany({
-      where: whereClause,
-      select: {
-        id: true,
-        title: true,
-        saleType: true,
-        startDate: true,
-        endDate: true,
-        city: true,
-        state: true,
-        address: true,
-        photoUrls: true,
-        status: true,
-        isOngoing: true,
-        sourceUrl: true,
-        sourceName: true,
-        scrapedMetadata: true,
-        organizer: {
-          select: {
-            id: true,
-            businessName: true,
-          },
-        },
-      },
-      orderBy: [{ startDate: 'asc' }, { endDate: 'asc' }],
-      take: fetchLimit,
-    });
+    const sales = saleTypeScoped
+      .sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime() || new Date(a.endDate).getTime() - new Date(b.endDate).getTime())
+      .slice(0, fetchLimit);
 
     // ---------------------------------------------------------------------------
     // Geo-mismatch suppression — exclude scraped rows whose city/state could NOT be
@@ -290,24 +407,13 @@ router.get('/by-city/:citySlug', async (req, res) => {
     // Cap final output at 50 rows after suppression
     const capped = filteredSales.slice(0, 50);
 
-    // Derive available categories from all sales (ignoring category filter for sidebar)
-    const allSalesForCategories = saleTypeFilter
-      ? await prisma.sale.findMany({
-          where: {
-            status: 'PUBLISHED',
-            deletedAt: null,
-            city: { equals: cityName, mode: 'insensitive' },
-            state: { equals: stateCode, mode: 'insensitive' },
-          },
-          select: { saleType: true },
-        })
-      : filteredSales;
-
-    const categorySet = new Set<string>(allSalesForCategories.map((s: any) => s.saleType));
+    // Derive available categories from the full radius/fallback set (ignoring the
+    // category filter for the sidebar), same intent as the original implementation.
+    const categorySet = new Set<string>(candidateSales.map((s: any) => s.saleType));
     const categories = Array.from(categorySet);
 
     const serialized = capped.map((s: any) => {
-      const { scrapedMetadata, ...rest } = s;
+      const { scrapedMetadata, lat, lng, ...rest } = s;
       return {
         ...rest,
         startDate: s.startDate instanceof Date ? s.startDate.toISOString() : s.startDate,
@@ -323,6 +429,9 @@ router.get('/by-city/:citySlug', async (req, res) => {
       sales: serialized,
       totalCount: serialized.length,
       categories,
+      activeByType,
+      activeCount: Object.values(activeByType).reduce((a, b) => a + b, 0),
+      matchMode: usedRadiusMatch ? 'radius' : 'exact-fallback',
     });
   } catch (err) {
     console.error('[sales/by-city] error:', err);

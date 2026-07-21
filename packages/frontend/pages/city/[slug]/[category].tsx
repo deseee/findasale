@@ -422,7 +422,11 @@ export const getStaticProps: GetStaticProps<CityCategoryPageProps> = async ({ pa
 
   const meta = CATEGORY_META[categorySlug];
 
-  // Fetch sales for this city + category
+  // Fetch sales for this city + category. ADR-091: by-city is now radius-aware and
+  // returns activeByType computed from the SAME radius set used to render the page,
+  // so gating (noindex below) and rendering can never disagree — this replaces the
+  // old separate /sales/city-slugs merge-fetch, which used an exact-city-match count
+  // that could differ from what by-city (also exact-match, pre-ADR-091) was showing.
   let sales: SaleListing[] = [];
   let totalCount = 0;
   let allCategories: string[] = [];
@@ -440,26 +444,10 @@ export const getStaticProps: GetStaticProps<CityCategoryPageProps> = async ({ pa
       sales = data.sales ?? [];
       totalCount = data.totalCount ?? 0;
       allCategories = data.categories ?? [];
+      activeByType = data.activeByType ?? {};
     }
   } catch (err) {
     console.error(`[city/category] fetch error for ${citySlug}/${categorySlug}:`, err);
-  }
-
-  // Per-type active counts for this city (drives the live stats block and FAQs)
-  try {
-    const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000/api';
-    const res = await fetch(`${apiBaseUrl}/sales/city-slugs`);
-    if (res.ok) {
-      const data = await res.json();
-      const row = (data.slugs ?? []).find(
-        (r: { slug: string; activeByType?: Record<string, number> }) => r.slug === citySlug
-      );
-      if (row && row.activeByType && typeof row.activeByType === 'object') {
-        activeByType = row.activeByType;
-      }
-    }
-  } catch (err) {
-    console.error(`[city/category] city-slugs fetch error for ${citySlug}:`, err);
   }
 
   // Parse display city name + state from slug

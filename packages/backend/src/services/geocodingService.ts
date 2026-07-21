@@ -181,3 +181,75 @@ export async function geocodeAddress(
   // All strategies failed
   return null;
 }
+
+/**
+ * ADR-091: Geocode a city+state CENTROID (no street address) -- distinct from
+ * geocodeAddress() above, which requires a street and returns null immediately
+ * without one (Strategy 3/Census 400s on address-less structured queries).
+ * Used to resolve a page's city-slug (e.g. "foley-al" -> "Foley", "AL") to a
+ * lat/lng so /sales/by-city can run a radius query. Reuses this module's shared
+ * Nominatim rate-limiter (waitForNominatimSlot) -- do not add a second one.
+ * Callers are expected to persist the result (CityCoordinate table) since this
+ * function does not use the module's in-memory geocodeCache -- a city centroid
+ * should be looked up once, ever, not re-fetched every 7 days.
+ */
+export async function geocodeCityState(city: string, state: string): Promise<GeocodedResult | null> {
+  if (!city || !state) return null;
+
+  await waitForNominatimSlot();
+
+  try {
+    const response = await axios.get('https://nominatim.openstreetmap.org/search', {
+      params: {
+        city,
+        state,
+        country: 'us',
+        format: 'json',
+        limit: 1,
+      },
+      headers: { 'User-Agent': 'FindA.Sale/1.0 (https://finda.sale; support@finda.sale)' },
+      timeout: 8000,
+    });
+
+    if (response.data?.length > 0) {
+      return {
+        lat: parseFloat(response.data[0].lat),
+        lng: parseFloat(response.data[0].lon),
+        displayName: response.data[0].display_name,
+        source: 'nominatim-structured',
+      };
+    }
+  } catch (err) {
+    console.error('[geocodingService] geocodeCityState structured error:', err instanceof Error ? err.message : err);
+  }
+
+  // Free-text fallback (covers small towns Nominatim's structured city/state
+  // params sometimes miss, e.g. unincorporated places)
+  await waitForNominatimSlot();
+
+  try {
+    const response = await axios.get('https://nominatim.openstreetmap.org/search', {
+      params: {
+        q: `${city}, ${state}`,
+        format: 'json',
+        limit: 1,
+        countrycodes: 'us',
+      },
+      headers: { 'User-Agent': 'FindA.Sale/1.0 (https://finda.sale; support@finda.sale)' },
+      timeout: 8000,
+    });
+
+    if (response.data?.length > 0) {
+      return {
+        lat: parseFloat(response.data[0].lat),
+        lng: parseFloat(response.data[0].lon),
+        displayName: response.data[0].display_name,
+        source: 'nominatim-freetext',
+      };
+    }
+  } catch (err) {
+    console.error('[geocodingService] geocodeCityState free-text error:', err instanceof Error ? err.message : err);
+  }
+
+  return null;
+}
