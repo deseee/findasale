@@ -157,6 +157,19 @@ packages/backend/craigslist-leads-*.json
 packages/*/claude_docs/
 
 # =========================
+# Public Repo Discipline (added 2026-07-21, S1145 findasale-hacker/records pass)
+# =========================
+# This repo is PUBLIC (S-public, 2026-07-06) for free GitHub Actions minutes —
+# private-tier minutes were exhausted within days on a prior attempt, per
+# Patrick. claude_docs/ contains internal strategy, legal-risk analysis, and
+# security audits that should never be public-repo content regardless of repo
+# visibility. Untracked here going forward (existing tracked history requires
+# a one-time `git rm -r --cached claude_docs/` — see pushblock). New sensitive
+# docs (legal risk, security posture, unresolved ToS/compliance decisions) go
+# to the private internal record, never here.
+claude_docs/
+
+# =========================
 # Encoded Windows temp path artifacts (VM encoding issue)
 # =========================
 "packages/backend/C:"*
