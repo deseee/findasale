@@ -63,8 +63,29 @@ setCatchHandler(async ({ event }) => {
       // Navigation request failed both network and cache -- serve the
       // precached offline fallback page (already in Workbox's precache
       // manifest automatically, no separate install-time caching needed).
+      //
+      // NOTE (S1145, 2026-07-21): this file is public/pwa-offline.html, NOT
+      // public/offline.html. Root cause of Feature #69's P0-REOPENED SW
+      // install failure: public/offline.html is silently shadowed in
+      // production -- pages/offline.tsx (a real page route at /offline)
+      // collides with it at the Vercel/Next.js static-file layer, so
+      // GET /offline.html returns Next's own 404 page even though the file
+      // is committed and present in the build. Workbox's precacheAndRoute()
+      // still listed /offline.html (globbed from public/ automatically) and
+      // tried to fetch+cache it during install; that 404 rejected the
+      // install waitUntil() promise, so the SW went straight from
+      // 'installing' to 'redundant' on every load -- confirmed via a direct
+      // A/B test (public/video.html, no colliding page route, served fine
+      // at 200; public/offline.html, colliding with pages/offline.tsx,
+      // 404'd) and via Vercel's own deployment API confirming the exact
+      // live commit's build had this file in its git tree. Renamed to a
+      // name no page route can ever collide with, and next.config.js's
+      // publicExcludes now excludes the old offline.html from the precache
+      // manifest so it can never break install again even though the
+      // now-orphaned public/offline.html file itself is still on disk
+      // (device_bash cannot delete files -- flagged for manual cleanup).
       try {
-        const cached = await matchPrecache('/offline.html');
+        const cached = await matchPrecache('/pwa-offline.html');
         if (cached) return cached;
       } catch {
         // fall through to Response.error() below

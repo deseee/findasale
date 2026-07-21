@@ -12,6 +12,19 @@ const withPWA = require('next-pwa')({
   // mode + push notifications both silently never surviving a real build.
   // S1141, 2026-07-20.
   customWorkerDir: 'worker',
+  // S1145, 2026-07-21: public/offline.html is shadowed in production by
+  // pages/offline.tsx (a real page route at /offline collides with it at
+  // the Vercel/Next.js static-file layer -- GET /offline.html returns
+  // Next's own 404 even though the file is committed). Workbox's
+  // precacheAndRoute() was still globbing it in from public/ automatically
+  // and fetch-failing on it during install, which rejected the whole
+  // install waitUntil() and sent the SW straight to 'redundant' on every
+  // load (the Feature #69 P0-REOPENED bug). The real fallback page moved to
+  // public/pwa-offline.html (see worker/index.js) -- excluding the old,
+  // permanently-404 offline.html here stops it from ever breaking install
+  // again, regardless of whether the orphaned file itself still exists on
+  // disk (device_bash cannot delete files in this environment).
+  publicExcludes: ['!noprecache/**/*', '!offline.html'],
   // Disable dynamic start-url re-fetching on every navigation.
   // When true (the default), next-pwa injects a cacheOnFrontEndNav helper into
   // main.js that calls fetch('/') on every history.pushState/replaceState.
