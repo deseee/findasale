@@ -327,7 +327,7 @@ async function getHaikuAnalysis(
 
   try {
     // Estimate tokens for cost tracking (#104)
-    const systemPrompt = `You are an expert secondary market cataloger for a ${regionConfig.city}, ${regionConfig.state} estate sale marketplace.${labelContext}
+    const systemPrompt = `You are an expert secondary market cataloger for a ${regionConfig.city}, ${regionConfig.state} secondary-sale marketplace (estate sales, yard sales, auctions, flea markets, consignment).${labelContext}
 
 Analyze this item photo and respond with ONLY valid JSON (no markdown, no explanation).`;
     const estimatedTokens = estimateTokensForRequest(systemPrompt, true);
@@ -351,13 +351,13 @@ Analyze this item photo and respond with ONLY valid JSON (no markdown, no explan
               },
               {
                 type: 'text',
-                text: `You are an expert secondary market cataloger for a ${regionConfig.city}, ${regionConfig.state} estate sale marketplace.${labelContext}${sparseImageNote}${compsContext}${catalogMatchContext}${webDetectionContext}${ebayMatchContext}
+                text: `You are an expert secondary market cataloger for a ${regionConfig.city}, ${regionConfig.state} secondary-sale marketplace (estate sales, yard sales, auctions, flea markets, consignment).${labelContext}${sparseImageNote}${compsContext}${catalogMatchContext}${webDetectionContext}${ebayMatchContext}
 
 Analyze this item photo and respond with ONLY valid JSON (no markdown, no explanation).
 
 Accuracy over richness: only state attributes (era, brand, material, maker, category) you can actually SEE or verify from the photos and any visible marks/labels. When unsure, omit the attribute rather than guessing a confident-but-wrong value.
 Title guidelines: Start with the most recognizable/searchable keyword. Format: "[Type], [Material or Era], [Maker or Style if visible]". Examples: "Brass Floor Lamp, Art Deco Style", "Oak Dining Chair Set, Mid-Century Modern", "McCoy Pottery Planter, Green Drip Glaze", "Cast Iron Skillet, Lodge 10-inch". Include an era/decade when there is reasonable supporting evidence — style, materials, maker marks, or a date — but do not force it or infer age from wear alone; leave it out when you are genuinely unsure rather than guess. Avoid vague words like "Beautiful" or "Nice".
-Sets & lots: If the photo(s) clearly show MULTIPLE matching or coordinated items that an estate-sale shopper would buy together as one lot (e.g., a set of golf clubs, a set of matching dishes, a group of the same figurine, a boxed tool set), catalog the WHOLE GROUP as one set/lot — do NOT describe just a single piece. Title it as a set (e.g., "Northwestern Golf Club Set", "Pyrex Mixing Bowl Set"), state the piece count when you can count them, and include a "Set of N" tag. Only treat it as a set when the items are genuinely a coordinated group sold together; a single item shown alongside unrelated background objects is still ONE item — catalog just that item.
+Sets & lots: If the photo(s) clearly show MULTIPLE matching or coordinated items that a shopper would buy together as one lot (e.g., a set of golf clubs, a set of matching dishes, a group of the same figurine, a boxed tool set), catalog the WHOLE GROUP as one set/lot — do NOT describe just a single piece. Title it as a set (e.g., "Northwestern Golf Club Set", "Pyrex Mixing Bowl Set"), state the piece count when you can count them, and include a "Set of N" tag. Only treat it as a set when the items are genuinely a coordinated group sold together; a single item shown alongside unrelated background objects is still ONE item — catalog just that item.
 Description: 1–2 sentences. Lead with searchable keywords buyers use on Google or eBay. Mention material, maker/brand (if visible), era/decade, and standout features. Example: "Solid oak mid-century modern dresser with original brass hardware, circa 1960s. Six drawers, minor surface scratches, no structural damage." Note any maker marks, chips, cracks, or signs of age.
 Category: Pick the single best fit by the item's PRIMARY USE/DOMAIN — not its materials or whether it plugs in. A powered device is categorized by what it is FOR (e.g. an aquarium air pump is "Pet Supplies", a guitar amp is "Musical Instruments", a kitchen mixer is "Kitchenware"), NOT "Electronics". Choose from: ${EBAY_L1_CATEGORIES.join(', ')}.
 Condition: NEW = unused with tags. USED = minimal to normal wear. REFURBISHED = restored/refurbished by seller. PARTS_OR_REPAIR = damaged, functional only for parts/repair.
@@ -1031,7 +1031,7 @@ async function getHaikuAnalysisMultiImage(
     : 'You are analyzing a photo of an item.';
 
   try {
-    const systemPrompt = `You are an expert secondary market cataloger for a ${regionConfig.city}, ${regionConfig.state} estate sale marketplace.${labelContext}${catalogMatchContext}${webDetectionContext}${ebayMatchContext}
+    const systemPrompt = `You are an expert secondary market cataloger for a ${regionConfig.city}, ${regionConfig.state} secondary-sale marketplace (estate sales, yard sales, auctions, flea markets, consignment).${labelContext}${catalogMatchContext}${webDetectionContext}${ebayMatchContext}
 
 ${multiImagePrompt} Respond with ONLY valid JSON (no markdown, no explanation).`;
     const estimatedTokens = estimateTokensForRequest(systemPrompt, true);
@@ -1060,7 +1060,7 @@ Analyze and respond with ONLY valid JSON (no markdown, no explanation).
 
 Accuracy over richness: only state attributes (era, brand, material, maker, category) you can actually SEE or verify from the photos and any visible marks/labels. When unsure, omit the attribute rather than guessing a confident-but-wrong value.
 Title guidelines: Start with the most recognizable/searchable keyword. Format: "[Type], [Material or Era], [Maker or Style if visible]". Examples: "Brass Floor Lamp, Art Deco Style", "Oak Dining Chair Set, Mid-Century Modern", "McCoy Pottery Planter, Green Drip Glaze", "Cast Iron Skillet, Lodge 10-inch". Include an era/decade when there is reasonable supporting evidence — style, materials, maker marks, or a date — but do not force it or infer age from wear alone; leave it out when you are genuinely unsure rather than guess. Avoid vague words like "Beautiful" or "Nice".
-Sets & lots: If the photo(s) clearly show MULTIPLE matching or coordinated items that an estate-sale shopper would buy together as one lot (e.g., a set of golf clubs, a set of matching dishes, a group of the same figurine, a boxed tool set), catalog the WHOLE GROUP as one set/lot — do NOT describe just a single piece. Title it as a set (e.g., "Northwestern Golf Club Set", "Pyrex Mixing Bowl Set"), state the piece count when you can count them, and include a "Set of N" tag. Only treat it as a set when the items are genuinely a coordinated group sold together; a single item shown alongside unrelated background objects is still ONE item — catalog just that item.
+Sets & lots: If the photo(s) clearly show MULTIPLE matching or coordinated items that a shopper would buy together as one lot (e.g., a set of golf clubs, a set of matching dishes, a group of the same figurine, a boxed tool set), catalog the WHOLE GROUP as one set/lot — do NOT describe just a single piece. Title it as a set (e.g., "Northwestern Golf Club Set", "Pyrex Mixing Bowl Set"), state the piece count when you can count them, and include a "Set of N" tag. Only treat it as a set when the items are genuinely a coordinated group sold together; a single item shown alongside unrelated background objects is still ONE item — catalog just that item.
 Description: 1–2 sentences. Lead with searchable keywords buyers use on Google or eBay. Mention material, maker/brand (if visible), era/decade, and standout features. Example: "Solid oak mid-century modern dresser with original brass hardware, circa 1960s. Six drawers, minor surface scratches, no structural damage." Note any maker marks, chips, cracks, or signs of age.
 Category: Pick the single best fit by the item's PRIMARY USE/DOMAIN — not its materials or whether it plugs in. A powered device is categorized by what it is FOR (e.g. an aquarium air pump is "Pet Supplies", a guitar amp is "Musical Instruments", a kitchen mixer is "Kitchenware"), NOT "Electronics". Choose from: ${EBAY_L1_CATEGORIES.join(', ')}.
 Condition: NEW = unused with tags. USED = minimal to normal wear. REFURBISHED = restored/refurbished by seller. PARTS_OR_REPAIR = damaged, functional only for parts/repair.
@@ -1287,7 +1287,7 @@ export interface ComparableSale {
 
 /**
  * Suggest a price range for an item based on title, category, and condition.
- * Uses Claude Haiku with estate sale pricing expertise.
+ * Uses Claude Haiku with secondary-sale pricing expertise.
  * Optionally includes comparable sold prices from the platform to inform the suggestion.
  *
  * Feature #104: Returns fallback price if cost ceiling is exceeded.
@@ -1566,7 +1566,7 @@ export async function clusterPhotos(imageBase64Array: string[]): Promise<Cluster
       // EXIF extraction failed gracefully — proceed without timing hints
     }
 
-    const clusteringPrompt = `You are a batch item grouper for an estate sale app. Given N photos from an organizer's drop, identify logical groupings (matching sets, bundles, identical items, obvious pairs). A "set" is: same pattern/design, same manufacturer, intended to be used/sold together.${timingHints}
+    const clusteringPrompt = `You are a batch item grouper for a secondary-sale marketplace app (estate sales, yard sales, auctions, flea markets, consignment). Given N photos from an organizer's drop, identify logical groupings (matching sets, bundles, identical items, obvious pairs). A "set" is: same pattern/design, same manufacturer, intended to be used/sold together.${timingHints}
 
 For each photo in each cluster AND each ungrouped photo, assign one of these roles:
 - FRONT: Best main angle for identifying the item visually (primary shot)

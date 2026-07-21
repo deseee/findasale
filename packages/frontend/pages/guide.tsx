@@ -48,8 +48,8 @@ const sections: Section[] = [
         </p>
         <ul className="space-y-3 text-warm-700 dark:text-warm-300">
           <li>
-            <strong>Sale Title</strong> — Choose a clear, descriptive title. "Oak Valley Estate Collection"
-            or "Downtown Victoriana — May 5–7" works better than just "Estate Sale." Shoppers search by keywords,
+            <strong>Sale Title</strong>: Choose a clear, descriptive title. "Oak Valley Estate Collection"
+            or "Downtown Victoriana, May 5-7" works better than just "Yard Sale" or "Estate Sale." Shoppers search by keywords,
             so be specific.
           </li>
           <li>
@@ -152,7 +152,7 @@ const sections: Section[] = [
 
         <h3 className="text-xl font-semibold text-warm-800 dark:text-warm-200 mt-6">What Gets Rejected or Downvoted</h3>
         <p className="text-warm-700 dark:text-warm-300 leading-relaxed">
-          Vague opinions ("looks old"), AI-generated text, copy-pasted descriptions from elsewhere,
+          Vague opinions ("looks old"), chatbot-written text, copy-pasted descriptions from elsewhere,
           no source cited, or a price with zero reasoning all get flagged. The community votes down
           weak appraisals so the strongest ones rise to the top.
         </p>

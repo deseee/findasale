@@ -79,7 +79,7 @@ interface DayHours {
 
 interface WizardFormData {
   // Step 1
-  saleType: SaleTypeKey;
+  saleType: SaleTypeKey | '';
   saleSubtype: string;
   title: string;
   description: string;
@@ -190,8 +190,8 @@ const TAG_OPTIONS = [
 ];
 
 const DEFAULT_FORM: WizardFormData = {
-  saleType: 'ESTATE',
-  saleSubtype: 'estate',
+  saleType: '',
+  saleSubtype: '',
   title: '',
   description: '',
   isCharitySale: false,
@@ -2203,6 +2203,10 @@ const CreateSalePage: React.FC = () => {
 
   const validateStep = (step: number): boolean => {
     if (step === 1) {
+      if (!form.saleType) {
+        showToast('Please choose a sale type.', 'error');
+        return false;
+      }
       if (!form.title.trim()) {
         showToast('Please enter a sale title.', 'error');
         return false;

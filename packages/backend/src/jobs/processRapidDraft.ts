@@ -25,7 +25,7 @@ const OLLAMA_VISION_MODEL = process.env.OLLAMA_VISION_MODEL || 'qwen3-vl:4b';
 async function analyzeWithOllamaFallback(buffer: Buffer): Promise<AITagResult | null> {
   try {
     const base64Image = buffer.toString('base64');
-    const prompt = `You are an estate sale pricing assistant. Look at this image and respond with ONLY valid JSON (no markdown, no explanation) in this exact format:
+    const prompt = `You are a secondary-sale pricing assistant (estate sales, yard sales, auctions, flea markets, consignment). Look at this image and respond with ONLY valid JSON (no markdown, no explanation) in this exact format:
 {
   "title": "short descriptive item title",
   "description": "1-2 sentence description mentioning condition and notable features",

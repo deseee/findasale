@@ -85,7 +85,7 @@ export const processAbandonedCheckouts = async (): Promise<void> => {
     for (const checkout of abandonedCheckouts) {
       try {
         const itemPrice = checkout.item.price || 0;
-        const saleName = checkout.item.sale?.title || 'Estate Sale';
+        const saleName = checkout.item.sale?.title || 'the sale';
 
         await sendAbandonedCheckoutEmail(
           checkout.user.email,

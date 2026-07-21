@@ -877,7 +877,7 @@ const EbayPolicySetupPage = () => {
                             className="h-4 w-4 text-sage-600 focus:ring-sage-600 border-gray-300 dark:border-gray-600 dark:bg-gray-700"
                           />
                           <label htmlFor="locationSale" className="text-sm text-gray-700 dark:text-gray-300">
-                            Use the sale's address (recommended for estate sales)
+                            Use the sale's address (recommended for temporary/one-time sales)
                           </label>
                         </div>
 

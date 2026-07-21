@@ -66,7 +66,7 @@ export async function generateDailyClue(date: string): Promise<GeneratedClue> {
     return FALLBACK_CLUE;
   }
 
-  const prompt = `Generate a fun, cryptic clue for an estate sale treasure hunt.
+  const prompt = `Generate a fun, cryptic clue for a secondary-sale treasure hunt (estate sales, yard sales, auctions, flea markets, consignment).
 The clue should hint at one of these item categories: ${ITEM_CATEGORIES.join(', ')}.
 
 Format your response as ONLY valid JSON (no markdown, no explanation):
@@ -77,7 +77,7 @@ Format your response as ONLY valid JSON (no markdown, no explanation):
 }
 
 Guidelines:
-- Clue: 1-2 sentences, fun and mysterious, written for estate sale shoppers
+- Clue: 1-2 sentences, fun and mysterious, written for secondary-sale shoppers
 - Category: one of the categories listed above
 - Keywords: 3-5 matching terms/variations (e.g., for books: ["book", "novel", "paperback", "hardcover", "volume"])
 

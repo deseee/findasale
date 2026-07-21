@@ -138,7 +138,7 @@ const FAQ_DATA = [
     category: 'Community Appraisals',
     question: 'Why was my appraisal submission declined or downvoted?',
     answer:
-      'Appraisals are evaluated for quality and credibility. Common reasons submissions are declined: vague opinions with no specificity, no source cited, AI-generated or copy-pasted text, prices with no reasoning, or falling below the character minimum. The community votes down weak submissions so the strongest appraisals float to the top. If your appraisal was declined, review the feedback and try again with more specificity and sources.',
+      'Appraisals are evaluated for quality and credibility. Common reasons submissions are declined: vague opinions with no specificity, no source cited, chatbot-generated or copy-pasted text, prices with no reasoning, or falling below the character minimum. The community votes down weak submissions so the strongest appraisals float to the top. If your appraisal was declined, review the feedback and try again with more specificity and sources.',
   },
   {
     id: 'appraisals-4',

@@ -9,6 +9,18 @@ import { canRemoveWatermark } from '../utils/watermarkPolicy';
 
 const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5-20251001';
 
+function saleTypeToLabel(saleType: string): string {
+  const map: Record<string, string> = {
+    ESTATE: 'Estate Sale',
+    YARD: 'Yard Sale',
+    AUCTION: 'Auction',
+    FLEA_MARKET: 'Flea Market',
+    RETAIL: 'Retail Sale',
+    DORM_DASH: 'Dorm Dash',
+  };
+  return map[saleType] || 'Sale';
+}
+
 /**
  * Apply platform-specific Cloudinary crop transformation
  * @param url Original Cloudinary URL
@@ -112,7 +124,7 @@ export const generateSocialPost = async (req: AuthRequest, res: Response) => {
       instagram: 'Instagram: engaging, emoji-rich, 3-5 relevant hashtags at the end, max 220 words. Include call to action to visit link in bio.',
       facebook: 'Facebook: friendly and informative, 1-2 relevant hashtags, max 150 words. Include the sale dates and address. Encourage sharing.',
       nextdoor: 'Nextdoor: friendly neighborhood tone, no hashtags, mention specific neighborhood/city, max 100 words. Focus on community and local discovery.',
-      tiktok: 'TikTok: trendy and fun tone, use 3-5 popular hashtags (#findasale, #estatesale, etc.), max 150 words. Hook viewers in first sentence with benefit or intrigue.',
+      tiktok: 'TikTok: trendy and fun tone, use 3-5 popular hashtags (#findasale, #secondhandfinds, etc.), max 150 words. Hook viewers in first sentence with benefit or intrigue.',
       pinterest: 'Pinterest: inspirational and lifestyle tone, emphasize treasure/finds/deals, use 5-10 relevant hashtags, max 300 words. Focus on visual appeal and discovery.',
       threads: 'Threads: conversational and authentic, max 500 words, include 2-3 relevant hashtags. Encourage replies and community discussion about the sale and items.',
     };
@@ -124,7 +136,8 @@ export const generateSocialPost = async (req: AuthRequest, res: Response) => {
       .map(i => `- ${i.title} ($${(i.price ?? 0).toFixed(2)})`)
       .join('\n');
 
-    const prompt = `Generate a social media post for an estate sale. ${platformGuidelines[platform] || platformGuidelines.facebook}
+    const saleTypeLabel = saleTypeToLabel(sale.saleType);
+    const prompt = `Generate a social media post for this ${saleTypeLabel.toLowerCase()}. ${platformGuidelines[platform] || platformGuidelines.facebook}
 
 Sale Details:
 - Title: ${sale.title}

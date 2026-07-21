@@ -1068,7 +1068,7 @@ export const createCombinedInvoice = async (req: AuthRequest, res: Response) => 
               currency: 'usd',
               product_data: {
                 name: res.item.title,
-                description: 'Estate sale item',
+                description: res.item.title || 'Secondhand item',
                 images: res.item.photoUrls && res.item.photoUrls.length > 0 ? [res.item.photoUrls[0]] : [],
               },
               unit_amount_decimal: String(Math.round((res.item.price || 0) * 100)),

@@ -29,6 +29,33 @@ const fetchImageBuffer = async (url: string): Promise<Buffer | null> => {
 };
 
 /**
+ * Sale-type label mapping (mirrors the pattern already used in
+ * printKitController.ts) -- used to personalize brand kit collateral copy
+ * instead of hardcoding "Estate Sale" (D-001: All Sale Types Scope).
+ */
+const SALE_TYPE_LABELS: Record<string, string> = {
+  ESTATE: 'Estate Sale', YARD: 'Yard Sale', AUCTION: 'Auction',
+  FLEA_MARKET: 'Flea Market', CONSIGNMENT: 'Consignment Sale',
+};
+
+/**
+ * Resolve a single sale-type label for an organizer's brand kit collateral.
+ * Returns null when the organizer runs multiple different sale types (or has
+ * no sales yet) so callers can fall back to neutral copy instead of
+ * overclaiming a single sale type.
+ */
+const getOrganizerSaleTypeLabel = async (organizerId: string): Promise<string | null> => {
+  const distinctSales = await prisma.sale.findMany({
+    where: { organizerId },
+    select: { saleType: true },
+    distinct: ['saleType'],
+  });
+
+  if (distinctSales.length !== 1) return null;
+  return SALE_TYPE_LABELS[distinctSales[0].saleType ?? ''] ?? null;
+};
+
+/**
  * Helper: Check tier and fetch organizer
  */
 const getOrganizerOrFail = async (req: AuthRequest, res: Response) => {
@@ -98,6 +125,8 @@ export const generateBusinessCards = async (req: AuthRequest, res: Response) => 
 
     const primaryColor = organizer.brandPrimaryColor || '#2563EB';
     const email = organizer.user?.email || '';
+    const saleTypeLabel = await getOrganizerSaleTypeLabel(organizer.id);
+    const specialistTagline = saleTypeLabel ? `${saleTypeLabel} Specialist` : 'Secondhand Sale Specialist';
 
     // 10 cards per page in 2×5 grid
     for (let i = 0; i < 10; i++) {
@@ -137,7 +166,7 @@ export const generateBusinessCards = async (req: AuthRequest, res: Response) => 
         .font('Helvetica')
         .fontSize(8)
         .fillColor('#666666')
-        .text('Estate Sale Specialist', contentX + 32, doc.y, { width: 190 });
+        .text(specialistTagline, contentX + 32, doc.y, { width: 190 });
 
       // Divider
       doc
@@ -294,6 +323,8 @@ export const generateSocialHeaders = async (req: AuthRequest, res: Response) => 
     }
 
     const primaryColor = organizer.brandPrimaryColor || '#2563EB';
+    const saleTypeLabel = await getOrganizerSaleTypeLabel(organizer.id);
+    const specialistTagline = saleTypeLabel ? `${saleTypeLabel} Specialist` : 'Secondhand Sale Specialist';
 
     // ── Facebook Cover (820×312px scaled to fit) ──
     let y = margin;
@@ -379,7 +410,7 @@ export const generateSocialHeaders = async (req: AuthRequest, res: Response) => 
       .text(organizer.businessName, margin + 16, y + 12, { width: twitterWidth - 32 })
       .font('Helvetica')
       .fontSize(10)
-      .text('Estate Sale Specialist', { width: twitterWidth - 32 });
+      .text(specialistTagline, { width: twitterWidth - 32 });
 
     // Instructions
     doc
@@ -430,6 +461,8 @@ export const generateBrandedYardSign = async (req: AuthRequest, res: Response) =
 
     const primaryColor = organizer.brandPrimaryColor || '#2563EB';
     const secondaryColor = organizer.brandSecondaryColor || '#1E40AF';
+    const saleTypeLabel = await getOrganizerSaleTypeLabel(organizer.id);
+    const saleTypeSubtitle = saleTypeLabel || 'Sale Organizer';
 
     // Has brand colors set?
     const hasBrandColors = organizer.brandPrimaryColor && organizer.brandSecondaryColor;
@@ -461,7 +494,7 @@ export const generateBrandedYardSign = async (req: AuthRequest, res: Response) =
       .font('Helvetica')
       .fontSize(14)
       .fillColor('#ffffff')
-      .text('Estate Sale', {
+      .text(saleTypeSubtitle, {
         width: pageWidth - margin * 2,
         align: 'center',
       });

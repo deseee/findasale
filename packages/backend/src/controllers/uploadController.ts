@@ -253,7 +253,7 @@ export const rapidBatchUpload = async (req: Request, res: Response): Promise<voi
       return;
     }
 
-    const ollamaPrompt = `You are an estate sale pricing assistant. Look at this image and respond with ONLY valid JSON (no markdown, no explanation) in this exact format:
+    const ollamaPrompt = `You are a secondary-sale pricing assistant (estate sales, yard sales, auctions, flea markets, consignment). Look at this image and respond with ONLY valid JSON (no markdown, no explanation) in this exact format:
 {
   "title": "short descriptive item title",
   "description": "1-2 sentence description mentioning condition and notable features",
@@ -375,7 +375,7 @@ export const analyzePhotoWithAI = async (req: Request, res: Response): Promise<v
     // ── Ollama fallback ────────────────────────────────────────────────────────
     const base64Image = file.buffer.toString('base64');
 
-    const prompt = `You are an estate sale pricing assistant. Look at this image and respond with ONLY valid JSON (no markdown, no explanation) in this exact format:
+    const prompt = `You are a secondary-sale pricing assistant (estate sales, yard sales, auctions, flea markets, consignment). Look at this image and respond with ONLY valid JSON (no markdown, no explanation) in this exact format:
 {
   "title": "short descriptive item title",
   "description": "1-2 sentence description mentioning condition and notable features",

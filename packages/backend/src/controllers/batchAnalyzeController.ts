@@ -327,7 +327,7 @@ export const batchAnalyzeImages = async (req: AuthRequest, res: Response): Promi
           // Fallback to Ollama if Cloud AI unavailable or failed
           if (!analysis) {
             try {
-              const ollamaPrompt = `You are an estate sale pricing assistant. Look at this image and respond with ONLY valid JSON (no markdown, no explanation):
+              const ollamaPrompt = `You are a secondary-sale pricing assistant (estate sales, yard sales, auctions, flea markets, consignment). Look at this image and respond with ONLY valid JSON (no markdown, no explanation):
 {
   "title": "short specific title (include material, era, or maker if visible)",
   "description": "1-2 sentence description mentioning condition and notable features",

@@ -1278,7 +1278,7 @@ export const markSoldAndCreateInvoice = async (req: AuthRequest, res: Response) 
           currency: 'usd',
           product_data: {
             name: hold.item.title,
-            description: `Estate sale item`,
+            description: hold.item.title || 'Secondhand item',
             images: hold.item.photoUrls && hold.item.photoUrls.length > 0 ? [hold.item.photoUrls[0]] : [],
           },
           unit_amount_decimal: String(Math.round((hold.item.price || 0) * 100)),

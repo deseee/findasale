@@ -6,6 +6,17 @@ import { prisma } from '../lib/prisma';
 import { AuthRequest } from '../middleware/auth';
 import { canRemoveWatermark } from '../utils/watermarkPolicy';
 
+/**
+ * Sale-type label mapping (mirrors the pattern already used in
+ * printKitController.ts / brandKitPrintController.ts) -- used to
+ * personalize the marketing kit header instead of hardcoding "Estate Sale"
+ * (D-001: All Sale Types Scope).
+ */
+const SALE_TYPE_LABELS: Record<string, string> = {
+  ESTATE: 'Estate Sale', YARD: 'Yard Sale', AUCTION: 'Auction',
+  FLEA_MARKET: 'Flea Market', CONSIGNMENT: 'Consignment Sale',
+};
+
 const formatDate = (dateStr: string | Date): string => {
   const date = new Date(dateStr);
   return new Intl.DateTimeFormat('en-US', {
@@ -40,6 +51,8 @@ export const generateMarketingKit = async (req: AuthRequest, res: Response) => {
     if (!sale) {
       return res.status(404).json({ message: 'Sale not found' });
     }
+
+    const saleTypeLabel = SALE_TYPE_LABELS[sale.saleType ?? ''] || 'Sale';
 
     if (req.user.role !== 'ADMIN') {
       const organizerProfile = await prisma.organizer.findUnique({
@@ -95,7 +108,7 @@ export const generateMarketingKit = async (req: AuthRequest, res: Response) => {
       .fillColor('#bfdbfe')
       .font('Helvetica')
       .fontSize(12)
-      .text('Estate Sale Marketing Kit', margin, 60, { lineBreak: false });
+      .text(`${saleTypeLabel} Marketing Kit`, margin, 60, { lineBreak: false });
 
     // ── Sale title ────────────────────────────────────────
     doc

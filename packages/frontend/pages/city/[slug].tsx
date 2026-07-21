@@ -75,7 +75,7 @@ export default function CityPage({
     setClientNow(new Date());
   }, []);
 
-  const title = `Estate Sales, Auctions & More in ${cityName}, ${cityState} | FindA.Sale`;
+  const title = `Yard, Estate Sales, Auctions & More in ${cityName}, ${cityState} | FindA.Sale`;
   const description = `Browse ${totalCount} sales in ${cityName}, ${cityState}. Find estate sales, yard sales, auctions, flea markets and more on FindA.Sale.`;
   const canonicalUrl = `https://finda.sale/city/${citySlug}`;
 
