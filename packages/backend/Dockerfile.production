@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-# cache-bust: 2026-07-18T17:20:00Z -- retry after the real root cause fix (check-sentry-after-deploy.yml timeout-minutes 5->35, commit 6476bf39). The previous WAITING deployment was gated on a Sentry post-deploy check that was guaranteed to Cancel every run (5min timeout, 30min sleep by design). This push touches packages/backend/** so Railway will actually build it, riding on the now-fixed CI gate.
+# cache-bust: 2026-07-21T20:40:00Z -- unblock stuck WAITING deploy after OUTREACH_DAILY_CAP=50 env-var-only change (Railway commitChanges workflow queued a deploy for commit 54e66d87 that never progressed past WAITING for 5+ min; this touches packages/backend/** so Railway will actually build it).
 FROM node:20-slim AS base
 
 # Install OpenSSL for Prisma
