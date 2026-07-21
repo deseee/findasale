@@ -109,6 +109,10 @@ async function main() {
   }
   const totalBatches = batches.length;
   const totals = { created: 0, updated: 0, skipped: 0, failed: 0, httpErrors: 0 };
+  // Diagnostic only — aggregates the (reason -> count) buckets the backend now
+  // returns alongside `stats`, so item-level failure causes are visible in the
+  // GitHub Actions console log instead of being silently swallowed.
+  const failureReasonTotals = new Map<string, number>();
   let completed = 0;
 
   async function postOne(batch: { num: number; items: any[] }): Promise<void> {
@@ -165,12 +169,18 @@ async function main() {
 
         const result = (await response.json()) as {
           stats?: { created: number; updated: number; skipped: number; failed: number };
+          failureReasons?: { reason: string; count: number }[];
         };
         if (result.stats) {
           totals.created += result.stats.created;
           totals.updated += result.stats.updated;
           totals.skipped += result.stats.skipped;
           totals.failed += result.stats.failed;
+          if (result.failureReasons) {
+            for (const { reason, count } of result.failureReasons) {
+              failureReasonTotals.set(reason, (failureReasonTotals.get(reason) || 0) + count);
+            }
+          }
           console.log(
             `[run-estatesalesnet] (${completed}/${totalBatches}) Batch ${batch.num} — ${result.stats.created}c / ${result.stats.skipped}s / ${result.stats.failed}f`
           );
@@ -225,6 +235,18 @@ async function main() {
   console.log(
     `[run-estatesalesnet] Ingest complete in ${ingestSec}s${chunkLabel} — ${totals.created} created, ${totals.skipped} skipped, ${totals.failed} failed (item-level), ${totals.httpErrors} batch HTTP errors`
   );
+
+  // Diagnostic only — surfaces the reasons behind `failed (item-level)` above,
+  // which were previously visible only via direct DB/log access.
+  if (failureReasonTotals.size > 0) {
+    const topReasons = Array.from(failureReasonTotals.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10);
+    console.log('[run-estatesalesnet] Top item-level failure reasons:');
+    for (const [reason, count] of topReasons) {
+      console.log(`[run-estatesalesnet]   ${count}x — ${reason}`);
+    }
+  }
 }
 
 main()

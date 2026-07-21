@@ -40,6 +40,23 @@ export const ingestFromGitHubActions = async (req: Request, res: Response): Prom
 
   // --- Ingest phase — synchronous so caller gets real stats ---
   const stats = { created: 0, updated: 0, skipped: 0, failed: 0 };
+  // Diagnostic aggregation only — does NOT affect created/updated/skipped/failed
+  // classification. Item-level failure reasons were previously swallowed entirely
+  // (only the aggregate `failed` count was visible in GitHub Actions logs), making
+  // a 0-created/high-failed regression undiagnosable without direct DB/log access.
+  // Bucketed by truncated reason text and capped to the top 10 so this can never
+  // produce unbounded log/response growth on a bad batch.
+  const failureReasonCounts = new Map<string, number>();
+  const recordFailureReason = (reason?: string): void => {
+    if (!reason) return;
+    const key = reason.length > 120 ? `${reason.slice(0, 120)}…` : reason;
+    failureReasonCounts.set(key, (failureReasonCounts.get(key) || 0) + 1);
+  };
+  const topFailureReasons = (): { reason: string; count: number }[] =>
+    Array.from(failureReasonCounts.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10)
+      .map(([reason, count]) => ({ reason, count }));
 
   try {
     for (const item of items) {
@@ -47,17 +64,21 @@ export const ingestFromGitHubActions = async (req: Request, res: Response): Prom
       if (result.status === 'created') stats.created++;
       else if (result.status === 'updated') stats.updated++;
       else if (result.status === 'skipped') stats.skipped++;
-      else stats.failed++;
+      else {
+        stats.failed++;
+        recordFailureReason(result.reason);
+      }
     }
     await flushFreshnessTouches();
     await flushScraperRevalidation();
 
-    console.log('[internalScraperController] Ingest complete:', stats);
-    res.status(200).json({ stats });
+    const failureReasons = topFailureReasons();
+    console.log('[internalScraperController] Ingest complete:', stats, 'Top failure reasons:', failureReasons);
+    res.status(200).json({ stats, failureReasons });
   } catch (err) {
     console.error('[internalScraperController] Ingest error:', err);
     if (!res.headersSent) {
-      res.status(500).json({ message: 'Ingest failed', stats });
+      res.status(500).json({ message: 'Ingest failed', stats, failureReasons: topFailureReasons() });
     }
   }
 };
