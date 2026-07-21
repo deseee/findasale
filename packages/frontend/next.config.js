@@ -248,6 +248,24 @@ const nextConfig = {
       { source: '/shopper/hall-of-fame', destination: '/leaderboard', permanent: true },
       // S1: /consignment category renamed to /resale (RETAIL bucket was mislabeled) — 2026-07-09
       { source: '/city/:slug/consignment', destination: '/city/:slug/resale', permanent: true },
+      // seo-geo-monitor S1147, 2026-07-21: legacy per-category city landing pages
+      // (/estate-sales/:citySlug etc) were live simultaneously with their
+      // /city/:slug/:category equivalents, each serving its own self-referencing
+      // canonical — confirmed via direct fetch that both returned HTTP 200 with
+      // separate canonicals for the same Denver estate-sale content. GSC showed
+      // 197 pages in the "Duplicate, Google chose different canonical than user"
+      // bucket and "estate sales denver" (~pos 32 baseline) dropped out of the
+      // top-queries table entirely. /city/[slug]/[category].tsx is the current
+      // GEO architecture (roadmap #436) — 301 the legacy routes onto it to
+      // consolidate ranking signal onto one canonical URL. Category slugs map
+      // 1:1 (verified against CATEGORY_META/VALID_CATEGORIES in
+      // city/[slug]/[category].tsx). NOTE: /companies/:citySlug is intentionally
+      // NOT included here — it's a distinct hire-intent company directory
+      // (companyDirectoryController) with no equivalent under /city/:slug/:category.
+      { source: '/estate-sales/:citySlug', destination: '/city/:citySlug/estate-sales', permanent: true },
+      { source: '/yard-sales/:citySlug', destination: '/city/:citySlug/yard-sales', permanent: true },
+      { source: '/auctions/:citySlug', destination: '/city/:citySlug/auctions', permanent: true },
+      { source: '/flea-markets/:citySlug', destination: '/city/:citySlug/flea-markets', permanent: true },
     ];
   },
 

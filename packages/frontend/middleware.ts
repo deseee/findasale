@@ -80,6 +80,42 @@ export function middleware(request: NextRequest) {
     return NextResponse.rewrite(new URL('/api/sitemap-index', request.url));
   }
 
+  // ── Permanently deleted sale IDs (GSC 404 cleanup, 2026-07-21) ─────────────
+  // These 14 Sale IDs were confirmed (psycopg2 against production DB) to be
+  // genuinely and permanently deleted from the Sale table — no soft-delete
+  // field exists on the model, so this is a known-finite historical list from
+  // one purge event, not something that needs to be DB-driven. GSC reported
+  // repeated "Not found (404)" validation failures for these URLs because
+  // pages/sales/[id].tsx uses getStaticProps (ISR), which cannot return a
+  // custom status code from the page component itself. Middleware already
+  // runs on every /sales/:id request (crawler tracking, above/below) at zero
+  // added network cost, so it handles the 410 instead. A 410 Gone (vs 404)
+  // tells Google the removal is intentional and permanent, which is the
+  // correct signal for content that will never come back.
+  const DELETED_SALE_IDS = new Set([
+    'cmqf14g6x00t9bo1nibst4yk7',
+    'cmqf14aag001hbo1nkd6lqcs7',
+    'cmqf14g6v00t7bo1npyinumlm',
+    'cmqgf5gzi03r690oa8rt92e5q',
+    'cmqf14g7500tfbo1nxqfso1ie',
+    'cmqgf5kir046c90oail86mrb5',
+    'cmqf14hmb010jbo1n4r4heyzz',
+    'cmqf14hia00zjbo1nrw634enx',
+    'cmqf14f0v00o9bo1n3ryqp5vt',
+    'cmqj52zq601mui79azm2pyhd0',
+    'cmqf14dka00glbo1new9x5egg',
+    'cmqf14af4002bbo1nu7kw6v4a',
+    'cmr7fwc6y006rzjpwt5k8lsdf',
+    'cmr7g5csm00obzjpwgdn4jg3j',
+  ]);
+
+  if (pathname.startsWith('/sales/')) {
+    const saleId = pathname.slice('/sales/'.length).split('/')[0];
+    if (DELETED_SALE_IDS.has(saleId)) {
+      return new NextResponse(null, { status: 410 });
+    }
+  }
+
   // ── Crawler tracking (Flag 4 fix) ──────────────────────────────────────────
   // Fire-and-forget: never await, never block the response.
   // Order matters for Fluid Active CPU cost: isCrawlerPage() is a cheap 4-item
