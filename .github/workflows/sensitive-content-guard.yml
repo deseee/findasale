@@ -1,0 +1,56 @@
+name: Sensitive Content Guard
+
+# Defense-in-depth for CLAUDE.md §10d "Public Repo Discipline" (added S1145,
+# 2026-07-21). The local .githooks/pre-commit hook catches this first, but
+# hooks can be bypassed (--no-verify) or simply not configured on a given
+# machine. This workflow re-checks every push/PR against main so a lapse
+# never reaches the default branch unnoticed.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Block tracked claude_docs/ content
+        run: |
+          if find . -path './node_modules' -prune -o -path './claude_docs/*' -print -quit 2>/dev/null | grep -q .; then
+            echo "::error::claude_docs/ is tracked in this checkout. It is intentionally untracked per CLAUDE.md §10d — internal docs, legal-risk analysis, and security audits do not belong in this public repo. Run: git rm -r --cached claude_docs/"
+            exit 1
+          fi
+          echo "OK: claude_docs/ not present in tracked tree."
+
+      - name: Scan for legal-risk narrative and real infra hostnames
+        run: |
+          set -e
+          PLACEHOLDER_RE='(your-worker|<worker>|<your-worker>|example-worker|my-worker)\.workers\.dev'
+          FOUND=0
+
+          echo "Scanning for risk-admission narrative phrases..."
+          if grep -rniE 'never formally resolved|shipped anyway|flagged CRITICAL' \
+              --include="*.ts" --include="*.tsx" --include="*.js" --include="*.md" --include="*.yml" --include="*.yaml" \
+              --exclude-dir=node_modules . ; then
+            echo "::error::Found a risk-admission narrative phrase in tracked content — see CLAUDE.md §10d before committing language like this to the public repo. Reference the private internal record instead of restating specifics."
+            FOUND=1
+          fi
+
+          echo "Scanning for real (non-placeholder) *.workers.dev hostnames..."
+          HITS=$(grep -rnoE '[a-z0-9][a-z0-9-]*\.workers\.dev' \
+              --include="*.ts" --include="*.tsx" --include="*.js" --include="*.md" --include="*.yml" --include="*.yaml" \
+              --exclude-dir=node_modules . | grep -viE "$PLACEHOLDER_RE" || true)
+          if [ -n "$HITS" ]; then
+            echo "::error::Found a real (non-placeholder) *.workers.dev hostname committed to this public repo. Use an env var or a placeholder like your-worker.workers.dev in docs/comments instead:"
+            echo "$HITS"
+            FOUND=1
+          fi
+
+          if [ "$FOUND" = "1" ]; then
+            exit 1
+          fi
+          echo "OK: no banned patterns found."
