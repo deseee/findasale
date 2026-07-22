@@ -3,6 +3,7 @@ import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import { getWatermarkedUrlWithQR } from '../utils/cloudinaryWatermark';
 import { canRemoveWatermark } from '../utils/watermarkPolicy';
+import { resolvePublishPackageWeight } from './ebayController';
 
 // Facebook Marketplace condition values. Mirrors mapConditionForFacebook() in
 // exportController.ts (kept in sync; trivial pure map — not worth a shared import).
@@ -64,9 +65,51 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
       category: true, condition: true, photoUrls: true, qrEmbedEnabled: true, createdAt: true,
       packageWeightOz: true, aiPackageWeightOz: true, ebayShippingOverride: true, shippingAvailable: true,
       allowBestOffer: true, bestOfferMinimumAmt: true,
+      // ADR fb-package-weight-estimator (2026-07-22): needed to call resolvePublishPackageWeight
+      // below, the same package-weight resolver eBay's publish flow already uses.
+      ebayCategoryId: true, packageConfirmedByOrganizer: true,
+      packageLengthIn: true, packageWidthIn: true, packageHeightIn: true, packageType: true,
+      aiPackageDimsJson: true, aiPackageConfidence: true,
     },
     orderBy: { createdAt: 'desc' },
   });
+
+  // Resolve missing package weights the same way eBay's publish flow does (ADR
+  // fb-package-weight-estimator, 2026-07-22). Previously this endpoint read only the raw
+  // packageWeightOz/aiPackageWeightOz columns -- any item whose upload-time AI photo pass
+  // wasn't confident (aiPackageConfidence < 0.5) got NO weight at all and was force-switched
+  // to LOCAL_PICKUP_ONLY on Facebook, even when a PackageProfile category/keyword default
+  // existed (e.g. the seeded 'lamp' keyword profile). resolvePublishPackageWeight persists
+  // its result to the Item, so both eBay and Facebook converge on the same stored weight
+  // instead of two channels silently disagreeing. No-ops (single early return, no extra
+  // queries) for any item that already has a confirmed/measured weight or is pickup-only.
+  for (const it of items) {
+    if (it.ebayShippingOverride === 'LOCAL_PICKUP_ONLY') continue;
+    if (it.packageWeightOz != null && Number(it.packageWeightOz) > 0) continue;
+    try {
+      const resolved = await resolvePublishPackageWeight({
+        id: it.id,
+        title: it.title,
+        category: it.category,
+        ebayCategoryId: it.ebayCategoryId,
+        ebayShippingOverride: it.ebayShippingOverride,
+        packageConfirmedByOrganizer: it.packageConfirmedByOrganizer,
+        packageWeightOz: it.packageWeightOz,
+        packageLengthIn: it.packageLengthIn != null ? Number(it.packageLengthIn) : null,
+        packageWidthIn: it.packageWidthIn != null ? Number(it.packageWidthIn) : null,
+        packageHeightIn: it.packageHeightIn != null ? Number(it.packageHeightIn) : null,
+        packageType: it.packageType,
+        aiPackageWeightOz: it.aiPackageWeightOz,
+        aiPackageDimsJson: it.aiPackageDimsJson,
+        aiPackageConfidence: it.aiPackageConfidence != null ? Number(it.aiPackageConfidence) : null,
+      });
+      if (resolved) {
+        (it as { packageWeightOz: number | null }).packageWeightOz = resolved.weightOz;
+      }
+    } catch (e: any) {
+      console.warn('[FB AutoWeight] resolvePublishPackageWeight failed for item', it.id, e?.message || e);
+    }
+  }
 
   const itemIds = items.map((i) => i.id);
   const jobs = itemIds.length

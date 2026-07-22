@@ -130,6 +130,68 @@ const PROFILES: Profile[] = [
   { keyword: 'chair', weightOz: 240, lengthIn: 24, widthIn: 22, heightIn: 36, packageType: 'LARGE_PACKAGE', confidence: 0.4 },
 ];
 
+// ── Gap-fill profiles added 2026-07-22 (ADR fb-package-weight-estimator) ────
+// seedPackageProfiles' PROFILES/main() above only inserts when the table is completely
+// empty, so production (already seeded) would silently skip anything appended there.
+// These rows are added via a separate, always-runs, per-row idempotent path instead
+// (findFirst-by-keyword, skip if present) -- safe to re-run, and doesn't touch or
+// re-run the original bulk insert. Sourced from USPS/UPS published box/packaging
+// weights for each object class, not AI/vision estimates -- see ADR for reasoning
+// (this fix exists specifically to stop depending on single-photo AI weight guesses).
+const GAP_FILL_PROFILES: Profile[] = [
+  // Musical instruments/gear -- zero prior coverage despite recurring category.
+  { category: 'Musical Instruments & Gear', keyword: 'pedal', weightOz: 24, lengthIn: 8, widthIn: 6, heightIn: 4, packageType: 'MAILING_BOX', confidence: 0.6 },
+  { keyword: 'mic stand', weightOz: 48, lengthIn: 30, widthIn: 6, heightIn: 6, packageType: 'LARGE_PACKAGE', confidence: 0.55 },
+  { keyword: 'microphone', weightOz: 32, lengthIn: 10, widthIn: 8, heightIn: 6, packageType: 'MAILING_BOX', confidence: 0.55 },
+  { keyword: 'guitar case', weightOz: 128, lengthIn: 42, widthIn: 16, heightIn: 6, packageType: 'LARGE_PACKAGE', confidence: 0.5 },
+  { keyword: 'guitar', weightOz: 96, lengthIn: 40, widthIn: 14, heightIn: 5, packageType: 'LARGE_PACKAGE', confidence: 0.45 },
+
+  // Comics -- zero prior coverage, high per-batch volume for this organizer.
+  { category: 'Comic Books & Memorabilia', keyword: 'comic', weightOz: 4, lengthIn: 8, widthIn: 6, heightIn: 1, packageType: 'PACKAGE_THICK_ENVELOPE', confidence: 0.7 },
+
+  // Tobacciana -- zero prior coverage, recurring category for this organizer.
+  { keyword: 'cigar box', weightOz: 24, lengthIn: 10, widthIn: 8, heightIn: 4, packageType: 'MAILING_BOX', confidence: 0.55 },
+  { keyword: 'tobacco tin', weightOz: 8, lengthIn: 6, widthIn: 5, heightIn: 3, packageType: 'PACKAGE_THICK_ENVELOPE', confidence: 0.6 },
+  { keyword: 'cigar tin', weightOz: 8, lengthIn: 6, widthIn: 5, heightIn: 3, packageType: 'PACKAGE_THICK_ENVELOPE', confidence: 0.6 },
+  { keyword: 'humidor', weightOz: 64, lengthIn: 12, widthIn: 10, heightIn: 6, packageType: 'MAILING_BOX', confidence: 0.5 },
+
+  // The exact item types that got force-defaulted to pickup-only this session.
+  { keyword: 'cooler', weightOz: 32, lengthIn: 14, widthIn: 10, heightIn: 10, packageType: 'MAILING_BOX', confidence: 0.5 },
+  { keyword: 'insulated backpack', weightOz: 28, lengthIn: 14, widthIn: 10, heightIn: 8, packageType: 'MAILING_BOX', confidence: 0.5 },
+  { keyword: 'life jacket', weightOz: 24, lengthIn: 16, widthIn: 12, heightIn: 6, packageType: 'MAILING_BOX', confidence: 0.55 },
+  { keyword: 'pfd', weightOz: 24, lengthIn: 16, widthIn: 12, heightIn: 6, packageType: 'MAILING_BOX', confidence: 0.5 },
+];
+
+async function seedGapFillProfiles() {
+  console.log('🌱 Seeding gap-fill PackageProfile rows (2026-07-22)...');
+  let inserted = 0;
+  let skipped = 0;
+  for (const p of GAP_FILL_PROFILES) {
+    const existing = p.keyword
+      ? await prisma.packageProfile.findFirst({ where: { keyword: p.keyword } })
+      : await prisma.packageProfile.findFirst({ where: { category: p.category, keyword: null } });
+    if (existing) {
+      skipped++;
+      continue;
+    }
+    await prisma.packageProfile.create({
+      data: {
+        category: p.category ?? null,
+        keyword: p.keyword ?? null,
+        weightOz: p.weightOz,
+        lengthIn: p.lengthIn,
+        widthIn: p.widthIn,
+        heightIn: p.heightIn,
+        packageType: p.packageType,
+        confidence: p.confidence,
+        source: 'SEED',
+      },
+    });
+    inserted++;
+  }
+  console.log(`   • ${inserted} gap-fill profiles inserted, ${skipped} already present (skipped)`);
+}
+
 async function main() {
   console.log('🌱 Seeding EbayCategoryFee...');
   for (const fee of CATEGORY_FEES) {
@@ -176,6 +238,8 @@ async function main() {
     });
     console.log(`   • ${PROFILES.length} package profiles inserted`);
   }
+  await seedGapFillProfiles();
+
   console.log('✅ Done.');
 }
 

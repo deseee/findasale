@@ -1519,6 +1519,24 @@ const EditItemPage = () => {
                       onChange={(e) => setFormData({ ...formData, packageWeightOz: e.target.value })}
                       className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
                     />
+                    {/* ADR fb-package-weight-estimator (2026-07-22): packageWeightOz now gets
+                        auto-filled by resolvePublishPackageWeight (eBay publish + FB extension
+                        queue both persist an estimate here when the organizer hasn't). Surface
+                        that provenance instead of showing a bare number indistinguishable from
+                        one the organizer typed themselves. */}
+                    {formData.packageWeightOz && !item?.packageConfirmedByOrganizer && item?.packageEstimateSource && (
+                      <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                        Estimated
+                        {item.packageEstimateSource === 'KEYWORD' || item.packageEstimateSource === 'CATEGORY'
+                          ? ' (category default)'
+                          : item.packageEstimateSource === 'AI'
+                          ? ' (AI guess from photo)'
+                          : item.packageEstimateSource === 'SEED'
+                          ? ' (generic default)'
+                          : ''}
+                        {' — not your input. Edit this field to enter a real measurement.'}
+                      </p>
+                    )}
                   </div>
                   <div className="grid grid-cols-3 gap-3">
                     <div>
