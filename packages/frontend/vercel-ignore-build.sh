@@ -44,9 +44,29 @@ fi
 # immediately followed by a STATE.md-only commit; Vercel built HEAD^..HEAD,
 # saw only STATE.md, and skipped the real deploy).
 PREV="${VERCEL_GIT_PREVIOUS_SHA:-}"
+if [ -n "$PREV" ] && ! git cat-file -e "${PREV}^{commit}" >/dev/null 2>&1; then
+  # S1148 (cont., 2026-07-22): Vercel's build environment does a SHALLOW
+  # clone. VERCEL_GIT_PREVIOUS_SHA can be correctly set to the real
+  # last-deployed commit and still fail `git cat-file -e` simply because
+  # that commit's history isn't present in the shallow clone -- NOT because
+  # there's no previous deployment. Confirmed live bug: a normal 3-commit
+  # push (one of the commits a real change to THIS script) got silently
+  # SKIPPED because the shallow-clone check fell straight through to the
+  # HEAD^ fallback below, which re-introduces the exact S1066 multi-commit
+  # under-counting bug this PREV logic exists to prevent. Before giving up,
+  # try to deepen the clone just enough to reach $PREV. Bound the fetch and
+  # guard it so a network hiccup at this build stage can't hang or crash the
+  # step -- on any failure we fall through to the HEAD^ fallback exactly as
+  # before, preserving the "uncertain -> BUILD" philosophy.
+  timeout 20 git fetch --quiet --deepen=50 origin "$PREV" >/dev/null 2>&1 || true
+  if ! git cat-file -e "${PREV}^{commit}" >/dev/null 2>&1; then
+    timeout 20 git fetch --quiet --unshallow origin >/dev/null 2>&1 || true
+  fi
+fi
 if [ -z "$PREV" ] || ! git cat-file -e "${PREV}^{commit}" >/dev/null 2>&1; then
   # No previous-deployment SHA available (first deploy, or Vercel didn't set
-  # it) -> fall back to HEAD^, but only if it's reachable.
+  # it), or still unreachable even after attempting to deepen the clone ->
+  # fall back to HEAD^, but only if it's reachable.
   if git rev-parse HEAD^ >/dev/null 2>&1; then
     PREV="HEAD^"
   else
