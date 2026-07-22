@@ -1320,13 +1320,20 @@ export async function ingestScrapedListing(
     // with headroom above FacebookMarketplace's legitimate 30-day default window
     // (facebook-marketplace.ts) so this never false-rejects real listings.
     const MAX_SALE_DURATION_MS = 45 * 24 * 60 * 60 * 1000;
+    // Coerce to Date defensively -- some scraper mappers (confirmed: EstateSalesNet,
+    // Facebook Events) pass startDate/endDate as ISO strings rather than Date instances,
+    // which made the raw .getTime() calls below throw 'X.getTime is not a function' on
+    // EVERY listing since this check shipped (2026-07-19), silently zeroing out new-listing
+    // ingest across multiple sources for ~2 days (auto-fixed by daily health monitor).
+    const _startDate = listing.startDate instanceof Date ? listing.startDate : new Date(listing.startDate);
+    const _endDate = listing.endDate instanceof Date ? listing.endDate : new Date(listing.endDate);
     if (
       !listing.isOngoing &&
-      listing.endDate.getTime() - listing.startDate.getTime() > MAX_SALE_DURATION_MS
+      _endDate.getTime() - _startDate.getTime() > MAX_SALE_DURATION_MS
     ) {
       return {
         status: 'failed',
-        reason: `Implausible date window (${listing.startDate.toISOString()} -> ${listing.endDate.toISOString()}) exceeds 45-day sanity cap -- likely mismatched start/end fields, not ingested`,
+        reason: `Implausible date window (${_startDate.toISOString()} -> ${_endDate.toISOString()}) exceeds 45-day sanity cap -- likely mismatched start/end fields, not ingested`,
       };
     }
 
