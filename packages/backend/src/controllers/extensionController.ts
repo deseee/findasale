@@ -103,8 +103,25 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
         aiPackageDimsJson: it.aiPackageDimsJson,
         aiPackageConfidence: it.aiPackageConfidence != null ? Number(it.aiPackageConfidence) : null,
       });
-      if (resolved) {
+      if (resolved && resolved.source !== 'SEED') {
+        // 'SEED' here means resolvePublishPackageWeight fell all the way through to its
+        // own generic last-resort guess (24oz/0.25 confidence, no category or keyword
+        // match, not the AI photo estimate either) -- NOT a curated PackageProfile row
+        // (those come back as 'CATEGORY'/'KEYWORD'). Per the ADR, FB should never ship a
+        // real weight built on that low a confidence -- pickup-only is the safer default.
+        // resolvePublishPackageWeight already persisted it to the Item as a side effect
+        // (shared with eBay's publish path), so explicitly revert that persistence for
+        // this item rather than silently using a value we've decided not to trust.
         (it as { packageWeightOz: number | null }).packageWeightOz = resolved.weightOz;
+      } else if (resolved && resolved.source === 'SEED') {
+        try {
+          await prisma.item.update({
+            where: { id: it.id },
+            data: { packageWeightOz: null, packageEstimateSource: null },
+          });
+        } catch (revertErr: any) {
+          console.warn('[FB AutoWeight] failed to revert generic-fallback weight for item', it.id, revertErr?.message || revertErr);
+        }
       }
     } catch (e: any) {
       console.warn('[FB AutoWeight] resolvePublishPackageWeight failed for item', it.id, e?.message || e);
