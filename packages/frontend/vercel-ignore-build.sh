@@ -18,6 +18,23 @@ set -uo pipefail
 ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || { echo "vercel-ignore: no git root -> BUILD"; exit 1; }
 cd "$ROOT"
 
+# S1148: HEAD-is-a-merge-commit guard. Confirmed live bug 2026-07-22: commit
+# d3a4aede (a merge of origin/main into a local branch that already had
+# 3bee5133, the Vercel Option B SSR-routing change) was silently SKIPPED.
+# VERCEL_GIT_PREVIOUS_SHA was not usable and the HEAD^ fallback resolved to
+# the merge commit's FIRST PARENT (3bee5133 itself) -- which already
+# contained the real frontend changes, so the diff against it showed only
+# the second parent's doc/workflow commits and the script wrongly concluded
+# "docs only". A merge commit can smuggle real changes past a single-parent
+# diff this way. Never trust single-parent diffing for merge commits --
+# always BUILD instead. Merge commits are rare on this repo (most "pushes"
+# are single commits or fast-forwards); the extra build minutes this costs
+# are negligible next to silently never deploying a real change.
+if git rev-parse -q --verify HEAD^2 >/dev/null 2>&1; then
+  echo "vercel-ignore: HEAD is a merge commit -> BUILD (S1148 guard)"
+  exit 1
+fi
+
 # Compare against the last DEPLOYED commit, not just HEAD^. A multi-commit
 # push (e.g. a code commit followed by a docs-only wrap commit) means HEAD^
 # is NOT "the last deploy" -- it's whatever commit happens to sit directly
