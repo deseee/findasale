@@ -88,20 +88,21 @@ export const discoverHubs = async (req: Request, res: Response) => {
     const pageNum = parseInt(String(page) || '1');
     const limitNum = parseInt(String(limit) || '20');
 
-    const hubs = await prisma.saleHub.findMany({
+    // S1149: paginate in application code, not via Prisma skip/take (LIMIT/OFFSET), which
+    // currently triggers a Postgres wire-protocol error against this table (Prisma 5.22 /
+    // Postgres 18 gap -- see claude_docs/feature-notes/adr-s1149-salehub-prisma-pg18-2026-07-22.md).
+    // Mirrors the pattern the lat/lng branch above already uses (take: 500 + in-memory slice).
+    const allActiveHubs = await prisma.saleHub.findMany({
       where: { isActive: true },
-      skip: (pageNum - 1) * limitNum,
-      take: limitNum,
+      take: 500,
       include: {
         memberships: { select: { id: true } },
         organizer: { select: { businessName: true } },
       },
     });
 
-    const total = await prisma.saleHub.count({ where: { isActive: true } });
-
-    res.json({
-      hubs: hubs.map((hub) => ({
+    const pagedHubs = allActiveHubs
+      .map((hub) => ({
         id: hub.id,
         name: hub.name,
         slug: hub.slug,
@@ -111,8 +112,12 @@ export const discoverHubs = async (req: Request, res: Response) => {
         organizerName: hub.organizer?.businessName,
         saleDate: hub.saleDate,
         eventName: hub.eventName,
-      })),
-      total,
+      }))
+      .slice((pageNum - 1) * limitNum, pageNum * limitNum);
+
+    res.json({
+      hubs: pagedHubs,
+      total: allActiveHubs.length,
       page: pageNum,
       limit: limitNum,
     });
@@ -226,11 +231,16 @@ export const createHub = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: 'Slug already in use' });
     }
 
+    // S1149: explicit select shrinks the RETURNING clause to just what's used below --
+    // Prisma's default full-scalar-field RETURNING on this table currently triggers a
+    // Postgres wire-protocol error (Prisma 5.22 / Postgres 18 gap -- see
+    // claude_docs/feature-notes/adr-s1149-salehub-prisma-pg18-2026-07-22.md).
     const hub = await prisma.saleHub.create({
       data: {
         ...validated,
         organizerId: req.user.organizerProfile?.id,
       },
+      select: { id: true, slug: true },
     });
 
     res.json({ hubId: hub.id, slug: hub.slug });
