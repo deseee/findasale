@@ -3,7 +3,7 @@
  *
  * Usage:
  *   cd packages/backend
- *   FB_EVENTS_PROXY_URL=https://findasale-fb-proxy.findas-6eb.workers.dev \
+ *   FB_EVENTS_PROXY_URL=https://findasale-fb-proxy.your-worker.workers.dev \
  *   FB_EVENTS_PROXY_TOKEN=<token> \
  *   npx ts-node src/test-fb-proxy.ts
  *
