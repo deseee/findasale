@@ -301,9 +301,9 @@ function decideGate(analyses: ClipAnalysis[], inference: TemplateInference): Gat
  * failure-isolated (matches createNotification's own graceful-degradation
  * contract): a notification failure must never fail classification.
  *
- * No admin UI page exists yet for this route (API-only, curl/fetch), so the
- * notification link is intentionally omitted rather than pointing at a 404 --
- * the batch id is in the body text so it can be looked up directly.
+ * The /admin/video-pipeline page (added 2026-07-13) now handles these batches,
+ * so every notification carries a clickable link there instead of leaving the
+ * admin to copy/paste the raw API route by hand (Patrick feedback, 2026-07-22).
  */
 async function notifyAdminsBatchNeedsAttention(
   batchId: string,
@@ -323,9 +323,10 @@ async function notifyAdminsBatchNeedsAttention(
     const body =
       kind === 'FAILED'
         ? `Footage batch ${batchId} hit an unrecoverable error during classification. Check Railway logs.`
-        : `Footage batch ${batchId}: ${question ?? 'a question is staged'}. Answer via POST /api/admin/video-pipeline/footage-batch/${batchId}/answer.`;
+        : `Footage batch ${batchId}: ${question ?? 'a question is staged'}.`;
+    const link = '/admin/video-pipeline';
     await Promise.all(
-      admins.map((a) => createNotification(a.id, 'video_batch_attention', title, body, undefined, 'OPERATIONAL')),
+      admins.map((a) => createNotification(a.id, 'video_batch_attention', title, body, link, 'OPERATIONAL')),
     );
   } catch (err: any) {
     console.warn(`[footageClassify] Failed to notify admins for batch ${batchId} (${kind}):`, err?.message ?? err);
