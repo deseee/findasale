@@ -69,7 +69,7 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
       // below, the same package-weight resolver eBay's publish flow already uses.
       ebayCategoryId: true, packageConfirmedByOrganizer: true,
       packageLengthIn: true, packageWidthIn: true, packageHeightIn: true, packageType: true,
-      aiPackageDimsJson: true, aiPackageConfidence: true,
+      aiPackageDimsJson: true, aiPackageConfidence: true, packageEstimateSource: true,
     },
     orderBy: { createdAt: 'desc' },
   });
@@ -85,7 +85,12 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
   // queries) for any item that already has a confirmed/measured weight or is pickup-only.
   for (const it of items) {
     if (it.ebayShippingOverride === 'LOCAL_PICKUP_ONLY') continue;
-    if (it.packageWeightOz != null && Number(it.packageWeightOz) > 0) continue;
+    // 2026-07-22 follow-up: don't treat a persisted 'SEED' (generic fallback) weight as
+    // already-resolved -- items that got the bad 24oz fallback before this file's SEED
+    // guard existed (e.g. items persisted between the two deploys today) need to keep
+    // re-running through resolvePublishPackageWeight so they self-heal on next fetch,
+    // instead of being silently skipped forever because a (bad) weight is already set.
+    if (it.packageWeightOz != null && Number(it.packageWeightOz) > 0 && it.packageEstimateSource !== 'SEED') continue;
     try {
       const resolved = await resolvePublishPackageWeight({
         id: it.id,
