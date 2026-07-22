@@ -26,6 +26,28 @@
  * static file serving, so this overrides the stale committed public/sitemap.xml
  * (frozen at lastmod 2026-05-24 because Vercel skips the next-sitemap postbuild hook).
  *
+ * Option B — ISR-write overage fix (2026-07-22, seo-geo-monitor / findasale-dev):
+ * ADR: claude_docs/feature-notes/adr-vercel-isr-overage-2026-07-19.md. Cities NOT in
+ * the curated top-N list below (CURATED_CITY_SLUGS / CURATED_COMPANY_SLUGS) are
+ * rewritten -- invisibly to the client, the URL bar and any crawler-visible
+ * response are unaffected -- to a getServerSideProps + Cache-Control sibling
+ * page under pages/internal-ssr/** instead of the curated ISR page. Curated
+ * cities fall through unchanged to the existing ISR pages. This only covers
+ * the 4 route families still receiving live traffic at their own URL today
+ * (/city/:slug, /city/:slug/:category, /this-weekend/:city, /companies/:city-slug)
+ * -- /estate-sales/:citySlug, /yard-sales/:citySlug, /auctions/:citySlug, and
+ * /flea-markets/:citySlug already 301-redirect to /city/:slug/:category
+ * (next.config.js, S1147, 2026-07-21) before any request ever reaches their
+ * own ISR page, so they do not need this treatment.
+ * The curated lists here are copies of the existing hardcoded fallback arrays
+ * already committed in each ISR page (FALLBACK_CITY_SLUGS / TOP_CITY_SLUGS /
+ * TOP_COMPANY_CITIES) -- this environment has no network path to the backend
+ * DB/API to pull a fresher top-N by real sale-count, so rather than invent a
+ * new cutoff, Option B reuses the same real, previously-vetted lists those
+ * pages already trust. Refresh periodically by re-checking GET /sales/city-slugs
+ * and /companies/city-slugs (both already ORDER BY count DESC) with real
+ * backend access -- do not hand-guess new entries.
+ *
  * Matcher scoping (Fluid Active CPU root cause, fixed 2026-07-09):
  * Live Vercel Usage dashboard showed Fluid Active CPU at ~196% of the Hobby free
  * allocation (7h51m/4h) and Edge Requests + Function Invocations both approaching
@@ -56,6 +78,65 @@ const CRAWLER_PATTERNS: RegExp[] = [
 ];
 
 const CRAWLER_PAGE_PREFIXES = ['/sales/', '/city/', '/this-weekend/', '/organizers/'];
+
+// ── Option B curated top-N (ISR-write overage fix) ─────────────────────────
+// Copies of the existing hardcoded fallback arrays already in each ISR page
+// (see file header above for provenance/refresh instructions). Kept as
+// literal arrays here (not imported from the page files) since middleware
+// runs on the Edge runtime and importing a Pages Router page module into
+// middleware is unsupported/unreliable.
+const CURATED_CITY_SLUGS = new Set([
+  'grand-rapids-mi', 'chicago-il', 'detroit-mi', 'phoenix-az', 'dallas-tx',
+  'los-angeles-ca', 'new-york-ny', 'houston-tx', 'san-antonio-tx', 'philadelphia-pa',
+]);
+
+const CURATED_COMPANY_SLUGS = new Set([
+  'atlanta-ga', 'san-antonio-tx', 'chicago-il', 'dallas-tx', 'houston-tx',
+  'fort-worth-tx', 'saint-louis-mo', 'nashville-tn', 'denver-co', 'wichita-ks',
+  'seattle-wa', 'austin-tx', 'san-diego-ca', 'minneapolis-mn', 'baton-rouge-la',
+  'miami-fl', 'rochester-ny', 'new-york-ny', 'knoxville-tn', 'kansas-city-mo',
+]);
+
+// Must match VALID_CATEGORIES / CATEGORY_META keys in
+// pages/city/[slug]/[category].tsx. Excludes legacy values like 'consignment'
+// on purpose -- those must keep falling through to next.config.js's own
+// 301 redirect (S1: /consignment -> /resale) instead of being routed here.
+const VALID_CITY_CATEGORIES = new Set(['estate-sales', 'yard-sales', 'auctions', 'flea-markets', 'resale']);
+
+/**
+ * Option B: decide whether this request is for a long-tail (non-curated)
+ * city/company page that should be served via the SSR sibling instead of
+ * the curated ISR page. Returns the internal rewrite destination, or null
+ * if this request should fall through unchanged (curated city, or not one
+ * of the 4 route families this fix applies to).
+ */
+function resolveOptionBRewrite(pathname: string, requestUrl: string): URL | null {
+  const segments = pathname.split('/').filter(Boolean);
+  if (segments.length < 2) return null;
+
+  if (segments[0] === 'city' && segments.length === 2) {
+    if (CURATED_CITY_SLUGS.has(segments[1])) return null;
+    return new URL(`/internal-ssr/city/${segments[1]}`, requestUrl);
+  }
+
+  if (segments[0] === 'city' && segments.length === 3) {
+    if (!VALID_CITY_CATEGORIES.has(segments[2])) return null; // e.g. legacy 'consignment' — let next.config.js redirect it
+    if (CURATED_CITY_SLUGS.has(segments[1])) return null;
+    return new URL(`/internal-ssr/city-category/${segments[1]}/${segments[2]}`, requestUrl);
+  }
+
+  if (segments[0] === 'this-weekend' && segments.length === 2) {
+    if (CURATED_CITY_SLUGS.has(segments[1])) return null;
+    return new URL(`/internal-ssr/this-weekend/${segments[1]}`, requestUrl);
+  }
+
+  if (segments[0] === 'companies' && segments.length === 2) {
+    if (CURATED_COMPANY_SLUGS.has(segments[1])) return null;
+    return new URL(`/internal-ssr/companies/${segments[1]}`, requestUrl);
+  }
+
+  return null;
+}
 
 function isCrawler(ua: string): boolean {
   return CRAWLER_PATTERNS.some((p) => p.test(ua));
@@ -140,6 +221,12 @@ export function middleware(request: NextRequest) {
     });
   }
 
+  // ── Option B: long-tail city/company SSR routing (ISR-write overage fix) ──
+  // See file header + resolveOptionBRewrite() above. Computed here (not
+  // returned immediately) so a rewritten request still gets the UTM/fsa_*
+  // cookie capture below if it also carries an attribution query param.
+  const optionBRewriteUrl = resolveOptionBRewrite(pathname, request.url);
+
   // ── UTM / fsa_* attribution capture ───────────────────────────────────────
   // fsa_* params: used in outreach emails (Chrome-safe names)
   const fsa_src = searchParams.get('fsa_src');
@@ -159,10 +246,10 @@ export function middleware(request: NextRequest) {
   const hasFsa = fsa_src || fsa_med || fsa_cmp || fsa_cnt;
   const hasUtm = utm_source || utm_medium || utm_campaign || utm_content;
   if (!hasFsa && !hasUtm) {
-    return NextResponse.next();
+    return optionBRewriteUrl ? NextResponse.rewrite(optionBRewriteUrl) : NextResponse.next();
   }
 
-  const response = NextResponse.next();
+  const response = optionBRewriteUrl ? NextResponse.rewrite(optionBRewriteUrl) : NextResponse.next();
 
   // Normalise to utm_* names in the cookie regardless of input format
   const utmData = JSON.stringify({
@@ -196,10 +283,14 @@ export const config = {
   matcher: [
     // ── Sitemap rewrite: exactly one path, not every page ──────────────────
     { source: '/sitemap.xml' },
-    // ── Crawler tracking: only the 4 tracked prefixes, not every page ──────
+    // ── Crawler tracking (4 prefixes) + Option B city/company SSR routing ──
     // Regex-in-parens source per Next.js docs — equivalent to OR-ing
-    // /sales/:path*, /city/:path*, /this-weekend/:path*, /organizers/:path*.
-    { source: '/(sales|city|this-weekend|organizers)/(.*)' },
+    // /sales/:path*, /city/:path*, /this-weekend/:path*, /organizers/:path*,
+    // /companies/:path*. 'companies' was added 2026-07-22 solely so
+    // resolveOptionBRewrite() runs on those requests too -- it does NOT add
+    // crawler tracking for /companies/ (isCrawlerPage()'s own
+    // CRAWLER_PAGE_PREFIXES list above is unchanged and still excludes it).
+    { source: '/(sales|city|this-weekend|organizers|companies)/(.*)' },
     // ── UTM/fsa_* capture: only when one of the 8 real attribution params is
     // present in the URL, not on every page navigation site-wide (mirrors the
     // exact set checked by hasFsa/hasUtm above — `ref` alone does NOT trigger
