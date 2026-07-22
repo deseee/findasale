@@ -2090,6 +2090,9 @@ export const webhookHandler = async (req: Request, res: Response) => {
         }
       }
       // POS Upgrade: Payment Link self-checkout via QR (session.payment_link is set when triggered by a Payment Link)
+      if (!session.payment_link) {
+        console.log(`[pos] checkout.session.completed ${session.id} has no payment_link field -- not a POS QR sale (metadata.type=${session.metadata?.type ?? 'none'}).`);
+      }
       if (session.payment_link) {
         const stripePaymentLinkId = typeof session.payment_link === 'string'
           ? session.payment_link
@@ -2192,6 +2195,14 @@ export const webhookHandler = async (req: Request, res: Response) => {
           }
 
           console.log(`[pos] Payment link completed via checkout: ${stripePaymentLinkId}`);
+        } else if (!posPaymentLink) {
+          // Diagnostic logging added after a real live sale (2026-07-22, plink_1Tw4DoLIWHQCHu75vBTfy2Ly,
+          // PaymentIntent pi_3Tw4ESLIWHQCHu7505o8jWp4) went silent right here with zero log output --
+          // we could not tell afterward whether this branch was ever reached. Money was captured by
+          // Stripe but FindA.Sale never recorded the sale. This makes that failure mode visible.
+          console.error(`[pos] checkout.session.completed for payment_link=${stripePaymentLinkId} but no matching POSPaymentLink row exists in the DB -- sale may be STRANDED (Stripe captured the charge, FindA.Sale never recorded it). Session: ${session.id}`);
+        } else {
+          console.log(`[pos] checkout.session.completed for payment_link=${stripePaymentLinkId} received but link is already status=${posPaymentLink.status} -- skipping as already processed (idempotent).`);
         }
       }
 

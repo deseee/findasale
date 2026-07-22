@@ -121,7 +121,10 @@ export const handleStripeWebhook = async (req: AuthRequest, res: Response) => {
         console.log(`[webhook] Event ${event.id} already processed (idempotent retry)`);
         return res.json({ received: true });
       }
-      throw e;
+      // Other errors (e.g. P2011 — known ProcessedWebhookEvent schema/DB drift, see
+      // STATE.md Blocked Queue): log and continue rather than crashing the whole webhook.
+      // A broken idempotency check should never take down real event processing.
+      console.warn(`[webhook] Failed to check idempotency for event ${event.id}:`, e);
     }
 
     switch (event.type) {
