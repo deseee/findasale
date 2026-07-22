@@ -43,7 +43,16 @@ jobs:
   enrich:
     name: Overture Enrichment
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    # Was 120 (2h) -- run #556 hit the hard job-timeout every time since
+    # workflow creation (2026-06-30): confirmed via run-page annotations
+    # "The job has exceeded the maximum execution time of 2h0m0s" /
+    # "The operation was canceled." Not a concurrency collision, not a manual
+    # cancel. Raised to 240 (4h) for real margin -- Stage A (DuckDB predicate
+    # pushdown over the full US Overture Places S3 slice) + Stage B (batched
+    # Prisma classify/dedupe/upsert) is a monthly full-US run, not a quick job,
+    # and this is a public repo so Actions minutes are unlimited/free
+    # (CLAUDE.md Sec 10d) -- no cost reason to keep the timeout tight.
+    timeout-minutes: 240
 
     steps:
       - name: Checkout

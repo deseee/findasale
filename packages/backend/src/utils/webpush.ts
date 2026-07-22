@@ -61,25 +61,62 @@ export const sendPushNotification = async (
   const wp = getWebPush();
   if (!wp) return;
 
-  await wp.sendNotification(
-    {
-      endpoint: subscription.endpoint,
-      keys: { p256dh: subscription.p256dh, auth: subscription.auth }
-    },
-    JSON.stringify(payload)
-  );
+  // Bug fix (P0 push-log investigation): wp.sendNotification() can reject (invalid
+  // subscription, push service rejects it, network error, etc.). Previously that
+  // rejection propagated straight out of this function BEFORE the log write below
+  // ever ran, so a failed send left zero trace in PushNotificationLog — "0 rows"
+  // in production was consistent with "every send silently failing," not just
+  // "sends never attempted." Capture the error here so we can log regardless of
+  // outcome, then re-throw at the end to preserve the existing contract: every
+  // current caller does `.catch(err => ...)` (or a wrapping try/catch) on this
+  // function's return value and expects a rejection on failure.
+  let sendError: unknown = null;
+  try {
+    await wp.sendNotification(
+      {
+        endpoint: subscription.endpoint,
+        keys: { p256dh: subscription.p256dh, auth: subscription.auth }
+      },
+      JSON.stringify(payload)
+    );
+  } catch (err) {
+    sendError = err;
+  }
 
   if (logInfo) {
     try {
+      // NOTE: PushNotificationLog (schema.prisma) has no dedicated status/error
+      // column today — only id, userId, type, payload (Json), sentAt. Success/failure
+      // is therefore recorded inside the flexible `payload` Json field. A future
+      // migration adding a proper `success Boolean` / `error String?` column (with
+      // an index on `success`) would make failure-rate queries far cheaper than
+      // scanning JSON, but that's a schema change outside this fix's scope.
       await prisma.pushNotificationLog.create({
         data: {
           userId: logInfo.userId,
           type: logInfo.type,
-          payload: { title: payload.title, body: payload.body, url: payload.url ?? null },
+          payload: sendError
+            ? {
+                title: payload.title,
+                body: payload.body,
+                url: payload.url ?? null,
+                success: false,
+                error: sendError instanceof Error ? sendError.message : String(sendError),
+              }
+            : {
+                title: payload.title,
+                body: payload.body,
+                url: payload.url ?? null,
+                success: true,
+              },
         },
       });
     } catch (err) {
       console.warn('[webpush] Failed to write PushNotificationLog:', err);
     }
+  }
+
+  if (sendError) {
+    throw sendError;
   }
 };

@@ -230,8 +230,18 @@ export const sendApproachNotification = async (req: AuthRequest, res: Response) 
       // Bug fix: this endpoint previously only wrote a PushNotificationLog row (for the
       // 24h dedup check above) and never actually delivered a browser push — organizers
       // were told "notifications sent" but shoppers received nothing. Fetch each user's
-      // real PushSubscription rows and deliver the push for real. The log row above is
-      // the single source of truth for dedup, so no logInfo is passed here (would double-log).
+      // real PushSubscription rows and deliver the push for real.
+      //
+      // Bug fix (P0 push-log investigation): this call previously omitted the third
+      // logInfo argument entirely, so sendPushNotification() never wrote a delivery
+      // log for this call site even on success. Deliberately using type
+      // 'APPROACH_NOTES_DELIVERY' here — NOT 'APPROACH_NOTES' — so this per-subscription
+      // delivery-outcome row doesn't get swept up by the 24h dedup query above (which
+      // filters on type === 'APPROACH_NOTES' + payload.saleId). The dedup row created
+      // in the loop above is a per-user "we decided to notify" marker written before
+      // any send is attempted; this row is a per-subscription "did the push actually
+      // succeed or fail" record written by sendPushNotification itself. Keeping the
+      // types distinct avoids polluting the dedup marker set with delivery-outcome rows.
       const chunkSubscriptions = await prisma.pushSubscription.findMany({
         where: { userId: { in: chunk } },
       });
@@ -243,7 +253,7 @@ export const sendApproachNotification = async (req: AuthRequest, res: Response) 
               ? sale.entranceNote.slice(0, 120)
               : `Parking and entrance info for ${sale.title}`,
             url: `/sales/${sale.id}`,
-          }).catch(err =>
+          }, { userId: ps.userId, type: 'APPROACH_NOTES_DELIVERY' }).catch(err =>
             console.warn(
               `[arrivalController] Approach-notes push failed for user ${ps.userId}:`,
               err?.message
