@@ -211,7 +211,7 @@ export const getHub = async (req: Request, res: Response) => {
 // Auth + PRO tier required
 export const createHub = async (req: AuthRequest, res: Response) => {
   try {
-    if (!req.user?.organizerId) {
+    if (!req.user?.organizerProfile?.id) {
       return res.status(401).json({ message: 'Not authenticated as organizer' });
     }
 
@@ -229,7 +229,7 @@ export const createHub = async (req: AuthRequest, res: Response) => {
     const hub = await prisma.saleHub.create({
       data: {
         ...validated,
-        organizerId: req.user.organizerId,
+        organizerId: req.user.organizerProfile?.id,
       },
     });
 
@@ -247,7 +247,7 @@ export const createHub = async (req: AuthRequest, res: Response) => {
 // Auth + ownership required
 export const updateHub = async (req: AuthRequest, res: Response) => {
   try {
-    if (!req.user?.organizerId) {
+    if (!req.user?.organizerProfile?.id) {
       return res.status(401).json({ message: 'Not authenticated as organizer' });
     }
 
@@ -263,7 +263,7 @@ export const updateHub = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ message: 'Hub not found' });
     }
 
-    if (hub.organizerId !== req.user.organizerId) {
+    if (hub.organizerId !== req.user.organizerProfile?.id) {
       return res.status(403).json({ message: 'Unauthorized' });
     }
 
@@ -286,7 +286,7 @@ export const updateHub = async (req: AuthRequest, res: Response) => {
 // Auth + ownership required (soft delete)
 export const deleteHub = async (req: AuthRequest, res: Response) => {
   try {
-    if (!req.user?.organizerId) {
+    if (!req.user?.organizerProfile?.id) {
       return res.status(401).json({ message: 'Not authenticated as organizer' });
     }
 
@@ -300,7 +300,7 @@ export const deleteHub = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ message: 'Hub not found' });
     }
 
-    if (hub.organizerId !== req.user.organizerId) {
+    if (hub.organizerId !== req.user.organizerProfile?.id) {
       return res.status(403).json({ message: 'Unauthorized' });
     }
 
@@ -320,12 +320,12 @@ export const deleteHub = async (req: AuthRequest, res: Response) => {
 // Auth required: list my hubs
 export const listMyHubs = async (req: AuthRequest, res: Response) => {
   try {
-    if (!req.user?.organizerId) {
+    if (!req.user?.organizerProfile?.id) {
       return res.status(401).json({ message: 'Not authenticated as organizer' });
     }
 
     const hubs = await prisma.saleHub.findMany({
-      where: { organizerId: req.user.organizerId },
+      where: { organizerId: req.user.organizerProfile?.id },
       include: {
         memberships: { select: { id: true } },
       },
@@ -351,7 +351,7 @@ export const listMyHubs = async (req: AuthRequest, res: Response) => {
 // Auth required: add current organizer's sales to hub
 export const joinHub = async (req: AuthRequest, res: Response) => {
   try {
-    if (!req.user?.organizerId) {
+    if (!req.user?.organizerProfile?.id) {
       return res.status(401).json({ message: 'Not authenticated as organizer' });
     }
 
@@ -371,7 +371,7 @@ export const joinHub = async (req: AuthRequest, res: Response) => {
     const sales = await prisma.sale.findMany({
       where: {
         id: { in: validated.saleIds },
-        organizerId: req.user.organizerId,
+        organizerId: req.user.organizerProfile?.id,
       },
     });
 
@@ -414,7 +414,7 @@ export const joinHub = async (req: AuthRequest, res: Response) => {
 // Auth required: remove sale from hub
 export const leaveHub = async (req: AuthRequest, res: Response) => {
   try {
-    if (!req.user?.organizerId) {
+    if (!req.user?.organizerProfile?.id) {
       return res.status(401).json({ message: 'Not authenticated as organizer' });
     }
 
@@ -425,7 +425,7 @@ export const leaveHub = async (req: AuthRequest, res: Response) => {
       where: { id: saleId },
     });
 
-    if (!sale || sale.organizerId !== req.user.organizerId) {
+    if (!sale || sale.organizerId !== req.user.organizerProfile?.id) {
       return res.status(403).json({ message: 'Unauthorized' });
     }
 
@@ -446,7 +446,7 @@ export const leaveHub = async (req: AuthRequest, res: Response) => {
 // Auth + ownership required: set event date (Neighborhood Sale Day)
 export const setHubEvent = async (req: AuthRequest, res: Response) => {
   try {
-    if (!req.user?.organizerId) {
+    if (!req.user?.organizerProfile?.id) {
       return res.status(401).json({ message: 'Not authenticated as organizer' });
     }
 
@@ -462,7 +462,7 @@ export const setHubEvent = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ message: 'Hub not found' });
     }
 
-    if (hub.organizerId !== req.user.organizerId) {
+    if (hub.organizerId !== req.user.organizerProfile?.id) {
       return res.status(403).json({ message: 'Unauthorized' });
     }
 
