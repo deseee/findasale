@@ -102,6 +102,7 @@ async function pullSyncForOrganizer(organizerId: string): Promise<void> {
   const proxySecret = process.env.EBAY_PROXY_SECRET;
   const proxyHeaders: Record<string, string> = {
     Authorization: `Bearer ${accessToken}`,
+    'Accept-Language': 'en-US', // required by eBay Inventory API -- omitting it 400s every call (errorId 25709, same as Bug #506)
     'Content-Language': 'en-US',
     ...(proxySecret ? { 'X-Proxy-Secret': proxySecret } : {}),
   };
