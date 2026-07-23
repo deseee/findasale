@@ -34,6 +34,7 @@ import { sendConsignorItemSold } from '../services/consignorEmailService'; // Fe
 import { applyFirstMonthRefundCap, logRefundProcessing } from '../services/refundService'; // P2-2: Refund cap + logging
 import { transactionalEmailService } from '../lib/transactionalEmailService';
 import { assertCheckoutAllowed, assertGuestCheckoutAllowed, recordConfirmedSignal, CheckoutGuardError } from '../services/checkoutGuard'; // S1072 Finding #4: collusion/wash-trade guard
+import { recordPosPaymentLinkSale } from '../services/posPaymentLinkRecorder'; // ADR pos-webhook-idempotency-reconciliation (2026-07-23, S1151)
 
 // Lazy — avoids crash when module loads before dotenv runs
 const stripe = () => getStripe();
@@ -759,19 +760,45 @@ export const webhookHandler = async (req: Request, res: Response) => {
     }
   }
 
-  // P0 Race Fix: INSERT-FIRST idempotency — try to insert immediately, catch duplicate
+  // ADR pos-webhook-idempotency-reconciliation (2026-07-23, S1151): per-endpoint namespaced
+  // idempotency key so /api/stripe/webhook and /api/billing/webhook cannot collide on the
+  // shared ProcessedWebhookEvent table. Two-phase status (PENDING -> COMPLETED | FAILED)
+  // with fail-open retry: a FAILED prior attempt no longer permanently strands the sale.
+  const idempotencyKey = `stripe:${event.id}`;
+
+  // INSERT-FIRST preserves the P0 concurrent-duplicate race guard (first inserter wins).
   try {
     await prisma.processedWebhookEvent.create({
-      data: { eventId: event.id }
+      data: { eventId: idempotencyKey, status: 'PENDING' },
     });
   } catch (err: any) {
-    // Unique constraint violation = event already processed by another request
     if (err.code === 'P2002') {
-      console.warn(`[webhook] Duplicate event detected: ${event.id} (type: ${event.type}) — skipping reprocessing`);
-      return res.json({ received: true, duplicate: true });
+      // Row already exists -- inspect its status to decide what to do.
+      const existing = await prisma.processedWebhookEvent
+        .findUnique({ where: { eventId: idempotencyKey } })
+        .catch(() => null);
+      if (existing?.status === 'COMPLETED') {
+        console.warn(`[webhook] Duplicate event ${event.id} (type: ${event.type}) already COMPLETED -- skipping.`);
+        return res.json({ received: true, duplicate: true });
+      }
+      if (existing?.status === 'FAILED') {
+        // A prior attempt threw. Reset to PENDING and reprocess (fail-open retry).
+        console.warn(`[webhook] Event ${event.id} (type: ${event.type}) previously FAILED -- reprocessing.`);
+        await prisma.processedWebhookEvent
+          .update({ where: { eventId: idempotencyKey }, data: { status: 'PENDING' } })
+          .catch(() => {});
+        // fall through to reprocess below
+      } else {
+        // PENDING (or unreadable) -- another delivery is in flight; do not reprocess
+        // concurrently. Stripe's later retry will find COMPLETED or FAILED.
+        console.warn(`[webhook] Event ${event.id} (type: ${event.type}) in-flight (PENDING) -- skipping concurrent reprocess.`);
+        return res.json({ received: true, duplicate: true });
+      }
+    } else {
+      // Other errors: log and continue (non-blocking) -- a broken idempotency check must
+      // never take down real event processing.
+      console.warn(`[webhook] Failed to check idempotency for event ${event.id}:`, err);
     }
-    // Other errors: log and continue (non-blocking)
-    console.warn(`[webhook] Failed to check idempotency for event ${event.id}:`, err);
   }
 
   // S1157-b diagnostic (2026-07-23): unconditional receipt log for EVERY webhook
@@ -785,6 +812,10 @@ export const webhookHandler = async (req: Request, res: Response) => {
   // Stripe's dashboard event log by hand.
   console.log(`[webhook] Received event ${event.id} type=${event.type} livemode=${event.livemode}`);
 
+  // ADR pos-webhook-idempotency-reconciliation (2026-07-23): wrap the ENTIRE switch so any
+  // handler throw marks the idempotency row FAILED (not permanently COMPLETED) and returns
+  // 500 -> Stripe retries with backoff, instead of the sale stranding forever.
+  try {
   switch (event.type) {
     case 'payment_intent.succeeded': {
       const paymentIntent = event.data.object;
@@ -2091,13 +2122,19 @@ export const webhookHandler = async (req: Request, res: Response) => {
           console.error('[ala-carte] Failed to create Purchase record:', purchaseErr);
         }
       }
-      // Hold-to-Pay Phase 2: Handle checkout session completion for invoices
+      // Hold-to-Pay Phase 2: Handle checkout session completion for invoices.
+      // Guarded (ADR pos-webhook-idempotency-reconciliation 2026-07-23): a transient failure
+      // retrieving the PaymentIntent here only feeds a hold-to-pay log line and must NEVER
+      // abort the POS / cart recording that follows.
       if (session.payment_intent) {
-        // Retrieve the payment intent to get full metadata
-        const paymentIntent = await stripe().paymentIntents.retrieve(session.payment_intent as string);
-        if (paymentIntent.metadata?.invoiceId) {
-          // This is a hold-to-pay invoice — wait for charge.succeeded for actual payment
-          console.log(`[hold-to-pay] Checkout session completed for invoice ${paymentIntent.metadata.invoiceId}`);
+        try {
+          const paymentIntent = await stripe().paymentIntents.retrieve(session.payment_intent as string);
+          if (paymentIntent.metadata?.invoiceId) {
+            // This is a hold-to-pay invoice -- wait for charge.succeeded for actual payment
+            console.log(`[hold-to-pay] Checkout session completed for invoice ${paymentIntent.metadata.invoiceId}`);
+          }
+        } catch (piErr: any) {
+          console.error(`[hold-to-pay] Non-fatal: failed to retrieve PaymentIntent for session ${session.id}:`, piErr?.message ?? piErr);
         }
       }
       // POS Upgrade: Payment Link self-checkout via QR (session.payment_link is set when triggered by a Payment Link)
@@ -2113,107 +2150,24 @@ export const webhookHandler = async (req: Request, res: Response) => {
           where: { stripePaymentLinkId },
         });
 
-        let posLinkFullySoldOutIds: string[] = [];
-        const posLinkPartialSaleUpdates: { itemId: string; remainingStock: number }[] = [];
-        if (posPaymentLink && posPaymentLink.status !== 'COMPLETED') {
-          await prisma.$transaction(async (tx) => {
-            await tx.pOSPaymentLink.update({
-              where: { id: posPaymentLink.id },
-              data: { status: 'COMPLETED', completedAt: new Date() },
-            });
-
-            if (posPaymentLink.itemIds?.length) {
-              // ADR-085 Track B Phase 1 Step 4: atomic, race-safe stock decrement replaces the
-              // old unconditional updateMany. Collects which items are now fully sold out so
-              // downstream cross-channel removal hooks (fired outside this tx below) only
-              // touch those, not every item unconditionally.
-              for (const posItemId of posPaymentLink.itemIds) {
-                try {
-                  const { fullySoldOut, remainingStock } = await sellItemUnits(posItemId, 1, tx);
-                  if (fullySoldOut) posLinkFullySoldOutIds.push(posItemId);
-                  else posLinkPartialSaleUpdates.push({ itemId: posItemId, remainingStock });
-                } catch (stockErr: any) {
-                  if (stockErr instanceof InsufficientStockError) {
-                    console.error(`[stripe/pos-link] Oversold race on item ${posItemId}:`, stockErr.message);
-                  } else {
-                    throw stockErr;
-                  }
-                }
-              }
-
-              const items = await tx.item.findMany({
-                where: { id: { in: posPaymentLink.itemIds } },
-              });
-
-              // Look up organizer tier for fee calculation
-              const posOrganizerTier = posPaymentLink.saleId
-                ? (await tx.sale!.findUnique({
-                    where: { id: posPaymentLink.saleId },
-                    select: { organizer: { select: { subscriptionTier: true } } },
-                  }))?.organizer?.subscriptionTier ?? null
-                : null;
-              const posFeeRate = getPlatformFeeRate(posOrganizerTier as SubscriptionTier);
-
-              const purchaseIds: string[] = [];
-              for (const item of items) {
-                const purchase = await tx.purchase.create({
-                  data: {
-                    itemId: item.id,
-                    saleId: posPaymentLink.saleId,
-                    amount: item.price || 0,
-                    platformFeeAmount: parseFloat(((item.price || 0) * posFeeRate).toFixed(2)),
-                    status: 'PAID',
-                    source: 'POS',
-                    stripePaymentIntentId: `pos_${posPaymentLink.id}`,
-                  },
-                });
-                purchaseIds.push(purchase.id);
-              }
-
-              await tx.pOSPaymentLink.update({
-                where: { id: posPaymentLink.id },
-                data: { purchaseIds },
-              });
-            }
-          });
-
-          // Fire-and-forget: end eBay listings for items now fully sold out (not every item
-          // in the link unconditionally -- ADR-085 Track B Phase 1 Step 4)
-          if (posLinkFullySoldOutIds.length) {
-            setImmediate(() => {
-              Promise.allSettled(
-                posLinkFullySoldOutIds.map((itemId: string) => endEbayListingIfExists(itemId))
-              ).catch(() => {});
-              Promise.allSettled(
-                posLinkFullySoldOutIds.map((itemId: string) => markShopifyItemSold(itemId))
-              ).catch(() => {});
-              Promise.allSettled(
-                posLinkFullySoldOutIds.map((itemId: string) => notifyFacebookExportedItemSold(itemId))
-              ).catch(() => {});
-            });
+        if (posPaymentLink) {
+          // ADR pos-webhook-idempotency-reconciliation (2026-07-23, S1151): recording is now
+          // a shared, idempotent, transaction-based function reused by the stranded-sale
+          // reconciliation cron. An already-COMPLETED link is a safe no-op inside it.
+          try {
+            await recordPosPaymentLinkSale(posPaymentLink, { source: 'webhook', sessionId: session.id });
+          } catch (recErr: any) {
+            // Re-throw so the outer handler try/catch marks the event FAILED and returns 500,
+            // letting Stripe retry -- and the reconciliation cron is the additional backstop.
+            console.error(`[pos] Failed to record POS payment link sale for link=${stripePaymentLinkId} session=${session.id}:`, recErr);
+            throw recErr;
           }
-
-          // ADR-087 Phase 4: partial sales (not fully sold out) — revise eBay listing
-          // quantities for any eBay-linked items in this batch. Fire-and-forget.
-          if (posLinkPartialSaleUpdates.length) {
-            setImmediate(() => {
-              Promise.allSettled(
-                posLinkPartialSaleUpdates.map(({ itemId, remainingStock }) =>
-                  syncMarketplaceStock(itemId, { fullySoldOut: false, remainingStock })
-                )
-              ).catch(() => {});
-            });
-          }
-
-          console.log(`[pos] Payment link completed via checkout: ${stripePaymentLinkId}`);
-        } else if (!posPaymentLink) {
+        } else {
           // Diagnostic logging added after a real live sale (2026-07-22, plink_1Tw4DoLIWHQCHu75vBTfy2Ly,
           // PaymentIntent pi_3Tw4ESLIWHQCHu7505o8jWp4) went silent right here with zero log output --
           // we could not tell afterward whether this branch was ever reached. Money was captured by
           // Stripe but FindA.Sale never recorded the sale. This makes that failure mode visible.
           console.error(`[pos] checkout.session.completed for payment_link=${stripePaymentLinkId} but no matching POSPaymentLink row exists in the DB -- sale may be STRANDED (Stripe captured the charge, FindA.Sale never recorded it). Session: ${session.id}`);
-        } else {
-          console.log(`[pos] checkout.session.completed for payment_link=${stripePaymentLinkId} received but link is already status=${posPaymentLink.status} -- skipping as already processed (idempotent).`);
         }
       }
 
@@ -2729,7 +2683,19 @@ export const webhookHandler = async (req: Request, res: Response) => {
       console.warn(`[stripe] Unhandled event type: ${event.type}`);
   }
 
+  await prisma.processedWebhookEvent.update({
+    where: { eventId: idempotencyKey },
+    data: { status: 'COMPLETED' },
+  }).catch((e) => console.warn(`[webhook] Failed to mark event ${event.id} COMPLETED:`, e));
   res.json({ received: true });
+  } catch (handlerErr: any) {
+    await prisma.processedWebhookEvent.update({
+      where: { eventId: idempotencyKey },
+      data: { status: 'FAILED' },
+    }).catch((e) => console.warn(`[webhook] Failed to mark event ${event.id} FAILED:`, e));
+    console.error(`[webhook] handler threw for event ${event.id} type=${event.type}`, handlerErr);
+    return res.status(500).json({ received: false, error: 'handler_failed' });
+  }
 };
 
 // Return the clientSecret for an existing PENDING purchase (used by auction winners)

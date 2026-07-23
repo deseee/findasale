@@ -111,9 +111,13 @@ export const handleStripeWebhook = async (req: AuthRequest, res: Response) => {
     // P0 Race Fix: INSERT-FIRST pattern for idempotency
     // Try to insert immediately. If duplicate key (eventId already exists), catch and return 200.
     let isIdempotentRun = false;
+    // ADR pos-webhook-idempotency-reconciliation (2026-07-23, S1151): namespace the
+    // idempotency key per endpoint so the billing webhook cannot claim (and lock out) a
+    // shared event.id that the POS recorder on /api/stripe/webhook also needs to process.
+    const billingIdempotencyKey = `billing:${event.id}`;
     try {
       await prisma.processedWebhookEvent.create({
-        data: { eventId: event.id },
+        data: { eventId: billingIdempotencyKey, status: 'COMPLETED' },
       });
     } catch (e: any) {
       // Unique constraint violation = event already processed by another request

@@ -2460,9 +2460,12 @@ model FeeStructure {
 // P0 Fix 2: Idempotency table for Stripe webhook deduplication (replaces StripeEvent)
 model ProcessedWebhookEvent {
   eventId     String   @id
+  status      String   @default("PENDING") // PENDING | COMPLETED | FAILED (ADR pos-webhook-idempotency 2026-07-23)
   processedAt DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   @@index([processedAt])
+  @@index([status])
 }
 
 // Task #7: Shopper Referral Rewards — track reward transactions between referrers and referred users
