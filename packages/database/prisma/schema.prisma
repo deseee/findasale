@@ -1481,9 +1481,16 @@ model Purchase {
   createdAt              DateTime              @default(now())
   updatedAt              DateTime              @updatedAt
 
-  // Partial UNIQUE index (WHERE "stripePaymentIntentId" IS NOT NULL) is created via raw
-  // SQL migration 20260707120000_purchase_pi_partial_unique. Prisma @@unique cannot express
-  // a partial index, so it is intentionally NOT declared here; this @@index remains for lookups.
+  // Compound partial UNIQUE index on (stripePaymentIntentId, itemId) (WHERE
+  // stripePaymentIntentId IS NOT NULL), created via raw SQL migration
+  // 20260723000000_purchase_pi_itemid_compound_unique. Blocks a duplicate Purchase row for
+  // the SAME PaymentIntent + SAME item (the original 2026-07-04 bug this constraint exists
+  // for), while still allowing multiple DIFFERENT items to share one PaymentIntent (POS
+  // Payment Link, Cart Checkout multi-item sales). A single-column unique index on
+  // stripePaymentIntentId alone was live 2026-07-07 through 2026-07-23 and silently broke
+  // every real multi-item sale in that window (P2002 on the 2nd+ item) -- do not
+  // reintroduce a single-column unique constraint here. Prisma @@unique cannot express a
+  // partial index, so it is intentionally NOT declared here; this @@index remains for lookups.
   @@index([stripePaymentIntentId])
   @@index([isTestTransaction])
   @@index([userId])

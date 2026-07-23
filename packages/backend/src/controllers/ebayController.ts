@@ -4409,6 +4409,9 @@ export async function endEbayListingIfExists(itemId: string): Promise<void> {
         ebayOfferId: true,
         ebayListingId: true,
         saleId: true,
+        createdAt: true,
+        costBasis: true,
+        roomTag: true,
       },
     });
 
@@ -4417,8 +4420,59 @@ export async function endEbayListingIfExists(itemId: string): Promise<void> {
       return;
     }
 
-    // If no eBay offer ID, item was never pushed to eBay
-    if (!item.ebayOfferId) {
+    // S1157 fix: ebayOfferId can go stale (cleared by the stale-category
+    // delete+recreate path above without a follow-up republish landing) while
+    // ebayListingId stays live -- the item is genuinely still live on eBay but
+    // this function previously had no way to withdraw it. Fall back to
+    // resolving the current offerId by SKU (same GET /offer?sku= lookup
+    // ebayPublishService already uses when creating/updating an offer) before
+    // giving up. Self-heals the DB so future calls don't need to re-resolve it.
+    let offerId: string | null = item.ebayOfferId;
+
+    if (!offerId && item.ebayListingId && item.saleId) {
+      const saleForOrganizer = await prisma.sale.findUnique({
+        where: { id: item.saleId },
+        select: { organizerId: true },
+      });
+      const organizerForSku = saleForOrganizer
+        ? await prisma.organizer.findUnique({
+            where: { id: saleForOrganizer.organizerId },
+            select: { skuAppendDate: true, skuAppendCost: true, skuAppendLocation: true },
+          })
+        : null;
+
+      if (saleForOrganizer && organizerForSku) {
+        const accessTokenForLookup = await refreshEbayAccessToken(saleForOrganizer.organizerId);
+        if (accessTokenForLookup) {
+          const sku = buildCustomLabel(itemId, organizerForSku, item);
+          try {
+            const getOfferRes = await fetch(
+              ebayProxyUrl(encodeURIComponent(`/sell/inventory/v1/offer?sku=${encodeURIComponent(sku)}`)),
+              { headers: { ...ebayUserHeaders(accessTokenForLookup), ...ebayProxyHeaders() } }
+            );
+            if (getOfferRes.ok) {
+              const getOfferData = (await getOfferRes.json()) as any;
+              const existing = getOfferData.offers?.[0];
+              if (existing?.offerId) {
+                offerId = existing.offerId;
+                await prisma.item.update({ where: { id: itemId }, data: { ebayOfferId: offerId } });
+                console.log(
+                  `[eBay] Recovered stale-missing ebayOfferId for item ${itemId} via SKU lookup (sku=${sku}) -> ${offerId}`
+                );
+              }
+            } else {
+              console.warn(`[eBay] SKU lookup failed for item ${itemId} (sku=${sku}): ${getOfferRes.status}`);
+            }
+          } catch (lookupErr) {
+            console.warn(`[eBay] SKU lookup error for item ${itemId}:`, lookupErr);
+          }
+        }
+      }
+    }
+
+    // If still no offer ID after the SKU fallback, item was never pushed to eBay
+    // (or is genuinely unresolvable) -- nothing to withdraw.
+    if (!offerId) {
       return;
     }
 
@@ -4458,7 +4512,7 @@ export async function endEbayListingIfExists(itemId: string): Promise<void> {
 
     // Call eBay API to withdraw the offer
     const response = await fetch(
-      ebayProxyUrl(encodeURIComponent(`/sell/inventory/v1/offer/${item.ebayOfferId}/withdraw`)),
+      ebayProxyUrl(encodeURIComponent(`/sell/inventory/v1/offer/${offerId}/withdraw`)),
       {
         method: 'POST',
         headers: {
@@ -4472,13 +4526,13 @@ export async function endEbayListingIfExists(itemId: string): Promise<void> {
     if (!response.ok) {
       const errorData = await response.text();
       console.error(
-        `[eBay] Failed to withdraw offer ${item.ebayOfferId} for item ${itemId}: ${response.status} ${errorData}`
+        `[eBay] Failed to withdraw offer ${offerId} for item ${itemId}: ${response.status} ${errorData}`
       );
       return;
     }
 
     console.log(
-      `[eBay] Successfully withdrew offer ${item.ebayOfferId} for item ${itemId} — item sold on FindA.Sale`
+      `[eBay] Successfully withdrew offer ${offerId} for item ${itemId} — item sold on FindA.Sale`
     );
   } catch (error) {
     console.error(`[eBay] Error withdrawing eBay listing for item ${itemId}:`, error);
