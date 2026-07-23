@@ -197,9 +197,16 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
     // item where the organizer simply never touched that unrelated legacy checkbox. Removed the
     // `shippingAvailable` condition; shippability is now determined the same way eBay does:
     // explicit override or missing weight only.
+    // 2026-07-23 fix: this used to also require aiPackageWeightOz == null before forcing
+    // pickup-only, on the assumption that packageWeightOz null implied no AI weight either.
+    // That broke the moment SEED/AI-sourced weights started being deliberately reverted to
+    // null above (raw aiPackageWeightOz column is untouched by that revert) -- items like
+    // the 3 lamps ended up with packageWeightOz=null AND aiPackageWeightOz still populated,
+    // so this condition silently failed to trigger and FB was left with no weight and no
+    // pickup-only fallback (worse than either state alone). packageWeightOz is now the
+    // single source of truth for "does FB have a usable weight" -- check it alone.
     shippingOverride:
-      it.ebayShippingOverride === 'LOCAL_PICKUP_ONLY' ||
-      (it.packageWeightOz == null && it.aiPackageWeightOz == null)
+      it.ebayShippingOverride === 'LOCAL_PICKUP_ONLY' || it.packageWeightOz == null
         ? 'LOCAL_PICKUP_ONLY'
         : it.ebayShippingOverride,
     // Mirror the item's existing eBay Best Offer settings onto Facebook's Offer step.
