@@ -774,6 +774,17 @@ export const webhookHandler = async (req: Request, res: Response) => {
     console.warn(`[webhook] Failed to check idempotency for event ${event.id}:`, err);
   }
 
+  // S1157-b diagnostic (2026-07-23): unconditional receipt log for EVERY webhook
+  // event, regardless of type or downstream branch. Added after a second stranded-
+  // sale incident (POSPaymentLink cmrxseqdp004sc635lolxkzp0, jacket item) where
+  // Railway logs showed 2 webhook POSTs return 200 with ZERO application-level
+  // output from either -- we could not even confirm whether checkout.session.completed
+  // was among the events actually delivered, let alone which branch it took. This
+  // line cannot be skipped by any downstream logic, so the next occurrence is
+  // immediately diagnosable from logs alone instead of requiring cross-referencing
+  // Stripe's dashboard event log by hand.
+  console.log(`[webhook] Received event ${event.id} type=${event.type} livemode=${event.livemode}`);
+
   switch (event.type) {
     case 'payment_intent.succeeded': {
       const paymentIntent = event.data.object;

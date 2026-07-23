@@ -4470,8 +4470,72 @@ export async function endEbayListingIfExists(itemId: string): Promise<void> {
       }
     }
 
-    // If still no offer ID after the SKU fallback, item was never pushed to eBay
-    // (or is genuinely unresolvable) -- nothing to withdraw.
+    // If still no offer ID after the SKU fallback, this item may be a legacy
+    // listing that predates the eBay Inventory API entirely -- Trading-API-only
+    // listings have no /offer object at all, confirmed via two real 404
+    // errorId-25713 failures on a genuinely correct SKU during the 2026-07-23
+    // incident (S1157). item.ebayListingId holds the real numeric eBay ItemID
+    // regardless of which API created the listing (same value GetItem/EndedSync
+    // already use elsewhere in this file) -- fall back to ending it directly via
+    // the legacy Trading API's EndFixedPriceItem call before giving up entirely.
+    if (!offerId && item.ebayListingId && item.saleId) {
+      const saleForTradingApi = await prisma.sale.findUnique({
+        where: { id: item.saleId },
+        select: { organizerId: true },
+      });
+      const accessTokenForTradingApi = saleForTradingApi
+        ? await refreshEbayAccessToken(saleForTradingApi.organizerId)
+        : null;
+
+      if (accessTokenForTradingApi) {
+        try {
+          const requestXml = `<?xml version="1.0" encoding="utf-8"?>
+<EndFixedPriceItemRequest xmlns="urn:ebay:apis:eBLBaseComponents">
+  <ItemID>${item.ebayListingId}</ItemID>
+  <EndingReason>NotAvailable</EndingReason>
+</EndFixedPriceItemRequest>`;
+
+          const tradingResponse = await fetch(ebayProxyUrl('/ws/api.dll'), {
+            method: 'POST',
+            headers: {
+              'X-EBAY-API-CALL-NAME': 'EndFixedPriceItem',
+              'X-EBAY-API-SITEID': '0',
+              'X-EBAY-API-COMPATIBILITY-LEVEL': '967',
+              'X-EBAY-API-APP-NAME': process.env.EBAY_CLIENT_ID || '',
+              'X-EBAY-API-IAF-TOKEN': accessTokenForTradingApi,
+              'Content-Type': 'text/xml',
+              ...ebayProxyHeaders(),
+            },
+            body: requestXml,
+          });
+          trackEbayCall();
+
+          const tradingText = await tradingResponse.text();
+          const ack = xmlVal(tradingText, 'Ack');
+          if (ack === 'Success' || ack === 'Warning') {
+            console.log(
+              `[eBay] Successfully ended legacy Trading-API listing ${item.ebayListingId} for item ${itemId} (no Inventory API offer existed)`
+            );
+          } else {
+            const errMsg = xmlVal(tradingText, 'LongMessage') || xmlVal(tradingText, 'ShortMessage') || 'Unknown error';
+            console.warn(
+              `[eBay] Trading API EndFixedPriceItem failed for item ${itemId} (eBay ItemID ${item.ebayListingId}): ${ack} — ${errMsg}`
+            );
+          }
+        } catch (tradingErr) {
+          console.warn(`[eBay] Trading API end-listing error for item ${itemId}:`, tradingErr);
+        }
+      } else {
+        console.warn(`[eBay] Could not get access token for Trading API fallback on item ${itemId}`);
+      }
+
+      // Whether the Trading API call above succeeded, failed, or couldn't get a
+      // token, there is no Inventory API offerId to withdraw for this item.
+      return;
+    }
+
+    // If still no offer ID and no ebayListingId either, item was never pushed to
+    // eBay (or is genuinely unresolvable) -- nothing to withdraw.
     if (!offerId) {
       return;
     }
