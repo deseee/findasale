@@ -29,9 +29,16 @@ export const reconcileStrandedPosSales = async (): Promise<void> => {
 
   const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
 
+  // NOTE (S1157, FINDASALE-NODEJS-67): the organizer relation used to be fetched here via
+  // `include`. Prisma 5 (no relationJoins preview feature) resolves an `include` as a
+  // second, separate SQL query -- if the organizer/sale behind a candidate row is deleted
+  // (cascade) in the window between the two queries, or the row is otherwise a stale
+  // orphan, Prisma throws PrismaClientUnknownRequestError ("Field organizer is required to
+  // return data, got null") for the WHOLE findMany, which killed every OTHER candidate in
+  // the same batch too. The organizer lookup now happens per-link below, inside the
+  // existing try/catch, so one bad row can't take down the rest of the run.
   const candidates = await prisma.pOSPaymentLink.findMany({
     where: { status: 'ACTIVE', createdAt: { lt: tenMinutesAgo } },
-    include: { organizer: { select: { userId: true } } },
   });
 
   if (candidates.length === 0) return;
@@ -64,9 +71,18 @@ export const reconcileStrandedPosSales = async (): Promise<void> => {
         // Belt-and-suspenders: surface in monitoring even though it self-healed.
         console.error(`[pos-reconcile] AUTO-RECORDED stranded sale link=${link.id} session=${paidSession.id} amount=$${amountDollars}`);
 
-        if (link.organizer?.userId) {
+        // Per-link organizer lookup (see note above) -- tolerate a missing/raced organizer
+        // without losing the auto-record or crashing the batch; just skip the notification.
+        const organizer = await prisma.organizer
+          .findUnique({ where: { id: link.organizerId }, select: { userId: true } })
+          .catch((e) => {
+            console.error(`[pos-reconcile] Organizer lookup failed for link=${link.id} organizerId=${link.organizerId}:`, e?.message ?? e);
+            return null;
+          });
+
+        if (organizer?.userId) {
           await createNotification({
-            userId: link.organizer.userId,
+            userId: organizer.userId,
             type: 'POS_SALE_RECOVERED',
             title: 'A POS sale was auto-recovered',
             body: `A QR / payment-link sale of $${amountDollars} was captured by Stripe but not recorded at the moment of sale. FindA.Sale automatically reconciled and recorded it -- no action needed.`,
