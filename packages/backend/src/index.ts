@@ -587,6 +587,22 @@ app.use((req: express.Request, res: express.Response, next: express.NextFunction
     if (req.path.startsWith('/api/extension') && hasBearer) {
       return next();
     }
+    // Booth-token cart sessions (ADR-015 Contract Defined -- vendor covers register via
+    // X-Booth-Token, no login, no CSRF cookie by design) are inherently CSRF-safe for the
+    // same reason Bearer tokens are above: a cross-site attacker cannot read/attach a
+    // secret X-Booth-Token header the victim never had, and an attacker who already
+    // possesses a valid booth token doesn't need CSRF to abuse it. Confirmed live
+    // 2026-07-23 (findasale-hacker VendorBooth adversarial pass): the global CSRF check
+    // was unconditionally 403'ing every booth-token cart mutation (start/add-items/
+    // terminal/qr/capture/cancel) before requireBoothTokenOrTeamMember ever ran -- the
+    // entire no-login vendor-cashier flow was non-functional in production. Scoped
+    // narrowly to the hub cart routes where X-Booth-Token is a recognized credential
+    // (requireBoothTokenOrTeamMember, requireBoothAuth.ts) -- a forged header on an
+    // unrelated route grants nothing, since no other middleware reads it.
+    const hasBoothToken = typeof req.headers['x-booth-token'] === 'string' && req.headers['x-booth-token'].length > 0;
+    if (/^\/api\/organizer\/hubs\/[^/]+\/cart(\/|$)/.test(req.path) && hasBoothToken) {
+      return next();
+    }
     return validateCsrfToken(req, res, next);
   }
   next();
