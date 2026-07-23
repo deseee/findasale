@@ -92,6 +92,15 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
     // instead of being silently skipped forever because a (bad) weight is already set.
     if (it.packageWeightOz != null && Number(it.packageWeightOz) > 0 && it.packageEstimateSource !== 'SEED') continue;
     try {
+      // resolvePublishPackageWeight (shared with eBay's publish path) unconditionally
+      // short-circuits and returns null whenever packageWeightOz is already set -- it
+      // has no idea *why* a weight is set, only that one is. That's correct for a real
+      // organizer-confirmed or category-matched value, but wrong for a persisted 'SEED'
+      // (generic fallback) value we've explicitly decided not to trust on FB: we need
+      // the shared resolver to actually recompute, not treat the untrusted guess as
+      // already-resolved. Pass null here (FB-side only, not touching the shared
+      // function's own semantics used by eBay) so it falls through to a fresh estimate.
+      const isUntrustedSeed = it.packageEstimateSource === 'SEED';
       const resolved = await resolvePublishPackageWeight({
         id: it.id,
         title: it.title,
@@ -99,7 +108,7 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
         ebayCategoryId: it.ebayCategoryId,
         ebayShippingOverride: it.ebayShippingOverride,
         packageConfirmedByOrganizer: it.packageConfirmedByOrganizer,
-        packageWeightOz: it.packageWeightOz,
+        packageWeightOz: isUntrustedSeed ? null : it.packageWeightOz,
         packageLengthIn: it.packageLengthIn != null ? Number(it.packageLengthIn) : null,
         packageWidthIn: it.packageWidthIn != null ? Number(it.packageWidthIn) : null,
         packageHeightIn: it.packageHeightIn != null ? Number(it.packageHeightIn) : null,
@@ -124,6 +133,12 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
             where: { id: it.id },
             data: { packageWeightOz: null, packageEstimateSource: null },
           });
+          // Also reflect the revert in-memory -- this same request's response payload
+          // (built from `it` further down) must NOT keep showing the stale weight just
+          // because the DB write happened after `it` was already loaded from the initial
+          // query. Without this, this endpoint would silently serve the untrusted 24oz
+          // value for one more request even though the DB was already corrected.
+          (it as { packageWeightOz: number | null }).packageWeightOz = null;
         } catch (revertErr: any) {
           console.warn('[FB AutoWeight] failed to revert generic-fallback weight for item', it.id, revertErr?.message || revertErr);
         }
