@@ -85,22 +85,30 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
   // queries) for any item that already has a confirmed/measured weight or is pickup-only.
   for (const it of items) {
     if (it.ebayShippingOverride === 'LOCAL_PICKUP_ONLY') continue;
-    // 2026-07-22 follow-up: don't treat a persisted 'SEED' (generic fallback) weight as
-    // already-resolved -- items that got the bad 24oz fallback before this file's SEED
-    // guard existed (e.g. items persisted between the two deploys today) need to keep
-    // re-running through resolvePublishPackageWeight so they self-heal on next fetch,
-    // instead of being silently skipped forever because a (bad) weight is already set.
-    if (it.packageWeightOz != null && Number(it.packageWeightOz) > 0 && it.packageEstimateSource !== 'SEED') continue;
+    // 2026-07-22 follow-up: don't treat a persisted 'SEED' (generic fallback) or 'AI'
+    // (unmeasured single-photo vision guess) weight as already-resolved -- items with
+    // either source need to keep re-running through resolvePublishPackageWeight so they
+    // self-heal on next fetch, instead of being silently skipped forever because *a*
+    // weight is already set. Patrick's call (2026-07-23): FB should not ship on a raw AI
+    // guess any more than it should ship on the generic fallback -- neither is a real
+    // measurement. Only a PackageProfile CATEGORY/KEYWORD match or an organizer-confirmed
+    // value counts as "already resolved" now.
+    const UNTRUSTED_SOURCES = ['SEED', 'AI'];
+    if (
+      it.packageWeightOz != null &&
+      Number(it.packageWeightOz) > 0 &&
+      !UNTRUSTED_SOURCES.includes(it.packageEstimateSource || '')
+    ) continue;
     try {
       // resolvePublishPackageWeight (shared with eBay's publish path) unconditionally
       // short-circuits and returns null whenever packageWeightOz is already set -- it
       // has no idea *why* a weight is set, only that one is. That's correct for a real
       // organizer-confirmed or category-matched value, but wrong for a persisted 'SEED'
-      // (generic fallback) value we've explicitly decided not to trust on FB: we need
-      // the shared resolver to actually recompute, not treat the untrusted guess as
-      // already-resolved. Pass null here (FB-side only, not touching the shared
-      // function's own semantics used by eBay) so it falls through to a fresh estimate.
-      const isUntrustedSeed = it.packageEstimateSource === 'SEED';
+      // or 'AI' value we've explicitly decided not to trust on FB: we need the shared
+      // resolver to actually recompute, not treat the untrusted guess as already-resolved.
+      // Pass null here (FB-side only, not touching the shared function's own semantics
+      // used by eBay) so it falls through to a fresh estimate.
+      const isUntrustedSource = UNTRUSTED_SOURCES.includes(it.packageEstimateSource || '');
       const resolved = await resolvePublishPackageWeight({
         id: it.id,
         title: it.title,
@@ -108,7 +116,7 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
         ebayCategoryId: it.ebayCategoryId,
         ebayShippingOverride: it.ebayShippingOverride,
         packageConfirmedByOrganizer: it.packageConfirmedByOrganizer,
-        packageWeightOz: isUntrustedSeed ? null : it.packageWeightOz,
+        packageWeightOz: isUntrustedSource ? null : it.packageWeightOz,
         packageLengthIn: it.packageLengthIn != null ? Number(it.packageLengthIn) : null,
         packageWidthIn: it.packageWidthIn != null ? Number(it.packageWidthIn) : null,
         packageHeightIn: it.packageHeightIn != null ? Number(it.packageHeightIn) : null,
@@ -117,17 +125,17 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
         aiPackageDimsJson: it.aiPackageDimsJson,
         aiPackageConfidence: it.aiPackageConfidence != null ? Number(it.aiPackageConfidence) : null,
       });
-      if (resolved && resolved.source !== 'SEED') {
-        // 'SEED' here means resolvePublishPackageWeight fell all the way through to its
-        // own generic last-resort guess (24oz/0.25 confidence, no category or keyword
-        // match, not the AI photo estimate either) -- NOT a curated PackageProfile row
-        // (those come back as 'CATEGORY'/'KEYWORD'). Per the ADR, FB should never ship a
-        // real weight built on that low a confidence -- pickup-only is the safer default.
-        // resolvePublishPackageWeight already persisted it to the Item as a side effect
-        // (shared with eBay's publish path), so explicitly revert that persistence for
-        // this item rather than silently using a value we've decided not to trust.
+      if (resolved && !UNTRUSTED_SOURCES.includes(resolved.source)) {
+        // 'SEED' (generic 24oz/0.25-confidence last-resort guess) and 'AI' (unmeasured
+        // single-photo vision guess) are NOT curated PackageProfile rows (those come back
+        // as 'CATEGORY'/'KEYWORD') and are not organizer-confirmed either. Per the ADR and
+        // Patrick's 2026-07-23 follow-up decision, FB should never ship a weight built on
+        // either -- pickup-only is the safer default. resolvePublishPackageWeight already
+        // persisted it to the Item as a side effect (shared with eBay's publish path), so
+        // explicitly revert that persistence for this item rather than silently using a
+        // value we've decided not to trust.
         (it as { packageWeightOz: number | null }).packageWeightOz = resolved.weightOz;
-      } else if (resolved && resolved.source === 'SEED') {
+      } else if (resolved && UNTRUSTED_SOURCES.includes(resolved.source)) {
         try {
           await prisma.item.update({
             where: { id: it.id },
@@ -140,7 +148,7 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
           // value for one more request even though the DB was already corrected.
           (it as { packageWeightOz: number | null }).packageWeightOz = null;
         } catch (revertErr: any) {
-          console.warn('[FB AutoWeight] failed to revert generic-fallback weight for item', it.id, revertErr?.message || revertErr);
+          console.warn('[FB AutoWeight] failed to revert untrusted-source weight for item', it.id, revertErr?.message || revertErr);
         }
       }
     } catch (e: any) {
