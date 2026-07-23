@@ -333,12 +333,17 @@
   // FB's Package weight step (Delivery) -- see fas-selectors.js weightExactLink /
   // weightExactInputs. Converts raw ounces into whole lb + remaining oz for Facebook's
   // exact-weight text inputs (2026-07-18 fix -- replaces the old fixed-bucket-radio approach,
-  // see fillDeliveryStep). Falls back to a mid-range default (24oz = 1lb 8oz) when the item has
-  // no weight data at all -- FB reconciles any difference against actual weight at ship time,
-  // so a mid-range guess here is low-stakes, not something worth a hard stop over (mirrors the
-  // old weightBucketLabel default of the "1-2 lbs" bucket).
+  // see fillDeliveryStep).
+  // 2026-07-23 fix (Patrick live report -- "la15r amplifier" quoted 6lb shipping when the real
+  // item is 17+lb): this used to silently default to 24oz (1lb 8oz) whenever oz was missing,
+  // on the theory that FB reconciles any difference against actual weight at ship time. That
+  // theory was wrong for a 6lb-guess-vs-17lb-real gap -- FB buys a PREPAID label sized off
+  // whatever weight it's given, so a bad guess here means an underpaid label, not a low-stakes
+  // rounding error. Callers must now pass a real, already-validated oz value (see the
+  // noConfirmedWeight guard in fillDeliveryStep, which routes blank-weight items to Local
+  // pickup before ever reaching this function) -- this function no longer invents one.
   function ozToLbOz(oz) {
-    const total = (oz === undefined || oz === null || isNaN(oz)) ? 24 : Math.max(0, Math.round(oz));
+    const total = Math.max(0, Math.round(oz));
     const lb = Math.floor(total / 16);
     const remOz = total % 16;
     return { lb: lb, oz: remOz, label: lb + ' lb ' + remOz + ' oz' };
@@ -395,7 +400,17 @@
   // item shippable when the organizer marked it pickup-only is a real incorrect listing, not a
   // low-stakes guess like Category.
   async function fillDeliveryStep(item) {
-    if (item.shippingOverride === 'LOCAL_PICKUP_ONLY') {
+    // 2026-07-23 fix (Patrick live report -- "la15r amplifier" quoted 6lb shipping when the
+    // real item is 17+lb, correction: Patrick wants blank weight to auto-route to Local pickup,
+    // not a hard stop): item.packageWeightOz is blank ONLY when Patrick deliberately left the
+    // real weight unset -- that's the whole point of leaving it blank. The backend
+    // (extensionController.ts getExtensionItems) already sets item.shippingOverride =
+    // 'LOCAL_PICKUP_ONLY' whenever packageWeightOz is null, but don't rely on the backend alone
+    // (this exact contract has had 5 separate bugfix commits today) -- check packageWeightOz
+    // directly here too so a blank weight always lands on Local pickup, even if shippingOverride
+    // is ever wrong or stale.
+    const noConfirmedWeight = item.packageWeightOz === undefined || item.packageWeightOz === null || isNaN(item.packageWeightOz);
+    if (item.shippingOverride === 'LOCAL_PICKUP_ONLY' || noConfirmedWeight) {
       // 2026-07-16 fix (DOM-verified live): open FB's "Delivery method" dropdown, then UNCHECK the
       // "Shipping" item (leaving "Local pickup" checked). FB renders these as role="menuitemcheckbox"
       // items inside the opened combo -- NOT role="option" (old optionByText('pickup') never matched)
@@ -425,9 +440,9 @@
     await waitThenClick(() => SEL.comboByLabel('Package weight'), 'Delivery',
       'Couldn\'t find the Package weight control.', 5000);
 
-    const weight = ozToLbOz(
-      item.packageWeightOz !== undefined && item.packageWeightOz !== null ? item.packageWeightOz : item.aiPackageWeightOz
-    );
+    // By this point noConfirmedWeight (checked above) is guaranteed false -- any blank-weight
+    // item was already routed into the Local-pickup branch instead of reaching here.
+    const weight = ozToLbOz(item.packageWeightOz);
 
     // 2026-07-18 fix (Patrick live report, Hofnar tin cmrqpqatn005ul0sum3ij77kx + full live DOM
     // investigation): the 6 fixed weight-BUCKET radios (role="radio") genuinely require trusted
