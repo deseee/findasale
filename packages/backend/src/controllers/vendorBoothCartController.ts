@@ -194,11 +194,29 @@ export const startBoothCart = async (req: BoothAuthRequest, res: Response) => {
 
 /**
  * POST /api/organizer/hubs/:hubId/cart/:cartTransactionId/items
- * Add item(s) to the cart. Server resolves each item's vendorBoothId — cart can
- * span any booths in the hub. Rejects items whose status !== 'AVAILABLE', OR
- * whose booth status !== 'CONFIRMED', OR whose booth is unclaimed (userId IS NULL)
- * — per the 2026-07-07 decision log, unclaimed booths are hard-blocked from
- * checkout (not just a wash-trade-guard skip; a full reject at add-items).
+ * Add item(s) to the cart. Server resolves each item's booth membership DYNAMICALLY
+ * (2026-07-24 rework, Patrick's decision -- see claude_docs/feature-notes for the
+ * contract): an Item no longer needs a pre-set vendorBoothId tag. Instead, the
+ * item's owner (Item.organizerId -- denormalized, stays populated even for
+ * saleId-null "persistent inventory" items, unlike going through Sale.organizerId)
+ * is resolved to their User, and we check whether that User holds a CONFIRMED
+ * VendorBooth at THIS hub. Under Patrick's mall-only-earns-a-cut-through-its-own-POS
+ * model, this is the one and only place that decision gets enforced -- a vendor's
+ * item sold any other way (their own Terminal/online checkout, eBay, Facebook)
+ * never reaches this function, so the mall correctly gets no cut on it.
+ *
+ * Item.vendorBoothId is still WRITTEN here (as part of the RESERVED update below)
+ * so every downstream consumer (resolveBoothLegItems, the cancel path) keeps
+ * working completely unchanged -- it's now a derived, reservation-scoped value
+ * instead of something a vendor/organizer pre-sets, not a dead field.
+ *
+ * Rejects items whose status !== 'AVAILABLE', OR whose owner has no CONFIRMED
+ * VendorBooth at this hub at all (covers: not a vendor here, booth at a different
+ * hub, booth not yet CONFIRMED, booth unclaimed -- VendorBooth.userId IS NULL rows
+ * can never match this query since we search FOR a specific non-null userId, so
+ * the 2026-07-07 "unclaimed booths hard-blocked" invariant holds for free with no
+ * separate check needed). All reasons collapse to the same generic strings as
+ * before so no distinct signal is ever leaked to the caller.
  * Body: { itemIds: string[] }
  */
 export const addBoothCartItems = async (req: BoothAuthRequest, res: Response) => {
@@ -219,8 +237,7 @@ export const addBoothCartItems = async (req: BoothAuthRequest, res: Response) =>
     const items = await prisma.item.findMany({
       where: { id: { in: itemIds } },
       select: {
-        id: true, title: true, price: true, status: true, vendorBoothId: true,
-        vendorBooth: { select: { id: true, hubId: true, status: true, userId: true } },
+        id: true, title: true, price: true, status: true, organizerId: true,
       },
     });
 
@@ -228,46 +245,48 @@ export const addBoothCartItems = async (req: BoothAuthRequest, res: Response) =>
       return res.status(400).json({ error: 'One or more items not found' });
     }
 
+    // Batch-resolve owner (Item.organizerId -> Organizer.userId) then batch-check
+    // for a CONFIRMED VendorBooth at this hub per resolved userId. Two small
+    // queries regardless of batch size, not N+1.
+    const distinctOrganizerIds = Array.from(
+      new Set(items.map((i) => i.organizerId).filter((id): id is string => !!id))
+    );
+    const organizers = distinctOrganizerIds.length
+      ? await prisma.organizer.findMany({ where: { id: { in: distinctOrganizerIds } }, select: { id: true, userId: true } })
+      : [];
+    const organizerIdToUserId = new Map(organizers.map((o) => [o.id, o.userId]));
+
+    const candidateUserIds = Array.from(new Set(organizers.map((o) => o.userId)));
+    const confirmedBooths = candidateUserIds.length
+      ? await prisma.vendorBooth.findMany({
+          where: { hubId, status: 'CONFIRMED', userId: { in: candidateUserIds } },
+          select: { id: true, userId: true },
+        })
+      : [];
+    const userIdToBooth = new Map(confirmedBooths.map((b) => [b.userId as string, b]));
+
     const rejected: Array<{ itemId: string; reason: string }> = [];
-    const accepted: typeof items = [];
+    const accepted: Array<{ id: string; title: string; price: number | null; vendorBoothId: string }> = [];
 
     for (const item of items) {
       if (item.status !== 'AVAILABLE') {
         rejected.push({ itemId: item.id, reason: 'ITEM_NOT_AVAILABLE' });
         continue;
       }
-      // findasale-hacker P0 fix, 2026-07-08: this cart is scoped to ONE hub
-      // (:hubId in the route) -- every item added must be a CONFIRMED, claimed
-      // VendorBooth item belonging to THIS SAME hub. Items with no vendorBoothId at
-      // all (not a vendor-booth item), or whose booth belongs to a DIFFERENT hub,
-      // are rejected with the SAME generic reason as the other checks below so no
-      // distinct signal (cross-hub vs. non-booth vs. unclaimed) is ever leaked to
-      // the caller.
-      if (!item.vendorBoothId || !item.vendorBooth || item.vendorBooth.hubId !== hubId) {
+      const ownerUserId = item.organizerId ? organizerIdToUserId.get(item.organizerId) : undefined;
+      const booth = ownerUserId ? userIdToBooth.get(ownerUserId) : undefined;
+      if (!booth) {
         rejected.push({ itemId: item.id, reason: 'ITEM_NOT_AVAILABLE' });
         continue;
       }
-      if (item.vendorBooth.status !== 'CONFIRMED') {
-        rejected.push({ itemId: item.id, reason: 'BOOTH_NOT_CONFIRMED' });
-        continue;
-      }
-      // Decision log 2026-07-07: unclaimed booths (userId IS NULL) are BLOCKED
-      // from checkout entirely — generic reason, never leak "unclaimed" as a
-      // distinct signal that invites probing.
-      if (!item.vendorBooth.userId) {
-        rejected.push({ itemId: item.id, reason: 'ITEM_NOT_AVAILABLE' });
-        continue;
-      }
-      accepted.push(item);
+      accepted.push({ id: item.id, title: item.title, price: item.price, vendorBoothId: booth.id });
     }
 
     if (accepted.length === 0) {
       return res.status(409).json({ error: 'No items could be added to the cart', rejected });
     }
 
-    const newBoothIds = Array.from(
-      new Set(accepted.map((i) => i.vendorBoothId).filter((id): id is string => !!id))
-    );
+    const newBoothIds = Array.from(new Set(accepted.map((i) => i.vendorBoothId)));
     const mergedBoothsRepresented = Array.from(new Set([...cart.boothsRepresented, ...newBoothIds]));
 
     const newTotal = accepted.reduce((sum, i) => sum + (i.price || 0), 0) + Number(cart.totalAmount);
@@ -280,11 +299,25 @@ export const addBoothCartItems = async (req: BoothAuthRequest, res: Response) =>
       },
     });
 
-    // Reserve items against this cart so a second concurrent cart can't also grab them.
-    await prisma.item.updateMany({
-      where: { id: { in: accepted.map((i) => i.id) } },
-      data: { status: 'RESERVED' },
-    });
+    // Reserve items against this cart so a second concurrent cart can't also grab
+    // them, AND persist the resolved vendorBoothId so resolveBoothLegItems / the
+    // cancel path (both key off Item.vendorBoothId in the DB) keep working
+    // unchanged. Grouped by resolved booth since one addBoothCartItems call can
+    // legitimately span multiple different vendors' items in one shared cart.
+    const acceptedByBooth = new Map<string, string[]>();
+    for (const i of accepted) {
+      const list = acceptedByBooth.get(i.vendorBoothId) ?? [];
+      list.push(i.id);
+      acceptedByBooth.set(i.vendorBoothId, list);
+    }
+    await Promise.all(
+      Array.from(acceptedByBooth.entries()).map(([boothId, ids]) =>
+        prisma.item.updateMany({
+          where: { id: { in: ids } },
+          data: { status: 'RESERVED', vendorBoothId: boothId },
+        })
+      )
+    );
 
     return res.status(200).json({
       cart: updated,
@@ -1202,6 +1235,52 @@ export const cancelBoothCart = async (req: BoothAuthRequest, res: Response) => {
  * GET /api/organizer/hubs/:hubId/cart-transactions
  * Organizer-only audit view: cashier, timestamp, booths represented, total.
  */
+
+/**
+ * GET /api/organizer/hubs/:hubId/cart/booths/:vendorBoothId/items?q=
+ * QR-fail fallback (Patrick, 2026-07-24): if a physical QR scan doesn't work, the
+ * cashier needs to be able to find a vendor's sellable items by typing/searching
+ * instead. Reuses the exact same ownership-resolution rule addBoothCartItems uses
+ * (CONFIRMED VendorBooth at this hub, owner resolved via Item.organizerId) so the
+ * result set is guaranteed to match what would actually be accepted into the cart
+ * -- no separate/looser filter that could show items that would then get rejected.
+ */
+export const searchVendorBoothItems = async (req: BoothAuthRequest, res: Response) => {
+  try {
+    const { hubId, vendorBoothId } = req.params;
+    const { q } = req.query as { q?: string };
+    if (!req.boothAuth) return res.status(401).json({ error: 'Booth/team authentication required' });
+
+    // Same generic 404 whether the booth doesn't exist, belongs to a different
+    // hub, or isn't CONFIRMED yet -- no distinct signal leaked, mirrors the
+    // add-items rejection behavior above.
+    const booth = await prisma.vendorBooth.findFirst({
+      where: { id: vendorBoothId, hubId, status: 'CONFIRMED' },
+      select: { id: true, userId: true, vendorName: true },
+    });
+    if (!booth || !booth.userId) return res.status(404).json({ error: 'Booth not found' });
+
+    const organizer = await prisma.organizer.findUnique({ where: { userId: booth.userId }, select: { id: true } });
+    if (!organizer) return res.status(404).json({ error: 'Booth not found' });
+
+    const items = await prisma.item.findMany({
+      where: {
+        organizerId: organizer.id,
+        status: 'AVAILABLE',
+        ...(q ? { title: { contains: q, mode: 'insensitive' as const } } : {}),
+      },
+      select: { id: true, title: true, price: true, photoUrls: true },
+      orderBy: { title: 'asc' },
+      take: 50,
+    });
+
+    return res.status(200).json({ vendorBoothId: booth.id, vendorName: booth.vendorName, items });
+  } catch (error) {
+    console.error('[searchVendorBoothItems] Error:', error);
+    return res.status(500).json({ error: 'Failed to search booth items' });
+  }
+};
+
 export const listBoothCartTransactions = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) return res.status(401).json({ error: 'Authentication required' });

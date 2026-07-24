@@ -26,6 +26,7 @@ import {
   captureBoothCart,
   cancelBoothCart,
   listBoothCartTransactions,
+  searchVendorBoothItems,
 } from '../controllers/vendorBoothCartController';
 import {
   previewVendorBoothSettlement,
@@ -91,6 +92,11 @@ router.delete('/api/organizer/hubs/:hubId/vendor-booths/:boothId', authenticate,
 // still hard-401s if neither a valid booth token NOR an authenticated req.user is present.
 router.post('/api/organizer/hubs/:hubId/cart/start', optionalAuthenticate, requireBoothTokenOrTeamMember(), startBoothCart);
 router.post('/api/organizer/hubs/:hubId/cart/:cartTransactionId/items', optionalAuthenticate, requireBoothTokenOrTeamMember(), addBoothCartItems);
+
+// QR-fail fallback (2026-07-24): cashier can search a specific vendor's sellable
+// items by keyword when scanning fails. Same auth model as the rest of the cart
+// routes -- booth token or team member, scoped to this hub.
+router.get('/api/organizer/hubs/:hubId/cart/booths/:vendorBoothId/items', optionalAuthenticate, requireBoothTokenOrTeamMember(), searchVendorBoothItems);
 
 // ADR-020 (2026-07-07): sequential per-booth Standard-account checkout — replaces
 // the old single-PaymentIntent /charge + /confirm pair. Terminal rail: booth-scoped
