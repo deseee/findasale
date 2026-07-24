@@ -62,7 +62,7 @@ export default function FleaMarketEventsPage() {
   useEffect(() => {
     const fetchEvents = async () => {
       try {
-        const res = await api.get('/hubs/my');
+        const res = await api.get('/organizer/hubs');
         const data = res.data;
         setEvents(data?.hubs || []);
       } catch (err: any) {

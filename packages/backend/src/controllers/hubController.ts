@@ -349,6 +349,8 @@ export const listMyHubs = async (req: AuthRequest, res: Response) => {
         createdAt: hub.createdAt,
         saleCount: hub.memberships.length,
         isActive: hub.isActive,
+        saleDate: hub.saleDate,
+        eventName: hub.eventName,
       })),
     });
   } catch (error) {
