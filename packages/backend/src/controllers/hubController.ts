@@ -349,11 +349,57 @@ export const listMyHubs = async (req: AuthRequest, res: Response) => {
         createdAt: hub.createdAt,
         saleCount: hub.memberships.length,
         isActive: hub.isActive,
+        saleDate: hub.saleDate,
+        eventName: hub.eventName,
       })),
     });
   } catch (error) {
     console.error('Error listing hubs:', error);
     res.status(500).json({ message: 'Failed to list hubs' });
+  }
+};
+
+// GET /api/organizer/hubs/:hubId
+// Auth + ownership required: fetch one of my own hubs with full detail (used by the
+// hub management page -- previously stubbed out with no real fetch at all, S-hubs-followup).
+export const getMyHub = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user?.organizerProfile?.id) {
+      return res.status(401).json({ message: 'Not authenticated as organizer' });
+    }
+
+    const { hubId } = req.params;
+
+    const hub = await prisma.saleHub.findUnique({
+      where: { id: hubId },
+    });
+
+    if (!hub) {
+      return res.status(404).json({ message: 'Hub not found' });
+    }
+
+    if (hub.organizerId !== req.user.organizerProfile?.id) {
+      return res.status(403).json({ message: 'Unauthorized' });
+    }
+
+    res.json({
+      hub: {
+        id: hub.id,
+        name: hub.name,
+        slug: hub.slug,
+        description: hub.description,
+        lat: hub.lat,
+        lng: hub.lng,
+        radiusKm: hub.radiusKm,
+        saleDate: hub.saleDate,
+        eventName: hub.eventName,
+        isActive: hub.isActive,
+        createdAt: hub.createdAt,
+      },
+    });
+  } catch (error) {
+    console.error('Error getting my hub:', error);
+    res.status(500).json({ message: 'Failed to get hub' });
   }
 };
 

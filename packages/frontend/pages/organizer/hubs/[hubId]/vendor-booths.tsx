@@ -37,6 +37,18 @@ interface VendorBooth {
   createdAt: string;
 }
 
+interface FeeCharge {
+  id: string;
+  boothNumber: string;
+  vendorName: string;
+  periodStart: string;
+  periodEnd: string;
+  amountCents: number;
+  status: string;
+  failureReason: string | null;
+  createdAt: string;
+}
+
 type ModalMode = 'closed' | 'create' | 'edit';
 
 const VendorBoothsPage: React.FC = () => {
@@ -56,6 +68,8 @@ const VendorBoothsPage: React.FC = () => {
   });
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
+  const [feeCharges, setFeeCharges] = useState<FeeCharge[]>([]);
+  const [feeChargesLoading, setFeeChargesLoading] = useState(true);
 
   const [formData, setFormData] = useState({
     boothNumber: '',
@@ -82,8 +96,24 @@ const VendorBoothsPage: React.FC = () => {
     }
   };
 
+  const fetchFeeCharges = async () => {
+    if (!hubId || typeof hubId !== 'string') return;
+    try {
+      setFeeChargesLoading(true);
+      const response = await api.get(`/organizer/hubs/${hubId}/vendor-booths/fee-charges`);
+      setFeeCharges(response.data?.charges || []);
+    } catch (error: any) {
+      console.error('Error fetching booth fee charges:', error);
+    } finally {
+      setFeeChargesLoading(false);
+    }
+  };
+
   useEffect(() => {
-    if (user && hubId) fetchBooths();
+    if (user && hubId) {
+      fetchBooths();
+      fetchFeeCharges();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, hubId]);
 
@@ -200,6 +230,27 @@ const VendorBoothsPage: React.FC = () => {
       case 'REJECTED': return 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400';
       case 'CANCELLED': return 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300';
       default: return 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400';
+    }
+  };
+
+  const feeChargeStatusBadgeClass = (status: string) => {
+    switch (status) {
+      case 'COMPLETED': return 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400';
+      case 'FAILED': return 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400';
+      case 'PROCESSING': return 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400';
+      case 'PENDING_PAYMENT_METHOD':
+      case 'PENDING_STRIPE_ONBOARDING':
+      case 'PENDING':
+        return 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400';
+      default: return 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300';
+    }
+  };
+
+  const feeChargeStatusLabel = (status: string) => {
+    switch (status) {
+      case 'PENDING_PAYMENT_METHOD': return 'Awaiting vendor payment method';
+      case 'PENDING_STRIPE_ONBOARDING': return 'Awaiting hub Stripe setup';
+      default: return status.charAt(0) + status.slice(1).toLowerCase();
     }
   };
 
@@ -351,6 +402,58 @@ const VendorBoothsPage: React.FC = () => {
               </table>
             </div>
           )}
+
+          {/* ADR-090 Gap 2: booth-rent (fee) charge history across the hub, sourced from
+              vendorBoothFeeBillingCron.ts via GET .../vendor-booths/fee-charges. The
+              settlement-batch system linked below is largely vestigial post-Phase 3
+              (read-only reconciliation report, moves no money) -- this table is the
+              real answer to "did the vendor's rent get collected." */}
+          <div className="mt-8">
+            <h2 className="text-xl font-bold text-warm-900 dark:text-white mb-3">Booth Rent Charge History</h2>
+            {feeChargesLoading ? (
+              <div className="text-center py-8">
+                <p className="text-warm-600 dark:text-warm-400">Loading charge history...</p>
+              </div>
+            ) : feeCharges.length === 0 ? (
+              <div className="bg-white dark:bg-gray-800 rounded-xl p-8 text-center">
+                <p className="text-warm-600 dark:text-warm-400">No booth rent charges yet</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-warm-200 dark:border-gray-700">
+                <table className="w-full text-sm">
+                  <thead className="bg-warm-100 dark:bg-gray-700 text-left">
+                    <tr>
+                      <th className="p-3 font-bold text-warm-700 dark:text-warm-300">Booth #</th>
+                      <th className="p-3 font-bold text-warm-700 dark:text-warm-300">Vendor</th>
+                      <th className="p-3 font-bold text-warm-700 dark:text-warm-300">Period</th>
+                      <th className="p-3 font-bold text-warm-700 dark:text-warm-300">Amount</th>
+                      <th className="p-3 font-bold text-warm-700 dark:text-warm-300">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {feeCharges.map((charge) => (
+                      <tr key={charge.id} className="border-t border-warm-200 dark:border-gray-700">
+                        <td className="p-3 font-mono text-warm-900 dark:text-white">{charge.boothNumber}</td>
+                        <td className="p-3 text-warm-900 dark:text-white">{charge.vendorName}</td>
+                        <td className="p-3 text-warm-700 dark:text-warm-300">
+                          {new Date(charge.periodStart).toLocaleDateString()} - {new Date(charge.periodEnd).toLocaleDateString()}
+                        </td>
+                        <td className="p-3 text-warm-700 dark:text-warm-300">${(charge.amountCents / 100).toFixed(2)}</td>
+                        <td className="p-3">
+                          <span className={`px-2 py-1 rounded-full text-xs font-bold ${feeChargeStatusBadgeClass(charge.status)}`}>
+                            {feeChargeStatusLabel(charge.status)}
+                          </span>
+                          {charge.failureReason && (
+                            <div className="text-xs text-red-600 dark:text-red-400 mt-1">{charge.failureReason}</div>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
 
           <div className="mt-6">
             <Link

@@ -8,6 +8,7 @@ import {
   updateHub,
   deleteHub,
   listMyHubs,
+  getMyHub,
   joinHub,
   leaveHub,
   setHubEvent,
@@ -21,6 +22,7 @@ router.get('/api/hubs/:slug', getHub);
 
 // Authenticated endpoints (organizer)
 router.get('/api/organizer/hubs', authenticate, listMyHubs);
+router.get('/api/organizer/hubs/:hubId', authenticate, getMyHub);
 router.post('/api/organizer/hubs', authenticate, requireTier('PRO'), createHub);
 router.put('/api/organizer/hubs/:hubId', authenticate, requireTier('PRO'), updateHub);
 router.delete('/api/organizer/hubs/:hubId', authenticate, requireTier('PRO'), deleteHub);

@@ -14,6 +14,11 @@ import {
   startVendorBoothStripeOnboarding,
   getVendorBoothStripeStatus,
   getVendorBoothPayouts,
+  startVendorBoothFeeBillingSetup,
+  confirmVendorBoothFeeBillingSetup,
+  getVendorBoothFeeBillingStatus,
+  getVendorBoothFeeCharges,
+  listHubVendorBoothFeeCharges,
 } from '../controllers/vendorBoothController';
 import {
   startBoothCart,
@@ -74,10 +79,24 @@ router.post('/api/vendor-booth/:vendorBoothId/stripe/onboard', authenticate, sta
 router.get('/api/vendor-booth/:vendorBoothId/stripe/status', authenticate, getVendorBoothStripeStatus);
 router.get('/api/vendor-booth/:vendorBoothId/payouts', authenticate, getVendorBoothPayouts);
 
+// ADR-090 Phase 4 (S-hubs-followup): vendor payment-method collection for recurring
+// booth-fee (rent) billing. Platform-account SetupIntent flow, mirrors
+// createBoothCartQrSetupIntent's Customer pattern -- see vendorBoothController.ts.
+router.post('/api/vendor-booth/:vendorBoothId/fee-billing/setup-intent', authenticate, startVendorBoothFeeBillingSetup);
+router.post('/api/vendor-booth/:vendorBoothId/fee-billing/confirm', authenticate, confirmVendorBoothFeeBillingSetup);
+router.get('/api/vendor-booth/:vendorBoothId/fee-billing/status', authenticate, getVendorBoothFeeBillingStatus);
+router.get('/api/vendor-booth/:vendorBoothId/fee-charges', authenticate, getVendorBoothFeeCharges);
+
 // --- Organizer-only CRUD ---
 
 router.get('/api/organizer/hubs/:hubId/vendor-booths', authenticate, requireTier('TEAMS'), listVendorBooths);
 router.post('/api/organizer/hubs/:hubId/vendor-booths', authenticate, requireTier('TEAMS'), createVendorBooth);
+// MUST precede the GET .../vendor-booths/:boothId route immediately below --
+// same route-shape collision class as the my-booths/:boothToken lesson documented
+// at the top of this file (S1091): "fee-charges" is the same single-segment shape
+// as ":boothId" and Express matches registration order, so a literal route here
+// must come first or every request for it gets swallowed by getVendorBooth.
+router.get('/api/organizer/hubs/:hubId/vendor-booths/fee-charges', authenticate, requireTier('TEAMS'), listHubVendorBoothFeeCharges);
 router.get('/api/organizer/hubs/:hubId/vendor-booths/:boothId', authenticate, requireTier('TEAMS'), getVendorBooth);
 router.put('/api/organizer/hubs/:hubId/vendor-booths/:boothId', authenticate, requireTier('TEAMS'), updateVendorBooth);
 router.delete('/api/organizer/hubs/:hubId/vendor-booths/:boothId', authenticate, requireTier('TEAMS'), deleteVendorBooth);
