@@ -125,6 +125,55 @@ export const useHub = (slug: string, options?: Partial<UseQueryOptions<HubDetail
 };
 
 /**
+ * Full detail for one of the organizer's own hubs, fetched by id (auth + ownership
+ * checked server-side). Distinct from useHub(slug) above, which is the PUBLIC
+ * by-slug landing-page endpoint -- reusing that here would leak inactive/private
+ * hub data to non-owners and doesn't have the hubId the management page has.
+ */
+export interface MyHubDetail {
+  id: string;
+  name: string;
+  slug: string;
+  description?: string;
+  lat: number;
+  lng: number;
+  radiusKm: number;
+  saleDate?: string;
+  eventName?: string;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export interface MyHubDetailResponse {
+  hub: MyHubDetail;
+}
+
+export const useHubById = (hubId: string, options?: Partial<UseQueryOptions<MyHubDetailResponse>>) => {
+  const queryKey: QueryKey = ['hubs', 'byId', hubId];
+
+  return useQuery<MyHubDetailResponse>({
+    queryKey,
+    queryFn: async () => {
+      const response = await fetch(`/api/organizer/hubs/${hubId}`, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to fetch hub');
+      }
+
+      return response.json();
+    },
+    enabled: !!hubId,
+    staleTime: 5 * 60 * 1000,
+    ...options,
+  });
+};
+
+/**
  * Fetch list of organizer's hubs
  */
 export const useMyHubs = (options?: Partial<UseQueryOptions<{ hubs: SaleHubInfo[] }>>) => {

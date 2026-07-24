@@ -359,6 +359,43 @@ export const listMyHubs = async (req: AuthRequest, res: Response) => {
   }
 };
 
+// GET /api/organizer/hubs/:hubId
+// Auth + ownership required: full detail for one of the organizer's own hubs.
+// Distinct from the PUBLIC by-slug GET /api/hubs/:slug above -- that endpoint
+// leaks hub data to non-owners and doesn't accept a hubId, which is all the
+// authenticated management page (manage.tsx) has from its route.
+export const getMyHub = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user?.organizerProfile?.id) {
+      return res.status(401).json({ message: 'Not authenticated as organizer' });
+    }
+    const { hubId } = req.params;
+    const hub = await prisma.saleHub.findUnique({ where: { id: hubId } });
+    if (!hub) return res.status(404).json({ message: 'Hub not found' });
+    if (hub.organizerId !== req.user.organizerProfile?.id) {
+      return res.status(403).json({ message: 'Unauthorized' });
+    }
+    res.json({
+      hub: {
+        id: hub.id,
+        name: hub.name,
+        slug: hub.slug,
+        description: hub.description,
+        lat: hub.lat,
+        lng: hub.lng,
+        radiusKm: hub.radiusKm,
+        saleDate: hub.saleDate,
+        eventName: hub.eventName,
+        isActive: hub.isActive,
+        createdAt: hub.createdAt,
+      },
+    });
+  } catch (error) {
+    console.error('Error getting my hub:', error);
+    res.status(500).json({ message: 'Failed to get hub' });
+  }
+};
+
 // POST /api/organizer/hubs/:hubId/join
 // Auth required: add current organizer's sales to hub
 export const joinHub = async (req: AuthRequest, res: Response) => {

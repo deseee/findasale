@@ -3,11 +3,11 @@
  * Edit hub details, set event date, and manage member sales
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import Link from 'next/link';
-import { useHub, useUpdateHub, useSetHubEvent, useJoinHub, useLeaveHub } from '../../../../hooks/useHubs';
+import { useHubById, useUpdateHub, useSetHubEvent, useJoinHub, useLeaveHub } from '../../../../hooks/useHubs';
 import { useAuth } from '../../../../components/AuthContext';
 import { useToast } from '../../../../components/ToastContext';
 import { useQueryClient } from '@tanstack/react-query';
@@ -31,18 +31,37 @@ export default function HubManagePage() {
     radiusKm: 5,
   });
 
-  const { data, isLoading } = useHub('', { enabled: false }); // We'll use a different approach for fetching
+  const { data, isLoading } = useHubById(hubId as string, { enabled: !!hubId });
   const updateHubMutation = useUpdateHub(hubId as string);
   const setEventMutation = useSetHubEvent(hubId as string);
 
-  // For now, simplified version without full hub detail fetch
-  // In production, you'd fetch the full hub data and populate forms
+  // Populate form state from the real fetched hub once it loads (or changes, e.g.
+  // after a save invalidates+refetches). Previously this page never fetched real
+  // data at all -- formData stayed at its all-empty defaults forever, rendering
+  // "N/A" for every hub (confirmed live in production, S-hubs-followup).
+  useEffect(() => {
+    if (!data?.hub) return;
+    setFormData({
+      name: data.hub.name || '',
+      description: data.hub.description || '',
+      lat: data.hub.lat ?? 0,
+      lng: data.hub.lng ?? 0,
+      radiusKm: data.hub.radiusKm ?? 5,
+    });
+    if (data.hub.saleDate) {
+      setEventDate(new Date(data.hub.saleDate).toISOString().slice(0, 16));
+    }
+    if (data.hub.eventName) {
+      setEventName(data.hub.eventName);
+    }
+  }, [data]);
 
   const handleSaveHub = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
       await updateHubMutation.mutateAsync(formData);
       queryClient.invalidateQueries({ queryKey: ['hubs', 'my'] });
+      queryClient.invalidateQueries({ queryKey: ['hubs', 'byId', hubId] });
       setEditMode(false);
       showToast('Hub updated successfully', 'success');
     } catch (err) {
@@ -58,6 +77,7 @@ export default function HubManagePage() {
         eventName: eventName,
       });
       queryClient.invalidateQueries({ queryKey: ['hubs', 'my'] });
+      queryClient.invalidateQueries({ queryKey: ['hubs', 'byId', hubId] });
       setShowEventForm(false);
       showToast('Event date set successfully', 'success');
     } catch (err) {

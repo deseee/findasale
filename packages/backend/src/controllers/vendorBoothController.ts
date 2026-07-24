@@ -3,6 +3,9 @@ import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import { Decimal } from '@prisma/client/runtime/library';
 import { createConnectAccount, createOnboardingLink, getAccountStatus } from '../services/stripeConnectService';
+import { getStripe } from '../utils/stripe';
+
+const stripe = () => getStripe();
 
 /**
  * Vendor Booth Payments — CRUD + Claim + Stripe Onboarding (2026-07-07)
@@ -525,5 +528,208 @@ export const getVendorBoothPayouts = async (req: AuthRequest, res: Response) => 
   } catch (error) {
     console.error('[getVendorBoothPayouts] Error:', error);
     return res.status(500).json({ error: 'Failed to get vendor booth payouts' });
+  }
+};
+
+/**
+ * POST /api/vendor-booth/:vendorBoothId/fee-billing/setup-intent
+ * Booth owner only. Creates (or reuses) a platform-account Stripe Customer for this
+ * booth and returns a SetupIntent clientSecret so the vendor can save a card for
+ * recurring booth-fee billing (ADR-090 Phase 4). This Customer/PaymentMethod pair is
+ * intentionally on the PLATFORM's own Stripe account, not the booth's own Connect
+ * account (stripeAccountId) -- see schema.prisma's VendorBooth comment and
+ * vendorBoothFeeBillingCron.ts, which charges off-session against exactly these two
+ * fields. Mirrors createBoothCartQrSetupIntent's platform-Customer pattern
+ * (vendorBoothCartController.ts).
+ */
+export const startVendorBoothFeeBillingSetup = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) return res.status(401).json({ error: 'Authentication required' });
+    const { vendorBoothId } = req.params;
+
+    const booth = await prisma.vendorBooth.findUnique({ where: { id: vendorBoothId } });
+    if (!booth || booth.deletedAt) return res.status(404).json({ error: 'Booth not found' });
+    if (booth.userId !== req.user.id) return res.status(403).json({ error: 'You do not operate this booth' });
+
+    let customerId = booth.vendorStripeCustomerId;
+    if (!customerId) {
+      const customer = await stripe().customers.create({
+        email: booth.vendorEmail || req.user.email,
+        name: booth.vendorName,
+        metadata: { source: 'vendor_booth_fee_billing', vendorBoothId: booth.id, hubId: booth.hubId },
+      });
+      customerId = customer.id;
+      await prisma.vendorBooth.update({ where: { id: booth.id }, data: { vendorStripeCustomerId: customerId } });
+    }
+
+    const setupIntent = await stripe().setupIntents.create({
+      customer: customerId,
+      payment_method_types: ['card'],
+      usage: 'off_session',
+      metadata: { source: 'vendor_booth_fee_billing', vendorBoothId: booth.id, hubId: booth.hubId },
+    });
+
+    return res.status(200).json({ clientSecret: setupIntent.client_secret });
+  } catch (error) {
+    console.error('[startVendorBoothFeeBillingSetup] Error:', error);
+    return res.status(500).json({ error: 'Failed to start booth fee billing setup' });
+  }
+};
+
+/**
+ * POST /api/vendor-booth/:vendorBoothId/fee-billing/confirm
+ * Booth owner only. Body: { setupIntentId }. Never trusts a client-supplied
+ * payment_method id directly -- always re-reads the SetupIntent from Stripe and
+ * confirms it actually succeeded and belongs to this booth's own Customer before
+ * persisting anything.
+ */
+export const confirmVendorBoothFeeBillingSetup = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) return res.status(401).json({ error: 'Authentication required' });
+    const { vendorBoothId } = req.params;
+    const { setupIntentId } = req.body as { setupIntentId?: string };
+    if (!setupIntentId) return res.status(400).json({ error: 'setupIntentId is required' });
+
+    const booth = await prisma.vendorBooth.findUnique({ where: { id: vendorBoothId } });
+    if (!booth || booth.deletedAt) return res.status(404).json({ error: 'Booth not found' });
+    if (booth.userId !== req.user.id) return res.status(403).json({ error: 'You do not operate this booth' });
+
+    const setupIntent = await stripe().setupIntents.retrieve(setupIntentId);
+    if (setupIntent.status !== 'succeeded') {
+      return res.status(400).json({ error: `Card setup not complete (status: ${setupIntent.status})` });
+    }
+    if (setupIntent.customer !== booth.vendorStripeCustomerId) {
+      return res.status(403).json({ error: 'SetupIntent does not belong to this booth' });
+    }
+
+    const paymentMethodId =
+      typeof setupIntent.payment_method === 'string' ? setupIntent.payment_method : setupIntent.payment_method?.id;
+    if (!paymentMethodId) {
+      return res.status(400).json({ error: 'No payment method attached to this SetupIntent' });
+    }
+
+    await prisma.vendorBooth.update({ where: { id: booth.id }, data: { vendorPaymentMethodId: paymentMethodId } });
+
+    return res.status(200).json({ configured: true });
+  } catch (error) {
+    console.error('[confirmVendorBoothFeeBillingSetup] Error:', error);
+    return res.status(500).json({ error: 'Failed to confirm booth fee billing setup' });
+  }
+};
+
+/**
+ * GET /api/vendor-booth/:vendorBoothId/fee-billing/status
+ * Booth owner only. Whether a payment method is on file for recurring booth-fee
+ * billing. Card display details are best-effort -- a Stripe retrieve failure here
+ * degrades to configured:true with no card details rather than erroring the page.
+ */
+export const getVendorBoothFeeBillingStatus = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) return res.status(401).json({ error: 'Authentication required' });
+    const { vendorBoothId } = req.params;
+
+    const booth = await prisma.vendorBooth.findUnique({ where: { id: vendorBoothId } });
+    if (!booth || booth.deletedAt) return res.status(404).json({ error: 'Booth not found' });
+    if (booth.userId !== req.user.id) return res.status(403).json({ error: 'You do not operate this booth' });
+
+    if (!booth.vendorPaymentMethodId) {
+      return res.status(200).json({ configured: false });
+    }
+
+    try {
+      const pm = await stripe().paymentMethods.retrieve(booth.vendorPaymentMethodId);
+      return res.status(200).json({ configured: true, brand: pm.card?.brand, last4: pm.card?.last4 });
+    } catch (retrieveErr) {
+      console.warn('[getVendorBoothFeeBillingStatus] Could not retrieve card details (non-fatal):', retrieveErr);
+      return res.status(200).json({ configured: true });
+    }
+  } catch (error) {
+    console.error('[getVendorBoothFeeBillingStatus] Error:', error);
+    return res.status(500).json({ error: 'Failed to get booth fee billing status' });
+  }
+};
+
+/**
+ * GET /api/vendor-booth/:vendorBoothId/fee-charges
+ * Booth owner only. Booth-fee (rent) billing history from vendorBoothFeeBillingCron.ts
+ * -- distinct from GET /payouts above (VendorBoothPayout is the largely-vestigial
+ * vendor-receives-money model post-ADR-090 Phase 3 rescoping; VendorBoothFeeCharge is
+ * the real vendor-owes-money booth-rent history -- see schema.prisma's model comment).
+ */
+export const getVendorBoothFeeCharges = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) return res.status(401).json({ error: 'Authentication required' });
+    const { vendorBoothId } = req.params;
+
+    const booth = await prisma.vendorBooth.findUnique({ where: { id: vendorBoothId }, select: { id: true, userId: true } });
+    if (!booth) return res.status(404).json({ error: 'Booth not found' });
+    if (booth.userId !== req.user.id) return res.status(403).json({ error: 'You do not operate this booth' });
+
+    const charges = await prisma.vendorBoothFeeCharge.findMany({
+      where: { vendorBoothId },
+      select: {
+        id: true,
+        periodStart: true,
+        periodEnd: true,
+        amountCents: true,
+        status: true,
+        failureReason: true,
+        createdAt: true,
+      },
+      orderBy: { periodStart: 'desc' },
+    });
+
+    return res.status(200).json({ charges });
+  } catch (error) {
+    console.error('[getVendorBoothFeeCharges] Error:', error);
+    return res.status(500).json({ error: 'Failed to get booth fee charges' });
+  }
+};
+
+/**
+ * GET /api/organizer/hubs/:hubId/vendor-booths/fee-charges
+ * Hub owner only. Booth-fee (rent) billing history across every booth in this hub --
+ * lets a hub owner (e.g. Maple Lake Mall) see whether a vendor's (e.g. artifactmi's)
+ * rent actually got collected, distinct from the mostly-vestigial settlement/payout
+ * system (ADR-090 Phase 3 rescoping -- see vendorBoothSettlementController.ts module
+ * header). Registered BEFORE the GET .../vendor-booths/:boothId route in routes/
+ * vendorBooth.ts -- same route-shape collision class as the my-booths/:boothToken
+ * lesson documented at the top of that file (S1091): "fee-charges" is the same
+ * segment shape as ":boothId" and would otherwise be swallowed by getVendorBooth.
+ */
+export const listHubVendorBoothFeeCharges = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) return res.status(401).json({ error: 'Authentication required' });
+    const { hubId } = req.params;
+
+    const result = await getOrganizerWorkspace(req.user.id);
+    if (!result) return res.status(404).json({ error: 'Organizer profile not found' });
+    const { organizer } = result;
+
+    const hub = await prisma.saleHub.findFirst({ where: { id: hubId, organizerId: organizer.id } });
+    if (!hub) return res.status(404).json({ error: 'Hub not found' });
+
+    const charges = await prisma.vendorBoothFeeCharge.findMany({
+      where: { hubId },
+      include: { vendorBooth: { select: { boothNumber: true, vendorName: true } } },
+      orderBy: { periodStart: 'desc' },
+    });
+
+    return res.status(200).json({
+      charges: charges.map((c) => ({
+        id: c.id,
+        boothNumber: c.vendorBooth.boothNumber,
+        vendorName: c.vendorBooth.vendorName,
+        periodStart: c.periodStart,
+        periodEnd: c.periodEnd,
+        amountCents: c.amountCents,
+        status: c.status,
+        failureReason: c.failureReason,
+        createdAt: c.createdAt,
+      })),
+    });
+  } catch (error) {
+    console.error('[listHubVendorBoothFeeCharges] Error:', error);
+    return res.status(500).json({ error: 'Failed to list hub booth fee charges' });
   }
 };

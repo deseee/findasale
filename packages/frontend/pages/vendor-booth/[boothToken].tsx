@@ -10,9 +10,22 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
+import { loadStripe, Stripe } from '@stripe/stripe-js';
+import { Elements } from '@stripe/react-stripe-js';
 import api from '../../lib/api';
 import { useAuth } from '../../components/AuthContext';
 import { useToast } from '../../components/ToastContext';
+import VendorBoothFeeBillingSetup from '../../components/VendorBoothFeeBillingSetup';
+
+// Module-level singleton, same pattern as CheckoutModal.tsx / pos.tsx -- avoids
+// re-creating the Stripe.js instance on every render.
+let stripePromise: Promise<Stripe | null> | null = null;
+const getStripePromise = () => {
+  if (!stripePromise) {
+    stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
+  }
+  return stripePromise;
+};
 
 interface PublicBoothSummary {
   boothNumber: string;
@@ -36,6 +49,22 @@ interface PayoutInfo {
   }>;
 }
 
+interface FeeBillingStatus {
+  configured: boolean;
+  brand?: string;
+  last4?: string;
+}
+
+interface FeeCharge {
+  id: string;
+  periodStart: string;
+  periodEnd: string;
+  amountCents: number;
+  status: string;
+  failureReason: string | null;
+  createdAt: string;
+}
+
 const VendorBoothTokenPage: React.FC = () => {
   const router = useRouter();
   const { boothToken } = router.query;
@@ -44,6 +73,8 @@ const VendorBoothTokenPage: React.FC = () => {
 
   const [summary, setSummary] = useState<PublicBoothSummary | null>(null);
   const [payoutInfo, setPayoutInfo] = useState<PayoutInfo | null>(null);
+  const [feeBillingStatus, setFeeBillingStatus] = useState<FeeBillingStatus | null>(null);
+  const [feeCharges, setFeeCharges] = useState<FeeCharge[]>([]);
   const [myBoothId, setMyBoothId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -85,6 +116,12 @@ const VendorBoothTokenPage: React.FC = () => {
           setMyBoothId(match.id);
           const payoutResponse = await api.get(`/vendor-booth/${match.id}/payouts`);
           setPayoutInfo(payoutResponse.data);
+          const [feeBillingResponse, feeChargesResponse] = await Promise.all([
+            api.get(`/vendor-booth/${match.id}/fee-billing/status`),
+            api.get(`/vendor-booth/${match.id}/fee-charges`),
+          ]);
+          setFeeBillingStatus(feeBillingResponse.data);
+          setFeeCharges(feeChargesResponse.data?.charges || []);
         }
       } catch (error: any) {
         console.error('Error loading vendor booth details:', error);
@@ -236,6 +273,57 @@ const VendorBoothTokenPage: React.FC = () => {
                         </ul>
                       )}
                     </div>
+
+                    {/* Booth-fee (rent) auto-pay -- only relevant when this booth actually
+                        has a flat fee. VendorBooth.vendorPaymentMethodId is what
+                        vendorBoothFeeBillingCron.ts checks before it can charge rent --
+                        until it's set, real bookings sit at PENDING_PAYMENT_METHOD forever. */}
+                    {Number(payoutInfo.boothFee) > 0 && (
+                      <div className="mb-6 p-4 bg-warm-50 dark:bg-gray-700 rounded-lg">
+                        <h2 className="text-sm font-bold text-warm-700 dark:text-warm-300 uppercase mb-3">
+                          Booth Rent Auto-Pay
+                        </h2>
+                        {feeBillingStatus?.configured ? (
+                          <p className="text-sm text-green-700 dark:text-green-400">
+                            ✓ Auto-pay active
+                            {feeBillingStatus.brand && feeBillingStatus.last4
+                              ? ` — ${feeBillingStatus.brand} ending in ${feeBillingStatus.last4}`
+                              : ''}
+                          </p>
+                        ) : myBoothId ? (
+                          <Elements stripe={getStripePromise()}>
+                            <VendorBoothFeeBillingSetup
+                              vendorBoothId={myBoothId}
+                              boothFee={payoutInfo.boothFee}
+                              onConfigured={() => {
+                                showToast('Booth rent auto-pay is set up', 'success');
+                                setFeeBillingStatus({ configured: true });
+                              }}
+                            />
+                          </Elements>
+                        ) : null}
+
+                        {feeCharges.length > 0 && (
+                          <div className="mt-4 pt-4 border-t border-warm-200 dark:border-gray-600">
+                            <h3 className="text-xs font-bold text-warm-600 dark:text-warm-400 uppercase mb-2">
+                              Charge History
+                            </h3>
+                            <ul className="divide-y divide-warm-200 dark:divide-gray-600">
+                              {feeCharges.map((c) => (
+                                <li key={c.id} className="py-2 flex justify-between text-sm">
+                                  <span className="text-warm-700 dark:text-warm-300">
+                                    {new Date(c.periodStart).toLocaleDateString()} · {c.status}
+                                  </span>
+                                  <span className="font-bold text-warm-900 dark:text-white">
+                                    ${(c.amountCents / 100).toFixed(2)}
+                                  </span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </>
                 ) : (
                   <p className="text-sm text-warm-500 dark:text-warm-400 mb-4">Loading your booth details...</p>
