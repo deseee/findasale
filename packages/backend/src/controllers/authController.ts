@@ -857,6 +857,16 @@ export const login = async (req: Request, res: Response) => {
       return res.status(400).json({ message: 'Account not set up for password login. Please contact support.' });
     }
 
+    // P0 Fix: reject login for suspended/soft-deleted accounts.
+    // Previously, suspend/delete only bumped tokenVersion (invalidating an EXISTING
+    // session via authenticate's DB re-check) but never blocked re-login, so a
+    // suspended/deleted user could just log back in and mint a fresh valid token.
+    // Generic message, no deleted-vs-suspended distinction, matching the #106
+    // account-enumeration-prevention pattern used above in this same function.
+    if (user.deletedAt || user.suspendedAt) {
+      return res.status(403).json({ message: 'This account is not available. Contact support@finda.sale.' });
+    }
+
     // Load organizer if user is an organizer (for subscriptionTier in JWT)
     let organizerProfile: Awaited<ReturnType<typeof prisma.organizer.findUnique>> = null;
     let subscriptionLapsed = false;

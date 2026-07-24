@@ -11,6 +11,7 @@ import {
   suspendUser,
   unsuspendUser,
   deleteUser,
+  purgeUser,
   restoreUser,
   getSales,
   deleteSale,
@@ -79,6 +80,7 @@ router.patch('/users/:userId/role', updateUserRole);
 router.patch('/users/:userId/suspend', suspendUser);
 router.patch('/users/:userId/unsuspend', unsuspendUser);
 router.delete('/users/:userId', deleteUser);
+router.delete('/users/:userId/purge', purgeUser);
 router.post('/users/:userId/message', sendDirectMessageToUser);
 router.patch('/users/:userId/restore', restoreUser);
 router.get('/sales', getSales);

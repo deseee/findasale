@@ -546,7 +546,96 @@ export const unsuspendUser = async (req: AuthRequest, res: Response) => {
   }
 };
 
-// DELETE /api/admin/users/:userId — soft-delete a user account
+// DELETE /api/admin/users/:userId/purge -- PERMANENT hard delete for already-soft-deleted
+// test/junk accounts. Requires deletedAt already set (purge is a second step, never a
+// first action) and requires the caller to echo the target's real email back (confirmEmail)
+// as a fat-finger guard, since this is irreversible. Blocks unconditionally (no force
+// override) if the target has any Sale or AffiliateLink rows -- those are real
+// transactional/payment data and must never be silently cascade-deleted by an admin tool.
+// Relies entirely on the existing onDelete: Cascade/SetNull rules already in schema.prisma
+// (Organizer.user, OrganizerWorkspace.owner, WorkspaceMember.organizer/.user, VendorBooth.user,
+// etc.) -- does not manually delete child rows.
+export const purgeUser = async (req: AuthRequest, res: Response) => {
+  try {
+    const { userId } = req.params;
+    const { confirmEmail } = req.body;
+
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    if (!confirmEmail || confirmEmail.trim().toLowerCase() !== user.email.trim().toLowerCase()) {
+      return res.status(400).json({ message: 'confirmEmail does not match target account' });
+    }
+
+    if (!user.deletedAt) {
+      return res.status(400).json({ message: 'Account must be soft-deleted before it can be purged' });
+    }
+
+    const organizer = await prisma.organizer.findUnique({ where: { userId: user.id } });
+
+    if (organizer) {
+      const saleCount = await prisma.sale.count({ where: { organizerId: organizer.id } });
+      if (saleCount > 0) {
+        return res.status(409).json({
+          message: `Cannot purge: ${saleCount} Sale row(s) reference this organizer`,
+          blockedBy: 'Sale',
+        });
+      }
+    }
+
+    const affiliateLinkCount = await prisma.affiliateLink.count({
+      where: {
+        OR: [
+          { userId: user.id },
+          ...(organizer ? [{ sale: { organizerId: organizer.id } }] : []),
+        ],
+      },
+    });
+    if (affiliateLinkCount > 0) {
+      return res.status(409).json({
+        message: `Cannot purge: ${affiliateLinkCount} AffiliateLink row(s) reference this account`,
+        blockedBy: 'AffiliateLink',
+      });
+    }
+
+    let workspaceCount = 0;
+    let vendorBoothCount = 0;
+    if (organizer) {
+      workspaceCount = await prisma.organizerWorkspace.count({ where: { ownerId: organizer.id } });
+    }
+    vendorBoothCount = await prisma.vendorBooth.count({ where: { userId: user.id } });
+
+    const cascaded = {
+      organizer: organizer ? 1 : 0,
+      workspaces: workspaceCount,
+      vendorBooths: vendorBoothCount,
+    };
+
+    console.warn('[ADMIN PURGE]', {
+      actorAdminId: req.user?.id,
+      targetUserId: user.id,
+      targetEmail: user.email,
+      cascaded,
+      at: new Date().toISOString(),
+    });
+
+    await prisma.user.delete({ where: { id: user.id } });
+
+    res.json({
+      success: true,
+      purgedUserId: user.id,
+      purgedEmail: user.email,
+      cascaded,
+    });
+  } catch (error) {
+    console.error('Error purging user:', error);
+    res.status(500).json({ message: 'Failed to purge user' });
+  }
+};
+
+// DELETE /api/admin/users/:userId -- soft-delete a user account
 export const deleteUser = async (req: AuthRequest, res: Response) => {
   try {
     const { userId } = req.params;
