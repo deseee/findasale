@@ -2863,6 +2863,7 @@ export const publishItemOffer = async (req: AuthRequest, res: Response) => {
         isbn: true,
         draftStatus: true,
         title: true,
+        description: true,
         category: true,
         brand: true,
         mpn: true,
