@@ -1803,6 +1803,7 @@ export function validateItemForEbayPublish(item: {
 export async function resolvePublishPackageWeight(item: {
   id: string;
   title?: string | null;
+  description?: string | null;
   category?: string | null;
   ebayCategoryId?: string | null;
   ebayShippingOverride?: string | null;
@@ -1846,6 +1847,7 @@ export async function resolvePublishPackageWeight(item: {
       const est = await estimatePackageProfile({
         id: item.id,
         title: item.title,
+        description: item.description,
         category: item.category,
         ebayCategoryId: item.ebayCategoryId,
         packageConfirmedByOrganizer: item.packageConfirmedByOrganizer,
@@ -2133,6 +2135,7 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
         const autoPkg = await resolvePublishPackageWeight({
           id: item.id,
           title: item.title,
+          description: item.description,
           category: item.category,
           ebayCategoryId: item.ebayCategoryId,
           ebayShippingOverride: item.ebayShippingOverride,
@@ -2968,6 +2971,7 @@ export const publishItemOffer = async (req: AuthRequest, res: Response) => {
     const autoPkg = await resolvePublishPackageWeight({
       id: item.id,
       title: item.title,
+      description: item.description,
       category: item.category,
       ebayCategoryId: item.ebayCategoryId,
       ebayShippingOverride: item.ebayShippingOverride,
@@ -5428,6 +5432,7 @@ export const getUnsoldItems = async (req: AuthRequest, res: Response) => {
           select: {
             id: true,
             title: true,
+            description: true,
             price: true,
             photoUrls: true,
             category: true,
@@ -5500,6 +5505,7 @@ export const getUnsoldItems = async (req: AuthRequest, res: Response) => {
             const est = await estimatePackageProfile({
               id: item.id,
               title: item.title,
+              description: item.description,
               category: item.category,
               ebayCategoryId: item.ebayCategoryId,
               packageConfirmedByOrganizer: item.packageConfirmedByOrganizer,

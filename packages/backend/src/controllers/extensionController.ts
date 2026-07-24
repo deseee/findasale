@@ -112,6 +112,7 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
       const resolved = await resolvePublishPackageWeight({
         id: it.id,
         title: it.title,
+        description: it.description,
         category: it.category,
         ebayCategoryId: it.ebayCategoryId,
         ebayShippingOverride: it.ebayShippingOverride,

@@ -15,6 +15,7 @@ import { prisma } from '../lib/prisma';
 export interface PackageEstimateItem {
   id?: string;
   title?: string | null;
+  description?: string | null;
   category?: string | null;
   ebayCategoryId?: string | null;
   packageConfirmedByOrganizer?: boolean | null;
@@ -50,6 +51,30 @@ const FALLBACK: PackageEstimate = {
   confidence: 0.25,
   source: 'SEED',
 };
+
+/**
+ * ADR-092 (2026-07-24): extract an explicit weight statement from free text (item
+ * title/description), e.g. "44 lbs total weight" or "net weight 12oz". Returns ounces,
+ * or null if no clear, unambiguous weight statement is found. Conservative by design --
+ * a missed statement just means no plausibility check runs (same as today); a false
+ * match would be worse (could wrongly veto a correct keyword estimate), so this only
+ * matches clear numeric + unit patterns and makes no attempt to disambiguate things
+ * like "16oz mug" (container capacity, not necessarily the shipping weight).
+ */
+function extractStatedWeightOz(text: string): number | null {
+  if (!text) return null;
+  const lbMatch = text.match(/(\d+(?:\.\d+)?)\s*(?:lbs?|pounds?)\b/i);
+  if (lbMatch) {
+    const lbs = parseFloat(lbMatch[1]);
+    if (!isNaN(lbs) && lbs > 0) return lbs * 16;
+  }
+  const ozMatch = text.match(/(\d+(?:\.\d+)?)\s*(?:oz|ounces?)\b/i);
+  if (ozMatch) {
+    const oz = parseFloat(ozMatch[1]);
+    if (!isNaN(oz) && oz > 0) return oz;
+  }
+  return null;
+}
 
 /**
  * Estimate a package profile for an item.
@@ -98,7 +123,21 @@ export async function estimatePackageProfile(item: PackageEstimateItem): Promise
         orderBy: { confidence: 'desc' },
       });
       const hit = keywordProfiles.find((p) => p.keyword && title.includes(p.keyword.toLowerCase()));
-      if (hit) return toEstimate(hit, 'KEYWORD');
+      if (hit) {
+        // ADR-092 (2026-07-24): a generic keyword profile can't tell a single small
+        // item from a bulk lot -- cross-check against any explicit weight the organizer
+        // already stated in their own title/description text (e.g. "44 lbs total
+        // weight"). More than 2x off in either direction means this keyword match is
+        // implausible for this specific item -- don't trust it, fall through to the
+        // next tier instead (exactly as if no keyword had matched at all).
+        const statedOz = extractStatedWeightOz(`${item.title} ${item.description || ''}`);
+        if (statedOz == null || hit.weightOz <= 0 || Math.abs(Math.log2(statedOz / hit.weightOz)) <= 1) {
+          return toEstimate(hit, 'KEYWORD');
+        }
+        console.warn(
+          `[PackageEstimate] KEYWORD match implausible for "${item.title}" -- stated=${statedOz}oz vs keyword=${hit.weightOz}oz, falling through to next tier`
+        );
+      }
     }
 
     // 3. FindA.Sale category match — ONLY true category defaults (keyword IS NULL).
