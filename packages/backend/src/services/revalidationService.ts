@@ -84,3 +84,55 @@ export async function triggerSaleAndCityRevalidation(
   ];
   await triggerRevalidation(paths);
 }
+
+/**
+ * ADR (2026-07-23): Debounced ISR revalidation for per-field organizer
+ * autosave. Vercel's ISR Writes billing metric was running 2-4x over the
+ * sustainable free-tier budget; the dominant remaining cause was updateSale
+ * firing an immediate, unconditional ISR write on every successful save —
+ * so an autosave-per-blur UI pattern could trigger N writes for N rapid
+ * consecutive edits to the same sale within a few seconds, when 1 write
+ * would suffice. This coalesces rapid consecutive saves to the SAME saleId
+ * into a single eventual triggerSaleAndCityRevalidation call, debounced by
+ * DEBOUNCE_MS: each call for a saleId resets the timer (true debounce, not
+ * throttle), so continuous edits keep deferring until the sale goes quiet.
+ *
+ * In-memory only — safe because the backend runs as a single persistent
+ * Node.js process on Railway (not serverless), so this Map survives across
+ * requests within that process for the life of the debounce window.
+ *
+ * Fire-and-forget / never throws, matching the rest of this file's style.
+ */
+
+const DEBOUNCE_MS = 8000;
+
+type PendingRevalidation = {
+  timer: ReturnType<typeof setTimeout>;
+  citySlugs: Set<string>;
+};
+
+const pendingRevalidations = new Map<string, PendingRevalidation>();
+
+export function debouncedTriggerSaleAndCityRevalidation(saleId: string, citySlug: string | null): void {
+  const existing = pendingRevalidations.get(saleId);
+
+  if (existing) {
+    if (citySlug) existing.citySlugs.add(citySlug);
+    clearTimeout(existing.timer);
+    existing.timer = setTimeout(() => flushPendingRevalidation(saleId), DEBOUNCE_MS);
+    return;
+  }
+
+  const citySlugs = new Set<string>();
+  if (citySlug) citySlugs.add(citySlug);
+
+  const timer = setTimeout(() => flushPendingRevalidation(saleId), DEBOUNCE_MS);
+  pendingRevalidations.set(saleId, { timer, citySlugs });
+}
+
+function flushPendingRevalidation(saleId: string): void {
+  const pending = pendingRevalidations.get(saleId);
+  if (!pending) return;
+  pendingRevalidations.delete(saleId);
+  triggerSaleAndCityRevalidation([saleId], Array.from(pending.citySlugs)).catch(() => {});
+}

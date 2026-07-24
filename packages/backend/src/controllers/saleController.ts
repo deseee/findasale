@@ -16,7 +16,7 @@ import { generateSaleDescription, isAnthropicAvailable } from '../services/cloud
 import { PUBLIC_ITEM_FILTER } from '../helpers/itemQueries'; // Phase 1B: Rapidfire Mode public item filtering
 import { canRemoveWatermark } from '../utils/watermarkPolicy'; // #27b: iCal watermark footer
 import { invalidateCommandCenterCache } from '../services/commandCenterService'; // P2-3: Cache invalidation
-import { triggerSaleAndCityRevalidation, citySlugFromCityState } from '../services/revalidationService'; // ADR 2026-07-11: on-demand ISR revalidation
+import { triggerSaleAndCityRevalidation, citySlugFromCityState, debouncedTriggerSaleAndCityRevalidation } from '../services/revalidationService'; // ADR 2026-07-11: on-demand ISR revalidation
 import { notifyNearbyFavorites } from '../services/rippleService'; // Phase 5: #51 Sale Ripples
 import { getIO } from '../lib/socket'; // V1: Socket.io instance
 import { checkAlertsForNewSale } from '../services/wishlistAlertService'; // Feature #32: Wishlist Alerts
@@ -792,9 +792,12 @@ export const updateSale = async (req: AuthRequest, res: Response) => {
 
     // ADR 2026-07-11: on-demand ISR revalidation — only PUBLISHED sales are on
     // /sales/[id] or /city/[slug] today, so a DRAFT edit has nothing to revalidate.
+    // ADR 2026-07-23: debounced (not immediate) here specifically — autosave-per-blur
+    // can fire this on every field edit, so we coalesce rapid consecutive saves to
+    // the same sale into a single ISR write (see revalidationService.ts).
     if (sale.status === 'PUBLISHED') {
       const citySlug = citySlugFromCityState(sale.city, sale.state);
-      triggerSaleAndCityRevalidation([sale.id], citySlug ? [citySlug] : []).catch(() => {});
+      debouncedTriggerSaleAndCityRevalidation(sale.id, citySlug);
     }
 
     res.json(convertDecimalsToNumbers(sale));

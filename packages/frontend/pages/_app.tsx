@@ -8,13 +8,14 @@ import '../styles/globals.css';
 import 'leaflet/dist/leaflet.css';
 import type { AppProps } from 'next/app';
 import dynamic from 'next/dynamic';
-// SSR-skip these — @vercel/analytics 1.6.1 ESM build does `import { useEffect } from "react"`,
+// SSR-skip — @vercel/speed-insights ESM build does `import { useEffect } from "react"`,
 // which fails Node's strict ESM loader against react@18 CJS and 500s every SSR page.
-// ssr:false defers them to the browser, where React is loaded as a real module.
-const Analytics = dynamic(
-  () => import('@vercel/analytics/react').then((m) => m.Analytics),
-  { ssr: false }
-);
+// ssr:false defers it to the browser, where React is loaded as a real module.
+// NOTE (2026-07-23): <Analytics/> from @vercel/analytics was removed here — Vercel Web
+// Analytics is a paid Hobby add-on that isn't enabled on this project (confirmed via
+// 404 from the Analytics API), so its beacon to /_vercel/insights/view was pure wasted
+// Edge Request traffic (~376 req/day, see Firewall Traffic "Top Request Paths").
+// Speed Insights is a separate product/beacon — left in place, not confirmed unpaid.
 const SpeedInsights = dynamic(
   () => import('@vercel/speed-insights/next').then((m) => m.SpeedInsights),
   { ssr: false }
@@ -499,8 +500,7 @@ function MyApp({ Component, pageProps: { session, ...pageProps } }: AppProps) {
               <CookieConsentBanner />
               {/* GA4 — consent-gated, env-var-controlled */}
               <GoogleAnalytics />
-              {/* Vercel Analytics + Speed Insights */}
-              <Analytics />
+              {/* Vercel Speed Insights only — <Analytics/> removed, Web Analytics isn't a paid feature here */}
               <SpeedInsights />
               </QueryClientProvider>
             </LowBandwidthProvider>
