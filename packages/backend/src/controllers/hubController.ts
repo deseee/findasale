@@ -360,28 +360,21 @@ export const listMyHubs = async (req: AuthRequest, res: Response) => {
 };
 
 // GET /api/organizer/hubs/:hubId
-// Auth + ownership required: fetch one of my own hubs with full detail (used by the
-// hub management page -- previously stubbed out with no real fetch at all, S-hubs-followup).
+// Auth + ownership required: full detail for one of the organizer's own hubs.
+// Distinct from the PUBLIC by-slug GET /api/hubs/:slug above -- that endpoint
+// leaks hub data to non-owners and doesn't accept a hubId, which is all the
+// authenticated management page (manage.tsx) has from its route.
 export const getMyHub = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user?.organizerProfile?.id) {
       return res.status(401).json({ message: 'Not authenticated as organizer' });
     }
-
     const { hubId } = req.params;
-
-    const hub = await prisma.saleHub.findUnique({
-      where: { id: hubId },
-    });
-
-    if (!hub) {
-      return res.status(404).json({ message: 'Hub not found' });
-    }
-
+    const hub = await prisma.saleHub.findUnique({ where: { id: hubId } });
+    if (!hub) return res.status(404).json({ message: 'Hub not found' });
     if (hub.organizerId !== req.user.organizerProfile?.id) {
       return res.status(403).json({ message: 'Unauthorized' });
     }
-
     res.json({
       hub: {
         id: hub.id,
