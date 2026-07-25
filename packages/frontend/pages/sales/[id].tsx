@@ -2426,6 +2426,17 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
                   </button>
                 </div>
               )}
+
+              {/* Organizer message -- desktop rail parity with mobile card (regression fix, #205) */}
+              {!isOrganizer && (
+                <div className="mt-3 pt-3 border-t border-black/8 dark:border-white/8">
+                  {user ? (
+                    <button onClick={() => setMessageModalOpen(true)} className="w-full text-center text-xs px-3 py-1.5 rounded-lg bg-blue-600 dark:bg-blue-700 hover:bg-blue-700 text-white font-medium transition-colors">Message Organizer</button>
+                  ) : (
+                    <Link href="/login" className="block w-full text-center text-xs px-3 py-1.5 rounded-lg bg-blue-600 dark:bg-blue-700 hover:bg-blue-700 text-white font-medium transition-colors">Sign in to Message</Link>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Holds & shipping info */}

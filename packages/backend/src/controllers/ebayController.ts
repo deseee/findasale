@@ -1792,9 +1792,12 @@ export function validateItemForEbayPublish(item: {
  * LOCAL_PICKUP_ONLY) that has no confirmed/measured package weight, resolve one
  * automatically BEFORE the offer is built so the listing always goes out with real
  * shipping instead of a soft warning + weightless listing (S1130 bug):
- *   a. use the AI estimate (aiPackageWeightOz + aiPackageDimsJson) when present, else
- *   b. JIT-invoke estimatePackageProfile (category/keyword/AI/seed cascade — always
- *      returns a usable weight).
+ *   a. JIT-invoke estimatePackageProfile first (category/keyword/AI/seed cascade —
+ *      curated PackageProfile data beats an unmeasured single-photo AI guess, mirroring
+ *      the ADR-092 plausibility guard and the FB extension's AI distrust decision
+ *      (commit b0af249a); always returns a usable weight), else
+ *   b. fall back to the raw AI estimate (aiPackageWeightOz + aiPackageDimsJson) only
+ *      when the cascade itself failed to produce anything usable (should be rare).
  * Resolved values are persisted back to the Item (reused on future pushes/resyncs) and
  * returned. Returns null when nothing needs resolving (already has a weight, or
  * LOCAL_PICKUP_ONLY) OR — should not happen — when no usable weight could be produced,
@@ -1834,42 +1837,51 @@ export async function resolvePublishPackageWeight(item: {
   let packageType: string | null = item.packageType ?? null;
   let source = 'AI';
 
-  // a. Direct AI estimate wins first (aiPackageWeightOz + optional dims).
-  if (item.aiPackageWeightOz != null && Number(item.aiPackageWeightOz) > 0) {
+  // a. JIT full estimate first — category/keyword/AI/seed cascade. Curated PackageProfile
+  //    data (CATEGORY/KEYWORD, with the ADR-092 plausibility guard) is preferred over an
+  //    unmeasured single-photo AI guess whenever both exist -- mirrors the FB extension's
+  //    decision to never trust an AI-only weight (commit b0af249a). Always returns a usable
+  //    value (falls through to its own gated AI tier, then a SEED default).
+  try {
+    const est = await estimatePackageProfile({
+      id: item.id,
+      title: item.title,
+      description: item.description,
+      category: item.category,
+      ebayCategoryId: item.ebayCategoryId,
+      packageConfirmedByOrganizer: item.packageConfirmedByOrganizer,
+      packageWeightOz: item.packageWeightOz,
+      packageLengthIn: item.packageLengthIn != null ? Number(item.packageLengthIn) : null,
+      packageWidthIn: item.packageWidthIn != null ? Number(item.packageWidthIn) : null,
+      packageHeightIn: item.packageHeightIn != null ? Number(item.packageHeightIn) : null,
+      packageType: item.packageType,
+      aiEstimatedWeightOz: item.aiPackageWeightOz ?? null,
+      aiEstimatedDimensions:
+        (item.aiPackageDimsJson as { length: number; width: number; height: number } | null) ?? null,
+      aiPackageConfidence: item.aiPackageConfidence != null ? Number(item.aiPackageConfidence) : null,
+    });
+    if (est && est.weightOz > 0) {
+      weightOz = Math.round(est.weightOz);
+      dims = est.dims;
+      packageType = est.packageType || packageType;
+      source = est.source;
+    }
+  } catch (e: any) {
+    console.warn('[eBay AutoWeight] estimatePackageProfile failed for item', item.id, e?.message || e);
+  }
+
+  // b. Fallback: raw AI estimate (aiPackageWeightOz + optional dims) only when the curated
+  //    cascade above didn't produce a usable weight (e.g. estimatePackageProfile itself
+  //    threw) -- should be rare, since the cascade always returns at least its own SEED
+  //    default. This tier no longer runs FIRST -- see ADR (2026-07-25): an unmeasured
+  //    single-photo AI guess must not pre-empt curated PackageProfile data.
+  if ((weightOz == null || weightOz <= 0) && item.aiPackageWeightOz != null && Number(item.aiPackageWeightOz) > 0) {
     weightOz = Math.round(Number(item.aiPackageWeightOz));
     const d = item.aiPackageDimsJson as { length?: number; width?: number; height?: number } | null;
     if (d && d.length != null && d.width != null && d.height != null) {
       dims = { length: Number(d.length), width: Number(d.width), height: Number(d.height) };
     }
-  } else {
-    // b. JIT full estimate — category/keyword/AI/seed cascade always returns a value.
-    try {
-      const est = await estimatePackageProfile({
-        id: item.id,
-        title: item.title,
-        description: item.description,
-        category: item.category,
-        ebayCategoryId: item.ebayCategoryId,
-        packageConfirmedByOrganizer: item.packageConfirmedByOrganizer,
-        packageWeightOz: item.packageWeightOz,
-        packageLengthIn: item.packageLengthIn != null ? Number(item.packageLengthIn) : null,
-        packageWidthIn: item.packageWidthIn != null ? Number(item.packageWidthIn) : null,
-        packageHeightIn: item.packageHeightIn != null ? Number(item.packageHeightIn) : null,
-        packageType: item.packageType,
-        aiEstimatedWeightOz: item.aiPackageWeightOz ?? null,
-        aiEstimatedDimensions:
-          (item.aiPackageDimsJson as { length: number; width: number; height: number } | null) ?? null,
-        aiPackageConfidence: item.aiPackageConfidence != null ? Number(item.aiPackageConfidence) : null,
-      });
-      if (est && est.weightOz > 0) {
-        weightOz = Math.round(est.weightOz);
-        dims = est.dims;
-        packageType = est.packageType || packageType;
-        source = est.source;
-      }
-    } catch (e: any) {
-      console.warn('[eBay AutoWeight] estimatePackageProfile failed for item', item.id, e?.message || e);
-    }
+    source = 'AI';
   }
 
   if (weightOz == null || weightOz <= 0) return null;

@@ -115,7 +115,8 @@ function row(it) {
   d.innerHTML = img +
     '<div class="meta"><div class="t">' + esc(it.title) + '</div><div class="p">$' + (it.price != null ? Number(it.price).toFixed(2) : '—') +
     ' · ' + esc(it.condition || '') + '</div></div>' +
-    (it.marketplaceListed ? '<span class="badge">LISTED</span>' : '<input type="checkbox" class="cb">');
+    (it.marketplaceListed ? '<span class="badge">LISTED</span>' : '') +
+    '<input type="checkbox" class="cb">';
   const cb = d.querySelector('.cb');
   if (cb) {
     cb.checked = selected.has(it.id);

@@ -29,6 +29,16 @@ export const reconcileStrandedPosSales = async (): Promise<void> => {
 
   const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
 
+  // Stale-row guard (added 2026-07-25): ACTIVE POSPaymentLink rows older than this cutoff
+  // predate FindA.Sale's live Stripe Connect integration and hold payment-link IDs from the
+  // early sandbox/test era that Stripe will never recognize. Reconciling them therefore always
+  // fails and just floods logs with STRANDED-UNRECOVERED noise for money that was never really
+  // stranded. Any ACTIVE row this old is treated as permanently dead and skipped WITHOUT calling
+  // Stripe, logged as a distinct low-severity STALE-SKIPPED line (not STRANDED-UNRECOVERED) so a
+  // genuinely new stranded sale is never silently swallowed by this guard -- only ancient rows are.
+  const STALE_ROW_CUTOFF_DAYS = 7;
+  const staleRowCutoff = new Date(Date.now() - STALE_ROW_CUTOFF_DAYS * 24 * 60 * 60 * 1000);
+
   // NOTE (S1157, FINDASALE-NODEJS-67): the organizer relation used to be fetched here via
   // `include`. Prisma 5 (no relationJoins preview feature) resolves an `include` as a
   // second, separate SQL query -- if the organizer/sale behind a candidate row is deleted
@@ -46,6 +56,11 @@ export const reconcileStrandedPosSales = async (): Promise<void> => {
   console.log(`[pos-reconcile] Checking ${candidates.length} ACTIVE POS payment link(s) older than 10 min for stranded sales.`);
 
   for (const link of candidates) {
+    if (link.createdAt < staleRowCutoff) {
+      console.log(`[pos-reconcile] STALE-SKIPPED link=${link.id} createdAt=${link.createdAt.toISOString()} -- older than ${STALE_ROW_CUTOFF_DAYS}d cutoff, not re-checked against Stripe (see stale-row guard note above).`);
+      continue;
+    }
+
     try {
       const sessions = await stripe().checkout.sessions.list({
         payment_link: link.stripePaymentLinkId,
