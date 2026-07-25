@@ -145,9 +145,13 @@ const NotificationBell = () => {
         )}
       </button>
 
-      {/* Dropdown Panel */}
+      {/* Dropdown Panel — fixed + viewport-clamped below lg (matches the lg:hidden mobile
+          icon row in Layout.tsx where this bell is NOT the rightmost icon, so anchoring
+          via `absolute right-0` off the bell's own ~40px wrapper pushed the 320px panel
+          off-screen on narrow viewports, e.g. Pixel 6a 412px). At lg+ the bell sits in the
+          spacious desktop right-nav, so the original absolute/right-0/w-80 behavior is kept. */}
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-80 rounded-lg border border-warm-300 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-lg z-50">
+        <div className="fixed left-2 right-2 top-14 w-auto lg:absolute lg:left-auto lg:right-0 lg:top-auto lg:mt-2 lg:w-80 rounded-lg border border-warm-300 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-lg z-50">
           <div className="border-b border-warm-200 dark:border-gray-700 px-4 py-3 flex justify-between items-center">
             <h3 className="font-semibold text-warm-900 dark:text-gray-100">Notifications</h3>
             {unreadCount > 0 && (
