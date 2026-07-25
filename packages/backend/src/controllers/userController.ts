@@ -873,6 +873,54 @@ export const deleteAccount = async (req: AuthRequest, res: Response) => {
       }
     }
 
+    // Guard: several models point at User/Organizer with onDelete: Restrict by
+    // deliberate design (see schema.prisma migration 20260604200000_schema_fk_cascade_restrict —
+    // "RESTRICT = safe default" so real transactional data is never silently deleted).
+    // A bare prisma.user.delete() below would otherwise throw a raw Postgres FK
+    // violation on any of these and surface as an unhelpful 500. Check first and
+    // fail gracefully with a clear, actionable message instead.
+    const [
+      saleCount,
+      saleHubCount,
+      treasureTrailCount,
+      affiliateLinkCount,
+      disputeCount,
+      appraisalAIRequestCount,
+    ] = await Promise.all([
+      req.user.organizer
+        ? prisma.sale.count({ where: { organizerId: req.user.organizer.id } })
+        : Promise.resolve(0),
+      req.user.organizer
+        ? prisma.saleHub.count({ where: { organizerId: req.user.organizer.id } })
+        : Promise.resolve(0),
+      req.user.organizer
+        ? prisma.treasureTrail.count({ where: { organizerId: req.user.organizer.id } })
+        : Promise.resolve(0),
+      prisma.affiliateLink.count({ where: { userId: req.user.id } }),
+      prisma.dispute.count({ where: { OR: [{ buyerId: req.user.id }, { sellerId: req.user.id }] } }),
+      prisma.appraisalAIRequest.count({ where: { userId: req.user.id } }),
+    ]);
+
+    const blockers: string[] = [];
+    if (saleCount > 0) blockers.push(`${saleCount} sale${saleCount === 1 ? '' : 's'}`);
+    if (saleHubCount > 0) blockers.push(`${saleHubCount} sale hub${saleHubCount === 1 ? '' : 's'}`);
+    if (treasureTrailCount > 0) blockers.push(`${treasureTrailCount} treasure trail${treasureTrailCount === 1 ? '' : 's'}`);
+    if (affiliateLinkCount > 0) blockers.push(`${affiliateLinkCount} affiliate link${affiliateLinkCount === 1 ? '' : 's'}`);
+    if (disputeCount > 0) blockers.push(`${disputeCount} dispute${disputeCount === 1 ? '' : 's'}`);
+    if (appraisalAIRequestCount > 0) blockers.push(`${appraisalAIRequestCount} appraisal request${appraisalAIRequestCount === 1 ? '' : 's'}`);
+
+    if (blockers.length > 0) {
+      const blockerList =
+        blockers.length === 1
+          ? blockers[0]
+          : blockers.length === 2
+          ? blockers.join(' and ')
+          : `${blockers.slice(0, -1).join(', ')}, and ${blockers[blockers.length - 1]}`;
+      return res.status(400).json({
+        message: `We can't delete your account just yet — you still have ${blockerList} tied to it. Please contact support@finda.sale so we can help transfer or close these out safely, then we'll take care of the rest.`,
+      });
+    }
+
     // Delete user — Prisma cascade rules will handle related records
     await prisma.user.delete({
       where: { id: req.user.id }
