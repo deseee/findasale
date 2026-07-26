@@ -2,7 +2,16 @@ name: Scrape PublicSurplus Government Auction Directory
 
 on:
   schedule:
-    - cron: '0 8 1-7 * 2'  # 1st Tuesday of each month at 8:00 UTC — gov agencies are stable institutions, monthly is sufficient
+    # Fixed 2026-07-26: day-of-month '1-7' + day-of-week '2' were both
+    # restricted, which POSIX/GitHub Actions cron treats as OR'd (fires if
+    # EITHER matches), not AND'd -- month is unrestricted here, so this was
+    # firing every day 1-7 of every month AND every Tuesday of every month,
+    # a union of both -- confirmed via 10 real runs averaging every ~7-9
+    # days (Jun16, Jun23, Jul2, Jul3, Jul4, Jul5, Jul6, Jul7, Jul14, Jul21),
+    # each a real ~3+ hour scrape, instead of the intended 1x/month. Fix:
+    # unrestrict day-of-month here and gate the real "first Tuesday" check
+    # in the step below.
+    - cron: '0 8 * * 2'  # Every Tuesday; step below skips all but the first Tuesday of the month
   workflow_dispatch:
 
 jobs:
@@ -52,7 +61,19 @@ jobs:
               sys.exit(1)
           "
 
+      - name: Check first Tuesday of month
+        id: check_date
+        run: |
+          day=$(date -u +%d)
+          if [ "$day" -gt 7 ]; then
+            echo "Not the first Tuesday of the month (day-of-month=$day) -- skipping."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Run PublicSurplus Scraper
+        if: steps.check_date.outputs.skip != 'true'
         continue-on-error: true
         id: run_scraper
         working-directory: packages/backend

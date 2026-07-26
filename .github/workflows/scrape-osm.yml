@@ -2,7 +2,18 @@ name: Scrape OSM Overpass API
 
 on:
   schedule:
-    - cron: '5 3 1-7 1,4,7,10 1'   # Quarterly — first Monday of Jan/Apr/Jul/Oct at 3:05am UTC
+    # Fixed 2026-07-26: day-of-month '1-7' + day-of-week '1' were both
+    # restricted, which POSIX/GitHub Actions cron treats as OR'd (fires if
+    # EITHER matches), not AND'd -- this was firing every Monday within the
+    # trigger months instead of only the first. Root cause of the ambiguous
+    # cron: commit 7b67eb88 (2026-07-15, unrelated 'Harden Anthropic-balance
+    # failure paths' commit) silently changed this from a correct plain-
+    # weekly '5 3 * * 1' to this broken quarterly-intended expression as an
+    # apparent drive-by edit. It was masked through July (a trigger month,
+    # so it kept firing weekly by coincidence) but would have gone dark for
+    # August+September and resumed in October. Fix: unrestrict day-of-month
+    # here and gate the real "first Monday" check in the step below.
+    - cron: '5 3 * 1,4,7,10 1'   # Every Monday in Jan/Apr/Jul/Oct; step below skips all but the first
   workflow_dispatch:
 
 concurrency:
@@ -60,7 +71,19 @@ jobs:
               sys.exit(1)
           "
 
+      - name: Check first Monday of month
+        id: check_date
+        run: |
+          day=$(date -u +%d)
+          if [ "$day" -gt 7 ]; then
+            echo "Not the first Monday of the month (day-of-month=$day) -- skipping."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Run OSM Overpass scraper batch ${{ matrix.batch_index }}
+        if: steps.check_date.outputs.skip != 'true'
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           SCRAPER_BATCH_INDEX: ${{ matrix.batch_index }}

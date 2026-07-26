@@ -3,7 +3,14 @@ name: Scrape EstateSale.com
 on:
   schedule:
     # Quarterly — first Sunday of March, June, September, December at 6:00 AM UTC
-    - cron: '0 6 1-7 3,6,9,12 0'
+    # Fixed 2026-07-26: day-of-month '1-7' + day-of-week '0' were both
+    # restricted, which POSIX/GitHub Actions cron treats as OR'd (fires if
+    # EITHER matches), not AND'd -- this was firing every Sunday within the
+    # trigger months instead of only the first, then going fully silent in
+    # every other month (confirmed via 3 real runs: 2026-06-14/21/28, none
+    # of which is June's actual first Sunday, 06-07). Fix: unrestrict day-of-
+    # month here and gate the real "first Sunday" check in the step below.
+    - cron: '0 6 * 3,6,9,12 0'   # Every Sunday in Mar/Jun/Sep/Dec; step below skips all but the first
   workflow_dispatch:
 
 jobs:
@@ -33,7 +40,19 @@ jobs:
         env:
           DATABASE_URL: "postgresql://dummy:dummy@localhost:5432/dummy"
 
+      - name: Check first Sunday of month
+        id: check_date
+        run: |
+          day=$(date -u +%d)
+          if [ "$day" -gt 7 ]; then
+            echo "Not the first Sunday of the month (day-of-month=$day) -- skipping."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Run EstateSale.com Scraper
+        if: steps.check_date.outputs.skip != 'true'
         continue-on-error: true
         id: run_scraper
         working-directory: packages/backend
