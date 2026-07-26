@@ -193,7 +193,7 @@
 
   // The lb/oz text inputs inside Package weight's "Enter exact weight" sub-panel (confirmed
   // live 2026-07-18): two plain input[type="text"] elements with no aria-label and only opaque
-  // auto-generated ids (e.g. "_r_9t_") -- distinguished instead by their immediate parent's own
+  // auto-generated ids (e.g. "_r_9t_"), distinguished instead by their immediate parent's own
   // text content, which is exactly "lb" / "oz" (the unit renders as a sibling text node next to
   // the input, not an aria-label on it). Returns {lbInput, ozInput}, either side null if not
   // found -- both are only present once the exact-weight sub-panel is open (see weightExactLink).
