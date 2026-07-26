@@ -18,10 +18,13 @@
  * ```
  *
  * ACCOUNTS CREATED:
- * 1. ***REDACTED-ADMIN-EMAIL*** — Admin + Organizer (Teams tier)
- * 2. ***REDACTED-TEST-ORGANIZER-EMAIL*** — Organizer (Teams tier)
+ * 1. ADMIN_SEED_EMAIL env var — Admin + Organizer (Teams tier)
+ * 2. TEST_ORGANIZER_EMAIL env var — Organizer (Teams tier)
  *
- * PASSWORD (default): FindASale2026! (Patrick changes after first login)
+ * PASSWORD (default): set via ADMIN_SEED_PASSWORD env var (change immediately after first login)
+ *
+ * REQUIRED ENV VARS: ADMIN_SEED_EMAIL, TEST_ORGANIZER_EMAIL, ADMIN_SEED_PASSWORD
+ * (ADMIN_SEED_NAME optional, defaults to 'Admin')
  */
 
 import { PrismaClient } from '@prisma/client';
@@ -31,24 +34,34 @@ const prisma = new PrismaClient();
 
 async function survivorSeed() {
   try {
-    console.log('🌱 Seeding Patrick\'s production accounts...');
+    console.log('🌱 Seeding production accounts...');
 
-    // Default password for both accounts (Patrick changes after login)
-    const defaultPassword = 'FindASale2026!';
+    const adminSeedEmail = process.env.ADMIN_SEED_EMAIL;
+    const testOrganizerEmail = process.env.TEST_ORGANIZER_EMAIL;
+    const adminSeedName = process.env.ADMIN_SEED_NAME || 'Admin';
+    const defaultPassword = process.env.ADMIN_SEED_PASSWORD;
+    if (!adminSeedEmail || !testOrganizerEmail || !defaultPassword) {
+      console.error(
+        '\n❌ REFUSING TO SEED: ADMIN_SEED_EMAIL, TEST_ORGANIZER_EMAIL, and/or ADMIN_SEED_PASSWORD not set.\n' +
+        '   Set all three before running this script — see packages/backend/.env.example.\n'
+      );
+      process.exit(1);
+    }
+    // Default password for both accounts (change immediately after first login)
     const hashedPassword = await bcryptjs.hash(defaultPassword, 10);
 
     // Account 1: Admin Account
     const adminUser = await prisma.user.upsert({
-      where: { email: '***REDACTED-ADMIN-EMAIL***' },
+      where: { email: adminSeedEmail },
       update: {
-        name: 'Admin',
+        name: adminSeedName,
         password: hashedPassword,
         role: 'ADMIN',
         roles: ['USER', 'ORGANIZER', 'ADMIN'],
       },
       create: {
-        email: '***REDACTED-ADMIN-EMAIL***',
-        name: 'Admin',
+        email: adminSeedEmail,
+        name: adminSeedName,
         password: hashedPassword,
         role: 'ADMIN',
         roles: ['USER', 'ORGANIZER', 'ADMIN'],
@@ -73,13 +86,13 @@ async function survivorSeed() {
       },
     });
 
-    console.log(`✅ Admin account: ***REDACTED-ADMIN-EMAIL*** (TEAMS tier)`);
+    console.log(`✅ Admin account: ${adminSeedEmail} (TEAMS tier)`);
     console.log(`   User ID: ${adminUser.id}`);
     console.log(`   Organizer ID: ${adminOrganizer.id}`);
 
     // Account 2: Teams Organizer
     const organizerUser = await prisma.user.upsert({
-      where: { email: '***REDACTED-TEST-ORGANIZER-EMAIL***' },
+      where: { email: testOrganizerEmail },
       update: {
         name: 'Artifact MI',
         password: hashedPassword,
@@ -87,7 +100,7 @@ async function survivorSeed() {
         roles: ['USER', 'ORGANIZER'],
       },
       create: {
-        email: '***REDACTED-TEST-ORGANIZER-EMAIL***',
+        email: testOrganizerEmail,
         name: 'Artifact MI',
         password: hashedPassword,
         role: 'ORGANIZER',
@@ -113,7 +126,7 @@ async function survivorSeed() {
       },
     });
 
-    console.log(`✅ Organizer account: ***REDACTED-TEST-ORGANIZER-EMAIL*** (TEAMS tier)`);
+    console.log(`✅ Organizer account: ${testOrganizerEmail} (TEAMS tier)`);
     console.log(`   User ID: ${organizerUser.id}`);
     console.log(`   Organizer ID: ${organizerAccount.id}`);
 

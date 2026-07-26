@@ -261,7 +261,7 @@ STRIPE
 
 MAILERLITE
   Account ID: 2169788
-  Email: ***REDACTED-ADMIN-EMAIL***
+  Email: $env:ADMIN_SEED_EMAIL
 
 DOMAIN
   Registrar: Spaceship

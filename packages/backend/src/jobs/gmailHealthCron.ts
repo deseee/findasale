@@ -15,7 +15,7 @@ import { cronGuard } from '../utils/cronGuard';
  * All alerts are sent via Resend (bypasses Gmail — safe even when Gmail is broken).
  */
 
-const ALERT_RECIPIENT = process.env.QUOTA_ALERT_EMAIL || '***REDACTED-ADMIN-EMAIL***';
+const ALERT_RECIPIENT = process.env.QUOTA_ALERT_EMAIL;
 const HARD_LIMIT = parseInt(process.env.GMAIL_DAILY_HARD_LIMIT || '1500', 10);
 
 /** Send an out-of-band alert via Resend. */
@@ -23,6 +23,10 @@ async function sendResendAlert(subject: string, html: string): Promise<void> {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
     console.error('[GmailHealthCron] RESEND_API_KEY not set — cannot send alert');
+    return;
+  }
+  if (!ALERT_RECIPIENT) {
+    console.error('[GmailHealthCron] QUOTA_ALERT_EMAIL not set — cannot send alert');
     return;
   }
   try {

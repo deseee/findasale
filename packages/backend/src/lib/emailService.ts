@@ -22,7 +22,7 @@ const HARD_LIMIT = parseInt(process.env.GMAIL_DAILY_HARD_LIMIT || '1500', 10);
 // Alert threshold: send an out-of-band Resend alert when count crosses this.
 const ALERT_THRESHOLD = Math.floor(HARD_LIMIT * 0.75);
 // Who gets the alert email.
-const ALERT_RECIPIENT = process.env.QUOTA_ALERT_EMAIL || '***REDACTED-ADMIN-EMAIL***';
+const ALERT_RECIPIENT = process.env.QUOTA_ALERT_EMAIL;
 
 function getTodayKey(): string {
   return new Date().toISOString().slice(0, 10); // YYYY-MM-DD
@@ -33,6 +33,10 @@ async function sendQuotaAlert(count: number, limit: number, reason: 'warning' | 
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
     console.error('[EmailService] RESEND_API_KEY not set — cannot send quota alert');
+    return;
+  }
+  if (!ALERT_RECIPIENT) {
+    console.error('[EmailService] QUOTA_ALERT_EMAIL not set — cannot send quota alert');
     return;
   }
   try {

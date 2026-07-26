@@ -87,7 +87,11 @@ export const getStats = async (req: AuthRequest, res: Response) => {
     });
 
     // MRR calculation (real organizers only — exclude internal/test accounts)
-    const INTERNAL_EMAILS = ['***REDACTED-TEST-ORGANIZER-EMAIL***', '***REDACTED-ADMIN-EMAIL***'];
+    // INTERNAL_EMAILS_CSV = comma-separated list of internal/test account emails to exclude, e.g. "admin@example.com,test@example.com"
+    const INTERNAL_EMAILS = (process.env.INTERNAL_EMAILS_CSV || '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
     const activePaidOrganizers = await prisma.organizer.findMany({
       where: {
         isUnmanagedListing: false,

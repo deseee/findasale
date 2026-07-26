@@ -1361,7 +1361,7 @@ const AddItemsDetailPage = () => {
         // even on a fully healthy connection. These errors already carry an accurate,
         // user-friendly message (e.g. "The item you were adding this photo to is no
         // longer available.") — show that instead of a misleading network message.
-        // Confirmed via Sentry FINDASALE-NEXTJS-Q, 2026-07-14 (***REDACTED-TEST-ORGANIZER-EMAIL***).
+        // Confirmed via Sentry FINDASALE-NEXTJS-Q, 2026-07-14 (real organizer test account).
         errorMessage = err.message;
       } else if (!err.response) {
         // No response at all on a real AxiosError = genuine network-level failure

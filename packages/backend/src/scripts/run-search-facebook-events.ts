@@ -58,15 +58,20 @@ const USE_ADDRESS_FETCH = process.env.FB_EVENTS_ADDRESS_FETCH === 'true';
  */
 async function sendKeyHealthAlert(subject: string, html: string): Promise<void> {
   const apiKey = process.env.RESEND_API_KEY;
+  const alertRecipient = process.env.QUOTA_ALERT_EMAIL;
   if (!apiKey) {
     console.error('[run-fb-events] RESEND_API_KEY not set — cannot send health alert');
+    return;
+  }
+  if (!alertRecipient) {
+    console.error('[run-fb-events] QUOTA_ALERT_EMAIL not set — cannot send health alert');
     return;
   }
   try {
     const resend = new Resend(apiKey);
     await resend.emails.send({
       from: process.env.RESEND_FROM_EMAIL || 'FindA.Sale Alerts <alerts@finda.sale>',
-      to: process.env.QUOTA_ALERT_EMAIL || '***REDACTED-ADMIN-EMAIL***',
+      to: alertRecipient,
       subject,
       html,
     });

@@ -55,14 +55,17 @@ export async function runDeliverabilityMonitor(): Promise<void> {
       console.warn(`[deliverability:alert] ${alertMsg}`);
 
       const apiKey = process.env.RESEND_API_KEY;
+      const alertRecipient = process.env.QUOTA_ALERT_EMAIL;
       if (!apiKey) {
         console.error('[deliverability] RESEND_API_KEY not set — cannot send bounce alert');
+      } else if (!alertRecipient) {
+        console.error('[deliverability] QUOTA_ALERT_EMAIL not set — cannot send bounce alert');
       } else {
         try {
           const resend = new Resend(apiKey);
           await resend.emails.send({
             from: process.env.RESEND_FROM_EMAIL || 'FindA.Sale Alerts <alerts@finda.sale>',
-            to: process.env.QUOTA_ALERT_EMAIL || '***REDACTED-ADMIN-EMAIL***',
+            to: alertRecipient,
             subject: `⚠️ High bounce rate: ${bouncePercentage}% (${recentSuppressions}/${recentSent})`,
             html: `
               <p><strong>⚠️ WARNING:</strong> The outreach bounce rate over the last 7 days has exceeded the 2% threshold.</p>
@@ -75,7 +78,7 @@ export async function runDeliverabilityMonitor(): Promise<void> {
               <p style="color:#666;font-size:12px">FindA.Sale · deliverabilityMonitorJob.ts · weekly Sunday 19:00 UTC</p>
             `,
           });
-          console.log(`[deliverability] Bounce alert sent to ${process.env.QUOTA_ALERT_EMAIL || '***REDACTED-ADMIN-EMAIL***'}`);
+          console.log(`[deliverability] Bounce alert sent to ${alertRecipient}`);
         } catch (err) {
           console.error('[deliverability] Failed to send bounce alert via Resend:', err);
         }

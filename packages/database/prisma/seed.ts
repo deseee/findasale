@@ -316,13 +316,26 @@ async function main() {
     process.exit(1);
   }
 
+  // ── REQUIRED ENV VARS (defense-in-depth — no hardcoded real account emails) ─
+  // ADMIN_SEED_EMAIL / TEST_ORGANIZER_EMAIL must be set locally (see .env.example)
+  // so this script never needs a real address hardcoded in a public file.
+  const adminSeedEmail = process.env.ADMIN_SEED_EMAIL;
+  const testOrganizerEmail = process.env.TEST_ORGANIZER_EMAIL;
+  if (!adminSeedEmail || !testOrganizerEmail) {
+    console.error(
+      '\n❌ REFUSING TO SEED: ADMIN_SEED_EMAIL and/or TEST_ORGANIZER_EMAIL not set.\n' +
+      '   Set both in packages/database/.env before running this script — see .env.example.\n'
+    );
+    process.exit(1);
+  }
+
   console.log('🌱 Starting database seed...');
   const defaultPassword = await bcrypt.hash('Seedy2025!', 10);
 
-  // ── Clear data, preserving ***REDACTED-TEST-ORGANIZER-EMAIL*** and ***REDACTED-ADMIN-EMAIL*** ───────
+  // ── Clear data, preserving the protected admin + test organizer accounts ───
   console.log('🗑️  Clearing existing data (preserving protected accounts)...');
 
-  const preservedEmails = ['***REDACTED-TEST-ORGANIZER-EMAIL***', '***REDACTED-ADMIN-EMAIL***'];
+  const preservedEmails = [testOrganizerEmail, adminSeedEmail];
   const preserved = await prisma.user.findMany({
     where: { email: { in: preservedEmails } },
     select: { id: true },
@@ -401,7 +414,7 @@ async function main() {
   const users: any[] = [];
 
 
-  // 23 users: 11 organizers (user1-11, includes unclaimed user11) + 12 shoppers (user12-23). user1 is TEAMS organizer (no longer ADMIN — Patrick/***REDACTED-ADMIN-EMAIL*** is the only admin).
+  // 23 users: 11 organizers (user1-11, includes unclaimed user11) + 12 shoppers (user12-23). user1 is TEAMS organizer (no longer ADMIN — the seeded ADMIN_SEED_EMAIL account is the only admin).
   // The shoppers cover hardcoded references for bids, Hunt Pass, and completed-sale purchases.
   // user11 = unclaimed organizer for #361 Claim-This-Listing test (isClaimed=false).
   for (let i = 0; i < 23; i++) {
@@ -436,7 +449,7 @@ async function main() {
   console.log('🏢 Creating 11 organizers...');
   const organizers: any[] = [];
   // Subscription tiers by organizer index (0-based): 0=TEAMS, 1=PRO, 2=SIMPLE, rest=SIMPLE
-  // user1 = TEAMS organizer, user2 = PRO, user3 = SIMPLE, user11 = unclaimed for #361 test. Admin = Patrick (***REDACTED-ADMIN-EMAIL***) only.
+  // user1 = TEAMS organizer, user2 = PRO, user3 = SIMPLE, user11 = unclaimed for #361 test. Admin = the seeded ADMIN_SEED_EMAIL account only.
   const orgTiers: Record<number, string> = { 0: 'TEAMS', 1: 'PRO', 2: 'SIMPLE' };
 
   for (let i = 0; i < 11; i++) {
@@ -1225,11 +1238,11 @@ async function main() {
   // matches the real account structure. Passwords: password123 (local only).
 
   const patrickAdmin = await prisma.user.upsert({
-    where: { email: '***REDACTED-ADMIN-EMAIL***' },
-    update: { name: 'Admin', role: 'ADMIN', roles: ['USER', 'ORGANIZER', 'ADMIN'] },
+    where: { email: adminSeedEmail },
+    update: { name: process.env.ADMIN_SEED_NAME || 'Admin', role: 'ADMIN', roles: ['USER', 'ORGANIZER', 'ADMIN'] },
     create: {
-      email: '***REDACTED-ADMIN-EMAIL***',
-      name: 'Admin',
+      email: adminSeedEmail,
+      name: process.env.ADMIN_SEED_NAME || 'Admin',
       password: defaultPassword,
       role: 'ADMIN',
       roles: ['USER', 'ORGANIZER', 'ADMIN'],
@@ -1250,10 +1263,10 @@ async function main() {
   });
 
   const artifactUser = await prisma.user.upsert({
-    where: { email: '***REDACTED-TEST-ORGANIZER-EMAIL***' },
+    where: { email: testOrganizerEmail },
     update: { name: 'Artifact MI', role: 'ORGANIZER', roles: ['USER', 'ORGANIZER'] },
     create: {
-      email: '***REDACTED-TEST-ORGANIZER-EMAIL***',
+      email: testOrganizerEmail,
       name: 'Artifact MI',
       password: defaultPassword,
       role: 'ORGANIZER',
@@ -1303,8 +1316,8 @@ async function main() {
   console.log('   user11@example.com    — Unclaimed organizer [#361 test: isClaimed=false, isUnmanagedListing=true]');
   console.log('   user12@example.com    — Shopper [TD-02: 6+ purchases, 10+ likes, badges, trail, reviews, holds]');
   console.log('\n🔑 Real accounts (password: Seedy2025! locally):');
-  console.log('   ***REDACTED-ADMIN-EMAIL***      — ADMIN + TEAMS organizer (Patrick)');
-  console.log('   ***REDACTED-TEST-ORGANIZER-EMAIL***  — TEAMS organizer (Artifact MI)');
+  console.log(`   ${adminSeedEmail}      — ADMIN + TEAMS organizer`);
+  console.log(`   ${testOrganizerEmail}  — TEAMS organizer (Artifact MI)`);
 }
 
 main()
