@@ -96,6 +96,16 @@
     try { await chrome.runtime.sendMessage({ type: 'markItemRemovedByRemoval', itemId: item.id }); } catch (e) {}
   }
 
+  // (2026-07-26 fix) Record a genuine skip (zero/ambiguous match, NOT already-sold) so the
+  // backend can eventually stop re-serving an item that will never resolve on its own --
+  // previously a skip was purely a client-side overlay message that vanished in 4s, so the
+  // exact same "no confident match" error repeated forever on every poll with no way for
+  // getPendingRemovals to know this item has already failed N times. Fire-and-forget, same as
+  // mark() -- a failed report here must never block the removal queue from advancing.
+  async function markSkipped(item, reason) {
+    try { await chrome.runtime.sendMessage({ type: 'markItemRemovalSkipped', itemId: item.id, reason: reason || null }); } catch (e) {}
+  }
+
   // Removes one item's Facebook listing: finds the matching "Your listings" card by title
   // (SEL.listingCardByTitle -- exact/clean-substring match ONLY, no fuzzy word-overlap) and
   // clicks its "Mark as sold" control. That control does NOT toggle the listing directly --
@@ -109,6 +119,17 @@
   async function removeOne(item) {
     const match = SEL.listingCardByTitle(item.title);
     if (!match) {
+      // (2026-07-26 fix) Before treating "no active card with a 'Mark as sold' control" as a
+      // failure, check whether the listing is already Sold on Facebook -- the normal steady
+      // state right after a prior successful removal (or a listing Patrick marked sold by hand).
+      // Confirmed live 2026-07-26: this was the actual cause of Patrick's "keeps erroring"
+      // report -- the Bjorn Borg tennis ball and FILA golf set were both already Sold, so this
+      // branch used to report a false failure and never tell the backend, which meant the same
+      // already-done item got re-served and re-"failed" on every ~20-min poll forever.
+      const alreadySold = SEL.alreadySoldCardByTitle(item.title);
+      if (alreadySold) {
+        return { ok: true, alreadyDone: true };
+      }
       return { ok: false, reason: 'No confident match for this listing on the page (zero or more than one "' + item.title + '" found) -- skipped, not guessed.' };
     }
     await realClick(match.button);
@@ -192,9 +213,13 @@
     const result = await removeOne(item);
     if (result.ok) {
       await mark(item);
-      overlay('<b>FindA.Sale</b><div style="margin-top:6px">Removed <b>' + escapeHtml(item.title) + '</b> from Facebook.</div>' +
+      const doneLabel = result.alreadyDone
+        ? 'Already marked sold on Facebook -- synced with FindA.Sale, nothing left to do.'
+        : 'Removed <b>' + escapeHtml(item.title) + '</b> from Facebook.';
+      overlay('<b>FindA.Sale</b><div style="margin-top:6px">' + doneLabel + '</div>' +
         '<div style="margin-top:8px;font-size:11px;color:#9fb6a8">' + (index + 1) + ' of ' + total + '</div>');
     } else {
+      await markSkipped(item, result.reason);
       overlay('<b>FindA.Sale</b><div style="color:#ffcf7a;margin-top:6px;font-size:12px">Skipped <b>' + escapeHtml(item.title) +
         '</b>: ' + escapeHtml(result.reason) + '</div>' +
         '<div style="margin-top:8px;font-size:11px;color:#9fb6a8">' + (index + 1) + ' of ' + total + '</div>');

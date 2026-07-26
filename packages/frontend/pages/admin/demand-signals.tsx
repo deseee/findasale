@@ -24,6 +24,9 @@ const AdminDemandSignals = () => {
   const [cities, setCities] = useState<string[]>([]);
   const [cityFilter, setCityFilter] = useState('');
   const [minCount, setMinCount] = useState(2);
+  // Raw-text mirror so the field can go through an empty intermediate
+  // state while typing instead of snapping back to 1 on every keystroke.
+  const [minCountText, setMinCountText] = useState(String(2));
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -109,8 +112,13 @@ const AdminDemandSignals = () => {
             <input
               type="number"
               min={1}
-              value={minCount}
-              onChange={(e) => setMinCount(Math.max(1, parseInt(e.target.value, 10) || 1))}
+              value={minCountText}
+              onChange={(e) => setMinCountText(e.target.value)}
+              onBlur={() => {
+                const parsed = Math.max(1, parseInt(minCountText, 10) || 1);
+                setMinCountText(String(parsed));
+                setMinCount(parsed);
+              }}
               className="w-20 px-3 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-600"
             />
           </div>

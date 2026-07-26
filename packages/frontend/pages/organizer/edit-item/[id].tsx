@@ -90,6 +90,20 @@ const EditItemPage = () => {
     ebayFulfillmentPolicyOverrideId: null as string | null,
   });
 
+  // Local raw-text mirrors for quantity/stockTotal inputs — lets the field
+  // go through an empty intermediate state while typing instead of snapping
+  // back to 1 on every keystroke. Clamped to a valid integer (min 1) on blur.
+  const [quantityText, setQuantityText] = useState(String(formData.quantity ?? 1));
+  const [stockTotalText, setStockTotalText] = useState(String(formData.stockTotal ?? 1));
+
+  useEffect(() => {
+    setQuantityText(String(formData.quantity ?? 1));
+  }, [formData.quantity]);
+
+  useEffect(() => {
+    setStockTotalText(String(formData.stockTotal ?? 1));
+  }, [formData.stockTotal]);
+
   const uploadInputRef = useRef<HTMLInputElement>(null);
 
   const handlePrintLabel = async () => {
@@ -1153,10 +1167,13 @@ const EditItemPage = () => {
                 type="number"
                 min="1"
                 step="1"
-                value={formData.quantity}
-                onChange={(e) =>
-                  setFormData({ ...formData, quantity: Math.max(1, parseInt(e.target.value) || 1) })
-                }
+                value={quantityText}
+                onChange={(e) => setQuantityText(e.target.value)}
+                onBlur={() => {
+                  const parsed = Math.max(1, parseInt(quantityText, 10) || 1);
+                  setQuantityText(String(parsed));
+                  setFormData({ ...formData, quantity: parsed });
+                }}
                 className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
               />
               <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">How many pieces are bundled together and sold as one lot (e.g. "set of 8" sold together). This is not your sellable stock count.</p>
@@ -1171,10 +1188,13 @@ const EditItemPage = () => {
                 type="number"
                 min="1"
                 step="1"
-                value={formData.stockTotal}
-                onChange={(e) =>
-                  setFormData({ ...formData, stockTotal: Math.max(1, parseInt(e.target.value) || 1) })
-                }
+                value={stockTotalText}
+                onChange={(e) => setStockTotalText(e.target.value)}
+                onBlur={() => {
+                  const parsed = Math.max(1, parseInt(stockTotalText, 10) || 1);
+                  setStockTotalText(String(parsed));
+                  setFormData({ ...formData, stockTotal: parsed });
+                }}
                 className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
               />
               <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">How many separate units of this item you have to sell. Each sale &mdash; in person, at POS, or on a connected marketplace &mdash; draws one unit from this pool, and the item stays listed until every unit is gone. Leave at 1 for a single item.</p>

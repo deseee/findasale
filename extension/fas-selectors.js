@@ -238,6 +238,46 @@
     return null; // zero or ambiguous (multiple) matches -- caller skips + flags, never guesses
   }
 
+  // (2026-07-26 fix) Facebook shows "Mark as available"/"Relist this item" instead of
+  // "Mark as sold" once a listing is ALREADY Sold -- listingCardByTitle above only recognizes
+  // the "Mark as sold" control, so an already-sold card (the normal steady state right after a
+  // successful removal, or a listing Patrick marked sold by hand) returned null there,
+  // indistinguishable from "can't find it / ambiguous". removeOne() in fas-remove.js treated
+  // that null as a hard failure and never told the backend, so the SAME already-sold item got
+  // re-served by /extension/pending-removals and re-"failed" on every poll cycle forever.
+  // Confirmed live 2026-07-26: "Bjorn Borg Signed Tennis Ball, Vintage" and "Left Handed FILA
+  // Golf Club Set with Bag, Irons and Woods" were BOTH already Sold on Facebook the entire time
+  // Patrick kept seeing removal errors -- there was nothing left to remove.
+  // Same single-confident-match discipline as listingCardByTitle: dedup by card element first
+  // ("Mark as available" AND "Relist this item" both sit on the same sold card, so a naive count
+  // would see 2 hits on one real card and wrongly call it ambiguous), then require exactly one
+  // candidate card. Zero or truly ambiguous (multiple distinct cards) still return null.
+  function alreadySoldCardByTitle(title) {
+    const want = norm(title);
+    if (!want) return null;
+    const markers = Array.from(document.querySelectorAll('div[role="button"], button, span[role="button"], a[role="button"]'))
+      .filter((b) => {
+        const t = norm(b.textContent);
+        return t === 'mark as available' || t === 'relist this item';
+      });
+    const cardMap = new Map(); // cardEl -> cardText, deduped
+    for (const btn of markers) {
+      let el = btn, hops = 0;
+      while (el && hops < 8) {
+        el = el.parentElement;
+        hops++;
+        if (!el) break;
+        const t = norm(el.textContent);
+        if (t.indexOf('$') !== -1 && t.length > 40) { cardMap.set(el, t); break; }
+      }
+    }
+    const candidates = Array.from(cardMap.entries())
+      .filter(([, cardText]) => cardText === want || cardText.indexOf(want) !== -1)
+      .map(([cardEl, cardText]) => ({ cardEl, cardText }));
+    if (candidates.length === 1) return candidates[0];
+    return null; // zero or ambiguous -- caller falls through to the genuine skip+flag path
+  }
+
   // Facebook's custom div[role="button"] controls (category chips, "Enter exact weight",
   // "Done", the "Change shipping method" modal's "Update" button, etc.) DO respond to
   // script-dispatched (isTrusted:false) events using the sequence below -- confirmed live
@@ -371,7 +411,7 @@
   function isSwitchOn(el) { return !!(el && el.getAttribute('aria-checked') === 'true'); }
 
   window.__FAS_SEL__ = { norm, fieldByLabel, comboByLabel, optionByText, photoInput, chipsAfter, categoryChips, persistentCategoryChips, bestTextMatch,
-    elementByText, radioLabelByText, listingCardByTitle, realClick, menuCheckboxByText, isMenuChecked, isDisabled, radioOptionByText,
+    elementByText, radioLabelByText, listingCardByTitle, alreadySoldCardByTitle, realClick, menuCheckboxByText, isMenuChecked, isDisabled, radioOptionByText,
     switchByLabel, isSwitchOn, isRadioChecked, weightExactLink, weightExactInputs,
     LABELS: { title: 'Title', price: 'Price', description: 'Description', condition: 'Condition', category: 'Category', offerToggle: 'negotiate', offerMinimum: 'Minimum price' } };
 })();

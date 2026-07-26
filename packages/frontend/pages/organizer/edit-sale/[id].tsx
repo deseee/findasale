@@ -633,28 +633,30 @@ const EditSalePage = () => {
               </div>
             )}
 
-            <div className="bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500 p-4 rounded">
-              <p className="text-sm text-blue-700 dark:text-blue-200 mb-3">Want to create a similar sale?</p>
-              <button
-                type="button"
-                onClick={handleCloneSale}
-                disabled={isCloning}
-                className="text-sm bg-blue-600 hover:bg-blue-700 text-white py-1 px-3 rounded disabled:opacity-50"
-              >
-                {isCloning ? 'Duplicating...' : 'Duplicate This Sale'}
-              </button>
-            </div>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <div className="flex-1 flex items-center justify-between gap-3 bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500 px-4 py-2 rounded">
+                <p className="text-sm text-blue-700 dark:text-blue-200">Want a similar sale?</p>
+                <button
+                  type="button"
+                  onClick={handleCloneSale}
+                  disabled={isCloning}
+                  className="text-sm bg-blue-600 hover:bg-blue-700 text-white py-1 px-3 rounded disabled:opacity-50 whitespace-nowrap flex-shrink-0"
+                >
+                  {isCloning ? 'Duplicating...' : 'Duplicate'}
+                </button>
+              </div>
 
-            <div className="bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 p-4 rounded">
-              <p className="text-sm text-red-700 dark:text-red-200 mb-3">No longer need this sale?</p>
-              <button
-                type="button"
-                onClick={handleDeleteSale}
-                disabled={isDeleting}
-                className="text-sm bg-red-600 hover:bg-red-700 text-white py-1 px-3 rounded disabled:opacity-50"
-              >
-                {isDeleting ? 'Deleting...' : 'Delete Sale'}
-              </button>
+              <div className="flex-1 flex items-center justify-between gap-3 bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 px-4 py-2 rounded">
+                <p className="text-sm text-red-700 dark:text-red-200">No longer need this?</p>
+                <button
+                  type="button"
+                  onClick={handleDeleteSale}
+                  disabled={isDeleting}
+                  className="text-sm bg-red-600 hover:bg-red-700 text-white py-1 px-3 rounded disabled:opacity-50 whitespace-nowrap flex-shrink-0"
+                >
+                  {isDeleting ? 'Deleting...' : 'Delete Sale'}
+                </button>
+              </div>
             </div>
 
             <div>

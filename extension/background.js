@@ -197,6 +197,29 @@ async function checkPendingUpdates() {
   return 'notified:' + items.length;
 }
 
+// (2026-07-26) Items the backend has given up retrying (see MAX_REMOVAL_SKIP_ATTEMPTS in
+// extensionController.ts) come back separately as needsManualReview instead of items -- notify
+// about them ONCE per distinct set, not every ~20-min cycle, so a permanently-unmatchable item
+// degrades to "one notification, then quiet" instead of reproducing the exact same infinite-
+// error-spam bug this whole fix is closing, just moved one level up.
+async function notifyManualReviewIfNew(needsManualReview) {
+  if (!needsManualReview || !needsManualReview.length) return;
+  const ids = needsManualReview.map((i) => i.id).sort().join(',');
+  const { fasLastNotifiedManualReviewIds = '' } = await chrome.storage.local.get(['fasLastNotifiedManualReviewIds']);
+  if (ids === fasLastNotifiedManualReviewIds) return; // same stuck set as last time -- already told Patrick
+  await chrome.storage.local.set({ fasLastNotifiedManualReviewIds: ids });
+  chrome.notifications.create('fasNeedsManualReview', {
+    type: 'basic',
+    iconUrl: 'icon128.png',
+    title: 'FindA.Sale',
+    message: (needsManualReview.length === 1
+      ? '1 sold item couldn\'t be auto-matched on Facebook after multiple tries'
+      : needsManualReview.length + ' sold items couldn\'t be auto-matched on Facebook after multiple tries') +
+      ' -- remove manually: ' + needsManualReview.map((i) => i.title).join(', '),
+    priority: 1
+  });
+}
+
 async function checkPendingRemovals() {
   const { fasAutoRemoveMode = 'notify' } = await chrome.storage.local.get(['fasAutoRemoveMode']);
   if (fasAutoRemoveMode === 'off') return 'off';
@@ -207,6 +230,7 @@ async function checkPendingRemovals() {
   const resp = await apiFetch('/extension/pending-removals');
   if (!resp.ok) return 'error:' + (resp.error || resp.status);
   const items = (resp.data && resp.data.items) || [];
+  await notifyManualReviewIfNew(resp.data && resp.data.needsManualReview);
   if (!items.length) return 'no_items';
 
   await chrome.storage.local.set({ fasRemovalQueue: items, fasRemovalIndex: 0 });
@@ -352,6 +376,12 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         sendResponse({ ok: true, item, index: next, total: (st.fasRemovalQueue || []).length });
       } else if (msg.type === 'markItemRemovedByRemoval') {
         sendResponse(await apiFetch('/extension/items/' + encodeURIComponent(msg.itemId) + '/removed', { method: 'POST', body: {} }));
+      } else if (msg.type === 'markItemRemovalSkipped') {
+        // (2026-07-26 fix) Report a genuine removal skip (zero/ambiguous title match) so the
+        // backend can eventually stop re-serving an item that keeps failing the same way --
+        // see extensionController.ts's getPendingRemovals dead-letter note.
+        sendResponse(await apiFetch('/extension/items/' + encodeURIComponent(msg.itemId) + '/removal-skipped',
+          { method: 'POST', body: { reason: msg.reason || null } }));
       } else if (msg.type === 'removalQueueDone') {
         // fas-remove.js finished the queue -- restore the organizer's tab + close the auto-opened
         // silent-mode removal tab. No-op in notify mode (no fasRemovalTabId tracked there).

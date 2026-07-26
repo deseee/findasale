@@ -294,6 +294,10 @@ export default function LabelComposerPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCatalogItems, setSelectedCatalogItems] = useState<Set<string>>(new Set());
   const [catalogQtys, setCatalogQtys] = useState<Record<string, number>>({});
+  // Raw-text mirror per item so the qty field can go through an empty
+  // intermediate state while typing instead of snapping back to 1 on every
+  // keystroke. Committed (parsed + clamped) into catalogQtys on blur.
+  const [catalogQtyText, setCatalogQtyText] = useState<Record<string, string>>({});
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   const [initialized, setInitialized] = useState(false);
   const [savedBatches, setSavedBatches] = useState<Array<{ key: string; name: string; itemCount: number }>>([]);
@@ -823,8 +827,14 @@ export default function LabelComposerPage() {
                             type="number"
                             min={1}
                             max={99}
-                            value={catalogQtys[item.id] || 1}
-                            onChange={e => setCatalogQtys(prev => ({ ...prev, [item.id]: parseInt(e.target.value) || 1 }))}
+                            value={catalogQtyText[item.id] ?? String(catalogQtys[item.id] || 1)}
+                            onChange={e => setCatalogQtyText(prev => ({ ...prev, [item.id]: e.target.value }))}
+                            onBlur={() => {
+                              const raw = catalogQtyText[item.id] ?? String(catalogQtys[item.id] || 1);
+                              const parsed = Math.max(1, parseInt(raw, 10) || 1);
+                              setCatalogQtyText(prev => ({ ...prev, [item.id]: String(parsed) }));
+                              setCatalogQtys(prev => ({ ...prev, [item.id]: parsed }));
+                            }}
                             className="w-12 px-1 py-0.5 rounded border border-warm-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-center text-xs font-mono text-warm-700 dark:text-gray-300"
                           />
                         </label>
