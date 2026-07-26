@@ -4,6 +4,7 @@
  */
 
 import { useQuery, useMutation, QueryKey, UseQueryOptions } from '@tanstack/react-query';
+import api from '../lib/api';
 
 export interface SaleHubInfo {
   id: string;
@@ -213,19 +214,12 @@ export const useCreateHub = () => {
       lng: number;
       radiusKm?: number;
     }) => {
-      const response = await fetch('/api/organizer/hubs', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify(data),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to create hub');
+      try {
+        const response = await api.post('/organizer/hubs', data);
+        return response.data;
+      } catch (err: any) {
+        throw new Error(err.response?.data?.message || 'Failed to create hub');
       }
-
-      return response.json();
     },
   });
 };
@@ -242,19 +236,12 @@ export const useUpdateHub = (hubId: string) => {
       lng?: number;
       radiusKm?: number;
     }) => {
-      const response = await fetch(`/api/organizer/hubs/${hubId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify(data),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to update hub');
+      try {
+        const response = await api.put(`/organizer/hubs/${hubId}`, data);
+        return response.data;
+      } catch (err: any) {
+        throw new Error(err.response?.data?.message || 'Failed to update hub');
       }
-
-      return response.json();
     },
   });
 };
@@ -265,18 +252,12 @@ export const useUpdateHub = (hubId: string) => {
 export const useDeleteHub = (hubId: string) => {
   return useMutation({
     mutationFn: async () => {
-      const response = await fetch(`/api/organizer/hubs/${hubId}`, {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to delete hub');
+      try {
+        const response = await api.delete(`/organizer/hubs/${hubId}`);
+        return response.data;
+      } catch (err: any) {
+        throw new Error(err.response?.data?.message || 'Failed to delete hub');
       }
-
-      return response.json();
     },
   });
 };
@@ -287,19 +268,12 @@ export const useDeleteHub = (hubId: string) => {
 export const useJoinHub = (hubId: string) => {
   return useMutation({
     mutationFn: async (saleIds: string[]) => {
-      const response = await fetch(`/api/organizer/hubs/${hubId}/join`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ saleIds }),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to join hub');
+      try {
+        const response = await api.post(`/organizer/hubs/${hubId}/join`, { saleIds });
+        return response.data;
+      } catch (err: any) {
+        throw new Error(err.response?.data?.message || 'Failed to join hub');
       }
-
-      return response.json();
     },
   });
 };
@@ -310,18 +284,12 @@ export const useJoinHub = (hubId: string) => {
 export const useLeaveHub = (hubId: string, saleId: string) => {
   return useMutation({
     mutationFn: async () => {
-      const response = await fetch(`/api/organizer/hubs/${hubId}/sales/${saleId}`, {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to leave hub');
+      try {
+        const response = await api.delete(`/organizer/hubs/${hubId}/sales/${saleId}`);
+        return response.data;
+      } catch (err: any) {
+        throw new Error(err.response?.data?.message || 'Failed to leave hub');
       }
-
-      return response.json();
     },
   });
 };
@@ -332,19 +300,12 @@ export const useLeaveHub = (hubId: string, saleId: string) => {
 export const useSetHubEvent = (hubId: string) => {
   return useMutation({
     mutationFn: async (data: { saleDate?: string; eventName?: string }) => {
-      const response = await fetch(`/api/organizer/hubs/${hubId}/event`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify(data),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to set hub event');
+      try {
+        const response = await api.patch(`/organizer/hubs/${hubId}/event`, data);
+        return response.data;
+      } catch (err: any) {
+        throw new Error(err.response?.data?.message || 'Failed to set hub event');
       }
-
-      return response.json();
     },
   });
 };
