@@ -942,13 +942,17 @@ const AddItemsDetailPage = () => {
         error.response?.data?.message || 'Failed to update items';
       showToast(message, 'error');
 
-      // Show detailed error if available
-      if (error.response?.data?.errors && error.response.data.errors.length > 0) {
+      // Bug fix S1163: backend names this field "failed", not "errors" — this check
+      // never matched, so the all-items-rejected case (e.g. "already sold") only ever
+      // showed the generic toast above and never opened the detail modal with the
+      // real per-item reason.
+      const detailErrors = error.response?.data?.failed || error.response?.data?.errors;
+      if (detailErrors && detailErrors.length > 0) {
         setBulkErrorData({
           title: 'Operation Failed',
           message,
-          errors: error.response.data.errors,
-          itemCount: error.response.data.errors.length,
+          errors: detailErrors,
+          itemCount: detailErrors.length,
         });
         setBulkErrorModalOpen(true);
       }
@@ -2553,12 +2557,15 @@ const AddItemsDetailPage = () => {
                         <div className="flex-shrink-0 flex flex-col items-center gap-1">
                           <div className="flex items-center gap-1">
                             <span className={`text-xs font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${
+                              item.status === 'SOLD' ? 'bg-warm-700 text-white dark:bg-warm-800 dark:text-warm-100' :
+                              item.status === 'RESERVED' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300' :
                               item.ebayListingId ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' :
                               draftStatus === 'PUBLISHED' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' :
                               draftStatus === 'PENDING_REVIEW' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300' :
                               'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'
                             }`}>
-                              {draftStatus === 'PUBLISHED' ? 'Live' : draftStatus === 'PENDING_REVIEW' ? 'Ready' : 'Draft'}
+                              {/* Bug fix S1163: badge previously used draftStatus alone, so SOLD/RESERVED items still showed "Live" */}
+                              {item.status === 'SOLD' ? 'Sold' : item.status === 'RESERVED' ? 'Reserved' : draftStatus === 'PUBLISHED' ? 'Live' : draftStatus === 'PENDING_REVIEW' ? 'Ready' : 'Draft'}
                             </span>
                             {item.isActive === false && (
                               <span className="text-xs px-2 py-0.5 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 whitespace-nowrap">
