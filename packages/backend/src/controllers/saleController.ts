@@ -353,7 +353,7 @@ export const getMySales = async (req: AuthRequest, res: Response) => {
     if (!organizer) return res.json({ sales: [] });
 
     const sales = await prisma.sale.findMany({
-      where: { organizerId: organizer.id, isInventoryContainer: false },
+      where: { organizerId: organizer.id, isInventoryContainer: false, deletedAt: null },
       orderBy: [{ isPinned: 'desc' }, { startDate: 'asc' }],
       select: {
         id: true,
@@ -829,7 +829,7 @@ export const deleteSale = async (req: AuthRequest, res: Response) => {
 
     const { id } = req.params;
     const existingSale = await prisma.sale.findUnique({ where: { id } });
-    if (!existingSale) return res.status(404).json({ message: 'Sale not found' });
+    if (!existingSale || existingSale.deletedAt) return res.status(404).json({ message: 'Sale not found' });
 
     if (!isAdmin) {
       const organizerProfile = await prisma.organizer.findUnique({ where: { userId: req.user.id } });
@@ -837,12 +837,23 @@ export const deleteSale = async (req: AuthRequest, res: Response) => {
         return res.status(403).json({ message: 'Access denied. You can only delete your own sales.' });
       }
     }
-    
-    await prisma.item.deleteMany({ where: { saleId: id } });
-    await prisma.sale.delete({ where: { id } });
+
+    // Soft-delete only — never hard-delete a Sale. Review->Sale is onDelete:Cascade (a hard
+    // delete would destroy real shopper reviews), Purchase.sale/Purchase.item are onDelete:SetNull
+    // (a hard delete would silently orphan real paid-transaction records), and AffiliateLink->Sale
+    // is onDelete:Restrict (a hard delete would 500 on any sale that ever had affiliate activity).
+    // 2026-07-26: converted from hard delete after this was found to be a live data-loss risk.
+    const [soldItemCount, purchaseCount, reviewCount, affiliateLinkCount] = await Promise.all([
+      prisma.item.count({ where: { saleId: id, status: 'SOLD' } }),
+      prisma.purchase.count({ where: { saleId: id } }),
+      prisma.review.count({ where: { saleId: id } }),
+      prisma.affiliateLink.count({ where: { saleId: id } }),
+    ]);
+
+    await prisma.sale.update({ where: { id }, data: { deletedAt: new Date() } });
 
     // ADR 2026-07-11: on-demand ISR revalidation — a deleted PUBLISHED sale's own
-    // /sales/[id] page will 404 on next visit regardless (row is gone); the city
+    // /sales/[id] page will 404 on next visit regardless (soft-deleted); the city
     // listing page still needs a refresh so it disappears from there immediately.
     if (existingSale.status === 'PUBLISHED') {
       const citySlug = citySlugFromCityState(existingSale.city, existingSale.state);
@@ -851,7 +862,13 @@ export const deleteSale = async (req: AuthRequest, res: Response) => {
       }
     }
 
-    res.json({ message: 'Sale deleted successfully' });
+    const hadActivity = soldItemCount > 0 || purchaseCount > 0 || reviewCount > 0 || affiliateLinkCount > 0;
+
+    res.json({
+      message: 'Sale deleted successfully',
+      hadActivity,
+      counts: { soldItems: soldItemCount, purchases: purchaseCount, reviews: reviewCount, affiliateLinks: affiliateLinkCount },
+    });
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Server error while deleting sale' });

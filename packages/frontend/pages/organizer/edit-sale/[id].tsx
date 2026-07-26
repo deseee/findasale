@@ -36,6 +36,7 @@ const EditSalePage = () => {
   const [isCloning, setIsCloning] = useState(false);
   const [isGeneratingDesc, setIsGeneratingDesc] = useState(false);
   const [isTogglingStatus, setIsTogglingStatus] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [entrancePinTooFar, setEntrancePinTooFar] = useState(false);
   const [showPublishCelebration, setShowPublishCelebration] = useState(false);
   const [showAlaCarteModal, setShowAlaCarteModal] = useState(false); // #132: À La Carte
@@ -54,7 +55,8 @@ const EditSalePage = () => {
     title: string;
     message: string;
     onConfirm: () => void;
-  }>({ open: false, title: '', message: '', onConfirm: () => {} });
+    variant?: 'danger' | 'default';
+  }>({ open: false, title: '', message: '', onConfirm: () => {}, variant: 'default' });
 
   const [formData, setFormData] = useState({
     title: '',
@@ -411,6 +413,37 @@ const EditSalePage = () => {
     }
   };
 
+  // Sale deletion (soft-delete server-side) — organizer no longer needs this sale.
+  const handleDeleteSale = () => {
+    if (!id || !sale) return;
+    setConfirmState({
+      open: true,
+      title: 'Delete Sale',
+      message: `Delete "${sale.title}"? This can't be undone.`,
+      variant: 'danger',
+      onConfirm: async () => {
+        setIsDeleting(true);
+        try {
+          const response = await api.delete(`/sales/${id}`);
+          if (response.data?.hadActivity) {
+            showToast(
+              "Sale deleted. It's hidden from your dashboard — existing purchase and review records are kept.",
+              'success'
+            );
+          } else {
+            showToast('Sale deleted', 'success');
+          }
+          router.push('/organizer/sales');
+        } catch (error: any) {
+          showToast(error.response?.data?.message || 'Failed to delete sale', 'error');
+        } finally {
+          setIsDeleting(false);
+          setConfirmState(s => ({ ...s, open: false }));
+        }
+      },
+    });
+  };
+
   const handlePublishCelebrationClose = () => {
     setShowPublishCelebration(false);
     // Refetch and redirect after celebration
@@ -609,6 +642,18 @@ const EditSalePage = () => {
                 className="text-sm bg-blue-600 hover:bg-blue-700 text-white py-1 px-3 rounded disabled:opacity-50"
               >
                 {isCloning ? 'Duplicating...' : 'Duplicate This Sale'}
+              </button>
+            </div>
+
+            <div className="bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 p-4 rounded">
+              <p className="text-sm text-red-700 dark:text-red-200 mb-3">No longer need this sale?</p>
+              <button
+                type="button"
+                onClick={handleDeleteSale}
+                disabled={isDeleting}
+                className="text-sm bg-red-600 hover:bg-red-700 text-white py-1 px-3 rounded disabled:opacity-50"
+              >
+                {isDeleting ? 'Deleting...' : 'Delete Sale'}
               </button>
             </div>
 
@@ -1244,10 +1289,12 @@ const EditSalePage = () => {
         isOpen={confirmState.open}
         title={confirmState.title}
         message={confirmState.message}
+        variant={confirmState.variant || 'default'}
         onConfirm={() => confirmState.onConfirm()}
         onCancel={() => {
           setConfirmState(s => ({ ...s, open: false }));
           setIsTogglingStatus(false);
+          setIsDeleting(false);
         }}
       />
     </>

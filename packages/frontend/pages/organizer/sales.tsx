@@ -15,6 +15,7 @@ import OrganizerSaleCard from '../../components/OrganizerSaleCard';
 import Head from 'next/head';
 import Link from 'next/link';
 import Skeleton from '../../components/Skeleton';
+import ConfirmDialog from '../../components/ConfirmDialog';
 
 interface Sale {
   id: string;
@@ -43,6 +44,8 @@ const OrganizerSalesPage = () => {
   const { showToast } = useToast();
   const [isClient, setIsClient] = useState(false);
   const [pinningStates, setPinningStates] = useState<Record<string, boolean>>({});
+  const [deleteTarget, setDeleteTarget] = useState<Sale | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     setIsClient(true);
@@ -116,6 +119,28 @@ const OrganizerSalesPage = () => {
       showToast(error.response?.data?.message || 'Failed to update sale pin status', 'error');
     } finally {
       setPinningStates(prev => ({ ...prev, [saleId]: false }));
+    }
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
+    setIsDeleting(true);
+    try {
+      const response = await api.delete(`/sales/${deleteTarget.id}`);
+      if (response.data?.hadActivity) {
+        showToast(
+          "Sale deleted. It's hidden from your dashboard — existing purchase and review records are kept.",
+          'success'
+        );
+      } else {
+        showToast('Sale deleted', 'success');
+      }
+      refetchSales();
+    } catch (error: any) {
+      showToast(error.response?.data?.message || 'Failed to delete sale', 'error');
+    } finally {
+      setIsDeleting(false);
+      setDeleteTarget(null);
     }
   };
 
@@ -211,6 +236,14 @@ const OrganizerSalesPage = () => {
                         Settle
                       </Link>
                     )}
+                    <button
+                      type="button"
+                      onClick={() => setDeleteTarget(sale)}
+                      className="flex-1 text-center bg-red-50 dark:bg-red-900/40 hover:bg-red-100 dark:hover:bg-red-800 text-red-700 dark:text-red-200 font-semibold py-2 px-4 rounded-lg transition-colors text-sm"
+                      title="Delete this sale"
+                    >
+                      Delete
+                    </button>
                   </div>
                 </div>
               ))}
@@ -230,6 +263,15 @@ const OrganizerSalesPage = () => {
           ) : null}
         </div>
       </div>
+
+      <ConfirmDialog
+        isOpen={!!deleteTarget}
+        title="Delete Sale"
+        message={`Delete "${deleteTarget?.title}"? This can't be undone.`}
+        variant="danger"
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </>
   );
 };
