@@ -175,8 +175,17 @@ export const listSales = async (req: Request, res: Response) => {
       status: 'PUBLISHED',
       deletedAt: null,
       isInventoryContainer: false,
-      // Permanent storefronts (isOngoing) always count as current.
-      OR: [{ isOngoing: true }, { endDate: { gte: new Date() } }],
+      AND: [
+        // Permanent storefronts (isOngoing) always count as current.
+        { OR: [{ isOngoing: true }, { endDate: { gte: new Date() } }] },
+        // Photo requirement: exclude contentless scraped directory stubs (e.g. Foursquare/HEREPlaces
+        // business listings with zero photos) from the public browse feed, while still allowing real
+        // organizer sales whose photos live only on their Items (Sale.photoUrls is optional and never
+        // auto-synced from Item photos). Mirrors the existing photo-gate precedent in
+        // getInspirationItems() (itemController.ts), extended to also check item-level photos so real
+        // organizer content isn't wrongly hidden just because they skipped a separate sale cover photo.
+        { OR: [{ photoUrls: { isEmpty: false } }, { items: { some: { photoUrls: { isEmpty: false } } } }] },
+      ],
     };
 
     if (query.city) {
