@@ -60,6 +60,7 @@ import ValuationWidget from '../../../components/ValuationWidget';
 import { decodeHtmlEntities } from '../../../utils/textUtils';
 import VoiceTagButton from '../../../components/VoiceTagButton'; // Feature #42: Voice-to-Tag
 import BountyMatchModal from '../../../components/BountyMatchModal';
+import EbayCategoryPicker from '../../../components/EbayCategoryPicker';
 
 // Feature flag — hides "Enhance All" button until backend endpoint exists.
 // Set NEXT_PUBLIC_ENABLE_ENHANCE_ALL=true to enable.
@@ -490,9 +491,11 @@ const AddItemsDetailPage = () => {
 
   // Expandable item cards (like review & publish page)
   const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
-  const [itemEditState, setItemEditState] = useState<Record<string, { title: string; price: string; category: string; condition: string; description: string; lotNumber: string }>>({});
+  const [itemEditState, setItemEditState] = useState<Record<string, { title: string; price: string; category: string; condition: string; description: string; lotNumber: string; stockTotal: string; ebayCategoryId: string; ebayCategoryName: string; packageWeightOz: string }>>({});
   const [sortBy, setSortBy] = useState<'name' | 'price' | 'status' | 'date'>('date');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  // Collapsed-by-default "eBay & Shipping" sub-section per item in the expanded quick-edit card
+  const [itemEbaySectionOpen, setItemEbaySectionOpen] = useState<Record<string, boolean>>({});
 
   const getItemEditState = useCallback((item: any) => {
     return itemEditState[item.id] || {
@@ -502,6 +505,10 @@ const AddItemsDetailPage = () => {
       condition: item.condition || '',
       description: item.description || '',
       lotNumber: item.lotNumber || '',
+      stockTotal: item.stockTotal != null ? item.stockTotal.toString() : '1',
+      ebayCategoryId: item.ebayCategoryId || '',
+      ebayCategoryName: item.ebayCategoryName || '',
+      packageWeightOz: item.packageWeightOz != null ? item.packageWeightOz.toString() : '',
     };
   }, [itemEditState]);
 
@@ -516,6 +523,10 @@ const AddItemsDetailPage = () => {
         condition: state.condition,
         description: state.description,
         lotNumber: state.lotNumber || null,
+        stockTotal: Math.max(1, parseInt(state.stockTotal, 10) || 1),
+        ebayCategoryId: state.ebayCategoryId || null,
+        ebayCategoryName: state.ebayCategoryName || null,
+        packageWeightOz: state.packageWeightOz ? parseInt(state.packageWeightOz, 10) : undefined,
       });
       showToast('Item saved', 'success');
       queryClient.invalidateQueries({ queryKey: ['items', saleId] });
@@ -2506,6 +2517,10 @@ const AddItemsDetailPage = () => {
                               condition: item.condition || '',
                               description: item.description || '',
                               lotNumber: item.lotNumber || '',
+                              stockTotal: item.stockTotal != null ? item.stockTotal.toString() : '1',
+                              ebayCategoryId: item.ebayCategoryId || '',
+                              ebayCategoryName: item.ebayCategoryName || '',
+                              packageWeightOz: item.packageWeightOz != null ? item.packageWeightOz.toString() : '',
                             }}));
                           }
                         }}
@@ -2614,15 +2629,19 @@ const AddItemsDetailPage = () => {
                                aria-label="0.00" />
                             </div>
                             <div>
-                              <label className="block text-xs font-medium text-warm-700 dark:text-warm-300 mb-1">Category</label>
-                              <select
-                                value={editState.category}
-                                onChange={(e) => setItemEditState((prev) => ({ ...prev, [item.id]: { ...editState, category: e.target.value } }))}
+                              <label className="block text-xs font-medium text-warm-700 dark:text-warm-300 mb-1">Units available</label>
+                              <input
+                                type="number"
+                                min={1}
+                                step="1"
+                                value={editState.stockTotal}
+                                onChange={(e) => setItemEditState((prev) => ({ ...prev, [item.id]: { ...editState, stockTotal: e.target.value } }))}
+                                onBlur={() => {
+                                  const parsed = Math.max(1, parseInt(editState.stockTotal, 10) || 1);
+                                  setItemEditState((prev) => ({ ...prev, [item.id]: { ...editState, stockTotal: String(parsed) } }));
+                                }}
                                 className="w-full px-3 py-1.5 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded text-sm focus:ring-1 focus:ring-amber-500"
-                              >
-                                <option value="">Select category</option>
-                                {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
-                              </select>
+                              />
                             </div>
                             <div>
                               <label className="block text-xs font-medium text-warm-700 dark:text-warm-300 mb-1">Condition</label>
@@ -2660,6 +2679,50 @@ const AddItemsDetailPage = () => {
                               />
                             </div>
                           )}
+                          {/* Collapsed-by-default eBay & Shipping section (Patrick's ask 2026-07-26:
+                              this replaces the old always-visible internal-taxonomy Category field —
+                              eBay category is what shipping-weight estimation and eBay publish actually
+                              key off, and AI photo analysis already auto-suggests it during capture, so
+                              it rarely needs a manual touch at this stage. UX + Customer Champion signed
+                              off on collapsed-by-default rather than always-visible. */}
+                          <div className="border border-warm-200 dark:border-gray-700 rounded-lg">
+                            <button
+                              type="button"
+                              onClick={() => setItemEbaySectionOpen((prev) => ({ ...prev, [item.id]: !prev[item.id] }))}
+                              className="w-full flex items-center justify-between px-3 py-2 text-xs font-medium text-warm-700 dark:text-warm-300 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                            >
+                              <span>eBay &amp; Shipping{editState.ebayCategoryName ? ` — ${editState.ebayCategoryName}` : ''}</span>
+                              <span className="text-warm-400">{itemEbaySectionOpen[item.id] ? '▲' : '▼'}</span>
+                            </button>
+                            {itemEbaySectionOpen[item.id] && (
+                              <div className="px-3 pb-3 space-y-3">
+                                <EbayCategoryPicker
+                                  value={editState.category}
+                                  ebayCategoryName={editState.ebayCategoryName}
+                                  onChange={({ leafCategoryName, leafCategoryId, l1CategoryName }) =>
+                                    setItemEditState((prev) => ({ ...prev, [item.id]: {
+                                      ...editState,
+                                      category: l1CategoryName,
+                                      ebayCategoryId: leafCategoryId,
+                                      ebayCategoryName: leafCategoryName,
+                                    }}))
+                                  }
+                                  label="Category"
+                                  placeholder="Search and select an eBay category..."
+                                />
+                                <div>
+                                  <label className="block text-xs font-medium text-warm-700 dark:text-warm-300 mb-1">Weight (oz)</label>
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    value={editState.packageWeightOz}
+                                    onChange={(e) => setItemEditState((prev) => ({ ...prev, [item.id]: { ...editState, packageWeightOz: e.target.value } }))}
+                                    className="w-full px-3 py-1.5 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded text-sm focus:ring-1 focus:ring-amber-500"
+                                  />
+                                </div>
+                              </div>
+                            )}
+                          </div>
                           <div className="flex gap-2">
                             <button
                               type="button"
@@ -2667,6 +2730,26 @@ const AddItemsDetailPage = () => {
                               className="px-4 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold rounded transition-colors"
                             >
                               Save
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setCaptureMode('rapidfire');
+                                setRapidItems([{
+                                  id: item.id,
+                                  thumbnailUrl: item.photoUrls?.[0],
+                                  draftStatus,
+                                  title: item.title,
+                                  photoUrls: item.photoUrls || [],
+                                }]);
+                                setAddingToItemId(item.id);
+                                addingToItemIdRef.current = item.id;
+                                setCameraOpen(true);
+                              }}
+                              className="px-4 py-1.5 bg-purple-100 hover:bg-purple-200 dark:bg-purple-900/30 dark:hover:bg-purple-900/50 text-purple-700 dark:text-purple-300 text-sm font-semibold rounded transition-colors"
+                            >
+                              ⚡ Rapidfire
                             </button>
                             <button
                               type="button"

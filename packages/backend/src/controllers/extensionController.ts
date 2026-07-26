@@ -259,6 +259,39 @@ export const markItemRemoved = async (req: AuthRequest, res: Response): Promise<
   res.json({ ok: true });
 };
 
+// POST /api/extension/items/:id/removal-skipped — (2026-07-26, dead-letter fix) record a
+// genuine removal attempt that couldn't be resolved (zero/ambiguous title match on Facebook's
+// "Your listings" page, or couldn't confirm the Sold flip in time) -- NOT the "already sold,
+// nothing to do" case, which is reported as a normal /removed success instead (see
+// fas-remove.js's alreadySoldCardByTitle fix, same date). Root cause this closes: before this,
+// a skip was purely a client-side toast that vanished in 4s with no server-side record, so
+// getPendingRemovals kept re-serving the exact same unresolvable item forever, once per poll,
+// with zero visibility into "this has already failed N times". attemptCount here is a running
+// count of REMOVE/SKIPPED rows for this item, read back by getPendingRemovals to give up after
+// MAX_REMOVAL_SKIP_ATTEMPTS and surface it as needsManualReview instead of retrying it forever.
+export const markItemRemovalSkipped = async (req: AuthRequest, res: Response): Promise<void> => {
+  const userId = req.user?.id;
+  const itemId = req.params.id;
+  if (!userId) { res.status(401).json({ message: 'Authentication required' }); return; }
+  if (!(await assertItemOwned(userId, itemId))) { res.status(404).json({ message: 'Item not found' }); return; }
+
+  const reason = typeof req.body?.reason === 'string' ? req.body.reason.slice(0, 500) : null;
+  const priorSkips = await prisma.marketplaceListingJob.count({
+    where: { itemId, action: 'REMOVE', status: 'SKIPPED' },
+  });
+  await prisma.marketplaceListingJob.create({
+    data: {
+      itemId,
+      action: 'REMOVE',
+      status: 'SKIPPED',
+      attemptCount: priorSkips + 1,
+      lastAttemptAt: new Date(),
+      lastErrorMessage: reason,
+    },
+  });
+  res.json({ ok: true });
+};
+
 // GET /api/extension/pending-removals — items that were listed to Marketplace by this
 // extension and have since sold via ANY channel (POS, storefront, eBay, anything that
 // flips Item.status to SOLD) but haven't been marked removed yet. ADR-084 amendment
@@ -266,6 +299,14 @@ export const markItemRemoved = async (req: AuthRequest, res: Response): Promise<
 // endEbayListingIfExists() calls eBay directly -- this is a poll target for the extension's
 // own background alarm instead. Pure read composed from data every existing sale path
 // already updates (Item.status, MarketplaceListingJob) -- no new schema, no migration.
+// (2026-07-26) An item stuck on a genuine skip (title can't be matched on Facebook at all --
+// never the "already sold" case, which now self-resolves as a normal /removed success) will
+// NEVER succeed on its own no matter how many more times it's retried -- Facebook's DOM isn't
+// going to change. Past this many recorded skips, stop handing it back out on every poll and
+// surface it once as needsManualReview instead, so a permanently-unmatchable item degrades to
+// "flag it and stop", not "error forever".
+const MAX_REMOVAL_SKIP_ATTEMPTS = 3;
+
 export const getPendingRemovals = async (req: AuthRequest, res: Response): Promise<void> => {
   const userId = req.user?.id;
   if (!userId) { res.status(401).json({ message: 'Authentication required' }); return; }
@@ -277,25 +318,35 @@ export const getPendingRemovals = async (req: AuthRequest, res: Response): Promi
     where: { sale: { organizerId: organizer.id }, status: 'SOLD' },
     select: { id: true, title: true },
   });
-  if (!soldItems.length) { res.json({ items: [] }); return; }
+  if (!soldItems.length) { res.json({ items: [], needsManualReview: [] }); return; }
 
   const itemIds = soldItems.map((i) => i.id);
   const jobs = await prisma.marketplaceListingJob.findMany({
     where: { itemId: { in: itemIds } },
-    select: { itemId: true, action: true, status: true },
+    select: { itemId: true, action: true, status: true, lastErrorMessage: true },
   });
   const postedByItem = new Set<string>();
   const removedByItem = new Set<string>();
+  const skipCountByItem = new Map<string, number>();
+  const lastSkipReasonByItem = new Map<string, string | null>();
   for (const j of jobs) {
     if (j.action === 'POST' && j.status === 'POSTED') postedByItem.add(j.itemId);
     if (j.action === 'REMOVE' && j.status === 'REMOVED') removedByItem.add(j.itemId);
+    if (j.action === 'REMOVE' && j.status === 'SKIPPED') {
+      skipCountByItem.set(j.itemId, (skipCountByItem.get(j.itemId) || 0) + 1);
+      lastSkipReasonByItem.set(j.itemId, j.lastErrorMessage ?? null);
+    }
   }
 
-  const pending = soldItems
-    .filter((i) => postedByItem.has(i.id) && !removedByItem.has(i.id))
+  const stillPending = soldItems.filter((i) => postedByItem.has(i.id) && !removedByItem.has(i.id));
+  const items = stillPending
+    .filter((i) => (skipCountByItem.get(i.id) || 0) < MAX_REMOVAL_SKIP_ATTEMPTS)
     .map((i) => ({ id: i.id, title: i.title }));
+  const needsManualReview = stillPending
+    .filter((i) => (skipCountByItem.get(i.id) || 0) >= MAX_REMOVAL_SKIP_ATTEMPTS)
+    .map((i) => ({ id: i.id, title: i.title, skipCount: skipCountByItem.get(i.id) || 0, lastErrorMessage: lastSkipReasonByItem.get(i.id) || null }));
 
-  res.json({ items: pending });
+  res.json({ items, needsManualReview });
 };
 
 // GET /api/extension/pending-updates — ADR-086: items whose FindA.Sale price has drifted from
