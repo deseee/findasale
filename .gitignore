@@ -220,3 +220,44 @@ packages/frontend/public/downloads/*
 # File stays on disk locally (agents still read it every session) and is covered by
 # scripts/backup-everything.ps1's local backup -- it just no longer syncs to GitHub.
 CLAUDE.md
+
+# Extended public-repo exposure sweep 2026-07-26 (Patrick, same S1078 follow-up as CLAUDE.md
+# above -- "any files like CLAUDE.md that would make me uncomfortable"). All of these stay
+# on disk locally (still used by agents/scripts every session); they just no longer sync to
+# GitHub. Reasoning per file:
+#
+# ai-config/global-instructions.md -- a checked-in copy of Patrick's Cowork global
+# instructions (stale project name "SaleScout"), same internal-operations-detail problem
+# as root CLAUDE.md.
+# context.md -- session-routing meta-doc that describes CLAUDE.md's internal section
+# structure and agent-orchestration mechanics.
+# packages/backend/CLAUDE.md, packages/database/CLAUDE.md, packages/frontend/CLAUDE.md,
+# packages/shared/CLAUDE.md -- benign generic boundary-contract content, but carry the
+# CLAUDE.md name/branding Patrick said he's uncomfortable with.
+ai-config/global-instructions.md
+context.md
+packages/backend/CLAUDE.md
+packages/database/CLAUDE.md
+packages/frontend/CLAUDE.md
+packages/shared/CLAUDE.md
+
+# Facebook Marketplace Cloudflare proxy -- untracked 2026-07-26 (Patrick: "yes untrack that
+# proxy directory"). The worker code and its comments document, in working detail, a method
+# for bypassing Facebook's IP-based anti-scraping block (rotating fake browser user-agents/
+# referers after confirming Railway's own IP gets blocked) -- a concrete ToS/evasion exposure,
+# not just an internal-process one. deploy.ps1 never contains a real token (prompted
+# interactively, written to a gitignored local file), so nothing breaks by untracking this.
+cloudflare/fb-marketplace-proxy/
+
+# Cold-outreach / email-discovery internals -- untracked 2026-07-26 (Patrick: "third probably
+# doesn't need to be public", re: the SMTP-permutation email-guessing pipeline). These two
+# files document guessing organizer email addresses and verifying them via raw SMTP RCPT-TO
+# probing specifically because organizers "hide emails from HTML scrapers" -- a business
+# practice, not a bug, but one Patrick doesn't want publicly documented. NOTE: untracking the
+# workflow file below stops its GitHub Actions weekly cron (it runs the script directly in
+# the Actions runner, unlike the other outreach pipelines which just curl a Railway endpoint)
+# -- flagged to Patrick, needs a follow-up decision on re-hosting this as a Railway-triggered
+# internal job like the others before/if it should run again.
+packages/backend/scripts/smtpPermutationVerifier.ts
+scripts/outreach-mailbox-ops.js
+.github/workflows/smtp-permutation-verify.yml

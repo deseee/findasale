@@ -60,5 +60,5 @@ browser session. Full rationale: `claude_docs/architecture/ADR-084-marketplace-a
   no `debugger` permission, no Chrome DevTools Protocol, and no "is debugging your
   browser" banner. Facebook's shipping-weight picker and "Update" button accept these
   events given the full hover/focus/press/release sequence (confirmed live 2026-07-17).
-- findasale-legal reviewed this amendment 2026-07-15 (reviewed and approved for shipping,
-  clear-to-ship with the above conditions) — see ADR-084's amendment section.
+- findasale-legal reviewed this amendment 2026-07-15 and approved it for shipping with
+  the conditions above — see ADR-084's amendment section.
