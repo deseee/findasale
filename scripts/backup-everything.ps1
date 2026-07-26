@@ -2,6 +2,13 @@
 # Backs up: Git repo, Database, env vars, Railway config, skills, CLAUDE.md, claude_docs
 # Runs daily via Task Scheduler. Keeps 7 days of backups.
 # Created: 2026-05-23
+# SECURITY (2026-07-26, S1078 follow-up): this script no longer hardcodes credentials.
+# Set $env:RAILWAY_TOKEN and (for the direct-pg_dump fallback path only) $env:PGPASSWORD
+# in your own shell/profile or a local, gitignored secrets file before running --
+# see .secrets.env.template for the pattern this project already uses elsewhere.
+# A prior version of this file had both hardcoded in cleartext; that Railway token has
+# been revoked and rotated. If you are restoring this script from an old backup or an
+# old git ref, do NOT reintroduce hardcoded values here.
 
 param(
     [int]$RetentionDays = 7,
@@ -121,9 +128,10 @@ if (-not $SkipDB) {
     $railwayCli = Get-Command railway -ErrorAction SilentlyContinue
     $dumpFile = "$dbDir\findasale.dump"
 
-    if ($pgDump -and $railwayCli) {
+    if ($pgDump -and $railwayCli -and -not $env:RAILWAY_TOKEN) {
+        Log "  ERROR: RAILWAY_TOKEN not set in environment -- cannot use Railway CLI path. Set it before running this script (see header comment)."
+    } elseif ($pgDump -and $railwayCli) {
         # Best path: get current public URL from Railway CLI (password auto-updates)
-        $env:RAILWAY_TOKEN = "b618831f-2bab-4e5f-b1fb-0f1618b9f0f4"
         # Pass full connection string directly to pg_dump — no parsing, no escaping issues
         $connStr = (railway run --service Postgres -- cmd /c "echo %DATABASE_PUBLIC_URL%" 2>$null).Trim()
         if ($connStr) {
@@ -139,9 +147,13 @@ if (-not $SkipDB) {
         } else {
             Log "  ERROR: Could not get DATABASE_PUBLIC_URL from Railway CLI"
         }
+    } elseif ($pgDump -and -not $env:PGPASSWORD) {
+        Log "  ERROR: PGPASSWORD not set in environment -- skipping direct pg_dump fallback. Set it before running this script (see header comment)."
     } elseif ($pgDump) {
-        # Fallback: direct connection with stored password
-        $env:PGPASSWORD = "***REMOVED-PG-PASSWORD***"
+        # Fallback: direct connection. PGPASSWORD must already be set in the
+        # environment (e.g. sourced from a local, gitignored secrets file) --
+        # this script never hardcodes it. Password rotates periodically; get the
+        # current value from the Railway dashboard (Postgres service > Variables).
         $env:PGSSLMODE = "require"
         pg_dump --host=maglev.proxy.rlwy.net --port=13949 --username=postgres --dbname=railway --format=custom --compress=9 --file=$dumpFile 2>&1
         if ($LASTEXITCODE -eq 0) {
@@ -184,8 +196,9 @@ Safe-Copy "$projectRoot\packages\database\.env" "$envDir\database.env"
 
 # Railway env vars via CLI (if available)
 $railwayCli = Get-Command railway -ErrorAction SilentlyContinue
-if ($railwayCli) {
-    $env:RAILWAY_TOKEN = "b618831f-2bab-4e5f-b1fb-0f1618b9f0f4"
+if ($railwayCli -and -not $env:RAILWAY_TOKEN) {
+    Log "  ERROR: RAILWAY_TOKEN not set in environment -- skipping Railway env var export. Set it before running this script (see header comment)."
+} elseif ($railwayCli) {
     try {
         railway vars --service Postgres 2>$null | Out-File "$envDir\railway-postgres-vars.txt" -Encoding UTF8
         railway vars --service backend 2>$null | Out-File "$envDir\railway-backend-vars.txt" -Encoding UTF8

@@ -209,3 +209,14 @@ raw-footage/*
 packages/frontend/public/downloads/*
 !packages/frontend/public/downloads/findasale-marketplace-extension.zip
 !packages/frontend/public/downloads/sale-starter-kit.pdf
+
+# Railway CLI binary (installed by Cowork session, not committed)
+.railway-cli/
+
+# CLAUDE.md untracked 2026-07-26 (Patrick: "not comfortable giving away CLAUDE.md at all",
+# S1078 follow-up security sweep). Previously deliberately public; incident history,
+# architecture detail, and internal process it documents read worse in public than as
+# an internal record, same reasoning as the claude_docs/ redaction pass above it mirrors.
+# File stays on disk locally (agents still read it every session) and is covered by
+# scripts/backup-everything.ps1's local backup -- it just no longer syncs to GitHub.
+CLAUDE.md
