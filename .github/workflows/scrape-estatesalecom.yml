@@ -26,10 +26,14 @@ jobs:
         with:
           node-version: '20'
 
+      # Fixed 2026-07-26: this was the only workflow in the fleet hardcoding
+      # a pnpm version here (8.15.5) instead of letting action-setup read it
+      # from package.json's "packageManager" field (pnpm@9.1.0) like every
+      # other workflow does -- pnpm/action-setup now hard-fails on that
+      # mismatch (ERR_PNPM_BAD_PM_VERSION), confirmed via a real manual
+      # workflow_dispatch run this session that failed at this exact step.
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: '8.15.5'
 
       - name: Install dependencies
         working-directory: packages/backend
