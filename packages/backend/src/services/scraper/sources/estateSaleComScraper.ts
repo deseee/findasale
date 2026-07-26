@@ -27,7 +27,7 @@
 import * as cheerio from 'cheerio';
 import { RateLimiter } from '../rateLimiter';
 import { getOrCreateScrapedOrganizer } from '../index';
-import { getRandomUserAgent } from '../userAgents';
+import { getRandomUserAgent, getRandomReferer } from '../userAgents';
 import { ScrapeStats } from '../sourceRegistry';
 
 const BASE_URL = 'https://www.estatesale.com';
@@ -99,12 +99,24 @@ const STATES: Array<{ id: number; name: string; abbr: string }> = [
 
 async function fetchHtml(url: string): Promise<string | null> {
   try {
+    // 2026-07-26: added a Referer header (helper already existed via
+    // getRandomReferer() but was never wired in here) after live diagnosis
+    // showed every one of 51 state-page requests returned HTTP 200 with a
+    // parseable-but-empty table (0 companies), while the exact same URL
+    // fetched through an independent tool returned the real, populated
+    // table -- consistent with the site (or a CDN/WAF in front of it)
+    // soft-blocking requests that look like bare automated fetches
+    // (no Referer, no cookies, no browser fingerprint) rather than a
+    // real site outage or a markup/selector change. Trying the cheapest,
+    // lowest-risk fix first: look more like a referred browser navigation.
+    const referer = getRandomReferer();
     const response = await fetch(url, {
       headers: {
         'User-Agent': getRandomUserAgent(),
         Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         'Accept-Language': 'en-US,en;q=0.9',
         'Cache-Control': 'no-cache',
+        ...(referer ? { Referer: referer } : {}),
       },
       signal: AbortSignal.timeout(25000),
     });
@@ -249,6 +261,19 @@ export async function scrapeEstateSaleCom(
 
     const companies = parseStatePage(html, state.abbr);
     console.log(`[EstateSaleCom] ${state.abbr}: ${companies.length} companies on listing page`);
+    // 2026-07-26: diagnostic only -- if a listing page parses to zero
+    // companies, log a short snippet + common bot-block markers so a
+    // future run can tell "site changed markup" apart from "soft-blocked
+    // by a WAF/CDN challenge page" without needing another guess-and-push
+    // round-trip. Truncated to avoid flooding CI logs across 51 states.
+    if (companies.length === 0) {
+      const snippet = html.replace(/\s+/g, ' ').trim().slice(0, 300);
+      const blockMarkers = ['Just a moment', 'cf-browser-verification', 'Access Denied', 'captcha', 'cdn-cgi/challenge-platform'];
+      const matchedMarker = blockMarkers.find((m) => html.includes(m));
+      console.warn(
+        `[EstateSaleCom] ${state.abbr}: 0 companies -- possible block marker: ${matchedMarker ?? 'none found'} -- snippet: ${snippet}`,
+      );
+    }
 
     for (const c of companies) {
       if (!seenProfileUrls.has(c.profileUrl)) {
