@@ -75,7 +75,10 @@ jobs:
         id: check_date
         run: |
           day=$(date -u +%d)
-          if [ "$day" -gt 7 ]; then
+          # Manual workflow_dispatch always runs for real (e.g. an on-demand
+          # verification run) -- only the automatic "schedule" trigger needs
+          # gating to just the first Monday of the trigger months.
+          if [ "${{ github.event_name }}" = "schedule" ] && [ "$day" -gt 7 ]; then
             echo "Not the first Monday of the month (day-of-month=$day) -- skipping."
             echo "skip=true" >> "$GITHUB_OUTPUT"
           else
