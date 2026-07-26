@@ -39,7 +39,11 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
   const applyWatermark = !canRemoveWatermark(organizer);
 
   const sales = await prisma.sale.findMany({
-    where: { organizerId: organizer.id },
+    // 2026-07-26 (S1169): exclude soft-deleted sales -- deleteSale only sets Sale.deletedAt
+    // and deliberately leaves Item rows untouched, so without this filter items belonging to
+    // a deleted sale kept surfacing here forever (organizer report: "deleted test sale" items
+    // still showing after refresh).
+    where: { organizerId: organizer.id, deletedAt: null },
     select: { id: true, title: true },
   });
   const saleTitleById = new Map(sales.map((s) => [s.id, s.title]));
@@ -52,7 +56,8 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
     // That silently hid all but the rare non-null rows (extension showed only 1 of 126 items).
     // The OR keeps NULL-override items while still excluding explicit DONT_LIST.
     where: {
-      sale: { organizerId: organizer.id },
+      // 2026-07-26 (S1169): sale.deletedAt filter -- see matching comment on the sales query above.
+      sale: { organizerId: organizer.id, deletedAt: null },
       status: 'AVAILABLE',
       OR: [
         { ebayShippingOverride: null },
@@ -315,7 +320,9 @@ export const getPendingRemovals = async (req: AuthRequest, res: Response): Promi
   if (!organizer) { res.status(404).json({ message: 'Organizer profile not found' }); return; }
 
   const soldItems = await prisma.item.findMany({
-    where: { sale: { organizerId: organizer.id }, status: 'SOLD' },
+    // 2026-07-26 (S1169): same sale.deletedAt gap as getExtensionItems -- a sold item under a
+    // soft-deleted sale must not keep surfacing as a pending Facebook removal forever.
+    where: { sale: { organizerId: organizer.id, deletedAt: null }, status: 'SOLD' },
     select: { id: true, title: true },
   });
   if (!soldItems.length) { res.json({ items: [], needsManualReview: [] }); return; }
@@ -369,7 +376,8 @@ export const getPendingUpdates = async (req: AuthRequest, res: Response): Promis
   // item can never surface here.
   const items = await prisma.item.findMany({
     where: {
-      sale: { organizerId: organizer.id },
+      // 2026-07-26 (S1169): sale.deletedAt filter -- see matching comment in getExtensionItems.
+      sale: { organizerId: organizer.id, deletedAt: null },
       status: 'AVAILABLE',
       OR: [
         { ebayShippingOverride: null },
