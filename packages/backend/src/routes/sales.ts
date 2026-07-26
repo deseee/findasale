@@ -36,7 +36,7 @@ import { exportSaleToEbay } from '../controllers/ebayController'; // Feature #24
 import { exportCommerceManagerFeed } from '../controllers/exportController'; // Commerce Manager data feed
 import { returnItemsToInventoryHandler } from '../controllers/returnToInventoryController'; // Feature #300: Return to Inventory
 import { toggleSaleRSVP, removeRSVP, getRSVPCount, getMyRSVPStatus, getRSVPAttendees } from '../controllers/rsvpController'; // Feature #154: Sale RSVP
-import { authenticate, AuthRequest } from '../middleware/auth';
+import { authenticate, optionalAuthenticate, AuthRequest } from '../middleware/auth';
 import { requireOrganizer } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import { geocodeCityState } from '../services/geocodingService'; // ADR-091: radius-aware city pages
@@ -721,7 +721,7 @@ router.get('/organizer/:organizerId/recurring', async (req, res) => {
 });
 
 // Generic /:id routes (last so they don't intercept specific subroutes)
-router.get('/:id', getSale);
+router.get('/:id', optionalAuthenticate, getSale);
 router.put('/:id', authenticate, updateSale);
 router.patch('/:id/status', authenticate, updateSaleStatus);
 router.delete('/:id', authenticate, deleteSale);
