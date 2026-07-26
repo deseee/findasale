@@ -250,8 +250,22 @@ export const getAccountStatus = async (accountId: string) => {
 
 /**
  * Pay a consignor via ACH using Stripe Transfers.
- * TODO (compliance): Verify Stripe Identity at $500 lifetime threshold
- * TODO (compliance): Track 1099-NEC reporting at $600/yr
+ * COMPLIANCE (findasale-legal review 2026-07-26, see
+ * claude_docs/feature-notes/legal-stripe-consignor-payout-compliance-2026-07-26.md):
+ * - Identity verification: Stripe enforces its own verification thresholds
+ *   automatically on the connected Express account (its documented example is
+ *   $1,500 in charges or 30 days, whichever first) via `account.requirements`
+ *   (already read in `getAccountStatus()` above). No app-side duplicate check
+ *   needed — surface `requirements.currently_due`/Restricted status to the
+ *   organizer/consignor instead of gating independently.
+ * - Tax reporting: consignor payouts via Stripe Transfers to a connected
+ *   account fall under Form 1099-K (IRC §6050W), not 1099-NEC. The federal
+ *   threshold is $20,000 AND 200+ transactions (OBBBA, July 2025 — the
+ *   earlier $600 ARPA threshold was repealed). Before enabling
+ *   STRIPE_CONNECT_LIVE_TRANSFERS in production: verify whether Stripe's
+ *   built-in Connect tax-reporting (auto-generates/files 1099-K) is enabled
+ *   in the Stripe Dashboard, and get attorney review on state-level 1099-K
+ *   thresholds (several states are below the federal bar).
  *
  * PRE-EXISTING BUG FIX (2026-07-07, ADR-017 P0 finding, findasale-hacker
  * re-verification): this function used to set

@@ -570,35 +570,40 @@ export async function getLeaderboard(limit: number = 50) {
  * Apply seasonal reset to all users
  * Drops rank to seasonal floor, keeps XP for history
  * Called annually on Jan 1 UTC
+ *
+ * Health-scout finding 2026-07-26 (Low): this previously did an unbounded
+ * prisma.user.findMany() across the entire User table, then one
+ * prisma.user.update() PER USER (N+1 round-trips). SEASONAL_RESET_FLOOR only
+ * has 5 possible source ranks (ExplorerRank enum), and explorerRank is
+ * already indexed (@@index([explorerRank])), so the reset is rewritten as
+ * one batched updateMany() per rank bucket instead — O(5) queries total,
+ * no user rows loaded into app memory, regardless of table size.
  */
 export async function applySeasonalReset() {
   try {
-    const users = await prisma.user.findMany({
-      select: { id: true, guildXp: true, explorerRank: true },
-    });
+    const newSeasonalResetAt = new Date(
+      new Date().getFullYear(),
+      0,
+      1,
+      0,
+      0,
+      0,
+      0
+    ); // Jan 1 UTC midnight
 
-    for (const user of users) {
-      const newRank = SEASONAL_RESET_FLOOR[user.explorerRank];
-      const newSeasonalResetAt = new Date(
-        new Date().getFullYear(),
-        0,
-        1,
-        0,
-        0,
-        0,
-        0
-      ); // Jan 1 UTC midnight
-
-      await prisma.user.update({
-        where: { id: user.id },
+    let totalUpdated = 0;
+    for (const [oldRank, newRank] of Object.entries(SEASONAL_RESET_FLOOR) as [ExplorerRank, ExplorerRank][]) {
+      const result = await prisma.user.updateMany({
+        where: { explorerRank: oldRank },
         data: {
           explorerRank: newRank,
           seasonalResetAt: newSeasonalResetAt,
         },
       });
+      totalUpdated += result.count;
     }
 
-    console.log('[xpService] Seasonal reset applied to all users');
+    console.log(`[xpService] Seasonal reset applied to ${totalUpdated} users (batched by rank)`);
   } catch (error) {
     console.error('[xpService] Failed to apply seasonal reset:', error);
   }
