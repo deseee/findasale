@@ -111,6 +111,84 @@ const KEEP_KEYWORDS = [
 ];
 
 /**
+ * Referral-partner keywords — Patrick's explicit call (2026-07-27 spot-check): realtors,
+ * estate attorneys, estate-planning/probate professionals, and senior-move/elder-care
+ * services routinely refer clients who need to liquidate a household, even though they
+ * are not secondary-sale businesses themselves. Spot-check found 477 realtor-named and
+ * 17 attorney/estate-planning/hospice-named records that the original keyword set would
+ * have purged (e.g. "Sentinel Real Estate Group", "Bratton Estate & Elder Care
+ * Attorneys", "CITY OF LOS ANGELS HOSPICE FOUNDATION"). Kept separate from
+ * KEEP_KEYWORDS (not a name/domain distinction, a business-relationship distinction) so
+ * future readers understand WHY these are retained.
+ */
+const REFERRAL_PARTNER_KEYWORDS = [
+  'realty', 'realtor', 'real estate', 'properties llc', 'properties inc',
+  'keller williams', 're/max', 'remax', 'century 21', 'coldwell banker',
+  'exp realty', 'compass real', 'berkshire hathaway', 'sotheby', 'corcoran',
+  'redfin', 'weichert', 'better homes',
+  'probate', 'executor', 'estate planning', 'estate attorney', 'elder law',
+  'elder care', 'assisted living', 'senior living', 'hospice', 'trustee services',
+  'trust law', 'law firm', 'law office', 'attorney', 'esq.', 'esq ',
+  'financial advisor', 'wealth management', 'fiduciary', 'conservator',
+  'geriatric care', 'home care agency', 'move management', 'senior move',
+];
+
+function hasReferralPartnerKeyword(businessName: string): boolean {
+  const lower = businessName.toLowerCase();
+  return REFERRAL_PARTNER_KEYWORDS.some((kw) => lower.includes(kw));
+}
+
+/**
+ * Round 2 (Patrick, 2026-07-27): the round-1 fix only carved out AUCTION_HOUSE, but the
+ * SAME root cause applies to every non-RESALE_SHOP category assigned from a Phase2/
+ * Licensing feed. Full-DB breakdown of every licensing-sourced record that fails the name-
+ * keyword check, by category:
+ *   13,152 RESALE_SHOP   -- confirmed generic catch-all (parking garages, barber shops,
+ *                           auto-body shops, individual contractors -- genuinely off-target)
+ *    2,938 AUCTION_HOUSE -- state auctioneer-license records (e.g. Alex Lyon and Son)
+ *      619 FLEA_MARKET   -- LouisianaPhase2 flea-market/itinerant-vendor license records
+ *                           (e.g. individual booth vendors: "JEM BEAD ART", "BIJOUTIERE")
+ *        9 PAWN_SHOP     -- pawn/loan/jewelry-buy license records
+ *        5 CONSIGNMENT   -- consignment-shop license records
+ * RESALE_SHOP is the ONLY category where the state feed dumps everything it can't
+ * otherwise classify (confirmed both by the original script author's comment above and by
+ * this breakdown: RESALE_SHOP outnumbers every other category combined by ~3.7x). Every
+ * OTHER VALID_CATEGORIES value from a licensing source reflects the state's own license-
+ * type classification and is exactly FindA.Sale's target audience (auctioneers, flea-
+ * market/itinerant vendors, pawn shops, consignment shops, antique dealers, thrift stores,
+ * liquidators) — trust it outright, no keyword match required.
+ *
+ * Deliberately scoped to LICENSING-sourced records only, NOT the untracked-source bucket
+ * (sourcesJson/directoryMostRecentSource both null) — that bucket's categorization
+ * mechanism is unverified and round 1's manual review found real junk there with non-
+ * RESALE_SHOP categories (e.g. "Reynolds Paper Company", "State Farm Mutual Automobile
+ * Insurance Company", generic moving companies all tagged ESTATE_SALE_CO) — those still
+ * need the keyword gate below.
+ */
+function isTrustedLicensingCategory(category: string | null, sourcesJson: unknown): boolean {
+  if (!category || category === 'RESALE_SHOP') return false;
+  if (!VALID_CATEGORIES.has(category)) return false;
+  return isLicensingSource(sourcesJson);
+}
+
+/**
+ * Round 3 (Patrick, 2026-07-27 -- "are you nuts, we have a whole flea market venue
+ * targeted portion of our PWA"): FLEA_MARKET and ANTIQUE_MALL are NOT off-target junk
+ * categories, regardless of source or keyword match. Confirmed via ADR-014 (Sale Hubs
+ * repurposed specifically into a flea-market/vendor-booth platform, APPROVED 2026-04-10),
+ * ADR-090 (VendorBooth hub-owner payment split, S1142 -- its own reference example is
+ * "Maple Lake Mall"), roadmap #238 (Flea Market Vendor Management + Settlement, TEAMS
+ * tier, unlimited booths), and claude_docs/research/flea-market-software-competitive-
+ * analysis.md (benchmarks Booth Tracker/Seen Markets/AntiqueTrack/Zinifly/SimpleConsign --
+ * farmers markets, flea markets, antique malls are explicitly researched market segments).
+ * A multi-vendor venue like "Eastern Market" or "Georgetown French Market" IS the exact
+ * prospect list for the TEAMS Vendor Booth Hub product, not a generic shopping mall.
+ * These two categories are excluded from purge consideration entirely -- keep unconditionally,
+ * both licensing-sourced and untracked-source records.
+ */
+const NEVER_PURGE_CATEGORIES = new Set(['FLEA_MARKET', 'ANTIQUE_MALL']);
+
+/**
  * Source name patterns that identify a Phase 2 licensing scraper record.
  * Licensing scrapers use names like "AlabamaLicensing", "TexasPhase2", etc.
  */
@@ -153,6 +231,9 @@ async function main(): Promise<void> {
   let skippedClaimed = 0;
   let untrackedScanned = 0;
   let untrackedPurged = 0;
+  let referralPartnerKept = 0;
+  let auctioneerLicenseKept = 0;
+  let vendorMarketKept = 0;
   const purgeIds: string[] = [];
 
   while (true) {
@@ -196,6 +277,32 @@ async function main(): Promise<void> {
       }
       if (untracked) untrackedScanned++;
 
+      // Hard exclusion (Patrick, 2026-07-27, round 3): FLEA_MARKET / ANTIQUE_MALL are a
+      // deliberately-built TEAMS-tier target segment (Vendor Booth Hubs, ADR-014/090), not
+      // off-target junk. Never purge these regardless of source, keyword, or anything else.
+      if (org.businessCategory && NEVER_PURGE_CATEGORIES.has(org.businessCategory)) {
+        keepCount++;
+        vendorMarketKept++;
+        continue;
+      }
+
+      // Referral-partner carve-out (Patrick, 2026-07-27): realtors, estate attorneys,
+      // estate-planning/probate/elder-care professionals are not secondary-sale
+      // businesses themselves but are a real referral channel — always keep.
+      if (hasReferralPartnerKeyword(org.businessName)) {
+        keepCount++;
+        referralPartnerKept++;
+        continue;
+      }
+
+      // Non-RESALE_SHOP licensing category carve-out — see isTrustedLicensingCategory
+      // doc comment for the full evidence (round 2, 2026-07-27).
+      if (isTrustedLicensingCategory(org.businessCategory, org.sourcesJson)) {
+        keepCount++;
+        auctioneerLicenseKept++;
+        continue;
+      }
+
       // For licensing/Phase2/untracked records, skip the category check entirely —
       // categories were auto-assigned during scraping and are unreliable
       // (e.g., parking companies and construction firms got RESALE_SHOP).
@@ -221,6 +328,9 @@ async function main(): Promise<void> {
   console.log(`  Skip (claimed):     ${skippedClaimed}`);
   console.log(`  Untracked scanned:  ${untrackedScanned} (no sourcesJson + no directoryMostRecentSource)`);
   console.log(`  Untracked TO PURGE: ${untrackedPurged}`);
+  console.log(`  Kept (referral partner — realtor/attorney/elder-care/etc.): ${referralPartnerKept}`);
+  console.log(`  Kept (non-RESALE_SHOP category from a licensing feed — auctioneer/flea-market-vendor/pawn/consignment/etc.): ${auctioneerLicenseKept}`);
+  console.log(`  Kept (FLEA_MARKET / ANTIQUE_MALL — TEAMS Vendor Booth Hub target segment, never purged): ${vendorMarketKept}`);
   console.log(`  TO PURGE:           ${purgeCount}`);
 
   if (purgeCount === 0) {

@@ -301,6 +301,21 @@ if (Test-Path "$projectRoot\claude_docs") {
     Safe-CopyDir "$projectRoot\claude_docs" "$docsDir\claude_docs"
 }
 
+# Rolling per-file snapshots of the load-bearing docs (STATE.md, session-log.md,
+# patrick-dashboard.md, roadmap.md). claude_docs/ is gitignored -- no git history --
+# so the full zip above (once/day) plus these rolling per-file snapshots are the
+# only recovery path. Added 2026-07-27 after a real STATE.md truncation was found
+# on disk with no way to recover the original text.
+$pythonExe = Get-Command python -ErrorAction SilentlyContinue
+if (-not $pythonExe) { $pythonExe = Get-Command python3 -ErrorAction SilentlyContinue }
+if ($pythonExe) {
+    Push-Location $projectRoot
+    & $pythonExe.Source "claude_docs\operations\backup-claude-docs.py" 2>&1 | ForEach-Object { Log "  [rolling-backup] $_" }
+    Pop-Location
+} else {
+    Log "  SKIP: python/python3 not found -- rolling per-file claude_docs snapshots not run this pass (full claude_docs/ zip above still covers it once per day)"
+}
+
 # Global Cowork CLAUDE.md
 $globalClaude = "$env:APPDATA\Claude\local-agent-mode-sessions\42d3662d-10d1-4e34-9d2d-01726cdad063\5685eb83-5389-4313-9ba3-a01c604a25c3\local_a60b6242-9fd7-48ea-b234-9f3be1454c97\.claude\CLAUDE.md"
 if (Test-Path $globalClaude) {
