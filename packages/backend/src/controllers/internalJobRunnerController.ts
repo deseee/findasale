@@ -32,6 +32,7 @@ import { runMonthlyTrendReport } from '../jobs/monthlyTrendReportJob';
 import { runGmailOAuthHealthCheck, runDailySendSummary, runSuspensionDetect } from '../jobs/gmailHealthCron';
 import { runDeliverabilityMonitor } from '../jobs/deliverabilityMonitorJob';
 import { bounceSuppressService } from '../services/bounceSuppressService';
+import { runSmtpPermutationVerify } from '../jobs/smtpPermutationVerifyJob';
 
 /**
  * Allowlisted job-name → job logic function.
@@ -63,6 +64,10 @@ const JOB_MAP: Record<string, () => Promise<unknown>> = {
   'deliverability-monitor': runDeliverabilityMonitor,
   'process-bounces': () => bounceSuppressService.processBounces(),
   'reclassify-bounces': () => bounceSuppressService.reclassifyBounces(),
+  // S1172: re-hosted from packages/backend/scripts/smtpPermutationVerifier.ts
+  // (Patrick-authorized) -- see src/jobs/smtpPermutationVerifyJob.ts for why the
+  // original CLI script is untouched rather than imported directly.
+  'smtp-permutation-verify': runSmtpPermutationVerify,
 };
 
 /**

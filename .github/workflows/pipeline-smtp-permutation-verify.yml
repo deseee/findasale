@@ -1,0 +1,29 @@
+# S1172: re-hosted as a Railway-triggered internal job (Patrick-authorized).
+# The old workflow (.github/workflows/smtp-permutation-verify.yml) is untracked
+# in git after the public-repo redaction sweep (S1157/S1171) and can no longer
+# run at all. This workflow replaces it, following the same lightweight
+# curl-to-Railway pattern as every other pipeline-*.yml in this directory.
+name: Pipeline — SMTP Permutation Verify
+on:
+  schedule:
+    - cron: '0 2 * * 1'   # Weekly, Monday 2am UTC — matches the old workflow's cadence
+  workflow_dispatch:
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Trigger smtp-permutation-verify job
+        env:
+          OUTREACH_SECRET: ${{ secrets.INTERNAL_API_TOKEN }}
+          RAILWAY_BACKEND_URL: ${{ secrets.RAILWAY_BACKEND_URL }}
+        run: |
+          curl -X POST \
+            -H "x-internal-secret: ${OUTREACH_SECRET}" \
+            -H "Content-Type: application/json" \
+            -d '{"job":"smtp-permutation-verify"}' \
+            "${RAILWAY_BACKEND_URL}/api/internal/jobs/run" \
+            --fail-with-body --connect-timeout 10 --max-time 60
