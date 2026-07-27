@@ -79,6 +79,9 @@ export const AGGREGATOR_DOMAINS: ReadonlySet<string> = new Set([
   'yelp.com',
   'google.com',
   'maps.google.com',
+  'garagesaletracker.com', // Garage Sale Tracker — direct competitor (findasale-competitor watchlist)
+  'offerup.com', // OfferUp — resale marketplace competitor
+  'bidsquare.com', // Bidsquare — online auction competitor
 ]);
 
 // ---------------------------------------------------------------------------

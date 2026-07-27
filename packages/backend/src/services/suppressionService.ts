@@ -1,5 +1,11 @@
 import { prisma } from '../lib/prisma';
 import { AGGREGATOR_DOMAINS } from '../config/domainBlocklist';
+// FAMOUS_UNRELATED_DOMAINS is a superset that already spreads in both SOCIAL_DOMAINS and
+// AGGREGATOR_DOMAINS (see emailProvenance.ts) -- importing it here closes a gap where mega-brand
+// and social-platform domains (facebook.com, godaddy.com, walmart.com, etc.) were blocked from
+// being treated as an organizer's own website but were NOT blocked from receiving outreach/
+// transactional email, relying instead on a reactive bounce-then-suppress cycle.
+import { FAMOUS_UNRELATED_DOMAINS } from './emailProvenance';
 
 /**
  * Consecutive soft-bounce threshold for the BULK (marketing) suppression gate.
@@ -26,6 +32,12 @@ export const BLOCKED_DOMAINS: ReadonlySet<string> = new Set([
   // Converged with the ingest/fetch gate so the send-suppression list and the
   // aggregator/directory blocklist never drift (single source: config/domainBlocklist.ts).
   ...AGGREGATOR_DOMAINS,
+  // FAMOUS_UNRELATED_DOMAINS already includes SOCIAL_DOMAINS + AGGREGATOR_DOMAINS plus mega-brand
+  // hosts (disney/amazon/google/walmart/target/costco/apple/microsoft/wix/squarespace/godaddy/
+  // wordpress/shopify/etc.) -- spread it here so those domains are blocked proactively at send
+  // time instead of only after a real bounce (found 2026-07-27: facebook.com, godaddy.com, and
+  // several mall-tenant/mega-brand domains had reached EmailSuppression only reactively).
+  ...FAMOUS_UNRELATED_DOMAINS,
 ]);
 
 /**
