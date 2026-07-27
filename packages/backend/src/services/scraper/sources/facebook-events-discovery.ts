@@ -171,7 +171,27 @@ async function fetchSearchHtml(searchUrl: string): Promise<string | null> {
       );
       return null;
     }
-    return await response.text();
+    const text = await response.text();
+
+    // TEMP DIAGNOSTIC (2026-07-27, Patrick: "diagnose it immediately") --
+    // extractEventObjects has been silently returning 0 events for every
+    // metro/category for 3+ consecutive days with ZERO HTTP-level errors,
+    // meaning the fetch itself succeeds but the returned page has no embedded
+    // Event JSON. Log response length + a login-wall/checkpoint marker check so
+    // the NEXT run tells us whether FB is serving a login wall / checkpoint
+    // page instead of real search results, rather than us guessing again.
+    const lower = text.toLowerCase();
+    const looksBlocked =
+      lower.includes('checkpoint') ||
+      lower.includes('log_in') ||
+      lower.includes('log into facebook') ||
+      lower.includes('you must log in') ||
+      lower.includes('captcha');
+    console.log(
+      `[FB-Events-Discovery] DIAG len=${text.length} looksBlocked=${looksBlocked} url=${searchUrl.slice(0, 90)}`
+    );
+
+    return text;
   } catch (err) {
     console.warn(
       `[FB-Events-Discovery] Fetch failed for ${searchUrl}:`,
