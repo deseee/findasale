@@ -2838,6 +2838,103 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
 };
 
 /**
+ * Ask eBay's Trading API GetItem call what shipping configuration a LIVE
+ * listing actually has RIGHT NOW — distinguishes "already has a real, working
+ * setup" (local-pickup-only, or a flat/free rate someone set by hand) from
+ * "genuinely has nothing configured" (relying on FindA.Sale's own weight-based
+ * CALCULATED shipping). Mirrors the GetItem calling pattern used by
+ * syncEndedListingsForOrganizer (Trading API via the Vercel proxy, XML
+ * request/response, trackEbayCall() per call) for consistency.
+ *
+ * Background (audit 2026-07-26): 32 items in one sale were found live on eBay
+ * with no packageWeightOz recorded in FindA.Sale's DB. Every one of them
+ * already had a working shipping setup configured directly on eBay (pickup,
+ * free flat rate, or a real dollar rate) — FindA.Sale's own data had simply
+ * drifted out of sync. This helper lets a republish/resync path check eBay's
+ * live reality before letting an auto-guessed weight recompute shipping.
+ *
+ * Does NOT attempt to classify every possible eBay shipping configuration —
+ * only enough to answer "does this listing already have working shipping on
+ * eBay's side that FindA.Sale must not clobber." Never throws; returns
+ * { ok: false } on any HTTP/XML/parse failure so callers can fall back to
+ * existing behavior unchanged.
+ */
+type EbayLiveShippingCheck =
+  | { ok: true; isPickupOnly: boolean; hasFlatOrFreeRate: boolean; isCalculated: boolean }
+  | { ok: false; reason: string };
+
+async function fetchEbayLiveShippingConfig(
+  ebayListingId: string,
+  accessToken: string
+): Promise<EbayLiveShippingCheck> {
+  try {
+    const requestXml = `<?xml version="1.0" encoding="utf-8"?>
+<GetItemRequest xmlns="urn:ebay:apis:eBLBaseComponents">
+  <ItemID>${ebayListingId}</ItemID>
+  <DetailLevel>ReturnAll</DetailLevel>
+</GetItemRequest>`;
+
+    const ebayResponse = await fetch(ebayProxyUrl('/ws/api.dll'), {
+      method: 'POST',
+      headers: {
+        'X-EBAY-API-CALL-NAME': 'GetItem',
+        'X-EBAY-API-SITEID': '0',
+        'X-EBAY-API-COMPATIBILITY-LEVEL': '967',
+        'X-EBAY-API-APP-NAME': process.env.EBAY_CLIENT_ID || '',
+        'X-EBAY-API-IAF-TOKEN': accessToken,
+        'Content-Type': 'text/xml',
+        ...ebayProxyHeaders(),
+      },
+      body: requestXml,
+    });
+
+    trackEbayCall(); // Track this GetItem call against the daily eBay limit
+
+    if (!ebayResponse.ok) {
+      return { ok: false, reason: `HTTP ${ebayResponse.status}` };
+    }
+
+    const ebayText = await ebayResponse.text();
+
+    // eBay returns XML errors even on HTTP 200 — check Ack first.
+    const ack = xmlVal(ebayText, 'Ack');
+    if (ack && ack !== 'Success' && ack !== 'Warning') {
+      const errMsg = xmlVal(ebayText, 'LongMessage') || xmlVal(ebayText, 'ShortMessage') || 'Unknown error';
+      return { ok: false, reason: `${ack}: ${errMsg}` };
+    }
+
+    const shippingBlockMatch = ebayText.match(/<ShippingDetails(?:\s[^>]*)?>([\s\S]*?)<\/ShippingDetails>/);
+    const shippingBlock = shippingBlockMatch ? shippingBlockMatch[1] : '';
+
+    const shippingType = xmlVal(shippingBlock, 'ShippingType');
+    const serviceOptionBlocks = xmlAll(shippingBlock, 'ShippingServiceOptions');
+
+    // A real, already-resolved rate — a concrete cost (even $0.00) or an
+    // explicit FreeShipping flag on any service option — means this listing
+    // does NOT need FindA.Sale's weight-based calculation.
+    let hasFlatOrFreeRate = false;
+    for (const opt of serviceOptionBlocks) {
+      const cost = xmlVal(opt, 'ShippingServiceCost');
+      const freeShipping = xmlVal(opt, 'FreeShipping');
+      if (freeShipping === 'true' || cost != null) {
+        hasFlatOrFreeRate = true;
+      }
+    }
+
+    // "Local pickup only" listings carry no paid ShippingServiceOptions and
+    // either explicitly flag LocalPickup or simply have no ShippingType set.
+    const localPickupFlag = xmlVal(shippingBlock, 'LocalPickup') === 'true';
+    const isPickupOnly = serviceOptionBlocks.length === 0 && (localPickupFlag || !shippingType);
+
+    const isCalculated = shippingType === 'Calculated' || shippingType === 'CalculatedDomesticFlatInternational';
+
+    return { ok: true, isPickupOnly, hasFlatOrFreeRate, isCalculated };
+  } catch (err: any) {
+    return { ok: false, reason: err?.message || 'EXCEPTION' };
+  }
+}
+
+/**
  * POST /api/ebay/items/:itemId/publish
  *
  * S725: "Publish to eBay now" — publishes an existing UNPUBLISHED Inventory API
@@ -2931,6 +3028,52 @@ export const publishItemOffer = async (req: AuthRequest, res: Response) => {
     // the live offer before returning. Never let resync failure break the
     // idempotent response — the listing URL must always come back.
     if (item.ebayListingId) {
+      // Safety check (2026-07-27, shipping-drift audit): before trusting
+      // FindA.Sale's own (possibly stale) shipping fields, ask eBay directly
+      // what's actually configured on this LIVE listing. Some listings were
+      // hand-configured or revised directly on eBay after FindA.Sale's
+      // original push (pickup-only, a manual flat/free rate) and FindA.Sale's
+      // DB was never updated to match. Skipping this check risks a later
+      // weight-based auto-guess clobbering a manually-set, currently-working
+      // arrangement. Never blocks the publish response — any failure or
+      // inconclusive result falls back to the existing resync behavior below.
+      if (organizer.ebayConnection && !isEbayRateLimited()) {
+        try {
+          const liveCheckToken = await refreshEbayAccessToken(organizer.id);
+          if (liveCheckToken) {
+            const liveShipping = await fetchEbayLiveShippingConfig(item.ebayListingId, liveCheckToken);
+            if (liveShipping.ok) {
+              if (liveShipping.isPickupOnly && item.ebayShippingOverride !== 'LOCAL_PICKUP_ONLY') {
+                await prisma.item.update({
+                  where: { id: item.id },
+                  data: { ebayShippingOverride: 'LOCAL_PICKUP_ONLY' },
+                });
+                console.log(
+                  `[eBay PublishNow] item=${item.id} eBay listing ${item.ebayListingId} is pickup-only on eBay but FindA.Sale had ebayShippingOverride=${item.ebayShippingOverride ?? 'null'} — backfilled to LOCAL_PICKUP_ONLY so no future push recomputes a weight for it`
+                );
+              } else if (liveShipping.hasFlatOrFreeRate) {
+                console.log(
+                  `[eBay PublishNow] item=${item.id} eBay listing ${item.ebayListingId} already has a real flat/free shipping rate configured on eBay — leaving it alone this republish`
+                );
+              } else if (liveShipping.isCalculated) {
+                console.log(
+                  `[eBay PublishNow] item=${item.id} eBay listing ${item.ebayListingId} is on CALCULATED shipping on eBay's side — normal resync path applies`
+                );
+              }
+            } else {
+              console.warn(
+                `[eBay PublishNow] item=${item.id} live-shipping GetItem check inconclusive (${liveShipping.reason}) — proceeding with existing resync behavior`
+              );
+            }
+          }
+        } catch (liveCheckErr) {
+          console.warn(
+            `[eBay PublishNow] item=${item.id} live-shipping GetItem check threw (non-fatal):`,
+            (liveCheckErr as Error).message
+          );
+        }
+      }
+
       let shippingResynced = false;
       try {
         const resync = await resyncItemShippingPolicy(item.id);
@@ -2978,6 +3121,69 @@ export const publishItemOffer = async (req: AuthRequest, res: Response) => {
         console.warn('[auto-isbn] JIT resolve failed for item', item.id, e?.message || e);
       }
     }
+    // Drift-recovery guard (2026-07-27, shipping-drift audit): item.ebayListingId
+    // is FindA.Sale's own record of "this is published" — but that field can go
+    // stale (a lost DB write after a real eBay publish, or a listing revised
+    // directly on eBay after an earlier push). If an offer already exists, ask
+    // eBay directly whether it's ALREADY live before falling through to a blind
+    // resolvePublishPackageWeight() call that would auto-guess a weight and push
+    // a fresh shipping config on top of a manually-configured, currently-working
+    // listing. Never throws; any failure/inconclusive result falls through to
+    // the normal first-publish path unchanged.
+    if (item.ebayOfferId && organizer.ebayConnection && !isEbayRateLimited()) {
+      try {
+        const driftCheckToken = await refreshEbayAccessToken(organizer.id);
+        if (driftCheckToken) {
+          const offerPath = `/sell/inventory/v1/offer/${item.ebayOfferId}`;
+          const offerGet = await fetch(ebayProxyUrl(encodeURIComponent(offerPath)), {
+            headers: { ...ebayUserHeaders(driftCheckToken), ...ebayProxyHeaders() },
+          });
+          if (offerGet.ok) {
+            const offerBody = (await offerGet.json()) as any;
+            const liveListingId: string | null = offerBody?.listing?.listingId ?? null;
+            if (liveListingId) {
+              console.warn(
+                `[eBay PublishNow] item=${item.id} DB showed ebayListingId=null but offer ${item.ebayOfferId} is ALREADY live on eBay as ${liveListingId} — DB was out of sync. Backfilling ebayListingId and treating as already-published instead of auto-resolving a new weight/shipping config.`
+              );
+              await prisma.item.update({
+                where: { id: item.id },
+                data: {
+                  ebayListingId: liveListingId,
+                  ...(item.ebayListedAt == null ? { ebayListedAt: new Date() } : {}),
+                },
+              });
+              let shippingResynced = false;
+              try {
+                const resync = await resyncItemShippingPolicy(item.id);
+                shippingResynced = resync.changed;
+              } catch (resyncErr) {
+                console.warn(
+                  `[eBay PublishNow] shipping resync failed for item ${item.id} (non-fatal):`,
+                  (resyncErr as Error).message
+                );
+              }
+              return res.json({
+                ebayListingId: liveListingId,
+                ebayItemUrl: `https://www.ebay.com/itm/${liveListingId}`,
+                alreadyPublished: true,
+                shippingResynced,
+                recoveredFromDrift: true,
+              });
+            }
+          } else {
+            console.warn(
+              `[eBay PublishNow] item=${item.id} drift-check offer GET failed HTTP ${offerGet.status} — proceeding with normal publish path`
+            );
+          }
+        }
+      } catch (driftCheckErr) {
+        console.warn(
+          `[eBay PublishNow] item=${item.id} drift-check threw (non-fatal):`,
+          (driftCheckErr as Error).message
+        );
+      }
+    }
+
     // Auto-resolve shipping weight/dims for a SHIPPABLE item missing a confirmed weight
     // (mirror of pushSaleToEbay). Persists to the Item + mutates the in-memory item so
     // the guard passes and the live-inventory weight backfill below sends real shipping.
