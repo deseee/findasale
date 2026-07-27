@@ -303,11 +303,13 @@ const VendorBoothTokenPage: React.FC = () => {
                           </Elements>
                         ) : null}
 
-                        {feeCharges.length > 0 && (
-                          <div className="mt-4 pt-4 border-t border-warm-200 dark:border-gray-600">
-                            <h3 className="text-xs font-bold text-warm-600 dark:text-warm-400 uppercase mb-2">
-                              Charge History
-                            </h3>
+                        <div className="mt-4 pt-4 border-t border-warm-200 dark:border-gray-600">
+                          <h3 className="text-xs font-bold text-warm-600 dark:text-warm-400 uppercase mb-2">
+                            Charge History
+                          </h3>
+                          {feeCharges.length === 0 ? (
+                            <p className="text-sm text-warm-500 dark:text-warm-400">No charges yet</p>
+                          ) : (
                             <ul className="divide-y divide-warm-200 dark:divide-gray-600">
                               {feeCharges.map((c) => (
                                 <li key={c.id} className="py-2 flex justify-between text-sm">
@@ -320,8 +322,8 @@ const VendorBoothTokenPage: React.FC = () => {
                                 </li>
                               ))}
                             </ul>
-                          </div>
-                        )}
+                          )}
+                        </div>
                       </div>
                     )}
                   </>

@@ -163,15 +163,15 @@ export default function FleaMarketEventsPage() {
                     Ready to host a multi-vendor event?
                   </h2>
                   <p className="text-sm text-amber-800 dark:text-amber-200">
-                    Event creation is coming in Phase 2. You&apos;ll be able to set up booths, invite vendors, and manage payouts — all from one dashboard.
+                    Set up booths, invite vendors, and manage payouts — all from one dashboard.
                   </p>
                 </div>
-                <button
-                  disabled
-                  className="px-6 py-2.5 bg-amber-600/50 text-white rounded-lg font-semibold cursor-not-allowed"
+                <Link
+                  href="/organizer/hubs/create"
+                  className="px-6 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-semibold transition-colors"
                 >
-                  Create Event — Coming Soon
-                </button>
+                  Create Hub
+                </Link>
               </div>
             </div>
 
