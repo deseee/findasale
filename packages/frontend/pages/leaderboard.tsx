@@ -354,7 +354,7 @@ export const getStaticProps: GetStaticProps<LeaderboardPageProps> = async () => 
         initialScoutSeason: scoutSeason,
         initialScoutResetDate: scoutResetDate,
       },
-      revalidate: 3600, // 1 hour
+      revalidate: 21600, // ISR: 6h (widened from 1h 2026-07-27 -- Fluid Active CPU reduction, Patrick-approved; gamification standings tolerate hours of staleness fine
     };
   } catch {
     return { props: empty, revalidate: 300 };

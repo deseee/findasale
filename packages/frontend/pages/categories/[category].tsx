@@ -350,7 +350,7 @@ export const getStaticProps: GetStaticProps = async ({ params }) => {
       props: {
         initialData: data,
       },
-      revalidate: 3600, // ISR: revalidate every 1 hour
+      revalidate: 10800, // ISR: 3h (widened from 1h 2026-07-27 -- Fluid Active CPU reduction, Patrick-approved; shows real listings so kept tighter than the pure-count pages
     };
   } catch (error) {
     console.error(`Error fetching category ${category}:`, error);
