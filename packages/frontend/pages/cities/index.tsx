@@ -211,6 +211,6 @@ export const getStaticProps: GetStaticProps<CitiesPageProps> = async () => {
 
   return {
     props: { stateGroups, totalCities },
-    revalidate: 3600, // ISR: 1 hour
+    revalidate: 21600, // ISR: 6h (widened from 1h 2026-07-27 -- Fluid Active CPU reduction; this page only shows city names + aggregate sale counts by state, not individual sale/item data, so a few hours of staleness on a count is imperceptible to users)
   };
 };

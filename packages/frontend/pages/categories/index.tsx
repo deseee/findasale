@@ -695,7 +695,7 @@ export const getStaticProps: GetStaticProps<Props> = async () => {
     const data = (await res.json()) as { categories: Record<string, number> };
     return {
       props: { initialData: data },
-      revalidate: 3600, // ISR: re-render every 1 hour on Vercel
+      revalidate: 21600, // ISR: 6h (widened from 1h 2026-07-27 -- Fluid Active CPU reduction; this page only shows category names + aggregate item counts, not individual item listings, so a few hours of staleness on a count is imperceptible to users)
     };
   } catch (err) {
     console.error('[categories/index] getStaticProps error:', err);
