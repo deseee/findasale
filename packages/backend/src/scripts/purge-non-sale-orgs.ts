@@ -1,9 +1,22 @@
 /**
- * One-time migration: purge off-target organizers from Phase 2 licensing scrapes.
+ * One-time migration: purge off-target organizers from Phase 2 licensing scrapes,
+ * AND from untracked-source ingestion (sourcesJson/directoryMostRecentSource both null).
  *
  * Background: Phase 2 licensing scrapers pulled ~37k organizers from state auction
  * license databases, including non-secondary-sale businesses (delis, auto shops, etc.).
  * This script soft-deletes off-target records by setting directoryStatus = 'CLOSED'.
+ *
+ * Extended 2026-07-27: found via bounce-suppression review that a batch of Organizer
+ * rows created 2026-05-02 to 2026-05-04 have NO source tracking at all (sourcesJson
+ * AND directoryMostRecentSource both null) and are obviously not secondary-sale
+ * businesses -- e.g. "Bois Scott KeyBank Real Estate Capital", "The Bingo Mall",
+ * "It'Sugar", "Jason's Deli, Collin Creek Mall...", "Tourneau Watch Shop" -- with
+ * contactEmail values scraped from an outlet-mall/mega-brand site (info@premiumoutlets.com,
+ * info@homegoods.com, etc.). These never matched isLicensingSource() (no sourcesJson at
+ * all to check), so they silently evaded this script's original scope. The current live
+ * scraper pipeline (services/scraper/index.ts gateScrapedEmail/gateScrapedWebsite) already
+ * rejects this exact pattern for NEW scrapes -- this is purely a historical-data cleanup,
+ * not a live ingestion bug.
  *
  * Safety:
  * - Soft delete only — directoryStatus set to 'CLOSED', never hard delete
@@ -110,6 +123,18 @@ function isLicensingSource(sourcesJson: unknown): boolean {
 }
 
 /**
+ * Returns true if a record has NO source attribution at all (both sourcesJson and
+ * directoryMostRecentSource are empty/null). These predate or bypassed the current
+ * source-tagging convention and are just as untrustworthy as a licensing-scrape record --
+ * businessCategory on them is equally unreliable, so only KEEP_KEYWORDS is a trustworthy
+ * signal (same reasoning as isLicensingSource records, see the loop below).
+ */
+function isUntrackedSource(sourcesJson: unknown, directoryMostRecentSource: string | null): boolean {
+  const noSourcesJson = !sourcesJson || (Array.isArray(sourcesJson) && sourcesJson.length === 0);
+  return noSourcesJson && !directoryMostRecentSource;
+}
+
+/**
  * Returns true if businessName contains any secondary-sale keyword.
  */
 function hasKeepKeyword(businessName: string): boolean {
@@ -126,6 +151,8 @@ async function main(): Promise<void> {
   let totalScanned = 0;
   let keepCount = 0;
   let skippedClaimed = 0;
+  let untrackedScanned = 0;
+  let untrackedPurged = 0;
   const purgeIds: string[] = [];
 
   while (true) {
@@ -141,6 +168,7 @@ async function main(): Promise<void> {
         isClaimed: true,
         directoryStatus: true,
         sourcesJson: true,
+        directoryMostRecentSource: true,
       },
       skip: offset,
       take: PAGE_SIZE,
@@ -158,13 +186,17 @@ async function main(): Promise<void> {
         continue;
       }
 
-      // Only process records from licensing/Phase2 sources
-      if (!isLicensingSource(org.sourcesJson)) {
+      // Only process records from licensing/Phase2 sources OR records with no source
+      // attribution at all (both equally unreliable-category, same treatment).
+      const licensing = isLicensingSource(org.sourcesJson);
+      const untracked = isUntrackedSource(org.sourcesJson, org.directoryMostRecentSource);
+      if (!licensing && !untracked) {
         keepCount++;
         continue;
       }
+      if (untracked) untrackedScanned++;
 
-      // For licensing/Phase2 records, skip the category check entirely —
+      // For licensing/Phase2/untracked records, skip the category check entirely —
       // categories were auto-assigned during scraping and are unreliable
       // (e.g., parking companies and construction firms got RESALE_SHOP).
       // Only business name keywords are a trustworthy signal here.
@@ -174,6 +206,7 @@ async function main(): Promise<void> {
       }
 
       // Off-target — mark for purge
+      if (untracked) untrackedPurged++;
       purgeIds.push(org.id);
     }
 
@@ -186,6 +219,8 @@ async function main(): Promise<void> {
   console.log(`  Total scanned:      ${totalScanned}`);
   console.log(`  Keep (valid):       ${keepCount}`);
   console.log(`  Skip (claimed):     ${skippedClaimed}`);
+  console.log(`  Untracked scanned:  ${untrackedScanned} (no sourcesJson + no directoryMostRecentSource)`);
+  console.log(`  Untracked TO PURGE: ${untrackedPurged}`);
   console.log(`  TO PURGE:           ${purgeCount}`);
 
   if (purgeCount === 0) {
