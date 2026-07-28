@@ -466,6 +466,10 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                   <Users size={16} className="text-gray-500" />
                   <span>Workspace</span>
                 </Link>
+                <Link href="/organizer/hubs" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Flea market events — TEAMS">
+                  <Store size={16} className="text-gray-500" />
+                  <span>Market Hubs</span>
+                </Link>
               </>
             )}
             {canAccess('PRO') && (
