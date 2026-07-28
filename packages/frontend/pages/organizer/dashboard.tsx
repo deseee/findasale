@@ -46,6 +46,7 @@ import EfficiencyCoachingWidget from '../../components/EfficiencyCoachingWidget'
 import WeatherStrip from '../../components/WeatherStrip';
 import PostSaleMomentumCard from '../../components/PostSaleMomentumCard';
 import MyTeamsCard from '../../components/MyTeamsCard';
+import MyVendorBoothsCard from '../../components/MyVendorBoothsCard';
 import { isWidgetVisible, getSaleTypeConfig } from '../../lib/dashboard-sale-type-config';
 import { OGBuyerCountBadge } from '../../components/OGBuyerBadge'; // Feature #404: OG Buyer
 import { Clock, ShoppingCart, Megaphone, Pencil, Eye, Copy, Store } from 'lucide-react';
@@ -1023,6 +1024,18 @@ const OrganizerDashboard = () => {
               </div>
             </div>
           )}
+
+          {/* Booths this user RENTS at somebody else's market -- the mirror image of the
+              Market Hubs card directly above. That card reads /api/organizer/hubs
+              (hubController.ts listMyHubs :292), which filters to hubs this organizer
+              OWNS, so it shows a vendor at another person's mall nothing at all. This one
+              reads /api/vendor-booth/my-booths, which is filtered to
+              `userId: req.user.id`. Renders NOTHING when the viewer has no claimed booths,
+              so an organizer who is not also a vendor sees no change. Note this card can
+              only ever reach organizers: dashboard.tsx's auth guard below (:483) sends
+              anyone without the ORGANIZER role to /access-denied, which is why the same
+              component is also mounted standalone at /vendor/booths for pure vendors. */}
+          <MyVendorBoothsCard />
 
           {/* STATE-AWARE CONTENT */}
 

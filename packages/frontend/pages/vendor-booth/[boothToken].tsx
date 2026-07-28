@@ -10,6 +10,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
+import Link from 'next/link';
 import { loadStripe, Stripe } from '@stripe/stripe-js';
 import { Elements } from '@stripe/react-stripe-js';
 import api from '../../lib/api';
@@ -185,6 +186,19 @@ const VendorBoothTokenPage: React.FC = () => {
       </Head>
 
       <div className="max-w-lg mx-auto">
+        {/* Breaks the circle. Until now this page was the ONLY caller of
+            /vendor-booth/my-booths, and you could only open it if you already held the
+            booth token, so a vendor who lost the invite email had no way back in.
+            /vendor/booths lists every booth this user has claimed and needs no token. */}
+        {user && (
+          <Link
+            href="/vendor/booths"
+            className="text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300 font-medium mb-4 inline-block"
+          >
+            &larr; All your booths
+          </Link>
+        )}
+
         {loading || authLoading ? (
           <div className="bg-white dark:bg-gray-800 rounded-xl p-8 text-center">
             <p className="text-warm-600 dark:text-warm-400">Loading booth details...</p>

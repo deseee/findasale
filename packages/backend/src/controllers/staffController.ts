@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import * as Sentry from '@sentry/node';
+import { prisma } from '../lib/prisma';
 import {
   getStaffMembers,
   getStaffMember,
@@ -10,7 +11,10 @@ import {
   getCoverageGaps,
   getPerformanceSnapshot,
   verifyStaffBelongsToWorkspace,
-  removeStaffMember
+  removeStaffMember,
+  listRegisterAccess,
+  grantRegisterAccess,
+  revokeRegisterAccess
 } from '../services/staffService';
 
 /**
@@ -274,5 +278,194 @@ export const deleteStaff = async (req: AuthRequest, res: Response) => {
     Sentry.captureException(error);
     console.error('Error removing staff member:', error);
     return res.status(500).json({ message: 'Failed to remove staff member' });
+  }
+};
+
+/* ===========================================================================
+ * Register Access (2026-07-28)
+ *
+ * The register (pages/organizer/hubs/[hubId]/cart.tsx) lets a caller in only if
+ * requireBoothAuth.ts:153-168 finds their accepted WorkspaceMember WITH a linked
+ * TeamMember. Before this, no route in the repo could create that link, so a
+ * person could be invited, accept, and still be 403'd with NOT_TEAM_MEMBER
+ * (requireBoothAuth.ts:167). These endpoints are the owner's switch for it.
+ * =========================================================================== */
+
+/**
+ * Read guard: the workspace owner, or any accepted member of that workspace.
+ *
+ * Membership half is copied from requireWorkspaceMember()
+ * (middleware/workspaceAuth.ts:64-74): same workspaceId + acceptedAt not null +
+ * organizerId OR userId shape. The owner half is added on top because an owner
+ * onboarded through routes/users.ts:442-450 gets an OrganizerWorkspace and no
+ * WorkspaceMember row at all, and would otherwise be locked out of their own
+ * team page.
+ */
+const resolveWorkspaceForRead = async (
+  req: AuthRequest,
+  res: Response,
+  workspaceId: string
+): Promise<boolean> => {
+  const workspace = await prisma.organizerWorkspace.findUnique({
+    where: { id: workspaceId },
+    select: { id: true, ownerId: true },
+  });
+
+  if (!workspace) {
+    res.status(404).json({ message: 'Workspace not found' });
+    return false;
+  }
+
+  const organizerId = req.user?.organizerProfile?.id;
+  if (organizerId && workspace.ownerId === organizerId) {
+    return true;
+  }
+
+  if (!req.user?.id) {
+    res.status(401).json({ message: 'Unauthorized' });
+    return false;
+  }
+
+  const member = await prisma.workspaceMember.findFirst({
+    where: {
+      workspaceId,
+      acceptedAt: { not: null },
+      OR: [
+        ...(organizerId ? [{ organizerId }] : []),
+        { userId: req.user.id },
+      ],
+    },
+    select: { id: true },
+  });
+
+  if (!member) {
+    res.status(403).json({ message: 'You are not a member of this workspace' });
+    return false;
+  }
+
+  return true;
+};
+
+/**
+ * Write guard: workspace owner only.
+ *
+ * Copied line for line from removeMember (workspaceController.ts:263-268) — the
+ * sibling owner-only endpoint on the same workspace — with one extra check that
+ * the workspace the owner owns is the one named in the URL.
+ */
+const resolveWorkspaceForWrite = async (
+  req: AuthRequest,
+  res: Response,
+  workspaceId: string
+): Promise<boolean> => {
+  const organizerId = req.user?.organizerProfile?.id;
+  if (!organizerId) {
+    res.status(401).json({ message: 'Unauthorized' });
+    return false;
+  }
+
+  const workspace = await prisma.organizerWorkspace.findUnique({ where: { ownerId: organizerId } });
+  if (!workspace) {
+    res.status(404).json({ message: 'Workspace not found' });
+    return false;
+  }
+  if (workspace.ownerId !== organizerId) {
+    res.status(403).json({ message: 'Only the market owner can change register access' });
+    return false;
+  }
+  if (workspace.id !== workspaceId) {
+    res.status(403).json({ message: 'Only the market owner can change register access' });
+    return false;
+  }
+
+  return true;
+};
+
+/**
+ * GET /api/workspaces/:workspaceId/register-access
+ * Everyone on the team, and whether each of them can work the register.
+ */
+export const getRegisterAccess = async (req: AuthRequest, res: Response) => {
+  try {
+    const { workspaceId } = req.params;
+    if (!workspaceId || typeof workspaceId !== 'string') {
+      return res.status(400).json({ message: 'Workspace ID is required' });
+    }
+
+    const allowed = await resolveWorkspaceForRead(req, res, workspaceId);
+    if (!allowed) return;
+
+    const result = await listRegisterAccess(workspaceId);
+    if (!result) {
+      return res.status(404).json({ message: 'Workspace not found' });
+    }
+
+    return res.json(result);
+  } catch (error) {
+    Sentry.captureException(error);
+    console.error('Error listing register access:', error);
+    return res.status(500).json({ message: 'Failed to load register access' });
+  }
+};
+
+/**
+ * POST /api/workspaces/:workspaceId/register-access/:workspaceMemberId
+ * Give one person register access. Owner only. Safe to call twice.
+ */
+export const giveRegisterAccess = async (req: AuthRequest, res: Response) => {
+  try {
+    const { workspaceId, workspaceMemberId } = req.params;
+    if (!workspaceId || !workspaceMemberId) {
+      return res.status(400).json({ message: 'Workspace ID and member ID are required' });
+    }
+
+    const allowed = await resolveWorkspaceForWrite(req, res, workspaceId);
+    if (!allowed) return;
+
+    const result = await grantRegisterAccess(workspaceId, workspaceMemberId);
+
+    if (!result.ok) {
+      if (result.code === 'INVITE_NOT_ACCEPTED') {
+        return res.status(400).json({
+          message: 'This person has not accepted their invite yet. You can turn on register access once they do.',
+          code: 'INVITE_NOT_ACCEPTED',
+        });
+      }
+      return res.status(404).json({ message: 'That person is not on this team', code: 'MEMBER_NOT_FOUND' });
+    }
+
+    return res.json({ canWorkRegister: true, teamMemberId: result.teamMemberId });
+  } catch (error) {
+    Sentry.captureException(error);
+    console.error('Error giving register access:', error);
+    return res.status(500).json({ message: 'Failed to give register access' });
+  }
+};
+
+/**
+ * DELETE /api/workspaces/:workspaceId/register-access/:workspaceMemberId
+ * Take register access away. Owner only. Safe to call on someone who never had it.
+ */
+export const takeRegisterAccess = async (req: AuthRequest, res: Response) => {
+  try {
+    const { workspaceId, workspaceMemberId } = req.params;
+    if (!workspaceId || !workspaceMemberId) {
+      return res.status(400).json({ message: 'Workspace ID and member ID are required' });
+    }
+
+    const allowed = await resolveWorkspaceForWrite(req, res, workspaceId);
+    if (!allowed) return;
+
+    const result = await revokeRegisterAccess(workspaceId, workspaceMemberId);
+
+    if (!result.ok) {
+      return res.status(404).json({ message: 'That person is not on this team', code: 'MEMBER_NOT_FOUND' });
+    }
+
+    return res.json({ canWorkRegister: false, removed: result.removed });
+  } catch (error) {
+    Sentry.captureException(error);
+    console.error('Error taking register access:', error);
+    return res.status(500).json({ message: 'Failed to take register access' });
   }
 };

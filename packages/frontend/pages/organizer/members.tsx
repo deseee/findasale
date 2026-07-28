@@ -8,6 +8,7 @@
  * - View performance snapshots (items sold, revenue, tasks)
  * - Coverage gap alerts for upcoming sales
  * - Remove members (workspace owner only)
+ * - Give and remove register access, one control per person (owner only)
  * - Tier upgrade wall for non-TEAMS organizers
  *
  * Role descriptions:
@@ -21,7 +22,9 @@ import React, { useState, useMemo } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { ChevronDown, ChevronUp, Phone, Mail, Trash2, AlertTriangle } from 'lucide-react';
+import { ChevronDown, ChevronUp, Phone, Mail, Trash2, AlertTriangle, CheckCircle2, XCircle, Clock } from 'lucide-react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import api from '../../lib/api';
 import { useAuth } from '../../components/AuthContext';
 import { useToast } from '../../components/ToastContext';
 import ConfirmDialog from '../../components/ConfirmDialog';
@@ -54,6 +57,58 @@ const INVITE_ROLES = [
   { value: 'MANAGER', label: 'Manager', description: 'Can assign tasks and approve work' },
   { value: 'VIEWER', label: 'Viewer', description: 'Read-only for accountants, executors, or family' },
 ];
+
+/**
+ * Register access (2026-07-28)
+ *
+ * The register at /organizer/hubs/[hubId]/cart only opens for the market owner
+ * and for team members the owner has switched on here. Backend:
+ * GET/POST/DELETE /api/workspaces/:workspaceId/register-access (routes/staff.ts).
+ */
+interface RegisterAccessRow {
+  workspaceMemberId: string | null;
+  name: string;
+  email: string | null;
+  workspaceRole: string;
+  accepted: boolean;
+  isOwner: boolean;
+  canWorkRegister: boolean;
+  teamMemberId: string | null;
+}
+
+interface RegisterAccessResponse {
+  workspaceId: string;
+  ownerId: string;
+  members: RegisterAccessRow[];
+}
+
+const useRegisterAccess = (workspaceId?: string) => {
+  return useQuery<RegisterAccessResponse>({
+    queryKey: ['register-access', workspaceId],
+    queryFn: async () => {
+      const response = await api.get(`/workspaces/${workspaceId}/register-access`);
+      return response.data;
+    },
+    enabled: !!workspaceId,
+  });
+};
+
+const useSetRegisterAccess = (workspaceId?: string) => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ workspaceMemberId, allow }: { workspaceMemberId: string; allow: boolean }) => {
+      if (!workspaceId) throw new Error('Missing workspaceId');
+      const url = `/workspaces/${workspaceId}/register-access/${workspaceMemberId}`;
+      const response = allow ? await api.post(url) : await api.delete(url);
+      return response.data;
+    },
+    onSuccess: () => {
+      // Granting creates the TeamMember row, so the staff list below changes too.
+      queryClient.invalidateQueries({ queryKey: ['register-access', workspaceId] });
+      queryClient.invalidateQueries({ queryKey: ['staff-list', workspaceId] });
+    },
+  });
+};
 
 interface ExpandedState {
   [staffId: string]: boolean;
@@ -99,6 +154,9 @@ const OrganizerMembersPage = () => {
   // Confirm dialog state
   const [removeConfirmOpen, setRemoveConfirmOpen] = useState(false);
   const [staffToRemove, setStaffToRemove] = useState<string | null>(null);
+  // Register access state
+  const [pendingRegisterMemberId, setPendingRegisterMemberId] = useState<string | null>(null);
+  const [registerToRemove, setRegisterToRemove] = useState<RegisterAccessRow | null>(null);
 
   // Workspace & staff queries
   const { data: workspace, isLoading: workspaceLoading } = useMyWorkspace();
@@ -111,6 +169,13 @@ const OrganizerMembersPage = () => {
   const updateProfileMutation = useUpdateStaffProfile(workspaceId);
   const updateAvailabilityMutation = useUpdateAvailability(workspaceId);
   const removeStaffMutation = useRemoveStaffMember(workspaceId);
+  const {
+    data: registerAccess,
+    isLoading: registerAccessLoading,
+    isError: registerAccessError,
+    refetch: refetchRegisterAccess,
+  } = useRegisterAccess(workspaceId);
+  const setRegisterAccessMutation = useSetRegisterAccess(workspaceId);
 
   if (authLoading) return null;
   if (!user || !user.roles?.includes('ORGANIZER')) {
@@ -158,6 +223,13 @@ const OrganizerMembersPage = () => {
   // TEAMS tier: show member management
   const isOwner = workspace?.ownerUserId === user?.id;
   const members = staffList || [];
+
+  // Register access rows. The owner is always present in this list (the backend
+  // adds them even when they have no WorkspaceMember row), so "only me" is
+  // length <= 1, not length === 0.
+  const registerRows = registerAccess?.members || [];
+  const otherRegisterRows = registerRows.filter((r) => !r.isOwner);
+  const someoneElseHasAccess = otherRegisterRows.some((r) => r.canWorkRegister);
 
   // Normalize STAFF → MEMBER for display
   const displayRole = (role: string) => role === 'STAFF' ? 'MEMBER' : role;
@@ -259,6 +331,46 @@ const OrganizerMembersPage = () => {
       setStaffToRemove(null);
     } catch (error: any) {
       showToast(error.response?.data?.message || 'Failed to remove team member', 'error');
+    }
+  };
+
+  const handleGiveRegisterAccess = async (row: RegisterAccessRow) => {
+    if (!row.workspaceMemberId) return;
+    setPendingRegisterMemberId(row.workspaceMemberId);
+    try {
+      await setRegisterAccessMutation.mutateAsync({
+        workspaceMemberId: row.workspaceMemberId,
+        allow: true,
+      });
+      showToast(`${row.name} can now work the register`, 'success');
+    } catch (error: any) {
+      showToast(
+        error.response?.data?.message || 'We could not turn on register access. Try again.',
+        'error'
+      );
+    } finally {
+      setPendingRegisterMemberId(null);
+    }
+  };
+
+  const confirmRemoveRegisterAccess = async () => {
+    const row = registerToRemove;
+    if (!row?.workspaceMemberId) return;
+    setPendingRegisterMemberId(row.workspaceMemberId);
+    try {
+      await setRegisterAccessMutation.mutateAsync({
+        workspaceMemberId: row.workspaceMemberId,
+        allow: false,
+      });
+      showToast(`${row.name} can no longer work the register`, 'success');
+      setRegisterToRemove(null);
+    } catch (error: any) {
+      showToast(
+        error.response?.data?.message || 'We could not remove register access. Try again.',
+        'error'
+      );
+    } finally {
+      setPendingRegisterMemberId(null);
     }
   };
 
@@ -387,12 +499,152 @@ const OrganizerMembersPage = () => {
                 </div>
               )}
 
+              {/* Who can work the register */}
+              <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+                  Who can work the register
+                </h2>
+                <p className="text-base text-gray-600 dark:text-gray-400 mt-2 mb-6">
+                  {isOwner
+                    ? 'The register is the checkout screen you use at the market. Turn it on for anyone who takes payments for you.'
+                    : 'The register is the checkout screen used at the market. Only the market owner can change this list.'}
+                </p>
+
+                {registerAccessLoading ? (
+                  <Skeleton className="h-32 rounded-lg" />
+                ) : registerAccessError ? (
+                  <div className="rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 p-5">
+                    <p className="text-base font-semibold text-red-800 dark:text-red-200">
+                      We could not load who can work the register.
+                    </p>
+                    <p className="text-sm text-red-700 dark:text-red-300 mt-1">
+                      Check your internet, then press Try again.
+                    </p>
+                    <button
+                      onClick={() => refetchRegisterAccess()}
+                      className="mt-4 w-full sm:w-auto px-5 py-3 min-h-[48px] bg-red-600 text-white rounded-lg hover:bg-red-700 transition text-base font-semibold"
+                    >
+                      Try again
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    {isOwner && otherRegisterRows.length === 0 && (
+                      <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/40 p-5 mb-4">
+                        <p className="text-base font-semibold text-gray-900 dark:text-white">
+                          You are the only person on the team.
+                        </p>
+                        <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                          Invite someone with the form above. When they accept, come back here and press Give register access.
+                        </p>
+                      </div>
+                    )}
+
+                    {isOwner && otherRegisterRows.length > 0 && !someoneElseHasAccess && (
+                      <div className="rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 p-5 mb-4">
+                        <p className="text-base font-semibold text-blue-900 dark:text-blue-100">
+                          Nobody else can work the register yet.
+                        </p>
+                        <p className="text-sm text-blue-800 dark:text-blue-200 mt-1">
+                          Find their name below and press Give register access.
+                        </p>
+                      </div>
+                    )}
+
+                    <div className="space-y-3">
+                      {registerRows.map((row) => {
+                        const rowKey = row.workspaceMemberId || 'workspace-owner';
+                        const busy =
+                          !!row.workspaceMemberId && pendingRegisterMemberId === row.workspaceMemberId;
+
+                        return (
+                          <div
+                            key={rowKey}
+                            className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 rounded-lg border border-gray-200 dark:border-gray-700 p-4"
+                          >
+                            <div className="min-w-0">
+                              <p className="text-base font-semibold text-gray-900 dark:text-white break-words">
+                                {row.name}
+                                {row.isOwner ? ' (you)' : ''}
+                              </p>
+                              {row.email && (
+                                <p className="text-sm text-gray-600 dark:text-gray-400 break-words">
+                                  {row.email}
+                                </p>
+                              )}
+                              <div className="flex items-start gap-2 mt-2">
+                                {row.isOwner ? (
+                                  <>
+                                    <CheckCircle2 className="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" />
+                                    <span className="text-sm font-medium text-green-700 dark:text-green-300">
+                                      Can work the register. You own this market, so this is always on.
+                                    </span>
+                                  </>
+                                ) : !row.accepted ? (
+                                  <>
+                                    <Clock className="w-5 h-5 text-gray-500 dark:text-gray-400 flex-shrink-0 mt-0.5" />
+                                    <span className="text-sm text-gray-600 dark:text-gray-400">
+                                      Has not accepted the invite yet.
+                                    </span>
+                                  </>
+                                ) : row.canWorkRegister ? (
+                                  <>
+                                    <CheckCircle2 className="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" />
+                                    <span className="text-sm font-medium text-green-700 dark:text-green-300">
+                                      Can work the register
+                                    </span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <XCircle className="w-5 h-5 text-gray-500 dark:text-gray-400 flex-shrink-0 mt-0.5" />
+                                    <span className="text-sm text-gray-600 dark:text-gray-400">
+                                      Cannot work the register
+                                    </span>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+
+                            <div className="sm:flex-shrink-0">
+                              {row.isOwner || !isOwner ? null : !row.accepted ? (
+                                <p className="text-sm text-gray-600 dark:text-gray-400">
+                                  You can turn this on once they accept.
+                                </p>
+                              ) : row.canWorkRegister ? (
+                                <button
+                                  onClick={() => setRegisterToRemove(row)}
+                                  disabled={busy}
+                                  className="w-full sm:w-auto px-5 py-3 min-h-[48px] border-2 border-red-600 dark:border-red-500 text-red-700 dark:text-red-300 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 disabled:opacity-50 transition text-base font-semibold"
+                                >
+                                  {busy ? 'Working...' : 'Remove register access'}
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={() => handleGiveRegisterAccess(row)}
+                                  disabled={busy}
+                                  className="w-full sm:w-auto px-5 py-3 min-h-[48px] bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 transition text-base font-semibold"
+                                >
+                                  {busy ? 'Working...' : 'Give register access'}
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
+              </div>
+
               {/* Team Overview Header */}
               <div className="flex items-center justify-between">
                 <div>
                   <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Your Team</h2>
                   <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
                     {members.length} member{members.length !== 1 ? 's' : ''}
+                  </p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                    Hours and job details for the people who can work the register.
                   </p>
                 </div>
               </div>
@@ -622,6 +874,17 @@ const OrganizerMembersPage = () => {
           setRemoveConfirmOpen(false);
           setStaffToRemove(null);
         }}
+        variant="danger"
+      />
+
+      <ConfirmDialog
+        isOpen={!!registerToRemove}
+        title="Remove register access"
+        message={`${registerToRemove?.name || 'This person'} will not be able to open the register. Their hours and job details on this page are cleared too. Past sales they rang up stay in your records.`}
+        confirmLabel="Remove access"
+        cancelLabel="Keep access"
+        onConfirm={confirmRemoveRegisterAccess}
+        onCancel={() => setRegisterToRemove(null)}
         variant="danger"
       />
     </>

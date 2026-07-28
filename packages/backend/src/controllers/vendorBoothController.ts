@@ -561,6 +561,27 @@ export const claimVendorBooth = async (req: AuthRequest, res: Response) => {
  * GET /api/vendor-booth/my-booths
  * Authenticated User's own booths across ALL hubs. Explicit field selection —
  * NEVER an eager include that could pull sibling booths' data (ADR-017).
+ *
+ * Ownership: the ONLY filter is `userId: req.user.id`, taken from the verified session
+ * and never from the request. There is no id/token/query parameter on this route at all
+ * (routes/vendorBooth.ts :71 is `authenticate` + this handler, no params), so there is
+ * nothing for a caller to tamper with — a user can only ever receive booths whose
+ * VendorBooth.userId is their own User id. Unchanged by the additions below.
+ *
+ * ADDED 2026-07-28 (vendor re-entry): `boothToken` and `hub { id, name }`. Both are
+ * additive — every field this endpoint returned before is still returned, unchanged and
+ * in the same shape, so this stays backward compatible. Callers checked before changing
+ * it (grep for 'my-booths' across packages/backend/src and packages/frontend): exactly
+ * two — pages/vendor-booth/[boothToken].tsx:111, which reads only `.id`, `.boothNumber`
+ * and `.vendorName`, and the new components/MyVendorBoothsCard.tsx.
+ *
+ * Why boothToken is safe HERE and not in getPublicBoothSummary: boothToken is a bearer
+ * secret (requireBoothAuth.ts :57-79 accepts it as X-Booth-Token and grants cashier
+ * rights), so ADR-017 keeps it out of the PUBLIC, unauthenticated summary. This response
+ * is authenticated and filtered to the caller's own rows, and the caller already holds
+ * this exact token — it is the link they claimed the booth from. Returning it to its
+ * owner grants no access the owner did not already have. The frontend must keep it in
+ * hrefs only and never render it as visible text.
  */
 export const listMyVendorBooths = async (req: AuthRequest, res: Response) => {
   try {
@@ -571,6 +592,11 @@ export const listMyVendorBooths = async (req: AuthRequest, res: Response) => {
       select: {
         id: true, hubId: true, boothNumber: true, vendorName: true, status: true,
         boothFee: true, revenueSharePercent: true, stripeOnboarded: true,
+        // Deep link back to this booth's own page. Owner-scoped by the where clause above.
+        boothToken: true,
+        // The market's name. Without it the vendor sees a bare hub id, which means nothing
+        // to them. Narrow select — id and name only, never the hub owner or its other booths.
+        hub: { select: { id: true, name: true } },
         payouts: { select: { id: true, totalSales: true, netPayout: true, status: true, paidAt: true } },
       },
       orderBy: { createdAt: 'desc' },

@@ -9,7 +9,10 @@ import {
   updateStaffAvailability,
   checkCoverageGaps,
   getStaffPerformance,
-  deleteStaff
+  deleteStaff,
+  getRegisterAccess,
+  giveRegisterAccess,
+  takeRegisterAccess
 } from '../controllers/staffController';
 
 const router = Router();
@@ -69,5 +72,20 @@ router.get('/:workspaceId/staff/:staffId/performance', getStaffPerformance);
  * Remove a staff member from workspace
  */
 router.delete('/:workspaceId/staff/:staffId', deleteStaff);
+
+/**
+ * Register access (2026-07-28)
+ *
+ * Creates and deletes the TeamMember row that requireBoothAuth.ts:153-168 looks
+ * for. Read is open to the owner or any accepted member; both writes are owner
+ * only (guards live in staffController.ts).
+ *
+ * Declared after the /staff routes above so the '/staff' literal keeps priority;
+ * 'register-access' is a distinct literal segment and cannot collide with
+ * '/:workspaceId/staff/:staffId'.
+ */
+router.get('/:workspaceId/register-access', getRegisterAccess);
+router.post('/:workspaceId/register-access/:workspaceMemberId', giveRegisterAccess);
+router.delete('/:workspaceId/register-access/:workspaceMemberId', takeRegisterAccess);
 
 export default router;
