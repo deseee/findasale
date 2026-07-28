@@ -43,7 +43,15 @@ function callerOwnsCart(
   boothAuth: NonNullable<BoothAuthRequest['boothAuth']>,
   cart: { cashierBoothId: string | null }
 ): boolean {
-  if (boothAuth.type === 'TEAM_MEMBER') return true;
+  // 2026-07-28 P0: HUB_OWNER is the market's own owner, resolved in
+  // requireBoothAuth.ts by comparing req.user.organizerProfile.id === SaleHub.organizerId.
+  // They own every cart on their own hub for the same reason their staff do, and strictly
+  // more so. Without this line the owner would pass the middleware and then be rejected
+  // with "This cart belongs to another cashier" on add-items, checkout and capture,
+  // because this function's fallback requires a cashierBoothId match a HUB_OWNER session
+  // does not have. Their carts store null in BOTH cashier columns (startBoothCart below),
+  // so the booth-token branch could never match one.
+  if (boothAuth.type === 'TEAM_MEMBER' || boothAuth.type === 'HUB_OWNER') return true;
   return !!boothAuth.vendorBoothId && boothAuth.vendorBoothId === cart.cashierBoothId;
 }
 
@@ -312,6 +320,12 @@ export const startBoothCart = async (req: BoothAuthRequest, res: Response) => {
     const cart = await prisma.boothCartTransaction.create({
       data: {
         hubId,
+        // A HUB_OWNER cart stores null in BOTH columns. That is deliberate and it is a
+        // legal row: schema.prisma:5641-5644 makes both FKs optional. The owner has no
+        // TeamMember row to reference and is not a vendor, so writing either id would be
+        // false. The owner is still a protected party in the fraud guard -- it derives
+        // the hub organizer's User from hubId alone (checkoutGuard.ts:456-459), not from
+        // cashierTeamMemberId.
         cashierTeamMemberId: req.boothAuth.type === 'TEAM_MEMBER' ? req.boothAuth.teamMemberId : null,
         cashierBoothId: req.boothAuth.type === 'BOOTH' ? req.boothAuth.vendorBoothId : null,
         status: 'PENDING',

@@ -46,6 +46,144 @@ interface BoothSummary {
 
 type BoothLegOutcome = 'pending' | 'connecting' | 'ready' | 'tapping' | 'authorized' | 'failed';
 
+/**
+ * One failure, in words a cashier can act on (2026-07-28).
+ * Before this, every failure on this page collapsed to one string. "Failed to start
+ * register session" was shown for a 403 you can never fix by retrying, a 404 for a
+ * market that does not exist, and a dropped WiFi connection alike. The server's own
+ * reason was thrown away: the backend middleware answers with `message`
+ * (requireBoothAuth.ts) while this page only ever read `data.error`.
+ *
+ * `canRetry` is the important field. A 403 will never fix itself, so no Try again
+ * button is offered on one. A button that can only ever fail teaches people to jab at a
+ * dead control and then give up on the whole product.
+ */
+interface Failure {
+  title: string;
+  detail: string;
+  canRetry: boolean;
+  retryLabel?: string;
+  href?: string;
+  hrefLabel?: string;
+}
+
+/** Pull the server's own words out, whichever key it used. */
+const serverMessage = (error: any): string | null => {
+  const data = error?.response?.data;
+  if (!data) return null;
+  const raw = typeof data.error === 'string' ? data.error : typeof data.message === 'string' ? data.message : null;
+  const trimmed = raw ? raw.trim() : '';
+  return trimmed.length > 0 ? trimmed : null;
+};
+
+/** Turn any thrown error into something readable at a busy counter. */
+const describeFailure = (error: any, retryLabel: string): Failure => {
+  // No HTTP response at all means the request never reached the server: a dead WiFi
+  // access point, a phone that dropped to no bars, airplane mode.
+  if (!error?.response) {
+    return {
+      title: 'No internet right now',
+      detail: 'Your phone is not connected. Check the WiFi or your cell signal, then try again. No card was charged.',
+      canRetry: true,
+      retryLabel,
+    };
+  }
+
+  const status = error.response.status;
+  const code = error.response.data?.code;
+  const message = serverMessage(error);
+
+  if (status === 401) {
+    return {
+      title: 'You are signed out',
+      detail: 'Your sign in ran out. Sign in again, then open the register.',
+      canRetry: false,
+      href: '/login',
+      hrefLabel: 'Sign in',
+    };
+  }
+
+  if (status === 403 && code === 'NOT_TEAM_MEMBER') {
+    return {
+      title: 'You are not on this market\u2019s team',
+      detail: 'The register opens for the market owner and the staff they have added. Ask the market owner to add you to their team. Then open this page again.',
+      canRetry: false,
+      href: '/organizer/members',
+      hrefLabel: 'See team members',
+    };
+  }
+
+  if (status === 403 && code === 'NO_WORKSPACE') {
+    return {
+      title: 'This market has no team yet',
+      detail: 'The register needs a team before it can open. The market owner can add one on the Team Members page, then come back here.',
+      canRetry: false,
+      href: '/organizer/members',
+      hrefLabel: 'Go to Team Members',
+    };
+  }
+
+  if (status === 403) {
+    return {
+      title: 'You cannot do that here',
+      detail: message || 'You do not have permission for this. Ask the market owner to check your access.',
+      canRetry: false,
+    };
+  }
+
+  if (status === 404 && code === 'HUB_NOT_FOUND') {
+    return {
+      title: 'We cannot find this market',
+      detail: 'It may have been deleted, or the link is wrong. Go back to your markets and open it from the list.',
+      canRetry: false,
+      href: '/organizer/hubs',
+      hrefLabel: 'Back to my markets',
+    };
+  }
+
+  if (status === 404) {
+    return {
+      title: 'That is gone',
+      detail: message || 'We could not find it. Start a new cart.',
+      canRetry: false,
+    };
+  }
+
+  if (status === 409) {
+    return {
+      title: 'Wait a moment',
+      detail: message || 'Something else is using this cart right now. Wait a few seconds, then try again.',
+      canRetry: true,
+      retryLabel,
+    };
+  }
+
+  if (status === 429) {
+    return {
+      title: 'Too many tries',
+      detail: 'Wait about a minute, then try again.',
+      canRetry: true,
+      retryLabel,
+    };
+  }
+
+  if (status >= 500) {
+    return {
+      title: 'Something went wrong on our end',
+      detail: 'This one is our fault, not yours. Wait a moment and try again. No card was charged.',
+      canRetry: true,
+      retryLabel,
+    };
+  }
+
+  return {
+    title: 'That did not work',
+    detail: message || 'Something unexpected happened. Try again. If it keeps happening, call for help.',
+    canRetry: true,
+    retryLabel,
+  };
+};
+
 const BoothCartPage: React.FC = () => {
   const router = useRouter();
   const { hubId } = router.query;
@@ -58,12 +196,18 @@ const BoothCartPage: React.FC = () => {
   const [rejectedItems, setRejectedItems] = useState<Array<{ itemId: string; reason: string }>>([]);
   const [starting, setStarting] = useState(false);
   const [adding, setAdding] = useState(false);
-  const [startError, setStartError] = useState<string | null>(null);
+  const [startFailure, setStartFailure] = useState<Failure | null>(null);
 
   // ─── Sequential per-booth checkout state (ADR-020) ─────────────────────────
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
-  const [checkoutError, setCheckoutError] = useState<string | null>(null);
+  const [checkoutFailure, setCheckoutFailure] = useState<Failure | null>(null);
+  // A capture failure is its own state. The money may already be authorized on the
+  // customer's card, so the way out is "try to finish again" (the server treats a repeat
+  // capture as safe: vendorBoothCartController.ts:1123 returns success for a cart that
+  // already completed, and :1140 explicitly keeps retries unblocked), NOT "start over".
+  const [captureFailed, setCaptureFailed] = useState(false);
+  const [addFailure, setAddFailure] = useState<Failure | null>(null);
   const [booths, setBooths] = useState<BoothSummary[]>([]);
   const [boothOutcomes, setBoothOutcomes] = useState<Record<string, BoothLegOutcome>>({});
   const [activeBoothIndex, setActiveBoothIndex] = useState(0);
@@ -74,20 +218,27 @@ const BoothCartPage: React.FC = () => {
   const startCart = async () => {
     if (!hubId || typeof hubId !== 'string') return;
     setStarting(true);
-    setStartError(null);
+    setStartFailure(null);
     try {
       const response = await api.post(`/organizer/hubs/${hubId}/cart/start`, { cashierType: 'TEAM_MEMBER' });
       setCart(response.data);
     } catch (error: any) {
       console.error('Error starting cart:', error);
-      setStartError(error.response?.data?.error || 'Failed to start register session');
+      setStartFailure(describeFailure(error, 'Try again'));
     } finally {
       setStarting(false);
     }
   };
 
+  // Open exactly ONE register session per hub per visit. Without this guard, any change
+  // to the `user` object identity re-ran startCart and left another PENDING
+  // BoothCartTransaction row open on the hub that nobody can see or close.
+  const autoStartedForHub = useRef<string | null>(null);
   useEffect(() => {
-    if (user && hubId) startCart();
+    if (!user || !hubId || typeof hubId !== 'string') return;
+    if (autoStartedForHub.current === hubId) return;
+    autoStartedForHub.current = hubId;
+    startCart();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, hubId]);
 
@@ -95,27 +246,34 @@ const BoothCartPage: React.FC = () => {
     if (!authLoading && !user) router.push('/login');
   }, [authLoading, user, router]);
 
-  const handleAddItem = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // `e` is optional so the failure card's retry button can call this directly with the
+  // item ID still in the box (the input is only cleared on success).
+  const handleAddItem = async (e?: React.FormEvent) => {
+    e?.preventDefault();
     if (!cart || !itemIdInput.trim()) return;
     setAdding(true);
+    setAddFailure(null);
     try {
       const response = await api.post(
         `/organizer/hubs/${hubId}/cart/${cart.id}/items`,
         { itemIds: [itemIdInput.trim()] }
       );
       setCart(response.data.cart);
-      setAddedItems((prev) => [...prev, ...response.data.accepted]);
+      setAddedItems((prev) => [...prev, ...(response.data.accepted || [])]);
       if (response.data.rejected?.length > 0) {
         setRejectedItems((prev) => [...prev, ...response.data.rejected]);
-        showToast(`Item could not be added: ${response.data.rejected[0].reason}`, 'error');
+        // A toast disappears. The reason also goes into the cart card below, where it
+        // stays on screen until the cashier starts a new cart.
+        showToast('That item was not added. See the reason under the cart.', 'error');
       } else {
         showToast('Item added to cart', 'success');
       }
       setItemIdInput('');
     } catch (error: any) {
       console.error('Error adding item:', error);
-      showToast(error.response?.data?.error || 'Failed to add item', 'error');
+      const failure = describeFailure(error, 'Try adding it again');
+      setAddFailure(failure);
+      showToast(failure.title, 'error');
     } finally {
       setAdding(false);
     }
@@ -152,7 +310,12 @@ const BoothCartPage: React.FC = () => {
         return res.data.secret;
       },
       onUnexpectedReaderDisconnect: () => {
-        showToast('Card reader disconnected unexpectedly.', 'error');
+        showToast('The card reader disconnected.', 'error');
+        setCheckoutFailure({
+          title: 'The card reader disconnected',
+          detail: 'Check that the reader is switched on and on the same WiFi as this phone. No card was charged. Start a new cart once the reader is back.',
+          canRetry: false,
+        });
       },
     });
 
@@ -202,7 +365,17 @@ const BoothCartPage: React.FC = () => {
     } catch (error: any) {
       console.error(`[cart] Booth leg failed for ${booth.vendorBoothId}:`, error);
       setBoothOutcomes((prev) => ({ ...prev, [booth.vendorBoothId]: 'failed' }));
-      setCheckoutError(`${booth.vendorName}: ${error?.response?.data?.error || error?.message || 'Payment failed'}`);
+      const failure = describeFailure(error, 'Try again');
+      setCheckoutFailure({
+        title: `The payment for ${booth.vendorName} did not go through`,
+        // A Stripe Terminal error is thrown as a plain Error with no HTTP response, so
+        // describeFailure would read it as an offline blip. Prefer the reader's own words
+        // when there is no server response to explain it.
+        detail: error?.response
+          ? failure.detail
+          : `${error?.message || 'The card was not accepted.'} No card was charged. This cart is closing. Start a new cart without this vendor\u2019s items.`,
+        canRetry: false,
+      });
       return false;
     }
   }, [connectReaderForBooth, hubId, cart, showToast]);
@@ -210,18 +383,27 @@ const BoothCartPage: React.FC = () => {
   const startSequentialCheckout = async () => {
     if (!cart) return;
     setCheckoutLoading(true);
-    setCheckoutError(null);
+    setCheckoutFailure(null);
+    setCaptureFailed(false);
     try {
       const summaryRes = await api.get(`/organizer/hubs/${hubId}/cart/${cart.id}/summary`);
-      const boothList: BoothSummary[] = summaryRes.data.booths;
+      const boothList: BoothSummary[] = summaryRes.data.booths || [];
       if (boothList.length === 0) {
-        showToast('Cart is empty', 'error');
+        setCheckoutFailure({
+          title: 'The cart is empty',
+          detail: 'Scan or type an item ID first, then take payment.',
+          canRetry: false,
+        });
         setCheckoutLoading(false);
         return;
       }
       const notReady = boothList.find((b) => !b.readyForStandardCharge);
       if (notReady) {
-        setCheckoutError(`${notReady.vendorName} has not completed Stripe onboarding yet — cannot charge this cart.`);
+        setCheckoutFailure({
+          title: `${notReady.vendorName} cannot be paid yet`,
+          detail: `${notReady.vendorName} has not finished setting up their payouts, so their items cannot be sold here. Start a new cart without their items, or ask them to finish their setup.`,
+          canRetry: false,
+        });
         setCheckoutLoading(false);
         return;
       }
@@ -245,7 +427,7 @@ const BoothCartPage: React.FC = () => {
       await captureAll();
     } catch (error: any) {
       console.error('[cart] Failed to start checkout:', error);
-      setCheckoutError(error.response?.data?.error || 'Failed to start checkout');
+      setCheckoutFailure(describeFailure(error, 'Try payment again'));
       setCheckoutLoading(false);
     }
   };
@@ -253,13 +435,25 @@ const BoothCartPage: React.FC = () => {
   const captureAll = async () => {
     if (!cart) return;
     setCapturing(true);
+    setCheckoutFailure(null);
     try {
       const res = await api.post(`/organizer/hubs/${hubId}/cart/${cart.id}/capture`, {});
       setCompleted({ itemsSold: res.data.itemsSold ?? 0 });
+      setCaptureFailed(false);
       showToast('Sale complete!', 'success');
     } catch (error: any) {
       console.error('[cart] Capture failed:', error);
-      setCheckoutError(error.response?.data?.error || 'Failed to complete the sale — booths may need manual reconciliation.');
+      const failure = describeFailure(error, 'Try to finish the sale again');
+      // The card has already been approved by this point. Never tell the cashier to
+      // start over here: that leaves an authorized payment behind and invites a second
+      // charge. Finishing again is safe and is the only correct next step.
+      setCaptureFailed(true);
+      setCheckoutFailure({
+        title: 'The sale did not finish',
+        detail: `${failure.detail} The card was approved but the sale is not closed yet. Do not charge the customer again. Press the button below to finish it.`,
+        canRetry: true,
+        retryLabel: 'Try to finish the sale again',
+      });
     } finally {
       setCapturing(false);
     }
@@ -269,10 +463,20 @@ const BoothCartPage: React.FC = () => {
     if (!cart) return;
     try {
       await api.post(`/organizer/hubs/${hubId}/cart/${cart.id}/cancel`, {});
-    } catch (error) {
+      showToast('Checkout cancelled. No card was charged.', 'error');
+    } catch (error: any) {
+      // Do NOT claim the cart was cancelled when it was not. A cart that failed to
+      // cancel still holds its items as reserved, so they will not show as for sale
+      // until it closes properly.
       console.error('[cart] Failed to cancel cart:', error);
+      const failure = describeFailure(error, 'Try to close this cart again');
+      setCheckoutFailure({
+        title: 'This cart did not close',
+        detail: `${failure.detail} The items in it are still held and will not show as for sale until this cart closes.`,
+        canRetry: true,
+        retryLabel: 'Try to close this cart again',
+      });
     }
-    showToast('Checkout cancelled — start a new cart without the problem vendor’s items.', 'error');
   };
 
   const resetForNewCart = () => {
@@ -280,12 +484,49 @@ const BoothCartPage: React.FC = () => {
     setAddedItems([]);
     setRejectedItems([]);
     setCheckoutOpen(false);
-    setCheckoutError(null);
+    setCheckoutFailure(null);
+    setCaptureFailed(false);
+    setAddFailure(null);
     setBooths([]);
     setBoothOutcomes({});
     setCompleted(null);
     startCart();
   };
+
+  /**
+   * One consistent way to show a failure: big text, big buttons, high contrast, and a
+   * next action that can actually work. Replaces the bare red sentence this page used.
+   */
+  const FailureCard: React.FC<{ failure: Failure; onRetry?: () => void; busy?: boolean }> = ({
+    failure,
+    onRetry,
+    busy,
+  }) => (
+    <div
+      role="alert"
+      className="bg-red-50 dark:bg-red-950 border-2 border-red-600 dark:border-red-500 rounded-xl p-6 mb-6"
+    >
+      <p className="text-xl font-bold text-red-900 dark:text-red-100 mb-2">{failure.title}</p>
+      <p className="text-base leading-relaxed text-red-900 dark:text-red-100 mb-5">{failure.detail}</p>
+      {failure.canRetry && onRetry && (
+        <button
+          onClick={onRetry}
+          disabled={busy}
+          className="w-full min-h-[56px] bg-red-700 hover:bg-red-800 disabled:opacity-60 text-white text-lg font-bold py-3 px-4 rounded-lg transition-colors"
+        >
+          {busy ? 'Working...' : failure.retryLabel || 'Try again'}
+        </button>
+      )}
+      {failure.href && (
+        <Link
+          href={failure.href}
+          className="block w-full min-h-[56px] text-center bg-white dark:bg-gray-800 border-2 border-red-700 dark:border-red-400 text-red-800 dark:text-red-200 text-lg font-bold py-3 px-4 rounded-lg mt-3"
+        >
+          {failure.hrefLabel || 'Go'}
+        </Link>
+      )}
+    </div>
+  );
 
   if (authLoading) {
     return <div className="p-8 text-center">Loading...</div>;
@@ -325,16 +566,20 @@ const BoothCartPage: React.FC = () => {
             <div className="bg-white dark:bg-gray-800 rounded-xl p-8 text-center">
               <p className="text-warm-600 dark:text-warm-400">Opening register session...</p>
             </div>
-          ) : startError ? (
-            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-8 text-center">
-              <p className="text-red-700 dark:text-red-400 mb-2">{startError}</p>
-              <button onClick={startCart} className="text-sm underline text-red-700 dark:text-red-400">
-                Try again
-              </button>
-            </div>
+          ) : startFailure ? (
+            <FailureCard failure={startFailure} onRetry={startCart} busy={starting} />
           ) : !cart ? (
+            // Dead end before this change: the page said "No active register session"
+            // and gave no way to open one.
             <div className="bg-white dark:bg-gray-800 rounded-xl p-8 text-center">
-              <p className="text-warm-600 dark:text-warm-400">No active register session</p>
+              <p className="text-lg text-warm-700 dark:text-warm-300 mb-5">The register is not open.</p>
+              <button
+                onClick={startCart}
+                disabled={starting}
+                className="w-full min-h-[56px] bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white text-lg font-bold py-3 px-4 rounded-lg transition-colors"
+              >
+                {starting ? 'Opening...' : 'Open the register'}
+              </button>
             </div>
           ) : completed ? (
             <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl p-8 text-center">
@@ -382,17 +627,21 @@ const BoothCartPage: React.FC = () => {
               {capturing && (
                 <p className="text-center text-blue-600 font-bold mb-4">Finalizing sale — capturing all booths...</p>
               )}
-              {checkoutError && (
-                <div className="p-3 bg-red-50 dark:bg-red-900/20 rounded-lg text-sm text-red-700 dark:text-red-400 mb-4">
-                  {checkoutError}
-                </div>
+              {/* Capture failures retry the capture, which is safe and the only correct
+                  move once the card is approved. Everything else retries the close. */}
+              {checkoutFailure && (
+                <FailureCard
+                  failure={checkoutFailure}
+                  onRetry={captureFailed ? captureAll : cancelCart}
+                  busy={capturing}
+                />
               )}
-              {checkoutError && (
+              {checkoutFailure && !captureFailed && (
                 <button
                   onClick={resetForNewCart}
-                  className="w-full bg-warm-600 hover:bg-warm-700 text-white font-bold py-2 px-4 rounded-lg transition-colors"
+                  className="w-full min-h-[56px] bg-warm-700 hover:bg-warm-800 text-white text-lg font-bold py-3 px-4 rounded-lg transition-colors"
                 >
-                  Start new cart
+                  Start a new cart
                 </button>
               )}
             </div>
@@ -420,7 +669,18 @@ const BoothCartPage: React.FC = () => {
                     {adding ? 'Adding...' : 'Add'}
                   </button>
                 </div>
+                {cart.status !== 'PENDING' && (
+                  // Before this the box just went grey with no explanation, which reads
+                  // as a broken page.
+                  <p className="mt-3 text-base text-warm-700 dark:text-warm-300">
+                    This cart is already in checkout, so no more items can go in it. Finish it or start a new cart.
+                  </p>
+                )}
               </form>
+
+              {addFailure && (
+                <FailureCard failure={addFailure} onRetry={() => handleAddItem()} busy={adding} />
+              )}
 
               <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-warm-200 dark:border-gray-700 p-6 mb-6">
                 <h2 className="text-lg font-bold text-warm-900 dark:text-white mb-4">Cart</h2>
@@ -437,8 +697,19 @@ const BoothCartPage: React.FC = () => {
                   </ul>
                 )}
                 {rejectedItems.length > 0 && (
-                  <div className="mt-4 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg text-sm text-red-700 dark:text-red-400">
-                    {rejectedItems.length} item(s) could not be added (unavailable or booth not ready).
+                  // The server sends a per-item reason. Showing only a count threw it
+                  // away and left the cashier guessing which item and why.
+                  <div className="mt-4 p-4 bg-red-50 dark:bg-red-950 border-2 border-red-600 dark:border-red-500 rounded-lg">
+                    <p className="text-base font-bold text-red-900 dark:text-red-100 mb-2">
+                      {rejectedItems.length === 1 ? '1 item was not added' : `${rejectedItems.length} items were not added`}
+                    </p>
+                    <ul className="space-y-1">
+                      {rejectedItems.map((r, idx) => (
+                        <li key={`${r.itemId}-${idx}`} className="text-base text-red-900 dark:text-red-100">
+                          {r.itemId}: {r.reason}
+                        </li>
+                      ))}
+                    </ul>
                   </div>
                 )}
                 <div className="mt-4 pt-4 border-t border-warm-200 dark:border-gray-700 flex justify-between items-center">
@@ -453,10 +724,12 @@ const BoothCartPage: React.FC = () => {
                 </div>
               </div>
 
-              {checkoutError && (
-                <div className="p-3 bg-red-50 dark:bg-red-900/20 rounded-lg text-sm text-red-700 dark:text-red-400 mb-4">
-                  {checkoutError}
-                </div>
+              {checkoutFailure && (
+                <FailureCard
+                  failure={checkoutFailure}
+                  onRetry={startSequentialCheckout}
+                  busy={checkoutLoading}
+                />
               )}
 
               <button
