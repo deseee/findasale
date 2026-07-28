@@ -3,12 +3,17 @@
 # Runs daily via Task Scheduler. Keeps 7 days of backups.
 # Created: 2026-05-23
 # SECURITY (2026-07-26, S1078 follow-up): this script no longer hardcodes credentials.
-# Set $env:RAILWAY_TOKEN and (for the direct-pg_dump fallback path only) $env:PGPASSWORD
-# in your own shell/profile or a local, gitignored secrets file before running --
-# see .secrets.env.template for the pattern this project already uses elsewhere.
+# RAILWAY_TOKEN and (for the direct-pg_dump fallback path only) PGPASSWORD are loaded
+# below from the project's gitignored .secrets.env (see .secrets.env.template) if not
+# already present in the environment. This works the same for an interactive run and
+# for the unattended Task Scheduler run (which uses -NoProfile and inherits neither a
+# PowerShell profile nor any $env: value set only in an open terminal).
 # A prior version of this file had both hardcoded in cleartext; that Railway token has
 # been revoked and rotated. If you are restoring this script from an old backup or an
 # old git ref, do NOT reintroduce hardcoded values here.
+# FIX 2026-07-28: the RAILWAY_TOKEN check below was failing every night because nothing
+# ever actually loaded it for the unattended run -- this loader is the fix. See
+# .secrets.env for where to paste a fresh Railway project token (the previous one is dead).
 
 param(
     [int]$RetentionDays = 7,
@@ -25,6 +30,26 @@ $errorLogFile = "$backupRoot\backup-log-error.txt"
 
 # Ensure backup root exists before anything else
 if (!(Test-Path $backupRoot)) { New-Item -ItemType Directory -Path $backupRoot -Force | Out-Null }
+
+# Load secrets from the project's gitignored .secrets.env (export KEY="value" lines),
+# for any key not already set in this process's environment. Doing this here -- as a
+# file read, not an inherited env var -- means it works identically whether this script
+# is run interactively or via Task Scheduler (-NoProfile, no inherited shell state).
+$secretsFile = "$projectRoot\.secrets.env"
+if (Test-Path $secretsFile) {
+    Get-Content $secretsFile | ForEach-Object {
+        if ($_ -match '^\s*export\s+([A-Z_]+)=(.*)$') {
+            $name = $matches[1]
+            $value = $matches[2].Trim('"').Trim("'")
+            if ($value -and -not (Get-Item "Env:$name" -ErrorAction SilentlyContinue)) {
+                Set-Item "Env:$name" $value
+            }
+        }
+    }
+    Write-Host "  Loaded secrets from .secrets.env (existing env vars take precedence)"
+} else {
+    Write-Host "  NOTE: .secrets.env not found at $secretsFile -- RAILWAY_TOKEN/PGPASSWORD must already be in the environment"
+}
 
 # --- Helpers ---
 function Log($msg) {
