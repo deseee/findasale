@@ -185,6 +185,10 @@ claude_docs/audits/secrets-audit-*.md
 
 # centralized local secrets for scheduled tasks (never commit)
 .secrets.env
+# template also untracked 2026-07-28 (Patrick: "don't make it easier for attackers") --
+# publishing the exact env-var-name list on a public repo is free recon for anyone
+# looking for what to target if a code-injection bug ever runs with these loaded.
+.secrets.env.template
 
 # Local DB/infra backups — 619MB, must never enter git history
 backups/
