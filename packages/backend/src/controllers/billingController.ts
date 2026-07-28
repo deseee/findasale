@@ -91,6 +91,11 @@ export const createCheckoutSession = async (req: AuthRequest, res: Response) => 
  * Feature #75: Tier Lapse State Logic integrated here
  */
 export const handleStripeWebhook = async (req: AuthRequest, res: Response) => {
+  // Hoisted to function scope so the terminal-state catch at the bottom can mark this
+  // event FAILED (mirrors stripeController.ts, where `event` is likewise in scope for
+  // the handler catch). Empty key = we threw before the event was even parsed.
+  let event: any;
+  let billingIdempotencyKey = '';
   try {
     const sig = req.headers['stripe-signature'] as string;
     const webhookSecret = process.env.STRIPE_BILLING_WEBHOOK_SECRET;
@@ -100,7 +105,6 @@ export const handleStripeWebhook = async (req: AuthRequest, res: Response) => {
       return res.status(500).json({ message: 'Webhook secret not configured' });
     }
 
-    let event;
     try {
       event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
     } catch (err: any) {
@@ -108,27 +112,52 @@ export const handleStripeWebhook = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: 'Webhook signature verification failed' });
     }
 
-    // P0 Race Fix: INSERT-FIRST pattern for idempotency
-    // Try to insert immediately. If duplicate key (eventId already exists), catch and return 200.
-    let isIdempotentRun = false;
     // ADR pos-webhook-idempotency-reconciliation (2026-07-23, S1151): namespace the
     // idempotency key per endpoint so the billing webhook cannot claim (and lock out) a
     // shared event.id that the POS recorder on /api/stripe/webhook also needs to process.
-    const billingIdempotencyKey = `billing:${event.id}`;
+    billingIdempotencyKey = `billing:${event.id}`;
+
+    // S1176: two-phase status (PENDING -> COMPLETED | FAILED), ported verbatim in shape
+    // from the proven POS implementation in stripeController.ts:763-802 / :2686-2698 so
+    // there is ONE idempotency idiom in this codebase. This handler previously wrote
+    // status:'COMPLETED' BEFORE running the switch below; if the switch then threw, the
+    // catch returned 500, Stripe retried, the retry hit the P2002 path, saw a COMPLETED
+    // row and returned 200 -- silently dropping the billing event forever (tier never
+    // synced, Hunt Pass never activated, grace period never cleared).
+    // INSERT-FIRST still preserves the P0 concurrent-duplicate race guard (first inserter wins).
     try {
       await prisma.processedWebhookEvent.create({
-        data: { eventId: billingIdempotencyKey, status: 'COMPLETED' },
+        data: { eventId: billingIdempotencyKey, status: 'PENDING' },
       });
     } catch (e: any) {
-      // Unique constraint violation = event already processed by another request
       if (e.code === 'P2002') {
-        console.log(`[webhook] Event ${event.id} already processed (idempotent retry)`);
-        return res.json({ received: true });
+        // Row already exists -- inspect its status to decide what to do.
+        const existing = await prisma.processedWebhookEvent
+          .findUnique({ where: { eventId: billingIdempotencyKey } })
+          .catch(() => null);
+        if (existing?.status === 'COMPLETED') {
+          console.warn(`[billing-webhook] Duplicate event ${event.id} (type: ${event.type}) already COMPLETED -- skipping.`);
+          return res.json({ received: true, duplicate: true });
+        }
+        if (existing?.status === 'FAILED') {
+          // A prior attempt threw. Reset to PENDING and reprocess (fail-open retry).
+          console.warn(`[billing-webhook] Event ${event.id} (type: ${event.type}) previously FAILED -- reprocessing.`);
+          await prisma.processedWebhookEvent
+            .update({ where: { eventId: billingIdempotencyKey }, data: { status: 'PENDING' } })
+            .catch(() => {});
+          // fall through to reprocess below
+        } else {
+          // PENDING (or unreadable) -- another delivery is in flight; do not reprocess
+          // concurrently. Stripe's later retry will find COMPLETED or FAILED.
+          console.warn(`[billing-webhook] Event ${event.id} (type: ${event.type}) in-flight (PENDING) -- skipping concurrent reprocess.`);
+          return res.json({ received: true, duplicate: true });
+        }
+      } else {
+        // Other errors (e.g. P2011 — known ProcessedWebhookEvent schema/DB drift, see
+        // STATE.md Blocked Queue): log and continue rather than crashing the whole webhook.
+        // A broken idempotency check should never take down real event processing.
+        console.warn(`[billing-webhook] Failed to check idempotency for event ${event.id}:`, e);
       }
-      // Other errors (e.g. P2011 — known ProcessedWebhookEvent schema/DB drift, see
-      // STATE.md Blocked Queue): log and continue rather than crashing the whole webhook.
-      // A broken idempotency check should never take down real event processing.
-      console.warn(`[webhook] Failed to check idempotency for event ${event.id}:`, e);
     }
 
     switch (event.type) {
@@ -348,11 +377,28 @@ export const handleStripeWebhook = async (req: AuthRequest, res: Response) => {
         break;
     }
 
-    // Already recorded in INSERT-FIRST check above
+    // Terminal state written only AFTER the switch completed successfully
+    // (mirrors stripeController.ts:2686-2689).
+    await prisma.processedWebhookEvent.update({
+      where: { eventId: billingIdempotencyKey },
+      data: { status: 'COMPLETED' },
+    }).catch((e) => console.warn(`[billing-webhook] Failed to mark event ${event.id} COMPLETED:`, e));
     res.json({ received: true });
-  } catch (error) {
-    console.error('Webhook processing error:', error);
-    res.status(500).json({ message: 'Webhook processing failed' });
+  } catch (handlerErr: any) {
+    // Mark FAILED so Stripe's retry is allowed to REPROCESS (fail-open) instead of
+    // being short-circuited by a COMPLETED row that was never actually earned
+    // (mirrors stripeController.ts:2691-2698). Guarded because a throw before the
+    // signature was verified leaves no row to update.
+    if (billingIdempotencyKey) {
+      await prisma.processedWebhookEvent.update({
+        where: { eventId: billingIdempotencyKey },
+        data: { status: 'FAILED' },
+      }).catch((e) => console.warn(`[billing-webhook] Failed to mark event ${event?.id} FAILED:`, e));
+    }
+    console.error(`[billing-webhook] handler threw for event ${event?.id} type=${event?.type}`, handlerErr);
+    if (!res.headersSent) {
+      res.status(500).json({ message: 'Webhook processing failed' });
+    }
   }
 };
 

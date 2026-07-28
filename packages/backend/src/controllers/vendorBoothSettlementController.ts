@@ -50,8 +50,25 @@ function serializeBatch(batch: any) {
  * 0 here -- the hub owner's revenue-share cut is taken in real time at charge time
  * (ADR-090 Phase 2, application_fee_amount) and Transferred immediately, never
  * deducted again in this settlement pass. The field is kept (rather than removed)
- * purely for API/response-shape backward compatibility with the existing frontend
- * settlement preview table.
+ * for API/response-shape backward compatibility.
+ *
+ * CORRECTION (verified this pass, supersedes the prior wording): the back-compat
+ * rationale used to cite "the existing frontend settlement preview table." No such
+ * consumer exists -- grepping all of packages/ for `settlement/preview` and
+ * `settlement/batches` outside src/routes and src/controllers returns zero hits. These
+ * endpoints have NO frontend caller today.
+ *
+ * KNOWN DEFECT, deliberately NOT changed here (needs a product decision, see the
+ * session report): `netPayout` below is neither what the vendor received nor what they
+ * owe. It subtracts boothFee, which is MONTHLY RENT billed separately by
+ * vendorBoothFeeBillingCron.ts (Phase 4), and it does NOT subtract the platform fee or
+ * the revenue share that were already taken at capture. For a $1,000 booth with $200/mo
+ * rent and a 20% revenue share, this reports net $800.00 while the vendor actually
+ * received $720 and separately owes $200. These values are PERSISTED onto
+ * VendorBoothPayout by createVendorBoothSettlementBatch below and are surfaced to the
+ * vendor as "Payout History" on pages/vendor-booth/[boothToken].tsx. Changing the
+ * formula changes stored rows and contradicts schema.prisma's documented definition of
+ * VendorBoothPayout.netPayout, so it is not a silent edit.
  */
 async function buildBoothSettlementLines(hubId: string) {
   const booths = await prisma.vendorBooth.findMany({

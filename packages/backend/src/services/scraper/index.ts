@@ -1249,6 +1249,37 @@ export async function ingestScrapedListing(
   organizerId?: string
 ): Promise<{ saleId?: string; status: 'created' | 'updated' | 'skipped' | 'failed'; reason?: string }> {
   try {
+    // --- Date normalisation at the ingest BOUNDARY (S1176) ---
+    // Every listing that arrives over HTTP (POST /api/internal/scraper/ingest,
+    // internalScraperController.ts:22 `items = req.body?.items`) has been through
+    // JSON.stringify in its GitHub-Actions runner script (run-search-facebook-events.ts:258,
+    // run-estatesalesnet.ts:131, run-foursquare-places.ts, run-here-places.ts), so its
+    // startDate/endDate are ISO STRINGS, not Date instances -- even though ScrapedItem
+    // declares them `Date` (htmlParser.ts:13). In-process callers (estatesalesnet.ts:259,
+    // facebook-marketplace.ts:324, garageSaleFinder.ts:124) do pass real Dates.
+    // Normalising ONCE here means every downstream consumer -- checkDuplicate() below,
+    // the 45-day sanity check, the RETAIL branch, the Prisma writes -- can trust the type,
+    // instead of each call site needing its own `instanceof Date ? ... : new Date(...)`
+    // guard (the 2026-07-19 ~30h silent-zeroed-ingest outage was exactly one such
+    // unguarded call site; dedupe.ts:301 was a second, still-live one).
+    const startDate = listing.startDate instanceof Date ? listing.startDate : new Date(listing.startDate as any);
+    const endDate = listing.endDate instanceof Date ? listing.endDate : new Date(listing.endDate as any);
+    const startValid = !!listing.startDate && !isNaN(startDate.getTime());
+    const endValid = !!listing.endDate && !isNaN(endDate.getTime());
+    if (!startValid || !endValid) {
+      // LOUD failure: a zeroed ingest must be diagnosable from the logs alone.
+      // The bad raw value is echoed so the offending mapper is identifiable without
+      // DB access, and the reason string is aggregated by internalScraperController's
+      // topFailureReasons() and surfaced in the GitHub Actions run output.
+      const reason = `Unparseable date on scraped listing (startDate=${JSON.stringify(listing.startDate)}, endDate=${JSON.stringify(listing.endDate)}) -- not ingested`;
+      console.error(`[scraper] INGEST DATE PARSE FAILURE source=${listing.sourceName} url=${listing.sourceUrl} :: ${reason}`);
+      return { status: 'failed', reason };
+    }
+    // Write the normalised Dates back so downstream reads of listing.startDate /
+    // listing.endDate (dedupe, Prisma create/update payloads) are type-correct too.
+    listing.startDate = startDate;
+    listing.endDate = endDate;
+
     // Dedup check
     const dupeResult = await checkDuplicate(
       listing,
@@ -1320,21 +1351,17 @@ export async function ingestScrapedListing(
     // with headroom above FacebookMarketplace's legitimate 30-day default window
     // (facebook-marketplace.ts) so this never false-rejects real listings.
     const MAX_SALE_DURATION_MS = 45 * 24 * 60 * 60 * 1000;
-    // Coerce to Date defensively -- some scraper mappers (confirmed: EstateSalesNet,
-    // Facebook Events) pass startDate/endDate as ISO strings rather than Date instances,
-    // which made the raw .getTime() calls below throw 'X.getTime is not a function' on
-    // EVERY listing since this check shipped (2026-07-19), silently zeroing out new-listing
-    // ingest across multiple sources for ~2 days (auto-fixed by daily health monitor).
-    const _startDate = listing.startDate instanceof Date ? listing.startDate : new Date(listing.startDate);
-    const _endDate = listing.endDate instanceof Date ? listing.endDate : new Date(listing.endDate);
+    // startDate/endDate were normalised to real Dates (and validated as parseable)
+    // at the top of this function -- see the ingest-boundary block above. The original
+    // 2026-07-19 outage was a raw .getTime() here on an ISO string; that class of bug
+    // is now prevented at the boundary rather than re-guarded at each call site.
     if (
       !listing.isOngoing &&
-      _endDate.getTime() - _startDate.getTime() > MAX_SALE_DURATION_MS
+      endDate.getTime() - startDate.getTime() > MAX_SALE_DURATION_MS
     ) {
-      return {
-        status: 'failed',
-        reason: `Implausible date window (${_startDate.toISOString()} -> ${_endDate.toISOString()}) exceeds 45-day sanity cap -- likely mismatched start/end fields, not ingested`,
-      };
+      const reason = `Implausible date window (${startDate.toISOString()} -> ${endDate.toISOString()}) exceeds 45-day sanity cap -- likely mismatched start/end fields, not ingested`;
+      console.warn(`[scraper] INGEST DATE WINDOW REJECT source=${listing.sourceName} url=${listing.sourceUrl} :: ${reason}`);
+      return { status: 'failed', reason };
     }
 
     // RETAIL deduplication: check if same address already exists

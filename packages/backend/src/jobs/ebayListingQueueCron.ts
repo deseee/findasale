@@ -76,6 +76,11 @@ async function pushQueuedItem(
         ebayOfferId: true,
         ebayListingId: true,
         ebayListedAt: true,
+        // Weight guard inputs — this cron is a third publish entry point and used to
+        // bypass the pre-publish checks in ebayController entirely.
+        packageWeightOz: true,
+        packageConfirmedByOrganizer: true,
+        ebayShippingOverride: true,
       },
     });
 
@@ -100,6 +105,22 @@ async function pushQueuedItem(
     if (!item.ebayOfferId) {
       console.warn(`[eBay Queue] Item ${itemId} has no ebayOfferId — cannot publish from queue`);
       return false;
+    }
+
+    // Weight guard — mirrors validateItemForEbayPublish Guard 2 in ebayController.
+    // Queue mode publishes an already-created offer without going back through the
+    // controller, so without this check it is a way to publish a shippable item on an
+    // unconfirmed, auto-estimated weight. Returning false leaves the item in the queue
+    // (nothing is dropped or unqueued) so it publishes on a later run once the
+    // organizer confirms the weight. Local-pickup items are exempt.
+    if (item.ebayShippingOverride !== 'LOCAL_PICKUP_ONLY') {
+      const hasWeight = item.packageWeightOz != null && Number(item.packageWeightOz) > 0;
+      if (!hasWeight || item.packageConfirmedByOrganizer !== true) {
+        console.warn(
+          `[eBay Queue] Item ${itemId} held in queue: shipping weight not confirmed by organizer (weightOz=${item.packageWeightOz ?? 'null'}, confirmed=${item.packageConfirmedByOrganizer === true})`
+        );
+        return false;
+      }
     }
 
     const publishPath = encodeURIComponent(`/sell/inventory/v1/offer/${item.ebayOfferId}/publish`);

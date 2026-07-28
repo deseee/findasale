@@ -1741,6 +1741,7 @@ export function validateItemForEbayPublish(item: {
   price?: number | null;
   packageWeightOz?: number | null;
   aiPackageWeightOz?: number | null;
+  packageConfirmedByOrganizer?: boolean | null;
   ebayShippingOverride?: string | null;
   isbn?: string | null;
   isBookCategory?: boolean;
@@ -1756,18 +1757,33 @@ export function validateItemForEbayPublish(item: {
     };
   }
 
-  // Guard 2 — shippable item with no usable package weight → eBay error 25101
-  // (calculated shipping can't build a parcel). Local-pickup items are exempt.
+  // Guard 2 — shippable item without an organizer-confirmed package weight.
+  // Two separate failure modes, both blocked:
+  //   a. No weight at all → eBay error 25101 (calculated shipping cannot build a parcel).
+  //   b. A weight exists but nobody confirmed it. The publish path auto-fills an
+  //      estimated weight (category/keyword/seed cascade) so the organizer has a
+  //      starting number, and an estimate is a prefill, not a measurement. Publishing
+  //      on an unconfirmed estimate is what shipped a whole sale of wrongly-rated
+  //      listings, and the organizer eats that shipping difference on every order.
+  //      An estimate must never publish on its own.
+  // Local-pickup items are exempt — nothing gets boxed, so no weight is needed.
   const isLocalPickup = item.ebayShippingOverride === 'LOCAL_PICKUP_ONLY';
-  const hasUsableWeight =
-    (item.packageWeightOz != null && Number(item.packageWeightOz) > 0) ||
-    (item.aiPackageWeightOz != null && Number(item.aiPackageWeightOz) > 0);
-  if (!isLocalPickup && !hasUsableWeight) {
-    return {
-      code: 'EBAY_NO_PACKAGE_WEIGHT',
-      message:
-        'eBay needs a package weight to calculate shipping. Add a package weight, or mark this item Local pickup only.',
-    };
+  if (!isLocalPickup) {
+    const hasWeight = item.packageWeightOz != null && Number(item.packageWeightOz) > 0;
+    if (!hasWeight) {
+      return {
+        code: 'EBAY_NO_PACKAGE_WEIGHT',
+        message:
+          'eBay needs a package weight to calculate shipping. Add a package weight, or mark this item Local pickup only.',
+      };
+    }
+    if (item.packageConfirmedByOrganizer !== true) {
+      return {
+        code: 'EBAY_WEIGHT_NOT_CONFIRMED',
+        message:
+          "Confirm this item's shipping weight before publishing. We filled in an estimated weight to start from, but it has not been checked. Open the item, weigh it, correct the weight and box size, and save. If this item is not shipping, mark it Local pickup only.",
+      };
+    }
   }
 
   // Guard 3 (ADR-089) — Books category with no ISBN. eBay's Books category (261186) requires a
@@ -2273,6 +2289,9 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
           price,
           packageWeightOz: item.packageWeightOz,
           aiPackageWeightOz: item.aiPackageWeightOz,
+          // Read the DB-selected flag, NOT the in-memory value the auto-resolve above
+          // may have prefilled — an estimate never counts as organizer confirmation.
+          packageConfirmedByOrganizer: item.packageConfirmedByOrganizer,
           ebayShippingOverride: item.ebayShippingOverride,
           isbn: item.isbn,
           isBookCategory,
@@ -3215,6 +3234,7 @@ export const publishItemOffer = async (req: AuthRequest, res: Response) => {
       price: effectivePrice,
       packageWeightOz: item.packageWeightOz,
       aiPackageWeightOz: item.aiPackageWeightOz,
+      packageConfirmedByOrganizer: item.packageConfirmedByOrganizer,
       ebayShippingOverride: item.ebayShippingOverride,
       isbn: item.isbn,
       isBookCategory,

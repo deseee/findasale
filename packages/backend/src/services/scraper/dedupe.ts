@@ -269,6 +269,25 @@ export async function checkDuplicate(
       listing.endDate
     ) {
       const normalizedIncoming = normalizeEventTitle(listing.title);
+      // Defence-in-depth date coercion (S1176). ingestScrapedListing() now normalises
+      // startDate/endDate at the ingest boundary (scraper/index.ts), but checkDuplicate()
+      // is exported and independently callable (and is exercised directly by
+      // __tests__/dedupe.test.ts), so this tier must not assume a Date instance.
+      // Untyped ISO strings reaching here were silently corrupting BOTH comparisons
+      // below -- `Date <= string` coerces the string to NaN and always evaluates
+      // false (wrong dedup verdict, no error) -- and made the `.getTime()` on the
+      // roll-forward path throw, which the catch at the bottom of this function
+      // swallowed into a blanket `isDuplicate: false` (duplicate rows, no log of why).
+      const incomingStart =
+        listing.startDate instanceof Date ? listing.startDate : new Date(listing.startDate as any);
+      const incomingEnd =
+        listing.endDate instanceof Date ? listing.endDate : new Date(listing.endDate as any);
+      if (isNaN(incomingStart.getTime()) || isNaN(incomingEnd.getTime())) {
+        console.warn(
+          `[dedupe] Tier-6 skipped: unparseable listing dates (startDate=${JSON.stringify(listing.startDate)}, endDate=${JSON.stringify(listing.endDate)}) for "${listing.title}" @ ${listing.city}, ${listing.state}`
+        );
+        return { isDuplicate: false };
+      }
       if (hasDistinctiveTitleCore(normalizedIncoming)) {
         const candidates = await prisma.sale.findMany({
           where: {
@@ -283,7 +302,7 @@ export async function checkDuplicate(
           if (!candidate.title || normalizeEventTitle(candidate.title) !== normalizedIncoming) continue;
 
           const overlaps =
-            candidate.startDate <= listing.endDate && candidate.endDate >= listing.startDate;
+            candidate.startDate <= incomingEnd && candidate.endDate >= incomingStart;
           if (overlaps) {
             return {
               isDuplicate: true,
@@ -296,9 +315,9 @@ export async function checkDuplicate(
           // Recurring-instance roll-forward: only when the existing row has ALREADY
           // fully ended (never collapses a still-live/upcoming distinct listing) and
           // the new occurrence falls within the bounded recurrence gap.
-          const alreadyEnded = candidate.endDate < new Date() && candidate.endDate < listing.startDate;
+          const alreadyEnded = candidate.endDate < new Date() && candidate.endDate < incomingStart;
           if (alreadyEnded) {
-            const gapMs = listing.startDate.getTime() - candidate.endDate.getTime();
+            const gapMs = incomingStart.getTime() - candidate.endDate.getTime();
             const gapDays = gapMs / 86_400_000;
             if (gapDays <= RECURRING_ROLL_FORWARD_MAX_GAP_DAYS) {
               return {
@@ -315,7 +334,14 @@ export async function checkDuplicate(
 
     return { isDuplicate: false };
   } catch (error) {
-    console.error('Dedup check failed:', error);
+    // Fail-open is deliberate (a dedup outage must not block the scrape), but it MUST
+    // be loud: this catch previously logged only the bare error, so a systematic
+    // failure here looked identical to "nothing was a duplicate" and produced silent
+    // duplicate-row growth with no attributable source (S1176).
+    console.error(
+      `[dedupe] Dedup check FAILED (failing open as non-duplicate) source=${sourceName} url=${sourceUrl} sourceItemId=${sourceItemId ?? 'n/a'} title="${listing.title ?? ''}":`,
+      error
+    );
     // On error, treat as non-duplicate to avoid blocking the scrape
     return { isDuplicate: false };
   }

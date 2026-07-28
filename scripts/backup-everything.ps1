@@ -14,6 +14,13 @@
 # FIX 2026-07-28: the RAILWAY_TOKEN check below was failing every night because nothing
 # ever actually loaded it for the unattended run -- this loader is the fix. See
 # .secrets.env for where to paste a fresh Railway project token (the previous one is dead).
+# FIX 2026-07-28 (part 2, S1176): the loader above was only half the bug. The OTHER half
+# was that the failure was SILENT -- on 2026-07-27 and 2026-07-28 the DB dump was skipped,
+# yet the script logged "RUN ENDED - SUCCESS" and exited 0, so Task Scheduler reported
+# SUCCESS on two consecutive dumpless backups and backup-log-error.txt was never created.
+# Every category that can fail to produce its artifact now records that failure, the DB
+# dump is verified by SIZE (not just pg_dump's exit code), rotation is skipped on a failed
+# run so a bad night cannot purge the last good backup, and the script exits non-zero.
 
 param(
     [int]$RetentionDays = 7,
@@ -31,25 +38,10 @@ $errorLogFile = "$backupRoot\backup-log-error.txt"
 # Ensure backup root exists before anything else
 if (!(Test-Path $backupRoot)) { New-Item -ItemType Directory -Path $backupRoot -Force | Out-Null }
 
-# Load secrets from the project's gitignored .secrets.env (export KEY="value" lines),
-# for any key not already set in this process's environment. Doing this here -- as a
-# file read, not an inherited env var -- means it works identically whether this script
-# is run interactively or via Task Scheduler (-NoProfile, no inherited shell state).
-$secretsFile = "$projectRoot\.secrets.env"
-if (Test-Path $secretsFile) {
-    Get-Content $secretsFile | ForEach-Object {
-        if ($_ -match '^\s*export\s+([A-Z_]+)=(.*)$') {
-            $name = $matches[1]
-            $value = $matches[2].Trim('"').Trim("'")
-            if ($value -and -not (Get-Item "Env:$name" -ErrorAction SilentlyContinue)) {
-                Set-Item "Env:$name" $value
-            }
-        }
-    }
-    Write-Host "  Loaded secrets from .secrets.env (existing env vars take precedence)"
-} else {
-    Write-Host "  NOTE: .secrets.env not found at $secretsFile -- RAILWAY_TOKEN/PGPASSWORD must already be in the environment"
-}
+# NOTE (S1176): the .secrets.env loader used to run HERE, above the Log helper, so its
+# result only ever reached Write-Host and never backup-log.txt -- under Task Scheduler
+# that output goes nowhere at all. It now runs inside the try block below, after Log and
+# the failure helpers exist. See "--- Load secrets (.secrets.env) ---".
 
 # --- Helpers ---
 function Log($msg) {
@@ -107,6 +99,80 @@ function Safe-CopyDir($src, $dest) {
 # to both log files and causes the script to exit 1 (so Task Scheduler's
 # "Last Run Result" reflects real failures instead of always showing success).
 $script:BackupFailureReason = $null
+$script:ExitCode = 0
+
+# --- Failure / warning tracking (added S1176) ---
+# A category that cannot produce its artifact MUST make the run non-zero. Before this,
+# a skipped DB dump only called Log "  ERROR: ..." and the run still ended SUCCESS.
+#   Add-Failure -> hard failure, exit 1, no rotation of old backups
+#   Add-Warning -> degraded/partial, exit 2, backup still usable
+$script:BackupFailures = New-Object System.Collections.ArrayList
+$script:BackupWarnings = New-Object System.Collections.ArrayList
+
+# DB dump size gates. Known-good custom-format dump is ~38 MB (the 2026-07-26 zip
+# contains database\findasale.dump at 38.2 MB). The hard floor is 5 MB -- about 13% of
+# known-good: far below any plausible legitimate shrinkage of this database, but well
+# above a 0-byte, truncated, or aborted dump, which is what we actually need to catch.
+# 20 MB (~half of known-good) is a warn-only tripwire for "still writing, but suspicious".
+$script:DbDumpMinBytes  = 5MB
+$script:DbDumpWarnBytes = 20MB
+
+function Add-Failure($category, $msg) {
+    [void]$script:BackupFailures.Add("$category - $msg")
+    Log "  FAIL [$category] $msg"
+}
+
+function Add-Warning($category, $msg) {
+    [void]$script:BackupWarnings.Add("$category - $msg")
+    Log "  WARN [$category] $msg"
+}
+
+# Verify an artifact landed on disk at a plausible size. Exit codes lie; file size does not.
+function Assert-Artifact($category, $path, $minBytes) {
+    if (!(Test-Path $path)) {
+        Add-Failure $category "artifact was never created at $path"
+        return
+    }
+    $len = (Get-Item $path).Length
+    $mb = [math]::Round($len / 1MB, 2)
+    if ($len -lt $minBytes) {
+        Add-Failure $category "artifact is only $mb MB at $path (hard floor $([math]::Round($minBytes / 1MB, 2)) MB) -- treating as truncated/failed"
+        return
+    }
+    Log "  VERIFIED [$category] $mb MB at $path"
+}
+
+function Assert-Dir($category, $path, $minFiles) {
+    if (!(Test-Path $path)) {
+        Add-Failure $category "directory was never created at $path"
+        return
+    }
+    $count = (Get-ChildItem $path -Recurse -File -ErrorAction SilentlyContinue).Count
+    if ($count -lt $minFiles) {
+        Add-Failure $category "only $count file(s) at $path (expected at least $minFiles) -- incomplete copy"
+        return
+    }
+    Log "  VERIFIED [$category] $count files at $path"
+}
+
+# The DB dump has no other recovery path, so it gets its own check: pg_dump can exit 0
+# having written a 0-byte or partial file (disk full, killed connection, SSL reset).
+function Assert-DbDump($path) {
+    if (!(Test-Path $path)) {
+        Add-Failure "DATABASE" "pg_dump reported success but no dump file exists at $path. NO DATABASE DUMP IN THIS BACKUP."
+        return
+    }
+    $len = (Get-Item $path).Length
+    $mb = [math]::Round($len / 1MB, 2)
+    if ($len -lt $script:DbDumpMinBytes) {
+        Add-Failure "DATABASE" "dump is only $mb MB (hard floor $([math]::Round($script:DbDumpMinBytes / 1MB, 0)) MB, known-good ~38 MB) -- empty or truncated. NOT A USABLE BACKUP."
+        return
+    }
+    if ($len -lt $script:DbDumpWarnBytes) {
+        Add-Warning "DATABASE" "dump is $mb MB, far below the ~38 MB norm -- verify the database is intact"
+    }
+    Log "  VERIFIED [DATABASE] dump is $mb MB at $path"
+}
 
 try {
 
@@ -114,6 +180,59 @@ try {
 Log "=========================================="
 Log "FindA.Sale Backup Started: $timestamp"
 Log "=========================================="
+
+# --- Load secrets (.secrets.env) ---
+# Load secrets from the project's gitignored .secrets.env (KEY=value or `export KEY=value`
+# lines) for any key not already set in this process's environment. Doing this as a file
+# read, not an inherited env var, means it works identically for an interactive run and
+# for Task Scheduler (-NoProfile, no inherited shell state).
+# Hardened S1176 -- the previous regex was ^\s*export\s+([A-Z_]+)=(.*)$ with
+# .Trim('"').Trim("'"), which silently dropped or mangled: keys containing digits
+# (API_KEY_2), lines without the `export` prefix, whitespace around `=`, and -- the
+# dangerous one on Windows -- it relied entirely on Get-Content to strip CRLF. A stray
+# \r or trailing space inside a token value produces a token that LOOKS present and
+# fails auth with no useful error. Everything below is now explicit.
+$secretsFile = "$projectRoot\.secrets.env"
+$loadedKeys = @()
+if (Test-Path $secretsFile) {
+    foreach ($rawLine in (Get-Content $secretsFile)) {
+        $line = $rawLine -replace '[\r\n]', ''
+        if ($line -match '^\s*$') { continue }
+        if ($line -match '^\s*#') { continue }
+        if ($line -match '^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$') {
+            $name  = $matches[1]
+            $value = $matches[2]
+            # Strip exactly ONE matched pair of surrounding quotes. The old
+            # .Trim('"') stripped EVERY leading/trailing quote character.
+            if ($value.Length -ge 2 -and
+                (($value.StartsWith('"') -and $value.EndsWith('"')) -or
+                 ($value.StartsWith("'") -and $value.EndsWith("'")))) {
+                $value = $value.Substring(1, $value.Length - 2)
+            }
+            $value = ($value -replace '[\r\n]', '')
+            if (-not $value) { continue }
+            if (Get-Item "Env:$name" -ErrorAction SilentlyContinue) { continue }
+            Set-Item "Env:$name" $value
+            $loadedKeys += $name
+        } else {
+            Log "  NOTE: ignoring unparseable line in .secrets.env (no KEY=value match)"
+        }
+    }
+    Log "  Loaded $($loadedKeys.Count) key(s) from .secrets.env: $($loadedKeys -join ', ') (existing env vars take precedence)"
+} else {
+    Add-Failure "SECRETS" ".secrets.env not found at $secretsFile -- RAILWAY_TOKEN/PGPASSWORD cannot be loaded"
+}
+
+# NEVER log a token VALUE -- presence and length only. That is enough to diagnose an
+# empty, truncated, or whitespace-mangled token without writing the secret to disk.
+if ($env:RAILWAY_TOKEN) {
+    Log "  RAILWAY_TOKEN present (length $($env:RAILWAY_TOKEN.Length))"
+    if ($env:RAILWAY_TOKEN -match '\s') {
+        Add-Failure "SECRETS" "RAILWAY_TOKEN contains whitespace or a line break -- Railway auth will fail. Re-paste it in .secrets.env with no trailing space and no wrapped line."
+    }
+} else {
+    Log "  RAILWAY_TOKEN NOT present after secret load"
+}
 
 # Create backup directory
 New-Item -ItemType Directory -Path $backupDir -Force | Out-Null
@@ -133,11 +252,13 @@ if ($gitExe) {
     if ($LASTEXITCODE -eq 0 -and (Test-Path $bundleFile)) {
         $bundleMB = [math]::Round((Get-Item $bundleFile).Length / 1MB, 1)
         Log "  Git bundle: $bundleMB MB (all branches)"
+        # Size-verify as well as exit-code-verify. Last good bundle was 36 MB.
+        Assert-Artifact "GIT" $bundleFile 1MB
     } else {
-        Log "  ERROR: git bundle failed (exit $LASTEXITCODE)"
+        Add-Failure "GIT" "git bundle failed (exit $LASTEXITCODE) -- NO REPO BUNDLE IN THIS BACKUP"
     }
 } else {
-    Log "  SKIP: git not found"
+    Add-Failure "GIT" "git not found on PATH -- NO REPO BUNDLE IN THIS BACKUP"
 }
 
 # ============================================
@@ -154,7 +275,7 @@ if (-not $SkipDB) {
     $dumpFile = "$dbDir\findasale.dump"
 
     if ($pgDump -and $railwayCli -and -not $env:RAILWAY_TOKEN) {
-        Log "  ERROR: RAILWAY_TOKEN not set in environment -- cannot use Railway CLI path. Set it before running this script (see header comment)."
+        Add-Failure "DATABASE" "RAILWAY_TOKEN not set in environment -- cannot use Railway CLI path. Paste a fresh Railway project token into .secrets.env. NO DATABASE DUMP IN THIS BACKUP."
     } elseif ($pgDump -and $railwayCli) {
         # Best path: get current public URL from Railway CLI (password auto-updates)
         # Pass full connection string directly to pg_dump — no parsing, no escaping issues
@@ -164,16 +285,16 @@ if (-not $SkipDB) {
             if ($connStr -notmatch 'sslmode=') { $connStr = "$connStr`?sslmode=require" }
             pg_dump "$connStr" --format=custom --compress=9 --file=$dumpFile 2>&1
             if ($LASTEXITCODE -eq 0) {
-                $sizeMB = [math]::Round((Get-Item $dumpFile).Length / 1MB, 1)
-                Log "  DB dump via Railway CLI: $sizeMB MB"
+                Log "  pg_dump via Railway CLI returned exit 0 -- verifying artifact size"
+                Assert-DbDump $dumpFile
             } else {
-                Log "  ERROR: pg_dump with connection string failed (exit $LASTEXITCODE)"
+                Add-Failure "DATABASE" "pg_dump with Railway connection string failed (exit $LASTEXITCODE). NO DATABASE DUMP IN THIS BACKUP."
             }
         } else {
-            Log "  ERROR: Could not get DATABASE_PUBLIC_URL from Railway CLI"
+            Add-Failure "DATABASE" "could not get DATABASE_PUBLIC_URL from Railway CLI. NO DATABASE DUMP IN THIS BACKUP."
         }
     } elseif ($pgDump -and -not $env:PGPASSWORD) {
-        Log "  ERROR: PGPASSWORD not set in environment -- skipping direct pg_dump fallback. Set it before running this script (see header comment)."
+        Add-Failure "DATABASE" "PGPASSWORD not set in environment -- direct pg_dump fallback unavailable. NO DATABASE DUMP IN THIS BACKUP."
     } elseif ($pgDump) {
         # Fallback: direct connection. PGPASSWORD must already be set in the
         # environment (e.g. sourced from a local, gitignored secrets file) --
@@ -182,14 +303,14 @@ if (-not $SkipDB) {
         $env:PGSSLMODE = "require"
         pg_dump --host=maglev.proxy.rlwy.net --port=13949 --username=postgres --dbname=railway --format=custom --compress=9 --file=$dumpFile 2>&1
         if ($LASTEXITCODE -eq 0) {
-            $sizeMB = [math]::Round((Get-Item $dumpFile).Length / 1MB, 1)
-            Log "  DB dump: $sizeMB MB"
+            Log "  pg_dump (direct) returned exit 0 -- verifying artifact size"
+            Assert-DbDump $dumpFile
         } else {
-            Log "  ERROR: pg_dump failed (exit code $LASTEXITCODE). Password may have rotated - check Railway dashboard."
+            Add-Failure "DATABASE" "pg_dump failed (exit code $LASTEXITCODE). Password may have rotated - check Railway dashboard. NO DATABASE DUMP IN THIS BACKUP."
         }
         Remove-Item Env:\PGPASSWORD -ErrorAction SilentlyContinue
     } else {
-        Log "  SKIP: pg_dump not found. Install PostgreSQL client tools to enable DB backups."
+        Add-Failure "DATABASE" "pg_dump not found on PATH -- install PostgreSQL client tools. NO DATABASE DUMP IN THIS BACKUP (only connection-info.txt below)."
         Log "  Download: https://www.postgresql.org/download/windows/"
         # Fallback: save connection info so restore is possible from Railway snapshot
         @"
@@ -222,17 +343,25 @@ Safe-Copy "$projectRoot\packages\database\.env" "$envDir\database.env"
 # Railway env vars via CLI (if available)
 $railwayCli = Get-Command railway -ErrorAction SilentlyContinue
 if ($railwayCli -and -not $env:RAILWAY_TOKEN) {
-    Log "  ERROR: RAILWAY_TOKEN not set in environment -- skipping Railway env var export. Set it before running this script (see header comment)."
+    Add-Warning "RAILWAY-VARS" "RAILWAY_TOKEN not set -- Railway env vars not exported (recoverable from the Railway dashboard, so PARTIAL not FATAL)"
 } elseif ($railwayCli) {
     try {
         railway vars --service Postgres 2>$null | Out-File "$envDir\railway-postgres-vars.txt" -Encoding UTF8
         railway vars --service backend 2>$null | Out-File "$envDir\railway-backend-vars.txt" -Encoding UTF8
-        Log "  Railway env vars exported"
+        # Out-File creates the file even when the railway call emitted nothing, so an
+        # existence check would always pass. Check for real content instead.
+        $emptyVarFiles = @("$envDir\railway-postgres-vars.txt", "$envDir\railway-backend-vars.txt") |
+            Where-Object { -not (Test-Path $_) -or (Get-Item $_).Length -lt 50 }
+        if ($emptyVarFiles) {
+            Add-Warning "RAILWAY-VARS" "Railway env var export produced empty file(s): $($emptyVarFiles -join ', ')"
+        } else {
+            Log "  Railway env vars exported"
+        }
     } catch {
-        Log "  Railway CLI vars export failed: $_"
+        Add-Warning "RAILWAY-VARS" "Railway CLI vars export threw: $_"
     }
 } else {
-    Log "  SKIP: Railway CLI not installed (env vars not exported)"
+    Add-Warning "RAILWAY-VARS" "Railway CLI not installed -- env vars not exported"
 }
 
 # ============================================
@@ -324,6 +453,11 @@ Safe-Copy "$projectRoot\packages\database\CLAUDE.md" "$docsDir\database-CLAUDE.m
 # claude_docs directory (full copy)
 if (Test-Path "$projectRoot\claude_docs") {
     Safe-CopyDir "$projectRoot\claude_docs" "$docsDir\claude_docs"
+    # claude_docs is gitignored -- this zip is its ONLY recovery path, so an incomplete
+    # copy is a hard failure, not a note. Last good copy: 1,312 files (2026-07-28 run).
+    Assert-Dir "DOCS" "$docsDir\claude_docs" 500
+} else {
+    Add-Failure "DOCS" "claude_docs not found at $projectRoot\claude_docs -- it is gitignored, so this backup has NO copy of STATE.md / roadmap.md / session logs"
 }
 
 # Rolling per-file snapshots of the load-bearing docs (STATE.md, session-log.md,
@@ -336,9 +470,13 @@ if (-not $pythonExe) { $pythonExe = Get-Command python3 -ErrorAction SilentlyCon
 if ($pythonExe) {
     Push-Location $projectRoot
     & $pythonExe.Source "claude_docs\operations\backup-claude-docs.py" 2>&1 | ForEach-Object { Log "  [rolling-backup] $_" }
+    $rollingExit = $LASTEXITCODE
     Pop-Location
+    if ($rollingExit -ne 0) {
+        Add-Warning "ROLLING-DOCS" "backup-claude-docs.py exited $rollingExit -- rolling per-file snapshots may be incomplete"
+    }
 } else {
-    Log "  SKIP: python/python3 not found -- rolling per-file claude_docs snapshots not run this pass (full claude_docs/ zip above still covers it once per day)"
+    Add-Warning "ROLLING-DOCS" "python/python3 not found -- rolling per-file claude_docs snapshots not run this pass (full claude_docs/ zip above still covers it once per day)"
 }
 
 # Global Cowork CLAUDE.md
@@ -379,7 +517,7 @@ if (-not $skillsFound) {
         }
     }
     if (-not $skillsFound) {
-        Log "  SKIP: Skills directory not found in either Roaming or Package sandbox"
+        Add-Warning "SKILLS" "skills directory not found in either Roaming or Package sandbox -- no skills in this backup"
     }
 }
 
@@ -401,7 +539,7 @@ foreach ($mp in $memPaths) {
     }
 }
 if (-not $memFound) {
-    Log "  SKIP: Memory directory not found in either Roaming or Package sandbox"
+    Add-Warning "MEMORY" "memory directory not found in either Roaming or Package sandbox -- no memory files in this backup"
 }
 
 # ============================================
@@ -409,23 +547,52 @@ if (-not $memFound) {
 # ============================================
 Log "Compressing backup..."
 $zipFile = "$backupRoot\findasale-backup-$timestamp.zip"
-Compress-Archive -Path "$backupDir\*" -DestinationPath $zipFile -CompressionLevel Optimal
-$zipSizeMB = [math]::Round((Get-Item $zipFile).Length / 1MB, 1)
-Log "Compressed: $zipFile ($zipSizeMB MB)"
-
-# Remove uncompressed folder (keep only zip)
-Remove-Item -Path $backupDir -Recurse -Force
-Log "Cleaned up uncompressed folder"
-
-# Rotate old backups (keep last N days)
-$cutoff = (Get-Date).AddDays(-$RetentionDays)
-$old = Get-ChildItem $backupRoot -Filter "findasale-backup-*.zip" |
-    Where-Object { $_.LastWriteTime -lt $cutoff }
-if ($old) {
-    $old | Remove-Item -Force
-    Log "Rotated $($old.Count) old backup(s) (older than $RetentionDays days)"
+$zipSizeMB = 0
+$zipOk = $false
+try {
+    # -ErrorAction Stop because $ErrorActionPreference is "Continue" for this script:
+    # without it a failed Compress-Archive is non-terminating and execution falls
+    # straight through to the Remove-Item that deletes the staging folder.
+    Compress-Archive -Path "$backupDir\*" -DestinationPath $zipFile -CompressionLevel Optimal -ErrorAction Stop
+    $zipOk = $true
+} catch {
+    Add-Failure "ARCHIVE" "Compress-Archive failed: $($_.Exception.Message)"
+}
+if ($zipOk -and (Test-Path $zipFile)) {
+    $zipSizeMB = [math]::Round((Get-Item $zipFile).Length / 1MB, 1)
+    Log "Compressed: $zipFile ($zipSizeMB MB)"
+    # Smallest legitimate zip on record is 43.1 MB; 5 MB is a truncation tripwire only.
+    Assert-Artifact "ARCHIVE" $zipFile 5MB
 } else {
-    Log "No old backups to rotate"
+    $zipOk = $false
+    Add-Failure "ARCHIVE" "no zip produced at $zipFile"
+}
+
+# Remove uncompressed folder (keep only zip) -- ONLY when the zip actually exists.
+# Deleting the staging folder after a failed Compress-Archive would destroy the entire
+# night's backup with nothing to show for it.
+if ($zipOk) {
+    Remove-Item -Path $backupDir -Recurse -Force
+    Log "Cleaned up uncompressed folder"
+} else {
+    Log "KEEPING uncompressed folder $backupDir -- compression failed; staged files preserved for manual recovery"
+}
+
+# Rotate old backups (keep last N days) -- SKIPPED whenever this run had a hard failure,
+# so a broken night can never purge the last good backup. On 2026-07-28 the dumpless run
+# rotated away findasale-backup-2026-07-20 while producing a zip with no database dump.
+if ($script:BackupFailures.Count -gt 0) {
+    Log "SKIPPING rotation -- this run recorded $($script:BackupFailures.Count) failure(s); old backups are preserved"
+} else {
+    $cutoff = (Get-Date).AddDays(-$RetentionDays)
+    $old = Get-ChildItem $backupRoot -Filter "findasale-backup-*.zip" |
+        Where-Object { $_.LastWriteTime -lt $cutoff }
+    if ($old) {
+        $old | Remove-Item -Force
+        Log "Rotated $($old.Count) old backup(s) (older than $RetentionDays days)"
+    } else {
+        Log "No old backups to rotate"
+    }
 }
 
 # Summary
@@ -454,13 +621,64 @@ catch {
     Log "  FATAL ERROR: $($_.Exception.Message)"
 }
 finally {
+    # Fold the per-category failures recorded by Add-Failure into the single reason
+    # string that drives the RUN ENDED line and the process exit code. A terminating
+    # exception caught above still leads the message.
+    $failCount = $script:BackupFailures.Count
+    $warnCount = $script:BackupWarnings.Count
+
+    if ($failCount -gt 0) {
+        $catReason = ($script:BackupFailures -join ' | ')
+        if ($script:BackupFailureReason) {
+            $script:BackupFailureReason = "$($script:BackupFailureReason) | $catReason"
+        } else {
+            $script:BackupFailureReason = $catReason
+        }
+    }
+
     if ($script:BackupFailureReason) {
-        Log "RUN ENDED - FAILURE: $($script:BackupFailureReason)"
+        $script:ExitCode = 1
+        $outcome = "RUN ENDED - FAILED: $($script:BackupFailureReason)"
+    } elseif ($warnCount -gt 0) {
+        $script:ExitCode = 2
+        $outcome = "RUN ENDED - PARTIAL: $($script:BackupWarnings -join ' | ')"
     } else {
-        Log "RUN ENDED - SUCCESS"
+        $script:ExitCode = 0
+        $outcome = "RUN ENDED - SUCCESS"
+    }
+
+    if ($failCount -gt 0 -and $warnCount -gt 0) {
+        Log "ALSO WARNINGS ($warnCount): $($script:BackupWarnings -join ' | ')"
+    }
+    Log $outcome
+
+    # Durable failure record. backup-log-error.txt is the file an operator (or the next
+    # session) checks to answer "did last night's backup actually work?" -- before S1176
+    # it was never created, because only a terminating exception ever wrote to it, and a
+    # missing DB dump is not a terminating exception.
+    if ($script:ExitCode -ne 0) {
+        $errBlock = @(
+            "==========================================",
+            "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') | BACKUP RUN $timestamp | EXIT $($script:ExitCode)",
+            $outcome,
+            "Zip: $zipFile",
+            "Full log: $logFile"
+        )
+        foreach ($d in $errBlock) {
+            try { Add-Content -Path $errorLogFile -Value $d -ErrorAction Stop } catch {}
+        }
     }
 }
 
-if ($script:BackupFailureReason) {
-    exit 1
-}
+# Exit code drives Task Scheduler's "Last Run Result":
+#   0 = SUCCESS
+#   2 = PARTIAL  (a non-critical category was skipped: Railway vars, skills, memory,
+#                 rolling doc snapshots -- the backup itself is usable)
+#   1 = FAILED   (a critical artifact is missing or too small -- DB dump, git bundle,
+#                 claude_docs, the zip itself -- or a terminating exception was caught)
+# This `exit` sits at script top level, deliberately NOT inside a function (where `exit`
+# would only unwind the script if the script is the caller) and NOT inside the finally
+# block (where it can mask the real code). Invoked as
+# `powershell.exe -NoProfile -File backup-everything.ps1`, this sets the process exit
+# code that Task Scheduler records.
+exit $script:ExitCode

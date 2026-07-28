@@ -591,7 +591,20 @@ export const PostSaleEbayPanel: React.FC<PostSaleEbayPanelProps> = ({ saleId }) 
         showToast(`${successCount} item(s) published to eBay`, 'success');
       }
       if (failureCount > 0) {
-        showToast(`Failed to push ${failureCount} item(s)`, 'error');
+        // Surface the real reason, not just a count. A sale-wide push that fails the
+        // weight guard used to show only "Failed to push N item(s)", which told the
+        // organizer nothing about what to fix. Failures usually share one cause, so
+        // show the distinct messages (capped) instead of one toast per item.
+        const failures = results.filter((r: any) => r.status === 'error');
+        const distinctMsgs = Array.from(
+          new Set(failures.map((r: any) => r.message || r.error || 'Failed to push item'))
+        ) as string[];
+        distinctMsgs.slice(0, 3).forEach((m: string) => {
+          showToast(`${failureCount} item(s) not pushed: ${m}`, 'error');
+        });
+        if (distinctMsgs.length > 3) {
+          showToast(`Plus ${distinctMsgs.length - 3} other error(s) on this push.`, 'error');
+        }
       }
 
       setSelectedItems(new Set());

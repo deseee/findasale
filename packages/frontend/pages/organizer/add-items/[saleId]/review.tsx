@@ -470,11 +470,14 @@ const ReviewPage = () => {
           }
         } else {
           errorCount++;
+          // result.message is what the backend pre-publish guards populate
+          // (price / weight / ISBN blocks). Falling back to result.error alone
+          // swallowed those and showed a generic "Failed to push item".
           const errorMsg = result.error?.includes('NOT_CONNECTED')
             ? 'eBay not connected'
             : result.error?.includes('POLICIES')
             ? 'eBay policies not configured'
-            : result.error || 'Failed to push item';
+            : result.message || result.error || 'Failed to push item';
           showToast(`Item ${result.itemId}: ${errorMsg}`, 'error');
         }
       });

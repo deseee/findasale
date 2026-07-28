@@ -72,6 +72,18 @@ const VendorBoothsPage: React.FC = () => {
   const [feeCharges, setFeeCharges] = useState<FeeCharge[]>([]);
   const [feeChargesLoading, setFeeChargesLoading] = useState(true);
 
+  // ADR-090 §6: the server caps revenue share at 30% -- vendorBoothController.ts
+  // rejects anything higher with a 400, and vendorBoothCartController.ts clamps it
+  // again at charge time. Keep this in step with REVENUE_SHARE_CAP_PERCENT there,
+  // so the form never accepts a number the save will bounce.
+  const REVENUE_SHARE_CAP_PERCENT = 30;
+  const revShareValue = parseFloat(formData.revenueSharePercent);
+  const revShareError =
+    formData.revenueSharePercent !== '' &&
+    (Number.isNaN(revShareValue) || revShareValue < 0 || revShareValue > REVENUE_SHARE_CAP_PERCENT)
+      ? `Revenue share must be between 0 and ${REVENUE_SHARE_CAP_PERCENT}%.`
+      : null;
+
   const [formData, setFormData] = useState({
     boothNumber: '',
     vendorName: '',
@@ -157,6 +169,10 @@ const VendorBoothsPage: React.FC = () => {
     e.preventDefault();
     if (!formData.boothNumber || !formData.vendorName) {
       showToast('Booth number and vendor name are required', 'error');
+      return;
+    }
+    if (revShareError) {
+      showToast(revShareError, 'error');
       return;
     }
 
@@ -518,17 +534,31 @@ const VendorBoothsPage: React.FC = () => {
                 <div>
                   <label className="block text-sm font-bold text-warm-700 dark:text-warm-300 mb-1">Rev Share (%)</label>
                   <input
-                    type="number" name="revenueSharePercent" min="0" max="100" step="0.1" value={formData.revenueSharePercent} onChange={handleFormChange}
-                    className="w-full border border-warm-300 dark:border-gray-600 rounded-lg px-3 py-2 dark:bg-gray-700 dark:text-white"
+                    type="number" name="revenueSharePercent" min="0" max={REVENUE_SHARE_CAP_PERCENT} step="0.1" value={formData.revenueSharePercent} onChange={handleFormChange}
+                    className={`w-full border rounded-lg px-3 py-2 dark:bg-gray-700 dark:text-white ${
+                      revShareError
+                        ? 'border-red-500 dark:border-red-500'
+                        : 'border-warm-300 dark:border-gray-600'
+                    }`}
                     aria-label="Revenue Share Percent"
+                    aria-invalid={!!revShareError}
+                    aria-describedby="revShareHelp"
                   />
+                  <p
+                    id="revShareHelp"
+                    className={`text-xs mt-1 ${
+                      revShareError ? 'text-red-600 dark:text-red-400' : 'text-warm-500 dark:text-warm-400'
+                    }`}
+                  >
+                    {revShareError || `Up to ${REVENUE_SHARE_CAP_PERCENT}% of each sale at this booth.`}
+                  </p>
                 </div>
               </div>
               <div className="flex gap-3">
                 <button type="button" onClick={handleCloseModal} className="flex-1 px-4 py-2 border border-warm-300 dark:border-gray-600 rounded-lg text-warm-700 dark:text-warm-300 font-medium">
                   Cancel
                 </button>
-                <button type="submit" disabled={isSaving} className="flex-1 px-4 py-2 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white rounded-lg font-bold transition-colors">
+                <button type="submit" disabled={isSaving || !!revShareError} className="flex-1 px-4 py-2 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white rounded-lg font-bold transition-colors">
                   {isSaving ? 'Saving...' : modalMode === 'create' ? 'Create' : 'Save'}
                 </button>
               </div>

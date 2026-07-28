@@ -2861,7 +2861,44 @@ export const createRefund = async (req: AuthRequest, res: Response) => {
     try {
       await stripe().refunds.create({
         payment_intent: purchase.stripePaymentIntentId,
-        amount: Math.round(refundAmount * 100) // Convert to cents
+        amount: Math.round(refundAmount * 100), // Convert to cents
+        // P1 money-path fix (2026-07-28): booth-cart legs are DIRECT charges on the
+        // booth's own connected account, created by the platform with an
+        // application_fee_amount (vendorBoothCartController.ts:630 TERMINAL rail,
+        // :884 QR rail = platform cut + hub-owner revenue-share cut,
+        // computeLegFeeSplit :52-82). On a Direct charge the connected account funds
+        // 100% of a refund, and refund_application_fee DEFAULTS TO FALSE — so without
+        // this flag the platform kept the entire application fee while the vendor's
+        // balance was debited the full gross. A $100 leg at 8% platform + 20% hub
+        // share (fee = $28) refunded in full left the vendor at -$28 on a sale they
+        // never kept a cent of. Setting this returns the fee to the vendor.
+        //
+        // Stripe semantics (node_modules/stripe@14.25.0/types/RefundsResource.d.ts:53-56,
+        // verbatim): "If a full charge refund is given, the full application fee will
+        // be refunded. Otherwise, the application fee will be refunded in an amount
+        // proportional to the amount of the charge refunded." That proportion is
+        // refundedAmount / chargeAmount, and chargeAmount IS leg.amountCents (the leg
+        // row and its PaymentIntent are created from the same `amountCents` value —
+        // vendorBoothCartController.ts:609/:623 TERMINAL, :851/:876 QR). So this
+        // proration shares an identical denominator with the hub-owner Transfer
+        // reversal below (refundedCents / leg.amountCents, :2905-2909) and the two
+        // clawbacks stay consistent on partial refunds and on multi-Purchase legs.
+        //
+        // Chosen deliberately over `refund_application_fee: false` +
+        // applicationFees.createRefund({ amount }): the boolean rides INSIDE this same
+        // refunds.create call, so the existing `refund-${purchase.id}` idempotency key
+        // covers the fee refund atomically. A separate fee-refund call would be a
+        // second money movement needing its own claim/idempotency ledger and could
+        // strand the vendor negative if it failed after the refund succeeded. Exact
+        // amounts aren't needed here — proportional IS the correct model.
+        //
+        // Scoped to isBoothCartPurchase only. Regular purchases are DESTINATION
+        // charges (createPaymentIntent :601-603 transfer_data.destination) where the
+        // charge lives on the platform; there the correct fix is
+        // reverse_transfer + refund_application_fee TOGETHER, which claws money back
+        // from organizers — a separate money-behavior change requiring sign-off, not
+        // shipped here. See handoff note.
+        ...(isBoothCartPurchase ? { refund_application_fee: true } : {}),
       }, {
         idempotencyKey: `refund-${purchase.id}`,
         ...(isBoothCartPurchase ? { stripeAccount: boothStripeAccountId! } : {}),

@@ -263,6 +263,18 @@ const VendorBoothTokenPage: React.FC = () => {
                       {payoutInfo.payouts.length === 0 ? (
                         <p className="text-sm text-warm-500 dark:text-warm-400">No payouts yet</p>
                       ) : (
+                        <>
+                        {/* These rows are VendorBoothPayout.netPayout, which is gross sales
+                            minus booth rent only. Post-ADR-090 Phase 2 the vendor is paid
+                            directly at capture time (minus platform fee + revenue share) and
+                            rent is billed separately by vendorBoothFeeBillingCron.ts, so the
+                            figure is a reconciliation record, not a transfer. Labelled here so
+                            it cannot be read as "what you were paid." */}
+                        <p className="text-xs text-warm-500 dark:text-warm-400 mb-2">
+                          These figures are a reconciliation record, not a payment. Your sale proceeds
+                          already arrived in your account at checkout, minus the platform fee and revenue
+                          share listed above. Booth rent is billed separately.
+                        </p>
                         <ul className="divide-y divide-warm-200 dark:divide-gray-700">
                           {payoutInfo.payouts.map((p) => (
                             <li key={p.id} className="py-2 flex justify-between text-sm">
@@ -271,6 +283,7 @@ const VendorBoothTokenPage: React.FC = () => {
                             </li>
                           ))}
                         </ul>
+                        </>
                       )}
                     </div>
 

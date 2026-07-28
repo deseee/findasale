@@ -4,6 +4,11 @@ import { prisma } from '../lib/prisma';
 import { Decimal } from '@prisma/client/runtime/library';
 import { createConnectAccount, createOnboardingLink, getAccountStatus } from '../services/stripeConnectService';
 import { getStripe } from '../utils/stripe';
+// Single source of truth for the platform's cut. The vendor-facing fee disclosure
+// below MUST derive from this, using the same hub-owner tier the money path
+// (vendorBoothCartController.ts computeLegFeeSplit) feeds it -- a hardcoded
+// display percentage drifts from what Stripe actually takes.
+import { getPlatformFeeRate } from '../utils/feeCalculator';
 
 const stripe = () => getStripe();
 
@@ -496,7 +501,11 @@ export const getVendorBoothPayouts = async (req: AuthRequest, res: Response) => 
 
     const booth = await prisma.vendorBooth.findUnique({
       where: { id: vendorBoothId },
-      select: { id: true, userId: true, boothFee: true, revenueSharePercent: true },
+      select: {
+        id: true, userId: true, boothFee: true, revenueSharePercent: true,
+        // Same tier input the charge path uses (vendorBoothCartController.ts:561/795).
+        hub: { select: { organizer: { select: { subscriptionTier: true } } } },
+      },
     });
     if (!booth) return res.status(404).json({ error: 'Booth not found' });
     if (booth.userId !== req.user.id) return res.status(403).json({ error: 'You do not operate this booth' });
@@ -510,13 +519,18 @@ export const getVendorBoothPayouts = async (req: AuthRequest, res: Response) => 
       orderBy: { createdAt: 'desc' },
     });
 
-    // Fee disclosure requirement: itemize per-booth flat 10% platform fee + THIS
-    // booth's boothFee + THIS booth's revenueSharePercent — never a blended number,
-    // since one vendor can have different terms at different malls.
+    // Fee disclosure requirement: itemize the platform fee + THIS booth's boothFee +
+    // THIS booth's revenueSharePercent — never a blended number, since one vendor can
+    // have different terms at different malls. The platform fee is the hub owner's real
+    // tier-based rate (getPlatformFeeRate), NOT a hardcoded number: every hub route is
+    // requireTier('TEAMS') (routes/vendorBooth.ts), so in practice this is 8%, and it is
+    // exactly what computeLegFeeSplit charges at capture time.
     return res.status(200).json({
       boothFee: booth.boothFee.toString(),
       revenueSharePercent: booth.revenueSharePercent,
-      platformFeePercent: 10, // locked flat 10% platform fee — never a different rate
+      platformFeePercent: Math.round(
+        getPlatformFeeRate((booth.hub?.organizer?.subscriptionTier as any) ?? null) * 100
+      ),
       payouts: payouts.map((p) => ({
         ...p,
         totalSales: p.totalSales.toString(),

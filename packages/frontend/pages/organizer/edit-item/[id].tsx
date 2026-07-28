@@ -193,6 +193,12 @@ const EditItemPage = () => {
 
   // eBay push state
   const [ebayPushPending, setEbayPushPending] = useState(false);
+  // True once the organizer actually edits the package weight box on this page.
+  // eBay publish blocks a shippable item whose weight is only an estimate, and the
+  // only way out of that block is the organizer confirming a real weight. Saving an
+  // untouched, prefilled estimate must NOT count as confirming it, so the confirm
+  // flag is sent only when this is true.
+  const [weightTouched, setWeightTouched] = useState(false);
 
   // eBay push mutation — S725 always LIVE (DRAFT mode killed)
   const ebayPushMutation = useMutation({
@@ -261,6 +267,12 @@ const EditItemPage = () => {
     const savePayload = {
       ...formData,
       packageWeightOz: toIntOrNull(formData.packageWeightOz),
+      // Organizer typed a real weight on this page — record it as confirmed so eBay
+      // publish stops treating it as an estimate. Never sent when the box was left
+      // untouched (see weightTouched).
+      ...(weightTouched && toIntOrNull(formData.packageWeightOz) !== null
+        ? { packageConfirmedByOrganizer: true, packageEstimateSource: 'ORGANIZER' }
+        : {}),
       packageLengthIn: toIntOrNull(formData.packageLengthIn),
       packageWidthIn: toIntOrNull(formData.packageWidthIn),
       packageHeightIn: toIntOrNull(formData.packageHeightIn),
@@ -544,6 +556,10 @@ const EditItemPage = () => {
       const payload = {
         ...formData,
         packageWeightOz: toIntOrNull(formData.packageWeightOz),
+        // Same confirm-on-real-edit rule as saveFormState above.
+        ...(weightTouched && toIntOrNull(formData.packageWeightOz) !== null
+          ? { packageConfirmedByOrganizer: true, packageEstimateSource: 'ORGANIZER' }
+          : {}),
         packageLengthIn: toIntOrNull(formData.packageLengthIn),
         packageWidthIn: toIntOrNull(formData.packageWidthIn),
         packageHeightIn: toIntOrNull(formData.packageHeightIn),
@@ -1536,7 +1552,10 @@ const EditItemPage = () => {
                       step="1"
                       placeholder="e.g. 16"
                       value={formData.packageWeightOz}
-                      onChange={(e) => setFormData({ ...formData, packageWeightOz: e.target.value })}
+                      onChange={(e) => {
+                        setWeightTouched(true);
+                        setFormData({ ...formData, packageWeightOz: e.target.value });
+                      }}
                       className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
                     />
                     {/* ADR fb-package-weight-estimator (2026-07-22): packageWeightOz now gets
