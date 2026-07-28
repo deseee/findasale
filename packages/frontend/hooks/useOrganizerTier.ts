@@ -29,13 +29,24 @@ function hasAccess(organizerTier: SubscriptionTier, requiredTier: SubscriptionTi
 export function useOrganizerTier() {
   const { user, isLoading: authLoading } = useAuth();
   // While auth is still initializing, return null tier to prevent flash of wrong plan.
-  // Once auth resolves, fall back to SIMPLE if no tier is set.
   // Feature #75: If subscription is lapsed, treat as SIMPLE (hard gate).
-  const tier = authLoading
+  //
+  // S-TIER-RECONCILE: there is deliberately NO `|| 'SIMPLE'` fallback here any more.
+  // AuthContext.resolveOrganizerTier() leaves organizerTier `undefined` when the tier
+  // could not be read from either the /auth/me response or the JWT. Collapsing that
+  // to 'SIMPLE' is what silently downgraded paying PRO/TEAMS organizers: every gated
+  // feature vanished AND the UI started asking them to buy a plan they already own.
+  // Unknown is now its own state — `tier === null` with `tierKnown === false`.
+  // Gates stay CLOSED on unknown (fail-safe, matches the loading behaviour), but
+  // upgrade/downgrade copy must key off `tierKnown`, not off `!canAccess(...)`.
+  const rawTier = user?.organizerTier;
+  const tierKnown = !authLoading && !!user && (rawTier !== undefined && rawTier !== null && rawTier !== '');
+
+  const tier: SubscriptionTier | null = authLoading
     ? null
     : (user?.subscriptionLapsed
       ? 'SIMPLE'
-      : ((user?.organizerTier || 'SIMPLE') as SubscriptionTier));
+      : (tierKnown ? (rawTier as SubscriptionTier) : null));
 
   const isLapsed = !authLoading && (user?.subscriptionLapsed ?? false);
 
@@ -58,11 +69,21 @@ export function useOrganizerTier() {
   return {
     /**
      * Current organizer's tier: SIMPLE, PRO, or TEAMS.
-     * null while auth is still loading — callers should guard on authLoading.
+     * null while auth is still loading, AND null when the tier could not be
+     * resolved from any source — check `tierKnown` to tell those apart from
+     * a genuine SIMPLE tier.
      */
     tier,
     /** True while auth context is still resolving — gate any tier-dependent UI */
     tierLoading: authLoading,
+    /**
+     * S-TIER-RECONCILE: true only when a real tier value was received.
+     * False while loading, when logged out, or when the tier was missing from
+     * both /auth/me and the JWT. NEVER render "Upgrade to ..." copy, a plan
+     * name, or a downgrade banner while this is false — a paying customer
+     * must not be told to buy the plan they already pay for.
+     */
+    tierKnown,
     canAccess,
     /** True if subscription is currently lapsed (past_due) — Feature #75 */
     isLapsed,

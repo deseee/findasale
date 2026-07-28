@@ -1,6 +1,43 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import api, { setSessionMarker, clearSessionMarker } from '../lib/api';
 
+/**
+ * S-TIER-RECONCILE: SINGLE SOURCE OF TRUTH for the organizer subscription tier.
+ *
+ * The tier signal arrives under two different field names depending on the source:
+ *   - GET /auth/me  -> `organizerTier`      (API shape, read from Organizer.subscriptionTier)
+ *   - decoded JWT   -> `subscriptionTier`   (token claim shape)
+ *
+ * Previously each call site read only ONE of those names and fell back to
+ * `|| 'SIMPLE'`. That silently downgraded a PAYING organizer to the free tier
+ * whenever the expected field was missing (e.g. tokens minted by
+ * POST /users/me/organizer-setup and POST /auth/refresh carry no
+ * `subscriptionTier` claim at all), which hides every PRO/TEAMS feature and
+ * shows "Upgrade to PRO" to a customer who is already billed for TEAMS.
+ *
+ * This resolver accepts either name and returns `undefined` — NOT 'SIMPLE' —
+ * when neither is present, so "tier unknown" stays distinguishable from
+ * "tier really is SIMPLE". Consumers (useOrganizerTier) keep paid features
+ * closed on unknown, but must not render downgrade/upgrade copy.
+ * The backend remains authoritative: requireTier reads Organizer.subscriptionTier
+ * straight from the database and is unaffected by this value.
+ */
+export function resolveOrganizerTier(
+  source: any,
+  origin: 'auth/me' | 'jwt'
+): string | undefined {
+  const tier = source?.organizerTier ?? source?.subscriptionTier;
+  if (tier === undefined || tier === null || tier === '') {
+    // Loud, not silent: a missing tier is a data/contract problem, never a downgrade.
+    console.error(
+      `[AuthContext] Organizer tier missing from ${origin} payload — treating tier as UNKNOWN (not SIMPLE). ` +
+        'Paid features stay gated but no upgrade prompt will be shown.'
+    );
+    return undefined;
+  }
+  return tier as string;
+}
+
 interface User {
   id: string;
   email: string;
@@ -64,7 +101,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         referralCode: user.referralCode || '',
         huntPassActive: user.huntPassActive,
         huntPassExpiry: user.huntPassExpiry,
-        organizerTier: user.organizerTier || 'SIMPLE',
+        organizerTier: resolveOrganizerTier(user, 'auth/me'),
         subscriptionStatus: user.subscriptionStatus ?? null,
         subscriptionLapsed: user.subscriptionLapsed ?? false,
         onboardingComplete: user.onboardingComplete ?? false,
@@ -145,7 +182,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         referralCode: payload.referralCode || '',
         huntPassActive: payload.huntPassActive,
         huntPassExpiry: payload.huntPassExpiry,
-        organizerTier: payload.subscriptionTier || 'SIMPLE',
+        organizerTier: resolveOrganizerTier(payload, 'jwt'),
         subscriptionStatus: payload.subscriptionStatus ?? null,
         subscriptionLapsed: payload.subscriptionLapsed ?? false,
         onboardingComplete: payload.onboardingComplete ?? false,

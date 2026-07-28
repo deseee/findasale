@@ -383,10 +383,51 @@ router.post('/refresh', async (req: AuthRequest, res: Response) => {
 router.get('/me', authenticate, async (req: AuthRequest, res: Response) => {
   if (!req.user) return res.status(401).json({ message: 'Not authenticated' });
 
-  const organizer = await prisma.organizer.findUnique({
-    where: { userId: req.user.id },
-    select: { subscriptionTier: true, subscriptionStatus: true },
-  }).catch(() => null);
+  // S-TIER-RECONCILE: `authenticate` has ALREADY loaded the organizer row
+  // (middleware/auth.ts: `include: { organizer: true }`) and attached it as
+  // req.user.organizerProfile. That is the exact same object requireTier()
+  // reads Organizer.subscriptionTier from, so sourcing the tier from it here
+  // makes /auth/me agree with the backend gate by construction.
+  //
+  // The previous code re-queried the organizer row and swallowed any failure
+  // with `.catch(() => null)`, then defaulted the tier to 'SIMPLE'. A single
+  // transient database error therefore returned HTTP 200 telling the frontend
+  // that a paying TEAMS customer was on the free plan — silently hiding every
+  // paid feature while the backend happily kept authorising TEAMS routes.
+  const attachedProfile = (req.user as any).organizerProfile ?? null;
+  const organizer = attachedProfile
+    ? attachedProfile
+    : await prisma.organizer.findUnique({
+        where: { userId: req.user.id },
+        select: { subscriptionTier: true, subscriptionStatus: true },
+      }).catch((err) => {
+        console.error('[auth/me] organizer lookup failed — tier will be reported as UNKNOWN, not SIMPLE:', err);
+        return undefined; // undefined = unknown; null would be indistinguishable from "no organizer"
+      });
+
+  const isOrganizerAccount =
+    req.user.role === 'ORGANIZER' || (req.user as any).roles?.includes('ORGANIZER');
+
+  // Unknown tier must stay distinguishable from a genuine SIMPLE tier so the
+  // client can keep paid features gated WITHOUT showing upgrade prompts.
+  let organizerTier: string | null;
+  if (organizer === undefined) {
+    organizerTier = null; // lookup genuinely failed
+  } else if (organizer === null) {
+    // No organizer profile at all. For a plain shopper that legitimately means SIMPLE.
+    // For an account that carries the ORGANIZER role it is a data inconsistency.
+    if (isOrganizerAccount) {
+      console.error(`[auth/me] user ${req.user.id} has ORGANIZER role but no organizer profile — reporting tier as UNKNOWN.`);
+      organizerTier = null;
+    } else {
+      organizerTier = 'SIMPLE';
+    }
+  } else {
+    organizerTier = organizer.subscriptionTier ?? (isOrganizerAccount ? null : 'SIMPLE');
+    if (organizerTier === null) {
+      console.error(`[auth/me] organizer ${req.user.id} has a profile with no subscriptionTier — reporting tier as UNKNOWN.`);
+    }
+  }
 
   // Strip sensitive fields that must never leave the server
   const {
@@ -400,7 +441,11 @@ router.get('/me', authenticate, async (req: AuthRequest, res: Response) => {
   res.json({
     user: {
       ...safeUser,
-      organizerTier: organizer?.subscriptionTier ?? 'SIMPLE',
+      organizerTier,
+      // S-TIER-RECONCILE: emit the JWT-shaped field name too, so any consumer
+      // reading either `organizerTier` or `subscriptionTier` gets the same
+      // value and a field-name mismatch can no longer downgrade a customer.
+      subscriptionTier: organizerTier,
       subscriptionStatus: organizer?.subscriptionStatus ?? null,
       subscriptionLapsed: req.user.subscriptionLapsed ?? false,
     },

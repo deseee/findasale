@@ -76,7 +76,7 @@ interface AvatarDropdownProps {
 
 const AvatarDropdown: React.FC<AvatarDropdownProps> = ({ onBecomeOrganizer }) => {
   const { user, logout } = useAuth();
-  const { canAccess } = useOrganizerTier();
+  const { canAccess, tierKnown } = useOrganizerTier();
   const router = useRouter();
   const { openCart } = useCart();
   const [isOpen, setIsOpen] = useState(false);
@@ -658,11 +658,15 @@ const AvatarDropdown: React.FC<AvatarDropdownProps> = ({ onBecomeOrganizer }) =>
                 onClick={() => setIsOpen(false)}
               >
                 <Sparkles size={16} />
-                <span>{canAccess('TEAMS')
+                {/* S-TIER-RECONCILE: unknown tier must not render upgrade copy —
+                    a TEAMS customer being asked to "Upgrade to PRO" is a billing-trust bug. */}
+                <span>{!tierKnown
                   ? 'Subscription'
-                  : canAccess('PRO')
-                    ? 'Upgrade to TEAMS'
-                    : 'Upgrade to PRO'}</span>
+                  : canAccess('TEAMS')
+                    ? 'Subscription'
+                    : canAccess('PRO')
+                      ? 'Upgrade to TEAMS'
+                      : 'Upgrade to PRO'}</span>
               </Link>
 
               <Link

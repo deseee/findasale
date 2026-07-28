@@ -87,7 +87,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
 
   const router = useRouter();
   const { user, logout } = useAuth();
-  const { canAccess, isLapsed } = useOrganizerTier();
+  const { canAccess, isLapsed, tierKnown } = useOrganizerTier();
   const { isLowBandwidth } = useNetworkQuality();
   const cart = useShopperCart(user?.id);
   const { items: cartItems } = cart;
@@ -300,7 +300,10 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
             </Link>
             <Link href="/organizer/subscription" className="flex items-center gap-2 px-3 py-2 text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 font-medium hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
               <Sparkles size={16} />
-              <span>{canAccess('TEAMS') ? 'Subscription' : canAccess('PRO') ? 'Upgrade to TEAMS' : 'Upgrade to PRO'}</span>
+              {/* S-TIER-RECONCILE: never sell a plan to someone whose tier we could not read.
+                  `!canAccess('PRO')` is true both for a real SIMPLE organizer AND for an
+                  unresolved tier — only the former should be asked to upgrade. */}
+              <span>{!tierKnown ? 'Subscription' : canAccess('TEAMS') ? 'Subscription' : canAccess('PRO') ? 'Upgrade to TEAMS' : 'Upgrade to PRO'}</span>
             </Link>
 
             <SectionHeader icon={Wrench} label="Account & Profile" color="amber" />
@@ -1249,7 +1252,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
 
 
                 <Link href="/organizer/subscription" className="block px-3 py-2 text-sm text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 font-medium hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                  <Zap size={14} className="inline mr-2" /> {canAccess('TEAMS') ? 'Subscription' : canAccess('PRO') ? 'Upgrade to TEAMS' : 'Upgrade to PRO'}
+                  <Zap size={14} className="inline mr-2" /> {!tierKnown ? 'Subscription' : canAccess('TEAMS') ? 'Subscription' : canAccess('PRO') ? 'Upgrade to TEAMS' : 'Upgrade to PRO'}
                 </Link>
 
                 {/* Pro Tools Section — Collapsible */}
