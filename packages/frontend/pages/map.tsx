@@ -54,7 +54,11 @@ interface ActiveTrail {
   stops: TrailStop[];
 }
 
-const MapPage = () => {
+interface MapPageProps {
+  initialSales: Sale[];
+}
+
+const MapPage = ({ initialSales }: MapPageProps) => {
   const { showToast } = useToast();
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [dateFilter, setDateFilter] = useState<DateFilter>('all');
@@ -333,6 +337,23 @@ const MapPage = () => {
             }),
           }}
         />
+        {initialSales.length > 0 && (
+          <script
+            type="application/ld+json"
+            dangerouslySetInnerHTML={{
+              __html: jsonLdSafe({
+                '@context': 'https://schema.org',
+                '@type': 'ItemList',
+                itemListElement: initialSales.slice(0, 24).map((sale, idx) => ({
+                  '@type': 'ListItem',
+                  position: idx + 1,
+                  name: sale.title,
+                  url: `https://finda.sale/sales/${sale.id}`,
+                })),
+              }),
+            }}
+          />
+        )}
       </Head>
 
       {/* Header Strip */}
@@ -499,6 +520,31 @@ const MapPage = () => {
         )}
       </section>
 
+      {/* SSR fallback content — server-rendered sale list so crawlers (and no-JS visitors)
+          see real content on first paint. Fixes GSC Soft 404 first detected 2026-07-25:
+          page previously shipped zero server-rendered sale data, only nav/footer chrome. */}
+      {initialSales.length > 0 && (
+        <section className="bg-warm-50 dark:bg-gray-900 border-t border-warm-200 dark:border-gray-700 px-4 py-6">
+          <div className="container mx-auto">
+            <h2 className="text-xl font-bold text-warm-900 dark:text-warm-100 mb-4">
+              Trending Sales Near {defaultCity}
+            </h2>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+              {initialSales.slice(0, 12).map((sale) => (
+                <a
+                  key={sale.id}
+                  href={`/sales/${sale.id}`}
+                  className="block bg-white dark:bg-gray-800 rounded-lg border border-warm-200 dark:border-gray-700 p-3 hover:border-blue-400 dark:hover:border-gray-500 transition-colors"
+                >
+                  <p className="font-medium text-warm-900 dark:text-warm-100 text-sm truncate">{sale.title}</p>
+                  <p className="text-xs text-warm-600 dark:text-warm-400 mt-1">{sale.city}, {sale.state}</p>
+                </a>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
       {/* D3: Route Builder — collapsible panel below map */}
       {!isLoading && !isError && (
         <div id="route-builder">
@@ -508,5 +554,31 @@ const MapPage = () => {
     </div>
   );
 };
+
+export async function getStaticProps() {
+  const DEFAULT_LAT = parseFloat(process.env.NEXT_PUBLIC_DEFAULT_LAT || '42.9619');
+  const DEFAULT_LNG = parseFloat(process.env.NEXT_PUBLIC_DEFAULT_LNG || '-85.6789');
+
+  let initialSales: Sale[] = [];
+  try {
+    const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000/api';
+    const res = await fetch(
+      `${apiBaseUrl}/sales?limit=24&lat=${DEFAULT_LAT}&lng=${DEFAULT_LNG}&radius=100`,
+      { headers: { 'Content-Type': 'application/json' } }
+    );
+    if (res.ok) {
+      const data = await res.json();
+      const salesData = data.sales ?? data;
+      initialSales = Array.isArray(salesData) ? salesData : [];
+    }
+  } catch (err) {
+    console.error('[map] getStaticProps fetch error:', err);
+  }
+
+  return {
+    props: { initialSales },
+    revalidate: 86400, // ISR: 24h — /map is a single static route, negligible added ISR-write cost
+  };
+}
 
 export default MapPage;
