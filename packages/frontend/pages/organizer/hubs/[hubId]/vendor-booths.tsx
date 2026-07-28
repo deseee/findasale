@@ -17,7 +17,8 @@ import { useToast } from '../../../../components/ToastContext';
 import TierGate from '../../../../components/TierGate';
 import ConfirmDialog from '../../../../components/ConfirmDialog';
 import HubOwnerStripeOnboarding from '../../../../components/HubOwnerStripeOnboarding';
-import { Trash2, Edit2, Copy, Check, DollarSign } from 'lucide-react';
+import HubManagementNav from '../../../../components/HubManagementNav';
+import { Trash2, Edit2, Copy, Check } from 'lucide-react';
 
 interface VendorBooth {
   id: string;
@@ -270,6 +271,15 @@ const VendorBoothsPage: React.FC = () => {
 
       <div className="min-h-screen bg-warm-50 dark:bg-gray-900 p-4 md:p-8">
         <div className="max-w-6xl mx-auto">
+          <Link
+            href="/organizer/hubs"
+            className="text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300 font-medium mb-6 inline-block"
+          >
+            ← Back to Hubs
+          </Link>
+
+          {hubId && typeof hubId === 'string' && <HubManagementNav hubId={hubId} />}
+
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
             <div>
               <h1 className="text-3xl font-bold text-warm-900 dark:text-white">Vendor Booths</h1>
@@ -453,16 +463,6 @@ const VendorBoothsPage: React.FC = () => {
                 </table>
               </div>
             )}
-          </div>
-
-          <div className="mt-6">
-            <Link
-              href={`/organizer/hubs/${hubId}/settlement`}
-              className="inline-flex items-center gap-2 bg-warm-900 dark:bg-warm-700 text-white font-bold py-2 px-4 rounded-lg hover:bg-warm-800 transition-colors"
-            >
-              <DollarSign className="w-4 h-4" />
-              Run Settlement
-            </Link>
           </div>
         </div>
       </div>

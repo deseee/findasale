@@ -241,7 +241,7 @@ export default function FleaMarketEventsPage() {
                         </p>
                       </div>
                       <Link
-                        href={`/organizer/hubs/${event.id}/manage`}
+                        href={`/organizer/hubs/${event.id}/vendor-booths`}
                         className="text-sm text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300 font-medium"
                       >
                         Manage →

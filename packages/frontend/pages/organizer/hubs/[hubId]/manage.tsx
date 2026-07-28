@@ -8,6 +8,7 @@ import { useRouter } from 'next/router';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useHubById, useUpdateHub, useSetHubEvent } from '../../../../hooks/useHubs';
+import HubManagementNav from '../../../../components/HubManagementNav';
 import { useAuth } from '../../../../components/AuthContext';
 import { useToast } from '../../../../components/ToastContext';
 import { useQueryClient } from '@tanstack/react-query';
@@ -104,6 +105,8 @@ export default function HubManagePage() {
           <Link href="/organizer/hubs" className="text-sage-600 hover:text-sage-700 font-medium mb-6 inline-block">
             ← Back to Hubs
           </Link>
+
+          {hubId && <HubManagementNav hubId={hubId as string} />}
 
           <h1 className="text-3xl font-bold text-sage-900 mb-8">Manage Hub</h1>
 

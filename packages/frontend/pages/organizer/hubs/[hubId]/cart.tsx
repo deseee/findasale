@@ -19,10 +19,12 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
+import Link from 'next/link';
 import api from '../../../../lib/api';
 import { useAuth } from '../../../../components/AuthContext';
 import { useToast } from '../../../../components/ToastContext';
 import TierGate from '../../../../components/TierGate';
+import HubManagementNav from '../../../../components/HubManagementNav';
 
 interface CartTransaction {
   id: string;
@@ -304,6 +306,15 @@ const BoothCartPage: React.FC = () => {
 
       <div className="min-h-screen bg-warm-50 dark:bg-gray-900 p-4 md:p-8">
         <div className="max-w-2xl mx-auto">
+          <Link
+            href="/organizer/hubs"
+            className="text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300 font-medium mb-6 inline-block"
+          >
+            ← Back to Hubs
+          </Link>
+
+          {hubId && typeof hubId === 'string' && <HubManagementNav hubId={hubId} />}
+
           <h1 className="text-3xl font-bold text-warm-900 dark:text-white mb-2">Multi-Booth Register</h1>
           <p className="text-warm-600 dark:text-warm-400 mb-8">
             Scan or enter item IDs from any booth in this hub. Each booth is billed separately — the

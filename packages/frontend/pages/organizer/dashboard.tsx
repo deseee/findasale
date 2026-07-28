@@ -188,6 +188,25 @@ const OrganizerDashboard = () => {
     hasAutoExpandedOtherSales.current = true;
   }, [salesData]);
 
+  // Market Hubs ownership -- surfaced on the dashboard independent of dashboardState,
+  // since running a vendor-mall hub is orthogonal to whether the organizer also has
+  // any individual sales. Gated on login only (NOT a TEAMS-tier check): GET
+  // /api/organizer/hubs is authenticate-only (packages/backend/src/routes/hubs.ts) --
+  // hub *creation* is PRO-gated, hub *listing* is not gated by tier at all, so a
+  // PRO-tier hub owner must still see their existing hub here.
+  const { data: hubsData } = useQuery<{ hubs: Array<{ id: string; name: string; boothCount: number }> }>({
+    queryKey: ['organizer-hubs', user?.id],
+    queryFn: async () => {
+      const response = await api.get('/organizer/hubs');
+      return response.data;
+    },
+    enabled: !!user?.id && isClient,
+  });
+
+  const hubs = hubsData?.hubs ?? [];
+  const ownsHubs = hubs.length > 0;
+  const totalHubBoothCount = hubs.reduce((sum, hub) => sum + (hub.boothCount ?? 0), 0);
+
   // Fetch organizer analytics (total items, revenue)
   const { data: analyticsData } = useQuery({
     queryKey: ['organizer-analytics', user?.id],
@@ -954,12 +973,42 @@ const OrganizerDashboard = () => {
             </div>
           )}
 
+          {/* Market Hubs ownership card -- independent of dashboardState (new/active/between);
+              hub ownership is orthogonal to whether the organizer also runs an individual sale. */}
+          {ownsHubs && (
+            <div className="bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 rounded-lg p-6 mb-8">
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                <div className="flex items-start gap-3">
+                  <Store className="w-6 h-6 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-1" />
+                  <div>
+                    <h2 className="text-xl font-bold text-warm-900 dark:text-warm-100">
+                      {hubs.length === 1 ? hubs[0].name : `${hubs.length} Market Hubs`}
+                    </h2>
+                    <p className="text-sm text-warm-600 dark:text-warm-400">
+                      {totalHubBoothCount} vendor booth{totalHubBoothCount === 1 ? '' : 's'}
+                    </p>
+                  </div>
+                </div>
+                <Link
+                  href={hubs.length === 1 ? `/organizer/hubs/${hubs[0].id}/vendor-booths` : '/organizer/hubs'}
+                  className="inline-block bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded-lg transition-colors text-center"
+                >
+                  Manage Vendor Booths
+                </Link>
+              </div>
+            </div>
+          )}
+
           {/* STATE-AWARE CONTENT */}
 
           {dashboardState === 'new' && (
             // STATE 1: New Organizer (0 sales ever)
             <div className="space-y-6 mb-8">
-              {/* Hero Card */}
+              {/* Hero Card -- suppressed when the organizer already owns a Market Hub: the
+                  first-time-user "set up your first sale" framing is wrong for someone
+                  already running a mall. Everything else in this state block (À la Carte
+                  callout, Benefits Grid, Quick Link Grid) still renders as normal. */}
+              {!ownsHubs && (
               <div className="bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 border border-amber-200 dark:border-amber-700 rounded-lg p-8 text-center">
                 <h2 className="text-2xl font-bold text-warm-900 dark:text-warm-100 mb-2">Welcome to FindA.Sale Organizer</h2>
                 <p className="text-warm-600 dark:text-warm-400 mb-6">Let's set up your first sale in 5 minutes</p>
@@ -992,6 +1041,7 @@ const OrganizerDashboard = () => {
                   <Link href="/guide" className="text-amber-600 hover:text-amber-700 dark:text-amber-400 underline">View Getting Started Guide</Link>
                 </p>
               </div>
+              )}
 
               {/* À la Carte callout for new organizers */}
               <div className="bg-gradient-to-r from-purple-50 to-indigo-50 dark:from-purple-900/20 dark:to-indigo-900/20 border border-purple-200 dark:border-purple-800 rounded-lg p-4 text-center">
