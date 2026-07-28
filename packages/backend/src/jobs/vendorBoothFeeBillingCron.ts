@@ -33,6 +33,10 @@
 
 import cron from 'node-cron';
 import { prisma } from '../lib/prisma';
+// Rent-charge failure notification. Fire-and-forget with a .catch at both FAILED sites
+// below: telling people must NEVER change what this cron does to money, and the service
+// itself never throws (it returns { sent, reason }).
+import { notifyBoothRentChargeFailed } from '../services/vendorBoothLifecycleNotificationService';
 import { cronGuard } from '../utils/cronGuard';
 import { getStripe } from '../utils/stripe';
 
@@ -145,6 +149,11 @@ export async function runBoothFeeBilling(periodStart: Date, periodEnd: Date): Pr
             where: { id: charge.id },
             data: { status: 'FAILED', failureReason: `PaymentIntent status: ${paymentIntent.status}` },
           });
+          // The vendor's card did not go through and the hub owner did not get the rent.
+          // Before this, both facts were silent -- the only surface was the fee-charges table.
+          notifyBoothRentChargeFailed(charge.id).catch(err =>
+            console.warn('[booth-lifecycle] Rent failure notification failed for charge', charge.id, err)
+          );
           continue;
         }
 
@@ -193,6 +202,9 @@ export async function runBoothFeeBilling(periodStart: Date, periodEnd: Date): Pr
             data: { status: 'FAILED', failureReason: chargeErr?.message?.slice(0, 500) || 'Stripe charge/transfer failed' },
           })
           .catch(() => {});
+        notifyBoothRentChargeFailed(charge.id).catch(err =>
+          console.warn('[booth-lifecycle] Rent failure notification failed for charge', charge.id, err)
+        );
         console.error(`[vendor-booth-fee-billing] Booth ${booth.id} charge failed:`, chargeErr);
       }
     } catch (err) {

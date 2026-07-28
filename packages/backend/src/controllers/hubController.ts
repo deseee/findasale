@@ -296,6 +296,28 @@ export const listMyHubs = async (req: AuthRequest, res: Response) => {
       },
     });
 
+    // "N booths awaiting your confirmation" -- the count-based in-app signal behind the
+    // dashboard hub card and the hubs list. A booth in this state (a vendor has claimed
+    // it, but the organizer has not confirmed it) CANNOT be sold from: claimVendorBooth
+    // sets only userId, and addBoothCartItems filters to status 'CONFIRMED'
+    // (vendorBoothCartController.ts :396). Before this, the only way to discover one was
+    // to open the Vendor Booths page and notice a column had changed.
+    //
+    // Counted in application code rather than a filtered _count relation, matching the
+    // in-memory pattern the rest of this controller already uses, and kept to one extra
+    // query for the whole list.
+    const hubIds = hubs.map((hub) => hub.id);
+    const awaitingByHub = new Map<string, number>();
+    if (hubIds.length > 0) {
+      const awaitingBooths = await prisma.vendorBooth.findMany({
+        where: { hubId: { in: hubIds }, deletedAt: null, status: 'PENDING', userId: { not: null } },
+        select: { hubId: true },
+      });
+      for (const booth of awaitingBooths) {
+        awaitingByHub.set(booth.hubId, (awaitingByHub.get(booth.hubId) ?? 0) + 1);
+      }
+    }
+
     res.json({
       hubs: hubs.map((hub) => ({
         id: hub.id,
@@ -303,6 +325,7 @@ export const listMyHubs = async (req: AuthRequest, res: Response) => {
         slug: hub.slug,
         createdAt: hub.createdAt,
         boothCount: hub._count.vendorBooths,
+        awaitingConfirmationCount: awaitingByHub.get(hub.id) ?? 0,
         isActive: hub.isActive,
         saleDate: hub.saleDate,
         eventName: hub.eventName,

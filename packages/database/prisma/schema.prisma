@@ -5600,6 +5600,20 @@ model VendorBooth {
   inviteSentAt    DateTime?
   inviteSentCount Int       @default(0)
 
+  // Booth lifecycle notification stamps (2026-07-28). Same "record that a send happened"
+  // pattern as inviteSentAt above, one column per transition, all nullable and additive.
+  // Written by services/vendorBoothLifecycleNotificationService.ts, which checks the stamp
+  // BEFORE doing anything and writes it LAST, so no transition can ever notify twice.
+  // A null value genuinely means "nobody has been told", not "not tracked".
+  //   claimNotifiedAt    hub organizer was told a vendor claimed the booth
+  //   confirmNotifiedAt  vendor was told the organizer confirmed the booth
+  //   decisionNotifiedAt vendor was told the booth was rejected or cancelled
+  //   stripeNotifiedAt   hub organizer was told the vendor finished Stripe onboarding
+  claimNotifiedAt    DateTime?
+  confirmNotifiedAt  DateTime?
+  decisionNotifiedAt DateTime?
+  stripeNotifiedAt   DateTime?
+
   items               Item[]                 @relation("VendorBoothItems")
   payouts             VendorBoothPayout[]
   cashierTransactions BoothCartTransaction[] @relation("CashierBoothTransactions")

@@ -32,7 +32,7 @@ const CLAIMABLE_STATUSES = ['PENDING', 'CONFIRMED'];
 
 /** Same implementation as jobs/outreachEmailsCron.ts escapeHtml. Vendor/hub/organizer
  *  names are organizer-typed free text and land inside an HTML email body. */
-const escapeHtml = (str: string): string => {
+export const escapeHtml = (str: string): string => {
   return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 };
 

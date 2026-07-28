@@ -194,7 +194,9 @@ const OrganizerDashboard = () => {
   // /api/organizer/hubs is authenticate-only (packages/backend/src/routes/hubs.ts) --
   // hub *creation* is PRO-gated, hub *listing* is not gated by tier at all, so a
   // PRO-tier hub owner must still see their existing hub here.
-  const { data: hubsData } = useQuery<{ hubs: Array<{ id: string; name: string; boothCount: number }> }>({
+  const { data: hubsData } = useQuery<{
+    hubs: Array<{ id: string; name: string; boothCount: number; awaitingConfirmationCount?: number }>;
+  }>({
     queryKey: ['organizer-hubs', user?.id],
     queryFn: async () => {
       const response = await api.get('/organizer/hubs');
@@ -206,6 +208,13 @@ const OrganizerDashboard = () => {
   const hubs = hubsData?.hubs ?? [];
   const ownsHubs = hubs.length > 0;
   const totalHubBoothCount = hubs.reduce((sum, hub) => sum + (hub.boothCount ?? 0), 0);
+  // Booths a vendor has already claimed that the organizer has not confirmed yet. These
+  // cannot be sold from until the organizer acts, and nothing used to tell them so --
+  // this is the count-based in-app signal for that. Optional-chained with ?? 0 so an
+  // older API response (before awaitingConfirmationCount existed) renders as zero
+  // rather than NaN.
+  const totalAwaitingConfirmation = hubs.reduce((sum, hub) => sum + (hub.awaitingConfirmationCount ?? 0), 0);
+  const awaitingHub = hubs.find((hub) => (hub.awaitingConfirmationCount ?? 0) > 0);
 
   // Fetch organizer analytics (total items, revenue)
   const { data: analyticsData } = useQuery({
@@ -987,13 +996,29 @@ const OrganizerDashboard = () => {
                     <p className="text-sm text-warm-600 dark:text-warm-400">
                       {totalHubBoothCount} vendor booth{totalHubBoothCount === 1 ? '' : 's'}
                     </p>
+                    {totalAwaitingConfirmation > 0 && (
+                      <p className="mt-1 text-sm font-bold text-amber-700 dark:text-amber-400">
+                        {totalAwaitingConfirmation} booth{totalAwaitingConfirmation === 1 ? '' : 's'} awaiting your
+                        confirmation
+                        <span className="block font-normal text-warm-600 dark:text-warm-400">
+                          Nothing can be sold from{' '}
+                          {totalAwaitingConfirmation === 1 ? 'that booth' : 'those booths'} until you confirm.
+                        </span>
+                      </p>
+                    )}
                   </div>
                 </div>
                 <Link
-                  href={hubs.length === 1 ? `/organizer/hubs/${hubs[0].id}/vendor-booths` : '/organizer/hubs'}
+                  href={
+                    totalAwaitingConfirmation > 0 && awaitingHub
+                      ? `/organizer/hubs/${awaitingHub.id}/vendor-booths`
+                      : hubs.length === 1
+                        ? `/organizer/hubs/${hubs[0].id}/vendor-booths`
+                        : '/organizer/hubs'
+                  }
                   className="inline-block bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded-lg transition-colors text-center"
                 >
-                  Manage Vendor Booths
+                  {totalAwaitingConfirmation > 0 ? 'Confirm Booths' : 'Manage Vendor Booths'}
                 </Link>
               </div>
             </div>

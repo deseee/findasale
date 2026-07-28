@@ -278,14 +278,44 @@ const VendorBoothsPage: React.FC = () => {
     }
   };
 
-  const statusBadgeClass = (status: string) => {
-    switch (status) {
-      case 'CONFIRMED': return 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400';
-      case 'REJECTED': return 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400';
-      case 'CANCELLED': return 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300';
-      default: return 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400';
+  // The Status column used to render the raw enum ("PENDING") while the Claimed column
+  // right next to it said "Claimed" for the SAME row. Both were technically true and
+  // together they read as a contradiction -- a real hub organizer concluded from exactly
+  // this that the claim had failed. claimVendorBooth sets ONLY userId, never status, so
+  // "PENDING + claimed" is a normal, expected, and very actionable state. These two
+  // helpers render status and userId as ONE honest sentence instead of two half-truths.
+  const boothStateLabel = (booth: VendorBooth) => {
+    switch (booth.status) {
+      case 'CONFIRMED':
+        return booth.userId ? 'Confirmed' : 'Confirmed, not claimed yet';
+      case 'REJECTED':
+        return 'Rejected';
+      case 'CANCELLED':
+        return 'Cancelled';
+      default:
+        return booth.userId ? 'Claimed, awaiting your confirmation' : 'Waiting on vendor to claim';
     }
   };
+
+  const boothStateClass = (booth: VendorBooth) => {
+    switch (booth.status) {
+      case 'CONFIRMED':
+        return 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400';
+      case 'REJECTED':
+        return 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400';
+      case 'CANCELLED':
+        return 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300';
+      default:
+        // A claimed-but-unconfirmed booth is the one state that needs the organizer to
+        // act, so it is the only one drawn as a call to action rather than a soft wait.
+        return booth.userId
+          ? 'bg-amber-200 text-amber-900 dark:bg-amber-500/30 dark:text-amber-200'
+          : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400';
+    }
+  };
+
+  // Drives the banner and is the same rule hubController.listMyHubs counts server-side.
+  const awaitingConfirmation = booths.filter((b) => b.status === 'PENDING' && !!b.userId);
 
   const feeChargeStatusBadgeClass = (status: string) => {
     switch (status) {
@@ -360,6 +390,24 @@ const VendorBoothsPage: React.FC = () => {
               revenue-share agreement needs it -- renders nothing once already onboarded. */}
           <HubOwnerStripeOnboarding />
 
+          {/* Claimed-but-unconfirmed booths are blocked from selling entirely, so they get
+              said out loud at the top of the page instead of only being findable by
+              reading a column. Same rule the dashboard and hubs-list counts use. */}
+          {awaitingConfirmation.length > 0 && (
+            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-800 rounded-xl p-4 mb-6">
+              <p className="font-bold text-amber-900 dark:text-amber-300">
+                {awaitingConfirmation.length} booth{awaitingConfirmation.length === 1 ? '' : 's'} awaiting your
+                confirmation
+              </p>
+              <p className="text-sm text-amber-800 dark:text-amber-400 mt-1">
+                {awaitingConfirmation.map((b) => `Booth ${b.boothNumber} (${b.vendorName})`).join(', ')}.{' '}
+                {awaitingConfirmation.length === 1 ? 'This vendor has' : 'These vendors have'} claimed{' '}
+                {awaitingConfirmation.length === 1 ? 'their booth' : 'their booths'}. Nothing can be rung up or sold
+                at {awaitingConfirmation.length === 1 ? 'it' : 'them'} until you press Confirm Booth below.
+              </p>
+            </div>
+          )}
+
           {loading ? (
             <div className="text-center py-12">
               <p className="text-warm-600 dark:text-warm-400">Loading vendor booths...</p>
@@ -408,8 +456,10 @@ const VendorBoothsPage: React.FC = () => {
                         )}
                       </td>
                       <td className="p-3">
-                        <span className={`px-2 py-1 rounded-full text-xs font-bold ${statusBadgeClass(booth.status)}`}>
-                          {booth.status}
+                        <span
+                          className={`inline-block px-2 py-1 rounded-full text-xs font-bold ${boothStateClass(booth)}`}
+                        >
+                          {boothStateLabel(booth)}
                         </span>
                       </td>
                       <td className="p-3">
@@ -431,10 +481,20 @@ const VendorBoothsPage: React.FC = () => {
                         )}
                       </td>
                       <td className="p-3">
+                        {/* Kept, not removed. It now reports only whether a vendor account is
+                            attached, and never restates the booth's status -- the Status column
+                            owns that. "Yes, not confirmed" is the wording that stops this column
+                            reading as a contradiction of the one three cells to its left. */}
                         {booth.userId ? (
-                          <span className="text-green-600 dark:text-green-400 text-xs font-bold">Claimed</span>
+                          booth.status === 'PENDING' ? (
+                            <span className="text-amber-700 dark:text-amber-400 text-xs font-bold">
+                              Yes, not confirmed
+                            </span>
+                          ) : (
+                            <span className="text-green-600 dark:text-green-400 text-xs font-bold">Yes</span>
+                          )
                         ) : (
-                          <span className="text-warm-400 text-xs">Unclaimed</span>
+                          <span className="text-warm-400 text-xs">Not yet</span>
                         )}
                       </td>
                       <td className="p-3">
@@ -451,9 +511,18 @@ const VendorBoothsPage: React.FC = () => {
                           {booth.status === 'PENDING' && (
                             <button
                               onClick={() => handleStatusChange(booth, 'CONFIRMED')}
-                              className="text-xs px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded font-bold"
+                              title={
+                                booth.userId
+                                  ? `${booth.vendorName} has claimed this booth. Nothing can be sold from it until you confirm.`
+                                  : 'Confirm this booth. The vendor has not claimed it yet.'
+                              }
+                              className={
+                                booth.userId
+                                  ? 'text-xs px-3 py-1 bg-green-600 hover:bg-green-700 text-white rounded font-bold'
+                                  : 'text-xs px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded font-bold'
+                              }
                             >
-                              Confirm
+                              {booth.userId ? 'Confirm Booth' : 'Confirm'}
                             </button>
                           )}
                           <button

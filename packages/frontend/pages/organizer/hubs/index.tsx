@@ -20,6 +20,9 @@ interface HubEvent {
   saleDate?: string;
   eventName?: string;
   boothCount: number;
+  // Booths a vendor has claimed that this organizer has not confirmed yet. Optional so an
+  // older API response renders as zero rather than NaN. Served by hubController.listMyHubs.
+  awaitingConfirmationCount?: number;
 }
 
 const EVENT_TYPES = [
@@ -239,12 +242,18 @@ export default function FleaMarketEventsPage() {
                           {event.boothCount} {event.boothCount === 1 ? 'vendor' : 'vendors'}
                           {event.saleDate && <> · {new Date(event.saleDate).toLocaleDateString()}</>}
                         </p>
+                        {(event.awaitingConfirmationCount ?? 0) > 0 && (
+                          <p className="mt-1 text-sm font-bold text-amber-700 dark:text-amber-400">
+                            {event.awaitingConfirmationCount} booth
+                            {event.awaitingConfirmationCount === 1 ? '' : 's'} awaiting your confirmation
+                          </p>
+                        )}
                       </div>
                       <Link
                         href={`/organizer/hubs/${event.id}/vendor-booths`}
                         className="text-sm text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300 font-medium"
                       >
-                        Manage →
+                        {(event.awaitingConfirmationCount ?? 0) > 0 ? 'Confirm →' : 'Manage →'}
                       </Link>
                     </div>
                   ))}

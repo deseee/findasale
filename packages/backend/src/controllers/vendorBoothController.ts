@@ -10,6 +10,16 @@ import { getStripe } from '../utils/stripe';
 // display percentage drifts from what Stripe actually takes.
 import { getPlatformFeeRate } from '../utils/feeCalculator';
 import { sendVendorBoothInviteEmail } from '../services/vendorBoothInviteEmailService';
+// Lifecycle notifications (claim / confirm / reject-cancel / Stripe connected). Every one
+// of these is invoked fire-and-forget with a .catch, exactly like the invite trigger at
+// createVendorBooth below -- a notification must NEVER fail or roll back the action that
+// produced it, and the service itself never throws (it returns { sent, reason }).
+import {
+  notifyOrganizerBoothClaimed,
+  notifyVendorBoothConfirmed,
+  notifyVendorBoothDecision,
+  notifyOrganizerBoothStripeConnected,
+} from '../services/vendorBoothLifecycleNotificationService';
 
 const stripe = () => getStripe();
 
@@ -235,6 +245,22 @@ export const updateVendorBooth = async (req: AuthRequest, res: Response) => {
     }
 
     const updated = await prisma.vendorBooth.update({ where: { id: boothId }, data: updateData });
+
+    // Lifecycle notification. Gated on a REAL transition (status actually changed from
+    // what was stored), so re-saving an unrelated field, or re-submitting the same status,
+    // never re-notifies. The service stamps its own idempotency column on top of this.
+    if (status !== undefined && status !== existing.status) {
+      if (status === 'CONFIRMED') {
+        notifyVendorBoothConfirmed(boothId).catch(err =>
+          console.warn('[booth-lifecycle] Confirm notification failed for booth', boothId, err)
+        );
+      } else if (status === 'REJECTED' || status === 'CANCELLED') {
+        notifyVendorBoothDecision(boothId, status).catch(err =>
+          console.warn('[booth-lifecycle] Decision notification failed for booth', boothId, err)
+        );
+      }
+    }
+
     return res.status(200).json(serializeBooth(updated));
   } catch (error) {
     console.error('[updateVendorBooth] Error:', error);
@@ -262,6 +288,17 @@ export const deleteVendorBooth = async (req: AuthRequest, res: Response) => {
     if (!existing) return res.status(404).json({ error: 'Vendor booth not found' });
 
     await prisma.vendorBooth.update({ where: { id: boothId }, data: { deletedAt: new Date(), status: 'CANCELLED' } });
+
+    // A vendor who claimed this booth (or was emailed an invite to it) must not be left
+    // wondering why it stopped working. notifyVendorBoothDecision deliberately does not
+    // bail on deletedAt for exactly this call, and skips on its own when the booth was
+    // never claimed and never invited.
+    if (existing.status !== 'CANCELLED') {
+      notifyVendorBoothDecision(boothId, 'CANCELLED').catch(err =>
+        console.warn('[booth-lifecycle] Cancel notification failed for booth', boothId, err)
+      );
+    }
+
     return res.status(204).send();
   } catch (error) {
     console.error('[deleteVendorBooth] Error:', error);
@@ -409,6 +446,16 @@ export const claimVendorBooth = async (req: AuthRequest, res: Response) => {
       data: { userId: req.user.id },
     });
 
+    // Tell the hub organizer. This is the gap that stranded a real vendor: the claim
+    // above sets ONLY userId, so the booth stays PENDING and addBoothCartItems still
+    // refuses to sell from it (vendorBoothCartController.ts :396) until the organizer
+    // confirms -- and until now nothing anywhere told the organizer to do that.
+    // Fire-and-forget with a .catch, same shape as the invite trigger in
+    // createVendorBooth above: the claim MUST succeed even with email completely down.
+    notifyOrganizerBoothClaimed(claimed.id).catch(err =>
+      console.warn('[booth-lifecycle] Claim notification failed for booth', claimed.id, err)
+    );
+
     return res.status(200).json(serializeBooth(claimed));
   } catch (error) {
     console.error('[claimVendorBooth] Error:', error);
@@ -481,6 +528,15 @@ export const startVendorBoothStripeOnboarding = async (req: AuthRequest, res: Re
             stripeOnboarded: liveStatus.chargesEnabled && liveStatus.payoutsEnabled,
           },
         });
+        // Reusing an already-working Connect account means this booth just became
+        // payment-ready in one shot, with no return trip through Stripe's hosted flow --
+        // so the organizer notification fires here too, not only in the status poll below.
+        if (liveStatus.chargesEnabled && liveStatus.payoutsEnabled) {
+          notifyOrganizerBoothStripeConnected(booth.id).catch(err =>
+            console.warn('[booth-lifecycle] Stripe notification failed for booth', booth.id, err)
+          );
+        }
+
         // Already has a real, existing Stripe identity -- no onboarding
         // redirect needed. The frontend should show "linked to your existing
         // account" rather than sending them through Stripe's hosted flow again.
@@ -544,6 +600,16 @@ export const getVendorBoothStripeStatus = async (req: AuthRequest, res: Response
     const status = await getAccountStatus(booth.stripeAccountId);
     if (status.chargesEnabled !== booth.stripeOnboarded) {
       await prisma.vendorBooth.update({ where: { id: booth.id }, data: { stripeOnboarded: status.chargesEnabled } });
+
+      // Only on the false -> true edge. This endpoint is polled by the vendor booth page
+      // on every load, and stripeOnboarded can flap both directions, so the transition
+      // check here plus the stripeNotifiedAt stamp in the service are BOTH required to
+      // keep this from turning into a repeating alert.
+      if (status.chargesEnabled) {
+        notifyOrganizerBoothStripeConnected(booth.id).catch(err =>
+          console.warn('[booth-lifecycle] Stripe notification failed for booth', booth.id, err)
+        );
+      }
     }
 
     return res.status(200).json({ stripeOnboarded: status.chargesEnabled, status: status.status });
