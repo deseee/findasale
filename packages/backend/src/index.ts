@@ -191,7 +191,7 @@ import markdownCycleRoutes from './routes/markdownCycles';       // Feature: Aut
 import locationRoutes from './routes/locations';                 // #311: Multi-Location Inventory View
 import qrScannerRoutes from './routes/qrScanner';                // QR Scanner Phase 2: scan analytics
 import imageProxyRoutes from './routes/imageProxy';              // Image proxy for eBay CDN images
-import { crawlerAnalyticsMiddleware } from './middleware/crawlerAnalytics'; // AI Crawler Analytics
+import { crawlerAnalyticsMiddleware, detectCrawler } from './middleware/crawlerAnalytics'; // AI Crawler Analytics
 import crawlerStatsRouter from './routes/crawlerStats';           // AI Crawler Stats endpoint
 import crawlerLogRouter from './routes/crawlerLog';               // AI Crawler Log — SSR bot tracking
 import demandSignalsRouter from './routes/demandSignals';          // #454 Organizer Demand Dashboard
@@ -495,7 +495,25 @@ const globalLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many requests, please try again later.' },
-  skip: (req) => req.path.startsWith('/api/viewers') || req.path === '/api/health/latency' || isWhitelistedIP(req),
+  // 2026-07-28: log rejections — this backend has no access logger (no morgan/winston/pino),
+  // so a 429 was previously invisible in Railway logs. `handler` replaces express-rate-limit's
+  // default response entirely, so it must still send the same 429 JSON body itself.
+  handler: (req, res) => {
+    const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.ip;
+    console.warn(`[rateLimit] 429 ${req.method} ${req.path} ip=${ip} ua="${req.headers['user-agent'] || ''}"`);
+    res.status(429).json({ error: 'Too many requests, please try again later.' });
+  },
+  // 2026-07-28: verified-crawler bypass (GET only) — GSC Live Test showed /map's client-side
+  // sales query failing for Googlebot's renderer (Soft 404 investigation). The anonymous
+  // 500/15min budget had no exemption for search-engine crawlers; a crawl burst from a shared IP
+  // can trip it. This only loosens a rate limit (not auth/payment), so a spoofed UA just wins a
+  // bigger anonymous budget, not access to anything sensitive — reuses the same detectCrawler()
+  // UA patterns as crawlerAnalyticsMiddleware to avoid a second list drifting out of sync.
+  skip: (req) =>
+    req.path.startsWith('/api/viewers') ||
+    req.path === '/api/health/latency' ||
+    isWhitelistedIP(req) ||
+    (req.method === 'GET' && detectCrawler((req.headers['user-agent'] as string) || '') !== null),
   store: createRateLimitStore(),
 });
 app.use(resilientLimiter(globalLimiter));

@@ -12,7 +12,7 @@ const CRAWLER_PATTERNS: { pattern: RegExp; name: string }[] = [
   { pattern: /bingbot/i, name: 'BingBot' },
 ];
 
-function detectCrawler(userAgent: string): string | null {
+export function detectCrawler(userAgent: string): string | null {
   for (const { pattern, name } of CRAWLER_PATTERNS) {
     if (pattern.test(userAgent)) return name;
   }
