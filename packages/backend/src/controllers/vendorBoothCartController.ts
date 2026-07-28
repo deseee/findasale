@@ -11,6 +11,7 @@ import { sellItemUnits, InsufficientStockError } from '../services/itemStockServ
 import { syncMarketplaceStock } from '../services/marketplaceStockSyncService'; // ADR-087 Phase 4: revise-on-partial eBay quantity sync
 import { generateReceipt, sendBoothCartReceiptEmail } from '../services/receiptService';
 import { getPlatformFeeRate } from '../utils/feeCalculator'; // ADR-090 Phase 2: platform's normal cut formula
+import { notifyVendorOfBoothSale } from '../services/vendorBoothSaleNotificationService'; // per-vendor "your item sold" notification
 import { Decimal } from '@prisma/client/runtime/library';
 
 const stripe = () => getStripe();
@@ -755,6 +756,13 @@ export const authorizeBoothCartTerminalLeg = async (req: BoothAuthRequest, res: 
           rail: 'TERMINAL',
           status: 'PENDING',
           hubOwnerShareAmount: feeSplit.hubOwnerShareCents > 0 ? new Decimal(feeSplit.hubOwnerShareCents / 100) : null,
+          // Persist the platform's own cut alongside the hub owner's, so the vendor-facing
+          // sale notification can quote what was ACTUALLY charged. application_fee_amount is
+          // platformFee + hubOwnerShare, and only the hub-owner half was ever stored -- the
+          // platform half was unrecoverable afterwards without re-reading the organizer's
+          // MUTABLE subscriptionTier, which is exactly how a disclosure ends up saying 10%
+          // when the charge was 8%. Written unconditionally, mirroring hubOwnerShareAmount.
+          platformFeeCents: feeSplit.applicationFeeAmountCents - feeSplit.hubOwnerShareCents,
         },
       });
     } catch (claimErr: any) {
@@ -998,6 +1006,9 @@ export const authorizeBoothCartQrLegs = async (req: BoothAuthRequest, res: Respo
             rail: 'QR',
             status: 'PENDING',
             hubOwnerShareAmount: feeSplit.hubOwnerShareCents > 0 ? new Decimal(feeSplit.hubOwnerShareCents / 100) : null,
+            // Same as the TERMINAL rail above: store the platform's own cut so the sale
+            // notification never has to re-derive it. Both rails converge on captureBoothCart.
+            platformFeeCents: feeSplit.applicationFeeAmountCents - feeSplit.hubOwnerShareCents,
           },
         });
       } catch (claimErr: any) {
@@ -1309,6 +1320,25 @@ export const captureBoothCart = async (req: BoothAuthRequest, res: Response) => 
     sendBoothCartReceiptEmail(cart.id).catch((err) =>
       console.error('[captureBoothCart] Failed to send itemized cart receipt email:', err)
     );
+
+    // Tell each vendor their own goods sold. The line above emails the SHOPPER a receipt;
+    // until this, the vendor whose items just sold was told nothing on any channel -- no
+    // email, no in-app notification -- which left a vendor standing at a market with no way
+    // to know an item sold, for how much, or what reached them when somebody else was
+    // working the register.
+    //
+    // Per LEG, not per cart and not per item: a leg is exactly one vendor's slice of this
+    // cart, so a multi-vendor cart sends each vendor one email about their own goods only.
+    // Placed AFTER the COMPLETED write and fired the same fire-and-forget way as the receipt
+    // email and the hub-owner Transfer above: a captured payment is real money and a
+    // notification must never delay, fail or roll back a capture. notifyVendorOfBoothSale
+    // never throws and takes a compare-and-swap claim on BoothCartLeg.vendorSaleNotifiedAt
+    // before sending, so a retried /capture cannot email the same vendor twice.
+    for (const leg of captured) {
+      notifyVendorOfBoothSale(leg.id).catch((err) =>
+        console.error(`[captureBoothCart] Vendor sale notification failed for leg ${leg.id} (non-fatal):`, err)
+      );
+    }
 
     return res.status(200).json({ success: true, itemsSold: purchaseIds.length, purchaseIds });
   } catch (error) {

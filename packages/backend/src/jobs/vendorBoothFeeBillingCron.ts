@@ -36,7 +36,7 @@ import { prisma } from '../lib/prisma';
 // Rent-charge failure notification. Fire-and-forget with a .catch at both FAILED sites
 // below: telling people must NEVER change what this cron does to money, and the service
 // itself never throws (it returns { sent, reason }).
-import { notifyBoothRentChargeFailed } from '../services/vendorBoothLifecycleNotificationService';
+import { notifyBoothRentChargeFailed, notifyBoothRentCharged } from '../services/vendorBoothLifecycleNotificationService';
 import { cronGuard } from '../utils/cronGuard';
 import { getStripe } from '../utils/stripe';
 
@@ -187,6 +187,16 @@ export async function runBoothFeeBilling(periodStart: Date, periodEnd: Date): Pr
               data: { stripeTransferId: transfer.id, status: 'COMPLETED' },
             });
             summary.charged += 1;
+            // Gap closed 2026-07-28: rent SUCCESS was silent. The charge above is
+            // off_session with confirm: true and no receipt_email, so real money left the
+            // vendor's card with no message from anyone. The failure twin already existed;
+            // this is the receipt. Reached only inside the claim.count === 1 branch of the
+            // stripeTransferId compare-and-swap, which can win at most once per charge row,
+            // so this fires exactly once. Fire-and-forget: rent has already been collected
+            // and Transferred, and a notification must not unwind that.
+            notifyBoothRentCharged(charge.id).catch(err =>
+              console.warn('[booth-lifecycle] Rent receipt notification failed for charge', charge.id, err)
+            );
           } catch (transferErr) {
             await prisma.vendorBoothFeeCharge
               .updateMany({ where: { id: charge.id, stripeTransferId: 'CLAIMING' }, data: { stripeTransferId: null } })

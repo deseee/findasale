@@ -36,6 +36,7 @@ import { transactionalEmailService } from '../lib/transactionalEmailService';
 import { assertCheckoutAllowed, assertGuestCheckoutAllowed, recordConfirmedSignal, CheckoutGuardError } from '../services/checkoutGuard'; // S1072 Finding #4: collusion/wash-trade guard
 import { recordPosPaymentLinkSale } from '../services/posPaymentLinkRecorder'; // ADR pos-webhook-idempotency-reconciliation (2026-07-23, S1151)
 import { settleHubOwnerReversalForLeg } from './vendorBoothCartController'; // P1 (2026-07-28): durable hub-owner Transfer reversal settlement
+import { notifyVendorBoothSaleRefunded } from '../services/vendorBoothSaleNotificationService'; // tell the vendor their booth sale was refunded
 
 // Lazy — avoids crash when module loads before dotenv runs
 const stripe = () => getStripe();
@@ -3086,6 +3087,18 @@ export const createRefund = async (req: AuthRequest, res: Response) => {
       where: { id: purchaseId },
       data: { status: 'REFUNDED' }
     });
+
+    // Tell the VENDOR their booth sale was refunded. The shopper already gets a refund
+    // confirmation further down this handler; the vendor got nothing, even though a
+    // booth-cart refund is taken against their OWN connected account (Direct charge,
+    // { stripeAccount: boothStripeAccountId }) and drops their balance. No-ops on
+    // non-booth-cart purchases. Fire-and-forget and never-throwing: the buyer's refund has
+    // already succeeded on Stripe and must not be disturbed by a notification.
+    // Exactly-once without a new column: the PAID -> REFUNDING compare-and-swap claim above
+    // admits only one caller into this block per purchase.
+    notifyVendorBoothSaleRefunded(purchaseId).catch(err =>
+      console.error(`[createRefund] Vendor refund notification failed for purchase ${purchaseId} (non-fatal):`, err)
+    );
 
     // ADR-090 Phase 2 refund clawback: a plain PaymentIntent refund does NOT claw
     // back a completed platform -> hub-owner Transfer (they're separate money

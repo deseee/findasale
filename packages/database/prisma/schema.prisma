@@ -5721,6 +5721,28 @@ model BoothCartLeg {
   hubOwnerTransferFailedAt DateTime?
   hubOwnerTransferError    String?
 
+  // Per-vendor sale notification (2026-07-28). Before this, a booth cart capture emailed
+  // the SHOPPER a receipt (receiptService.sendBoothCartReceiptEmail, fired from
+  // vendorBoothCartController.captureBoothCart) and told the VENDOR whose goods just sold
+  // nothing at all, on any channel.
+  //
+  // platformFeeCents PERSISTS the platform's cut exactly as computeLegFeeSplit computed it
+  // for THIS leg at authorize time, so the vendor-facing disclosure quotes the number that
+  // was actually charged instead of re-deriving it later. It cannot be recovered from the
+  // other columns: only hubOwnerShareAmount was stored, while the value handed to Stripe was
+  // application_fee_amount = platformFee + hubOwnerShare. Re-deriving it at notify time via
+  // getPlatformFeeRate(organizer.subscriptionTier) would read a MUTABLE column: an organizer
+  // who changes tier between authorize and capture would be shown a fee that was never taken.
+  // That is the same class of error as the disclosure that said 10% while the charge was 8%.
+  // NULL on every leg captured before this column existed -- the notifier treats NULL as
+  // "fee breakdown unknown" and states gross only, rather than inventing a number.
+  //
+  // vendorSaleNotifiedAt is the idempotency stamp, at LEG grain because the leg is the unit
+  // of one vendor's slice of one cart: one leg = one vendor = one PaymentIntent = one sale
+  // event, on both the TERMINAL and QR rails, and /capture is retryable.
+  platformFeeCents     Int?
+  vendorSaleNotifiedAt DateTime?
+
   @@index([cartTransactionId])
   @@index([vendorBoothId])
   @@index([stripePaymentIntentId])
