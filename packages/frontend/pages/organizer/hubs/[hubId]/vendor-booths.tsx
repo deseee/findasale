@@ -72,6 +72,16 @@ const VendorBoothsPage: React.FC = () => {
   const [feeCharges, setFeeCharges] = useState<FeeCharge[]>([]);
   const [feeChargesLoading, setFeeChargesLoading] = useState(true);
 
+  const [formData, setFormData] = useState({
+    boothNumber: '',
+    vendorName: '',
+    vendorEmail: '',
+    vendorPhone: '',
+    boothFee: '',
+    revenueSharePercent: '',
+    notes: '',
+  });
+
   // ADR-090 §6: the server caps revenue share at 30% -- vendorBoothController.ts
   // rejects anything higher with a 400, and vendorBoothCartController.ts clamps it
   // again at charge time. Keep this in step with REVENUE_SHARE_CAP_PERCENT there,
@@ -83,16 +93,6 @@ const VendorBoothsPage: React.FC = () => {
     (Number.isNaN(revShareValue) || revShareValue < 0 || revShareValue > REVENUE_SHARE_CAP_PERCENT)
       ? `Revenue share must be between 0 and ${REVENUE_SHARE_CAP_PERCENT}%.`
       : null;
-
-  const [formData, setFormData] = useState({
-    boothNumber: '',
-    vendorName: '',
-    vendorEmail: '',
-    vendorPhone: '',
-    boothFee: '',
-    revenueSharePercent: '',
-    notes: '',
-  });
 
   const fetchBooths = async () => {
     if (!hubId || typeof hubId !== 'string') return;

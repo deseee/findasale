@@ -58,17 +58,24 @@ function serializeBatch(batch: any) {
  * `settlement/batches` outside src/routes and src/controllers returns zero hits. These
  * endpoints have NO frontend caller today.
  *
- * KNOWN DEFECT, deliberately NOT changed here (needs a product decision, see the
- * session report): `netPayout` below is neither what the vendor received nor what they
- * owe. It subtracts boothFee, which is MONTHLY RENT billed separately by
- * vendorBoothFeeBillingCron.ts (Phase 4), and it does NOT subtract the platform fee or
- * the revenue share that were already taken at capture. For a $1,000 booth with $200/mo
- * rent and a 20% revenue share, this reports net $800.00 while the vendor actually
- * received $720 and separately owes $200. These values are PERSISTED onto
- * VendorBoothPayout by createVendorBoothSettlementBatch below and are surfaced to the
- * vendor as "Payout History" on pages/vendor-booth/[boothToken].tsx. Changing the
- * formula changes stored rows and contradicts schema.prisma's documented definition of
- * VendorBoothPayout.netPayout, so it is not a silent edit.
+ * KNOWN DEFECT, deliberately STILL NOT changed here: `netPayout` below is neither what
+ * the vendor received nor what they owe. It subtracts boothFee, which is MONTHLY RENT
+ * billed separately by vendorBoothFeeBillingCron.ts (Phase 4), and it does NOT subtract
+ * the platform fee or the revenue share that were already taken at capture
+ * (vendorBoothCartController.ts computeLegFeeSplit). For a $1,000 booth with $200/mo rent
+ * and a 20% revenue share, this reports net $800.00 while the vendor actually received
+ * $720 and separately owes $200. These values are PERSISTED onto VendorBoothPayout by
+ * createVendorBoothSettlementBatch below. Changing the formula would rewrite stored rows
+ * and contradict schema.prisma:5736's documented definition of
+ * VendorBoothPayout.netPayout, so the formula stays exactly as-is.
+ *
+ * RESOLVED at the DISPLAY layer instead (approved product decision, 2026-07-28): the
+ * vendor-facing page pages/vendor-booth/[boothToken].tsx no longer renders netPayout. Its
+ * "Sales History" section now renders VendorBoothPayout.totalSales, i.e. `gross` below,
+ * which is true on its own, alongside the platform-fee and revenue-share percentages so a
+ * vendor can follow the arithmetic. netPayout is still computed, still persisted, and
+ * still returned by getVendorBoothPayouts for back-compat. Do NOT "fix" the formula here
+ * without a fresh decision.
  */
 async function buildBoothSettlementLines(hubId: string) {
   const booths = await prisma.vendorBooth.findMany({

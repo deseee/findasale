@@ -22,6 +22,36 @@ const stripe = () => getStripe();
 const REVENUE_SHARE_CAP_PERCENT = 30;
 
 /**
+ * P1 cart-IDOR fix (findasale-hacker fix-and-reverify pass, 2026-07-28). Every cart
+ * endpoint in this file resolves its cart with `findFirst({ id: cartTransactionId, hubId })`,
+ * which proves only that the cart belongs to the SAME HUB the caller authenticated
+ * against -- never that the caller is the cashier who opened it.
+ * requireBoothTokenOrTeamMember() hands a BOOTH-type session to ANY CONFIRMED booth on
+ * the hub, so before this check a competitor vendor's booth token could add a leg to,
+ * capture, or cancel another booth's live cart -- and /cancel releases that cart's
+ * RESERVED items back to AVAILABLE, i.e. a one-request basket drop mid-checkout.
+ *
+ * Rule: a TEAM_MEMBER session is the hub owner's own workspace staff (the middleware
+ * resolves it through SaleHub -> Organizer -> OrganizerWorkspace -> WorkspaceMember ->
+ * TeamMember) and may operate any cart on its hub -- that is the existing register model,
+ * and the only live cashier UI (pages/organizer/hubs/[hubId]/cart.tsx) is TEAM_MEMBER-only,
+ * so this changes nothing for it. A BOOTH session may only touch a cart it opened itself
+ * (BoothCartTransaction.cashierBoothId, written at startBoothCart).
+ */
+function callerOwnsCart(
+  boothAuth: NonNullable<BoothAuthRequest['boothAuth']>,
+  cart: { cashierBoothId: string | null }
+): boolean {
+  if (boothAuth.type === 'TEAM_MEMBER') return true;
+  return !!boothAuth.vendorBoothId && boothAuth.vendorBoothId === cart.cashierBoothId;
+}
+
+// 403 (not 404) matches this file's existing guard-rejection convention
+// (CheckoutGuardError -> 403) and requireBoothAuth.ts's own 403s for a valid-but-
+// unauthorized session. The message carries no detail about the other cashier.
+const CART_NOT_YOURS_ERROR = 'This cart belongs to another cashier';
+
+/**
  * ADR-090 Phase 2: compute one booth-cart leg's application_fee_amount (the
  * platform's normal cut, using the SAME tier-based formula terminalController.ts
  * already uses for POS/Terminal charges, plus the hub owner's revenue-share cut on
@@ -135,16 +165,119 @@ export async function transferHubOwnerShareForLeg(legId: string): Promise<void> 
       },
       { idempotencyKey: `hub-owner-transfer-${leg.id}` }
     );
-    await prisma.boothCartLeg.update({ where: { id: leg.id }, data: { stripeTransferId: transfer.id } });
+    await prisma.boothCartLeg.update({
+      where: { id: leg.id },
+      data: { stripeTransferId: transfer.id, hubOwnerTransferFailedAt: null, hubOwnerTransferError: null },
+    });
   } catch (err) {
     // Release the claim so a future retry (e.g. a manual reconciliation re-run) isn't
-    // permanently blocked by the sentinel.
+    // permanently blocked by the sentinel, AND durably record the failure in the same
+    // write. Before this, a failed Transfer left zero trace in the database -- an unpaid
+    // hub owner discoverable only by grepping logs. Now:
+    //   SELECT * FROM "BoothCartLeg"
+    //   WHERE "hubOwnerTransferFailedAt" IS NOT NULL AND "stripeTransferId" IS NULL;
     await prisma.boothCartLeg
-      .updateMany({ where: { id: leg.id, stripeTransferId: 'CLAIMING' }, data: { stripeTransferId: null } })
+      .updateMany({
+        where: { id: leg.id, stripeTransferId: 'CLAIMING' },
+        data: {
+          stripeTransferId: null,
+          hubOwnerTransferFailedAt: new Date(),
+          hubOwnerTransferError: String((err as any)?.message ?? err).slice(0, 500),
+        },
+      })
       .catch((revertErr) =>
         console.error(`[transferHubOwnerShareForLeg] Failed to release claim after Stripe error for leg ${legId}:`, revertErr)
       );
     console.error(`[transferHubOwnerShareForLeg] Stripe transfer failed for leg ${legId}:`, err);
+    throw err;
+  }
+
+  // P1 race close (2026-07-28): a refund may have landed while stripeTransferId still held
+  // 'CLAIMING' -- in that window the refund path could not reverse anything, so it recorded
+  // the obligation in hubOwnerReversalOwedCents instead. Now that a REAL tr_... id exists,
+  // drain it. Non-fatal: the Transfer itself already succeeded and must not be unwound here;
+  // the owed watermark stays on the row so a later refund or reconciliation run settles it.
+  await settleHubOwnerReversalForLeg(leg.id).catch((settleErr) =>
+    console.error(
+      `[transferHubOwnerShareForLeg] Transfer succeeded but post-transfer reversal settlement failed for leg ${legId} — hubOwnerReversalOwedCents remains outstanding:`,
+      settleErr
+    )
+  );
+}
+
+/**
+ * P1 refund/transfer race fix (2026-07-28). Drain the outstanding hub-owner Transfer
+ * reversal recorded on a leg (hubOwnerReversalOwedCents minus hubOwnerReversalDoneCents).
+ *
+ * Called from BOTH sides of the race: stripeController.createRefund (after it increments
+ * the owed watermark) and transferHubOwnerShareForLeg (right after the real Transfer id
+ * lands). Whichever finishes second is the one that actually moves money, so no ordering
+ * of (capture, claim, transfer, refund) can leave the hub owner holding platform funds.
+ *
+ * Guarantees:
+ *  - NEVER reverses a Transfer that does not exist: the Stripe call is gated on
+ *    stripeTransferId being a real `tr_` id, which the 'CLAIMING' sentinel and null both
+ *    fail. The existing guard is preserved, not weakened.
+ *  - NEVER reverses twice: hubOwnerReversalDoneCents is advanced by a conditional
+ *    updateMany keyed to the exact value observed (compare-and-swap -- the same idiom as
+ *    the stripeTransferId IS NULL -> 'CLAIMING' claim above and the Purchase
+ *    PAID -> REFUNDING claim in stripeController.ts). Exactly one concurrent caller wins;
+ *    the losers see count 0 and return. The reversal amount is additionally clamped to the
+ *    leg's total hub-owner share, and Stripe independently refuses reversals exceeding the
+ *    Transfer amount.
+ *  - Idempotency key is derived from the resulting cumulative watermark, so a retry of the
+ *    same outstanding delta collapses to one reversal on Stripe's side.
+ */
+export async function settleHubOwnerReversalForLeg(legId: string): Promise<void> {
+  const leg = await prisma.boothCartLeg.findUnique({
+    where: { id: legId },
+    select: {
+      id: true,
+      stripeTransferId: true,
+      hubOwnerShareAmount: true,
+      hubOwnerReversalOwedCents: true,
+      hubOwnerReversalDoneCents: true,
+    },
+  });
+  if (!leg) return;
+
+  // Phantom-reversal guard. null = never transferred; 'CLAIMING' = transfer in flight.
+  // Neither is a reversible Stripe object. The owed watermark simply stays on the row.
+  if (!leg.stripeTransferId || !leg.stripeTransferId.startsWith('tr_')) return;
+
+  const owedCents = leg.hubOwnerReversalOwedCents ?? 0;
+  const doneCents = leg.hubOwnerReversalDoneCents ?? 0;
+  const shareCents = Math.round(Number(leg.hubOwnerShareAmount ?? 0) * 100);
+  // Can never reverse more than was actually transferred.
+  const outstandingCents = Math.min(owedCents, shareCents) - doneCents;
+  if (outstandingCents <= 0) return;
+
+  const nextDoneCents = doneCents + outstandingCents;
+  const claim = await prisma.boothCartLeg.updateMany({
+    where: { id: leg.id, hubOwnerReversalDoneCents: leg.hubOwnerReversalDoneCents },
+    data: { hubOwnerReversalDoneCents: nextDoneCents },
+  });
+  if (claim.count !== 1) return; // lost the race — another settler owns this delta
+
+  try {
+    await stripe().transfers.createReversal(
+      leg.stripeTransferId,
+      { amount: outstandingCents },
+      { idempotencyKey: `hub-owner-reversal-${leg.id}-${nextDoneCents}` }
+    );
+  } catch (err) {
+    // Roll the watermark back so the obligation stays outstanding and retryable rather
+    // than being silently marked settled. Mirrors the claim-release above and the
+    // REFUNDING -> PAID revert in stripeController.createRefund.
+    await prisma.boothCartLeg
+      .updateMany({
+        where: { id: leg.id, hubOwnerReversalDoneCents: nextDoneCents },
+        data: { hubOwnerReversalDoneCents: leg.hubOwnerReversalDoneCents },
+      })
+      .catch((revertErr) =>
+        console.error(`[settleHubOwnerReversalForLeg] Failed to roll back reversal watermark for leg ${legId}:`, revertErr)
+      );
+    console.error(`[settleHubOwnerReversalForLeg] Stripe reversal failed for leg ${legId}:`, err);
     throw err;
   }
 }
@@ -230,6 +363,7 @@ export const addBoothCartItems = async (req: BoothAuthRequest, res: Response) =>
 
     const cart = await prisma.boothCartTransaction.findFirst({ where: { id: cartTransactionId, hubId } });
     if (!cart) return res.status(404).json({ error: 'Cart not found' });
+    if (!callerOwnsCart(req.boothAuth, cart)) return res.status(403).json({ error: CART_NOT_YOURS_ERROR });
     if (cart.status !== 'PENDING') {
       return res.status(409).json({ error: `Cart is not open for edits (status: ${cart.status})` });
     }
@@ -300,10 +434,12 @@ export const addBoothCartItems = async (req: BoothAuthRequest, res: Response) =>
     });
 
     // Reserve items against this cart so a second concurrent cart can't also grab
-    // them, AND persist the resolved vendorBoothId so resolveBoothLegItems / the
-    // cancel path (both key off Item.vendorBoothId in the DB) keep working
-    // unchanged. Grouped by resolved booth since one addBoothCartItems call can
-    // legitimately span multiple different vendors' items in one shared cart.
+    // them, AND persist BOTH the resolved vendorBoothId and this cart's own id.
+    // boothCartTransactionId (P0 fix, 2026-07-28) is what makes a reservation
+    // cart-scoped: resolveBoothLegItems and the cancel path below now key off it, so a
+    // second cart on the same hub can never sum or release this cart's items.
+    // Grouped by resolved booth since one addBoothCartItems call can legitimately
+    // span multiple different vendors' items in one shared cart.
     const acceptedByBooth = new Map<string, string[]>();
     for (const i of accepted) {
       const list = acceptedByBooth.get(i.vendorBoothId) ?? [];
@@ -314,7 +450,7 @@ export const addBoothCartItems = async (req: BoothAuthRequest, res: Response) =>
       Array.from(acceptedByBooth.entries()).map(([boothId, ids]) =>
         prisma.item.updateMany({
           where: { id: { in: ids } },
-          data: { status: 'RESERVED', vendorBoothId: boothId },
+          data: { status: 'RESERVED', vendorBoothId: boothId, boothCartTransactionId: cart.id },
         })
       )
     );
@@ -359,18 +495,24 @@ export const addBoothCartItems = async (req: BoothAuthRequest, res: Response) =>
 const isTerminalSimulated = () => process.env.STRIPE_TERMINAL_SIMULATED === 'true';
 
 /**
- * Sum of RESERVED item prices, for THIS cart's boothsRepresented, belonging to one
- * specific vendor booth. Same ambiguity the original code documented (Item has no
- * direct cartTransactionId column — RESERVED + vendorBoothId-in-boothsRepresented is
- * the existing resolution mechanism, unchanged here, not a new gap introduced by
- * this rework): a production hardening item would add an explicit itemIds column on
- * BoothCartTransaction for full precision against a second concurrent cart on the
- * same hub.
+ * The RESERVED items of ONE vendor booth that belong to THIS cart, and nothing else.
+ *
+ * P0 fix (findasale-hacker fix-and-reverify pass, 2026-07-28): this function took
+ * `cartTransactionId` and never used it -- the query was `{ status: 'RESERVED',
+ * vendorBoothId }`, i.e. EVERY item that booth had reserved anywhere on the hub. Two
+ * concurrent carts holding items of the same booth therefore each summed BOTH carts'
+ * items: cart-2 could charge its shopper for cart-1's goods and inflate the platform
+ * fee and the hub owner's revenue-share cut along with it. The ambiguity the old
+ * comment described is now closed by the explicit Item.boothCartTransactionId link
+ * written at add-items time, so this filter is exact rather than best-effort.
+ *
+ * Callers: leg amounts (both rails), the cashier's booth summary, and the capture
+ * finalize loop -- all of which must see the same, cart-exact set.
  */
 async function resolveBoothLegItems(cartTransactionId: string, boothsRepresented: string[], vendorBoothId: string) {
   if (!boothsRepresented.includes(vendorBoothId)) return [];
   return prisma.item.findMany({
-    where: { status: 'RESERVED', vendorBoothId },
+    where: { status: 'RESERVED', vendorBoothId, boothCartTransactionId: cartTransactionId },
     select: { id: true, price: true, title: true, vendorBoothId: true },
   });
 }
@@ -385,12 +527,11 @@ async function resolveBoothLegItems(cartTransactionId: string, boothsRepresented
 async function beginCartCheckout(params: {
   cart: { id: string; hubId: string; status: string; boothsRepresented: string[] };
   hubId: string;
-  buyerUserId?: string;
   cashierTeamMemberId?: string | null;
   cashierBoothId?: string | null;
   context: string;
 }): Promise<void> {
-  const { cart, hubId, buyerUserId, cashierTeamMemberId, cashierBoothId, context } = params;
+  const { cart, hubId, cashierTeamMemberId, cashierBoothId, context } = params;
 
   if (cart.status === 'IN_PROGRESS') return; // guard already ran for an earlier leg in this cart
 
@@ -399,7 +540,9 @@ async function beginCartCheckout(params: {
   }
 
   await assertBoothCartCheckoutAllowed({
-    buyerUserId,
+    // No buyer id is passed, deliberately -- see the note on the same call inside
+    // captureBoothCart. A booth cart has no authenticated shopper identity, and the
+    // cashier's assertion about who the shopper is was never evidence of anything.
     hubId,
     cartTransactionId: cart.id,
     boothsRepresented: cart.boothsRepresented,
@@ -435,6 +578,7 @@ export const getBoothCartSummary = async (req: BoothAuthRequest, res: Response) 
 
     const cart = await prisma.boothCartTransaction.findFirst({ where: { id: cartTransactionId, hubId } });
     if (!cart) return res.status(404).json({ error: 'Cart not found' });
+    if (!callerOwnsCart(req.boothAuth, cart)) return res.status(403).json({ error: CART_NOT_YOURS_ERROR });
 
     const booths = await prisma.vendorBooth.findMany({
       where: { id: { in: cart.boothsRepresented } },
@@ -485,6 +629,7 @@ export const createBoothCartTerminalConnectionToken = async (req: BoothAuthReque
 
     const cart = await prisma.boothCartTransaction.findFirst({ where: { id: cartTransactionId, hubId } });
     if (!cart) return res.status(404).json({ error: 'Cart not found' });
+    if (!callerOwnsCart(req.boothAuth, cart)) return res.status(403).json({ error: CART_NOT_YOURS_ERROR });
     if (!cart.boothsRepresented.includes(vendorBoothId)) {
       return res.status(400).json({ error: 'Booth is not represented in this cart' });
     }
@@ -509,7 +654,7 @@ export const createBoothCartTerminalConnectionToken = async (req: BoothAuthReque
 
 /**
  * POST /api/organizer/hubs/:hubId/cart/:cartTransactionId/terminal/authorize
- * Body: { vendorBoothId, buyerUserId? }
+ * Body: { vendorBoothId }
  * ADR-020 step 3: creates a `card_present`, `capture_method: 'manual'`
  * PaymentIntent scoped to THIS booth's own `stripeAccountId` for THIS booth's
  * subtotal. The cashier taps the physical card against the reader for the
@@ -520,12 +665,13 @@ export const createBoothCartTerminalConnectionToken = async (req: BoothAuthReque
 export const authorizeBoothCartTerminalLeg = async (req: BoothAuthRequest, res: Response) => {
   try {
     const { hubId, cartTransactionId } = req.params;
-    const { vendorBoothId, buyerUserId } = req.body as { vendorBoothId?: string; buyerUserId?: string };
+    const { vendorBoothId } = req.body as { vendorBoothId?: string };
     if (!req.boothAuth) return res.status(401).json({ error: 'Booth/team authentication required' });
     if (!vendorBoothId) return res.status(400).json({ error: 'vendorBoothId is required' });
 
     const cart = await prisma.boothCartTransaction.findFirst({ where: { id: cartTransactionId, hubId } });
     if (!cart) return res.status(404).json({ error: 'Cart not found' });
+    if (!callerOwnsCart(req.boothAuth, cart)) return res.status(403).json({ error: CART_NOT_YOURS_ERROR });
     if (!cart.boothsRepresented.includes(vendorBoothId)) {
       return res.status(400).json({ error: 'Booth is not represented in this cart' });
     }
@@ -541,7 +687,6 @@ export const authorizeBoothCartTerminalLeg = async (req: BoothAuthRequest, res: 
       await beginCartCheckout({
         cart,
         hubId,
-        buyerUserId,
         cashierTeamMemberId: req.boothAuth.type === 'TEAM_MEMBER' ? req.boothAuth.teamMemberId : null,
         cashierBoothId: req.boothAuth.type === 'BOOTH' ? req.boothAuth.vendorBoothId : null,
         context: 'boothCartTerminalAuthorize',
@@ -671,7 +816,7 @@ export const authorizeBoothCartTerminalLeg = async (req: BoothAuthRequest, res: 
 
 /**
  * POST /api/organizer/hubs/:hubId/cart/:cartTransactionId/qr/setup-intent
- * Body: { buyerUserId? }
+ * Body: none.
  * ADR-020 QR/in-app rail, step 1: collect the shopper's card ONCE via a SetupIntent
  * on the PLATFORM account (not any single booth's account — this PaymentMethod
  * gets cloned to each booth next). Runs the checkout guard + cart lock on this
@@ -680,17 +825,16 @@ export const authorizeBoothCartTerminalLeg = async (req: BoothAuthRequest, res: 
 export const createBoothCartQrSetupIntent = async (req: BoothAuthRequest, res: Response) => {
   try {
     const { hubId, cartTransactionId } = req.params;
-    const { buyerUserId } = req.body as { buyerUserId?: string };
     if (!req.boothAuth) return res.status(401).json({ error: 'Booth/team authentication required' });
 
     const cart = await prisma.boothCartTransaction.findFirst({ where: { id: cartTransactionId, hubId } });
     if (!cart) return res.status(404).json({ error: 'Cart not found' });
+    if (!callerOwnsCart(req.boothAuth, cart)) return res.status(403).json({ error: CART_NOT_YOURS_ERROR });
 
     try {
       await beginCartCheckout({
         cart,
         hubId,
-        buyerUserId,
         cashierTeamMemberId: req.boothAuth.type === 'TEAM_MEMBER' ? req.boothAuth.teamMemberId : null,
         cashierBoothId: req.boothAuth.type === 'BOOTH' ? req.boothAuth.vendorBoothId : null,
         context: 'boothCartQrSetupIntent',
@@ -705,32 +849,20 @@ export const createBoothCartQrSetupIntent = async (req: BoothAuthRequest, res: R
       throw guardError;
     }
 
-    // Resolve or create the platform-level Stripe Customer this SetupIntent (and
-    // the PaymentMethod-clone step after it) will hang off of. Reuse User.stripeCustomerId
-    // when the buyer has an account; otherwise create an ad hoc platform Customer for
-    // this walk-in cart (POS walk-in buyers legitimately have no FindA.Sale account —
-    // Purchase.userId is already nullable for exactly this case).
-    let platformCustomerId: string | undefined;
-    let buyerEmail: string | undefined;
-    if (buyerUserId) {
-      const buyer = await prisma.user.findUnique({ where: { id: buyerUserId }, select: { stripeCustomerId: true, email: true } });
-      buyerEmail = buyer?.email || undefined;
-      if (buyer?.stripeCustomerId) {
-        platformCustomerId = buyer.stripeCustomerId;
-      }
-    }
-    if (!platformCustomerId) {
-      const customer = await stripe().customers.create({
-        email: buyerEmail,
-        metadata: { source: 'booth_cart_qr', hubId, cartTransactionId: cart.id },
-      });
-      platformCustomerId = customer.id;
-      if (buyerUserId) {
-        await prisma.user.update({ where: { id: buyerUserId }, data: { stripeCustomerId: platformCustomerId } }).catch((err) =>
-          console.warn('[createBoothCartQrSetupIntent] Failed to persist stripeCustomerId (non-fatal):', err)
-        );
-      }
-    }
+    // Ad hoc platform-level Stripe Customer for this walk-in cart -- the SetupIntent
+    // (and the PaymentMethod-clone step after it) hangs off it. POS walk-in buyers
+    // legitimately have no FindA.Sale account; Purchase.userId is already nullable for
+    // exactly this case.
+    //
+    // P0 fix (2026-07-28): the branch removed here reused -- and on the miss path
+    // OVERWROTE -- User.stripeCustomerId for whatever user id the CASHIER put in the
+    // request body. That let a cashier both probe an arbitrary account for a saved-card
+    // Customer and clobber it with one of their own making, on an unverified id. Buyer
+    // identity is never taken from the body of a cashier-authenticated call.
+    const customer = await stripe().customers.create({
+      metadata: { source: 'booth_cart_qr', hubId, cartTransactionId: cart.id },
+    });
+    const platformCustomerId = customer.id;
 
     const setupIntent = await stripe().setupIntents.create({
       customer: platformCustomerId,
@@ -770,6 +902,7 @@ export const authorizeBoothCartQrLegs = async (req: BoothAuthRequest, res: Respo
 
     const cart = await prisma.boothCartTransaction.findFirst({ where: { id: cartTransactionId, hubId } });
     if (!cart) return res.status(404).json({ error: 'Cart not found' });
+    if (!callerOwnsCart(req.boothAuth, cart)) return res.status(403).json({ error: CART_NOT_YOURS_ERROR });
     if (cart.status !== 'IN_PROGRESS') {
       return res.status(409).json({ error: `Cart is not ready for QR authorization (status: ${cart.status})` });
     }
@@ -788,6 +921,19 @@ export const authorizeBoothCartQrLegs = async (req: BoothAuthRequest, res: Respo
     const platformPaymentMethodId = typeof setupIntent.payment_method === 'string' ? setupIntent.payment_method : setupIntent.payment_method?.id;
     if (!platformCustomerId || !platformPaymentMethodId) {
       return res.status(400).json({ error: 'SetupIntent is missing a customer or payment method' });
+    }
+    // The SetupIntent id is a client-supplied body field, so it must be proven to belong
+    // to THIS cart -- not merely to exist and have succeeded (findasale-hacker
+    // fix-and-reverify pass, 2026-07-28). Every booth-cart SetupIntent is created by
+    // createBoothCartQrSetupIntent above with source/cartTransactionId metadata on the
+    // PLATFORM account, so without this check a cashier could hand in another cart's
+    // succeeded SetupIntent and clone THAT shopper's card into this cart's booths --
+    // charging a card whose owner never agreed to this basket.
+    if (
+      setupIntent.metadata?.source !== 'booth_cart_qr' ||
+      setupIntent.metadata?.cartTransactionId !== cart.id
+    ) {
+      return res.status(400).json({ error: 'This card setup does not belong to this cart' });
     }
 
     const booths = await prisma.vendorBooth.findMany({
@@ -958,11 +1104,11 @@ export const captureBoothCart = async (req: BoothAuthRequest, res: Response) => 
   };
   try {
     const { hubId, cartTransactionId } = req.params;
-    const { buyerUserId } = req.body as { buyerUserId?: string };
     if (!req.boothAuth) return res.status(401).json({ error: 'Booth/team authentication required' });
 
     const cart = await prisma.boothCartTransaction.findFirst({ where: { id: cartTransactionId, hubId } });
     if (!cart) return res.status(404).json({ error: 'Cart not found' });
+    if (!callerOwnsCart(req.boothAuth, cart)) return res.status(403).json({ error: CART_NOT_YOURS_ERROR });
     if (cart.status === 'COMPLETED') {
       return res.status(200).json({ success: true, message: 'Cart already completed' });
     }
@@ -991,14 +1137,24 @@ export const captureBoothCart = async (req: BoothAuthRequest, res: Response) => 
     }
     lockedCartId = cart.id;
 
-    // Re-run the collusion guard against the buyerUserId that is ACTUALLY about to be
-    // attributed to this capture's Purchase rows (findasale-hacker P0 finding,
-    // 2026-07-08 -- see comment above). cashierTeamMemberId/cashierBoothId are read
-    // from the cart row itself (persisted at startBoothCart), not from req.boothAuth,
+    // Re-run the collusion guard at capture time. cashierTeamMemberId/cashierBoothId are
+    // read from the cart row itself (persisted at startBoothCart), not from req.boothAuth,
     // since the cashier who opened the cart may differ from whoever calls /capture.
+    //
+    // P0 fix (findasale-hacker fix-and-reverify pass, 2026-07-28): the buyer id is no
+    // longer accepted here. It came from req.body on a CASHIER-authenticated call and was
+    // never validated against any session -- the cashier, i.e. the exact party this guard
+    // exists to catch, was asserting the buyer's identity TO the guard. Omitting the field
+    // skipped SELF_DEALING / SHARED_DEVICE_FP / SHARED_CARD_FP entirely (checkoutGuard.ts
+    // returns early with no buyer id), and setting it to an arbitrary account attributed
+    // the purchase there: receipts, order history, loyalty XP, and the first-month refund
+    // cap in stripeController.applyFirstMonthRefundCap all key off Purchase.userId.
+    // No shopper-authenticated caller exists for these routes, so the server-derived value
+    // is "no buyer" -- the walk-in POS case, which is what production already does. The
+    // cashier self-dealing check (cashierBoothId in boothsRepresented) still runs
+    // unconditionally and is unaffected. See the buyer-side gap noted in checkoutGuard.ts.
     try {
       await assertBoothCartCheckoutAllowed({
-        buyerUserId,
         hubId,
         cartTransactionId: cart.id,
         boothsRepresented: cart.boothsRepresented,
@@ -1088,7 +1244,7 @@ export const captureBoothCart = async (req: BoothAuthRequest, res: Response) => 
         try {
           const purchase = await prisma.purchase.create({
             data: {
-              userId: buyerUserId || null,
+              userId: null, // walk-in POS: no server-derived shopper identity exists (P0 fix, 2026-07-28)
               itemId: item.id,
               amount: item.price || 0,
               stripePaymentIntentId: leg.stripePaymentIntentId,
@@ -1178,6 +1334,7 @@ export const cancelBoothCart = async (req: BoothAuthRequest, res: Response) => {
 
     const cart = await prisma.boothCartTransaction.findFirst({ where: { id: cartTransactionId, hubId } });
     if (!cart) return res.status(404).json({ error: 'Cart not found' });
+    if (!callerOwnsCart(req.boothAuth, cart)) return res.status(403).json({ error: CART_NOT_YOURS_ERROR });
     if (cart.status === 'COMPLETED') {
       return res.status(409).json({ error: 'Cart is already completed — cannot cancel, use refund instead' });
     }
@@ -1213,13 +1370,15 @@ export const cancelBoothCart = async (req: BoothAuthRequest, res: Response) => {
       }
     }
 
-    // Release this cart's reserved items back to AVAILABLE.
-    if (cart.boothsRepresented.length > 0) {
-      await prisma.item.updateMany({
-        where: { status: 'RESERVED', vendorBoothId: { in: cart.boothsRepresented } },
-        data: { status: 'AVAILABLE' },
-      });
-    }
+    // Release THIS cart's reserved items back to AVAILABLE and drop the cart link.
+    // P0 fix (2026-07-28): this previously matched every RESERVED item of every booth in
+    // boothsRepresented, hub-wide -- so cancelling one cart un-reserved another live
+    // cart's items too (a competitor vendor could drop a rival's basket mid-checkout).
+    // Scoped to boothCartTransactionId, it can only ever touch its own.
+    await prisma.item.updateMany({
+      where: { status: 'RESERVED', boothCartTransactionId: cart.id },
+      data: { status: 'AVAILABLE', boothCartTransactionId: null },
+    });
 
     await prisma.boothCartTransaction.update({ where: { id: cart.id }, data: { status: 'FAILED' } });
 

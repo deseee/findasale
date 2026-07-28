@@ -5898,6 +5898,155 @@ export const setEbayShippingOverride = async (req: AuthRequest, res: Response) =
 };
 
 /**
+ * GET /api/ebay/organizer/unconfirmed-weight-listings
+ *
+ * Review queue for live eBay listings whose shipping weight was never confirmed
+ * by the organizer.
+ *
+ * Background: publishing now hard-blocks on packageConfirmedByOrganizer (see
+ * validateItemForEbayPublish Guard 2 above), so no NEW listing can go out on a
+ * guessed weight. Listings that went live BEFORE that guard are still out there
+ * carrying an estimated (or missing) weight. This endpoint surfaces them so the
+ * organizer can check each one. It is read-only: it makes no eBay API calls and
+ * changes nothing. The organizer confirms each item through the existing
+ * per-item save (PUT /api/items/:id with packageConfirmedByOrganizer), which is
+ * what drives any downstream shipping re-sync.
+ *
+ * Scope: the authenticated organizer's own items only. Ownership pattern copied
+ * from setEbayShippingOverride above (organizer.findUnique by req.user.id, then
+ * match against the item's sale.organizerId) — here the organizer match is done
+ * inside the query via `sale: { organizerId }` so a foreign item can never be
+ * returned in the first place.
+ *
+ * Excluded: LOCAL_PICKUP_ONLY and DONT_LIST items. Neither one ships, so neither
+ * one needs a weight.
+ *
+ * Two severities, both returned, distinguished by `weightStatus`:
+ *   MISSING     — packageWeightOz is NULL. eBay has nothing to rate against.
+ *   UNCONFIRMED — a weight exists but it came from an estimate, not a scale.
+ *
+ * Query params (same limit/offset/hasMore shape the import path in this
+ * controller already uses): ?limit=50&offset=0. Response:
+ *   { items, total, counts: { missing, unconfirmed }, limit, offset, hasMore }
+ */
+export const getUnconfirmedWeightListings = async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user?.id;
+
+    if (!userId) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+
+    // Ownership: same organizer lookup setEbayShippingOverride uses.
+    const organizer = await prisma.organizer.findUnique({
+      where: { userId },
+    });
+
+    if (!organizer) {
+      return res.status(404).json({ message: 'Organizer profile not found' });
+    }
+
+    const rawLimit = parseInt(String(req.query.limit ?? '50'), 10);
+    const rawOffset = parseInt(String(req.query.offset ?? '0'), 10);
+    const limit = Number.isFinite(rawLimit) ? Math.min(Math.max(rawLimit, 1), 200) : 50;
+    const offset = Number.isFinite(rawOffset) && rawOffset > 0 ? rawOffset : 0;
+
+    // Live on eBay + never confirmed + actually needs a weight.
+    // The ebayShippingOverride OR is deliberate: `notIn` alone drops NULL rows in
+    // SQL, and NULL (no override set) is the common case that DOES need a weight.
+    const where = {
+      sale: { organizerId: organizer.id },
+      ebayListingId: { not: null },
+      packageConfirmedByOrganizer: false,
+      OR: [
+        { ebayShippingOverride: null },
+        { ebayShippingOverride: { notIn: ['LOCAL_PICKUP_ONLY', 'DONT_LIST'] } },
+      ],
+    };
+
+    const [total, missingCount, rows] = await Promise.all([
+      prisma.item.count({ where }),
+      prisma.item.count({ where: { ...where, packageWeightOz: null } }),
+      prisma.item.findMany({
+        where,
+        // NULL weights first (the worse severity), then oldest listings first.
+        orderBy: [{ packageWeightOz: { sort: 'asc', nulls: 'first' } }, { listedOnEbayAt: 'asc' }],
+        skip: offset,
+        take: limit,
+        select: {
+          id: true,
+          title: true,
+          price: true,
+          photoUrls: true,
+          category: true,
+          tags: true,
+          ebayListingId: true,
+          listedOnEbayAt: true,
+          ebayShippingClassification: true,
+          ebayShippingOverride: true,
+          ebayCategoryId: true,
+          // Parity fields the existing per-item edit form reads back.
+          brand: true,
+          mpn: true,
+          upc: true,
+          isbn: true,
+          ean: true,
+          ebaySubtitle: true,
+          conditionNotes: true,
+          allowBestOffer: true,
+          bestOfferAutoAcceptAmt: true,
+          bestOfferMinimumAmt: true,
+          // Package + provenance
+          packageWeightOz: true,
+          packageLengthIn: true,
+          packageWidthIn: true,
+          packageHeightIn: true,
+          packageType: true,
+          packageEstimateSource: true,
+          packageEstimateConfidence: true,
+          packageConfirmedByOrganizer: true,
+        },
+      }),
+    ]);
+
+    const items = rows.map((item: any) => ({
+      ...item,
+      packageLengthIn: item.packageLengthIn != null ? Number(item.packageLengthIn) : null,
+      packageWidthIn: item.packageWidthIn != null ? Number(item.packageWidthIn) : null,
+      packageHeightIn: item.packageHeightIn != null ? Number(item.packageHeightIn) : null,
+      packageEstimateConfidence:
+        item.packageEstimateConfidence != null ? Number(item.packageEstimateConfidence) : null,
+      bestOfferAutoAcceptAmt:
+        item.bestOfferAutoAcceptAmt != null ? Number(item.bestOfferAutoAcceptAmt) : null,
+      bestOfferMinimumAmt:
+        item.bestOfferMinimumAmt != null ? Number(item.bestOfferMinimumAmt) : null,
+      price: item.price != null ? Number(item.price) : null,
+      effectiveShipping: item.ebayShippingOverride || classifyEbayShipping(item.category, item.tags),
+      // Two severities. MISSING is the worse one: eBay has no weight at all.
+      weightStatus: item.packageWeightOz == null ? 'MISSING' : 'UNCONFIRMED',
+      // Never pre-fill a guessed weight here. An estimate is what put these
+      // listings in this queue; the organizer types the real number.
+      packageEstimate: null,
+    }));
+
+    return res.json({
+      items,
+      total,
+      counts: {
+        missing: missingCount,
+        unconfirmed: total - missingCount,
+      },
+      limit,
+      offset,
+      hasMore: offset + items.length < total,
+    });
+  } catch (err: any) {
+    console.error('[eBay] getUnconfirmedWeightListings error:', err.message);
+    return res.status(500).json({ message: 'Failed to load listings that need a weight check' });
+  }
+};
+
+/**
  * Checks all active eBay listings for a given organizer and clears
  * ebayListingId/listedOnEbayAt/ebayOfferId for any listings that have ENDED on eBay.
  * Uses Trading API GetItem (individual calls, still supported, no OAuth required).

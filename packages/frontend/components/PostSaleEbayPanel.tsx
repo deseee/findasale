@@ -518,7 +518,7 @@ const EbayEditForm: React.FC<{
   );
 };
 
-export const PostSaleEbayPanel: React.FC<PostSaleEbayPanelProps> = ({ saleId }) => {
+const PostSaleEbayUnsoldSection: React.FC<PostSaleEbayPanelProps> = ({ saleId }) => {
   const { showToast } = useToast();
   const { tier } = useOrganizerTier();
   const queryClient = useQueryClient();
@@ -852,3 +852,271 @@ export const PostSaleEbayPanel: React.FC<PostSaleEbayPanelProps> = ({ saleId }) 
     </div>
   );
 };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Weight review queue
+//
+// Listings that went live on eBay before publishing required a confirmed weight.
+// They are still out there charging buyers a shipping price built from a guess.
+// This section lists them so the organizer can check each one. Nothing is sent
+// to eBay from here — the organizer saves each item through the same
+// "Save eBay Details" form used elsewhere in this panel, which is what marks the
+// package confirmed.
+// ─────────────────────────────────────────────────────────────────────────────
+
+type WeightStatus = 'MISSING' | 'UNCONFIRMED';
+
+interface WeightReviewItem extends UnsoldItem {
+  weightStatus: WeightStatus;
+  listedOnEbayAt?: string | null;
+}
+
+interface WeightReviewResponse {
+  items: WeightReviewItem[];
+  total: number;
+  counts: { missing: number; unconfirmed: number };
+  limit: number;
+  offset: number;
+  hasMore: boolean;
+}
+
+const REVIEW_PAGE_SIZE = 25;
+
+/** The two severities read very differently, so they get their own chip. */
+const WeightStatusChip: React.FC<{ status: WeightStatus }> = ({ status }) => {
+  if (status === 'MISSING') {
+    return (
+      <span className="inline-block px-2 py-0.5 rounded text-[11px] font-semibold whitespace-nowrap bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-200">
+        No weight
+      </span>
+    );
+  }
+  return (
+    <span className="inline-block px-2 py-0.5 rounded text-[11px] font-semibold whitespace-nowrap bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-200">
+      Guessed weight
+    </span>
+  );
+};
+
+export const EbayWeightReviewQueue: React.FC<{ saleId?: string }> = ({ saleId }) => {
+  const { showToast } = useToast();
+  const queryClient = useQueryClient();
+  const [expandedItem, setExpandedItem] = useState<string | null>(null);
+  const [savingItemId, setSavingItemId] = useState<string | null>(null);
+  const [pageSize, setPageSize] = useState(REVIEW_PAGE_SIZE);
+
+  const { data, isLoading, isError, refetch } = useQuery({
+    queryKey: ['ebay-weight-review', pageSize],
+    queryFn: async () => {
+      const response = await api.get(
+        `/ebay/organizer/unconfirmed-weight-listings?limit=${pageSize}&offset=0`
+      );
+      return response.data as WeightReviewResponse;
+    },
+  });
+
+  // Same per-item confirm the rest of this panel uses: PUT /items/:id with
+  // packageConfirmedByOrganizer + packageEstimateSource ORGANIZER.
+  const confirmMutation = useMutation({
+    mutationFn: async ({ itemId, data: body }: { itemId: string; data: EbayPhaseB }) => {
+      return api.put(`/items/${itemId}`, body);
+    },
+    onSuccess: () => {
+      showToast('Shipping details confirmed', 'success');
+      setSavingItemId(null);
+      setExpandedItem(null);
+      queryClient.invalidateQueries({ queryKey: ['ebay-weight-review'] });
+      if (saleId) {
+        queryClient.invalidateQueries({ queryKey: ['unsold-items', saleId] });
+      }
+    },
+    onError: (error: any) => {
+      showToast(error?.response?.data?.message || 'Could not save the shipping details', 'error');
+      setSavingItemId(null);
+    },
+  });
+
+  const cardClass =
+    'bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-warm-200 dark:border-gray-700 p-4 sm:p-6 mt-8';
+
+  if (isLoading) {
+    return (
+      <div className={cardClass} aria-busy="true">
+        <div className="animate-pulse">
+          <div className="h-6 bg-gray-200 dark:bg-gray-700 rounded w-2/3 mb-4"></div>
+          <div className="space-y-3">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="h-16 bg-gray-100 dark:bg-gray-700 rounded"></div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className={cardClass}>
+        <h2 className="text-lg sm:text-xl font-bold text-warm-900 dark:text-warm-100 mb-2">
+          Listings that need a weight check
+        </h2>
+        <p className="text-red-600 dark:text-red-400 text-sm mb-3">
+          We could not load this list right now.
+        </p>
+        <button
+          type="button"
+          onClick={() => refetch()}
+          className="py-2 px-4 rounded font-medium text-sm bg-warm-200 dark:bg-gray-700 text-warm-900 dark:text-warm-100 hover:bg-warm-300 dark:hover:bg-gray-600 transition-colors"
+        >
+          Try again
+        </button>
+      </div>
+    );
+  }
+
+  const items = data?.items ?? [];
+  const total = data?.total ?? 0;
+  const missing = data?.counts?.missing ?? 0;
+  const guessed = data?.counts?.unconfirmed ?? 0;
+
+  if (total === 0) {
+    return (
+      <div className={cardClass}>
+        <h2 className="text-lg sm:text-xl font-bold text-warm-900 dark:text-warm-100 mb-2">
+          Listings that need a weight check
+        </h2>
+        <p className="text-warm-700 dark:text-warm-300 text-center py-4 font-semibold">
+          Nothing to review. Every live eBay listing has a weight you confirmed.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className={cardClass}>
+      <h2 className="text-lg sm:text-xl font-bold text-warm-900 dark:text-warm-100 mb-1">
+        {total} live eBay listing{total !== 1 ? 's' : ''} need{total === 1 ? 's' : ''} a weight check
+      </h2>
+      <p className="text-sm text-warm-600 dark:text-warm-400 mb-3">
+        These went live before we started asking you to confirm the weight, so eBay may be charging
+        buyers the wrong shipping. Check each one, put in the real weight and box size, and save.
+        Nothing is sent to eBay until you save.
+      </p>
+
+      {/* Severity counts — the two problems are not the same */}
+      <div className="flex flex-wrap gap-2 mb-4">
+        {missing > 0 && (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-semibold bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-200">
+            {missing} with no weight at all
+          </span>
+        )}
+        {guessed > 0 && (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-semibold bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-200">
+            {guessed} with a weight we guessed
+          </span>
+        )}
+      </div>
+
+      <ul className="space-y-3 list-none p-0 m-0">
+        {items.map((item) => {
+          const isEditing = expandedItem === item.id;
+          return (
+            <li key={item.id}>
+              <div
+                className={`flex flex-col sm:flex-row sm:items-start gap-3 p-3 sm:p-4 rounded-lg border ${
+                  item.weightStatus === 'MISSING'
+                    ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800'
+                    : 'bg-warm-50 dark:bg-gray-700 border-warm-200 dark:border-gray-600'
+                }`}
+              >
+                <div className="flex gap-3 flex-1 min-w-0">
+                  <div className="w-14 h-14 flex-shrink-0 bg-gray-100 dark:bg-gray-600 rounded overflow-hidden">
+                    {item.photoUrls?.[0] && (
+                      <img
+                        src={item.photoUrls[0]}
+                        alt={item.title}
+                        className="w-full h-full object-cover"
+                      />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-semibold text-warm-900 dark:text-warm-100 line-clamp-2 break-words">
+                      {item.title}
+                    </h3>
+                    <div className="flex flex-wrap items-center gap-2 mt-1">
+                      <WeightStatusChip status={item.weightStatus} />
+                      <span className="text-xs text-warm-600 dark:text-warm-400">
+                        {item.weightStatus === 'MISSING'
+                          ? 'eBay has no weight for this one'
+                          : `Currently ${item.packageWeightOz} oz`}
+                      </span>
+                    </div>
+                    {item.packageEstimateSource && item.weightStatus === 'UNCONFIRMED' && (
+                      <p className="text-xs text-warm-600 dark:text-warm-400 mt-0.5 break-words">
+                        Where that number came from: {describeEstimateSource(item.packageEstimateSource)}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex-shrink-0 sm:pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setExpandedItem(isEditing ? null : item.id)}
+                    className="w-full sm:w-auto text-sm px-3 py-2 rounded bg-warm-200 dark:bg-warm-700 text-warm-900 dark:text-warm-100 hover:bg-warm-300 dark:hover:bg-warm-600 transition-colors font-medium"
+                  >
+                    {isEditing ? 'Close' : 'Check weight'}
+                  </button>
+                </div>
+              </div>
+
+              {isEditing && (
+                <EbayEditForm
+                  item={item}
+                  onSave={(itemId, body) => {
+                    setSavingItemId(itemId);
+                    confirmMutation.mutate({ itemId, data: body });
+                  }}
+                  isSaving={savingItemId === item.id}
+                />
+              )}
+            </li>
+          );
+        })}
+      </ul>
+
+      {data?.hasMore && (
+        <button
+          type="button"
+          onClick={() => setPageSize((n) => n + REVIEW_PAGE_SIZE)}
+          className="mt-4 w-full py-2 px-4 rounded font-medium text-sm bg-warm-200 dark:bg-gray-700 text-warm-900 dark:text-warm-100 hover:bg-warm-300 dark:hover:bg-gray-600 transition-colors"
+        >
+          Show more ({items.length} of {total})
+        </button>
+      )}
+    </div>
+  );
+};
+
+/** Plain-English version of packageEstimateSource for a non-technical organizer. */
+function describeEstimateSource(source: string): string {
+  switch (source) {
+    case 'ORGANIZER':
+      return 'you entered it';
+    case 'CATEGORY':
+      return 'a typical weight for this kind of item';
+    case 'KEYWORD':
+      return 'a typical weight matched from the title';
+    case 'SEED':
+      return 'a starting default, not this item';
+    default:
+      return 'an automatic estimate, not a scale';
+  }
+}
+
+export const PostSaleEbayPanel: React.FC<PostSaleEbayPanelProps> = ({ saleId }) => (
+  <>
+    <EbayWeightReviewQueue saleId={saleId} />
+    <PostSaleEbayUnsoldSection saleId={saleId} />
+  </>
+);

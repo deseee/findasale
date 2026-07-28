@@ -58,10 +58,16 @@ export const requireBoothTokenOrTeamMember = () => {
       if (boothToken && typeof boothToken === 'string') {
         const booth = await prisma.vendorBooth.findUnique({
           where: { boothToken },
-          select: { id: true, hubId: true, status: true },
+          select: { id: true, hubId: true, status: true, deletedAt: true },
         });
 
-        if (!booth || booth.hubId !== hubId) {
+        // A soft-deleted booth (removed from the hub via deleteVendorBooth, which sets
+        // deletedAt) is treated exactly like a booth that does not exist -- same 401,
+        // same message, so no distinct "was deleted" signal is leaked. Mirrors the
+        // deletedAt: null condition claimVendorBooth already enforces
+        // (vendorBoothController.ts:307). Without this, a removed booth kept cashier
+        // rights for as long as its status row read CONFIRMED.
+        if (!booth || booth.deletedAt || booth.hubId !== hubId) {
           return res.status(401).json({ message: 'Invalid booth token' });
         }
         if (booth.status !== 'CONFIRMED') {

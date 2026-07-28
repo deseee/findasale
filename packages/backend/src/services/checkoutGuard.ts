@@ -427,6 +427,24 @@ export async function assertBoothCartCheckoutAllowed({
   // has none to check — that is expected and fine. This is an explicit, documented
   // no-op, not a silent skip: the cashier self-dealing check above already ran
   // unconditionally and is NOT affected by buyerUserId being absent.
+  //
+  // 2026-07-28 (findasale-hacker fix-and-reverify pass) — STATE OF THIS PARAMETER:
+  // vendorBoothCartController.ts used to fill buyerUserId from req.body on a
+  // CASHIER-authenticated call, unvalidated against any session. That has been removed
+  // (P0): the cashier could omit the field to skip everything below, or name any account
+  // to have the sale attributed to it. Every booth-cart caller now passes no buyer id at
+  // all, so in production this early return is ALWAYS taken and SELF_DEALING /
+  // SHARED_DEVICE_FP / SHARED_CARD_FP below are dead for booth carts. That is honest
+  // (there is no shopper session at a booth POS) but it is a REAL COVERAGE GAP, not a
+  // fix: only the cashier self-dealing check above protects booth carts today.
+  // Closing it needs a buyer-side signal the server can obtain for itself — the shape
+  // already exists in this file: assertGuestCheckoutAllowed (line ~284) compares a
+  // client-collected hashed device fingerprint against protected parties without any
+  // user id, and the post-payment webhook path compares Purchase.buyerCardFingerprint
+  // against User.stripeCardFingerprint. A booth-cart equivalent (device fingerprint from
+  // the shopper's own QR page, and/or the card fingerprint Stripe returns on the QR
+  // rail's SetupIntent PaymentMethod) is the correct next step. Product decision, not a
+  // silent code change: flagged to Patrick 2026-07-28.
   if (!buyerUserId) {
     return;
   }

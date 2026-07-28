@@ -1175,6 +1175,18 @@ model Item {
   // itemController, not a DB CHECK constraint per ADR-015 Consequences).
   vendorBoothId                   String? // FK to VendorBooth model (TEAMS, flea market hubs)
   vendorBooth                     VendorBooth?            @relation("VendorBoothItems", fields: [vendorBoothId], references: [id], onDelete: SetNull)
+  // P0 cart-scope fix (findasale-hacker fix-and-reverify pass, 2026-07-28): which
+  // BoothCartTransaction currently holds this item's RESERVED reservation. Before this
+  // field, resolveBoothLegItems() in vendorBoothCartController.ts could only ask "is this
+  // item RESERVED and tagged to this booth?" -- which is true of EVERY live cart on the
+  // hub at once, so two concurrent carts each summed the other's items into their own
+  // per-booth leg (over-charging the shopper and inflating both the platform fee and the
+  // hub owner's revenue-share cut), and cancelling one cart released the other's items.
+  // Written by addBoothCartItems alongside status=RESERVED, cleared by cancelBoothCart
+  // when the items go back to AVAILABLE. Nullable + SetNull: purely additive, and no
+  // non-booth-cart flow ever populates it.
+  boothCartTransactionId          String?
+  boothCartTransaction            BoothCartTransaction?   @relation("BoothCartReservedItems", fields: [boothCartTransactionId], references: [id], onDelete: SetNull)
   // #310: Color-tagged Discount Rules (TEAMS)
   tagColor                        String? // Hex or label e.g. "#EF4444" — ties to active DiscountRule
   // #311: Multi-Location Inventory (TEAMS)
@@ -1329,6 +1341,7 @@ model Item {
   @@index([locationId]) // #311: Multi-Location filter
   @@index([consignorId]) // #309: Consignor item lookup
   @@index([vendorBoothId]) // Vendor Booth Payments 2026-07-07: booth item lookup
+  @@index([boothCartTransactionId]) // 2026-07-28: cart-scoped reservation lookup (resolveBoothLegItems / cancelBoothCart)
   @@index([tagColor]) // #310: Discount rule color tag lookup
   @@index([saleId])
   @@index([saleId, status]) // Sentry slow query: SELECT Item WHERE saleId+status (1351ms) — public item browse + POS organizer item search with optional status filter
@@ -5614,6 +5627,11 @@ model BoothCartTransaction {
 
   purchases Purchase[]
   legs      BoothCartLeg[]
+  // Items currently RESERVED against this cart (2026-07-28 cart-scope fix) -- the back
+  // side of Item.boothCartTransactionId. Empty once the cart is cancelled (items released)
+  // or for any cart whose items were captured (they become SOLD; Purchase rows above are
+  // the durable record of what this cart sold).
+  reservedItems Item[] @relation("BoothCartReservedItems")
 
   @@index([hubId])
   @@index([cashierTeamMemberId])
@@ -5655,11 +5673,36 @@ model BoothCartLeg {
   hubOwnerShareAmount Decimal? @db.Decimal(10, 2)
   stripeTransferId    String?
 
+  // P1 refund/transfer race fix (2026-07-28). The hub-owner Transfer fires AFTER capture,
+  // best-effort, so a refund can land while stripeTransferId still holds the 'CLAIMING'
+  // sentinel. The refund path then had nothing real to reverse and silently skipped the
+  // clawback, leaving the hub owner paid out of platform funds. These two cumulative
+  // watermarks make the obligation DURABLE instead of order-dependent:
+  //   hubOwnerReversalOwedCents  -- cents the platform is owed back off this leg's Transfer,
+  //                                 incremented by every refund REGARDLESS of transfer state.
+  //   hubOwnerReversalDoneCents  -- cents actually reversed on Stripe. Doubles as the
+  //                                 compare-and-swap claim for a settlement in flight (same
+  //                                 CAS idiom as the stripeTransferId 'CLAIMING' claim and
+  //                                 the Purchase PAID->REFUNDING claim).
+  // Whichever of (refund, transfer) finishes second calls settleHubOwnerReversalForLeg and
+  // drains owed-minus-done, so neither ordering can lose money.
+  hubOwnerReversalOwedCents Int? @default(0)
+  hubOwnerReversalDoneCents Int? @default(0)
+
+  // Durable, queryable record of a FAILED hub-owner Transfer. Previously the catch block
+  // reverted the claim to null and only console.error'd -- an unpaid hub owner with no trace
+  // in the database. Reconciliation query:
+  //   SELECT * FROM "BoothCartLeg"
+  //   WHERE "hubOwnerTransferFailedAt" IS NOT NULL AND "stripeTransferId" IS NULL;
+  hubOwnerTransferFailedAt DateTime?
+  hubOwnerTransferError    String?
+
   @@index([cartTransactionId])
   @@index([vendorBoothId])
   @@index([stripePaymentIntentId])
   @@index([status])
   @@index([stripeTransferId])
+  @@index([hubOwnerTransferFailedAt])
 }
 
 model VendorBoothSettlementBatch {

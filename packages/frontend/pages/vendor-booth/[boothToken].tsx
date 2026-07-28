@@ -259,30 +259,46 @@ const VendorBoothTokenPage: React.FC = () => {
                     </div>
 
                     <div className="mb-6">
-                      <h2 className="text-sm font-bold text-warm-700 dark:text-warm-300 uppercase mb-3">Payout History</h2>
+                      <h2 className="text-sm font-bold text-warm-700 dark:text-warm-300 uppercase mb-3">Sales History</h2>
                       {payoutInfo.payouts.length === 0 ? (
-                        <p className="text-sm text-warm-500 dark:text-warm-400">No payouts yet</p>
+                        <p className="text-sm text-warm-500 dark:text-warm-400">No sales recorded yet</p>
                       ) : (
                         <>
-                        {/* These rows are VendorBoothPayout.netPayout, which is gross sales
-                            minus booth rent only. Post-ADR-090 Phase 2 the vendor is paid
-                            directly at capture time (minus platform fee + revenue share) and
-                            rent is billed separately by vendorBoothFeeBillingCron.ts, so the
-                            figure is a reconciliation record, not a transfer. Labelled here so
-                            it cannot be read as "what you were paid." */}
+                        {/* Renders VendorBoothPayout.totalSales (gross sales for the period),
+                            NOT netPayout. netPayout is still returned by the API
+                            (vendorBoothController.ts getVendorBoothPayouts) and is deliberately
+                            left untouched for back-compat, but it is not a true figure for a
+                            vendor: it subtracts booth rent (billed separately by
+                            vendorBoothFeeBillingCron.ts) and subtracts neither the platform fee
+                            nor the revenue share, both of which are taken at capture time
+                            (vendorBoothCartController.ts computeLegFeeSplit :84-111). totalSales
+                            is the only stored figure here that is true on its own, so it is what
+                            the vendor sees. Approved product decision, not a silent swap. */}
                         <p className="text-xs text-warm-500 dark:text-warm-400 mb-2">
-                          These figures are a reconciliation record, not a payment. Your sale proceeds
-                          already arrived in your account at checkout, minus the platform fee and revenue
-                          share listed above. Booth rent is billed separately.
+                          This is the total that sold at your booth in each period, before fees. It is not
+                          a deposit. Your money already arrived in your account at checkout, after the{' '}
+                          {payoutInfo.platformFeePercent}% platform fee and the {payoutInfo.revenueSharePercent}%
+                          revenue share listed above were taken out. Booth rent is billed separately.
+                          {Number(payoutInfo.boothFee) > 0 ? ' See Booth Rent Auto-Pay below.' : ''}
                         </p>
                         <ul className="divide-y divide-warm-200 dark:divide-gray-700">
                           {payoutInfo.payouts.map((p) => (
                             <li key={p.id} className="py-2 flex justify-between text-sm">
                               <span className="text-warm-700 dark:text-warm-300">{p.status}</span>
-                              <span className="font-bold text-warm-900 dark:text-white">${Number(p.netPayout).toFixed(2)}</span>
+                              <span className="text-right">
+                                <span className="block font-bold text-warm-900 dark:text-white">
+                                  ${Number(p.totalSales).toFixed(2)}
+                                </span>
+                                <span className="block text-xs text-warm-500 dark:text-warm-400">Total sold</span>
+                              </span>
                             </li>
                           ))}
                         </ul>
+                        <p className="text-xs text-warm-500 dark:text-warm-400 mt-2">
+                          For every $100 that sells at your booth, about $
+                          {Math.max(0, 100 - payoutInfo.platformFeePercent - payoutInfo.revenueSharePercent).toFixed(2)}{' '}
+                          reaches your account.
+                        </p>
                         </>
                       )}
                     </div>

@@ -128,8 +128,14 @@ export const getHub = async (req: Request, res: Response) => {
   try {
     const { slug } = req.params;
 
-    const hub = await prisma.saleHub.findUnique({
-      where: { slug },
+    // isActive: true matches what discoverHubs already filters on above (:51, :91).
+    // deleteHub soft-deletes by setting isActive: false (:274) -- SaleHub has no
+    // deletedAt column (schema.prisma:3043-3067), so isActive IS the valid-state flag.
+    // findFirst (not findUnique) because slug alone is the unique key; a deactivated
+    // hub falls through to the SAME 404 a nonexistent slug gets, so this public
+    // endpoint never distinguishes "deactivated" from "does not exist".
+    const hub = await prisma.saleHub.findFirst({
+      where: { slug, isActive: true },
       include: {
         _count: { select: { vendorBooths: true } },
         organizer: { select: { businessName: true, profilePhoto: true } },

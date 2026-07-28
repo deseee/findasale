@@ -1,6 +1,32 @@
 /**
  * Feature #40+#44: Sale Hubs & Neighborhood Sale Day
  * React Query hooks for hub operations
+ *
+ * ---------------------------------------------------------------------------
+ * PARKED, NOT DEAD (recorded 2026-07-28, Patrick decision: KEEP AND DOCUMENT)
+ * ---------------------------------------------------------------------------
+ * `useNearbyHubs` and `useHub` currently have ZERO callers in this repo. That is
+ * intentional and must not be read as dead code:
+ *
+ *  - Their only callers were the public `/hubs` pages, deleted in commit
+ *    `69b79dee` at S512.
+ *  - `useHub(slug)` calls `GET /api/hubs/:slug`. That is exactly the public hub
+ *    landing page named in the ADR-014 Target State table
+ *    (`claude_docs/architecture/ADR-014-hubs-flea-market-repurpose.md:36`, was
+ *    `:35` before the 2026-07-28 Amendment A header lines were added),
+ *    backed by the LOCKED S436 entry at `claude_docs/decisions-log.md:94`.
+ *    Amendment A (ADR-014:44) narrows that page to venue / event date / map /
+ *    booth count / CONFIRMED-vendor names only.
+ *  - Building that public landing page is now approved (ADR-014 amendment,
+ *    2026-07-28). Deleting these hooks would mean rebuilding them within weeks.
+ *
+ * Do not remove either hook, and do not change its signature or return shape,
+ * without first re-reading ADR-014.
+ *
+ * SEPARATE, UNDECIDED CASE: `useMyHubs` (:194) and `useDeleteHub` (:264) are
+ * also caller-free right now. No decision has been made about them — they are
+ * NOT covered by the "parked" ruling above and still need their own review.
+ * ---------------------------------------------------------------------------
  */
 
 import { useQuery, useMutation, QueryKey, UseQueryOptions } from '@tanstack/react-query';
@@ -34,7 +60,11 @@ export interface HubDetailResponse {
 }
 
 /**
- * Fetch nearby hubs based on user location
+ * Fetch nearby hubs based on user location.
+ *
+ * PARKED — no callers since the public `/hubs` pages were deleted in `69b79dee`
+ * (S512). Retained for the approved ADR-014 public hub landing work; see the
+ * file header. Behavior and signature are frozen — do not "clean up".
  */
 export const useNearbyHubs = (
   lat?: number,
@@ -78,7 +108,12 @@ export const useNearbyHubs = (
 };
 
 /**
- * Fetch hub landing page data by slug
+ * Fetch hub landing page data by slug (`GET /api/hubs/:slug`).
+ *
+ * PARKED — no callers since the public `/hubs` pages were deleted in `69b79dee`
+ * (S512). This is the exact endpoint behind the public landing page in
+ * ADR-014's Target State table (ADR-014:36, LOCKED via decisions-log.md:94),
+ * which is now approved to be built. Behavior and signature are frozen.
  */
 export const useHub = (slug: string, options?: Partial<UseQueryOptions<HubDetailResponse>>) => {
   const queryKey: QueryKey = ['hub', slug];

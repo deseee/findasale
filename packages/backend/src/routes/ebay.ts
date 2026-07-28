@@ -14,6 +14,7 @@ import {
   handleEbayNotificationVerification,
   handleEbayNotification,
   getUnsoldItems,
+  getUnconfirmedWeightListings,
   setEbayShippingOverride,
   syncEndedListingsForOrganizer,
   refreshEbayAccessToken,
@@ -100,6 +101,11 @@ router.post('/items/:itemId/publish', authenticate, publishItemOffer);
 // Feature #244 Phase 3: Post-sale eBay push — unsold items + shipping overrides
 router.get('/organizer/sales/:saleId/unsold-items', authenticate, getUnsoldItems);
 router.patch('/organizer/items/:itemId/ebay-shipping', authenticate, setEbayShippingOverride);
+
+// Review queue: this organizer's LIVE eBay listings whose shipping weight was
+// never confirmed. Read-only — no eBay API calls, nothing is revised. The
+// organizer confirms each item through the existing PUT /api/items/:id save.
+router.get('/organizer/unconfirmed-weight-listings', authenticate, requireOrganizer, getUnconfirmedWeightListings);
 
 // Feature #244 Phase 2b: eBay Inventory Import
 // Import eBay inventory items into FindA.Sale

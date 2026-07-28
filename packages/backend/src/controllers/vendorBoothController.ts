@@ -525,6 +525,15 @@ export const getVendorBoothPayouts = async (req: AuthRequest, res: Response) => 
     // tier-based rate (getPlatformFeeRate), NOT a hardcoded number: every hub route is
     // requireTier('TEAMS') (routes/vendorBooth.ts), so in practice this is 8%, and it is
     // exactly what computeLegFeeSplit charges at capture time.
+    //
+    // Response shape note (2026-07-28, approved product decision): the vendor page
+    // pages/vendor-booth/[boothToken].tsx renders `totalSales` (true gross for the
+    // period) as its headline figure, NOT `netPayout`. netPayout is retained in this
+    // payload for back-compat only: it is gross minus booth rent, which is neither what
+    // the vendor received (rent is billed separately by vendorBoothFeeBillingCron.ts, and
+    // the platform fee + revenue share were already taken at capture) nor what they owe.
+    // See vendorBoothSettlementController.ts buildBoothSettlementLines for the full note.
+    // Do not re-point the UI at netPayout.
     return res.status(200).json({
       boothFee: booth.boothFee.toString(),
       revenueSharePercent: booth.revenueSharePercent,
