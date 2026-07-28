@@ -16,6 +16,7 @@
  *   3. notifyVendorBoothDecision           rejected / cancelled -> vendor
  *   4. notifyOrganizerBoothStripeConnected vendor connects      -> hub organizer
  *   5. notifyBoothRentChargeFailed         rent charge fails    -> vendor AND hub organizer
+ *   6. notifyBoothRentCharged              rent charge succeeds -> vendor
  *
  * Each one does TWO things: an in-app notification AND an email.
  *
@@ -595,5 +596,106 @@ export async function notifyBoothRentChargeFailed(chargeId: string): Promise<Boo
   } catch (error) {
     console.error(`[booth-lifecycle] notifyBoothRentChargeFailed failed for charge ${chargeId}:`, error);
     return { sent: false, reason: 'Could not send the rent failure notification' };
+  }
+}
+
+/**
+ * 6. A booth rent charge SUCCEEDED -> tell the vendor. (Gap found 2026-07-28.)
+ *
+ * The twin of notifyBoothRentChargeFailed above, and the one that was still missing.
+ * jobs/vendorBoothFeeBillingCron.ts charges the vendor's saved card off_session with
+ * confirm: true and no receipt_email, then Transfers the full amount to the hub owner and
+ * writes status COMPLETED. Real money left a real person's card with no message of any kind
+ * from anybody: not from us, not from Stripe, not from the organizer. A vendor's first
+ * knowledge of a recurring rent charge should not be their bank statement.
+ *
+ * Vendor only. The hub owner is not emailed on success: rent arriving as agreed is not an
+ * event they need a message about, and the failure twin already covers the case where it
+ * does not arrive.
+ *
+ * IDEMPOTENCY without a new column, same reasoning style as the failure twin. The caller
+ * fires this from inside the `claim.count === 1` branch of the cron's compare-and-swap on
+ * VendorBoothFeeCharge.stripeTransferId (null -> 'CLAIMING'), which can succeed at most once
+ * for a given charge row, and the charge row itself is created once per booth per period
+ * behind the @@unique([vendorBoothId, periodStart, periodEnd]) constraint. So a charge can
+ * reach COMPLETED exactly once and this can be reached exactly once.
+ */
+export async function notifyBoothRentCharged(chargeId: string): Promise<BoothNotifyResult> {
+  try {
+    const charge = await prisma.vendorBoothFeeCharge.findUnique({
+      where: { id: chargeId },
+      select: {
+        id: true,
+        amountCents: true,
+        periodStart: true,
+        periodEnd: true,
+        vendorBooth: {
+          select: {
+            id: true,
+            boothNumber: true,
+            vendorName: true,
+            vendorEmail: true,
+            userId: true,
+            boothToken: true,
+            user: { select: { email: true } },
+            hub: { select: { name: true, organizer: { select: { businessName: true } } } },
+          },
+        },
+      },
+    });
+
+    if (!charge || !charge.vendorBooth) return { sent: false, reason: 'Charge not found' };
+
+    const booth = charge.vendorBooth;
+    const amount = (charge.amountCents / 100).toFixed(2);
+    const period = `${charge.periodStart.toISOString().slice(0, 10)} to ${charge.periodEnd.toISOString().slice(0, 10)}`;
+    const hubNameRaw = booth.hub?.name || 'the market';
+    const organizerNameRaw = booth.hub?.organizer?.businessName || 'the market organizer';
+    const boothPath = `/vendor-booth/${booth.boothToken}`;
+
+    if (booth.userId) {
+      await createNotification(
+        booth.userId,
+        'vendor_booth',
+        `Booth rent of $${amount} was paid`,
+        `The $${amount} rent for Booth ${booth.boothNumber} at ${hubNameRaw} was charged to your card on file for ${period}.`,
+        boothPath,
+        'OPERATIONAL'
+      );
+    }
+
+    const vendorEmail = booth.user?.email || booth.vendorEmail;
+    if (!vendorEmail) return { sent: false, reason: 'No vendor email on file' };
+
+    const vendorName = escapeHtml(booth.vendorName);
+    const boothNumber = escapeHtml(booth.boothNumber);
+    const hubName = escapeHtml(hubNameRaw);
+    const organizerName = escapeHtml(organizerNameRaw);
+    const boothUrl = `${FRONTEND_URL}${boothPath}`;
+
+    const html = buildEmail({
+      preheader: `Your $${amount} booth rent for ${period} was paid.`,
+      headline: `Your booth rent was paid`,
+      body: `<p>Hi ${vendorName},</p>
+        <p>We charged the card you have on file $${amount} for Booth ${boothNumber} rent at ${hubName}, covering ${period}. It went through.</p>
+        <p>That money goes to ${organizerName}, who runs ${hubName}. FindA.Sale does not take a cut of booth rent.</p>
+        <p>Nothing is needed from you. This is a receipt, not a bill.</p>
+        <p>To change the card we charge, open your booth page.</p>
+        <p>If the button does not work, copy this link into your browser:<br />${boothUrl}</p>
+        <p>If this charge does not look right, contact ${organizerName} at ${hubName}.</p>
+        <p>The FindA.Sale Team</p>`,
+      ctaText: 'View Your Booth',
+      ctaUrl: boothUrl,
+    });
+
+    return await deliverEmail(
+      vendorEmail,
+      `Booth ${booth.boothNumber} rent of $${amount} was paid`,
+      html,
+      'rent-charged'
+    );
+  } catch (error) {
+    console.error(`[booth-lifecycle] notifyBoothRentCharged failed for charge ${chargeId}:`, error);
+    return { sent: false, reason: 'Could not send the rent receipt notification' };
   }
 }
