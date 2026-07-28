@@ -245,6 +245,26 @@ router.post('/setup-organizer', authenticate, async (req: AuthRequest, res: Resp
       })
     ]);
 
+    // S-TIER-RECONCILE: this token previously carried NO `subscriptionTier` claim.
+    // AuthContext.resolveOrganizerTier() no longer falls back to 'SIMPLE', so a token
+    // without the claim leaves the organizer in the UNKNOWN-tier state and
+    // useOrganizerTier.canAccess() returns false for every tier above SIMPLE.
+    // useOrganizerSetup.ts feeds this token straight into login(), so the organizer
+    // landed on the dashboard with paid navigation hidden. Claim block copied from
+    // authController.ts login() (:897) — the `organizer` row is already in hand from
+    // the transaction above, so the tier costs no extra query here.
+    //
+    // Feature #75: lapse state must travel WITH the tier. Shipping subscriptionTier
+    // without subscriptionLapsed would let a lapsed organizer's PRO/TEAMS features
+    // un-gate on the client (AuthContext defaults a missing lapse flag to false).
+    const roleSubscription = await prisma.userRoleSubscription.findFirst({
+      where: { userId: updatedUser.id, role: 'ORGANIZER' },
+    });
+    const subscriptionLapsed =
+      roleSubscription !== null &&
+      roleSubscription.tierLapsedAt !== null &&
+      roleSubscription.tierResumedAt === null;
+
     // Generate fresh JWT with updated roles
     const token = jwt.sign(
       {
@@ -255,6 +275,11 @@ router.post('/setup-organizer', authenticate, async (req: AuthRequest, res: Resp
         roles: updatedUser.roles,
         referralCode: updatedUser.referralCode,
         tokenVersion: updatedUser.tokenVersion,
+        subscriptionTier: organizer?.subscriptionTier ?? 'SIMPLE',
+        subscriptionStatus: organizer?.subscriptionStatus ?? null,
+        subscriptionLapsed: subscriptionLapsed, // Feature #75: Tier lapse state
+        organizerTokenVersion: organizer?.tokenVersion ?? 0,
+        onboardingComplete: organizer?.onboardingComplete ?? false,
         guildXp: updatedUser.guildXp || 0, // Phase 2a: Explorer's Guild XP
       },
       process.env.JWT_SECRET!,

@@ -321,7 +321,16 @@ router.post('/refresh', async (req: AuthRequest, res: Response) => {
         roles: true,
         tokenVersion: true,
         suspendedAt: true,
-        organizer: { select: { tokenVersion: true } },
+        // S-TIER-RECONCILE: subscriptionTier/Status/onboardingComplete added to an
+        // ALREADY-EXECUTING select — no additional query, only extra columns.
+        organizer: {
+          select: {
+            tokenVersion: true,
+            subscriptionTier: true,
+            subscriptionStatus: true,
+            onboardingComplete: true,
+          },
+        },
       },
     });
     if (!freshUser) return res.status(401).json({ error: 'User not found' });
@@ -350,6 +359,29 @@ router.post('/refresh', async (req: AuthRequest, res: Response) => {
       }
     }
 
+    // S-TIER-RECONCILE: the refreshed access token previously carried NO
+    // `subscriptionTier` claim. AuthContext.resolveOrganizerTier() no longer falls
+    // back to 'SIMPLE', so any consumer that decodes this token sees the tier as
+    // UNKNOWN and useOrganizerTier.canAccess() closes every gate above SIMPLE.
+    // Claim block copied from authController.ts login() (:897) so a refreshed token
+    // is tier-equivalent to a freshly-logged-in one.
+    //
+    // Feature #75: lapse state must be minted alongside the tier. Emitting
+    // subscriptionTier on its own would let a lapsed organizer's paid features
+    // un-gate on the client, because a missing lapse flag defaults to false there.
+    // This is the ONE extra query this handler adds, and only for organizers.
+    let subscriptionLapsed = false;
+    if (isOrganizer) {
+      const roleSubscription = await prisma.userRoleSubscription.findFirst({
+        where: { userId: payload.id, role: 'ORGANIZER' },
+        select: { tierLapsedAt: true, tierResumedAt: true },
+      });
+      subscriptionLapsed =
+        roleSubscription !== null &&
+        roleSubscription.tierLapsedAt !== null &&
+        roleSubscription.tierResumedAt === null;
+    }
+
     const newAccessToken = jwt.sign(
       {
         id: payload.id,
@@ -358,6 +390,10 @@ router.post('/refresh', async (req: AuthRequest, res: Response) => {
         roles: freshUser.roles || [freshUser.role],
         tokenVersion: freshUser.tokenVersion,
         organizerTokenVersion: freshUser.organizer?.tokenVersion ?? 0,
+        subscriptionTier: freshUser.organizer?.subscriptionTier ?? 'SIMPLE',
+        subscriptionStatus: freshUser.organizer?.subscriptionStatus ?? null,
+        subscriptionLapsed: subscriptionLapsed, // Feature #75: Tier lapse state
+        onboardingComplete: freshUser.organizer?.onboardingComplete ?? false,
       },
       jwtSecret,
       { expiresIn: '1h' }

@@ -67,6 +67,7 @@ import { useNetworkQuality } from '../hooks/useNetworkQuality';
 import useUnreadMessages from '../hooks/useUnreadMessages';
 import useXpProfile from '../hooks/useXpProfile';
 import { SectionHeader, TierGatedNavLink } from './TierGatedNav';
+import { teamsNavForSurface, teamsNavGroupForSurface, SIDEBAR_RETAIL_TIER } from '../lib/organizerNav';
 import BottomTabNav from './BottomTabNav';
 import NotificationBell from './NotificationBell';
 import ThemeToggle from './ThemeToggle'; // #63: Dark Mode
@@ -453,51 +454,39 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
               <span>Email Digest</span>
             </Link>
 
-            {canAccess('TEAMS') && (
+            {(isTeams || isAdmin) && (
               <>
-                <Link href="/organizer/command-center" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Multi-sale overview dashboard">
-                  <LayoutDashboard size={16} className="text-gray-400" />
-                  <span>Command Center</span>
-                </Link>
+                {teamsNavGroupForSurface('sidebar', 'teams').map(({ id, label, href, icon: Icon, title }) => (
+                  <Link key={id} href={href} className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title={title}>
+                    <Icon size={16} className="text-gray-400" />
+                    <span>{label}</span>
+                  </Link>
+                ))}
                 <SectionHeader icon={Wrench} label="Developer Tools" />
-                <Link href="/organizer/webhooks" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Send real-time sale events to your own systems">
-                  <Webhook size={16} className="text-gray-500" />
-                  <span>Webhooks</span>
-                </Link>
+                {teamsNavGroupForSurface('sidebar', 'developerTools').map(({ id, label, href, icon: Icon, title }) => (
+                  <Link key={id} href={href} className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title={title}>
+                    <Icon size={16} className="text-gray-500" />
+                    <span>{label}</span>
+                  </Link>
+                ))}
                 <SectionHeader icon={Users} label="Workspace" />
-                <Link href="/organizer/workspace" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Team and member management — TEAMS">
-                  <Users size={16} className="text-gray-500" />
-                  <span>Workspace</span>
-                </Link>
-                <Link href="/organizer/hubs" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Flea market events — TEAMS">
-                  <Store size={16} className="text-gray-500" />
-                  <span>Market Hubs</span>
-                </Link>
+                {teamsNavGroupForSurface('sidebar', 'workspace').map(({ id, label, href, icon: Icon, title }) => (
+                  <Link key={id} href={href} className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title={title}>
+                    <Icon size={16} className="text-gray-500" />
+                    <span>{label}</span>
+                  </Link>
+                ))}
               </>
             )}
-            {canAccess('PRO') && (
+            {canAccess(SIDEBAR_RETAIL_TIER) && (
               <>
                 <SectionHeader icon={Store} label="Retail" />
-                <Link href="/organizer/consignors" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Consignor portal and payouts management — PRO">
-                  <Users size={16} className="text-teal-500" />
-                  <span>Consignors</span>
-                </Link>
-                <Link href="/organizer/color-rules" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Color-tagged discount rules — PRO">
-                  <Tag size={16} className="text-teal-500" />
-                  <span>Color Rules</span>
-                </Link>
-                <Link href="/organizer/locations" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Multi-location inventory view — PRO">
-                  <MapPin size={16} className="text-teal-500" />
-                  <span>Locations</span>
-                </Link>
-                <Link href="/organizer/shopify" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Cross-list items to your Shopify store — PRO">
-                  <ShoppingBag size={16} className="text-teal-500" />
-                  <span>Shopify</span>
-                </Link>
-                <Link href="/organizer/stripe-connect" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Send payouts to consignors — PRO">
-                  <CreditCard size={16} className="text-teal-500" />
-                  <span>Consignor Payouts</span>
-                </Link>
+                {teamsNavGroupForSurface('sidebar', 'retail').map(({ id, label, href, icon: Icon, title }) => (
+                  <Link key={id} href={href} className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title={title}>
+                    <Icon size={16} className="text-teal-500" />
+                    <span>{label}</span>
+                  </Link>
+                ))}
               </>
             )}
 
@@ -1307,40 +1296,23 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                     </button>
                     {mobileTeamsOpen && (
                       <>
-                        <Link href="/organizer/command-center" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                          <LayoutDashboard size={14} className="inline mr-2 text-gray-400" /> Command Center
-                        </Link>
-                        <Link href="/organizer/calendar" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                          <Calendar size={14} className="inline mr-2 text-gray-400" /> Calendar
-                        </Link>
-                        <Link href="/organizer/members" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                          <UserPlus size={14} className="inline mr-2 text-gray-400" /> Team Members
-                        </Link>
-                        <Link href="/organizer/webhooks" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                          <Webhook size={14} className="inline mr-2 text-gray-500" /> Webhooks
-                        </Link>
-                        <Link href="/organizer/workspace" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                          <Network size={14} className="inline mr-2 text-gray-500" /> Workspace
-                        </Link>
-                        <Link href="/organizer/hubs" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                          <Store size={14} className="inline mr-2 text-gray-400" /> Market Hubs
-                        </Link>
-                        {canAccess('PRO') && (
-                          <>
-                            <Link href="/organizer/color-rules" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                              <Tag size={14} className="inline mr-2 text-teal-500" /> Discount Rules
-                            </Link>
-                            <Link href="/organizer/consignors" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                              <Users size={14} className="inline mr-2 text-teal-500" /> Consignors
-                            </Link>
-                            <Link href="/organizer/locations" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                              <MapPin size={14} className="inline mr-2 text-teal-500" /> Locations
-                            </Link>
-                            <Link href="/organizer/shopify" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
-                              <ShoppingBag size={14} className="inline mr-2 text-teal-500" /> Shopify
-                            </Link>
-                          </>
-                        )}
+                        {teamsNavForSurface('mobileMenu').map(({ id, label, href, icon: Icon, group }) => (
+                          <Link
+                            key={id}
+                            href={href}
+                            className={`block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md ${
+                              group === 'retail'
+                                ? 'hover:text-teal-600 dark:hover:text-teal-400'
+                                : 'hover:text-amber-600 dark:hover:text-amber-400'
+                            }`}
+                          >
+                            <Icon
+                              size={14}
+                              className={`inline mr-2 ${group === 'retail' ? 'text-teal-500' : 'text-gray-400'}`}
+                            />{' '}
+                            {label}
+                          </Link>
+                        ))}
                       </>
                     )}
                   </>

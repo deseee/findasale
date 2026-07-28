@@ -63,6 +63,7 @@ import {
   Wifi,
 } from 'lucide-react';
 import { SectionHeader, TierGatedNavLink } from './TierGatedNav';
+import { teamsNavForSurface } from '../lib/organizerNav';
 import { useShopperCart } from '../hooks/useShopperCart';
 import useXpProfile from '../hooks/useXpProfile';
 import { useCart } from '../context/CartContext';
@@ -817,85 +818,18 @@ const AvatarDropdown: React.FC<AvatarDropdownProps> = ({ onBecomeOrganizer }) =>
                   </button>
                   {teamsOpen && (
                     <>
-                      <Link
-                        href="/organizer/command-center"
-                        className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                        onClick={() => setIsOpen(false)}
-                        title="Multi-sale overview dashboard"
-                      >
-                        <LayoutDashboard size={16} className="text-gray-400" />
-                        <span>Command Center</span>
-                      </Link>
-                      <Link
-                        href="/organizer/calendar"
-                        className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                        onClick={() => setIsOpen(false)}
-                      >
-                        <Calendar size={16} className="text-gray-400" />
-                        <span>Calendar</span>
-                      </Link>
-                      <Link
-                        href="/organizer/members"
-                        className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                        onClick={() => setIsOpen(false)}
-                      >
-                        <UserPlus size={16} className="text-gray-400" />
-                        <span>Team Members</span>
-                      </Link>
-                      <Link
-                        href="/organizer/webhooks"
-                        className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                        onClick={() => setIsOpen(false)}
-                        title="Send real-time sale events to your own systems"
-                      >
-                        <Webhook size={16} className="text-gray-500" />
-                        <span>Webhooks</span>
-                      </Link>
-                      <Link
-                        href="/organizer/workspace"
-                        className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                        onClick={() => setIsOpen(false)}
-                        title="Team and member management — TEAMS"
-                      >
-                        <Network size={16} className="text-gray-500" />
-                        <span>Workspace</span>
-                      </Link>
-                      <Link
-                        href="/organizer/hubs"
-                        className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                        onClick={() => setIsOpen(false)}
-                        title="Flea market events — TEAMS"
-                      >
-                        <Store size={16} className="text-gray-400" />
-                        <span>Market Hubs</span>
-                      </Link>
-                      <Link
-                        href="/organizer/discount-rules"
-                        className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                        onClick={() => setIsOpen(false)}
-                        title="Color-tagged discount rules — TEAMS"
-                      >
-                        <Palette size={16} className="text-gray-400" />
-                        <span>Discount Rules</span>
-                      </Link>
-                      <Link
-                        href="/organizer/consignors"
-                        className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                        onClick={() => setIsOpen(false)}
-                        title="Manage consignors and payouts — TEAMS"
-                      >
-                        <DollarSign size={16} className="text-gray-400" />
-                        <span>Consignors</span>
-                      </Link>
-                      <Link
-                        href="/organizer/locations"
-                        className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-                        onClick={() => setIsOpen(false)}
-                        title="Manage multiple inventory locations — TEAMS"
-                      >
-                        <MapPin size={16} className="text-gray-400" />
-                        <span>Locations</span>
-                      </Link>
+                      {teamsNavForSurface('avatarDropdown').map(({ id, label, href, icon: Icon, title }) => (
+                        <Link
+                          key={id}
+                          href={href}
+                          className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                          onClick={() => setIsOpen(false)}
+                          title={title}
+                        >
+                          <Icon size={16} className="text-gray-400" />
+                          <span>{label}</span>
+                        </Link>
+                      ))}
                     </>
                   )}
                 </>
