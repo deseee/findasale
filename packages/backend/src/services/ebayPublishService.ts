@@ -383,7 +383,33 @@ async function attemptPublish(ctx: EbayPublishContext): Promise<{ ok: boolean; l
   const res = await ebayFetch(`/sell/inventory/v1/offer/${ctx.offerId}/publish`, ctx.accessToken, { method: 'POST', body: {} });
   if (res.ok) {
     const data = (await res.json().catch(() => ({}))) as any;
-    return { ok: true, listingId: (data?.listingId ?? null) as string | null, errorBody: '' };
+    let listingId = (data?.listingId ?? null) as string | null;
+    if (!listingId) {
+      // eBay confirmed the publish (res.ok) but the response body didn't parse or
+      // didn't include listingId. Previously this silently returned listingId: null,
+      // which the caller treats as a total publish FAILURE even though eBay actually
+      // created a live listing -- resulting in items live on eBay with zero trace in
+      // FindA.Sale (no ebayListingId, no listedOnEbayAt, no ebayQueuedAt). Recover the
+      // listingId via a follow-up GET before giving up. (Fix: eBay sync gap, 2026-07-28.)
+      console.warn(`[eBay Publish] offer ${ctx.offerId}: publish returned ok but no listingId in body -- attempting recovery GET`);
+      try {
+        const offerGetRes = await ebayFetch(`/sell/inventory/v1/offer/${ctx.offerId}`, ctx.accessToken, { method: 'GET' });
+        if (offerGetRes.ok) {
+          const offerData = (await offerGetRes.json().catch(() => ({}))) as any;
+          listingId = (offerData?.listingId ?? null) as string | null;
+          if (listingId) {
+            console.log(`[eBay Publish] offer ${ctx.offerId}: recovered listingId ${listingId} via GET after empty publish response`);
+          } else {
+            console.error(`[eBay Publish] offer ${ctx.offerId}: recovery GET succeeded but still no listingId -- publish may not be fully live yet`);
+          }
+        } else {
+          console.error(`[eBay Publish] offer ${ctx.offerId}: recovery GET failed (HTTP ${offerGetRes.status}) after empty publish response`);
+        }
+      } catch (recoverErr) {
+        console.error(`[eBay Publish] offer ${ctx.offerId}: recovery GET threw:`, recoverErr instanceof Error ? recoverErr.message : String(recoverErr));
+      }
+    }
+    return { ok: true, listingId, errorBody: '' };
   }
   const errorBody = await res.text().catch(() => '');
   return { ok: false, listingId: null, errorBody };

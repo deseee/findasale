@@ -4887,8 +4887,22 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
     ): Promise<boolean> => {
       const target = normTitleForMatch(rawTitle);
       if (!target || !listingId) return false;
+      // NOTE: Item.organizerId is a denormalized convenience field for library
+      // queries and is NOT reliably populated for non-library items -- real
+      // ownership traces through Item.saleId -> Sale.organizerId. Items with no
+      // sale at all (pure inventory-container items) only have the denormalized
+      // organizerId, so this must OR both paths rather than replace one with the
+      // other. Missing the sale-join half of this let this reconciliation silently
+      // skip candidates that should have been title-matched. (Fix: eBay sync gap,
+      // 2026-07-28.)
       const candidates = await prisma.item.findMany({
-        where: { organizerId: organizer.id, ebayListingId: null },
+        where: {
+          ebayListingId: null,
+          OR: [
+            { organizerId: organizer.id },
+            { sale: { organizerId: organizer.id } },
+          ],
+        },
         select: { id: true, title: true, listedOnEbayAt: true, ebayCategoryId: true, category: true, draftStatus: true },
       });
       const hits = candidates.filter((c) => normTitleForMatch(c.title) === target);
