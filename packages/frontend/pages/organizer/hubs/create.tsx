@@ -36,7 +36,12 @@ export default function CreateHubPage() {
     address: '',
     lat: 0,
     lng: 0,
-    radiusKm: 1,
+    // Not shown as a form field -- see removed "Discovery Radius" section below.
+    // Checked against the live discoverHubs/joinHub code: this value isn't used to gate
+    // anything for a vendor-booth hub (booths attach via hubId directly, no distance
+    // check; shopper-side "nearby hubs" search uses ITS OWN radius param, not this one).
+    // A fixed default avoids asking organizers to make a decision that has no real effect.
+    radiusKm: 5,
   });
 
   const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -99,7 +104,7 @@ export default function CreateHubPage() {
         <meta name="description" content="Create a new sale hub" />
       </Head>
 
-      <div className="min-h-screen bg-gradient-to-b from-sage-50 to-white">
+      <div className="min-h-screen bg-gradient-to-b from-sage-50 to-white dark:from-gray-900 dark:to-gray-900">
         <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
           {/* Navigation */}
           <Link href="/organizer/hubs" className="text-sage-600 hover:text-sage-700 font-medium mb-6 inline-block">
@@ -199,26 +204,6 @@ export default function CreateHubPage() {
                   {formData.lat && formData.lng
                     ? `📍 ${formData.address}`
                     : "Select an address from the suggestions to set this hub's location"}
-                </p>
-              </div>
-
-              {/* Radius */}
-              <div>
-                <label htmlFor="radiusKm" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Discovery Radius (km) *
-                </label>
-                <input
-                  id="radiusKm"
-                  type="number"
-                  step="0.1"
-                  min="0.1"
-                  value={formData.radiusKm}
-                  onChange={(e) => setFormData({ ...formData, radiusKm: parseFloat(e.target.value) })}
-                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-sage-500 focus:border-transparent"
-                  required
-                />
-                <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                  How far shoppers browsing the map will see this hub from. This doesn't affect vendor booths inside it — just map discovery.
                 </p>
               </div>
 
