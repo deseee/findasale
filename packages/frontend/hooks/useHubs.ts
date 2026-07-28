@@ -12,7 +12,7 @@ export interface SaleHubInfo {
   slug: string;
   lat: number;
   lng: number;
-  saleCount: number;
+  boothCount: number;
   organizerName?: string;
   saleDate?: string;
   eventName?: string;
@@ -20,26 +20,6 @@ export interface SaleHubInfo {
 
 export interface SaleHubDetail extends SaleHubInfo {
   description?: string;
-  radiusKm: number;
-  sales: SaleInfo[];
-  stats: {
-    totalItems: number;
-    totalSales: number;
-    priceRangeUSD: [number, number];
-  };
-}
-
-export interface SaleInfo {
-  id: string;
-  title: string;
-  address: string;
-  city: string;
-  state: string;
-  lat: number;
-  lng: number;
-  startDate: string;
-  endDate: string;
-  organizerName: string;
 }
 
 export interface NearbyHubsResponse {
@@ -138,7 +118,6 @@ export interface MyHubDetail {
   description?: string;
   lat: number;
   lng: number;
-  radiusKm: number;
   saleDate?: string;
   eventName?: string;
   isActive: boolean;
@@ -212,7 +191,6 @@ export const useCreateHub = () => {
       description?: string;
       lat: number;
       lng: number;
-      radiusKm?: number;
     }) => {
       try {
         const response = await api.post('/organizer/hubs', data);
@@ -234,7 +212,6 @@ export const useUpdateHub = (hubId: string) => {
       description?: string;
       lat?: number;
       lng?: number;
-      radiusKm?: number;
     }) => {
       try {
         const response = await api.put(`/organizer/hubs/${hubId}`, data);
@@ -257,38 +234,6 @@ export const useDeleteHub = (hubId: string) => {
         return response.data;
       } catch (err: any) {
         throw new Error(err.response?.data?.message || 'Failed to delete hub');
-      }
-    },
-  });
-};
-
-/**
- * Join a hub (add current organizer's sales to hub)
- */
-export const useJoinHub = (hubId: string) => {
-  return useMutation({
-    mutationFn: async (saleIds: string[]) => {
-      try {
-        const response = await api.post(`/organizer/hubs/${hubId}/join`, { saleIds });
-        return response.data;
-      } catch (err: any) {
-        throw new Error(err.response?.data?.message || 'Failed to join hub');
-      }
-    },
-  });
-};
-
-/**
- * Leave a hub (remove sale from hub)
- */
-export const useLeaveHub = (hubId: string, saleId: string) => {
-  return useMutation({
-    mutationFn: async () => {
-      try {
-        const response = await api.delete(`/organizer/hubs/${hubId}/sales/${saleId}`);
-        return response.data;
-      } catch (err: any) {
-        throw new Error(err.response?.data?.message || 'Failed to leave hub');
       }
     },
   });

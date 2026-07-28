@@ -22,14 +22,9 @@ const createHubSchema = z.object({
   description: z.string().optional(),
   lat: z.number(),
   lng: z.number(),
-  radiusKm: z.number().positive().default(5),
 });
 
 const updateHubSchema = createHubSchema.partial().omit({ slug: true });
-
-const joinHubSchema = z.object({
-  saleIds: z.array(z.string()).min(1),
-});
 
 const setEventDateSchema = z.object({
   saleDate: z.string().datetime().optional(),
@@ -56,7 +51,7 @@ export const discoverHubs = async (req: Request, res: Response) => {
         where: { isActive: true },
         take: 500,
         include: {
-          memberships: { select: { id: true } },
+          _count: { select: { vendorBooths: true } },
           organizer: { select: { businessName: true } },
         },
       });
@@ -69,7 +64,7 @@ export const discoverHubs = async (req: Request, res: Response) => {
           slug: hub.slug,
           lat: hub.lat,
           lng: hub.lng,
-          saleCount: hub.memberships.length,
+          boothCount: hub._count.vendorBooths,
           organizerName: hub.organizer?.businessName,
           saleDate: hub.saleDate,
           eventName: hub.eventName,
@@ -96,7 +91,7 @@ export const discoverHubs = async (req: Request, res: Response) => {
       where: { isActive: true },
       take: 500,
       include: {
-        memberships: { select: { id: true } },
+        _count: { select: { vendorBooths: true } },
         organizer: { select: { businessName: true } },
       },
     });
@@ -108,7 +103,7 @@ export const discoverHubs = async (req: Request, res: Response) => {
         slug: hub.slug,
         lat: hub.lat,
         lng: hub.lng,
-        saleCount: hub.memberships.length,
+        boothCount: hub._count.vendorBooths,
         organizerName: hub.organizer?.businessName,
         saleDate: hub.saleDate,
         eventName: hub.eventName,
@@ -136,25 +131,7 @@ export const getHub = async (req: Request, res: Response) => {
     const hub = await prisma.saleHub.findUnique({
       where: { slug },
       include: {
-        memberships: {
-          include: {
-            sale: {
-              select: {
-                id: true,
-                title: true,
-                address: true,
-                city: true,
-                state: true,
-                lat: true,
-                lng: true,
-                startDate: true,
-                endDate: true,
-                organizer: { select: { businessName: true } },
-                _count: { select: { items: true } },
-              },
-            },
-          },
-        },
+        _count: { select: { vendorBooths: true } },
         organizer: { select: { businessName: true, profilePhoto: true } },
       },
     });
@@ -162,17 +139,6 @@ export const getHub = async (req: Request, res: Response) => {
     if (!hub) {
       return res.status(404).json({ message: 'Hub not found' });
     }
-
-    // P2 #16: Fix N+1 by using aggregation for price range and count for item totals
-    const priceAgg = await prisma.item.aggregate({
-      where: { sale: { hubMemberships: { some: { hubId: hub.id } } } },
-      _min: { price: true },
-      _max: { price: true },
-    });
-
-    const totalItems = hub.memberships.reduce((sum, m) => sum + m.sale._count.items, 0);
-    const minPrice = priceAgg._min.price ?? 0;
-    const maxPrice = priceAgg._max.price ?? 0;
 
     res.json({
       hub: {
@@ -182,28 +148,11 @@ export const getHub = async (req: Request, res: Response) => {
         description: hub.description,
         lat: hub.lat,
         lng: hub.lng,
-        radiusKm: hub.radiusKm,
+        boothCount: hub._count.vendorBooths,
         saleDate: hub.saleDate,
         eventName: hub.eventName,
         organizerName: hub.organizer?.businessName,
         organizerPhoto: hub.organizer?.profilePhoto,
-        sales: hub.memberships.map((m) => ({
-          id: m.sale.id,
-          title: m.sale.title,
-          address: m.sale.address,
-          city: m.sale.city,
-          state: m.sale.state,
-          lat: m.sale.lat,
-          lng: m.sale.lng,
-          startDate: m.sale.startDate,
-          endDate: m.sale.endDate,
-          organizerName: m.sale.organizer.businessName,
-        })),
-        stats: {
-          totalItems,
-          totalSales: hub.memberships.length,
-          priceRangeUSD: [minPrice, maxPrice],
-        },
       },
     });
   } catch (error) {
@@ -337,7 +286,7 @@ export const listMyHubs = async (req: AuthRequest, res: Response) => {
     const hubs = await prisma.saleHub.findMany({
       where: { organizerId: req.user.organizerProfile?.id },
       include: {
-        memberships: { select: { id: true } },
+        _count: { select: { vendorBooths: true } },
       },
     });
 
@@ -347,7 +296,7 @@ export const listMyHubs = async (req: AuthRequest, res: Response) => {
         name: hub.name,
         slug: hub.slug,
         createdAt: hub.createdAt,
-        saleCount: hub.memberships.length,
+        boothCount: hub._count.vendorBooths,
         isActive: hub.isActive,
         saleDate: hub.saleDate,
         eventName: hub.eventName,
@@ -383,7 +332,6 @@ export const getMyHub = async (req: AuthRequest, res: Response) => {
         description: hub.description,
         lat: hub.lat,
         lng: hub.lng,
-        radiusKm: hub.radiusKm,
         saleDate: hub.saleDate,
         eventName: hub.eventName,
         isActive: hub.isActive,
@@ -393,101 +341,6 @@ export const getMyHub = async (req: AuthRequest, res: Response) => {
   } catch (error) {
     console.error('Error getting my hub:', error);
     res.status(500).json({ message: 'Failed to get hub' });
-  }
-};
-
-// POST /api/organizer/hubs/:hubId/join
-// Auth required: add current organizer's sales to hub
-export const joinHub = async (req: AuthRequest, res: Response) => {
-  try {
-    if (!req.user?.organizerProfile?.id) {
-      return res.status(401).json({ message: 'Not authenticated as organizer' });
-    }
-
-    const { hubId } = req.params;
-    const validated = joinHubSchema.parse(req.body);
-
-    // Verify hub exists
-    const hub = await prisma.saleHub.findUnique({
-      where: { id: hubId },
-    });
-
-    if (!hub) {
-      return res.status(404).json({ message: 'Hub not found' });
-    }
-
-    // Verify all sales belong to current organizer
-    const sales = await prisma.sale.findMany({
-      where: {
-        id: { in: validated.saleIds },
-        organizerId: req.user.organizerProfile?.id,
-      },
-    });
-
-    if (sales.length !== validated.saleIds.length) {
-      return res.status(400).json({ message: 'Not all sales belong to you' });
-    }
-
-    // Add memberships
-    let added = 0;
-    const skipped: Array<{ saleId: string; reason: string }> = [];
-
-    for (const saleId of validated.saleIds) {
-      const existing = await prisma.saleHubMembership.findUnique({
-        where: {
-          hubId_saleId: { hubId, saleId },
-        },
-      });
-
-      if (!existing) {
-        await prisma.saleHubMembership.create({
-          data: { hubId, saleId },
-        });
-        added++;
-      } else {
-        skipped.push({ saleId, reason: 'Already in hub' });
-      }
-    }
-
-    res.json({ added, skipped });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return res.status(400).json({ message: error.errors });
-    }
-    console.error('Error joining hub:', error);
-    res.status(500).json({ message: 'Failed to join hub' });
-  }
-};
-
-// DELETE /api/organizer/hubs/:hubId/sales/:saleId
-// Auth required: remove sale from hub
-export const leaveHub = async (req: AuthRequest, res: Response) => {
-  try {
-    if (!req.user?.organizerProfile?.id) {
-      return res.status(401).json({ message: 'Not authenticated as organizer' });
-    }
-
-    const { hubId, saleId } = req.params;
-
-    // Verify sale belongs to current organizer
-    const sale = await prisma.sale.findUnique({
-      where: { id: saleId },
-    });
-
-    if (!sale || sale.organizerId !== req.user.organizerProfile?.id) {
-      return res.status(403).json({ message: 'Unauthorized' });
-    }
-
-    await prisma.saleHubMembership.delete({
-      where: {
-        hubId_saleId: { hubId, saleId },
-      },
-    });
-
-    res.json({ removed: true });
-  } catch (error) {
-    console.error('Error leaving hub:', error);
-    res.status(500).json({ message: 'Failed to leave hub' });
   }
 };
 

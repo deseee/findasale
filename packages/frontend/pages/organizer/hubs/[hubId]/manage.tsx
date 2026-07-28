@@ -7,7 +7,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import Link from 'next/link';
-import { useHubById, useUpdateHub, useSetHubEvent, useJoinHub, useLeaveHub } from '../../../../hooks/useHubs';
+import { useHubById, useUpdateHub, useSetHubEvent } from '../../../../hooks/useHubs';
 import { useAuth } from '../../../../components/AuthContext';
 import { useToast } from '../../../../components/ToastContext';
 import { useQueryClient } from '@tanstack/react-query';
@@ -28,7 +28,6 @@ export default function HubManagePage() {
     description: '',
     lat: 0,
     lng: 0,
-    radiusKm: 5,
   });
 
   const { data, isLoading } = useHubById(hubId as string, { enabled: !!hubId });
@@ -46,7 +45,6 @@ export default function HubManagePage() {
       description: data.hub.description || '',
       lat: data.hub.lat ?? 0,
       lng: data.hub.lng ?? 0,
-      radiusKm: data.hub.radiusKm ?? 5,
     });
     if (data.hub.saleDate) {
       setEventDate(new Date(data.hub.saleDate).toISOString().slice(0, 16));
@@ -257,14 +255,6 @@ export default function HubManagePage() {
                 </p>
               </div>
             )}
-          </div>
-
-          {/* Member Sales Section */}
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-8">
-            <h2 className="text-xl font-bold text-sage-900 mb-6">Member Sales</h2>
-            <p className="text-gray-600 dark:text-gray-400">
-              Sales management coming soon. You can add/remove your sales to this hub from the hub creation page.
-            </p>
           </div>
         </div>
       </div>

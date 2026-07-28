@@ -19,7 +19,7 @@ interface HubEvent {
   slug: string;
   saleDate?: string;
   eventName?: string;
-  saleCount: number;
+  boothCount: number;
 }
 
 const EVENT_TYPES = [
@@ -236,7 +236,7 @@ export default function FleaMarketEventsPage() {
                       <div>
                         <h3 className="font-medium text-warm-900 dark:text-gray-100">{event.name}</h3>
                         <p className="text-sm text-warm-500 dark:text-gray-400">
-                          {event.saleCount} {event.saleCount === 1 ? 'sale' : 'sales'}
+                          {event.boothCount} {event.boothCount === 1 ? 'vendor' : 'vendors'}
                           {event.saleDate && <> · {new Date(event.saleDate).toLocaleDateString()}</>}
                         </p>
                       </div>

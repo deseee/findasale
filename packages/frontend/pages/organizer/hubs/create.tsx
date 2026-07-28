@@ -36,12 +36,6 @@ export default function CreateHubPage() {
     address: '',
     lat: 0,
     lng: 0,
-    // Not shown as a form field -- see removed "Discovery Radius" section below.
-    // Checked against the live discoverHubs/joinHub code: this value isn't used to gate
-    // anything for a vendor-booth hub (booths attach via hubId directly, no distance
-    // check; shopper-side "nearby hubs" search uses ITS OWN radius param, not this one).
-    // A fixed default avoids asking organizers to make a decision that has no real effect.
-    radiusKm: 5,
   });
 
   const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
