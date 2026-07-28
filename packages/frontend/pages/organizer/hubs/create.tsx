@@ -3,7 +3,7 @@
  * Form to create a new sale hub
  */
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import Link from 'next/link';
@@ -11,6 +11,7 @@ import { useCreateHub } from '../../../hooks/useHubs';
 import { useAuth } from '../../../components/AuthContext';
 import { useToast } from '../../../components/ToastContext';
 import { useQueryClient } from '@tanstack/react-query';
+import AddressAutocomplete from '../../../components/AddressAutocomplete';
 
 function generateSlug(name: string): string {
   return name
@@ -32,30 +33,11 @@ export default function CreateHubPage() {
     name: '',
     slug: '',
     description: '',
+    address: '',
     lat: 0,
     lng: 0,
-    radiusKm: 5,
+    radiusKm: 1,
   });
-  const [geoError, setGeoError] = useState('');
-
-  // Get user location on mount
-  useEffect(() => {
-    if ('geolocation' in navigator) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          setFormData((prev) => ({
-            ...prev,
-            lat: position.coords.latitude,
-            lng: position.coords.longitude,
-          }));
-        },
-        (error) => {
-          setGeoError('Unable to get your location. Please enter coordinates manually.');
-          console.error('Geolocation error:', error);
-        }
-      );
-    }
-  }, []);
 
   const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const name = e.target.value;
@@ -76,6 +58,11 @@ export default function CreateHubPage() {
 
     if (!formData.slug.trim()) {
       showToast('Please enter a valid slug', 'error');
+      return;
+    }
+
+    if (!formData.lat || !formData.lng) {
+      showToast("Please select this hub's address from the suggestions", 'error');
       return;
     }
 
@@ -122,7 +109,8 @@ export default function CreateHubPage() {
           {/* Header */}
           <h1 className="text-3xl font-bold text-sage-900 mb-2">Create a New Hub</h1>
           <p className="text-gray-600 dark:text-gray-400 mb-8">
-            Group your nearby sales into a discoverable hub for shoppers to find and plan their routes.
+            Set up a flea market, antique mall, popup market, or farmers market. Vendors claim their own
+            booth inside this hub, with their own booth fee, revenue share, and payouts.
           </p>
 
           {/* Form */}
@@ -181,56 +169,43 @@ export default function CreateHubPage() {
 
               {/* Location */}
               <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Hub Location</h3>
-
-                {geoError && (
-                  <div className="mb-4 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 rounded-lg text-amber-800 text-sm">
-                    {geoError}
-                  </div>
-                )}
-
-                <div className="grid grid-cols-2 gap-4 mb-4">
-                  <div>
-                    <label htmlFor="lat" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Latitude *
-                    </label>
-                    <input
-                      id="lat"
-                      type="number"
-                      step="0.0001"
-                      value={formData.lat}
-                      onChange={(e) => setFormData({ ...formData, lat: parseFloat(e.target.value) })}
-                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-sage-500 focus:border-transparent"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="lng" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Longitude *
-                    </label>
-                    <input
-                      id="lng"
-                      type="number"
-                      step="0.0001"
-                      value={formData.lng}
-                      onChange={(e) => setFormData({ ...formData, lng: parseFloat(e.target.value) })}
-                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-sage-500 focus:border-transparent"
-                      required
-                    />
-                  </div>
-                </div>
-
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Venue Address</h3>
                 <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                  Where is this market or mall located? Start typing and pick your address from the
+                  suggestions below.
+                </p>
+
+                <label htmlFor="address" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Address *
+                </label>
+                <AddressAutocomplete
+                  id="address"
+                  name="address"
+                  value={formData.address}
+                  onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                  onSuggestionSelected={(suggestion) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      address: suggestion.address,
+                      lat: suggestion.lat,
+                      lng: suggestion.lng,
+                    }))
+                  }
+                  placeholder="123 Main St, Grand Rapids, MI"
+                  required
+                />
+
+                <p className="text-sm text-gray-600 dark:text-gray-400 mt-3">
                   {formData.lat && formData.lng
-                    ? `Hub center: ${formData.lat.toFixed(4)}, ${formData.lng.toFixed(4)}`
-                    : 'Enter your hub center coordinates'}
+                    ? `📍 ${formData.address}`
+                    : "Select an address from the suggestions to set this hub's location"}
                 </p>
               </div>
 
               {/* Radius */}
               <div>
                 <label htmlFor="radiusKm" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Search Radius (km) *
+                  Discovery Radius (km) *
                 </label>
                 <input
                   id="radiusKm"
@@ -243,7 +218,7 @@ export default function CreateHubPage() {
                   required
                 />
                 <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                  Shoppers will see all sales within {formData.radiusKm} km of the hub center
+                  How far shoppers browsing the map will see this hub from. This doesn't affect vendor booths inside it — just map discovery.
                 </p>
               </div>
 
