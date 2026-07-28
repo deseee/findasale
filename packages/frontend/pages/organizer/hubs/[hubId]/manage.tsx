@@ -173,19 +173,6 @@ export default function HubManagePage() {
                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Radius (km)</label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    min="0.1"
-                    value={formData.radiusKm}
-                    onChange={(e) => setFormData({ ...formData, radiusKm: parseFloat(e.target.value) })}
-                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg"
-                    required
-                  />
-                </div>
-
                 <button
                   type="submit"
                   className="w-full bg-sage-600 hover:bg-sage-700 text-white font-medium py-2 rounded-lg transition-colors"
@@ -205,9 +192,9 @@ export default function HubManagePage() {
                   <p className="text-gray-700 dark:text-gray-300">{formData.description || 'No description'}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">Location & Radius</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Location</p>
                   <p className="text-gray-700 dark:text-gray-300">
-                    {formData.lat}, {formData.lng} • {formData.radiusKm} km radius
+                    {formData.lat}, {formData.lng}
                   </p>
                 </div>
               </div>
