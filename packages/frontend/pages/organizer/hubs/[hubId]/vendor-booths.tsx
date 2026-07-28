@@ -18,7 +18,7 @@ import TierGate from '../../../../components/TierGate';
 import ConfirmDialog from '../../../../components/ConfirmDialog';
 import HubOwnerStripeOnboarding from '../../../../components/HubOwnerStripeOnboarding';
 import HubManagementNav from '../../../../components/HubManagementNav';
-import { Trash2, Edit2, Copy, Check, Mail } from 'lucide-react';
+import { Trash2, Edit2, Copy, Check, Mail, ChevronDown, ChevronUp } from 'lucide-react';
 
 interface VendorBooth {
   id: string;
@@ -38,6 +38,12 @@ interface VendorBooth {
   createdAt: string;
   inviteSentAt: string | null;
   inviteSentCount: number;
+  // Lifecycle notification stamps, served by vendorBoothController.listVendorBooths.
+  // Null does NOT mean "failed" on its own -- see classifyNotifyState below.
+  claimNotifiedAt: string | null;
+  confirmNotifiedAt: string | null;
+  decisionNotifiedAt: string | null;
+  stripeNotifiedAt: string | null;
 }
 
 interface FeeCharge {
@@ -51,6 +57,298 @@ interface FeeCharge {
   failureReason: string | null;
   createdAt: string;
 }
+
+
+/**
+ * Vendor notification observability (2026-07-28)
+ *
+ * The booth lifecycle now emails people at four moments, and each one stamps its own
+ * column (vendorBoothLifecycleNotificationService.ts). Until this, none of those stamps
+ * reached the page, so the question that started this whole workstream -- "did the vendor
+ * get the email?" -- was unanswerable from inside the product one level down from where
+ * we had just answered it for the invite.
+ *
+ * WHY ONE CELL AND NOT FOUR COLUMNS: this table already carries nine columns and is used
+ * on a phone at the market. Four more would push the useful columns off-screen behind a
+ * horizontal scroll. So the existing Invite cell grows a single summary chip that answers
+ * "is this vendor up to date?" at a glance, and only expands into the per-event detail
+ * when the organizer taps it. Collapsed, the cell is one short line plus one chip.
+ */
+type NotifyState = 'sent' | 'missing' | 'untracked' | 'na';
+type NotifyKind = 'claim' | 'confirm' | 'decision' | 'stripe';
+
+interface NotifyRow {
+  key: NotifyKind;
+  label: string;
+  state: NotifyState;
+  at: string | null;
+  detail: string;
+}
+
+/**
+ * When the lifecycle notifiers went live. The migration that added the four columns is
+ * packages/database/prisma/migrations/20260728190000_vendor_booth_lifecycle_notifications,
+ * and it deliberately backfills nothing; the last migration in that same release is
+ * 20260728200000. Anything that happened before this instant COULD NOT have been stamped,
+ * so a null stamp there means "we were not recording yet" and must never be drawn as a
+ * failed send.
+ *
+ * Erring an hour LATE is the safe direction. Too late under-reports a genuine miss as
+ * "not recorded" -- which still offers a Send now button, so nothing is lost. Too early
+ * would accuse the system of failing to send something nobody could have sent, which is
+ * simply false.
+ */
+const NOTIFY_TRACKING_STARTED = Date.parse('2026-07-28T20:00:00Z');
+
+/**
+ * The one honest rule, applied to every stamp.
+ *
+ *   happened  did the event this notification reports actually occur?
+ *   stamp     the notification stamp itself
+ *   eventAt   when the event happened, when we know it exactly
+ *   createdAt fallback for the events nothing timestamps
+ *
+ * Only two of the four transitions leave a timestamp behind: updateVendorBooth writes
+ * confirmedAt and rejectedAt and nothing else, so a claim, a Stripe connection and a
+ * cancellation have no time of their own. createdAt is the fallback, and it is a strict
+ * implication rather than a guess: a booth CREATED after tracking began cannot have had
+ * any of its events happen before tracking began. A booth created before it is genuinely
+ * ambiguous, and gets said so.
+ */
+const classifyNotifyState = (
+  happened: boolean,
+  stamp: string | null,
+  eventAt: string | null,
+  createdAt: string
+): NotifyState => {
+  if (!happened) return 'na';
+  if (stamp) return 'sent';
+  const when = Date.parse(eventAt || createdAt);
+  if (Number.isNaN(when)) return 'untracked';
+  return when >= NOTIFY_TRACKING_STARTED ? 'missing' : 'untracked';
+};
+
+/** The four lifecycle notifications for one booth, in the order they happen. */
+const buildNotifyRows = (booth: VendorBooth): NotifyRow[] => {
+  const vendor = booth.vendorName;
+
+  // 1. Claim -> the organizer. Nothing records WHEN a booth was claimed (claimVendorBooth
+  //    sets only userId), so createdAt carries the date test.
+  const claimState = classifyNotifyState(!!booth.userId, booth.claimNotifiedAt, null, booth.createdAt);
+
+  // 2. Confirm -> the vendor. This is the one that matters most and the one we can be
+  //    exact about, because confirmedAt records the transition precisely.
+  const confirmState = classifyNotifyState(
+    booth.status === 'CONFIRMED',
+    booth.confirmNotifiedAt,
+    booth.confirmedAt,
+    booth.createdAt
+  );
+
+  // 3. Rejected or cancelled -> the vendor. The notifier refuses outright when the booth
+  //    was never claimed and never invited, because there is genuinely nobody to tell
+  //    (vendorBoothLifecycleNotificationService.ts, notifyVendorBoothDecision). That is a
+  //    correct skip, not a miss, so it reads as "not needed".
+  const decisionHappened = booth.status === 'REJECTED' || booth.status === 'CANCELLED';
+  const nobodyToTell = !booth.userId && !booth.inviteSentAt;
+  const decisionState: NotifyState =
+    decisionHappened && nobodyToTell
+      ? 'na'
+      : classifyNotifyState(
+          decisionHappened,
+          booth.decisionNotifiedAt,
+          booth.status === 'REJECTED' ? booth.rejectedAt : null,
+          booth.createdAt
+        );
+
+  // 4. Stripe connected -> the organizer. No timestamp for it either.
+  const stripeState = classifyNotifyState(
+    booth.stripeOnboarded,
+    booth.stripeNotifiedAt,
+    null,
+    booth.createdAt
+  );
+
+  return [
+    {
+      key: 'claim',
+      label: 'Claim alert to you',
+      state: claimState,
+      at: booth.claimNotifiedAt,
+      detail:
+        claimState === 'sent'
+          ? `We told you when ${vendor} claimed this booth.`
+          : claimState === 'missing'
+            ? `${vendor} claimed this booth and you were never alerted.`
+            : claimState === 'untracked'
+              ? 'This booth was claimed before we started recording these alerts, so we cannot say.'
+              : 'Nobody has claimed this booth yet.',
+    },
+    {
+      key: 'confirm',
+      label: 'Confirmation to vendor',
+      state: confirmState,
+      at: booth.confirmNotifiedAt,
+      detail:
+        confirmState === 'sent'
+          ? `${vendor} was told their booth is confirmed and asked to connect Stripe.`
+          : confirmState === 'missing'
+            ? `You confirmed this booth and ${vendor} was never told. They are waiting on you.`
+            : confirmState === 'untracked'
+              ? 'This booth was confirmed before we started recording, so we cannot say whether the vendor was told.'
+              : 'This booth is not confirmed yet, so there is nothing to tell the vendor.',
+    },
+    {
+      key: 'decision',
+      label: 'Rejection or cancellation',
+      state: decisionState,
+      at: booth.decisionNotifiedAt,
+      detail:
+        decisionState === 'sent'
+          ? `${vendor} was told this booth is no longer active.`
+          : decisionState === 'missing'
+            ? `This booth is ${booth.status.toLowerCase()} and ${vendor} was never told.`
+            : decisionState === 'untracked'
+              ? 'This booth was closed before we started recording, so we cannot say whether the vendor was told.'
+              : decisionHappened
+                ? 'Nobody ever claimed this booth or was invited to it, so there is nobody to tell.'
+                : 'This booth has not been rejected or cancelled.',
+    },
+    {
+      key: 'stripe',
+      label: 'Stripe alert to you',
+      state: stripeState,
+      at: booth.stripeNotifiedAt,
+      detail:
+        stripeState === 'sent'
+          ? `We told you when ${vendor} finished connecting Stripe.`
+          : stripeState === 'missing'
+            ? `${vendor} finished connecting Stripe and you were never alerted.`
+            : stripeState === 'untracked'
+              ? 'Stripe was connected before we started recording these alerts, so we cannot say.'
+              : 'This vendor has not connected Stripe yet.',
+    },
+  ];
+};
+
+/** Same palette the fee-charge badges use, so the page reads as one thing. */
+const notifyChipClass = (state: 'good' | 'warn' | 'quiet') => {
+  switch (state) {
+    case 'good': return 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400';
+    case 'warn': return 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400';
+    default: return 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300';
+  }
+};
+
+const notifyRowTextClass = (state: NotifyState) => {
+  switch (state) {
+    case 'sent': return 'text-green-600 dark:text-green-400';
+    case 'missing': return 'text-amber-600 dark:text-amber-400';
+    case 'untracked': return 'text-warm-500 dark:text-warm-400';
+    default: return 'text-warm-400';
+  }
+};
+
+const notifyRowStateLabel = (row: NotifyRow) => {
+  switch (row.state) {
+    case 'sent': return row.at ? `Sent ${new Date(row.at).toLocaleDateString()}` : 'Sent';
+    case 'missing': return 'Not sent';
+    case 'untracked': return 'Not recorded';
+    default: return 'Not needed';
+  }
+};
+
+/**
+ * The collapsed answer. "Not sent" outranks everything else because it is the only state
+ * that needs the organizer to do something.
+ */
+const notifySummary = (rows: NotifyRow[]) => {
+  const missing = rows.filter((r) => r.state === 'missing').length;
+  const untracked = rows.filter((r) => r.state === 'untracked').length;
+  const sent = rows.filter((r) => r.state === 'sent').length;
+  if (missing > 0) return { label: missing === 1 ? '1 not sent' : `${missing} not sent`, tone: 'warn' as const };
+  if (untracked > 0) return { label: 'Not recorded', tone: 'quiet' as const };
+  if (sent > 0) return { label: 'Vendor up to date', tone: 'good' as const };
+  return { label: 'Nothing to send yet', tone: 'quiet' as const };
+};
+
+/**
+ * One table cell. Defined outside the page component on purpose -- a component declared
+ * inside another component is a new type on every render and would remount (and collapse)
+ * on every keystroke elsewhere on the page.
+ */
+const VendorNotifiedCell: React.FC<{
+  booth: VendorBooth;
+  open: boolean;
+  onToggle: () => void;
+  sendingKey: string | null;
+  onSend: (booth: VendorBooth, row: NotifyRow) => void;
+}> = ({ booth, open, onToggle, sendingKey, onSend }) => {
+  const rows = buildNotifyRows(booth);
+  const summary = notifySummary(rows);
+
+  return (
+    <div className="min-w-[9rem] max-w-[13rem]">
+      {/* The invite line, unchanged in meaning and now labelled, since this cell reports
+          more than the invite. */}
+      <div className="text-xs">
+        <span className="text-warm-500 dark:text-warm-400">Invite: </span>
+        {booth.inviteSentAt ? (
+          <span className="text-green-600 dark:text-green-400 font-bold">
+            Sent {new Date(booth.inviteSentAt).toLocaleDateString()}
+          </span>
+        ) : booth.userId ? (
+          <span className="text-warm-400">Not needed</span>
+        ) : booth.vendorEmail ? (
+          <span className="text-amber-600 dark:text-amber-400 font-bold">Not sent</span>
+        ) : (
+          <span className="text-warm-400">No email</span>
+        )}
+        {booth.inviteSentAt && booth.inviteSentCount > 1 && (
+          <span className="block text-warm-500 dark:text-warm-400">{booth.inviteSentCount} times</span>
+        )}
+      </div>
+
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={open}
+        title="What this vendor has and has not been told"
+        className={`mt-2 inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-bold ${notifyChipClass(summary.tone)}`}
+      >
+        {summary.label}
+        {open ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+      </button>
+
+      {open && (
+        <ul className="mt-2 space-y-2">
+          {rows.map((row) => {
+            const key = `${booth.id}:${row.key}`;
+            const canSend = row.state === 'missing' || row.state === 'untracked';
+            return (
+              <li key={row.key} className="text-xs leading-snug">
+                <span className={`font-bold ${notifyRowTextClass(row.state)}`}>
+                  {row.label}: {notifyRowStateLabel(row)}
+                </span>
+                <span className="block text-warm-500 dark:text-warm-400">{row.detail}</span>
+                {canSend && (
+                  <button
+                    type="button"
+                    onClick={() => onSend(booth, row)}
+                    disabled={sendingKey === key}
+                    className="mt-1 px-2 py-1 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 rounded font-bold disabled:opacity-50"
+                  >
+                    {sendingKey === key ? 'Sending...' : 'Send now'}
+                  </button>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+};
 
 type ModalMode = 'closed' | 'create' | 'edit';
 
@@ -67,6 +365,10 @@ const VendorBoothsPage: React.FC = () => {
   const [editingBooth, setEditingBooth] = useState<VendorBooth | null>(null);
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
   const [sendingInvite, setSendingInvite] = useState<string | null>(null);
+  // Which booth row has its notification detail open, and which single notification is
+  // mid-send. One at a time on purpose -- the cell lives inside a narrow table column.
+  const [expandedNotify, setExpandedNotify] = useState<string | null>(null);
+  const [sendingNotify, setSendingNotify] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean; id: string; name: string }>({
     open: false, id: '', name: '',
   });
@@ -278,6 +580,39 @@ const VendorBoothsPage: React.FC = () => {
     }
   };
 
+  // Fills a hole in the notification chain. The server refuses (409) if the stamp is
+  // already set, so this can never produce a duplicate email -- it can only send the one
+  // that never went. Same shape as handleSendInvite above, including patching the row
+  // from the response rather than re-fetching the whole list.
+  const handleSendNotification = async (booth: VendorBooth, row: NotifyRow) => {
+    const key = `${booth.id}:${row.key}`;
+    setSendingNotify(key);
+    try {
+      const response = await api.post(`/organizer/hubs/${hubId}/vendor-booths/${booth.id}/notify`, {
+        kind: row.key,
+      });
+      setBooths((prev) =>
+        prev.map((b) =>
+          b.id === booth.id
+            ? {
+                ...b,
+                claimNotifiedAt: response.data?.claimNotifiedAt ?? b.claimNotifiedAt,
+                confirmNotifiedAt: response.data?.confirmNotifiedAt ?? b.confirmNotifiedAt,
+                decisionNotifiedAt: response.data?.decisionNotifiedAt ?? b.decisionNotifiedAt,
+                stripeNotifiedAt: response.data?.stripeNotifiedAt ?? b.stripeNotifiedAt,
+              }
+            : b
+        )
+      );
+      showToast(`${row.label} sent`, 'success');
+    } catch (error: any) {
+      console.error('Error sending booth notification:', error);
+      showToast(error.response?.data?.error || 'Could not send that notification', 'error');
+    } finally {
+      setSendingNotify(null);
+    }
+  };
+
   // The Status column used to render the raw enum ("PENDING") while the Claimed column
   // right next to it said "Claimed" for the SAME row. Both were technically true and
   // together they read as a contradiction -- a real hub organizer concluded from exactly
@@ -437,7 +772,7 @@ const VendorBoothsPage: React.FC = () => {
                     <th className="p-3 font-bold text-warm-700 dark:text-warm-300">Booth #</th>
                     <th className="p-3 font-bold text-warm-700 dark:text-warm-300">Vendor</th>
                     <th className="p-3 font-bold text-warm-700 dark:text-warm-300">Status</th>
-                    <th className="p-3 font-bold text-warm-700 dark:text-warm-300">Invite</th>
+                    <th className="p-3 font-bold text-warm-700 dark:text-warm-300">Notified</th>
                     <th className="p-3 font-bold text-warm-700 dark:text-warm-300">Claimed</th>
                     <th className="p-3 font-bold text-warm-700 dark:text-warm-300">Stripe</th>
                     <th className="p-3 font-bold text-warm-700 dark:text-warm-300">Booth Fee</th>
@@ -462,23 +797,18 @@ const VendorBoothsPage: React.FC = () => {
                           {boothStateLabel(booth)}
                         </span>
                       </td>
-                      <td className="p-3">
-                        {booth.inviteSentAt ? (
-                          <>
-                            <span className="text-green-600 dark:text-green-400 text-xs font-bold">
-                              Sent {new Date(booth.inviteSentAt).toLocaleDateString()}
-                            </span>
-                            {booth.inviteSentCount > 1 && (
-                              <span className="block text-xs text-warm-500 dark:text-warm-400">
-                                {booth.inviteSentCount} times
-                              </span>
-                            )}
-                          </>
-                        ) : booth.vendorEmail ? (
-                          <span className="text-amber-600 dark:text-amber-400 text-xs font-bold">Not sent</span>
-                        ) : (
-                          <span className="text-warm-400 text-xs">No email</span>
-                        )}
+                      <td className="p-3 align-top">
+                        {/* Was the Invite column. Still reports the invite on its own line,
+                            and now also answers the harder question next to it: what has
+                            this vendor actually been told since? Detail is behind a tap so
+                            the column stays one line wide on a phone. */}
+                        <VendorNotifiedCell
+                          booth={booth}
+                          open={expandedNotify === booth.id}
+                          onToggle={() => setExpandedNotify(expandedNotify === booth.id ? null : booth.id)}
+                          sendingKey={sendingNotify}
+                          onSend={handleSendNotification}
+                        />
                       </td>
                       <td className="p-3">
                         {/* Kept, not removed. It now reports only whether a vendor account is

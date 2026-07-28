@@ -20,6 +20,7 @@ import {
   getVendorBoothFeeCharges,
   listHubVendorBoothFeeCharges,
   resendVendorBoothInvite,
+  resendVendorBoothNotification,
 } from '../controllers/vendorBoothController';
 import {
   startBoothCart,
@@ -107,6 +108,13 @@ router.delete('/api/organizer/hubs/:hubId/vendor-booths/:boothId', authenticate,
 // "fee-charges" path could -- no registration-order hazard here. Organizer ownership
 // is enforced in the controller with the same chain updateVendorBooth uses.
 router.post('/api/organizer/hubs/:hubId/vendor-booths/:boothId/invite', authenticate, requireTier('TEAMS'), resendVendorBoothInvite);
+
+// Re-send ONE lifecycle notification (claim / confirm / decision / stripe) that should
+// have gone out and did not. Same two-segments-deeper shape as "/:boothId/invite" above,
+// so it cannot be swallowed by the :boothId routes either -- no registration-order
+// hazard. Ownership is the same chain resendVendorBoothInvite uses, enforced in the
+// controller, behind the same authenticate + requireTier('TEAMS') pair.
+router.post('/api/organizer/hubs/:hubId/vendor-booths/:boothId/notify', authenticate, requireTier('TEAMS'), resendVendorBoothNotification);
 
 // --- Roaming multi-booth cart (cashier: TeamMember JWT or X-Booth-Token) ---
 // optionalAuthenticate() runs first — it populates req.user when a valid Bearer

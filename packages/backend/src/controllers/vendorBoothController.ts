@@ -20,6 +20,7 @@ import {
   notifyVendorBoothDecision,
   notifyOrganizerBoothStripeConnected,
 } from '../services/vendorBoothLifecycleNotificationService';
+import type { BoothNotifyResult } from '../services/vendorBoothLifecycleNotificationService';
 
 const stripe = () => getStripe();
 
@@ -84,6 +85,13 @@ export const listVendorBooths = async (req: AuthRequest, res: Response) => {
         rejectedAt: true, createdAt: true,
         // Observability (S-booth-invite): "did the invite go out?" answered on the page.
         inviteSentAt: true, inviteSentCount: true,
+        // Same question, one level down: the lifecycle notification stamps written by
+        // services/vendorBoothLifecycleNotificationService.ts. Without these on the wire
+        // the page could tell an organizer the invite went out but not whether the vendor
+        // was ever told their booth was confirmed. Raw columns only -- the page decides
+        // what each null means, exactly as it already does for inviteSentAt.
+        claimNotifiedAt: true, confirmNotifiedAt: true,
+        decisionNotifiedAt: true, stripeNotifiedAt: true,
       },
       orderBy: { boothNumber: 'asc' },
     });
@@ -353,6 +361,92 @@ export const resendVendorBoothInvite = async (req: AuthRequest, res: Response) =
   } catch (error) {
     console.error('[resendVendorBoothInvite] Error:', error);
     return res.status(500).json({ error: 'Failed to send booth invite' });
+  }
+};
+
+/**
+ * POST /api/organizer/hubs/:hubId/vendor-booths/:boothId/notify
+ * Organizer-only. Re-runs ONE lifecycle notification that should have gone out and did not.
+ * Body: { kind: 'claim' | 'confirm' | 'decision' | 'stripe' }
+ *
+ * Ownership check is the SAME three-step chain resendVendorBoothInvite above uses, copied
+ * line for line: getOrganizerWorkspace(req.user.id) -> saleHub.findFirst({ id: hubId,
+ * organizerId }) -> vendorBooth.findFirst({ id: boothId, hubId, deletedAt: null }). A user
+ * who is not this hub's organizer never gets past the hub lookup (404, same as the
+ * siblings). Route-level guards are identical too: authenticate + requireTier('TEAMS').
+ *
+ * No stamp is ever cleared here. Each notifier checks its own stamp FIRST and refuses when
+ * it is already set (vendorBoothLifecycleNotificationService.ts :162, :245, :332, :401), so
+ * this endpoint can only ever fill a hole -- it can never produce a duplicate email. That
+ * refusal comes back as a 409 with the service's own reason, which is also how the caller
+ * learns the send was not applicable (for example a booth that was never claimed and never
+ * invited has nobody to tell about a rejection).
+ *
+ * Awaited (unlike the fire-and-forget triggers on the lifecycle transitions themselves) so
+ * the organizer gets a real answer instead of an optimistic one.
+ */
+export const resendVendorBoothNotification = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) return res.status(401).json({ error: 'Authentication required' });
+    const { hubId, boothId } = req.params;
+    const { kind } = req.body;
+
+    const validKinds = ['claim', 'confirm', 'decision', 'stripe'];
+    if (!kind || !validKinds.includes(kind)) {
+      return res.status(400).json({ error: `kind must be one of ${validKinds.join(', ')}` });
+    }
+
+    const result = await getOrganizerWorkspace(req.user.id);
+    if (!result) return res.status(404).json({ error: 'Organizer profile not found' });
+    const { organizer } = result;
+
+    const hub = await prisma.saleHub.findFirst({ where: { id: hubId, organizerId: organizer.id } });
+    if (!hub) return res.status(404).json({ error: 'Hub not found' });
+
+    const existing = await prisma.vendorBooth.findFirst({ where: { id: boothId, hubId, deletedAt: null } });
+    if (!existing) return res.status(404).json({ error: 'Vendor booth not found' });
+
+    let sendResult: BoothNotifyResult;
+    if (kind === 'claim') {
+      sendResult = await notifyOrganizerBoothClaimed(boothId);
+    } else if (kind === 'confirm') {
+      sendResult = await notifyVendorBoothConfirmed(boothId);
+    } else if (kind === 'decision') {
+      // The service only recognises these two, and it needs to be told WHICH one so the
+      // wording matches. Anything else is not a decision and has no notification.
+      if (existing.status !== 'REJECTED' && existing.status !== 'CANCELLED') {
+        return res.status(409).json({ error: 'This booth was not rejected or cancelled, so there is no decision to send' });
+      }
+      sendResult = await notifyVendorBoothDecision(boothId, existing.status);
+    } else {
+      sendResult = await notifyOrganizerBoothStripeConnected(boothId);
+    }
+
+    if (!sendResult.sent) {
+      return res.status(409).json({ error: sendResult.reason || 'Notification was not sent' });
+    }
+
+    // Hand back every stamp so the page can patch the row in place, the same way the
+    // invite endpoint hands back inviteSentAt / inviteSentCount.
+    const refreshed = await prisma.vendorBooth.findUnique({
+      where: { id: boothId },
+      select: {
+        claimNotifiedAt: true, confirmNotifiedAt: true,
+        decisionNotifiedAt: true, stripeNotifiedAt: true,
+      },
+    });
+
+    return res.status(200).json({
+      sent: true,
+      kind,
+      claimNotifiedAt: refreshed?.claimNotifiedAt ?? null,
+      confirmNotifiedAt: refreshed?.confirmNotifiedAt ?? null,
+      decisionNotifiedAt: refreshed?.decisionNotifiedAt ?? null,
+      stripeNotifiedAt: refreshed?.stripeNotifiedAt ?? null,
+    });
+  } catch (error) {
+    console.error('[resendVendorBoothNotification] Error:', error);
+    return res.status(500).json({ error: 'Failed to send the notification' });
   }
 };
 
