@@ -19,6 +19,7 @@ import {
   getVendorBoothFeeBillingStatus,
   getVendorBoothFeeCharges,
   listHubVendorBoothFeeCharges,
+  resendVendorBoothInvite,
 } from '../controllers/vendorBoothController';
 import {
   startBoothCart,
@@ -100,6 +101,12 @@ router.get('/api/organizer/hubs/:hubId/vendor-booths/fee-charges', authenticate,
 router.get('/api/organizer/hubs/:hubId/vendor-booths/:boothId', authenticate, requireTier('TEAMS'), getVendorBooth);
 router.put('/api/organizer/hubs/:hubId/vendor-booths/:boothId', authenticate, requireTier('TEAMS'), updateVendorBooth);
 router.delete('/api/organizer/hubs/:hubId/vendor-booths/:boothId', authenticate, requireTier('TEAMS'), deleteVendorBooth);
+
+// Re-send the booth claim invite email. Two segments deeper than the :boothId routes
+// above ("/:boothId/invite"), so it cannot be swallowed by them the way the literal
+// "fee-charges" path could -- no registration-order hazard here. Organizer ownership
+// is enforced in the controller with the same chain updateVendorBooth uses.
+router.post('/api/organizer/hubs/:hubId/vendor-booths/:boothId/invite', authenticate, requireTier('TEAMS'), resendVendorBoothInvite);
 
 // --- Roaming multi-booth cart (cashier: TeamMember JWT or X-Booth-Token) ---
 // optionalAuthenticate() runs first — it populates req.user when a valid Bearer

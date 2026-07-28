@@ -5590,6 +5590,16 @@ model VendorBooth {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @default(now())
 
+  // Booth invite observability (2026-07-28). Before this, an organizer typed a vendor
+  // email into the Add Booth form and nobody could answer "did the invite go out?" --
+  // nothing was sent and nothing was recorded. Stamped by
+  // services/vendorBoothInviteEmailService.ts only after a send that did not throw, so
+  // a null inviteSentAt genuinely means "never delivered", not "not tracked".
+  // EmailAutomationLog was not reused: it requires a non-null userId, and an unclaimed
+  // booth has no User at all -- which is precisely the case an invite exists to fix.
+  inviteSentAt    DateTime?
+  inviteSentCount Int       @default(0)
+
   items               Item[]                 @relation("VendorBoothItems")
   payouts             VendorBoothPayout[]
   cashierTransactions BoothCartTransaction[] @relation("CashierBoothTransactions")

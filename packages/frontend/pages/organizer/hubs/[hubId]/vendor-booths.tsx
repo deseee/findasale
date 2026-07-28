@@ -18,7 +18,7 @@ import TierGate from '../../../../components/TierGate';
 import ConfirmDialog from '../../../../components/ConfirmDialog';
 import HubOwnerStripeOnboarding from '../../../../components/HubOwnerStripeOnboarding';
 import HubManagementNav from '../../../../components/HubManagementNav';
-import { Trash2, Edit2, Copy, Check } from 'lucide-react';
+import { Trash2, Edit2, Copy, Check, Mail } from 'lucide-react';
 
 interface VendorBooth {
   id: string;
@@ -36,6 +36,8 @@ interface VendorBooth {
   confirmedAt: string | null;
   rejectedAt: string | null;
   createdAt: string;
+  inviteSentAt: string | null;
+  inviteSentCount: number;
 }
 
 interface FeeCharge {
@@ -64,6 +66,7 @@ const VendorBoothsPage: React.FC = () => {
   const [modalMode, setModalMode] = useState<ModalMode>('closed');
   const [editingBooth, setEditingBooth] = useState<VendorBooth | null>(null);
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
+  const [sendingInvite, setSendingInvite] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean; id: string; name: string }>({
     open: false, id: '', name: '',
   });
@@ -191,7 +194,15 @@ const VendorBoothsPage: React.FC = () => {
       if (modalMode === 'create') {
         const response = await api.post(`/organizer/hubs/${hubId}/vendor-booths`, payload);
         setBooths((prev) => [...prev, response.data]);
-        showToast('Vendor booth created', 'success');
+        showToast(
+          payload.vendorEmail ? 'Vendor booth created and invite emailed' : 'Vendor booth created',
+          'success'
+        );
+        // The invite send is fire-and-forget on the server (it must never fail booth
+        // creation), so the row we just pushed still has inviteSentAt = null. Re-read the
+        // list shortly after so the Invite column shows the real outcome instead of
+        // "Not sent" for a booth whose invite did go out.
+        if (payload.vendorEmail) setTimeout(() => { fetchBooths(); }, 2500);
       } else if (editingBooth) {
         const response = await api.put(`/organizer/hubs/${hubId}/vendor-booths/${editingBooth.id}`, payload);
         setBooths((prev) => prev.map((b) => (b.id === editingBooth.id ? response.data : b)));
@@ -239,6 +250,32 @@ const VendorBoothsPage: React.FC = () => {
     setCopiedToken(token);
     showToast('Booth invite link copied', 'success');
     setTimeout(() => setCopiedToken(null), 2000);
+  };
+
+  // Emails the claim link to booth.vendorEmail. The clipboard button above stays --
+  // it is still the fastest path when the organizer has the vendor standing there.
+  const handleSendInvite = async (booth: VendorBooth) => {
+    if (!booth.vendorEmail) {
+      showToast('Add a vendor email to this booth first', 'error');
+      return;
+    }
+    setSendingInvite(booth.id);
+    try {
+      const response = await api.post(`/organizer/hubs/${hubId}/vendor-booths/${booth.id}/invite`);
+      setBooths((prev) =>
+        prev.map((b) =>
+          b.id === booth.id
+            ? { ...b, inviteSentAt: response.data?.inviteSentAt ?? b.inviteSentAt, inviteSentCount: response.data?.inviteSentCount ?? b.inviteSentCount }
+            : b
+        )
+      );
+      showToast(`Invite emailed to ${booth.vendorEmail}`, 'success');
+    } catch (error: any) {
+      console.error('Error sending booth invite:', error);
+      showToast(error.response?.data?.error || 'Failed to send the invite email', 'error');
+    } finally {
+      setSendingInvite(null);
+    }
   };
 
   const statusBadgeClass = (status: string) => {
@@ -352,6 +389,7 @@ const VendorBoothsPage: React.FC = () => {
                     <th className="p-3 font-bold text-warm-700 dark:text-warm-300">Booth #</th>
                     <th className="p-3 font-bold text-warm-700 dark:text-warm-300">Vendor</th>
                     <th className="p-3 font-bold text-warm-700 dark:text-warm-300">Status</th>
+                    <th className="p-3 font-bold text-warm-700 dark:text-warm-300">Invite</th>
                     <th className="p-3 font-bold text-warm-700 dark:text-warm-300">Claimed</th>
                     <th className="p-3 font-bold text-warm-700 dark:text-warm-300">Stripe</th>
                     <th className="p-3 font-bold text-warm-700 dark:text-warm-300">Booth Fee</th>
@@ -373,6 +411,24 @@ const VendorBoothsPage: React.FC = () => {
                         <span className={`px-2 py-1 rounded-full text-xs font-bold ${statusBadgeClass(booth.status)}`}>
                           {booth.status}
                         </span>
+                      </td>
+                      <td className="p-3">
+                        {booth.inviteSentAt ? (
+                          <>
+                            <span className="text-green-600 dark:text-green-400 text-xs font-bold">
+                              Sent {new Date(booth.inviteSentAt).toLocaleDateString()}
+                            </span>
+                            {booth.inviteSentCount > 1 && (
+                              <span className="block text-xs text-warm-500 dark:text-warm-400">
+                                {booth.inviteSentCount} times
+                              </span>
+                            )}
+                          </>
+                        ) : booth.vendorEmail ? (
+                          <span className="text-amber-600 dark:text-amber-400 text-xs font-bold">Not sent</span>
+                        ) : (
+                          <span className="text-warm-400 text-xs">No email</span>
+                        )}
                       </td>
                       <td className="p-3">
                         {booth.userId ? (
@@ -406,6 +462,23 @@ const VendorBoothsPage: React.FC = () => {
                           >
                             {copiedToken === booth.boothToken ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
                             Invite Link
+                          </button>
+                          <button
+                            onClick={() => handleSendInvite(booth)}
+                            disabled={sendingInvite === booth.id || !booth.vendorEmail || !!booth.userId}
+                            title={
+                              !booth.vendorEmail
+                                ? 'Add a vendor email to this booth first'
+                                : booth.userId
+                                  ? 'This booth has already been claimed'
+                                  : booth.inviteSentAt
+                                    ? 'Send the claim invite again'
+                                    : 'Email the claim invite to this vendor'
+                            }
+                            className="text-xs px-2 py-1 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 rounded font-bold flex items-center gap-1 disabled:opacity-50"
+                          >
+                            <Mail className="w-3 h-3" />
+                            {sendingInvite === booth.id ? 'Sending...' : booth.inviteSentAt ? 'Resend Invite' : 'Email Invite'}
                           </button>
                           <button
                             onClick={() => handleOpenEditModal(booth)}

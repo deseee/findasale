@@ -9,6 +9,7 @@ import { getStripe } from '../utils/stripe';
 // (vendorBoothCartController.ts computeLegFeeSplit) feeds it -- a hardcoded
 // display percentage drifts from what Stripe actually takes.
 import { getPlatformFeeRate } from '../utils/feeCalculator';
+import { sendVendorBoothInviteEmail } from '../services/vendorBoothInviteEmailService';
 
 const stripe = () => getStripe();
 
@@ -71,6 +72,8 @@ export const listVendorBooths = async (req: AuthRequest, res: Response) => {
         vendorPhone: true, boothFee: true, revenueSharePercent: true, status: true,
         stripeOnboarded: true, boothToken: true, userId: true, confirmedAt: true,
         rejectedAt: true, createdAt: true,
+        // Observability (S-booth-invite): "did the invite go out?" answered on the page.
+        inviteSentAt: true, inviteSentCount: true,
       },
       orderBy: { boothNumber: 'asc' },
     });
@@ -133,6 +136,16 @@ export const createVendorBooth = async (req: AuthRequest, res: Response) => {
         status: 'PENDING',
       },
     });
+
+    // Booth invite email. Fire-and-forget with a .catch, exactly like
+    // consignorController.ts sendConsignorPayout(...).catch(...) -- a delivery failure
+    // must NEVER fail booth creation, so this is deliberately not awaited and the
+    // service itself never throws (it returns { sent, reason }).
+    if (booth.vendorEmail) {
+      sendVendorBoothInviteEmail(booth.id).catch(err =>
+        console.warn('[booth-invite] Invite email failed for booth', booth.id, err)
+      );
+    }
 
     return res.status(201).json(serializeBooth(booth));
   } catch (error) {
@@ -253,6 +266,56 @@ export const deleteVendorBooth = async (req: AuthRequest, res: Response) => {
   } catch (error) {
     console.error('[deleteVendorBooth] Error:', error);
     return res.status(500).json({ error: 'Failed to delete vendor booth' });
+  }
+};
+
+/**
+ * POST /api/organizer/hubs/:hubId/vendor-booths/:boothId/invite
+ * Organizer-only. Re-sends the booth claim invite to VendorBooth.vendorEmail.
+ * Ownership check is the SAME three-step chain updateVendorBooth uses above:
+ * getOrganizerWorkspace(req.user.id) -> saleHub.findFirst({ id: hubId, organizerId })
+ * -> vendorBooth.findFirst({ id: boothId, hubId, deletedAt: null }). A user who is not
+ * this hub's organizer never gets past the hub lookup (404, same as the siblings).
+ * Awaited (unlike the create-time send) so the organizer gets a real answer.
+ */
+export const resendVendorBoothInvite = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) return res.status(401).json({ error: 'Authentication required' });
+    const { hubId, boothId } = req.params;
+
+    const result = await getOrganizerWorkspace(req.user.id);
+    if (!result) return res.status(404).json({ error: 'Organizer profile not found' });
+    const { organizer } = result;
+
+    const hub = await prisma.saleHub.findFirst({ where: { id: hubId, organizerId: organizer.id } });
+    if (!hub) return res.status(404).json({ error: 'Hub not found' });
+
+    const existing = await prisma.vendorBooth.findFirst({ where: { id: boothId, hubId, deletedAt: null } });
+    if (!existing) return res.status(404).json({ error: 'Vendor booth not found' });
+
+    if (!existing.vendorEmail) {
+      return res.status(400).json({ error: 'This booth has no vendor email. Add one first, then send the invite.' });
+    }
+
+    const sendResult = await sendVendorBoothInviteEmail(boothId);
+    if (!sendResult.sent) {
+      return res.status(409).json({ error: sendResult.reason || 'Invite was not sent' });
+    }
+
+    const refreshed = await prisma.vendorBooth.findUnique({
+      where: { id: boothId },
+      select: { inviteSentAt: true, inviteSentCount: true },
+    });
+
+    return res.status(200).json({
+      sent: true,
+      vendorEmail: existing.vendorEmail,
+      inviteSentAt: refreshed?.inviteSentAt ?? null,
+      inviteSentCount: refreshed?.inviteSentCount ?? 0,
+    });
+  } catch (error) {
+    console.error('[resendVendorBoothInvite] Error:', error);
+    return res.status(500).json({ error: 'Failed to send booth invite' });
   }
 };
 
