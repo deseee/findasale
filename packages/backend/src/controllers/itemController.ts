@@ -35,6 +35,7 @@ import { checkAndAward } from '../services/achievementService'; // Feature #58: 
 import { notifyFacebookExportedItemSold } from '../services/facebookNudgeService'; // Bug #461: FB nudge on single-item SOLD
 import { republishEbayOffer, ebayPublishWithSelfHeal, ensureConditionValidForCategory } from '../services/ebayPublishService'; // Phase 2 relocation + Phase 3 rewire (ADR 2026-06-30)
 import { assertCheckoutAllowed, CheckoutGuardError } from '../services/checkoutGuard'; // S1072 Finding #4: collusion/wash-trade guard
+import { commitItemSale, ItemAlreadyCommittedError } from '../services/itemSaleGuard'; // ADR-098: atomic double-sell guard
 import { removeItemFromShopify, updateShopifyProductFields, markShopifyItemSold } from '../services/shopifyService'; // Cross-platform sync: unpublish on delete + propagate price/quantity edits + mark-sold-elsewhere
 
 /** Decode HTML entities from CSV/eBay data before writing to the DB. */
@@ -1325,7 +1326,20 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     if (auctionReservePrice !== undefined) updateData.auctionReservePrice = auctionReservePrice ? parseFloat(auctionReservePrice) : null;
     if (bidIncrement !== undefined) updateData.bidIncrement = bidIncrement ? parseFloat(bidIncrement) : null;
     if (auctionEndTime !== undefined) updateData.auctionEndTime = auctionEndTime ? new Date(auctionEndTime) : null;
-    if (status !== undefined) updateData.status = status;
+    // ADR-098 (2026-07-29): SOLD is a sale-completing transition -- route it through
+    // the atomic commitItemSale() guard (services/itemSaleGuard.ts) instead of folding
+    // it straight into the generic updateData write below. This closes the double-sell
+    // race where a concurrent POS/terminal/checkout sale could win the same item at the
+    // same time as this generic single-item edit endpoint (confirmed real incident,
+    // ADR-098 Section 1). Throws ItemAlreadyCommittedError (caught below -> 409) if
+    // another request already won the race. All other status values keep the existing
+    // plain-write path -- flagged as a P2 follow-up in ADR-098 Section 5 (can an
+    // organizer revert SOLD -> AVAILABLE and re-sell?), not fixed in this pass.
+    if (status !== undefined && status === 'SOLD' && item.status !== 'SOLD') {
+      await commitItemSale(id, 'SOLD');
+    } else if (status !== undefined) {
+      updateData.status = status;
+    }
     if (ebayCategoryId !== undefined) updateData.ebayCategoryId = ebayCategoryId || null;
     if (ebayCategoryName !== undefined) updateData.ebayCategoryName = ebayCategoryName || null;
     if (conditionGrade !== undefined) updateData.conditionGrade = conditionGrade || null; // #145: Persist condition grade
@@ -1887,6 +1901,10 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
       }
     }
   } catch (error) {
+    // ADR-098: another request already committed this item's sale (double-sell race lost).
+    if (error instanceof ItemAlreadyCommittedError) {
+      return res.status(409).json({ message: 'This item already shows as sold -- refresh to see its current status.' });
+    }
     console.error('Error updating item:', error);
     res.status(500).json({ message: 'Server error while updating item' });
   }

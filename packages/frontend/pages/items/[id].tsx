@@ -37,12 +37,14 @@ import BidHistory from '../../components/BidHistory'; // ADR-013 Phase 2: Bid hi
 import SoldItemBanner from '../../components/SoldItemBanner';
 import SimilarItemsGrid from '../../components/SimilarItemsGrid';
 import EbayCompTiles from '../../components/EbayCompTiles';
+import MessageComposeModal from '../../components/MessageComposeModal'; // ADR-097: item-scoped messaging entry point
 
 interface Item {
   id: string;
   title: string;
   description: string;
   price: number;
+  organizerId?: string; // ADR-097: type gap fix — backend already returns this top-level field
   auctionStartPrice: number;
   auctionReservePrice?: number;
   currentBid: number;
@@ -207,6 +209,7 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
   const [showSwitchSaleModal, setShowSwitchSaleModal] = useState(false); // Phase 1: Smart Cart — cross-sale confirmation
   const [pendingCartItem, setPendingCartItem] = useState<any>(null); // Phase 1: Smart Cart
   const [bidModalOpen, setBidModalOpen] = useState(false);
+  const [itemMessageModalOpen, setItemMessageModalOpen] = useState(false); // ADR-097
   const [scoutRevealModalOpen, setScoutRevealModalOpen] = useState(false);
   const [scoutRevealResults, setScoutRevealResults] = useState<Array<{ displayName: string; avatarUrl: string | null; savedAt: string }> | null>(null);
   const socketRef = useRef<Socket | null>(null);
@@ -1093,6 +1096,24 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
                           className="bg-blue-500 hover:bg-blue-600"
                         />
                       )}
+
+                      {/* ADR-097: Message about this item — item-scoped variant, distinct from
+                          the sale-level "Message Organizer" button on sales/[id].tsx */}
+                      {item.organizerId && (
+                        <button
+                          onClick={() => {
+                            if (!user) {
+                              router.push(`/login?redirect=${encodeURIComponent(router.asPath)}`);
+                              return;
+                            }
+                            setItemMessageModalOpen(true);
+                          }}
+                          title={!user ? 'Sign in to message the organizer' : ''}
+                          className="w-full py-2 px-4 rounded-lg font-semibold transition bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 border border-blue-300 dark:border-blue-700 hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                        >
+                          💬 Message about this item
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
@@ -1225,6 +1246,18 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
             setBidModalOpen(false);
             refetchItem();
           }}
+        />
+      )}
+
+      {/* ADR-097: Message about this item — item-scoped compose modal */}
+      {item && item.organizerId && (
+        <MessageComposeModal
+          open={itemMessageModalOpen}
+          onClose={() => setItemMessageModalOpen(false)}
+          organizerId={item.organizerId}
+          saleId={item.sale?.id}
+          itemId={item.id}
+          itemTitle={item.title}
         />
       )}
 

@@ -26,6 +26,7 @@ export const getConversations = async (req: AuthRequest, res: Response) => {
             messages: {
               orderBy: { createdAt: 'desc' },
               take: 1,
+              include: { item: { select: { id: true, title: true } } }, // ADR-097
             },
             _count: { select: { messages: { where: { isRead: false, senderId: { not: userId } } } } },
           },
@@ -51,6 +52,7 @@ export const getConversations = async (req: AuthRequest, res: Response) => {
           messages: {
             orderBy: { createdAt: 'desc' },
             take: 1,
+            include: { item: { select: { id: true, title: true } } }, // ADR-097
           },
           _count: { select: { messages: { where: { isRead: false, senderId: { not: userId } } } } },
         },
@@ -105,7 +107,10 @@ export const getThread = async (req: AuthRequest, res: Response) => {
 
     const messages = await prisma.message.findMany({
       where: { conversationId },
-      include: { sender: { select: { id: true, name: true } } },
+      include: {
+        sender: { select: { id: true, name: true } },
+        item: { select: { id: true, title: true } }, // ADR-097
+      },
       orderBy: { createdAt: 'asc' },
       take: 200, // M1: cap thread history — prevents runaway queries on long threads
     });
@@ -133,7 +138,7 @@ export const sendMessage = async (req: AuthRequest, res: Response) => {
     if (!req.user) return res.status(401).json({ message: 'Authentication required' });
 
     const userId = req.user.id;
-    const { organizerId, saleId, body } = req.body;
+    const { organizerId, saleId, itemId, body } = req.body;
 
     if (!organizerId || !body?.trim()) {
       return res.status(400).json({ message: 'organizerId and body are required' });
@@ -150,6 +155,19 @@ export const sendMessage = async (req: AuthRequest, res: Response) => {
           message: 'This listing is not yet claimed by an organizer. Try one of our verified organizer sales.',
           code: 'UNMANAGED_LISTING',
         });
+      }
+    }
+
+    // ADR-097: if an itemId was supplied, confirm it belongs to the sale being messaged
+    // about BEFORE creating any records — defense against a client sending an itemId
+    // from an unrelated sale (IDOR mitigation, CLAUDE.md §9 Security-QA Gate).
+    if (itemId) {
+      const item = await prisma.item.findUnique({
+        where: { id: itemId },
+        select: { saleId: true },
+      });
+      if (!item || (saleId && item.saleId !== saleId)) {
+        return res.status(400).json({ message: 'Invalid item for this sale.' });
       }
     }
 
@@ -185,9 +203,13 @@ export const sendMessage = async (req: AuthRequest, res: Response) => {
         data: {
           conversationId: conv.id,
           senderId: userId,
+          itemId: itemId ?? null, // ADR-097
           body: body.trim(),
         },
-        include: { sender: { select: { id: true, name: true } } },
+        include: {
+          sender: { select: { id: true, name: true } },
+          item: { select: { id: true, title: true } }, // ADR-097
+        },
       });
 
       return [conv, msg] as const;
@@ -221,7 +243,7 @@ export const replyInThread = async (req: AuthRequest, res: Response) => {
     if (!req.user) return res.status(401).json({ message: 'Authentication required' });
 
     const { conversationId } = req.params;
-    const { body } = req.body;
+    const { body, itemId } = req.body;
     const userId = req.user.id;
 
     if (!body?.trim()) return res.status(400).json({ message: 'body is required' });
@@ -245,9 +267,13 @@ export const replyInThread = async (req: AuthRequest, res: Response) => {
         data: {
           conversationId,
           senderId: userId,
+          itemId: itemId ?? null, // ADR-097
           body: body.trim(),
         },
-        include: { sender: { select: { id: true, name: true } } },
+        include: {
+          sender: { select: { id: true, name: true } },
+          item: { select: { id: true, title: true } }, // ADR-097
+        },
       }),
       prisma.conversation.update({
         where: { id: conversationId },

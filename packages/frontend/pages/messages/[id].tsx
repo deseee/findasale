@@ -15,6 +15,7 @@ interface Message {
   isRead: boolean;
   createdAt: string;
   sender: { id: string; name: string };
+  item?: { id: string; title: string } | null; // NEW (ADR-097)
 }
 
 interface ConversationDetail {
@@ -156,6 +157,11 @@ const MessageThreadPage = () => {
                     : 'bg-white dark:bg-gray-800 text-warm-900 dark:text-warm-100 border border-warm-200 dark:border-gray-700 rounded-bl-sm'
                 }`}
               >
+                {msg.item && (
+                  <div className={`text-[10px] font-medium mb-1 ${isMine ? 'text-amber-100' : 'text-amber-600'}`}>
+                    Re: {msg.item.title}
+                  </div>
+                )}
                 {msg.body}
                 <div className={`text-[10px] mt-1 ${isMine ? 'text-amber-200' : 'text-warm-400'}`}>
                   {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}

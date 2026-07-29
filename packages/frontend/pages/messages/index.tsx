@@ -13,7 +13,7 @@ interface ConversationSummary {
   shopperUser?: { id: string; name: string };
   organizer?: { id: string; businessName: string; userId: string };
   lastMessageAt: string;
-  messages: Array<{ body: string; createdAt: string; senderId: string }>;
+  messages: Array<{ body: string; createdAt: string; senderId: string; item?: { id: string; title: string } | null }>; // ADR-097: item optional
   _count: { messages: number };
   roleContext?: 'organizer' | 'shopper';
 }
@@ -162,6 +162,7 @@ const MessagesPage = () => {
                     {preview && (
                       <p className={`text-xs truncate mt-0.5 ${unread > 0 ? 'text-warm-900 dark:text-warm-100 font-medium' : 'text-warm-500 dark:text-warm-400'}`}>
                         {preview.senderId === user.id ? 'You: ' : ''}{preview.body}
+                        {preview.item && <span className="text-warm-400"> · Re: {preview.item.title}</span>}
                       </p>
                     )}
                   </div>

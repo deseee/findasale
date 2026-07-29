@@ -8,6 +8,8 @@ interface MessageComposeModalProps {
   onClose: () => void;
   organizerId: string;
   saleId?: string | null;
+  itemId?: string | null;      // NEW (ADR-097)
+  itemTitle?: string | null;   // NEW (ADR-097) — for display only, e.g. "Re: Vintage Rolex"
   onSuccess?: (conversationId: string) => void;
 }
 
@@ -16,6 +18,8 @@ const MessageComposeModal: React.FC<MessageComposeModalProps> = ({
   onClose,
   organizerId,
   saleId,
+  itemId,
+  itemTitle,
   onSuccess,
 }) => {
   const [subject, setSubject] = useState('');
@@ -37,6 +41,7 @@ const MessageComposeModal: React.FC<MessageComposeModalProps> = ({
       const result = await sendMessageMutation.mutateAsync({
         organizerId,
         saleId: saleId || undefined,
+        itemId: itemId || undefined,
         body: body.trim(),
       });
 
@@ -81,6 +86,13 @@ const MessageComposeModal: React.FC<MessageComposeModalProps> = ({
 
         {/* Content */}
         <div className="p-4 space-y-4">
+          {/* Item context chip (ADR-097) — non-editable confirmation of which item this message is about */}
+          {itemTitle && (
+            <div className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium
+              bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+              About: {itemTitle}
+            </div>
+          )}
           {/* Subject Field (Optional) */}
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">

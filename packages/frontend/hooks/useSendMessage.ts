@@ -4,6 +4,7 @@ import api from '../lib/api';
 export interface SendMessagePayload {
   organizerId: string;
   saleId?: string | null;
+  itemId?: string | null;   // NEW (ADR-097)
   body: string;
 }
 
@@ -20,6 +21,8 @@ export interface SendMessageResponse {
     id: string;
     conversationId: string;
     senderId: string;
+    itemId?: string | null;                              // NEW (ADR-097)
+    item?: { id: string; title: string } | null;          // NEW (ADR-097)
     body: string;
     isRead: boolean;
     createdAt: string;

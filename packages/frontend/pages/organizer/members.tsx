@@ -177,14 +177,18 @@ const OrganizerMembersPage = () => {
   } = useRegisterAccess(workspaceId);
   const setRegisterAccessMutation = useSetRegisterAccess(workspaceId);
 
-  if (authLoading) return null;
-  if (!user || !user.roles?.includes('ORGANIZER')) {
+  if (authLoading || workspaceLoading) return null;
+  if (!user || (!user.roles?.includes('ORGANIZER') && !workspace)) {
     router.push('/login');
     return null;
   }
 
-  // Non-TEAMS: show tier upgrade wall
-  if (tier !== 'TEAMS') {
+  // Non-TEAMS: show tier upgrade wall (skip if the user belongs to any workspace —
+  // workspace membership means a TEAMS-tier owner invited them; gating on the
+  // logged-in user's OWN personal tier here was the S-STAFF-DEADEND root cause,
+  // since staff/members are never given the ORGANIZER role or a TEAMS tier of
+  // their own. Root-caused 2026-07-29, Row 12.)
+  if (tier !== 'TEAMS' && !workspace) {
     return (
       <>
         <Head>

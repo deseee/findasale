@@ -20,6 +20,7 @@ import { getIO } from '../lib/socket';
 import { createNotification } from '../lib/notificationService';
 import { getPlatformFeeRate, SubscriptionTier } from '../utils/feeCalculator';
 import { transactionalEmailService } from '../lib/transactionalEmailService';
+import { commitItemSale, ItemAlreadyCommittedError } from '../services/itemSaleGuard'; // ADR-098: atomic double-sell guard
 
 const stripe = () => getStripe();
 
@@ -548,6 +549,26 @@ export const sendHoldInvoice = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: 'Invoice already exists for this reservation' });
     }
 
+    // ADR-098 (2026-07-29): re-verify + atomically claim the held item before invoicing it.
+    // This endpoint previously never read Item.status or Purchase at all -- it relied
+    // entirely on ItemReservation.status (already checked above via reservation lookup),
+    // which left a gap: a hold created minutes ago on an item since sold through a
+    // *different* channel (e.g. the generic single-item edit path, or a race against
+    // Terminal/checkout) could still be invoiced and paid (ADR-098 Section 3 point 1).
+    // A plain read-only precondition check would NOT close this race (that's exactly the
+    // TOCTOU gap Option B eliminates) -- so this atomically transitions Item.status to
+    // INVOICE_ISSUED, matching the same value reservationController.ts's own hold-to-pay
+    // path already writes at invoice time (see markSoldAndCreateInvoice). The Stripe
+    // webhook remains the sole SOLD-setter once payment is actually captured.
+    try {
+      await commitItemSale(reservation.itemId, 'INVOICE_ISSUED', ['AVAILABLE', 'RESERVED']);
+    } catch (guardError) {
+      if (guardError instanceof ItemAlreadyCommittedError) {
+        return res.status(409).json({ message: 'This item is no longer available to invoice -- it may have already been sold or invoiced elsewhere.' });
+      }
+      throw guardError;
+    }
+
     // Calculate total: held item + misc items
     const heldItemTotal = Math.round(reservation.item.price! * 100); // in cents
     const miscTotal = miscItems ? miscItems.reduce((sum, item) => sum + Math.round(item.amount * 100), 0) : 0;
@@ -1007,6 +1028,29 @@ export const createCombinedInvoice = async (req: AuthRequest, res: Response) => 
       }
       if (heldItem.invoiceId) {
         return res.status(409).json({ message: `Hold ${heldItem.id} already has an invoice` });
+      }
+    }
+
+    // ADR-098 (2026-07-29): re-verify + atomically claim every held item before invoicing
+    // the cart. Same gap as sendHoldInvoice (ADR-098 Section 3 point 1) — this endpoint
+    // previously never read Item.status or Purchase, relying solely on
+    // ItemReservation.status (HOLD_IN_CART, checked above), so an item sold through a
+    // different channel since it was pulled into this cart could still be invoiced. All
+    // items in the cart are committed inside ONE transaction so that if any single item
+    // loses the race, the whole cart's invoice creation is blocked together rather than
+    // silently invoicing a partial cart.
+    if (heldReservations.length > 0) {
+      try {
+        await prisma.$transaction(async (tx) => {
+          for (const heldItem of heldReservations) {
+            await commitItemSale(heldItem.item.id, 'INVOICE_ISSUED', ['AVAILABLE', 'RESERVED'], tx);
+          }
+        });
+      } catch (guardError) {
+        if (guardError instanceof ItemAlreadyCommittedError) {
+          return res.status(409).json({ message: 'One or more items in this cart are no longer available to invoice -- they may have already been sold or invoiced elsewhere.' });
+        }
+        throw guardError;
       }
     }
 

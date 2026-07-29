@@ -12,7 +12,7 @@ import { useAuth } from '../../components/AuthContext';
  */
 const NewMessagePage = () => {
   const router = useRouter();
-  const { organizerId, saleId } = router.query as { organizerId?: string; saleId?: string };
+  const { organizerId, saleId, itemId } = router.query as { organizerId?: string; saleId?: string; itemId?: string };
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [body, setBody] = useState('');
@@ -22,6 +22,7 @@ const NewMessagePage = () => {
       const res = await api.post('/messages', {
         organizerId,
         saleId: saleId || null,
+        itemId: itemId || null,
         body: text,
       });
       return res.data as { conversation: { id: string }; message: unknown };

@@ -31,7 +31,7 @@ import { markShopifyItemSold } from '../services/shopifyService'; // Feature: Sh
 import { sellItemUnits, InsufficientStockError } from '../services/itemStockService'; // ADR-085 Track B Phase 1 Step 4
 import { syncMarketplaceStock } from '../services/marketplaceStockSyncService'; // ADR-087 Phase 4: revise-on-partial eBay quantity sync
 import { sendConsignorItemSold } from '../services/consignorEmailService'; // Feature #309: Consignor email notifications
-import { applyFirstMonthRefundCap, logRefundProcessing, executeVerifiedRefund, RefundError, sendRefundConfirmationEmail } from '../services/refundService'; // P2-2: Refund cap + logging; P1 fix (2026-07-29): shared refund execution (see refundService.ts) + dispute-triggered refund confirmation
+import { executeVerifiedRefund, RefundError, sendRefundConfirmationEmail } from '../services/refundService'; // P1 fix (2026-07-29): shared refund execution (see refundService.ts) + dispute-triggered refund confirmation. applyFirstMonthRefundCap/logRefundProcessing no longer used here — see the cap-removal comment at this file's createRefund call site.
 import { transactionalEmailService } from '../lib/transactionalEmailService';
 import { assertCheckoutAllowed, assertGuestCheckoutAllowed, recordConfirmedSignal, CheckoutGuardError } from '../services/checkoutGuard'; // S1072 Finding #4: collusion/wash-trade guard
 import { recordPosPaymentLinkSale } from '../services/posPaymentLinkRecorder'; // ADR pos-webhook-idempotency-reconciliation (2026-07-23, S1151)
@@ -1522,6 +1522,10 @@ export const webhookHandler = async (req: Request, res: Response) => {
         }
 
         // Notify organizer of payment received
+        // Root-caused 2026-07-29 (Row 14): this call wrote an in-app Notification row
+        // only -- sendEmail was never passed, so organizers away from the app had no
+        // way to learn a sale happened until they opened it. createNotification()
+        // (packages/backend/src/lib/notificationService.ts) only emails when told to.
         if (purchase.sale?.organizer?.userId) {
           createNotification({
             userId: purchase.sale!.organizer.userId,
@@ -1530,6 +1534,7 @@ export const webhookHandler = async (req: Request, res: Response) => {
             body: `Payment of $${(paymentIntent.amount_received / 100).toFixed(2)} received for "${purchase.item?.title || 'item'}"`,
             link: `/organizer/sales/${purchase.saleId}`,
             channel: 'OPERATIONAL',
+            sendEmail: true,
           }).catch(() => {});
         }
 
@@ -2910,12 +2915,17 @@ export const createRefund = async (req: AuthRequest, res: Response) => {
       }
     }
 
-    // P2-2: Apply first-month refund cap for new accounts. Capping stays HERE (not inside
-    // executeVerifiedRefund) — each caller of executeVerifiedRefund has its own idea of the
-    // "requested" amount before capping. This endpoint caps purchase.amount;
-    // disputeController.ts's updateDisputeStatus caps the dispute's requested refundAmount.
-    const { cappedAmount, wasCapped } = await applyFirstMonthRefundCap(purchase.userId ?? "", purchase.amount);
-    const refundAmount = cappedAmount;
+    // P2-2 cap REMOVED (2026-07-29, Patrick decision): this is a seller/admin-initiated
+    // refund (organizer refunding their own sale, or an admin acting on their behalf) — the
+    // first-month cap exists to blunt NEW-ACCOUNT FRAUD from whoever is REQUESTING a refund,
+    // which doesn't apply when the platform/organizer is the one choosing to issue it.
+    // Confirmed live 2026-07-29: this cap silently halved a legitimate refund for a genuine
+    // double-sale (buyer owed $12, got $6, no warning shown anywhere in the UI) before this
+    // was caught and fixed with a manual top-up. applyFirstMonthRefundCap is kept in
+    // refundService.ts for a possible future BUYER-initiated self-service refund flow, but is
+    // no longer called from this seller/admin-initiated endpoint.
+    const refundAmount = purchase.amount;
+    const wasCapped = false;
 
     // Money movement — the PAID-status check, payment-intent-exists check, 30-day window,
     // the PAID->REFUNDING TOCTOU compare-and-swap claim + idempotency key, the booth-cart-vs

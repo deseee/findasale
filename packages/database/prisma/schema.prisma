@@ -1333,6 +1333,8 @@ model Item {
   // pending-updates poll. Null = never listed, or listed before this field existed (falls
   // back to "unknown, needs first sync").
   marketplaceListedPrice          Int?
+  // ADR-097 (2026-07-29): item-scoped messaging — messages that reference this item
+  messages                        Message[]
   createdAt                       DateTime                @default(now())
   updatedAt                       DateTime                @updatedAt
 
@@ -1707,12 +1709,15 @@ model Message {
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   senderId       String?
   sender         User?        @relation("SentMessages", fields: [senderId], references: [id], onDelete: SetNull)
+  itemId         String?                                                              // NEW (ADR-097)
+  item           Item?        @relation(fields: [itemId], references: [id], onDelete: SetNull)  // NEW (ADR-097)
   body           String
   isRead         Boolean      @default(false)
   createdAt      DateTime     @default(now())
 
   @@index([conversationId])
   @@index([senderId])
+  @@index([itemId])                                                                   // NEW (ADR-097)
 }
 
 // Phase 17: Shopper follows an organizer
