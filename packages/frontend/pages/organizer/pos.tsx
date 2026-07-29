@@ -135,6 +135,16 @@ export default function POSPage() {
   // Cart state
   const [cart, setCart] = useState<CartItem[]>([]);
   const [buyerEmail, setBuyerEmail] = useState('');
+  // BQ fix (2026-07-29): moved up from its original spot further down in this
+  // component (was a plain `const cartTotal = ...` right before the numpad-ops
+  // section) -- the S1178 venue-mode useCallback added tonight references
+  // cartTotal in its dependency array and is declared earlier in the component
+  // than the original cartTotal line, causing a real "used before its
+  // declaration" TypeScript compile error (block-scoped const, not hoisted).
+  // Only cartTotal itself needed to move -- cartChange/cardAmount (which derive
+  // from cartTotal) stay at their original location, nothing else references
+  // them before that point.
+  const cartTotal = cart.reduce((sum, c) => sum + c.amount, 0);
 
   // Numpad state (price / custom amount only)
   const [numpadOpen, setNumpadOpen] = useState(false);
@@ -1048,7 +1058,7 @@ export default function POSPage() {
     setSearchResults([]);
   };
 
-  const cartTotal = cart.reduce((sum, c) => sum + c.amount, 0);
+  // cartTotal declaration moved up to right after `cart` state (see comment there) -- S1178 BQ fix.
   const cartChange = Math.max(0, cashReceived - cartTotal);
   // Amount to charge on card: cartTotal minus cash if a partial cash payment is entered
   const cardAmount = cashReceived > 0 && cashReceived < cartTotal ? cartTotal - cashReceived : cartTotal;
