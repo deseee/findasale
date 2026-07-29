@@ -61,6 +61,9 @@ const AdminUserDetail = () => {
   const [msgBody, setMsgBody] = useState('');
   const [msgSending, setMsgSending] = useState(false);
   const [msgResult, setMsgResult] = useState<{ ok: boolean; text: string } | null>(null);
+  const [refundModalPurchase, setRefundModalPurchase] = useState<Purchase | null>(null);
+  const [refundLoading, setRefundLoading] = useState(false);
+  const [refundError, setRefundError] = useState('');
 
   useEffect(() => {
     if (!isLoading && (!user || !user.roles?.includes('ADMIN'))) {
@@ -297,7 +300,8 @@ const AdminUserDetail = () => {
                 <tr className="text-left text-xs font-medium text-warm-500 dark:text-warm-400 uppercase tracking-wide">
                   <th className="pb-2 pr-4">Date</th>
                   <th className="pb-2 pr-4">Amount</th>
-                  <th className="pb-2">Status</th>
+                  <th className="pb-2 pr-4">Status</th>
+                  <th className="pb-2">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-warm-100 dark:divide-gray-700">
@@ -316,13 +320,23 @@ const AdminUserDetail = () => {
                     <td className="py-2 pr-4 text-warm-700 dark:text-warm-300">
                       ${p.amount.toFixed(2)}
                     </td>
-                    <td className={`py-2 ${
+                    <td className={`py-2 pr-4 ${
                       p.status === 'PAID' ? 'text-green-600 dark:text-green-400' :
                       p.status === 'REFUNDED' ? 'text-orange-500 dark:text-orange-400' :
                       p.status === 'DISPUTED' ? 'text-red-600 dark:text-red-400' :
                       'text-warm-500 dark:text-warm-400'
                     }`}>
                       {p.status}
+                    </td>
+                    <td className="py-2">
+                      {p.status === 'PAID' && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setRefundModalPurchase(p); setRefundError(''); }}
+                          className="px-2.5 py-1 text-xs font-medium bg-red-600 hover:bg-red-700 text-white rounded transition-colors"
+                        >
+                          Refund
+                        </button>
+                      )}
                     </td>
                   </tr>
                   );
@@ -401,6 +415,67 @@ const AdminUserDetail = () => {
                 className="px-4 py-2 text-sm font-medium bg-amber-600 hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded transition-colors"
               >
                 {msgSending ? 'Sending...' : 'Send'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Refund Confirmation Modal */}
+      {refundModalPurchase && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md">
+            <div className="flex items-center justify-between p-5 border-b border-warm-200 dark:border-gray-700">
+              <h2 className="text-base font-semibold text-warm-900 dark:text-warm-100">
+                Confirm Refund
+              </h2>
+              <button
+                onClick={() => { if (!refundLoading) { setRefundModalPurchase(null); setRefundError(''); } }}
+                className="text-warm-400 hover:text-warm-600 dark:text-warm-500 dark:hover:text-warm-300 text-xl leading-none"
+              >
+                ×
+              </button>
+            </div>
+            <div className="p-5 space-y-3">
+              <p className="text-sm text-warm-700 dark:text-warm-300">
+                Refund <span className="font-semibold">${refundModalPurchase.amount.toFixed(2)}</span> to{' '}
+                {userData.email}? This reverses the Stripe charge and cannot be undone.
+              </p>
+              {refundError && (
+                <p className="text-sm text-red-600 dark:text-red-400">{refundError}</p>
+              )}
+            </div>
+            <div className="flex justify-end gap-3 px-5 pb-5">
+              <button
+                onClick={() => { if (!refundLoading) { setRefundModalPurchase(null); setRefundError(''); } }}
+                disabled={refundLoading}
+                className="px-4 py-2 text-sm text-warm-600 dark:text-warm-400 hover:text-warm-900 dark:hover:text-warm-100 disabled:opacity-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                disabled={refundLoading}
+                onClick={async () => {
+                  const target = refundModalPurchase;
+                  if (!target) return;
+                  setRefundLoading(true);
+                  setRefundError('');
+                  try {
+                    await api.post(`/stripe/refund/${target.id}`);
+                    setUserData(prev => prev ? {
+                      ...prev,
+                      purchases: prev.purchases.map(p => p.id === target.id ? { ...p, status: 'REFUNDED' } : p),
+                    } : prev);
+                    setRefundModalPurchase(null);
+                  } catch (err: any) {
+                    setRefundError(err?.response?.data?.message || 'Failed to issue refund');
+                  } finally {
+                    setRefundLoading(false);
+                  }
+                }}
+                className="px-4 py-2 text-sm font-medium bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded transition-colors"
+              >
+                {refundLoading ? 'Refunding…' : 'Refund'}
               </button>
             </div>
           </div>

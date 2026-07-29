@@ -33,6 +33,8 @@ const OrganizerPayoutsPage = () => {
   const [payoutAmount, setPayoutAmount] = useState('');
   const [payoutMethod, setPayoutMethod] = useState<'standard' | 'instant'>('standard');
   const [selectedInterval, setSelectedInterval] = useState<Interval | null>(null);
+  const [refundModalItem, setRefundModalItem] = useState<EarningsItem | null>(null);
+  const [refundError, setRefundError] = useState('');
 
   // ─── Data fetching ───────────────────────────────────────────────────────────
 
@@ -136,6 +138,22 @@ const OrganizerPayoutsPage = () => {
     },
     onError: (err: any) => {
       showToast(err.response?.data?.message || 'Failed to create payout', 'error');
+    },
+  });
+
+  const refundMutation = useMutation({
+    mutationFn: (purchaseId: string) => api.post(`/stripe/refund/${purchaseId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['earnings-breakdown'] });
+      queryClient.invalidateQueries({ queryKey: ['stripe-balance'] });
+      showToast('Refund issued', 'success');
+      setRefundModalItem(null);
+      setRefundError('');
+    },
+    onError: (err: any) => {
+      const msg = err.response?.data?.message || 'Failed to issue refund';
+      setRefundError(msg);
+      showToast(msg, 'error');
     },
   });
 
@@ -473,7 +491,8 @@ const OrganizerPayoutsPage = () => {
                         <th className="text-right text-xs font-medium text-gray-400 dark:text-gray-500 pb-2 pr-3">Price</th>
                         <th className="text-right text-xs font-medium text-gray-400 dark:text-gray-500 pb-2 pr-3 hidden sm:table-cell">Platform</th>
                         <th className="text-right text-xs font-medium text-gray-400 dark:text-gray-500 pb-2 pr-3 hidden md:table-cell">Stripe</th>
-                        <th className="text-right text-xs font-medium text-gray-400 dark:text-gray-500 pb-2">Net</th>
+                        <th className="text-right text-xs font-medium text-gray-400 dark:text-gray-500 pb-2 pr-3">Net</th>
+                        <th className="text-right text-xs font-medium text-gray-400 dark:text-gray-500 pb-2">Action</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -493,8 +512,17 @@ const OrganizerPayoutsPage = () => {
                           <td className="py-2 pr-3 text-right text-orange-400 dark:text-orange-300 text-xs hidden md:table-cell whitespace-nowrap">
                             ~−${item.stripeFee.toFixed(2)}
                           </td>
-                          <td className="py-2 text-right text-green-600 dark:text-green-400 font-semibold whitespace-nowrap">
+                          <td className="py-2 pr-3 text-right text-green-600 dark:text-green-400 font-semibold whitespace-nowrap">
                             ${item.netPayout.toFixed(2)}
+                          </td>
+                          <td className="py-2 text-right whitespace-nowrap">
+                            <button
+                              type="button"
+                              onClick={() => { setRefundModalItem(item); setRefundError(''); }}
+                              className="px-2.5 py-1 text-xs font-medium bg-red-600 hover:bg-red-700 text-white rounded transition-colors"
+                            >
+                              Refund
+                            </button>
                           </td>
                         </tr>
                       ))}
@@ -513,6 +541,51 @@ const OrganizerPayoutsPage = () => {
 
         </div>
       </div>
+
+      {/* Refund Confirmation Modal */}
+      {refundModalItem && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-xl w-full max-w-md">
+            <div className="flex items-center justify-between p-5 border-b border-gray-200 dark:border-gray-700">
+              <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">
+                Confirm Refund
+              </h2>
+              <button
+                onClick={() => { if (!refundMutation.isPending) { setRefundModalItem(null); setRefundError(''); } }}
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-xl leading-none"
+              >
+                ×
+              </button>
+            </div>
+            <div className="p-5 space-y-3">
+              <p className="text-sm text-gray-600 dark:text-gray-300">
+                Refund <span className="font-semibold">${refundModalItem.salePrice.toFixed(2)}</span> for{' '}
+                <span className="font-semibold">{refundModalItem.itemTitle}</span> ({refundModalItem.saleTitle})?
+                This reverses the buyer's charge and cannot be undone.
+              </p>
+              {refundError && (
+                <p className="text-sm text-red-600 dark:text-red-400">{refundError}</p>
+              )}
+            </div>
+            <div className="flex justify-end gap-3 px-5 pb-5">
+              <button
+                onClick={() => { if (!refundMutation.isPending) { setRefundModalItem(null); setRefundError(''); } }}
+                disabled={refundMutation.isPending}
+                className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 disabled:opacity-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                disabled={refundMutation.isPending}
+                onClick={() => { if (refundModalItem) refundMutation.mutate(refundModalItem.purchaseId); }}
+                className="px-4 py-2 text-sm font-medium bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
+              >
+                {refundMutation.isPending ? 'Refunding…' : 'Refund'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 };
