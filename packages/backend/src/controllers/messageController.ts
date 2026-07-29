@@ -161,12 +161,21 @@ export const sendMessage = async (req: AuthRequest, res: Response) => {
     // ADR-097: if an itemId was supplied, confirm it belongs to the sale being messaged
     // about BEFORE creating any records — defense against a client sending an itemId
     // from an unrelated sale (IDOR mitigation, CLAUDE.md §9 Security-QA Gate).
+    //
+    // findasale-hacker fix (2026-07-29, ADR-097 security review): the comparison used
+    // to be gated behind `saleId && ...`, so a client that simply OMITTED saleId from
+    // the request body made that expression short-circuit to false, skipping the
+    // mismatch check entirely and letting an itemId from ANY unrelated sale/organizer
+    // through. The check must run unconditionally, comparing against the resolved
+    // (possibly-null) saleId with strict equality so an item with no sale (saleId:
+    // null, e.g. an unsold inventory item) only matches a request that also has no
+    // saleId — never a wildcard.
     if (itemId) {
       const item = await prisma.item.findUnique({
         where: { id: itemId },
         select: { saleId: true },
       });
-      if (!item || (saleId && item.saleId !== saleId)) {
+      if (!item || item.saleId !== (saleId ?? null)) {
         return res.status(400).json({ message: 'Invalid item for this sale.' });
       }
     }
@@ -261,6 +270,22 @@ export const replyInThread = async (req: AuthRequest, res: Response) => {
       : conversation.shopperUserId === userId;
 
     if (!ownedByUser) return res.status(403).json({ message: 'Access denied' });
+
+    // ADR-097 (findasale-hacker fix 2026-07-29, security review): replyInThread accepted
+    // a client-supplied itemId with NO validation whatsoever — either party in an
+    // existing conversation could attach any itemId in the system, including items
+    // belonging to a completely unrelated sale/organizer, or private/unpublished items.
+    // Mirror sendMessage's IDOR check, but derive the authoritative saleId from the
+    // conversation record itself (server-side), never from client input.
+    if (itemId) {
+      const item = await prisma.item.findUnique({
+        where: { id: itemId },
+        select: { saleId: true },
+      });
+      if (!item || item.saleId !== (conversation.saleId ?? null)) {
+        return res.status(400).json({ message: 'Invalid item for this conversation.' });
+      }
+    }
 
     const [message] = await prisma.$transaction([
       prisma.message.create({

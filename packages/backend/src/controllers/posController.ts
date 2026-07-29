@@ -587,7 +587,21 @@ export const sendHoldInvoice = async (req: AuthRequest, res: Response) => {
         totalAmount: grandTotal,
         platformFeeAmount,
         status: 'PENDING',
-        expiresAt: expiryHours ? new Date(Date.now() + expiryHours * 60 * 60 * 1000) : reservation.expiresAt,
+        // ADR-098 follow-up (findasale-hacker adversarial pass, 2026-07-29): clamp the
+        // custom expiryHours so this invoice can never outlive the underlying hold's own
+        // expiresAt. Item.status was just atomically set to INVOICE_ISSUED above (via
+        // commitItemSale) -- the ONLY thing that currently reclaims an INVOICE_ISSUED item
+        // back to AVAILABLE if the shopper never pays is reservationExpiryJob.ts, which acts
+        // purely on ItemReservation.expiresAt (it blindly resets Item.status regardless of
+        // its current value) and does not know about HoldInvoice.expiresAt at all. If an
+        // organizer-supplied expiryHours pushed this invoice's expiry PAST the hold's own
+        // expiresAt, that cron would release the item back to AVAILABLE (and it could be sold
+        // again) while this invoice was still technically live and payable -- reopening the
+        // exact double-sell class ADR-098 exists to close. Mirrors the same Math.min() clamp
+        // reservationController.ts's markSoldAndCreateInvoice already applies for this reason.
+        expiresAt: expiryHours
+          ? new Date(Math.min(Date.now() + expiryHours * 60 * 60 * 1000, reservation.expiresAt.getTime()))
+          : reservation.expiresAt,
       },
     });
 
