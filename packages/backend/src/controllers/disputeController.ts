@@ -1,7 +1,7 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
-import { applyFirstMonthRefundCap, logRefundProcessing, executeVerifiedRefund, RefundError, sendRefundConfirmationEmail } from '../services/refundService'; // P1 fix (2026-07-29): dispute-triggered refunds now actually call Stripe via the shared executeVerifiedRefund path
+import { executeVerifiedRefund, RefundError, sendRefundConfirmationEmail } from '../services/refundService'; // P1 fix (2026-07-29): dispute-triggered refunds now actually call Stripe via the shared executeVerifiedRefund path. applyFirstMonthRefundCap/logRefundProcessing no longer used here — see the cap-removal comment below.
 
 // POST /api/disputes — authenticated buyer creates dispute
 export const createDispute = async (req: AuthRequest, res: Response) => {
@@ -236,17 +236,17 @@ export const updateDisputeStatus = async (req: AuthRequest, res: Response) => {
       | { toEmail?: string | null; buyerName?: string | null; itemTitle?: string | null; organizerBusinessName?: string | null }
       | undefined;
 
-    // Platform Safety #100: Apply first-month refund cap if resolving with refund
+    // Platform Safety #100 cap REMOVED for this path (2026-07-29, Patrick decision):
+    // resolving a dispute with a refund is an ADMIN-initiated refund, not buyer self-service —
+    // the first-month cap exists to blunt new-account fraud from whoever is REQUESTING a
+    // refund, which doesn't apply when the platform is the one choosing to issue it. Confirmed
+    // live 2026-07-29: this cap silently halved a legitimate refund for a genuine double-sale
+    // (buyer owed $12, got $6, no warning shown anywhere in the UI) before this was caught and
+    // fixed with a manual top-up. applyFirstMonthRefundCap/logRefundProcessing are kept in
+    // refundService.ts for a possible future BUYER-initiated self-service refund flow, but are
+    // no longer called from this seller/admin-initiated path (or createRefund's). Leaving
+    // finalRefundAmount at its declared value (= refundAmount, uncapped) below.
     if (status === 'resolved' && refundAmount && refundAmount > 0) {
-      const { cappedAmount, wasCapped } = await applyFirstMonthRefundCap(existingDispute.buyer.id, refundAmount);
-      finalRefundAmount = cappedAmount;
-      refundCapApplied = wasCapped;
-
-      // Log refund processing
-      if (wasCapped) {
-        await logRefundProcessing(id, existingDispute.buyer.id, refundAmount, cappedAmount, true);
-      }
-
       // SECURITY (IDOR guard): Dispute.orderId is a free-text String field with NO Prisma
       // relation to Purchase (schema.prisma: "references Order or transaction ID") — it is
       // accepted verbatim from the BUYER's own request body at dispute-creation time with

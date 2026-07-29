@@ -301,7 +301,7 @@ const AdminUserDetail = () => {
                   <th className="pb-2 pr-4">Date</th>
                   <th className="pb-2 pr-4">Amount</th>
                   <th className="pb-2 pr-4">Status</th>
-                  <th className="pb-2">Action</th>
+                  <th className="pb-2 pl-3 sticky right-0 bg-white dark:bg-gray-800">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-warm-100 dark:divide-gray-700">
@@ -312,7 +312,7 @@ const AdminUserDetail = () => {
                   <tr
                     key={p.id}
                     onClick={() => { if (purchaseHref) router.push(purchaseHref); }}
-                    className={purchaseHref ? 'cursor-pointer hover:bg-warm-50 dark:hover:bg-gray-700/50 transition' : ''}
+                    className={`group ${purchaseHref ? 'cursor-pointer hover:bg-warm-50 dark:hover:bg-gray-700/50 transition' : ''}`}
                   >
                     <td className="py-2 pr-4 text-amber-600 hover:underline">
                       {new Date(p.createdAt).toLocaleDateString()}
@@ -328,7 +328,7 @@ const AdminUserDetail = () => {
                     }`}>
                       {p.status}
                     </td>
-                    <td className="py-2">
+                    <td className="py-2 pl-3 sticky right-0 bg-white dark:bg-gray-800 group-hover:bg-warm-50 dark:group-hover:bg-gray-700/50">
                       {p.status === 'PAID' && (
                         <button
                           onClick={(e) => { e.stopPropagation(); setRefundModalPurchase(p); setRefundError(''); }}

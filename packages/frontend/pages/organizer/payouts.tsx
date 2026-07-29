@@ -492,12 +492,12 @@ const OrganizerPayoutsPage = () => {
                         <th className="text-right text-xs font-medium text-gray-400 dark:text-gray-500 pb-2 pr-3 hidden sm:table-cell">Platform</th>
                         <th className="text-right text-xs font-medium text-gray-400 dark:text-gray-500 pb-2 pr-3 hidden md:table-cell">Stripe</th>
                         <th className="text-right text-xs font-medium text-gray-400 dark:text-gray-500 pb-2 pr-3">Net</th>
-                        <th className="text-right text-xs font-medium text-gray-400 dark:text-gray-500 pb-2">Action</th>
+                        <th className="text-right text-xs font-medium text-gray-400 dark:text-gray-500 pb-2 pl-3 sticky right-0 bg-white dark:bg-gray-800">Action</th>
                       </tr>
                     </thead>
                     <tbody>
                       {earnings.items.map((item) => (
-                        <tr key={item.purchaseId} className="border-b border-gray-50 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                        <tr key={item.purchaseId} className="group border-b border-gray-50 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
                           <td className="py-2 pr-3 text-gray-800 dark:text-gray-200 max-w-[140px] truncate">{item.itemTitle}</td>
                           <td className="py-2 pr-3 text-gray-500 dark:text-gray-400 hidden sm:table-cell max-w-[120px] truncate">{item.saleTitle}</td>
                           <td className="py-2 pr-3 text-gray-400 dark:text-gray-500 text-xs hidden md:table-cell whitespace-nowrap">
@@ -515,7 +515,7 @@ const OrganizerPayoutsPage = () => {
                           <td className="py-2 pr-3 text-right text-green-600 dark:text-green-400 font-semibold whitespace-nowrap">
                             ${item.netPayout.toFixed(2)}
                           </td>
-                          <td className="py-2 text-right whitespace-nowrap">
+                          <td className="py-2 pl-3 text-right whitespace-nowrap sticky right-0 bg-white dark:bg-gray-800 group-hover:bg-gray-50 dark:group-hover:bg-gray-700">
                             <button
                               type="button"
                               onClick={() => { setRefundModalItem(item); setRefundError(''); }}
