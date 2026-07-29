@@ -279,7 +279,14 @@ if (-not $SkipDB) {
     } elseif ($pgDump -and $railwayCli) {
         # Best path: get current public URL from Railway CLI (password auto-updates)
         # Pass full connection string directly to pg_dump — no parsing, no escaping issues
-        $connStr = (railway run --service Postgres -- cmd /c "echo %DATABASE_PUBLIC_URL%" 2>$null).Trim()
+        # BQ fix 2026-07-29 (S1178): the raw `railway run ...` output can be $null when
+        # the Railway CLI auth itself fails (e.g. a malformed RAILWAY_TOKEN with embedded
+        # whitespace/line breaks) -- calling .Trim() directly on that crashed the whole
+        # script with a cryptic "cannot call a method on a null-valued expression" instead
+        # of hitting the existing Add-Failure path below. Capture raw output first, only
+        # call .Trim() when it is actually a non-null string.
+        $rawConnStr = railway run --service Postgres -- cmd /c "echo %DATABASE_PUBLIC_URL%" 2>$null
+        $connStr = if ($rawConnStr) { $rawConnStr.Trim() } else { $null }
         if ($connStr) {
             # Append sslmode if not already present
             if ($connStr -notmatch 'sslmode=') { $connStr = "$connStr`?sslmode=require" }
