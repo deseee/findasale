@@ -44,7 +44,7 @@ function tierLabel(minPrice: Decimal, maxPrice: Decimal | null): string {
  */
 function resolveTierForPrice(
   price: Decimal,
-  sortedTiers: { minPrice: Decimal; maxPrice: Decimal | null; consignorRate: Decimal }[]
+  sortedTiers: { id: string; minPrice: Decimal; maxPrice: Decimal | null; consignorRate: Decimal }[]
 ) {
   for (const tier of sortedTiers) {
     const atOrAboveMin = price.greaterThanOrEqualTo(tier.minPrice);
