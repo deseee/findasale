@@ -93,7 +93,7 @@ export const requireBoothTokenOrTeamMember = () => {
       if (boothToken && typeof boothToken === 'string') {
         const booth = await prisma.vendorBooth.findUnique({
           where: { boothToken },
-          select: { id: true, hubId: true, status: true, deletedAt: true, userId: true },
+          select: { id: true, hubId: true, status: true, deletedAt: true, userId: true, registerAccessGrantedAt: true },
         });
 
         // A soft-deleted booth (removed from the hub via deleteVendorBooth, which sets
@@ -121,6 +121,19 @@ export const requireBoothTokenOrTeamMember = () => {
         // claiming rather than showing an "invalid token" dead end.
         if (!booth.userId) {
           return res.status(403).json({ message: 'This booth has not been claimed yet. The vendor must claim it before it can be used to check out shoppers.', code: 'BOOTH_NOT_CLAIMED' });
+        }
+
+        // Register access grant (2026-07-29, Patrick's decision): claiming a CONFIRMED booth
+        // is NO LONGER sufficient on its own to open the register. This is a SEPARATE,
+        // organizer-controlled grant, mirroring staffService.grantRegisterAccess for
+        // TeamMember rows (staffService.ts:556) -- see the comment on
+        // VendorBooth.registerAccessGrantedAt in schema.prisma for the full rationale. A
+        // distinct code (not BOOTH_TOKEN_INVALID/BOOTH_NOT_CLAIMED) lets the vendor-facing
+        // UI tell them their register access is pending the organizer's approval, rather
+        // than showing a dead-end "invalid token" or "claim it first" message that is no
+        // longer the accurate next step.
+        if (!booth.registerAccessGrantedAt) {
+          return res.status(403).json({ message: 'The market has not turned on register access for this booth yet. Ask the market organizer to grant it.', code: 'REGISTER_ACCESS_NOT_GRANTED' });
         }
 
         req.boothAuth = { type: 'BOOTH', vendorBoothId: booth.id, hubId };

@@ -11,6 +11,7 @@ import {
   payConsignorViaACH,
   updateConsignorOnboardingStatus,
 } from '../services/stripeConnectService';
+import { sendConsignorPaymentSetupInvite } from '../services/consignorEmailService';
 import { Decimal } from '@prisma/client/runtime/library';
 
 const stripe = () => getStripe();
@@ -109,10 +110,28 @@ export const initiateConsignorOnboarding = async (req: AuthRequest, res: Respons
     // Create onboarding link
     const onboardingUrl = await createOnboardingLink(accountId, returnUrl, refreshUrl);
 
+    // ADR-096: the consignor never logs into FindA.Sale, so when the organizer
+    // chooses "set up automatic payout" (emailConsignor=true), email the Stripe
+    // hosted link directly to the consignor rather than making the organizer
+    // relay it. Default false so existing callers that just want the raw
+    // link back (e.g. an organizer walking the consignor through it in person)
+    // are unaffected.
+    const emailConsignor = req.body?.emailConsignor === true;
+    if (emailConsignor && consignor.email) {
+      const workspace = await prisma.organizerWorkspace.findFirst({ where: { ownerId: userId } });
+      sendConsignorPaymentSetupInvite({
+        consignorName: consignor.name,
+        consignorEmail: consignor.email,
+        onboardingUrl,
+        organizerName: workspace?.name || 'your organizer',
+      }).catch((err) => console.warn('[consignor-payment-setup-email] Failed to send:', err));
+    }
+
     return res.json({
       consignorId,
       accountId,
       onboardingUrl,
+      emailSentToConsignor: emailConsignor && !!consignor.email,
     });
   } catch (error) {
     console.error('initiateConsignorOnboarding error:', error);

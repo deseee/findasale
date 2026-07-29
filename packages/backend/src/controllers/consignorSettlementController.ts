@@ -4,6 +4,7 @@ import { prisma } from '../lib/prisma';
 import { Decimal } from '@prisma/client/runtime/library';
 import { payConsignorViaACH } from '../services/stripeConnectService';
 import { sendConsignorPayout } from '../services/consignorEmailService';
+import { calculateConsignorPayout } from '../services/commissionCalcService';
 
 /**
  * #239 Multi-Consignor Estate Settlement — Phase 1 (plumbing, Stripe TEST MODE).
@@ -70,26 +71,28 @@ async function buildSettlementLines(saleId: string, workspaceId: string) {
   let totalGross = new Decimal(0);
   let totalNet = new Decimal(0);
 
-  const rows = consignors.map((c) => {
-    const gross = c.items.reduce(
-      (sum, item) => sum.plus(new Decimal(item.price || 0)),
-      new Decimal(0)
-    );
-    const net = gross.times(c.commissionRate).dividedBy(100);
-    totalGross = totalGross.plus(gross);
-    totalNet = totalNet.plus(net);
-    return {
-      consignorId: c.id,
-      name: c.name,
-      email: c.email,
-      commissionRate: c.commissionRate,
-      stripeOnboarded: c.stripeOnboarded,
-      stripeAccountId: c.stripeAccountId,
-      itemCount: c.items.length,
-      gross,
-      net,
-    };
-  });
+  // ADR-096: shared helper -- same calculateConsignorPayout() runPayout() uses,
+  // so the ad-hoc single-consignor payout path and this batch settlement path
+  // can never silently diverge (see ADR-090 for why that matters).
+  const rows = await Promise.all(
+    consignors.map(async (c) => {
+      const { gross, net, tierBreakdown } = await calculateConsignorPayout(c, c.items);
+      totalGross = totalGross.plus(gross);
+      totalNet = totalNet.plus(net);
+      return {
+        consignorId: c.id,
+        name: c.name,
+        email: c.email,
+        commissionRate: c.commissionRate,
+        stripeOnboarded: c.stripeOnboarded,
+        stripeAccountId: c.stripeAccountId,
+        itemCount: c.items.length,
+        gross,
+        net,
+        tierBreakdown,
+      };
+    })
+  );
 
   return { rows, totalGross, totalNet };
 }
@@ -142,6 +145,7 @@ export const previewConsignorSettlement = async (req: AuthRequest, res: Response
         net: r.net.toFixed(2),
         stripeOnboarded: r.stripeOnboarded,
         payoutMethod: r.stripeOnboarded ? 'ACH' : 'MANUAL_CASH_CHECK',
+        tierBreakdown: r.tierBreakdown ?? null,
       })),
     });
   } catch (error) {
@@ -209,6 +213,7 @@ export const createConsignorSettlementBatch = async (req: AuthRequest, res: Resp
             // Un-onboarded consignors are flagged for manual payout, never hard-blocking.
             method: r.stripeOnboarded ? 'ACH' : null,
             status: r.stripeOnboarded ? 'PENDING' : 'MANUAL_CASH_CHECK',
+            ...(r.tierBreakdown ? { tierBreakdown: r.tierBreakdown } : {}),
           })),
         },
       },

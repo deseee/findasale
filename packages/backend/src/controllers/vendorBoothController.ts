@@ -92,6 +92,9 @@ export const listVendorBooths = async (req: AuthRequest, res: Response) => {
         // what each null means, exactly as it already does for inviteSentAt.
         claimNotifiedAt: true, confirmNotifiedAt: true,
         decisionNotifiedAt: true, stripeNotifiedAt: true,
+        // Register access grant (2026-07-29, Patrick's decision) -- separate from
+        // claim/confirm. See VendorBooth.registerAccessGrantedAt in schema.prisma.
+        registerAccessGrantedAt: true,
       },
       orderBy: { boothNumber: 'asc' },
     });
@@ -451,6 +454,99 @@ export const resendVendorBoothNotification = async (req: AuthRequest, res: Respo
 };
 
 /**
+ * Register access grant (2026-07-29, Patrick's decision)
+ * ---------------------------------------------------------------------------
+ * Claiming a CONFIRMED booth (VendorBooth.userId set) is NO LONGER sufficient on its own
+ * to open the venue register -- that has to be a SEPARATE, organizer-controlled grant,
+ * mirroring staffService.grantRegisterAccess/revokeRegisterAccess for TeamMember rows
+ * (staffService.ts:556/610). See the comment on VendorBooth.registerAccessGrantedAt in
+ * schema.prisma for the full rationale and requireBoothAuth.ts's booth-token branch for
+ * the enforcement (403 REGISTER_ACCESS_NOT_GRANTED when this is null).
+ *
+ * Ownership check is the SAME three-step chain every sibling organizer-only booth endpoint
+ * in this file uses: getOrganizerWorkspace(req.user.id) -> saleHub.findFirst({ id: hubId,
+ * organizerId }) -> vendorBooth.findFirst({ id: boothId, hubId, deletedAt: null }). A user
+ * who is not this hub's organizer never gets past the hub lookup (404, same as the
+ * siblings).
+ *
+ * Both grant and revoke are idempotent: granting an already-granted booth is a no-op that
+ * still returns 200 with the (unchanged) grant timestamp; revoking a never-granted booth
+ * likewise no-ops rather than erroring. Neither write touches `status`, `userId`, or any
+ * other lifecycle field on the booth -- this is additive and orthogonal to claim/confirm,
+ * exactly per Patrick's "separate grant" instruction.
+ */
+
+/**
+ * POST /api/organizer/hubs/:hubId/vendor-booths/:boothId/register-access
+ * Organizer-only. Turn ON register access for one booth. Safe to call twice.
+ */
+export const grantBoothRegisterAccess = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) return res.status(401).json({ error: 'Authentication required' });
+    const { hubId, boothId } = req.params;
+
+    const result = await getOrganizerWorkspace(req.user.id);
+    if (!result) return res.status(404).json({ error: 'Organizer profile not found' });
+    const { organizer } = result;
+
+    const hub = await prisma.saleHub.findFirst({ where: { id: hubId, organizerId: organizer.id } });
+    if (!hub) return res.status(404).json({ error: 'Hub not found' });
+
+    const existing = await prisma.vendorBooth.findFirst({ where: { id: boothId, hubId, deletedAt: null } });
+    if (!existing) return res.status(404).json({ error: 'Vendor booth not found' });
+
+    const updated = existing.registerAccessGrantedAt
+      ? existing
+      : await prisma.vendorBooth.update({
+          where: { id: boothId },
+          data: { registerAccessGrantedAt: new Date() },
+          select: { registerAccessGrantedAt: true },
+        });
+
+    return res.status(200).json({ registerAccessGrantedAt: updated.registerAccessGrantedAt });
+  } catch (error) {
+    console.error('[grantBoothRegisterAccess] Error:', error);
+    return res.status(500).json({ error: 'Failed to grant register access' });
+  }
+};
+
+/**
+ * DELETE /api/organizer/hubs/:hubId/vendor-booths/:boothId/register-access
+ * Organizer-only. Turn OFF register access for one booth. Safe to call on a booth that
+ * never had it. Does NOT touch claim/confirm state -- a revoked vendor can still sell
+ * their own items normally through the booth-cart flow another cashier rings up; they
+ * simply cannot open the register on their own device via X-Booth-Token afterward.
+ */
+export const revokeBoothRegisterAccess = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) return res.status(401).json({ error: 'Authentication required' });
+    const { hubId, boothId } = req.params;
+
+    const result = await getOrganizerWorkspace(req.user.id);
+    if (!result) return res.status(404).json({ error: 'Organizer profile not found' });
+    const { organizer } = result;
+
+    const hub = await prisma.saleHub.findFirst({ where: { id: hubId, organizerId: organizer.id } });
+    if (!hub) return res.status(404).json({ error: 'Hub not found' });
+
+    const existing = await prisma.vendorBooth.findFirst({ where: { id: boothId, hubId, deletedAt: null } });
+    if (!existing) return res.status(404).json({ error: 'Vendor booth not found' });
+
+    if (existing.registerAccessGrantedAt) {
+      await prisma.vendorBooth.update({
+        where: { id: boothId },
+        data: { registerAccessGrantedAt: null },
+      });
+    }
+
+    return res.status(200).json({ registerAccessGrantedAt: null });
+  } catch (error) {
+    console.error('[revokeBoothRegisterAccess] Error:', error);
+    return res.status(500).json({ error: 'Failed to revoke register access' });
+  }
+};
+
+/**
  * GET /api/vendor-booth/:boothToken
  * PUBLIC endpoint (no auth). Field-whitelisted per ADR-017 — never boothFee,
  * revenueSharePercent, stripeAccountId, stripeOnboarded, or payout data.
@@ -598,6 +694,10 @@ export const listMyVendorBooths = async (req: AuthRequest, res: Response) => {
         // to them. Narrow select — id and name only, never the hub owner or its other booths.
         hub: { select: { id: true, name: true } },
         payouts: { select: { id: true, totalSales: true, netPayout: true, status: true, paidAt: true } },
+        // Register access grant (2026-07-29, Patrick's decision) -- gates the "Open the
+        // register" link in MyVendorBoothsCard.tsx. A separate, organizer-controlled state
+        // from claim/confirm; see VendorBooth.registerAccessGrantedAt in schema.prisma.
+        registerAccessGrantedAt: true,
       },
       orderBy: { createdAt: 'desc' },
     });

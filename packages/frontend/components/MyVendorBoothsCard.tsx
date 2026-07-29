@@ -36,6 +36,13 @@ export interface MyVendorBooth {
   /** Bearer secret. Href only. Added to listMyVendorBooths alongside `hub`. */
   boothToken?: string | null;
   hub?: { id: string; name: string } | null;
+  /**
+   * Register access grant (2026-07-29, Patrick's decision): a SEPARATE, organizer-
+   * controlled state from claim/confirm. null = the market has not turned this on for
+   * this booth yet. Gates the "Open the register" link below -- see
+   * VendorBooth.registerAccessGrantedAt in schema.prisma for the full rationale.
+   */
+  registerAccessGrantedAt?: string | null;
 }
 
 interface MyVendorBoothsCardProps {
@@ -173,19 +180,37 @@ const MyVendorBoothsCard: React.FC<MyVendorBoothsCardProps> = ({ variant = 'card
                 : 'Payouts not set up yet. Open your booth to finish it.'}
             </p>
 
-            {/* boothToken lives in this href and nowhere else on the page. */}
-            {booth.boothToken ? (
-              <Link
-                href={`/vendor-booth/${booth.boothToken}`}
-                className="mt-3 block w-full sm:w-auto sm:inline-block text-center bg-amber-600 hover:bg-amber-700 text-white font-bold py-3 px-4 rounded-lg transition-colors"
-              >
-                Open your booth
-              </Link>
-            ) : (
-              <p className="mt-3 text-sm text-warm-500 dark:text-warm-400">
-                Use the booth link the market emailed you to open this booth.
-              </p>
-            )}
+            {/* boothToken lives in these hrefs and nowhere else on the page. */}
+            <div className="mt-3 flex flex-wrap gap-2">
+              {booth.boothToken ? (
+                <Link
+                  href={`/vendor-booth/${booth.boothToken}`}
+                  className="block w-full sm:w-auto sm:inline-block text-center bg-amber-600 hover:bg-amber-700 text-white font-bold py-3 px-4 rounded-lg transition-colors"
+                >
+                  Open your booth
+                </Link>
+              ) : (
+                <p className="text-sm text-warm-500 dark:text-warm-400">
+                  Use the booth link the market emailed you to open this booth.
+                </p>
+              )}
+
+              {/* Register access (2026-07-29, Patrick's decision): shown ONLY once the market
+                  has granted it for this specific booth -- claiming/confirming the booth is
+                  NOT enough on its own, that is a separate step the market takes (mirrors
+                  staffService.grantRegisterAccess for workspace staff). Routes into the same
+                  venue-mode POS staff/owner use, but authenticates with this booth's
+                  boothToken (X-Booth-Token) instead of a workspace JWT -- pos.tsx attempts
+                  that credential and shows a clear message if the market later revokes access. */}
+              {booth.status === 'CONFIRMED' && booth.boothToken && booth.registerAccessGrantedAt && (
+                <Link
+                  href={`/organizer/pos?venue=${booth.hubId}&boothToken=${booth.boothToken}`}
+                  className="block w-full sm:w-auto sm:inline-block text-center bg-sage-600 hover:bg-sage-700 text-white font-bold py-3 px-4 rounded-lg transition-colors"
+                >
+                  Open the register
+                </Link>
+              )}
+            </div>
           </li>
         ))}
       </ul>
@@ -194,10 +219,11 @@ const MyVendorBoothsCard: React.FC<MyVendorBoothsCardProps> = ({ variant = 'card
         <div className="mt-4 pt-4 border-t border-warm-200 dark:border-gray-700">
           <h3 className="text-sm font-bold text-warm-700 dark:text-warm-300 mb-1">About the register</h3>
           <p className="text-sm text-warm-600 dark:text-warm-400">
-            The register at a market is run by the market&rsquo;s own staff. If you are ever handed
-            it, your own booth&rsquo;s items still cannot be in that sale. The system stops the whole
-            sale so one person is never both the seller and the cashier. Running the register for
-            other booths does not earn you anything today.
+            The register at a market rings up items from any booth there, including your own --
+            the system tracks who sold what instead of blocking it. Running the register does
+            not earn you anything today. A market must turn on register access for your booth
+            before you can open it yourself; look for &ldquo;Open the register&rdquo; above once
+            they have.
           </p>
         </div>
       )}

@@ -1,0 +1,29 @@
+-- Vendor booth register-access grant (2026-07-29, Patrick's decision, same session as the
+-- other two pending migrations below).
+--
+-- Purely additive: one nullable column on "VendorBooth". No column dropped or retyped, no
+-- existing row changes meaning beyond the default (NULL) itself.
+--
+-- Patrick's decision, verbatim in substance: claiming a CONFIRMED booth must NOT by itself
+-- hand a vendor register/cashier access -- that has to be a SEPARATE GRANT, mirroring how
+-- mall staff already get register access via staffService.grantRegisterAccess
+-- (packages/backend/src/services/staffService.ts:556), which creates a TeamMember row as a
+-- distinct step from accepting a workspace invite. A VendorBooth has no second row to hang
+-- an equivalent grant off of, so this is one column instead: NULL = not granted (the default,
+-- for every existing row too -- nobody's access silently changes when this migration lands),
+-- a timestamp = granted, exactly the same null-vs-timestamp convention this same model
+-- already uses for confirmedAt/rejectedAt/claimNotifiedAt etc.
+--
+-- MUST be applied together with (or before) the requireBoothAuth.ts code change that reads
+-- this column -- that code already ships in this same session and will 403 with
+-- REGISTER_ACCESS_NOT_GRANTED on any booth-token cashier session where this is still NULL,
+-- in addition to the existing claimed+CONFIRMED checks. The column is nullable with no
+-- NOT NULL/default-false requirement, so applying this migration alone (without the code)
+-- changes nothing observable; deploying the code without this column present 500s the whole
+-- booth-token cart auth path (Prisma select would reference a column that does not exist).
+--
+-- NOT YET APPLIED to Railway or any database -- pending a combined go/no-go with Patrick
+-- alongside 20260729000000_item_booth_eligible and 20260729010000_booth_cart_leg_restrict_delete,
+-- all three from the same S1178/S1179 batch.
+
+ALTER TABLE "VendorBooth" ADD COLUMN IF NOT EXISTS "registerAccessGrantedAt" TIMESTAMP(3);

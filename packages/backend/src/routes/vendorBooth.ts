@@ -21,6 +21,8 @@ import {
   listHubVendorBoothFeeCharges,
   resendVendorBoothInvite,
   resendVendorBoothNotification,
+  grantBoothRegisterAccess,
+  revokeBoothRegisterAccess,
 } from '../controllers/vendorBoothController';
 import {
   startBoothCart,
@@ -115,6 +117,14 @@ router.post('/api/organizer/hubs/:hubId/vendor-booths/:boothId/invite', authenti
 // hazard. Ownership is the same chain resendVendorBoothInvite uses, enforced in the
 // controller, behind the same authenticate + requireTier('TEAMS') pair.
 router.post('/api/organizer/hubs/:hubId/vendor-booths/:boothId/notify', authenticate, requireTier('TEAMS'), resendVendorBoothNotification);
+
+// Register access grant/revoke (2026-07-29, Patrick's decision): a SEPARATE, organizer-only
+// switch from claim/confirm -- see the comment on VendorBooth.registerAccessGrantedAt in
+// schema.prisma and the block comment above grantBoothRegisterAccess in the controller.
+// Same "two segments deeper than :boothId" shape as /invite and /notify above, so there is
+// no registration-order hazard with the literal "fee-charges" route or the :boothId routes.
+router.post('/api/organizer/hubs/:hubId/vendor-booths/:boothId/register-access', authenticate, requireTier('TEAMS'), grantBoothRegisterAccess);
+router.delete('/api/organizer/hubs/:hubId/vendor-booths/:boothId/register-access', authenticate, requireTier('TEAMS'), revokeBoothRegisterAccess);
 
 // --- Roaming multi-booth cart (cashier: TeamMember JWT or X-Booth-Token) ---
 // optionalAuthenticate() runs first — it populates req.user when a valid Bearer

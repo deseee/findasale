@@ -250,6 +250,15 @@ export default function POSPage() {
   // X-Booth-Token has NO frontend anywhere in this repo today (verified this session) --
   // that is a separate, larger build, flagged in the S1178 dev handoff, not attempted here.
   const [venueHubId, setVenueHubId] = useState<string | null>(null);
+  // Vendor-booth-token credential (2026-07-29, Patrick's decision + ADR-095 follow-up):
+  // present ONLY when a vendor arrived via MyVendorBoothsCard's "Open the register" link
+  // (?venue=<hubId>&boothToken=<token>). When set, every venue-mode cart call below sends
+  // X-Booth-Token instead of relying on the workspace/organizer JWT the TEAM_MEMBER/HUB_OWNER
+  // path already uses. The backend (requireBoothAuth.ts) enforces both claim AND the
+  // separate registerAccessGrantedAt grant -- this page does not duplicate that check, it
+  // just attempts the credential and surfaces whatever 403 message comes back (already
+  // wired via venueStartFailure below).
+  const [venueBoothToken, setVenueBoothToken] = useState<string | null>(null);
   const [venueCart, setVenueCart] = useState<{ id: string; hubId: string; status: string } | null>(null);
   const [venueStartFailure, setVenueStartFailure] = useState<string | null>(null);
   const [venueItemIdInput, setVenueItemIdInput] = useState('');
@@ -388,10 +397,19 @@ export default function POSPage() {
   // ─── Auth guard ────────────────────────────────────────────────────────────────────
 
   useEffect(() => {
-    if (!loading && (!user || (!user.roles?.includes('ORGANIZER') && user.role !== 'ORGANIZER'))) {
+    // A vendor arriving via their own booth token (MyVendorBoothsCard's "Open the
+    // register" link, ?venue=<hubId>&boothToken=<token>) is very often NOT an ORGANIZER-
+    // role account -- register access there is enforced server-side by
+    // requireBoothAuth.ts's booth-token branch (claimed + CONFIRMED + the separate
+    // registerAccessGrantedAt grant), not by this client-side role gate. Wait for the
+    // router to be ready before deciding, so this never fires on the very first render
+    // before router.query.boothToken is populated and wrongly bounces a real vendor.
+    if (!router.isReady) return;
+    const hasBoothToken = typeof router.query.boothToken === 'string' && !!router.query.boothToken;
+    if (!loading && !hasBoothToken && (!user || (!user.roles?.includes('ORGANIZER') && user.role !== 'ORGANIZER'))) {
       router.replace('/login');
     }
-  }, [user, loading, router]);
+  }, [user, loading, router, router.isReady, router.query.boothToken]);
 
   // ─── Load sales ────────────────────────────────────────────────────────────────────
 
@@ -424,20 +442,30 @@ export default function POSPage() {
     if (!router.isReady) return;
     const v = router.query.venue;
     setVenueHubId(typeof v === 'string' && v ? v : null);
-  }, [router.isReady, router.query.venue]);
+    const t = router.query.boothToken;
+    setVenueBoothToken(typeof t === 'string' && t ? t : null);
+  }, [router.isReady, router.query.venue, router.query.boothToken]);
 
   useEffect(() => {
     if (!venueHubId || !user) return;
     if (venueAutoStartedRef.current === venueHubId) return;
     venueAutoStartedRef.current = venueHubId;
     setVenueStartFailure(null);
-    api.post(`/organizer/hubs/${venueHubId}/cart/start`, { cashierType: 'TEAM_MEMBER' })
+    api.post(
+      `/organizer/hubs/${venueHubId}/cart/start`,
+      { cashierType: 'TEAM_MEMBER' },
+      venueBoothToken ? { headers: { 'X-Booth-Token': venueBoothToken } } : undefined
+    )
       .then(res => setVenueCart(res.data))
       .catch(err => {
         console.error('[pos] Failed to start venue cart:', err);
+        // REGISTER_ACCESS_NOT_GRANTED (requireBoothAuth.ts) surfaces here with its own
+        // clear message already -- this is exactly the "attempt the credential, handle a
+        // 403 gracefully" contract the vendor-booth-token path is scoped to. No special
+        // casing needed for that code specifically.
         setVenueStartFailure(err?.response?.data?.error || err?.response?.data?.message || 'Failed to open the venue register.');
       });
-  }, [venueHubId, user]);
+  }, [venueHubId, user, venueBoothToken]);
 
   // ─── Handle price sheet QR code auto-add-misc action ───────────────────────────────
 
@@ -867,7 +895,11 @@ export default function POSPage() {
       setErrorMessage(`"${item.title}" is already in the cart.`);
       return;
     }
-    api.post(`/organizer/hubs/${venueHubId}/cart/${venueCart.id}/items`, { itemIds: [item.id] })
+    api.post(
+      `/organizer/hubs/${venueHubId}/cart/${venueCart.id}/items`,
+      { itemIds: [item.id] },
+      venueBoothToken ? { headers: { 'X-Booth-Token': venueBoothToken } } : undefined
+    )
       .then(res => {
         const accepted = res.data?.accepted || [];
         const rejected = res.data?.rejected || [];
@@ -885,7 +917,7 @@ export default function POSPage() {
         console.error('[pos] Venue add-item error:', err);
         setErrorMessage(err?.response?.data?.error || err?.response?.data?.message || `Failed to add "${item.title}".`);
       });
-  }, [venueHubId, venueCart, cart]);
+  }, [venueHubId, venueCart, cart, venueBoothToken]);
 
   // ─── Venue mode: sequential per-booth checkout -- ports the proven flow from
   // hubs/[hubId]/cart.tsx (now deprecated, see S1178 ADR). Card/manual-card rail only in
@@ -905,7 +937,8 @@ export default function POSPage() {
       onFetchConnectionToken: async () => {
         const res = await api.post<{ secret: string }>(
           `/organizer/hubs/${venueHubId}/cart/${venueCart!.id}/terminal/connection-token`,
-          { vendorBoothId }
+          { vendorBoothId },
+          venueBoothToken ? { headers: { 'X-Booth-Token': venueBoothToken } } : undefined
         );
         return res.data.secret;
       },
@@ -926,7 +959,7 @@ export default function POSPage() {
 
     venueTerminalRef.current = terminal;
     return terminal;
-  }, [venueHubId, venueCart]);
+  }, [venueHubId, venueCart, venueBoothToken]);
 
   const runVenueBoothLeg = useCallback(async (booth: { vendorBoothId: string; vendorName: string; subtotalCents: number }) => {
     setVenueBoothOutcomes(prev => ({ ...prev, [booth.vendorBoothId]: 'connecting' }));
@@ -934,7 +967,8 @@ export default function POSPage() {
       const terminal = await connectReaderForVenueBooth(booth.vendorBoothId);
       const authRes = await api.post(
         `/organizer/hubs/${venueHubId}/cart/${venueCart!.id}/terminal/authorize`,
-        { vendorBoothId: booth.vendorBoothId }
+        { vendorBoothId: booth.vendorBoothId },
+        venueBoothToken ? { headers: { 'X-Booth-Token': venueBoothToken } } : undefined
       );
       const { clientSecret } = authRes.data;
 
@@ -957,23 +991,31 @@ export default function POSPage() {
       );
       return false;
     }
-  }, [connectReaderForVenueBooth, venueHubId, venueCart, showToast]);
+  }, [connectReaderForVenueBooth, venueHubId, venueCart, showToast, venueBoothToken]);
 
   const cancelVenueCart = useCallback(async () => {
     if (!venueCart) return;
     try {
-      await api.post(`/organizer/hubs/${venueHubId}/cart/${venueCart.id}/cancel`, {});
+      await api.post(
+        `/organizer/hubs/${venueHubId}/cart/${venueCart.id}/cancel`,
+        {},
+        venueBoothToken ? { headers: { 'X-Booth-Token': venueBoothToken } } : undefined
+      );
     } catch (err) {
       console.error('[pos] Venue cart cancel failed:', err);
     }
-  }, [venueHubId, venueCart]);
+  }, [venueHubId, venueCart, venueBoothToken]);
 
   const captureVenueAll = useCallback(async () => {
     if (!venueCart) return;
     setVenueCapturing(true);
     setVenueCheckoutFailure(null);
     try {
-      await api.post(`/organizer/hubs/${venueHubId}/cart/${venueCart.id}/capture`, {});
+      await api.post(
+        `/organizer/hubs/${venueHubId}/cart/${venueCart.id}/capture`,
+        {},
+        venueBoothToken ? { headers: { 'X-Booth-Token': venueBoothToken } } : undefined
+      );
       setVenueCaptureFailed(false);
       setSuccessMessage(`✅ Venue sale of $${cartTotal.toFixed(2)} accepted across ${venueBooths.length} vendor${venueBooths.length === 1 ? '' : 's'}.`);
       setPaymentStatus('success');
@@ -990,7 +1032,7 @@ export default function POSPage() {
     } finally {
       setVenueCapturing(false);
     }
-  }, [venueHubId, venueCart, cartTotal, venueBooths.length]);
+  }, [venueHubId, venueCart, cartTotal, venueBooths.length, venueBoothToken]);
 
   const startVenueCheckout = useCallback(async () => {
     if (!venueCart || !cart.length) return;
@@ -999,7 +1041,10 @@ export default function POSPage() {
     setVenueCheckoutFailure(null);
     setVenueCaptureFailed(false);
     try {
-      const summaryRes = await api.get(`/organizer/hubs/${venueHubId}/cart/${venueCart.id}/summary`);
+      const summaryRes = await api.get(
+        `/organizer/hubs/${venueHubId}/cart/${venueCart.id}/summary`,
+        venueBoothToken ? { headers: { 'X-Booth-Token': venueBoothToken } } : undefined
+      );
       const boothList = summaryRes.data.booths || [];
       if (boothList.length === 0) {
         setPaymentStatus('error');
@@ -1033,7 +1078,7 @@ export default function POSPage() {
       setPaymentStatus('error');
       setErrorMessage(err?.response?.data?.error || err?.response?.data?.message || err?.message || 'Failed to start venue checkout.');
     }
-  }, [venueHubId, venueCart, cart.length, runVenueBoothLeg, cancelVenueCart, captureVenueAll]);
+  }, [venueHubId, venueCart, cart.length, runVenueBoothLeg, cancelVenueCart, captureVenueAll, venueBoothToken]);
 
   const quickAddMisc = (amount: number) => {
     const label = amount < 1

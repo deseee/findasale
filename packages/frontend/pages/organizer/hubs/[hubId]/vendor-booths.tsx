@@ -44,6 +44,10 @@ interface VendorBooth {
   confirmNotifiedAt: string | null;
   decisionNotifiedAt: string | null;
   stripeNotifiedAt: string | null;
+  // Register access grant (2026-07-29, Patrick's decision): a SEPARATE state from
+  // claim/confirm. null = not granted. See VendorBooth.registerAccessGrantedAt in
+  // schema.prisma.
+  registerAccessGrantedAt: string | null;
 }
 
 interface FeeCharge {
@@ -369,6 +373,9 @@ const VendorBoothsPage: React.FC = () => {
   // mid-send. One at a time on purpose -- the cell lives inside a narrow table column.
   const [expandedNotify, setExpandedNotify] = useState<string | null>(null);
   const [sendingNotify, setSendingNotify] = useState<string | null>(null);
+  // Register access grant/revoke (2026-07-29, Patrick's decision) -- separate from
+  // claim/confirm, mirrors sendingInvite/sendingNotify's per-row in-flight tracking.
+  const [sendingRegisterAccess, setSendingRegisterAccess] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean; id: string; name: string }>({
     open: false, id: '', name: '',
   });
@@ -613,6 +620,44 @@ const VendorBoothsPage: React.FC = () => {
     }
   };
 
+  // Register access grant/revoke (2026-07-29, Patrick's decision). SEPARATE from
+  // claim/confirm -- a booth can be CONFIRMED and claimed (userId set) with register access
+  // still off, and vice versa is not possible server-side (grantBoothRegisterAccess does not
+  // check status/userId, but the button below is only shown once both are true, since access
+  // is meaningless to turn on before then -- requireBoothAuth.ts's booth-token branch still
+  // 403s on unclaimed/unconfirmed booths regardless of this flag).
+  const handleGrantRegisterAccess = async (booth: VendorBooth) => {
+    setSendingRegisterAccess(booth.id);
+    try {
+      const response = await api.post(`/organizer/hubs/${hubId}/vendor-booths/${booth.id}/register-access`);
+      setBooths((prev) =>
+        prev.map((b) =>
+          b.id === booth.id ? { ...b, registerAccessGrantedAt: response.data?.registerAccessGrantedAt ?? new Date().toISOString() } : b
+        )
+      );
+      showToast(`${booth.vendorName} can now open the register`, 'success');
+    } catch (error: any) {
+      console.error('Error granting register access:', error);
+      showToast(error.response?.data?.error || 'Failed to grant register access', 'error');
+    } finally {
+      setSendingRegisterAccess(null);
+    }
+  };
+
+  const handleRevokeRegisterAccess = async (booth: VendorBooth) => {
+    setSendingRegisterAccess(booth.id);
+    try {
+      await api.delete(`/organizer/hubs/${hubId}/vendor-booths/${booth.id}/register-access`);
+      setBooths((prev) => prev.map((b) => (b.id === booth.id ? { ...b, registerAccessGrantedAt: null } : b)));
+      showToast(`Register access removed for ${booth.vendorName}`, 'success');
+    } catch (error: any) {
+      console.error('Error revoking register access:', error);
+      showToast(error.response?.data?.error || 'Failed to revoke register access', 'error');
+    } finally {
+      setSendingRegisterAccess(null);
+    }
+  };
+
   // The Status column used to render the raw enum ("PENDING") while the Claimed column
   // right next to it said "Claimed" for the SAME row. Both were technically true and
   // together they read as a contradiction -- a real hub organizer concluded from exactly
@@ -826,6 +871,22 @@ const VendorBoothsPage: React.FC = () => {
                         ) : (
                           <span className="text-warm-400 text-xs">Not yet</span>
                         )}
+                        {/* Register access (2026-07-29, Patrick's decision) is a SEPARATE state
+                            from claim/confirm above -- shown as its own line so it never reads
+                            as a restatement of "Claimed". Only meaningful once claimed+confirmed
+                            (requireBoothAuth.ts 403s on register access regardless of this flag
+                            until both are true), so it is hidden entirely before that point. */}
+                        {booth.userId && booth.status === 'CONFIRMED' && (
+                          <div
+                            className={`mt-1 text-xs font-bold ${
+                              booth.registerAccessGrantedAt
+                                ? 'text-green-600 dark:text-green-400'
+                                : 'text-warm-400'
+                            }`}
+                          >
+                            Register: {booth.registerAccessGrantedAt ? 'On' : 'Off'}
+                          </div>
+                        )}
                       </td>
                       <td className="p-3">
                         {booth.stripeOnboarded ? (
@@ -854,6 +915,32 @@ const VendorBoothsPage: React.FC = () => {
                             >
                               {booth.userId ? 'Confirm Booth' : 'Confirm'}
                             </button>
+                          )}
+                          {/* Register access grant/revoke (2026-07-29, Patrick's decision) --
+                              a SEPARATE step from Confirm above. Only shown once the booth is
+                              CONFIRMED and claimed (userId set); before that there is nothing
+                              to grant access to yet, and requireBoothAuth.ts would 403 the
+                              vendor regardless of this flag. */}
+                          {booth.status === 'CONFIRMED' && booth.userId && (
+                            booth.registerAccessGrantedAt ? (
+                              <button
+                                onClick={() => handleRevokeRegisterAccess(booth)}
+                                disabled={sendingRegisterAccess === booth.id}
+                                title={`Turn off register access for ${booth.vendorName}. They can still sell their own items; they will not be able to open the register on their own device.`}
+                                className="text-xs px-2 py-1 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 rounded font-bold disabled:opacity-50"
+                              >
+                                {sendingRegisterAccess === booth.id ? 'Removing...' : 'Revoke Register Access'}
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => handleGrantRegisterAccess(booth)}
+                                disabled={sendingRegisterAccess === booth.id}
+                                title={`Let ${booth.vendorName} open the register on their own device to ring up any vendor's items at this market.`}
+                                className="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 rounded font-bold disabled:opacity-50"
+                              >
+                                {sendingRegisterAccess === booth.id ? 'Granting...' : 'Grant Register Access'}
+                              </button>
+                            )
                           )}
                           <button
                             onClick={() => handleCopyInviteLink(booth.boothToken)}

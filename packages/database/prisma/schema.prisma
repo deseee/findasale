@@ -2739,6 +2739,7 @@ model OrganizerWorkspace {
   alerts            WorkspaceAlert[]            @relation("WorkspaceAlerts")
   // Retail gap features (TEAMS)
   consignors        Consignor[]                 @relation("WorkspaceConsignors")
+  commissionTiers   CommissionTier[]            @relation("WorkspaceCommissionTiers")
   discountRules     DiscountRule[]              @relation("WorkspaceDiscountRules")
   locations         Location[]                  @relation("WorkspaceLocations")
   // #239: Multi-Consignor Settlement batches owned by this workspace
@@ -4566,6 +4567,7 @@ model Consignor {
   email             String?
   phone             String?
   commissionRate    Decimal            @db.Decimal(5, 2) // e.g. 70.00 = organizer pays consignor 70%
+  useTieredCommission Boolean          @default(false) // ADR-096: opt-in value-tiered split; false = today's flat commissionRate behavior, unchanged
   notes             String?            @db.Text
   portalToken       String             @unique @default(cuid()) // capability URL token — permanent for MVP
   stripeAccountId   String? // Stripe Connect account ID for consignor payouts
@@ -4603,6 +4605,7 @@ model ConsignorPayout {
   settlementBatch   ConsignorSettlementBatch? @relation(fields: [settlementBatchId], references: [id], onDelete: SetNull)
   status            String                    @default("PENDING") // PENDING | SIMULATED | COMPLETED | FAILED | MANUAL_CASH_CHECK
   failureReason     String?
+  tierBreakdown     Json? // ADR-096: display-only per-tier split detail for CSV export when consignor.useTieredCommission is true
 
   @@index([consignorId])
   @@index([saleId])
@@ -4628,6 +4631,22 @@ model ConsignorSettlementBatch {
 
   @@index([saleId])
   @@index([status])
+  @@index([workspaceId])
+}
+
+// ADR-096: Value-tiered consignor commission ladder -- one ladder per workspace.
+// Only consulted when Consignor.useTieredCommission is true; otherwise the
+// flat Consignor.commissionRate applies exactly as before (zero regression).
+model CommissionTier {
+  id             String             @id @default(cuid())
+  workspaceId    String
+  workspace      OrganizerWorkspace @relation("WorkspaceCommissionTiers", fields: [workspaceId], references: [id], onDelete: Cascade)
+  minPrice       Decimal            @db.Decimal(10, 2) // inclusive lower bound
+  maxPrice       Decimal?           @db.Decimal(10, 2) // exclusive upper bound; null = unbounded top tier
+  consignorRate  Decimal            @db.Decimal(5, 2) // % of item price paid to consignor for items in this band
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
   @@index([workspaceId])
 }
 
@@ -5595,6 +5614,23 @@ model VendorBooth {
   deletedAt   DateTime?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @default(now())
+
+  // Register access grant (2026-07-29, Patrick's decision, S1179/ADR-095 follow-up).
+  // A SEPARATE grant from claiming: claiming a CONFIRMED booth (userId set) no longer by
+  // itself hands a vendor cashier rights on the venue-wide register. This mirrors
+  // staffService.ts's TeamMember-row grant/revoke for workspace staff (staffService.ts:556
+  // grantRegisterAccess / :610 revokeRegisterAccess) -- same "the mall makes one deliberate,
+  // separate decision per person" shape, just one column instead of a second row, since a
+  // VendorBooth (unlike a WorkspaceMember) has no other row to hang a grant off of.
+  // null  = register access NOT granted (default for every booth, including existing rows --
+  //         this migration adds no automatic access for anyone who was previously relying on
+  //         claimed+CONFIRMED alone).
+  // set   = the timestamp the organizer turned it on. requireBoothAuth.ts's booth-token
+  //         branch now 403s (REGISTER_ACCESS_NOT_GRANTED) on a claimed+CONFIRMED booth with
+  //         this still null -- claimed+confirmed is necessary but no longer sufficient.
+  // Grant/revoke: vendorBoothController.ts grantBoothRegisterAccess / revokeBoothRegisterAccess,
+  // organizer-only, same hub-ownership chain updateVendorBooth already uses.
+  registerAccessGrantedAt DateTime?
 
   // Booth invite observability (2026-07-28). Before this, an organizer typed a vendor
   // email into the Add Booth form and nobody could answer "did the invite go out?" --
