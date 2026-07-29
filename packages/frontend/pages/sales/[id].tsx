@@ -2775,10 +2775,14 @@ export const getStaticProps: GetStaticProps<SaleDetailPageProps> = async ({ para
     // ISR write cost: ENDED sales are frozen content (won't change again) but were
     // still regenerating on the same 24h cadence as live sales across 35K+ total sale
     // pages -- the dominant driver of repeated 100% ISR-Writes free-tier warnings.
-    // Give ENDED pages a 30-day window; keep live/upcoming sales at 24h for accuracy.
+    // Give ENDED pages a 30-day window.
+    // Active/live sales widened 24h -> 7d 2026-07-29 -- ISR-write reduction, Patrick-approved
+    // via findasale-architect ADR; safe because live data (price/bids/inventory/sold-state)
+    // is 100% client-polled, see useQuery refetchInterval ~line 542 (5s poll) -- the ISR HTML
+    // only backs OG tags/JSON-LD for crawlers and a brief pre-hydration flash.
     return {
       props: { ogData, initialData, eventSeriesData, noindex, unavailableAfter },
-      revalidate: isEnded ? 2592000 : 86400,
+      revalidate: isEnded ? 2592000 : 604800,
     };
   } catch (err) {
     // Network/timeout/parse failure — render the shell, let the client fetch and ISR retry

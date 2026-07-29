@@ -1,6 +1,7 @@
 import cron from 'node-cron';
 import { prisma } from '../index';
 import { cronGuard } from '../utils/cronGuard';
+import { triggerSaleAndCityRevalidation } from '../services/revalidationService';
 
 /**
  * Auto-close expired PUBLISHED sales.
@@ -8,6 +9,13 @@ import { cronGuard } from '../utils/cronGuard';
  * Restricts to scraped sales (sourceUrl IS NOT NULL) to avoid closing organizer-owned sales
  * where the date may have been entered incorrectly but the sale is still active.
  */
+// Capped batch size for post-autoclose ISR revalidation -- mirrors
+// MAX_SCRAPER_REVALIDATION_CITY_PATHS (scraper/index.ts) and
+// PRUNE_MAX_REVALIDATION_CITY_PATHS (pruneScrapedSales.ts) so a large
+// autoclose batch can never become an unbounded ISR-write source itself.
+// Added 2026-07-29 -- Patrick-approved via findasale-architect ADR.
+const MAX_AUTOCLOSE_REVALIDATION_PATHS = 100;
+
 export function scheduleSaleAutoCloseCron(): void {
   // Every hour at minute 0
   cron.schedule('0 * * * *', cronGuard({ jobName: 'saleAutoCloseCron' }, async () => {
@@ -51,6 +59,23 @@ export function scheduleSaleAutoCloseCron(): void {
       });
       console.log(`[liquidation] Auto-close batch: ${saleIds.length} sales ended, ${liquidationCount} items queued for liquidation`);
       // Phase 2: clearance UI queries items WHERE status='AVAILABLE' AND isActive=true AND sale.status='ENDED'
+
+      // ISR revalidation: transitioning to ENDED changes SEO metadata/JSON-LD on
+      // /sales/[id] (staged-deindex policy) but this cron previously triggered no
+      // revalidation at all, leaving those pages to catch up on their existing ISR
+      // timer alone. Fire a capped, fire-and-forget batch -- never throws, never
+      // blocks the cron -- mirroring the capped-batch pattern in
+      // flushScraperRevalidation() (MAX_SCRAPER_REVALIDATION_CITY_PATHS) and
+      // pruneScrapedSales.ts (PRUNE_MAX_REVALIDATION_CITY_PATHS). Added 2026-07-29 --
+      // Patrick-approved via findasale-architect ADR.
+      let revalidationIds = saleIds;
+      if (revalidationIds.length > MAX_AUTOCLOSE_REVALIDATION_PATHS) {
+        console.log(`[sale-auto-close] revalidation batch capped: ${revalidationIds.length} closed sales this run, revalidating first ${MAX_AUTOCLOSE_REVALIDATION_PATHS}`);
+        revalidationIds = revalidationIds.slice(0, MAX_AUTOCLOSE_REVALIDATION_PATHS);
+      }
+      triggerSaleAndCityRevalidation(revalidationIds, []).catch((err) => {
+        console.error('[sale-auto-close] revalidation trigger failed:', err);
+      });
     }
   }));
 
