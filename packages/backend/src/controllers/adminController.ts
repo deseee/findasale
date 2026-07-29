@@ -819,7 +819,34 @@ export const deleteSale = async (req: AuthRequest, res: Response) => {
   try {
     const { saleId } = req.params;
 
-    // Delete the sale — cascading deletes handle items, favorites, etc.
+    // BQ fix (S1178, 2026-07-29): same class of gap as the organizer-side
+    // deleteAccount hard-delete fix -- a bare prisma.sale.delete() here does NOT
+    // raise a clean error on real transactional data, it silently succeeds and
+    // orphans it. Purchase.saleId is onDelete: SetNull (not Cascade/Restrict), so
+    // deleting a sale with real purchases doesn't destroy those Purchase rows, but
+    // it DOES sever their saleId link -- breaking receipts/reporting/attribution
+    // for real buyer transactions with zero warning. AffiliateLink.sale is
+    // onDelete: Restrict, so a sale with any affiliate link would already throw a
+    // raw Postgres FK violation (unhelpful 500) rather than a clear message. Check
+    // first and fail gracefully with an actionable message, same pattern as
+    // userController.deleteAccount.
+    const [purchaseCount, affiliateLinkCount] = await Promise.all([
+      prisma.purchase.count({ where: { saleId } }),
+      prisma.affiliateLink.count({ where: { saleId } }),
+    ]);
+
+    const blockers: string[] = [];
+    if (purchaseCount > 0) blockers.push(`${purchaseCount} purchase${purchaseCount === 1 ? '' : 's'}`);
+    if (affiliateLinkCount > 0) blockers.push(`${affiliateLinkCount} affiliate link${affiliateLinkCount === 1 ? '' : 's'}`);
+
+    if (blockers.length > 0) {
+      const blockerList = blockers.length === 1 ? blockers[0] : blockers.join(' and ');
+      return res.status(400).json({
+        message: `This sale can't be deleted -- it still has ${blockerList} tied to it, which would be silently orphaned or blocked by the database. Resolve or reassign those first.`,
+      });
+    }
+
+    // Delete the sale -- cascading deletes handle items, favorites, etc.
     await prisma.sale.delete({
       where: { id: saleId },
     });
