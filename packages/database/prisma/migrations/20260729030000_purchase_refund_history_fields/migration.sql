@@ -1,0 +1,22 @@
+-- Refund History (2026-07-29): organizer-facing record of refunds issued against a
+-- Purchase, so a refunded purchase no longer silently disappears from Earnings Breakdown
+-- (payoutController.ts's getEarningsBreakdown hardcodes status = 'PAID') with zero trace
+-- anywhere in the product.
+--
+-- Purely additive: three nullable columns on "Purchase". No column dropped or retyped, no
+-- existing row changes meaning beyond the default (NULL) itself -- every row that has never
+-- been refunded (the overwhelming majority) keeps all three columns NULL forever.
+--
+-- Types match existing "Purchase"."amount" (Float in schema.prisma -> DOUBLE PRECISION here).
+--
+-- Populated going forward by refundService.ts's executeVerifiedRefund on every refund path
+-- (organizer via stripeController.ts's createRefund, admin via the same endpoint, and
+-- dispute-triggered via disputeController.ts's updateDisputeStatus) -- see that same
+-- session's code change. Read by payoutController.ts's new getRefundHistory export.
+--
+-- NOT YET APPLIED to Railway or any database -- pending `prisma migrate deploy` (this
+-- environment cannot run `prisma migrate dev` against Railway; documented P3006
+-- shadow-database limitation). Column additions alone change nothing observable until the
+-- refundService.ts code change (same session) starts writing to them.
+
+ALTER TABLE "Purchase" ADD COLUMN "refundedAmount" DOUBLE PRECISION, ADD COLUMN "refundedAt" TIMESTAMP(3), ADD COLUMN "refundInitiatedBy" TEXT;

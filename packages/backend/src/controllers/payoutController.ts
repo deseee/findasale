@@ -355,3 +355,72 @@ export const getEarningsBreakdown = async (req: AuthRequest, res: Response) => {
     res.status(500).json({ message: 'Failed to retrieve earnings breakdown' });
   }
 };
+
+export interface RefundHistoryItem {
+  purchaseId: string;
+  itemTitle: string;
+  saleTitle: string;
+  originalAmount: number;
+  refundedAmount: number | null;
+  refundedAt: Date | null;
+  refundInitiatedBy: string | null;
+}
+
+/**
+ * GET /api/stripe/refunds
+ *
+ * Refund History (2026-07-29): organizer-facing record of refunds against their own sales.
+ * getEarningsBreakdown above hardcodes `status: 'PAID'`, so a refunded purchase (Purchase.
+ * status flips PAID -> REFUNDED in refundService.ts's executeVerifiedRefund) silently
+ * disappears from that table with zero trace anywhere else in the product — this endpoint is
+ * that trace. Same organizer-role-check + ownership pattern as getEarningsBreakdown.
+ */
+export const getRefundHistory = async (req: AuthRequest, res: Response) => {
+  try {
+    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    if (!req.user || !hasOrganizerRole) {
+      return res.status(403).json({ message: 'Organizer access required' });
+    }
+
+    const organizer = await prisma.organizer.findUnique({
+      where: { userId: req.user.id },
+    });
+    if (!organizer) {
+      return res.status(404).json({ message: 'Organizer not found' });
+    }
+
+    const purchases = await prisma.purchase.findMany({
+      where: {
+        sale: { organizerId: organizer.id },
+        status: 'REFUNDED',
+      },
+      include: {
+        item: { select: { title: true } },
+        sale: { select: { title: true } },
+      },
+      // nulls: 'last' (Prisma 5, no preview flag needed) — any REFUNDED purchase that
+      // predates this migration has refundedAt = NULL (never backfilled) and must not sort
+      // ahead of every genuinely-dated refund under a naive desc sort.
+      orderBy: { refundedAt: { sort: 'desc', nulls: 'last' } },
+      take: 100,
+    });
+
+    const items: RefundHistoryItem[] = purchases.map((p) => ({
+      purchaseId: p.id,
+      itemTitle: p.item?.title ?? 'Unknown item',
+      saleTitle: p.sale?.title ?? 'Unknown sale',
+      originalAmount: p.amount,
+      refundedAmount: p.refundedAmount,
+      refundedAt: p.refundedAt,
+      refundInitiatedBy: p.refundInitiatedBy,
+    }));
+
+    res.json({
+      items,
+      count: items.length,
+    });
+  } catch (error) {
+    console.error('getRefundHistory error:', error);
+    res.status(500).json({ message: 'Failed to retrieve refund history' });
+  }
+};

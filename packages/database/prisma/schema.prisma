@@ -1499,6 +1499,13 @@ model Purchase {
   checkoutEvidence       CheckoutEvidence? // Platform Safety #98: Chargeback defense documentation
   createdAt              DateTime              @default(now())
   updatedAt              DateTime              @updatedAt
+  // Refund History (2026-07-29): nullable/additive-only — populated by refundService.ts's
+  // executeVerifiedRefund on every refund (organizer, admin, or dispute-triggered). NULL on
+  // every existing row and on any Purchase never refunded; a non-null refundedAt is what
+  // getRefundHistory (payoutController.ts) filters/orders on.
+  refundedAmount         Float? // Actual amount refunded — may be less than `amount` for partial refunds
+  refundedAt             DateTime? // When Stripe confirmed the refund
+  refundInitiatedBy      String? // 'organizer' | 'admin' | 'dispute' — who/what triggered the refund
 
   // Compound partial UNIQUE index on (stripePaymentIntentId, itemId) (WHERE
   // stripePaymentIntentId IS NOT NULL), created via raw SQL migration

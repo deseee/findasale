@@ -91,6 +91,29 @@ const OrganizerPayoutsPage = () => {
     staleTime: 2 * 60_000,
   });
 
+  // Refund History (2026-07-29): organizer-facing trace of refunds against their own sales.
+  // getEarningsBreakdown above hardcodes status: 'PAID', so a REFUNDED purchase silently
+  // disappears from the Earnings Breakdown table — this card is where it shows up instead.
+  interface RefundHistoryItem {
+    purchaseId: string;
+    itemTitle: string;
+    saleTitle: string;
+    originalAmount: number;
+    refundedAmount: number | null;
+    refundedAt: string | null;
+    refundInitiatedBy: string | null;
+  }
+
+  const { data: refundHistory, isLoading: refundHistoryLoading, isError: refundHistoryError } = useQuery({
+    queryKey: ['refund-history'],
+    queryFn: async () => {
+      const res = await api.get('/stripe/refunds');
+      return res.data as { items: RefundHistoryItem[]; count: number };
+    },
+    enabled: !!user?.id,
+    staleTime: 2 * 60_000,
+  });
+
   // Feature #11: Referral discount status
   const { data: organizerProfile } = useQuery({
     queryKey: ['organizer-me'],
@@ -536,6 +559,62 @@ const OrganizerPayoutsPage = () => {
                   </p>
                 )}
               </>
+            )}
+          </div>
+
+          {/* Refund History (2026-07-29): trace for purchases refunded via the organizer
+              Refund button, an admin refund, or dispute resolution — status flips PAID ->
+              REFUNDED and would otherwise vanish from Earnings Breakdown above with zero
+              record anywhere in the product. */}
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
+            <h2 className="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">
+              Refund History
+            </h2>
+            <p className="text-xs text-gray-400 mb-4">
+              Purchases refunded from your sales, including who initiated the refund.
+            </p>
+
+            {refundHistoryLoading ? (
+              <p className="text-gray-400 text-sm">Loading refund history…</p>
+            ) : refundHistoryError ? (
+              <p className="text-red-500 text-sm">Something went wrong loading refund history. Please refresh to try again.</p>
+            ) : !refundHistory || refundHistory.count === 0 ? (
+              <p className="text-gray-400 text-sm">No refunds yet.</p>
+            ) : (
+              <div className="overflow-x-auto -mx-6 px-6">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-100 dark:border-gray-700">
+                      <th className="text-left text-xs font-medium text-gray-400 dark:text-gray-500 pb-2 pr-3">Item</th>
+                      <th className="text-left text-xs font-medium text-gray-400 dark:text-gray-500 pb-2 pr-3 hidden sm:table-cell">Sale</th>
+                      <th className="text-right text-xs font-medium text-gray-400 dark:text-gray-500 pb-2 pr-3">Original Amount</th>
+                      <th className="text-right text-xs font-medium text-gray-400 dark:text-gray-500 pb-2 pr-3">Refunded Amount</th>
+                      <th className="text-left text-xs font-medium text-gray-400 dark:text-gray-500 pb-2 pr-3 hidden md:table-cell">Date</th>
+                      <th className="text-left text-xs font-medium text-gray-400 dark:text-gray-500 pb-2 pl-3 hidden sm:table-cell">Initiated By</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {refundHistory.items.map((r) => (
+                      <tr key={r.purchaseId} className="border-b border-gray-50 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                        <td className="py-2 pr-3 text-gray-800 dark:text-gray-200 max-w-[140px] truncate">{r.itemTitle}</td>
+                        <td className="py-2 pr-3 text-gray-500 dark:text-gray-400 hidden sm:table-cell max-w-[120px] truncate">{r.saleTitle}</td>
+                        <td className="py-2 pr-3 text-right text-gray-800 dark:text-gray-200 whitespace-nowrap">
+                          ${r.originalAmount.toFixed(2)}
+                        </td>
+                        <td className="py-2 pr-3 text-right text-red-500 dark:text-red-400 font-medium whitespace-nowrap">
+                          ${(r.refundedAmount ?? r.originalAmount).toFixed(2)}
+                        </td>
+                        <td className="py-2 pr-3 text-gray-400 dark:text-gray-500 text-xs hidden md:table-cell whitespace-nowrap">
+                          {r.refundedAt ? new Date(r.refundedAt).toLocaleDateString() : '—'}
+                        </td>
+                        <td className="py-2 pl-3 text-gray-500 dark:text-gray-400 text-xs hidden sm:table-cell capitalize whitespace-nowrap">
+                          {r.refundInitiatedBy ?? '—'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
           </div>
 

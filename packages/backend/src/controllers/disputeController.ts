@@ -276,7 +276,11 @@ export const updateDisputeStatus = async (req: AuthRequest, res: Response) => {
       // sees an error and can retry, instead of the dispute silently flipping to 'resolved'
       // over a refund that never happened.
       try {
-        const { refundedAmount, purchase: refundedPurchase } = await executeVerifiedRefund(purchase.id, finalRefundAmount);
+        // Refund History (2026-07-29): this whole branch is the admin-only dispute-resolution
+        // path (user.role !== 'ADMIN' already 403'd above) — always 'dispute', not 'admin', so
+        // getRefundHistory (payoutController.ts) can tell a dispute-triggered refund apart from
+        // a direct admin refund via createRefund.
+        const { refundedAmount, purchase: refundedPurchase } = await executeVerifiedRefund(purchase.id, finalRefundAmount, 'dispute');
         actualRefundedAmount = refundedAmount;
         refundedItemId = refundedPurchase.itemId;
         refundConfirmationParams = {

@@ -2927,6 +2927,12 @@ export const createRefund = async (req: AuthRequest, res: Response) => {
     const refundAmount = purchase.amount;
     const wasCapped = false;
 
+    // Refund History (2026-07-29): 'organizer' vs 'admin' mirrors the SAME role check this
+    // endpoint already ran above (hasOrganizerRole gates the own-sale ownership check just
+    // above; a pure admin with no organizer role skips it). A user with both roles is
+    // recorded as 'organizer' since that's the branch whose ownership check actually ran.
+    const initiatedBy: 'organizer' | 'admin' = hasOrganizerRole ? 'organizer' : 'admin';
+
     // Money movement — the PAID-status check, payment-intent-exists check, 30-day window,
     // the PAID->REFUNDING TOCTOU compare-and-swap claim + idempotency key, the booth-cart-vs
     // destination-charge Stripe call branching, the STRIPE_REFUND_LIVE_CLAWBACK-gated
@@ -2936,7 +2942,7 @@ export const createRefund = async (req: AuthRequest, res: Response) => {
     // Stripe path instead of only updating a status string. Moved, not rewritten: this
     // endpoint's behavior for existing callers is unchanged.
     try {
-      await executeVerifiedRefund(purchaseId, refundAmount);
+      await executeVerifiedRefund(purchaseId, refundAmount, initiatedBy);
     } catch (refundErr) {
       if (refundErr instanceof RefundError) {
         return res.status(refundErr.statusCode).json({ message: refundErr.message, ...(refundErr.details || {}) });

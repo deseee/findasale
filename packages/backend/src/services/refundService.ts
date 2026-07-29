@@ -144,6 +144,11 @@ export function sendRefundConfirmationEmail(params: {
  * the "requested" amount before capping (createRefund caps purchase.amount; disputeController
  * caps the dispute's requested refundAmount) and passes the ALREADY-CAPPED `refundAmount` in.
  *
+ * `initiatedBy` (Refund History, 2026-07-29) records WHO/WHAT triggered the refund —
+ * 'organizer' or 'admin' from createRefund (matching its own role check), 'dispute' from
+ * disputeController's updateDisputeStatus — onto Purchase.refundInitiatedBy, alongside
+ * refundedAmount/refundedAt, so payoutController.ts's getRefundHistory has something to read.
+ *
  * Every other check and code path createRefund had inline — PAID-status check,
  * payment-intent-exists check, 30-day window, the PAID->REFUNDING TOCTOU compare-and-swap
  * claim, the idempotency key, the booth-cart-vs-destination-charge Stripe call branching,
@@ -153,7 +158,8 @@ export function sendRefundConfirmationEmail(params: {
  */
 export async function executeVerifiedRefund(
   purchaseId: string,
-  refundAmount: number
+  refundAmount: number,
+  initiatedBy: 'organizer' | 'admin' | 'dispute'
 ): Promise<{
   refundedAmount: number;
   purchase: {
@@ -307,10 +313,19 @@ export async function executeVerifiedRefund(
     throw stripeErr;
   }
 
-  // Stripe confirmed — finalize status to REFUNDED.
+  // Stripe confirmed — finalize status to REFUNDED, and record Refund History
+  // (2026-07-29): refundedAmount/refundedAt/refundInitiatedBy are nullable/additive columns
+  // (see schema.prisma + migrations/20260729030000_purchase_refund_history_fields) so a
+  // refunded purchase is no longer silently invisible everywhere in the product — see
+  // payoutController.ts's getRefundHistory, which reads exactly these three fields.
   await prisma.purchase.update({
     where: { id: purchaseId },
-    data: { status: 'REFUNDED' }
+    data: {
+      status: 'REFUNDED',
+      refundedAmount: refundAmount,
+      refundedAt: new Date(),
+      refundInitiatedBy: initiatedBy,
+    }
   });
 
   // Tell the VENDOR their booth sale was refunded. No-ops on non-booth-cart purchases.
