@@ -358,8 +358,15 @@ export const authenticateComplete = async (req: Request, res: Response) => {
       }
 
       // Load organizer if user is an organizer (for subscriptionTier and other fields in JWT)
+      // S1178 BQ fix: user.role (scalar, deprecated) can drift out of sync with the
+      // canonical user.roles[] array -- a user whose organizer privilege lives only in
+      // roles[] was silently skipped here, shipping a JWT with subscriptionTier defaulted
+      // to 'SIMPLE' and organizerTokenVersion/onboardingComplete defaulted to 0/false,
+      // same class of bug as the S1177 tier-resolution fix. Same hasOrganizerRole check
+      // already used across saleController.ts.
       let organizerProfile: Organizer | null = null;
-      if (user.role === 'ORGANIZER') {
+      const hasOrganizerRole = user.roles?.includes('ORGANIZER') || user.role === 'ORGANIZER';
+      if (hasOrganizerRole) {
         organizerProfile = await prisma.organizer.findUnique({
           where: { userId: user.id },
         });
