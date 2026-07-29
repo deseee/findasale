@@ -247,8 +247,97 @@ export const updateHub = async (req: AuthRequest, res: Response) => {
   }
 };
 
+// ---------------------------------------------------------------------------
+// Close-a-market safety counts (2026-07-28)
+//
+// deleteHub below is a SOFT delete: it sets isActive: false and nothing else.
+// Nothing OUTSIDE this controller reads SaleHub.isActive -- the only hits for
+// `isActive` across controllers/, middleware/ and services/ are in this file.
+// So a "deleted" hub keeps working for everyone already inside it:
+//   - vendorBoothCartController sells from its CONFIRMED booths with no hub
+//     isActive check anywhere in that path;
+//   - jobs/vendorBoothFeeBillingCron.ts:70-71 selects booths by
+//     `status: 'CONFIRMED', deletedAt: null, boothFee: { gt: 0 }` with NO hub
+//     filter at all, so a closed hub would keep charging its vendors booth
+//     rent every billing period.
+// Hiding a hub from shoppers while its vendors keep trading and keep being
+// billed is the orphaning case. deleteHub now refuses on these counts, and
+// listMyHubs / getMyHub return them so the UI can refuse first instead of
+// letting an organizer close a market out from under a claimed vendor.
+// ---------------------------------------------------------------------------
+export interface HubCloseBlockers {
+  // status CONFIRMED, not soft-deleted. The state addBoothCartItems requires to
+  // sell (vendorBoothCartController.ts filters to 'CONFIRMED') and the state
+  // the booth-fee cron bills on.
+  confirmedBoothCount: number;
+  // status PENDING with a real claiming User attached. Same definition the hub
+  // list has used for "N booths awaiting your confirmation".
+  awaitingConfirmationCount: number;
+  // A register cart still open at this hub -- someone is mid-checkout.
+  openCartCount: number;
+  // Settlement batches that have not reached COMPLETED: money owed to vendors
+  // that has not finished moving.
+  unfinishedPayoutCount: number;
+}
+
+const emptyBlockers = (): HubCloseBlockers => ({
+  confirmedBoothCount: 0,
+  awaitingConfirmationCount: 0,
+  openCartCount: 0,
+  unfinishedPayoutCount: 0,
+});
+
+export const hubHasCloseBlockers = (b: HubCloseBlockers): boolean =>
+  b.confirmedBoothCount > 0 ||
+  b.awaitingConfirmationCount > 0 ||
+  b.openCartCount > 0 ||
+  b.unfinishedPayoutCount > 0;
+
+// Counted in application code rather than filtered _count relations, matching
+// the in-memory pattern the rest of this controller already uses, and kept to a
+// fixed 3 queries no matter how many hubs are passed in.
+const getHubCloseBlockers = async (hubIds: string[]): Promise<Map<string, HubCloseBlockers>> => {
+  const byHub = new Map<string, HubCloseBlockers>();
+  for (const id of hubIds) byHub.set(id, emptyBlockers());
+  if (hubIds.length === 0) return byHub;
+
+  const booths = await prisma.vendorBooth.findMany({
+    where: { hubId: { in: hubIds }, deletedAt: null, status: { in: ['PENDING', 'CONFIRMED'] } },
+    select: { hubId: true, status: true, userId: true },
+  });
+  for (const booth of booths) {
+    const row = byHub.get(booth.hubId);
+    if (!row) continue;
+    if (booth.status === 'CONFIRMED') {
+      row.confirmedBoothCount += 1;
+    } else if (booth.userId) {
+      row.awaitingConfirmationCount += 1;
+    }
+  }
+
+  const openCarts = await prisma.boothCartTransaction.findMany({
+    where: { hubId: { in: hubIds }, status: 'PENDING' },
+    select: { hubId: true },
+  });
+  for (const cart of openCarts) {
+    const row = byHub.get(cart.hubId);
+    if (row) row.openCartCount += 1;
+  }
+
+  const batches = await prisma.vendorBoothSettlementBatch.findMany({
+    where: { hubId: { in: hubIds }, status: { not: 'COMPLETED' } },
+    select: { hubId: true },
+  });
+  for (const batch of batches) {
+    const row = byHub.get(batch.hubId);
+    if (row) row.unfinishedPayoutCount += 1;
+  }
+
+  return byHub;
+};
+
 // DELETE /api/organizer/hubs/:hubId
-// Auth + ownership required (soft delete)
+// Auth + ownership required. SOFT close: sets isActive: false, keeps every row.
 export const deleteHub = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user?.organizerProfile?.id) {
@@ -269,6 +358,26 @@ export const deleteHub = async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ message: 'Unauthorized' });
     }
 
+    // Already closed. Report success rather than an error: a double tap, a stale
+    // list, or a retry after a dropped response must not show the organizer a
+    // failure for the exact state they asked for.
+    if (!hub.isActive) {
+      return res.json({ deleted: true, alreadyClosed: true });
+    }
+
+    // Refuse to close a market that still has vendors trading in it or money in
+    // flight. Without this the soft delete only hides the hub from shoppers --
+    // its CONFIRMED booths keep selling and keep getting billed booth rent (see
+    // the note above getHubCloseBlockers).
+    const blockers = (await getHubCloseBlockers([hubId])).get(hubId) ?? emptyBlockers();
+    if (hubHasCloseBlockers(blockers)) {
+      return res.status(409).json({
+        code: 'HUB_NOT_EMPTY',
+        message: 'This market still has vendors or unfinished money records.',
+        blockers,
+      });
+    }
+
     await prisma.saleHub.update({
       where: { id: hubId },
       data: { isActive: false },
@@ -278,6 +387,50 @@ export const deleteHub = async (req: AuthRequest, res: Response) => {
   } catch (error) {
     console.error('Error deleting hub:', error);
     res.status(500).json({ message: 'Failed to delete hub' });
+  }
+};
+
+// POST /api/organizer/hubs/:hubId/reopen
+// Auth + ownership required. The exact inverse of deleteHub above.
+//
+// deleteHub does not erase anything, so "closed" has to be undoable or the UI
+// would be promising permanence the database never delivers. updateHub cannot
+// do this: updateHubSchema is createHubSchema.partial().omit({ slug: true }),
+// which has no isActive field, so before this endpoint there was no way back
+// from isActive: false at all.
+export const reopenHub = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user?.organizerProfile?.id) {
+      return res.status(401).json({ message: 'Not authenticated as organizer' });
+    }
+
+    const { hubId } = req.params;
+
+    const hub = await prisma.saleHub.findUnique({
+      where: { id: hubId },
+    });
+
+    if (!hub) {
+      return res.status(404).json({ message: 'Hub not found' });
+    }
+
+    if (hub.organizerId !== req.user.organizerProfile?.id) {
+      return res.status(403).json({ message: 'Unauthorized' });
+    }
+
+    if (hub.isActive) {
+      return res.json({ reopened: true, alreadyOpen: true });
+    }
+
+    await prisma.saleHub.update({
+      where: { id: hubId },
+      data: { isActive: true },
+    });
+
+    res.json({ reopened: true });
+  } catch (error) {
+    console.error('Error reopening hub:', error);
+    res.status(500).json({ message: 'Failed to reopen hub' });
   }
 };
 
@@ -303,33 +456,32 @@ export const listMyHubs = async (req: AuthRequest, res: Response) => {
     // (vendorBoothCartController.ts :396). Before this, the only way to discover one was
     // to open the Vendor Booths page and notice a column had changed.
     //
-    // Counted in application code rather than a filtered _count relation, matching the
-    // in-memory pattern the rest of this controller already uses, and kept to one extra
-    // query for the whole list.
+    // That same count is now one of four "can this market be closed" numbers, so it comes
+    // from the shared getHubCloseBlockers helper instead of its own inline query -- the
+    // list and deleteHub must agree exactly, or the UI would offer a Close button the
+    // server then refuses.
     const hubIds = hubs.map((hub) => hub.id);
-    const awaitingByHub = new Map<string, number>();
-    if (hubIds.length > 0) {
-      const awaitingBooths = await prisma.vendorBooth.findMany({
-        where: { hubId: { in: hubIds }, deletedAt: null, status: 'PENDING', userId: { not: null } },
-        select: { hubId: true },
-      });
-      for (const booth of awaitingBooths) {
-        awaitingByHub.set(booth.hubId, (awaitingByHub.get(booth.hubId) ?? 0) + 1);
-      }
-    }
+    const blockersByHub = await getHubCloseBlockers(hubIds);
 
     res.json({
-      hubs: hubs.map((hub) => ({
-        id: hub.id,
-        name: hub.name,
-        slug: hub.slug,
-        createdAt: hub.createdAt,
-        boothCount: hub._count.vendorBooths,
-        awaitingConfirmationCount: awaitingByHub.get(hub.id) ?? 0,
-        isActive: hub.isActive,
-        saleDate: hub.saleDate,
-        eventName: hub.eventName,
-      })),
+      hubs: hubs.map((hub) => {
+        const blockers = blockersByHub.get(hub.id) ?? emptyBlockers();
+        return {
+          id: hub.id,
+          name: hub.name,
+          slug: hub.slug,
+          createdAt: hub.createdAt,
+          boothCount: hub._count.vendorBooths,
+          awaitingConfirmationCount: blockers.awaitingConfirmationCount,
+          confirmedBoothCount: blockers.confirmedBoothCount,
+          openCartCount: blockers.openCartCount,
+          unfinishedPayoutCount: blockers.unfinishedPayoutCount,
+          canClose: !hubHasCloseBlockers(blockers),
+          isActive: hub.isActive,
+          saleDate: hub.saleDate,
+          eventName: hub.eventName,
+        };
+      }),
     });
   } catch (error) {
     console.error('Error listing hubs:', error);
@@ -353,6 +505,9 @@ export const getMyHub = async (req: AuthRequest, res: Response) => {
     if (hub.organizerId !== req.user.organizerProfile?.id) {
       return res.status(403).json({ message: 'Unauthorized' });
     }
+    // Same four counts listMyHubs returns, so the Hub Details page can state
+    // plainly why a market cannot be closed yet instead of guessing.
+    const blockers = (await getHubCloseBlockers([hubId])).get(hubId) ?? emptyBlockers();
     res.json({
       hub: {
         id: hub.id,
@@ -365,6 +520,11 @@ export const getMyHub = async (req: AuthRequest, res: Response) => {
         eventName: hub.eventName,
         isActive: hub.isActive,
         createdAt: hub.createdAt,
+        awaitingConfirmationCount: blockers.awaitingConfirmationCount,
+        confirmedBoothCount: blockers.confirmedBoothCount,
+        openCartCount: blockers.openCartCount,
+        unfinishedPayoutCount: blockers.unfinishedPayoutCount,
+        canClose: !hubHasCloseBlockers(blockers),
       },
     });
   } catch (error) {

@@ -108,7 +108,31 @@ export default function HubManagePage() {
 
           {hubId && <HubManagementNav hubId={hubId as string} />}
 
-          <h1 className="text-3xl font-bold text-sage-900 mb-8">Manage Hub</h1>
+          <h1 className="text-3xl font-bold text-warm-900 dark:text-gray-100 mb-8">Manage Hub</h1>
+
+          {/* deleteHub is a soft close (isActive: false) and this page still loads a closed
+              hub perfectly happily, so say so up front rather than letting somebody edit a
+              market shoppers can no longer see. */}
+          {data?.hub?.isActive === false && (
+            <div
+              role="status"
+              className="mb-8 p-4 rounded-lg border-2 border-warm-400 bg-warm-100 dark:bg-gray-800 dark:border-gray-500"
+            >
+              <p className="text-base font-bold text-warm-900 dark:text-gray-100">
+                This market is closed.
+              </p>
+              <p className="mt-1 text-base text-warm-800 dark:text-gray-300">
+                It is off the public site. Shoppers cannot find it. Your records are kept, and
+                you can reopen it whenever you want.
+              </p>
+              <Link
+                href="/organizer/hubs"
+                className="mt-3 inline-flex items-center justify-center min-h-[48px] px-5 py-3 text-base font-semibold rounded-lg bg-sage-700 hover:bg-sage-600 text-white"
+              >
+                Go to my markets to reopen it
+              </Link>
+            </div>
+          )}
 
           {/* Hub Details Section */}
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 mb-8">
@@ -259,6 +283,71 @@ export default function HubManagePage() {
               </div>
             )}
           </div>
+
+          {/* Close this market.
+              The confirmation step itself lives on /organizer/hubs so there is exactly one
+              copy of it. This section states the same facts and hands the organizer over
+              with ?close=<hubId>, which opens the confirmation for this market on arrival.
+              The counts come from hubController.getMyHub and are the SAME four numbers
+              deleteHub refuses on, so this never offers a button the server then rejects. */}
+          {data?.hub && data.hub.isActive !== false && (
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 mb-8">
+              <h2 className="text-xl font-bold text-warm-900 dark:text-gray-100 mb-4">
+                Close this market
+              </h2>
+
+              {data.hub.canClose === false ? (
+                <>
+                  <p className="text-base text-warm-800 dark:text-gray-200">
+                    You cannot close this market yet. Vendors are still counting on it:
+                  </p>
+                  <ul className="mt-3 list-disc pl-5 space-y-2 text-base font-medium text-warm-800 dark:text-gray-200">
+                    {(data.hub.confirmedBoothCount ?? 0) > 0 && (
+                      <li>{data.hub.confirmedBoothCount} confirmed vendor booths can still sell here.</li>
+                    )}
+                    {(data.hub.awaitingConfirmationCount ?? 0) > 0 && (
+                      <li>
+                        {data.hub.awaitingConfirmationCount} vendors claimed a booth and are waiting
+                        for your answer.
+                      </li>
+                    )}
+                    {(data.hub.openCartCount ?? 0) > 0 && (
+                      <li>{data.hub.openCartCount} register sales are still open.</li>
+                    )}
+                    {(data.hub.unfinishedPayoutCount ?? 0) > 0 && (
+                      <li>{data.hub.unfinishedPayoutCount} vendor payouts have not finished.</li>
+                    )}
+                  </ul>
+                  <p className="mt-3 text-base text-warm-800 dark:text-gray-200">
+                    Sort those out first. Closing now would pull the market out from under a vendor
+                    who is still trading in it.
+                  </p>
+                  <Link
+                    href={`/organizer/hubs/${hubId}/vendor-booths`}
+                    className="mt-4 inline-flex items-center justify-center min-h-[48px] w-full sm:w-auto px-5 py-3 text-base font-semibold rounded-lg bg-amber-700 hover:bg-amber-800 text-white"
+                  >
+                    Go to the vendor booths
+                  </Link>
+                </>
+              ) : (
+                <>
+                  <p className="text-base text-warm-800 dark:text-gray-200">
+                    This takes the market off FindA.Sale. Shoppers will not find it any more.
+                  </p>
+                  <p className="mt-2 text-base text-warm-800 dark:text-gray-200">
+                    Nothing is erased. Your sales, payouts and receipts are kept, and you can reopen
+                    the market whenever you want.
+                  </p>
+                  <Link
+                    href={`/organizer/hubs?close=${hubId}`}
+                    className="mt-4 inline-flex items-center justify-center min-h-[48px] w-full sm:w-auto px-5 py-3 text-base font-semibold rounded-lg border-2 border-warm-400 dark:border-gray-500 bg-white dark:bg-gray-700 text-warm-900 dark:text-gray-100 hover:bg-warm-100 dark:hover:bg-gray-600"
+                  >
+                    Close this market
+                  </Link>
+                </>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </>

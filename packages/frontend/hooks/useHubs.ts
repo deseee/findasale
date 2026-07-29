@@ -23,9 +23,12 @@
  * Do not remove either hook, and do not change its signature or return shape,
  * without first re-reading ADR-014.
  *
- * SEPARATE, UNDECIDED CASE: `useMyHubs` (:194) and `useDeleteHub` (:264) are
- * also caller-free right now. No decision has been made about them — they are
- * NOT covered by the "parked" ruling above and still need their own review.
+ * SEPARATE CASE: `useMyHubs` is still caller-free (the organizer hub list at
+ * pages/organizer/hubs/index.tsx fetches with `api.get` directly). No decision
+ * has been made about it — it is NOT covered by the "parked" ruling above.
+ *
+ * `useDeleteHub` is NO LONGER caller-free as of 2026-07-28: it is the mutation
+ * behind the Close-this-market flow on pages/organizer/hubs/index.tsx.
  * ---------------------------------------------------------------------------
  */
 
@@ -157,6 +160,13 @@ export interface MyHubDetail {
   eventName?: string;
   isActive: boolean;
   createdAt: string;
+  // Close-a-market safety counts, served by hubController.getMyHub. All optional so an
+  // older API response renders as zero rather than NaN.
+  awaitingConfirmationCount?: number;
+  confirmedBoothCount?: number;
+  openCartCount?: number;
+  unfinishedPayoutCount?: number;
+  canClose?: boolean;
 }
 
 export interface MyHubDetailResponse {
@@ -259,7 +269,49 @@ export const useUpdateHub = (hubId: string) => {
 };
 
 /**
- * Delete a hub (soft delete)
+ * Blockers the server reports when it refuses to close a hub (409 HUB_NOT_EMPTY).
+ * Mirrors HubCloseBlockers in backend/src/controllers/hubController.ts.
+ */
+export interface HubCloseBlockers {
+  confirmedBoothCount: number;
+  awaitingConfirmationCount: number;
+  openCartCount: number;
+  unfinishedPayoutCount: number;
+}
+
+export interface HubMutationError extends Error {
+  status?: number;
+  code?: string;
+  blockers?: HubCloseBlockers;
+}
+
+/**
+ * Turn an axios error into an Error that still carries the HTTP status, the
+ * server's `code`, and (for 409 HUB_NOT_EMPTY) the blocker counts.
+ *
+ * WHY THIS EXISTS: the previous body of useDeleteHub was
+ * `throw new Error(err.response?.data?.message || 'Failed to delete hub')`,
+ * which flattened every failure to one string. The Close-this-market UI has to
+ * tell four different failures apart and say something different for each:
+ * 409 HUB_NOT_EMPTY (name the vendors in the way), 403 TIER_REQUIRED,
+ * 403 GRACE_PERIOD_RESTRICTION, and 429 rate limiting. With only a message
+ * string the page could not do better than one generic red box.
+ * The thrown value is still an Error, so nothing that only reads `.message`
+ * changes behaviour.
+ */
+const asHubMutationError = (err: any, fallback: string): HubMutationError => {
+  const wrapped: HubMutationError = new Error(err?.response?.data?.message || err?.message || fallback);
+  wrapped.status = err?.response?.status;
+  wrapped.code = err?.response?.data?.code;
+  wrapped.blockers = err?.response?.data?.blockers;
+  return wrapped;
+};
+
+/**
+ * Close a hub. This is a SOFT delete server-side: hubController.deleteHub sets
+ * isActive: false and keeps every booth, cart transaction and payout row. It
+ * returns 409 HUB_NOT_EMPTY when the hub still has confirmed or claimed booths,
+ * an open register cart, or unfinished payouts. Pair with useReopenHub.
  */
 export const useDeleteHub = (hubId: string) => {
   return useMutation({
@@ -268,7 +320,24 @@ export const useDeleteHub = (hubId: string) => {
         const response = await api.delete(`/organizer/hubs/${hubId}`);
         return response.data;
       } catch (err: any) {
-        throw new Error(err.response?.data?.message || 'Failed to delete hub');
+        throw asHubMutationError(err, 'Failed to close market');
+      }
+    },
+  });
+};
+
+/**
+ * Reopen a hub that was closed (POST /api/organizer/hubs/:hubId/reopen).
+ * Exists because deleteHub never erased anything, so "closed" must be undoable.
+ */
+export const useReopenHub = (hubId: string) => {
+  return useMutation({
+    mutationFn: async () => {
+      try {
+        const response = await api.post(`/organizer/hubs/${hubId}/reopen`);
+        return response.data;
+      } catch (err: any) {
+        throw asHubMutationError(err, 'Failed to reopen market');
       }
     },
   });

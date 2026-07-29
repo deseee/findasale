@@ -7,6 +7,7 @@ import {
   createHub,
   updateHub,
   deleteHub,
+  reopenHub,
   listMyHubs,
   getMyHub,
   setHubEvent,
@@ -24,6 +25,9 @@ router.get('/api/organizer/hubs/:hubId', authenticate, getMyHub);
 router.post('/api/organizer/hubs', authenticate, requireTier('PRO'), createHub);
 router.put('/api/organizer/hubs/:hubId', authenticate, requireTier('PRO'), updateHub);
 router.delete('/api/organizer/hubs/:hubId', authenticate, requireTier('PRO'), deleteHub);
+// Inverse of the DELETE above. deleteHub only sets isActive: false, so closing has to
+// be undoable -- same auth, same ownership check, same tier.
+router.post('/api/organizer/hubs/:hubId/reopen', authenticate, requireTier('PRO'), reopenHub);
 router.patch('/api/organizer/hubs/:hubId/event', authenticate, requireTier('PRO'), setHubEvent);
 
 export default router;

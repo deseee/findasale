@@ -714,7 +714,7 @@ export const getVendorBoothStripeStatus = async (req: AuthRequest, res: Response
     if (booth.userId !== req.user.id) return res.status(403).json({ error: 'You do not operate this booth' });
 
     if (!booth.stripeAccountId) {
-      return res.status(200).json({ stripeOnboarded: false, status: 'NOT_STARTED' });
+      return res.status(200).json({ stripeOnboarded: false, payoutsEnabled: false, status: 'NOT_STARTED' });
     }
 
     const status = await getAccountStatus(booth.stripeAccountId);
@@ -732,7 +732,18 @@ export const getVendorBoothStripeStatus = async (req: AuthRequest, res: Response
       }
     }
 
-    return res.status(200).json({ stripeOnboarded: status.chargesEnabled, status: status.status });
+    // `stripeOnboarded` stays charges_enabled ONLY, unchanged: it is the same value
+    // persisted above and the same value the organizer's Vendor Booths table reads, so
+    // its meaning must not shift here. `payoutsEnabled` is ADDITIVE (2026-07-29) --
+    // getAccountStatus (stripeConnectService.ts :229) has always computed it and this
+    // handler was discarding it, which made a half-onboarded account (charges on, payouts
+    // still blocked) indistinguishable from a finished one. The vendor booth page needs
+    // both to tell "you can be paid" from "you cannot be paid yet".
+    return res.status(200).json({
+      stripeOnboarded: status.chargesEnabled,
+      payoutsEnabled: status.payoutsEnabled,
+      status: status.status,
+    });
   } catch (error) {
     console.error('[getVendorBoothStripeStatus] Error:', error);
     return res.status(500).json({ error: 'Failed to get Stripe status' });

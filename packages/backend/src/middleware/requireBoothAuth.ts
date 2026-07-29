@@ -43,8 +43,12 @@ export interface BoothAuthRequest extends AuthRequest {
  * 2. Else, require an authenticated User (authenticate() must run before this
  *    middleware). Load SaleHub by hubId -> hub.organizerId, then:
  *
- *    OWNER PATH (added 2026-07-28, P0 fix). If the caller's own Organizer profile id
- *    === hub.organizerId, the caller IS the market owner and gets HUB_OWNER access.
+ *    OWNER PATH (added 2026-07-28, P0 fix; id-shape corrected 2026-07-28b). If the
+ *    caller owns the Organizer that owns this hub -- matched by Organizer.userId ===
+ *    req.user.id, or by req.user.organizerProfile.id === Organizer.id when that profile
+ *    is present -- the caller IS the market owner and gets HUB_OWNER access. Both shapes
+ *    are accepted because these routes run optionalAuthenticate (which does NOT attach
+ *    organizerProfile), not authenticate (which does).
  *    Before this, hub.organizerId was fetched and then never used as an authorization
  *    signal, so the owner was 403'd out of their own register unless they ALSO had an
  *    accepted WorkspaceMember row WITH a linked TeamMember row -- a combination no code
@@ -123,25 +127,48 @@ export const requireBoothTokenOrTeamMember = () => {
       }
 
       // Branch 2a: the hub's OWNER. hub.organizerId was already loaded above; this is
-      // the authorization signal that was missing. Organizer.id is the same id space as
-      // req.user.organizerProfile.id (auth.ts:210 sets organizerProfile from the User's
-      // own Organizer row), so this is a direct id comparison, not an inferred one.
-      // Checked BEFORE the workspace lookup so the owner is never blocked by the
-      // "no workspace" 403 below -- routes/users.ts:443 creates an OrganizerWorkspace
-      // during TEAMS onboarding but never a WorkspaceMember, and an owner who has not
-      // been through workspaceController.createWorkspace has no workspace at all.
-      if (req.user.organizerProfile?.id && req.user.organizerProfile.id === hub.organizerId) {
-        req.boothAuth = { type: 'HUB_OWNER', organizerId: hub.organizerId, hubId };
-        return next();
-      }
-
+      // the authorization signal that was missing.
+      //
+      // FIX 2026-07-28b: the original owner check read ONLY req.user.organizerProfile.id.
+      // authenticate() sets that field (auth.ts:166-169 loads the User with
+      // `include: { organizer: true }`; auth.ts:209-211 attaches it), but
+      // optionalAuthenticate() does NOT -- it loads the bare User row (auth.ts:50) and
+      // attaches only `user` and `roles` (auth.ts:52-56). All ten cart routes are wired
+      // with optionalAuthenticate (routes/vendorBooth.ts:127-147), so organizerProfile
+      // was ALWAYS undefined here and the owner branch could never fire: the market owner
+      // fell through to the workspace lookup and got 403 NOT_TEAM_MEMBER on their own hub.
+      //
+      // The Organizer row is now loaded BEFORE the owner check -- it was already being
+      // loaded a few lines below for the workspace join, so this costs no extra query --
+      // and the ownership test accepts EITHER id shape:
+      //   - Organizer.userId === req.user.id  (works under optionalAuthenticate; this is
+      //     the authoritative link, Organizer.userId is @unique in schema.prisma)
+      //   - organizerProfile.id === Organizer.id  (works under authenticate())
+      // Either match proves the caller owns the Organizer that owns this hub, so neither
+      // arm widens access beyond the single legitimate owner.
+      //
+      // Still evaluated BEFORE the "no workspace" 403 below -- routes/users.ts:443 creates
+      // an OrganizerWorkspace during TEAMS onboarding but never a WorkspaceMember, and an
+      // owner who has not been through workspaceController.createWorkspace has no
+      // workspace at all.
       const organizer = await prisma.organizer.findUnique({
         where: { id: hub.organizerId },
         select: {
           id: true,
+          userId: true,
           workspace: { select: { id: true } },
         },
       });
+
+      const callerOrganizerProfileId = req.user.organizerProfile?.id ?? null;
+      if (
+        organizer &&
+        (organizer.userId === req.user.id ||
+          (callerOrganizerProfileId !== null && callerOrganizerProfileId === organizer.id))
+      ) {
+        req.boothAuth = { type: 'HUB_OWNER', organizerId: hub.organizerId, hubId };
+        return next();
+      }
 
       if (!organizer?.workspace?.id) {
         // A SaleHub whose owning Organizer somehow has no workspace is not a valid
@@ -151,12 +178,34 @@ export const requireBoothTokenOrTeamMember = () => {
 
       const workspaceId = organizer.workspace.id;
 
+      // FIX 2026-07-28b (SECOND instance of the same bug class): this OR clause also read
+      // req.user.organizerProfile?.id, so on these optionalAuthenticate routes the
+      // { organizerId } arm was ALWAYS dropped and only { userId } could ever match.
+      // That is not merely dead code. workspaceController.ts:734-738 creates an accepted
+      // invitee's WorkspaceMember with `...(organizer ? { organizerId } : { userId })` --
+      // EXCLUSIVE, one or the other. A team member who also has an Organizer profile
+      // therefore has a WorkspaceMember row whose userId is NULL, which the userId-only
+      // arm can never match, so that cashier was 403'd off the register as well.
+      // Resolve the caller's Organizer id from req.user.id when the profile is absent --
+      // the same lookup shape the cart controller already uses
+      // (vendorBoothCartController.ts:1492). This query runs ONLY on the logged-in
+      // non-owner path: booth-token sessions returned at branch 1, owners returned at
+      // branch 2a, and anonymous callers never get past the req.user?.id check.
+      let callerOrganizerId = callerOrganizerProfileId;
+      if (!callerOrganizerId) {
+        const callerOrganizer = await prisma.organizer.findUnique({
+          where: { userId: req.user.id },
+          select: { id: true },
+        });
+        callerOrganizerId = callerOrganizer?.id ?? null;
+      }
+
       const member = await prisma.workspaceMember.findFirst({
         where: {
           workspaceId,
           acceptedAt: { not: null },
           OR: [
-            ...(req.user.organizerProfile?.id ? [{ organizerId: req.user.organizerProfile.id }] : []),
+            ...(callerOrganizerId ? [{ organizerId: callerOrganizerId }] : []),
             { userId: req.user.id },
           ],
         },
