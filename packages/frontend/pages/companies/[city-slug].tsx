@@ -207,7 +207,7 @@ export default function CompaniesCityPage({
               Companies
             </span>
             <Link
-              href={`/estate-sales/${citySlug}`}
+              href={`/city/${citySlug}/estate-sales`}
               className="px-3 py-1.5 rounded-full text-sm border border-warm-300 dark:border-gray-600 text-warm-700 dark:text-warm-300 hover:border-amber-500 hover:text-amber-600 transition-colors"
             >
               Estate Sales in {cityName}

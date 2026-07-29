@@ -3,9 +3,13 @@
  *
  * Turns the sales array from /sales/by-city and the activeByType breakdown
  * from /sales/city-slugs into on-page inventory stats and data-driven FAQ
- * entries. Used by the four type-city landing page families:
- *   /estate-sales/[city-slug], /yard-sales/[city-slug],
- *   /auctions/[city-slug], /flea-markets/[city-slug]
+ * entries. Used by the canonical city+category landing pages:
+ *   /city/[slug]/estate-sales, /city/[slug]/yard-sales,
+ *   /city/[slug]/auctions, /city/[slug]/flea-markets, /city/[slug]/resale
+ *
+ * href targets point at /city/[slug]/[category] only. The legacy
+ * /estate-sales/[city-slug] family 308-redirects there (next.config.js, 2026-07-21);
+ * linking to the legacy form fed Google a redirect hop on every canonical page.
  *
  * Rule: every number shown to shoppers or search engines comes from real
  * listing data fetched at build/revalidate time. Nothing is fabricated.
@@ -38,22 +42,22 @@ export const SALE_TYPE_PAGES: Record<
   ESTATE: {
     label: 'Estate Sales',
     singular: 'estate sale',
-    href: (citySlug) => `/estate-sales/${citySlug}`,
+    href: (citySlug) => `/city/${citySlug}/estate-sales`,
   },
   YARD: {
     label: 'Yard Sales',
     singular: 'yard sale',
-    href: (citySlug) => `/yard-sales/${citySlug}`,
+    href: (citySlug) => `/city/${citySlug}/yard-sales`,
   },
   AUCTION: {
     label: 'Auctions',
     singular: 'auction',
-    href: (citySlug) => `/auctions/${citySlug}`,
+    href: (citySlug) => `/city/${citySlug}/auctions`,
   },
   FLEA_MARKET: {
     label: 'Flea Markets',
     singular: 'flea market',
-    href: (citySlug) => `/flea-markets/${citySlug}`,
+    href: (citySlug) => `/city/${citySlug}/flea-markets`,
   },
   RETAIL: {
     label: 'Resale Listings',

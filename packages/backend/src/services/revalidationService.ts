@@ -12,19 +12,23 @@
  * save). Failures are logged, never thrown.
  */
 
+import { canonicalCitySlug } from '../utils/citySlug';
+
 const REVALIDATE_TIMEOUT_MS = 10000;
 
 /**
- * Build a city page slug from a Sale's city + state, matching the canonical
- * formula used by /api/sales/city-slugs (packages/backend/src/routes/sales.ts):
- *   LOWER(REPLACE(city, ' ', '-')) || '-' || LOWER(state)
+ * Build a city page slug from a Sale's city + state.
+ *
+ * 2026-07-28: this used to re-implement the formula (space -> hyphen, lowercase)
+ * and, critically, did NOT strip dots or apostrophes — so every publish/update/
+ * cancel/prune/scrape of a sale in "St. Louis" fired ISR revalidation against
+ * /city/st.-louis-mo, a path the by-city API rejects with a 400. It now delegates
+ * to the single canonical generator (utils/citySlug.ts) shared with
+ * /sales/city-slugs and the metro index. Thin re-export wrapper kept because this
+ * name is imported by saleController, pruneScrapedSales and the scraper.
  */
 export function citySlugFromCityState(city: string | null | undefined, state: string | null | undefined): string | null {
-  if (!city || !state) return null;
-  const citySlug = city.trim().toLowerCase().replace(/\s+/g, '-');
-  const stateSlug = state.trim().toLowerCase();
-  if (!citySlug || !stateSlug) return null;
-  return `${citySlug}-${stateSlug}`;
+  return canonicalCitySlug(city, state);
 }
 
 /**

@@ -1175,6 +1175,12 @@ model Item {
   // itemController, not a DB CHECK constraint per ADR-015 Consequences).
   vendorBoothId                   String? // FK to VendorBooth model (TEAMS, flea market hubs)
   vendorBooth                     VendorBooth?            @relation("VendorBoothItems", fields: [vendorBoothId], references: [id], onDelete: SetNull)
+  // S1178 Bug 2 (findasale-architect ADR-item-venue-eligibility-S1178): vendor must
+  // explicitly opt an item in before it can be rung up at ANY flea-market booth. Default
+  // false = secure by default -- existing items are NOT booth-sellable until their owner
+  // opts in via the item-edit form. Checked in addBoothCartItems alongside (not instead
+  // of) the existing owner+hub-match resolution.
+  boothEligible                   Boolean                 @default(false)
   // P0 cart-scope fix (findasale-hacker fix-and-reverify pass, 2026-07-28): which
   // BoothCartTransaction currently holds this item's RESERVED reservation. Before this
   // field, resolveBoothLegItems() in vendorBoothCartController.ts could only ask "is this
@@ -5675,7 +5681,7 @@ model BoothCartLeg {
   cartTransactionId     String
   cartTransaction       BoothCartTransaction @relation(fields: [cartTransactionId], references: [id], onDelete: Cascade)
   vendorBoothId         String
-  vendorBooth           VendorBooth          @relation("VendorBoothCartLegs", fields: [vendorBoothId], references: [id], onDelete: Cascade)
+  vendorBooth           VendorBooth          @relation("VendorBoothCartLegs", fields: [vendorBoothId], references: [id], onDelete: Restrict) // S1178 Bug 3: Restrict, not Cascade -- a booth with sales history can no longer be hard-deleted; see ADR-booth-deletion-ledger-restrict-S1178.md
   stripeAccountId       String // the booth's OWN connected account — the Direct-charge merchant of record for this leg
   stripePaymentIntentId String               @unique
   amountCents           Int
@@ -5849,10 +5855,31 @@ model CityCoordinate {
   state      String
   lat        Float
   lng        Float
-  source     String   // 'nominatim-structured' | 'nominatim-freetext' | 'census' (mirrors GeocodedResult.source)
+  source     String   // 'nominatim-structured' | 'nominatim-freetext' | 'census' | 'sale-centroid' (mirrors GeocodedResult.source, plus the backfill job's own DB-derived fallback)
   geocodedAt DateTime @default(now())
 
   @@index([state])
+}
+
+// Negative cache for city slugs that could NOT be resolved to a centroid.
+// Without this, cityCoordinateBackfillJob re-geocodes the same hopeless slugs on
+// every run forever -- Sale.city contains real typos ("Burnabt, BC") and free-text
+// place names that Nominatim will never match, and each retry burns a rate-limited
+// Nominatim request that a resolvable city could have used instead.
+// A row here is a SKIP instruction, not a permanent verdict: `permanent` is only set
+// once attempts cross the job's threshold, and any row can be deleted to force a
+// fresh attempt (e.g. after the underlying Sale.city typo is corrected).
+model CityGeocodeFailure {
+  slug          String   @id // same key space as CityCoordinate.slug
+  city          String
+  state         String
+  attempts      Int      @default(1)
+  permanent     Boolean  @default(false) // true = stop retrying; set after MAX_ATTEMPTS
+  lastReason    String? // e.g. 'no-nominatim-match', 'no-sale-coordinates'
+  firstFailedAt DateTime @default(now())
+  lastAttemptAt DateTime @default(now())
+
+  @@index([permanent])
 }
 
 // Directory/enrichment URL fetch health per registrable domain.

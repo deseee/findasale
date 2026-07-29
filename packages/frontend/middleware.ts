@@ -65,6 +65,7 @@
  */
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { normalizeCitySlug, isCitySlugSafe } from './lib/seo/citySlug';
 
 // ── Crawler detection ──────────────────────────────────────────────────────────
 const CRAWLER_PATTERNS: RegExp[] = [
@@ -138,6 +139,60 @@ function resolveOptionBRewrite(pathname: string, requestUrl: string): URL | null
   return null;
 }
 
+// ── Canonical city-slug redirect (2026-07-28) ──────────────────────────────
+// Three backend slug generators had drifted: /sales/city-slugs stripped dots
+// (-> "st-louis-mo", the canonical form feeding the sitemap and getStaticPaths)
+// while the metro index (indexController.makeSlug) and the ISR revalidation
+// trigger did not (-> "st.-louis-mo"). MetroTable linked the un-stripped form,
+// so Google indexed URLs the by-city API rejects with a 400 — pages that render
+// permanently empty. Confirmed live before the fix: GET
+// /api/sales/by-city/st.-louis-mo -> 400, /st-louis-mo -> 200 with 50 sales.
+// The generators are unified now, but "st.-louis-mo" (46 impressions/wk),
+// "coeur-d'alene-id" (8) and "st.-paul-mn" (3) are already indexed and carrying
+// real impressions, so they must consolidate onto the canonical URL rather than
+// 404 or keep serving an empty page.
+//
+// This CANNOT be expressed as a static next.config.js redirect: that layer can
+// match a path but cannot transform a captured param (there is no string-replace
+// in a `destination`), and the dotted form is open-ended — any city with a dot,
+// apostrophe or accent produces one. Middleware is the only place the rewrite of
+// the value itself can happen.
+//
+// Composition with the existing next.config.js redirect: next.config redirects
+// run BEFORE middleware, so a legacy dotted URL resolves in two permanent hops —
+//   /estate-sales/st.-louis-mo
+//     -> 308 (next.config, S1147) /city/st.-louis-mo/estate-sales
+//     -> 308 (here)               /city/st-louis-mo/estate-sales  -> 200
+// Both hops are permanent and the chain terminates; Google consolidates signal
+// across chains this short. No loop is possible because normalizeCitySlug() is
+// idempotent and we only redirect when the value actually changes — the target
+// slug is already canonical, so the second pass returns early at isCitySlugSafe.
+const CITY_SLUG_ROUTE_PREFIXES = new Set(['city', 'this-weekend', 'companies']);
+
+function resolveCitySlugRedirect(request: NextRequest): URL | null {
+  const segments = request.nextUrl.pathname.split('/').filter(Boolean);
+  if (segments.length < 2) return null;
+  if (!CITY_SLUG_ROUTE_PREFIXES.has(segments[0])) return null;
+
+  let raw: string;
+  try {
+    raw = decodeURIComponent(segments[1]);
+  } catch {
+    return null; // malformed percent-encoding — leave it alone
+  }
+
+  // Cheap fast path: the overwhelming majority of requests are already canonical.
+  if (isCitySlugSafe(raw)) return null;
+
+  const canonical = normalizeCitySlug(raw);
+  if (!canonical || canonical === raw) return null;
+
+  segments[1] = canonical;
+  const target = new URL(request.url);
+  target.pathname = `/${segments.join('/')}`;
+  return target; // query string preserved by copying the whole URL
+}
+
 function isCrawler(ua: string): boolean {
   return CRAWLER_PATTERNS.some((p) => p.test(ua));
 }
@@ -195,6 +250,15 @@ export function middleware(request: NextRequest) {
     if (DELETED_SALE_IDS.has(saleId)) {
       return new NextResponse(null, { status: 410 });
     }
+  }
+
+  // ── Canonical city-slug redirect ───────────────────────────────────────────
+  // Runs before crawler tracking and before the Option B rewrite so a legacy
+  // slug is consolidated onto its canonical URL first, and the downstream
+  // curated-vs-SSR routing decision is made against the canonical slug.
+  const citySlugRedirect = resolveCitySlugRedirect(request);
+  if (citySlugRedirect) {
+    return NextResponse.redirect(citySlugRedirect, 308);
   }
 
   // ── Crawler tracking (Flag 4 fix) ──────────────────────────────────────────

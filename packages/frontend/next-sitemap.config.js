@@ -12,6 +12,21 @@ module.exports = {
   ],
   exclude: [
     '/server-sitemap.xml',
+    // Deprecated city URL families (2026-07-28) -- do not re-add.
+    // next.config.js redirects() 308s each of these to /city/:citySlug/:category
+    // (canonical consolidation, 2026-07-21). next-sitemap builds from the prerendered
+    // getStaticPaths output, so it kept emitting 25 of each family into sitemap-0.xml
+    // with a build-time (always-fresh) lastmod -- advertising redirecting URLs as the
+    // current, most recently updated form. The page files stay (they must keep serving
+    // the 308); only their sitemap entries are excluded.
+    '/estate-sales',
+    '/estate-sales/*',
+    '/yard-sales',
+    '/yard-sales/*',
+    '/auctions',
+    '/auctions/*',
+    '/flea-markets',
+    '/flea-markets/*',
     '/organizer',
     '/organizer/*',
     '/shopper',

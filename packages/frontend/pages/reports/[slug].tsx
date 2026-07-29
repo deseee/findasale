@@ -10,6 +10,7 @@
 
 import Head from 'next/head';
 import { jsonLdSafe } from '@/lib/jsonLdSafe';
+import { canonicalCitySlug } from '../../lib/seo/citySlug';
 import Link from 'next/link';
 import { GetServerSideProps, GetServerSidePropsContext } from 'next';
 
@@ -73,11 +74,12 @@ function humanizeSaleType(raw: string): string {
   return SALE_TYPE_LABELS[raw] ?? raw;
 }
 
-function toCitySlug(city: string, state: string): string {
-  return `${city}-${state}`
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '');
+// 2026-07-28: was a local slug chain that hyphenated apostrophes
+// ("Coeur d'Alene" -> "coeur-d-alene") instead of deleting them, so it disagreed
+// with the canonical form used by the sitemap and the by-city API. Delegates to
+// the one shared generator now. Returns null when no valid slug exists.
+function toCitySlug(city: string, state: string): string | null {
+  return canonicalCitySlug(city, state);
 }
 
 // ---------------------------------------------------------------------------
@@ -238,12 +240,20 @@ export default function MonthlyReportPage({ report, slug, error }: PageProps) {
                     key={`${row.city}-${row.state}`}
                     rank={i + 1}
                     label={
-                      <Link
-                        href={`/city/${citySlug}`}
-                        style={{ color: '#1a6b4a', textDecoration: 'none', fontWeight: 500 }}
-                      >
-                        {row.city}, {row.state}
-                      </Link>
+                      citySlug ? (
+                        <Link
+                          href={`/city/${citySlug}`}
+                          style={{ color: '#1a6b4a', textDecoration: 'none', fontWeight: 500 }}
+                        >
+                          {row.city}, {row.state}
+                        </Link>
+                      ) : (
+                        // No valid slug for this city — show the name without a
+                        // link rather than link to a page that cannot render.
+                        <span style={{ fontWeight: 500 }}>
+                          {row.city}, {row.state}
+                        </span>
+                      )
                     }
                     value={`${row.count.toLocaleString()} sale${row.count !== 1 ? 's' : ''}`}
                     total={report.totalPublishedSales}

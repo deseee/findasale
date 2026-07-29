@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { canonicalCitySlug, CITY_SLUG_PATTERN } from '../utils/citySlug';
 import {
   listSales,
   getMySales,
@@ -242,7 +243,7 @@ router.get('/by-city/:citySlug', async (req, res) => {
     const { category } = req.query as { category?: string };
 
     // Validate slug format: word-chars-state e.g. "grand-rapids-mi"
-    if (!/^[a-z0-9-]+-[a-z]{2}$/.test(citySlug)) {
+    if (!CITY_SLUG_PATTERN.test(citySlug)) {
       return res.status(400).json({ error: 'Invalid city slug format' });
     }
 
@@ -321,6 +322,23 @@ router.get('/by-city/:citySlug', async (req, res) => {
         (s) => s.lat != null && s.lng != null && haversineMiles(centroid.lat, centroid.lng, s.lat as number, s.lng as number) <= RADIUS_MILES
       );
     } else {
+      // OBSERVABILITY (2026-07-28): this branch used to degrade result quality in total
+      // silence. The endpoint still answered 200, just with the far narrower exact
+      // city-string result set, so a city page rendering nothing was indistinguishable
+      // from a city that genuinely has nothing. Measured against production the same
+      // day: 1,088 of the 2,710 city slugs with active inventory had no CityCoordinate
+      // row at all, and spot-checked slugs (burton-mi, beltsville-md) returned 50 sales
+      // each once a centroid existed while showing 0 without one.
+      // Logged at warn level with a stable, greppable token so a regression is visible
+      // in Railway logs without a metrics backend — search: EXACT-FALLBACK.
+      // The durable fix is jobs/cityCoordinateBackfillJob.ts, which warms this cache
+      // ahead of traffic; this log is how we find out when it has stopped keeping up.
+      console.warn(
+        `[sales/by-city] EXACT-FALLBACK slug=${citySlug} city="${cityName}" state=${stateCode} ` +
+          `- no CityCoordinate row and geocoding returned nothing; serving exact city-string ` +
+          `match instead of the ${RADIUS_MILES}mi radius query.`
+      );
+
       // Fallback: original exact-string-match behavior (geocoding failed entirely).
       const aliases = cityAliases[cityName] ?? [];
       const whereClause: any = {
@@ -356,6 +374,11 @@ router.get('/by-city/:citySlug', async (req, res) => {
         },
         take: 2000,
       });
+
+      console.warn(
+        `[sales/by-city] EXACT-FALLBACK slug=${citySlug} served ${candidateSales.length} row(s) ` +
+          `from the exact city-string query.`
+      );
     }
 
     // activeByType — computed from this SAME radius (or fallback exact-match) set,
@@ -442,9 +465,8 @@ router.get('/by-city/:citySlug', async (req, res) => {
 // SEO: GET /sales/city-slugs — returns all available city slugs for sitemaps/getStaticPaths
 router.get('/city-slugs', async (req, res) => {
   try {
-    const rows = await prisma.$queryRaw<Array<{ slug: string; city: string; state: string; count: bigint }>>`
+    const rows = await prisma.$queryRaw<Array<{ city: string; state: string; count: bigint }>>`
       SELECT
-        LOWER(REPLACE(city, ' ', '-')) || '-' || LOWER(state) AS slug,
         city,
         state,
         COUNT(*) AS count
@@ -481,18 +503,59 @@ router.get('/city-slugs', async (req, res) => {
       activeByCity.set(key, entry);
     }
 
-    const slugs = rows.map((r) => {
+    // 2026-07-28: the slug is now built in JS by the single canonical generator
+    // (utils/citySlug.ts) instead of in SQL, so this endpoint — which feeds the
+    // sitemap AND every city getStaticPaths — can no longer drift from the metro
+    // index (indexController) or the ISR revalidation trigger (revalidationService).
+    // canonicalCitySlug() returns null for rows that cannot yield a valid slug
+    // (non-Latin city names exist in Sale.city); those are dropped rather than
+    // emitted as URLs the API would reject with a 400.
+    //
+    // Distinct (city, state) rows can legitimately collapse onto ONE canonical
+    // slug — production has 18 such pairs, e.g. ('Washington','DC') and
+    // ('Washington','D.C.') both -> "washington-dc", ('St Petersburg','FL') and
+    // ('St. Petersburg','FL') both -> "st-petersburg-fl". Emitting a slug twice
+    // would push duplicate paths into getStaticPaths and duplicate <url> entries
+    // into the sitemap, so counts are merged. Rows arrive ORDER BY count DESC, so
+    // the first row for a slug supplies the display city/state.
+    type CitySlugRow = {
+      slug: string;
+      city: string;
+      state: string;
+      count: number;
+      activeCount: number;
+      activeByType: Record<string, number>;
+    };
+    const bySlug = new Map<string, CitySlugRow>();
+
+    for (const r of rows) {
+      const slug = canonicalCitySlug(r.city, r.state);
+      if (!slug) continue;
+
       const active = activeByCity.get(`${r.city.toLowerCase()}|${r.state.toLowerCase()}`);
-      return {
-        slug: r.slug.replace(/\./g, ''),
-        city: r.city,
-        state: r.state,
-        count: Number(r.count),
-        // S1071 additive fields — existing slug/city/state/count consumers are unaffected
-        activeCount: active?.total ?? 0,
-        activeByType: active?.byType ?? {},
-      };
-    });
+      const existing = bySlug.get(slug);
+
+      if (!existing) {
+        bySlug.set(slug, {
+          slug,
+          city: r.city,
+          state: r.state,
+          count: Number(r.count),
+          // S1071 additive fields — existing slug/city/state/count consumers are unaffected
+          activeCount: active?.total ?? 0,
+          activeByType: { ...(active?.byType ?? {}) },
+        });
+        continue;
+      }
+
+      existing.count += Number(r.count);
+      existing.activeCount += active?.total ?? 0;
+      for (const [saleType, n] of Object.entries(active?.byType ?? {})) {
+        existing.activeByType[saleType] = (existing.activeByType[saleType] ?? 0) + n;
+      }
+    }
+
+    const slugs = Array.from(bySlug.values()).sort((a, b) => b.count - a.count);
 
     return res.json({ slugs, total: slugs.length });
   } catch (err) {

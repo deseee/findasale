@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { RETAIL_JUNK_KEYWORDS } from '../routes/sales';
+import { CITY_SLUG_PATTERN } from '../utils/citySlug';
 
 // ---------------------------------------------------------------------------
 // #567 Hire-intent company directory
@@ -59,7 +60,7 @@ export async function getCompaniesByCity(req: Request, res: Response) {
   try {
     const { citySlug } = req.params;
 
-    if (!/^[a-z0-9-]+-[a-z]{2}$/.test(citySlug)) {
+    if (!CITY_SLUG_PATTERN.test(citySlug)) {
       return res.status(400).json({ error: 'Invalid city slug format' });
     }
 

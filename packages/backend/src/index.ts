@@ -1080,6 +1080,19 @@ httpServer.listen(PORT, '0.0.0.0', () => {
     console.error('[Geocode Backlog] Non-fatal startup error — cron not scheduled:', err?.message);
   }
 
+  // 2026-07-28: City-coordinate backfill — warms CityCoordinate for every servable
+  // city slug so /sales/by-city runs its 35mi radius query instead of silently
+  // degrading to exact city-string matching on a cold cache (1,088 of 2,710 slugs
+  // with active inventory had no centroid row). Same defensive require() pattern as
+  // the geocode backlog above: a missing/corrupt compiled file must not crash-loop
+  // the server at startup.
+  try {
+    const { scheduleCityCoordinateBackfillCron } = require('./jobs/cityCoordinateBackfillJob');
+    scheduleCityCoordinateBackfillCron();
+  } catch (err: any) {
+    console.error('[cityCoordinateBackfill] Non-fatal startup error — cron not scheduled:', err?.message);
+  }
+
   // Feature #75: Tier grace period finalization cron
   startTierGraceCron();
 

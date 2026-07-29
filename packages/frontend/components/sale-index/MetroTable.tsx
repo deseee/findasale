@@ -64,7 +64,7 @@ export default function MetroTable({ metros, embed = false, limit }: MetroTableP
                   </span>
                 ) : (
                   <Link
-                    href={`/estate-sales/${m.slug}`}
+                    href={`/city/${m.slug}/estate-sales`}
                     className="text-amber-700 dark:text-amber-400 hover:underline"
                   >
                     {m.city}, {m.state}

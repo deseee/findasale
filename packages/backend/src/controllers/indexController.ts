@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { redis } from '../lib/redis'; // graceful Redis cache (in-memory fallback)
+import { canonicalCitySlug } from '../utils/citySlug';
 
 /**
  * Weekend Sale Index — public aggregation endpoint.
@@ -72,9 +73,6 @@ function bucketForSaleType(saleType: string): Bucket | null {
   }
 }
 
-function makeSlug(city: string, state: string): string {
-  return `${city.toLowerCase().replace(/\s+/g, '-')}-${state.toLowerCase()}`;
-}
 
 export const getMetroIndex = async (req: Request, res: Response) => {
   try {
@@ -117,6 +115,16 @@ export const getMetroIndex = async (req: Request, res: Response) => {
       if (!city || !state) continue;
       if (CANADIAN_PROVINCES.has(state)) continue; // US-only asset
 
+      // 2026-07-28: was a local makeSlug() that did NOT strip dots/apostrophes,
+      // so this index linked to "st.-louis-mo" / "coeur-d'alene-id" — URLs the
+      // by-city API rejects with a 400 (its validator is CITY_SLUG_PATTERN), which
+      // rendered as empty pages that Google then indexed. Now uses the one
+      // canonical generator shared with /sales/city-slugs and the ISR revalidation
+      // trigger. Rows whose city cannot produce a valid slug are skipped rather
+      // than linked to a page that can never load.
+      const slug = canonicalCitySlug(city, state);
+      if (!slug) continue;
+
       const count = g._count._all;
       const key = `${city}|${state}`;
 
@@ -125,7 +133,7 @@ export const getMetroIndex = async (req: Request, res: Response) => {
         row = {
           city,
           state,
-          slug: makeSlug(city, state),
+          slug,
           total: 0,
           breakdown: { estate: 0, yard: 0, auction: 0, flea: 0, other: 0 },
         };

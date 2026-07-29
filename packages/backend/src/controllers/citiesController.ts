@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
+import { CITY_SLUG_PATTERN } from '../utils/citySlug';
 
 /**
  * GET /api/cities/:slug/top-finds
@@ -10,7 +11,7 @@ export async function getTopFinds(req: Request, res: Response) {
     const { slug } = req.params;
 
     // Validate slug format (lowercase-with-hyphens-state)
-    if (!/^[a-z0-9-]+-[a-z]{2}$/.test(slug.toLowerCase())) {
+    if (!CITY_SLUG_PATTERN.test(slug.toLowerCase())) {
       return res.status(400).json({
         error: 'Invalid city slug format',
       });
@@ -47,7 +48,7 @@ export async function getCityPageData(req: Request, res: Response) {
     const { slug } = req.params;
 
     // Validate slug format (lowercase-with-hyphens-state)
-    if (!/^[a-z0-9-]+-[a-z]{2}$/.test(slug.toLowerCase())) {
+    if (!CITY_SLUG_PATTERN.test(slug.toLowerCase())) {
       return res.status(400).json({
         error: 'Invalid city slug format',
       });

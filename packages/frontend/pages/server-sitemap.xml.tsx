@@ -9,7 +9,12 @@ export async function getServerSideProps(ctx: any) {
     // STATIC_LASTMOD: stable date for pages whose content doesn't change every request.
     // Google June 2024 policy: always-"now" lastmod is treated as inaccurate and ignored sitewide.
     // Bump this string only when the template/structure of static/city/category pages meaningfully changes.
-    const STATIC_LASTMOD = '2026-06-22';
+    // 2026-07-28: bumped from '2026-06-22'. The 2026-07-21 canonical consolidation
+    // (next.config.js redirects /estate-sales/:citySlug -> /city/:citySlug/estate-sales, 308)
+    // left this constant dated BEFORE the redirect shipped, so the surviving canonical
+    // /city/* URLs carried no freshness signal and Google never recrawled them --
+    // GSC still reported the old URLs as indexed with the OLD googleCanonical.
+    const STATIC_LASTMOD = '2026-07-28';
 
     // Fetch all sales and tags to generate URLs
     const salesResponse = await api.get('/sales/sitemap');
@@ -74,9 +79,9 @@ export async function getServerSideProps(ctx: any) {
 
     // Fetch canonical city slugs (e.g. "grand-rapids-mi") + per-type ACTIVE sale counts.
     // S1071 crawl-budget policy: bare /city/[slug] hubs are ALWAYS included (all 200), but
-    // every city×type variant (/city/[slug]/[category], /this-weekend/, /estate-sales/,
-    // /yard-sales/, /auctions/, /flea-markets/) is emitted ONLY when that city has >= 3
-    // ACTIVE sales of the relevant type (this-weekend gate: >= 3 active of ANY type).
+    // every city×type variant (/city/[slug]/[category], /this-weekend/) is emitted ONLY
+    // when that city has >= 3 ACTIVE sales of the relevant type (this-weekend gate:
+    // >= 3 active of ANY type).
     // Rationale: 200 cities × 11 variants = 2,200 mostly-empty URLs were the dominant
     // GSC discovered-never-crawled class. Do not re-emit ungated variants.
     type CityRow = { slug: string; activeCount: number; activeByType: Record<string, number> };
@@ -126,7 +131,10 @@ export async function getServerSideProps(ctx: any) {
           loc: `${baseUrl}/city/${row.slug}/${category}`,
           lastmod: STATIC_LASTMOD,
           changefreq: 'daily',
-          priority: 0.7,
+          // 0.70 -> 0.75 (2026-07-28): matches what the now-removed /estate-sales/{city}
+          // entries carried. These are the ONLY surviving form of the city+type page,
+          // so they inherit the crawl priority the deprecated duplicates used to hold.
+          priority: 0.75,
         });
       }
     }
@@ -141,45 +149,16 @@ export async function getServerSideProps(ctx: any) {
         priority: 0.7, // lowered from 0.8 — reduce crawl budget drain on GEO variants
       }));
 
-    // /estate-sales/{city-slug} — gated on >= 3 active ESTATE sales (SEO3)
-    const estateSalesUrls = cityRows
-      .filter((row) => hasActiveOfType(row, 'ESTATE'))
-      .map((row) => ({
-        loc: `${baseUrl}/estate-sales/${row.slug}`,
-        lastmod: STATIC_LASTMOD,
-        changefreq: 'daily',
-        priority: 0.75, // lower from 0.85 — was outcompeting core nav pages for crawl budget
-      }));
-
-    // /yard-sales/{city-slug} — gated on >= 3 active YARD sales
-    const yardSalesUrls = cityRows
-      .filter((row) => hasActiveOfType(row, 'YARD'))
-      .map((row) => ({
-        loc: `${baseUrl}/yard-sales/${row.slug}`,
-        lastmod: STATIC_LASTMOD,
-        changefreq: 'daily',
-        priority: 0.70,
-      }));
-
-    // /auctions/{city-slug} — gated on >= 3 active AUCTION sales
-    const auctionsUrls = cityRows
-      .filter((row) => hasActiveOfType(row, 'AUCTION'))
-      .map((row) => ({
-        loc: `${baseUrl}/auctions/${row.slug}`,
-        lastmod: STATIC_LASTMOD,
-        changefreq: 'daily',
-        priority: 0.70,
-      }));
-
-    // /flea-markets/{city-slug} — gated on >= 3 active FLEA_MARKET sales
-    const fleaMarketsUrls = cityRows
-      .filter((row) => hasActiveOfType(row, 'FLEA_MARKET'))
-      .map((row) => ({
-        loc: `${baseUrl}/flea-markets/${row.slug}`,
-        lastmod: STATIC_LASTMOD,
-        changefreq: 'daily',
-        priority: 0.70,
-      }));
+    // DEPRECATED URL FAMILIES REMOVED (2026-07-28) -- do not re-add.
+    // /estate-sales/{city}, /yard-sales/{city}, /auctions/{city} and /flea-markets/{city}
+    // were 308-redirected to /city/{city}/{category} by the 2026-07-21 canonical
+    // consolidation (next.config.js redirects()). This sitemap kept emitting them at
+    // priority 0.75 -- HIGHER than the canonical /city/*/{category} entries at 0.70 --
+    // which told Google the redirecting form was the current, preferred URL. Result:
+    // GSC showed the old URLs still "Submitted and indexed" with googleCanonical set to
+    // the OLD url and lastCrawlTime predating the redirect; the canonical /city/*
+    // form stayed flat at ~20 URLs for nine weeks. A sitemap must never advertise a
+    // URL that immediately redirects. The canonical entries are emitted above.
 
     // /companies/{city-slug} -- hire-intent company directory (#567).
     // Gated server-side: /companies/city-slugs only returns cities with >= 3
@@ -312,10 +291,6 @@ export async function getServerSideProps(ctx: any) {
       ...saleUrls,
       ...cityCategoryUrls,
       ...thisWeekendUrls,
-      ...estateSalesUrls,
-      ...yardSalesUrls,
-      ...auctionsUrls,
-      ...fleaMarketsUrls,
       ...companiesUrls,
       ...neighborhoodUrls,
       ...zipUrls,

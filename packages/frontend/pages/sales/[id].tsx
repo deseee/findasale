@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { jsonLdSafe } from '@/lib/jsonLdSafe';
+import { canonicalCitySlug } from '../../lib/seo/citySlug';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
@@ -2491,7 +2492,11 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
 
       {/* SEO Internal Links — city + sale-type discovery (helps Google index /city/* pages) */}
       {sale?.city && sale?.state && (() => {
-        const citySlug = `${sale.city}-${sale.state}`.toLowerCase().replace(/[\s.]+/g, '-').replace(/[^a-z0-9-]/g, '');
+        // Was a 4th hand-rolled slug chain; now the one shared generator (2026-07-28).
+        // Null when the city cannot yield a valid slug — render no links rather
+        // than link to a URL the by-city API would reject with a 400.
+        const citySlug = canonicalCitySlug(sale.city, sale.state);
+        if (!citySlug) return null;
         const saleTypes = [
           { label: 'Estate Sales', slug: 'estate-sales' },
           { label: 'Yard Sales', slug: 'yard-sales' },
