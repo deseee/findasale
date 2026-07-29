@@ -233,6 +233,30 @@ export default function POSPage() {
   const [organizerVenmo, setOrganizerVenmo] = useState<string | null>(null);
   const [organizerZelle, setOrganizerZelle] = useState<string | null>(null);
 
+  // ─── Venue mode (S1178, Priority 1) ────────────────────────────────────────────────
+  // Entered via ?venue=<hubId>. STAFF/OWNER only in this pass -- both auth branches ride
+  // the same workspace/organizer JWT the `api` client already attaches, so no new
+  // credential handling is needed here. A vendor checking out from their OWN device via
+  // X-Booth-Token has NO frontend anywhere in this repo today (verified this session) --
+  // that is a separate, larger build, flagged in the S1178 dev handoff, not attempted here.
+  const [venueHubId, setVenueHubId] = useState<string | null>(null);
+  const [venueCart, setVenueCart] = useState<{ id: string; hubId: string; status: string } | null>(null);
+  const [venueStartFailure, setVenueStartFailure] = useState<string | null>(null);
+  const [venueItemIdInput, setVenueItemIdInput] = useState('');
+  const [venueBooths, setVenueBooths] = useState<Array<{
+    vendorBoothId: string;
+    vendorName: string;
+    boothNumber: string;
+    subtotalCents: number;
+    readyForStandardCharge: boolean;
+  }>>([]);
+  const [venueBoothOutcomes, setVenueBoothOutcomes] = useState<Record<string, 'pending' | 'connecting' | 'ready' | 'tapping' | 'authorized' | 'failed'>>({});
+  const [venueCheckoutOpen, setVenueCheckoutOpen] = useState(false);
+  const [venueCheckoutFailure, setVenueCheckoutFailure] = useState<string | null>(null);
+  const [venueCapturing, setVenueCapturing] = useState(false);
+  const [venueCaptureFailed, setVenueCaptureFailed] = useState(false);
+  const venueTerminalRef = useRef<any>(null);
+
   // Stripe Terminal SDK ref
   const terminalRef = useRef<any>(null);
   const sdkLoadedRef = useRef(false);
@@ -383,6 +407,27 @@ export default function POSPage() {
       setSelectedSaleId(router.query.saleId as string);
     }
   }, [router.isReady, router.query.saleId]);
+
+  // ─── Venue mode: parse ?venue=<hubId> + auto-start booth cart (S1178) ─────────────────
+  const venueAutoStartedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!router.isReady) return;
+    const v = router.query.venue;
+    setVenueHubId(typeof v === 'string' && v ? v : null);
+  }, [router.isReady, router.query.venue]);
+
+  useEffect(() => {
+    if (!venueHubId || !user) return;
+    if (venueAutoStartedRef.current === venueHubId) return;
+    venueAutoStartedRef.current = venueHubId;
+    setVenueStartFailure(null);
+    api.post(`/organizer/hubs/${venueHubId}/cart/start`, { cashierType: 'TEAM_MEMBER' })
+      .then(res => setVenueCart(res.data))
+      .catch(err => {
+        console.error('[pos] Failed to start venue cart:', err);
+        setVenueStartFailure(err?.response?.data?.error || err?.response?.data?.message || 'Failed to open the venue register.');
+      });
+  }, [venueHubId, user]);
 
   // ─── Handle price sheet QR code auto-add-misc action ───────────────────────────────
 
@@ -763,6 +808,10 @@ export default function POSPage() {
   // ─── Cart operations ────────────────────────────────────────────────────────────────────
 
   const addToCart = (item: Item | { title: string; amount: number }) => {
+    if (venueHubId && 'price' in item) {
+      addVenueItemToCart(item);
+      return;
+    }
     if ('price' in item) {
       // Block adding the same inventory item twice
       if (cart.some(c => c.itemId === item.id)) {
@@ -799,6 +848,182 @@ export default function POSPage() {
     setItemSearch('');
     setSearchResults([]);
   };
+
+  // ─── Venue mode: add item via booth-cart endpoint (resolves vendor booth server-side,
+  // reserves the item against this cart) -- S1178 ──────────────────────────────────────
+  const addVenueItemToCart = useCallback((item: Item) => {
+    if (!venueCart) return;
+    if (cart.some(c => c.itemId === item.id)) {
+      setErrorMessage(`"${item.title}" is already in the cart.`);
+      return;
+    }
+    api.post(`/organizer/hubs/${venueHubId}/cart/${venueCart.id}/items`, { itemIds: [item.id] })
+      .then(res => {
+        const accepted = res.data?.accepted || [];
+        const rejected = res.data?.rejected || [];
+        if (accepted.length > 0) {
+          const a = accepted[0];
+          const cartId = `${Date.now()}_${Math.random().toString(36).substring(7)}`;
+          setCart(prev => [...prev, { id: cartId, itemId: a.itemId, title: a.title, amount: a.price ?? 0, photoUrl: item.photoUrls?.[0] }]);
+          setErrorMessage('');
+        }
+        if (rejected.length > 0) {
+          setErrorMessage(`"${item.title}" could not be added: ${rejected[0].reason}`);
+        }
+      })
+      .catch(err => {
+        console.error('[pos] Venue add-item error:', err);
+        setErrorMessage(err?.response?.data?.error || err?.response?.data?.message || `Failed to add "${item.title}".`);
+      });
+  }, [venueHubId, venueCart, cart]);
+
+  // ─── Venue mode: sequential per-booth checkout -- ports the proven flow from
+  // hubs/[hubId]/cart.tsx (now deprecated, see S1178 ADR). Card/manual-card rail only in
+  // this pass; cash/venmo/zelle/QR-payment-link venue support is a flagged follow-up --
+  // no per-vendor fee-attribution path exists yet for those rails (BoothCartLeg.rail is
+  // 'TERMINAL' | 'QR' only). ────────────────────────────────────────────────────────────
+  const connectReaderForVenueBooth = useCallback(async (vendorBoothId: string) => {
+    const { loadStripeTerminal } = await import('@stripe/terminal-js');
+    const StripeTerminal = await loadStripeTerminal();
+
+    if (venueTerminalRef.current) {
+      try { await venueTerminalRef.current.disconnectReader(); } catch {}
+      venueTerminalRef.current = null;
+    }
+
+    const terminal = StripeTerminal!.create({
+      onFetchConnectionToken: async () => {
+        const res = await api.post<{ secret: string }>(
+          `/organizer/hubs/${venueHubId}/cart/${venueCart!.id}/terminal/connection-token`,
+          { vendorBoothId }
+        );
+        return res.data.secret;
+      },
+      onUnexpectedReaderDisconnect: () => {
+        setVenueCheckoutFailure('The card reader disconnected. No card was charged.');
+      },
+    });
+
+    const discoverResult = await terminal.discoverReaders({
+      simulated: process.env.NEXT_PUBLIC_STRIPE_TERMINAL_SIMULATED === 'true',
+    });
+    if ('error' in discoverResult) throw new Error(discoverResult.error.message);
+    if (!discoverResult.discoveredReaders.length) {
+      throw new Error('No readers found. Ensure the card reader is powered on and on the same WiFi network.');
+    }
+    const connectResult = await terminal.connectReader(discoverResult.discoveredReaders[0]);
+    if ('error' in connectResult) throw new Error(connectResult.error.message);
+
+    venueTerminalRef.current = terminal;
+    return terminal;
+  }, [venueHubId, venueCart]);
+
+  const runVenueBoothLeg = useCallback(async (booth: { vendorBoothId: string; vendorName: string; subtotalCents: number }) => {
+    setVenueBoothOutcomes(prev => ({ ...prev, [booth.vendorBoothId]: 'connecting' }));
+    try {
+      const terminal = await connectReaderForVenueBooth(booth.vendorBoothId);
+      const authRes = await api.post(
+        `/organizer/hubs/${venueHubId}/cart/${venueCart!.id}/terminal/authorize`,
+        { vendorBoothId: booth.vendorBoothId }
+      );
+      const { clientSecret } = authRes.data;
+
+      setVenueBoothOutcomes(prev => ({ ...prev, [booth.vendorBoothId]: 'ready' }));
+      showToast(`Tap card for ${booth.vendorName} — $${(booth.subtotalCents / 100).toFixed(2)}`, 'success');
+
+      setVenueBoothOutcomes(prev => ({ ...prev, [booth.vendorBoothId]: 'tapping' }));
+      const collectResult = await terminal.collectPaymentMethod(clientSecret);
+      if ('error' in collectResult) throw new Error(collectResult.error.message);
+      const processResult = await terminal.processPayment(collectResult.paymentIntent);
+      if ('error' in processResult) throw new Error(processResult.error.message);
+
+      setVenueBoothOutcomes(prev => ({ ...prev, [booth.vendorBoothId]: 'authorized' }));
+      return true;
+    } catch (err: any) {
+      console.error(`[pos] Venue booth leg failed for ${booth.vendorBoothId}:`, err);
+      setVenueBoothOutcomes(prev => ({ ...prev, [booth.vendorBoothId]: 'failed' }));
+      setVenueCheckoutFailure(
+        `${err?.response?.data?.error || err?.response?.data?.message || err?.message || 'The card was not accepted.'} No card was charged. This cart is closing.`
+      );
+      return false;
+    }
+  }, [connectReaderForVenueBooth, venueHubId, venueCart, showToast]);
+
+  const cancelVenueCart = useCallback(async () => {
+    if (!venueCart) return;
+    try {
+      await api.post(`/organizer/hubs/${venueHubId}/cart/${venueCart.id}/cancel`, {});
+    } catch (err) {
+      console.error('[pos] Venue cart cancel failed:', err);
+    }
+  }, [venueHubId, venueCart]);
+
+  const captureVenueAll = useCallback(async () => {
+    if (!venueCart) return;
+    setVenueCapturing(true);
+    setVenueCheckoutFailure(null);
+    try {
+      await api.post(`/organizer/hubs/${venueHubId}/cart/${venueCart.id}/capture`, {});
+      setVenueCaptureFailed(false);
+      setSuccessMessage(`✅ Venue sale of $${cartTotal.toFixed(2)} accepted across ${venueBooths.length} vendor${venueBooths.length === 1 ? '' : 's'}.`);
+      setPaymentStatus('success');
+      clearCart();
+      setVenueCheckoutOpen(false);
+      setVenueCart(null);
+      venueAutoStartedRef.current = null;
+    } catch (err: any) {
+      console.error('[pos] Venue capture failed:', err);
+      setVenueCaptureFailed(true);
+      setVenueCheckoutFailure(
+        `${err?.response?.data?.error || err?.response?.data?.message || 'The sale did not finish.'} The card was approved but the sale is not closed yet. Do not charge the customer again.`
+      );
+    } finally {
+      setVenueCapturing(false);
+    }
+  }, [venueHubId, venueCart, cartTotal, venueBooths.length]);
+
+  const startVenueCheckout = useCallback(async () => {
+    if (!venueCart || !cart.length) return;
+    setPaymentStatus('creating');
+    setErrorMessage('');
+    setVenueCheckoutFailure(null);
+    setVenueCaptureFailed(false);
+    try {
+      const summaryRes = await api.get(`/organizer/hubs/${venueHubId}/cart/${venueCart.id}/summary`);
+      const boothList = summaryRes.data.booths || [];
+      if (boothList.length === 0) {
+        setPaymentStatus('error');
+        setErrorMessage('The venue cart is empty.');
+        return;
+      }
+      const notReady = boothList.find((b: any) => !b.readyForStandardCharge);
+      if (notReady) {
+        setPaymentStatus('error');
+        setErrorMessage(`${notReady.vendorName} has not finished payout setup — remove their items or ask them to finish setup.`);
+        return;
+      }
+      setVenueBooths(boothList);
+      setVenueBoothOutcomes(Object.fromEntries(boothList.map((b: any) => [b.vendorBoothId, 'pending' as const])));
+      setVenueCheckoutOpen(true);
+      setPaymentStatus('waiting_for_card');
+
+      for (let i = 0; i < boothList.length; i++) {
+        const ok = await runVenueBoothLeg(boothList[i]);
+        if (!ok) {
+          await cancelVenueCart();
+          setPaymentStatus('error');
+          return;
+        }
+      }
+
+      setPaymentStatus('processing');
+      await captureVenueAll();
+    } catch (err: any) {
+      console.error('[pos] Venue checkout failed to start:', err);
+      setPaymentStatus('error');
+      setErrorMessage(err?.response?.data?.error || err?.response?.data?.message || err?.message || 'Failed to start venue checkout.');
+    }
+  }, [venueHubId, venueCart, cart.length, runVenueBoothLeg, cancelVenueCart, captureVenueAll]);
 
   const quickAddMisc = (amount: number) => {
     const label = amount < 1
@@ -859,6 +1084,10 @@ export default function POSPage() {
   // ─── Payment flows ───────────────────────────────────────────────────────────────────
 
   const handleCharge = async () => {
+    if (venueHubId) {
+      await startVenueCheckout();
+      return;
+    }
     if (!cart.length || !terminalRef.current) return;
     setPaymentStatus('creating');
     setErrorMessage('');
@@ -1611,6 +1840,42 @@ export default function POSPage() {
         )}
       </div>
 
+      {/* Venue mode: add item by ID/scan (S1178) -- no single saleId spans a multi-vendor hub */}
+      {venueHubId && (
+        <div className="mb-4">
+          <div className="mb-2 px-3 py-2 rounded-lg bg-sage-50 dark:bg-sage-900/30 border border-sage-200 dark:border-sage-800 text-xs text-sage-800 dark:text-sage-300">
+            Venue register — items can belong to any vendor at this market.
+          </div>
+          {venueStartFailure && (
+            <p className="mb-2 text-sm text-red-600 dark:text-red-400">{venueStartFailure}</p>
+          )}
+          <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-1">Add item</label>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={venueItemIdInput}
+              onChange={e => setVenueItemIdInput(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter' && venueItemIdInput.trim()) {
+                  api.get<Item>(`/items/${venueItemIdInput.trim()}`)
+                    .then(res => { addToCart(res.data); setVenueItemIdInput(''); })
+                    .catch(() => setErrorMessage('Item not found.'));
+                }
+              }}
+              placeholder="Scan or type item ID…"
+              className="flex-1 border border-warm-300 dark:border-gray-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-warm-900 dark:text-warm-100 focus:outline-none focus:ring-2 focus:ring-sage-500"
+            />
+            <button
+              onClick={() => setCameraOpen(true)}
+              className="px-4 py-2 rounded-lg bg-amber-600 text-white font-semibold hover:bg-amber-700 transition"
+              title="Scan QR code on price label"
+            >
+              📷
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Item search + results */}
       {selectedSaleId && (
         <div className="mb-4">
@@ -2076,9 +2341,46 @@ export default function POSPage() {
       )}
 
       {/* Payment method selector (2×2 grid) */}
-      {selectedSaleId && (
+      {(selectedSaleId || venueHubId) && (
         <div className="mb-4">
-          <h3 className="text-sm font-medium text-warm-700 dark:text-warm-300 mb-3">How are they paying?</h3>
+          {venueHubId ? (
+            <>
+              <h3 className="text-sm font-medium text-warm-700 dark:text-warm-300 mb-3">Venue register — card only</h3>
+              {venueCheckoutFailure && (
+                <p className="mb-2 text-sm text-red-600 dark:text-red-400">{venueCheckoutFailure}</p>
+              )}
+              {venueCheckoutOpen && venueBooths.length > 0 && (
+                <ul className="mb-3 space-y-1">
+                  {venueBooths.map(b => (
+                    <li key={b.vendorBoothId} className="flex items-center justify-between text-sm px-3 py-2 rounded-lg bg-warm-100 dark:bg-gray-800">
+                      <span className="text-warm-800 dark:text-warm-200">{b.vendorName} — ${(b.subtotalCents / 100).toFixed(2)}</span>
+                      <span className="text-xs font-medium text-warm-500 dark:text-warm-400">{venueBoothOutcomes[b.vendorBoothId] || 'pending'}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <button
+                onClick={handleCharge}
+                disabled={!venueCart || cart.length === 0 || venueCapturing || (paymentStatus !== 'idle' && paymentStatus !== 'error' && paymentStatus !== 'cancelled')}
+                className="w-full py-4 rounded-xl font-semibold transition bg-sage-700 text-white hover:bg-sage-800 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {venueCapturing ? 'Finishing sale…' : `💳 Charge $${cartTotal.toFixed(2)} — tap per vendor`}
+              </button>
+              {venueCaptureFailed && (
+                <button
+                  onClick={captureVenueAll}
+                  className="w-full mt-2 py-3 rounded-xl font-semibold transition bg-amber-600 text-white hover:bg-amber-700"
+                >
+                  Try to finish the sale again
+                </button>
+              )}
+              <p className="mt-2 text-xs text-warm-500 dark:text-warm-400">
+                Cash, Venmo, Zelle, invoice, and payment-link modes are not yet supported for multi-vendor carts.
+              </p>
+            </>
+          ) : (
+            <>
+              <h3 className="text-sm font-medium text-warm-700 dark:text-warm-300 mb-3">How are they paying?</h3>
           <div className="grid grid-cols-2 gap-2">
             {/* Cash button */}
             <button
@@ -2210,6 +2512,8 @@ export default function POSPage() {
               No reader? Enter card manually
             </button>
           </div>
+            </>
+          )}
         </div>
       )}
 

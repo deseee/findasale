@@ -391,9 +391,9 @@ function logBoothCartSignal(params: {
  * Checks per protected party (identity-grade only, same as assertCheckoutAllowed):
  *  SELF_DEALING (buyer === protected party's User.id), SHARED_DEVICE_FP, SHARED_CARD_FP.
  *
- * Cart-specific additional check: SELF_DEALING extends to cashierBoothId === any
- * vendorBoothId in boothsRepresented — a booth-token session ringing up its own
- * booth's items is self-dealing regardless of who the buyer is.
+ * Cart-specific: the cashierBoothId-self-dealing check that used to live here was
+ * removed (S1178, Priority 1, Patrick-approved) -- a vendor granted register access
+ * may ring up any booth's items including their own; attribution replaces prohibition.
  *
  * Never reads or compares IP address — shared network/IP is explicitly out of scope,
  * same as assertCheckoutAllowed.
@@ -408,19 +408,13 @@ export async function assertBoothCartCheckoutAllowed({
   prisma,
   context,
 }: AssertBoothCartCheckoutAllowedParams): Promise<void> {
-  // Cart-specific: a booth-token cashier session ringing up its own booth is
-  // self-dealing regardless of buyer identity.
-  if (cashierBoothId && boothsRepresented.includes(cashierBoothId)) {
-    logBoothCartSignal({
-      signalType: 'SELF_DEALING',
-      context,
-      hubId,
-      cartTransactionId,
-      buyerUserId,
-      notes: `Booth-token cashier (boothId ${cashierBoothId}) rang up a cart containing its own booth's items.`,
-    });
-    throw new CheckoutGuardError();
-  }
+  // S1178 (Priority 1, Patrick-approved): the cashier-rings-up-own-booth
+  // SELF_DEALING block that lived here was removed. Patrick's product model is
+  // that a vendor a mall grants register access to may check out shoppers for
+  // ANY booth's items, their own explicitly included -- attribution (who rang
+  // what) replaces prohibition. cashierBoothId is still recorded on
+  // BoothCartTransaction for that attribution; it is simply no longer grounds
+  // to reject the checkout. See claude_docs/feature-notes/ADR-venue-mode-pos-contract-S1178.md.
 
   // 2026-07-07 fix (findasale-hacker adversarial pass): the buyer-identity checks
   // below all require a real buyerUserId. A walk-in POS cart with no buyer account

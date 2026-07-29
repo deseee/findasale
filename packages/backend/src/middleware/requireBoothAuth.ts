@@ -93,7 +93,7 @@ export const requireBoothTokenOrTeamMember = () => {
       if (boothToken && typeof boothToken === 'string') {
         const booth = await prisma.vendorBooth.findUnique({
           where: { boothToken },
-          select: { id: true, hubId: true, status: true, deletedAt: true },
+          select: { id: true, hubId: true, status: true, deletedAt: true, userId: true },
         });
 
         // A soft-deleted booth (removed from the hub via deleteVendorBooth, which sets
@@ -107,6 +107,20 @@ export const requireBoothTokenOrTeamMember = () => {
         }
         if (booth.status !== 'CONFIRMED') {
           return res.status(403).json({ message: 'This booth is not confirmed for this hub', code: 'BOOTH_NOT_CONFIRMED' });
+        }
+
+        // S1178 Priority 2 Bug 1 (findasale-hacker fix-and-reverify, 2026-07-29): a
+        // CONFIRMED booth can still have userId === null -- the organizer confirms a
+        // booth's registration independently of the vendor claiming it (claim sets
+        // userId via vendorBoothController.claimVendorBooth). Before this check, ANY
+        // printed placard QR for a CONFIRMED-but-unclaimed booth was a full working
+        // cashier session for the entire venue (booth-cart checkout is venue-wide, not
+        // scoped to this booth's own items) to whoever read/photographed it first --
+        // no vendor identity was ever verified. A distinct code (not the generic
+        // BOOTH_TOKEN_INVALID) lets the real vendor's claim UI tell them to finish
+        // claiming rather than showing an "invalid token" dead end.
+        if (!booth.userId) {
+          return res.status(403).json({ message: 'This booth has not been claimed yet. The vendor must claim it before it can be used to check out shoppers.', code: 'BOOTH_NOT_CLAIMED' });
         }
 
         req.boothAuth = { type: 'BOOTH', vendorBoothId: booth.id, hubId };

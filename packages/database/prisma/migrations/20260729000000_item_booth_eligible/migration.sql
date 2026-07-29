@@ -1,0 +1,22 @@
+-- Item-level venue eligibility flag (S1178 Bug 2 fix, 2026-07-29).
+--
+-- Purely additive: one NOT NULL column with a default on "Item". No column dropped or
+-- retyped, no existing row changes meaning beyond the default itself.
+--
+-- Default false is deliberate and load-bearing, not just a Prisma convenience: before
+-- this column existed, addBoothCartItems (vendorBoothCartController.ts) resolved booth-cart
+-- eligibility purely by ownership -- any item belonging to a vendor with a CONFIRMED booth
+-- at a hub could be rung up there, including items never physically at that market. This
+-- column requires the vendor to explicitly opt an item in via the item-edit form before it
+-- can ever be added to a booth cart (see ADR-item-venue-eligibility-S1178.md). Defaulting to
+-- false means every EXISTING item is NOT booth-sellable until its owner opts in -- this is a
+-- deliberate security-first default, not an oversight, and the intended consequence is that
+-- booth checkout has no eligible items until the item-edit-form checkbox this ADR also calls
+-- for ships and vendors start using it.
+--
+-- MUST be applied together with (or before) the addBoothCartItems code change that reads
+-- this column -- that code already ships in this same session (S1178) and selects
+-- boothEligible unconditionally, so deploying the code without this column present 500s the
+-- add-items endpoint. Apply this migration first if deploying separately.
+
+ALTER TABLE "Item" ADD COLUMN IF NOT EXISTS "boothEligible" BOOLEAN NOT NULL DEFAULT false;

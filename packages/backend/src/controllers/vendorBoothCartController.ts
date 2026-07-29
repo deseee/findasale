@@ -386,7 +386,7 @@ export const addBoothCartItems = async (req: BoothAuthRequest, res: Response) =>
     const items = await prisma.item.findMany({
       where: { id: { in: itemIds } },
       select: {
-        id: true, title: true, price: true, status: true, organizerId: true,
+        id: true, title: true, price: true, status: true, organizerId: true, boothEligible: true,
       },
     });
 
@@ -420,6 +420,16 @@ export const addBoothCartItems = async (req: BoothAuthRequest, res: Response) =>
     for (const item of items) {
       if (item.status !== 'AVAILABLE') {
         rejected.push({ itemId: item.id, reason: 'ITEM_NOT_AVAILABLE' });
+        continue;
+      }
+      // S1178 Bug 2 fix: ownership + hub-match alone let a cashier ring up a vendor's
+      // ENTIRE catalog (including items never physically at this market) just because
+      // that vendor has a confirmed booth here -- marking them SOLD and triggering the
+      // cross-channel removal hooks (e.g. ending a live eBay listing) for stock that was
+      // never at the venue. boothEligible is an explicit, vendor-set opt-in (default
+      // false) checked BEFORE the existing owner/hub resolution runs.
+      if (!item.boothEligible) {
+        rejected.push({ itemId: item.id, reason: 'NOT_BOOTH_ELIGIBLE' });
         continue;
       }
       const ownerUserId = item.organizerId ? organizerIdToUserId.get(item.organizerId) : undefined;
