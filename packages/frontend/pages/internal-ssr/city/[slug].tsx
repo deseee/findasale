@@ -23,6 +23,7 @@ import Link from 'next/link';
 import { useState, useEffect } from 'react';
 import { computeSaleStats, buildLiveDataFaqs, CitySaleStats } from '@/lib/seo/cityStats';
 import { buildFaqJsonLd } from '@/lib/seo/cityData';
+import { CITY_SLUG_PATTERN } from '@/lib/seo/citySlug';
 import CityLiveStats from '@/components/CityLiveStats';
 
 // Category slug → display label + saleType enum
@@ -390,6 +391,22 @@ export default function CityPage({
 export const getServerSideProps: GetServerSideProps<CityPageProps> = async ({ params, res }) => {
   const citySlug = params?.slug as string;
 
+  // Set unconditionally (before the validation gate and the fetch) so even a
+  // notFound response is CDN-cacheable, avoiding repeat backend hits for a
+  // garbage/malformed slug (e.g. a literal, unsubstituted route placeholder
+  // like "[city-slug]") that will never resolve to a real city.
+  res.setHeader('Cache-Control', 'public, s-maxage=86400, stale-while-revalidate=86400');
+
+  // Reject malformed/garbage slugs before any parsing or fetch. Without this
+  // gate the code below happily parses ANY string into a fake cityName/
+  // stateCode and returns 200 with that garbage echoed into the canonical
+  // tag, JSON-LD, and visible links -- confirmed live 2026-07-29 (GSC audit
+  // 2026-07-28): /city/[city-slug] rendered 200 with canonical
+  // "https://finda.sale/city/[city-slug]".
+  if (!CITY_SLUG_PATTERN.test(citySlug)) {
+    return { notFound: true };
+  }
+
   // Parse display name + state from slug
   const parts = citySlug.split('-');
   const stateCode = parts[parts.length - 1].toUpperCase();
@@ -438,12 +455,6 @@ export const getServerSideProps: GetServerSideProps<CityPageProps> = async ({ pa
   }
 
   const stats = computeSaleStats(sales);
-
-  // Long-tail city (not in the curated ISR top-N -- see middleware.ts). Served
-  // via SSR + CDN Cache-Control instead of ISR (ADR-vercel-isr-overage-2026-07-19
-  // Option B) -- this keeps it off the ISR-write meter entirely. 24h freshness
-  // window matches the ISR variant's revalidate: 86400.
-  res.setHeader('Cache-Control', 'public, s-maxage=86400, stale-while-revalidate=86400');
 
   return {
     props: {

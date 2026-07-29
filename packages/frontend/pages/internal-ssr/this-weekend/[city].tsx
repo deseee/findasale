@@ -24,6 +24,7 @@
 
 import { GetServerSideProps } from 'next';
 import { jsonLdSafe } from '@/lib/jsonLdSafe';
+import { CITY_SLUG_PATTERN } from '@/lib/seo/citySlug';
 import Head from 'next/head';
 import Link from 'next/link';
 
@@ -325,6 +326,22 @@ export default function ThisWeekendPage({
 export const getServerSideProps: GetServerSideProps<ThisWeekendPageProps> = async ({ params, res }) => {
   const citySlug = params?.city as string;
 
+  // Set unconditionally (before the validation gate and the fetch) so even a
+  // notFound response is CDN-cacheable, avoiding repeat backend hits for a
+  // garbage/malformed slug (e.g. a literal, unsubstituted route placeholder
+  // like "[city-slug]") that will never resolve to a real city.
+  res.setHeader('Cache-Control', 'public, s-maxage=86400, stale-while-revalidate=86400');
+
+  // Reject malformed/garbage slugs before any parsing or fetch. Without this
+  // gate the code below happily parses ANY string into a fake cityName/
+  // stateCode and returns 200 with that garbage echoed into the canonical
+  // tag, JSON-LD, and visible links -- confirmed live 2026-07-29 (GSC audit
+  // 2026-07-28) on the sibling /city/[city-slug] route, same missing-
+  // validation pattern.
+  if (!CITY_SLUG_PATTERN.test(citySlug)) {
+    return { notFound: true };
+  }
+
   // Parse display name + state from slug
   const parts = citySlug.split('-');
   const stateCode = parts[parts.length - 1].toUpperCase();
@@ -371,11 +388,6 @@ export const getServerSideProps: GetServerSideProps<ThisWeekendPageProps> = asyn
     // Overlap: sale starts before Sunday ends AND sale ends after Friday starts
     return saleStart <= sundayMs && saleEnd >= fridayMs;
   });
-
-  // Long-tail city (not in the curated ISR top-N -- see middleware.ts). Served
-  // via SSR + CDN Cache-Control instead of ISR (ADR-vercel-isr-overage-2026-07-19
-  // Option B).
-  res.setHeader('Cache-Control', 'public, s-maxage=86400, stale-while-revalidate=86400');
 
   return {
     props: {

@@ -8,6 +8,7 @@
 
 import { GetStaticProps, GetStaticPaths } from 'next';
 import { jsonLdSafe } from '@/lib/jsonLdSafe';
+import { CITY_SLUG_PATTERN } from '@/lib/seo/citySlug';
 import Head from 'next/head';
 import Link from 'next/link';
 
@@ -338,6 +339,18 @@ export const getStaticPaths: GetStaticPaths = async () => {
 
 export const getStaticProps: GetStaticProps<ThisWeekendPageProps> = async ({ params }) => {
   const citySlug = params?.city as string;
+
+  // Reject malformed/garbage slugs (e.g. a literal, unsubstituted route
+  // placeholder like "[city-slug]" reaching this handler via a redirect,
+  // rewrite, or stale backlink that never validated its input) before any
+  // parsing or fetch. Without this gate the code below happily parses ANY
+  // string into a fake cityName/stateCode and returns 200 with that garbage
+  // echoed into the canonical tag, JSON-LD, and visible links -- confirmed
+  // live 2026-07-29 (GSC audit 2026-07-28) on the sibling /city/[city-slug]
+  // route, same missing-validation pattern.
+  if (!CITY_SLUG_PATTERN.test(citySlug)) {
+    return { notFound: true, revalidate: 86400 };
+  }
 
   // Parse display name + state from slug
   const parts = citySlug.split('-');

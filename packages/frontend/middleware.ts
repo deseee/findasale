@@ -243,6 +243,11 @@ export function middleware(request: NextRequest) {
     'cmqf14af4002bbo1nu7kw6v4a',
     'cmr7fwc6y006rzjpwt5k8lsdf',
     'cmr7g5csm00obzjpwgdn4jg3j',
+    // Added 2026-07-29 (GSC audit 2026-07-28 follow-up): two more Sale IDs from
+    // the same "Not found (404)" bucket, re-confirmed live 404 via
+    // `curl -sI https://finda.sale/sales/<id>` immediately before this change.
+    'cmrjfli9v000n8tv0hcw0s2fo',
+    'cmqq49tbh00ejvg736nkqlowq',
   ]);
 
   if (pathname.startsWith('/sales/')) {

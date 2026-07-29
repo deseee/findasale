@@ -26,6 +26,7 @@ import Head from 'next/head';
 import Link from 'next/link';
 import { computeSaleStats, buildLiveDataFaqs, CitySaleStats } from '@/lib/seo/cityStats';
 import { buildFaqJsonLd } from '@/lib/seo/cityData';
+import { CITY_SLUG_PATTERN } from '@/lib/seo/citySlug';
 import CityLiveStats from '@/components/CityLiveStats';
 
 // Category slug → display label + saleType enum
@@ -414,6 +415,22 @@ export const getServerSideProps: GetServerSideProps<CityCategoryPageProps> = asy
   const citySlug = params?.slug as string;
   const categorySlug = params?.category as string;
 
+  // Set unconditionally (before either validation gate and the fetch) so even
+  // a notFound response is CDN-cacheable, avoiding repeat backend hits for a
+  // garbage/malformed slug (e.g. a literal, unsubstituted route placeholder
+  // like "[city-slug]") that will never resolve to a real city.
+  res.setHeader('Cache-Control', 'public, s-maxage=86400, stale-while-revalidate=86400');
+
+  // Reject malformed/garbage city slugs before any parsing or fetch. Without
+  // this gate the code below happily parses ANY string into a fake cityName/
+  // stateCode and returns 200 with that garbage echoed into the canonical
+  // tag, JSON-LD, and visible links -- confirmed live 2026-07-29 (GSC audit
+  // 2026-07-28): /city/[city-slug]/estate-sales rendered 200 with canonical
+  // "https://finda.sale/city/[city-slug]/estate-sales".
+  if (!CITY_SLUG_PATTERN.test(citySlug)) {
+    return { notFound: true };
+  }
+
   // Validate category
   if (!VALID_CATEGORIES.includes(categorySlug)) {
     return { notFound: true };
@@ -453,11 +470,6 @@ export const getServerSideProps: GetServerSideProps<CityCategoryPageProps> = asy
     .join(' ');
 
   const stats = computeSaleStats(sales);
-
-  // Long-tail city (not in the curated ISR top-N -- see middleware.ts). Served
-  // via SSR + CDN Cache-Control instead of ISR (ADR-vercel-isr-overage-2026-07-19
-  // Option B). 24h freshness window matches the ISR variant's revalidate: 86400.
-  res.setHeader('Cache-Control', 'public, s-maxage=86400, stale-while-revalidate=86400');
 
   return {
     props: {

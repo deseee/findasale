@@ -14,6 +14,7 @@ import Link from 'next/link';
 import { useState, useEffect } from 'react';
 import { computeSaleStats, buildLiveDataFaqs, CitySaleStats } from '@/lib/seo/cityStats';
 import { buildFaqJsonLd } from '@/lib/seo/cityData';
+import { CITY_SLUG_PATTERN } from '@/lib/seo/citySlug';
 import CityLiveStats from '@/components/CityLiveStats';
 
 // Category slug → display label + saleType enum
@@ -407,6 +408,18 @@ export const getStaticPaths: GetStaticPaths = async () => {
 
 export const getStaticProps: GetStaticProps<CityPageProps> = async ({ params }) => {
   const citySlug = params?.slug as string;
+
+  // Reject malformed/garbage slugs (e.g. a literal, unsubstituted route
+  // placeholder like "[city-slug]" reaching this handler via a redirect,
+  // rewrite, or stale backlink that never validated its input) before any
+  // parsing or fetch. Without this gate the code below happily parses ANY
+  // string into a fake cityName/stateCode and returns 200 with that garbage
+  // echoed into the canonical tag, JSON-LD, and visible links -- confirmed
+  // live 2026-07-29 (GSC audit 2026-07-28): /city/[city-slug] rendered 200
+  // with canonical "https://finda.sale/city/[city-slug]".
+  if (!CITY_SLUG_PATTERN.test(citySlug)) {
+    return { notFound: true, revalidate: 86400 };
+  }
 
   // Parse display name + state from slug
   const parts = citySlug.split('-');
