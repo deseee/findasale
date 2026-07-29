@@ -116,7 +116,7 @@ function buildWinBackHtml(opts: {
 
   return baseWrapper({
     preheader: metro
-      ? `${metro.activeNearby} active sales near you — your shoppers are still browsing.`
+      ? `${metro.activeNearby} active sales are happening near you. Your shoppers are still browsing.`
       : `Your shoppers are still here. Ready to list your next sale?`,
     content,
     unsubLabel: 'Manage email preferences',

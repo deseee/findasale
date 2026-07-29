@@ -193,11 +193,11 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
           });
           showToast('Cart shared with cashier ✓', 'success');
         } catch {
-          showToast('Cashier requested your cart — tap Share Cart to check out', 'info');
+          showToast('Cashier requested your cart. Tap Share Cart to check out.', 'info');
         }
       } else {
         // Cart is empty or on a different sale — just notify
-        showToast('Cashier is ready for you — open your cart and tap Share', 'info');
+        showToast('Cashier is ready for you. Open your cart and tap Share.', 'info');
       }
       openCart();
     });
@@ -214,7 +214,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
       const expiresDate = new Date(data.expiresAt);
       const minutesLeft = Math.round((expiresDate.getTime() - Date.now()) / 60000);
       showToast(
-        `Crew Invasion! Use code ${data.code} for ${data.discountPct}% off your held items — expires in ${minutesLeft} min`,
+        `Crew Invasion! Use code ${data.code} for ${data.discountPct}% off your held items. Expires in ${minutesLeft} min.`,
         'success'
       );
     });
@@ -439,13 +439,13 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                   <ShieldAlert size={16} className="text-purple-400" />
                   <span>Fraud Signals</span>
                 </Link>
-                <Link href="/organizer/markdown-cycles" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Automatic time-based price reductions — PRO">
+                <Link href="/organizer/markdown-cycles" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="PRO feature: automatic time-based price reductions">
                   <TrendingDown size={16} className="text-purple-400" />
                   <span>Auto Markdown</span>
                 </Link>
               </>
             )}
-            <Link href="/organizer/appraisals" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Crowdsourced item appraisals — also available as à la carte">
+            <Link href="/organizer/appraisals" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Crowdsourced item appraisals (also sold à la carte)">
               <Scale size={16} className="text-purple-400" />
               <span>Appraisals</span>
             </Link>
@@ -634,7 +634,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
               <span>Trades <span className="text-xs text-gray-400">(Soon)</span></span>
             </Link>
 
-            <Link href="/shopper/hunt-pass" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="1.5x XP, early access to sales, and exclusive badges — $4.99/mo">
+            <Link href="/shopper/hunt-pass" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="$4.99/mo for 1.5x XP, early access to sales, and exclusive badges">
               <Ticket size={16} className="text-amber-500" />
               <span>Hunt Pass</span>
             </Link>
@@ -644,11 +644,11 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
               <Sparkles size={16} className="text-amber-400" />
               <span>Rare Finds</span>
             </Link>
-            <Link href="/shopper/loot-legend" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Hunt Pass Loot Legend Portfolio — LEGENDARY and EPIC items">
+            <Link href="/shopper/loot-legend" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Your LEGENDARY and EPIC items live in the Hunt Pass Loot Legend Portfolio">
               <Star size={16} className="text-amber-400" />
               <span>Loot Legend</span>
             </Link>
-            <Link href="/shopper/league" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Weekly XP leaderboard — compete with shoppers in your region">
+            <Link href="/shopper/league" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Weekly XP leaderboard where you compete with shoppers in your region">
               <Trophy size={16} className="text-amber-500" />
               <span>League</span>
             </Link>
@@ -891,7 +891,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                     )}
                     <CartIcon />
                     {isLowBandwidth && (
-                      <span className="px-2 py-1 rounded-full text-xs font-bold bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700" title="Low-Bandwidth Mode enabled — photos optimized for slow connections">
+                      <span className="px-2 py-1 rounded-full text-xs font-bold bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700" title="Low-Bandwidth Mode is on, so photos are optimized for slow connections">
                         Low BW
                       </span>
                     )}

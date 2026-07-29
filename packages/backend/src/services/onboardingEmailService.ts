@@ -41,7 +41,7 @@ export async function sendOnboardingEmail5a(organizer: {
   const bullets = [
     'Organizers who post within 24 hours get 4&times; more first-week views.',
     'Average setup time, start to finish, is under 7 minutes.',
-    'You can save a draft and come back — nothing has to be final.',
+    'Save a draft and come back later. Nothing has to be final yet.',
   ];
 
   const bulletRows = bullets.map(b => `
@@ -75,7 +75,7 @@ export async function sendOnboardingEmail5a(organizer: {
     await emailService.emails.send({
       from:    FROM_EMAIL,
       to:      organizer.email,
-      subject: `You're in — here's your first step`,
+      subject: `Welcome in! Here's your first step`,
       html,
     });
     console.log(`[onboarding] Email 5a sent to ${organizer.email}`);
@@ -197,7 +197,7 @@ export async function sendOnboardingEmail5c(organizer: {
     await emailService.emails.send({
       from:    FROM_EMAIL,
       to:      organizer.email,
-      subject: `One last nudge — then we'll leave you alone`,
+      subject: `One last nudge before we leave you alone`,
       html,
     });
     console.log(`[onboarding] Email 5c sent to ${organizer.email}`);

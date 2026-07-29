@@ -105,7 +105,7 @@ export async function sendSaleLiveEmail(
     await emailService.emails.send({
       from:    FROM_EMAIL,
       to:      organizer.email,
-      subject: `Your sale is live — share it now`,
+      subject: `Your sale is live! Time to share it`,
       html,
     });
     console.log(`[saleLive] Confirmation email sent to ${organizer.email} for sale ${sale.id}`);

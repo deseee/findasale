@@ -199,7 +199,7 @@ export const sendHoldStatusToShopper = async (data: HoldStatusShopperData): Prom
       case 'extended':
         subject = `Your hold on "${data.itemTitle}" has been extended`;
         headline = `Hold extended`;
-        bodyHtml = `<p>Hi ${name},</p><p>Good news — the organizer has <strong>extended your hold</strong> on <em>${data.itemTitle}</em>.</p>${expiryLine}`;
+        bodyHtml = `<p>Hi ${name},</p><p>Good news! The organizer has <strong>extended your hold</strong> on <em>${data.itemTitle}</em>.</p>${expiryLine}`;
         ctaText = 'View Item';
         accentColor = '#8FB897';
         break;
