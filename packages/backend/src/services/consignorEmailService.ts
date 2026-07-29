@@ -108,6 +108,55 @@ export const sendConsignorPayout = async (params: {
 };
 
 /**
+ * ADR-096: Send a Stripe onboarding link directly to the consignor so they can
+ * set up automatic payout -- the consignor never logs into FindA.Sale, so this
+ * email (not an in-app screen) is how they get the link. Triggered from
+ * initiateConsignorOnboarding() as an opt-in choice offered right after an
+ * organizer adds a new consignor.
+ */
+export const sendConsignorPaymentSetupInvite = async (params: {
+  consignorName: string;
+  consignorEmail: string;
+  onboardingUrl: string;
+  organizerName: string;
+}): Promise<void> => {
+
+  if (await suppressionService.isHardSuppressed(params.consignorEmail)) {
+    console.log(`[consignor-email] Skipping suppressed address: ${params.consignorEmail}`);
+    return;
+  }
+
+  try {
+    const html = buildEmail({
+      preheader: `Set up automatic payout from ${params.organizerName}`,
+      headline: 'Get paid automatically when your items sell',
+      body: `<p>Hi ${params.consignorName},</p>
+        <p><strong>${params.organizerName}</strong> wants to pay you automatically via bank transfer whenever one of your consigned items sells -- no more waiting on cash or checks.</p>
+        <div style="background: #f3f4f6; padding: 16px; border-radius: 8px; margin: 20px 0;">
+          <p style="margin: 8px 0; color: #666;">
+            Takes about 2 minutes. You'll need your bank or debit card details. No FindA.Sale account required.
+          </p>
+        </div>
+        <p>If you'd rather be paid the usual way (cash, check, Venmo), just let ${params.organizerName} know -- nothing changes for you.</p>`,
+      ctaText: 'Set Up Automatic Payout',
+      ctaUrl: params.onboardingUrl,
+      accentColor: '#10b981',
+    });
+
+    await transactionalEmailService.emails.send({
+      from: fromEmail,
+      to: params.consignorEmail,
+      subject: `Set up automatic payout from ${params.organizerName}`,
+      html,
+    });
+
+    console.log(`[consignor-email] Sent payment setup invite to ${params.consignorEmail}`);
+  } catch (err) {
+    console.error('[consignor-email] Failed to send payment setup invite email:', err);
+  }
+};
+
+/**
  * Send email to consignor when item is about to expire (60 days)
  */
 export const sendConsignorExpiryNotice = async (params: {

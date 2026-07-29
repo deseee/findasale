@@ -3,6 +3,7 @@ import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import { Decimal } from '@prisma/client/runtime/library';
 import { sendConsignorPayout } from '../services/consignorEmailService';
+import { calculateConsignorPayout, seedDefaultCommissionTiers } from '../services/commissionCalcService';
 
 /**
  * Helper: Get organizer workspace from authenticated user
@@ -88,7 +89,7 @@ export const createConsignor = async (req: AuthRequest, res: Response) => {
       return res.status(401).json({ error: 'Authentication required' });
     }
 
-    const { name, email, phone, commissionRate, notes } = req.body;
+    const { name, email, phone, commissionRate, notes, useTieredCommission } = req.body;
 
     if (!name || commissionRate === undefined) {
       return res.status(400).json({ error: 'name and commissionRate required' });
@@ -114,6 +115,12 @@ export const createConsignor = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ error: 'commissionRate must be 0-100' });
     }
 
+    // ADR-096: opt-in tiered commission. Seed the workspace's default ladder the
+    // first time anyone turns this on, so the toggle never silently no-ops.
+    if (useTieredCommission === true) {
+      await seedDefaultCommissionTiers(workspace.id);
+    }
+
     const consignor = await prisma.consignor.create({
       data: {
         workspaceId: workspace.id,
@@ -121,6 +128,7 @@ export const createConsignor = async (req: AuthRequest, res: Response) => {
         email: email || null,
         phone: phone || null,
         commissionRate: new Decimal(rate),
+        useTieredCommission: useTieredCommission === true,
         notes: notes || null,
       },
       include: {
@@ -216,7 +224,7 @@ export const updateConsignor = async (req: AuthRequest, res: Response) => {
     }
 
     const { id } = req.params;
-    const { name, email, phone, commissionRate, notes } = req.body;
+    const { name, email, phone, commissionRate, notes, useTieredCommission } = req.body;
 
     // Get organizer's workspace
     const result = await getOrganizerWorkspace(req.user.id);
@@ -254,6 +262,12 @@ export const updateConsignor = async (req: AuthRequest, res: Response) => {
         return res.status(400).json({ error: 'commissionRate must be 0-100' });
       }
       updateData.commissionRate = new Decimal(rate);
+    }
+    if (useTieredCommission !== undefined) {
+      updateData.useTieredCommission = useTieredCommission === true;
+      if (useTieredCommission === true) {
+        await seedDefaultCommissionTiers(workspace.id);
+      }
     }
 
     const updated = await prisma.consignor.update({
@@ -387,30 +401,29 @@ export const runPayout = async (req: AuthRequest, res: Response) => {
         status: 'SOLD',
         ...(saleId && { saleId }), // Optional: filter by sale
       },
-      select: { price: true },
+      select: { id: true, price: true },
     });
 
-    // Calculate total sales from item prices
-    const totalSales = soldItems.reduce((sum, item) => {
-      return sum + (item.price || 0);
-    }, 0);
-
-    // Calculate commission and net payout
-    const commissionAmount = new Decimal(totalSales)
-      .times(consignor.commissionRate)
-      .dividedBy(100);
-    const netPayout = commissionAmount; // extensible for future deductions
+    // ADR-096: shared helper -- flat math if !useTieredCommission (identical to
+    // pre-ADR-096 behavior), per-item tiered math if true. Never duplicate this
+    // calculation inline; consignorSettlementController.ts uses the same helper.
+    const { gross: totalSales, net: netPayout, tierBreakdown } = await calculateConsignorPayout(
+      consignor,
+      soldItems
+    );
+    const commissionAmount = netPayout; // kept as a distinct field name for API/back-compat; extensible for future deductions
 
     // Create payout record
     const payout = await prisma.consignorPayout.create({
       data: {
         consignorId: id,
         saleId: saleId || null,
-        totalSales: new Decimal(totalSales),
+        totalSales,
         commissionAmount,
         netPayout,
         method: method || null,
         notes: notes || null,
+        ...(tierBreakdown ? { tierBreakdown } : {}),
       },
     });
 

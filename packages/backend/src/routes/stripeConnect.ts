@@ -6,12 +6,12 @@ import {
   getConsignorPayoutStatus,
 } from '../controllers/stripeConnectController';
 import { authenticate } from '../middleware/auth';
-import { paymentLimiter } from '../middleware/rateLimiter';
+import { paymentLimiter, consignorOnboardingInviteLimiter } from '../middleware/rateLimiter';
 
 const router = Router();
 
-// Consignor onboarding
-router.post('/onboard/:consignorId', authenticate, initiateConsignorOnboarding);
+// Consignor onboarding (rate-limited: this can email a real consignor, see rateLimiter.ts)
+router.post('/onboard/:consignorId', authenticate, consignorOnboardingInviteLimiter, initiateConsignorOnboarding);
 router.get('/return/:consignorId', authenticate, handleConnectReturn);
 
 // Payout execution

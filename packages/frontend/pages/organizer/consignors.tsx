@@ -58,6 +58,7 @@ const ConsignorsPage: React.FC = () => {
     email: '',
     phone: '',
     commissionRate: '',
+    useTieredCommission: false,
     notes: '',
   });
 
@@ -96,6 +97,7 @@ const ConsignorsPage: React.FC = () => {
       email: '',
       phone: '',
       commissionRate: '',
+      useTieredCommission: false,
       notes: '',
     });
     setEditingConsignor(null);
@@ -108,6 +110,7 @@ const ConsignorsPage: React.FC = () => {
       email: consignor.email || '',
       phone: consignor.phone || '',
       commissionRate: String(consignor.commissionRate),
+      useTieredCommission: Boolean((consignor as any).useTieredCommission),
       notes: consignor.notes || '',
     });
     setEditingConsignor(consignor);
@@ -122,8 +125,9 @@ const ConsignorsPage: React.FC = () => {
   const handleFormChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
   ) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    const { name, value, type } = e.target;
+    const checked = (e.target as HTMLInputElement).checked;
+    setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -146,6 +150,7 @@ const ConsignorsPage: React.FC = () => {
         email: formData.email || undefined,
         phone: formData.phone || undefined,
         commissionRate: rate,
+        useTieredCommission: formData.useTieredCommission,
         notes: formData.notes || undefined,
       };
 
@@ -433,6 +438,29 @@ const ConsignorsPage: React.FC = () => {
                 <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">
                   Percentage of sold item price paid to consignor
                 </p>
+              </div>
+
+              <div className="mb-6">
+                <label className="flex items-start gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    name="useTieredCommission"
+                    checked={formData.useTieredCommission}
+                    onChange={handleFormChange}
+                    className="mt-1"
+                    aria-label="Use value-based tiered commission"
+                  />
+                  <span className="text-sm text-warm-700 dark:text-warm-300">
+                    <span className="font-bold">Use value-based tiered commission</span>
+                    <br />
+                    <span className="text-xs text-warm-500 dark:text-warm-400">
+                      Instead of one flat rate, pay this consignor a richer split as an item's
+                      price goes up (e.g. ~50% under $100, up to ~75% above $2,000). The
+                      Commission Rate above still applies as the fallback rate. Tier breakpoints
+                      are shared workspace-wide and start from sensible defaults you can adjust later.
+                    </span>
+                  </span>
+                </label>
               </div>
 
               <div className="mb-6">

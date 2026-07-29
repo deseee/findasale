@@ -204,3 +204,22 @@ export const sendTestEmailLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
 });
+
+/**
+ * ADR-096 hacker-pass finding: /api/stripe-connect/onboard/:consignorId had no
+ * rate limit at all. Harmless before this session (it only returned a link to
+ * the organizer's own browser) -- now that it can also email a real
+ * consignor's inbox (emailConsignor: true), an organizer hammering this route
+ * for the same consignor becomes an email-spam vector. 10 requests per hour
+ * per user/IP, matching sendTestEmailLimiter's shape -- generous for the
+ * legitimate one-time-per-consignor use case, tight enough to stop abuse.
+ */
+export const consignorOnboardingInviteLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 10,
+  keyGenerator: getKeyGenerator,
+  validate: false,
+  message: 'Too many onboarding invite requests. Maximum 10 per hour.',
+  standardHeaders: true,
+  legacyHeaders: false,
+});
