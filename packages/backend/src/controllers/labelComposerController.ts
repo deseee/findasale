@@ -28,7 +28,7 @@ const LEFT_MARGIN = 13.5; // 3/16"
 const TOP_MARGIN = 36;    // 0.5"
 
 // QR code standard sizes for label printing (Avery 5160)
-const QR_SIZE_LABEL = 48;     // Small label QR for price tags
+const QR_SIZE_LABEL = 600;    // Source PNG resolution for label QR (was 48px -- too few raw pixels per module for a real phone-camera scan of a small printed label; physical print size is unchanged, fixed by the 0.67in CSS box below)
 
 // ---------------------------------------------------------------------------
 // In-memory batch store (ephemeral — v1 has no DB persistence for batches)
@@ -353,7 +353,7 @@ export const printLabelBatch = async (req: AuthRequest, res: Response) => {
       const qrDataUrl = await QRCode.toDataURL(qrUrl, {
         type: 'image/png',
         width: QR_SIZE_LABEL,
-        margin: 1,
+        margin: 4, // QR-spec minimum quiet zone (was 1 -- well below spec, a documented cause of scan failures once printed next to other label content)
         color: { dark: '#000000', light: '#ffffff' },
       });
       qrDataUrls.push(qrDataUrl);
@@ -399,6 +399,8 @@ export const printLabelBatch = async (req: AuthRequest, res: Response) => {
       width: 100%;
       height: 100%;
       display: block;
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
     }
     .label-text {
       flex: 1;
