@@ -1,7 +1,7 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
-import { applyFirstMonthRefundCap, logRefundProcessing } from '../services/refundService';
+import { applyFirstMonthRefundCap, logRefundProcessing, executeVerifiedRefund, RefundError, sendRefundConfirmationEmail } from '../services/refundService'; // P1 fix (2026-07-29): dispute-triggered refunds now actually call Stripe via the shared executeVerifiedRefund path
 
 // POST /api/disputes — authenticated buyer creates dispute
 export const createDispute = async (req: AuthRequest, res: Response) => {
@@ -225,6 +225,17 @@ export const updateDisputeStatus = async (req: AuthRequest, res: Response) => {
     let finalRefundAmount = refundAmount;
     let refundCapApplied = false;
 
+    // P1 fix (2026-07-29): a dispute resolved with a refundAmount used to only WRITE a
+    // resolution note claiming a refund happened — refundService.ts had ZERO Stripe calls,
+    // so no money ever moved and buyers were told they'd been refunded when they hadn't.
+    // These three carry the outcome of the real refund (if one runs) out of this block so
+    // the dispute is only ever marked 'resolved' after Stripe actually confirms it.
+    let actualRefundedAmount: number | undefined;
+    let refundedItemId: string | null | undefined;
+    let refundConfirmationParams:
+      | { toEmail?: string | null; buyerName?: string | null; itemTitle?: string | null; organizerBusinessName?: string | null }
+      | undefined;
+
     // Platform Safety #100: Apply first-month refund cap if resolving with refund
     if (status === 'resolved' && refundAmount && refundAmount > 0) {
       const { cappedAmount, wasCapped } = await applyFirstMonthRefundCap(existingDispute.buyer.id, refundAmount);
@@ -234,6 +245,52 @@ export const updateDisputeStatus = async (req: AuthRequest, res: Response) => {
       // Log refund processing
       if (wasCapped) {
         await logRefundProcessing(id, existingDispute.buyer.id, refundAmount, cappedAmount, true);
+      }
+
+      // SECURITY (IDOR guard): Dispute.orderId is a free-text String field with NO Prisma
+      // relation to Purchase (schema.prisma: "references Order or transaction ID") — it is
+      // accepted verbatim from the BUYER's own request body at dispute-creation time with
+      // zero validation that it names a real Purchase. Before any money moves, it must be
+      // resolved to an actual Purchase AND ownership-verified against THIS dispute's buyer,
+      // or a spoofed/mismatched orderId could trigger a refund against someone else's
+      // purchase (or a purchase that doesn't exist at all).
+      const purchase = await prisma.purchase.findUnique({ where: { id: existingDispute.orderId } });
+      if (!purchase) {
+        return res.status(400).json({
+          message: "This dispute's orderId does not correspond to a real purchase — cannot process refund, needs manual investigation.",
+        });
+      }
+      if (
+        purchase.userId !== existingDispute.buyerId ||
+        (purchase.saleId && purchase.saleId !== existingDispute.saleId) ||
+        (purchase.itemId && purchase.itemId !== existingDispute.itemId)
+      ) {
+        return res.status(400).json({
+          message: "This dispute's orderId does not match the dispute's buyer/sale/item — refusing to refund, needs manual investigation.",
+        });
+      }
+
+      // Actually move the money — the SAME Stripe path (TOCTOU claim, idempotency key,
+      // booth-cart vs destination-charge branching, hub-owner reversal) the organizer/admin
+      // refund endpoint uses. If this throws, the dispute is NOT updated below — an admin
+      // sees an error and can retry, instead of the dispute silently flipping to 'resolved'
+      // over a refund that never happened.
+      try {
+        const { refundedAmount, purchase: refundedPurchase } = await executeVerifiedRefund(purchase.id, finalRefundAmount);
+        actualRefundedAmount = refundedAmount;
+        refundedItemId = refundedPurchase.itemId;
+        refundConfirmationParams = {
+          toEmail: refundedPurchase.user?.email,
+          buyerName: refundedPurchase.user?.name,
+          itemTitle: refundedPurchase.item?.title,
+          organizerBusinessName: refundedPurchase.sale?.organizer?.businessName,
+        };
+      } catch (refundErr) {
+        if (refundErr instanceof RefundError) {
+          return res.status(refundErr.statusCode).json({ message: refundErr.message, ...(refundErr.details || {}) });
+        }
+        console.error('Error processing dispute refund:', refundErr);
+        return res.status(500).json({ message: 'Failed to issue refund' });
       }
     }
 
@@ -248,7 +305,9 @@ export const updateDisputeStatus = async (req: AuthRequest, res: Response) => {
       updateData.resolution = `${resolution || ''} [REFUND CAPPED: Original $${refundAmount.toFixed(2)} → $${finalRefundAmount.toFixed(2)} (Platform Safety #100: First-month account)]`.trim();
     }
 
-    // Update dispute
+    // Update dispute — for a refund-triggering resolution, only reached once Stripe has
+    // actually confirmed the refund above (any failure returned early without updating,
+    // so the dispute never flips to 'resolved' over a refund that didn't happen).
     const dispute = await prisma.dispute.update({
       where: { id },
       data: updateData,
@@ -262,10 +321,30 @@ export const updateDisputeStatus = async (req: AuthRequest, res: Response) => {
       },
     });
 
+    // Restore the item to AVAILABLE and send the buyer their real refund confirmation —
+    // matching what the organizer/admin refund endpoint (POST /api/stripe/refund/:purchaseId)
+    // already does — so a dispute-triggered refund is not a silent, second-class one.
+    if (actualRefundedAmount !== undefined) {
+      if (refundedItemId) {
+        await prisma.item.update({
+          where: { id: refundedItemId },
+          data: { status: 'AVAILABLE' }
+        }).catch((err: unknown) => console.error(`[updateDisputeStatus] Failed to restore item ${refundedItemId} to AVAILABLE (non-fatal):`, err));
+      }
+      if (refundConfirmationParams) {
+        sendRefundConfirmationEmail({
+          ...refundConfirmationParams,
+          refundAmount: actualRefundedAmount,
+          wasCapped: refundCapApplied,
+        });
+      }
+    }
+
     res.json({
       message: 'Dispute status updated',
       dispute,
       ...(refundCapApplied && { refundCapApplied: true, originalAmount: refundAmount, cappedAmount: finalRefundAmount }),
+      ...(actualRefundedAmount !== undefined && { refundedAmount: actualRefundedAmount }),
     });
   } catch (error) {
     console.error('Error updating dispute status:', error);

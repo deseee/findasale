@@ -31,7 +31,7 @@ import { markShopifyItemSold } from '../services/shopifyService'; // Feature: Sh
 import { sellItemUnits, InsufficientStockError } from '../services/itemStockService'; // ADR-085 Track B Phase 1 Step 4
 import { syncMarketplaceStock } from '../services/marketplaceStockSyncService'; // ADR-087 Phase 4: revise-on-partial eBay quantity sync
 import { sendConsignorItemSold } from '../services/consignorEmailService'; // Feature #309: Consignor email notifications
-import { applyFirstMonthRefundCap, logRefundProcessing } from '../services/refundService'; // P2-2: Refund cap + logging
+import { applyFirstMonthRefundCap, logRefundProcessing, executeVerifiedRefund, RefundError, sendRefundConfirmationEmail } from '../services/refundService'; // P2-2: Refund cap + logging; P1 fix (2026-07-29): shared refund execution (see refundService.ts) + dispute-triggered refund confirmation
 import { transactionalEmailService } from '../lib/transactionalEmailService';
 import { assertCheckoutAllowed, assertGuestCheckoutAllowed, recordConfirmedSignal, CheckoutGuardError } from '../services/checkoutGuard'; // S1072 Finding #4: collusion/wash-trade guard
 import { recordPosPaymentLinkSale } from '../services/posPaymentLinkRecorder'; // ADR pos-webhook-idempotency-reconciliation (2026-07-23, S1151)
@@ -110,31 +110,9 @@ const stripe = () => getStripe();
 const isDestinationCharge = (pi: Stripe.PaymentIntent): boolean =>
   !!pi.transfer_data?.destination;
 
-/**
- * PART B GATE (2026-07-28) — organizer-initiated refunds only (createRefund, regular branch).
- *
- * Follows the established money-path env-flag convention already used in this codebase:
- *   consignorSettlementController.ts:22   STRIPE_CONNECT_LIVE_TRANSFERS === 'true'
- *   vendorBoothSettlementController.ts:29 VENDOR_BOOTH_LIVE_TRANSFERS  === 'true'
- * i.e. a module-level arrow predicate, strict `=== 'true'`, DEFAULT OFF (unset === off).
- *
- * WHAT FLIPPING IT TO 'true' DOES: an organizer-issued refund on a regular (non-booth-cart)
- * destination charge will additionally reverse that organizer's payout Transfer and refund
- * the platform application fee, proportionally to the refunded amount. With the flag OFF
- * (today's behaviour, unchanged) the organizer keeps their full payout and the platform
- * absorbs the entire refund.
- *
- * DO NOT ENABLE BEFORE ORGANIZERS HAVE BEEN NOTIFIED. This changes what lands in a connected
- * account: money already paid out is clawed back at refund time, and an organizer whose
- * connected-account balance cannot cover the reversal will go negative. That is a change to
- * the economics organizers signed up under and needs advance notice.
- *
- * The two AUTOMATIC, system-initiated refunds in webhookHandler (guest-fraud block and the
- * CA3 concurrent-purchase block) are deliberately NOT gated on this flag: they fire on sales
- * that never validly completed, where no organizer legitimately earned anything.
- */
-const refundClawbackEnabled = (): boolean =>
-  process.env.STRIPE_REFUND_LIVE_CLAWBACK === 'true';
+// PART B GATE (2026-07-28) / refundClawbackEnabled() — MOVED to services/refundService.ts
+// 2026-07-29 as part of the executeVerifiedRefund extraction. Do not re-add a local copy
+// here; see refundService.ts for the full money-path rationale and the DEFAULT-OFF flag.
 
 
 const sendReceiptEmail = async (purchase: {
@@ -2932,240 +2910,28 @@ export const createRefund = async (req: AuthRequest, res: Response) => {
       }
     }
 
-    if (purchase.status !== 'PAID') {
-      return res.status(400).json({ message: 'Only paid purchases can be refunded' });
-    }
-
-    if (!purchase.stripePaymentIntentId) {
-      return res.status(400).json({ message: 'No payment intent found for this purchase' });
-    }
-
-    // P2-2: Verify purchase is within 30 days
-    const purchaseAgeMs = Date.now() - purchase.createdAt.getTime();
-    const purchaseAgeDays = purchaseAgeMs / (1000 * 60 * 60 * 24);
-    if (purchaseAgeDays > 30) {
-      return res.status(400).json({
-        message: 'Refunds can only be issued within 30 days of purchase',
-        purchaseAgeDays: Math.floor(purchaseAgeDays)
-      });
-    }
-
-    // P2-2: Apply first-month refund cap for new accounts
+    // P2-2: Apply first-month refund cap for new accounts. Capping stays HERE (not inside
+    // executeVerifiedRefund) — each caller of executeVerifiedRefund has its own idea of the
+    // "requested" amount before capping. This endpoint caps purchase.amount;
+    // disputeController.ts's updateDisputeStatus caps the dispute's requested refundAmount.
     const { cappedAmount, wasCapped } = await applyFirstMonthRefundCap(purchase.userId ?? "", purchase.amount);
     const refundAmount = cappedAmount;
 
-    // P3 (TOCTOU lock): atomically claim the PAID->refund transition BEFORE calling Stripe.
-    // Purchase.status is a free String field (no Prisma enum — documented values PENDING, PAID,
-    // REFUNDED, FAILED, DISPUTED), so using an intermediate 'REFUNDING' marker needs NO schema
-    // change. The conditional updateMany only matches a row still in 'PAID', so exactly one
-    // concurrent request wins the claim; every other request sees count 0 and is rejected.
-    // Status is set to REFUNDED only after Stripe confirms; on Stripe failure it is reverted to
-    // PAID so the organizer can retry.
-    const claim = await prisma.purchase.updateMany({
-      where: { id: purchaseId, status: 'PAID' },
-      data: {
-        status: 'REFUNDING',
-        ...(wasCapped && { notes: `Refund capped: $${purchase.amount.toFixed(2)} → $${refundAmount.toFixed(2)} (first-month account)` })
-      }
-    });
-    if (claim.count !== 1) {
-      return res.status(400).json({ message: 'Refund already in progress or not refundable' });
-    }
-
-    // Create Stripe refund with capped amount.
-    // P3 (idempotency): stable key keyed to the purchase collapses retries/concurrent
-    // requests to a single refund on Stripe's side.
-    //
-    // ADR-020 refund rework: booth-cart purchases (isBoothCartPurchase) live on
-    // their ITEM's vendor booth's own Standard account — the PaymentIntent was
-    // created there as a Direct charge, so the refund call must pass that same
-    // { stripeAccount } option or Stripe can't find the PaymentIntent at all (it
-    // doesn't exist on the platform account). Regular purchases are unaffected —
-    // createPaymentIntent uses transfer_data.destination (a destination charge that
-    // DOES live on the platform account), so no stripeAccount option for those,
-    // exactly as before this change.
-    const boothStripeAccountId = purchase.item?.vendorBooth?.stripeAccountId;
-    if (isBoothCartPurchase && !boothStripeAccountId) {
-      await prisma.purchase.updateMany({ where: { id: purchaseId, status: 'REFUNDING' }, data: { status: 'PAID' } });
-      return res.status(400).json({ message: 'This item\'s vendor booth has no Stripe account on file — cannot resolve which account to refund.' });
-    }
-    // PART B (2026-07-28), DEFAULT OFF — organizer-initiated destination-charge clawback.
-    // Regular (non-booth-cart) purchases are DESTINATION charges, created by
-    // createPaymentIntent only when its `shouldUseConnect` was true. The predicate below
-    // mirrors that exact condition (stripeConnectId present and not a seeded `acct_test_`
-    // id) because only the PaymentIntent's id is persisted on Purchase — the PaymentIntent
-    // object itself is never loaded in this handler.
-    // KNOWN EDGE, acceptable only while the flag is OFF: an organizer who onboarded to
-    // Connect AFTER this purchase was charged satisfies the predicate even though the
-    // original charge carries no transfer_data. Resolve that (retrieve the PaymentIntent, or
-    // persist a wasDestinationCharge flag at capture) BEFORE turning
-    // STRIPE_REFUND_LIVE_CLAWBACK on.
-    const organizerConnectId = purchase.sale?.organizer?.stripeConnectId;
-    const isRegularDestinationCharge =
-      !isBoothCartPurchase &&
-      !!organizerConnectId &&
-      !organizerConnectId.startsWith('acct_test_');
-    const applyOrganizerClawback = refundClawbackEnabled() && isRegularDestinationCharge;
-
+    // Money movement — the PAID-status check, payment-intent-exists check, 30-day window,
+    // the PAID->REFUNDING TOCTOU compare-and-swap claim + idempotency key, the booth-cart-vs
+    // destination-charge Stripe call branching, the STRIPE_REFUND_LIVE_CLAWBACK-gated
+    // organizer clawback, the vendor-booth notification, and the hub-owner Transfer reversal
+    // all now live in executeVerifiedRefund (services/refundService.ts) — extracted 2026-07-29
+    // so disputeController.ts's updateDisputeStatus can share the exact same, already-hardened
+    // Stripe path instead of only updating a status string. Moved, not rewritten: this
+    // endpoint's behavior for existing callers is unchanged.
     try {
-      await stripe().refunds.create({
-        payment_intent: purchase.stripePaymentIntentId,
-        amount: Math.round(refundAmount * 100), // Convert to cents
-        // P1 money-path fix (2026-07-28): booth-cart legs are DIRECT charges on the
-        // booth's own connected account, created by the platform with an
-        // application_fee_amount (vendorBoothCartController.ts:630 TERMINAL rail,
-        // :884 QR rail = platform cut + hub-owner revenue-share cut,
-        // computeLegFeeSplit :52-82). On a Direct charge the connected account funds
-        // 100% of a refund, and refund_application_fee DEFAULTS TO FALSE — so without
-        // this flag the platform kept the entire application fee while the vendor's
-        // balance was debited the full gross. A $100 leg at 8% platform + 20% hub
-        // share (fee = $28) refunded in full left the vendor at -$28 on a sale they
-        // never kept a cent of. Setting this returns the fee to the vendor.
-        //
-        // Stripe semantics (node_modules/stripe@14.25.0/types/RefundsResource.d.ts:53-56,
-        // verbatim): "If a full charge refund is given, the full application fee will
-        // be refunded. Otherwise, the application fee will be refunded in an amount
-        // proportional to the amount of the charge refunded." That proportion is
-        // refundedAmount / chargeAmount, and chargeAmount IS leg.amountCents (the leg
-        // row and its PaymentIntent are created from the same `amountCents` value —
-        // vendorBoothCartController.ts:609/:623 TERMINAL, :851/:876 QR). So this
-        // proration shares an identical denominator with the hub-owner Transfer
-        // reversal below (refundedCents / leg.amountCents, in the hub-owner reversal
-        // block later in this handler) and the two
-        // clawbacks stay consistent on partial refunds and on multi-Purchase legs.
-        //
-        // Chosen deliberately over `refund_application_fee: false` +
-        // applicationFees.createRefund({ amount }): the boolean rides INSIDE this same
-        // refunds.create call, so the existing `refund-${purchase.id}` idempotency key
-        // covers the fee refund atomically. A separate fee-refund call would be a
-        // second money movement needing its own claim/idempotency ledger and could
-        // strand the vendor negative if it failed after the refund succeeded. Exact
-        // amounts aren't needed here — proportional IS the correct model.
-        //
-        // Scoped to isBoothCartPurchase only. Regular purchases are DESTINATION
-        // charges (createPaymentIntent, transfer_data.destination) where the charge lives
-        // on the platform; there the correct fix is reverse_transfer +
-        // refund_application_fee TOGETHER, which claws money back from organizers. That is
-        // now implemented immediately below as PART B, gated OFF behind
-        // STRIPE_REFUND_LIVE_CLAWBACK pending organizer notice.
-        ...(isBoothCartPurchase ? { refund_application_fee: true } : {}),
-        // PART B (2026-07-28) — DEFAULT OFF, gated on STRIPE_REFUND_LIVE_CLAWBACK.
-        // Mutually exclusive with the booth-cart spread directly above (that branch requires
-        // isBoothCartPurchase; this one requires !isBoothCartPurchase). KEEP THEM DISTINCT:
-        //   - booth cart  = DIRECT charge on the vendor's own connected account. The vendor
-        //     funds 100% of the refund, so only the application fee needs to come back.
-        //     reverse_transfer is meaningless there (there is no platform->vendor Transfer).
-        //   - regular     = DESTINATION charge on the platform account. The PLATFORM funds
-        //     the refund, so BOTH the organizer's payout Transfer and the platform fee must
-        //     be unwound, or the platform absorbs the entire gross.
-        // Swapping the two branches loses money in opposite directions.
-        //
-        // Both flags ride inside this same refunds.create call, so the
-        // `refund-${purchase.id}` idempotency key below covers the Transfer reversal
-        // atomically: a retry replays an identical request and Stripe returns the original
-        // Refund object rather than reversing the Transfer a second time. This also composes
-        // with the PAID -> REFUNDING compare-and-swap claim above, which already admits only
-        // one caller into this block.
-        ...(applyOrganizerClawback
-          ? { reverse_transfer: true, refund_application_fee: true }
-          : {}),
-      }, {
-        idempotencyKey: `refund-${purchase.id}`,
-        ...(isBoothCartPurchase ? { stripeAccount: boothStripeAccountId! } : {}),
-      });
-    } catch (stripeErr) {
-      // Stripe failed — revert the claim back to PAID so the organizer can retry.
-      await prisma.purchase.updateMany({
-        where: { id: purchaseId, status: 'REFUNDING' },
-        data: { status: 'PAID' }
-      });
-      throw stripeErr;
-    }
-
-    // Stripe confirmed — finalize status to REFUNDED.
-    await prisma.purchase.update({
-      where: { id: purchaseId },
-      data: { status: 'REFUNDED' }
-    });
-
-    // Tell the VENDOR their booth sale was refunded. The shopper already gets a refund
-    // confirmation further down this handler; the vendor got nothing, even though a
-    // booth-cart refund is taken against their OWN connected account (Direct charge,
-    // { stripeAccount: boothStripeAccountId }) and drops their balance. No-ops on
-    // non-booth-cart purchases. Fire-and-forget and never-throwing: the buyer's refund has
-    // already succeeded on Stripe and must not be disturbed by a notification.
-    // Exactly-once without a new column: the PAID -> REFUNDING compare-and-swap claim above
-    // admits only one caller into this block per purchase.
-    notifyVendorBoothSaleRefunded(purchaseId).catch(err =>
-      console.error(`[createRefund] Vendor refund notification failed for purchase ${purchaseId} (non-fatal):`, err)
-    );
-
-    // ADR-090 Phase 2 refund clawback: a plain PaymentIntent refund does NOT claw
-    // back a completed platform -> hub-owner Transfer (they're separate money
-    // movements) — so booth-cart purchases whose leg received a hub-owner
-    // revenue-share Transfer must have that Transfer reversed, proportional to
-    // how much of the LEG's total this specific item's refund represents (one leg's
-    // PaymentIntent can fund multiple Purchase rows for a multi-item booth leg).
-    //
-    // P1 RACE FIX (2026-07-28). The old code called Stripe inline and skipped the
-    // reversal outright when stripeTransferId was null or the 'CLAIMING' sentinel.
-    // The hub-owner Transfer fires AFTER capture, best-effort and non-blocking
-    // (vendorBoothCartController.ts:1140-1147), so this interleaving lost real money:
-    //     capture -> transfer claims 'CLAIMING' -> refund runs, sees sentinel, SKIPS
-    //     -> transfer completes and pays the hub owner, never reversed.
-    // The buyer is refunded and (since refund_application_fee: true above) the vendor
-    // is made whole out of the full application fee — platform cut AND hub share — so
-    // the un-reversed Transfer came straight out of platform funds.
-    //
-    // The fix separates OBLIGATION from EXECUTION. The obligation is recorded here
-    // unconditionally and durably (hubOwnerReversalOwedCents, an atomic SQL increment
-    // that survives a process dying mid-flight and cannot lose concurrent updates),
-    // and execution is delegated to settleHubOwnerReversalForLeg, which is called from
-    // BOTH sides of the race — here, and again by transferHubOwnerShareForLeg the
-    // moment a real tr_... id lands. Whichever finishes second moves the money, so no
-    // ordering leaves the hub owner holding platform funds.
-    //
-    // The proration math below is unchanged (verified correct 2026-07-28) and shares a
-    // denominator with refund_application_fee's proportional fee refund.
-    // Never fatal: the buyer-facing refund above already succeeded and must not be
-    // rolled back over a hub-owner-side reconciliation issue.
-    if (isBoothCartPurchase && purchase.stripePaymentIntentId) {
-      try {
-        const leg = await prisma.boothCartLeg.findUnique({ where: { stripePaymentIntentId: purchase.stripePaymentIntentId } });
-        if (
-          leg &&
-          leg.hubOwnerShareAmount &&
-          Number(leg.hubOwnerShareAmount) > 0 &&
-          leg.amountCents > 0
-        ) {
-          const refundedCents = Math.round(refundAmount * 100);
-          const hubOwnerShareCents = Math.round(Number(leg.hubOwnerShareAmount) * 100);
-          const reversalCents = Math.min(
-            hubOwnerShareCents,
-            Math.round(hubOwnerShareCents * (refundedCents / leg.amountCents))
-          );
-          if (reversalCents > 0) {
-            // Seed then increment: `increment` on a NULL column is a no-op in SQL
-            // (NULL + n = NULL). The seed is itself conditional on null, so it is safe
-            // to run concurrently, and the increment that follows is atomic — two
-            // Purchases on the same leg refunded at the same instant both land.
-            await prisma.boothCartLeg.updateMany({
-              where: { id: leg.id, hubOwnerReversalOwedCents: null },
-              data: { hubOwnerReversalOwedCents: 0 },
-            });
-            await prisma.boothCartLeg.update({
-              where: { id: leg.id },
-              data: { hubOwnerReversalOwedCents: { increment: reversalCents } },
-            });
-            // Executes now if the Transfer is already a real tr_... id; no-ops while it
-            // is still null or 'CLAIMING', in which case transferHubOwnerShareForLeg
-            // drains the watermark as soon as the Transfer lands.
-            await settleHubOwnerReversalForLeg(leg.id);
-          }
-        }
-      } catch (reversalErr) {
-        console.error(`[createRefund] Failed to reverse hub-owner Transfer for purchase ${purchaseId} — hubOwnerReversalOwedCents on the leg records the outstanding amount:`, reversalErr);
+      await executeVerifiedRefund(purchaseId, refundAmount);
+    } catch (refundErr) {
+      if (refundErr instanceof RefundError) {
+        return res.status(refundErr.statusCode).json({ message: refundErr.message, ...(refundErr.details || {}) });
       }
+      throw refundErr;
     }
 
     // Restore item to AVAILABLE if it exists
@@ -3176,26 +2942,16 @@ export const createRefund = async (req: AuthRequest, res: Response) => {
       });
     }
 
-    // Send confirmation email to shopper
-    if (purchase.user?.email) {
-      const fromEmail = process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'support@finda.sale';
-      const itemTitle = purchase.item?.title || 'your purchase';
-      const baseUrl = process.env.FRONTEND_URL || 'https://finda.sale';
-
-      transactionalEmailService.emails.send({
-        from: fromEmail,
-        to: purchase.user.email,
-        subject: 'Refund processed for your FindA.Sale purchase',
-        html: `
-          <h2>Refund Processed</h2>
-          <p>Hi ${purchase.user.name || 'Shopper'},</p>
-          <p>We've issued a refund of <strong>$${refundAmount.toFixed(2)}</strong> for <strong>${itemTitle}</strong> from <strong>${purchase.sale?.organizer?.businessName || 'a sale'}</strong>.</p>
-          <p>The refund will appear in your original payment method within 1-2 business days.</p>
-          ${wasCapped ? `<p style="color: #ef4444; font-size: 14px;"><strong>Note:</strong> Your refund was capped at 50% because your account is less than 30 days old (Platform Safety Policy #100).</p>` : ''}
-          <p><a href="${baseUrl}/shopper/purchases">View your purchase history</a></p>
-        `,
-      }).catch((err: unknown) => console.warn('[refund] Failed to send confirmation email:', err));
-    }
+    // Send confirmation email to shopper (shared helper — see refundService.ts;
+    // fire-and-forget, same as before this extraction)
+    sendRefundConfirmationEmail({
+      toEmail: purchase.user?.email,
+      buyerName: purchase.user?.name,
+      refundAmount,
+      wasCapped,
+      itemTitle: purchase.item?.title,
+      organizerBusinessName: purchase.sale?.organizer?.businessName,
+    });
 
     res.json({
       message: 'Refund issued successfully',
