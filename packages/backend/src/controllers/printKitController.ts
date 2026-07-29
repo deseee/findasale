@@ -1049,8 +1049,8 @@ async function renderPriceSheet(saleId: string, saleTitle: string, frontendUrl: 
     const miscQrUrl = `${frontendUrl}/pos/${saleId}?action=add-misc&price=${price.toFixed(2)}`;
     const qrDataUrl = await QRCode.toDataURL(miscQrUrl, {
       type: 'image/png',
-      width: QR_SIZE_LABEL,
-      margin: 1,
+      width: 600,    // Source PNG resolution decoupled from the 0.67in CSS display box below (2026-07-29: same QR_SIZE_LABEL=48px scan-failure bug as labelComposerController.ts -- physical print size unchanged, quiet zone also below spec)
+      margin: 4,     // QR-spec minimum quiet zone (was 1)
       color: { dark: '#000000', light: '#ffffff' },
     });
     priceQrDataUrls.push(qrDataUrl);
@@ -1095,6 +1095,8 @@ async function renderPriceSheet(saleId: string, saleTitle: string, frontendUrl: 
       width: 100%;
       height: 100%;
       display: block;
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
     }
     .label-text {
       flex: 1;
@@ -1216,8 +1218,8 @@ async function appendPriceSheetToPDF(doc: any, saleId: string, saleTitle: string
     const miscQrUrl = `${frontendUrl}/pos/${saleId}?action=add-misc&price=${prices[i].toFixed(2)}`;
     const miscQrBuffer = await QRCode.toBuffer(miscQrUrl, {
       type: 'png',
-      width: QR_SIZE_LABEL,
-      margin: 1,
+      width: 600,    // Source PNG resolution decoupled from the 48pt PDFKit placement box below (2026-07-29: same scan-failure bug as labelComposerController.ts -- physical placement size unchanged)
+      margin: 4,     // QR-spec minimum quiet zone (was 1)
       color: { dark: '#000000', light: '#ffffff' },
     });
     doc.image(miscQrBuffer, cellX + 4 + xPad, cellY + 12, { width: QR_SIZE_PRICE, height: QR_SIZE_PRICE });
