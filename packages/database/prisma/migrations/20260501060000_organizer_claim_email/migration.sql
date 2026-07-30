@@ -1,28 +1,19 @@
--- CreateTable: OrganizerClaimEmail — ADR-073 Phase 2: 3-touch claim email pipeline for unmanaged organizers
-CREATE TABLE "OrganizerClaimEmail" (
-  "id" TEXT NOT NULL,
-  "organizerId" TEXT NOT NULL,
-  "touchNumber" INTEGER NOT NULL,
-  "sentAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  "status" TEXT NOT NULL DEFAULT 'sent',
-  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  "updatedAt" TIMESTAMP(3) NOT NULL,
-
-  CONSTRAINT "OrganizerClaimEmail_pkey" PRIMARY KEY ("id")
-);
-
--- AddForeignKey
-ALTER TABLE "OrganizerClaimEmail" ADD CONSTRAINT "OrganizerClaimEmail_organizerId_fkey"
-  FOREIGN KEY ("organizerId") REFERENCES "Organizer"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- CreateIndex
-CREATE INDEX "OrganizerClaimEmail_organizerId_idx" ON "OrganizerClaimEmail"("organizerId");
-
--- CreateIndex
-CREATE INDEX "OrganizerClaimEmail_sentAt_idx" ON "OrganizerClaimEmail"("sentAt");
-
--- CreateIndex
-CREATE INDEX "OrganizerClaimEmail_touchNumber_idx" ON "OrganizerClaimEmail"("touchNumber");
-
--- CreateUniqueIndex: one email per touch per organizer
-CREATE UNIQUE INDEX "OrganizerClaimEmail_organizerId_touchNumber_key" ON "OrganizerClaimEmail"("organizerId", "touchNumber");
+-- No-op (2026-07-30): this migration duplicated OrganizerClaimEmail table creation.
+--
+-- Confirmed via `prisma migrate status` against production (Railway): the table this
+-- migration creates was ALREADY created by 20260223014341_organizer_claim_email
+-- (renamed 2026-07-30 from 20250501080000_organizer_claim_email, which production's
+-- own _prisma_migrations bookkeeping confirms was applied under that original name --
+-- see claude_docs/STATE.md's Row 19 for the full investigation). That migration sorts
+-- earlier than this one and creates the same table, columns, indexes, and foreign key.
+--
+-- This migration's NAME is left completely unchanged -- production's _prisma_migrations
+-- table already has it recorded as applied under this exact name, and renaming or
+-- deleting the folder would desync that bookkeeping for no benefit (production never
+-- re-runs an already-applied migration's SQL against a live database; only a
+-- from-scratch shadow-database build, e.g. `prisma migrate dev`, replays this file).
+--
+-- Only the SQL BODY is emptied, so a fresh shadow-database build no longer tries to
+-- CREATE TABLE "OrganizerClaimEmail" a second time and fail with P3006 ("already
+-- exists"). This is the only thing that was ever wrong with this migration file --
+-- it never needs to run its original SQL again anywhere.
