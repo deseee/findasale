@@ -980,14 +980,16 @@ export default function POSPage() {
   // race on a fresh page load, camera opened before POST /cart/start resolves) or when
   // the server rejects the item. That produced a false "Item added to cart" toast
   // immediately followed by an empty cart on close -- exactly Pegasus's report.
-  const addVenueItemToCart = useCallback((item: Item): Promise<boolean> => {
+  const addVenueItemToCart = useCallback((item: Item): Promise<{ added: boolean; message?: string }> => {
     if (!venueCart) {
-      setErrorMessage('Register is still starting -- wait a moment and try again.');
-      return Promise.resolve(false);
+      const message = 'Register is still starting -- wait a moment and try again.';
+      setErrorMessage(message);
+      return Promise.resolve({ added: false, message });
     }
     if (cart.some(c => c.itemId === item.id)) {
-      setErrorMessage(`"${item.title}" is already in the cart.`);
-      return Promise.resolve(false);
+      const message = `"${item.title}" is already in the cart.`;
+      setErrorMessage(message);
+      return Promise.resolve({ added: false, message });
     }
     return api.post(
       `/organizer/hubs/${venueHubId}/cart/${venueCart.id}/items`,
@@ -998,6 +1000,7 @@ export default function POSPage() {
         const accepted = res.data?.accepted || [];
         const rejected = res.data?.rejected || [];
         let added = false;
+        let message: string | undefined;
         if (accepted.length > 0) {
           const a = accepted[0];
           const cartId = `${Date.now()}_${Math.random().toString(36).substring(7)}`;
@@ -1006,14 +1009,16 @@ export default function POSPage() {
           added = true;
         }
         if (rejected.length > 0) {
-          setErrorMessage(`"${item.title}" could not be added: ${rejected[0].reason}`);
+          message = `"${item.title}" could not be added: ${rejected[0].reason}`;
+          setErrorMessage(message);
         }
-        return added;
+        return { added, message };
       })
       .catch(err => {
         console.error('[pos] Venue add-item error:', err);
-        setErrorMessage(err?.response?.data?.error || err?.response?.data?.message || `Failed to add "${item.title}".`);
-        return false;
+        const message = err?.response?.data?.error || err?.response?.data?.message || `Failed to add "${item.title}".`;
+        setErrorMessage(message);
+        return { added: false, message };
       });
   }, [venueHubId, venueCart, cart, venueBoothToken]);
 
@@ -1562,15 +1567,19 @@ export default function POSPage() {
             // cart depending on which mode is active, same reasoning as the item-ID
             // input fix above.
             if (venueHubId) {
-              addVenueItemToCart(scannedItem).then(added => {
+              addVenueItemToCart(scannedItem).then(({ added, message }) => {
                 if (added) {
                   showToast('✓ Item added to cart', 'success');
                   setQrScanStatus('scanning');
                   setQrScanMessage('');
                 } else {
                   setQrScanStatus('error');
-                  setQrScanMessage('Could not add item -- see message below');
-                  setTimeout(() => { setQrScanStatus('scanning'); setQrScanMessage(''); }, 2500);
+                  // Render the real failure reason inside the camera modal itself --
+                  // the fullscreen modal (fixed inset-0 z-50) covers the page's
+                  // errorMessage banner, so a "see message below" pointer was never
+                  // visible to the cashier (2026-07-30 fix, Pegasus/S1178 follow-up).
+                  setQrScanMessage(message || 'Could not add item to cart');
+                  setTimeout(() => { setQrScanStatus('scanning'); setQrScanMessage(''); }, 3500);
                 }
               });
               return;
