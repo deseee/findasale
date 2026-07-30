@@ -1585,6 +1585,29 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                   )}
                 </div>
 
+                {/* Shared With You (mobile) -- 2026-07-30, second follow-up: this is the
+                    ACTUAL branch that renders for a real logged-in shopper/team-member
+                    (isClient && user && user.roles.includes('USER')) -- the first mobile
+                    fix went into `authLinks`, which is dead code for this user shape (only
+                    reachable when a logged-in user has neither USER nor ORGANIZER role).
+                    Root-caused live: confirmed via DOM inspection against the deployed build
+                    that this three-way isOrganizer / isUser / authLinks ternary was missed
+                    the first time around. */}
+                {(hasVendorBoothsMobile || hasTeamMembershipsMobile) && (
+                  <>
+                    {hasVendorBoothsMobile && (
+                      <Link href="/vendor/booths" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Every booth you have claimed, and your register if one has been shared with you">
+                        <Store size={14} className="inline mr-2 text-indigo-500" /> Your Booths
+                      </Link>
+                    )}
+                    {hasTeamMembershipsMobile && (
+                      <Link href="/team/registers" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Every team you belong to, and your register if one has been shared with you">
+                        <Users size={14} className="inline mr-2 text-indigo-500" /> Your Teams
+                      </Link>
+                    )}
+                  </>
+                )}
+
                 {/* Shopper-only nav (when not organizer) */}
                 <Link href="/shopper/dashboard" className="block px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
                   <LayoutDashboard size={14} className="inline mr-2 text-indigo-600" /> Shopper Dashboard
