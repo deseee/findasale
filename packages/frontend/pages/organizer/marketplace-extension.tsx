@@ -81,7 +81,7 @@ const MarketplaceExtensionPage = () => {
               </h1>
               <p className="text-blue-800 dark:text-blue-200 mb-6 leading-relaxed">
                 This browser extension fills and publishes your Facebook Marketplace listings straight
-                from your FindA.Sale inventory — so you list once and post everywhere. Upgrade to PRO to
+                from your FindA.Sale inventory. So you list once and post everywhere. Upgrade to PRO to
                 unlock it.
               </p>
               <Link
@@ -116,8 +116,8 @@ const MarketplaceExtensionPage = () => {
             Facebook Marketplace Autofill
           </h1>
           <p className="text-warm-600 dark:text-gray-400 mb-8 leading-relaxed">
-            This browser extension fills your Facebook Marketplace listings — title, price, condition,
-            description, and photos — straight from your FindA.Sale inventory, then walks through
+            This browser extension fills your Facebook Marketplace listings. Title, price, condition,
+            description, and photos. Straight from your FindA.Sale inventory, then walks through
             publishing. You review before anything goes live.
           </p>
 
@@ -147,7 +147,7 @@ const MarketplaceExtensionPage = () => {
                     Download and unzip.
                   </span>{' '}
                   Click Download above, then unzip the file to a permanent folder on your computer
-                  (e.g. Documents) — Chrome runs the extension from that folder, so don&apos;t delete
+                  (e.g. Documents). Chrome runs the extension from that folder, so don&apos;t delete
                   it afterward.
                 </div>
               </li>
@@ -225,7 +225,7 @@ const MarketplaceExtensionPage = () => {
                   <span className="font-semibold text-warm-900 dark:text-gray-100">
                     Pin the FindA.Sale icon
                   </span>{' '}
-                  (puzzle-piece menu → pin), then click it — your items load, grouped by sale.
+                  (puzzle-piece menu → pin), then click it. Your items load, grouped by sale.
                 </div>
               </li>
             </ol>
@@ -239,7 +239,7 @@ const MarketplaceExtensionPage = () => {
             <ul className="space-y-2 text-sm text-warm-500 dark:text-gray-400 list-disc pl-5">
               <li>
                 While the extension is working, Chrome shows its own &quot;debugging this tab&quot;
-                banner — that&apos;s normal and closes when the tab closes.
+                banner. That&apos;s normal and closes when the tab closes.
               </li>
               <li>
                 One-click install through the Chrome Web Store is coming; for now this is the direct

@@ -53,7 +53,7 @@ const SaleOfTheDayCard: React.FC = () => {
       const res = await api.get('/public/sale-of-the-day');
       return res.data;
     },
-    staleTime: 60 * 60 * 1000, // 1 hour — matches server Cache-Control
+    staleTime: 60 * 60 * 1000, // 1 hour. Matches server Cache-Control
     retry: 1,
   });
 

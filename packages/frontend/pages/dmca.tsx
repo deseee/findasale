@@ -9,7 +9,7 @@ const DmcaPage = () => {
     <>
       <Head>
         <title>DMCA Policy – FindA.Sale</title>
-        <meta name="description" content="DMCA Policy for FindA.Sale — Digital Millennium Copyright Act compliance, takedown requests, and counter-notice procedures." />
+        <meta name="description" content="DMCA Policy for FindA.Sale. Digital Millennium Copyright Act compliance, takedown requests, and counter-notice procedures." />
       </Head>
       <div className="min-h-screen bg-white dark:bg-gray-800">
         <div className="max-w-4xl mx-auto px-4 py-12">

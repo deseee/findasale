@@ -196,12 +196,12 @@ export default function PosManualCard({
             <div className="flex items-start gap-2">
               <span className="text-amber-600 dark:text-amber-400 text-base mt-0.5">⚠</span>
               <div>
-                <p className="text-xs font-semibold text-amber-900 dark:text-amber-200 mb-1">Manual Entry — Higher Risk</p>
+                <p className="text-xs font-semibold text-amber-900 dark:text-amber-200 mb-1">Manual Entry. Higher Risk</p>
                 <p className="text-xs text-amber-800 dark:text-amber-300 mb-1">
                   Processing fee: 3.4% + $0.30 (vs 2.9% + $0.30 for Stripe QR)
                 </p>
                 <p className="text-xs text-amber-800 dark:text-amber-300">
-                  <strong>No dispute protection.</strong> If a shopper disputes this charge, you will lose the sale amount plus a $15 dispute fee with no recourse. (Stripe's optional Chargeback Protection at +0.4%/transaction can cover this — contact Stripe support to enable.)
+                  <strong>No dispute protection.</strong> If a shopper disputes this charge, you will lose the sale amount plus a $15 dispute fee with no recourse. (Stripe's optional Chargeback Protection at +0.4%/transaction can cover this. Contact Stripe support to enable.)
                 </p>
               </div>
             </div>

@@ -82,7 +82,7 @@ const PhotoOpsLandingPage = () => {
   return (
     <>
       <Head>
-        <title>Photo Ops — FindA.Sale</title>
+        <title>Photo Ops. FindA.Sale</title>
       </Head>
 
       <TierGate requiredTier="PRO" featureName="Photo Ops" description="Mark your best photo spots on the map and let shoppers know where to find the most Instagrammable finds at your sale.">

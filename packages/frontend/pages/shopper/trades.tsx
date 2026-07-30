@@ -23,7 +23,7 @@ export default function ShopperTradesPage() {
 
           <div className="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-lg p-6 mb-8">
             <p className="text-sm text-indigo-800 dark:text-indigo-200">
-              🎉 <strong>Coming Soon</strong> — Feature in development
+              🎉 <strong>Coming Soon</strong>. Feature in development
             </p>
           </div>
 

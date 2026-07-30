@@ -237,7 +237,7 @@ const OrganizerProfilePage = ({ organizer: staticOrganizer }: OrganizerPageProps
       <Head>
         <title>{organizer.businessName} – FindA.Sale</title>
         <link rel="canonical" href={`https://finda.sale/organizers/${organizer.id}`} key="canonical" />
-        <meta name="description" content={`Browse upcoming estate sales, auctions, yard sales, and more from ${organizer.businessName}${locationSuffix} — FindA.Sale.`} />
+        <meta name="description" content={`Browse upcoming estate sales, auctions, yard sales, and more from ${organizer.businessName}${locationSuffix}. FindA.Sale.`} />
         <meta property="og:title" content={`${organizer.businessName} | FindA.Sale`} />
         <meta property="og:image" content="https://finda.sale/og-image.png" />
         <meta property="og:description" content={`Estate sales, garage sales, auctions, and more from ${organizer.businessName}${locationSuffix}.`} />
@@ -253,7 +253,7 @@ const OrganizerProfilePage = ({ organizer: staticOrganizer }: OrganizerPageProps
           <span className="text-base flex-shrink-0 mt-0.5">📋</span>
           <p className="text-sm text-amber-100 leading-snug">
             <strong className="text-amber-300">We found your sales listed publicly.</strong>{' '}
-            This profile was auto-created from your public sale listings — shoppers are already finding it. Claim it to take control.
+            This profile was auto-created from your public sale listings. Shoppers are already finding it. Claim it to take control.
           </p>
         </div>
       )}
@@ -493,7 +493,7 @@ const OrganizerProfilePage = ({ organizer: staticOrganizer }: OrganizerPageProps
                     }}
                     className="w-full bg-orange-500 hover:bg-orange-600 active:bg-orange-700 text-white text-base font-bold py-3.5 rounded-xl transition-colors mb-2"
                   >
-                    Claim This Profile — It&apos;s Free
+                    Claim This Profile. It&apos;s Free
                   </button>
                   <p className="text-xs text-center text-gray-500 dark:text-gray-400">
                     Free forever &middot; No credit card needed
@@ -735,7 +735,7 @@ const UnclaimedReviewsSection = () => (
         style={{ filter: 'blur(5px)' }}
         aria-hidden="true"
       >
-        Amazing finds at this sale! The vintage clothing section was incredible — I found a 1970s leather jacket
+        Amazing finds at this sale! The vintage clothing section was incredible. I found a 1970s leather jacket
         in perfect condition. The organizer was friendly and the space was well laid-out. Will definitely be back
         next time they have a sale in the area.
       </p>

@@ -73,7 +73,7 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
       },
     };
   } catch (err) {
-    console.warn('[checkout] SSR resolve failed — redirecting to /:', err);
+    console.warn('[checkout] SSR resolve failed. Redirecting to /:', err);
     return { redirect: { destination: '/', permanent: false } };
   }
 };

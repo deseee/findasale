@@ -44,7 +44,7 @@ const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete }) => {
       return true;
     } catch (error: any) {
       console.error('Error marking onboarding complete:', error);
-      setCompletionError('Something went wrong — please try again');
+      setCompletionError('Something went wrong. Please try again');
       return false;
     }
   };

@@ -120,7 +120,7 @@ export default function DonationModal({
         contentClassName="bg-white dark:bg-gray-800 rounded-xl p-6 max-w-sm w-full"
       >
         <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-2">
-          Charity Close — PRO Feature
+          Charity Close. PRO Feature
         </h2>
           <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
             Generate professional tax receipts for donated items. Upgrade to PRO or TEAMS to unlock this feature.

@@ -152,13 +152,13 @@ const CategoryPage = ({ initialData }: CategoryPageProps) => {
   return (
     <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
       <Head>
-        <title>{label} — FindA.Sale</title>
+        <title>{label}. FindA.Sale</title>
         <link rel="canonical" href={`https://finda.sale/categories/${category}`} key="canonical" />
         <meta
           name="description"
           content={`Browse ${label} items from estate sales, auctions, yard sales, and consignment near you. New listings added daily.`}
         />
-        <meta property="og:title" content={`${label} — FindA.Sale`} />
+        <meta property="og:title" content={`${label}. FindA.Sale`} />
         <meta
           property="og:description"
           content={`Browse ${label} items from estate sales, auctions, yard sales, and consignment near you. New listings added daily.`}
@@ -266,7 +266,7 @@ const CategoryPage = ({ initialData }: CategoryPageProps) => {
             <p className="text-5xl mb-4">📭</p>
             <h3 className="text-xl font-semibold text-warm-900 dark:text-warm-100 mb-2">No items in this category yet</h3>
             <p className="text-warm-600 dark:text-warm-400 mb-6">
-              Check back soon — new sales go live every week.
+              Check back soon. New sales go live every week.
             </p>
             <Link
               href="/"

@@ -268,7 +268,7 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
                         <div className="flex-1 bg-amber-200 dark:bg-amber-900/40 rounded-full h-2">
                           <div className="bg-amber-600 dark:bg-amber-400 h-2 rounded-full" style={{ width: `${percentage}%` }} />
                         </div>
-                        <span className="text-xs font-semibold text-amber-900 dark:text-amber-100 whitespace-nowrap">{percentage}% — please confirm</span>
+                        <span className="text-xs font-semibold text-amber-900 dark:text-amber-100 whitespace-nowrap">{percentage}%. Please confirm</span>
                       </div>
                     </div>
                   );
@@ -276,7 +276,7 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
                   return (
                     <div>
                       <p className="text-sm font-medium text-amber-900 dark:text-amber-100 mb-2">
-                        We couldn't quite identify this one from the photo. No problem — just tell us what it is, and we'll fill in what we can.
+                        We couldn't quite identify this one from the photo. No problem. Just tell us what it is, and we'll fill in what we can.
                       </p>
                       <p className="text-xs text-amber-800 dark:text-amber-200">
                         A clearer photo (or a different angle) might help too, but no pressure.
@@ -315,7 +315,7 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
                 />
               ) : (
                 <p className="text-warm-900 dark:text-warm-100 font-semibold text-base">
-                  {edits.title || '—'}
+                  {edits.title || 'N/A'}
                 </p>
               )}
             </div>
@@ -355,7 +355,7 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
                 </select>
               ) : (
                 <p className="text-warm-700 dark:text-warm-300 text-sm">
-                  {edits.category || '—'}
+                  {edits.category || 'N/A'}
                 </p>
               )}
             </div>
@@ -395,7 +395,7 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
                 </select>
               ) : (
                 <p className="text-warm-700 dark:text-warm-300 text-sm">
-                  {edits.condition || '—'}
+                  {edits.condition || 'N/A'}
                 </p>
               )}
             </div>
@@ -437,7 +437,7 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
               ) : (
                 <div>
                   <p className="text-warm-700 dark:text-warm-300 text-sm line-clamp-3">
-                    {edits.description || '—'}
+                    {edits.description || 'N/A'}
                   </p>
                   {edits.description && edits.description.length > 150 && (
                     <button

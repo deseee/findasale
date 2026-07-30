@@ -427,7 +427,7 @@ const EditSalePage = () => {
           const response = await api.delete(`/sales/${id}`);
           if (response.data?.hadActivity) {
             showToast(
-              "Sale deleted. It's hidden from your dashboard — existing purchase and review records are kept.",
+              "Sale deleted. It's hidden from your dashboard. Existing purchase and review records are kept.",
               'success'
             );
           } else {
@@ -628,7 +628,7 @@ const EditSalePage = () => {
             {sale?.status === 'PUBLISHED' && (
               <div className="bg-yellow-50 dark:bg-yellow-900/20 border-l-4 border-yellow-500 p-4 rounded">
                 <p className="text-sm text-yellow-800 dark:text-yellow-200 font-semibold">
-                  ⚠️ This sale is live to shoppers — changes will be visible immediately.
+                  ⚠️ This sale is live to shoppers. Changes will be visible immediately.
                 </p>
               </div>
             )}
@@ -825,7 +825,7 @@ const EditSalePage = () => {
             {/* Neighborhood \u2014 autocomplete input */}
             <div>
               <label htmlFor="neighborhood" className="block text-sm font-medium text-warm-700 mb-2">
-                Neighborhood <span className="text-warm-400 font-normal">(optional — helps shoppers find you)</span>
+                Neighborhood <span className="text-warm-400 font-normal">(optional. Helps shoppers find you)</span>
               </label>
               <input
                 id="neighborhood"
@@ -862,7 +862,7 @@ const EditSalePage = () => {
                   Entrance / Parking Pin <span className="text-warm-400 dark:text-gray-500 font-normal">(optional)</span>
                 </label>
                 <p className="text-sm text-warm-500 dark:text-gray-400 mb-3">
-                  Drop a pin to show shoppers exactly where to park or enter — especially useful for large properties.
+                  Drop a pin to show shoppers exactly where to park or enter. Especially useful for large properties.
                 </p>
                 <EntrancePinPicker
                   saleAddress={formData.address}
@@ -893,7 +893,7 @@ const EditSalePage = () => {
                 {entrancePinTooFar && (
                   <div className="mt-3 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-md">
                     <p className="text-sm text-yellow-800 dark:text-yellow-200">
-                      ⚠️ Your entrance pin is far from the sale address — shoppers may have trouble finding you. Drag the pin to adjust.
+                      ⚠️ Your entrance pin is far from the sale address. Shoppers may have trouble finding you. Drag the pin to adjust.
                     </p>
                   </div>
                 )}
@@ -908,7 +908,7 @@ const EditSalePage = () => {
               <div>
                 <div className="bg-yellow-50 dark:bg-yellow-900/20 border-l-4 border-yellow-500 p-4 rounded mb-4">
                   <p className="text-yellow-800 dark:text-yellow-200 font-semibold">
-                    Coordinates not found — try one of the options below.
+                    Coordinates not found. Try one of the options below.
                   </p>
                   <button
                     type="button"
@@ -1169,7 +1169,7 @@ const EditSalePage = () => {
                 Safety & Entry Notes <span className="text-warm-400 dark:text-gray-500 font-normal">(optional)</span>
               </label>
               <p className="text-sm text-warm-500 dark:text-gray-400 mb-3">
-                Share any safety, parking, or entry details shoppers should know — displayed prominently on your sale page.
+                Share any safety, parking, or entry details shoppers should know. Displayed prominently on your sale page.
               </p>
               <textarea
                 id="safetyNotes"
@@ -1216,7 +1216,7 @@ const EditSalePage = () => {
                       onChange={(e) => setFormData(prev => ({ ...prev, moveOutDate: e.target.value }))}
                       className="w-full px-3 py-2 border border-warm-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-warm-900 dark:text-gray-100 focus:ring-2 focus:ring-amber-500 focus:border-transparent"
                     />
-                    <p className="text-xs text-warm-400 dark:text-gray-500 mt-1">When you must be out — shoppers see urgency</p>
+                    <p className="text-xs text-warm-400 dark:text-gray-500 mt-1">When you must be out. Shoppers see urgency</p>
                   </div>
                 </div>
               </div>

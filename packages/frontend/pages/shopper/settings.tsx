@@ -182,7 +182,7 @@ function SettingsPage() {
                   </p>
                   {isManualOverride && (
                     <p className="text-xs text-amber-600 font-medium mt-2">
-                      Manually enabled — will stay active regardless of connection speed
+                      Manually enabled. Will stay active regardless of connection speed
                     </p>
                   )}
                 </div>
@@ -381,7 +381,7 @@ function SettingsPage() {
                       ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
                       : 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300'
                   }`}>
-                    {user?.profileSlug ? '✓ Unlocked — free to change' : '🔒 Costs 1500 XP to unlock'}
+                    {user?.profileSlug ? '✓ Unlocked. Free to change' : '🔒 Costs 1500 XP to unlock'}
                   </span>
                 </div>
 

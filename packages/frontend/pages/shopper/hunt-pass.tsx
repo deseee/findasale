@@ -102,7 +102,7 @@ const HuntPassPage = () => {
                       1.5x XP on Everything
                     </h3>
                     <p className="text-warm-600 dark:text-warm-400">
-                      Earn 1.5x XP on every action — visits, purchases, treasure hunts, and more. Build your ranks faster and unlock rewards sooner.
+                      Earn 1.5x XP on every action. Visits, purchases, treasure hunts, and more. Build your ranks faster and unlock rewards sooner.
                     </p>
                   </div>
                 </div>
@@ -132,7 +132,7 @@ const HuntPassPage = () => {
                       Treasure Hunt Pro
                     </h3>
                     <p className="text-warm-600 dark:text-warm-400">
-                      Increase your daily item scan limit from 100 to 150 scans per day. More scans, more finds — unlock premium hunting capacity.
+                      Increase your daily item scan limit from 100 to 150 scans per day. More scans, more finds. Unlock premium hunting capacity.
                     </p>
                     <p className="text-warm-600 dark:text-warm-400 mt-2">
                       +10% XP bonus on every QR scan, stacked on top of your rank multiplier.
@@ -150,7 +150,7 @@ const HuntPassPage = () => {
                       Golden Trophy Avatar Frame
                     </h3>
                     <p className="text-warm-600 dark:text-warm-400">
-                      Amber trophy ring on your profile photo — visible on your nav avatar and dropdown. A subtle status marker that shows at a glance you're a Hunt Pass subscriber.
+                      Amber trophy ring on your profile photo. Visible on your nav avatar and dropdown. A subtle status marker that shows at a glance you're a Hunt Pass subscriber.
                     </p>
                   </div>
                 </div>
@@ -180,7 +180,7 @@ const HuntPassPage = () => {
                       More Monthly Coupon Slots
                     </h3>
                     <p className="text-warm-600 dark:text-warm-400">
-                      More monthly coupon redemptions — 3 Standard, 3 Deluxe, and 2 Premium per month (vs 2/2/1 for free accounts).
+                      More monthly coupon redemptions, 3 Standard, 3 Deluxe, and 2 Premium per month (vs 2/2/1 for free accounts).
                     </p>
                     <p className="text-xs text-warm-500 dark:text-warm-400 mt-2">
                       Standard: 2→3/mo | Deluxe: 2→3/mo | Premium: 1→2/mo

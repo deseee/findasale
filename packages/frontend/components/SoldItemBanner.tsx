@@ -43,7 +43,7 @@ const SoldItemBanner: React.FC<SoldItemBannerProps> = ({
       <p className="text-lg font-bold text-amber-900 dark:text-amber-200">Already sold.</p>
       <p className="text-sm text-amber-800 dark:text-amber-300">
         {soldAt
-          ? `This one sold ${relativeTime(soldAt)} ago — good taste.`
+          ? `This one sold ${relativeTime(soldAt)} ago. Good taste.`
           : 'This item has already sold.'}
       </p>
       <Link href={ctaHref}>

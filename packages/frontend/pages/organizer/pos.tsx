@@ -841,7 +841,7 @@ export default function POSPage() {
         setSplitCount(Math.max(2, event.scannerIds.length));
         setSplitCollected([]);
         setSplitCustomAmounts(Array(Math.max(2, event.scannerIds.length)).fill(''));
-        showToast('Two shoppers scanned the same item — Split Bill opened', 'info');
+        showToast('Two shoppers scanned the same item. Split Bill opened', 'info');
       });
     }).catch((err) => {
       console.error('[pos] Failed to load socket.io-client:', err);
@@ -1031,7 +1031,7 @@ export default function POSPage() {
       const { clientSecret } = authRes.data;
 
       setVenueBoothOutcomes(prev => ({ ...prev, [booth.vendorBoothId]: 'ready' }));
-      showToast(`Tap card for ${booth.vendorName} — $${(booth.subtotalCents / 100).toFixed(2)}`, 'success');
+      showToast(`Tap card for ${booth.vendorName}, $${(booth.subtotalCents / 100).toFixed(2)}`, 'success');
 
       setVenueBoothOutcomes(prev => ({ ...prev, [booth.vendorBoothId]: 'tapping' }));
       const collectResult = await terminal.collectPaymentMethod(clientSecret);
@@ -1112,7 +1112,7 @@ export default function POSPage() {
       const notReady = boothList.find((b: any) => !b.readyForStandardCharge);
       if (notReady) {
         setPaymentStatus('error');
-        setErrorMessage(`${notReady.vendorName} has not finished payout setup — remove their items or ask them to finish setup.`);
+        setErrorMessage(`${notReady.vendorName} has not finished payout setup. Remove their items or ask them to finish setup.`);
         return;
       }
       setVenueBooths(boothList);
@@ -1253,7 +1253,7 @@ export default function POSPage() {
       setPaymentStatus('success');
       const chargeAmount = remainingCents > 0 ? (remainingCents / 100).toFixed(2) : cartTotal.toFixed(2);
       setSuccessMessage(
-        `✅ Card payment of $${chargeAmount} accepted${buyerEmail.trim() ? ` — receipt sent to ${buyerEmail.trim()}` : ''}.`
+        `✅ Card payment of $${chargeAmount} accepted${buyerEmail.trim() ? `. Receipt sent to ${buyerEmail.trim()}` : ''}.`
       );
 
       showSurvey('OG-3');
@@ -1292,7 +1292,7 @@ export default function POSPage() {
       });
       setPaymentStatus('success');
       setSuccessMessage(
-        `📥 Offline — cash sale for $${cartTotal.toFixed(2)} queued. It will sync automatically once you're back online.`
+        `📥 Offline. Cash sale for $${cartTotal.toFixed(2)} queued. It will sync automatically once you're back online.`
       );
       showSurvey('OG-3');
       clearCart();
@@ -1322,7 +1322,7 @@ export default function POSPage() {
       setPaymentStatus('success');
       const change = (cashReceived - cartTotal).toFixed(2);
       setSuccessMessage(
-        `✅ Cash sale recorded for $${cartTotal.toFixed(2)}. Change: $${change}${buyerEmail.trim() ? ` — receipt sent to ${buyerEmail.trim()}` : ''}.`
+        `✅ Cash sale recorded for $${cartTotal.toFixed(2)}. Change: $${change}${buyerEmail.trim() ? `. Receipt sent to ${buyerEmail.trim()}` : ''}.`
       );
 
       showSurvey('OG-3');
@@ -1580,7 +1580,7 @@ export default function POSPage() {
         setTimeout(tryFrame, 100);
       } else {
         setQrScanStatus('error');
-        setQrScanMessage('No QR code detected — try again');
+        setQrScanMessage('No QR code detected. Try again');
         setTimeout(() => { setQrScanStatus('scanning'); setQrScanMessage(''); }, 1500);
       }
     };
@@ -1699,7 +1699,7 @@ export default function POSPage() {
           await handleAddLinkedCart(shopperCart.id, shopperCart.cartItems, shopperCart.shopperId, shopperCart.shopperEmail);
           mergedCount += shopperCart.cartItems.length;
         } else if (freshSessions.length === 0) {
-          showToast(`No shared carts found — shopper must tap "Share cart" in their app first`, 'info');
+          showToast(`No shared carts found. Shopper must tap "Share cart" in their app first`, 'info');
         } else {
           showToast(`No cart found for ${hold.shopperEmail} (${freshSessions.length} other cart${freshSessions.length !== 1 ? 's' : ''} open)`, 'info');
         }
@@ -1844,7 +1844,7 @@ export default function POSPage() {
       const payload: any = {
         shopperUserId: shopperId,
         saleId: selectedSaleId,
-        itemIds, // may be empty for custom-amount carts — backend handles gracefully
+        itemIds, // may be empty for custom-amount carts. Backend handles gracefully
         totalAmountCents,
       };
 
@@ -1973,7 +1973,7 @@ export default function POSPage() {
       {venueHubId && (
         <div className="mb-4">
           <div className="mb-2 px-3 py-2 rounded-lg bg-sage-50 dark:bg-sage-900/30 border border-sage-200 dark:border-sage-800 text-xs text-sage-800 dark:text-sage-300">
-            Venue register — items can belong to any vendor at this market.
+            Venue register. Items can belong to any vendor at this market.
           </div>
           {venueStartFailure && (
             <p className="mb-2 text-sm text-red-600 dark:text-red-400">{venueStartFailure}</p>
@@ -2046,7 +2046,7 @@ export default function POSPage() {
                   >
                     <span className="text-sm text-warm-900 dark:text-warm-100 truncate">{item.title}</span>
                     <span className="text-sm font-semibold text-sage-700 ml-2 shrink-0">
-                      +${item.price?.toFixed(2) ?? '—'}
+                      +${item.price?.toFixed(2) ?? '0.00'}
                     </span>
                   </button>
                 </li>
@@ -2149,7 +2149,7 @@ export default function POSPage() {
               <p className="text-xs text-warm-500 dark:text-warm-400">
                 {linkedShopperData.holds?.length > 0
                   ? `${linkedShopperData.holds.length} active hold${linkedShopperData.holds.length !== 1 ? 's' : ''}`
-                  : 'No active holds — account linked for XP'}
+                  : 'No active holds. Account linked for XP'}
               </p>
             </div>
           </div>
@@ -2320,7 +2320,7 @@ export default function POSPage() {
 
                     return allDone ? (
                       <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 text-center">
-                        ✓ Split complete — all {splitCount} paid
+                        ✓ Split complete. All {splitCount} paid
                       </p>
                     ) : (
                       <p className="text-xs text-warm-500 dark:text-warm-400 text-center">
@@ -2346,7 +2346,7 @@ export default function POSPage() {
       {cart.length > 0 && (
         <div className="mb-4">
           <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-1">
-            Buyer email <span className="text-warm-400 dark:text-warm-500 font-normal">(optional — for receipt)</span>
+            Buyer email <span className="text-warm-400 dark:text-warm-500 font-normal">(optional. For receipt)</span>
           </label>
           <input
             type="email"
@@ -2482,7 +2482,7 @@ export default function POSPage() {
         <div className="mb-4">
           {venueHubId ? (
             <>
-              <h3 className="text-sm font-medium text-warm-700 dark:text-warm-300 mb-3">Venue register — card only</h3>
+              <h3 className="text-sm font-medium text-warm-700 dark:text-warm-300 mb-3">Venue register. Card only</h3>
               {venueCheckoutFailure && (
                 <p className="mb-2 text-sm text-red-600 dark:text-red-400">{venueCheckoutFailure}</p>
               )}
@@ -2490,7 +2490,7 @@ export default function POSPage() {
                 <ul className="mb-3 space-y-1">
                   {venueBooths.map(b => (
                     <li key={b.vendorBoothId} className="flex items-center justify-between text-sm px-3 py-2 rounded-lg bg-warm-100 dark:bg-gray-800">
-                      <span className="text-warm-800 dark:text-warm-200">{b.vendorName} — ${(b.subtotalCents / 100).toFixed(2)}</span>
+                      <span className="text-warm-800 dark:text-warm-200">{b.vendorName}. ${(b.subtotalCents / 100).toFixed(2)}</span>
                       <span className="text-xs font-medium text-warm-500 dark:text-warm-400">{venueBoothOutcomes[b.vendorBoothId] || 'pending'}</span>
                     </li>
                   ))}
@@ -2501,7 +2501,7 @@ export default function POSPage() {
                 disabled={!venueCart || cart.length === 0 || venueCapturing || (paymentStatus !== 'idle' && paymentStatus !== 'error' && paymentStatus !== 'cancelled')}
                 className="w-full py-4 rounded-xl font-semibold transition bg-sage-700 text-white hover:bg-sage-800 disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                {venueCapturing ? 'Finishing sale…' : `💳 Charge $${cartTotal.toFixed(2)} — tap per vendor`}
+                {venueCapturing ? 'Finishing sale…' : `💳 Charge $${cartTotal.toFixed(2)}. Tap per vendor`}
               </button>
               {venueCaptureFailed && (
                 <button
@@ -2872,7 +2872,7 @@ export default function POSPage() {
                 </button>
               ) : (
                 <div className="mt-2 w-full py-2 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 text-xs font-semibold text-center">
-                  ✓ Cart request sent — waiting for shopper
+                  ✓ Cart request sent. Waiting for shopper
                 </div>
               )}
             </div>
@@ -3042,7 +3042,7 @@ export default function POSPage() {
                           onClick={() => { navigator.clipboard.writeText(organizerVenmo!); showToast('Venmo handle copied', 'success'); }}
                           className="text-xs bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300 px-3 py-1.5 rounded-lg hover:bg-blue-200 dark:hover:bg-blue-900/60 transition font-medium"
                         >
-                          @{organizerVenmo} — tap to copy
+                          @{organizerVenmo}. Tap to copy
                         </button>
                       </div>
                     );

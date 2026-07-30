@@ -9,7 +9,7 @@ const PrivacyPage = () => {
     <>
       <Head>
         <title>Privacy Policy – FindA.Sale</title>
-        <meta name="description" content="Privacy Policy for FindA.Sale — estate sales, yard sales, auctions, and flea markets. How we collect, use, and protect your personal information." />
+        <meta name="description" content="Privacy Policy for FindA.Sale. Estate sales, yard sales, auctions, and flea markets. How we collect, use, and protect your personal information." />
       </Head>
       <div className="min-h-screen bg-white dark:bg-gray-800">
         <div className="max-w-4xl mx-auto px-4 py-12">
@@ -35,7 +35,7 @@ const PrivacyPage = () => {
             <h3 className="text-lg font-semibold text-warm-700 dark:text-warm-300 mb-2">Transaction Information</h3>
             <p className="text-warm-700 dark:text-warm-300 leading-relaxed mb-4">
               We record purchase history, bid history, and payout records. Payment card details are never stored on our
-              servers — they are transmitted directly to Stripe and handled under their PCI-compliant infrastructure.
+              servers. They are transmitted directly to Stripe and handled under their PCI-compliant infrastructure.
             </p>
 
             <h3 className="text-lg font-semibold text-warm-700 dark:text-warm-300 mb-2">Location Information</h3>
@@ -226,9 +226,9 @@ const PrivacyPage = () => {
               data on the following legal bases:
             </p>
             <ul className="list-disc list-inside text-warm-700 dark:text-warm-300 space-y-2 mb-3">
-              <li><strong>Performance of a contract</strong> — to provide marketplace services and process transactions</li>
-              <li><strong>Compliance with legal obligations</strong> — financial record-keeping and tax reporting</li>
-              <li><strong>Legitimate interests</strong> — fraud prevention, platform security, and aggregate analytics</li>
+              <li><strong>Performance of a contract</strong>. To provide marketplace services and process transactions</li>
+              <li><strong>Compliance with legal obligations</strong>. Financial record-keeping and tax reporting</li>
+              <li><strong>Legitimate interests</strong>. Fraud prevention, platform security, and aggregate analytics</li>
             </ul>
             <p className="text-warm-700 dark:text-warm-300 leading-relaxed">
               You have the right to lodge a complaint with your national data protection authority. For requests
@@ -249,8 +249,8 @@ const PrivacyPage = () => {
             </p>
             <p className="text-warm-700 dark:text-warm-300 leading-relaxed mb-3">
               Transaction records required by applicable law (including IRS financial record-keeping requirements)
-              will be retained in pseudonymized form for up to 7 years. All other personal data — including your
-              name, email address, and phone number — will be permanently deleted.
+              will be retained in pseudonymized form for up to 7 years. All other personal data. Including your
+              name, email address, and phone number. Will be permanently deleted.
             </p>
           </section>
 
@@ -270,7 +270,7 @@ const PrivacyPage = () => {
             <p className="text-warm-700 dark:text-warm-300 leading-relaxed mb-3">
               FindA.Sale uses automated tools to suggest item tags, condition grades, and descriptions to help
               organizers list items faster. These suggestions are presented to organizers for review before being
-              published — suggested content is never published automatically without organizer approval.
+              published. Suggested content is never published automatically without organizer approval.
             </p>
             <p className="text-warm-700 dark:text-warm-300 leading-relaxed">
               Auto-generated suggestions may be inaccurate or incomplete. Organizers are responsible for verifying

@@ -15,13 +15,13 @@ export const GRAND_RAPIDS_NEIGHBORHOODS: Array<{
   name: string;
   description: string;
 }> = [
-  { slug: 'downtown',       name: 'Downtown',         description: 'City center — lofts, condos, and eclectic finds.' },
+  { slug: 'downtown',       name: 'Downtown',         description: 'City center. Lofts, condos, and eclectic finds.' },
   { slug: 'eastown',        name: 'Eastown',           description: 'Vibrant district known for mid-century gems and vintage décor.' },
   { slug: 'east-hills',     name: 'East Hills',        description: 'Historic neighborhood with antiques, art, and craftsman furniture.' },
   { slug: 'heritage-hill',  name: 'Heritage Hill',     description: 'Victorian homes full of heirloom pieces and estate jewelry.' },
   { slug: 'creston',        name: 'Creston',           description: 'North-side neighborhood with tools, collectibles, and garage finds.' },
   { slug: 'westside',       name: 'Westside',          description: 'Family-friendly area with furniture, clothing, and household goods.' },
-  { slug: 'midtown',        name: 'Midtown',           description: 'Central district close to hospitals — diverse selection every week.' },
+  { slug: 'midtown',        name: 'Midtown',           description: 'Central district close to hospitals. Diverse selection every week.' },
   { slug: 'fulton-heights', name: 'Fulton Heights',    description: 'Quiet residential area with frequent estate and moving sales.' },
   { slug: 'alger-heights',  name: 'Alger Heights',     description: 'Southeast neighborhood packed with estate auctions and collectibles.' },
   { slug: 'ada',            name: 'Ada Township',      description: 'Upscale suburb with high-end furniture and décor.' },

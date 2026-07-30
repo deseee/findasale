@@ -303,7 +303,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
               <Sparkles size={16} />
               {/* S-TIER-RECONCILE: never sell a plan to someone whose tier we could not read.
                   `!canAccess('PRO')` is true both for a real SIMPLE organizer AND for an
-                  unresolved tier — only the former should be asked to upgrade. */}
+                  unresolved tier. Only the former should be asked to upgrade. */}
               <span>{!tierKnown ? 'Subscription' : canAccess('TEAMS') ? 'Subscription' : canAccess('PRO') ? 'Upgrade to TEAMS' : 'Upgrade to PRO'}</span>
             </Link>
 

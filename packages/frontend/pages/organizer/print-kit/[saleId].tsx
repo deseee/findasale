@@ -708,7 +708,7 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
                       >
                         🚶 Check-In / Queue
                       </button>
-                      <p className="text-sm text-warm-600 dark:text-warm-400">Print this QR — shoppers scan to check in and join the virtual line</p>
+                      <p className="text-sm text-warm-600 dark:text-warm-400">Print this QR. Shoppers scan to check in and join the virtual line</p>
                     </div>
                   )}
 
@@ -724,11 +724,11 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
                                 onClick={() => printQRPage(`https://finda.sale/sales/${sale?.id}/treasure-hunt-qr/${clue.id}?via=qr`, `🗺️ Clue #${idx + 1}`, `Scan at this location to unlock the clue and earn XP rewards.`, canRemoveWatermark)}
                                 className="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-2 px-4 rounded-lg transition-colors text-sm"
                               >
-                                🗺️ Clue #{idx + 1}{clue.category ? ` — ${clue.category}` : ''}
+                                🗺️ Clue #{idx + 1}{clue.category ? `. ${clue.category}` : ''}
                               </button>
                             ))}
                           </div>
-                          <p className="text-sm text-warm-600 dark:text-warm-400 mt-2">Print individual clue QRs — attach near each location</p>
+                          <p className="text-sm text-warm-600 dark:text-warm-400 mt-2">Print individual clue QRs. Attach near each location</p>
                         </div>
                       ) : (
                         <div className="text-center">
@@ -738,7 +738,7 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
                           >
                             🗺️ Treasure Hunt
                           </button>
-                          <p className="text-sm text-warm-600 dark:text-warm-400">Print this QR — attach near each clue location</p>
+                          <p className="text-sm text-warm-600 dark:text-warm-400">Print this QR. Attach near each clue location</p>
                         </div>
                       )}
                     </>
@@ -752,7 +752,7 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
                     >
                       📸 Photo Station
                     </button>
-                    <p className="text-sm text-warm-600 dark:text-warm-400">Print this QR — place at your photo spot</p>
+                    <p className="text-sm text-warm-600 dark:text-warm-400">Print this QR. Place at your photo spot</p>
                   </div>
                 </div>
               </div>
@@ -881,7 +881,7 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
                       alt={`Clue ${idx + 1} QR`}
                       className="qr-full-page-qr"
                     />
-                    <div className="qr-full-page-label">🗺️ Clue #{idx + 1}{clue.category ? ` — ${clue.category}` : ''}</div>
+                    <div className="qr-full-page-label">🗺️ Clue #{idx + 1}{clue.category ? `. ${clue.category}` : ''}</div>
                     <div className="qr-full-page-sublabel">{canRemoveWatermark ? 'Scan to unlock this clue & earn XP' : 'Scan to unlock this clue & earn XP · finda.sale'}</div>
                   </div>
                 </div>

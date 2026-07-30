@@ -105,7 +105,7 @@ const ConsignorPayoutModal: React.FC<ConsignorPayoutModalProps> = ({
           Process Payout
         </h2>
         <p className="text-sm text-warm-500 dark:text-warm-400 mb-4">
-          {consignorName} — {Number(commissionRate).toFixed(1)}% commission
+          {consignorName}, {Number(commissionRate).toFixed(1)}% commission
         </p>
 
         {payoutResult ? (
@@ -167,7 +167,7 @@ const ConsignorPayoutModal: React.FC<ConsignorPayoutModalProps> = ({
 
             <div className="mb-4">
               <label className="block text-sm font-bold text-warm-700 dark:text-warm-300 mb-2">
-                Sale (Optional — leave blank for all sales)
+                Sale (Optional. Leave blank for all sales)
               </label>
               {loadingSales ? (
                 <p className="text-sm text-warm-500 dark:text-warm-400">Loading sales...</p>

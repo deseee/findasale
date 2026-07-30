@@ -218,9 +218,9 @@ const EditItemPage = () => {
         const errorMsg = result?.code?.includes('NOT_CONNECTED')
           ? 'eBay not connected'
           : result?.code === 'NO_FULFILLMENT_POLICY_MATCH'
-          ? 'No shipping policy matched — add package weight or set a default fulfillment policy in eBay Settings'
+          ? 'No shipping policy matched. Add package weight or set a default fulfillment policy in eBay Settings'
           : result?.code === 'POLICIES_NOT_CONFIGURED'
-          ? 'eBay policies not configured — complete eBay setup in Settings'
+          ? 'eBay policies not configured. Complete eBay setup in Settings'
           : result?.message || 'Failed to push item';
         showToast(errorMsg, 'error');
       }
@@ -311,7 +311,7 @@ const EditItemPage = () => {
       await saveFormState();
     } catch (err) {
       setEbayPushPending(false);
-      showToast('Save failed — fix errors before pushing to eBay', 'error');
+      showToast('Save failed. Fix errors before pushing to eBay', 'error');
       return;
     }
     ebayPushMutation.mutate({ itemId: String(id) });
@@ -324,7 +324,7 @@ const EditItemPage = () => {
       await saveFormState();
     } catch (err) {
       setEbayPushPending(false);
-      showToast('Save failed — fix errors before publishing to eBay', 'error');
+      showToast('Save failed. Fix errors before publishing to eBay', 'error');
       return;
     }
     ebayPublishMutation.mutate({ itemId: String(id) });
@@ -761,7 +761,7 @@ const EditItemPage = () => {
                     const shareUrl = `${window.location.origin}/items/${id}`;
                     const shareData = {
                       title: item.title,
-                      text: `${item.title} — check it out on FindA.Sale`,
+                      text: `${item.title}. Check it out on FindA.Sale`,
                       url: shareUrl,
                     };
                     try {
@@ -941,7 +941,7 @@ const EditItemPage = () => {
                 type="text"
                 value={formData.brand}
                 onChange={(e) => setFormData({ ...formData, brand: e.target.value })}
-                placeholder="e.g. Danner, Sony, Pyrex — leave blank if unbranded"
+                placeholder="e.g. Danner, Sony, Pyrex. Leave blank if unbranded"
                 className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
               />
               <div className="text-xs text-gray-400 mt-0.5">
@@ -1353,7 +1353,7 @@ const EditItemPage = () => {
                   <span className="text-2xl flex-shrink-0">⭐</span>
                   <div className="flex-1">
                     <p className="text-sm font-semibold text-amber-900 dark:text-amber-100">
-                      This item is priced at ${parseFloat(formData.price).toFixed(2)} — consider marking it Legendary to give Hunt Pass holders early access.
+                      This item is priced at ${parseFloat(formData.price).toFixed(2)}. Consider marking it Legendary to give Hunt Pass holders early access.
                     </p>
                   </div>
                   <button
@@ -1573,7 +1573,7 @@ const EditItemPage = () => {
                           : item.packageEstimateSource === 'SEED'
                           ? ' (generic default)'
                           : ''}
-                        {' — not your input. Edit this field to enter a real measurement.'}
+                        {'. Not your input. Edit this field to enter a real measurement.'}
                       </p>
                     )}
                   </div>
@@ -1664,7 +1664,7 @@ const EditItemPage = () => {
                     </p>
                     {showLocalPickupNudge && formData.ebayShippingOverride !== 'LOCAL_PICKUP_ONLY' && (
                       <div className="mt-2 flex items-start gap-2 p-2 bg-blue-50 dark:bg-blue-900/20 rounded text-xs text-blue-700 dark:text-blue-300">
-                        <span>We detected &quot;local pickup&quot; in your notes — enable local pickup mode for eBay?</span>
+                        <span>We detected &quot;local pickup&quot; in your notes. Enable local pickup mode for eBay?</span>
                         <button
                           type="button"
                           onClick={() => { setFormData(prev => ({ ...prev, ebayShippingOverride: 'LOCAL_PICKUP_ONLY' })); setShowLocalPickupNudge(false); }}
@@ -1797,7 +1797,7 @@ const EditItemPage = () => {
                         <div>eBay requires a minimum listing price of $0.99. Raise this item&apos;s price to list it on eBay.</div>
                       )}
                       {missingWeight && (
-                        <div>No weight set — we&apos;ll auto-estimate shipping for you when you publish. To use your own weight instead, add one above or check &quot;Local pickup only&quot;.</div>
+                        <div>No weight set. We&apos;ll auto-estimate shipping for you when you publish. To use your own weight instead, add one above or check &quot;Local pickup only&quot;.</div>
                       )}
                     </div>
                   );

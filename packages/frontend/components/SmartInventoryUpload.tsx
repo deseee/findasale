@@ -79,7 +79,7 @@ const SmartInventoryUpload: React.FC<SmartInventoryUploadProps> = ({
     },
     onError: (error: any) => {
       const isTransient = error.code === 'ECONNREFUSED' || error.message?.includes('timeout') || error.response?.status === 503;
-      const message = isTransient ? 'Upload failed — network issue' : 'Failed to upload photos';
+      const message = isTransient ? 'Upload failed. Network issue' : 'Failed to upload photos';
       showToast(message, 'error');
       setUploadProgress(0);
       (uploadPhotosMutation as any).isTransient = isTransient;
@@ -97,7 +97,7 @@ const SmartInventoryUpload: React.FC<SmartInventoryUploadProps> = ({
     },
     onError: (error: any) => {
       const isTransient = error.code === 'ECONNREFUSED' || error.message?.includes('timeout') || error.response?.status === 503;
-      const message = isTransient ? 'Analysis failed — try again shortly' : 'Failed to analyze photos';
+      const message = isTransient ? 'Analysis failed. Try again shortly' : 'Failed to analyze photos';
       showToast(message, 'error');
       setUploadProgress(0);
       (batchAnalyzeMutation as any).isTransient = isTransient;
@@ -232,7 +232,7 @@ const SmartInventoryUpload: React.FC<SmartInventoryUploadProps> = ({
       setTimeout(() => setUploadProgress(0), 500);
 
       if (itemsToCreate.length === 0) {
-        showToast('No photos could be analyzed — try again', 'error');
+        showToast('No photos could be analyzed. Try again', 'error');
         return;
       }
 
@@ -364,7 +364,7 @@ const SmartInventoryUpload: React.FC<SmartInventoryUploadProps> = ({
       setTimeout(() => setUploadProgress(0), 500);
       showToast(`Retried ${failedUrls.length} items`, 'success');
     } catch (err) {
-      showToast('Retry failed — try again later', 'error');
+      showToast('Retry failed. Try again later', 'error');
       setUploadProgress(0);
     }
   };
@@ -560,7 +560,7 @@ const SmartInventoryUpload: React.FC<SmartInventoryUploadProps> = ({
                     <strong>Analysis Failed</strong>
                     <p className="text-xs mt-1">
                       {item.errorCode === 'AI_TIMEOUT' && 'Analysis service timed out'}
-                      {item.errorCode === 'AI_RATE_LIMIT' && 'Analysis service busy — try again later'}
+                      {item.errorCode === 'AI_RATE_LIMIT' && 'Analysis service busy. Try again later'}
                       {item.errorCode === 'AI_PARSE_ERROR' && 'Analysis returned invalid data'}
                       {!item.errorCode && (item.error || 'Unable to analyze this image')}
                     </p>

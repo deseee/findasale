@@ -81,7 +81,7 @@ const SendUpdateLandingPage = () => {
   return (
     <>
       <Head>
-        <title>Send Update — FindA.Sale</title>
+        <title>Send Update. FindA.Sale</title>
       </Head>
 
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900">

@@ -93,7 +93,7 @@ function formatSentDate(isoString: string): string {
   try {
     return new Date(isoString).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   } catch {
-    return '—';
+    return 'N/A';
   }
 }
 
@@ -127,7 +127,7 @@ const HistoryRow = ({ broadcast, last }: { broadcast: Broadcast; last: boolean }
     <span className="font-mono text-xs text-warm-700 dark:text-gray-300 tabular-nums">
       {broadcast.recipientCount.toLocaleString()} sent
     </span>
-    <span className="font-mono text-xs text-warm-400 dark:text-gray-500">—</span>
+    <span className="font-mono text-xs text-warm-400 dark:text-gray-500">, </span>
   </div>
 );
 
@@ -228,11 +228,11 @@ const BroadcastSection: React.FC<BroadcastSectionProps> = ({
             <>
               <p className="text-sm font-medium text-warm-900 dark:text-gray-100">
                 {daysSince === null
-                  ? 'No broadcasts sent yet — you can send anytime.'
-                  : `Last broadcast was ${daysSince} ${daysSince === 1 ? 'day' : 'days'} ago — you can send anytime.`}
+                  ? 'No broadcasts sent yet. You can send anytime.'
+                  : `Last broadcast was ${daysSince} ${daysSince === 1 ? 'day' : 'days'} ago. You can send anytime.`}
               </p>
               <p className="text-xs text-warm-400 dark:text-gray-500 mt-0.5">
-                We hold to one per week so your followers don&apos;t unsubscribe — they&apos;re worth
+                We hold to one per week so your followers don&apos;t unsubscribe. They&apos;re worth
                 more than any single send.
               </p>
             </>
@@ -245,7 +245,7 @@ const BroadcastSection: React.FC<BroadcastSectionProps> = ({
                 </strong>
               </p>
               <p className="text-xs text-warm-400 dark:text-gray-500 mt-0.5">
-                You can send again on <strong>{lastSentAt ? nextAllowedDate(lastSentAt) : '—'}</strong>
+                You can send again on <strong>{lastSentAt ? nextAllowedDate(lastSentAt) : 'N/A'}</strong>
                 . One per 7 days protects your follower list.
               </p>
             </>

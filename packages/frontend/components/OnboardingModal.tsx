@@ -16,7 +16,7 @@ const STEPS = [
   {
     icon: '♥',
     title: 'Save what you love',
-    body: 'Tap the heart on any item to save it. You earn 2 Hunt Pass points every time you favorite — plus 1 point just for visiting a sale!',
+    body: 'Tap the heart on any item to save it. You earn 2 Hunt Pass points every time you favorite. Plus 1 point just for visiting a sale!',
     cta: 'Got it',
     secondary: 'Skip',
   },

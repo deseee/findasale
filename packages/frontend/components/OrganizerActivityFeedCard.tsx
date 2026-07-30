@@ -35,7 +35,7 @@ const OrganizerActivityFeedCard: React.FC<OrganizerActivityFeedCardProps> = ({
       case 'favorite':
         return `Someone favorited ${activity.saleName}`;
       case 'purchase':
-        return `Purchase completed for ${activity.saleName}${activity.amount ? ` — $${activity.amount.toFixed(2)}` : ''}`;
+        return `Purchase completed for ${activity.saleName}${activity.amount ? `, $${activity.amount.toFixed(2)}` : ''}`;
       case 'rsvp':
         return `New RSVP for ${activity.saleName}`;
       case 'message':

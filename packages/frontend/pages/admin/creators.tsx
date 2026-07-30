@@ -226,7 +226,7 @@ const AdminCreators = () => {
                     onClick={() => toggleExpanded(c.id)}
                     className="hover:bg-amber-50 dark:hover:bg-gray-700 cursor-pointer dark:bg-gray-900"
                   >
-                    <td className="px-6 py-4 text-sm font-medium text-warm-900 dark:text-warm-100">{c.name || '—'}</td>
+                    <td className="px-6 py-4 text-sm font-medium text-warm-900 dark:text-warm-100">{c.name || 'N/A'}</td>
                     <td className="px-6 py-4 text-sm text-warm-600 dark:text-warm-400">{c.email}</td>
                     <td className="px-6 py-4 text-sm">
                       {c.affiliateCode ? (
@@ -287,21 +287,21 @@ const AdminCreators = () => {
                             <tbody className="divide-y divide-warm-100 dark:divide-gray-800">
                               {c.referrals.map((r) => (
                                 <tr key={r.id} className="hover:bg-amber-50 dark:hover:bg-gray-700/40">
-                                  <td className="py-2 text-warm-900 dark:text-warm-100">{r.referredUser?.name || '—'}</td>
-                                  <td className="py-2 text-warm-600 dark:text-warm-400">{r.referredUser?.email || '—'}</td>
+                                  <td className="py-2 text-warm-900 dark:text-warm-100">{r.referredUser?.name || 'N/A'}</td>
+                                  <td className="py-2 text-warm-600 dark:text-warm-400">{r.referredUser?.email || 'N/A'}</td>
                                   <td className="py-2">
                                     <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${STATUS_COLORS[r.status] || STATUS_COLORS.CANCELLED}`}>
                                       {r.status}
                                     </span>
                                   </td>
                                   <td className="py-2 text-warm-600 dark:text-warm-400">
-                                    {r.qualifiedAt ? new Date(r.qualifiedAt).toLocaleDateString() : '—'}
+                                    {r.qualifiedAt ? new Date(r.qualifiedAt).toLocaleDateString() : 'N/A'}
                                   </td>
                                   <td className="py-2 text-right text-warm-900 dark:text-warm-100 font-medium">
                                     {formatDollars(r.payoutAmountCents)}
                                   </td>
                                   <td className="py-2 text-warm-600 dark:text-warm-400">
-                                    {r.paidAt ? new Date(r.paidAt).toLocaleDateString() : '—'}
+                                    {r.paidAt ? new Date(r.paidAt).toLocaleDateString() : 'N/A'}
                                   </td>
                                 </tr>
                               ))}

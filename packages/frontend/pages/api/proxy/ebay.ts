@@ -68,7 +68,7 @@ function requestEbayOnce(
     const finalHeaders: Record<string, string> = {
       'user-agent': PROXY_UA,
       accept: '*/*',
-      'accept-encoding': 'identity', // disable response compression — keeps body parsing simple
+      'accept-encoding': 'identity', // disable response compression. Keeps body parsing simple
       // connection header intentionally omitted — the keep-alive Agent below sets it.
       ...headers,
       host: EBAY_HOST,
@@ -232,7 +232,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (result.status >= 400) {
       console.error(
         '[ebay-proxy] Upstream', result.status, 'on', ebayPath,
-        'via', result.ip, '— body:', result.body.slice(0, 500),
+        'via', result.ip, '. Body:', result.body.slice(0, 500),
       );
     }
     res.setHeader('Content-Type', result.contentType ?? 'application/json');

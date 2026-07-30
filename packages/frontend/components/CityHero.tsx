@@ -29,7 +29,7 @@ export function CityHero({
           Top Deals &amp; Finds in {city.name}, {city.state}
         </h1>
         <p className="text-lg text-slate-600 dark:text-slate-300 mb-6">
-          Estate sales, yard sales, auctions, flea markets, and more — discover
+          Estate sales, yard sales, auctions, flea markets, and more. Discover
           this week&apos;s best deals.
         </p>
 

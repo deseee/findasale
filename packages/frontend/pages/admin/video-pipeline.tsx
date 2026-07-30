@@ -189,7 +189,7 @@ const AdminVideoPipelinePage = () => {
   const batches: FootageBatchRow[] = data?.batches || [];
 
   const formatDate = (dateString: string | null) => {
-    if (!dateString) return '—';
+    if (!dateString) return 'N/A';
     return new Date(dateString).toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'short',
@@ -410,8 +410,8 @@ const AdminVideoPipelinePage = () => {
                       <div className="text-xs bg-warm-50 dark:bg-gray-900 border border-amber-200 dark:border-amber-900/40 rounded-lg p-3 mb-3 text-warm-700 dark:text-warm-300">
                         Staged review notes were not saved for this batch. It was rendered before
                         notes were persisted to the database (fixed 2026-07-13), so only the
-                        original file path remains —{' '}
-                        <span className="font-mono break-all">{batch.stagedContent}</span> — and
+                        original file path remains:{' '}
+                        <span className="font-mono break-all">{batch.stagedContent}</span>. And
                         that file lived on an ephemeral server disk that is now gone. Newly
                         rendered batches show their full notes here; re-render this shoot as a new
                         batch to regenerate them.

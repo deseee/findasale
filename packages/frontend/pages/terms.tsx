@@ -10,7 +10,7 @@ const TermsPage = () => {
     <>
       <Head>
         <title>Terms of Service – FindA.Sale</title>
-        <meta name="description" content={`Terms of Service for FindA.Sale — the marketplace for yard sales, garage sales, estate sales, flea markets, and auctions in ${defaultCity} and beyond.`} />
+        <meta name="description" content={`Terms of Service for FindA.Sale. The marketplace for yard sales, garage sales, estate sales, flea markets, and auctions in ${defaultCity} and beyond.`} />
       </Head>
       <div className="min-h-screen bg-white dark:bg-gray-800">
         <div className="max-w-4xl mx-auto px-4 py-12">

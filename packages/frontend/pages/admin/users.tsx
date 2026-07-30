@@ -215,7 +215,7 @@ const AdminUsers = () => {
                 className="w-4 h-4 rounded border-warm-300 text-amber-600 focus:ring-amber-600"
               />
               Hide scraped organizers
-              <span className="text-warm-500 dark:text-warm-500 text-xs">(unmanaged listings imported by scrapers — not real registered users)</span>
+              <span className="text-warm-500 dark:text-warm-500 text-xs">(unmanaged listings imported by scrapers. Not real registered users)</span>
             </label>
           </div>
         </div>

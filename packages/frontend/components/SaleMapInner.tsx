@@ -214,7 +214,7 @@ const SaleMapInner = ({
     <>
       {/* Leaflet CSS is imported globally in pages/_app.tsx (`leaflet/dist/leaflet.css`)
           so the pane positioning styles are present BEFORE the map mounts. Do NOT
-          re-add an async <link> here — that race-loaded the CSS and left the
+          re-add an async <link> here. That race-loaded the CSS and left the
           .leaflet-map-pane stuck at the identity transform (H-002). */}
       <MapContainer
         center={singlePin ? [singlePin.lat, singlePin.lng] : center}
@@ -228,7 +228,7 @@ const SaleMapInner = ({
         />
 
         {/* Recompute pixel origin once the container has its final size (fixes
-            markers rendering off-screen — H-002) */}
+            markers rendering off-screen. H-002) */}
         <InvalidateMapSize />
 
         {/* Fly to user location if provided */}

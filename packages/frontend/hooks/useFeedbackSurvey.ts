@@ -186,7 +186,7 @@ export const useFeedbackSurvey = (): UseFeedbackSurveyReturn => {
             return; // Silently skip if shown within 24 hours
           }
         }
-      } catch { /* localStorage unavailable — proceed */ }
+      } catch { /* localStorage unavailable. Proceed */ }
 
       // All checks passed — open survey
       openSurvey(survey);

@@ -202,7 +202,7 @@ const OrganizerBountiesPage = () => {
 
   return (
     <>
-      <Head><title>Item Bounties — FindA.Sale</title></Head>
+      <Head><title>Item Bounties. FindA.Sale</title></Head>
 
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
         {/* Header */}
@@ -322,7 +322,7 @@ const OrganizerBountiesPage = () => {
                     No bounties found nearby
                   </h3>
                   <p className="text-sm text-gray-600 dark:text-gray-400 max-w-md mx-auto">
-                    Check back soon — shoppers post new requests daily.
+                    Check back soon. Shoppers post new requests daily.
                   </p>
                 </div>
               )}

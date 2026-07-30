@@ -35,10 +35,10 @@ const SocialProofMessage: React.FC<SocialProofMessageProps> = ({
     message = `${activeHoldCount} people ${activeHoldCount === 1 ? 'has' : 'have'} this on hold`;
   } else if (activeBidCount >= 3) {
     emoji = '🔥';
-    message = `${activeBidCount} active bids — bidding is competitive`;
+    message = `${activeBidCount} active bids. Bidding is competitive`;
   } else if (favoriteCount >= 10) {
     emoji = '⭐';
-    message = `Popular item — ${favoriteCount} people saved this`;
+    message = `Popular item. ${favoriteCount} people saved this`;
   } else if (favoriteCount >= 5) {
     emoji = '👀';
     message = `${favoriteCount} people are watching this item`;

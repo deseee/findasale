@@ -75,7 +75,7 @@ const OfflinePage = () => {
       await syncMutation.mutateAsync(operations);
       showToast(`Synced ${operations.length} operation(s)`, 'success');
     } catch (err) {
-      showToast('Sync failed — check your connection', 'error');
+      showToast('Sync failed. Check your connection', 'error');
     }
   };
 

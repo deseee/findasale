@@ -147,7 +147,7 @@ const EbayPolicySetupPage = () => {
         setLoading(true);
         const [setupRes, organizerRes] = await Promise.all([
           api.get('/ebay/setup-data'),
-          api.get('/organizers/me').catch(() => null), // tolerate failure — organizer defaults are optional
+          api.get('/organizers/me').catch(() => null), // tolerate failure. Organizer defaults are optional
         ]);
         setSetupData(setupRes.data);
         if (typeof setupRes.data.handlingTimeDays === 'number') {
@@ -429,7 +429,7 @@ const EbayPolicySetupPage = () => {
                         onChange={(e) => setMapping({ ...mapping, defaultReturnPolicyId: e.target.value || null })}
                         className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-sage-600"
                       >
-                        <option value="">— None —</option>
+                        <option value="">None</option>
                         {setupData.returnPolicies.map(policy => (
                           <option key={policy.returnPolicyId} value={policy.returnPolicyId}>
                             {policy.name}
@@ -447,7 +447,7 @@ const EbayPolicySetupPage = () => {
                         onChange={(e) => setMapping({ ...mapping, defaultPaymentPolicyId: e.target.value || null })}
                         className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-sage-600"
                       >
-                        <option value="">— None —</option>
+                        <option value="">None</option>
                         {setupData.paymentPolicies.map(policy => (
                           <option key={policy.paymentPolicyId} value={policy.paymentPolicyId}>
                             {policy.name}
@@ -465,7 +465,7 @@ const EbayPolicySetupPage = () => {
                         onChange={(e) => setMapping({ ...mapping, defaultFulfillmentPolicyId: e.target.value || null })}
                         className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-sage-600"
                       >
-                        <option value="">— None —</option>
+                        <option value="">None</option>
                         {setupData.fulfillmentPolicies.map(policy => (
                           <option key={policy.fulfillmentPolicyId} value={policy.fulfillmentPolicyId}>
                             {policy.name} · {policy.classification}
@@ -658,7 +658,7 @@ const EbayPolicySetupPage = () => {
                                 }}
                                 className="w-full px-2 py-1 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded text-sm focus:outline-none focus:ring-2 focus:ring-sage-600"
                               >
-                                <option value="">— Select policy —</option>
+                                <option value="">Select policy</option>
                                 {setupData.fulfillmentPolicies.map(policy => (
                                   <option key={policy.fulfillmentPolicyId} value={policy.fulfillmentPolicyId}>
                                     {policy.name} · {policy.classification}
@@ -706,7 +706,7 @@ const EbayPolicySetupPage = () => {
                         onChange={(e) => setMapping({ ...mapping, heavyOversizedPolicyId: e.target.value || null })}
                         className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-sage-600"
                       >
-                        <option value="">— None (use weight tier) —</option>
+                        <option value="">. None (use weight tier), </option>
                         {setupData.fulfillmentPolicies.map(policy => (
                           <option key={policy.fulfillmentPolicyId} value={policy.fulfillmentPolicyId}>
                             {policy.name}
@@ -727,7 +727,7 @@ const EbayPolicySetupPage = () => {
                         onChange={(e) => setMapping({ ...mapping, fragilePolicyId: e.target.value || null })}
                         className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-sage-600"
                       >
-                        <option value="">— None (use weight tier) —</option>
+                        <option value="">. None (use weight tier), </option>
                         {setupData.fulfillmentPolicies.map(policy => (
                           <option key={policy.fulfillmentPolicyId} value={policy.fulfillmentPolicyId}>
                             {policy.name}
@@ -745,7 +745,7 @@ const EbayPolicySetupPage = () => {
                         onChange={(e) => setMapping({ ...mapping, unknownPolicyId: e.target.value || null })}
                         className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-sage-600"
                       >
-                        <option value="">— None (use weight tier) —</option>
+                        <option value="">. None (use weight tier), </option>
                         {setupData.fulfillmentPolicies.map(policy => (
                           <option key={policy.fulfillmentPolicyId} value={policy.fulfillmentPolicyId}>
                             {policy.name}
@@ -809,7 +809,7 @@ const EbayPolicySetupPage = () => {
                                 }}
                                 className="w-full px-2 py-1 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded text-sm focus:outline-none focus:ring-2 focus:ring-sage-600"
                               >
-                                <option value="">— Select policy —</option>
+                                <option value="">Select policy</option>
                                 {setupData.fulfillmentPolicies.map(policy => (
                                   <option key={policy.fulfillmentPolicyId} value={policy.fulfillmentPolicyId}>
                                     {policy.name}
@@ -971,7 +971,7 @@ const EbayPolicySetupPage = () => {
                     </div>
                     <label htmlFor="skuAppendCost" className="cursor-pointer">
                       <span className="block text-sm font-medium text-gray-900 dark:text-white">Append Cost</span>
-                      <span className="block text-xs text-gray-500 dark:text-gray-400">Add your cost basis (e.g. $10.50) — only appended if cost basis is set on the item</span>
+                      <span className="block text-xs text-gray-500 dark:text-gray-400">Add your cost basis (e.g. $10.50). Only appended if cost basis is set on the item</span>
                     </label>
                   </div>
 
@@ -988,7 +988,7 @@ const EbayPolicySetupPage = () => {
                     </div>
                     <label htmlFor="skuAppendLocation" className="cursor-pointer">
                       <span className="block text-sm font-medium text-gray-900 dark:text-white">Append Location</span>
-                      <span className="block text-xs text-gray-500 dark:text-gray-400">Add room/location tag (e.g. Row 2 Bin D) — only appended if location is set on the item</span>
+                      <span className="block text-xs text-gray-500 dark:text-gray-400">Add room/location tag (e.g. Row 2 Bin D). Only appended if location is set on the item</span>
                     </label>
                   </div>
                 </div>

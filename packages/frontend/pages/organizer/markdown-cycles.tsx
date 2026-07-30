@@ -252,7 +252,7 @@ const MarkdownCyclesPage = () => {
     return (
       <>
         <Head>
-          <title>Auto Markdown — FindA.Sale</title>
+          <title>Auto Markdown. FindA.Sale</title>
         </Head>
         <div className="min-h-screen bg-white dark:bg-gray-800 py-8">
           <div className="max-w-4xl mx-auto px-4">
@@ -280,7 +280,7 @@ const MarkdownCyclesPage = () => {
   return (
     <>
       <Head>
-        <title>Auto Markdown — FindA.Sale</title>
+        <title>Auto Markdown. FindA.Sale</title>
       </Head>
       <div className="min-h-screen bg-white dark:bg-gray-800 py-8">
         <div className="max-w-4xl mx-auto px-4">
@@ -323,7 +323,7 @@ const MarkdownCyclesPage = () => {
             <div className="bg-warm-50 dark:bg-gray-700 border border-warm-200 dark:border-gray-600 rounded-lg p-8 text-center">
               <TrendingDown size={40} className="mx-auto mb-4 text-amber-500" />
               <p className="text-warm-600 dark:text-warm-300 mb-4">
-                No markdown cycles yet — set up automatic price reductions to move inventory faster.
+                No markdown cycles yet. Set up automatic price reductions to move inventory faster.
               </p>
               <button
                 onClick={() => {

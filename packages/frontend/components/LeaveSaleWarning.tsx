@@ -100,7 +100,7 @@ const LeaveSaleWarning: React.FC<LeaveSaleWarningProps> = ({
         </div>
 
         <p className="text-xs text-gray-500 mt-4 text-center">
-          Your holds are safe — this is just a reminder that GPS-based features may be affected by your distance from the sale.
+          Your holds are safe. This is just a reminder that GPS-based features may be affected by your distance from the sale.
         </p>
       </div>
     </div>

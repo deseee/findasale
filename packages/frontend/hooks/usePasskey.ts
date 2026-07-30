@@ -124,7 +124,7 @@ export const usePasskey = () => {
       } else if (err.code === 'NotSupportedError') {
         errorMessage = 'Your device or browser does not support passkeys';
       } else if (err.code === 'SecurityError') {
-        errorMessage = 'Authentication failed — ensure you are on a secure connection';
+        errorMessage = 'Authentication failed. Ensure you are on a secure connection';
       } else if (err.response?.data?.message) {
         errorMessage = err.response.data.message;
       } else if (err.message) {

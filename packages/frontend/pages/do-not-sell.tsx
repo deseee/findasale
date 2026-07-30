@@ -22,7 +22,7 @@ export default function DoNotSell() {
   return (
     <>
       <Head>
-        <title>Do Not Sell My Personal Information — FindA.Sale</title>
+        <title>Do Not Sell My Personal Information. FindA.Sale</title>
         <meta name="description" content="Exercise your CCPA rights and opt out of data sale." />
       </Head>
       <div className="max-w-2xl mx-auto px-4 py-12">

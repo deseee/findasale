@@ -244,7 +244,7 @@ const VendorBoothTokenPage: React.FC = () => {
       if (response.data.linkedExistingAccount) {
         showToast(
           response.data.chargesEnabled && response.data.payoutsEnabled
-            ? 'Linked to your existing Stripe account — you can start taking payments.'
+            ? 'Linked to your existing Stripe account. You can start taking payments.'
             : 'Linked to your existing Stripe account. Finish setup in your organizer Stripe settings to enable payouts.',
           'success'
         );
@@ -349,7 +349,7 @@ const VendorBoothTokenPage: React.FC = () => {
                         </div>
                       </dl>
                       <p className="text-xs text-warm-500 dark:text-warm-400 mt-3">
-                        These terms apply only to this booth — you may have different terms at other malls or markets.
+                        These terms apply only to this booth. You may have different terms at other malls or markets.
                       </p>
                     </div>
 
@@ -419,7 +419,7 @@ const VendorBoothTokenPage: React.FC = () => {
                           <p className="text-sm text-green-700 dark:text-green-400">
                             ✓ Auto-pay active
                             {feeBillingStatus.brand && feeBillingStatus.last4
-                              ? ` — ${feeBillingStatus.brand} ending in ${feeBillingStatus.last4}`
+                              ? `. ${feeBillingStatus.brand} ending in ${feeBillingStatus.last4}`
                               : ''}
                           </p>
                         ) : myBoothId ? (

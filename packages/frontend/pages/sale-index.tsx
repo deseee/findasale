@@ -37,7 +37,7 @@ export default function SaleIndexPage({
   totalSales,
   metros,
 }: SaleIndexProps) {
-  const title = 'The Weekend Sale Index — U.S. Secondary Sales by Metro | FindA.Sale';
+  const title = 'The Weekend Sale Index. U.S. Secondary Sales by Metro | FindA.Sale';
   const description =
     'A ranked, continuously-updated count of upcoming estate sales, yard sales, auctions, and flea markets across U.S. metro areas.';
 
@@ -53,7 +53,7 @@ export default function SaleIndexPage({
   const datasetJsonLd = {
     '@context': 'https://schema.org',
     '@type': 'Dataset',
-    name: 'The Weekend Sale Index — U.S. Secondary Sales by Metro',
+    name: 'The Weekend Sale Index. U.S. Secondary Sales by Metro',
     description:
       'Ranked count of upcoming estate sales, yard sales, auctions, and flea markets by U.S. metro area, updated continuously.',
     url: CANONICAL_URL,
@@ -112,7 +112,7 @@ export default function SaleIndexPage({
             </h1>
             <p className="mt-3 text-lg text-warm-600 dark:text-warm-300 max-w-3xl">
               A live ranking of U.S. metro areas by the number of upcoming estate
-              sales, yard sales, auctions, and flea markets — the secondary-sale
+              sales, yard sales, auctions, and flea markets. The secondary-sale
               market, counted in one place and updated continuously.
             </p>
 
@@ -148,7 +148,7 @@ export default function SaleIndexPage({
           ) : (
             <div className="rounded-xl border border-dashed border-warm-300 dark:border-gray-700 p-10 text-center">
               <p className="text-lg font-medium text-warm-700 dark:text-warm-200">
-                The index is updating — check back shortly.
+                The index is updating. Check back shortly.
               </p>
               <p className="mt-2 text-sm text-warm-500 dark:text-warm-400">
                 We refresh the Weekend Sale Index throughout the day as new sales
@@ -171,8 +171,8 @@ export default function SaleIndexPage({
             </h2>
             <p className="text-sm text-warm-600 dark:text-warm-300 leading-relaxed">
               The Weekend Sale Index counts <strong>published, upcoming sales</strong>{' '}
-              listed on FindA.Sale — estate sales, yard and garage sales, auctions,
-              and flea markets — grouped by the metro area where each sale takes
+              listed on FindA.Sale. Estate sales, yard and garage sales, auctions,
+              and flea markets. Grouped by the metro area where each sale takes
               place. Each sale is counted once, on its start date. We exclude
               permanent retail storefronts and consignment shops, since those are
               ongoing businesses rather than time-boxed sales. Rankings update

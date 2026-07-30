@@ -32,8 +32,8 @@ interface ThisWeekendPageProps {
   cityState: string;
   sales: SaleListing[];
   totalCount: number;
-  weekendStart: string;  // ISO string — Friday 00:00
-  weekendEnd: string;    // ISO string — Sunday 23:59
+  weekendStart: string;  // ISO string. Friday 00:00
+  weekendEnd: string;    // ISO string. Sunday 23:59
 }
 
 /** Returns the next Friday–Sunday range (handles all day-of-week cases). */
@@ -192,7 +192,7 @@ export default function ThisWeekendPage({
                 No sales listed for this weekend in {cityName}.
               </p>
               <p className="text-warm-400 dark:text-gray-500 text-sm mb-6">
-                Check back Thursday — we update weekly.
+                Check back Thursday. We update weekly.
               </p>
               <Link
                 href={`/city/${citySlug}`}
@@ -328,7 +328,7 @@ export const getStaticPaths: GetStaticPaths = async () => {
       }
     }
   } catch (err) {
-    console.error('[this-weekend/[city]] getStaticPaths fetch error — using fallback:', err);
+    console.error('[this-weekend/[city]] getStaticPaths fetch error. Using fallback:', err);
   }
 
   return {

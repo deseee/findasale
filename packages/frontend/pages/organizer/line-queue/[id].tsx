@@ -67,7 +67,7 @@ const LineQueuePage = () => {
       // Only surface the error on first-load failure.
       // Subsequent poll failures stay silent; staleness indicator handles them.
       if (!hasLoadedOnce.current) {
-        setLoadError("Couldn't load the line — tap to retry.");
+        setLoadError("Couldn't load the line. Tap to retry.");
       }
     } finally {
       setIsLoading(false);
@@ -233,7 +233,7 @@ const LineQueuePage = () => {
                   <div className="flex-1 min-w-0">
                     <p className="font-semibold text-warm-900 dark:text-gray-100 truncate">{entry.user.name}</p>
                     <p className="text-xs text-warm-500 dark:text-gray-400">
-                      {entry.user.phone ?? 'No phone — cannot SMS'}
+                      {entry.user.phone ?? 'No phone. Cannot SMS'}
                     </p>
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">

@@ -236,7 +236,7 @@ export default function EstateSalesCityPage({
             {totalCount > 0
               ? `${totalCount} estate sale${totalCount !== 1 ? 's' : ''} listed`
               : 'No estate sales currently listed'}
-            {' — '} updated daily
+            {', '} updated daily
           </p>
         </div>
 
@@ -291,7 +291,7 @@ export default function EstateSalesCityPage({
                 No estate sales currently listed in {cityName}.
               </p>
               <p className="text-warm-400 dark:text-warm-500 text-sm mb-6">
-                New sales are added daily — check back soon or browse nearby cities.
+                New sales are added daily. Check back soon or browse nearby cities.
               </p>
               <div className="flex flex-col sm:flex-row gap-3 justify-center mb-8">
                 <Link href="/cities" className="text-amber-600 hover:text-amber-700 font-medium">
@@ -502,7 +502,7 @@ export const getStaticPaths: GetStaticPaths = async () => {
       }
     }
   } catch (err) {
-    console.error('[estate-sales/[city-slug]] getStaticPaths fetch error — using fallback:', err);
+    console.error('[estate-sales/[city-slug]] getStaticPaths fetch error. Using fallback:', err);
   }
 
   return {

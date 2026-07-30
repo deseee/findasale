@@ -216,7 +216,7 @@ export default function PosInvoiceModal({ hold, miscItems = [], sessionId, cashA
                       className="w-4 h-4 cursor-pointer"
                     />
                     <span className="ml-3 text-sm text-gray-900 dark:text-white">
-                      Quick Pay (15 minutes) — Shopper pays now
+                      Quick Pay (15 minutes). Shopper pays now
                     </span>
                   </label>
                   <label className="flex items-center cursor-pointer">
@@ -232,7 +232,7 @@ export default function PosInvoiceModal({ hold, miscItems = [], sessionId, cashA
                       className="w-4 h-4 cursor-pointer"
                     />
                     <span className="ml-3 text-sm text-gray-900 dark:text-white">
-                      Trust Invoice (organizer-set) — Send for later payment
+                      Trust Invoice (organizer-set). Send for later payment
                     </span>
                   </label>
                 </div>

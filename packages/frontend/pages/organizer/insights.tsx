@@ -264,7 +264,7 @@ const OrganizerInsightsPage = () => {
         <title>Insights - FindA.Sale</title>
       </Head>
 
-      <TierGate requiredTier="PRO" featureName="Insights" description="Lifetime analytics across all your sales — revenue trends, category breakdowns, top items, and performance benchmarks.">
+      <TierGate requiredTier="PRO" featureName="Insights" description="Lifetime analytics across all your sales. Revenue trends, category breakdowns, top items, and performance benchmarks.">
       <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
         {/* Header */}
         <div className="bg-white dark:bg-gray-800 border-b border-warm-200 dark:border-gray-700 px-4 py-4">

@@ -11,7 +11,7 @@ const ReturnPolicyPage = () => {
         <title>Return &amp; Refund Policy – FindA.Sale</title>
         <meta
           name="description"
-          content="Return and refund policy for FindA.Sale — a marketplace for estate sales, yard sales, auctions, and flea markets. Each seller sets their own return policy."
+          content="Return and refund policy for FindA.Sale. A marketplace for estate sales, yard sales, auctions, and flea markets. Each seller sets their own return policy."
         />
       </Head>
       <div className="min-h-screen bg-white dark:bg-gray-800">
@@ -20,7 +20,7 @@ const ReturnPolicyPage = () => {
           <p className="text-warm-500 dark:text-warm-400 mb-10">Effective date: {effectiveDate}</p>
 
           <p className="text-warm-700 dark:text-warm-300 leading-relaxed mb-8">
-            FindA.Sale is a marketplace that connects shoppers with independent sale organizers — estate sale
+            FindA.Sale is a marketplace that connects shoppers with independent sale organizers. Estate sale
             companies, yard sale hosts, auctioneers, flea market vendors, and consignment sellers. Because each
             seller is an independent business, <strong>FindA.Sale does not set a single blanket return policy.</strong>{' '}
             Return eligibility, timeframes, and procedures are determined by each individual seller for each sale.
@@ -34,7 +34,7 @@ const ReturnPolicyPage = () => {
               organizer directly. Each seller's contact information is listed on their sale page.
             </p>
             <p className="text-warm-700 dark:text-warm-300 leading-relaxed mb-4">
-              Whether a return is accepted — and under what conditions — depends entirely on the seller's own
+              Whether a return is accepted And under what conditions depends entirely on the seller's own
               policy. Some sellers accept returns within a short window; others sell all items as final sale. If no
               return policy is stated in the listing, reach out to the seller before purchasing to ask.
             </p>

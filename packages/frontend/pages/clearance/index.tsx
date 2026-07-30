@@ -158,7 +158,7 @@ export default function ClearancePage({
   const jsonLd = {
     '@context': 'https://schema.org',
     '@type': 'ItemList',
-    name: 'Clearance & Post-Sale Finds — FindA.Sale',
+    name: 'Clearance & Post-Sale Finds. FindA.Sale',
     description: 'Items from recently ended sales, available for pickup or arrangement with the organizer.',
     numberOfItems: Math.min(10, items.length),
     itemListElement: items.slice(0, 10).map((item, idx) => ({
@@ -316,7 +316,7 @@ export default function ClearancePage({
               <p className="text-2xl mb-2">🏷️</p>
               <p className="text-gray-600 dark:text-gray-400 font-medium">No clearance items right now</p>
               <p className="text-sm text-gray-500 dark:text-gray-500 mt-1">
-                Check back after upcoming sales end — items appear here automatically.
+                Check back after upcoming sales end. Items appear here automatically.
               </p>
               <Link
                 href="/sales"

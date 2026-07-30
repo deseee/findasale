@@ -72,7 +72,7 @@ export const usePOSPaymentRequest = (requestId: string | undefined): UsePOSPayme
       socketRef.current = io(socketUrl, {
         auth: { token: token || undefined },
         withCredentials: true,
-        transports: ['websocket'], // polling causes 502 on Railway — websocket only
+        transports: ['websocket'], // polling causes 502 on Railway. Websocket only
         upgrade: false,
         reconnection: true,
         reconnectionDelay: 1000,

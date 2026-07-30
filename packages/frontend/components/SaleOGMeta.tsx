@@ -160,7 +160,7 @@ export default function SaleOGMeta({
       <meta name="description" content={metaDescription} />
 
       {/* Open Graph (Facebook, LinkedIn, etc.) */}
-      <meta property="og:title" content={`${sale.title} — FindA.Sale`} />
+      <meta property="og:title" content={`${sale.title}. FindA.Sale`} />
       <meta property="og:description" content={metaDescription} />
       <meta property="og:image" content={ogImageUrl} />
       <meta property="og:image:width" content="1200" />
@@ -171,7 +171,7 @@ export default function SaleOGMeta({
 
       {/* Twitter Card */}
       <meta name="twitter:card" content="summary_large_image" />
-      <meta name="twitter:title" content={`${sale.title} — FindA.Sale`} />
+      <meta name="twitter:title" content={`${sale.title}. FindA.Sale`} />
       <meta name="twitter:description" content={metaDescription} />
       <meta name="twitter:image" content={ogImageUrl} />
 

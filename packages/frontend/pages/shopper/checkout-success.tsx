@@ -321,7 +321,7 @@ const CheckoutSuccessPage = () => {
                   Know someone who runs sales?
                 </h3>
                 <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
-                  Invite them to list on FindA.Sale for free — it takes 5 minutes.
+                  Invite them to list on FindA.Sale for free. It takes 5 minutes.
                 </p>
                 <button
                   onClick={async () => {

@@ -122,9 +122,9 @@ const AdminWaitlist = () => {
               {entries.map((e) => (
                 <tr key={e.id} className="hover:bg-warm-50 dark:hover:bg-gray-700 dark:bg-gray-900">
                   <td className="px-6 py-4 text-sm text-warm-900 dark:text-warm-100 font-medium">{e.itemType}</td>
-                  <td className="px-6 py-4 text-sm text-warm-600 dark:text-warm-400">{e.user?.email || '—'}</td>
+                  <td className="px-6 py-4 text-sm text-warm-600 dark:text-warm-400">{e.user?.email || 'N/A'}</td>
                   <td className="px-6 py-4 text-sm text-warm-600 dark:text-warm-400">
-                    {[e.city, e.state].filter(Boolean).join(', ') || '—'}
+                    {[e.city, e.state].filter(Boolean).join(', ') || 'N/A'}
                   </td>
                   <td className="px-6 py-4 text-sm text-center">
                     {e.isActive ? (

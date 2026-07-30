@@ -33,7 +33,7 @@ const ReverseAuctionBadge: React.FC<ReverseAuctionBadgeProps> = ({ item, current
           {isAtFloor ? (
             <>
               <p className="font-semibold text-amber-900 mb-1">
-                📌 Final Price — Won't Drop Further!
+                📌 Final Price. Won't Drop Further!
               </p>
               <p className="text-sm text-amber-700">
                 This item has reached its minimum price: {' '}

@@ -26,7 +26,7 @@ export function CityTopFinds({ citySlug, items }: CityTopFindsProps) {
             Top Finds This Week
           </h2>
           <p className="text-slate-600 dark:text-slate-400">
-            No recent sales in your area yet—check back soon!
+            No recent sales in your area yet. Check back soon!
           </p>
         </div>
       </section>

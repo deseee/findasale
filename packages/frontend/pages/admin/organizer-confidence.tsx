@@ -133,10 +133,10 @@ const AdminOrganizerConfidence = () => {
               {organizers.map((o) => (
                 <tr key={o.id} className="hover:bg-warm-50 dark:hover:bg-gray-700 dark:bg-gray-900">
                   <td className="px-6 py-4 text-sm text-warm-900 dark:text-warm-100 font-medium">{o.businessName}</td>
-                  <td className="px-6 py-4 text-sm text-warm-600 dark:text-warm-400">{o.address || '—'}</td>
+                  <td className="px-6 py-4 text-sm text-warm-600 dark:text-warm-400">{o.address || 'N/A'}</td>
                   <td className="px-6 py-4 text-sm text-center">{scoreBadge(o.directoryConfidenceScore)}</td>
                   <td className="px-6 py-4 text-sm text-warm-600 dark:text-warm-400">
-                    {o.confidenceLastCalculated ? new Date(o.confidenceLastCalculated).toLocaleDateString() : '—'}
+                    {o.confidenceLastCalculated ? new Date(o.confidenceLastCalculated).toLocaleDateString() : 'N/A'}
                   </td>
                 </tr>
               ))}

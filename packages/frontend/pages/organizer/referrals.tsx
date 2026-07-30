@@ -123,19 +123,19 @@ const OrganizerReferralsPage = () => {
           <div className="grid grid-cols-3 gap-4 mb-6">
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-5 text-center">
               <p className="text-3xl font-bold text-warm-900 dark:text-warm-100">
-                {isLoading ? '—' : (stats?.totalOrgsReferred ?? 0)}
+                {isLoading ? ', ' : (stats?.totalOrgsReferred ?? 0)}
               </p>
               <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">Organizers Referred</p>
             </div>
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-5 text-center">
               <p className="text-3xl font-bold text-amber-600 dark:text-amber-400">
-                {isLoading ? '—' : (stats?.firstSalePublished ?? 0)}
+                {isLoading ? ', ' : (stats?.firstSalePublished ?? 0)}
               </p>
               <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">First Sales Published</p>
             </div>
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-5 text-center">
               <p className="text-3xl font-bold text-green-600 dark:text-green-400">
-                {isLoading ? '—' : (stats?.totalXpEarned ?? 0)}
+                {isLoading ? ', ' : (stats?.totalXpEarned ?? 0)}
               </p>
               <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">XP Earned</p>
             </div>
@@ -151,7 +151,7 @@ const OrganizerReferralsPage = () => {
                 </span>
                 <div>
                   <p className="text-sm font-medium text-warm-900 dark:text-warm-100">Share your link</p>
-                  <p className="text-sm text-warm-600 dark:text-warm-400">Send your referral link to another sale organizer — estate sales, yard sales, consignment, auctions, flea markets.</p>
+                  <p className="text-sm text-warm-600 dark:text-warm-400">Send your referral link to another sale organizer. Estate sales, yard sales, consignment, auctions, flea markets.</p>
                 </div>
               </li>
               <li className="flex gap-3">

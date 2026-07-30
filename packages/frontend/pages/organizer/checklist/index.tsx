@@ -100,7 +100,7 @@ export default function ChecklistPage() {
   return (
     <>
       <Head>
-        <title>Sale Launch Checklist — FindA.Sale</title>
+        <title>Sale Launch Checklist. FindA.Sale</title>
         <meta
           name="description"
           content="A step-by-step pre-launch checklist to help organizers run a great sale."

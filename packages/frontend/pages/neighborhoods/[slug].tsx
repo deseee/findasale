@@ -48,7 +48,7 @@ const isActive = (start: string, end: string) => {
 const NeighborhoodPage = ({ slug, name, description, sales, total }: Props) => {
   const canonicalUrl = `https://finda.sale/neighborhoods/${slug}`;
   const pageTitle = `Sales in ${name} | FindA.Sale`;
-  const metaDesc = `Browse ${total > 0 ? total : 'upcoming'} sale${total !== 1 ? 's' : ''} in ${name} — estate sales, yard sales, garage sales, and more. Find furniture, antiques, collectibles and more near you.`;
+  const metaDesc = `Browse ${total > 0 ? total : 'upcoming'} sale${total !== 1 ? 's' : ''} in ${name}. Estate sales, yard sales, garage sales, and more. Find furniture, antiques, collectibles and more near you.`;
 
   return (
     <>
@@ -116,7 +116,7 @@ const NeighborhoodPage = ({ slug, name, description, sales, total }: Props) => {
                 No upcoming sales in {name} right now
               </h2>
               <p className="text-warm-500 dark:text-warm-400 text-sm mb-6">
-                Check back soon — new sales are added every day.
+                Check back soon. New sales are added every day.
               </p>
               <Link
                 href="/neighborhoods"

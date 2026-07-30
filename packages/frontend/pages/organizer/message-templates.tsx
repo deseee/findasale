@@ -54,7 +54,7 @@ export default function TemplatesPage() {
 
   return (
     <>
-      <Head><title>Quick Reply Templates — FindA.Sale</title></Head>
+      <Head><title>Quick Reply Templates. FindA.Sale</title></Head>
       <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
         <div className="max-w-3xl mx-auto px-4 py-8">
           <div className="flex items-center justify-between mb-6">

@@ -158,7 +158,7 @@ function ExplorerProfilePage() {
                 placeholder="What drives your hunt? e.g., 'Passionate explorer of mid-century modern furniture'"
                 className="w-full h-24 px-4 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#8fb897]"
               />
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Optional — visible on your public profile</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Optional. Visible on your public profile</p>
             </div>
 
             {/* Specialties */}

@@ -42,7 +42,7 @@ interface WorkspaceInternal {
   slug: string;
   createdAt: string;
   ownerId: string;       // Organizer ID
-  ownerUserId: string;   // User ID — used for isOwner check
+  ownerUserId: string;   // User ID. Used for isOwner check
   ownerName: string;
   members: WorkspaceMember[];
   description?: string;
@@ -336,7 +336,7 @@ export default function WorkspacePage() {
     return (
       <>
         <Head>
-          <title>Day of — {workspace.name} | FindA.Sale</title>
+          <title>Day of, {workspace.name} | FindA.Sale</title>
           <meta name="description" content={`Morning briefing for ${workspace.name}`} />
         </Head>
         <MorningBriefing

@@ -91,7 +91,7 @@ const AdminItems = () => {
   };
 
   const formatPrice = (priceInCents: number) => {
-    if (!priceInCents && priceInCents !== 0) return '—';
+    if (!priceInCents && priceInCents !== 0) return 'N/A';
     return (priceInCents / 100).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
   };
 
@@ -99,7 +99,7 @@ const AdminItems = () => {
     try {
       return new Date(dateString).toLocaleDateString();
     } catch {
-      return '—';
+      return 'N/A';
     }
   };
 
@@ -199,19 +199,19 @@ const AdminItems = () => {
                     )}
                   </td>
                   <td className="px-6 py-4 text-sm text-warm-900 dark:text-warm-100 font-medium max-w-xs truncate">
-                    {item.title || '—'}
+                    {item.title || 'N/A'}
                   </td>
                   <td className="px-6 py-4 text-sm text-warm-900 dark:text-warm-100">{formatPrice(item.price)}</td>
                   <td className="px-6 py-4 text-sm">
                     <span className={`inline-block px-3 py-1 rounded text-xs font-medium ${getStatusBadgeColor(item.status)}`}>
-                      {item.status || '—'}
+                      {item.status || 'N/A'}
                     </span>
                   </td>
                   <td className="px-6 py-4 text-sm text-warm-600 dark:text-warm-400 truncate">
-                    {item.organizerName || '—'}
+                    {item.organizerName || 'N/A'}
                   </td>
                   <td className="px-6 py-4 text-sm text-warm-600 dark:text-warm-400 truncate">
-                    {item.saleTitle || '—'}
+                    {item.saleTitle || 'N/A'}
                   </td>
                   <td className="px-6 py-4 text-sm text-warm-600 dark:text-warm-400">
                     {formatDate(item.createdAt)}

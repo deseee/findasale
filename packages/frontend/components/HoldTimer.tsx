@@ -9,7 +9,7 @@ import { useState, useEffect } from 'react';
 import api from '../lib/api';
 
 interface HoldTimerProps {
-  itemId?: string;      // fetch expiresAt from API — use when expiresAt isn't available
+  itemId?: string;      // fetch expiresAt from API. Use when expiresAt isn't available
   expiresAt?: string;   // use directly when already known (e.g. CartDrawer)
   onExpiry?: () => void;
 }

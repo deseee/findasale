@@ -177,7 +177,7 @@ const ConsignorSettlementPage: React.FC = () => {
             Settlement
           </h1>
           <p className="text-warm-600 dark:text-warm-400 mt-1 mb-6">
-            {preview?.saleTitle || 'Sale'} — split sold-item proceeds across consignors
+            {preview?.saleTitle || 'Sale'}. Split sold-item proceeds across consignors
           </p>
 
           {/* Test-mode banner */}
@@ -229,7 +229,7 @@ const ConsignorSettlementPage: React.FC = () => {
                             <div className="font-medium">{r.name}</div>
                             {!r.stripeOnboarded && (
                               <div className="text-xs text-purple-600 dark:text-purple-400">
-                                Manual cash/check — not set up for online payout
+                                Manual cash/check. Not set up for online payout
                               </div>
                             )}
                           </td>

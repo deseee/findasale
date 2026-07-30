@@ -14,7 +14,7 @@ export const getServerSideProps: GetServerSideProps = async () => {
   return {
     redirect: {
       destination: '/cities',
-      permanent: true, // HTTP 301 — passes PageRank to /cities
+      permanent: true, // HTTP 301. Passes PageRank to /cities
     },
   };
 };

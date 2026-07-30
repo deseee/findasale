@@ -310,7 +310,7 @@ function PrepThermometer({
 
       {tasks.length === 0 && !showAdd && (
         <div className="py-4 text-gray-500 dark:text-gray-400 text-sm italic">
-          No prep tasks yet — tap &quot;+ Add task&quot; to get started
+          No prep tasks yet. Tap &quot;+ Add task&quot; to get started
         </div>
       )}
 
@@ -569,7 +569,7 @@ function ChatPanel({
       <div className="flex-1 overflow-y-auto px-4 py-3">
         {(!chatData?.messages || chatData.messages.length === 0) && (
           <div className="text-gray-500 dark:text-gray-400 text-sm italic text-center py-6">
-            No messages yet — say something!
+            No messages yet. Say something!
           </div>
         )}
         {chatData?.messages?.map((msg) => (

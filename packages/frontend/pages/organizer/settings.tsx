@@ -255,12 +255,12 @@ const OrganizerSettingsPage = () => {
       setVerSearchResults(results);
       setVerNextPageToken(res.data.nextPageToken || null);
       if (!results.length) {
-        showToast('No results found — try a different business name', 'error');
+        showToast('No results found. Try a different business name', 'error');
         return;
       }
       setVerStep('results');
     } catch {
-      showToast('Search failed — try a different name', 'error');
+      showToast('Search failed. Try a different name', 'error');
     } finally {
       setVerSearchLoading(false);
     }
@@ -301,14 +301,14 @@ const OrganizerSettingsPage = () => {
       const res = await api.get(`/verification/yelp/search?q=${encodeURIComponent(verSearchQuery)}${geoParams}`);
       const results = res.data.results || [];
       if (!results.length) {
-        showToast('No results found — try a different business name', 'error');
+        showToast('No results found. Try a different business name', 'error');
         return;
       }
       setVerSearchResults(results);
       setVerNextPageToken(null);
       setVerStep('results');
     } catch {
-      showToast('Search failed — try a different name', 'error');
+      showToast('Search failed. Try a different name', 'error');
     } finally {
       setVerSearchLoading(false);
     }
@@ -511,7 +511,7 @@ const OrganizerSettingsPage = () => {
       if (data?.url) {
         window.location.href = data.url;
       } else {
-        showToast('Could not start Stripe setup — try again', 'error');
+        showToast('Could not start Stripe setup. Try again', 'error');
       }
     } catch (error: any) {
       showToast(error.response?.data?.message || 'Failed to connect Stripe', 'error');
@@ -896,7 +896,7 @@ const OrganizerSettingsPage = () => {
                           type="text"
                           value={verCity}
                           onChange={(e) => setVerCity(e.target.value)}
-                          placeholder="City, State (optional — helps narrow results)"
+                          placeholder="City, State (optional. Helps narrow results)"
                           className="w-full px-4 py-2 border border-warm-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100 placeholder-warm-400 dark:placeholder-gray-500 text-sm"
                         />
                         <button
@@ -1192,7 +1192,7 @@ const OrganizerSettingsPage = () => {
                           try {
                             const permission = await Notification.requestPermission();
                             if (permission !== 'granted') {
-                              showToast('Permission denied — check your browser settings', 'error');
+                              showToast('Permission denied. Check your browser settings', 'error');
                               return;
                             }
 
@@ -1525,7 +1525,7 @@ const OrganizerSettingsPage = () => {
                     onChange={(e) => setTagline(e.target.value.slice(0, 120))}
                     maxLength={120}
                     className="w-full px-4 py-2 border border-warm-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-amber-500 bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100"
-                    placeholder="e.g., Quality Sales Since 2010 — Trusted by Local Buyers"
+                    placeholder="e.g., Quality Sales Since 2010. Trusted by Local Buyers"
                   />
                   <p className="text-xs text-warm-500 dark:text-gray-400 mt-1">{tagline.length}/120 characters</p>
                 </div>
@@ -1769,7 +1769,7 @@ const OrganizerSettingsPage = () => {
                   <div>
                     <p className="text-sm font-medium text-warm-900 dark:text-gray-100">Google</p>
                     {linkedProvider === 'google' ? (
-                      <p className="text-xs text-green-600 dark:text-green-400">Connected — sign in with Google is enabled</p>
+                      <p className="text-xs text-green-600 dark:text-green-400">Connected. Sign in with Google is enabled</p>
                     ) : (
                       <p className="text-xs text-warm-500 dark:text-gray-400">Not connected</p>
                     )}
@@ -1921,7 +1921,7 @@ const OrganizerSettingsPage = () => {
                   {organizerTier !== 'TEAMS' ? (
                     <div className="p-4 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
                       <p className="text-sm text-blue-800 dark:text-blue-200 mb-3">
-                        <strong>Teams plan required</strong> — Watermark removal is only available with the Teams plan.
+                        <strong>Teams plan required</strong>. Watermark removal is only available with the Teams plan.
                       </p>
                       <Link href="/pricing">
                         <button className="text-sm px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors">
@@ -1960,7 +1960,7 @@ const OrganizerSettingsPage = () => {
                   <Tooltip content="Connect your eBay account to list items on eBay directly from FindA.Sale." position="right" />
                 </div>
                 <p className="text-warm-600 dark:text-gray-400 mb-6">
-                  Connect your eBay account to sync inventory in both directions — import your eBay listings into FindA.Sale, and push FindA.Sale items to eBay. Items sold on either platform are automatically marked sold on the other.
+                  Connect your eBay account to sync inventory in both directions. Import your eBay listings into FindA.Sale, and push FindA.Sale items to eBay. Items sold on either platform are automatically marked sold on the other.
                 </p>
 
                 {ebayStatusLoading ? (
@@ -2108,7 +2108,7 @@ const OrganizerSettingsPage = () => {
                     This feature is available on PRO and TEAMS plans.
                   </h2>
                   <p className="text-warm-600 dark:text-gray-400 mb-6 max-w-md mx-auto">
-                    Add a live inventory widget to your own website — shoppers can browse your listings without leaving your page.
+                    Add a live inventory widget to your own website. Shoppers can browse your listings without leaving your page.
                   </p>
                   <button
                     onClick={() => setActiveTab('subscription')}

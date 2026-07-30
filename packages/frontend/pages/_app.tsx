@@ -449,7 +449,7 @@ function MyApp({ Component, pageProps: { session, ...pageProps } }: AppProps) {
             page-level <Head> tags with the same property/name AUTO-OVERRIDE them via
             next/head dedup, leaving exactly one tag. Do NOT add key props to these meta
             tags: next/head auto-dedupes meta by property/name only when no key is present;
-            a key would re-enable duplicates. Moved from _document.tsx (S— FB debugger saw
+            a key would re-enable duplicates. Moved from _document.tsx (S. FB debugger saw
             twitter:card twice because _document <Head> can't be deduped against next/head). */}
         <meta property="og:type" content="website" />
         <meta property="og:site_name" content="FindA.Sale" />

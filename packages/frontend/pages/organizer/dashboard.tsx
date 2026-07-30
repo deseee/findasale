@@ -707,7 +707,7 @@ const OrganizerDashboard = () => {
             <div className="mb-4 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 p-4 flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
-                  Grace period active — {Math.ceil((new Date(orgProfile.graceEndAt).getTime() - Date.now()) / 86400000)} days remaining
+                  Grace period active, {Math.ceil((new Date(orgProfile.graceEndAt).getTime() - Date.now()) / 86400000)} days remaining
                 </p>
                 <p className="text-xs text-amber-700 dark:text-amber-300 mt-0.5">
                   Some items are hidden from shoppers. Upgrade to restore them.
@@ -877,7 +877,7 @@ const OrganizerDashboard = () => {
                 <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
                   <div className="flex-1">
                     <h3 className="text-lg font-bold text-warm-900 dark:text-warm-100 mb-1">Your Plan: SIMPLE</h3>
-                  <p className="text-sm text-warm-600 dark:text-warm-400 mb-3">Unlock more features — PRO is just $29/mo</p>
+                  <p className="text-sm text-warm-600 dark:text-warm-400 mb-3">Unlock more features. PRO is just $29/mo</p>
                   <p className="text-sm text-warm-700 dark:text-warm-300">
                     <strong>PRO includes:</strong> 500+ items per sale • Advanced analytics • Brand Kit
                   </p>
@@ -903,7 +903,7 @@ const OrganizerDashboard = () => {
                     You've completed {analyticsData.completedSalesCount} sales and earned <strong>${(analyticsData.totalGMV || 0).toFixed(2)}</strong>.
                   </p>
                   <p className="text-sm text-warm-700 dark:text-warm-300">
-                    At SIMPLE, you paid <strong>${((analyticsData.totalGMV || 0) * 0.1).toFixed(2)}</strong> in fees (10%). On PRO, you'd pay just <strong>${((analyticsData.totalGMV || 0) * 0.08).toFixed(2)}</strong> (8%) — that's <strong>${(((analyticsData.totalGMV || 0) * 0.1) - ((analyticsData.totalGMV || 0) * 0.08) - 29).toFixed(2)}</strong> saved per month at your current volume.
+                    At SIMPLE, you paid <strong>${((analyticsData.totalGMV || 0) * 0.1).toFixed(2)}</strong> in fees (10%). On PRO, you'd pay just <strong>${((analyticsData.totalGMV || 0) * 0.08).toFixed(2)}</strong> (8%). That's <strong>${(((analyticsData.totalGMV || 0) * 0.1) - ((analyticsData.totalGMV || 0) * 0.08) - 29).toFixed(2)}</strong> saved per month at your current volume.
                   </p>
                 </div>
                 <div className="flex-shrink-0 flex gap-2">
@@ -930,7 +930,7 @@ const OrganizerDashboard = () => {
               <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
                 <div className="flex-1">
                   <h3 className={`text-lg font-bold mb-1 ${orgProfile?.subscriptionLapsed ? 'text-amber-900 dark:text-amber-100' : 'text-warm-900 dark:text-warm-100'}`}>Your Plan: PRO {orgProfile?.subscriptionLapsed && '(Payment Required)'}</h3>
-                  <p className={`text-sm mb-3 ${orgProfile?.subscriptionLapsed ? 'text-amber-600 dark:text-amber-400' : 'text-warm-600 dark:text-warm-400'}`}>{orgProfile?.subscriptionLapsed ? 'Your subscription payment is overdue. Renew now to restore full access.' : 'Scale with your team — TEAMS is $79/mo'}</p>
+                  <p className={`text-sm mb-3 ${orgProfile?.subscriptionLapsed ? 'text-amber-600 dark:text-amber-400' : 'text-warm-600 dark:text-warm-400'}`}>{orgProfile?.subscriptionLapsed ? 'Your subscription payment is overdue. Renew now to restore full access.' : 'Scale with your team. TEAMS is $79/mo'}</p>
                   <p className={`text-sm ${orgProfile?.subscriptionLapsed ? 'text-amber-700 dark:text-amber-300' : 'text-warm-700 dark:text-warm-300'}`}>
                     {orgProfile?.subscriptionLapsed ? <strong>You are temporarily on SIMPLE tier.</strong> : <><strong>TEAMS includes:</strong> Shared workspace • Team members • Collaboration tools</>}
                   </p>
@@ -1084,7 +1084,7 @@ const OrganizerDashboard = () => {
               {/* À la Carte callout for new organizers */}
               <div className="bg-gradient-to-r from-purple-50 to-indigo-50 dark:from-purple-900/20 dark:to-indigo-900/20 border border-purple-200 dark:border-purple-800 rounded-lg p-4 text-center">
                 <p className="text-sm text-warm-700 dark:text-warm-300">
-                  <strong className="text-warm-900 dark:text-warm-100">Just testing?</strong> Try our à la carte option: publish a single sale for <strong>$9.99</strong> — no monthly commitment needed.
+                  <strong className="text-warm-900 dark:text-warm-100">Just testing?</strong> Try our à la carte option: publish a single sale for <strong>$9.99</strong>. No monthly commitment needed.
                 </p>
               </div>
 
@@ -1097,7 +1097,7 @@ const OrganizerDashboard = () => {
                 </div>
                 <div className="bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 rounded-lg p-6">
                   <p className="text-4xl mb-3">🤖</p>
-                  <p className="font-semibold text-warm-900 dark:text-warm-100 mb-2">List items with photos — smart tagging suggests descriptions</p>
+                  <p className="font-semibold text-warm-900 dark:text-warm-100 mb-2">List items with photos. Smart tagging suggests descriptions</p>
                   <p className="text-sm text-warm-600 dark:text-warm-400">Snap photos and get auto-tagged suggestions instantly</p>
                 </div>
                 <div className="bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 rounded-lg p-6">
@@ -1285,7 +1285,7 @@ const OrganizerDashboard = () => {
                             onConfirm: async () => {
                               try {
                                 await api.patch(`/sales/${activeSale!.id}/status`, { status: 'ENDED' });
-                                showToast('Sale closed — completing your settlement', 'success');
+                                showToast('Sale closed. Completing your settlement', 'success');
                                 setTimeout(() => router.push(`/organizer/settlement/${activeSale!.id}`), 800);
                               } catch (error: any) {
                                 showToast(error.response?.data?.message || 'Failed to close sale', 'error');
@@ -1307,7 +1307,7 @@ const OrganizerDashboard = () => {
                     <div className="mt-3 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-teal-50 dark:bg-teal-900/20 border border-teal-200 dark:border-teal-700 rounded-lg px-4 py-2.5">
                       <div className="flex items-center gap-2 min-w-0 w-full sm:w-auto">
                         <span className="text-lg flex-shrink-0">📣</span>
-                        <p className="text-sm font-medium text-teal-900 dark:text-teal-100 truncate min-w-0">Your sale is live — spread the word!</p>
+                        <p className="text-sm font-medium text-teal-900 dark:text-teal-100 truncate min-w-0">Your sale is live. Spread the word!</p>
                       </div>
                       <div className="flex items-center gap-2 flex-shrink-0 self-end sm:self-auto">
                         <button
@@ -1351,7 +1351,7 @@ const OrganizerDashboard = () => {
                       <div className="flex items-center gap-2 min-w-0">
                         <span className="text-lg">{isDateToday(activeSale.startDate) ? '🗓️' : '⏰'}</span>
                         <p className="text-sm font-medium text-amber-900 dark:text-amber-100 truncate">
-                          {isDateToday(activeSale.startDate) ? 'Your sale starts today — post in neighborhood groups for more foot traffic.' : 'Sale tomorrow — a quick share now drives morning shoppers.'}
+                          {isDateToday(activeSale.startDate) ? 'Your sale starts today. Post in neighborhood groups for more foot traffic.' : 'Sale tomorrow. A quick share now drives morning shoppers.'}
                         </p>
                       </div>
                       <Link
@@ -1505,7 +1505,7 @@ const OrganizerDashboard = () => {
                 if (statsData.activeSale.viewCount > 10) {
                   return (
                     <div className="p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 text-sm text-blue-800 dark:text-blue-200">
-                      {statsData.activeSale.viewCount} shoppers are viewing — answer their questions
+                      {statsData.activeSale.viewCount} shoppers are viewing. Answer their questions
                     </div>
                   );
                 }
@@ -1520,7 +1520,7 @@ const OrganizerDashboard = () => {
 
                 return (
                   <div className="p-3 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 text-sm text-green-800 dark:text-green-200">
-                    Your sale is live — keep it up!
+                    Your sale is live. Keep it up!
                   </div>
                 );
               })()}
@@ -1635,7 +1635,7 @@ const OrganizerDashboard = () => {
                       <Link href="/organizer/holds" className="text-center p-3 rounded-lg hover:bg-warm-50 dark:hover:bg-gray-700 transition-colors cursor-pointer">
                         <div className="flex items-center justify-center gap-1 mb-2">
                           <p className="text-sm text-warm-600 dark:text-warm-400">Active Holds</p>
-                          <Tooltip content="Items shoppers are currently holding — these are reserved temporarily" position="top" />
+                          <Tooltip content="Items shoppers are currently holding. These are reserved temporarily" position="top" />
                         </div>
                         <p className="text-3xl font-bold text-warm-900 dark:text-warm-100">{statsData.activeSale.holdCount ?? '--'}</p>
                       </Link>

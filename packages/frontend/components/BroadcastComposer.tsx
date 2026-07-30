@@ -90,23 +90,23 @@ const TEMPLATES = [
   {
     key: 'sale_day',
     label: 'Sale day',
-    subject: 'We open today at 8am — come find something great',
+    subject: 'We open today at 8am. Come find something great',
     message:
-      "Doors open this morning at 8am sharp. We've got a full house — furniture, collectibles, and plenty of surprises. First come, first served. See you there.",
+      "Doors open this morning at 8am sharp. We've got a full house. Furniture, collectibles, and plenty of surprises. First come, first served. See you there.",
   },
   {
     key: 'new_inventory',
     label: 'New inventory',
-    subject: 'Fresh inventory just added — first look inside',
+    subject: 'Fresh inventory just added. First look inside',
     message:
-      "We've added new items this week — some great finds across furniture, art, and vintage pieces. Stop in or browse the listing for a preview. We'd love to see you.",
+      "We've added new items this week. Some great finds across furniture, art, and vintage pieces. Stop in or browse the listing for a preview. We'd love to see you.",
   },
   {
     key: 'flash_deal',
     label: 'Flash deal',
-    subject: 'Flash deal — 20% off everything today only',
+    subject: 'Flash deal, 20% off everything today only',
     message:
-      'Quick heads-up: we\'re running a one-day deal — 20% off all remaining items today. No code needed, just mention this message at checkout. Ends at 4pm.',
+      'Quick heads-up: we\'re running a one-day deal, 20% off all remaining items today. No code needed, just mention this message at checkout. Ends at 4pm.',
   },
 ];
 
@@ -185,7 +185,7 @@ const EmailPreview = ({
             style={{ color: body ? '#1A1814' : 'rgba(26,24,20,0.35)', fontStyle: body ? 'normal' : 'italic' }}
           >
             {body ||
-              'Your message will appear here as you type. Keep it short — 3 to 5 sentences works best for follower opens.'}
+              'Your message will appear here as you type. Keep it short, 3 to 5 sentences works best for follower opens.'}
           </div>
 
           {attachedSale && (
@@ -623,7 +623,7 @@ const BroadcastComposer: React.FC<BroadcastComposerProps> = ({
             </p>
             <p className="text-amber-700 dark:text-amber-400 mt-0.5">
               You can send again on{' '}
-              <strong>{lastSentAt ? nextAllowedDate(lastSentAt) : '—'}</strong>. One per 7 days
+              <strong>{lastSentAt ? nextAllowedDate(lastSentAt) : 'N/A'}</strong>. One per 7 days
               protects your follower list.
             </p>
           </div>
@@ -677,7 +677,7 @@ const BroadcastComposer: React.FC<BroadcastComposerProps> = ({
           id="bc-body"
           value={body}
           onChange={(e) => setBody(e.target.value)}
-          placeholder="Tell your followers what's new. A sale day reminder, a teaser for fresh inventory, or a flash deal closing soon — keep it short and warm."
+          placeholder="Tell your followers what's new. A sale day reminder, a teaser for fresh inventory, or a flash deal closing soon. Keep it short and warm."
           maxLength={2000}
           rows={6}
           className="flex-1 w-full px-3.5 py-3 text-sm leading-relaxed bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent text-warm-900 dark:text-gray-100 placeholder:text-warm-300 dark:placeholder:text-gray-600 placeholder:italic resize-none outline-none"

@@ -205,7 +205,7 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose }) => {
             {state === 'scanning' && (
               <div className="space-y-3">
                 <p className="text-sm text-white lg:text-warm-700 dark:lg:text-warm-300">
-                  Hold steady — we'll detect the QR automatically
+                  Hold steady. We'll detect the QR automatically
                 </p>
                 {!localStorage.getItem('qrScannerSeen_hint_shown') && (
                   <>
@@ -244,7 +244,7 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose }) => {
                   No camera found
                 </p>
                 <p className="text-xs text-white lg:text-warm-700 dark:lg:text-warm-300">
-                  Your device doesn't have a camera — try this on your phone
+                  Your device doesn't have a camera. Try this on your phone
                 </p>
               </div>
             )}

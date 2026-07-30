@@ -277,17 +277,17 @@ export default function ScrapePoolDashboard() {
                       {org.leadTier}
                     </span>
                   </td>
-                  <td className="p-3 dark:text-white">{org.leadScore !== null ? org.leadScore : '—'}</td>
+                  <td className="p-3 dark:text-white">{org.leadScore !== null ? org.leadScore : 'N/A'}</td>
                   <td className="p-3 text-xs text-gray-600 dark:text-gray-400">
                     {org.scrapedEmail ? (
                       <a href={`mailto:${org.scrapedEmail}`} className="text-blue-500 hover:underline">
                         {org.scrapedEmail.substring(0, 20)}...
                       </a>
                     ) : (
-                      '—'
+                      ', '
                     )}
                   </td>
-                  <td className="p-3 text-gray-600 dark:text-gray-400">{org.directoryMostRecentSource || '—'}</td>
+                  <td className="p-3 text-gray-600 dark:text-gray-400">{org.directoryMostRecentSource || 'N/A'}</td>
                   <td className="p-3 text-gray-600 dark:text-gray-400">{new Date(org.createdAt).toLocaleDateString()}</td>
                 </tr>
               ))}

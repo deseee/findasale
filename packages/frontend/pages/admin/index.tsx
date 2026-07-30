@@ -156,12 +156,12 @@ const AdminDashboard = () => {
   }
 
   const formatCurrency = (cents: number | undefined) => {
-    if (cents === undefined) return '—';
+    if (cents === undefined) return 'N/A';
     return (cents / 100).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
   };
 
   const funnelPercent = (current: number | undefined, previous: number | undefined) => {
-    if (!current || !previous || previous === 0) return '—';
+    if (!current || !previous || previous === 0) return 'N/A';
     const pct = ((current / previous) * 100).toFixed(1);
     return `${pct}%`;
   };
@@ -247,7 +247,7 @@ const AdminDashboard = () => {
               <h3 className="text-warm-600 dark:text-warm-400 text-sm font-medium uppercase">Total Organizers</h3>
               <p className="text-3xl font-bold text-warm-900 dark:text-warm-100 mt-2">{stats.totalOrganizers}</p>
               <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">
-                {stats.tierBreakdown ? `${stats.tierBreakdown.PRO || 0} PRO · ${stats.tierBreakdown.TEAMS || 0} TEAMS` : '—'}
+                {stats.tierBreakdown ? `${stats.tierBreakdown.PRO || 0} PRO · ${stats.tierBreakdown.TEAMS || 0} TEAMS` : 'N/A'}
               </p>
             </div>
 
@@ -261,7 +261,7 @@ const AdminDashboard = () => {
                 {stats.totalSales} <span className="text-xl text-purple-400">{drilldownOpen === 'sales' ? '▼' : '↗'}</span>
               </p>
               <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">
-                {stats.salesByStatus ? Object.entries(stats.salesByStatus).map(([status, count]) => `${count} ${status}`).join(' · ') : '—'}
+                {stats.salesByStatus ? Object.entries(stats.salesByStatus).map(([status, count]) => `${count} ${status}`).join(' · ') : 'N/A'}
               </p>
             </div>
 
@@ -299,7 +299,7 @@ const AdminDashboard = () => {
                         <tbody>
                           {drilldownData.users.map((u: any) => (
                             <tr key={u.id} className="border-b border-warm-100 dark:border-gray-700">
-                              <td className="py-2 px-3 text-warm-900 dark:text-warm-100">{u.name || '—'}</td>
+                              <td className="py-2 px-3 text-warm-900 dark:text-warm-100">{u.name || 'N/A'}</td>
                               <td className="py-2 px-3 text-warm-600 dark:text-warm-400 text-xs">{u.email}</td>
                               <td className="py-2 px-3">
                                 {(u.roles || []).map((r: string) => (
@@ -345,7 +345,7 @@ const AdminDashboard = () => {
                               {drilldownData.recentReal.map((s: any) => (
                                 <tr key={s.id} className="border-b border-warm-100 dark:border-gray-700">
                                   <td className="py-2 px-3 text-warm-900 dark:text-warm-100">{s.title}</td>
-                                  <td className="py-2 px-3 text-warm-600 dark:text-warm-400">{s.organizer?.businessName || '—'}</td>
+                                  <td className="py-2 px-3 text-warm-600 dark:text-warm-400">{s.organizer?.businessName || 'N/A'}</td>
                                   <td className="py-2 px-3 text-center">
                                     <span className={`text-xs px-2 py-0.5 rounded ${statusBadgeClass(s.status)}`}>{s.status}</span>
                                   </td>
@@ -375,7 +375,7 @@ const AdminDashboard = () => {
                           {drilldownData.sales.map((s: any) => (
                             <tr key={s.id} className="border-b border-warm-100 dark:border-gray-700">
                               <td className="py-2 px-3 text-warm-900 dark:text-warm-100">{s.title}</td>
-                              <td className="py-2 px-3 text-warm-600 dark:text-warm-400">{s.organizer?.businessName || '—'}</td>
+                              <td className="py-2 px-3 text-warm-600 dark:text-warm-400">{s.organizer?.businessName || 'N/A'}</td>
                               <td className="py-2 px-3 text-center">
                                 <span className={`text-xs px-2 py-0.5 rounded ${statusBadgeClass(s.status)}`}>{s.status}</span>
                               </td>
@@ -408,8 +408,8 @@ const AdminDashboard = () => {
                         <tbody>
                           {drilldownData.organizers.map((o: any) => (
                             <tr key={o.id} className="border-b border-warm-100 dark:border-gray-700">
-                              <td className="py-2 px-3 text-warm-900 dark:text-warm-100">{o.businessName || '—'}</td>
-                              <td className="py-2 px-3 text-warm-600 dark:text-warm-400 text-xs">{o.contactEmail || '—'}</td>
+                              <td className="py-2 px-3 text-warm-900 dark:text-warm-100">{o.businessName || 'N/A'}</td>
+                              <td className="py-2 px-3 text-warm-600 dark:text-warm-400 text-xs">{o.contactEmail || 'N/A'}</td>
                               <td className="py-2 px-3 text-center">
                                 <span className="text-xs px-2 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300">{o.subscriptionTier}</span>
                               </td>
@@ -632,7 +632,7 @@ const AdminDashboard = () => {
               >
                 <p className="text-xl font-bold text-gray-700 dark:text-gray-300">{(stats.scrapedSalesCount ?? 0).toLocaleString()}</p>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Scraped / Unclaimed ↗</p>
-                <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">Isolated — click to view</p>
+                <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">Isolated. Click to view</p>
               </div>
               <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded border border-blue-100 dark:border-blue-800 cursor-pointer hover:opacity-80 transition" onClick={() => openDrilldown('real-organizers')}>
                 <p className="text-xl font-bold text-blue-900 dark:text-blue-100">{stats.totalOrganizers.toLocaleString()}</p>
@@ -729,7 +729,7 @@ const AdminDashboard = () => {
 
         <Link href="/admin/creators" className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 hover:shadow-lg hover:bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 transition">
           <h3 className="text-lg font-bold text-warm-900 dark:text-warm-100 mb-2">Creators Admin</h3>
-          <p className="text-warm-600 dark:text-warm-400 text-sm">Manage all affiliates — codes, clicks, referrals, earnings</p>
+          <p className="text-warm-600 dark:text-warm-400 text-sm">Manage all affiliates. Codes, clicks, referrals, earnings</p>
         </Link>
 
         <Link href="/admin/scraper" className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 hover:shadow-lg hover:bg-green-50 dark:bg-green-900/20 border border-green-100 transition">

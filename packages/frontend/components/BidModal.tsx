@@ -69,7 +69,7 @@ const BidModal = ({ item, onClose, onBidPlaced }: Props) => {
             <strong>
               {item.currentBid !== null && item.currentBid !== undefined
                 ? `$${Number(item.currentBid).toFixed(2)}`
-                : '—'}
+                : 'N/A'}
             </strong>
           </span>
           <span>

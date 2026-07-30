@@ -194,7 +194,7 @@ const AdminSocialAccounts = () => {
       const created = res.data?.post;
       setNotice(
         created
-          ? `Test post created (${PLATFORM_LABEL[created.platform] || created.platform}) — status ${created.status}.`
+          ? `Test post created (${PLATFORM_LABEL[created.platform] || created.platform}). Status ${created.status}.`
           : 'Test post created.'
       );
       setFormBody('');
@@ -237,7 +237,7 @@ const AdminSocialAccounts = () => {
     }
     try {
       await api.post(`/social-publisher/posts/${id}/confirm`);
-      setNotice('Post confirmed — scheduled for the next publisher run.');
+      setNotice('Post confirmed. Scheduled for the next publisher run.');
       await loadPosts();
     } catch (err: any) {
       console.error('Confirm post error:', err);
@@ -347,12 +347,12 @@ const AdminSocialAccounts = () => {
                   <td className="px-6 py-4 text-sm text-warm-900 dark:text-warm-100 font-medium">
                     {PLATFORM_LABEL[a.platform] || a.platform}
                   </td>
-                  <td className="px-6 py-4 text-sm text-warm-600 dark:text-warm-400">{a.platformUsername || '—'}</td>
-                  <td className="px-6 py-4 text-sm text-center">{a.isActive ? '✓' : '—'}</td>
+                  <td className="px-6 py-4 text-sm text-warm-600 dark:text-warm-400">{a.platformUsername || 'N/A'}</td>
+                  <td className="px-6 py-4 text-sm text-center">{a.isActive ? '✓' : 'N/A'}</td>
                   <td className="px-6 py-4 text-sm text-warm-600 dark:text-warm-400">
-                    {a.connectedAt ? new Date(a.connectedAt).toLocaleDateString() : '—'}
+                    {a.connectedAt ? new Date(a.connectedAt).toLocaleDateString() : 'N/A'}
                   </td>
-                  <td className="px-6 py-4 text-sm text-red-600 dark:text-red-400">{a.lastErrorMessage || '—'}</td>
+                  <td className="px-6 py-4 text-sm text-red-600 dark:text-red-400">{a.lastErrorMessage || 'N/A'}</td>
                 </tr>
               ))}
             </tbody>
@@ -395,7 +395,7 @@ const AdminSocialAccounts = () => {
 
           <div className="flex flex-col gap-1">
             <label className="text-sm text-warm-700 dark:text-warm-300">
-              Media URL <span className="text-warm-500 dark:text-warm-500">(optional — for YouTube, the video URL)</span>
+              Media URL <span className="text-warm-500 dark:text-warm-500">(optional. For YouTube, the video URL)</span>
             </label>
             <input
               type="url"
@@ -482,10 +482,10 @@ const AdminSocialAccounts = () => {
                       </span>
                     </td>
                     <td className="px-6 py-4 text-sm text-warm-600 dark:text-warm-400 whitespace-nowrap">
-                      {p.scheduledFor ? new Date(p.scheduledFor).toLocaleString() : '—'}
+                      {p.scheduledFor ? new Date(p.scheduledFor).toLocaleString() : 'N/A'}
                     </td>
                     <td className="px-6 py-4 text-sm text-red-600 dark:text-red-400 max-w-xs">
-                      {p.lastErrorMessage || '—'}
+                      {p.lastErrorMessage || 'N/A'}
                     </td>
                     <td className="px-6 py-4 text-sm text-right whitespace-nowrap">
                       <div className="flex items-center justify-end gap-2">
@@ -493,7 +493,7 @@ const AdminSocialAccounts = () => {
                           <button
                             onClick={() => handleConfirmPost(p.id)}
                             className="px-3 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 transition"
-                            title="Confirm this staged post — the final human gate before it publishes"
+                            title="Confirm this staged post. The final human gate before it publishes"
                           >
                             Confirm &amp; schedule
                           </button>
@@ -507,7 +507,7 @@ const AdminSocialAccounts = () => {
                           </button>
                         ) : (
                           !(p.status === 'DRAFT') && (
-                            <span className="text-warm-400 dark:text-gray-600">—</span>
+                            <span className="text-warm-400 dark:text-gray-600">, </span>
                           )
                         )}
                       </div>

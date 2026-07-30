@@ -181,7 +181,7 @@ const ShopperHoldsPage = () => {
                             {hold.item.sale.organizerZelleHandle && (
                               <div className="flex items-center gap-2">
                                 <span className="text-xs text-warm-700 dark:text-warm-300">
-                                  Pay with Zelle — send <span className="font-semibold">${hold.item.price.toFixed(2)}</span> to{' '}
+                                  Pay with Zelle. Send <span className="font-semibold">${hold.item.price.toFixed(2)}</span> to{' '}
                                   <span className="font-semibold">{hold.item.sale.organizerZelleHandle}</span>
                                 </span>
                                 <button

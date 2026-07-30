@@ -84,7 +84,7 @@ const ShopifyPage: React.FC = () => {
             </p>
             <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-6 mb-8">
               <p className="text-sm text-blue-800 dark:text-blue-200 mb-4">
-                <strong>TEAMS feature</strong> — Cross-list items to Shopify with automatic inventory syncing
+                <strong>TEAMS feature</strong>. Cross-list items to Shopify with automatic inventory syncing
               </p>
               <p className="text-xs text-blue-700 dark:text-blue-300">
                 Current tier: <strong>{tier}</strong>
@@ -154,7 +154,7 @@ const ShopifyPage: React.FC = () => {
   return (
     <>
       <Head>
-        <title>Shopify Integration — FindA.Sale</title>
+        <title>Shopify Integration. FindA.Sale</title>
         <meta name="description" content="Manage Shopify cross-listing for your sales" />
       </Head>
 

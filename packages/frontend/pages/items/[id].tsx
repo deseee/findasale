@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { GetStaticPropsContext, GetStaticPathsResult } from 'next';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
-import type { Socket } from 'socket.io-client'; // type-only — prevents SSR module crash
+import type { Socket } from 'socket.io-client'; // type-only. Prevents SSR module crash
 import api from '../../lib/api';
 import { formatCategoryLabel } from '../../lib/itemConstants';
 import { useAuth } from '../../components/AuthContext';
@@ -44,7 +44,7 @@ interface Item {
   title: string;
   description: string;
   price: number;
-  organizerId?: string; // ADR-097: type gap fix — backend already returns this top-level field
+  organizerId?: string; // ADR-097: type gap fix. Backend already returns this top-level field
   auctionStartPrice: number;
   auctionReservePrice?: number;
   currentBid: number;
@@ -57,7 +57,7 @@ interface Item {
   lotNumber?: string | null;
   isLiveDrop: boolean; // CD2
   liveDropAt: string | null; // CD2
-  reverseAuction: boolean; // CD2 Phase 4 (deprecated — use listingType)
+  reverseAuction: boolean; // CD2 Phase 4 (deprecated. Use listingType)
   listingType?: string; // P2 #6: canonical field (FIXED | AUCTION | REVERSE_AUCTION | FLASH_DEAL)
   reverseDailyDrop?: number; // CD2 Phase 4
   reverseFloorPrice?: number; // CD2 Phase 4
@@ -186,7 +186,7 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
   const { showToast } = useToast();
   const { showSurvey } = useFeedbackSurvey();
   const queryClient = useQueryClient();
-  const shopperCart = useShopperCart(user?.id); // Phase 1: Smart Cart — scoped to user
+  const shopperCart = useShopperCart(user?.id); // Phase 1: Smart Cart. Scoped to user
 
   // State
   const [selectedPhotoIndex, setSelectedPhotoIndex] = useState(0);
@@ -206,7 +206,7 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
   const { openCart } = useCart();
   const [showQrModal, setShowQrModal] = useState(false); // Feature #85: Treasure Hunt QR
   const [showHoldToPayModal, setShowHoldToPayModal] = useState(false); // Hold-to-Pay: organizer invoice
-  const [showSwitchSaleModal, setShowSwitchSaleModal] = useState(false); // Phase 1: Smart Cart — cross-sale confirmation
+  const [showSwitchSaleModal, setShowSwitchSaleModal] = useState(false); // Phase 1: Smart Cart. Cross-sale confirmation
   const [pendingCartItem, setPendingCartItem] = useState<any>(null); // Phase 1: Smart Cart
   const [bidModalOpen, setBidModalOpen] = useState(false);
   const [itemMessageModalOpen, setItemMessageModalOpen] = useState(false); // ADR-097
@@ -742,7 +742,7 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
               {/* B2: AI Tagging Disclosure */}
               {item.isAiTagged && (
                 <p className="text-xs text-warm-500 mt-1">
-                  ✨ Some of this item&apos;s details were auto-suggested — check with the seller if you have questions.
+                  ✨ Some of this item&apos;s details were auto-suggested. Check with the seller if you have questions.
                 </p>
               )}
 
@@ -834,7 +834,7 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
                 {item.organizerDiscountAmount && item.organizerDiscountAmount > 0 && (
                   <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
                     <div className="inline-block px-3 py-1.5 bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400 text-sm font-semibold rounded-full">
-                      Organizer Special: ${item.organizerDiscountAmount.toFixed(2)} off — spend {item.organizerDiscountXp} XP
+                      Organizer Special: ${item.organizerDiscountAmount.toFixed(2)} off. Spend {item.organizerDiscountXp} XP
                     </div>
                     {user && user.guildXp && user.guildXp >= (item.organizerDiscountXp ?? 0) && (
                       <div className="mt-2 text-xs font-semibold text-green-600 dark:text-green-400">
@@ -856,7 +856,7 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
                 </div>
                 <div>
                   <span className="text-gray-500 dark:text-gray-400">Category: </span>
-                  <span className="font-semibold text-gray-900 dark:text-gray-100">{formatCategoryLabel(item.category) || '—'}</span>
+                  <span className="font-semibold text-gray-900 dark:text-gray-100">{formatCategoryLabel(item.category) || 'N/A'}</span>
                 </div>
               </div>
 
@@ -1306,7 +1306,7 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
                 <p className="text-warm-700 dark:text-gray-300 mb-4">
                   {scoutRevealResults.length > 0
                     ? `${scoutRevealResults.length} shopper${scoutRevealResults.length !== 1 ? 's' : ''} ${scoutRevealResults.length === 1 ? 'is' : 'are'} interested in this item:`
-                    : 'No one else has saved this item yet — you may have the edge!'}
+                    : 'No one else has saved this item yet. You may have the edge!'}
                 </p>
 
                 {scoutRevealResults.length > 0 && (

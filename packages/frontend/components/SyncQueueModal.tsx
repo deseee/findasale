@@ -160,14 +160,14 @@ export default function SyncQueueModal({ isOpen, onClose }: SyncQueueModalProps)
                       {needsReconciliation && (
                         <p className="mt-2 text-sm text-red-700 flex items-start gap-1">
                           <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-                          Needs reconciliation — one or more items in this sale were already sold elsewhere while this device was offline. This sale was NOT recorded; review manually before re-entering it.
+                          Needs reconciliation. One or more items in this sale were already sold elsewhere while this device was offline. This sale was NOT recorded; review manually before re-entering it.
                         </p>
                       )}
 
                       {stale && (
                         <p className="mt-2 text-xs font-medium text-amber-700 flex items-center gap-1">
                           <AlertTriangle className="w-3.5 h-3.5" />
-                          Unsynced 24h+ — will keep retrying, will not expire
+                          Unsynced 24h+. Will keep retrying, will not expire
                         </p>
                       )}
                     </div>

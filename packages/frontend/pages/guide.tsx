@@ -24,7 +24,7 @@ const sections: Section[] = [
         <p className="text-warm-700 dark:text-warm-300 leading-relaxed">
           Head to FindA.Sale and sign up for an account. Once you've confirmed your email,
           visit <strong>Settings → Account</strong> and set your role to Organizer. You'll be prompted
-          to complete your organizer profile — add a business name, profile photo, and bio.
+          to complete your organizer profile. Add a business name, profile photo, and bio.
           A professional photo and welcoming bio help shoppers trust you before they ever visit a sale.
         </p>
 
@@ -53,20 +53,20 @@ const sections: Section[] = [
             so be specific.
           </li>
           <li>
-            <strong>Description</strong> — Briefly describe what's for sale. Mention standout categories
+            <strong>Description</strong>. Briefly describe what's for sale. Mention standout categories
             (antique furniture, vintage jewelry, collectibles) and any special details. Two or three sentences
             is plenty.
           </li>
           <li>
-            <strong>Sale Dates</strong> — Set your start and end dates. Publishing 3–5 days before the
+            <strong>Sale Dates</strong>. Set your start and end dates. Publishing 3–5 days before the
             sale starts gives shoppers time to browse and set holds before opening day.
           </li>
           <li>
-            <strong>Address</strong> — Your exact address is shown to shoppers once the sale is published
+            <strong>Address</strong>. Your exact address is shown to shoppers once the sale is published
             and used to display your sale on the map.
           </li>
           <li>
-            <strong>Sale Type</strong> — Choose Regular (fixed price) or Auction (competitive bidding).
+            <strong>Sale Type</strong>. Choose Regular (fixed price) or Auction (competitive bidding).
             All items carry a 10% flat platform fee regardless of sale type.
           </li>
         </ul>
@@ -93,7 +93,7 @@ const sections: Section[] = [
         <h3 className="text-xl font-semibold text-warm-800 dark:text-warm-200 mt-6">Smart Auto-Tagging</h3>
         <p className="text-warm-700 dark:text-warm-300 leading-relaxed">
           After you upload photos, our system suggests a title, description, category, and tags based on
-          what it sees. Review each suggestion — you know your items best. Accept useful suggestions,
+          what it sees. Review each suggestion. You know your items best. Accept useful suggestions,
           dismiss irrelevant ones, or edit them freely. Smart tagging handles the first draft; you refine it.
         </p>
 
@@ -105,7 +105,7 @@ const sections: Section[] = [
         <h3 className="text-xl font-semibold text-warm-800 dark:text-warm-200 mt-6">Tags and Categories</h3>
         <p className="text-warm-700 dark:text-warm-300 leading-relaxed">
           Select the most specific category that fits (Furniture, Glassware, Jewelry, Books, Art, etc.).
-          Add custom tags for styles collectors search for — "Mid-Century Modern," "Art Deco," "Tole Ware."
+          Add custom tags for styles collectors search for, "Mid-Century Modern," "Art Deco," "Tole Ware."
           Good tags dramatically improve item discoverability.
         </p>
       </div>
@@ -120,7 +120,7 @@ const sections: Section[] = [
           Not sure what an item is worth? Community members can appraise items for you.
           Mark an item for appraisal and Scout-rank members will submit valuations based on
           their expertise, research, and market knowledge. You choose the appraisal you find
-          most useful — it's your decision, your final value.
+          most useful. It's your decision, your final value.
         </p>
 
         <h3 className="text-xl font-semibold text-warm-800 dark:text-warm-200 mt-6">What Qualifies You to Appraise</h3>
@@ -133,9 +133,9 @@ const sections: Section[] = [
 
         <h3 className="text-xl font-semibold text-warm-800 dark:text-warm-200 mt-6">What Makes a Great Appraisal</h3>
         <ul className="space-y-3 text-warm-700 dark:text-warm-300 list-disc list-inside">
-          <li><strong>Cite your source:</strong> eBay sold listings, Worthpoint, live auction results, personal sales experience — name it.</li>
+          <li><strong>Cite your source:</strong> eBay sold listings, Worthpoint, live auction results, personal sales experience. Name it.</li>
           <li><strong>Be specific about what you see:</strong> Describe joinery style, maker's marks, material, era, model number. "Old bowl" is useless; "Wedgwood Jasperware, ca. 1920, blue with white relief figures" is credible.</li>
-          <li><strong>Give a price range, not a single number:</strong> $150–$250, not $185. Explain the spread — condition variance, regional differences, market timing.</li>
+          <li><strong>Give a price range, not a single number:</strong> $150–$250, not $185. Explain the spread. Condition variance, regional differences, market timing.</li>
           <li><strong>Note what pushes value up or down:</strong> Original hardware vs. replacements, restoration work, provenance, reproduction parts. Honesty builds trust.</li>
         </ul>
 
@@ -177,12 +177,12 @@ const sections: Section[] = [
           sold manually to prevent duplicate purchases and keep your inventory accurate.
         </p>
         <p className="text-warm-700 dark:text-warm-300 leading-relaxed">
-          <strong>CSV Export</strong> — Go to your sale dashboard and click <strong>Export</strong> to
+          <strong>CSV Export</strong>. Go to your sale dashboard and click <strong>Export</strong> to
           download your full inventory as a CSV. The file includes titles, descriptions, prices, categories,
-          tags, and sold status — useful for record-keeping and accounting.
+          tags, and sold status. Useful for record-keeping and accounting.
         </p>
         <p className="text-warm-700 dark:text-warm-300 leading-relaxed">
-          <strong>Holds and Reservations</strong> — Shoppers can request holds before the sale opens.
+          <strong>Holds and Reservations</strong>. Shoppers can request holds before the sale opens.
           If you allow holds, the item is marked "held" and reserved for that shopper. Accept or decline
           hold requests from your dashboard. Holds build excitement and give serious buyers confidence.
         </p>
@@ -196,7 +196,7 @@ const sections: Section[] = [
       <div className="space-y-4">
         <p className="text-warm-700 dark:text-warm-300 leading-relaxed">
           When you create an auction sale, shoppers bid on items rather than buying at a fixed price.
-          Each bid must exceed the previous bid (typically by $1–$5). Bidding is live — participants see
+          Each bid must exceed the previous bid (typically by $1–$5). Bidding is live. Participants see
           each other's bids in real time. At the auction end time, the highest bidder wins and payment
           is collected automatically.
         </p>
@@ -218,7 +218,7 @@ const sections: Section[] = [
       <div className="space-y-4">
         <p className="text-warm-700 dark:text-warm-300 leading-relaxed">
           Shoppers can message you directly with questions about items or logistics. Check your inbox
-          regularly — responding within a few hours builds trust and reduces abandoned carts.
+          regularly. Responding within a few hours builds trust and reduces abandoned carts.
         </p>
         <p className="text-warm-700 dark:text-warm-300 leading-relaxed">
           You can also send updates to all shoppers following your sale. Use this for last-minute announcements
@@ -239,7 +239,7 @@ const sections: Section[] = [
           The 10% platform fee is deducted before payout.
         </p>
         <p className="text-warm-700 dark:text-warm-300 leading-relaxed">
-          <strong>Instant Payouts</strong> — Need funds sooner? Stripe's instant payout option lets
+          <strong>Instant Payouts</strong>. Need funds sooner? Stripe's instant payout option lets
           you withdraw your balance immediately for a small fee charged by Stripe. Visit your Stripe
           dashboard to enable this option.
         </p>
@@ -262,7 +262,7 @@ const sections: Section[] = [
         </p>
         <p className="text-warm-700 dark:text-warm-300 leading-relaxed">
           Find your sale's QR code on the sale detail page under <strong>Share</strong>.
-          The larger you print it, the easier it is to scan from a distance — aim for at least 2 inches
+          The larger you print it, the easier it is to scan from a distance. Aim for at least 2 inches
           on printed materials.
         </p>
       </div>
@@ -338,7 +338,7 @@ const sections: Section[] = [
         <h3 className="text-xl font-semibold text-warm-800 dark:text-warm-200 mt-6">1. Confirm Your Stripe Account Is Ready</h3>
         <p className="text-warm-700 dark:text-warm-300 leading-relaxed">
           Go to your <strong>Earnings</strong> page. If you see a yellow banner asking you to complete
-          Stripe setup, do that first — no payments will go through until onboarding is finished.
+          Stripe setup, do that first. No payments will go through until onboarding is finished.
           You're ready when there are no setup banners and your Earnings page shows a connected payout method.
         </p>
 
@@ -347,7 +347,7 @@ const sections: Section[] = [
           Open the{' '}
           <Link href="/organizer/pos" className="text-amber-600 hover:underline font-medium">POS page</Link>,
           select your sale, and tap <strong>"Run $1.00 Test Transaction"</strong> in the Pre-Sale Test card.
-          This sends a $1 charge through Stripe's test environment — no real money moves. When it succeeds,
+          This sends a $1 charge through Stripe's test environment. No real money moves. When it succeeds,
           the "POS open and test transaction done" item on your progress checklist automatically marks itself complete.
         </p>
         <p className="text-warm-700 dark:text-warm-300 leading-relaxed">
@@ -357,7 +357,7 @@ const sections: Section[] = [
 
         <h3 className="text-xl font-semibold text-warm-800 dark:text-warm-200 mt-6">3. Test Online Checkout (if using self-checkout QR codes)</h3>
         <p className="text-warm-700 dark:text-warm-300 leading-relaxed">
-          Open the POS page for your sale and tap &quot;Test Online Checkout&quot;. You&apos;ll get a link and QR code — click to open on desktop, or scan with your phone to test the real mobile experience. Use card <strong>4242 4242 4242 4242</strong> with any future expiry and any CVC. Your inventory won&apos;t change — the test is fully isolated.
+          Open the POS page for your sale and tap &quot;Test Online Checkout&quot;. You&apos;ll get a link and QR code. Click to open on desktop, or scan with your phone to test the real mobile experience. Use card <strong>4242 4242 4242 4242</strong> with any future expiry and any CVC. Your inventory won&apos;t change. The test is fully isolated.
         </p>
         <p className="text-warm-700 dark:text-warm-300 leading-relaxed mt-3">
           If you&apos;re running an auction, tap &quot;Test Auction Checkout&quot; to verify the winner payment flow works the same way.
@@ -366,7 +366,7 @@ const sections: Section[] = [
         <h3 className="text-xl font-semibold text-warm-800 dark:text-warm-200 mt-6">4. Walk Through the POS Flow Once</h3>
         <p className="text-warm-700 dark:text-warm-300 leading-relaxed">
           Open the POS page and run a quick walkthrough: search for an item, add it to the cart, and
-          verify prices look right. You don't need to complete a real charge — you're just confirming
+          verify prices look right. You don't need to complete a real charge. You're just confirming
           items load, prices are accurate, and the charge screen appears correctly.
         </p>
 
@@ -374,7 +374,7 @@ const sections: Section[] = [
         <ul className="space-y-2 text-warm-700 dark:text-warm-300 mt-2">
           {[
             'Stripe account fully connected (no yellow banners)',
-            'POS test transaction completed — checklist task auto-checked',
+            'POS test transaction completed. Checklist task auto-checked',
             'At least one item is priced and published',
             'QR codes printed and tested (if using self-checkout)',
             'Sale start time is correct (double-check timezone)',
@@ -415,13 +415,13 @@ const sections: Section[] = [
         <h3 className="text-xl font-semibold text-warm-800 dark:text-warm-200 mt-8">Optional: Physical Card Reader</h3>
         <p className="text-warm-700 dark:text-warm-300 leading-relaxed">
           FindA.Sale's POS supports two Stripe Terminal smart readers: the <strong>Stripe Reader S700</strong> and
-          the <strong>Stripe Reader S710</strong>. The S710 adds cellular connectivity — a good choice for outdoor
+          the <strong>Stripe Reader S710</strong>. The S710 adds cellular connectivity. A good choice for outdoor
           venues or anywhere Wi-Fi is spotty. Both accept chip, swipe, and contactless payments including Apple Pay
           and Google Pay. Order at{' '}
           <a href="https://stripe.com/terminal" target="_blank" rel="noopener noreferrer" className="text-amber-600 hover:underline font-medium">stripe.com/terminal</a>.
         </p>
         <p className="text-warm-700 dark:text-warm-300 leading-relaxed mt-3">
-          Because FindA.Sale is a web app, readers connect over the internet rather than Bluetooth — your venue
+          Because FindA.Sale is a web app, readers connect over the internet rather than Bluetooth. Your venue
           needs a working Wi-Fi or cellular connection. Your Stripe account must be fully onboarded before
           in-person card payments will process. If you're ordering a reader, allow a few days for delivery and
           add reader setup to your pre-sale checklist.
@@ -454,9 +454,9 @@ const GuidePage = () => {
     <>
       <Head>
         <title>Organizer Guide – FindA.Sale</title>
-        <meta name="description" content="Complete guide for sale organizers on FindA.Sale — create sales, add items, manage inventory, and get paid." />
+        <meta name="description" content="Complete guide for sale organizers on FindA.Sale. Create sales, add items, manage inventory, and get paid." />
         <meta property="og:title" content="Organizer Guide – FindA.Sale" />
-        <meta property="og:description" content="Complete guide for sale organizers on FindA.Sale — create sales, add items, manage inventory, and get paid." />
+        <meta property="og:description" content="Complete guide for sale organizers on FindA.Sale. Create sales, add items, manage inventory, and get paid." />
         <meta property="og:url" content="https://finda.sale/guide" />
         <meta property="og:image" content="https://finda.sale/og-image.png" />
         <script
@@ -466,7 +466,7 @@ const GuidePage = () => {
               '@context': 'https://schema.org',
               '@type': 'CollectionPage',
               name: 'Organizer Guide',
-              description: 'Complete guide for sale organizers on FindA.Sale — create sales, add items, manage inventory, and get paid.',
+              description: 'Complete guide for sale organizers on FindA.Sale. Create sales, add items, manage inventory, and get paid.',
               url: 'https://finda.sale/guide',
             }),
           }}

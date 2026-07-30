@@ -13,7 +13,7 @@ const FAQ_DATA = [
     category: 'Getting Started',
     question: 'How do I set up payments before my first sale?',
     answer:
-      'Before you can receive payments, you\'ll need to connect a Stripe account. From your Dashboard, click Setup Payments and follow the short onboarding flow. Stripe will verify your identity and bank account — this usually takes a few minutes. Once connected, your share of each sale deposits to your bank account within 2 business days. You only need to do this once.',
+      'Before you can receive payments, you\'ll need to connect a Stripe account. From your Dashboard, click Setup Payments and follow the short onboarding flow. Stripe will verify your identity and bank account. This usually takes a few minutes. Once connected, your share of each sale deposits to your bank account within 2 business days. You only need to do this once.',
   },
   {
     id: 'getting-started-2',
@@ -36,7 +36,7 @@ const FAQ_DATA = [
     category: 'Sales Management',
     question: 'What\'s the difference between a Draft, a Hidden sale, and a Published sale?',
     answer:
-      'These are three distinct states that control who can see your sale. Draft — Your sale exists in your dashboard but is completely invisible to shoppers and search. Nothing is public. Use this while you\'re still building your inventory. Published — Your sale is live. It appears in search results, on the map, and can be found by shoppers. Items can be purchased. Hidden — Your sale is published (items can still be accessed and purchased by anyone with the direct link) but it does not appear in public search results or on the map. Use this when you want to soft-launch a preview for select shoppers before going fully public.',
+      'These are three distinct states that control who can see your sale. Draft. Your sale exists in your dashboard but is completely invisible to shoppers and search. Nothing is public. Use this while you\'re still building your inventory. Published. Your sale is live. It appears in search results, on the map, and can be found by shoppers. Items can be purchased. Hidden. Your sale is published (items can still be accessed and purchased by anyone with the direct link) but it does not appear in public search results or on the map. Use this when you want to soft-launch a preview for select shoppers before going fully public.',
   },
   {
     id: 'sales-2',
@@ -50,7 +50,7 @@ const FAQ_DATA = [
     category: 'Sales Management',
     question: 'Can I schedule a sale to go live automatically?',
     answer:
-      'Yes. When creating your sale, set the sale start date and time. You can pre-schedule the listing to appear in search results a set number of days before the sale starts — shoppers can see it, favorite it, and hold items before the doors open. The exact lead time is configurable per sale.',
+      'Yes. When creating your sale, set the sale start date and time. You can pre-schedule the listing to appear in search results a set number of days before the sale starts. Shoppers can see it, favorite it, and hold items before the doors open. The exact lead time is configurable per sale.',
   },
   {
     id: 'sales-4',
@@ -64,58 +64,58 @@ const FAQ_DATA = [
     category: 'Sales Management',
     question: 'Can I edit a sale after it\'s published?',
     answer:
-      'Yes — you can edit the sale title, description, dates, address, and photos at any time before the sale ends. Item prices, descriptions, and photos can be edited at any time. After the sale end date, the page becomes read-only but stays visible for 30 days so shoppers can reference what sold.',
+      'Yes. You can edit the sale title, description, dates, address, and photos at any time before the sale ends. Item prices, descriptions, and photos can be edited at any time. After the sale end date, the page becomes read-only but stays visible for 30 days so shoppers can reference what sold.',
   },
 
   // Item Management FAQs
   {
     id: 'item-mgmt-1',
     category: 'Item Management',
-    question: 'What do the item status options mean — Available, Sold, and Unavailable?',
+    question: 'What do the item status options mean. Available, Sold, and Unavailable?',
     answer:
-      'These three statuses control whether an item can be purchased, but they are separate from whether the item is visible to shoppers. Available — The item is for sale. Shoppers can view it, favorite it, hold it (if holds are enabled), and purchase it online. Sold — The item has been sold. This could mean it was purchased through FindA.Sale, or you\'ve manually marked it sold (for in-person sales). Sold items remain visible on your sale page as a record of what sold — shoppers can see them but cannot purchase. Unavailable — The item is temporarily not purchasable online. Shoppers can still see the listing but cannot buy it or place a hold. Use this when an item is being held for an offline buyer, is under dispute, or you\'re pulling it briefly for any reason without wanting to delete or mark it sold.',
+      'These three statuses control whether an item can be purchased, but they are separate from whether the item is visible to shoppers. Available. The item is for sale. Shoppers can view it, favorite it, hold it (if holds are enabled), and purchase it online. Sold. The item has been sold. This could mean it was purchased through FindA.Sale, or you\'ve manually marked it sold (for in-person sales). Sold items remain visible on your sale page as a record of what sold. Shoppers can see them but cannot purchase. Unavailable. The item is temporarily not purchasable online. Shoppers can still see the listing but cannot buy it or place a hold. Use this when an item is being held for an offline buyer, is under dispute, or you\'re pulling it briefly for any reason without wanting to delete or mark it sold.',
   },
   {
     id: 'item-mgmt-2',
     category: 'Item Management',
     question: 'What\'s the difference between marking an item Unavailable and Unpublishing it?',
     answer:
-      'Great question — these look similar but do different things. Unpublishing (setting an item back to Draft) hides the item completely. Shoppers cannot see it at all. The item disappears from your public sale listing. Marking Unavailable keeps the item visible to shoppers — they can see the photo, title, and description — but removes the ability to purchase or hold it. Think of "unavailable" as a soft pause and "unpublish" as a full removal from view. For a quick offline hold, use Unavailable. For a photo that needs to be retaken or a listing you\'re not ready to show, use Unpublish.',
+      'Great question. These look similar but do different things. Unpublishing (setting an item back to Draft) hides the item completely. Shoppers cannot see it at all. The item disappears from your public sale listing. Marking Unavailable keeps the item visible to shoppers They can see the photo, title, and description but removes the ability to purchase or hold it. Think of "unavailable" as a soft pause and "unpublish" as a full removal from view. For a quick offline hold, use Unavailable. For a photo that needs to be retaken or a listing you\'re not ready to show, use Unpublish.',
   },
   {
     id: 'item-mgmt-3',
     category: 'Item Management',
     question: 'What is Pending Review and when does it appear?',
     answer:
-      'Items captured via Rapid Capture (the rapid-fire photo mode) enter a Pending Review state automatically. This means the system has analyzed the photo and generated a suggested title, description, category, and tags — but you haven\'t confirmed them yet. The item is in your inventory but is not visible to shoppers. Once you review and approve the Auto Tag suggestions on the Review page, the item moves to Published.',
+      'Items captured via Rapid Capture (the rapid-fire photo mode) enter a Pending Review state automatically. This means the system has analyzed the photo and generated a suggested title, description, category, and tags. But you haven\'t confirmed them yet. The item is in your inventory but is not visible to shoppers. Once you review and approve the Auto Tag suggestions on the Review page, the item moves to Published.',
   },
   {
     id: 'item-mgmt-4',
     category: 'Item Management',
     question: 'How do I add items to my sale?',
     answer:
-      'You have three ways to add items: 1. Manual add — Click Add Item in your sale and fill in the details yourself. 2. Camera / Rapid Capture — Photograph items one by one (regular mode) or in rapid-fire mode. Auto Tags suggests titles, descriptions, categories, and tags from each photo. You review in batches on the Review page. 3. Bulk import — Upload a CSV with item data for larger inventory sets (PRO/TEAMS).',
+      'You have three ways to add items: 1. Manual add. Click Add Item in your sale and fill in the details yourself. 2. Camera / Rapid Capture. Photograph items one by one (regular mode) or in rapid-fire mode. Auto Tags suggests titles, descriptions, categories, and tags from each photo. You review in batches on the Review page. 3. Bulk import. Upload a CSV with item data for larger inventory sets (PRO/TEAMS).',
   },
   {
     id: 'item-mgmt-5',
     category: 'Item Management',
     question: 'How does Auto Tags work?',
     answer:
-      'When you take a photo or upload an image, FindA.Sale\'s system analyzes the visual content and generates a suggested title, description, category, and tags. You\'ll see these suggestions on the review screen. You can accept them as-is, edit any field, or dismiss and start fresh. You stay in control — Auto Tags gives you a first draft, not a final listing. This feature saves significant time on large inventories where writing every description manually isn\'t practical.',
+      'When you take a photo or upload an image, FindA.Sale\'s system analyzes the visual content and generates a suggested title, description, category, and tags. You\'ll see these suggestions on the review screen. You can accept them as-is, edit any field, or dismiss and start fresh. You stay in control. Auto Tags gives you a first draft, not a final listing. This feature saves significant time on large inventories where writing every description manually isn\'t practical.',
   },
   {
     id: 'item-mgmt-6',
     category: 'Item Management',
     question: 'How many photos can I add per item?',
     answer:
-      'Up to 5 photos per item. The first photo is the primary thumbnail that appears in search results. Additional photos give shoppers more detail — recommended for high-value, collectible, or condition-sensitive items.',
+      'Up to 5 photos per item. The first photo is the primary thumbnail that appears in search results. Additional photos give shoppers more detail. Recommended for high-value, collectible, or condition-sensitive items.',
   },
   {
     id: 'item-mgmt-7',
     category: 'Item Management',
     question: 'How do I bulk edit or delete items?',
     answer:
-      'From your sale\'s item list, check the boxes next to multiple items to select them. The bulk action bar appears at the top — use it to change status, delete, move items between sales, or export selected items. Bulk operations are available on PRO and TEAMS plans.',
+      'From your sale\'s item list, check the boxes next to multiple items to select them. The bulk action bar appears at the top. Use it to change status, delete, move items between sales, or export selected items. Bulk operations are available on PRO and TEAMS plans.',
   },
 
   // Community Appraisals FAQs
@@ -124,14 +124,14 @@ const FAQ_DATA = [
     category: 'Community Appraisals',
     question: 'How do I request an appraisal for an item?',
     answer:
-      'Mark an item for appraisal from your sale dashboard — flip the toggle or click the Appraisal icon on the item card. Your item will be visible to the community. Members with Scout rank or higher can submit appraisals. You\'ll receive notifications as appraisals come in. Once you have one or more submissions, review them and select the one you find most useful. You stay in control — pick the appraisal that best matches what you believe the item is worth.',
+      'Mark an item for appraisal from your sale dashboard. Flip the toggle or click the Appraisal icon on the item card. Your item will be visible to the community. Members with Scout rank or higher can submit appraisals. You\'ll receive notifications as appraisals come in. Once you have one or more submissions, review them and select the one you find most useful. You stay in control. Pick the appraisal that best matches what you believe the item is worth.',
   },
   {
     id: 'appraisals-2',
     category: 'Community Appraisals',
     question: 'What qualifies someone to submit an appraisal?',
     answer:
-      'You don\'t need formal credentials. Appraisers are community members with collecting experience, professional backgrounds (estate sale organizers, antiques dealers, eBay powersellers), or strong research skills. What matters is specificity — cite your sources, describe what you\'re seeing, and explain your reasoning. A collector with deep knowledge of one category is more valuable than a generalist.',
+      'You don\'t need formal credentials. Appraisers are community members with collecting experience, professional backgrounds (estate sale organizers, antiques dealers, eBay powersellers), or strong research skills. What matters is specificity. Cite your sources, describe what you\'re seeing, and explain your reasoning. A collector with deep knowledge of one category is more valuable than a generalist.',
   },
   {
     id: 'appraisals-3',
@@ -143,9 +143,9 @@ const FAQ_DATA = [
   {
     id: 'appraisals-4',
     category: 'Community Appraisals',
-    question: 'I think an appraisal is wrong — what do I do?',
+    question: 'I think an appraisal is wrong. What do I do?',
     answer:
-      'You have three options: (1) Downvote the appraisal so it ranks lower, (2) Leave a comment with your concern or alternative perspective, or (3) Request a second opinion. The organizer who requested the appraisal ultimately chooses which submission they find most useful — you\'re not locked into any one appraisal. Multiple perspectives help everyone make better decisions.',
+      'You have three options: (1) Downvote the appraisal so it ranks lower, (2) Leave a comment with your concern or alternative perspective, or (3) Request a second opinion. The organizer who requested the appraisal ultimately chooses which submission they find most useful. You\'re not locked into any one appraisal. Multiple perspectives help everyone make better decisions.',
   },
   {
     id: 'appraisals-5',
@@ -168,14 +168,14 @@ const FAQ_DATA = [
     category: 'Photos & Rapid Capture',
     question: 'How do I use the inline camera on the edit page?',
     answer:
-      'On any item\'s edit page, the photo section has three buttons: 📁 (upload from files), 📷 (regular camera), and ⚡ (rapid capture). Tap either camera button to open the camera inline — photos you take are added directly to that item without leaving the page. No need to go to a separate add-items flow for existing items.',
+      'On any item\'s edit page, the photo section has three buttons: 📁 (upload from files), 📷 (regular camera), and ⚡ (rapid capture). Tap either camera button to open the camera inline. Photos you take are added directly to that item without leaving the page. No need to go to a separate add-items flow for existing items.',
   },
   {
     id: 'photos-3',
     category: 'Photos & Rapid Capture',
     question: 'What makes a good item photo?',
     answer:
-      'Good lighting and a plain background help Auto Tags give better suggestions and help shoppers make decisions. For sellable items: shoot in natural daylight if possible, place the item against a neutral surface (floor, table, wall), and photograph from a slight angle to show dimension. For condition-sensitive items, include close-ups of any wear or damage — shoppers appreciate honesty and it reduces disputes.',
+      'Good lighting and a plain background help Auto Tags give better suggestions and help shoppers make decisions. For sellable items: shoot in natural daylight if possible, place the item against a neutral surface (floor, table, wall), and photograph from a slight angle to show dimension. For condition-sensitive items, include close-ups of any wear or damage. Shoppers appreciate honesty and it reduces disputes.',
   },
 
   // Holds & Reservations FAQs
@@ -191,7 +191,7 @@ const FAQ_DATA = [
     category: 'Holds & Reservations',
     question: 'How long do holds last?',
     answer:
-      'Hold duration is based on the shopper\'s Explorer rank — ranging from 30 minutes for new shoppers up to 90 minutes for Grandmasters. If a shopper doesn\'t complete their purchase within the hold window, the item becomes available again automatically.',
+      'Hold duration is based on the shopper\'s Explorer rank. Ranging from 30 minutes for new shoppers up to 90 minutes for Grandmasters. If a shopper doesn\'t complete their purchase within the hold window, the item becomes available again automatically.',
   },
   {
     id: 'holds-3',
@@ -223,14 +223,14 @@ const FAQ_DATA = [
     category: 'Analytics & Command Center',
     question: 'How do I see how many people are viewing my sale?',
     answer:
-      'The Hype Meter shows real-time viewer count on your live sale page — you can see it from the sale detail page. PRO and TEAMS subscribers have full analytics in the Command Center Dashboard: visit counts, item view rankings, hold rates, purchase conversion, and revenue over time.',
+      'The Hype Meter shows real-time viewer count on your live sale page. You can see it from the sale detail page. PRO and TEAMS subscribers have full analytics in the Command Center Dashboard: visit counts, item view rankings, hold rates, purchase conversion, and revenue over time.',
   },
   {
     id: 'analytics-2',
     category: 'Analytics & Command Center',
     question: 'What is the Command Center?',
     answer:
-      'The Command Center is a real-time operations dashboard available to TEAMS subscribers. It gives you a live view across all your active sales — track items, holds, messages, purchases, and performance metrics in one place. Useful for estate sale companies running multiple concurrent sales or teams managing large inventories together.',
+      'The Command Center is a real-time operations dashboard available to TEAMS subscribers. It gives you a live view across all your active sales. Track items, holds, messages, purchases, and performance metrics in one place. Useful for estate sale companies running multiple concurrent sales or teams managing large inventories together.',
   },
   {
     id: 'analytics-3',
@@ -246,7 +246,7 @@ const FAQ_DATA = [
     category: 'Teams & Permissions',
     question: 'How do I add team members to my sale?',
     answer:
-      'On a TEAMS plan, go to Team Members and invite by email. You can assign roles: Admin (manage team & settings), Manager (assign tasks, approve work), Member (view inventory, process sales), or Viewer (read-only for accountants, executors, or family). Team members log in with their own accounts — no shared passwords needed.',
+      'On a TEAMS plan, go to Team Members and invite by email. You can assign roles: Admin (manage team & settings), Manager (assign tasks, approve work), Member (view inventory, process sales), or Viewer (read-only for accountants, executors, or family). Team members log in with their own accounts. No shared passwords needed.',
   },
   {
     id: 'teams-2',
@@ -262,7 +262,7 @@ const FAQ_DATA = [
     category: 'In-Person Payments',
     question: 'Can I use a physical card reader at my sale?',
     answer:
-      'Yes. FindA.Sale\'s POS supports two Stripe Terminal smart readers: the Stripe Reader S700 and the Stripe Reader S710 (the S710 adds cellular connectivity for venues without reliable Wi-Fi). Both accept chip, swipe, and contactless payments including Apple Pay and Google Pay. Because FindA.Sale is a web app, the reader connects over the internet — a working Wi-Fi or cellular connection at your venue is required. Order from stripe.com/terminal. Your Stripe account must be fully onboarded before any in-person card payments will process.',
+      'Yes. FindA.Sale\'s POS supports two Stripe Terminal smart readers: the Stripe Reader S700 and the Stripe Reader S710 (the S710 adds cellular connectivity for venues without reliable Wi-Fi). Both accept chip, swipe, and contactless payments including Apple Pay and Google Pay. Because FindA.Sale is a web app, the reader connects over the internet. A working Wi-Fi or cellular connection at your venue is required. Order from stripe.com/terminal. Your Stripe account must be fully onboarded before any in-person card payments will process.',
   },
   {
     id: 'pos-hardware-2',
@@ -444,8 +444,8 @@ const Support: React.FC = () => {
   return (
     <>
       <Head>
-        <title>Support — FindA.Sale</title>
-        <meta name="description" content="FindA.Sale Support — FAQs and Chat" />
+        <title>Support. FindA.Sale</title>
+        <meta name="description" content="FindA.Sale Support. FAQs and Chat" />
       </Head>
 
       <div className={styles.container}>

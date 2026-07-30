@@ -123,7 +123,7 @@ export async function getServerSideProps(ctx: any) {
         loc: `${baseUrl}/city/${row.slug}`,
         lastmod: STATIC_LASTMOD,
         changefreq: 'daily',
-        priority: 0.75, // lowered from 0.8 — preserve crawl budget for core nav pages
+        priority: 0.75, // lowered from 0.8. Preserve crawl budget for core nav pages
       });
       for (const [category, saleType] of Object.entries(SALE_CATEGORY_TYPE_MAP)) {
         if (!hasActiveOfType(row, saleType)) continue;
@@ -146,7 +146,7 @@ export async function getServerSideProps(ctx: any) {
         loc: `${baseUrl}/this-weekend/${row.slug}`,
         lastmod: STATIC_LASTMOD,
         changefreq: 'daily',
-        priority: 0.7, // lowered from 0.8 — reduce crawl budget drain on GEO variants
+        priority: 0.7, // lowered from 0.8. Reduce crawl budget drain on GEO variants
       }));
 
     // DEPRECATED URL FAMILIES REMOVED (2026-07-28) -- do not re-add.

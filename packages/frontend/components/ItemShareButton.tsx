@@ -26,7 +26,7 @@ const ItemShareButton: React.FC<ItemShareButtonProps> = ({
   const handleShare = async () => {
     const shareData = {
       title: itemTitle,
-      text: `${itemTitle} — $${itemPrice.toFixed(2)}`,
+      text: `${itemTitle}, $${itemPrice.toFixed(2)}`,
       url: shareUrl,
     };
 

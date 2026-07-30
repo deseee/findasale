@@ -152,7 +152,7 @@ const CheckInPage: React.FC = () => {
     <>
       <Head>
         <title>
-          {isNewCheckIn ? '✅ Checked In!' : 'Already Checked In'} — {checkInResult.saleTitle}
+          {isNewCheckIn ? '✅ Checked In!' : 'Already Checked In'}, {checkInResult.saleTitle}
         </title>
       </Head>
       <div className="min-h-screen flex items-center justify-center bg-warm-50 dark:bg-gray-900 p-4">

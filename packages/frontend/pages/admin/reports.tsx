@@ -116,7 +116,7 @@ const AdminReportsPage = () => {
   }, [user, activeTab, revenuePeriod]);
 
   const formatCurrency = (cents: number) => {
-    if (cents === undefined || cents === null) return '—';
+    if (cents === undefined || cents === null) return 'N/A';
     return (cents / 100).toLocaleString('en-US', {
       style: 'currency',
       currency: 'USD',
@@ -167,7 +167,7 @@ const AdminReportsPage = () => {
       (org.sellThroughRate * 100).toFixed(1),
       formatCurrency(org.totalGmv),
       formatCurrency(org.platformRevenue),
-      org.lastSaleAt ? new Date(org.lastSaleAt).toLocaleDateString() : '—',
+      org.lastSaleAt ? new Date(org.lastSaleAt).toLocaleDateString() : 'N/A',
       new Date(org.joinedAt).toLocaleDateString(),
     ]);
 
@@ -383,7 +383,7 @@ const AdminReportsPage = () => {
                             <td className="px-6 py-4 text-sm text-warm-600 dark:text-warm-400">
                               {org.lastSaleAt
                                 ? new Date(org.lastSaleAt).toLocaleDateString()
-                                : '—'}
+                                : 'N/A'}
                             </td>
                           </tr>
                         ))}

@@ -166,7 +166,7 @@ export default function InstallPrompt() {
 
         <div className="flex-1 min-w-0">
           <p className="font-semibold text-warm-900 dark:text-warm-100 text-sm leading-tight">Add FindA.Sale to your home screen</p>
-          <p className="text-xs text-warm-500 mt-0.5">Quick access to sales near you — no app store needed</p>
+          <p className="text-xs text-warm-500 mt-0.5">Quick access to sales near you. No app store needed</p>
         </div>
 
         <div className="flex flex-col gap-1.5 flex-shrink-0">

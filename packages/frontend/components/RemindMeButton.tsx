@@ -122,7 +122,7 @@ const RemindMeButton: React.FC<RemindMeButtonProps> = ({ saleId, saleName, disab
           ? 'Reminders not available for this sale'
           : isActive
           ? 'Cancel email reminder for this sale'
-          : 'Set email reminder — we\'ll notify you 24 hours before the sale'
+          : 'Set email reminder. We\'ll notify you 24 hours before the sale'
       }
     >
       <span>🔔</span>

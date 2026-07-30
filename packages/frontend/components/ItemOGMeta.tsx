@@ -131,7 +131,7 @@ export default function ItemOGMeta({
     `${item.title} from ${saleName}`.trim();
 
   // og:title: "[Item Title] — [Sale Name] on FindA.Sale"
-  const ogTitle = `${item.title} — ${saleName} on FindA.Sale`;
+  const ogTitle = `${item.title}. ${saleName} on FindA.Sale`;
 
   // Canonical URL — use /items/{id} deep-link format (Loot Link)
   const url =

@@ -84,7 +84,7 @@ const EarlyAccessItemsPage = () => {
   return (
     <>
       <Head>
-        <title>Early Access Items — FindA.Sale</title>
+        <title>Early Access Items. FindA.Sale</title>
       </Head>
       <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
         <div className="max-w-7xl mx-auto px-4 py-12">

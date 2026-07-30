@@ -338,7 +338,7 @@ const QRCodesPage = () => {
             ) : (
               <div className="p-4 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-900/50">
                 <p className="text-sm text-amber-700 dark:text-amber-200">
-                  No scanner data yet — share your sale QR code to start tracking engagement.
+                  No scanner data yet. Share your sale QR code to start tracking engagement.
                 </p>
               </div>
             )}
@@ -442,7 +442,7 @@ const QRCodesPage = () => {
               {metrics.totalScans === 0 && (
                 <div className="mt-8 p-6 rounded-lg bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 text-center">
                   <p className="text-slate-600 dark:text-slate-400">
-                    No scans yet — print QR labels and attach them to your items!
+                    No scans yet. Print QR labels and attach them to your items!
                   </p>
                 </div>
               )}

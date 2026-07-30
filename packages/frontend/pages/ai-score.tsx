@@ -255,7 +255,7 @@ export default function AiScorePage() {
                 textAlign: 'center',
               }}
             >
-              Example preview — enter a URL above and click Analyze to see real results
+              Example preview. Enter a URL above and click Analyze to see real results
             </div>
           )}
 
@@ -416,13 +416,13 @@ export default function AiScorePage() {
           >
             <h2 style={{ margin: '0 0 12px', fontSize: '16px', fontWeight: 600 }}>What this measures</h2>
             <p style={{ margin: '0 0 12px', fontSize: '14px', color: '#9ca3af', lineHeight: 1.7 }}>
-              This tool measures <strong style={{ color: '#f3f4f6' }}>Generative Engine Optimization (GEO)</strong> — how well a
+              This tool measures <strong style={{ color: '#f3f4f6' }}>Generative Engine Optimization (GEO)</strong>. How well a
               page communicates its content to AI-powered search tools. Unlike traditional search engines that rank pages
               by links and keywords, AI assistants like ChatGPT, Perplexity, and Google AI Overviews extract structured
               facts from your page to generate direct answers.
             </p>
             <p style={{ margin: 0, fontSize: '14px', color: '#9ca3af', lineHeight: 1.7 }}>
-              A higher score means more of your sale's details — dates, location, categories, pricing — will appear when
+              A higher score means more of your sale's details Dates, location, categories, pricing will appear when
               someone asks an AI assistant about sales in your area.
             </p>
           </div>

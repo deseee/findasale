@@ -151,7 +151,7 @@ export function useOfflineSync() {
         if (reconciliationNeeded.length > 0) {
           await markNeedsReconciliation(reconciliationNeeded.map((f: any) => f.localId));
           showToast(
-            `${reconciliationNeeded.length} cash sale${reconciliationNeeded.length > 1 ? 's' : ''} need${reconciliationNeeded.length > 1 ? '' : 's'} reconciliation — item sold elsewhere while offline. Review in Offline Sync Queue.`,
+            `${reconciliationNeeded.length} cash sale${reconciliationNeeded.length > 1 ? 's' : ''} need${reconciliationNeeded.length > 1 ? '' : 's'} reconciliation. Item sold elsewhere while offline. Review in Offline Sync Queue.`,
             'warning'
           );
         }
@@ -184,7 +184,7 @@ export function useOfflineSync() {
       if (error.response?.status === 409) {
         // Conflict — show conflict resolution UI
         setSyncError(`Conflict: ${errorMsg}`);
-        showToast('Sync conflict — please review', 'warning');
+        showToast('Sync conflict. Please review', 'warning');
       } else if (error.response?.status >= 400 && error.response?.status < 500) {
         // Permanent error
         setSyncError(errorMsg);

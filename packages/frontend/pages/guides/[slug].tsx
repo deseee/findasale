@@ -208,12 +208,12 @@ export default function GuidePage({ guide, relatedGuides }: GuidePageProps) {
         <title>{guide.title} | FindA.Sale Help</title>
         <meta
           name="description"
-          content={`${guide.title} — a step-by-step guide from FindA.Sale.`}
+          content={`${guide.title}. A step-by-step guide from FindA.Sale.`}
         />
         <meta property="og:title" content={`${guide.title} | FindA.Sale Help`} />
         <meta
           property="og:description"
-          content={`${guide.title} — a step-by-step guide from FindA.Sale.`}
+          content={`${guide.title}. A step-by-step guide from FindA.Sale.`}
         />
         <meta property="og:url" content={canonical} />
         <link rel="canonical" href={canonical} key="canonical" />

@@ -51,7 +51,7 @@ interface Sale {
   minutesUntilUnlock?: number;
   sourceName?: string; // P2: Disclosure label for scraped sales
   scrapedMetadata?: Record<string, unknown> | null; // P3: scraped enrichment (e.g. dateApproximate)
-  isOngoing?: boolean; // Permanent-storefront model — always-live directory listing, no real end date
+  isOngoing?: boolean; // Permanent-storefront model. Always-live directory listing, no real end date
 }
 
 interface BadgeConfig {

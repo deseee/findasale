@@ -430,7 +430,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
     // Defensive: temp- IDs aren't valid server-side. The thumbnail mic is already hidden
     // for them, but guard here too so any future caller path is safe.
     if (itemId.startsWith('temp-')) {
-      showToast('Photo still uploading — try again in a moment.', 'info');
+      showToast('Photo still uploading. Try again in a moment.', 'info');
       return;
     }
 
@@ -502,7 +502,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
       console.error('[RapidCapture] Voice input error:', error);
       const status = error?.response?.status;
       const message = status === 404
-        ? 'Item not ready yet — try again in a moment.'
+        ? 'Item not ready yet. Try again in a moment.'
         : (error?.response?.data?.message || 'Could not save voice note. Try again.');
       showToast(message, 'error');
     }
@@ -571,7 +571,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
             if (cap?.focusMode?.includes?.('continuous')) {
               await videoTrack.applyConstraints({ advanced: [{ focusMode: 'continuous' } as any] });
             }
-          } catch { /* unsupported — ignore */ }
+          } catch { /* unsupported. Ignore */ }
         }, 350);
       } else {
         // CSS digital zoom fallback
@@ -923,7 +923,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
                     if (cap?.focusMode?.includes?.('continuous')) {
                       vt.applyConstraints({ advanced: [{ focusMode: 'continuous' } as any] }).catch(() => {});
                     }
-                  } catch { /* unsupported — ignore */ }
+                  } catch { /* unsupported. Ignore */ }
                 }
               }
             }
@@ -1206,7 +1206,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
 
         {/* Bottom section: compact single row with stats line above.
             In landscape: becomes a fixed-width right column running full height,
-            with a vertical layout — shutter centered, thumbnail strip scrolling upward. */}
+            with a vertical layout. Shutter centered, thumbnail strip scrolling upward. */}
         <div className={`bg-black/90 pb-safe flex flex-col ${isLandscape ? 'w-22 min-w-[88px] max-w-[88px] h-full overflow-y-auto overflow-x-hidden' : ''}`}
           style={isLandscape ? { width: '88px' } : undefined}
         >
@@ -1307,11 +1307,11 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
             <div className="bg-black/60 border-t border-white/10 px-4 py-1.5 flex items-center justify-between text-xs h-10">
               <div className="flex-1">
                 <span className="text-white text-sm">
-                  {photosThisItem === 0 && "Start with the front view — this becomes your listing photo"}
-                  {photosThisItem === 1 && "Shot 1 ✓ — Add a back view or maker's mark next"}
-                  {photosThisItem === 2 && "Shot 2 ✓ — Look for labels, tags, or maker's marks"}
-                  {photosThisItem === 3 && "Shot 3 ✓ — Add a detail or condition shot"}
-                  {photosThisItem === 4 && "Shot 4 ✓ — One more for complete coverage!"}
+                  {photosThisItem === 0 && "Start with the front view. This becomes your listing photo"}
+                  {photosThisItem === 1 && "Shot 1 ✓. Add a back view or maker's mark next"}
+                  {photosThisItem === 2 && "Shot 2 ✓. Look for labels, tags, or maker's marks"}
+                  {photosThisItem === 3 && "Shot 3 ✓. Add a detail or condition shot"}
+                  {photosThisItem === 4 && "Shot 4 ✓. One more for complete coverage!"}
                   {photosThisItem >= 5 && "Great coverage! Ready to review"}
                 </span>
               </div>
@@ -1450,7 +1450,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
                       </button>
 
                       {/* Feature #331: Voice-to-tag mic button (bottom-left corner, only rapidfire).
-                          Suppressed for temp- IDs because the item doesn't exist server-side yet —
+                          Suppressed for temp- IDs because the item doesn't exist server-side yet, 
                           POSTing /api/items/temp-xyz/description/append would 404. Reappears once
                           the real cuid lands in rapidItems state (typically 1-3s after capture). */}
                       {isRapidfire && !item.id.startsWith('temp-') && (
@@ -1498,7 +1498,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
             </div>{/* end outer RTL scroll */}
 
             {/* Shutter: floats above the scroll strip in portrait mode.
-                In landscape mode this is hidden — the landscape shutter is rendered above. */}
+                In landscape mode this is hidden. The landscape shutter is rendered above. */}
             {!isLandscape && <button
               onClick={capturePhoto}
               disabled={!cameraReady || (isRapidfire ? photos.length >= maxPhotos : photosThisItem >= MAX_REGULAR)}

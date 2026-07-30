@@ -41,7 +41,7 @@ export default function SalePulseWidget({ saleId, followerCount = 0, organizerNa
     return (
       <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border border-gray-100 dark:border-gray-700">
         <p className="text-sm text-gray-500 dark:text-gray-400">
-          Your sale hasn&apos;t gone live yet — come back when shoppers start browsing.
+          Your sale hasn&apos;t gone live yet. Come back when shoppers start browsing.
         </p>
       </div>
     );

@@ -103,7 +103,7 @@ export function CityRecentSales({ citySlug, sales }: CityRecentSalesProps) {
                   </p>
                   <div className="flex flex-wrap gap-2 mt-3">
                     <span className="text-xs text-slate-500 dark:text-slate-400">
-                      {formatDate(sale.startDate)} — {formatDate(sale.endDate)}
+                      {formatDate(sale.startDate)}, {formatDate(sale.endDate)}
                     </span>
                     {sale.organizerName && (
                       <span className="text-xs text-slate-500 dark:text-slate-400">

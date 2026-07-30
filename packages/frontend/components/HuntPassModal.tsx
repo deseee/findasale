@@ -87,7 +87,7 @@ const HuntPassModal = ({ isOpen, onClose }: HuntPassModalProps) => {
 
         <p className="text-xs text-warm-500 mb-5">
           You&apos;ll be taken to a secure Stripe checkout page. This is a recurring monthly
-          subscription — cancel anytime from your profile. By subscribing you agree to our{' '}
+          subscription. Cancel anytime from your profile. By subscribing you agree to our{' '}
           <a href="/terms" target="_blank" rel="noopener noreferrer" className="underline hover:text-warm-900 dark:text-warm-100">
             Terms of Service
           </a>{' '}
@@ -118,7 +118,7 @@ const HuntPassModal = ({ isOpen, onClose }: HuntPassModalProps) => {
             disabled={isSubmitting}
             className="flex-1 py-2 px-4 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {isSubmitting ? 'Loading...' : 'Subscribe — $4.99/mo'}
+            {isSubmitting ? 'Loading...' : 'Subscribe, $4.99/mo'}
           </button>
         </div>
       </div>

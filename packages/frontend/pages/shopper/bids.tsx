@@ -89,7 +89,7 @@ export default function BidsPage() {
     return (
       <>
         <Head>
-          <title>My Bids — FindA.Sale</title>
+          <title>My Bids. FindA.Sale</title>
         </Head>
         <div className="max-w-6xl mx-auto px-4 py-8">
           <h1 className="text-3xl font-bold text-warm-900 dark:text-warm-100 mb-8">My Bids</h1>
@@ -108,7 +108,7 @@ export default function BidsPage() {
   return (
     <>
       <Head>
-        <title>My Bids — FindA.Sale</title>
+        <title>My Bids. FindA.Sale</title>
         <meta name="description" content="Your active and past bids on auction items" />
       </Head>
 

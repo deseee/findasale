@@ -196,7 +196,7 @@ const FlashDealsPage: React.FC = () => {
   return (
     <>
       <Head>
-        <title>Flash Deals — FindA.Sale</title>
+        <title>Flash Deals. FindA.Sale</title>
       </Head>
 
       <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
@@ -251,10 +251,10 @@ const FlashDealsPage: React.FC = () => {
                       onChange={(e) => setSelectedItemId(e.target.value)}
                       className="w-full px-3 py-2 border border-warm-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white dark:bg-gray-700 text-warm-900 dark:text-white text-sm"
                     >
-                      <option value="">— Choose an item —</option>
+                      <option value="">Choose an item</option>
                       {saleItems.map((item) => (
                         <option key={item.id} value={item.id}>
-                          {item.title}{item.price ? ` — $${item.price}` : ''}
+                          {item.title}{item.price ? `, $${item.price}` : ''}
                         </option>
                       ))}
                     </select>
@@ -311,7 +311,7 @@ const FlashDealsPage: React.FC = () => {
                 {selectedItemId && (
                   <div className="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg text-sm text-amber-800 dark:text-amber-300">
                     ⚡ {discountPct}% off for{' '}
-                    {DURATION_OPTIONS.find((o) => o.minutes === durationMinutes)?.label} — subscribers will be notified instantly.
+                    {DURATION_OPTIONS.find((o) => o.minutes === durationMinutes)?.label}. Subscribers will be notified instantly.
                   </div>
                 )}
 

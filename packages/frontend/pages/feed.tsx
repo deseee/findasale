@@ -59,8 +59,8 @@ const FeedPage = ({ initialSales }: FeedPageProps) => {
         <Head>
           <title>Your Feed – FindA.Sale</title>
           <meta name="description" content="Sales from organizers you follow on FindA.Sale" />
-          <meta property="og:title" content="Your Sale Feed — FindA.Sale" />
-          <meta property="og:description" content="Your personalized sales feed — sales from organizers you follow and items matching your interests." />
+          <meta property="og:title" content="Your Sale Feed. FindA.Sale" />
+          <meta property="og:description" content="Your personalized sales feed. Sales from organizers you follow and items matching your interests." />
           <meta property="og:url" content="https://finda.sale/feed" />
           <meta property="og:image" content="https://finda.sale/og-default.png" />
           <meta name="twitter:card" content="summary" />
@@ -102,8 +102,8 @@ const FeedPage = ({ initialSales }: FeedPageProps) => {
       <Head>
         <title>Your Feed – FindA.Sale</title>
         <meta name="description" content="Sales from organizers you follow on FindA.Sale" />
-        <meta property="og:title" content="Your Sale Feed — FindA.Sale" />
-        <meta property="og:description" content="Your personalized sales feed — sales from organizers you follow and items matching your interests." />
+        <meta property="og:title" content="Your Sale Feed. FindA.Sale" />
+        <meta property="og:description" content="Your personalized sales feed. Sales from organizers you follow and items matching your interests." />
         <meta property="og:url" content="https://finda.sale/feed" />
         <meta property="og:image" content="https://finda.sale/og-default.png" />
         <meta name="twitter:card" content="summary" />
@@ -118,7 +118,7 @@ const FeedPage = ({ initialSales }: FeedPageProps) => {
               <p className="text-sm text-warm-500 dark:text-gray-400 mt-1">
                 {data.personalized
                   ? 'Sales from organizers you follow'
-                  : <>Recent sales — <Link href="/" className="text-amber-600 hover:underline">follow organizers</Link> to personalize</>
+                  : <>Recent sales, <Link href="/" className="text-amber-600 hover:underline">follow organizers</Link> to personalize</>
                 }
               </p>
             )}

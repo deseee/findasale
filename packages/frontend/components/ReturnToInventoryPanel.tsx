@@ -109,7 +109,7 @@ const ReturnToInventoryPanel: React.FC<ReturnToInventoryPanelProps> = ({
             <ul className="text-sm text-warm-500 dark:text-gray-500 space-y-1 pl-4">
               {result.skipped.map((item) => (
                 <li key={item.id}>
-                  {item.title} — <span className="italic">{reasonLabel(item.reason)}</span>
+                  {item.title}, <span className="italic">{reasonLabel(item.reason)}</span>
                 </li>
               ))}
             </ul>
@@ -136,11 +136,11 @@ const ReturnToInventoryPanel: React.FC<ReturnToInventoryPanelProps> = ({
 
       {saleType === 'YARD' || saleType === 'AUCTION' ? (
         <p className="text-sm text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded px-3 py-2 mb-4">
-          All items pre-selected — review before returning.
+          All items pre-selected. Review before returning.
         </p>
       ) : saleType === 'ESTATE' ? (
         <p className="text-sm text-warm-500 dark:text-gray-400 mb-4">
-          Estate sale items are not pre-selected — choose which items to return.
+          Estate sale items are not pre-selected. Choose which items to return.
         </p>
       ) : null}
 

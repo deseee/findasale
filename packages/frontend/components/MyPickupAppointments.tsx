@@ -104,7 +104,7 @@ const MyPickupAppointments: React.FC = () => {
                     🕐 {format(startTime, 'EEE, MMM d, yyyy')}
                   </p>
                   <p className="text-warm-700 dark:text-warm-300">
-                    {format(startTime, 'h:mm a')} —{' '}
+                    {format(startTime, 'h:mm a')} to{' '}
                     {format(parseISO(booking.slot.endsAt), 'h:mm a')}
                   </p>
                 </div>

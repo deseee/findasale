@@ -11,7 +11,7 @@ interface AlaCartePublishModalProps {
   saleName: string;
   isOpen: boolean;
   onClose: () => void;
-  onPublishSuccess: () => void; // Called after modal confirms — caller handles sale status update
+  onPublishSuccess: () => void; // Called after modal confirms. Caller handles sale status update
 }
 
 const AlaCartePublishModal: React.FC<AlaCartePublishModalProps> = ({
@@ -82,7 +82,7 @@ const AlaCartePublishModal: React.FC<AlaCartePublishModalProps> = ({
                 Subscribe to PRO
               </h3>
               <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                $29/month — unlimited sales + more features
+                $29/month. Unlimited sales + more features
               </p>
               <ul className="text-sm space-y-2 text-gray-700 dark:text-gray-300 mb-6">
                 <li className="flex items-start gap-2">
@@ -113,7 +113,7 @@ const AlaCartePublishModal: React.FC<AlaCartePublishModalProps> = ({
                 Pay per sale
               </h3>
               <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                $9.99 one-time — publish this sale only
+                $9.99 one-time. Publish this sale only
               </p>
               <ul className="text-sm space-y-2 text-gray-700 dark:text-gray-300 mb-6">
                 <li className="flex items-start gap-2">

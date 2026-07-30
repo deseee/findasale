@@ -43,7 +43,7 @@ export default function EmbedSnippetBox() {
       </h2>
       <p className="text-sm text-warm-600 dark:text-warm-300 mb-4">
         Writing about secondary sales? Drop this live, auto-updating index into your
-        article or site. It refreshes on its own — no maintenance required.
+        article or site. It refreshes on its own. No maintenance required.
       </p>
 
       <div className="relative">

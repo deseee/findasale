@@ -154,7 +154,7 @@ const OrganizerPayoutsPage = () => {
       const { amount, method, arrivalDate } = res.data;
       const arrival = arrivalDate ? new Date(arrivalDate).toLocaleDateString() : 'soon';
       showToast(
-        `$${amount.toFixed(2)} ${method} payout initiated — expected ${arrival}`,
+        `$${amount.toFixed(2)} ${method} payout initiated. Expected ${arrival}`,
         'success'
       );
       setPayoutAmount('');
@@ -265,7 +265,7 @@ const OrganizerPayoutsPage = () => {
             <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl p-4 flex items-start gap-3">
               <span className="text-green-600 text-lg mt-0.5">🎉</span>
               <div>
-                <p className="text-sm font-semibold text-green-800 dark:text-green-200">Referral discount active — 0% platform fee</p>
+                <p className="text-sm font-semibold text-green-800 dark:text-green-200">Referral discount active, 0% platform fee</p>
                 <p className="text-xs text-green-700 mt-0.5">
                   Your platform fee is waived until{' '}
                   <strong>{new Date(organizerProfile.referralDiscountExpiry).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</strong>
@@ -568,7 +568,7 @@ const OrganizerPayoutsPage = () => {
           </div>
 
           {/* Refund History (2026-07-29): trace for purchases refunded via the organizer
-              Refund button, an admin refund, or dispute resolution — status flips PAID ->
+              Refund button, an admin refund, or dispute resolution. Status flips PAID ->
               REFUNDED and would otherwise vanish from Earnings Breakdown above with zero
               record anywhere in the product. */}
           <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
@@ -610,10 +610,10 @@ const OrganizerPayoutsPage = () => {
                           ${(r.refundedAmount ?? r.originalAmount).toFixed(2)}
                         </td>
                         <td className="py-2 pr-3 text-gray-400 dark:text-gray-500 text-xs hidden md:table-cell whitespace-nowrap">
-                          {r.refundedAt ? new Date(r.refundedAt).toLocaleDateString() : '—'}
+                          {r.refundedAt ? new Date(r.refundedAt).toLocaleDateString() : 'N/A'}
                         </td>
                         <td className="py-2 pl-3 text-gray-500 dark:text-gray-400 text-xs hidden sm:table-cell capitalize whitespace-nowrap">
-                          {r.refundInitiatedBy ?? '—'}
+                          {r.refundInitiatedBy ?? 'N/A'}
                         </td>
                       </tr>
                     ))}

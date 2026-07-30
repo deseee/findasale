@@ -107,7 +107,7 @@ const OrganizerWebhooksPage = () => {
           <div className="space-y-4">
             <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 rounded-xl p-4 text-sm text-blue-800 dark:text-blue-200">
               <p className="font-medium mb-2">What are webhooks?</p>
-              <p className="mb-2">Webhooks send real-time updates from your FindA.Sale sales to other tools you use — like QuickBooks for accounting, Zapier for automation, or Google Sheets for tracking. When something happens (an item sells, a new hold is placed, a bid comes in), FindA.Sale automatically notifies your connected tools so you stay in sync across systems.</p>
+              <p className="mb-2">Webhooks send real-time updates from your FindA.Sale sales to other tools you use. Like QuickBooks for accounting, Zapier for automation, or Google Sheets for tracking. When something happens (an item sells, a new hold is placed, a bid comes in), FindA.Sale automatically notifies your connected tools so you stay in sync across systems.</p>
               <p className="mb-2">Each webhook request is signed with <code className="font-mono bg-blue-100 dark:bg-blue-900 px-1 rounded">X-FindASale-Signature</code> (HMAC-SHA256) so your endpoint can verify it came from FindA.Sale.</p>
               <p>
                 New to webhooks?{' '}
@@ -121,7 +121,7 @@ const OrganizerWebhooksPage = () => {
           {/* Secret revealed once */}
           {newSecret && (
             <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl p-4">
-              <p className="text-sm font-semibold text-green-900 mb-1">Webhook created — save your secret now</p>
+              <p className="text-sm font-semibold text-green-900 mb-1">Webhook created. Save your secret now</p>
               <p className="text-xs text-green-700 mb-2">This is the only time it will be shown.</p>
               <code className="block font-mono text-xs bg-white dark:bg-gray-800 border border-green-200 dark:border-green-800 rounded px-3 py-2 break-all select-all">
                 {newSecret}

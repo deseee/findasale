@@ -242,7 +242,7 @@ const CSVImportModal: React.FC<CSVImportModalProps> = ({ isOpen, onClose, saleId
               ) : (
                 <>
                   <p className="text-sm text-warm-600 dark:text-warm-400"><span className="font-medium text-amber-600">Click to upload</span> or drag and drop</p>
-                  <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">CSV files only — max 200 items per import</p>
+                  <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">CSV files only. Max 200 items per import</p>
                 </>
               )}
             </div>
@@ -267,7 +267,7 @@ const CSVImportModal: React.FC<CSVImportModalProps> = ({ isOpen, onClose, saleId
           <div>
             <p className="text-sm text-warm-600 dark:text-warm-400 mb-1">
               {previewData.totalRows} row{previewData.totalRows !== 1 ? 's' : ''} detected
-              {previewData.totalRows > 200 ? ' — only first 200 will be imported' : ''}.
+              {previewData.totalRows > 200 ? '. Only first 200 will be imported' : ''}.
               Map your CSV columns to FindA.Sale fields.
             </p>
 
@@ -305,7 +305,7 @@ const CSVImportModal: React.FC<CSVImportModalProps> = ({ isOpen, onClose, saleId
                     onChange={(e) => setColumnMap((prev) => ({ ...prev, [key]: e.target.value }))}
                     className="flex-1 text-sm border border-warm-300 dark:border-gray-600 rounded-md px-2 py-1.5 bg-white dark:bg-gray-700 text-warm-900 dark:text-warm-100 focus:outline-none focus:ring-1 focus:ring-amber-500"
                   >
-                    <option value="">{required ? '— select column —' : '— skip —'}</option>
+                    <option value="">{required ? 'Select column' : 'Skip'}</option>
                     {previewData.headers.map((h) => (
                       <option key={h} value={h}>{h}</option>
                     ))}

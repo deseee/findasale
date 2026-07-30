@@ -36,7 +36,7 @@ export default function XpVelocityPage() {
   return (
     <>
       <Head>
-        <title>XP Velocity Flags — Admin | FindA.Sale</title>
+        <title>XP Velocity Flags. Admin | FindA.Sale</title>
       </Head>
       <div className="max-w-6xl mx-auto px-4 py-8">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">
@@ -74,7 +74,7 @@ export default function XpVelocityPage() {
                     <td className="px-4 py-3 font-mono text-orange-600 dark:text-orange-400">{user.maxHourlyXp.toLocaleString()}</td>
                     <td className="px-4 py-3 font-mono text-gray-700 dark:text-gray-300">{user.totalXpLast7Days.toLocaleString()}</td>
                     <td className="px-4 py-3 text-gray-500 dark:text-gray-400 text-xs">
-                      {user.recentEvents[0] ? new Date(user.recentEvents[0].createdAt).toLocaleString() : '—'}
+                      {user.recentEvents[0] ? new Date(user.recentEvents[0].createdAt).toLocaleString() : 'N/A'}
                     </td>
                     <td className="px-4 py-3">
                       <button

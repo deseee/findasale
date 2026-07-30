@@ -203,7 +203,7 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onScan, onCancel }) => 
             <p className="text-white/80 text-sm">Requesting camera…</p>
           )}
           {scanState === 'scanning' && (
-            <p className="text-white/80 text-sm">Point at a barcode — scanning automatically</p>
+            <p className="text-white/80 text-sm">Point at a barcode. Scanning automatically</p>
           )}
           {scanState === 'denied' && (
             <div className="text-center px-6 pointer-events-auto">

@@ -58,7 +58,7 @@ export default async function handler(
 
   for (const rawPath of paths) {
     if (typeof rawPath !== 'string' || !rawPath.startsWith('/')) {
-      results.push({ path: String(rawPath), revalidated: false, error: 'Invalid path — must be a string starting with "/"' });
+      results.push({ path: String(rawPath), revalidated: false, error: 'Invalid path. Must be a string starting with "/"' });
       continue;
     }
 

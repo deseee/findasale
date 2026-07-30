@@ -15,32 +15,32 @@ import { useRouter } from 'next/router';
 const PRE_SALE_CHECKLIST = [
   'Photograph all key items (aim for 3+ photos each)',
   'Create your sale on FindA.Sale and publish the listing',
-  'Enable Sneak Peek — publish 48 hours early so followers get first look',
+  'Enable Sneak Peek. Publish 48 hours early so followers get first look',
   'Connect Stripe to accept card payments at checkout',
   'Share your sale link on Facebook, Nextdoor, and neighborhood groups',
   'Print QR code signs and place them around your sale location',
-  'Set prices on all items — use round numbers for speed',
+  'Set prices on all items. Use round numbers for speed',
   'Arrange items by category so shoppers can browse easily',
   'Prepare cash for making change ($100–$200 in small bills)',
-  "Charge your phone overnight — you'll need it all day",
+  "Charge your phone overnight. You'll need it all day",
   'Send a morning-of update to your followers via FindA.Sale',
 ];
 
 const PRICING_TIPS = [
   { bold: 'Research eBay sold listings', detail: "Search eBay for your item → filter by \"Sold\" to see what people actually paid, not asking prices." },
-  { bold: 'Price for a quick sale, not retail', detail: '25–50% of retail is the sweet spot. People come for deals — honor that expectation.' },
+  { bold: 'Price for a quick sale, not retail', detail: '25–50% of retail is the sweet spot. People come for deals. Honor that expectation.' },
   { bold: 'Use round numbers', detail: '$5, $10, $25 makes checkout fast and avoids coin-hunting delays.' },
   { bold: 'Bundle deals boost revenue', detail: 'Group small items in a "fill a bag for $5" bin to clear clutter and move volume.' },
-  { bold: 'Let Markdown Cycles do the work', detail: "Turn on automatic Day 2 markdowns in your FindA.Sale settings — no manual repricing needed." },
+  { bold: 'Let Markdown Cycles do the work', detail: "Turn on automatic Day 2 markdowns in your FindA.Sale settings. No manual repricing needed." },
 ];
 
 const DAYOF_RUNBOOK = [
   { time: '6:00 AM', step: 'Arrive 90 min before open. Set up tables, signs, and QR codes.' },
-  { time: '7:00 AM', step: 'Final price check — every item needs a tag or sticker.' },
+  { time: '7:00 AM', step: 'Final price check. Every item needs a tag or sticker.' },
   { time: '7:30 AM', step: 'Open your FindA.Sale dashboard. Mark your sale as live if not already.' },
   { time: '8:00 AM', step: 'Doors open. Greet shoppers and direct them to high-value items.' },
   { time: 'Ongoing', step: 'Use the POS tab to mark items sold and accept card payments.' },
-  { time: 'Midday', step: 'Consolidate sparse tables — a full table feels like better deals.' },
+  { time: 'Midday', step: 'Consolidate sparse tables. A full table feels like better deals.' },
   { time: '1 Hour Out', step: 'Enable holds for hot items. Announce closing-time markdowns on social.' },
   { time: 'Close', step: 'Mark remaining items sold, archived, or carry-over. Run your earnings report.' },
 ];
@@ -49,7 +49,7 @@ const POST_SALE = [
   { bold: 'Run the Settlement Wizard', detail: 'Dashboard → Settlement → generate a full earnings breakdown by category.' },
   { bold: 'Generate a donation receipt', detail: 'For unsold items, use the Donation Receipt tool to produce a tax-ready document.' },
   { bold: 'Export to QuickBooks', detail: 'Download your sales CSV and import directly into QuickBooks for clean bookkeeping.' },
-  { bold: 'Ask for a review', detail: 'Send a follow-up to your attendees — great reviews bring more shoppers to your next sale.' },
+  { bold: 'Ask for a review', detail: 'Send a follow-up to your attendees. Great reviews bring more shoppers to your next sale.' },
 ];
 
 export default function StarterKitPage() {
@@ -68,10 +68,10 @@ export default function StarterKitPage() {
   return (
     <>
       <Head>
-        <title>Sale Day Starter Kit — FindA.Sale</title>
+        <title>Sale Day Starter Kit. FindA.Sale</title>
         <meta
           name="description"
-          content="Your complete sale day guide — checklist, pricing tips, day-of rundown, and post-sale steps."
+          content="Your complete sale day guide. Checklist, pricing tips, day-of rundown, and post-sale steps."
         />
         <style>{`
           @media print {
@@ -119,7 +119,7 @@ export default function StarterKitPage() {
               Sale Day Starter Kit
             </h1>
             <p className="text-warm-600 dark:text-warm-400 text-lg">
-              Your complete guide — checklist, pricing tips, day-of rundown, and post-sale steps.
+              Your complete guide. Checklist, pricing tips, day-of rundown, and post-sale steps.
             </p>
             <p className="text-amber-600 dark:text-amber-400 text-sm mt-1 font-medium">
               finda.sale
@@ -161,7 +161,7 @@ export default function StarterKitPage() {
                     {i + 1}
                   </span>
                   <span className="text-warm-800 dark:text-warm-200 text-sm leading-relaxed">
-                    <strong>{bold}</strong> — {detail}
+                    <strong>{bold}</strong>, {detail}
                   </span>
                 </li>
               ))}
@@ -208,7 +208,7 @@ export default function StarterKitPage() {
                     {i + 1}
                   </span>
                   <span className="text-warm-800 dark:text-warm-200 text-sm leading-relaxed">
-                    <strong>{bold}</strong> — {detail}
+                    <strong>{bold}</strong>, {detail}
                   </span>
                 </li>
               ))}
@@ -231,7 +231,7 @@ export default function StarterKitPage() {
 
           {/* Print footer */}
           <div className="hidden print:block text-center mt-8 text-xs text-gray-500">
-            <p>FindA.Sale — finda.sale · Printed from your organizer dashboard</p>
+            <p>FindA.Sale. Finda.sale · Printed from your organizer dashboard</p>
           </div>
 
         </div>

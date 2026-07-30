@@ -67,14 +67,14 @@ Estate sales in ${cityName} typically peak in ${seasonal.peakMonth}, when season
 
 ## Insider Tip
 
-${regional.tip} Check back frequently for upcoming sales—new listings typically appear 1–2 weeks before events.
+${regional.tip} Check back frequently for upcoming sales. New listings typically appear 1–2 weeks before events.
 
 ## How to Hunt Smartly
 
-1. **Join the platform** — save your favorite sales and get alerts for new ones in ${cityName}
-2. **Follow organizers** — get notified the moment they list a new sale
-3. **Plan your route** — use GPS and sale timestamps to maximize your visit
-4. **Check condition carefully** — remote viewings are great for planning, but always inspect in person before purchasing
+1. **Join the platform**. Save your favorite sales and get alerts for new ones in ${cityName}
+2. **Follow organizers**. Get notified the moment they list a new sale
+3. **Plan your route**. Use GPS and sale timestamps to maximize your visit
+4. **Check condition carefully**. Remote viewings are great for planning, but always inspect in person before purchasing
 
 Happy hunting!`;
 }

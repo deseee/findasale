@@ -97,7 +97,7 @@ export default function PlatformHighlightsWidget() {
                 <span className="text-xs text-warm-500 dark:text-warm-400">eBay</span>
                 <div className="flex items-center gap-1">
                   <span className="text-base font-bold text-warm-900 dark:text-warm-100">
-                    {data.ebay.connected ? data.ebay.listed : '—'}
+                    {data.ebay.connected ? data.ebay.listed : 'N/A'}
                   </span>
                   {ebayWarning && (
                     <span className="text-orange-500" title="eBay listing limit warning">

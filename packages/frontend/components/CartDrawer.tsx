@@ -140,10 +140,10 @@ const CartDrawer: React.FC<CartDrawerProps> = ({ isOpen, onClose }) => {
       if (res.data?.url) {
         window.location.href = res.data.url;
       } else {
-        showToast(res.data?.error || 'Checkout failed — please try again', 'error');
+        showToast(res.data?.error || 'Checkout failed. Please try again', 'error');
       }
     } catch (err: any) {
-      const message = err?.response?.data?.error || err?.response?.data?.message || 'Checkout failed — please try again';
+      const message = err?.response?.data?.error || err?.response?.data?.message || 'Checkout failed. Please try again';
       showToast(message, 'error');
     } finally {
       setCheckoutLoading(false);

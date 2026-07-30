@@ -154,7 +154,7 @@ const LocationsPage = () => {
       showToast('Location deleted', 'success');
     } catch (error: any) {
       if (error.response?.status === 409) {
-        showToast('Cannot delete — location has assigned items or sales. Transfer them first.', 'error');
+        showToast('Cannot delete. Location has assigned items or sales. Transfer them first.', 'error');
       } else {
         showToast(error.response?.data?.error || 'Failed to delete location', 'error');
       }
@@ -307,7 +307,7 @@ const LocationsPage = () => {
                           </div>
                         </td>
                         <td className="py-4 px-4 text-sm text-warm-600 dark:text-warm-300">
-                          {location.address || '—'}
+                          {location.address || 'N/A'}
                         </td>
                         <td className="py-4 px-4 text-center font-semibold text-warm-900 dark:text-warm-100">
                           {location._count.items}

@@ -141,7 +141,7 @@ const RareFindsPage = () => {
             </div>
             <h1 className="text-4xl font-bold text-warm-900 dark:text-warm-100 mb-2">💎 Rare Finds</h1>
             <p className="text-lg text-warm-600 dark:text-warm-400">
-              Exclusive to Hunt Pass subscribers — Get early access to the finest rare and legendary items before they're available to the public.
+              Exclusive to Hunt Pass subscribers. Get early access to the finest rare and legendary items before they're available to the public.
             </p>
           </div>
 

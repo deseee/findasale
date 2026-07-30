@@ -68,7 +68,7 @@ const SurpriseMePage = () => {
       const res = await api.get('/search/random', { params });
       return res.data as SerendipityResponse;
     },
-    staleTime: 0, // always fresh — serendipity means new results each time
+    staleTime: 0, // always fresh. Serendipity means new results each time
   });
 
   const handleSurpriseMe = () => setSeed((s) => s + 1);
@@ -78,7 +78,7 @@ const SurpriseMePage = () => {
   return (
     <>
       <Head>
-        <title>Surprise Me — FindA.Sale</title>
+        <title>Surprise Me. FindA.Sale</title>
         <meta
           name="description"
           content="Discover random treasures from active sales near you. Hit 'Surprise me' to see what turns up."

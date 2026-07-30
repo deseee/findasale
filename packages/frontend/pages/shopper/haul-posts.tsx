@@ -202,7 +202,7 @@ function HaulPostsFeedPage() {
         {allPosts.length === 0 && (
           <div className="text-center py-16">
             <div className="text-5xl mb-4">📸</div>
-            <p className="text-gray-600 dark:text-gray-400 text-lg">No hauls yet — be the first to share!</p>
+            <p className="text-gray-600 dark:text-gray-400 text-lg">No hauls yet. Be the first to share!</p>
             <Link
               href="/shopper/haul-posts/create"
               className="inline-block mt-4 px-6 py-2 bg-amber-600 hover:bg-amber-700 dark:bg-amber-600 dark:hover:bg-amber-700 text-white font-medium rounded-lg transition-colors"

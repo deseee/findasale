@@ -179,7 +179,7 @@ const CouponsPage = () => {
       setTimeout(() => setCopied(false), 2000);
       showToast('Code copied!', 'success');
     } catch {
-      showToast('Copy failed — select and copy manually', 'error');
+      showToast('Copy failed. Select and copy manually', 'error');
     }
   };
 
@@ -197,7 +197,7 @@ const CouponsPage = () => {
   return (
     <>
       <Head>
-        <title>XP Store — FindA.Sale</title>
+        <title>XP Store. FindA.Sale</title>
       </Head>
 
       <main className="container mx-auto px-4 py-8 max-w-5xl">
@@ -417,7 +417,7 @@ const CouponsPage = () => {
                 </h3>
                 <div className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-amber-200 dark:border-amber-700">
                   <p className="text-warm-700 dark:text-warm-300 mb-4">
-                    Spend 50 XP to generate a $1-off single-use code. Share it with a shopper — they enter it at
+                    Spend 50 XP to generate a $1-off single-use code. Share it with a shopper. They enter it at
                     checkout. Discount is deducted from your payout, not the platform fee.
                   </p>
 
@@ -457,7 +457,7 @@ const CouponsPage = () => {
                         </button>
                       </div>
                       <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">
-                        Share this code with a shopper — they enter it at checkout for $1 off.
+                        Share this code with a shopper. They enter it at checkout for $1 off.
                       </p>
                     </div>
                   )}
@@ -582,7 +582,7 @@ const CouponsPage = () => {
         userXp={spendableXp}
         onSuccess={() => {
           queryClient.invalidateQueries({ queryKey: ['xp-profile'] });
-          showToast('Rarity Boost activated — your next upload gets a rarity bonus!', 'success');
+          showToast('Rarity Boost activated. Your next upload gets a rarity bonus!', 'success');
         }}
       />
     </>

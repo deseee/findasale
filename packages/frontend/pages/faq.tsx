@@ -51,7 +51,7 @@ const shopperFAQs: FAQItem[] = [
     question: 'How do I search for specific items?',
     answer: (
       <>
-        Use the search bar to type what you're looking for — "vintage lamps," "oak furniture," "comic books," etc.
+        Use the search bar to type what you're looking for, "vintage lamps," "oak furniture," "comic books," etc.
         Results show all matching items across current and upcoming sales in your area. Browse by
         category or use tags to narrow results further.
       </>
@@ -63,13 +63,13 @@ const shopperFAQs: FAQItem[] = [
       <>
         Every item on FindA.Sale has a condition grade from S to D so you know what to expect before you visit:
         <ul className="mt-2 ml-4 space-y-1">
-          <li><strong>S — Like New</strong> (80–100% of retail). No signs of wear. May still have original packaging or tags. Examples: new-in-box items, rarely used vintage collectibles, display pieces.</li>
-          <li><strong>A — Excellent</strong> (60–80% of retail). Light cosmetic wear only. Fully functional, looks great. Examples: lightly used kitchenware, gently worn clothing, well-maintained electronics.</li>
-          <li><strong>B — Good</strong> (40–60% of retail). Visible signs of use but fully functional. Minor cosmetic imperfections that don't affect use. Examples: gently used furniture, dishes without chips, working electronics.</li>
-          <li><strong>C — Fair</strong> (25–40% of retail). Noticeable wear, scratches, or patina. Fully functional. Great finds for budget shoppers, collectors, and people restoring or upcycling items.</li>
-          <li><strong>D — Poor</strong> (10–25% of retail). Heavy wear, damage, or missing parts. May need repair. Best for restoration or upcycling projects.</li>
+          <li><strong>S. Like New</strong> (80–100% of retail). No signs of wear. May still have original packaging or tags. Examples: new-in-box items, rarely used vintage collectibles, display pieces.</li>
+          <li><strong>A. Excellent</strong> (60–80% of retail). Light cosmetic wear only. Fully functional, looks great. Examples: lightly used kitchenware, gently worn clothing, well-maintained electronics.</li>
+          <li><strong>B. Good</strong> (40–60% of retail). Visible signs of use but fully functional. Minor cosmetic imperfections that don't affect use. Examples: gently used furniture, dishes without chips, working electronics.</li>
+          <li><strong>C. Fair</strong> (25–40% of retail). Noticeable wear, scratches, or patina. Fully functional. Great finds for budget shoppers, collectors, and people restoring or upcycling items.</li>
+          <li><strong>D. Poor</strong> (10–25% of retail). Heavy wear, damage, or missing parts. May need repair. Best for restoration or upcycling projects.</li>
         </ul>
-        <p className="mt-2"><strong>As-Is</strong> is a separate flag the organizer can apply to any item, regardless of grade. It means the item is sold in its current condition without warranty — buyers should inspect before purchasing. As-Is items are often the lowest-priced and most negotiable.</p>
+        <p className="mt-2"><strong>As-Is</strong> is a separate flag the organizer can apply to any item, regardless of grade. It means the item is sold in its current condition without warranty. Buyers should inspect before purchasing. As-Is items are often the lowest-priced and most negotiable.</p>
       </>
     ),
   },
@@ -85,7 +85,7 @@ const shopperFAQs: FAQItem[] = [
     question: 'Can I dispute a condition rating?',
     answer: (
       <>
-        If you believe an item's condition is misrepresented, contact the organizer directly through the item's listing. They may provide additional photos or clarifications. If you purchased an item and it arrives in worse condition than described, check the organizer's return and refund policy — most provide a grace period for inspection after pickup or delivery.
+        If you believe an item's condition is misrepresented, contact the organizer directly through the item's listing. They may provide additional photos or clarifications. If you purchased an item and it arrives in worse condition than described, check the organizer's return and refund policy. Most provide a grace period for inspection after pickup or delivery.
       </>
     ),
   },
@@ -95,12 +95,12 @@ const shopperFAQs: FAQItem[] = [
       <>
         Every item on FindA.Sale is automatically assigned a rarity tier based on its category, condition, estimated value, and our Smart Pricing analysis:
         <ul className="mt-2 ml-4 space-y-1">
-          <li><strong>Common</strong> — Everyday household items, standard furniture, common clothing</li>
-          <li><strong>Uncommon</strong> — Quality pieces with good condition ratings, desirable but not rare</li>
-          <li><strong>Rare</strong> — Vintage, collectible, or high-value items that don't come up often</li>
-          <li><strong>Legendary</strong> — Museum-quality, one-of-a-kind, or exceptionally rare finds</li>
+          <li><strong>Common</strong>. Everyday household items, standard furniture, common clothing</li>
+          <li><strong>Uncommon</strong>. Quality pieces with good condition ratings, desirable but not rare</li>
+          <li><strong>Rare</strong>. Vintage, collectible, or high-value items that don't come up often</li>
+          <li><strong>Legendary</strong>. Museum-quality, one-of-a-kind, or exceptionally rare finds</li>
         </ul>
-        Higher rarity items are surfaced in the <strong>Rare Finds</strong> feed available to Hunt Pass subscribers. Rarity is set automatically — organizers can't manually inflate it.
+        Higher rarity items are surfaced in the <strong>Rare Finds</strong> feed available to Hunt Pass subscribers. Rarity is set automatically. Organizers can't manually inflate it.
       </>
     ),
   },
@@ -108,7 +108,7 @@ const shopperFAQs: FAQItem[] = [
     question: 'What is the Rare Finds feed?',
     answer: (
       <>
-        Rare Finds is a curated feed exclusively for Hunt Pass subscribers that shows RARE and LEGENDARY items from sales in your area. Hunt Pass members see Rare items 6 hours early and Legendary items 12 hours early — before the general public. It's the best way to stay ahead of serious competition on the finds that matter most.
+        Rare Finds is a curated feed exclusively for Hunt Pass subscribers that shows RARE and LEGENDARY items from sales in your area. Hunt Pass members see Rare items 6 hours early and Legendary items 12 hours early. Before the general public. It's the best way to stay ahead of serious competition on the finds that matter most.
       </>
     ),
   },
@@ -127,7 +127,7 @@ const shopperFAQs: FAQItem[] = [
     question: 'How do I cancel a hold?',
     answer: (
       <>
-        Holds you've placed on items can be cancelled from your account under <strong>Account → Holds</strong>. Find the item, click <strong>Cancel Hold</strong>, and the item is released back to Available status. Note that organizers can also cancel holds — you'll be notified if that happens.
+        Holds you've placed on items can be cancelled from your account under <strong>Account → Holds</strong>. Find the item, click <strong>Cancel Hold</strong>, and the item is released back to Available status. Note that organizers can also cancel holds. You'll be notified if that happens.
       </>
     ),
   },
@@ -135,7 +135,7 @@ const shopperFAQs: FAQItem[] = [
     question: 'What is a Treasure Hunt scan and how do QR codes work?',
     answer: (
       <>
-        Each item at a participating sale has a QR sticker printed by the organizer. Scan an item's QR code at the sale to pull up its full listing — price, condition, description, and photos — right on your phone. Scanning is a quick way to verify details before you buy, and organizers use it to streamline checkout at the event.
+        Each item at a participating sale has a QR sticker printed by the organizer. Scan an item's QR code at the sale to pull up its full listing Price, condition, description, and photos right on your phone. Scanning is a quick way to verify details before you buy, and organizers use it to streamline checkout at the event.
       </>
     ),
   },
@@ -143,7 +143,7 @@ const shopperFAQs: FAQItem[] = [
     question: 'What is a Bounty?',
     answer: (
       <>
-        A Bounty is a request you post for a specific item you've been hunting for. Describe what you're looking for — "vintage Danish modern dining table," "1960s Pyrex set in pink" — and participating organizers can match and fulfill your request if they come across it. You get notified when a match is found. It's a way to turn passive hunting into active discovery.
+        A Bounty is a request you post for a specific item you've been hunting for. Describe what you're looking for, "vintage Danish modern dining table," "1960s Pyrex set in pink". And participating organizers can match and fulfill your request if they come across it. You get notified when a match is found. It's a way to turn passive hunting into active discovery.
       </>
     ),
   },
@@ -151,7 +151,7 @@ const shopperFAQs: FAQItem[] = [
     question: 'What are Flash Deals?',
     answer: (
       <>
-        Flash Deals are time-limited discounts posted by organizers — usually on the last day of a sale when they want to move remaining inventory fast. Standard users are notified when a Flash Deal goes live. Hunt Pass subscribers are notified 6 hours early, giving them first access to the best deals before the crowd.
+        Flash Deals are time-limited discounts posted by organizers. Usually on the last day of a sale when they want to move remaining inventory fast. Standard users are notified when a Flash Deal goes live. Hunt Pass subscribers are notified 6 hours early, giving them first access to the best deals before the crowd.
       </>
     ),
   },
@@ -160,7 +160,7 @@ const shopperFAQs: FAQItem[] = [
     answer: (
       <>
         In an auction, items go to the highest bidder. Place a bid, and if someone outbids you,
-        you'll receive a notification. Bidding continues until the auction end time — the highest bid
+        you'll receive a notification. Bidding continues until the auction end time. The highest bid
         at closing wins. Auction end times are clearly marked so you always know the deadline.
       </>
     ),
@@ -172,7 +172,7 @@ const shopperFAQs: FAQItem[] = [
       <>
         Click <strong>Buy Now</strong> on any item, review your order, and complete checkout with your
         card via Stripe. Once payment goes through, the item is marked sold and you'll receive a
-        confirmation. Coordinate pickup directly with the organizer — their contact info is on the sale page.
+        confirmation. Coordinate pickup directly with the organizer. Their contact info is on the sale page.
       </>
     ),
   },
@@ -224,7 +224,7 @@ const shopperFAQs: FAQItem[] = [
     question: 'What is the Explorer\'s Guild?',
     answer: (
       <>
-        The Explorer's Guild is our loyalty rewards program. You earn Guild XP by visiting sales, making purchases, posting hauls, completing seasonal challenges, and more — and you progress through five ranks: Initiate, Scout, Ranger, Sage, and Grandmaster. Each rank unlocks perks like longer hold times, earlier access to listings, and exclusive cosmetics. See the full XP table and rank perks in <Link href="/shopper/guild-primer" className="text-amber-600 hover:underline">the Explorer's Guild walkthrough</Link>.
+        The Explorer's Guild is our loyalty rewards program. You earn Guild XP by visiting sales, making purchases, posting hauls, completing seasonal challenges, and more. And you progress through five ranks: Initiate, Scout, Ranger, Sage, and Grandmaster. Each rank unlocks perks like longer hold times, earlier access to listings, and exclusive cosmetics. See the full XP table and rank perks in <Link href="/shopper/guild-primer" className="text-amber-600 hover:underline">the Explorer's Guild walkthrough</Link>.
       </>
     ),
   },
@@ -232,7 +232,7 @@ const shopperFAQs: FAQItem[] = [
     question: 'How do I earn XP?',
     answer: (
       <>
-        XP comes from a wide range of activities — visiting sales, making purchases, winning auctions, posting hauls, leaving item reviews, fulfilling bounties, completing Treasure Trails, referring friends, daily streaks, seasonal challenges, and more. Hunt Pass subscribers earn 1.5× XP on every action. The complete table of XP values per action lives in <Link href="/shopper/guild-primer" className="text-amber-600 hover:underline">the Guild walkthrough</Link> under "How to Earn XP".
+        XP comes from a wide range of activities. Visiting sales, making purchases, winning auctions, posting hauls, leaving item reviews, fulfilling bounties, completing Treasure Trails, referring friends, daily streaks, seasonal challenges, and more. Hunt Pass subscribers earn 1.5× XP on every action. The complete table of XP values per action lives in <Link href="/shopper/guild-primer" className="text-amber-600 hover:underline">the Guild walkthrough</Link> under "How to Earn XP".
       </>
     ),
   },
@@ -242,11 +242,11 @@ const shopperFAQs: FAQItem[] = [
       <>
         There are five ranks. Each unlocks longer hold times, earlier access to high-value items, and additional perks:
         <ul className="mt-2 ml-4 space-y-1">
-          <li><strong>Initiate</strong> — 0 XP (everyone starts here)</li>
-          <li><strong>Scout</strong> — 500 XP</li>
-          <li><strong>Ranger</strong> — 2,000 XP</li>
-          <li><strong>Sage</strong> — 5,000 XP</li>
-          <li><strong>Grandmaster</strong> — 12,000 XP</li>
+          <li><strong>Initiate</strong>, 0 XP (everyone starts here)</li>
+          <li><strong>Scout</strong>, 500 XP</li>
+          <li><strong>Ranger</strong>, 2,000 XP</li>
+          <li><strong>Sage</strong>, 5,000 XP</li>
+          <li><strong>Grandmaster</strong>, 12,000 XP</li>
         </ul>
         Full perk lists per rank live in <Link href="/shopper/guild-primer" className="text-amber-600 hover:underline">the Guild walkthrough</Link> under "The Rank Journey".
       </>
@@ -256,7 +256,7 @@ const shopperFAQs: FAQItem[] = [
     question: 'What happens to my rank each year?',
     answer: (
       <>
-        On January 1st, everyone drops one tier — Grandmaster becomes Sage, Sage becomes Ranger, Ranger becomes Scout, Scout becomes Initiate. Your XP resets to the floor of your new rank. Reaching <strong>Grandmaster</strong> unlocks free Hunt Pass while you hold that rank — if you drop below Grandmaster the pass lapses, and it restores automatically the next time you re-qualify.
+        On January 1st, everyone drops one tier. Grandmaster becomes Sage, Sage becomes Ranger, Ranger becomes Scout, Scout becomes Initiate. Your XP resets to the floor of your new rank. Reaching <strong>Grandmaster</strong> unlocks free Hunt Pass while you hold that rank. If you drop below Grandmaster the pass lapses, and it restores automatically the next time you re-qualify.
       </>
     ),
   },
@@ -280,7 +280,7 @@ const shopperFAQs: FAQItem[] = [
     question: 'What are seasonal challenges?',
     answer: (
       <>
-        Each quarter brings a themed adventure — Spring Awakening, Summer Exploration, Fall Collection, Winter Treasures — with challenges, exclusive cosmetics, and a fresh leaderboard. Hunt Pass subscribers get challenge access included; everyone else can buy a season pass for 250 XP (or $2.50). Details are in <Link href="/shopper/guild-primer" className="text-amber-600 hover:underline">the Guild walkthrough</Link> under "Seasonal Adventures".
+        Each quarter brings a themed adventure Spring Awakening, Summer Exploration, Fall Collection, Winter Treasures with challenges, exclusive cosmetics, and a fresh leaderboard. Hunt Pass subscribers get challenge access included; everyone else can buy a season pass for 250 XP (or $2.50). Details are in <Link href="/shopper/guild-primer" className="text-amber-600 hover:underline">the Guild walkthrough</Link> under "Seasonal Adventures".
       </>
     ),
   },
@@ -288,7 +288,7 @@ const shopperFAQs: FAQItem[] = [
     question: 'What are Treasure Trails?',
     answer: (
       <>
-        Treasure Trails are curated multi-stop local experiences — for example, a Saturday estate sale plus a vintage shop downtown plus a scenic café on the way home. You check in at each stop and earn a tiered completion bonus (40 XP for 3 stops, scaling up to 80 XP for 7+ stops) when you finish. Trail access scales with rank: Ranger gets 3 per week, Sage gets unlimited. Hunt Pass subscribers can create and share their own trails. Full XP details are in <Link href="/shopper/guild-primer" className="text-amber-600 hover:underline">the Guild walkthrough</Link>.
+        Treasure Trails are curated multi-stop local experiences. For example, a Saturday estate sale plus a vintage shop downtown plus a scenic café on the way home. You check in at each stop and earn a tiered completion bonus (40 XP for 3 stops, scaling up to 80 XP for 7+ stops) when you finish. Trail access scales with rank: Ranger gets 3 per week, Sage gets unlimited. Hunt Pass subscribers can create and share their own trails. Full XP details are in <Link href="/shopper/guild-primer" className="text-amber-600 hover:underline">the Guild walkthrough</Link>.
       </>
     ),
   },
@@ -297,7 +297,7 @@ const shopperFAQs: FAQItem[] = [
     question: 'What are Crowd Appraisals?',
     answer: (
       <>
-        Crowd Appraisals let the FindA.Sale community weigh in on an item's estimated value. When a buyer or organizer marks an item for appraisal, community members with Scout rank or above can submit their valuation. The community votes on submissions, and the requester picks the appraisal they find most useful. Submitting earns XP — and if yours is selected, you earn a significant XP bonus. It's a way for experienced collectors to share their knowledge and get recognized for it.
+        Crowd Appraisals let the FindA.Sale community weigh in on an item's estimated value. When a buyer or organizer marks an item for appraisal, community members with Scout rank or above can submit their valuation. The community votes on submissions, and the requester picks the appraisal they find most useful. Submitting earns XP. And if yours is selected, you earn a significant XP bonus. It's a way for experienced collectors to share their knowledge and get recognized for it.
       </>
     ),
   },
@@ -305,7 +305,7 @@ const shopperFAQs: FAQItem[] = [
     question: 'What is the Loot Legend?',
     answer: (
       <>
-        The Loot Legend is your personal collection showcase. Every notable purchase, earned badge, and completed challenge adds to it. You can make your Loot Legend public so other collectors can see your best finds, or keep it private. It's your FindA.Sale identity — a record of your collecting history.
+        The Loot Legend is your personal collection showcase. Every notable purchase, earned badge, and completed challenge adds to it. You can make your Loot Legend public so other collectors can see your best finds, or keep it private. It's your FindA.Sale identity. A record of your collecting history.
       </>
     ),
   },
@@ -316,7 +316,7 @@ const organizerFAQs: FAQItem[] = [
     question: 'What\'s the difference between SIMPLE, PRO, and TEAMS?',
     answer: (
       <>
-        SIMPLE is free — you get everything you need to run a single sale with up to 200 items. PRO ($29/month) unlocks bulk operations, analytics, export tools, and more.
+        SIMPLE is free. You get everything you need to run a single sale with up to 200 items. PRO ($29/month) unlocks bulk operations, analytics, export tools, and more.
         TEAMS ($79/month) adds multi-user workspaces with roles and permissions and the Command Center for organizations that run sales together.
       </>
     ),
@@ -363,7 +363,7 @@ const organizerFAQs: FAQItem[] = [
         <strong>For POS (in-person card payments):</strong> Open the{' '}
         <Link href="/organizer/pos" className="text-amber-600 hover:underline">POS page</Link>,
         select your sale, and tap <strong>"Run $1.00 Test Transaction"</strong> in the Pre-Sale Test card.
-        It sends a $1 charge through Stripe's test environment — no real money moves — and automatically
+        It sends a $1 charge through Stripe's test environment No real money moves and automatically
         checks off the POS task on your sale's progress checklist when it succeeds.
         <br /><br />
         <strong>For online checkout:</strong> Open your sale's Promote page and tap <strong>"Test Online Checkout"</strong> or <strong>"Test Auction Checkout"</strong> to get a test link and QR code. No real money moves and your inventory stays safe.
@@ -384,9 +384,9 @@ const organizerFAQs: FAQItem[] = [
       <>
         Use these when clicking through the test checkout links on the Promote page. Any future expiry date (e.g. 12/30) and any 3-digit CVC work with all test cards.
         <br /><br />
-        <strong>4242 4242 4242 4242</strong> — Payment succeeds<br />
-        <strong>4000 0000 0000 0002</strong> — Payment is declined<br />
-        <strong>4000 0025 0000 3155</strong> — Triggers an authentication step (3D Secure)
+        <strong>4242 4242 4242 4242</strong>. Payment succeeds<br />
+        <strong>4000 0000 0000 0002</strong>. Payment is declined<br />
+        <strong>4000 0025 0000 3155</strong>. Triggers an authentication step (3D Secure)
         <br /><br />
         Test cards only work in test checkout flows. Real checkouts will never ask for these numbers.
         If you see a test card request when you&apos;re not testing, contact support.
@@ -399,7 +399,7 @@ const organizerFAQs: FAQItem[] = [
       <>
         After you upload a photo, our system analyzes the image and suggests
         a title, description, category, and tags. You review each suggestion and apply, edit, or dismiss
-        as you see fit. Auto Tags saves time on the first draft — you stay in control of the final listing.
+        as you see fit. Auto Tags saves time on the first draft. You stay in control of the final listing.
       </>
     ),
   },
@@ -407,7 +407,7 @@ const organizerFAQs: FAQItem[] = [
     question: 'How does Rapid Capture work?',
     answer: (
       <>
-        Open your sale and tap the ⚡ icon in the photo controls. You'll enter rapid-fire camera mode — photograph items one after another without stopping. Our system analyzes each photo as you go. When you're done, you'll review Auto Tag suggestions (title, description, category, tags) for all captured items in a batch on the Review page. Approve, edit, or dismiss each one and publish. This is the fastest way to get a large inventory online — many organizers photograph 100+ items in under 30 minutes.
+        Open your sale and tap the ⚡ icon in the photo controls. You'll enter rapid-fire camera mode. Photograph items one after another without stopping. Our system analyzes each photo as you go. When you're done, you'll review Auto Tag suggestions (title, description, category, tags) for all captured items in a batch on the Review page. Approve, edit, or dismiss each one and publish. This is the fastest way to get a large inventory online. Many organizers photograph 100+ items in under 30 minutes.
       </>
     ),
   },
@@ -417,7 +417,7 @@ const organizerFAQs: FAQItem[] = [
       <>
         Yes. Visit your <Link href="/organizer/dashboard" className="text-amber-600 hover:underline">dashboard</Link>,
         click a sale, then click <strong>Edit</strong> to update pricing, descriptions, photos, tags,
-        and more. You can edit at any time — before, during, or after the sale.
+        and more. You can edit at any time. Before, during, or after the sale.
       </>
     ),
   },
@@ -439,7 +439,7 @@ const organizerFAQs: FAQItem[] = [
     answer: (
       <>
         When creating your sale, enable the <strong>Auction</strong> option. Then, for each item you
-        want to auction, mark it as an auction item and set a starting bid. Bidding is live — shoppers
+        want to auction, mark it as an auction item and set a starting bid. Bidding is live. Shoppers
         see real-time bids. At the end time you set, the highest bidder wins and payment is processed
         automatically. The standard 10% platform fee applies.
       </>
@@ -470,8 +470,8 @@ const organizerFAQs: FAQItem[] = [
       <>
         From your sale dashboard, click <strong>Print Kit</strong>. You can generate:
         <ul className="mt-2 ml-4 space-y-1">
-          <li><strong>Item label stickers</strong> — Avery-format adhesive labels with QR codes for each item (6 per page, 30 per page options). Shoppers scan these at the sale to view item details and price on their phone.</li>
-          <li><strong>Price sheet / cheat sheet</strong> — A printed reference grid of all items with prices, useful for you and staff during the sale.</li>
+          <li><strong>Item label stickers</strong>. Avery-format adhesive labels with QR codes for each item (6 per page, 30 per page options). Shoppers scan these at the sale to view item details and price on their phone.</li>
+          <li><strong>Price sheet / cheat sheet</strong>. A printed reference grid of all items with prices, useful for you and staff during the sale.</li>
         </ul>
         Print the sticker sheet, cut the labels, and apply them to items before the sale. The QR code links directly to that item's listing.
       </>
@@ -481,7 +481,7 @@ const organizerFAQs: FAQItem[] = [
     question: 'How do I manage holds and reservations?',
     answer: (
       <>
-        Enable holds in your sale settings under <strong>Allow Holds</strong>. Once enabled, shoppers can request holds from any item detail page. You'll receive a notification for each request — you can accept or decline. Accepted holds are marked on the listing and the hold window is determined by the shopper's Explorer Rank (30–90 minutes depending on rank). Manage all active holds from your sale's <strong>Holds</strong> tab. You can cancel any hold at any time.
+        Enable holds in your sale settings under <strong>Allow Holds</strong>. Once enabled, shoppers can request holds from any item detail page. You'll receive a notification for each request. You can accept or decline. Accepted holds are marked on the listing and the hold window is determined by the shopper's Explorer Rank (30–90 minutes depending on rank). Manage all active holds from your sale's <strong>Holds</strong> tab. You can cancel any hold at any time.
       </>
     ),
   },
@@ -489,7 +489,7 @@ const organizerFAQs: FAQItem[] = [
     question: 'How does in-person / Point of Sale checkout work?',
     answer: (
       <>
-        The FindA.Sale POS lets you process sales at the event using your phone or tablet. From your sale dashboard, tap <strong>POS</strong> to open the point-of-sale view. You can search your inventory, add items to a cart, accept payment (card via Stripe or cash), and mark items sold — all from the same screen. POS transactions sync with your online inventory in real time, so an item sold in person won't show as available online.
+        The FindA.Sale POS lets you process sales at the event using your phone or tablet. From your sale dashboard, tap <strong>POS</strong> to open the point-of-sale view. You can search your inventory, add items to a cart, accept payment (card via Stripe or cash), and mark items sold. All from the same screen. POS transactions sync with your online inventory in real time, so an item sold in person won't show as available online.
       </>
     ),
   },
@@ -498,12 +498,12 @@ const organizerFAQs: FAQItem[] = [
     answer: (
       <>
         Yes. FindA.Sale's POS supports two Stripe Terminal smart readers: the <strong>Stripe Reader S700</strong> and
-        the <strong>Stripe Reader S710</strong>. The S710 adds cellular connectivity — useful for outdoor venues or
+        the <strong>Stripe Reader S710</strong>. The S710 adds cellular connectivity. Useful for outdoor venues or
         locations where Wi-Fi isn't reliable. Both accept chip, swipe, and contactless payments including Apple Pay
         and Google Pay. Order directly from Stripe at{' '}
         <a href="https://stripe.com/terminal" target="_blank" rel="noopener noreferrer" className="text-amber-600 hover:underline">stripe.com/terminal</a>.
         <br /><br />
-        Because FindA.Sale is a web app, readers connect over the internet rather than Bluetooth — so a working
+        Because FindA.Sale is a web app, readers connect over the internet rather than Bluetooth. So a working
         Wi-Fi or cellular connection at your venue is required. Your Stripe account must also be fully onboarded
         before the reader will process payments. See{' '}
         <Link href="/organizer/pos" className="text-amber-600 hover:underline">your POS page</Link> to
@@ -516,7 +516,7 @@ const organizerFAQs: FAQItem[] = [
     answer: (
       <>
         From your sale dashboard, click <strong>Export</strong> to download a CSV of your full inventory.
-        The file includes titles, descriptions, prices, categories, tags, and sold status — useful for
+        The file includes titles, descriptions, prices, categories, tags, and sold status. Useful for
         accounting, record-keeping, or import into other systems.
       </>
     ),
@@ -527,7 +527,7 @@ const organizerFAQs: FAQItem[] = [
       <>
         All sales are final once payment is completed. If there's a genuine issue (item not as described,
         damage, etc.), the organizer can issue a refund through their Stripe dashboard. Our support team
-        can also help mediate disputes — contact us at{' '}
+        can also help mediate disputes. Contact us at{' '}
         <Link href="/contact" className="text-amber-600 hover:underline">support@finda.sale</Link>.
       </>
     ),
@@ -536,7 +536,7 @@ const organizerFAQs: FAQItem[] = [
     question: 'What is the Command Center?',
     answer: (
       <>
-        The Command Center is a Teams feature that gives you a real-time dashboard across all your active sales — track items, holds, messages, and performance in one place.
+        The Command Center is a Teams feature that gives you a real-time dashboard across all your active sales. Track items, holds, messages, and performance in one place.
       </>
     ),
   },

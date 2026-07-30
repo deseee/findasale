@@ -196,7 +196,7 @@ const DiscountRulesPage = () => {
     return (
       <>
         <Head>
-          <title>Discount Rules — FindA.Sale</title>
+          <title>Discount Rules. FindA.Sale</title>
         </Head>
         <div className="min-h-screen bg-white dark:bg-gray-800 py-8">
           <div className="max-w-4xl mx-auto px-4">
@@ -224,7 +224,7 @@ const DiscountRulesPage = () => {
   return (
     <>
       <Head>
-        <title>Discount Rules — FindA.Sale</title>
+        <title>Discount Rules. FindA.Sale</title>
       </Head>
       <div className="min-h-screen bg-white dark:bg-gray-800 py-8">
         <div className="max-w-4xl mx-auto px-4">
@@ -260,7 +260,7 @@ const DiscountRulesPage = () => {
             <div className="bg-blue-50 dark:bg-gray-700 border border-blue-200 dark:border-gray-600 rounded-lg p-8 text-center">
               <Tag size={40} className="mx-auto mb-4 text-blue-500" />
               <p className="text-warm-600 dark:text-warm-300 mb-4">
-                No discount rules yet — create a rule to apply bulk discounts by color tag.
+                No discount rules yet. Create a rule to apply bulk discounts by color tag.
               </p>
               <button
                 onClick={() => {
@@ -415,9 +415,9 @@ const DiscountRulesPage = () => {
                   onChange={(e) =>
                     setFormData({ ...formData, label: e.target.value })
                   }
-                  placeholder="e.g., 25% Off — Red Tag"
+                  placeholder="e.g., 25% Off. Red Tag"
                   className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-700 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-blue-500"
-                 aria-label="e.g., 25% Off — Red Tag" />
+                 aria-label="e.g., 25% Off. Red Tag" />
                 <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">
                   Human-readable name for this rule
                 </p>

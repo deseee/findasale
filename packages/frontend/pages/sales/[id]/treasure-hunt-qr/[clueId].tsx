@@ -115,7 +115,7 @@ const CluePage = () => {
       const statusCode = error.response?.status;
       if (statusCode === 403) {
         setGeofenceBlocked(true);
-        showToast('Location required — tap "Try again" to allow location access', 'error');
+        showToast('Location required. Tap "Try again" to allow location access', 'error');
       } else if (statusCode === 409) {
         showToast('You already found this one!', 'info');
         setTimeout(() => {

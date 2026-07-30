@@ -102,7 +102,7 @@ const SimpleModePanel: React.FC<SimpleModeViewProps> = ({ onExitSimpleMode }) =>
         {/* Header */}
         <div className="mb-12 text-center">
           <h1 className="text-4xl font-bold text-warm-900 dark:text-gray-100 mb-2">Welcome to Simple Mode</h1>
-          <p className="text-lg text-warm-600 dark:text-gray-400">Everything you need to get started—in five easy steps</p>
+          <p className="text-lg text-warm-600 dark:text-gray-400">Everything you need to get started. In five easy steps</p>
         </div>
 
         {/* 5-Button Grid */}

@@ -80,7 +80,7 @@ export default function DemandSignalsCard({ maxLocal = 10 }: DemandSignalsCardPr
       {!hasLocal && !hasNational ? (
         /* Empty state */
         <p className="text-sm text-violet-700 dark:text-violet-300 leading-relaxed">
-          Not enough search data yet — check back after your sale goes live.
+          Not enough search data yet. Check back after your sale goes live.
         </p>
       ) : (
         <>

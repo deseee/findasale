@@ -17,7 +17,7 @@ const READERS: Reader[] = [
     name: 'Stripe Reader S700',
     icon: '📱',
     price: 299,
-    bestFor: 'Estate sales, yard sales, flea markets, and resale shops. The most popular choice — works with any WiFi network.',
+    bestFor: 'Estate sales, yard sales, flea markets, and resale shops. The most popular choice. Works with any WiFi network.',
     connectivity: 'WiFi',
     specs: [
       '5.5" customer-facing display',
@@ -52,7 +52,7 @@ export default function HardwareSection() {
         </h3>
         <p className="text-gray-700 dark:text-gray-300">
           For fixed checkout stations or high-volume sales, connect a Stripe Terminal reader to FindA.Sale.
-          Set up in minutes — no additional software needed.
+          Set up in minutes. No additional software needed.
         </p>
       </div>
 

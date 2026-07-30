@@ -116,7 +116,7 @@ const PickupBookingCard: React.FC<Props> = ({ saleId }) => {
                   {format(parseISO(slot.startsAt), 'EEE, MMM d, yyyy')}
                 </p>
                 <p className="text-lg font-medium text-amber-600 dark:text-amber-400 mt-1">
-                  {format(parseISO(slot.startsAt), 'h:mm a')} —{' '}
+                  {format(parseISO(slot.startsAt), 'h:mm a')} to{' '}
                   {format(parseISO(slot.endsAt), 'h:mm a')}
                 </p>
                 <div className="flex gap-4 mt-3 text-sm text-warm-600 dark:text-gray-400">

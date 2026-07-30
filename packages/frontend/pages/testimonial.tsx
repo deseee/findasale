@@ -35,7 +35,7 @@ const TestimonialPage = () => {
         saleId,
       });
       setSubmitted(true);
-      showToast('Thank you — your testimonial has been received.', 'success');
+      showToast('Thank you. Your testimonial has been received.', 'success');
     } catch (error: any) {
       const status = error?.response?.status;
       if (status === 401) {

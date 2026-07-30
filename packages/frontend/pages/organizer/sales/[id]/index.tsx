@@ -92,7 +92,7 @@ const SaleDetailPage = () => {
           showToast(`Item listed on eBay`, 'success');
         } else if (result.status === 'category_review_needed') {
           setEbayPushStatus((prev) => ({ ...prev, [result.itemId]: 'category_review_needed' }));
-          showToast('eBay category needs review — open item editor to set manually', 'error');
+          showToast('eBay category needs review. Open item editor to set manually', 'error');
         } else {
           setEbayPushStatus((prev) => ({ ...prev, [result.itemId]: 'error' }));
           const errorMsg = result.error?.includes('NOT_CONNECTED')
@@ -183,7 +183,7 @@ const SaleDetailPage = () => {
           };
 
           // Custom toast with action button
-          showToast(`${unsoldWithoutEbay} item${unsoldWithoutEbay !== 1 ? 's' : ''} didn't sell — ready to list on eBay?`, 'info');
+          showToast(`${unsoldWithoutEbay} item${unsoldWithoutEbay !== 1 ? 's' : ''} didn't sell. Ready to list on eBay?`, 'info');
 
           setShowedPostSaleToast(true);
           if (typeof window !== 'undefined') {

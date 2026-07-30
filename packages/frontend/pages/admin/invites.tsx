@@ -211,7 +211,7 @@ const AdminInvitesPage = () => {
                           </code>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-warm-600 dark:text-warm-400">
-                          {invite.email || '—'}
+                          {invite.email || 'N/A'}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <span
@@ -231,7 +231,7 @@ const AdminInvitesPage = () => {
                               <div className="text-warm-500 dark:text-warm-400">{invite.usedBy.email}</div>
                             </div>
                           ) : (
-                            <span className="text-warm-400">—</span>
+                            <span className="text-warm-400">, </span>
                           )}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-warm-600 dark:text-warm-400">

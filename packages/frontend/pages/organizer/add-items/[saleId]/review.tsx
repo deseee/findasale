@@ -466,7 +466,7 @@ const ReviewPage = () => {
           successCount++;
           // Warn if item is still a draft on FindA.Sale after eBay push
           if (result.warning === 'DRAFT_ON_FINDASALE') {
-            showToast('Item pushed to eBay but is still a draft on FindA.Sale — shoppers won\'t see it until you approve it.', 'info');
+            showToast('Item pushed to eBay but is still a draft on FindA.Sale. Shoppers won\'t see it until you approve it.', 'info');
           }
         } else {
           errorCount++;
@@ -1177,7 +1177,7 @@ const ReviewPage = () => {
                 Publish items to this sale?
               </h2>
               <p className="text-sm text-[rgba(26,24,20,0.62)] dark:text-[#B8B8BA] leading-relaxed">
-                Each item will go live with the values currently shown — Smart's title,
+                Each item will go live with the values currently shown. Smart's title,
                 category, condition, your price, and tags. You can edit any item later
                 from the manager.
               </p>
@@ -1187,7 +1187,7 @@ const ReviewPage = () => {
                 return !p.trim() || isNaN(parseFloat(p)) || parseFloat(p) <= 0;
               }) && (
                 <div className="mt-4 p-3 rounded-lg bg-amber-50 border border-amber-200 text-sm text-amber-800">
-                  Items without a price will be skipped — approve only priced items.
+                  Items without a price will be skipped. Approve only priced items.
                 </div>
               )}
             </div>

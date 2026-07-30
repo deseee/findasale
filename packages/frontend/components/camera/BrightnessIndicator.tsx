@@ -76,7 +76,7 @@ const BrightnessIndicator: React.FC<BrightnessIndicatorProps> = ({
   const getTierInfo = (b: number | null) => {
     if (b === null) return { dots: '●●●●●', color: 'text-gray-400', text: 'Checking light...' };
     if (b >= 65) return { dots: '●●●●●', color: 'text-green-400', text: 'Lighting looks good' };
-    if (b >= 40) return { dots: '●●●○○', color: 'text-yellow-400', text: 'Soft light — brighter helps' };
+    if (b >= 40) return { dots: '●●●○○', color: 'text-yellow-400', text: 'Soft light. Brighter helps' };
     return { dots: '●○○○○', color: 'text-red-400', text: 'Move toward better light' };
   };
 

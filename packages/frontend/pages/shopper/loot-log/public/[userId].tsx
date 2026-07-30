@@ -43,7 +43,7 @@ export default function PublicLootLogPage() {
   return (
     <>
       <Head>
-        <title>{userName}&apos;s Loot Log — FindA.Sale</title>
+        <title>{userName}&apos;s Loot Log. FindA.Sale</title>
         <meta name="description" content={`${userName}'s purchase history on FindA.Sale`} />
       </Head>
 

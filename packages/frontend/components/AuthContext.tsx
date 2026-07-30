@@ -30,7 +30,7 @@ export function resolveOrganizerTier(
   if (tier === undefined || tier === null || tier === '') {
     // Loud, not silent: a missing tier is a data/contract problem, never a downgrade.
     console.error(
-      `[AuthContext] Organizer tier missing from ${origin} payload — treating tier as UNKNOWN (not SIMPLE). ` +
+      `[AuthContext] Organizer tier missing from ${origin} payload. Treating tier as UNKNOWN (not SIMPLE). ` +
         'Paid features stay gated but no upgrade prompt will be shown.'
     );
     return undefined;

@@ -76,7 +76,7 @@ const SalePlanPage = () => {
       await api.post('/stripe/test-transaction', { saleId, amount: 1, paymentMethod: 'direct' });
       // live_pos is auto-detected from DB (hasTestTransaction) — invalidate so it refetches
       queryClient.invalidateQueries({ queryKey: ['checklist', saleId] });
-      showToast('POS test passed — no inventory affected ✓', 'success');
+      showToast('POS test passed. No inventory affected ✓', 'success');
     } catch {
       showToast('POS test failed. Check your Stripe connection.', 'error');
     } finally {
@@ -188,7 +188,7 @@ const SalePlanPage = () => {
     if (router.query.testCheckout === 'success') {
       const type = router.query.type as string;
       const label = type === 'auction' ? 'Auction checkout' : 'Online checkout';
-      showToast(`${label} test passed — inventory untouched ✓`, 'success');
+      showToast(`${label} test passed. Inventory untouched ✓`, 'success');
 
       // Auto-check the relevant checklist item
       const itemId = type === 'auction' ? 'pre_auction_checkout' : 'pre_online_checkout';

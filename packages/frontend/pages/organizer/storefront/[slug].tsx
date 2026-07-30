@@ -625,7 +625,7 @@ const OrganizerStorefront = () => {
                   style={{ background: 'repeating-linear-gradient(135deg, #E8E2D6 0 14px, #EFEAE0 14px 28px)' }}
                 >
                   <p className="text-[rgba(26,24,20,0.62)] dark:text-[rgba(242,240,234,0.62)] text-sm">
-                    No sales right now — follow to get notified
+                    No sales right now. Follow to get notified
                   </p>
                 </div>
               ) : (

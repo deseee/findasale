@@ -81,7 +81,7 @@ const FlashDealBanner: React.FC<FlashDealBannerProps> = ({ saleId, itemIds }) =>
       <div className="flex items-center gap-3">
         <div className="text-3xl">⚡</div>
         <div className="flex-1">
-          <h3 className="font-bold text-lg">Flash Deal — {deal.discountPct}% off!</h3>
+          <h3 className="font-bold text-lg">Flash Deal, {deal.discountPct}% off!</h3>
           <p className="text-sm opacity-90">
             {deal.item.title} {countdownText && `for next ${countdownText}`}
           </p>

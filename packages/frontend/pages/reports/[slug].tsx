@@ -91,7 +91,7 @@ export default function MonthlyReportPage({ report, slug, error }: PageProps) {
   const canonicalUrl = `${frontendUrl}/reports/${slug}`;
 
   if (!report) {
-    const title = 'Report Not Found — FindA.Sale';
+    const title = 'Report Not Found. FindA.Sale';
     return (
       <>
         <Head>
@@ -120,7 +120,7 @@ export default function MonthlyReportPage({ report, slug, error }: PageProps) {
     );
   }
 
-  const title = `${report.periodLabel} Secondary Sale Trends — FindA.Sale`;
+  const title = `${report.periodLabel} Secondary Sale Trends. FindA.Sale`;
   const description = `${report.totalPublishedSales} sales listed across ${report.totalActiveOrganizers} organizers in ${report.periodLabel}. See top sale types, active cities, and item categories on FindA.Sale.`;
 
   const jsonLd = {
@@ -199,7 +199,7 @@ export default function MonthlyReportPage({ report, slug, error }: PageProps) {
             <StatCard label="Active Organizers" value={report.totalActiveOrganizers.toLocaleString()} />
             <StatCard
               label="Search Engine Views"
-              value={report.totalCrawlerVisits > 0 ? report.totalCrawlerVisits.toLocaleString() : '—'}
+              value={report.totalCrawlerVisits > 0 ? report.totalCrawlerVisits.toLocaleString() : 'N/A'}
               note={report.totalCrawlerVisits === 0 ? 'Crawler tracking initializing' : undefined}
             />
           </div>
@@ -321,7 +321,7 @@ export default function MonthlyReportPage({ report, slug, error }: PageProps) {
             List Your Sale on FindA.Sale
           </h2>
           <p style={{ margin: '0 0 20px', fontSize: 15, color: '#374151', lineHeight: 1.6 }}>
-            Reach local shoppers and get your listings indexed by search engines — free to start.
+            Reach local shoppers and get your listings indexed by search engines. Free to start.
           </p>
           <Link
             href="/register"

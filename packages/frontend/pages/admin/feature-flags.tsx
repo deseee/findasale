@@ -353,7 +353,7 @@ export default function AdminFeatureFlagsPage() {
             <ul className="space-y-1">
               {SUGGESTED_FLAGS.map(flag => (
                 <li key={flag.key} className="text-sm text-blue-800 dark:text-blue-200">
-                  <code className="font-mono">{flag.key}</code> — {flag.description}
+                  <code className="font-mono">{flag.key}</code>, {flag.description}
                 </li>
               ))}
             </ul>
@@ -426,14 +426,14 @@ export default function AdminFeatureFlagsPage() {
                             Paid Only
                           </span>
                         ) : (
-                          <span className="text-xs text-warm-500 dark:text-warm-400">—</span>
+                          <span className="text-xs text-warm-500 dark:text-warm-400">, </span>
                         )}
                       </td>
                       <td className="px-6 py-4 text-sm text-warm-600 dark:text-warm-400">
                         {new Date(flag.updatedAt).toLocaleDateString()}
                       </td>
                       <td className="px-6 py-4 text-sm text-warm-600 dark:text-warm-400">
-                        {flag.updatedBy || '—'}
+                        {flag.updatedBy || 'N/A'}
                       </td>
                       <td className="px-6 py-4 text-center">
                         <div className="flex gap-2 justify-center">

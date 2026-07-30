@@ -329,7 +329,7 @@ const ConsignorPortalPage: React.FC = () => {
                               ${Number(payout.netPayout).toFixed(2)}
                             </td>
                             <td className="px-4 py-3 text-sm text-warm-600 dark:text-warm-400">
-                              {payout.method || '—'}
+                              {payout.method || 'N/A'}
                             </td>
                           </tr>
                         ))}

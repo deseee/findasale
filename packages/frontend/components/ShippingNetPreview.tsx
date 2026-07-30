@@ -169,7 +169,7 @@ export const ShippingNetPreview: React.FC<ShippingNetPreviewProps> = ({
   if (!loading && data && data.customPolicy) {
     return (
       <div className="rounded-lg border border-warm-200 dark:border-gray-600 bg-warm-50 dark:bg-gray-800 p-3 text-sm text-warm-700 dark:text-warm-300">
-        {data.message || 'Custom eBay policy selected — buyer shipping is set by your eBay policy.'}
+        {data.message || 'Custom eBay policy selected. Buyer shipping is set by your eBay policy.'}
       </div>
     );
   }
@@ -217,7 +217,7 @@ export const ShippingNetPreview: React.FC<ShippingNetPreviewProps> = ({
               <div className="text-[11px] text-warm-500 dark:text-warm-400">You cover ~{fmt(data.shippingEstimate.rate)}</div>
             </>
           ) : (
-            <div className="mt-1 text-sm text-warm-500 dark:text-warm-400">—</div>
+            <div className="mt-1 text-sm text-warm-500 dark:text-warm-400">, </div>
           )}
         </div>
 
@@ -238,7 +238,7 @@ export const ShippingNetPreview: React.FC<ShippingNetPreviewProps> = ({
               </button>
             </>
           ) : (
-            <div className="mt-1 text-sm text-warm-500 dark:text-warm-400">—</div>
+            <div className="mt-1 text-sm text-warm-500 dark:text-warm-400">, </div>
           )}
         </div>
       </div>
@@ -274,7 +274,7 @@ export const ShippingNetPreview: React.FC<ShippingNetPreviewProps> = ({
           {data.flatPolicy && (
             <p className="text-[11px] text-warm-500 dark:text-warm-400 pt-1">
               Your buyer pays the {data.flatPolicy.name} flat rate ({fmt(data.breakdown.buyerShipping)}). Your
-              label costs about {fmt(data.breakdown.labelCost)} — the difference, minus eBay's fee on the full
+              label costs about {fmt(data.breakdown.labelCost)}. The difference, minus eBay's fee on the full
               shipping amount, is yours.
             </p>
           )}
@@ -291,7 +291,7 @@ export const ShippingNetPreview: React.FC<ShippingNetPreviewProps> = ({
             <span className="text-amber-600 dark:text-amber-400 text-sm leading-none mt-0.5">⚠️</span>
             <div className="text-xs text-amber-800 dark:text-amber-200 leading-relaxed">
               At <span className="font-bold">{fmt(itemPrice)}</span>, eBay fees and shipping eat
-              most of your money — you'd keep only about{' '}
+              most of your money. You'd keep only about{' '}
               <span className="font-bold">{fmt(data.net)}</span>. List at{' '}
               <span className="font-bold">{fmt(floorPrice)}</span> or more to keep at least{' '}
               {Math.round(GUARDRAIL_MARGIN_PCT * 100)}% after fees.

@@ -163,7 +163,7 @@ const PhotoOpsPage: React.FC = () => {
             <div className="mb-6 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg">
               <h4 className="text-sm font-semibold text-amber-900 dark:text-amber-100 mb-1">Frame Selection</h4>
               <p className="text-xs text-amber-800 dark:text-amber-200">
-                Custom photo frames coming soon — unlock unique frames as you earn XP!
+                Custom photo frames coming soon. Unlock unique frames as you earn XP!
               </p>
             </div>
 

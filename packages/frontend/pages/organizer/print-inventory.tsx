@@ -519,7 +519,7 @@ const PrintInventoryPage = () => {
                                       {category}
                                     </td>
                                     <td className="py-3 px-4 text-warm-600 dark:text-warm-400 capitalize">
-                                      {item.condition || '—'}
+                                      {item.condition || 'N/A'}
                                     </td>
                                     <td className="py-3 px-4 text-right font-semibold text-warm-900 dark:text-warm-200">
                                       $

@@ -124,7 +124,7 @@ const TeamSeatUpsellModal: React.FC<TeamSeatUpsellModalProps> = ({
                 Adding...
               </>
             ) : (
-              'Add Seat — $20/mo'
+              'Add Seat, $20/mo'
             )}
           </button>
         </div>

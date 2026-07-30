@@ -26,7 +26,7 @@ const RegisterPage = () => {
     inviteCode: '',
     country: 'US',
     province: '',
-    website: '', // honeypot — real users never see or fill this; see P0 fix below
+    website: '', // honeypot. Real users never see or fill this; see P0 fix below
   });
   const [ageError, setAgeError] = useState('');
   const [organizerEmailConsent, setOrganizerEmailConsent] = useState(false);
@@ -180,7 +180,7 @@ const RegisterPage = () => {
       return btoa(fingerprintStr);
     } catch (error) {
       console.error('[fingerprint] Error generating device fingerprint:', error);
-      return ''; // Return empty string if fingerprinting fails — don't block registration
+      return ''; // Return empty string if fingerprinting fails. Don't block registration
     }
   };
 
@@ -217,7 +217,7 @@ const RegisterPage = () => {
     if (!challengeToken || !challengeNonce) {
       setError(challengeError
         ? "Couldn't prepare the registration form. Please refresh the page and try again."
-        : 'Still preparing your registration — please try again in a moment.');
+        : 'Still preparing your registration. Please try again in a moment.');
       setLoading(false);
       return;
     }
@@ -228,7 +228,7 @@ const RegisterPage = () => {
 
       const isQuebecBlocked = formData.country === 'CA' && formData.province === 'QC';
       if (isQuebecBlocked) {
-        setError("Quebec support is coming soon — we're actively working on provincial compliance.");
+        setError("Quebec support is coming soon. We're actively working on provincial compliance.");
         setLoading(false);
         return;
       }
@@ -247,7 +247,7 @@ const RegisterPage = () => {
         deviceFingerprint, // Platform Safety #118: Include fingerprint
         challengeToken, // P0 SECURITY FIX (2026-07-19): PoW challenge, re-verified server-side
         challengeNonce,
-        website: formData.website, // honeypot — must stay empty; backend rejects if filled
+        website: formData.website, // honeypot. Must stay empty; backend rejects if filled
       };
       if (formData.role === 'ORGANIZER') {
         payload.businessName = formData.businessName;
@@ -349,7 +349,7 @@ const RegisterPage = () => {
                 You're claiming your FindA.Sale storefront.
               </p>
               <p className="text-xs text-amber-600 dark:text-amber-300 mt-1">
-                Create a free account — once registered, your profile is immediately linked and you're in control.
+                Create a free account. Once registered, your profile is immediately linked and you're in control.
               </p>
             </div>
           )}
@@ -558,7 +558,7 @@ const RegisterPage = () => {
               <svg className="h-4 w-4 text-green-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
-              <span className="text-sm text-green-700 dark:text-green-300">Referral link applied — your friend gets bonus XP when you join!</span>
+              <span className="text-sm text-green-700 dark:text-green-300">Referral link applied. Your friend gets bonus XP when you join!</span>
             </div>
           )}
 

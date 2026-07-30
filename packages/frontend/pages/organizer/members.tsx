@@ -206,7 +206,7 @@ const OrganizerMembersPage = () => {
             </p>
             <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-6 mb-8">
               <p className="text-sm text-blue-800 dark:text-blue-200 mb-4">
-                <strong>TEAMS feature</strong> — Full team management with scheduling and performance tracking
+                <strong>TEAMS feature</strong>. Full team management with scheduling and performance tracking
               </p>
               <p className="text-xs text-blue-700 dark:text-blue-300">
                 Current tier: <strong>{tier}</strong>
@@ -447,7 +447,7 @@ const OrganizerMembersPage = () => {
                       {gap.message}
                     </p>
                     <p className="text-xs text-yellow-700 dark:text-yellow-300 mt-1">
-                      {gap.saleName} — {gap.saleDate}
+                      {gap.saleName}, {gap.saleDate}
                     </p>
                   </div>
                 </div>
@@ -487,7 +487,7 @@ const OrganizerMembersPage = () => {
                       >
                         {INVITE_ROLES.map((r) => (
                           <option key={r.value} value={r.value}>
-                            {r.label} — {r.description}
+                            {r.label}, {r.description}
                           </option>
                         ))}
                       </select>

@@ -352,7 +352,7 @@ const ItemCard: React.FC<ItemCardProps> = ({
           {showAiTagged && item.isAiTagged && (
             <span
               className="absolute bottom-2 right-2 px-1.5 py-0.5 rounded bg-black/60 text-white text-[9px] font-semibold leading-none"
-              title="This tag was auto-suggested by our system. Check it before listing — you know your items best."
+              title="This tag was auto-suggested by our system. Check it before listing. You know your items best."
             >
               Auto
             </span>

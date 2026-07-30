@@ -152,7 +152,7 @@ const AdminDemandSignals = () => {
                       {s.searchCount}
                     </span>
                   </td>
-                  <td className="px-6 py-4 text-sm text-warm-600 dark:text-warm-400">{s.city || '—'}</td>
+                  <td className="px-6 py-4 text-sm text-warm-600 dark:text-warm-400">{s.city || 'N/A'}</td>
                   <td className="px-6 py-4 text-sm text-warm-600 dark:text-warm-400">{new Date(s.lastSearched).toLocaleDateString()}</td>
                 </tr>
               ))}

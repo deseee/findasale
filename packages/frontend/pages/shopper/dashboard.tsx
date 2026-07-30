@@ -418,7 +418,7 @@ const ShopperDashboard = () => {
               />
             ) : (
               <div className="h-64 rounded-lg border border-warm-200 dark:border-gray-700 flex items-center justify-center bg-white dark:bg-gray-800">
-                <p className="text-warm-500 dark:text-gray-400 text-sm">Couldn't load your rank — refresh to try again.</p>
+                <p className="text-warm-500 dark:text-gray-400 text-sm">Couldn't load your rank. Refresh to try again.</p>
               </div>
             )}
           </div>
@@ -478,7 +478,7 @@ const ShopperDashboard = () => {
           {user && xpProfile && !user.huntPassActive && xpProfile.explorerRank !== 'GRANDMASTER' && (
             <div className="flex items-center justify-between bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-700 rounded-lg px-4 py-3 mb-6">
               <span className="text-sm text-purple-800 dark:text-purple-200">
-                ⭐ <strong>Hunt Pass</strong> — earn 1.5x XP on every purchase
+                ⭐ <strong>Hunt Pass</strong>. Earn 1.5x XP on every purchase
               </span>
               <Link
                 href="/shopper/hunt-pass"

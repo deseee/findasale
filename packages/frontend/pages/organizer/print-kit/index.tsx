@@ -82,7 +82,7 @@ const PrintKitLandingPage = () => {
   return (
     <>
       <Head>
-        <title>Print Kit — FindA.Sale</title>
+        <title>Print Kit. FindA.Sale</title>
       </Head>
 
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
@@ -104,7 +104,7 @@ const PrintKitLandingPage = () => {
               Choose a Sale
             </h2>
             <p className="text-gray-600 dark:text-gray-400 text-sm">
-              Select a sale to generate your print kit — yard signs, price tags, and labels.
+              Select a sale to generate your print kit. Yard signs, price tags, and labels.
             </p>
           </div>
 

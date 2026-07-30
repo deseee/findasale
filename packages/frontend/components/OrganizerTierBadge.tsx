@@ -19,21 +19,21 @@ const TIER_CONFIG: Record<string, {
     bg: 'bg-amber-100',
     text: 'text-amber-800',
     icon: '🥉',
-    nextLevelMessage: 'Reach Silver at 5 sales — get priority search placement and access to advanced analytics',
+    nextLevelMessage: 'Reach Silver at 5 sales. Get priority search placement and access to advanced analytics',
   },
   SILVER: {
     label: 'Silver Organizer',
     bg: 'bg-slate-200',
     text: 'text-slate-700',
     icon: '🥈',
-    nextLevelMessage: 'Reach Gold at 15 sales — get featured on the homepage and early access to new features',
+    nextLevelMessage: 'Reach Gold at 15 sales. Get featured on the homepage and early access to new features',
   },
   GOLD: {
     label: 'Gold Organizer',
     bg: 'bg-yellow-100',
     text: 'text-yellow-800',
     icon: '🥇',
-    nextLevelMessage: "You've reached Gold — your sales are featured on the homepage and you get early access to new features",
+    nextLevelMessage: "You've reached Gold. Your sales are featured on the homepage and you get early access to new features",
   },
 };
 

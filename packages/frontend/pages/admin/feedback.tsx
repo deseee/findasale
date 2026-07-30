@@ -133,7 +133,7 @@ const AdminFeedback = () => {
           <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 border-l-4 border-blue-500">
             <h3 className="text-warm-600 dark:text-warm-400 text-sm font-medium uppercase">Avg Rating</h3>
             <p className="text-3xl font-bold text-warm-900 dark:text-warm-100 mt-2">
-              {stats.averageRating ? stats.averageRating.toFixed(1) : '—'}
+              {stats.averageRating ? stats.averageRating.toFixed(1) : 'N/A'}
             </p>
             <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">/ 5.0</p>
           </div>
@@ -205,20 +205,20 @@ const AdminFeedback = () => {
                         {fb.rating}★
                       </span>
                     ) : (
-                      <span className="text-warm-500 dark:text-warm-400">—</span>
+                      <span className="text-warm-500 dark:text-warm-400">, </span>
                     )}
                   </td>
                   <td className="px-6 py-4 text-sm text-warm-900 dark:text-warm-100 max-w-xs truncate">
-                    {fb.text || '—'}
+                    {fb.text || 'N/A'}
                   </td>
                   <td className="px-6 py-4 text-sm text-warm-600 dark:text-warm-400">
-                    {fb.page || '—'}
+                    {fb.page || 'N/A'}
                   </td>
                   <td className="px-6 py-4 text-sm text-warm-900 dark:text-warm-100">
-                    {fb.user?.name || '—'}
+                    {fb.user?.name || 'N/A'}
                   </td>
                   <td className="px-6 py-4 text-sm text-warm-600 dark:text-warm-400">
-                    {fb.user?.email || '—'}
+                    {fb.user?.email || 'N/A'}
                   </td>
                   <td className="px-6 py-4 text-sm text-warm-600 dark:text-warm-400">
                     {new Date(fb.createdAt).toLocaleDateString()}

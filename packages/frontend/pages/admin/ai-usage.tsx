@@ -112,7 +112,7 @@ export default function AIUsagePage() {
   return (
     <>
       <Head>
-        <title>AI Spend — Admin | FindA.Sale</title>
+        <title>AI Spend. Admin | FindA.Sale</title>
       </Head>
       <div className="max-w-7xl mx-auto px-4 py-8">
         <div className="flex items-center gap-3 mb-2">
@@ -130,7 +130,7 @@ export default function AIUsagePage() {
           {loading
             ? 'Loading…'
             : usage
-            ? `Month: ${usage.monthKey} — read-only view of AI cost across 4 subsystems.`
+            ? `Month: ${usage.monthKey}. Read-only view of AI cost across 4 subsystems.`
             : ''}
         </p>
 

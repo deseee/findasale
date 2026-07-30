@@ -249,9 +249,9 @@ export default function PromotePage(): JSX.Element {
       if (response.status === 429) {
         try {
           const errorData = await response.json();
-          showToast(errorData.message || 'Too many requests — please wait before exporting again', 'error');
+          showToast(errorData.message || 'Too many requests. Please wait before exporting again', 'error');
         } catch {
-          showToast('Too many requests — please wait before exporting again', 'error');
+          showToast('Too many requests. Please wait before exporting again', 'error');
         }
         return;
       }
@@ -294,9 +294,9 @@ export default function PromotePage(): JSX.Element {
       if (response.status === 429) {
         try {
           const errorData = await response.json();
-          showToast(errorData.message || 'Too many requests — please wait before exporting again', 'error');
+          showToast(errorData.message || 'Too many requests. Please wait before exporting again', 'error');
         } catch {
-          showToast('Too many requests — please wait before exporting again', 'error');
+          showToast('Too many requests. Please wait before exporting again', 'error');
         }
         return;
       }
@@ -370,15 +370,15 @@ export default function PromotePage(): JSX.Element {
 
       instagram: `🏷️ ${sale.title}\n\nFind amazing deals on quality items! ${itemCount ? `We have ${itemCount}+ items` : 'Great selection of items available'}.\n\n📍 ${address}\n📅 ${startDate} - ${endDate}\n\n#LocalSales ${getHashtagsForSaleType(sale.saleType)} #Bargains #ShoppingLocal`,
 
-      nextdoor: `Neighbors — ${sale.title} this ${startDate} - ${endDate} at ${address}\n\n${saleTypeLabel.charAt(0).toUpperCase() + saleTypeLabel.slice(1)} open to the public. Items include furniture, household goods, collectibles, and more. Early arrival recommended.\n\nFull item list at finda.sale — search "${sale.city}"\n\nHope to see some familiar faces!`,
+      nextdoor: `Neighbors. ${sale.title} this ${startDate} - ${endDate} at ${address}\n\n${saleTypeLabel.charAt(0).toUpperCase() + saleTypeLabel.slice(1)} open to the public. Items include furniture, household goods, collectibles, and more. Early arrival recommended.\n\nFull item list at finda.sale. Search "${sale.city}"\n\nHope to see some familiar faces!`,
 
-      threads: `Running a ${saleTypeLabel} this weekend in ${sale.city} — ${sale.title}\n\nLots of ${sale.title} items: furniture, vintage pieces, collectibles, and more. Everything must go.\n\n📍 ${address} · ${startDate} - ${endDate}\nBrowse the inventory at finda.sale`,
+      threads: `Running a ${saleTypeLabel} this weekend in ${sale.city}. ${sale.title}\n\nLots of ${sale.title} items: furniture, vintage pieces, collectibles, and more. Everything must go.\n\n📍 ${address} · ${startDate} - ${endDate}\nBrowse the inventory at finda.sale`,
 
       email: `SUBJECT: You're invited to ${sale.title}: Limited time sale!\n\n---\n\nHello Friend,\n\nI'm excited to invite you to our upcoming sale:\n\n${sale.title}\n\nWhen:\n${fullStartDate} through ${fullEndDate}\n[Your Hours]\n\nWhere:\n${address}\n\nWhat to expect:\n${itemCount ? `Over ${itemCount} quality items` : 'A wide selection of quality items'} at unbeatable prices. From treasures to everyday finds, there's something for everyone!\n\n${sale.description ? `About this sale: ${sale.description}\n\n` : ''}Why shop with us?\n• Quality merchandise\n• Competitive pricing\n• First-come, first-served items\n• Friendly staff\n\nWe look forward to seeing you there!\n\nBest regards,\n[Your Name]`,
 
-      pinterest: `${sale.title} — ${saleTypeLabel.charAt(0).toUpperCase() + saleTypeLabel.slice(1)} in ${sale.city}\n\nDiscover unique vintage furniture, antiques, collectibles, and one-of-a-kind finds at this ${sale.city} ${saleTypeLabel}. Browse curated items from ${startDate} - ${endDate}. Shop in person or browse the full inventory online at FindA.Sale.\n\n📍 ${address}\n🗓️ ${startDate} - ${endDate}\n\n${getHashtagsForSaleType(sale.saleType)}\n\nFind more ${saleTypeLabel}s near you → finda.sale`,
+      pinterest: `${sale.title}. ${saleTypeLabel.charAt(0).toUpperCase() + saleTypeLabel.slice(1)} in ${sale.city}\n\nDiscover unique vintage furniture, antiques, collectibles, and one-of-a-kind finds at this ${sale.city} ${saleTypeLabel}. Browse curated items from ${startDate} - ${endDate}. Shop in person or browse the full inventory online at FindA.Sale.\n\n📍 ${address}\n🗓️ ${startDate} - ${endDate}\n\n${getHashtagsForSaleType(sale.saleType)}\n\nFind more ${saleTypeLabel}s near you → finda.sale`,
 
-      tiktok: `${saleTypeLabel.charAt(0).toUpperCase() + saleTypeLabel.slice(1)} haul alert 🏷️ ${sale.title} in ${sale.city} — furniture, collectibles, vintage finds and more\n\n📍 ${address}\n🗓️ ${startDate} - ${endDate}\n🔗 Link in bio → finda.sale\n\n${getHashtagsForSaleType(sale.saleType)} #thrifting #vintagefinds #${sale.city.toLowerCase().replace(/\s/g, '')}thrift #secondhand #thrifthaul`,
+      tiktok: `${saleTypeLabel.charAt(0).toUpperCase() + saleTypeLabel.slice(1)} haul alert 🏷️ ${sale.title} in ${sale.city}. Furniture, collectibles, vintage finds and more\n\n📍 ${address}\n🗓️ ${startDate} - ${endDate}\n🔗 Link in bio → finda.sale\n\n${getHashtagsForSaleType(sale.saleType)} #thrifting #vintagefinds #${sale.city.toLowerCase().replace(/\s/g, '')}thrift #secondhand #thrifthaul`,
 
       flyer: `✨ ${sale.title.toUpperCase()} ✨\n\nDATE: ${fullStartDate} – ${fullEndDate}\nTIME: [Your Hours]\nLOCATION: ${address}\n\nHIGHLIGHTS:\n• ${itemCount ? `${itemCount}+ quality items` : 'Wide selection of items'}\n• Quality merchandise\n• Unbeatable prices\n• First come, first served\n${sale.description ? `• ${sale.description.substring(0, 60)}...` : ''}\n\n👉 DON'T MISS THIS OPPORTUNITY!\n\nDIRECTIONS: ${sale.city}, ${sale.state}\nQuestions? [Your Phone] | [Your Email]`,
 
@@ -479,7 +479,7 @@ export default function PromotePage(): JSX.Element {
   return (
     <>
       <Head>
-        <title>Launch Your Sale — FindA.Sale</title>
+        <title>Launch Your Sale. FindA.Sale</title>
       </Head>
 
       <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
@@ -616,7 +616,7 @@ export default function PromotePage(): JSX.Element {
                 <div className="text-4xl mb-3">📋</div>
                 <h3 className="text-lg font-semibold text-warm-900 dark:text-warm-100 mb-2">EstateSales.NET</h3>
                 <p className="text-warm-700 dark:text-warm-300 text-sm mb-4">
-                  CSV for EstateSales.NET — reaches dedicated estate sale shoppers
+                  CSV for EstateSales.NET. Reaches dedicated estate sale shoppers
                 </p>
                 <div className="flex gap-3">
                   <button
@@ -667,7 +667,7 @@ export default function PromotePage(): JSX.Element {
                   <h3 className="text-lg font-semibold text-warm-900 dark:text-warm-100 mb-2">Facebook Commerce Manager</h3>
                   <p className="text-warm-700 dark:text-warm-300 text-sm mb-4">
                     Submit your catalog feed URL to Facebook Commerce Manager. This URL covers all
-                    your active sales automatically — you only need to register it once.
+                    your active sales automatically. You only need to register it once.
                   </p>
                   <div className="flex gap-2">
                     <input
@@ -869,7 +869,7 @@ export default function PromotePage(): JSX.Element {
                   <li>Click "Download Spreadsheet" to save the .xlsx file</li>
                   <li>Go to Facebook Marketplace → "Create new listing"</li>
                   <li>Select "Item for sale" → scroll down and choose "Bulk upload"</li>
-                  <li>Upload the spreadsheet — up to 50 listings are created at once</li>
+                  <li>Upload the spreadsheet. Up to 50 listings are created at once</li>
                   <li>Review and publish your listings</li>
                 </ol>
               </div>

@@ -121,7 +121,7 @@ const NEXT_RANK_PERKS: Record<ExplorerRank, string> = {
     '75-min holds, 3 concurrent holds, and 4-hour early access',
   SAGE:
     'auto-confirm holds, 6-hour early access, all cosmetics free',
-  GRANDMASTER: 'Peak rank achieved — all perks unlocked 👑',
+  GRANDMASTER: 'Peak rank achieved. All perks unlocked 👑',
 };
 
 export const RankHeroSection: React.FC<RankHeroSectionProps> = ({
@@ -196,7 +196,7 @@ export const RankHeroSection: React.FC<RankHeroSectionProps> = ({
             <p className={`text-base font-semibold ${textColors.title}`}>
               {calculatedXpToNext.toLocaleString()} XP to{' '}
               {nextRank ? nextRank.charAt(0) + nextRank.slice(1).toLowerCase() : 'Grandmaster'}{' '}
-              — unlock {NEXT_RANK_PERKS[rank]}
+             . Unlock {NEXT_RANK_PERKS[rank]}
             </p>
             <p className={`text-xs ${textColors.subtitle}`}>
               {guildXp.toLocaleString()} / {nextRankThreshold.toLocaleString()} XP

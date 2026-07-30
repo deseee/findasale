@@ -67,7 +67,7 @@ export default function HallOfFame() {
     return (
       <div className="min-h-screen bg-white dark:bg-slate-950 p-6">
         <Head>
-          <title>Hall of Fame — Explorer's Guild</title>
+          <title>Hall of Fame. Explorer's Guild</title>
         </Head>
         <div className="max-w-4xl mx-auto text-center py-20">
           <p className="text-gray-600 dark:text-gray-400">Loading Hall of Fame...</p>
@@ -80,7 +80,7 @@ export default function HallOfFame() {
     return (
       <div className="min-h-screen bg-white dark:bg-slate-950 p-6">
         <Head>
-          <title>Hall of Fame — Explorer's Guild</title>
+          <title>Hall of Fame. Explorer's Guild</title>
         </Head>
         <div className="max-w-4xl mx-auto text-center py-20">
           <p className="text-red-600 dark:text-red-400">Error: {error}</p>
@@ -92,7 +92,7 @@ export default function HallOfFame() {
   return (
     <div className="min-h-screen bg-white dark:bg-slate-950">
       <Head>
-        <title>Hall of Fame — Explorer's Guild</title>
+        <title>Hall of Fame. Explorer's Guild</title>
         <meta name="description" content="Celebrate the most accomplished treasure hunters in the Explorer's Guild." />
       </Head>
 
@@ -154,7 +154,7 @@ export default function HallOfFame() {
           ) : (
             <div className="text-center py-12 bg-gray-50 dark:bg-slate-900 rounded-lg">
               <p className="text-gray-600 dark:text-gray-400">
-                No Grandmasters yet — be the first!
+                No Grandmasters yet. Be the first!
               </p>
             </div>
           )}

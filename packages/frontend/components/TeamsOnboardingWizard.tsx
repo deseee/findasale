@@ -163,7 +163,7 @@ const TeamsOnboardingWizard: React.FC<TeamsOnboardingWizardProps> = ({ onComplet
             setIsLoading(false);
             setPendingInviteForUpsell(invitee);
             setShowSeatUpsellModal(true);
-            return; // Exit early — don't mark onboarding as complete yet
+            return; // Exit early. Don't mark onboarding as complete yet
           }
           throw inviteErr; // Re-throw other errors
         }
@@ -276,7 +276,7 @@ const TeamsOnboardingWizard: React.FC<TeamsOnboardingWizardProps> = ({ onComplet
                   Step 2: Invite Team Members
                 </h3>
                 <p className="text-gray-600 dark:text-gray-300 text-sm mb-4">
-                  Add other organizers to your workspace (optional — you can add more later).
+                  Add other organizers to your workspace (optional. You can add more later).
                 </p>
               </div>
 

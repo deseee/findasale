@@ -81,7 +81,7 @@ const LineQueueLandingPage = () => {
   return (
     <>
       <Head>
-        <title>Line Queue — FindA.Sale</title>
+        <title>Line Queue. FindA.Sale</title>
       </Head>
 
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900">

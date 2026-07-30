@@ -7,7 +7,7 @@ interface PaymentRequestFormProps {
   requestId: string;
   clientSecret: string;
   totalAmountCents: number;
-  stripeAccountId?: string | null; // connected account — PI lives here
+  stripeAccountId?: string | null; // connected account. PI lives here
   onSuccess: (paymentIntentId: string) => void;
   onError?: (error: string) => void;
   isProcessing?: boolean;

@@ -240,7 +240,7 @@ export default function AuctionsCityPage({
             {totalCount > 0
               ? `${totalCount} auction${totalCount !== 1 ? 's' : ''} listed`
               : 'No auctions currently listed'}
-            {' — '} updated daily
+            {', '} updated daily
           </p>
         </div>
 
@@ -295,7 +295,7 @@ export default function AuctionsCityPage({
                 No auctions currently listed in {cityName}.
               </p>
               <p className="text-warm-400 dark:text-warm-500 text-sm mb-6">
-                New auctions are added daily — check back soon or browse nearby cities.
+                New auctions are added daily. Check back soon or browse nearby cities.
               </p>
               <div className="flex flex-col sm:flex-row gap-3 justify-center mb-8">
                 <Link href="/cities" className="text-amber-600 hover:text-amber-700 font-medium">
@@ -506,7 +506,7 @@ export const getStaticPaths: GetStaticPaths = async () => {
       }
     }
   } catch (err) {
-    console.error('[auctions/[city-slug]] getStaticPaths fetch error — using fallback:', err);
+    console.error('[auctions/[city-slug]] getStaticPaths fetch error. Using fallback:', err);
   }
 
   return {

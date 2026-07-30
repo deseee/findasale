@@ -144,7 +144,7 @@ const SALE_TYPE_TILES = [
   {
     key: 'YARD' as SaleTypeKey,
     label: 'Yard & Moving',
-    desc: 'A weekend sale at your home — stuff you no longer need.',
+    desc: 'A weekend sale at your home. Stuff you no longer need.',
     icon: '🏷️',
     subs: getSubtypesFor('YARD'),
     hasCharityToggle: false,
@@ -152,7 +152,7 @@ const SALE_TYPE_TILES = [
   {
     key: 'AUCTION' as SaleTypeKey,
     label: 'Auction',
-    desc: 'Bidding event — live, online, or storage unit lots.',
+    desc: 'Bidding event. Live, online, or storage unit lots.',
     icon: '🔨',
     subs: getSubtypesFor('AUCTION'),
     hasCharityToggle: false,
@@ -168,7 +168,7 @@ const SALE_TYPE_TILES = [
   {
     key: 'DORM_DASH' as SaleTypeKey,
     label: 'Dorm Dash',
-    desc: 'College move-out sale — organize by room or area.',
+    desc: 'College move-out sale. Organize by room or area.',
     icon: '🎓',
     subs: getSubtypesFor('DORM_DASH'),
     hasCharityToggle: false,
@@ -176,7 +176,7 @@ const SALE_TYPE_TILES = [
   {
     key: 'RETAIL' as SaleTypeKey,
     label: 'Storefront',
-    desc: 'An always-on shop — no start or end date, just keep adding items.',
+    desc: 'An always-on shop. No start or end date, just keep adding items.',
     icon: '🏪',
     subs: getSubtypesFor('RETAIL'),
     hasCharityToggle: false,
@@ -518,11 +518,11 @@ function Step1({ c, form, setForm }: Step1Props) {
 
   const titleSuggestions: Record<SaleTypeKey, string[]> = {
     ESTATE: ['Smith Family Estate Sale', 'Walden Estate · Main St', '3-Day Estate Sale'],
-    YARD: ['Weekend Yard Sale', 'Spring Garage Sale', 'Moving Sale — All Must Go'],
+    YARD: ['Weekend Yard Sale', 'Spring Garage Sale', 'Moving Sale. All Must Go'],
     AUCTION: ['Walden Estate Auction', 'Antiques & Collectibles Auction', 'Live Auction Event'],
     FLEA_MARKET: ['Riverside Flea Market', 'Monthly Pop-Up Market', 'Vintage Vendor Market'],
     RETAIL: ['Antique & Vintage Shop', 'Estate Finds Store', 'Consignment Boutique'],
-    DORM_DASH: ['Room 204 Move-Out Sale', 'End-of-Semester Dorm Dash', 'College Move-Out — Everything Must Go'],
+    DORM_DASH: ['Room 204 Move-Out Sale', 'End-of-Semester Dorm Dash', 'College Move-Out. Everything Must Go'],
   };
 
   return (
@@ -530,7 +530,7 @@ function Step1({ c, form, setForm }: Step1Props) {
       <WizardHeader
         eyebrow="Step 1 of 5"
         title="What kind of sale are you putting on?"
-        sub="Pick the closest fit — you can fine-tune the details after."
+        sub="Pick the closest fit. You can fine-tune the details after."
         c={c}
       />
 
@@ -674,7 +674,7 @@ function Step1({ c, form, setForm }: Step1Props) {
         fontSize: 12.5, color: c.textDim, fontFamily: 'Inter, sans-serif',
         display: 'flex', alignItems: 'center', gap: 8,
       }}>
-        ℹ Online-only sales? Set that on the next step — "No physical address — items ship to buyers".
+        ℹ Online-only sales? Set that on the next step, "No physical address. Items ship to buyers".
       </div>
 
       {/* Title section */}
@@ -695,7 +695,7 @@ function Step1({ c, form, setForm }: Step1Props) {
           <span style={{ fontSize: 13, fontWeight: 500, color: c.text }}>
             Sale title{' '}
             <span style={{ fontSize: 11, color: c.textFaint, fontWeight: 400 }}>
-              — shows on the map and in search
+             . Shows on the map and in search
             </span>
           </span>
           <input
@@ -761,7 +761,7 @@ function Step1({ c, form, setForm }: Step1Props) {
             <textarea
               value={form.description}
               onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-              placeholder="Tell shoppers what to expect — highlights, specialty items, condition of goods."
+              placeholder="Tell shoppers what to expect. Highlights, specialty items, condition of goods."
               rows={3}
               style={{
                 padding: '11px 14px', borderRadius: 8,
@@ -834,7 +834,7 @@ function Step2({ c, form, setForm, validationErrors, setValidationErrors }: Step
       }}>
         <div>
           <div style={{ fontSize: 14, fontWeight: 500, color: c.text, fontFamily: 'Inter, sans-serif' }}>
-            Online Only — No physical address
+            Online Only. No physical address
           </div>
           <div style={{ fontSize: 12, color: c.textDim, marginTop: 2, fontFamily: 'Inter, sans-serif' }}>
             Items ship to buyers. Address section hides.
@@ -1044,7 +1044,7 @@ function Step2({ c, form, setForm, validationErrors, setValidationErrors }: Step
                     Entrance &amp; parking
                   </div>
                   <div style={{ fontSize: 12, color: c.textDim, fontFamily: 'Inter, sans-serif' }}>
-                    Optional — note for shoppers on how to get in.
+                    Optional. Note for shoppers on how to get in.
                   </div>
                 </div>
                 <ToggleSwitch
@@ -1220,7 +1220,7 @@ function Step3({ c, photoUrls, setPhotoUrls }: Step3Props) {
       <WizardHeader
         eyebrow="Step 3 of 5 · the most important step"
         title="Photos do the selling."
-        sub="Upload at least 3 to publish. Drag to reorder — the first becomes your cover. We'll resize and optimize automatically."
+        sub="Upload at least 3 to publish. Drag to reorder. The first becomes your cover. We'll resize and optimize automatically."
         c={c}
       />
 
@@ -1474,7 +1474,7 @@ function Step4({ c, form, setForm }: Step4Props) {
       }}>
         <label style={{ display: 'flex', flexDirection: 'column', gap: 8, fontFamily: 'Inter, sans-serif' }}>
           <span style={{ fontSize: 13, fontWeight: 500, color: c.text }}>
-            Tags — what you'll find{' '}
+            Tags. What you'll find{' '}
             <span style={{ fontSize: 11, color: c.textFaint, fontWeight: 400 }}>Pick a few or type your own.</span>
           </span>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
@@ -1652,7 +1652,7 @@ function Step4({ c, form, setForm }: Step4Props) {
           <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontFamily: 'Inter, sans-serif' }}>
             <span style={{ fontSize: 13, fontWeight: 500, color: c.text }}>
               Move-out deadline{' '}
-              <span style={{ fontSize: 11, color: c.textFaint, fontWeight: 400 }}>When you must be out — shoppers see urgency</span>
+              <span style={{ fontSize: 11, color: c.textFaint, fontWeight: 400 }}>When you must be out. Shoppers see urgency</span>
             </span>
             <input
               type="date"
@@ -1740,7 +1740,7 @@ function Step5({
     {
       icon: '📅', label: 'Dates',
       value: form.saleType === 'RETAIL'
-        ? 'Retail — always live'
+        ? 'Retail. Always live'
         : (form.startDate && form.endDate
           ? `${form.startDate} → ${form.endDate} · ${form.startTime}–${form.endTime}`
           : '(dates not set)'),
@@ -1780,7 +1780,7 @@ function Step5({
           </div>
           <p style={{ fontSize: 13, color: '#664D03', marginBottom: 10 }}>
             An always-on Storefront is a TEAMS-tier feature. Upgrade to keep this as a
-            Storefront, or switch to Yard Sale and publish immediately, free — one click,
+            Storefront, or switch to Yard Sale and publish immediately, free. One click,
             no re-entering anything.
           </p>
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
@@ -2067,7 +2067,7 @@ function SuccessState({ c, saleTitle, saleId, onAddItems }: SuccessStateProps) {
               fontSize: 17, fontWeight: 600, letterSpacing: '-0.01em', color: c.text,
             }}>Now add your items</div>
             <div style={{ fontSize: 13, color: c.textDim, marginTop: 3 }}>
-              Snap a photo — Smart will suggest a title &amp; price. Review, save, repeat. About 15 seconds per item.
+              Snap a photo. Smart will suggest a title &amp; price. Review, save, repeat. About 15 seconds per item.
             </div>
           </div>
           <button
@@ -2088,7 +2088,7 @@ function SuccessState({ c, saleTitle, saleId, onAddItems }: SuccessStateProps) {
           justifyContent: 'center', fontSize: 13, color: c.textFaint,
         }}>
           <Link href="/organizer/dashboard" style={{ color: c.textFaint }}>
-            Skip for now — go to dashboard
+            Skip for now. Go to dashboard
           </Link>
           <span>·</span>
           <Link href={`/sales/${saleId}`} style={{ color: c.accent }}>
@@ -2120,7 +2120,7 @@ function ProModal({ c, saleId, onClose }: { c: typeof LIGHT; saleId: string; onC
           fontFamily: '"Inter Tight", "Inter", sans-serif',
           fontSize: 22, fontWeight: 600, marginBottom: 12, color: c.text,
         }}>
-          Your first sale is on PRO — on us 🎉
+          Your first sale is on PRO. On us 🎉
         </h2>
         <p style={{ fontSize: 14, color: c.textDim, marginBottom: 20, lineHeight: 1.6 }}>
           We&apos;ve unlocked PRO features for your first sale. Unlimited item listings, up to 10 photos per item, Smart auto-tagging, and priority placement on FindA.Sale.
@@ -2356,7 +2356,7 @@ const CreateSalePage: React.FC = () => {
           message: data.message ?? 'Retail Mode requires TEAMS tier',
           upgradeUrl: data.upgradeUrl ?? '/pricing',
         });
-        showToast('Storefront requires TEAMS — upgrade or switch sale type below.', 'error');
+        showToast('Storefront requires TEAMS. Upgrade or switch sale type below.', 'error');
       } else {
         const msg = err.response?.data?.message;
         showToast(msg || 'Failed to create sale', 'error');
@@ -2404,8 +2404,8 @@ const CreateSalePage: React.FC = () => {
     setForm(updatedForm);
     showToast(
       form.startDate
-        ? 'Switched to Yard Sale — publishing now…'
-        : `Switched to Yard Sale (defaulted to ${defaults.startDate} – ${defaults.endDate}, 9am–3pm — editable after publish) — publishing now…`,
+        ? 'Switched to Yard Sale. Publishing now…'
+        : `Switched to Yard Sale (defaulted to ${defaults.startDate} – ${defaults.endDate}, 9am–3pm. Editable after publish). Publishing now…`,
       'success'
     );
     await publishSale(buildPayload(updatedForm), 'YARD');
@@ -2443,7 +2443,7 @@ const CreateSalePage: React.FC = () => {
   if (published && publishedSaleId) {
     return (
       <>
-        <Head><title>Sale Published — FindA.Sale</title></Head>
+        <Head><title>Sale Published. FindA.Sale</title></Head>
         {showProModal && (
           <ProModal
             c={c}
@@ -2467,7 +2467,7 @@ const CreateSalePage: React.FC = () => {
   return (
     <>
       <Head>
-        <title>Create Sale — FindA.Sale</title>
+        <title>Create Sale. FindA.Sale</title>
         <meta name="viewport" content="width=device-width, initial-scale=1" />
       </Head>
 

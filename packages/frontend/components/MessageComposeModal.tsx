@@ -9,7 +9,7 @@ interface MessageComposeModalProps {
   organizerId: string;
   saleId?: string | null;
   itemId?: string | null;      // NEW (ADR-097)
-  itemTitle?: string | null;   // NEW (ADR-097) — for display only, e.g. "Re: Vintage Rolex"
+  itemTitle?: string | null;   // NEW (ADR-097). For display only, e.g. "Re: Vintage Rolex"
   onSuccess?: (conversationId: string) => void;
 }
 

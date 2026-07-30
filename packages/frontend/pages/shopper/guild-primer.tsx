@@ -268,13 +268,13 @@ const GuildPrimerPage = () => {
                       <td className="px-4 py-3 text-warm-900 dark:text-warm-100">Sale visit</td>
                       <td className="px-4 py-3 text-right font-bold text-purple-600 dark:text-purple-300">5</td>
                       <td className="px-4 py-3 text-right font-bold text-purple-400 dark:text-purple-300">7</td>
-                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">Once per unique sale per day — no cap</td>
+                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">Once per unique sale per day. No cap</td>
                     </tr>
                     <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50">
                       <td className="px-4 py-3 text-warm-900 dark:text-warm-100">Comeback bonus</td>
                       <td className="px-4 py-3 text-right font-bold text-purple-600 dark:text-purple-300">20</td>
                       <td className="px-4 py-3 text-right font-bold text-purple-400 dark:text-purple-300">30</td>
-                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">One-time — returning after 2+ weeks away</td>
+                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">One-time. Returning after 2+ weeks away</td>
                     </tr>
                     <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50">
                       <td className="px-4 py-3 text-warm-900 dark:text-warm-100">RSVP to a sale</td>
@@ -305,7 +305,7 @@ const GuildPrimerPage = () => {
                       <td className="px-4 py-3 text-warm-900 dark:text-warm-100">First purchase ever</td>
                       <td className="px-4 py-3 text-right font-bold text-purple-600 dark:text-purple-300">50</td>
                       <td className="px-4 py-3 text-right font-bold text-purple-400 dark:text-purple-300">75</td>
-                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">One-time milestone — first purchase on platform</td>
+                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">One-time milestone. First purchase on platform</td>
                     </tr>
                     <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50">
                       <td className="px-4 py-3 text-warm-900 dark:text-warm-100">Purchase</td>
@@ -354,7 +354,7 @@ const GuildPrimerPage = () => {
                       <td className="px-4 py-3 text-warm-900 dark:text-warm-100">Haul post</td>
                       <td className="px-4 py-3 text-right font-bold text-purple-600 dark:text-purple-300">15</td>
                       <td className="px-4 py-3 text-right font-bold text-purple-400 dark:text-purple-300">22</td>
-                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">In-app haul documentation — max 4/month earn XP</td>
+                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">In-app haul documentation. Max 4/month earn XP</td>
                     </tr>
                     <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50">
                       <td className="px-4 py-3 text-warm-900 dark:text-warm-100">Haul post hits 10+ likes</td>
@@ -366,19 +366,19 @@ const GuildPrimerPage = () => {
                       <td className="px-4 py-3 text-warm-900 dark:text-warm-100">Social share</td>
                       <td className="px-4 py-3 text-right font-bold text-purple-600 dark:text-purple-300">5</td>
                       <td className="px-4 py-3 text-right font-bold text-purple-400 dark:text-purple-300">7</td>
-                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">Share a sale externally — honor system</td>
+                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">Share a sale externally. Honor system</td>
                     </tr>
                     <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50">
                       <td className="px-4 py-3 text-warm-900 dark:text-warm-100">Community valuation</td>
                       <td className="px-4 py-3 text-right font-bold text-purple-600 dark:text-purple-300">5</td>
                       <td className="px-4 py-3 text-right font-bold text-purple-400 dark:text-purple-300">7</td>
-                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">Price opinion on an item — max 20/month</td>
+                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">Price opinion on an item. Max 20/month</td>
                     </tr>
                     <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50">
                       <td className="px-4 py-3 text-warm-900 dark:text-warm-100">Appraisal selected</td>
                       <td className="px-4 py-3 text-right font-bold text-purple-600 dark:text-purple-300">20</td>
                       <td className="px-4 py-3 text-right font-bold text-purple-400 dark:text-purple-300">30</td>
-                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">Seller chooses your valuation — max 5/day</td>
+                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">Seller chooses your valuation. Max 5/day</td>
                     </tr>
                   </tbody>
                 </table>
@@ -403,34 +403,34 @@ const GuildPrimerPage = () => {
                       <td className="px-4 py-3 text-warm-900 dark:text-warm-100">7-day streak bonus</td>
                       <td className="px-4 py-3 text-right font-bold text-purple-600 dark:text-purple-300">100</td>
                       <td className="px-4 py-3 text-right font-bold text-purple-400 dark:text-purple-300">150</td>
-                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">Active week completion — once/month</td>
+                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">Active week completion. Once/month</td>
                     </tr>
                     <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50">
                       <td className="px-4 py-3 text-warm-900 dark:text-warm-100">30-day anniversary</td>
                       <td className="px-4 py-3 text-right font-bold text-purple-600 dark:text-purple-300">250</td>
                       <td className="px-4 py-3 text-right font-bold text-purple-400 dark:text-purple-300">375</td>
-                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">Active month milestone — once/month</td>
+                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">Active month milestone. Once/month</td>
                     </tr>
                     <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50">
                       <td className="px-4 py-3 text-warm-900 dark:text-warm-100">Explorer Profile complete</td>
                       <td className="px-4 py-3 text-right font-bold text-purple-600 dark:text-purple-300">50</td>
                       <td className="px-4 py-3 text-right font-bold text-purple-400 dark:text-purple-300">75</td>
-                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">One-time — specialties, categories, and keywords filled</td>
+                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">One-time. Specialties, categories, and keywords filled</td>
                     </tr>
                     <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50">
-                      <td className="px-4 py-3 text-warm-900 dark:text-warm-100">Referral — friend signs up</td>
+                      <td className="px-4 py-3 text-warm-900 dark:text-warm-100">Referral. Friend signs up</td>
                       <td className="px-4 py-3 text-right font-bold text-purple-600 dark:text-purple-300">20</td>
                       <td className="px-4 py-3 text-right font-bold text-purple-400 dark:text-purple-300">30</td>
                       <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">Awarded when referred user creates an account</td>
                     </tr>
                     <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50">
-                      <td className="px-4 py-3 text-warm-900 dark:text-warm-100">Referral — friend's first purchase</td>
+                      <td className="px-4 py-3 text-warm-900 dark:text-warm-100">Referral. Friend's first purchase</td>
                       <td className="px-4 py-3 text-right font-bold text-purple-600 dark:text-purple-300">500</td>
                       <td className="px-4 py-3 text-right font-bold text-purple-400 dark:text-purple-300">750</td>
-                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">The big payout — when they actually buy</td>
+                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">The big payout. When they actually buy</td>
                     </tr>
                     <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50">
-                      <td className="px-4 py-3 text-warm-900 dark:text-warm-100">Referral — organizer's first sale</td>
+                      <td className="px-4 py-3 text-warm-900 dark:text-warm-100">Referral. Organizer's first sale</td>
                       <td className="px-4 py-3 text-right font-bold text-purple-600 dark:text-purple-300">50</td>
                       <td className="px-4 py-3 text-right font-bold text-purple-400 dark:text-purple-300">75</td>
                       <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">When your referred organizer goes live with a sale</td>
@@ -439,19 +439,19 @@ const GuildPrimerPage = () => {
                       <td className="px-4 py-3 text-warm-900 dark:text-warm-100">Discover a new organizer</td>
                       <td className="px-4 py-3 text-right font-bold text-purple-600 dark:text-purple-300">10</td>
                       <td className="px-4 py-3 text-right font-bold text-purple-400 dark:text-purple-300">15</td>
-                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">Manual submission — max 1000 XP/month per shopper</td>
+                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">Manual submission. Max 1000 XP/month per shopper</td>
                     </tr>
                     <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50">
                       <td className="px-4 py-3 text-warm-900 dark:text-warm-100">Organizer you introduced claims their storefront</td>
                       <td className="px-4 py-3 text-right font-bold text-purple-600 dark:text-purple-300">200</td>
                       <td className="px-4 py-3 text-right font-bold text-purple-400 dark:text-purple-300">300</td>
-                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">Verified claim — max 1000 XP/month per shopper</td>
+                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">Verified claim. Max 1000 XP/month per shopper</td>
                     </tr>
                     <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50">
                       <td className="px-4 py-3 text-warm-900 dark:text-warm-100">Organizer you introduced upgrades to PRO</td>
                       <td className="px-4 py-3 text-right font-bold text-purple-600 dark:text-purple-300">300</td>
                       <td className="px-4 py-3 text-right font-bold text-purple-400 dark:text-purple-300">450</td>
-                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">Within 60 days of introduction — one-time per organizer</td>
+                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">Within 60 days of introduction. One-time per organizer</td>
                     </tr>
                   </tbody>
                 </table>
@@ -482,7 +482,7 @@ const GuildPrimerPage = () => {
                       <td className="px-4 py-3 text-warm-900 dark:text-warm-100">Treasure Hunt clue scan</td>
                       <td className="px-4 py-3 text-right font-bold text-purple-600 dark:text-purple-300">3</td>
                       <td className="px-4 py-3 text-right font-bold text-purple-400 dark:text-purple-300">4</td>
-                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">Per QR clue found — each clue once</td>
+                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">Per QR clue found. Each clue once</td>
                     </tr>
                     <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50">
                       <td className="px-4 py-3 text-warm-900 dark:text-warm-100">Treasure Hunt completion</td>
@@ -498,7 +498,7 @@ const GuildPrimerPage = () => {
               <div className="mt-6">
                 <h4 className="text-base font-semibold text-warm-900 dark:text-warm-100 mb-2">Treasure Trail Completion Bonus</h4>
                 <p className="text-xs text-warm-600 dark:text-warm-400 mb-3">
-                  Completion bonus scales with the number of stops — earned once per trail. More stops = bigger reward.
+                  Completion bonus scales with the number of stops. Earned once per trail. More stops = bigger reward.
                 </p>
                 <div className="bg-white dark:bg-gray-800 rounded-lg border border-warm-200 dark:border-gray-700 overflow-x-auto">
                   <table className="w-full text-sm">
@@ -544,7 +544,7 @@ const GuildPrimerPage = () => {
             {/* Organizer Bonuses */}
             <div className="mb-4">
               <h3 className="text-xl font-bold text-warm-900 dark:text-warm-100 mb-4">Organizer Bonuses</h3>
-              <p className="text-sm text-warm-600 dark:text-warm-400 mb-4">Running sales earns XP too — organizers are full members of the Guild. Hunt Pass 1.5× applies here too.</p>
+              <p className="text-sm text-warm-600 dark:text-warm-400 mb-4">Running sales earns XP too. Organizers are full members of the Guild. Hunt Pass 1.5× applies here too.</p>
               <div className="bg-white dark:bg-gray-800 rounded-lg border border-warm-200 dark:border-gray-700 overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
@@ -588,7 +588,7 @@ const GuildPrimerPage = () => {
                     <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50">
                       <td className="px-4 py-3 text-warm-900 dark:text-warm-100">Shopper condition rating received</td>
                       <td className="px-4 py-3 text-right font-bold text-purple-600 dark:text-purple-300">5</td>
-                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">Per rating submitted on your items — max 50/month</td>
+                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">Per rating submitted on your items. Max 50/month</td>
                     </tr>
                   </tbody>
                 </table>
@@ -599,7 +599,7 @@ const GuildPrimerPage = () => {
           {/* Spend Your XP — XP Sinks */}
           <div className="mb-16">
             <h2 className="text-3xl font-bold text-warm-900 dark:text-warm-100 mb-4">
-              Spend Your XP — XP Sinks
+              Spend Your XP. XP Sinks
             </h2>
             <p className="text-warm-600 dark:text-warm-400 mb-8">
               XP is currency. Spend it on cosmetics, gameplay boosts, organizer tools, and guild features.
@@ -907,7 +907,7 @@ const GuildPrimerPage = () => {
                 },
                 {
                   q: 'Can I lose my rank?',
-                  a: 'At the annual reset (January 1st), everyone drops one tier — Grandmaster becomes Sage, Sage becomes Ranger, Ranger becomes Scout, Scout becomes Initiate. Your XP resets to the floor of your new rank. The soft floor means you can never drop more than one tier. One exception: if you reached Grandmaster, your free Hunt Pass stays with you for life.',
+                  a: 'At the annual reset (January 1st), everyone drops one tier. Grandmaster becomes Sage, Sage becomes Ranger, Ranger becomes Scout, Scout becomes Initiate. Your XP resets to the floor of your new rank. The soft floor means you can never drop more than one tier. One exception: if you reached Grandmaster, your free Hunt Pass stays with you for life.',
                 },
                 {
                   q: "What's the fastest path to Scout?",
@@ -919,7 +919,7 @@ const GuildPrimerPage = () => {
                 },
                 {
                   q: 'What happens when I reach Grandmaster?',
-                  a: 'Hunt Pass is included free while you hold Grandmaster status. It renews each year you re-qualify after the January reset. If you drop below Grandmaster, the pass lapses — re-qualify and it restores automatically.',
+                  a: 'Hunt Pass is included free while you hold Grandmaster status. It renews each year you re-qualify after the January reset. If you drop below Grandmaster, the pass lapses. Re-qualify and it restores automatically.',
                 },
               ].map((faq, idx) => (
                 <details key={idx} className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-warm-200 dark:border-gray-700">

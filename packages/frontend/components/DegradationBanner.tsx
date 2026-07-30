@@ -59,7 +59,7 @@ const DegradationBanner: React.FC = () => {
               />
             </svg>
             <span className="text-sm font-semibold">
-              Slow connection detected — performance mode active
+              Slow connection detected. Performance mode active
             </span>
           </div>
           <button

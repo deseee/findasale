@@ -331,17 +331,17 @@ const QuickPickerTaskModal: React.FC<QuickPickerTaskModalProps> = ({
               selected
               {selectedSaleId && (
                 <>
-                  {' — '}
+                  {', '}
                   {sales.find((s) => s.id === selectedSaleId)?.title}
                   {selectedAssigneeId && (
                     <>
-                      {' — '}
+                      {', '}
                       {members.find((m) => m.organizerId === selectedAssigneeId)?.organizer?.businessName ||
                         members.find((m) => m.organizerId === selectedAssigneeId)?.user?.name ||
                         'Assigned'}
                     </>
                   )}
-                  {!selectedAssigneeId && ' — Unassigned'}
+                  {!selectedAssigneeId && '. Unassigned'}
                 </>
               )}
             </p>

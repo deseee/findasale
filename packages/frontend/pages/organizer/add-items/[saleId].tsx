@@ -739,7 +739,7 @@ const AddItemsDetailPage = () => {
           }
           if (now - seen[it.id] > SPIN_TIMEOUT_MS) {
             changed = true;
-            return { ...it, aiError: 'Auto-tagging timed out — tap to fill in manually' };
+            return { ...it, aiError: 'Auto-tagging timed out. Tap to fill in manually' };
           }
           return it;
         });
@@ -769,7 +769,7 @@ const AddItemsDetailPage = () => {
           // returns aiErrorLog (array); the carousel UI checks the aiError string.
           const derivedAiError =
             Array.isArray(data.aiErrorLog) && data.aiErrorLog.length > 0
-              ? 'Auto-tagging failed — fill in manually'
+              ? 'Auto-tagging failed. Fill in manually'
               : undefined;
           if (data.draftStatus !== 'DRAFT' || derivedAiError) {
             setRapidItems((prev) =>
@@ -910,13 +910,13 @@ const AddItemsDetailPage = () => {
       // P1-B: Show warning toast if items were skipped
       if (skipped.length > 0) {
         const skipReasons = skipped.map((s: { reason?: string }) => s.reason).filter(Boolean);
-        const skipMessage = skipReasons.length > 0 ? ` — ${skipReasons[0]}` : '';
+        const skipMessage = skipReasons.length > 0 ? `. ${skipReasons[0]}` : '';
         showToast(`${skipped.length} item(s) skipped${skipMessage}`, 'warning');
       }
 
       // Check for partial failures (207 response with failed items)
       if (failed.length > 0) {
-        const toastMessage = `${succeeded.length}/${count + failed.length} items updated — ${failed.length} skipped`;
+        const toastMessage = `${succeeded.length}/${count + failed.length} items updated. ${failed.length} skipped`;
         showToast(toastMessage, 'warning');
 
         setBulkErrorData({
@@ -1367,7 +1367,7 @@ const AddItemsDetailPage = () => {
         // No response at all on a real AxiosError = genuine network-level failure
         // (offline, DNS, request aborted) — distinct from a server error or a plain
         // client-side Error, worth telling the user which it was.
-        errorMessage = 'Network error — check your connection and try again';
+        errorMessage = 'Network error. Check your connection and try again';
       }
 
       setRapidItems((prev) =>
@@ -1602,7 +1602,7 @@ const AddItemsDetailPage = () => {
           clearInterval(poll);
           setRapidItems((prev) =>
             prev.map((i) =>
-              i.id === itemId ? { ...i, aiError: 'Auto-tagging failed — fill in manually' } : i
+              i.id === itemId ? { ...i, aiError: 'Auto-tagging failed. Fill in manually' } : i
             )
           );
           return;
@@ -2130,7 +2130,7 @@ const AddItemsDetailPage = () => {
                   >
                     Clear
                   </button>
-                  <p className="ml-auto text-xs text-warm-400 dark:text-warm-500">Items save directly — no review needed</p>
+                  <p className="ml-auto text-xs text-warm-400 dark:text-warm-500">Items save directly. No review needed</p>
                 </div>
               </form>
             </div>
@@ -2668,7 +2668,7 @@ const AddItemsDetailPage = () => {
                             <div>
                               <label className="block text-xs font-medium text-warm-700 dark:text-warm-300 mb-1">
                                 Lot Number
-                                <span className="ml-1 font-normal text-warm-500 dark:text-warm-400">(optional — auction catalog identifier)</span>
+                                <span className="ml-1 font-normal text-warm-500 dark:text-warm-400">(optional. Auction catalog identifier)</span>
                               </label>
                               <input
                                 type="text"
@@ -2680,7 +2680,7 @@ const AddItemsDetailPage = () => {
                             </div>
                           )}
                           {/* Collapsed-by-default eBay & Shipping section (Patrick's ask 2026-07-26:
-                              this replaces the old always-visible internal-taxonomy Category field —
+                              this replaces the old always-visible internal-taxonomy Category field, 
                               eBay category is what shipping-weight estimation and eBay publish actually
                               key off, and AI photo analysis already auto-suggests it during capture, so
                               it rarely needs a manual touch at this stage. UX + Customer Champion signed
@@ -2691,7 +2691,7 @@ const AddItemsDetailPage = () => {
                               onClick={() => setItemEbaySectionOpen((prev) => ({ ...prev, [item.id]: !prev[item.id] }))}
                               className="w-full flex items-center justify-between px-3 py-2 text-xs font-medium text-warm-700 dark:text-warm-300 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
                             >
-                              <span>eBay &amp; Shipping{editState.ebayCategoryName ? ` — ${editState.ebayCategoryName}` : ''}</span>
+                              <span>eBay &amp; Shipping{editState.ebayCategoryName ? `. ${editState.ebayCategoryName}` : ''}</span>
                               <span className="text-warm-400">{itemEbaySectionOpen[item.id] ? '▲' : '▼'}</span>
                             </button>
                             {itemEbaySectionOpen[item.id] && (
@@ -3220,7 +3220,7 @@ const AddItemsDetailPage = () => {
                 <div className="flex items-start gap-3">
                   <span className="text-2xl mt-0.5">⚡</span>
                   <div>
-                    <p className="font-semibold text-warm-900 dark:text-warm-100 text-sm">Rapidfire Mode <span className="text-xs font-normal text-amber-600 dark:text-amber-400 ml-1">— recommended</span></p>
+                    <p className="font-semibold text-warm-900 dark:text-warm-100 text-sm">Rapidfire Mode <span className="text-xs font-normal text-amber-600 dark:text-amber-400 ml-1">. Recommended</span></p>
                     <p className="text-warm-600 dark:text-warm-400 text-sm mt-1">
                       Snap, snap, snap. <strong>1 photo = 1 item.</strong> Title, category, and price are filled in automatically while you keep shooting. Tap any thumbnail to add more photos to that item.
                     </p>
@@ -3258,7 +3258,7 @@ const AddItemsDetailPage = () => {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
                 </svg>
-                Got it — Open Camera
+                Got it. Open Camera
               </button>
               <button
                 onClick={() => {

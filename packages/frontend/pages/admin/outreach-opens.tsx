@@ -34,14 +34,14 @@ export default function OutreachOpensPage() {
   }, [router]);
 
   const fmt = (iso: string | null) => {
-    if (!iso) return '—';
+    if (!iso) return 'N/A';
     return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   };
 
   return (
     <>
       <Head>
-        <title>Outreach Opens — Admin | FindA.Sale</title>
+        <title>Outreach Opens. Admin | FindA.Sale</title>
       </Head>
       <div className="max-w-7xl mx-auto px-4 py-8">
         <div className="flex items-center gap-3 mb-2">
@@ -56,7 +56,7 @@ export default function OutreachOpensPage() {
           Outreach Email Opens
         </h1>
         <p className="text-gray-500 dark:text-gray-400 mb-6 text-sm">
-          {loading ? 'Loading…' : `${opens.length} organizer${opens.length !== 1 ? 's' : ''} opened an outreach email — sorted most recent first.`}
+          {loading ? 'Loading…' : `${opens.length} organizer${opens.length !== 1 ? 's' : ''} opened an outreach email. Sorted most recent first.`}
         </p>
 
         {error && <p className="text-red-500 mb-4">{error}</p>}
@@ -87,13 +87,13 @@ export default function OutreachOpensPage() {
                     className="border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/30"
                   >
                     <td className="px-4 py-3 text-gray-900 dark:text-gray-100 font-medium">
-                      {o.organizerName || '—'}
+                      {o.organizerName || 'N/A'}
                     </td>
                     <td className="px-4 py-3 text-gray-700 dark:text-gray-300">
                       {o.emailAddress}
                     </td>
                     <td className="px-4 py-3 text-gray-600 dark:text-gray-400 max-w-[200px] truncate">
-                      {o.address || '—'}
+                      {o.address || 'N/A'}
                     </td>
                     <td className="px-4 py-3 text-gray-600 dark:text-gray-400 max-w-[180px] truncate">
                       {o.website ? (
@@ -105,10 +105,10 @@ export default function OutreachOpensPage() {
                         >
                           {o.website.replace(/^https?:\/\//, '')}
                         </a>
-                      ) : '—'}
+                      ) : 'N/A'}
                     </td>
                     <td className="px-4 py-3 text-center text-gray-600 dark:text-gray-400">
-                      {o.touchNumber ?? '—'}
+                      {o.touchNumber ?? 'N/A'}
                     </td>
                     <td className="px-4 py-3 text-right text-gray-500 dark:text-gray-400 whitespace-nowrap">
                       {fmt(o.sentAt)}
@@ -125,7 +125,7 @@ export default function OutreachOpensPage() {
                         }`}>
                           {o.status}
                         </span>
-                      ) : '—'}
+                      ) : 'N/A'}
                     </td>
                   </tr>
                 ))}

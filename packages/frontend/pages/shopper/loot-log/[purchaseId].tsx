@@ -56,7 +56,7 @@ export default function PurchaseDetailPage() {
   return (
     <>
       <Head>
-        <title>{purchase?.item?.title || 'Purchase'} — My History</title>
+        <title>{purchase?.item?.title || 'Purchase'}. My History</title>
       </Head>
 
       <main className="min-h-screen bg-gradient-to-b from-warm-50 to-white dark:from-gray-900 dark:to-gray-800">

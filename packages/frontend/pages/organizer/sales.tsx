@@ -129,7 +129,7 @@ const OrganizerSalesPage = () => {
       const response = await api.delete(`/sales/${deleteTarget.id}`);
       if (response.data?.hadActivity) {
         showToast(
-          "Sale deleted. It's hidden from your dashboard — existing purchase and review records are kept.",
+          "Sale deleted. It's hidden from your dashboard. Existing purchase and review records are kept.",
           'success'
         );
       } else {

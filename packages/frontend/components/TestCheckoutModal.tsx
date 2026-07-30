@@ -76,7 +76,7 @@ const TestPaymentForm = ({ saleId, onClose, onDone }: TestPaymentFormProps) => {
         <span className="text-4xl">✓</span>
         <p className="text-green-700 dark:text-green-300 font-semibold text-base">In-app payment flow verified</p>
         <p className="text-xs text-warm-500 dark:text-warm-400 text-center">
-          Your Stripe integration handled the full checkout — card entry, confirmation, and processing — exactly as a shopper would experience it.
+          Your Stripe integration handled the full checkout Card entry, confirmation, and processing exactly as a shopper would experience it.
         </p>
       </div>
     );
@@ -149,7 +149,7 @@ const TestCheckoutModal = ({ saleId, onClose, onDone }: TestCheckoutModalProps) 
         <div className="flex justify-between items-center mb-4">
           <div>
             <h2 id="test-checkout-modal-title" className="text-base font-semibold text-warm-900 dark:text-warm-100">Test In-App Checkout</h2>
-            <p className="text-xs text-warm-500 dark:text-warm-400 mt-0.5">This is the exact form your shoppers see — $1.00, no real charge</p>
+            <p className="text-xs text-warm-500 dark:text-warm-400 mt-0.5">This is the exact form your shoppers see, $1.00, no real charge</p>
           </div>
           <button
             onClick={onClose}

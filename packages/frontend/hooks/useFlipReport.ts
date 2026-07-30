@@ -65,6 +65,6 @@ export function useFlipReport(saleId: string | null) {
     },
     enabled: !!saleId,
     staleTime: 5 * 60 * 1000, // 5 minutes
-    gcTime: 10 * 60 * 1000, // 10 minutes — cache data longer to avoid skeletons on revisit
+    gcTime: 10 * 60 * 1000, // 10 minutes. Cache data longer to avoid skeletons on revisit
   });
 }

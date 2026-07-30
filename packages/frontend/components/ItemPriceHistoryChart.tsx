@@ -40,7 +40,7 @@ export default function ItemPriceHistoryChart({ itemId, currentPrice }: Props) {
   }
 
   if (history.length === 0) {
-    return null; // No history yet — don't render anything
+    return null; // No history yet. Don't render anything
   }
 
   const chartData = history.map((h) => ({

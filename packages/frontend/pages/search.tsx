@@ -230,7 +230,7 @@ const SearchPage = () => {
   return (
     <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
       <Head>
-        <title>{q ? `"${q}" — Search` : 'Search'} — FindA.Sale</title>
+        <title>{q ? `"${q}". Search` : 'Search'}. FindA.Sale</title>
         <link rel="canonical" href={`${process.env.NEXT_PUBLIC_SITE_URL || 'https://finda.sale'}${router.asPath.split('?')[0]}${q ? `?q=${encodeURIComponent(q)}` : ''}`} key="canonical" />
         <meta name="description" content={q ? `Search results for ${q} on FindA.Sale` : 'Search sales and items on FindA.Sale'} />
       </Head>
@@ -524,7 +524,7 @@ const SearchPage = () => {
                         <EmptyState
                           icon="🔍"
                           heading={`We couldn't find "${q}"`}
-                          subtext="Try browsing by category or checking back soon — new sales are being listed all the time."
+                          subtext="Try browsing by category or checking back soon. New sales are being listed all the time."
                         />
                         <div className="flex flex-wrap justify-center gap-2 mt-6">
                           {SUGGESTED_CATEGORIES.map((cat) => (

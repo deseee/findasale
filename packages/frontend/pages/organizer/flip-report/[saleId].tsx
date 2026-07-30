@@ -130,7 +130,7 @@ export default function FlipReportPage() {
             <div>
               <h1 className="text-4xl font-bold text-gray-900 dark:text-gray-100 mb-2">{flipReport.saleTitle}</h1>
               <p className="text-gray-600 dark:text-gray-400 text-sm">
-                {formatDate(flipReport.saleStartDate)} — {formatDate(flipReport.saleEndDate)}
+                {formatDate(flipReport.saleStartDate)}, {formatDate(flipReport.saleEndDate)}
               </p>
             </div>
             <button
@@ -196,7 +196,7 @@ export default function FlipReportPage() {
               <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 print:border print:border-gray-300 dark:border-gray-600 print:shadow-none">
                 <h3 className="text-gray-600 dark:text-gray-400 text-sm font-semibold mb-2">Avg ROI</h3>
                 <p className={`text-3xl font-bold mb-1 ${flipReport.avgRoi !== null && flipReport.avgRoi >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
-                  {flipReport.avgRoi !== null ? `${flipReport.avgRoi >= 0 ? '+' : ''}${flipReport.avgRoi.toFixed(1)}%` : '—'}
+                  {flipReport.avgRoi !== null ? `${flipReport.avgRoi >= 0 ? '+' : ''}${flipReport.avgRoi.toFixed(1)}%` : 'N/A'}
                 </p>
                 <p className="text-xs text-gray-500 dark:text-gray-400">per item with cost basis</p>
               </div>
@@ -264,21 +264,21 @@ export default function FlipReportPage() {
                           {formatCurrency(item.finalPrice)}
                         </td>
                         <td className="px-4 py-3 text-right text-gray-500 dark:text-gray-400">
-                          {item.costBasis !== null ? formatCurrency(item.costBasis) : <span className="text-gray-300 dark:text-gray-600">—</span>}
+                          {item.costBasis !== null ? formatCurrency(item.costBasis) : <span className="text-gray-300 dark:text-gray-600">, </span>}
                         </td>
                         <td className="px-4 py-3 text-right font-semibold">
                           {item.profit !== null ? (
                             <span className={item.profit >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>
                               {item.profit >= 0 ? '+' : ''}{formatCurrency(item.profit)}
                             </span>
-                          ) : <span className="text-gray-300 dark:text-gray-600">—</span>}
+                          ) : <span className="text-gray-300 dark:text-gray-600">, </span>}
                         </td>
                         <td className="px-4 py-3 text-right font-semibold">
                           {item.roi !== null ? (
                             <span className={item.roi >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>
                               {item.roi >= 0 ? '+' : ''}{item.roi.toFixed(1)}%
                             </span>
-                          ) : <span className="text-gray-300 dark:text-gray-600">—</span>}
+                          ) : <span className="text-gray-300 dark:text-gray-600">, </span>}
                         </td>
                       </tr>
                     ))}

@@ -283,7 +283,7 @@ const MetricsGrid: React.FC<MetricsGridProps> = ({ data }) => {
           <div>
             <p className="text-warm-600">Avg Price</p>
             <p className="font-bold text-warm-900 dark:text-warm-100">
-              ${data.revenue.sourceCounts.online > 0 ? (data.revenue.total / (data.revenue.sourceCounts.online + data.revenue.sourceCounts.pos)).toFixed(2) : '—'}
+              ${data.revenue.sourceCounts.online > 0 ? (data.revenue.total / (data.revenue.sourceCounts.online + data.revenue.sourceCounts.pos)).toFixed(2) : 'N/A'}
             </p>
           </div>
         </div>

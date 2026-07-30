@@ -129,7 +129,7 @@ interface Sale {
   status: string;
   photoUrls: string[];
   saleType?: string;
-  isOngoing?: boolean; // permanent storefront (RETAIL) — never expires
+  isOngoing?: boolean; // permanent storefront (RETAIL). Never expires
   buyersPremiumPct?: number | null;
   organizer: {
     id: string;
@@ -480,7 +480,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
     if (!id || !user) return;
     api.post(`/sales/${id}/visit`).then((res) => {
       if (res.data?.xpAwarded > 0) {
-        showToast('📸 Photo Station is live — snap a pic to earn XP!', 'info');
+        showToast('📸 Photo Station is live. Snap a pic to earn XP!', 'info');
       }
     }).catch(() => { /* fire-and-forget */ });
   }, [id, user?.id]);
@@ -651,7 +651,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
   };
 
   const formatPrice = (amount: number | null | undefined) => {
-    if (amount == null) return '—';
+    if (amount == null) return 'N/A';
     return `$${amount.toFixed(2)}`;
   };
 
@@ -897,7 +897,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
           </Head>
         )}
         {/* S1071 staged deindex: PUBLISHED sales carry unavailable_after (endDate + 30d) so
-            Google drops the page naturally after the event closes — no 410s, no redirects. */}
+            Google drops the page naturally after the event closes. No 410s, no redirects. */}
         {!noindex && unavailableAfter && (
           <Head>
             <meta name="robots" content={`unavailable_after: ${unavailableAfter}`} />
@@ -1123,8 +1123,8 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
           <Head>
             <title>{sale.title} – FindA.Sale</title>
             <link rel="canonical" href={`${process.env.NEXT_PUBLIC_SITE_URL || 'https://finda.sale'}/sales/${sale.id}`} key="canonical" />
-            <meta name="description" content={`${displaySaleTypeLabel || 'Sale'} in ${sale.city}, ${sale.state} — browse items and get directions on FindA.Sale.`} />
-            <meta property="og:title" content={`${sale.title} — FindA.Sale`} />
+            <meta name="description" content={`${displaySaleTypeLabel || 'Sale'} in ${sale.city}, ${sale.state}. Browse items and get directions on FindA.Sale.`} />
+            <meta property="og:title" content={`${sale.title}. FindA.Sale`} />
             <meta property="og:description" content={sale.description} />
             <meta property="og:image" content={sale.photoUrls?.[0] || ''} />
             <meta property="og:image:width" content="1200" />
@@ -1132,7 +1132,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
             <meta property="og:url" content={`${process.env.NEXT_PUBLIC_SITE_URL || 'https://finda.sale'}/sales/${sale.id}`} />
             <meta property="og:type" content="website" />
             <meta name="twitter:card" content="summary_large_image" />
-            <meta name="twitter:title" content={`${sale.title} — FindA.Sale`} />
+            <meta name="twitter:title" content={`${sale.title}. FindA.Sale`} />
             <meta name="twitter:description" content={sale.description} />
           <meta name="twitter:image" content={sale.photoUrls?.[0] || ''} />
           </Head>
@@ -1596,7 +1596,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
                       {(sale.scrapedMetadata as any)?.hours_display ? (
                         <p className="text-sm mt-1 text-[rgba(26,24,20,0.62)] dark:text-[rgba(242,240,234,0.62)]">🕐 {(sale.scrapedMetadata as any).hours_display}</p>
                       ) : (
-                        <p className="text-sm mt-1 text-[rgba(26,24,20,0.4)] dark:text-[rgba(242,240,234,0.4)]">Hours vary — contact organizer for details.</p>
+                        <p className="text-sm mt-1 text-[rgba(26,24,20,0.4)] dark:text-[rgba(242,240,234,0.4)]">Hours vary. Contact organizer for details.</p>
                       )}
                       <div className="mt-4 pt-4 border-t border-black/8 dark:border-white/8 flex flex-col gap-2">
                         <div className="flex items-center gap-2">
@@ -1852,7 +1852,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
                   </div>
                   <h2 style={{ fontFamily: '"Inter Tight", "Inter", sans-serif', fontSize: 26, fontWeight: 600, letterSpacing: '-0.02em', margin: 0 }}>
                     {sale.items.length > 0 ? `${sale.items.length} items` : 'Items for Sale'}
-                    {saleHasEnded && <span className="text-sm font-normal ml-2 text-[rgba(26,24,20,0.5)] dark:text-[rgba(242,240,234,0.5)]">Archive — most items claimed.</span>}
+                    {saleHasEnded && <span className="text-sm font-normal ml-2 text-[rgba(26,24,20,0.5)] dark:text-[rgba(242,240,234,0.5)]">Archive. Most items claimed.</span>}
                   </h2>
                 </div>
                 {isOrganizer && sale.items.length > 0 && (
@@ -1987,7 +1987,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
                     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" className="text-[rgba(26,24,20,0.3)] dark:text-[rgba(242,240,234,0.3)]"><path d="M5 8h14l-1 13H6L5 8z"/><path d="M9 8V6a3 3 0 016 0v2"/></svg>
                   </div>
                   <div>
-                    <p className="text-sm font-medium">Inventory being added — check back soon.</p>
+                    <p className="text-sm font-medium">Inventory being added. Check back soon.</p>
                     <p className="text-xs mt-1 text-[rgba(26,24,20,0.5)] dark:text-[rgba(242,240,234,0.5)]">Get a reminder when items are posted.</p>
                   </div>
                   {isOrganizer ? (
@@ -2741,7 +2741,7 @@ export const getStaticProps: GetStaticProps<SaleDetailPageProps> = async ({ para
       const dropDate = new Date(sale.endDate);
       if (!Number.isNaN(dropDate.getTime())) {
         dropDate.setDate(dropDate.getDate() + 30);
-        unavailableAfter = dropDate.toISOString().slice(0, 10); // ISO 8601 date — accepted by Google
+        unavailableAfter = dropDate.toISOString().slice(0, 10); // ISO 8601 date. Accepted by Google
       }
     }
 

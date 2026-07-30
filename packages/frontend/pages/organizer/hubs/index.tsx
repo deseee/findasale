@@ -432,7 +432,7 @@ export default function FleaMarketEventsPage() {
                 </span>
               </div>
               <p className="text-sm text-warm-600 dark:text-gray-400">
-                Organize multi-vendor events — flea markets, antique malls, popup markets, and farmers markets
+                Organize multi-vendor events. Flea markets, antique malls, popup markets, and farmers markets
               </p>
             </div>
           </div>
@@ -464,7 +464,7 @@ export default function FleaMarketEventsPage() {
                     Ready to host a multi-vendor event?
                   </h2>
                   <p className="text-sm text-amber-800 dark:text-amber-200">
-                    Set up booths, invite vendors, and manage payouts — all from one dashboard.
+                    Set up booths, invite vendors, and manage payouts. All from one dashboard.
                   </p>
                 </div>
                 <Link

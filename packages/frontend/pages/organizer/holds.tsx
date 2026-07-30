@@ -451,7 +451,7 @@ const OrganizerHoldsPage = () => {
                                     <button
                                       onClick={() => updateMutation.mutate({ id: hold.id, status: 'CONFIRMED' })}
                                       disabled={updateMutation.isPending}
-                                      title="Approve this hold — shopper will be notified they can come pick up the item"
+                                      title="Approve this hold. Shopper will be notified they can come pick up the item"
                                       className="text-xs bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded disabled:opacity-50"
                                     >
                                       Approve Hold
@@ -468,7 +468,7 @@ const OrganizerHoldsPage = () => {
                                   <button
                                     onClick={() => updateMutation.mutate({ id: hold.id, status: 'CANCELLED' })}
                                     disabled={updateMutation.isPending}
-                                    title="Cancel this hold — item becomes available again for other shoppers"
+                                    title="Cancel this hold. Item becomes available again for other shoppers"
                                     className="text-xs border border-red-400 text-red-600 hover:bg-red-50 px-3 py-1 rounded disabled:opacity-50"
                                   >
                                     Cancel Hold

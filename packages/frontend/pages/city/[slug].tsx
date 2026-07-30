@@ -43,7 +43,7 @@ interface SaleListing {
   address: string;
   photoUrl: string | null;
   status: string;
-  isOngoing?: boolean; // Permanent-storefront model — always-live directory listing, no real end date
+  isOngoing?: boolean; // Permanent-storefront model. Always-live directory listing, no real end date
   organizer: { id: string; businessName: string } | null;
 }
 
@@ -397,7 +397,7 @@ export const getStaticPaths: GetStaticPaths = async () => {
       }
     }
   } catch (err) {
-    console.error('[city/[slug]] getStaticPaths fetch error — using fallback slugs:', err);
+    console.error('[city/[slug]] getStaticPaths fetch error. Using fallback slugs:', err);
   }
 
   return {

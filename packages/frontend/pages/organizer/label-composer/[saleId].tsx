@@ -593,7 +593,7 @@ export default function LabelComposerPage() {
   return (
     <>
       <Head>
-        <title>Label Composer — {sale?.title || 'Loading'} | finda.sale</title>
+        <title>Label Composer, {sale?.title || 'Loading'} | finda.sale</title>
       </Head>
 
       <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
@@ -612,7 +612,7 @@ export default function LabelComposerPage() {
               </h1>
               {sale && (
                 <span className="text-sm text-warm-500 dark:text-gray-400">
-                  — {sale.title}
+                 , {sale.title}
                 </span>
               )}
             </div>
@@ -706,7 +706,7 @@ export default function LabelComposerPage() {
 
                 {state.items.length === 0 ? (
                   <p className="text-sm text-warm-400 dark:text-gray-500 py-4 text-center">
-                    No labels yet — pick a price and add to batch.
+                    No labels yet. Pick a price and add to batch.
                   </p>
                 ) : (
                   <div className="divide-y divide-dashed divide-warm-200 dark:divide-gray-700">
@@ -775,7 +775,7 @@ export default function LabelComposerPage() {
                   Pull from priced items
                 </h2>
                 <p className="text-xs text-warm-400 dark:text-gray-500 mb-3">
-                  Search your catalog — items already priced get their tag added at the listed price.
+                  Search your catalog. Items already priced get their tag added at the listed price.
                 </p>
 
                 <div className="flex items-center gap-2 bg-warm-50 dark:bg-gray-900 border border-warm-200 dark:border-gray-700 rounded-lg px-3 py-2">
@@ -873,7 +873,7 @@ export default function LabelComposerPage() {
                 {startPosExpanded && (
                   <div className="px-4 pb-4">
                     <p className="text-xs text-warm-400 dark:text-gray-500 mb-3">
-                      Already peeled a few labels off this sheet? Tap the first blank slot — labels before it are skipped so your printout lines up. (Counts left-to-right, top-to-bottom.)
+                      Already peeled a few labels off this sheet? Tap the first blank slot. Labels before it are skipped so your printout lines up. (Counts left-to-right, top-to-bottom.)
                     </p>
                     <div className="grid grid-cols-3 gap-1 w-32 mb-2">
                       {Array.from({ length: LABELS_PER_PAGE }).map((_, i) => {
@@ -902,7 +902,7 @@ export default function LabelComposerPage() {
                     <p className="text-xs text-warm-600 dark:text-gray-300">
                       {startPosition === 1
                         ? 'Starting at the top-left (full sheet).'
-                        : `Skipping ${startPosition - 1} used slot${startPosition - 1 !== 1 ? 's' : ''} — printing starts at position ${startPosition}.`}
+                        : `Skipping ${startPosition - 1} used slot${startPosition - 1 !== 1 ? 's' : ''}. Printing starts at position ${startPosition}.`}
                       {startPosition !== 1 && (
                         <button
                           type="button"
@@ -1026,7 +1026,7 @@ export default function LabelComposerPage() {
                 <p className="text-xs text-warm-400 dark:text-gray-500 mb-3">
                   {blanksOnPage > 0
                     ? `${blanksOnPage} blank cell${blanksOnPage !== 1 ? 's' : ''} on this page. Don't waste label paper.`
-                    : 'Page is full — no blanks to fill.'}
+                    : 'Page is full. No blanks to fill.'}
                 </p>
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-sm text-warm-600 dark:text-gray-300">Fill blanks with:</span>
@@ -1040,7 +1040,7 @@ export default function LabelComposerPage() {
                     }
                     className="px-3 py-1.5 rounded-lg border border-warm-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm text-warm-800 dark:text-gray-200"
                   >
-                    <option value="">— leave blank —</option>
+                    <option value="">Leave blank</option>
                     {prices.map(p => (
                       <option key={p} value={p}>
                         {formatPrice(p)}

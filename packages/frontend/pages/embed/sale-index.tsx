@@ -34,7 +34,7 @@ export default function EmbedSaleIndex({ generatedAt, metros }: EmbedSaleIndexPr
   return (
     <>
       <Head>
-        <title>The Weekend Sale Index — FindA.Sale</title>
+        <title>The Weekend Sale Index. FindA.Sale</title>
         <meta name="robots" content="noindex, nofollow" />
       </Head>
 
@@ -58,7 +58,7 @@ export default function EmbedSaleIndex({ generatedAt, metros }: EmbedSaleIndexPr
           <MetroTable metros={metros} embed limit={EMBED_TOP_N} />
         ) : (
           <p className="text-sm text-warm-500 py-6 text-center">
-            The index is updating — check back shortly.
+            The index is updating. Check back shortly.
           </p>
         )}
 

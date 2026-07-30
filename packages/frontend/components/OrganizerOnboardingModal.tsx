@@ -34,7 +34,7 @@ const STEPS = [
   {
     headline: 'Great photos = more sales',
     subtext:
-      'Use your phone camera. Smart tagging automatically suggests descriptions and prices. Blurry photos get flagged — we\'ll tell you which ones to retake.',
+      'Use your phone camera. Smart tagging automatically suggests descriptions and prices. Blurry photos get flagged. We\'ll tell you which ones to retake.',
     visual: (
       <div className="text-center mb-6">
         <div className="text-6xl">📷</div>
@@ -45,7 +45,7 @@ const STEPS = [
   {
     headline: 'Your sale, your rules',
     subtext:
-      'Set your own prices, hours, and hold policy. Buyers can reserve items before your sale starts — you approve every hold.',
+      'Set your own prices, hours, and hold policy. Buyers can reserve items before your sale starts. You approve every hold.',
     visual: (
       <div className="text-center mb-6">
         <div className="text-6xl">⚙️</div>

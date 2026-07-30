@@ -66,7 +66,7 @@ export default function SettlementPage() {
   return (
     <>
       <Head>
-        <title>Settlement — {sale.title || 'Sale'} | FindA.Sale</title>
+        <title>Settlement, {sale.title || 'Sale'} | FindA.Sale</title>
       </Head>
 
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900">

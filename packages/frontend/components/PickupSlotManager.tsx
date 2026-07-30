@@ -255,7 +255,7 @@ const PickupSlotManager: React.FC<Props> = ({ saleId }) => {
                     {format(parseISO(slot.startsAt), 'EEE, MMM d, yyyy')}
                   </p>
                   <p className="text-sm text-warm-600 dark:text-gray-400">
-                    {format(parseISO(slot.startsAt), 'h:mm a')} — {format(parseISO(slot.endsAt), 'h:mm a')}
+                    {format(parseISO(slot.startsAt), 'h:mm a')}, {format(parseISO(slot.endsAt), 'h:mm a')}
                   </p>
                   <p className="text-sm text-warm-600 dark:text-gray-400 mt-1">
                     Capacity: {slot.capacity} | Booked: {slot.bookingCount}
@@ -412,7 +412,7 @@ const PickupSlotManager: React.FC<Props> = ({ saleId }) => {
           {/* Summary */}
           <div className="bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-600 rounded-lg p-4 mb-6">
             <p className="text-sm text-warm-700 dark:text-gray-300">
-              <strong>This will create {previewSlots.length} slots</strong> — every {slotDuration} minutes from{' '}
+              <strong>This will create {previewSlots.length} slots</strong>. Every {slotDuration} minutes from{' '}
               {startTime} to {endTime} on{' '}
               {selectedDates.length === 1
                 ? format(new Date(selectedDates[0]), 'EEE, MMM d, yyyy')
@@ -429,7 +429,7 @@ const PickupSlotManager: React.FC<Props> = ({ saleId }) => {
                     {format(parseISO(slot.startsAt), 'EEE, MMM d, yyyy')}
                   </p>
                   <p className="text-warm-600 dark:text-gray-400">
-                    {format(parseISO(slot.startsAt), 'h:mm a')} — {format(parseISO(slot.endsAt), 'h:mm a')}
+                    {format(parseISO(slot.startsAt), 'h:mm a')}, {format(parseISO(slot.endsAt), 'h:mm a')}
                   </p>
                   <p className="text-xs text-warm-600 dark:text-gray-500">Capacity: {slot.capacity}</p>
                 </div>

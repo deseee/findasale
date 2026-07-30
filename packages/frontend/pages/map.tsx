@@ -121,7 +121,7 @@ const MapPage = ({ initialSales }: MapPageProps) => {
         return [];
       }
     },
-    staleTime: 5 * 60 * 1000, // 5 min — boosts don't change frequently
+    staleTime: 5 * 60 * 1000, // 5 min. Boosts don't change frequently
     retry: 0,
   });
 
@@ -137,11 +137,11 @@ const MapPage = ({ initialSales }: MapPageProps) => {
         if (result.state === 'granted') {
           navigator.geolocation.getCurrentPosition(
             (position) => setUserLocation({ lat: position.coords.latitude, lng: position.coords.longitude }),
-            () => {} // granted but position failed — silent
+            () => {} // granted but position failed. Silent
           );
         }
       })
-      .catch(() => {}); // Permissions API unsupported (older iOS) — skip auto-request
+      .catch(() => {}); // Permissions API unsupported (older iOS). Skip auto-request
   }, []);
 
   // Filter sales by date, sale type, and geo-location
@@ -289,12 +289,12 @@ const MapPage = ({ initialSales }: MapPageProps) => {
   return (
     <div className="min-h-screen bg-warm-50 dark:bg-gray-900 flex flex-col">
       <Head>
-        <title>FindA.Sale Map — Sales Near You</title>
+        <title>FindA.Sale Map. Sales Near You</title>
         <meta
           name="description"
           content="View estate sales, yard sales, auctions, and consignment sales on an interactive map. Find sales near you in real time."
         />
-        <meta property="og:title" content="FindA.Sale Map — Sales Near You" />
+        <meta property="og:title" content="FindA.Sale Map. Sales Near You" />
         <meta
           property="og:description"
           content="View estate sales, yard sales, auctions, and consignment sales on an interactive map. Find sales near you in real time."
@@ -308,7 +308,7 @@ const MapPage = ({ initialSales }: MapPageProps) => {
             __html: jsonLdSafe({
               '@context': 'https://schema.org',
               '@type': 'CollectionPage',
-              name: 'Sales Near You — Interactive Map',
+              name: 'Sales Near You. Interactive Map',
               description: 'View estate sales, yard sales, auctions, and consignment sales on an interactive map. Find sales near you in real time.',
               url: 'https://finda.sale/map',
             }),
@@ -577,7 +577,7 @@ export async function getStaticProps() {
 
   return {
     props: { initialSales },
-    revalidate: 86400, // ISR: 24h — /map is a single static route, negligible added ISR-write cost
+    revalidate: 86400, // ISR: 24h, /map is a single static route, negligible added ISR-write cost
   };
 }
 

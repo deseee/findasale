@@ -351,7 +351,7 @@ const BoothCartPage: React.FC = () => {
       const { clientSecret } = authRes.data;
 
       setBoothOutcomes((prev) => ({ ...prev, [booth.vendorBoothId]: 'ready' }));
-      showToast(`Tap card for ${booth.vendorName} — $${(booth.subtotalCents / 100).toFixed(2)}`, 'success');
+      showToast(`Tap card for ${booth.vendorName}, $${(booth.subtotalCents / 100).toFixed(2)}`, 'success');
 
       setBoothOutcomes((prev) => ({ ...prev, [booth.vendorBoothId]: 'tapping' }));
       const collectResult = await terminal.collectPaymentMethod(clientSecret);
@@ -558,7 +558,7 @@ const BoothCartPage: React.FC = () => {
 
           <h1 className="text-3xl font-bold text-warm-900 dark:text-white mb-2">Multi-Booth Register</h1>
           <p className="text-warm-600 dark:text-warm-400 mb-8">
-            Scan or enter item IDs from any booth in this hub. Each booth is billed separately — the
+            Scan or enter item IDs from any booth in this hub. Each booth is billed separately. The
             customer taps their card once per booth represented in the cart.
           </p>
 
@@ -596,7 +596,7 @@ const BoothCartPage: React.FC = () => {
             </div>
           ) : checkoutOpen ? (
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-warm-200 dark:border-gray-700 p-6 mb-6">
-              <h2 className="text-lg font-bold text-warm-900 dark:text-white mb-4">Checkout — tap once per booth</h2>
+              <h2 className="text-lg font-bold text-warm-900 dark:text-white mb-4">Checkout. Tap once per booth</h2>
               <ul className="space-y-3 mb-4">
                 {booths.map((booth, idx) => {
                   const outcome = boothOutcomes[booth.vendorBoothId] || 'pending';
@@ -625,7 +625,7 @@ const BoothCartPage: React.FC = () => {
                 })}
               </ul>
               {capturing && (
-                <p className="text-center text-blue-600 font-bold mb-4">Finalizing sale — capturing all booths...</p>
+                <p className="text-center text-blue-600 font-bold mb-4">Finalizing sale. Capturing all booths...</p>
               )}
               {/* Capture failures retry the capture, which is safe and the only correct
                   move once the card is approved. Everything else retries the close. */}
@@ -719,7 +719,7 @@ const BoothCartPage: React.FC = () => {
                   </span>
                 </div>
                 <div className="mt-2 text-xs text-warm-500 dark:text-warm-400">
-                  {cart.boothsRepresented.length} booth(s) represented in this cart — the customer will tap their
+                  {cart.boothsRepresented.length} booth(s) represented in this cart. The customer will tap their
                   card once per booth during checkout.
                 </div>
               </div>

@@ -329,7 +329,7 @@ const EbayEditForm: React.FC<{
           <div className="space-y-3 p-3 bg-white dark:bg-gray-800 rounded mb-2">
             {isPackageEstimated && (
               <p className="text-xs text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/30 rounded px-2 py-1.5">
-                These package details are an estimate. Review and adjust them, then save to confirm — eBay uses them to charge buyers the right shipping.
+                These package details are an estimate. Review and adjust them, then save to confirm. EBay uses them to charge buyers the right shipping.
               </p>
             )}
             {/* Box-size presets */}
@@ -613,7 +613,7 @@ const PostSaleEbayUnsoldSection: React.FC<PostSaleEbayPanelProps> = ({ saleId })
     onError: (error: any) => {
       const rawMsg: string = error.response?.data?.message || 'Failed to push items to eBay';
       const msg = rawMsg.includes('Model is missing') || rawMsg.includes('item specific Model')
-        ? 'eBay requires a Model — fill in the MPN / Model # field and save before pushing'
+        ? 'eBay requires a Model. Fill in the MPN / Model # field and save before pushing'
         : rawMsg;
       showToast(msg, 'error');
     },
@@ -710,7 +710,7 @@ const PostSaleEbayUnsoldSection: React.FC<PostSaleEbayPanelProps> = ({ saleId })
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-warm-200 dark:border-gray-700 p-6 mt-8">
       {/* Header */}
       <h2 className="text-xl font-bold text-warm-900 dark:text-warm-100 mb-2">
-        {unsoldCount} item{unsoldCount !== 1 ? 's' : ''} didn't sell — list on eBay?
+        {unsoldCount} item{unsoldCount !== 1 ? 's' : ''} didn't sell. List on eBay?
       </h2>
       {alreadyListedCount > 0 && (
         <p className="text-sm text-warm-600 dark:text-warm-400 mb-4">
