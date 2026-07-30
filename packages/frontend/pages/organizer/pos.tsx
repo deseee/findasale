@@ -406,10 +406,22 @@ export default function POSPage() {
     // before router.query.boothToken is populated and wrongly bounces a real vendor.
     if (!router.isReady) return;
     const hasBoothToken = typeof router.query.boothToken === 'string' && !!router.query.boothToken;
-    if (!loading && !hasBoothToken && (!user || (!user.roles?.includes('ORGANIZER') && user.role !== 'ORGANIZER'))) {
+    // S1178 gap fix (2026-07-30): a plain TEAM_MEMBER/HUB_OWNER arriving via
+    // ?venue=<hubId> (workspace JWT, no X-Booth-Token) is very often NOT an
+    // ORGANIZER-role account either -- same reasoning as the boothToken escape
+    // hatch above. Real authorization for venue mode is enforced server-side by
+    // requireBoothTokenOrTeamMember on every /organizer/hubs/:hubId/cart/* call
+    // (see ADR-venue-mode-pos-contract-S1178.md), so it is safe to let an
+    // authenticated non-ORGANIZER user through here -- they are cleanly
+    // rejected downstream (venueStartFailure) if they don't actually have
+    // register access for this specific hub. An unauthenticated visitor still
+    // gets redirected: hasVenueSession requires `user` to be truthy.
+    const hasVenueParam = typeof router.query.venue === 'string' && !!router.query.venue;
+    const hasVenueSession = hasVenueParam && !!user;
+    if (!loading && !hasBoothToken && !hasVenueSession && (!user || (!user.roles?.includes('ORGANIZER') && user.role !== 'ORGANIZER'))) {
       router.replace('/login');
     }
-  }, [user, loading, router, router.isReady, router.query.boothToken]);
+  }, [user, loading, router, router.isReady, router.query.boothToken, router.query.venue]);
 
   // ─── Load sales ────────────────────────────────────────────────────────────────────
 
@@ -1458,7 +1470,16 @@ export default function POSPage() {
               setTimeout(() => { setQrScanStatus('scanning'); setQrScanMessage(''); }, 3000);
               return;
             }
-            addToCart(scannedItem);
+            // S1178 gap fix (2026-07-30): the camera modal is shared between normal
+            // POS mode (search block, gated on selectedSaleId) and venue mode (gated on
+            // venueHubId) -- this single scan-result handler must route to the correct
+            // cart depending on which mode is active, same reasoning as the item-ID
+            // input fix above.
+            if (venueHubId) {
+              addVenueItemToCart(scannedItem);
+            } else {
+              addToCart(scannedItem);
+            }
             showToast('✓ Item added to cart', 'success');
             setQrScanStatus('scanning');
             setQrScanMessage('');
@@ -1870,30 +1891,37 @@ export default function POSPage() {
         </div>
       </div>
 
-      {/* Sale selector */}
-      <div className="mb-4">
-        <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-1">Sale</label>
-        {sales.length === 0 ? (
-          <p className="text-sm text-warm-500 italic">No active sales. Publish a sale first.</p>
-        ) : (
-          <select
-            value={selectedSaleId}
-            onChange={e => {
-              setSelectedSaleId(e.target.value);
-              setItemSearch('');
-              setSearchResults([]);
-            }}
-            className="w-full border border-warm-300 dark:border-gray-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-warm-900 dark:text-warm-100 focus:outline-none focus:ring-2 focus:ring-sage-500"
-          >
-            <option value="">Select a sale…</option>
-            {sales.map(s => (
-              <option key={s.id} value={s.id}>
-                {s.title}
-              </option>
-            ))}
-          </select>
-        )}
-      </div>
+      {/* Sale selector -- hidden in venue mode (S1178 gap fix, 2026-07-30): this block is
+          fed by /sales/mine, which only ever loads for ORGANIZER-role users (see "Load
+          sales" effect above). A team member/owner in venue mode always saw "No active
+          sales. Publish a sale first." here regardless of whether venue mode itself was
+          working -- confusing and unrelated to venue mode, which has its own item-add UI
+          below and never uses selectedSaleId/sales at all. */}
+      {!venueHubId && (
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-1">Sale</label>
+          {sales.length === 0 ? (
+            <p className="text-sm text-warm-500 italic">No active sales. Publish a sale first.</p>
+          ) : (
+            <select
+              value={selectedSaleId}
+              onChange={e => {
+                setSelectedSaleId(e.target.value);
+                setItemSearch('');
+                setSearchResults([]);
+              }}
+              className="w-full border border-warm-300 dark:border-gray-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-warm-900 dark:text-warm-100 focus:outline-none focus:ring-2 focus:ring-sage-500"
+            >
+              <option value="">Select a sale…</option>
+              {sales.map(s => (
+                <option key={s.id} value={s.id}>
+                  {s.title}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
+      )}
 
       {/* Venue mode: add item by ID/scan (S1178) -- no single saleId spans a multi-vendor hub */}
       {venueHubId && (
@@ -1913,7 +1941,15 @@ export default function POSPage() {
               onKeyDown={e => {
                 if (e.key === 'Enter' && venueItemIdInput.trim()) {
                   api.get<Item>(`/items/${venueItemIdInput.trim()}`)
-                    .then(res => { addToCart(res.data); setVenueItemIdInput(''); })
+                    .then(res => {
+                      // S1178 gap fix (2026-07-30): this is the venue-mode-only input
+                      // block (`{venueHubId && (...)}` above) -- it must route through
+                      // the booth-cart endpoint (addVenueItemToCart), not the plain
+                      // single-organizer local cart (addToCart). Every item added here
+                      // was silently going into the wrong cart path before this fix.
+                      addVenueItemToCart(res.data);
+                      setVenueItemIdInput('');
+                    })
                     .catch(() => setErrorMessage('Item not found.'));
                 }
               }}
