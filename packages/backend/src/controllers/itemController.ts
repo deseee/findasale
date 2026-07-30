@@ -1336,7 +1336,12 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     // plain-write path -- flagged as a P2 follow-up in ADR-098 Section 5 (can an
     // organizer revert SOLD -> AVAILABLE and re-sell?), not fixed in this pass.
     if (status !== undefined && status === 'SOLD' && item.status !== 'SOLD') {
-      await commitItemSale(id, 'SOLD');
+      // S1179 fix: include RESERVED so an organizer manually finalizing a previously-held
+      // item as SOLD via this generic edit page (a very common "sold outside POS" case) doesn't
+      // get silently rejected -- terminalController.ts / reservationController.ts already pass
+      // ['AVAILABLE', 'RESERVED'] for the same reason (see itemSaleGuard.ts JSDoc); this call site
+      // was left at the ['AVAILABLE']-only default in the original ADR-098 pass.
+      await commitItemSale(id, 'SOLD', ['AVAILABLE', 'RESERVED']);
     } else if (status !== undefined) {
       updateData.status = status;
     }
@@ -1903,7 +1908,7 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
   } catch (error) {
     // ADR-098: another request already committed this item's sale (double-sell race lost).
     if (error instanceof ItemAlreadyCommittedError) {
-      return res.status(409).json({ message: 'This item already shows as sold -- refresh to see its current status.' });
+      return res.status(409).json({ message: `Couldn't mark this item sold: ${error.message}. Refresh the page to see its current status.` });
     }
     console.error('Error updating item:', error);
     res.status(500).json({ message: 'Server error while updating item' });

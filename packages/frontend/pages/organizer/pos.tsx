@@ -436,15 +436,13 @@ export default function POSPage() {
     // register" link, ?venue=<hubId>&boothToken=<token>) is very often NOT an ORGANIZER-
     // role account -- register access there is enforced server-side by
     // requireBoothAuth.ts's booth-token branch (claimed + CONFIRMED + the separate
-    // registerAccessGrantedAt grant), not by this client-side role gate. Wait for the
-    // router to be ready before deciding, so this never fires on the very first render
-    // before router.query.boothToken is populated and wrongly bounces a real vendor.
-    if (!router.isReady) return;
-    // S1178 hard-nav fix (2026-07-30): read venue/boothToken via the same
-    // window.location.search-backed helper the venue-parsing effect below uses --
-    // router.query.venue/boothToken is unreliable on a genuine hard navigation (see
-    // readVenueQueryParams above), and this gate must not misfire a redirect to
-    // /login for a real venue-mode team member because of that same race.
+    // registerAccessGrantedAt grant), not by this client-side role gate.
+    // S1179 hard-nav gate fix (2026-07-30): the `router.isReady` gate that used to sit
+    // here defeated the whole point of the S1178 hard-nav fix below -- readVenueQueryParams()
+    // reads window.location.search directly and is safe to call immediately, but was
+    // never actually reached because router.isReady was confirmed live to never resolve
+    // true on a genuine hard navigation to this route. Read venue/boothToken first,
+    // unconditionally, instead of gating the whole effect on router.isReady.
     const { venueHubId: hardNavVenueId, boothToken: hardNavBoothToken } = readVenueQueryParams(router);
     const hasBoothToken = !!hardNavBoothToken;
     // S1178 gap fix (2026-07-30): a plain TEAM_MEMBER/HUB_OWNER arriving via
@@ -492,13 +490,14 @@ export default function POSPage() {
   // ─── Venue mode: parse ?venue=<hubId> + auto-start booth cart (S1178) ─────────────────
   const venueAutoStartedRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!router.isReady) return;
-    // S1178 hard-nav fix (2026-07-30): see readVenueQueryParams above -- reads
-    // window.location.search directly instead of trusting router.query.venue/
-    // boothToken, which do not reliably reflect the real URL on this page's first
-    // render(s) after a genuine hard navigation. router.asPath is kept in the deps
-    // array (in addition to router.query.*) so this still re-runs on a client-side
-    // transition that changes the query string, which was already working correctly.
+    // S1179 hard-nav gate fix (2026-07-30): removed the `if (!router.isReady) return;`
+    // gate that used to sit here -- it blocked readVenueQueryParams() (see above) from
+    // ever running on a genuine hard navigation, since router.isReady was confirmed
+    // live to never resolve true on this route in that case. readVenueQueryParams()
+    // reads window.location.search directly and is safe to call immediately. Deps
+    // (router.isReady, router.asPath, router.query.venue/boothToken) are kept so this
+    // still re-runs correctly on a later client-side transition that changes the query
+    // string, which was already working.
     const { venueHubId: v, boothToken: t } = readVenueQueryParams(router);
     setVenueHubId(v);
     setVenueBoothToken(t);
@@ -528,13 +527,40 @@ export default function POSPage() {
   // ─── Handle price sheet QR code auto-add-misc action ───────────────────────────────
 
   useEffect(() => {
-    if (!router.isReady) return;
-
-    const action = router.query.action;
-    const priceStr = router.query.price;
+    // S1179 hard-nav gate fix (2026-07-30): this effect used to be gated behind
+    // `if (!router.isReady) return;` and read action/price only from router.query --
+    // the same failure mode as the venue-mode effects above. Price-sheet QR codes are
+    // scanned via a phone's camera app (not the in-app scanner), which opens this URL
+    // via a genuine hard navigation, so this effect is exposed to the exact same bug:
+    // router.isReady was confirmed live to never resolve true on a hard nav to this
+    // route, which would silently block the misc-item add entirely. Read action/price
+    // (and saleId, needed below for the query-clearing replace()) directly from
+    // window.location.search first, same pattern as readVenueQueryParams above, with
+    // router.query as a fallback for the non-browser case.
+    let action: string | null = null;
+    let priceStr: string | null = null;
+    let saleIdFromUrl: string | null = null;
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      action = params.get('action');
+      priceStr = params.get('price');
+      saleIdFromUrl = params.get('saleId');
+    }
+    if (!action) {
+      const a = router.query.action;
+      action = typeof a === 'string' && a ? a : null;
+    }
+    if (!priceStr) {
+      const p = router.query.price;
+      priceStr = typeof p === 'string' && p ? p : null;
+    }
+    if (!saleIdFromUrl) {
+      const s = router.query.saleId;
+      saleIdFromUrl = typeof s === 'string' && s ? s : null;
+    }
 
     if (action === 'add-misc' && priceStr) {
-      const price = parseFloat(priceStr as string);
+      const price = parseFloat(priceStr);
       if (!isNaN(price) && price > 0) {
         // Add the misc item with the decoded price
         const label = price >= 1 ? `$${price.toFixed(0)}` : price === 0.25 ? '25¢' : '50¢';
@@ -543,7 +569,7 @@ export default function POSPage() {
         // Clear the query params to prevent re-adding on page refresh
         router.replace({
           pathname: router.pathname,
-          query: router.query.saleId ? { saleId: router.query.saleId } : {},
+          query: saleIdFromUrl ? { saleId: saleIdFromUrl } : {},
         }, undefined, { shallow: true });
       }
     }
@@ -947,13 +973,23 @@ export default function POSPage() {
 
   // ─── Venue mode: add item via booth-cart endpoint (resolves vendor booth server-side,
   // reserves the item against this cart) -- S1178 ──────────────────────────────────────
-  const addVenueItemToCart = useCallback((item: Item) => {
-    if (!venueCart) return;
+  // Returns a promise resolving true only when the item genuinely landed in the
+  // server-side booth cart -- 2026-07-30 fix (live bug, Pegasus/S1178): callers used
+  // to fire a "success" toast unconditionally right after calling this, even though
+  // this function silently no-ops when venueCart hasn't finished starting yet (a real
+  // race on a fresh page load, camera opened before POST /cart/start resolves) or when
+  // the server rejects the item. That produced a false "Item added to cart" toast
+  // immediately followed by an empty cart on close -- exactly Pegasus's report.
+  const addVenueItemToCart = useCallback((item: Item): Promise<boolean> => {
+    if (!venueCart) {
+      setErrorMessage('Register is still starting -- wait a moment and try again.');
+      return Promise.resolve(false);
+    }
     if (cart.some(c => c.itemId === item.id)) {
       setErrorMessage(`"${item.title}" is already in the cart.`);
-      return;
+      return Promise.resolve(false);
     }
-    api.post(
+    return api.post(
       `/organizer/hubs/${venueHubId}/cart/${venueCart.id}/items`,
       { itemIds: [item.id] },
       venueBoothToken ? { headers: { 'X-Booth-Token': venueBoothToken } } : undefined
@@ -961,19 +997,23 @@ export default function POSPage() {
       .then(res => {
         const accepted = res.data?.accepted || [];
         const rejected = res.data?.rejected || [];
+        let added = false;
         if (accepted.length > 0) {
           const a = accepted[0];
           const cartId = `${Date.now()}_${Math.random().toString(36).substring(7)}`;
           setCart(prev => [...prev, { id: cartId, itemId: a.itemId, title: a.title, amount: a.price ?? 0, photoUrl: item.photoUrls?.[0] }]);
           setErrorMessage('');
+          added = true;
         }
         if (rejected.length > 0) {
           setErrorMessage(`"${item.title}" could not be added: ${rejected[0].reason}`);
         }
+        return added;
       })
       .catch(err => {
         console.error('[pos] Venue add-item error:', err);
         setErrorMessage(err?.response?.data?.error || err?.response?.data?.message || `Failed to add "${item.title}".`);
+        return false;
       });
   }, [venueHubId, venueCart, cart, venueBoothToken]);
 
@@ -1522,10 +1562,20 @@ export default function POSPage() {
             // cart depending on which mode is active, same reasoning as the item-ID
             // input fix above.
             if (venueHubId) {
-              addVenueItemToCart(scannedItem);
-            } else {
-              addToCart(scannedItem);
+              addVenueItemToCart(scannedItem).then(added => {
+                if (added) {
+                  showToast('✓ Item added to cart', 'success');
+                  setQrScanStatus('scanning');
+                  setQrScanMessage('');
+                } else {
+                  setQrScanStatus('error');
+                  setQrScanMessage('Could not add item -- see message below');
+                  setTimeout(() => { setQrScanStatus('scanning'); setQrScanMessage(''); }, 2500);
+                }
+              });
+              return;
             }
+            addToCart(scannedItem);
             showToast('✓ Item added to cart', 'success');
             setQrScanStatus('scanning');
             setQrScanMessage('');
@@ -1586,7 +1636,7 @@ export default function POSPage() {
     };
 
     tryFrame();
-  }, [addToCart, quickAddMisc]);
+  }, [addToCart, quickAddMisc, venueHubId, addVenueItemToCart]);
 
   const stopQRScan = useCallback(() => {
     if (animationFrameRef.current) {
