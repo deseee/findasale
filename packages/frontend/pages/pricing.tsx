@@ -34,12 +34,12 @@ const TIERS: PricingTier[] = [
     id: 'SIMPLE',
     name: 'SIMPLE',
     price: null,
-    period: 'Free — 10% when items sell',
+    period: 'Free, 10% when items sell',
     description: 'Perfect for trying FindA.Sale',
     featured: false,
     stripePrice: null,
     features: [
-      'Photo to listing — snap, confirm, publish',
+      'Photo to listing: snap, confirm, publish',
       'Up to 200 items per sale, 5 photos each',
       '100 auto tags per month',
       '1 active sale at a time',
@@ -48,7 +48,7 @@ const TIERS: PricingTier[] = [
       'Social post generator',
       'Batch operations',
       'Marketplace exports (Ebay, Facebook, + more)',
-      'Ripples — track clicks, saves and shares',
+      'Ripples: track clicks, saves and shares',
       'Self-serve help center + organizer guides',
     ],
   },
@@ -64,11 +64,11 @@ const TIERS: PricingTier[] = [
       'Everything in Simple, plus:',
       '3 concurrent sales, 500 items each',
       '10 photos per item, 2,000 auto tags/month',
-      'Smart Pricing — market value estimates',
-      'Virtual Queue — manage sale entry',
-      'Flip Report — post-sale earnings breakdown',
+      'Smart Pricing: market value estimates',
+      'Virtual Queue: manage sale entry',
+      'Flip Report: post-sale earnings breakdown',
       'Insights - Advanced sale analytics',
-      'Brand Kit — custom logo, colors, storefront',
+      'Brand Kit: custom logo, colors, storefront',
       'Data exports (Accounting, Mailings, + more)',
       'Weekly email digest',
       '24/7 support assistant + help center',
@@ -87,9 +87,9 @@ const TIERS: PricingTier[] = [
       'Everything in Pro, plus:',
       'Unlimited sales*, Unlimited Items*',
       'Unlimited photos*, Unlimited auto tags*',
-      'Command Center — manage all sales at once',
-      'Retail Mode — always-live storefront for resale shops & antique dealers',
-      'Multi-user workspace — Includes 5 team members',
+      'Command Center: manage all sales at once',
+      'Retail Mode: always-live storefront for resale shops & antique dealers',
+      'Multi-user workspace: includes 5 team members',
       'Extra members: $20/mo',
       'Team roles & permissions',
       'Webhooks - Connect your systems',
@@ -200,9 +200,9 @@ const PricingPage = () => {
     <>
       <Head>
         <title>Pricing - FindA.Sale</title>
-        <meta name="description" content="Simple, fair pricing for estate sale companies, garage sale hosts, auctioneers, and flea market operators. Start free — keep 90% of what you sell." />
+        <meta name="description" content="Simple, fair pricing for estate sale companies, garage sale hosts, auctioneers, and flea market operators. Start free and keep 90% of what you sell." />
         <meta property="og:title" content="Pricing - FindA.Sale" />
-        <meta property="og:description" content="Simple, fair pricing for estate sale companies, garage sale hosts, auctioneers, and flea market operators. Start free — keep 90% of what you sell." />
+        <meta property="og:description" content="Simple, fair pricing for estate sale companies, garage sale hosts, auctioneers, and flea market operators. Start free and keep 90% of what you sell." />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
@@ -272,7 +272,7 @@ const PricingPage = () => {
               Sell smarter.
             </h1>
             <p className="text-xl text-warm-600 dark:text-warm-300">
-              Whether you're running one sale or managing a team, FindA.Sale handles listings, payments and paperwork so you can focus on customers.
+              From a single sale to a full team operation, FindA.Sale handles listings, payments and paperwork so you can focus on customers.
             </p>
           </div>
 
@@ -429,7 +429,7 @@ const PricingPage = () => {
                     {/* Inline explainer */}
                     <p className="text-warm-500 dark:text-warm-500 text-xs mb-6">
                       {tier.id === 'SIMPLE' &&
-                        'No monthly cost — just 10% when items sell.'}
+                        'No monthly cost, just 10% when items sell.'}
                       {tier.id === 'PRO' &&
                         'Lower fees (8%) plus tools that speed your workflow and attract more buyers.'}
                       {tier.id === 'TEAMS' &&
@@ -692,7 +692,7 @@ const PricingPage = () => {
                   What happens if I run out of auto tags mid-sale?
                 </h3>
                 <p className="text-warm-700 dark:text-warm-300">
-                  On Simple, you get 100 per month — resets on the 1st. If you hit the limit, you can still add items manually, or upgrade that sale for $9.99 to get 500 auto tags. On PRO and TEAMS, you won't hit the limit in normal use.
+                  On Simple, you get 100 per month, resetting on the 1st. If you hit the limit, you can still add items manually, or upgrade that sale for $9.99 to get 500 auto tags. On PRO and TEAMS, you won't hit the limit in normal use.
                 </p>
               </div>
 

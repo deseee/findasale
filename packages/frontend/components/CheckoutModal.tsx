@@ -215,7 +215,7 @@ const PaymentForm = ({ itemTitle, itemPrice, originalAmount, platformFee, discou
       {errorMessage && (
         <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-red-700 text-sm">
           <p className="mb-2">{errorMessage}</p>
-          <p className="text-xs text-red-600 mb-3">You can also try a different card — just update your payment details above.</p>
+          <p className="text-xs text-red-600 mb-3">You can also try a different card. Just update your payment details above.</p>
           <button
             type="button"
             onClick={handleRetry}
@@ -252,7 +252,7 @@ const PaymentForm = ({ itemTitle, itemPrice, originalAmount, platformFee, discou
           aria-required="true"
         />
         <span className="text-xs text-warm-600 leading-relaxed">
-          I understand all sales are final — no returns or refunds. I agree to the{' '}
+          I understand all sales are final: no returns or refunds. I agree to the{' '}
           <a href="/terms" target="_blank" rel="noopener noreferrer" className="underline hover:text-warm-900 dark:text-warm-100">
             Terms of Service
           </a>{' '}
@@ -457,7 +457,7 @@ const CheckoutModal = ({ itemId, purchaseId: initialPurchaseId, itemTitle, listi
           {isGuest ? (
             <div className="mb-5 space-y-3">
               <p className="text-xs text-warm-500">
-                Checking out as a guest — no account needed. We'll email your receipt.
+                Checking out as a guest: no account needed. We'll email your receipt.
               </p>
               <div>
                 <label className="block text-sm font-medium text-warm-700 mb-1">
