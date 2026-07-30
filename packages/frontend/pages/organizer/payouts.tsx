@@ -169,6 +169,11 @@ const OrganizerPayoutsPage = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['earnings-breakdown'] });
       queryClient.invalidateQueries({ queryKey: ['stripe-balance'] });
+      // Without this, the refunded purchase vanishes from Earnings Breakdown (correct —
+      // that list is status:'PAID' only) but does NOT appear in Refund History until its
+      // 2-minute staleTime lapses or the page is manually refreshed — the UI would silently
+      // fail to reflect the refund it just issued.
+      queryClient.invalidateQueries({ queryKey: ['refund-history'] });
       showToast('Refund issued', 'success');
       setRefundModalItem(null);
       setRefundError('');

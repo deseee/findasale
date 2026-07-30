@@ -117,6 +117,41 @@ const getStripePromise = () => {
   return stripePromise;
 };
 
+// ─── Venue-mode query helper (S1178 hard-nav fix, 2026-07-30) ───────────────────────
+// router.query.venue/boothToken is unreliable on the very first client render(s) of
+// this page after a genuine hard navigation (full page load / typed URL / bookmark).
+// This route is automatically statically optimized (no getServerSideProps/
+// getStaticProps -- confirmed via `window.__NEXT_DATA__.nextExport === true` and
+// `query: {}` in a live hard-nav test, 2026-07-30), and on that path Next's Pages
+// Router does not reliably drive a fresh React re-render of this component at the
+// exact moment router.query catches up to the real URL -- router.isReady does flip to
+// true and does cause a re-render (confirmed: the auth-guard effect below reacts to it
+// correctly), but by relying on router.query.venue for the VALUE at that render this
+// component could still read a stale/empty query. window.location.search, read
+// directly, was confirmed live to be correct immediately on load in every case tested
+// (hard nav AND client-side router.push transitions -- history.pushState updates
+// location.search synchronously), so read the URL directly instead of trusting
+// router.query for this specific gate. router.query.venue/boothToken are kept as a
+// fallback for the (non-browser / SSR-adjacent) case where window is unavailable.
+function readVenueQueryParams(router: { query: { venue?: string | string[]; boothToken?: string | string[] } }): { venueHubId: string | null; boothToken: string | null } {
+  let venue: string | null = null;
+  let boothToken: string | null = null;
+  if (typeof window !== 'undefined') {
+    const params = new URLSearchParams(window.location.search);
+    venue = params.get('venue');
+    boothToken = params.get('boothToken');
+  }
+  if (!venue) {
+    const v = router.query.venue;
+    venue = typeof v === 'string' && v ? v : null;
+  }
+  if (!boothToken) {
+    const t = router.query.boothToken;
+    boothToken = typeof t === 'string' && t ? t : null;
+  }
+  return { venueHubId: venue, boothToken };
+}
+
 // ─── Component ─────────────────────────────────────────────────────────────────────
 
 export default function POSPage() {
@@ -405,7 +440,13 @@ export default function POSPage() {
     // router to be ready before deciding, so this never fires on the very first render
     // before router.query.boothToken is populated and wrongly bounces a real vendor.
     if (!router.isReady) return;
-    const hasBoothToken = typeof router.query.boothToken === 'string' && !!router.query.boothToken;
+    // S1178 hard-nav fix (2026-07-30): read venue/boothToken via the same
+    // window.location.search-backed helper the venue-parsing effect below uses --
+    // router.query.venue/boothToken is unreliable on a genuine hard navigation (see
+    // readVenueQueryParams above), and this gate must not misfire a redirect to
+    // /login for a real venue-mode team member because of that same race.
+    const { venueHubId: hardNavVenueId, boothToken: hardNavBoothToken } = readVenueQueryParams(router);
+    const hasBoothToken = !!hardNavBoothToken;
     // S1178 gap fix (2026-07-30): a plain TEAM_MEMBER/HUB_OWNER arriving via
     // ?venue=<hubId> (workspace JWT, no X-Booth-Token) is very often NOT an
     // ORGANIZER-role account either -- same reasoning as the boothToken escape
@@ -416,7 +457,7 @@ export default function POSPage() {
     // rejected downstream (venueStartFailure) if they don't actually have
     // register access for this specific hub. An unauthenticated visitor still
     // gets redirected: hasVenueSession requires `user` to be truthy.
-    const hasVenueParam = typeof router.query.venue === 'string' && !!router.query.venue;
+    const hasVenueParam = !!hardNavVenueId;
     const hasVenueSession = hasVenueParam && !!user;
     if (!loading && !hasBoothToken && !hasVenueSession && (!user || (!user.roles?.includes('ORGANIZER') && user.role !== 'ORGANIZER'))) {
       router.replace('/login');
@@ -452,11 +493,16 @@ export default function POSPage() {
   const venueAutoStartedRef = useRef<string | null>(null);
   useEffect(() => {
     if (!router.isReady) return;
-    const v = router.query.venue;
-    setVenueHubId(typeof v === 'string' && v ? v : null);
-    const t = router.query.boothToken;
-    setVenueBoothToken(typeof t === 'string' && t ? t : null);
-  }, [router.isReady, router.query.venue, router.query.boothToken]);
+    // S1178 hard-nav fix (2026-07-30): see readVenueQueryParams above -- reads
+    // window.location.search directly instead of trusting router.query.venue/
+    // boothToken, which do not reliably reflect the real URL on this page's first
+    // render(s) after a genuine hard navigation. router.asPath is kept in the deps
+    // array (in addition to router.query.*) so this still re-runs on a client-side
+    // transition that changes the query string, which was already working correctly.
+    const { venueHubId: v, boothToken: t } = readVenueQueryParams(router);
+    setVenueHubId(v);
+    setVenueBoothToken(t);
+  }, [router.isReady, router.asPath, router.query.venue, router.query.boothToken]);
 
   useEffect(() => {
     if (!venueHubId || !user) return;

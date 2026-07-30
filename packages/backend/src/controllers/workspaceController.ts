@@ -739,20 +739,41 @@ export const acceptMagicLinkInvite = async (req: AuthRequest, res: Response) => 
 
     // Create WorkspaceMember in transaction with invite deletion
     // Use organizerId if they're an organizer, userId otherwise
-    await prisma.$transaction(async (tx: any) => {
-      // Create member
-      await tx.workspaceMember.create({
-        data: {
-          workspaceId: invite.workspace.id,
-          ...(organizer ? { organizerId: organizer.id } : { userId: user.id }),
-          role: invite.role,
-          acceptedAt: new Date(),
-        },
-      });
+    try {
+      await prisma.$transaction(async (tx: any) => {
+        // Create member
+        await tx.workspaceMember.create({
+          data: {
+            workspaceId: invite.workspace.id,
+            ...(organizer ? { organizerId: organizer.id } : { userId: user.id }),
+            role: invite.role,
+            acceptedAt: new Date(),
+          },
+        });
 
-      // Delete the invite
-      await tx.workspaceInvite.delete({ where: { id: invite.id } });
-    });
+        // Delete the invite
+        await tx.workspaceInvite.delete({ where: { id: invite.id } });
+      });
+    } catch (txError) {
+      // Invite already accepted (double-click, retry, stale tab, or a genuinely
+      // concurrent accept request racing this one) -- the unique constraint on
+      // WorkspaceMember (@@unique([workspaceId, organizerId]) /
+      // @@unique([workspaceId, userId])) rejects the duplicate create. Treat this
+      // as a harmless no-op success instead of a 500.
+      if (txError instanceof Prisma.PrismaClientKnownRequestError && txError.code === 'P2002') {
+        // The failed transaction rolled back its own invite delete, so the invite
+        // row may still exist if this request lost a genuine race with a
+        // concurrent accept. Clean it up here (no-op if it's already gone).
+        await prisma.workspaceInvite.deleteMany({ where: { id: invite.id } });
+
+        return res.json({
+          success: true,
+          workspaceSlug: invite.workspace.slug,
+          workspaceName: invite.workspace.name,
+        });
+      }
+      throw txError;
+    }
 
     return res.json({
       success: true,
