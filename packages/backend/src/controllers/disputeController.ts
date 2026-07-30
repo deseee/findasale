@@ -347,8 +347,8 @@ export const updateDisputeStatus = async (req: AuthRequest, res: Response) => {
     res.json({
       message: 'Dispute status updated',
       dispute,
-      ...(refundCapApplied && { refundCapApplied: true, originalAmount: refundAmount, cappedAmount: finalRefundAmount }),
-      ...(actualRefundedAmount !== undefined && { refundedAmount: actualRefundedAmount }),
+      ...(refundCapApplied ? { refundCapApplied: true, originalAmount: refundAmount, cappedAmount: finalRefundAmount } : {}),
+      ...(actualRefundedAmount !== undefined ? { refundedAmount: actualRefundedAmount } : {}),
     });
   } catch (error) {
     console.error('Error updating dispute status:', error);
