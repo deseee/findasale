@@ -2,8 +2,11 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
+import { useQuery } from '@tanstack/react-query';
 import { useAuth } from './AuthContext';
 import { useOrganizerTier } from '../hooks/useOrganizerTier';
+import { useMyWorkspaceMemberships } from '../hooks/useWorkspace';
+import api from '../lib/api';
 import { useRouter } from 'next/router';
 import {
   ChevronRight,
@@ -153,6 +156,26 @@ const AvatarDropdown: React.FC<AvatarDropdownProps> = ({ onBecomeOrganizer }) =>
   const isAdmin = user?.roles?.includes('ADMIN');
   const isTeams = canAccess('TEAMS');
   const { items: cartItems } = useShopperCart(user?.id);
+
+  // Added 2026-07-30 (Patrick-directed, S1178 nav gap): these two queries are how a
+  // vendor booth holder or a plain team member (neither has an ORGANIZER role, so
+  // neither sees the ORGANIZER block below) finds their way to something shared with
+  // them at all. Both stay silent (render nothing) until there is real data -- same
+  // "queryKey shared with the owning card, so it's the same cache entry, not a second
+  // network call" pattern as everywhere else this component reads live data. Query is
+  // enabled only once a user is present so a logged-out visitor never fires either call.
+  const { data: myVendorBooths = [] } = useQuery<{ id: string }[]>({
+    queryKey: ['my-vendor-booths', user?.id],
+    queryFn: async () => {
+      const response = await api.get('/vendor-booth/my-booths');
+      return Array.isArray(response.data) ? response.data : [];
+    },
+    enabled: !!user?.id,
+    staleTime: 60_000,
+  });
+  const { data: myTeamMemberships = [] } = useMyWorkspaceMemberships({ enabled: !!user?.id });
+  const hasVendorBooths = myVendorBooths.length > 0;
+  const hasTeamMemberships = !!user?.id && myTeamMemberships.length > 0;
 
   // Fetch fresh explorer rank (not from stale JWT)
   const { data: xpProfile } = useXpProfile(!!user);
@@ -398,6 +421,42 @@ const AvatarDropdown: React.FC<AvatarDropdownProps> = ({ onBecomeOrganizer }) =>
                     <span>Invites</span>
                   </Link>
                 </>
+              )}
+              <hr className="my-2 border-warm-200 dark:border-gray-700" />
+            </>
+          )}
+
+          {/* Shared With You -- vendor booths and team registers (2026-07-30,
+              Patrick-directed: "if there's no nav it doesn't exist to our users").
+              Unconditional on role -- a vendor booth holder or a plain team member has
+              neither ORGANIZER nor TEAMS-tier-subscriber status, so every other section
+              in this menu is invisible to them. This is the ONLY nav path either of them
+              has. Each link only renders once there is real data (same silent-until-real-
+              data pattern as MyVendorBoothsCard / MyTeamsCard), so a user with neither
+              sees nothing added here at all. */}
+          {(hasVendorBooths || hasTeamMemberships) && (
+            <>
+              {hasVendorBooths && (
+                <Link
+                  href="/vendor/booths"
+                  className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                  onClick={() => setIsOpen(false)}
+                  title="Every booth you have claimed, and your register if one has been shared with you"
+                >
+                  <Store size={16} className="text-amber-500" />
+                  <span>Your Booths</span>
+                </Link>
+              )}
+              {hasTeamMemberships && (
+                <Link
+                  href="/team/registers"
+                  className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                  onClick={() => setIsOpen(false)}
+                  title="Every team you belong to, and your register if one has been shared with you"
+                >
+                  <Users size={16} className="text-amber-500" />
+                  <span>Your Teams</span>
+                </Link>
               )}
               <hr className="my-2 border-warm-200 dark:border-gray-700" />
             </>
@@ -674,7 +733,7 @@ const AvatarDropdown: React.FC<AvatarDropdownProps> = ({ onBecomeOrganizer }) =>
                 href="/organizer/referrals"
                 className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                 onClick={() => setIsOpen(false)}
-                title="Refer other organizers — earn XP and 30-day tier discount"
+                title="Refer other organizers. Earn XP and 30-day tier discount"
               >
                 <Gift size={16} className="text-amber-500" />
                 <span>Refer Organizers</span>
@@ -744,7 +803,7 @@ const AvatarDropdown: React.FC<AvatarDropdownProps> = ({ onBecomeOrganizer }) =>
                     href="/organizer/markdown-cycles"
                     className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                     onClick={() => setIsOpen(false)}
-                    title="Auto-reduce prices after set days — PRO"
+                    title="Auto-reduce prices after set days. PRO"
                   >
                     <TrendingUp size={16} className="text-purple-400" />
                     <span>Markdown Cycles</span>
@@ -753,7 +812,7 @@ const AvatarDropdown: React.FC<AvatarDropdownProps> = ({ onBecomeOrganizer }) =>
                     href="/organizer/appraisals"
                     className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                     onClick={() => setIsOpen(false)}
-                    title="Crowdsourced item appraisals — also available as à la carte"
+                    title="Crowdsourced item appraisals. Also available as à la carte"
                   >
                     <Scale size={16} className="text-purple-400" />
                     <span>Appraisals</span>
@@ -896,7 +955,7 @@ const AvatarDropdown: React.FC<AvatarDropdownProps> = ({ onBecomeOrganizer }) =>
                     href="/wishlists"
                     className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                     onClick={() => setIsOpen(false)}
-                    title="Create and manage named wishlists by occasion — share publicly"
+                    title="Create and manage named wishlists by occasion. Share publicly"
                   >
                     <Bookmark size={16} className="text-indigo-500" />
                     <span>My Collections</span>
@@ -984,7 +1043,7 @@ const AvatarDropdown: React.FC<AvatarDropdownProps> = ({ onBecomeOrganizer }) =>
                     href="/shopper/guild-primer"
                     className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                     onClick={() => setIsOpen(false)}
-                    title="Explorer's Guild — rank system, XP earning paths, and rewards"
+                    title="Explorer's Guild. Rank system, XP earning paths, and rewards"
                   >
                     <Award size={16} className="text-indigo-500" />
                     <span>Explorer's Guild</span>
@@ -1011,7 +1070,7 @@ const AvatarDropdown: React.FC<AvatarDropdownProps> = ({ onBecomeOrganizer }) =>
                     href="/shopper/early-access-cache"
                     className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                     onClick={() => setIsOpen(false)}
-                    title="Weekly XP gacha — spend 100 XP for a roll"
+                    title="Weekly XP gacha. Spend 100 XP for a roll"
                   >
                     <Zap size={16} className="text-indigo-500" />
                     <span>Early Access Cache</span>
@@ -1029,7 +1088,7 @@ const AvatarDropdown: React.FC<AvatarDropdownProps> = ({ onBecomeOrganizer }) =>
                     href="/surprise-me"
                     className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                     onClick={() => setIsOpen(false)}
-                    title="Random item discovery — serendipity search"
+                    title="Random item discovery. Serendipity search"
                   >
                     <Sparkles size={16} className="text-indigo-500" />
                     <span>Surprise Me</span>
@@ -1143,7 +1202,7 @@ const AvatarDropdown: React.FC<AvatarDropdownProps> = ({ onBecomeOrganizer }) =>
                 href="/shopper/hunt-pass"
                 className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                 onClick={() => setIsOpen(false)}
-                title="1.5x XP, early access to sales, and exclusive badges — $4.99/mo"
+                title="1.5x XP, early access to sales, and exclusive badges, $4.99/mo"
               >
                 <Ticket size={16} className="text-amber-500" />
                 <span>Hunt Pass</span>
@@ -1178,7 +1237,7 @@ const AvatarDropdown: React.FC<AvatarDropdownProps> = ({ onBecomeOrganizer }) =>
                     href="/shopper/loot-legend"
                     className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                     onClick={() => setIsOpen(false)}
-                    title="Hunt Pass Loot Legend Portfolio — LEGENDARY and EPIC items"
+                    title="Hunt Pass Loot Legend Portfolio. LEGENDARY and EPIC items"
                   >
                     <Star size={16} className="text-amber-400" />
                     <span>Loot Legend</span>
@@ -1187,7 +1246,7 @@ const AvatarDropdown: React.FC<AvatarDropdownProps> = ({ onBecomeOrganizer }) =>
                     href="/shopper/league"
                     className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                     onClick={() => setIsOpen(false)}
-                    title="Weekly XP leaderboard — compete with shoppers in your region"
+                    title="Weekly XP leaderboard. Compete with shoppers in your region"
                   >
                     <Trophy size={16} className="text-amber-500" />
                     <span>League</span>
@@ -1213,7 +1272,7 @@ const AvatarDropdown: React.FC<AvatarDropdownProps> = ({ onBecomeOrganizer }) =>
             href="/organizer/starter-kit"
             className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
             onClick={() => setIsOpen(false)}
-            title="Printable sale day guide — checklists, pricing tips, day-of runbook"
+            title="Printable sale day guide. Checklists, pricing tips, day-of runbook"
           >
             <BookOpen size={16} className="text-warm-500" />
             <span>Sale Starter Kit</span>

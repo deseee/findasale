@@ -818,14 +818,45 @@ export const getMyWorkspaceMemberships = async (req: AuthRequest, res: Response)
 
     // Filter out workspaces where this user (if organizer) is the owner
     const organizerId = organizer?.id;
-    const teamWorkspaces = memberships
-      .filter((m: any) => m.workspace.ownerId !== organizerId)
-      .map((m: any) => ({
-        workspaceId: m.workspace.id,
-        workspaceName: m.workspace.name,
-        workspaceSlug: m.workspace.slug,
-        role: m.role,
-      }));
+    const filteredMemberships = memberships.filter((m: any) => m.workspace.ownerId !== organizerId);
+
+    // Register access + reachable hubs (2026-07-30, Patrick-directed): a plain team
+    // member has register access iff a TeamMember row exists for their WorkspaceMember
+    // (staffService.grantRegisterAccess upserts this row -- staffService.ts:556-580).
+    // When granted, also resolve the hub(s) owned by the workspace's owning Organizer
+    // (SaleHub.organizerId === workspace.ownerId -- workspace.ownerId IS the Organizer.id
+    // per OrganizerWorkspace.ownerId, same tenancy join documented in
+    // requireBoothAuth.ts's header comment, walked from the other end). This is additive
+    // -- every field this endpoint returned before is unchanged. Before this, a plain
+    // team member (no ORGANIZER role, no own TEAMS subscription) had no UI surface
+    // anywhere that told them which hub's register they could open; they had to be
+    // handed a raw /organizer/pos?venue=<hubId> URL. See MyTeamsCard.tsx and
+    // pages/team/registers.tsx for the consuming UI.
+    const teamWorkspaces = await Promise.all(
+      filteredMemberships.map(async (m: any) => {
+        const teamMember = await prisma.teamMember.findUnique({
+          where: { workspaceMemberId: m.id },
+          select: { id: true },
+        });
+
+        let hubs: { id: string; name: string }[] = [];
+        if (teamMember) {
+          hubs = await prisma.saleHub.findMany({
+            where: { organizerId: m.workspace.ownerId, isActive: true },
+            select: { id: true, name: true },
+          });
+        }
+
+        return {
+          workspaceId: m.workspace.id,
+          workspaceName: m.workspace.name,
+          workspaceSlug: m.workspace.slug,
+          role: m.role,
+          registerAccessGranted: !!teamMember,
+          hubs,
+        };
+      })
+    );
 
     return res.json({ memberships: teamWorkspaces });
   } catch (error) {

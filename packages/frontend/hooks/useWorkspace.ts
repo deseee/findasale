@@ -174,12 +174,17 @@ export interface WorkspaceMembership {
   workspaceName: string;
   workspaceSlug: string;
   role: string;
+  // Added 2026-07-30: whether this member has an organizer-granted TeamMember row
+  // (staffService.grantRegisterAccess), and the hub(s) reachable with it if so. See
+  // workspaceController.ts:getMyWorkspaceMemberships for how these are resolved.
+  registerAccessGranted: boolean;
+  hubs: { id: string; name: string }[];
 }
 
 /**
  * Fetch team workspaces this user is a member of (but doesn't own)
  */
-export const useMyWorkspaceMemberships = () => {
+export const useMyWorkspaceMemberships = (options?: { enabled?: boolean }) => {
   return useQuery<WorkspaceMembership[]>({
     queryKey: ['workspace', 'my-memberships'],
     queryFn: async () => {
@@ -193,5 +198,10 @@ export const useMyWorkspaceMemberships = () => {
         throw error;
       }
     },
+    // Added 2026-07-30: default stays true so every existing call site (organizer
+    // dashboard, always-authenticated) is unaffected. AvatarDropdown.tsx (renders for
+    // logged-out visitors too, on every page) passes enabled: !!user?.id so this never
+    // fires an authenticated-only call with no session.
+    enabled: options?.enabled ?? true,
   });
 };
