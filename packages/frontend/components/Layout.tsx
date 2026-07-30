@@ -61,8 +61,10 @@ import {
   TrendingDown,
   ShoppingBag,
 } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
 import { useAuth } from './AuthContext';
 import { useOrganizerTier } from '../hooks/useOrganizerTier';
+import { useMyWorkspaceMemberships } from '../hooks/useWorkspace';
 import { useNetworkQuality } from '../hooks/useNetworkQuality';
 import useUnreadMessages from '../hooks/useUnreadMessages';
 import useXpProfile from '../hooks/useXpProfile';
@@ -102,6 +104,23 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
   const isUser = isClient && user?.roles?.includes('USER');
   const isAdmin = isClient && user?.roles?.includes('ADMIN');
   const isTeams = isClient && canAccess('TEAMS');
+  // Shared With You (mobile) -- 2026-07-30, same-day follow-up: the desktop
+  // AvatarDropdown got this fix earlier today, but the mobile drawer below
+  // renders from a completely separate JSX tree (authLinks, this file) and
+  // never got the equivalent links -- confirmed live, Pegasus/user5 had
+  // nothing to click on mobile despite the desktop fix working.
+  const { data: myVendorBoothsMobile = [] } = useQuery<{ id: string }[]>({
+    queryKey: ['my-vendor-booths', user?.id],
+    queryFn: async () => {
+      const response = await api.get('/vendor-booth/my-booths');
+      return Array.isArray(response.data) ? response.data : [];
+    },
+    enabled: isClient && !!user?.id,
+    staleTime: 60_000,
+  });
+  const { data: myTeamMembershipsMobile = [] } = useMyWorkspaceMemberships({ enabled: isClient && !!user?.id });
+  const hasVendorBoothsMobile = myVendorBoothsMobile.length > 0;
+  const hasTeamMembershipsMobile = isClient && !!user?.id && myTeamMembershipsMobile.length > 0;
   const [menuOpen, setMenuOpen] = useState(false);
   const [headerSearch, setHeaderSearch] = useState('');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -272,6 +291,22 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
         <span className="block px-3 py-2 text-sm text-warm-500 truncate">
           Hi, {user.name || user.email}
         </span>
+        {(hasVendorBoothsMobile || hasTeamMembershipsMobile) && (
+          <>
+            {hasVendorBoothsMobile && (
+              <Link href="/vendor/booths" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Every booth you have claimed, and your register if one has been shared with you">
+                <Store size={16} className="text-amber-500" />
+                <span>Your Booths</span>
+              </Link>
+            )}
+            {hasTeamMembershipsMobile && (
+              <Link href="/team/registers" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md" title="Every team you belong to, and your register if one has been shared with you">
+                <Users size={16} className="text-amber-500" />
+                <span>Your Teams</span>
+              </Link>
+            )}
+          </>
+        )}
         {user?.roles?.includes('ORGANIZER') && (
           <>
             <SectionHeader icon={Store} label="Your Sales" color="amber" />
