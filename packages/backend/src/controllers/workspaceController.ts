@@ -45,8 +45,8 @@ export const createWorkspace = async (req: AuthRequest, res: Response) => {
 
 export const getMyWorkspace = async (req: AuthRequest, res: Response) => {
   try {
+    if (!req.user?.id) return res.status(401).json({ message: 'Unauthorized' });
     const organizerId = req.user?.organizerProfile?.id;
-    if (!organizerId) return res.status(401).json({ message: 'Unauthorized' });
 
     // Common include pattern for workspace queries
     const workspaceInclude = {
@@ -64,15 +64,25 @@ export const getMyWorkspace = async (req: AuthRequest, res: Response) => {
       },
     };
 
-    let workspace = await prisma.organizerWorkspace.findUnique({
-      where: { ownerId: organizerId },
-      include: workspaceInclude,
-    });
+    // Ownership is inherently organizer-based, so this branch only applies when an organizer profile exists.
+    let workspace = organizerId
+      ? await prisma.organizerWorkspace.findUnique({
+          where: { ownerId: organizerId },
+          include: workspaceInclude,
+        })
+      : null;
 
-    // If not owner, check if user is a member of a workspace
+    // If not owner, check if user is a member of a workspace (membership can be keyed by
+    // organizerId OR userId - see WorkspaceMember schema / requireWorkspaceMember middleware).
     if (!workspace) {
       const membership = await prisma.workspaceMember.findFirst({
-        where: { organizerId, acceptedAt: { not: null } },
+        where: {
+          acceptedAt: { not: null },
+          OR: [
+            ...(organizerId ? [{ organizerId }] : []),
+            { userId: req.user.id },
+          ],
+        },
         include: {
           workspace: {
             include: workspaceInclude,

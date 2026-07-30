@@ -29,6 +29,9 @@ export const listStaff = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: 'Workspace ID is required' });
     }
 
+    const allowed = await resolveWorkspaceForRead(req, res, workspaceId);
+    if (!allowed) return;
+
     const staff = await getStaffMembers(workspaceId);
 
     return res.json(staff);
@@ -50,6 +53,9 @@ export const getStaff = async (req: AuthRequest, res: Response) => {
     if (!workspaceId || !staffId) {
       return res.status(400).json({ message: 'Workspace ID and Staff ID are required' });
     }
+
+    const allowed = await resolveWorkspaceForRead(req, res, workspaceId);
+    if (!allowed) return;
 
     // Verify staff belongs to workspace
     const belongs = await verifyStaffBelongsToWorkspace(staffId, workspaceId);
@@ -79,6 +85,9 @@ export const updateStaffProfile = async (req: AuthRequest, res: Response) => {
     if (!workspaceId || !staffId) {
       return res.status(400).json({ message: 'Workspace ID and Staff ID are required' });
     }
+
+    const allowed = await resolveWorkspaceForWrite(req, res, workspaceId);
+    if (!allowed) return;
 
     // Verify staff belongs to workspace
     const belongs = await verifyStaffBelongsToWorkspace(staffId, workspaceId);
@@ -117,6 +126,9 @@ export const getStaffAvailability = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: 'Workspace ID and Staff ID are required' });
     }
 
+    const allowed = await resolveWorkspaceForRead(req, res, workspaceId);
+    if (!allowed) return;
+
     // Verify staff belongs to workspace
     const belongs = await verifyStaffBelongsToWorkspace(staffId, workspaceId);
     if (!belongs) {
@@ -153,6 +165,9 @@ export const updateStaffAvailability = async (req: AuthRequest, res: Response) =
     if (!workspaceId || !staffId) {
       return res.status(400).json({ message: 'Workspace ID and Staff ID are required' });
     }
+
+    const allowed = await resolveWorkspaceForWrite(req, res, workspaceId);
+    if (!allowed) return;
 
     // Verify staff belongs to workspace
     const belongs = await verifyStaffBelongsToWorkspace(staffId, workspaceId);
@@ -199,6 +214,9 @@ export const checkCoverageGaps = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: 'Workspace ID is required' });
     }
 
+    const allowed = await resolveWorkspaceForRead(req, res, workspaceId);
+    if (!allowed) return;
+
     const gaps = await getCoverageGaps(
       workspaceId,
       saleId ? (saleId as string) : undefined
@@ -225,6 +243,9 @@ export const getStaffPerformance = async (req: AuthRequest, res: Response) => {
     if (!workspaceId || !staffId) {
       return res.status(400).json({ message: 'Workspace ID and Staff ID are required' });
     }
+
+    const allowed = await resolveWorkspaceForRead(req, res, workspaceId);
+    if (!allowed) return;
 
     // Verify staff belongs to workspace
     const belongs = await verifyStaffBelongsToWorkspace(staffId, workspaceId);
@@ -257,6 +278,9 @@ export const deleteStaff = async (req: AuthRequest, res: Response) => {
     if (!workspaceId || !staffId) {
       return res.status(400).json({ message: 'Workspace ID and Staff ID are required' });
     }
+
+    const allowed = await resolveWorkspaceForWrite(req, res, workspaceId);
+    if (!allowed) return;
 
     // Verify staff belongs to workspace
     const belongs = await verifyStaffBelongsToWorkspace(staffId, workspaceId);
