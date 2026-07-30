@@ -304,13 +304,22 @@ export const markItemRemovalSkipped = async (req: AuthRequest, res: Response): P
 // endEbayListingIfExists() calls eBay directly -- this is a poll target for the extension's
 // own background alarm instead. Pure read composed from data every existing sale path
 // already updates (Item.status, MarketplaceListingJob) -- no new schema, no migration.
-// (2026-07-26) An item stuck on a genuine skip (title can't be matched on Facebook at all --
-// never the "already sold" case, which now self-resolves as a normal /removed success) will
-// NEVER succeed on its own no matter how many more times it's retried -- Facebook's DOM isn't
-// going to change. Past this many recorded skips, stop handing it back out on every poll and
-// surface it once as needsManualReview instead, so a permanently-unmatchable item degrades to
-// "flag it and stop", not "error forever".
+// (2026-07-26, then S1179 2026-07-30) An item stuck on a genuine skip (title can't be matched
+// on Facebook at all -- never the "already sold" case, which now self-resolves as a normal
+// /removed success) was, until S1179, EXCLUDED FOREVER once it crossed MAX_REMOVAL_SKIP_ATTEMPTS
+// -- a permanent one-way dead-letter with no way back, even after later fixes to the client-side
+// matching logic (e.g. alreadySoldCardByTitle, same date as the original dead-letter). Confirmed
+// on the live Artifact account: 3 items burned their 3 attempts before that later fix shipped and
+// were then dead-lettered forever, unrelated to whether they could now actually resolve.
+// S1179 fix: past MAX_REMOVAL_SKIP_ATTEMPTS, stop hammering Facebook on every ~20min poll (still
+// surface once as needsManualReview so the organizer knows), but give the item a genuine retry
+// again after RETRY_COOLDOWN_MS has passed since its last recorded skip -- a decaying backoff,
+// not a one-way ratchet. Each fresh failure after cooldown just resets the clock via a new
+// SKIPPED row (markItemRemovalSkipped), so a permanently-unmatchable item still only gets
+// hammered once per cooldown window, while one that becomes matchable again (client-side fix,
+// title corrected, etc.) gets a real chance to succeed instead of being stuck forever.
 const MAX_REMOVAL_SKIP_ATTEMPTS = 3;
+const RETRY_COOLDOWN_MS = 24 * 60 * 60 * 1000; // 24h between retries once past the fast-fail cap
 
 export const getPendingRemovals = async (req: AuthRequest, res: Response): Promise<void> => {
   const userId = req.user?.id;
@@ -330,25 +339,51 @@ export const getPendingRemovals = async (req: AuthRequest, res: Response): Promi
   const itemIds = soldItems.map((i) => i.id);
   const jobs = await prisma.marketplaceListingJob.findMany({
     where: { itemId: { in: itemIds } },
-    select: { itemId: true, action: true, status: true, lastErrorMessage: true },
+    select: { itemId: true, action: true, status: true, lastErrorMessage: true, lastAttemptAt: true },
   });
   const postedByItem = new Set<string>();
   const removedByItem = new Set<string>();
   const skipCountByItem = new Map<string, number>();
   const lastSkipReasonByItem = new Map<string, string | null>();
+  const lastSkipAtByItem = new Map<string, Date>();
   for (const j of jobs) {
     if (j.action === 'POST' && j.status === 'POSTED') postedByItem.add(j.itemId);
     if (j.action === 'REMOVE' && j.status === 'REMOVED') removedByItem.add(j.itemId);
     if (j.action === 'REMOVE' && j.status === 'SKIPPED') {
       skipCountByItem.set(j.itemId, (skipCountByItem.get(j.itemId) || 0) + 1);
       lastSkipReasonByItem.set(j.itemId, j.lastErrorMessage ?? null);
+      // S1179: track the MOST RECENT skip per item (jobs aren't guaranteed ordered) so we can
+      // gate the cooldown off it -- a fresh retry is only offered once RETRY_COOLDOWN_MS has
+      // elapsed since the last actual failure, not since the item first crossed the cap.
+      const attemptedAt = j.lastAttemptAt;
+      if (attemptedAt && (!lastSkipAtByItem.has(j.itemId) || attemptedAt > lastSkipAtByItem.get(j.itemId)!)) {
+        lastSkipAtByItem.set(j.itemId, attemptedAt);
+      }
     }
   }
 
+  const now = Date.now();
+  const isRetryEligible = (itemId: string): boolean => {
+    const skipCount = skipCountByItem.get(itemId) || 0;
+    if (skipCount < MAX_REMOVAL_SKIP_ATTEMPTS) return true;
+    // S1179: past the fast-fail cap, only retry again once the cooldown since the last
+    // recorded skip has elapsed -- covers items that were dead-lettered before this fix
+    // shipped (their lastAttemptAt is already well past the cooldown, so they're eligible
+    // again on the very next poll) as well as future items that hit the cap going forward.
+    const lastSkipAt = lastSkipAtByItem.get(itemId);
+    if (!lastSkipAt) return true; // no timestamp on record -- fail open rather than stuck forever
+    return now - lastSkipAt.getTime() >= RETRY_COOLDOWN_MS;
+  };
+
   const stillPending = soldItems.filter((i) => postedByItem.has(i.id) && !removedByItem.has(i.id));
   const items = stillPending
-    .filter((i) => (skipCountByItem.get(i.id) || 0) < MAX_REMOVAL_SKIP_ATTEMPTS)
+    .filter((i) => isRetryEligible(i.id))
     .map((i) => ({ id: i.id, title: i.title }));
+  // S1179: still surfaced here for organizer visibility once an item crosses the cap, even
+  // during the cooldown windows where it's also (periodically) back in `items` above -- this
+  // is now a "heads up, this one's been stubborn" signal rather than "we've given up on this
+  // forever". background.js's notifyManualReviewIfNew already dedupes notifications per id, so
+  // an item cycling through cooldown retries doesn't re-spam the organizer.
   const needsManualReview = stillPending
     .filter((i) => (skipCountByItem.get(i.id) || 0) >= MAX_REMOVAL_SKIP_ATTEMPTS)
     .map((i) => ({ id: i.id, title: i.title, skipCount: skipCountByItem.get(i.id) || 0, lastErrorMessage: lastSkipReasonByItem.get(i.id) || null }));
