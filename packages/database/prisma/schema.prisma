@@ -1175,12 +1175,12 @@ model Item {
   // itemController, not a DB CHECK constraint per ADR-015 Consequences).
   vendorBoothId                   String? // FK to VendorBooth model (TEAMS, flea market hubs)
   vendorBooth                     VendorBooth?            @relation("VendorBoothItems", fields: [vendorBoothId], references: [id], onDelete: SetNull)
-  // S1178 Bug 2 (findasale-architect ADR-item-venue-eligibility-S1178): vendor must
-  // explicitly opt an item in before it can be rung up at ANY flea-market booth. Default
-  // false = secure by default -- existing items are NOT booth-sellable until their owner
-  // opts in via the item-edit form. Checked in addBoothCartItems alongside (not instead
-  // of) the existing owner+hub-match resolution.
-  boothEligible                   Boolean                 @default(false)
+  // S1178 Bug 2 (findasale-architect ADR-item-venue-eligibility-S1178), default flipped
+  // to true 2026-07-30 per Patrick's decision: the addBoothCartItems gate that checked this
+  // field was removed entirely (ownership + hub-match + item-status checks already do the
+  // real work), so this column is no longer read for cart eligibility. Field kept in place
+  // rather than dropped; default is now true for cleanliness/consistency only.
+  boothEligible                   Boolean                 @default(true)
   // P0 cart-scope fix (findasale-hacker fix-and-reverify pass, 2026-07-28): which
   // BoothCartTransaction currently holds this item's RESERVED reservation. Before this
   // field, resolveBoothLegItems() in vendorBoothCartController.ts could only ask "is this
