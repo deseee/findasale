@@ -20,6 +20,16 @@ interface PosManualCardProps {
   buyerEmail: string;
   onSuccess: (message: string) => void;
   onError: (message: string) => void;
+  // Venue/multi-vendor QR rail (2026-07-31): when set, this component confirms an
+  // EXISTING platform SetupIntent (stripe.confirmCardSetup) instead of creating and
+  // confirming a PaymentIntent of its own. Used by
+  // pages/pay/[setupIntentClientSecretToken].tsx, the shopper-facing phone page for
+  // the venue register's QR button -- the register already created this SetupIntent
+  // via createBoothCartQrSetupIntent and is polling for it to succeed; the actual
+  // per-booth PaymentIntents are created server-side afterward
+  // (authorizeBoothCartQrLegs), never here. No network call to
+  // /stripe/terminal/manual-card-payment-intent happens in this mode.
+  setupIntentClientSecret?: string;
 }
 
 type ManualCardState = 'idle' | 'processing' | 'success' | 'error';
@@ -37,7 +47,9 @@ export default function PosManualCard({
   buyerEmail,
   onSuccess,
   onError,
+  setupIntentClientSecret,
 }: PosManualCardProps) {
+  const isSetupIntentMode = !!setupIntentClientSecret;
   const stripe = useStripe();
   const elements = useElements();
 
@@ -82,6 +94,58 @@ export default function PosManualCard({
     setState('processing');
     setErrorMessage('');
 
+    const cardElement = elements.getElement(CardElement);
+    if (!cardElement) {
+      setErrorMessage('CardElement not found');
+      setState('error');
+      onError('CardElement not found');
+      return;
+    }
+
+    // Venue/multi-vendor QR rail (2026-07-31): confirm the EXISTING platform
+    // SetupIntent the register already created, instead of creating and confirming a
+    // PaymentIntent. No CNP fee applies here -- the real per-booth charges (and their
+    // own fee math) happen later, server-side, in authorizeBoothCartQrLegs.
+    if (isSetupIntentMode) {
+      try {
+        const { error, setupIntent } = await stripe.confirmCardSetup(setupIntentClientSecret!, {
+          payment_method: {
+            card: cardElement,
+            billing_details: {
+              email: buyerEmail || undefined,
+            },
+          },
+        });
+
+        if (error) {
+          setErrorMessage(error.message || 'Card was declined. Please try another card.');
+          setState('error');
+          onError(error.message || 'Card setup declined');
+          return;
+        }
+
+        if (!setupIntent || setupIntent.status !== 'succeeded') {
+          setErrorMessage(`Card status: ${setupIntent?.status ?? 'unknown'}. Please contact the cashier.`);
+          setState('error');
+          onError(`Unexpected setup intent status: ${setupIntent?.status ?? 'unknown'}`);
+          return;
+        }
+
+        const now = new Date();
+        setSuccessTimestamp(
+          now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
+        );
+        setState('success');
+        onSuccess('Card confirmed. Show this screen to the cashier to finish your purchase.');
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : 'An error occurred confirming your card.';
+        setErrorMessage(errorMsg);
+        setState('error');
+        onError(errorMsg);
+      }
+      return;
+    }
+
     try {
       // Step 1: Request PaymentIntent from backend
       // Backend will calculate CNP fee (~3.7% vs 3.2% for card-present)
@@ -108,11 +172,6 @@ export default function PosManualCard({
 
       // Step 2: Confirm payment with Stripe using CardElement
       // This tokenizes the card on client side (PCI compliant)
-      const cardElement = elements.getElement(CardElement);
-      if (!cardElement) {
-        throw new Error('CardElement not found');
-      }
-
       const { error, paymentIntent } = await stripe.confirmCardPayment(clientSecret, {
         payment_method: {
           card: cardElement,
@@ -182,48 +241,62 @@ export default function PosManualCard({
     <div className="mb-4 p-4 rounded-xl bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700">
       {/* Header */}
       <h4 className="text-sm font-semibold text-warm-900 dark:text-warm-100 mb-1">
-        💳 Manual Card Entry
+        💳 {isSetupIntentMode ? 'Enter Your Card' : 'Manual Card Entry'}
       </h4>
       <p className="text-xs text-warm-600 dark:text-warm-400 mb-4">
-        Card-not-present payment
+        {isSetupIntentMode ? 'Your card is confirmed here, then charged at the register.' : 'Card-not-present payment'}
       </p>
 
       {/* ═══ IDLE STATE: Form ═══ */}
       {state === 'idle' && (
         <div className="space-y-4">
-          {/* CNP Fee + Dispute Warning */}
-          <div className="mb-4 p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-700">
-            <div className="flex items-start gap-2">
-              <span className="text-amber-600 dark:text-amber-400 text-base mt-0.5">⚠</span>
-              <div>
-                <p className="text-xs font-semibold text-amber-900 dark:text-amber-200 mb-1">Manual Entry. Higher Risk</p>
-                <p className="text-xs text-amber-800 dark:text-amber-300 mb-1">
-                  Processing fee: 3.4% + $0.30 (vs 2.9% + $0.30 for Stripe QR)
-                </p>
-                <p className="text-xs text-amber-800 dark:text-amber-300">
-                  <strong>No dispute protection.</strong> If a shopper disputes this charge, you will lose the sale amount plus a $15 dispute fee with no recourse. (Stripe's optional Chargeback Protection at +0.4%/transaction can cover this. Contact Stripe support to enable.)
-                </p>
+          {/* CNP Fee + Dispute Warning -- only applies to the register-entered manual
+              flow (higher processing fee, no dispute protection). Not shown in
+              setup-intent mode: the real per-booth charge (and its own, unrelated fee
+              math) happens later, server-side, on the register's own account. */}
+          {!isSetupIntentMode && (
+            <div className="mb-4 p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-700">
+              <div className="flex items-start gap-2">
+                <span className="text-amber-600 dark:text-amber-400 text-base mt-0.5">⚠</span>
+                <div>
+                  <p className="text-xs font-semibold text-amber-900 dark:text-amber-200 mb-1">Manual Entry. Higher Risk</p>
+                  <p className="text-xs text-amber-800 dark:text-amber-300 mb-1">
+                    Processing fee: 3.4% + $0.30 (vs 2.9% + $0.30 for Stripe QR)
+                  </p>
+                  <p className="text-xs text-amber-800 dark:text-amber-300">
+                    <strong>No dispute protection.</strong> If a shopper disputes this charge, you will lose the sale amount plus a $15 dispute fee with no recourse. (Stripe's optional Chargeback Protection at +0.4%/transaction can cover this. Contact Stripe support to enable.)
+                  </p>
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
-          {/* Total */}
-          <div className="p-3 rounded-lg bg-warm-50 dark:bg-gray-700 border border-warm-200 dark:border-gray-600">
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <div>
-                <p className="text-xs text-warm-600 dark:text-warm-400">Subtotal</p>
-                <p className="font-semibold text-warm-900 dark:text-warm-100">
-                  ${cartTotal.toFixed(2)}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs text-warm-600 dark:text-warm-400">Est. Total</p>
-                <p className="font-semibold text-warm-900 dark:text-warm-100">
-                  ${totalWithFee.toFixed(2)}
-                </p>
+          {/* Total -- setup-intent mode shows a single read-only amount (display only,
+              from the register's own total; no CNP fee is added here since no charge
+              happens on this page at all). */}
+          {isSetupIntentMode ? (
+            <div className="p-3 rounded-lg bg-warm-50 dark:bg-gray-700 border border-warm-200 dark:border-gray-600 text-center">
+              <p className="text-xs text-warm-600 dark:text-warm-400">Amount due</p>
+              <p className="text-2xl font-bold text-warm-900 dark:text-warm-100">${cartTotal.toFixed(2)}</p>
+            </div>
+          ) : (
+            <div className="p-3 rounded-lg bg-warm-50 dark:bg-gray-700 border border-warm-200 dark:border-gray-600">
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <p className="text-xs text-warm-600 dark:text-warm-400">Subtotal</p>
+                  <p className="font-semibold text-warm-900 dark:text-warm-100">
+                    ${cartTotal.toFixed(2)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-warm-600 dark:text-warm-400">Est. Total</p>
+                  <p className="font-semibold text-warm-900 dark:text-warm-100">
+                    ${totalWithFee.toFixed(2)}
+                  </p>
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
           {/* Separator */}
           <div className="border-t border-warm-200 dark:border-gray-700"></div>
@@ -249,7 +322,7 @@ export default function PosManualCard({
               disabled={!stripe || !elements}
               className="w-full py-3 rounded-lg bg-sage-700 text-white font-semibold hover:bg-sage-800 transition disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Process Payment ${totalWithFee.toFixed(2)}
+              {isSetupIntentMode ? `Confirm Card $${cartTotal.toFixed(2)}` : `Process Payment $${totalWithFee.toFixed(2)}`}
             </button>
           </form>
         </div>
@@ -281,8 +354,12 @@ export default function PosManualCard({
         <div className="space-y-4">
           <div className="p-4 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700">
             <p className="text-3xl mb-2">✓</p>
-            <p className="text-sm font-bold text-green-900 dark:text-green-100 mb-1">Payment Confirmed</p>
-            <p className="text-xs text-green-700 dark:text-green-300">Card charged successfully</p>
+            <p className="text-sm font-bold text-green-900 dark:text-green-100 mb-1">
+              {isSetupIntentMode ? 'Card Confirmed' : 'Payment Confirmed'}
+            </p>
+            <p className="text-xs text-green-700 dark:text-green-300">
+              {isSetupIntentMode ? 'Show this screen to the cashier to finish your purchase.' : 'Card charged successfully'}
+            </p>
           </div>
 
           <div className="p-3 rounded-lg bg-warm-50 dark:bg-gray-700 border border-warm-200 dark:border-gray-600 space-y-2 text-sm">
@@ -320,19 +397,23 @@ export default function PosManualCard({
           <div className="flex gap-2">
             <button
               onClick={handleRetry}
-              className="flex-1 py-2 rounded-lg bg-sage-700 text-white text-sm font-semibold hover:bg-sage-800 transition"
+              className={isSetupIntentMode ? "w-full py-2 rounded-lg bg-sage-700 text-white text-sm font-semibold hover:bg-sage-800 transition" : "flex-1 py-2 rounded-lg bg-sage-700 text-white text-sm font-semibold hover:bg-sage-800 transition"}
             >
               Try Again
             </button>
-            <button
-              onClick={() => {
-                setState('idle');
-                onError('User switched to cash payment');
-              }}
-              className="flex-1 py-2 rounded-lg bg-warm-200 dark:bg-gray-700 text-warm-700 dark:text-warm-300 text-sm font-semibold hover:bg-warm-300 dark:hover:bg-gray-600 transition"
-            >
-              Use Cash
-            </button>
+            {/* "Use Cash" only makes sense on the register's own manual-entry flow --
+                there is no cash fallback on a shopper's own phone (setup-intent mode). */}
+            {!isSetupIntentMode && (
+              <button
+                onClick={() => {
+                  setState('idle');
+                  onError('User switched to cash payment');
+                }}
+                className="flex-1 py-2 rounded-lg bg-warm-200 dark:bg-gray-700 text-warm-700 dark:text-warm-300 text-sm font-semibold hover:bg-warm-300 dark:hover:bg-gray-600 transition"
+              >
+                Use Cash
+              </button>
+            )}
           </div>
         </div>
       )}

@@ -116,6 +116,7 @@ export async function notifyVendorOfBoothSale(legId: string): Promise<BoothSaleN
         platformFeeCents: true,
         hubOwnerShareAmount: true,
         status: true,
+        rail: true,
         vendorSaleNotifiedAt: true,
         vendorBooth: {
           select: {
@@ -170,13 +171,24 @@ export async function notifyVendorOfBoothSale(legId: string): Promise<BoothSaleN
     const organizerNameRaw = booth.hub?.organizer?.businessName || 'the market organizer';
     const boothPath = `/vendor-booth/${booth.boothToken}`;
 
+    // CASH branch (2026-07-31): a cash leg's money never touched Stripe at all -- the
+    // cashier collected it in person and it is sitting in the till, not "reaching a
+    // Stripe account." Saying otherwise would tell the vendor to go looking for money
+    // that is not coming through Stripe. platformFeeCents/hubOwnerShareAmount are still
+    // populated for a cash leg (computeLegFeeSplit's skipReadinessGate math, run for
+    // reporting) -- they describe what the vendor owes the platform/organizer, collected
+    // some other way, not what Stripe will deposit.
+    const isCash = leg.rail === 'CASH';
+
     // In-app first, so the vendor gets the alert even when the email leg is skipped.
     if (booth.userId) {
       await createNotification(
         booth.userId,
         'vendor_booth',
         `You sold $${money(grossCents)} at Booth ${booth.boothNumber}`,
-        netCents !== null
+        isCash
+          ? `${itemCount} ${itemWord} sold at Booth ${booth.boothNumber} at ${hubNameRaw} for $${money(grossCents)} cash, rung up at the register. This did not go through Stripe -- settle the FindA.Sale fee${hubOwnerShareCents > 0 ? ` and revenue share` : ''} with the market organizer directly.`
+          : netCents !== null
           ? `${itemCount} ${itemWord} sold at Booth ${booth.boothNumber} at ${hubNameRaw}. $${money(netCents)} reaches your Stripe account after the platform fee and the revenue share.`
           : `${itemCount} ${itemWord} sold at Booth ${booth.boothNumber} at ${hubNameRaw}, for $${money(grossCents)} before fees.`,
         boothPath,
@@ -198,8 +210,15 @@ export async function notifyVendorOfBoothSale(legId: string): Promise<BoothSaleN
       : '';
 
     // Every figure below is read straight off the leg. Nothing is recomputed.
-    const breakdownHtml =
-      platformFeeCents !== null && netCents !== null
+    const breakdownHtml = isCash
+      ? `<p><strong>What this sale came to</strong></p>
+        <ul>
+          <li>Sold for cash: $${money(grossCents)}</li>
+          ${platformFeeCents !== null ? `<li>FindA.Sale fee you owe: $${money(platformFeeCents)}</li>` : ''}
+          ${hubOwnerShareCents > 0 ? `<li>Revenue share owed to ${organizerName}: $${money(hubOwnerShareCents)}</li>` : ''}
+        </ul>
+        <p>This was a cash sale rung up at the register -- it never went through Stripe, so nothing was deducted automatically and nothing is landing in your Stripe account for it. Settle the fee${hubOwnerShareCents > 0 ? ` and revenue share` : ''} above with ${organizerName} directly; your booth page shows your current terms.</p>`
+      : platformFeeCents !== null && netCents !== null
         ? `<p><strong>What this sale came to</strong></p>
         <ul>
           <li>Sold: $${money(grossCents)}</li>
@@ -218,7 +237,9 @@ export async function notifyVendorOfBoothSale(legId: string): Promise<BoothSaleN
         <p>${itemCount === 1 ? 'An item' : `${itemCount} items`} just sold at Booth ${boothNumber} at ${hubName}.</p>
         ${itemsHtml}
         ${breakdownHtml}
-        <p>The money goes to your own Stripe account, not to us and not to ${organizerName}. You do not have to collect anything or invoice anyone.</p>
+        ${isCash
+          ? `<p>This was a cash sale -- the cashier already has your money. ${organizerName} did not collect anything on your behalf and nothing was charged on Stripe.</p>`
+          : `<p>The money goes to your own Stripe account, not to us and not to ${organizerName}. You do not have to collect anything or invoice anyone.</p>`}
         <p>If the button does not work, copy this link into your browser:<br />${boothUrl}</p>
         <p>If this sale does not look right, contact ${organizerName} at ${hubName}.</p>
         <p>The FindA.Sale Team</p>`,

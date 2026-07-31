@@ -33,9 +33,10 @@ import {
   createBoothCartQrSetupIntent,
   authorizeBoothCartQrLegs,
   captureBoothCart,
+  captureBoothCartCash,
   cancelBoothCart,
   listBoothCartTransactions,
-  searchVendorBoothItems,
+  searchHubCartItems,
 } from '../controllers/vendorBoothCartController';
 import {
   previewVendorBoothSettlement,
@@ -137,10 +138,13 @@ router.delete('/api/organizer/hubs/:hubId/vendor-booths/:boothId/register-access
 router.post('/api/organizer/hubs/:hubId/cart/start', optionalAuthenticate, requireBoothTokenOrTeamMember(), startBoothCart);
 router.post('/api/organizer/hubs/:hubId/cart/:cartTransactionId/items', optionalAuthenticate, requireBoothTokenOrTeamMember(), addBoothCartItems);
 
-// QR-fail fallback (2026-07-24): cashier can search a specific vendor's sellable
-// items by keyword when scanning fails. Same auth model as the rest of the cart
-// routes -- booth token or team member, scoped to this hub.
-router.get('/api/organizer/hubs/:hubId/cart/booths/:vendorBoothId/items', optionalAuthenticate, requireBoothTokenOrTeamMember(), searchVendorBoothItems);
+// Hub-wide item search (2026-07-31, replaces the booth-scoped route above's old
+// handler): venue mode's "Search by title or SKU" box has no single selectedSaleId to
+// search against, so it needs to search every booth's sellable items across the whole
+// hub at once. Optional vendorBoothId query param still narrows to one booth (keeps
+// serving the QR-fail single-booth-fallback case, Patrick 2026-07-24). Same auth model
+// as the rest of the cart routes -- booth token or team member, scoped to this hub.
+router.get('/api/organizer/hubs/:hubId/cart/items', optionalAuthenticate, requireBoothTokenOrTeamMember(), searchHubCartItems);
 
 // ADR-020 (2026-07-07): sequential per-booth Standard-account checkout — replaces
 // the old single-PaymentIntent /charge + /confirm pair. Terminal rail: booth-scoped
@@ -154,6 +158,10 @@ router.post('/api/organizer/hubs/:hubId/cart/:cartTransactionId/terminal/authori
 router.post('/api/organizer/hubs/:hubId/cart/:cartTransactionId/qr/setup-intent', optionalAuthenticate, requireBoothTokenOrTeamMember(), createBoothCartQrSetupIntent);
 router.post('/api/organizer/hubs/:hubId/cart/:cartTransactionId/qr/authorize', optionalAuthenticate, requireBoothTokenOrTeamMember(), authorizeBoothCartQrLegs);
 router.post('/api/organizer/hubs/:hubId/cart/:cartTransactionId/capture', optionalAuthenticate, requireBoothTokenOrTeamMember(), captureBoothCart);
+// Cash rail (2026-07-31, Patrick-approved): no authorize step, no PaymentIntent -- goes
+// straight from "cashier has the cash in hand" to CAPTURED. Same auth model as every
+// other cart route above.
+router.post('/api/organizer/hubs/:hubId/cart/:cartTransactionId/cash/capture', optionalAuthenticate, requireBoothTokenOrTeamMember(), captureBoothCartCash);
 router.post('/api/organizer/hubs/:hubId/cart/:cartTransactionId/cancel', optionalAuthenticate, requireBoothTokenOrTeamMember(), cancelBoothCart);
 
 // Organizer-only audit view

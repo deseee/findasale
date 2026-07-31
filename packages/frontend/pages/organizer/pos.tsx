@@ -52,6 +52,18 @@ interface Item {
   sku: string | null;
 }
 
+// Hub-wide venue search result (S1178 follow-up, 2026-07-31) -- searchHubCartItems
+// returns everything Item does plus which booth each item belongs to, so the cashier
+// can tell apart same-titled items at different vendors' booths before adding one to
+// the cart. status is synthesized as 'AVAILABLE' (the endpoint only ever returns
+// AVAILABLE items) so this is structurally an Item and can be passed straight into
+// addToCart/addVenueItemToCart unchanged.
+interface HubSearchItem extends Item {
+  vendorBoothId: string | null;
+  vendorName: string | null;
+  boothNumber: string | null;
+}
+
 interface CartItem {
   id: string;
   itemId?: string;
@@ -297,6 +309,12 @@ export default function POSPage() {
   const [venueCart, setVenueCart] = useState<{ id: string; hubId: string; status: string } | null>(null);
   const [venueStartFailure, setVenueStartFailure] = useState<string | null>(null);
   const [venueItemIdInput, setVenueItemIdInput] = useState('');
+  // Hub-wide item search (S1178 follow-up, 2026-07-31): venue mode has no
+  // selectedSaleId, so the plain "Search by title or SKU" block further down
+  // (gated on selectedSaleId) never rendered here -- this is venue mode's own
+  // equivalent, hitting searchHubCartItems instead of /items?saleId=.
+  const [venueItemSearch, setVenueItemSearch] = useState('');
+  const [venueSearchResults, setVenueSearchResults] = useState<HubSearchItem[]>([]);
   const [venueBooths, setVenueBooths] = useState<Array<{
     vendorBoothId: string;
     vendorName: string;
@@ -310,6 +328,16 @@ export default function POSPage() {
   const [venueCapturing, setVenueCapturing] = useState(false);
   const [venueCaptureFailed, setVenueCaptureFailed] = useState(false);
   const venueTerminalRef = useRef<any>(null);
+
+  // ─── Venue mode: Stripe QR rail state (S1178 follow-up, Task 3, 2026-07-31) ────────
+  // Reuses the EXISTING createBoothCartQrSetupIntent / authorizeBoothCartQrLegs backend
+  // endpoints (built for this exact multi-vendor-split purpose) plus the register-side
+  // "generate -> display QR -> poll -> done" shape already proven by the non-venue
+  // paymentLink* QR flow above (same react-qr-code component, same 3s poll interval).
+  const [venueQrStatus, setVenueQrStatus] = useState<'idle' | 'generating' | 'waiting' | 'confirmed'>('idle');
+  const [venueQrClientSecret, setVenueQrClientSecret] = useState('');
+  const [venueQrSetupIntentId, setVenueQrSetupIntentId] = useState('');
+  const [venueQrUrl, setVenueQrUrl] = useState('');
 
   // Stripe Terminal SDK ref
   const terminalRef = useRef<any>(null);
@@ -644,6 +672,30 @@ export default function POSPage() {
     }, 300);
     return () => clearTimeout(timeout);
   }, [itemSearch, selectedSaleId]);
+
+  // ─── Venue mode: hub-wide item search (S1178 follow-up, 2026-07-31) ───────────────
+  // Same 300ms debounce as the selectedSaleId search above. venue mode never has a
+  // selectedSaleId, so it hits searchHubCartItems instead of /items?saleId= -- that
+  // endpoint searches every CONFIRMED booth's items on this hub by title OR sku and
+  // reports back which booth each result belongs to.
+  useEffect(() => {
+    if (!venueHubId || !venueItemSearch.trim()) {
+      setVenueSearchResults([]);
+      return;
+    }
+    const timeout = setTimeout(async () => {
+      try {
+        const res = await api.get<{ items: HubSearchItem[] }>(
+          `/organizer/hubs/${venueHubId}/cart/items?q=${encodeURIComponent(venueItemSearch.trim())}`,
+          venueBoothToken ? { headers: { 'X-Booth-Token': venueBoothToken } } : undefined
+        );
+        setVenueSearchResults(res.data.items ?? []);
+      } catch {
+        setVenueSearchResults([]);
+      }
+    }, 300);
+    return () => clearTimeout(timeout);
+  }, [venueItemSearch, venueHubId, venueBoothToken]);
 
   // ─── Sync inline cash numpad → cashReceived ────────────────────────────────────────────
 
@@ -1182,6 +1234,152 @@ export default function POSPage() {
       setErrorMessage(err?.response?.data?.error || err?.response?.data?.message || err?.message || 'Failed to start venue checkout.');
     }
   }, [venueHubId, venueCart, cart.length, runVenueBoothLeg, cancelVenueCart, captureVenueAll, venueBoothToken]);
+
+  // ─── Venue mode: cash checkout (S1178 follow-up, 2026-07-31) ──────────────────────────
+  // Deliberately a SEPARATE function from startVenueCheckout, not a branch inside it --
+  // startVenueCheckout's first step is GET .../cart/summary, which 400s the whole checkout
+  // on any booth that isn't readyForStandardCharge (Stripe onboarding incomplete). That
+  // pre-check exists for the card/Terminal rail, where the booth's OWN connected account
+  // is about to be charged directly -- it must never gate a cash sale, where no booth's
+  // Stripe account is touched at all. This calls the cash/capture endpoint directly: no
+  // summary pre-check, no per-booth tap loop, nothing to poll.
+  const handleVenueCashPayment = useCallback(async () => {
+    if (!venueCart || !cart.length) return;
+    setPaymentStatus('creating');
+    setErrorMessage('');
+    setVenueCheckoutFailure(null);
+    setVenueCaptureFailed(false);
+    try {
+      const cashReceivedCents = Math.round(cashReceived * 100);
+      const res = await api.post<{ changeCents: number }>(
+        `/organizer/hubs/${venueHubId}/cart/${venueCart.id}/cash/capture`,
+        { cashReceivedCents },
+        venueBoothToken ? { headers: { 'X-Booth-Token': venueBoothToken } } : undefined
+      );
+      const changeCents = res.data?.changeCents ?? 0;
+      setPaymentStatus('success');
+      setSuccessMessage(`✅ Cash sale of $${cartTotal.toFixed(2)} recorded. Change: $${(changeCents / 100).toFixed(2)}.`);
+      clearCart();
+      setVenueCart(null);
+      venueAutoStartedRef.current = null;
+    } catch (err: any) {
+      console.error('[pos] Venue cash payment failed:', err);
+      setPaymentStatus('error');
+      setErrorMessage(err?.response?.data?.error || err?.response?.data?.message || 'Cash sale failed. Please try again.');
+    }
+  }, [venueHubId, venueCart, cart.length, cashReceived, cartTotal, venueBoothToken]);
+
+  // ─── Venue mode: Stripe QR checkout (S1178 follow-up, Task 3, 2026-07-31) ─────────────
+  // Patrick: "the same as what's already there for QR ... they're both already built,
+  // just reuse them." The register side of this reuses createBoothCartQrSetupIntent
+  // (already built for exactly this multi-vendor-split purpose) + the SAME
+  // generate/display/poll shape the non-venue paymentLink* flow above already uses.
+  // The shopper's own phone loads pages/pay/[setupIntentClientSecretToken].tsx, which
+  // reuses PosManualCard's Stripe Elements card form (in its new setup-intent mode) to
+  // call stripe.confirmCardSetup -- this register side never touches the card itself.
+  const handleVenueGenerateQr = useCallback(async () => {
+    if (!venueCart || !cart.length) return;
+    setVenueQrStatus('generating');
+    setErrorMessage('');
+    setVenueCheckoutFailure(null);
+    try {
+      const res = await api.post<{ clientSecret: string; setupIntentId: string }>(
+        `/organizer/hubs/${venueHubId}/cart/${venueCart.id}/qr/setup-intent`,
+        {},
+        venueBoothToken ? { headers: { 'X-Booth-Token': venueBoothToken } } : undefined
+      );
+      const { clientSecret, setupIntentId } = res.data;
+      setVenueQrClientSecret(clientSecret);
+      setVenueQrSetupIntentId(setupIntentId);
+      const origin = typeof window !== 'undefined' ? window.location.origin : '';
+      setVenueQrUrl(`${origin}/pay/${encodeURIComponent(clientSecret)}?amount=${cartTotal.toFixed(2)}`);
+      setVenueQrStatus('waiting');
+    } catch (err: any) {
+      console.error('[pos] Venue QR setup-intent failed:', err);
+      setVenueQrStatus('idle');
+      setErrorMessage(err?.response?.data?.error || err?.response?.data?.message || err?.message || 'Failed to start QR checkout.');
+    }
+  }, [venueHubId, venueCart, cart.length, cartTotal, venueBoothToken]);
+
+  const handleVenueQrReset = useCallback(() => {
+    setVenueQrStatus('idle');
+    setVenueQrClientSecret('');
+    setVenueQrSetupIntentId('');
+    setVenueQrUrl('');
+  }, []);
+
+  // Once the shopper's phone confirms the SetupIntent (detected by the poll below),
+  // clone the resulting PaymentMethod into every represented booth's account
+  // (authorizeBoothCartQrLegs) and capture through the SAME shared /capture endpoint
+  // the Terminal rail uses -- cash is the only rail that skips this authorize/capture
+  // split (Task 2). Whole-cart-fail on any error, same policy as startVenueCheckout.
+  const finishVenueQrCheckout = useCallback(async () => {
+    if (!venueCart) return;
+    setVenueCapturing(true);
+    setVenueCheckoutFailure(null);
+    try {
+      await api.post(
+        `/organizer/hubs/${venueHubId}/cart/${venueCart.id}/qr/authorize`,
+        { setupIntentId: venueQrSetupIntentId },
+        venueBoothToken ? { headers: { 'X-Booth-Token': venueBoothToken } } : undefined
+      );
+      await api.post(
+        `/organizer/hubs/${venueHubId}/cart/${venueCart.id}/capture`,
+        {},
+        venueBoothToken ? { headers: { 'X-Booth-Token': venueBoothToken } } : undefined
+      );
+      setSuccessMessage(`✅ Venue sale of $${cartTotal.toFixed(2)} accepted via QR.`);
+      setPaymentStatus('success');
+      clearCart();
+      setVenueCart(null);
+      venueAutoStartedRef.current = null;
+    } catch (err: any) {
+      console.error('[pos] Venue QR finish failed:', err);
+      await cancelVenueCart();
+      setPaymentStatus('error');
+      setVenueCheckoutFailure(
+        `${err?.response?.data?.error || err?.response?.data?.message || err?.message || 'The QR payment could not be finished.'} This cart is closing.`
+      );
+    } finally {
+      setVenueCapturing(false);
+      handleVenueQrReset();
+    }
+  }, [venueHubId, venueCart, venueQrSetupIntentId, cartTotal, cancelVenueCart, venueBoothToken, handleVenueQrReset]);
+
+  // Poll Stripe directly for the SetupIntent's status -- same 3s interval the
+  // non-venue paymentLink* QR flow already uses (see "Payment link polling" below).
+  // No new backend status endpoint needed: the clientSecret already lets the browser
+  // ask Stripe itself, same as any other Stripe.js client-side confirmation flow.
+  useEffect(() => {
+    if (venueQrStatus !== 'waiting' || !venueQrClientSecret) return;
+    let cancelled = false;
+    const interval = setInterval(async () => {
+      try {
+        const stripe = await getStripePromise();
+        if (!stripe || cancelled) return;
+        const { setupIntent } = await stripe.retrieveSetupIntent(venueQrClientSecret);
+        if (cancelled) return;
+        if (setupIntent?.status === 'succeeded') {
+          clearInterval(interval);
+          setVenueQrStatus('confirmed');
+        }
+      } catch (err) {
+        console.error('[pos] Venue QR poll error:', err);
+      }
+    }, 3000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [venueQrStatus, venueQrClientSecret]);
+
+  // Fire the authorize+capture sequence exactly once, the instant the poll above
+  // detects the shopper finished on their phone.
+  useEffect(() => {
+    if (venueQrStatus !== 'confirmed') return;
+    finishVenueQrCheckout();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [venueQrStatus]);
 
   const quickAddMisc = (amount: number) => {
     const label = amount < 1
@@ -2069,6 +2267,47 @@ export default function POSPage() {
               📷
             </button>
           </div>
+
+          {/* Hub-wide search by title or SKU (S1178 follow-up, 2026-07-31) --
+              searches every vendor's items at this hub at once, since no single
+              selectedSaleId spans a multi-vendor hub the way it does off venue mode. */}
+          <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mt-3 mb-1">Search by title or SKU</label>
+          <input
+            type="text"
+            value={venueItemSearch}
+            onChange={e => setVenueItemSearch(e.target.value)}
+            placeholder="Search by title or SKU…"
+            className="w-full border border-warm-300 dark:border-gray-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-warm-900 dark:text-warm-100 focus:outline-none focus:ring-2 focus:ring-sage-500"
+          />
+          {venueSearchResults.length > 0 && (
+            <ul className="mt-1 border border-warm-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 shadow-sm divide-y divide-warm-100 dark:divide-gray-700 max-h-48 overflow-y-auto">
+              {venueSearchResults.map(item => (
+                <li key={item.id}>
+                  <button
+                    onClick={() => {
+                      addToCart(item);
+                      setVenueItemSearch('');
+                      setVenueSearchResults([]);
+                    }}
+                    className="w-full text-left px-3 py-2 hover:bg-warm-50 dark:hover:bg-gray-700 flex items-center justify-between"
+                  >
+                    <span className="min-w-0">
+                      <span className="block text-sm text-warm-900 dark:text-warm-100 truncate">{item.title}</span>
+                      <span className="block text-xs text-warm-500 dark:text-warm-400 truncate">
+                        {item.vendorName || 'Unknown booth'}{item.boothNumber ? ` — Booth ${item.boothNumber}` : ''}
+                      </span>
+                    </span>
+                    <span className="text-sm font-semibold text-sage-700 ml-2 shrink-0">
+                      +${item.price?.toFixed(2) ?? '0.00'}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          {venueItemSearch.trim().length > 1 && venueSearchResults.length === 0 && (
+            <p className="mt-1 text-xs text-warm-400 dark:text-warm-500 italic">No available items match that search.</p>
+          )}
         </div>
       )}
 
@@ -2541,7 +2780,50 @@ export default function POSPage() {
         <div className="mb-4">
           {venueHubId ? (
             <>
-              <h3 className="text-sm font-medium text-warm-700 dark:text-warm-300 mb-3">Venue register. Card only</h3>
+              <h3 className="text-sm font-medium text-warm-700 dark:text-warm-300 mb-3">Venue register</h3>
+              {/* Venue payment method toggle (S1178 follow-up, 2026-07-31): reuses the
+                  SAME paymentMode state the non-venue flow below uses, just restricted
+                  to 'card' | 'cash' here -- venue mode has no reader/QR/invoice/venmo
+                  yet, only the tap-per-vendor card flow and cash. */}
+              <div className="grid grid-cols-3 gap-2 mb-3">
+                <button
+                  onClick={() => setPaymentMode('card')}
+                  className={`py-3 rounded-xl font-semibold transition flex flex-col items-center justify-center gap-1 ${
+                    paymentMode === 'card'
+                      ? 'bg-sage-700 text-white'
+                      : 'bg-warm-200 text-warm-700 hover:bg-warm-300 dark:bg-gray-700 dark:text-warm-200 dark:hover:bg-gray-600'
+                  }`}
+                >
+                  <span>💳</span><span className="text-xs">Card. Tap per vendor</span>
+                </button>
+                <button
+                  onClick={() => {
+                    setPaymentMode('cash');
+                    setCashReceived(0);
+                    setCashNumpadValue('');
+                  }}
+                  className={`py-3 rounded-xl font-semibold transition flex flex-col items-center justify-center gap-1 ${
+                    paymentMode === 'cash'
+                      ? 'bg-sage-700 text-white'
+                      : 'bg-warm-200 text-warm-700 hover:bg-warm-300 dark:bg-gray-700 dark:text-warm-200 dark:hover:bg-gray-600'
+                  }`}
+                >
+                  <span>💵</span><span className="text-xs">Cash</span>
+                </button>
+                <button
+                  onClick={() => setPaymentMode('qr')}
+                  disabled={cart.length === 0}
+                  className={`py-3 rounded-xl font-semibold transition flex flex-col items-center justify-center gap-1 ${
+                    paymentMode === 'qr'
+                      ? 'bg-sage-700 text-white'
+                      : cart.length === 0
+                      ? 'bg-warm-100 text-warm-300 cursor-not-allowed dark:bg-gray-800 dark:text-gray-600'
+                      : 'bg-warm-200 text-warm-700 hover:bg-warm-300 dark:bg-gray-700 dark:text-warm-200 dark:hover:bg-gray-600'
+                  }`}
+                >
+                  <span>📲</span><span className="text-xs">QR. Scan to pay</span>
+                </button>
+              </div>
               {venueCheckoutFailure && (
                 <p className="mb-2 text-sm text-red-600 dark:text-red-400">{venueCheckoutFailure}</p>
               )}
@@ -2555,13 +2837,122 @@ export default function POSPage() {
                   ))}
                 </ul>
               )}
-              <button
-                onClick={handleCharge}
-                disabled={!venueCart || cart.length === 0 || venueCapturing || (paymentStatus !== 'idle' && paymentStatus !== 'error' && paymentStatus !== 'cancelled')}
-                className="w-full py-4 rounded-xl font-semibold transition bg-sage-700 text-white hover:bg-sage-800 disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                {venueCapturing ? 'Finishing sale…' : `💳 Charge $${cartTotal.toFixed(2)}. Tap per vendor`}
-              </button>
+              {paymentMode === 'cash' ? (
+                <>
+                  {/* Cash received numpad -- identical UI/state to the non-venue cash
+                      flow further down (cashNumpadValue/cashReceived), just wired to
+                      handleVenueCashPayment instead of handleCashPayment. */}
+                  <div className="p-4 rounded-xl bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 shadow-sm mb-3">
+                    <div className="flex items-center justify-between mb-3">
+                      <p className="text-sm font-medium text-warm-700 dark:text-warm-300">Cash Received</p>
+                      <p className="text-2xl font-bold text-warm-900 dark:text-warm-100">
+                        ${(parseInt(cashNumpadValue || '0', 10) / 100).toFixed(2)}
+                      </p>
+                    </div>
+                    {cashNumpadValue.length > 0 && (
+                      <div
+                        className={`mb-3 p-2 rounded-lg text-center ${
+                          cashReceived >= cartTotal
+                            ? 'bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800'
+                            : 'bg-warm-50 dark:bg-gray-700 border border-warm-200 dark:border-gray-600'
+                        }`}
+                      >
+                        <p
+                          className={`text-sm font-semibold ${
+                            cashReceived >= cartTotal ? 'text-emerald-700 dark:text-emerald-400' : 'text-warm-500 dark:text-warm-400'
+                          }`}
+                        >
+                          {cashReceived >= cartTotal
+                            ? `Change: $${cartChange.toFixed(2)}`
+                            : `Short $${(cartTotal - cashReceived).toFixed(2)}`}
+                        </p>
+                      </div>
+                    )}
+                    <div className="grid grid-cols-3 gap-1">
+                      {['1', '2', '3', '4', '5', '6', '7', '8', '9', '00', '0', 'backspace'].map(key => (
+                        <button
+                          key={key}
+                          onClick={() => {
+                            if (key === 'backspace') {
+                              setCashNumpadValue(prev => prev.slice(0, -1));
+                            } else {
+                              setCashNumpadValue(prev => prev + key);
+                            }
+                          }}
+                          className="py-3 rounded-lg bg-warm-100 dark:bg-gray-700 hover:bg-warm-200 dark:hover:bg-gray-600 text-warm-900 dark:text-warm-100 text-sm font-semibold transition active:bg-warm-300 dark:active:bg-gray-600"
+                        >
+                          {key === 'backspace' ? '⌫' : key}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <button
+                    onClick={handleVenueCashPayment}
+                    disabled={!venueCart || cart.length === 0 || cashReceived < cartTotal || ['creating'].includes(paymentStatus)}
+                    className="w-full py-4 rounded-xl font-bold text-lg transition disabled:opacity-40 disabled:cursor-not-allowed bg-sage-700 text-white hover:bg-sage-800 active:scale-95"
+                  >
+                    {paymentStatus === 'creating' && 'Recording…'}
+                    {(paymentStatus === 'idle' || paymentStatus === 'error' || paymentStatus === 'cancelled') &&
+                      `💵 Record Cash Sale $${cartTotal.toFixed(2)}`}
+                  </button>
+                </>
+              ) : paymentMode === 'qr' ? (
+                <>
+                  {/* Register-side QR display -- same generate/display/poll shape as
+                      the non-venue paymentLink* QR flow (PosPaymentQr) further down,
+                      using the same react-qr-code component already imported in this
+                      file (see the Venmo QR block below for its other existing use). */}
+                  {(venueQrStatus === 'idle') && (
+                    <button
+                      onClick={handleVenueGenerateQr}
+                      disabled={!venueCart || cart.length === 0}
+                      className="w-full py-4 rounded-xl font-semibold transition bg-sage-700 text-white hover:bg-sage-800 disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      📲 Generate QR to pay ${cartTotal.toFixed(2)}
+                    </button>
+                  )}
+                  {venueQrStatus === 'generating' && (
+                    <button disabled className="w-full py-4 rounded-xl font-semibold bg-sage-700 text-white opacity-70">
+                      Generating…
+                    </button>
+                  )}
+                  {venueQrStatus === 'waiting' && venueQrUrl && (
+                    <div className="p-4 rounded-xl bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 space-y-3">
+                      <p className="text-xs text-warm-600 dark:text-warm-400 text-center">
+                        Total: ${cartTotal.toFixed(2)}
+                      </p>
+                      <div className="flex justify-center bg-white p-3 rounded-lg">
+                        <QRCode value={venueQrUrl} size={200} />
+                      </div>
+                      <p className="text-center text-xs text-warm-600 dark:text-warm-400">
+                        Have the shopper scan this QR with their phone camera and enter their card there.
+                      </p>
+                      <p className="text-center text-sm text-warm-600 dark:text-warm-400">
+                        ⏳ Waiting for payment…
+                      </p>
+                      <button
+                        onClick={handleVenueQrReset}
+                        className="w-full py-2 rounded-lg border border-warm-300 dark:border-gray-600 text-warm-600 dark:text-warm-400 text-sm hover:bg-warm-50 dark:hover:bg-gray-700 transition"
+                      >
+                        Cancel &amp; Regenerate
+                      </button>
+                    </div>
+                  )}
+                  {(venueQrStatus === 'confirmed' || venueCapturing) && (
+                    <button disabled className="w-full py-4 rounded-xl font-semibold bg-sage-700 text-white opacity-70">
+                      Finishing sale…
+                    </button>
+                  )}
+                </>
+              ) : (
+                <button
+                  onClick={handleCharge}
+                  disabled={!venueCart || cart.length === 0 || venueCapturing || (paymentStatus !== 'idle' && paymentStatus !== 'error' && paymentStatus !== 'cancelled')}
+                  className="w-full py-4 rounded-xl font-semibold transition bg-sage-700 text-white hover:bg-sage-800 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {venueCapturing ? 'Finishing sale…' : `💳 Charge $${cartTotal.toFixed(2)}. Tap per vendor`}
+                </button>
+              )}
               {venueCaptureFailed && (
                 <button
                   onClick={captureVenueAll}
@@ -2571,7 +2962,7 @@ export default function POSPage() {
                 </button>
               )}
               <p className="mt-2 text-xs text-warm-500 dark:text-warm-400">
-                Cash, Venmo, Zelle, invoice, and payment-link modes are not yet supported for multi-vendor carts.
+                Venmo, Zelle, invoice, and payment-link modes are not yet supported for multi-vendor carts.
               </p>
             </>
           ) : (

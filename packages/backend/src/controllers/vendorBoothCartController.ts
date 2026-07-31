@@ -1,4 +1,5 @@
 import { Response } from 'express';
+import { randomUUID } from 'crypto';
 import { AuthRequest } from '../middleware/auth';
 import { BoothAuthRequest } from '../middleware/requireBoothAuth';
 import { prisma } from '../lib/prisma';
@@ -83,11 +84,21 @@ async function computeLegFeeSplit(params: {
     stripeOnboarded: boolean;
     stripeAccountType: string | null;
   } | null;
+  // CASH ONLY (2026-07-31). A cash leg never touches Stripe at all -- not the booth's
+  // own connected account (no PaymentIntent is ever created for it) and not the hub
+  // owner's (no application_fee_amount is ever taken, and transferHubOwnerShareForLeg
+  // is never called for a CASH leg -- see captureBoothCartCash). So neither party's
+  // Stripe onboarding status can legitimately block a cash sale the way it blocks the
+  // TERMINAL/QR rails' real charges. This flag skips ONLY the hubOwnerReady gate below
+  // -- the platformFeeCents/hubOwnerShareCents math itself is unchanged and still runs,
+  // because the hub owner is still OWED that share; it is just collected from the booth
+  // by the organizer directly (outside Stripe) instead of Transferred automatically.
+  skipReadinessGate?: boolean;
 }): Promise<
   | { blocked: false; applicationFeeAmountCents: number; hubOwnerShareCents: number }
   | { blocked: true; reason: string }
 > {
-  const { amountCents, revenueSharePercent, hubOwnerOrganizer } = params;
+  const { amountCents, revenueSharePercent, hubOwnerOrganizer, skipReadinessGate } = params;
   // as any: mirrors the existing cast terminalController.ts already uses at this
   // exact call site (Prisma's generated SubscriptionTier enum vs. feeCalculator.ts's
   // plain string-literal-union SubscriptionTier type are structurally distinct types).
@@ -100,18 +111,20 @@ async function computeLegFeeSplit(params: {
     return { blocked: false, applicationFeeAmountCents: platformFeeCents, hubOwnerShareCents: 0 };
   }
 
-  const hubOwnerReady =
-    !!hubOwnerOrganizer &&
-    hubOwnerOrganizer.stripeAccountType === 'standard' &&
-    hubOwnerOrganizer.stripeOnboarded &&
-    !!hubOwnerOrganizer.stripeConnectId;
+  if (!skipReadinessGate) {
+    const hubOwnerReady =
+      !!hubOwnerOrganizer &&
+      hubOwnerOrganizer.stripeAccountType === 'standard' &&
+      hubOwnerOrganizer.stripeOnboarded &&
+      !!hubOwnerOrganizer.stripeConnectId;
 
-  if (!hubOwnerReady) {
-    return {
-      blocked: true,
-      reason:
-        "This hub's owner has not completed Stripe onboarding yet — checkout is unavailable for booths with a revenue-share agreement until they do.",
-    };
+    if (!hubOwnerReady) {
+      return {
+        blocked: true,
+        reason:
+          "This hub's owner has not completed Stripe onboarding yet — checkout is unavailable for booths with a revenue-share agreement until they do.",
+      };
+    }
   }
 
   const hubOwnerShareCents = Math.round(amountCents * (clampedRevenueSharePercent / 100));
@@ -142,6 +155,13 @@ export async function transferHubOwnerShareForLeg(legId: string): Promise<void> 
   });
   if (!leg || !leg.hubOwnerShareAmount || Number(leg.hubOwnerShareAmount) <= 0) return;
   if (leg.stripeTransferId) return; // already transferred (or a claim is already in flight)
+  // Defense-in-depth (hacker review, S1179 cash-rail dispatch): a CASH leg never had a
+  // real Stripe charge behind it, so a Transfer here would pay the hub owner real platform
+  // money for a sale that generated none. Currently the only caller is captureBoothCart's
+  // real-money finalize loop, but this guard makes it impossible by construction rather
+  // than merely true-by-convention if a future caller (reconciliation script, new feature)
+  // ever passes a cash leg's id here.
+  if (leg.rail === 'CASH') return;
 
   const hubOwnerOrganizer = leg.vendorBooth.hub.organizer;
   if (!hubOwnerOrganizer.stripeConnectId) {
@@ -1107,6 +1127,108 @@ export const authorizeBoothCartQrLegs = async (req: BoothAuthRequest, res: Respo
 };
 
 /**
+ * Shared finalize step for a cart whose legs have already reached a captured state,
+ * regardless of HOW they got there -- a real Stripe capture (captureBoothCart, TERMINAL
+ * or QR rail) or an immediate cash sale with no Stripe step at all (captureBoothCartCash).
+ * Extracted 2026-07-31 so both callers run the exact same Purchase-row creation, stock
+ * decrement, cross-channel-removal hooks, per-item receipt, cart-COMPLETED write, itemized
+ * cart receipt email, and per-vendor sale notification -- instead of a second hand-copied
+ * implementation drifting out of sync with this one.
+ *
+ * Deliberately does NOT call transferHubOwnerShareForLeg. That fires a real Stripe
+ * Transfer out of the PLATFORM's own Stripe balance, and is only ever correct for a leg
+ * whose money the platform actually collected via Stripe (an application_fee_amount taken
+ * on a real captured PaymentIntent). A CASH leg's amount was never collected through
+ * Stripe -- the cashier collected it in person -- so Transferring it would pay the hub
+ * owner real platform funds for a sale that generated none on the platform's Stripe
+ * balance. captureBoothCart (the real-money path) fires that Transfer itself, in its own
+ * loop, AFTER calling this function -- exactly where the original inline code ran it,
+ * just now a separate step instead of interleaved with the Purchase-creation loop.
+ * captureBoothCartCash never calls transferHubOwnerShareForLeg at all.
+ */
+async function finalizeCapturedLegs(
+  cart: { id: string; boothsRepresented: string[] },
+  legs: Array<{ id: string; vendorBoothId: string; stripePaymentIntentId: string }>
+): Promise<string[]> {
+  // Finalize: create Purchase rows (real per-booth PaymentIntent id, or the cash_...
+  // placeholder for a cash leg -- stripePaymentIntentId is @unique and non-null either
+  // way), mark items SOLD, fire the same downstream hooks the old confirmBoothCart ran.
+  const purchaseIds: string[] = [];
+  for (const leg of legs) {
+    const items = await resolveBoothLegItems(cart.id, cart.boothsRepresented, leg.vendorBoothId);
+    for (const item of items) {
+      try {
+        const purchase = await prisma.purchase.create({
+          data: {
+            userId: null, // walk-in POS: no server-derived shopper identity exists (P0 fix, 2026-07-28)
+            itemId: item.id,
+            amount: item.price || 0,
+            stripePaymentIntentId: leg.stripePaymentIntentId,
+            source: 'POS',
+            status: 'PAID',
+            boothCartTransactionId: cart.id,
+          },
+        });
+        purchaseIds.push(purchase.id);
+
+        // ADR-085 Track B Phase 1 Step 4: atomic, race-safe stock decrement replaces the
+        // old unconditional status update. Downstream cross-channel-removal hooks only
+        // fire once the item is actually fully sold out (stockSold reached stockTotal) --
+        // previously they fired unconditionally on every sale regardless of remaining stock.
+        let fullySoldOut: boolean;
+        let remainingStock: number;
+        try {
+          ({ fullySoldOut, remainingStock } = await sellItemUnits(item.id, 1));
+        } catch (stockErr: any) {
+          if (stockErr instanceof InsufficientStockError) {
+            console.error(`[finalizeCapturedLegs] Oversold race on item ${item.id} despite captured payment:`, stockErr.message);
+          }
+          throw stockErr;
+        }
+
+        if (fullySoldOut) {
+          endEbayListingIfExists(item.id).catch((err) => console.error('[eBay] Failed to withdraw offer:', err));
+          markShopifyItemSold(item.id).catch((err) => console.error('[Shopify] Failed to mark item sold:', err));
+          notifyFacebookExportedItemSold(item.id).catch((err) =>
+            console.warn(`[FB Nudge] failed for item ${item.id}:`, err.message)
+          );
+        } else {
+          // ADR-087 Phase 4: partial sale — revise eBay listing quantity if linked.
+          syncMarketplaceStock(item.id, { fullySoldOut: false, remainingStock }).catch((err) =>
+            console.error('[eBay ReviseQty] sync failed for item', item.id, err)
+          );
+        }
+        generateReceipt(purchase.id).catch((err) => console.error('[receipt] Failed to generate receipt:', err));
+      } catch (err: any) {
+        console.error(`[finalizeCapturedLegs] Failed to finalize item ${item.id}:`, err);
+      }
+    }
+  }
+
+  await prisma.boothCartTransaction.update({ where: { id: cart.id }, data: { status: 'COMPLETED' } });
+
+  sendBoothCartReceiptEmail(cart.id).catch((err) =>
+    console.error('[finalizeCapturedLegs] Failed to send itemized cart receipt email:', err)
+  );
+
+  // Tell each vendor their own goods sold. The line above emails the SHOPPER a receipt;
+  // until this existed, the vendor whose items just sold was told nothing on any channel.
+  // Per LEG, not per cart and not per item: a leg is exactly one vendor's slice of this
+  // cart. Fire-and-forget, same as the receipt email above: a captured/completed sale is
+  // final at this point (real money for Stripe legs, cash already in the till for CASH
+  // legs) and a notification must never delay, fail or roll back it. notifyVendorOfBoothSale
+  // never throws and takes a compare-and-swap claim on BoothCartLeg.vendorSaleNotifiedAt
+  // before sending, so a retried finalize call cannot email the same vendor twice.
+  for (const leg of legs) {
+    notifyVendorOfBoothSale(leg.id).catch((err) =>
+      console.error(`[finalizeCapturedLegs] Vendor sale notification failed for leg ${leg.id} (non-fatal):`, err)
+    );
+  }
+
+  return purchaseIds;
+}
+
+/**
  * POST /api/organizer/hubs/:hubId/cart/:cartTransactionId/capture
  * ADR-020 step 5 (shared by BOTH rails): once every leg in the cart has
  * successfully authorized, capture all of them — a loop of per-PaymentIntent
@@ -1259,98 +1381,26 @@ export const captureBoothCart = async (req: BoothAuthRequest, res: Response) => 
       });
     }
 
-    // Finalize: create Purchase rows (real per-booth PaymentIntent id, no composite
-    // placeholder), mark items SOLD, fire the same downstream hooks the old
-    // confirmBoothCart ran.
-    const purchaseIds: string[] = [];
-    for (const leg of captured) {
-      const items = await resolveBoothLegItems(cart.id, cart.boothsRepresented, leg.vendorBoothId);
-      for (const item of items) {
-        try {
-          const purchase = await prisma.purchase.create({
-            data: {
-              userId: null, // walk-in POS: no server-derived shopper identity exists (P0 fix, 2026-07-28)
-              itemId: item.id,
-              amount: item.price || 0,
-              stripePaymentIntentId: leg.stripePaymentIntentId,
-              source: 'POS',
-              status: 'PAID',
-              boothCartTransactionId: cart.id,
-            },
-          });
-          purchaseIds.push(purchase.id);
-
-          // ADR-085 Track B Phase 1 Step 4: atomic, race-safe stock decrement replaces the
-          // old unconditional status update. Downstream cross-channel-removal hooks only
-          // fire once the item is actually fully sold out (stockSold reached stockTotal) --
-          // previously they fired unconditionally on every sale regardless of remaining stock.
-          let fullySoldOut: boolean;
-          let remainingStock: number;
-          try {
-            ({ fullySoldOut, remainingStock } = await sellItemUnits(item.id, 1));
-          } catch (stockErr: any) {
-            if (stockErr instanceof InsufficientStockError) {
-              console.error(`[captureBoothCart] Oversold race on item ${item.id} despite captured payment:`, stockErr.message);
-            }
-            throw stockErr;
-          }
-
-          if (fullySoldOut) {
-            endEbayListingIfExists(item.id).catch((err) => console.error('[eBay] Failed to withdraw offer:', err));
-            markShopifyItemSold(item.id).catch((err) => console.error('[Shopify] Failed to mark item sold:', err));
-            notifyFacebookExportedItemSold(item.id).catch((err) =>
-              console.warn(`[FB Nudge] failed for item ${item.id}:`, err.message)
-            );
-          } else {
-            // ADR-087 Phase 4: partial sale — revise eBay listing quantity if linked.
-            syncMarketplaceStock(item.id, { fullySoldOut: false, remainingStock }).catch((err) =>
-              console.error('[eBay ReviseQty] sync failed for item', item.id, err)
-            );
-          }
-          generateReceipt(purchase.id).catch((err) => console.error('[receipt] Failed to generate receipt:', err));
-        } catch (err: any) {
-          console.error(`[captureBoothCart] Failed to finalize item ${item.id}:`, err);
-        }
-      }
-    }
+    // Finalize (2026-07-31: extracted to finalizeCapturedLegs, shared with the cash
+    // capture endpoint below) -- creates Purchase rows (real per-booth PaymentIntent id,
+    // no composite placeholder), marks items SOLD, fires the same downstream hooks the
+    // old confirmBoothCart ran, marks the cart COMPLETED, and sends the itemized shopper
+    // receipt + per-vendor sale notifications.
+    const purchaseIds = await finalizeCapturedLegs(cart, captured);
+    lockedCartId = null; // terminal state reached -- no lock left to release
 
     // ADR-090 Phase 2: fire the hub-owner Transfer for each captured leg carrying a
     // revenue-share slice. Runs once per LEG (not per item/Purchase row) -- the
     // application_fee_amount and its resulting hub-owner cut were computed once per
-    // leg at authorize time. Best-effort/non-blocking like the receipt email below:
-    // a Transfer failure here must never roll back an already-captured payment: the
-    // shopper was already charged and items already marked SOLD. Failures are logged
-    // for manual reconciliation -- no automated retry endpoint exists yet.
+    // leg at authorize time. Best-effort/non-blocking: a Transfer failure here must
+    // never roll back an already-captured payment: the shopper was already charged and
+    // items already marked SOLD. Failures are logged for manual reconciliation -- no
+    // automated retry endpoint exists yet. NEVER called from captureBoothCartCash --
+    // see finalizeCapturedLegs' own comment for why a CASH leg must never reach this.
     for (const leg of captured) {
       if (!leg.hubOwnerShareAmount || Number(leg.hubOwnerShareAmount) <= 0) continue;
       await transferHubOwnerShareForLeg(leg.id).catch((err) =>
         console.error(`[captureBoothCart] Hub-owner Transfer failed for leg ${leg.id} — flagged for manual reconciliation:`, err)
-      );
-    }
-
-    await prisma.boothCartTransaction.update({ where: { id: cart.id }, data: { status: 'COMPLETED' } });
-    lockedCartId = null; // terminal state reached -- no lock left to release
-
-    sendBoothCartReceiptEmail(cart.id).catch((err) =>
-      console.error('[captureBoothCart] Failed to send itemized cart receipt email:', err)
-    );
-
-    // Tell each vendor their own goods sold. The line above emails the SHOPPER a receipt;
-    // until this, the vendor whose items just sold was told nothing on any channel -- no
-    // email, no in-app notification -- which left a vendor standing at a market with no way
-    // to know an item sold, for how much, or what reached them when somebody else was
-    // working the register.
-    //
-    // Per LEG, not per cart and not per item: a leg is exactly one vendor's slice of this
-    // cart, so a multi-vendor cart sends each vendor one email about their own goods only.
-    // Placed AFTER the COMPLETED write and fired the same fire-and-forget way as the receipt
-    // email and the hub-owner Transfer above: a captured payment is real money and a
-    // notification must never delay, fail or roll back a capture. notifyVendorOfBoothSale
-    // never throws and takes a compare-and-swap claim on BoothCartLeg.vendorSaleNotifiedAt
-    // before sending, so a retried /capture cannot email the same vendor twice.
-    for (const leg of captured) {
-      notifyVendorOfBoothSale(leg.id).catch((err) =>
-        console.error(`[captureBoothCart] Vendor sale notification failed for leg ${leg.id} (non-fatal):`, err)
       );
     }
 
@@ -1359,6 +1409,181 @@ export const captureBoothCart = async (req: BoothAuthRequest, res: Response) => 
     console.error('[captureBoothCart] Error:', error);
     await releaseCaptureLock();
     return res.status(500).json({ error: 'Failed to capture cart payment' });
+  }
+};
+
+/**
+ * POST /api/organizer/hubs/:hubId/cart/:cartTransactionId/cash/capture
+ * Body: { cashReceivedCents: number }
+ * Cash rail for venue/multi-vendor carts (2026-07-31, Patrick-approved). Unlike the
+ * TERMINAL/QR rails there is no PaymentIntent, no authorize step, and nothing to poll
+ * or tap -- the cashier already has the cash in hand when this is called, so every leg
+ * goes straight to CAPTURED. No Stripe call is made anywhere in this function.
+ *
+ * Runs the SAME checkout guard + cart lock (beginCartCheckout) the TERMINAL/QR rails'
+ * first authorize call runs, and the SAME race-safe IN_PROGRESS -> CAPTURING capture
+ * lock captureBoothCart uses, reused here rather than re-implemented, since this is the
+ * cart's only capture attempt (no separate authorize step precedes it).
+ *
+ * Deliberately does NOT require booth.stripeAccountType === 'standard' && booth.stripeOnboarded
+ * the way the TERMINAL/QR rails do before charging a booth's own connected account --
+ * a cash sale never touches any booth's Stripe account, so a vendor who never onboarded
+ * to Stripe can still ring up a cash sale at this register. Fee math still runs (via
+ * computeLegFeeSplit's skipReadinessGate) purely for REPORTING -- the vendor notification
+ * quotes what the platform fee and hub-owner revenue share WOULD be, since the organizer
+ * and vendor still owe each other that money, just settled outside Stripe.
+ *
+ * MUST NEVER call transferHubOwnerShareForLeg -- see finalizeCapturedLegs' own comment.
+ * A cash leg's amount never lands in the platform's Stripe balance, so there is nothing
+ * for that function to Transfer out of; calling it here would pay the hub owner real
+ * platform funds for a sale that collected none.
+ */
+export const captureBoothCartCash = async (req: BoothAuthRequest, res: Response) => {
+  let lockedCartId: string | null = null;
+  const releaseCaptureLock = async () => {
+    if (!lockedCartId) return;
+    await prisma.boothCartTransaction
+      .updateMany({ where: { id: lockedCartId, status: 'CAPTURING' }, data: { status: 'IN_PROGRESS' } })
+      .catch((err) => console.error('[captureBoothCartCash] Failed to release capture lock (non-fatal):', err));
+  };
+  try {
+    const { hubId, cartTransactionId } = req.params;
+    const { cashReceivedCents } = req.body as { cashReceivedCents?: number };
+    if (!req.boothAuth) return res.status(401).json({ error: 'Booth/team authentication required' });
+    if (typeof cashReceivedCents !== 'number' || !Number.isFinite(cashReceivedCents) || cashReceivedCents < 0) {
+      return res.status(400).json({ error: 'cashReceivedCents is required and must be a non-negative number' });
+    }
+
+    const cart = await prisma.boothCartTransaction.findFirst({ where: { id: cartTransactionId, hubId } });
+    if (!cart) return res.status(404).json({ error: 'Cart not found' });
+    if (!callerOwnsCart(req.boothAuth, cart)) return res.status(403).json({ error: CART_NOT_YOURS_ERROR });
+    if (cart.status === 'COMPLETED') {
+      return res.status(200).json({ success: true, message: 'Cart already completed' });
+    }
+
+    // Standard cart-checkout guard/lock reuse (same as the TERMINAL/QR rails' first
+    // authorize call) -- runs assertBoothCartCheckoutAllowed exactly once for this cart
+    // and atomically flips PENDING -> IN_PROGRESS. No-op if a prior (abandoned) authorize
+    // attempt on this same cart already ran it.
+    try {
+      await beginCartCheckout({
+        cart,
+        hubId,
+        cashierTeamMemberId: req.boothAuth.type === 'TEAM_MEMBER' ? req.boothAuth.teamMemberId : null,
+        cashierBoothId: req.boothAuth.type === 'BOOTH' ? req.boothAuth.vendorBoothId : null,
+        context: 'boothCartCashCapture',
+      });
+    } catch (guardError: any) {
+      if (guardError instanceof CheckoutGuardError) {
+        return res.status(403).json({ error: guardError.message });
+      }
+      if (typeof guardError?.message === 'string' && guardError.message.startsWith('CART_NOT_CHARGEABLE:')) {
+        return res.status(409).json({ error: `Cart cannot be charged (status: ${guardError.message.split(':')[1]})` });
+      }
+      throw guardError;
+    }
+
+    // Race-safe capture lock -- same conditional-updateMany idiom captureBoothCart uses,
+    // reused here since a cash cart has no separate authorize step before this call: this
+    // IS both the authorize and the capture, all in one request.
+    const captureLock = await prisma.boothCartTransaction.updateMany({
+      where: { id: cart.id, status: 'IN_PROGRESS' },
+      data: { status: 'CAPTURING' },
+    });
+    if (captureLock.count !== 1) {
+      return res.status(409).json({ error: 'This cart is already being captured by another request' });
+    }
+    lockedCartId = cart.id;
+
+    const booths = await prisma.vendorBooth.findMany({
+      where: { id: { in: cart.boothsRepresented } },
+      include: { hub: { select: { organizer: { select: { subscriptionTier: true, stripeConnectId: true, stripeOnboarded: true, stripeAccountType: true } } } } },
+    });
+
+    // Resolve every represented booth's items + amount BEFORE validating the cash
+    // received, so the cashier is told the real total, not a stale cart.totalAmount.
+    const boothAmounts: Array<{ booth: (typeof booths)[number]; amountCents: number }> = [];
+    let totalCents = 0;
+    for (const booth of booths) {
+      const items = await resolveBoothLegItems(cart.id, cart.boothsRepresented, booth.id);
+      const amountCents = Math.round(items.reduce((sum, i) => sum + (i.price || 0), 0) * 100);
+      if (amountCents <= 0) continue; // nothing to charge this booth -- no leg needed
+      boothAmounts.push({ booth, amountCents });
+      totalCents += amountCents;
+    }
+
+    if (boothAmounts.length === 0) {
+      await releaseCaptureLock();
+      return res.status(400).json({ error: 'The venue cart is empty.' });
+    }
+
+    if (cashReceivedCents < totalCents) {
+      await releaseCaptureLock();
+      return res.status(400).json({
+        error: `Cash received ($${(cashReceivedCents / 100).toFixed(2)}) is less than the total due ($${(totalCents / 100).toFixed(2)}).`,
+        totalCents,
+      });
+    }
+    const changeCents = cashReceivedCents - totalCents;
+
+    const legs: Array<{ id: string; vendorBoothId: string; stripePaymentIntentId: string; hubOwnerShareAmount: any }> = [];
+    for (const { booth, amountCents } of boothAmounts) {
+      // Cash-only variant: computes platformFeeCents/hubOwnerShareCents for reporting
+      // WITHOUT blocking on the hub owner's Stripe onboarding readiness -- see
+      // computeLegFeeSplit's skipReadinessGate comment. blocked can never be true here.
+      const feeSplit = await computeLegFeeSplit({
+        amountCents,
+        revenueSharePercent: booth.revenueSharePercent,
+        hubOwnerOrganizer: booth.hub.organizer,
+        skipReadinessGate: true,
+      });
+      if (feeSplit.blocked) {
+        // Unreachable with skipReadinessGate: true, but never silently drop a booth's
+        // leg if this ever changes -- fail loudly instead of charging cash for goods
+        // that then have no leg/Purchase row recording the sale.
+        await releaseCaptureLock();
+        return res.status(500).json({ error: `Unexpected fee-split failure for booth "${booth.vendorName}"` });
+      }
+
+      const leg = await prisma.boothCartLeg.create({
+        data: {
+          cartTransactionId: cart.id,
+          vendorBoothId: booth.id,
+          stripeAccountId: booth.stripeAccountId ?? '',
+          // Mirrors terminalController.ts's existing cash-sale placeholder pattern
+          // (stripePaymentIntentId is @unique and non-null) -- no real Stripe object
+          // backs a cash leg.
+          stripePaymentIntentId: `cash_${randomUUID()}`,
+          amountCents,
+          rail: 'CASH',
+          status: 'CAPTURED',
+          hubOwnerShareAmount: feeSplit.hubOwnerShareCents > 0 ? new Decimal(feeSplit.hubOwnerShareCents / 100) : null,
+          platformFeeCents: feeSplit.applicationFeeAmountCents - feeSplit.hubOwnerShareCents,
+        },
+      });
+      legs.push(leg);
+    }
+
+    // Finalize exactly like captureBoothCart does (Purchase rows, stock decrement,
+    // cross-channel hooks, receipt, mark cart COMPLETED, notify each vendor) --
+    // deliberately WITHOUT the hub-owner Transfer loop captureBoothCart runs right
+    // after this same call. See this function's own doc-comment and
+    // finalizeCapturedLegs' doc-comment for why that call must never appear here.
+    const purchaseIds = await finalizeCapturedLegs(cart, legs);
+    lockedCartId = null; // terminal state reached -- no lock left to release
+
+    return res.status(200).json({
+      success: true,
+      itemsSold: purchaseIds.length,
+      purchaseIds,
+      totalCents,
+      cashReceivedCents,
+      changeCents,
+    });
+  } catch (error) {
+    console.error('[captureBoothCartCash] Error:', error);
+    await releaseCaptureLock();
+    return res.status(500).json({ error: 'Failed to record cash sale' });
   }
 };
 
@@ -1440,47 +1665,90 @@ export const cancelBoothCart = async (req: BoothAuthRequest, res: Response) => {
  */
 
 /**
- * GET /api/organizer/hubs/:hubId/cart/booths/:vendorBoothId/items?q=
- * QR-fail fallback (Patrick, 2026-07-24): if a physical QR scan doesn't work, the
- * cashier needs to be able to find a vendor's sellable items by typing/searching
- * instead. Reuses the exact same ownership-resolution rule addBoothCartItems uses
- * (CONFIRMED VendorBooth at this hub, owner resolved via Item.organizerId) so the
- * result set is guaranteed to match what would actually be accepted into the cart
- * -- no separate/looser filter that could show items that would then get rejected.
+ * GET /api/organizer/hubs/:hubId/cart/items?q=<string>&vendorBoothId=<optional>
+ * Hub-wide item search (2026-07-31). Replaces searchVendorBoothItems (confirmed unused
+ * anywhere else in the codebase, deleted rather than deprecated) -- that endpoint was
+ * booth-scoped, but venue mode's cashier UI (pos.tsx, ?venue=<hubId>) has no single
+ * selectedSaleId to search against (no one sale spans a multi-vendor hub), so "Search
+ * by title or SKU" there silently never worked. This searches every CONFIRMED, claimed
+ * booth's sellable items at once by title OR sku, optionally narrowed to one booth via
+ * vendorBoothId (keeps serving the old QR-fail single-booth-fallback case too). Reuses
+ * the exact same ownership-resolution pattern addBoothCartItems uses (CONFIRMED
+ * VendorBooth at this hub, owner resolved via Item.organizerId) so the result set is
+ * guaranteed to match what would actually be accepted into the cart.
  */
-export const searchVendorBoothItems = async (req: BoothAuthRequest, res: Response) => {
+export const searchHubCartItems = async (req: BoothAuthRequest, res: Response) => {
   try {
-    const { hubId, vendorBoothId } = req.params;
-    const { q } = req.query as { q?: string };
+    const { hubId } = req.params;
+    const { q, vendorBoothId } = req.query as { q?: string; vendorBoothId?: string };
     if (!req.boothAuth) return res.status(401).json({ error: 'Booth/team authentication required' });
 
-    // Same generic 404 whether the booth doesn't exist, belongs to a different
-    // hub, or isn't CONFIRMED yet -- no distinct signal leaked, mirrors the
-    // add-items rejection behavior above.
-    const booth = await prisma.vendorBooth.findFirst({
-      where: { id: vendorBoothId, hubId, status: 'CONFIRMED' },
-      select: { id: true, userId: true, vendorName: true },
+    const confirmedBooths = await prisma.vendorBooth.findMany({
+      where: {
+        hubId,
+        status: 'CONFIRMED',
+        userId: { not: null },
+        ...(vendorBoothId ? { id: vendorBoothId } : {}),
+      },
+      select: { id: true, userId: true, vendorName: true, boothNumber: true },
     });
-    if (!booth || !booth.userId) return res.status(404).json({ error: 'Booth not found' });
+    // Same generic 404 whether the requested booth doesn't exist, belongs to a
+    // different hub, isn't CONFIRMED, or is unclaimed -- no distinct signal leaked,
+    // mirrors the old searchVendorBoothItems rejection behavior.
+    if (vendorBoothId && confirmedBooths.length === 0) {
+      return res.status(404).json({ error: 'Booth not found' });
+    }
 
-    const organizer = await prisma.organizer.findUnique({ where: { userId: booth.userId }, select: { id: true } });
-    if (!organizer) return res.status(404).json({ error: 'Booth not found' });
+    // Resolve every booth's claiming User -> Organizer (mirrors addBoothCartItems'
+    // owner-resolution pattern) so items can be mapped back to the right booth below.
+    const userIds = Array.from(new Set(confirmedBooths.map((b) => b.userId as string)));
+    const organizers = userIds.length
+      ? await prisma.organizer.findMany({ where: { userId: { in: userIds } }, select: { id: true, userId: true } })
+      : [];
+    const userIdToOrganizerId = new Map(organizers.map((o) => [o.userId, o.id]));
+    const organizerIdToBooth = new Map<string, (typeof confirmedBooths)[number]>();
+    for (const booth of confirmedBooths) {
+      const organizerId = booth.userId ? userIdToOrganizerId.get(booth.userId) : undefined;
+      if (organizerId) organizerIdToBooth.set(organizerId, booth);
+    }
+    const organizerIds = Array.from(organizerIdToBooth.keys());
+
+    if (organizerIds.length === 0) {
+      return res.status(200).json({ items: [] });
+    }
 
     const items = await prisma.item.findMany({
       where: {
-        organizerId: organizer.id,
+        organizerId: { in: organizerIds },
         status: 'AVAILABLE',
-        ...(q ? { title: { contains: q, mode: 'insensitive' as const } } : {}),
+        OR: [
+          { title: { contains: q ?? '', mode: 'insensitive' as const } },
+          { sku: { contains: q ?? '', mode: 'insensitive' as const } },
+        ],
       },
-      select: { id: true, title: true, price: true, photoUrls: true },
+      select: { id: true, title: true, sku: true, price: true, photoUrls: true, organizerId: true },
       orderBy: { title: 'asc' },
       take: 50,
     });
 
-    return res.status(200).json({ vendorBoothId: booth.id, vendorName: booth.vendorName, items });
+    return res.status(200).json({
+      items: items.map((item) => {
+        const booth = item.organizerId ? organizerIdToBooth.get(item.organizerId) : undefined;
+        return {
+          id: item.id,
+          title: item.title,
+          sku: item.sku,
+          price: item.price,
+          photoUrls: item.photoUrls,
+          vendorBoothId: booth?.id ?? null,
+          vendorName: booth?.vendorName ?? null,
+          boothNumber: booth?.boothNumber ?? null,
+        };
+      }),
+    });
   } catch (error) {
-    console.error('[searchVendorBoothItems] Error:', error);
-    return res.status(500).json({ error: 'Failed to search booth items' });
+    console.error('[searchHubCartItems] Error:', error);
+    return res.status(500).json({ error: 'Failed to search hub items' });
   }
 };
 

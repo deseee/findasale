@@ -110,6 +110,11 @@ export const sendBoothCartReceiptEmail = async (cartTransactionId: string): Prom
             },
           },
         },
+        // 2026-07-31: needed to tell whether any booth in this cart was rung up for
+        // cash -- a cash leg produces no separate card-statement line, so the
+        // "N separate lines" promise below is only true when every leg is a real
+        // Stripe charge (TERMINAL/QR).
+        legs: { select: { rail: true } },
       },
     });
 
@@ -156,10 +161,24 @@ export const sendBoothCartReceiptEmail = async (cartTransactionId: string): Prom
     const { buildEmail } = await import('./emailTemplateService');
     const { transactionalEmailService } = await import('../lib/transactionalEmailService');
 
+    // 2026-07-31: a CASH leg never produces a Stripe charge at all, so it never shows
+    // up as a line on any card statement -- the "N separate lines" sentence is only
+    // honest when every leg in this cart is a real Stripe charge (TERMINAL/QR). A
+    // cart can be entirely cash (no statement-line claim makes sense at all), a mix
+    // of cash and card (the count would be wrong if it included the cash booths), or
+    // entirely card (the original sentence, unchanged).
+    const anyCashLeg = cart.legs.some((l) => l.rail === 'CASH');
+    const allCashLegs = cart.legs.length > 0 && cart.legs.every((l) => l.rail === 'CASH');
+    const multiVendorIntro = allCashLegs
+      ? `Your cart included items from ${byBooth.size} vendor booth${byBooth.size === 1 ? '' : 's'}, paid for in cash — the breakdown below shows what you paid each booth.`
+      : anyCashLeg
+        ? `Your cart included items from ${byBooth.size} vendor booth${byBooth.size === 1 ? '' : 's'} — some booths were charged to your card and some were paid in cash, so your card statement will show fewer than ${byBooth.size} lines. The breakdown below shows what you paid each booth.`
+        : `Your cart included items from ${byBooth.size} vendor booth${byBooth.size === 1 ? '' : 's'} — each is billed separately, so your card statement will show ${byBooth.size} separate line${byBooth.size === 1 ? '' : 's'} matching the breakdown below.`;
+
     const html = buildEmail({
       preheader: 'Your itemized receipt from FindA.Sale',
       headline: 'Your receipt from FindA.Sale',
-      body: `<p>Thank you for your purchase${cart.hub?.name ? ` at ${cart.hub.name}` : ''}! Your cart included items from ${byBooth.size} vendor booth${byBooth.size === 1 ? '' : 's'} — each is billed separately, so your card statement will show ${byBooth.size} separate line${byBooth.size === 1 ? '' : 's'} matching the breakdown below.</p>${boothSectionsHtml}<p><strong>Total: $${grandTotal.toFixed(2)}</strong></p>`,
+      body: `<p>Thank you for your purchase${cart.hub?.name ? ` at ${cart.hub.name}` : ''}! ${multiVendorIntro}</p>${boothSectionsHtml}<p><strong>Total: $${grandTotal.toFixed(2)}</strong></p>`,
       ctaText: 'View your purchases',
       ctaUrl: `${process.env.FRONTEND_URL || 'https://finda.sale'}/shopper/purchases`,
     });
