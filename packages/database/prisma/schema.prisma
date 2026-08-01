@@ -5710,6 +5710,7 @@ model BoothCartTransaction {
   boothsRepresented     String[] // denormalized list of VendorBooth IDs in this cart, for fast audit queries + wash-trade guard resolution
   status                String   @default("PENDING") // PENDING|COMPLETED|REFUNDED|FAILED
   createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
 
   purchases Purchase[]
   legs      BoothCartLeg[]

@@ -372,10 +372,10 @@ export default function POSPage() {
         const all: Sale[] = r.data.sales ?? [];
         const active = all.filter((s, i, arr) => arr.findIndex(x => x.id === s.id) === i); // dedup by id
         setSales(active);
-        if (active.length === 1) setSelectedSaleId(active[0].id);
+        if (active.length === 1 && !venueHubId) setSelectedSaleId(active[0].id);
       })
       .catch(err => console.error('[pos] Failed to load POS context:', err));
-  }, [user]);
+  }, [user, venueHubId]);
 
   // Pending Payments polling
   const { data: activePendingPayments = [] } = useQuery<PendingPayment[]>({
@@ -489,10 +489,10 @@ export default function POSPage() {
   // ─── Pre-select sale from query param ────────────────────────────────────────────
 
   useEffect(() => {
-    if (router.isReady && router.query.saleId) {
+    if (router.isReady && router.query.saleId && !venueHubId) {
       setSelectedSaleId(router.query.saleId as string);
     }
-  }, [router.isReady, router.query.saleId]);
+  }, [router.isReady, router.query.saleId, venueHubId]);
 
   // ─── Venue mode: parse ?venue=<hubId> + auto-start booth cart (S1178) ─────────────────
   const venueAutoStartedRef = useRef<string | null>(null);
@@ -520,7 +520,28 @@ export default function POSPage() {
       { cashierType: 'TEAM_MEMBER' },
       venueBoothToken ? { headers: { 'X-Booth-Token': venueBoothToken } } : undefined
     )
-      .then(res => setVenueCart(res.data))
+      .then(res => {
+        setVenueCart(res.data);
+        // Refresh-during-sale fix (2026-08-01): startBoothCart now find-or-reuses an
+        // existing PENDING cart for this cashier identity instead of always creating a
+        // new one, so a page refresh mid-sale can hand back a cart that already has
+        // RESERVED items on the server. Hydrate the local `cart` UI state from the
+        // server's itemized contents so those items reappear instead of looking empty.
+        return api.get(
+          `/organizer/hubs/${venueHubId}/cart/${res.data.id}`,
+          venueBoothToken ? { headers: { 'X-Booth-Token': venueBoothToken } } : undefined
+        );
+      })
+      .then(res => {
+        if (!res) return;
+        setCart(res.data.items.map((i: any) => ({
+          id: `${Date.now()}_${Math.random().toString(36).substring(7)}`,
+          itemId: i.itemId,
+          title: i.title,
+          amount: i.price ?? 0,
+          photoUrl: i.photoUrl,
+        })));
+      })
       .catch(err => {
         console.error('[pos] Failed to start venue cart:', err);
         // REGISTER_ACCESS_NOT_GRANTED (requireBoothAuth.ts) surfaces here with its own
@@ -2241,7 +2262,7 @@ export default function POSPage() {
                     .catch(() => setErrorMessage('Item not found.'));
                 }
               }}
-              placeholder="Scan or type item ID…"
+              placeholder="Scan barcode, or type the exact item ID (not a search)…"
               className="flex-1 border border-warm-300 dark:border-gray-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-warm-900 dark:text-warm-100 focus:outline-none focus:ring-2 focus:ring-sage-500"
             />
             <button
@@ -2297,7 +2318,7 @@ export default function POSPage() {
       )}
 
       {/* Item search + results */}
-      {selectedSaleId && (
+      {!venueHubId && selectedSaleId && (
         <div className="mb-4">
           <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-1">Add items</label>
           <div className="flex gap-2">
@@ -2344,7 +2365,7 @@ export default function POSPage() {
       )}
 
       {/* Quick-add misc buttons */}
-      {selectedSaleId && (
+      {!venueHubId && selectedSaleId && (
         <div className="mb-4">
           <p className="text-xs font-medium text-warm-600 dark:text-warm-400 mb-2">Quick add misc items:</p>
           <div className="grid grid-cols-3 gap-2">
@@ -2362,7 +2383,7 @@ export default function POSPage() {
       )}
 
       {/* Custom amount button */}
-      {selectedSaleId && (
+      {!venueHubId && selectedSaleId && (
         <button
           onClick={() => {
             setNumpadOpen(prev => !prev);
@@ -2418,7 +2439,7 @@ export default function POSPage() {
       )}
 
       {/* Open Carts Dashboard */}
-      {selectedSaleId && (
+      {!venueHubId && selectedSaleId && (
         <PosOpenCarts linkedCarts={linkedCarts} onPullCart={handleAddLinkedCart} onRemoveCart={handleRemoveCart} />
       )}
 

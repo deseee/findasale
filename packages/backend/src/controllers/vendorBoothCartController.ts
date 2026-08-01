@@ -14,6 +14,7 @@ import { generateReceipt, sendBoothCartReceiptEmail } from '../services/receiptS
 import { getPlatformFeeRate } from '../utils/feeCalculator'; // ADR-090 Phase 2: platform's normal cut formula
 import { notifyVendorOfBoothSale } from '../services/vendorBoothSaleNotificationService'; // per-vendor "your item sold" notification
 import { getOrCreateHouseBooth } from '../services/houseBoothService'; // Fix 2 (2026-08-01): hub owner's own items sell through a synthetic booth
+import { releasePendingCartHold } from '../services/vendorBoothCartLifecycleService'; // extracted cart-release-and-fail core, shared with the abandonment sweep job
 import { Decimal } from '@prisma/client/runtime/library';
 
 const stripe = () => getStripe();
@@ -337,6 +338,23 @@ export const startBoothCart = async (req: BoothAuthRequest, res: Response) => {
 
     const hub = await prisma.saleHub.findUnique({ where: { id: hubId }, select: { id: true } });
     if (!hub) return res.status(404).json({ error: 'Hub not found' });
+
+    // Refresh-during-sale fix (2026-08-01, live bug): a page refresh mid-sale used to
+    // always create a brand-new PENDING cart, orphaning the previous one -- its RESERVED
+    // items never got released (no cashier session left to /cancel it), so they vanished
+    // from the visible cart AND from search (which only shows AVAILABLE items) forever.
+    // Find-or-reuse this identity's existing PENDING cart on this hub before creating a
+    // new one. 200 (not 201) signals "reused" to callers that care to distinguish.
+    const identityWhere =
+      req.boothAuth.type === 'TEAM_MEMBER' ? { cashierTeamMemberId: req.boothAuth.teamMemberId, cashierBoothId: null } :
+      req.boothAuth.type === 'BOOTH' ? { cashierBoothId: req.boothAuth.vendorBoothId, cashierTeamMemberId: null } :
+      { cashierTeamMemberId: null, cashierBoothId: null }; // HUB_OWNER
+
+    const existing = await prisma.boothCartTransaction.findFirst({
+      where: { hubId, status: 'PENDING', ...identityWhere },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (existing) return res.status(200).json(existing);
 
     const cart = await prisma.boothCartTransaction.create({
       data: {
@@ -663,6 +681,47 @@ export const getBoothCartSummary = async (req: BoothAuthRequest, res: Response) 
   } catch (error) {
     console.error('[getBoothCartSummary] Error:', error);
     return res.status(500).json({ error: 'Failed to load cart summary' });
+  }
+};
+
+/**
+ * GET /api/organizer/hubs/:hubId/cart/:cartTransactionId
+ * Itemized cart contents (2026-08-01, refresh-during-sale fix companion) -- lets the
+ * frontend hydrate its local `cart` UI state from the server's source of truth
+ * (Item rows RESERVED against this cart) on every mount, instead of trusting an
+ * in-memory array that a page refresh wipes. Paired with startBoothCart's new
+ * find-or-reuse behavior: after a refresh, the reused PENDING cart's items are
+ * fetched here and repopulated into the visible cart.
+ */
+export const getBoothCartContents = async (req: BoothAuthRequest, res: Response) => {
+  try {
+    const { hubId, cartTransactionId } = req.params;
+    if (!req.boothAuth) return res.status(401).json({ error: 'Booth/team authentication required' });
+    const cart = await prisma.boothCartTransaction.findFirst({ where: { id: cartTransactionId, hubId } });
+    if (!cart) return res.status(404).json({ error: 'Cart not found' });
+    if (!callerOwnsCart(req.boothAuth, cart)) return res.status(403).json({ error: CART_NOT_YOURS_ERROR });
+
+    const items = await prisma.item.findMany({
+      where: { status: 'RESERVED', boothCartTransactionId: cart.id },
+      select: { id: true, title: true, price: true, vendorBoothId: true, photoUrls: true },
+    });
+    const booths = cart.boothsRepresented.length
+      ? await prisma.vendorBooth.findMany({ where: { id: { in: cart.boothsRepresented } }, select: { id: true, vendorName: true, boothNumber: true } })
+      : [];
+    const boothById = new Map(booths.map((b) => [b.id, b]));
+
+    return res.status(200).json({
+      cart: { id: cart.id, hubId: cart.hubId, status: cart.status, totalAmount: cart.totalAmount.toString() },
+      items: items.map((i) => ({
+        itemId: i.id, title: i.title, price: i.price, photoUrl: i.photoUrls?.[0] ?? null,
+        vendorBoothId: i.vendorBoothId,
+        vendorName: i.vendorBoothId ? boothById.get(i.vendorBoothId)?.vendorName ?? null : null,
+        boothNumber: i.vendorBoothId ? boothById.get(i.vendorBoothId)?.boothNumber ?? null : null,
+      })),
+    });
+  } catch (error) {
+    console.error('[getBoothCartContents] Error:', error);
+    return res.status(500).json({ error: 'Failed to load cart contents' });
   }
 };
 
@@ -1653,38 +1712,11 @@ export const cancelBoothCart = async (req: BoothAuthRequest, res: Response) => {
       return res.status(409).json({ error: 'Cart is currently being captured — cannot cancel right now, try again shortly' });
     }
 
-    const legs = await prisma.boothCartLeg.findMany({
-      where: { cartTransactionId: cart.id, status: { in: ['PENDING', 'REQUIRES_CAPTURE'] } },
-    });
-
-    const cancelledLegIds: string[] = [];
-    for (const leg of legs) {
-      try {
-        if (isTerminalSimulated() && leg.rail === 'TERMINAL') {
-          await stripe().paymentIntents.cancel(leg.stripePaymentIntentId);
-        } else {
-          await stripe().paymentIntents.cancel(leg.stripePaymentIntentId, {}, { stripeAccount: leg.stripeAccountId });
-        }
-        await prisma.boothCartLeg.update({ where: { id: leg.id }, data: { status: 'CANCELED' } });
-        cancelledLegIds.push(leg.id);
-      } catch (err) {
-        // Already-captured or already-expired legs will fail to cancel — log and
-        // continue; this endpoint's job is best-effort cleanup, not a hard guarantee.
-        console.error(`[cancelBoothCart] Failed to cancel leg ${leg.id}:`, err);
-      }
-    }
-
-    // Release THIS cart's reserved items back to AVAILABLE and drop the cart link.
-    // P0 fix (2026-07-28): this previously matched every RESERVED item of every booth in
-    // boothsRepresented, hub-wide -- so cancelling one cart un-reserved another live
-    // cart's items too (a competitor vendor could drop a rival's basket mid-checkout).
-    // Scoped to boothCartTransactionId, it can only ever touch its own.
-    await prisma.item.updateMany({
-      where: { status: 'RESERVED', boothCartTransactionId: cart.id },
-      data: { status: 'AVAILABLE', boothCartTransactionId: null },
-    });
-
-    await prisma.boothCartTransaction.update({ where: { id: cart.id }, data: { status: 'FAILED' } });
+    // Core release logic (Stripe-leg-cancel + item-release + status-flip-to-FAILED) is
+    // extracted into vendorBoothCartLifecycleService.ts (2026-08-01) so the abandonment
+    // sweep job can reuse it -- this function keeps only its own HTTP-request-specific
+    // guards above (auth, COMPLETED/FAILED/CAPTURING status checks).
+    const { cancelledLegIds } = await releasePendingCartHold(cart);
 
     return res.status(200).json({ success: true, cancelledLegIds });
   } catch (error) {

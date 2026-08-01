@@ -28,6 +28,7 @@ import {
   startBoothCart,
   addBoothCartItems,
   getBoothCartSummary,
+  getBoothCartContents,
   createBoothCartTerminalConnectionToken,
   authorizeBoothCartTerminalLeg,
   createBoothCartQrSetupIntent,
@@ -145,6 +146,14 @@ router.post('/api/organizer/hubs/:hubId/cart/:cartTransactionId/items', optional
 // serving the QR-fail single-booth-fallback case, Patrick 2026-07-24). Same auth model
 // as the rest of the cart routes -- booth token or team member, scoped to this hub.
 router.get('/api/organizer/hubs/:hubId/cart/items', optionalAuthenticate, requireBoothTokenOrTeamMember(), searchHubCartItems);
+
+// Itemized cart contents (2026-08-01, refresh-during-sale fix companion) -- lets the
+// frontend hydrate its local cart UI state from server-side RESERVED items on mount.
+// MUST be registered AFTER the literal '/cart/items' route above: both routes share
+// the same path shape (':cartTransactionId' vs the literal segment 'items'), and
+// Express matches by registration order -- registering this one first would swallow
+// every request to '/cart/items' (breaking the hub-wide item search above).
+router.get('/api/organizer/hubs/:hubId/cart/:cartTransactionId', optionalAuthenticate, requireBoothTokenOrTeamMember(), getBoothCartContents);
 
 // ADR-020 (2026-07-07): sequential per-booth Standard-account checkout — replaces
 // the old single-PaymentIntent /charge + /confirm pair. Terminal rail: booth-scoped

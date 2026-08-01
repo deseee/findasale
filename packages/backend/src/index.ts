@@ -219,6 +219,7 @@ import './jobs/organizerWeeklyDigestJob'; // Organizer weekly performance digest
 import './jobs/abandonedCheckoutJob'; // Abandoned Checkout Recovery — hourly email
 import './jobs/saleEndingSoonJob'; // Sale Ending Soon notifications — hourly check
 import './jobs/posStrandedSaleReconcileCron'; // ADR pos-webhook-idempotency-reconciliation (2026-07-23, S1151): auto-record stranded QR/POS sales every 10 min
+import './jobs/boothCartAbandonmentSweepJob'; // Refresh-during-sale bug companion (2026-08-01): release abandoned PENDING/IN_PROGRESS booth carts every 10 min
 import './jobs/weeklyEmailJob'; // CD2 Phase 2: Weekly personalized shopper digest — Sundays 6 PM
 import './jobs/tierLapseJob'; // Feature #75: Tier lapse state logic — daily batch processing and warnings
 import './jobs/fraudDetectionJob'; // Feature #73: Daily off-platform transaction detection at 2 AM
