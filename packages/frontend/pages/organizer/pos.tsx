@@ -308,7 +308,6 @@ export default function POSPage() {
   const [venueBoothToken, setVenueBoothToken] = useState<string | null>(null);
   const [venueCart, setVenueCart] = useState<{ id: string; hubId: string; status: string } | null>(null);
   const [venueStartFailure, setVenueStartFailure] = useState<string | null>(null);
-  const [venueItemIdInput, setVenueItemIdInput] = useState('');
   // Hub-wide item search (S1178 follow-up, 2026-07-31): venue mode has no
   // selectedSaleId, so the plain "Search by title or SKU" block further down
   // (gated on selectedSaleId) never rendered here -- this is venue mode's own
@@ -2245,24 +2244,31 @@ export default function POSPage() {
           <div className="flex gap-2">
             <input
               type="text"
-              value={venueItemIdInput}
-              onChange={e => setVenueItemIdInput(e.target.value)}
+              value={venueItemSearch}
+              onChange={e => setVenueItemSearch(e.target.value)}
               onKeyDown={e => {
-                if (e.key === 'Enter' && venueItemIdInput.trim()) {
-                  api.get<Item>(`/items/${venueItemIdInput.trim()}`)
+                if (e.key === 'Enter' && venueItemSearch.trim()) {
+                  api.get<Item>(`/items/${venueItemSearch.trim()}`)
                     .then(res => {
                       // S1178 gap fix (2026-07-30): this is the venue-mode-only input
                       // block (`{venueHubId && (...)}` above) -- it must route through
                       // the booth-cart endpoint (addVenueItemToCart), not the plain
                       // single-organizer local cart (addToCart). Every item added here
                       // was silently going into the wrong cart path before this fix.
+                      // S1178 consolidation (2026-08-01): merged the separate exact-ID
+                      // input into this single search box. Enter still attempts an
+                      // exact-ID lookup first (supports a hardware barcode-scanner
+                      // wedge that types a code + Enter); it fails gracefully below
+                      // if the typed text isn't a real item ID, which is fine since
+                      // live search already covers the title/SKU case as you type.
                       addVenueItemToCart(res.data);
-                      setVenueItemIdInput('');
+                      setVenueItemSearch('');
+                      setVenueSearchResults([]);
                     })
                     .catch(() => setErrorMessage('Item not found.'));
                 }
               }}
-              placeholder="Scan barcode, or type the exact item ID (not a search)…"
+              placeholder="Search by title or SKU, or scan barcode…"
               className="flex-1 border border-warm-300 dark:border-gray-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-warm-900 dark:text-warm-100 focus:outline-none focus:ring-2 focus:ring-sage-500"
             />
             <button
@@ -2277,21 +2283,13 @@ export default function POSPage() {
           {/* Hub-wide search by title or SKU (S1178 follow-up, 2026-07-31) --
               searches every vendor's items at this hub at once, since no single
               selectedSaleId spans a multi-vendor hub the way it does off venue mode. */}
-          <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mt-3 mb-1">Search by title or SKU</label>
-          <input
-            type="text"
-            value={venueItemSearch}
-            onChange={e => setVenueItemSearch(e.target.value)}
-            placeholder="Search by title or SKU…"
-            className="w-full border border-warm-300 dark:border-gray-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-warm-900 dark:text-warm-100 focus:outline-none focus:ring-2 focus:ring-sage-500"
-          />
           {venueSearchResults.length > 0 && (
             <ul className="mt-1 border border-warm-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 shadow-sm divide-y divide-warm-100 dark:divide-gray-700 max-h-48 overflow-y-auto">
               {venueSearchResults.map(item => (
                 <li key={item.id}>
                   <button
                     onClick={() => {
-                      addToCart(item);
+                      addVenueItemToCart(item);
                       setVenueItemSearch('');
                       setVenueSearchResults([]);
                     }}
@@ -3111,7 +3109,7 @@ export default function POSPage() {
       )}
 
       {/* Payment Method: Manual Card Entry */}
-      {paymentMode === 'manual_card' && cart.length > 0 && (
+      {!venueHubId && paymentMode === 'manual_card' && cart.length > 0 && (
         <Elements stripe={getStripePromise()}>
           <PosManualCard
             cartTotal={cartTotal}
@@ -3130,7 +3128,7 @@ export default function POSPage() {
       )}
 
       {/* Payment Method: QR Code */}
-      {paymentMode === 'qr' && cart.length > 0 && (
+      {!venueHubId && paymentMode === 'qr' && cart.length > 0 && (
         <PosPaymentQr
           cartTotal={cartTotal}
           paymentAmount={paymentLinkAmount || cardAmount}
@@ -3153,7 +3151,7 @@ export default function POSPage() {
       )}
 
       {/* Payment Method: Invoice/Holds */}
-      {paymentMode === 'invoice' && (
+      {!venueHubId && paymentMode === 'invoice' && (
         <div className="mb-4 p-4 rounded-xl bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700">
           <div className="flex justify-between items-center mb-3">
             <h4 className="text-sm font-semibold text-warm-900 dark:text-warm-100">📧 Send Invoice</h4>
@@ -3375,7 +3373,7 @@ export default function POSPage() {
       )}
 
       {/* Charge buttons */}
-      {paymentStatus !== 'success' && cart.length > 0 && (
+      {!venueHubId && paymentStatus !== 'success' && cart.length > 0 && (
         <div className="space-y-3">
           {/* Card payment button */}
           {paymentMode === 'card' && (
@@ -3570,7 +3568,7 @@ export default function POSPage() {
       )}
 
       {/* Platform fee note */}
-      {cart.length > 0 && paymentMode === 'card' && paymentStatus === 'idle' && (
+      {!venueHubId && cart.length > 0 && paymentMode === 'card' && paymentStatus === 'idle' && (
         <p className="mt-4 text-xs text-warm-400 dark:text-warm-500 text-center">
           Platform fee (10%) applied. Net payout: ~${(cartTotal * 0.9 * 0.971).toFixed(2)} after Stripe fees.
         </p>
