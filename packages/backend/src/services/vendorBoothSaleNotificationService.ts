@@ -127,6 +127,7 @@ export async function notifyVendorOfBoothSale(legId: string): Promise<BoothSaleN
             vendorEmail: true,
             userId: true,
             boothToken: true,
+            isHubOwnerBooth: true, // Fix 2 (2026-08-01): the hub owner selling their own stuff needs no "you made a sale" vendor notification
             user: { select: { email: true } },
             hub: { select: { name: true, organizer: { select: { businessName: true } } } },
           },
@@ -140,6 +141,10 @@ export async function notifyVendorOfBoothSale(legId: string): Promise<BoothSaleN
 
     const booth = leg.vendorBooth;
     if (!booth) return { sent: false, reason: 'Leg has no vendor booth' };
+    // Fix 2 (2026-08-01): the hub owner selling their own inventory through their own
+    // house booth doesn't need a "your item sold" vendor notification in this pipeline
+    // -- they already see it directly (it's their own register/sale).
+    if (booth.isHubOwnerBooth) return { sent: false, reason: 'House booth sale -- no vendor notification needed' };
 
     // Claim the send BEFORE doing anything visible. Losers of the race stop here.
     const claim = await prisma.boothCartLeg.updateMany({

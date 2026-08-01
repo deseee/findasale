@@ -11,6 +11,7 @@ import { markShopifyItemSold } from '../services/shopifyService';
 import { notifyFacebookExportedItemSold } from '../services/facebookNudgeService';
 import { sellItemUnits, InsufficientStockError } from '../services/itemStockService';
 import { syncMarketplaceStock } from '../services/marketplaceStockSyncService'; // ADR-087 Phase 4: revise-on-partial eBay quantity sync
+import { resolveOrganizerOrTeamMember } from '../utils/posAuth'; // S1183 Fix 1: TEAM_MEMBER fallback for non-venue POS
 
 const stripe = () => getStripe();
 
@@ -20,33 +21,6 @@ const stripe = () => getStripe();
  * Resolve the organizer record for the authenticated user.
  * Requires ORGANIZER role and valid Stripe Connect account.
  */
-const resolveOrganizer = async (req: AuthRequest, res: Response) => {
-  const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
-  if (!req.user || !hasOrganizerRole) {
-    res.status(403).json({ message: 'Organizer access required' });
-    return null;
-  }
-
-  const organizer = await prisma.organizer.findUnique({
-    where: { userId: req.user.id },
-    select: { id: true, stripeConnectId: true, userId: true },
-  });
-
-  if (!organizer) {
-    res.status(404).json({ message: 'Organizer profile not found' });
-    return null;
-  }
-
-  if (!organizer.stripeConnectId) {
-    res.status(400).json({
-      message: 'Stripe account not connected. Complete Stripe onboarding in Settings before using POS.',
-    });
-    return null;
-  }
-
-  return organizer;
-};
-
 // ─── Endpoints ────────────────────────────────────────────────────────────────
 
 /**
@@ -65,8 +39,14 @@ export const createPaymentRequest = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) return res.status(401).json({ message: 'Authentication required' });
 
-    const organizer = await resolveOrganizer(req, res);
+    const organizer = await resolveOrganizerOrTeamMember(req, res);
     if (!organizer) return;
+    // See file header note on posAuth's ResolvedPosActor: it intentionally omits the
+    // resolved organizer's own userId (distinct from organizer.actingUserId, who's
+    // actually standing at the register under the TEAM_MEMBER branch) -- resolved here
+    // for the POSPaymentRequest.organizerUserId / Stripe metadata / socket payload below.
+    const organizerUserRow = await prisma.organizer.findUnique({ where: { id: organizer.id }, select: { userId: true } });
+    const organizerUserId = organizerUserRow?.userId ?? organizer.actingUserId;
 
     const {
       shopperUserId,
@@ -215,7 +195,7 @@ export const createPaymentRequest = async (req: AuthRequest, res: Response) => {
           metadata: {
             requestId: '', // will be filled in after DB creation
             organizerId: organizer.id,
-            organizerUserId: organizer.userId,
+            organizerUserId: organizerUserId,
             shopperId: shopperUserId,
             saleId,
             source: 'pos_payment_request',
@@ -241,7 +221,7 @@ export const createPaymentRequest = async (req: AuthRequest, res: Response) => {
       posRequest = await prisma.pOSPaymentRequest.create({
         data: {
           organizerId: organizer.id,
-          organizerUserId: organizer.userId,
+          organizerUserId: organizerUserId,
           shopperUserId,
           saleId,
           itemIds: items.map((i) => i.id), // use only available items (SOLD filtered out above)
@@ -263,7 +243,7 @@ export const createPaymentRequest = async (req: AuthRequest, res: Response) => {
           metadata: {
             requestId: posRequest.id,
             organizerId: organizer.id,
-            organizerUserId: organizer.userId,
+            organizerUserId: organizerUserId,
             shopperId: shopperUserId,
             saleId,
             source: 'pos_payment_request',
@@ -285,7 +265,7 @@ export const createPaymentRequest = async (req: AuthRequest, res: Response) => {
       io.to(`user:${shopperUserId}`).emit('POS_PAYMENT_REQUEST', {
         type: 'POS_PAYMENT_REQUEST',
         requestId: posRequest.id,
-        organizerName: `${organizer.userId}`, // Will use sale.organizer.businessName in prod
+        organizerName: `${organizerUserId}`, // Will use sale.organizer.businessName in prod
         saleName: sale.title,
         saleLocation: [sale.address, sale.city, sale.state].filter(Boolean).join(', ') || undefined,
         itemNames,
@@ -643,7 +623,7 @@ export const getOrganizerActiveRequests = async (req: AuthRequest, res: Response
   try {
     if (!req.user) return res.status(401).json({ message: 'Authentication required' });
 
-    const organizer = await resolveOrganizer(req, res);
+    const organizer = await resolveOrganizerOrTeamMember(req, res);
     if (!organizer) return;
 
     // Fetch PENDING and ACCEPTED requests from the last 90 minutes
@@ -691,7 +671,7 @@ export const getTodaySummary = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) return res.status(401).json({ message: 'Authentication required' });
 
-    const organizer = await resolveOrganizer(req, res);
+    const organizer = await resolveOrganizerOrTeamMember(req, res);
     if (!organizer) return;
 
     // Calculate today's midnight UTC
@@ -734,7 +714,7 @@ export const cancelPaymentRequest = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) return res.status(401).json({ message: 'Authentication required' });
 
-    const organizer = await resolveOrganizer(req, res);
+    const organizer = await resolveOrganizerOrTeamMember(req, res);
     if (!organizer) return;
 
     const { id } = req.params;

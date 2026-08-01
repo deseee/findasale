@@ -21,6 +21,7 @@ import { createNotification } from '../lib/notificationService';
 import { getPlatformFeeRate, SubscriptionTier } from '../utils/feeCalculator';
 import { transactionalEmailService } from '../lib/transactionalEmailService';
 import { commitItemSale, ItemAlreadyCommittedError } from '../services/itemSaleGuard'; // ADR-098: atomic double-sell guard
+import { resolveOrganizerOrTeamMember } from '../utils/posAuth'; // S1183 Fix 1: TEAM_MEMBER fallback for non-venue POS
 
 const stripe = () => getStripe();
 
@@ -136,41 +137,60 @@ export async function createPaymentLinkInternal(opts: {
   return { linkId: posPaymentLink.id, paymentLinkUrl, qrCodeDataUrl, amount };
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// ─── Endpoints ────────────────────────────────────────────────────────────────
 
 /**
- * Resolve the organizer record + stripeConnectId for the authed user.
- * (Imported pattern from terminalController.ts)
+ * GET /api/pos/context
+ * S1183 Fix 1: narrow, POS-scoped, read-only replacement for POS's own use of
+ * `/sales/mine` and `/organizers/me` -- both of those endpoints are wide-blast-radius
+ * (used well beyond POS) and were never going to recognize a TEAM_MEMBER register
+ * operator anyway. Gated ONLY by `authenticate` at the route level -- this handler
+ * gates itself via resolveOrganizerOrTeamMember, so it correctly 403s an authenticated
+ * user with no organizer-or-team-member access instead of relying on route middleware.
+ *
+ * Response: {
+ *   actorKind: 'ORGANIZER' | 'TEAM_MEMBER';
+ *   organizerId: string;
+ *   sales: Array<{ id, title, status, startDate, endDate }>; // PUBLISHED only
+ *   venmoHandle: string | null;
+ *   zelleHandle: string | null;
+ * }
  */
-const resolveOrganizer = async (req: AuthRequest, res: Response, opts: { requireStripe?: boolean } = {}) => {
-  const { requireStripe = true } = opts;
-  const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
-  if (!req.user || !hasOrganizerRole) {
-    res.status(403).json({ message: 'Organizer access required' });
-    return null;
-  }
+export const getPosContext = async (req: AuthRequest, res: Response) => {
+  try {
+    const actor = await resolveOrganizerOrTeamMember(req, res, { requireStripe: false });
+    if (!actor) return;
 
-  const organizer = await prisma.organizer.findUnique({
-    where: { userId: req.user.id },
-    select: { id: true, stripeConnectId: true, subscriptionTier: true },
-  });
+    const [sales, organizerRow] = await Promise.all([
+      prisma.sale.findMany({
+        where: { organizerId: actor.id, status: 'PUBLISHED' },
+        select: { id: true, title: true, status: true, startDate: true, endDate: true },
+        orderBy: { startDate: 'desc' },
+      }),
+      prisma.organizer.findUnique({
+        where: { id: actor.id },
+        select: { venmoHandle: true, zelleHandle: true },
+      }),
+    ]);
 
-  if (!organizer) {
-    res.status(404).json({ message: 'Organizer profile not found' });
-    return null;
-  }
-
-  if (requireStripe && !organizer.stripeConnectId) {
-    res.status(400).json({
-      message: 'Stripe account not connected. Complete Stripe onboarding in Settings before using POS.',
+    return res.json({
+      actorKind: actor.actorKind,
+      organizerId: actor.id,
+      sales: sales.map((s) => ({
+        id: s.id,
+        title: s.title,
+        status: s.status,
+        startDate: s.startDate.toISOString(),
+        endDate: s.endDate.toISOString(),
+      })),
+      venmoHandle: organizerRow?.venmoHandle ?? null,
+      zelleHandle: organizerRow?.zelleHandle ?? null,
     });
-    return null;
+  } catch (error) {
+    console.error('[pos] getPosContext error:', error);
+    return res.status(500).json({ message: 'Failed to load POS context' });
   }
-
-  return organizer;
 };
-
-// ─── Endpoints ────────────────────────────────────────────────────────────────
 
 /**
  * POST /api/pos/sessions
@@ -237,7 +257,7 @@ export const shareCart = async (req: AuthRequest, res: Response) => {
  */
 export const getLinkedCarts = async (req: AuthRequest, res: Response) => {
   try {
-    const organizer = await resolveOrganizer(req, res, { requireStripe: false });
+    const organizer = await resolveOrganizerOrTeamMember(req, res, { requireStripe: false });
     if (!organizer) return;
 
     const { saleId } = req.query as { saleId?: string };
@@ -301,7 +321,7 @@ export const getLinkedCarts = async (req: AuthRequest, res: Response) => {
  */
 export const pullCart = async (req: AuthRequest, res: Response) => {
   try {
-    const organizer = await resolveOrganizer(req, res, { requireStripe: false });
+    const organizer = await resolveOrganizerOrTeamMember(req, res, { requireStripe: false });
     if (!organizer) return;
 
     const { sessionId } = req.params as { sessionId?: string };
@@ -342,7 +362,7 @@ export const createPaymentLink = async (req: AuthRequest, res: Response) => {
   try {
     // Payment Links are independent of the Terminal/card-reader simulation flag.
     // Always require a real Stripe connected account — never generate a fake URL.
-    const organizer = await resolveOrganizer(req, res, { requireStripe: true });
+    const organizer = await resolveOrganizerOrTeamMember(req, res, { requireStripe: true });
     if (!organizer) return;
 
     const { saleId, itemIds, amount, buyerEmail } = req.body as {
@@ -408,7 +428,7 @@ export const createPaymentLink = async (req: AuthRequest, res: Response) => {
  */
 export const getPaymentLink = async (req: AuthRequest, res: Response) => {
   try {
-    const organizer = await resolveOrganizer(req, res, { requireStripe: false });
+    const organizer = await resolveOrganizerOrTeamMember(req, res, { requireStripe: false });
     if (!organizer) return;
 
     const { linkId } = req.params as { linkId?: string };
@@ -453,7 +473,7 @@ export const getPaymentLink = async (req: AuthRequest, res: Response) => {
  */
 export const getActiveHolds = async (req: AuthRequest, res: Response) => {
   try {
-    const organizer = await resolveOrganizer(req, res, { requireStripe: false });
+    const organizer = await resolveOrganizerOrTeamMember(req, res, { requireStripe: false });
     if (!organizer) return;
 
     const { saleId } = req.query as { saleId?: string };
@@ -515,7 +535,7 @@ export const getActiveHolds = async (req: AuthRequest, res: Response) => {
  */
 export const sendHoldInvoice = async (req: AuthRequest, res: Response) => {
   try {
-    const organizer = await resolveOrganizer(req, res, { requireStripe: false });
+    const organizer = await resolveOrganizerOrTeamMember(req, res, { requireStripe: false });
     if (!organizer) return;
 
     const { reservationId } = req.params as { reservationId?: string };
@@ -690,7 +710,7 @@ export const sendHoldInvoice = async (req: AuthRequest, res: Response) => {
  */
 export const sendPaymentLinkEmail = async (req: AuthRequest, res: Response) => {
   try {
-    const organizer = await resolveOrganizer(req, res, { requireStripe: false });
+    const organizer = await resolveOrganizerOrTeamMember(req, res, { requireStripe: false });
     if (!organizer) return;
 
     const { paymentLinkUrl, buyerEmail, amount } = req.body as {
@@ -739,7 +759,7 @@ export const sendPaymentLinkEmail = async (req: AuthRequest, res: Response) => {
  */
 export const requestCartShare = async (req: AuthRequest, res: Response) => {
   try {
-    const organizer = await resolveOrganizer(req, res, { requireStripe: false });
+    const organizer = await resolveOrganizerOrTeamMember(req, res, { requireStripe: false });
     if (!organizer) return;
 
     const { reservationId } = req.params as { reservationId?: string };
@@ -799,7 +819,7 @@ export const requestCartShare = async (req: AuthRequest, res: Response) => {
  */
 export const deleteSession = async (req: AuthRequest, res: Response) => {
   try {
-    const organizer = await resolveOrganizer(req, res, { requireStripe: false });
+    const organizer = await resolveOrganizerOrTeamMember(req, res, { requireStripe: false });
     if (!organizer) return;
 
     const { sessionId } = req.params as { sessionId?: string };
@@ -836,7 +856,7 @@ export const deleteSession = async (req: AuthRequest, res: Response) => {
  */
 export const searchShopperHolds = async (req: AuthRequest, res: Response) => {
   try {
-    const organizer = await resolveOrganizer(req, res, { requireStripe: false });
+    const organizer = await resolveOrganizerOrTeamMember(req, res, { requireStripe: false });
     if (!organizer) return;
 
     const { sessionId } = req.params as { sessionId?: string };
@@ -899,7 +919,7 @@ export const searchShopperHolds = async (req: AuthRequest, res: Response) => {
  */
 export const pullHoldsToCart = async (req: AuthRequest, res: Response) => {
   try {
-    const organizer = await resolveOrganizer(req, res, { requireStripe: false });
+    const organizer = await resolveOrganizerOrTeamMember(req, res, { requireStripe: false });
     if (!organizer) return;
 
     const { sessionId } = req.params as { sessionId?: string };
@@ -973,7 +993,7 @@ export const pullHoldsToCart = async (req: AuthRequest, res: Response) => {
  */
 export const createCombinedInvoice = async (req: AuthRequest, res: Response) => {
   try {
-    const organizer = await resolveOrganizer(req, res, { requireStripe: true });
+    const organizer = await resolveOrganizerOrTeamMember(req, res, { requireStripe: true });
     if (!organizer) return;
 
     const { sessionId } = req.params as { sessionId?: string };

@@ -353,19 +353,28 @@ export default function POSPage() {
       const res = await api.get<PosTierStatus>('/organizer/pos-tiers');
       return res.data;
     },
-    enabled: !!user && (user.roles?.includes('ORGANIZER') || user.role === 'ORGANIZER'),
+    enabled: !!user, // S1183 Fix 1: backend (resolveOrganizerOrTeamMember) is the real gate now
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 
-  // Fetch organizer profile for venmo/zelle handles (#412)
+  // Fetch POS context: sales + venmo/zelle handles (S1183 Fix 1). Single call replaces
+  // the former /sales/mine + /organizers/me fetches (both wide-blast-radius endpoints
+  // used well beyond POS and never going to recognize a TEAM_MEMBER register operator).
+  // Backend is the real gate now (resolveOrganizerOrTeamMember) -- this only needs
+  // !!user, not a client-side ORGANIZER role check, so an authenticated TEAM_MEMBER
+  // with register access reaches this too and is cleanly rejected downstream if not.
   useEffect(() => {
-    if (!user?.roles?.includes('ORGANIZER') && user?.role !== 'ORGANIZER') return;
-    api.get<{ venmoHandle?: string | null; zelleHandle?: string | null }>('/organizers/me')
+    if (!user) return;
+    api.get<{ actorKind?: string; organizerId?: string; sales?: Sale[]; venmoHandle?: string | null; zelleHandle?: string | null }>('/pos/context')
       .then(r => {
         setOrganizerVenmo(r.data.venmoHandle || null);
         setOrganizerZelle(r.data.zelleHandle || null);
+        const all: Sale[] = r.data.sales ?? [];
+        const active = all.filter((s, i, arr) => arr.findIndex(x => x.id === s.id) === i); // dedup by id
+        setSales(active);
+        if (active.length === 1) setSelectedSaleId(active[0].id);
       })
-      .catch(() => {}); // non-critical, silent fail
+      .catch(err => console.error('[pos] Failed to load POS context:', err));
   }, [user]);
 
   // Pending Payments polling
@@ -375,7 +384,7 @@ export default function POSPage() {
       const res = await api.get<PendingPayment[]>('/pos/payment-requests/active');
       return res.data;
     },
-    enabled: !!user && (user.roles?.includes('ORGANIZER') || user.role === 'ORGANIZER'),
+    enabled: !!user, // S1183 Fix 1: backend (resolveOrganizerOrTeamMember) is the real gate now
     refetchInterval: (query) => {
       // Socket handles real-time updates — poll only as a fallback every 5s
       const d = (query as any).state?.data as PendingPayment[] | undefined;
@@ -460,52 +469,22 @@ export default function POSPage() {
   // ─── Auth guard ────────────────────────────────────────────────────────────────────
 
   useEffect(() => {
-    // A vendor arriving via their own booth token (MyVendorBoothsCard's "Open the
-    // register" link, ?venue=<hubId>&boothToken=<token>) is very often NOT an ORGANIZER-
-    // role account -- register access there is enforced server-side by
-    // requireBoothAuth.ts's booth-token branch (claimed + CONFIRMED + the separate
-    // registerAccessGrantedAt grant), not by this client-side role gate.
-    // S1179 hard-nav gate fix (2026-07-30): the `router.isReady` gate that used to sit
-    // here defeated the whole point of the S1178 hard-nav fix below -- readVenueQueryParams()
-    // reads window.location.search directly and is safe to call immediately, but was
-    // never actually reached because router.isReady was confirmed live to never resolve
-    // true on a genuine hard navigation to this route. Read venue/boothToken first,
-    // unconditionally, instead of gating the whole effect on router.isReady.
-    const { venueHubId: hardNavVenueId, boothToken: hardNavBoothToken } = readVenueQueryParams(router);
-    const hasBoothToken = !!hardNavBoothToken;
-    // S1178 gap fix (2026-07-30): a plain TEAM_MEMBER/HUB_OWNER arriving via
-    // ?venue=<hubId> (workspace JWT, no X-Booth-Token) is very often NOT an
-    // ORGANIZER-role account either -- same reasoning as the boothToken escape
-    // hatch above. Real authorization for venue mode is enforced server-side by
-    // requireBoothTokenOrTeamMember on every /organizer/hubs/:hubId/cart/* call
-    // (see ADR-venue-mode-pos-contract-S1178.md), so it is safe to let an
-    // authenticated non-ORGANIZER user through here -- they are cleanly
-    // rejected downstream (venueStartFailure) if they don't actually have
-    // register access for this specific hub. An unauthenticated visitor still
-    // gets redirected: hasVenueSession requires `user` to be truthy.
-    const hasVenueParam = !!hardNavVenueId;
-    const hasVenueSession = hasVenueParam && !!user;
-    if (!loading && !hasBoothToken && !hasVenueSession && (!user || (!user.roles?.includes('ORGANIZER') && user.role !== 'ORGANIZER'))) {
+    // S1183 Fix 1 (2026-08-01): generalized from the earlier hasBoothToken/
+    // hasVenueSession escape hatches (a vendor arriving via their own booth token, or
+    // a TEAM_MEMBER/HUB_OWNER arriving via ?venue=<hubId>) into one rule -- bounce
+    // unauthenticated visitors only, never a non-ORGANIZER authenticated user. That
+    // covers every prior escape hatch plus plain non-venue POS's own new TEAM_MEMBER
+    // register-access path (posAuth.ts), so the per-case boothToken/venue detection
+    // above is no longer needed here. Do NOT try to detect "is this a team member"
+    // client-side (User.roles never carries a TEAM_MEMBER marker -- that lives
+    // entirely in WorkspaceMember/TeamMember joins). The backend
+    // (resolveOrganizerOrTeamMember / requireBoothTokenOrTeamMember) is the real gate
+    // now, and cleanly rejects (venueStartFailure, or a 403 from /pos/context and
+    // friends) anyone who reaches a surface they don't actually have access to.
+    if (!loading && !user) {
       router.replace('/login');
     }
-  }, [user, loading, router, router.isReady, router.query.boothToken, router.query.venue]);
-
-  // ─── Load sales ────────────────────────────────────────────────────────────────────
-
-  useEffect(() => {
-    if (!user || (!user.roles?.includes('ORGANIZER') && user.role !== 'ORGANIZER')) return;
-    api
-      .get<{ sales?: Sale[]; data?: Sale[] }>('/sales/mine')
-      .then(res => {
-        const all: Sale[] = res.data.sales ?? res.data.data ?? [];
-        const active = all
-          .filter((s: Sale) => s.status === 'PUBLISHED')
-          .filter((s, i, arr) => arr.findIndex(x => x.id === s.id) === i); // dedup by id
-        setSales(active);
-        if (active.length === 1) setSelectedSaleId(active[0].id);
-      })
-      .catch(err => console.error('[pos] Failed to load sales:', err));
-  }, [user]);
+  }, [user, loading, router]);
 
   // ─── Pre-select sale from query param ────────────────────────────────────────────
 
@@ -839,7 +818,11 @@ export default function POSPage() {
   // ─── Socket listener for payment status updates ────────────────────────────────────────
 
   useEffect(() => {
-    if (!user || (!user.roles?.includes('ORGANIZER') && user.role !== 'ORGANIZER')) return;
+    // S1183 Fix 1: backend is the real gate now; whether the socket room a
+    // TEAM_MEMBER joins is keyed correctly for real-time push is UNVERIFIED, but
+    // polling is already a fallback every 5s regardless (see note above), so this
+    // degrades gracefully even if the socket room key turns out wrong.
+    if (!user) return;
 
     let isMounted = true;
     let socketInstance: any = null;
@@ -942,7 +925,7 @@ export default function POSPage() {
       const res = await api.get<{ totalAmountCents: number; transactionCount: number }>('/pos/transactions/today-summary');
       return res.data;
     },
-    enabled: !!user && (user.roles?.includes('ORGANIZER') || user.role === 'ORGANIZER'),
+    enabled: !!user, // S1183 Fix 1: backend (resolveOrganizerOrTeamMember) is the real gate now
     refetchInterval: 30000,
     staleTime: 0,
   });
@@ -2194,12 +2177,14 @@ export default function POSPage() {
         </div>
       </div>
 
-      {/* Sale selector -- hidden in venue mode (S1178 gap fix, 2026-07-30): this block is
-          fed by /sales/mine, which only ever loads for ORGANIZER-role users (see "Load
-          sales" effect above). A team member/owner in venue mode always saw "No active
-          sales. Publish a sale first." here regardless of whether venue mode itself was
-          working -- confusing and unrelated to venue mode, which has its own item-add UI
-          below and never uses selectedSaleId/sales at all. */}
+      {/* Sale selector -- hidden in venue mode (S1178 gap fix, 2026-07-30; sales source
+          updated S1183 Fix 1, 2026-08-01): this block is fed by the "Fetch POS context"
+          effect above (GET /pos/context), which loads for ANY authenticated user now,
+          not just ORGANIZER-role ones -- gating is server-side. A team member/owner in
+          venue mode always saw "No active sales. Publish a sale first." here regardless
+          of whether venue mode itself was working -- confusing and unrelated to venue
+          mode, which has its own item-add UI below and never uses selectedSaleId/sales
+          at all. */}
       {!venueHubId && (
         <div className="mb-4">
           <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-1">Sale</label>

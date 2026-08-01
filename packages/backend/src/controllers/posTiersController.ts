@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../index';
+import { resolveOrganizerOrTeamMember } from '../utils/posAuth'; // S1183 Fix 1: TEAM_MEMBER fallback for non-venue POS
 
 export interface PosTierStatus {
   tier: 0 | 1 | 2 | 3;
@@ -31,14 +32,10 @@ export const getPosTierStatus = async (req: AuthRequest, res: Response) => {
       return res.status(401).json({ message: 'Not authenticated' });
     }
 
-    // Get organizer by user ID
-    const organizer = await prisma.organizer.findUnique({
-      where: { userId },
-    });
-
-    if (!organizer) {
-      return res.status(404).json({ message: 'Organizer profile not found' });
-    }
+    // Resolve organizer-or-team-member (S1183 Fix 1): a TEAM_MEMBER with register access
+    // resolves to their organizer's data here too, same as every other POS surface.
+    const organizer = await resolveOrganizerOrTeamMember(req, res, { requireStripe: false });
+    if (!organizer) return;
 
     // Get user's subscription tier for PRO gating
     const user = await prisma.user.findUnique({

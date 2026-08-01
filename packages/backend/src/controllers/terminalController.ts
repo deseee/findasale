@@ -20,6 +20,7 @@ import { sellItemUnits, InsufficientStockError } from '../services/itemStockServ
 import { syncMarketplaceStock } from '../services/marketplaceStockSyncService'; // ADR-087 Phase 4: revise-on-partial eBay quantity sync
 import { transactionalEmailService } from '../lib/transactionalEmailService';
 import { recordSuspectedSignal } from '../services/checkoutGuard'; // S1072 Finding #4: cash path is offsite — log-only, never blocked
+import { resolveOrganizerOrTeamMember } from '../utils/posAuth'; // S1183 Fix 1: TEAM_MEMBER fallback for non-venue POS
 
 const stripe = () => getStripe();
 
@@ -30,34 +31,6 @@ const stripe = () => getStripe();
  * Returns null (and writes 4xx response) if not eligible.
  * requireStripe (default true): set false for endpoints that don't need Stripe Connect (e.g. cash).
  */
-const resolveOrganizer = async (req: AuthRequest, res: Response, opts: { requireStripe?: boolean } = {}) => {
-  const { requireStripe = true } = opts;
-  const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
-  if (!req.user || !hasOrganizerRole) {
-    res.status(403).json({ message: 'Organizer access required' });
-    return null;
-  }
-
-  const organizer = await prisma.organizer.findUnique({
-    where: { userId: req.user.id },
-    select: { id: true, stripeConnectId: true, referralDiscountExpiry: true, subscriptionTier: true },
-  });
-
-  if (!organizer) {
-    res.status(404).json({ message: 'Organizer profile not found' });
-    return null;
-  }
-
-  if (requireStripe && !organizer.stripeConnectId) {
-    res.status(400).json({
-      message: 'Stripe account not connected. Complete Stripe onboarding in Settings before using POS.',
-    });
-    return null;
-  }
-
-  return organizer;
-};
-
 // ─── Endpoints ────────────────────────────────────────────────────────────────
 
 /**
@@ -80,7 +53,7 @@ export const createConnectionToken = async (req: AuthRequest, res: Response) => 
       return res.json({ secret: token.secret });
     }
 
-    const organizer = await resolveOrganizer(req, res);
+    const organizer = await resolveOrganizerOrTeamMember(req, res);
     if (!organizer) return;
 
     // Create connection token on the organizer's connected account
@@ -108,7 +81,7 @@ export const createConnectionToken = async (req: AuthRequest, res: Response) => 
 export const createTerminalPaymentIntent = async (req: AuthRequest, res: Response) => {
   try {
     const isSimulated = process.env.STRIPE_TERMINAL_SIMULATED === 'true';
-    const organizer = await resolveOrganizer(req, res, { requireStripe: !isSimulated });
+    const organizer = await resolveOrganizerOrTeamMember(req, res, { requireStripe: !isSimulated });
     if (!organizer) return;
 
     const { items, buyerEmail, saleId: bodySaleId, cashAmountCents } = req.body as {
@@ -275,7 +248,7 @@ export const createTerminalPaymentIntent = async (req: AuthRequest, res: Respons
 export const captureTerminalPaymentIntent = async (req: AuthRequest, res: Response) => {
   try {
     const isSimulated = process.env.STRIPE_TERMINAL_SIMULATED === 'true';
-    const organizer = await resolveOrganizer(req, res, { requireStripe: !isSimulated });
+    const organizer = await resolveOrganizerOrTeamMember(req, res, { requireStripe: !isSimulated });
     if (!organizer) return;
 
     const { paymentIntentId } = req.body as { paymentIntentId?: string };
@@ -446,7 +419,7 @@ export const captureTerminalPaymentIntent = async (req: AuthRequest, res: Respon
 export const cancelTerminalPaymentIntent = async (req: AuthRequest, res: Response) => {
   try {
     const isSimulated = process.env.STRIPE_TERMINAL_SIMULATED === 'true';
-    const organizer = await resolveOrganizer(req, res, { requireStripe: !isSimulated });
+    const organizer = await resolveOrganizerOrTeamMember(req, res, { requireStripe: !isSimulated });
     if (!organizer) return;
 
     const { paymentIntentId } = req.body as { paymentIntentId?: string };
@@ -766,7 +739,7 @@ export async function processCashSaleCore(params: {
 export const cashPayment = async (req: AuthRequest, res: Response) => {
   try {
     // Cash never touches Stripe — no Connect account required
-    const organizer = await resolveOrganizer(req, res, { requireStripe: false });
+    const organizer = await resolveOrganizerOrTeamMember(req, res, { requireStripe: false });
     if (!organizer) return;
 
     const { items, cashReceived, buyerEmail, saleId, clientTransactionId } = req.body as {

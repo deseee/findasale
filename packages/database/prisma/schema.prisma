@@ -5581,6 +5581,14 @@ model VendorBooth {
   boothFee            Decimal @default(0) @db.Decimal(10, 2)
   revenueSharePercent Float   @default(0)
 
+  // Auto-provisioned synthetic booth for the hub owner's own inventory (2026-08-01,
+  // houseBoothService.getOrCreateHouseBooth). At most one per hub -- enforced by a hand-written
+  // partial unique index in migration 20260801000000_vendor_booth_house_flag (Prisma's schema
+  // DSL cannot express a WHERE-partial unique index), NOT expressible here as @@unique.
+  // Excluded from listVendorBooths/listMyVendorBooths and blocked from
+  // updateVendorBooth/deleteVendorBooth once those call sites are wired to check it.
+  isHubOwnerBooth Boolean @default(false)
+
   status String @default("PENDING") // PENDING|CONFIRMED|REJECTED|CANCELLED
 
   // Stripe Connect identity for this booth's operator (ADR-016, migrated to Standard

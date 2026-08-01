@@ -77,7 +77,9 @@ export const listVendorBooths = async (req: AuthRequest, res: Response) => {
     if (!hub) return res.status(404).json({ error: 'Hub not found' });
 
     const booths = await prisma.vendorBooth.findMany({
-      where: { hubId, deletedAt: null },
+      // isHubOwnerBooth: false -- the synthetic house booth (Fix 2, 2026-08-01) is
+      // never editable/visible via the normal booth CRUD UI. See houseBoothService.ts.
+      where: { hubId, deletedAt: null, isHubOwnerBooth: false },
       select: {
         id: true, hubId: true, boothNumber: true, vendorName: true, vendorEmail: true,
         vendorPhone: true, boothFee: true, revenueSharePercent: true, status: true,
@@ -192,7 +194,14 @@ export const getVendorBooth = async (req: AuthRequest, res: Response) => {
     if (!hub) return res.status(404).json({ error: 'Hub not found' });
 
     const booth = await prisma.vendorBooth.findFirst({
-      where: { id: boothId, hubId, deletedAt: null },
+      // isHubOwnerBooth: false -- the synthetic house booth (Fix 2, 2026-08-01) is
+      // system-managed and never visible via the normal booth CRUD UI (matches
+      // listVendorBooths/listMyVendorBooths' exclusion and updateVendorBooth/
+      // deleteVendorBooth's 403 guard). Without this, the detail endpoint would
+      // leak the house booth's boothToken (a bearer secret) and mirrored Stripe
+      // account ids through a plain findFirst-with-no-select include. (hacker
+      // fix-and-reverify, 2026-08-01)
+      where: { id: boothId, hubId, deletedAt: null, isHubOwnerBooth: false },
       include: {
         payouts: {
           select: { id: true, totalSales: true, boothFeeCharged: true, revenueShareOwed: true, netPayout: true, status: true, paidAt: true },
@@ -231,6 +240,11 @@ export const updateVendorBooth = async (req: AuthRequest, res: Response) => {
 
     const existing = await prisma.vendorBooth.findFirst({ where: { id: boothId, hubId, deletedAt: null } });
     if (!existing) return res.status(404).json({ error: 'Vendor booth not found' });
+    // Fix 2 (2026-08-01): the synthetic house booth is system-managed -- never
+    // editable/removable via the normal booth CRUD UI. See houseBoothService.ts.
+    if (existing.isHubOwnerBooth) {
+      return res.status(403).json({ error: 'This booth is system-managed and cannot be edited or removed.' });
+    }
 
     const updateData: any = {};
     if (boothNumber !== undefined) updateData.boothNumber = boothNumber;
@@ -297,6 +311,11 @@ export const deleteVendorBooth = async (req: AuthRequest, res: Response) => {
 
     const existing = await prisma.vendorBooth.findFirst({ where: { id: boothId, hubId, deletedAt: null } });
     if (!existing) return res.status(404).json({ error: 'Vendor booth not found' });
+    // Fix 2 (2026-08-01): the synthetic house booth is system-managed -- never
+    // editable/removable via the normal booth CRUD UI. See houseBoothService.ts.
+    if (existing.isHubOwnerBooth) {
+      return res.status(403).json({ error: 'This booth is system-managed and cannot be edited or removed.' });
+    }
 
     await prisma.vendorBooth.update({ where: { id: boothId }, data: { deletedAt: new Date(), status: 'CANCELLED' } });
 
@@ -684,7 +703,9 @@ export const listMyVendorBooths = async (req: AuthRequest, res: Response) => {
     if (!req.user) return res.status(401).json({ error: 'Authentication required' });
 
     const booths = await prisma.vendorBooth.findMany({
-      where: { userId: req.user.id, deletedAt: null },
+      // isHubOwnerBooth: false -- a hub owner's synthetic house booth (Fix 2, 2026-08-01)
+      // must not show up in their OWN "my booths as a vendor elsewhere" list either.
+      where: { userId: req.user.id, deletedAt: null, isHubOwnerBooth: false },
       select: {
         id: true, hubId: true, boothNumber: true, vendorName: true, status: true,
         boothFee: true, revenueSharePercent: true, stripeOnboarded: true,

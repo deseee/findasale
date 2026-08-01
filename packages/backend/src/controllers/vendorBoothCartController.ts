@@ -13,6 +13,7 @@ import { syncMarketplaceStock } from '../services/marketplaceStockSyncService'; 
 import { generateReceipt, sendBoothCartReceiptEmail } from '../services/receiptService';
 import { getPlatformFeeRate } from '../utils/feeCalculator'; // ADR-090 Phase 2: platform's normal cut formula
 import { notifyVendorOfBoothSale } from '../services/vendorBoothSaleNotificationService'; // per-vendor "your item sold" notification
+import { getOrCreateHouseBooth } from '../services/houseBoothService'; // Fix 2 (2026-08-01): hub owner's own items sell through a synthetic booth
 import { Decimal } from '@prisma/client/runtime/library';
 
 const stripe = () => getStripe();
@@ -396,6 +397,12 @@ export const addBoothCartItems = async (req: BoothAuthRequest, res: Response) =>
       return res.status(400).json({ error: 'itemIds is required and must be a non-empty array' });
     }
 
+    // Fix 2 (2026-08-01): the hub's own organizerId, so an item belonging to the hub
+    // OWNER (not a claimed vendor) can be recognized below and lazily routed to the
+    // synthetic house booth instead of being rejected as "not a vendor here."
+    const hub = await prisma.saleHub.findUnique({ where: { id: hubId }, select: { organizerId: true } });
+    if (!hub) return res.status(404).json({ error: 'Hub not found' });
+
     const cart = await prisma.boothCartTransaction.findFirst({ where: { id: cartTransactionId, hubId } });
     if (!cart) return res.status(404).json({ error: 'Cart not found' });
     if (!callerOwnsCart(req.boothAuth, cart)) return res.status(403).json({ error: CART_NOT_YOURS_ERROR });
@@ -437,13 +444,25 @@ export const addBoothCartItems = async (req: BoothAuthRequest, res: Response) =>
     const rejected: Array<{ itemId: string; reason: string }> = [];
     const accepted: Array<{ id: string; title: string; price: number | null; vendorBoothId: string }> = [];
 
+    // Fix 2 (2026-08-01): lazily resolved at most once per request, only if actually
+    // needed (an item owned by the hub itself with no pre-existing CONFIRMED booth
+    // match). `undefined` = not yet attempted; `null` = attempted and unavailable
+    // (hub/organizer missing) -- distinct from "not attempted" so we never retry.
+    let houseBooth: { id: string; userId: string; stripeAccountId: string | null } | null | undefined;
+
     for (const item of items) {
       if (item.status !== 'AVAILABLE') {
         rejected.push({ itemId: item.id, reason: 'ITEM_NOT_AVAILABLE' });
         continue;
       }
       const ownerUserId = item.organizerId ? organizerIdToUserId.get(item.organizerId) : undefined;
-      const booth = ownerUserId ? userIdToBooth.get(ownerUserId) : undefined;
+      let booth = ownerUserId ? userIdToBooth.get(ownerUserId) : undefined;
+      if (!booth && item.organizerId && item.organizerId === hub.organizerId) {
+        if (houseBooth === undefined) {
+          houseBooth = await getOrCreateHouseBooth(hubId);
+        }
+        if (houseBooth) booth = { id: houseBooth.id, userId: houseBooth.userId };
+      }
       if (!booth) {
         rejected.push({ itemId: item.id, reason: 'ITEM_NOT_AVAILABLE' });
         continue;
@@ -743,7 +762,17 @@ export const authorizeBoothCartTerminalLeg = async (req: BoothAuthRequest, res: 
     if (!booth) return res.status(404).json({ error: 'Booth not found' });
     if (!isTerminalSimulated()) {
       if (booth.stripeAccountType !== 'standard' || !booth.stripeOnboarded || !booth.stripeAccountId) {
-        return res.status(400).json({ error: `Booth "${booth.vendorName}" has not completed Standard-account onboarding` });
+        // Fix 2 (2026-08-01): a house booth failing this gate is the HUB OWNER's own
+        // Stripe account, not some other vendor's -- the generic "Booth X hasn't
+        // completed onboarding" copy would be confusing/wrong addressed to the owner
+        // themselves. This is an intentional, architect-approved limitation (ADR-023):
+        // an owner still on a legacy Express account can't sell their own items via
+        // card/QR through venue mode until they migrate to Standard -- cash still works
+        // (captureBoothCash doesn't require this gate). The gate itself is unchanged.
+        const message = booth.isHubOwnerBooth
+          ? 'Complete your Stripe account upgrade in Settings to sell your own items through this register'
+          : `Booth "${booth.vendorName}" has not completed Standard-account onboarding`;
+        return res.status(400).json({ error: message });
       }
     }
 
@@ -994,7 +1023,13 @@ export const authorizeBoothCartQrLegs = async (req: BoothAuthRequest, res: Respo
 
     for (const booth of boothsToCharge) {
       if (booth.stripeAccountType !== 'standard' || !booth.stripeOnboarded || !booth.stripeAccountId) {
-        failure = { vendorBoothId: booth.id, vendorName: booth.vendorName, message: `Booth "${booth.vendorName}" has not completed Standard-account onboarding` };
+        // Fix 2 (2026-08-01): see the identical note on the Terminal rail above -- a
+        // house booth here is the hub owner's own account, so the failure copy is
+        // organizer-facing instead of the generic vendor-facing message.
+        const message = booth.isHubOwnerBooth
+          ? 'Complete your Stripe account upgrade in Settings to sell your own items through this register'
+          : `Booth "${booth.vendorName}" has not completed Standard-account onboarding`;
+        failure = { vendorBoothId: booth.id, vendorName: booth.vendorName, message };
         break;
       }
 
@@ -1692,6 +1727,26 @@ export const searchHubCartItems = async (req: BoothAuthRequest, res: Response) =
       },
       select: { id: true, userId: true, vendorName: true, boothNumber: true },
     });
+
+    // Fix 2 (2026-08-01): lazily provision the house booth so the hub owner's own
+    // items are searchable/sellable here too. Only resolved when it could plausibly
+    // matter -- no explicit vendorBoothId filter (a general search should include it),
+    // or an explicit filter that found nothing above (it might be asking for the house
+    // booth on its very first use, before it exists) -- so an ordinary single-vendor-
+    // booth search never pays the extra lookup.
+    if (!vendorBoothId || confirmedBooths.length === 0) {
+      const houseBooth = await getOrCreateHouseBooth(hubId);
+      if (houseBooth && (!vendorBoothId || vendorBoothId === houseBooth.id)) {
+        const houseBoothRow = await prisma.vendorBooth.findUnique({
+          where: { id: houseBooth.id },
+          select: { id: true, userId: true, vendorName: true, boothNumber: true },
+        });
+        if (houseBoothRow && !confirmedBooths.some((b) => b.id === houseBoothRow.id)) {
+          confirmedBooths.push(houseBoothRow);
+        }
+      }
+    }
+
     // Same generic 404 whether the requested booth doesn't exist, belongs to a
     // different hub, isn't CONFIRMED, or is unclaimed -- no distinct signal leaked,
     // mirrors the old searchVendorBoothItems rejection behavior.

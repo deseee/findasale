@@ -77,12 +77,17 @@ function serializeBatch(batch: any) {
  * still returned by getVendorBoothPayouts for back-compat. Do NOT "fix" the formula here
  * without a fresh decision.
  */
-async function buildBoothSettlementLines(hubId: string) {
+async function buildBoothSettlementLines(hubId: string, includeHouseBooth: boolean = false) {
   const booths = await prisma.vendorBooth.findMany({
     where: {
       hubId,
       deletedAt: null,
       items: { some: { status: 'SOLD' } },
+      // Fix 2 (2026-08-01): excluded by default -- the hub owner's own house-booth
+      // sales are not a real vendor settlement the way every other booth's are (there
+      // is no one else to settle with). Overridable via ?includeHouseBooth=true; Patrick
+      // hasn't confirmed this is what he wants long-term, but it doesn't block shipping.
+      ...(includeHouseBooth ? {} : { isHubOwnerBooth: false }),
     },
     include: {
       items: { where: { status: 'SOLD' }, select: { id: true, price: true } },
@@ -137,7 +142,8 @@ export const previewVendorBoothSettlement = async (req: AuthRequest, res: Respon
     const hub = await prisma.saleHub.findFirst({ where: { id: hubId, organizerId: organizer.id } });
     if (!hub) return res.status(404).json({ error: 'Hub not found' });
 
-    const lines = await buildBoothSettlementLines(hubId);
+    const includeHouseBooth = req.query.includeHouseBooth === 'true';
+    const lines = await buildBoothSettlementLines(hubId, includeHouseBooth);
 
     const existingBatch = await prisma.vendorBoothSettlementBatch.findFirst({
       where: { hubId, status: { notIn: ['FAILED'] } },
@@ -204,7 +210,8 @@ export const createVendorBoothSettlementBatch = async (req: AuthRequest, res: Re
       return res.status(409).json({ error: 'A settlement batch already exists for this hub', batchId: existing.id });
     }
 
-    const lines = await buildBoothSettlementLines(hubId);
+    const includeHouseBooth = req.query.includeHouseBooth === 'true';
+    const lines = await buildBoothSettlementLines(hubId, includeHouseBooth);
     if (lines.rows.length === 0) {
       return res.status(400).json({ error: 'No SOLD vendor booth items found for this hub' });
     }
