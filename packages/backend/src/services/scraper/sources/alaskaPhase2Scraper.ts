@@ -4,7 +4,8 @@
  * PRIMARY source: ArcGIS Hub NAICS-filtered CSV
  *   Hub page: https://gis.data.alaska.gov/datasets/DCCED::alaska-dcced-cbpl-active-business-license-csv-file-download
  *   Direct CSV: https://opendata.arcgis.com/datasets/[layerId]/FeatureServer/0/query (GeoJSON/CSV)
- *   Socrata CSV endpoint (mirrors the Hub): https://data.alaska.gov/api/views/[dataset]/rows.csv
+ *   (data.alaska.gov Socrata mirror removed 2026-08-01 — DNS no longer resolves,
+ *   domain appears fully decommissioned; confirmed live via getent/curl)
  *
  * The AK Hub CSV contains all active business licenses with NAICS codes.
  * We filter to secondary-sale NAICS codes:
@@ -39,14 +40,14 @@ import { batchUpsertScrapedOrganizers, ScrapedOrganizerRow } from '../index';
 const AK_HUB_CSV_URLS = [
   // ArcGIS FeatureServer CSV export (all records, NAICS field present)
   'https://opendata.arcgis.com/api/v3/datasets/DCCED-cbpl-active-business-license/downloads/data?format=csv&spatialRefId=4326',
-  // Fallback: Socrata-style data.alaska.gov (if mirrored)
-  'https://data.alaska.gov/api/views/cbpl-active-business-license/rows.csv?accessType=DOWNLOAD',
+  // NOTE (2026-08-01): data.alaska.gov (Socrata-style mirror) removed — DNS no
+  // longer resolves at all (confirmed live: getent/curl both fail to resolve
+  // the host). Domain appears fully decommissioned, not just this dataset.
   // Second fallback: direct ArcGIS REST CSV via the known service URL pattern
   'https://services.arcgis.com/pGfbNJoYypmNq86F/arcgis/rest/services/DCCED_Active_Business_Licenses/FeatureServer/0/query?where=1%3D1&outFields=*&f=json',
 ];
 
 const AK_HUB_DOMAIN = 'opendata.arcgis.com';
-const AK_DATA_DOMAIN = 'data.alaska.gov';
 const AK_SERVICES_DOMAIN = 'services.arcgis.com';
 
 // ArcGIS MapServer fallback (keyword-based, no NAICS)
@@ -479,7 +480,7 @@ export async function runAlaskaPhase2Scraper(): Promise<void> {
   let totalUpserted = 0;
 
   // Try each Hub CSV URL in order
-  const csvDomains = [AK_HUB_DOMAIN, AK_DATA_DOMAIN, AK_SERVICES_DOMAIN];
+  const csvDomains = [AK_HUB_DOMAIN, AK_SERVICES_DOMAIN];
   for (let i = 0; i < AK_HUB_CSV_URLS.length; i++) {
     const url = AK_HUB_CSV_URLS[i];
     const domain = csvDomains[Math.min(i, csvDomains.length - 1)];

@@ -382,18 +382,13 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
     setMounted(true);
   }, []);
 
-  // Refresh sale data every 5 seconds to pick up new bids and inventory changes.
-  // Skip invalidation when the query is in an error state (e.g. deleted sale 404) —
-  // otherwise this drives an infinite refetch loop that bypasses the useQuery's own retry/refetchInterval guards.
-  useEffect(() => {
-    if (!id) return;
-    const interval = setInterval(() => {
-      const queryState = queryClient.getQueryState(['sale', id]);
-      if (queryState?.status === 'error' || queryState?.error) return;
-      queryClient.invalidateQueries({ queryKey: ['sale', id] });
-    }, 5000);
-    return () => clearInterval(interval);
-  }, [id, queryClient]);
+  // NOTE (2026-08-01, findasale-dev, Vercel Function Invocations cap fix): the manual
+  // setInterval + queryClient.invalidateQueries(['sale', id]) poll that used to live here was
+  // an exact duplicate of the useQuery refetchInterval below (both polled the same queryKey
+  // every 5s) -- removed. The useQuery refetchInterval already has the same error-state guard
+  // AND (unlike a raw setInterval) respects react-query's default refetchIntervalInBackground:
+  // false, so it now also stops polling when the tab is hidden. Net effect: half the
+  // invocations from this page with zero change to foreground live-update freshness.
 
   // Track QR scan — fires once when utm_source=qr_sign is in the URL
   useEffect(() => {

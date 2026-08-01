@@ -5,7 +5,14 @@
  * Dataset ID: 9k3w-7fwi — "Retail Sales and Retail Use Business Registrations"
  * ADR-073: Directory Scraper Phase 2 — State business licensing data
  *
- * Strategy:
+ * STATUS (2026-08-01): mydata.iowa.gov (Socrata tenant) is fully retired — the
+ * domain now redirects to socrata.com and returns 404 "Cannot find domain" for
+ * every dataset, not just 9k3w-7fwi. No equivalent dataset was found on Iowa's
+ * replacement portal (data.iowa.gov, a different non-Socrata platform with no
+ * public JSON/CSV API discovered). Scraper skips cleanly until a replacement
+ * source is found — see runIowaPhase2Scraper() below.
+ *
+ * Strategy (legacy — inert while the source above is skipped):
  *   1. Always-include NAICS codes: 453310 (Used Merchandise Stores), 459510 (Used Merchandise Retailers)
  *   2. Broader NAICS codes: 453998, 459999 — require keyword match on business name
  *   3. Any NAICS code — if business name keyword-matches a sale-type keyword
@@ -163,114 +170,11 @@ async function fetchSocrataAllPages(
  * Source: Iowa DOR Retail Sales & Retail Use Business Registrations (mydata.iowa.gov)
  */
 export async function runIowaPhase2Scraper(): Promise<void> {
-  console.log('[IowaPhase2] Starting secondary sale scraper');
-  console.log(`[IowaPhase2] Primary source: ${IA_SOCRATA_BASE}`);
-
-  let totalMatched = 0;
-  let totalUpserted = 0;
-
-  try {
-    // Fetch rows with always-include NAICS codes directly
-    const alwaysIncludeCodes = [...ALWAYS_INCLUDE_NAICS].map((c) => `'${c}'`).join(',');
-    const alwaysWhere = `department_business_code in(${alwaysIncludeCodes})`;
-
-    console.log('[IowaPhase2] Fetching always-include NAICS rows...');
-    const alwaysRows = await fetchSocrataAllPages(
-      IA_SOCRATA_BASE,
-      IA_SOCRATA_DOMAIN,
-      alwaysWhere,
-      '[IowaPhase2]'
-    );
-    console.log(`[IowaPhase2] Always-include rows fetched: ${alwaysRows.length}`);
-
-    // Fetch broader NAICS rows that need keyword filtering
-    const broaderCodes = [...BROADER_NAICS].map((c) => `'${c}'`).join(',');
-    const broaderWhere = `department_business_code in(${broaderCodes})`;
-
-    console.log('[IowaPhase2] Fetching broader NAICS rows...');
-    const broaderRows = await fetchSocrataAllPages(
-      IA_SOCRATA_BASE,
-      IA_SOCRATA_DOMAIN,
-      broaderWhere,
-      '[IowaPhase2]'
-    );
-    console.log(`[IowaPhase2] Broader NAICS rows fetched: ${broaderRows.length}`);
-
-    // Process always-include rows
-    let batchRows: ScrapedOrganizerRow[] = [];
-    for (const row of alwaysRows) {
-      const businessName = (row.name_of_business || '').trim();
-      if (!businessName) continue;
-      if (nameIsExcluded(businessName)) continue;
-
-      totalMatched++;
-
-      const city = (row.city_location_of_business || '').trim();
-      const state = (row.state || 'IA').trim();
-      const licenseNumber = (row.retail_permit_number || '').trim();
-      const naicsCode = (row.department_business_code || '').trim();
-      const businessCategory = mapCategory(naicsCode, businessName);
-
-      batchRows.push({
-        businessName,
-        sourceName: 'IowaPhase2',
-        city: city || 'Iowa',
-        state: state || 'IA',
-        businessCategory,
-        isStateLicensed: true,
-        licenseState: 'IA',
-        licenseNumber: licenseNumber || undefined,
-      });
-    }
-
-    // Batch upsert (ADR-073 perf: replaces serial per-row upserts)
-    const alwaysIds = await batchUpsertScrapedOrganizers(batchRows, 100);
-    totalUpserted = alwaysIds.filter((id) => id !== null).length;
-
-    console.log(`[IowaPhase2] Always-include processed — matched: ${totalMatched}, upserted: ${totalUpserted}`);
-
-    // Process broader NAICS rows — require keyword match
-    let broaderMatched = 0;
-    let broaderUpserted = 0;
-    batchRows = [];
-
-    for (const row of broaderRows) {
-      const businessName = (row.name_of_business || '').trim();
-      if (!businessName) continue;
-      if (!nameMatchesKeyword(businessName)) continue;
-      if (nameIsExcluded(businessName)) continue;
-
-      broaderMatched++;
-
-      const city = (row.city_location_of_business || '').trim();
-      const state = (row.state || 'IA').trim();
-      const licenseNumber = (row.retail_permit_number || '').trim();
-      const naicsCode = (row.department_business_code || '').trim();
-      const businessCategory = mapCategory(naicsCode, businessName);
-
-      batchRows.push({
-        businessName,
-        sourceName: 'IowaPhase2',
-        city: city || 'Iowa',
-        state: state || 'IA',
-        businessCategory,
-        isStateLicensed: true,
-        licenseState: 'IA',
-        licenseNumber: licenseNumber || undefined,
-      });
-    }
-
-    // Batch upsert (ADR-073 perf: replaces serial per-row upserts)
-    const broaderIds = await batchUpsertScrapedOrganizers(batchRows, 100);
-    broaderUpserted = broaderIds.filter((id) => id !== null).length;
-
-    totalMatched += broaderMatched;
-    totalUpserted += broaderUpserted;
-
-    console.log(`[IowaPhase2] Broader NAICS processed — matched: ${broaderMatched}, upserted: ${broaderUpserted}`);
-    console.log(`[IowaPhase2] Complete — total matched: ${totalMatched}, total upserted: ${totalUpserted}`);
-  } catch (err) {
-    console.error('[IowaPhase2] Fatal error:', err);
-    throw err;
-  }
+  // mydata.iowa.gov (Socrata) is fully retired as of 2026-08-01 — the domain
+  // redirects to socrata.com and 404s on every dataset, not just this one.
+  // No replacement dataset was found on data.iowa.gov (new, non-Socrata portal;
+  // no public JSON/CSV API discovered). Exit cleanly so the batch stays green.
+  console.log('[IowaPhase2] Skipping — mydata.iowa.gov (Socrata tenant) is retired (all datasets 404, domain redirects to socrata.com)');
+  console.log('[IowaPhase2] No replacement Iowa open data portal found. To unblock: check https://data.iowa.gov for a JSON/CSV API covering retail sales tax permits.');
+  return;
 }
