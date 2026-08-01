@@ -816,11 +816,40 @@ export interface EbayPublishInput {
   sku?: string | null;
 }
 
+/**
+ * Extract the first user-friendly error message from an eBay error response body.
+ * Duplicated (not imported) from ebayController.ts's own parseEbayErrorMessage to
+ * avoid a circular import (ebayController already imports from this file).
+ */
+function parseEbayErrorMessage(body: string): string | null {
+  try {
+    const parsed = JSON.parse(body);
+    if (parsed?.errors?.[0]?.message) return String(parsed.errors[0].message);
+    if (parsed?.errors?.[0]?.longMessage) return String(parsed.errors[0].longMessage);
+    if (parsed?.message) return String(parsed.message);
+  } catch {
+    // not JSON
+  }
+  return null;
+}
+
 export interface EbayPublishResult {
   published: boolean;
   listingId: string | null;
   /** The last eBay errorId encountered when publish ultimately failed. */
   lastErrorId?: string | null;
+  /**
+   * Human-readable text of the LAST publish error, parsed from eBay's raw response body
+   * (or the raw body itself, truncated, when it isn't parseable JSON). Root-cause fix
+   * (S1184, Vivitar-flash push failure): previously the real eBay error was only ever
+   * console.warn'd inside the loop and discarded from the return value -- every publish
+   * failure with an errorId outside the 4 registered healers (25005/25021/25101/25002)
+   * came back to the caller as `lastErrorId: null`, which every call site then turned
+   * into a completely generic "Failed to publish offer" / "eBay rejected publish" toast
+   * with zero information about what actually went wrong (e.g. an invalid/stale
+   * fulfillmentPolicyId). Callers should prefer this over a hardcoded generic string.
+   */
+  lastErrorMessage?: string | null;
   /** The final (or last) offerId, which a 25005 heal may have recreated. */
   offerId: string | null;
 }
@@ -841,12 +870,12 @@ export async function ebayPublishWithSelfHeal(input: EbayPublishInput): Promise<
   const item = input.item;
   const offerId = item.ebayOfferId;
   if (!offerId) {
-    return { published: false, listingId: null, offerId: null, lastErrorId: null };
+    return { published: false, listingId: null, offerId: null, lastErrorId: null, lastErrorMessage: 'Item has no eBay offer to publish' };
   }
 
   const accessToken = input.accessToken ?? (await getEbayAccessToken());
   if (!accessToken) {
-    return { published: false, listingId: null, offerId, lastErrorId: null };
+    return { published: false, listingId: null, offerId, lastErrorId: null, lastErrorMessage: 'Could not get a valid eBay access token' };
   }
 
   // isUsedFamily source of truth = DB item.condition (ADR canonical decision 1).
@@ -865,12 +894,18 @@ export async function ebayPublishWithSelfHeal(input: EbayPublishInput): Promise<
 
   const attempted = new Set<string>();
   let lastErrorId: string | null = null;
+  let lastErrorMessage: string | null = null;
 
   for (let iteration = 0; iteration < 5; iteration++) {
     const pub = await attemptPublish(ctx);
     if (pub.ok) {
-      return { published: true, listingId: pub.listingId, offerId: ctx.offerId, lastErrorId };
+      return { published: true, listingId: pub.listingId, offerId: ctx.offerId, lastErrorId, lastErrorMessage: null };
     }
+
+    // Capture the real eBay error text for EVERY failed attempt (not just unhealable
+    // ones) so the caller always has the most recent real reason, even if a later
+    // healer iteration also fails without changing the underlying cause.
+    lastErrorMessage = parseEbayErrorMessage(pub.errorBody) ?? pub.errorBody.slice(0, 300) ?? null;
 
     const errorId = matchErrorId(pub.errorBody);
     lastErrorId = errorId;
@@ -889,7 +924,7 @@ export async function ebayPublishWithSelfHeal(input: EbayPublishInput): Promise<
     const healer = HEALERS[errorId];
     const result = await healer(ctx, pub.errorBody);
     if (result.published) {
-      return { published: true, listingId: result.listingId ?? null, offerId: ctx.offerId, lastErrorId };
+      return { published: true, listingId: result.listingId ?? null, offerId: ctx.offerId, lastErrorId, lastErrorMessage: null };
     }
     if (!result.retry) {
       // Healer could not repair — stop.
@@ -898,5 +933,5 @@ export async function ebayPublishWithSelfHeal(input: EbayPublishInput): Promise<
     // result.retry === true → loop re-attempts the publish.
   }
 
-  return { published: false, listingId: null, offerId: ctx.offerId, lastErrorId };
+  return { published: false, listingId: null, offerId: ctx.offerId, lastErrorId, lastErrorMessage };
 }

@@ -1850,7 +1850,7 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
             });
             if (!healResult.published) {
               console.warn(
-                `[eBay PushSync] Item ${id}: republish did not publish (lastErrorId=${healResult.lastErrorId ?? 'none'})`
+                `[eBay PushSync] Item ${id}: republish did not publish (lastErrorId=${healResult.lastErrorId ?? 'none'}) reason=${healResult.lastErrorMessage ?? 'unknown'}`
               );
             }
           }

@@ -2498,13 +2498,18 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
         if (!inventoryResponse.ok && inventoryResponse.status !== 204) {
           const errorData = await inventoryResponse.text();
           console.error(`[eBay] Inventory creation failed: ${inventoryResponse.status} ${errorData}`);
+          const invErrMsg = parseEbayErrorMessage(errorData);
           results.push({
             itemId: item.id,
             sku,
             ebayListingId: null,
             status: 'error',
             error: 'INVENTORY_CREATION_FAILED',
-            message: `Failed to create inventory item: ${inventoryResponse.status}`,
+            // Root-cause fix (S1184): include eBay's real error text instead of a
+            // bare HTTP status code.
+            message: invErrMsg
+              ? `eBay rejected this listing: ${invErrMsg}`
+              : `Failed to create inventory item: ${inventoryResponse.status}`,
           });
           continue;
         }
@@ -2686,13 +2691,18 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
           if (!createRes.ok) {
             const errText = await createRes.text();
             console.error(`[eBay] Offer creation failed: ${createRes.status} ${errText}`);
+            const offerErrMsg = parseEbayErrorMessage(errText);
             results.push({
               itemId: item.id,
               sku,
               ebayListingId: null,
               status: 'error',
               error: 'OFFER_CREATION_FAILED',
-              message: `Failed to create offer: ${createRes.status}`,
+              // Root-cause fix (S1184): include eBay's real error text (e.g. an
+              // invalid fulfillmentPolicyId) instead of a bare HTTP status code.
+              message: offerErrMsg
+                ? `eBay rejected this listing: ${offerErrMsg}`
+                : `Failed to create offer: ${createRes.status}`,
             });
             continue;
           }
@@ -2754,14 +2764,20 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
               message: 'eBay could not find a valid category for this item. Open the item editor, set the eBay Category, and push again.',
             });
           } else {
-            console.error(`[eBay] Publish failed and no listingId found (lastErrorId=${healResult.lastErrorId ?? 'none'})`);
+            console.error(`[eBay] Publish failed and no listingId found (lastErrorId=${healResult.lastErrorId ?? 'none'}) reason=${healResult.lastErrorMessage ?? 'unknown'}`);
             results.push({
               itemId: item.id,
               sku,
               ebayListingId: null,
               status: 'error',
               error: 'PUBLISH_FAILED',
-              message: `Failed to publish offer${healResult.lastErrorId ? ` (eBay error ${healResult.lastErrorId})` : ''}`,
+              // Root-cause fix (S1184): surface eBay's real error text instead of a
+              // bare status/errorId — this is what actually renders in the organizer's
+              // toast, so a stale/invalid fulfillmentPolicyId (or any other eBay
+              // rejection reason) is no longer a silent generic "failed" message.
+              message: healResult.lastErrorMessage
+                ? `eBay rejected this listing: ${healResult.lastErrorMessage}`
+                : `Failed to publish offer${healResult.lastErrorId ? ` (eBay error ${healResult.lastErrorId})` : ''}`,
             });
           }
           continue;
@@ -3347,9 +3363,14 @@ export const publishItemOffer = async (req: AuthRequest, res: Response) => {
     const ebayListingId: string | null = healResult.listingId;
 
     if (!healResult.published || !ebayListingId) {
+      // Root-cause fix (S1184): same swallow bug as pushSaleToEbay — surface the real
+      // eBay error text instead of a generic message so the organizer's toast is
+      // actionable (e.g. an invalid/stale fulfillmentPolicyId now names itself).
       return res.status(400).json({
         code: 'PUBLISH_FAILED',
-        message: healResult.lastErrorId
+        message: healResult.lastErrorMessage
+          ? `eBay rejected this listing: ${healResult.lastErrorMessage}`
+          : healResult.lastErrorId
           ? `eBay rejected publish (error ${healResult.lastErrorId})`
           : 'eBay rejected publish',
         ebayErrorId: healResult.lastErrorId ?? null,
@@ -3920,6 +3941,57 @@ async function resolvePoliciesForItem(
     const weightOz = item.packageWeightOz;
     const tier = matchWeightTier(weightOz, tiers);
     if (tier) {
+      // Stale-policy guard (S1184 — root cause of the Vivitar-flash silent push
+      // failure): EbayPolicyMapping.weightTierMappings is a manually-saved snapshot
+      // (saveEbayPolicyMapping) that is NEVER auto-refreshed. It goes stale the moment
+      // the organizer edits/renames/deletes/consolidates policies directly on eBay's
+      // Business Policies page (confirmed real-world case: the 2026-07-29 eBay-side
+      // consolidation of the 4oz/8oz/12oz/15oz tiers into one "Ground Advantage Under
+      // 1lb $9.99" policy). Sending a dead fulfillmentPolicyId straight to eBay used to
+      // fail the offer/publish call with zero useful detail surfaced to the organizer.
+      // Validate the matched tier's policyId against the organizer's CURRENT live eBay
+      // fulfillment-policy list (already fetched/cached for smart-pick) before using it;
+      // if it's gone, self-heal via the same FVF-flat provisioning the gap-overshoot
+      // path below already uses, instead of silently submitting a bad id.
+      const livePolicies = smartPickContext?.fetchFulfillmentPolicies
+        ? await smartPickContext.fetchFulfillmentPolicies()
+        : null;
+      const tierPolicyStillLive =
+        livePolicies == null || // couldn't verify (no fetcher provided) — proceed unchanged
+        livePolicies.some((p: any) => p.fulfillmentPolicyId === tier.policyId);
+
+      if (!tierPolicyStillLive) {
+        console.warn(
+          `[eBay ShippingPick] item=${item.id} weight-tier policy "${tier.policyName}" (${tier.policyId}) no longer exists on eBay — stale EbayPolicyMapping.weightTierMappings snapshot for organizer=${organizerId}. Falling back to FVF-flat.`
+        );
+        const _staleFromZip = smartPickContext?.fromZip ?? null;
+        const _staleDims =
+          item.packageLengthIn != null && item.packageWidthIn != null && item.packageHeightIn != null
+            ? { length: item.packageLengthIn, width: item.packageWidthIn, height: item.packageHeightIn }
+            : null;
+        const _staleFvf = await ensureFvfFlatRatePolicy(organizerId, weightOz, _staleDims, _staleFromZip);
+        if (_staleFvf) {
+          return {
+            fulfillmentPolicyId: _staleFvf.policyId,
+            returnPolicyId: mapping.defaultReturnPolicyId || conn.returnPolicyId || '',
+            paymentPolicyId: mapping.defaultPaymentPolicyId || conn.paymentPolicyId || '',
+            descriptionHtml: mapping.defaultDescriptionHtml ?? null,
+            pushAsDraft: mapping.pushAsDraft ?? false,
+            merchantLocationSource: mapping.merchantLocationSource || conn.merchantLocationSource || 'SALE_ADDRESS',
+            routingReason: `stale-tier-fvf-flat:${_staleFvf.flatRate}`,
+          };
+        }
+        await prisma.item.update({
+          where: { id: item.id },
+          data: { ebayNeedsReview: true },
+        });
+        return {
+          error: 'SHIPPING_POLICY_STALE',
+          code: 'SHIPPING_POLICY_STALE',
+          message: `Your shipping tier "${tier.policyName}" no longer exists on eBay (it may have been renamed, merged, or deleted in eBay's Business Policies). Go to eBay Settings and re-sync your shipping tiers, or switch this item to Calculated shipping.`,
+        };
+      }
+
       // Gap-overshoot guard (S-stopgap): organizer weight-tier maps can have gaps
       // (e.g. a "6+ lb / ≤111oz" tier, then nothing until "45 lb / ≤720oz").
       // matchWeightTier picks the smallest tier whose maxOz >= weight, so an item
