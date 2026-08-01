@@ -27,6 +27,7 @@ import {
 import {
   startBoothCart,
   addBoothCartItems,
+  removeBoothCartItem,
   getBoothCartSummary,
   getBoothCartContents,
   createBoothCartTerminalConnectionToken,
@@ -138,6 +139,7 @@ router.delete('/api/organizer/hubs/:hubId/vendor-booths/:boothId/register-access
 // still hard-401s if neither a valid booth token NOR an authenticated req.user is present.
 router.post('/api/organizer/hubs/:hubId/cart/start', optionalAuthenticate, requireBoothTokenOrTeamMember(), startBoothCart);
 router.post('/api/organizer/hubs/:hubId/cart/:cartTransactionId/items', optionalAuthenticate, requireBoothTokenOrTeamMember(), addBoothCartItems);
+router.delete('/api/organizer/hubs/:hubId/cart/:cartTransactionId/items/:itemId', optionalAuthenticate, requireBoothTokenOrTeamMember(), removeBoothCartItem);
 
 // Hub-wide item search (2026-07-31, replaces the booth-scoped route above's old
 // handler): venue mode's "Search by title or SKU" box has no single selectedSaleId to

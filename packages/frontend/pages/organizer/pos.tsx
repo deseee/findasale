@@ -1394,7 +1394,22 @@ export default function POSPage() {
   };
 
   const removeFromCart = (cartId: string) => {
+    const removedItem = cart.find(c => c.id === cartId);
     setCart(prev => prev.filter(c => c.id !== cartId));
+
+    if (venueHubId && venueCart && removedItem?.itemId) {
+      api.delete(
+        `/organizer/hubs/${venueHubId}/cart/${venueCart.id}/items/${removedItem.itemId}`,
+        venueBoothToken ? { headers: { 'X-Booth-Token': venueBoothToken } } : undefined
+      ).catch(err => {
+        // Server-side release failed (e.g. checkout already started, or a race).
+        // Put the item back in the visible cart so local state doesn't silently
+        // diverge from server truth (item invisible in UI but still reserved
+        // server-side, blocking search -- the exact bug this fix closes).
+        setCart(prev => [...prev, removedItem]);
+        setErrorMessage(err?.response?.data?.error || 'Could not remove item -- please try again.');
+      });
+    }
   };
 
   const clearCart = () => {

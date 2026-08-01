@@ -539,6 +539,122 @@ export const addBoothCartItems = async (req: BoothAuthRequest, res: Response) =>
 };
 
 /**
+ * DELETE /api/organizer/hubs/:hubId/cart/:cartTransactionId/items/:itemId
+ * Releases one RESERVED item back to AVAILABLE and removes it from this cart.
+ * Only allowed while the cart is still PENDING (mirrors addBoothCartItems's own
+ * status guard) -- once checkout has started (IN_PROGRESS or later), a leg may
+ * already reference this item's booth, so removal is not safe/supported here.
+ * Mirrors addBoothCartItems's reservation write exactly (status, vendorBoothId,
+ * boothCartTransactionId -- confirmed those are the only three fields that write
+ * sets) so the release is fully symmetric with the reservation.
+ */
+export const removeBoothCartItem = async (req: BoothAuthRequest, res: Response) => {
+  try {
+    const { hubId, cartTransactionId, itemId } = req.params;
+    if (!req.boothAuth) return res.status(401).json({ error: 'Booth/team authentication required' });
+
+    const cart = await prisma.boothCartTransaction.findFirst({ where: { id: cartTransactionId, hubId } });
+    if (!cart) return res.status(404).json({ error: 'Cart not found' });
+    if (!callerOwnsCart(req.boothAuth, cart)) return res.status(403).json({ error: CART_NOT_YOURS_ERROR });
+    if (cart.status !== 'PENDING') {
+      return res.status(409).json({ error: `Cart is not open for edits (status: ${cart.status})` });
+    }
+
+    const item = await prisma.item.findFirst({
+      where: { id: itemId, status: 'RESERVED', boothCartTransactionId: cart.id },
+      select: { id: true, price: true, vendorBoothId: true },
+    });
+    if (!item) return res.status(404).json({ error: 'Item is not reserved in this cart' });
+
+    // P1 TOCTOU/lost-update fix (findasale-hacker adversarial pass, 2026-08-01).
+    // Three races closed here, all requiring only the ALREADY-authorized cart owner
+    // (no cross-tenant IDOR -- callerOwnsCart above already proved that), so this is
+    // hardening against racing-yourself / double-fire, not a new attacker surface:
+    //
+    // 1) Money correctness (item release vs. checkout start): the PENDING checks
+    //    above are plain reads. Without a re-check at write time, a concurrent
+    //    authorizeBoothCart*Leg call could flip this cart PENDING -> IN_PROGRESS
+    //    (beginCartCheckout) and read this item as still RESERVED into a leg's
+    //    amountCents, while THIS request's release still lands, unreserving the item
+    //    (and freeing it for resale) even though the shopper's card is about to be
+    //    authorized/captured for it. Guarding the final cart write with the SAME
+    //    conditional-updateMany CAS idiom beginCartCheckout/captureBoothCart already
+    //    use (`status: 'PENDING'` in the WHERE, count checked after) -- and reverting
+    //    the item release if the CAS loses -- closes the common case: once
+    //    beginCartCheckout's flip has landed, this request's own final write fails
+    //    and the item is put back to RESERVED before this handler returns, so any
+    //    authorize call that reads it afterward sees it correctly still reserved.
+    //
+    // 2) Double-removal (two racing calls for the SAME item): item release is now a
+    //    conditional updateMany keyed on `status: 'RESERVED'` (not a plain update by
+    //    id), so a second racer that already lost the initial findFirst-style read
+    //    still can't double-decrement the cart if it somehow reaches this point --
+    //    it gets count 0 and a 409, matching this file's existing claim-key idiom
+    //    (e.g. authorizeBoothCartTerminalLeg's BoothCartLeg claim).
+    //
+    // 3) Lost update on cart.boothsRepresented/totalAmount (two racing calls for
+    //    DIFFERENT items in the same cart): the old code diffed against a `cart`
+    //    snapshot read at the TOP of the request, so the second call to commit could
+    //    silently overwrite the first call's change with a stale value. totalAmount
+    //    now uses Prisma's atomic `decrement` (a single `SET total = total - x` at
+    //    the DB layer, safe under any interleaving) instead of a precomputed value.
+    //    boothsRepresented is now re-derived from a LIVE query of this cart's
+    //    currently-RESERVED items (same live-query style this function already used
+    //    for `stillHasBoothItems` below), not filtered off the stale snapshot, so a
+    //    concurrent sibling call's change is never clobbered.
+    const releaseClaim = await prisma.item.updateMany({
+      where: { id: item.id, status: 'RESERVED', boothCartTransactionId: cart.id },
+      data: { status: 'AVAILABLE', vendorBoothId: null, boothCartTransactionId: null },
+    });
+    if (releaseClaim.count !== 1) {
+      return res.status(409).json({ error: 'Item is not reserved in this cart (concurrent request)' });
+    }
+
+    const remainingBooths = await prisma.item.findMany({
+      where: { boothCartTransactionId: cart.id, status: 'RESERVED' },
+      select: { vendorBoothId: true },
+      distinct: ['vendorBoothId'],
+    });
+    const newBoothsRepresented = remainingBooths
+      .map((b) => b.vendorBoothId)
+      .filter((id): id is string => !!id);
+
+    const cas = await prisma.boothCartTransaction.updateMany({
+      where: { id: cart.id, status: 'PENDING' },
+      data: { boothsRepresented: newBoothsRepresented, totalAmount: { decrement: item.price || 0 } },
+    });
+    if (cas.count !== 1) {
+      // Lost the race to a concurrent checkout-start (beginCartCheckout already
+      // flipped this cart to IN_PROGRESS). Revert the release above so the item
+      // stays correctly RESERVED/attributed to its booth for whatever leg is now
+      // being authorized against it, exactly as if this request had arrived a
+      // moment earlier and simply hit the (still real, still enforced) PENDING
+      // check at the top of this handler.
+      await prisma.item.updateMany({
+        where: { id: item.id, status: 'AVAILABLE', boothCartTransactionId: null },
+        data: { status: 'RESERVED', vendorBoothId: item.vendorBoothId, boothCartTransactionId: cart.id },
+      });
+      const freshCart = await prisma.boothCartTransaction.findFirst({ where: { id: cart.id } });
+      return res.status(409).json({ error: `Cart is not open for edits (status: ${freshCart?.status ?? 'unknown'})` });
+    }
+
+    let updated = await prisma.boothCartTransaction.findFirstOrThrow({ where: { id: cart.id } });
+    if (Number(updated.totalAmount) < 0) {
+      // Defense-in-depth floor: decrement is atomic and correct under concurrency,
+      // but can only floor at 0 as a follow-up write, not inline -- guards against
+      // totalAmount ever going negative if it was already inconsistent with the
+      // live RESERVED-items sum for any other reason.
+      updated = await prisma.boothCartTransaction.update({ where: { id: cart.id }, data: { totalAmount: 0 } });
+    }
+
+    return res.status(200).json({ removed: true, cart: updated });
+  } catch (error) {
+    console.error('[removeBoothCartItem] Error:', error);
+    return res.status(500).json({ error: 'Failed to remove item from cart' });
+  }
+};
+
+/**
  * ADR-020 (2026-07-07, Patrick-approved same session): Standard-account migration.
  * Replaces the old single-PaymentIntent-per-cart model (`chargeBoothCart` /
  * `confirmBoothCart`, one Direct charge on the ORGANIZER's stripeConnectId, vendor
