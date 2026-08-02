@@ -303,7 +303,10 @@ export default function HubManagePage() {
                   </p>
                   <ul className="mt-3 list-disc pl-5 space-y-2 text-base font-medium text-warm-800 dark:text-gray-200">
                     {(data.hub.confirmedBoothCount ?? 0) > 0 && (
-                      <li>{data.hub.confirmedBoothCount} confirmed vendor booths can still sell here.</li>
+                      <li>
+                        {data.hub.confirmedBoothCount} confirmed vendor booth
+                        {data.hub.confirmedBoothCount === 1 ? '' : 's'} can still sell here.
+                      </li>
                     )}
                     {(data.hub.awaitingConfirmationCount ?? 0) > 0 && (
                       <li>

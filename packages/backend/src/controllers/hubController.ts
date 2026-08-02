@@ -302,7 +302,13 @@ const getHubCloseBlockers = async (hubIds: string[]): Promise<Map<string, HubClo
   if (hubIds.length === 0) return byHub;
 
   const booths = await prisma.vendorBooth.findMany({
-    where: { hubId: { in: hubIds }, deletedAt: null, status: { in: ['PENDING', 'CONFIRMED'] } },
+    // isHubOwnerBooth: false -- the synthetic house booth (Fix 2, 2026-08-01,
+    // houseBoothService.getOrCreateHouseBooth) is the hub owner's own inventory, not a
+    // real vendor. It must never count toward confirmedBoothCount/awaitingConfirmationCount
+    // or an organizer who has ever sold their own item through the register could never
+    // close their market, with no visibility into why since it's already excluded from
+    // listVendorBooths. Matches the guard in vendorBoothController.ts's listVendorBooths.
+    where: { hubId: { in: hubIds }, deletedAt: null, status: { in: ['PENDING', 'CONFIRMED'] }, isHubOwnerBooth: false },
     select: { hubId: true, status: true, userId: true },
   });
   for (const booth of booths) {
