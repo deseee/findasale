@@ -336,15 +336,36 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         for (const u of urls) { try { out.push(await fetchImageDataUrl(u)); } catch (e) { /* skip bad img */ } }
         sendResponse({ ok: true, dataUrls: out });
       } else if (msg.type === 'setQueue') {
-        await chrome.storage.local.set({ fasQueue: msg.queue || [], fasIndex: 0, fasAutoPublish: msg.autoPublish !== false });
+        await chrome.storage.local.set({ fasQueue: msg.queue || [], fasIndex: 0, fasAutoPublish: msg.autoPublish !== false, fasQueueSetAt: Date.now() });
         sendResponse({ ok: true });
       } else if (msg.type === 'getQueueItem') {
-        const { fasQueue = [], fasIndex = 0, fasAutoPublish = true } = await chrome.storage.local.get(['fasQueue', 'fasIndex', 'fasAutoPublish']);
-        sendResponse({ ok: true, item: fasQueue[fasIndex] || null, index: fasIndex, total: fasQueue.length, autoPublish: fasAutoPublish });
+        // (2026-08-02 fix -- Christmas-tree phantom-refill bug) A queue is only ever advanced by
+        // 'advanceQueue' below, which fires AFTER a full fill+publish completes in fas-content.js.
+        // If the create-item tab is closed/navigated away mid-fill (aborted run, or the organizer
+        // closing the tab right after seeing "Published" before advanceAuto() gets to run), fasIndex
+        // never moves off the same stuck item and NOTHING previously cleared fasQueue -- so it sat in
+        // chrome.storage.local (durable across restarts/extension reloads) and re-filled the SAME
+        // item every time /marketplace/create/item loaded, with no user action, indefinitely.
+        // FAS_QUEUE_STALE_MS treats a queue that hasn't advanced in 30+ min as an abandoned/interrupted
+        // run rather than a live one and self-clears it here at the read site (the actual "is anything
+        // queued" check), instead of trusting storage forever. 30 min comfortably covers a real
+        // multi-item run (each item normally fills in well under a minute) while still self-healing a
+        // leftover from a run abandoned days earlier.
+        const FAS_QUEUE_STALE_MS = 30 * 60 * 1000;
+        const { fasQueue = [], fasIndex = 0, fasAutoPublish = true, fasQueueSetAt = 0 } =
+          await chrome.storage.local.get(['fasQueue', 'fasIndex', 'fasAutoPublish', 'fasQueueSetAt']);
+        if (fasQueue.length && Date.now() - fasQueueSetAt > FAS_QUEUE_STALE_MS) {
+          await chrome.storage.local.set({ fasQueue: [], fasIndex: 0 });
+          sendResponse({ ok: true, item: null, index: 0, total: 0, autoPublish: fasAutoPublish });
+        } else {
+          sendResponse({ ok: true, item: fasQueue[fasIndex] || null, index: fasIndex, total: fasQueue.length, autoPublish: fasAutoPublish });
+        }
       } else if (msg.type === 'advanceQueue') {
         const st = await chrome.storage.local.get(['fasQueue', 'fasIndex']);
         const next = (st.fasIndex || 0) + 1;
-        await chrome.storage.local.set({ fasIndex: next });
+        // Refresh the staleness clock on real forward progress so a legitimate long multi-item run
+        // never gets treated as abandoned mid-way through.
+        await chrome.storage.local.set({ fasIndex: next, fasQueueSetAt: Date.now() });
         const item = (st.fasQueue || [])[next] || null;
         sendResponse({ ok: true, item, index: next, total: (st.fasQueue || []).length });
       } else if (msg.type === 'setCraigslistQueue') {
