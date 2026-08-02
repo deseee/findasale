@@ -374,6 +374,9 @@ const AddItemsDetailPage = () => {
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
   // Client-side search/filter for the saved-items list (helps when a sale has 100+ items)
   const [itemSearch, setItemSearch] = useState('');
+  // Sold-items filter (Patrick feedback 2026-08-02): segmented control, not a separate
+  // input-method tab — composes with itemSearch rather than replacing it.
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'sold'>('all');
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [deleteConfirmTitle, setDeleteConfirmTitle] = useState<string>('');
   const [bulkPrice, setBulkPrice] = useState('');
@@ -605,12 +608,19 @@ const AddItemsDetailPage = () => {
     enabled: !!saleId && !inMutationFlight.current,
   });
 
-  // Client-side filtered view of the saved-items list (search by name, category, or tag).
-  // When the query is empty, this is the identical array reference behavior as `items`.
+  // Client-side filtered view of the saved-items list (search by name/category/tag,
+  // composed with the All/Active/Sold status filter). When the query is empty and the
+  // status filter is 'all', this is the identical array reference behavior as `items`.
   const filteredItems = useMemo(() => {
     const q = itemSearch.trim().toLowerCase();
-    if (!q) return items as any[];
-    return (items as any[]).filter((it: any) => {
+    let result = items as any[];
+    if (statusFilter === 'sold') {
+      result = result.filter((it: any) => it?.status === 'SOLD');
+    } else if (statusFilter === 'active') {
+      result = result.filter((it: any) => it?.status !== 'SOLD');
+    }
+    if (!q) return result;
+    return result.filter((it: any) => {
       const title = (it?.title || '').toString().toLowerCase();
       const category = (it?.category || '').toString().toLowerCase();
       const tags = Array.isArray(it?.tags)
@@ -618,7 +628,7 @@ const AddItemsDetailPage = () => {
         : (it?.tags || '').toString().toLowerCase();
       return title.includes(q) || category.includes(q) || tags.includes(q);
     });
-  }, [items, itemSearch]);
+  }, [items, itemSearch, statusFilter]);
 
   // #403: Fetch existing bundles for this sale
   const { data: bundles = [], refetch: refetchBundles } = useQuery({
@@ -1003,6 +1013,9 @@ const AddItemsDetailPage = () => {
   const publishedCount = items.filter((i: any) => computeDraftStatus(i) === 'PUBLISHED').length;
   const unpublishedCount = items.filter((i: any) => computeDraftStatus(i) !== 'PUBLISHED').length;
   const draftCount = items.filter((i: any) => computeDraftStatus(i) === 'DRAFT').length;
+  // Sold vs Active counts for the status filter pill row (Patrick feedback 2026-08-02)
+  const soldItemCount = items.filter((i: any) => i.status === 'SOLD').length;
+  const activeItemCount = items.length - soldItemCount;
 
   const handlePhotoUpload = (urls: string[]) => {
     setFormData((prev) => ({
@@ -1732,15 +1745,6 @@ const AddItemsDetailPage = () => {
 
       <main className="min-h-screen bg-warm-50 dark:bg-gray-900 py-8">
         <div className="max-w-6xl mx-auto px-4">
-          <div className="mb-8">
-            <Link
-              href={`/organizer/dashboard`}
-              className="text-amber-700 hover:text-amber-800 text-sm font-medium inline-flex items-center gap-1"
-            >
-              &larr; Back to dashboard
-            </Link>
-          </div>
-
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-warm-200 dark:border-gray-700 p-6 mb-8">
             <h1 className="text-3xl font-bold text-warm-900 dark:text-warm-100 mb-1">
               Add Items
@@ -1765,6 +1769,15 @@ const AddItemsDetailPage = () => {
                 'Add items to your sale using camera capture, batch upload, manual entry, or CSV import.'
               )}
             </p>
+            {/* Moved below the item-count line to remove the dead-space top block (Patrick feedback 2026-08-02) */}
+            <div className="mt-3 pt-3 border-t border-warm-100 dark:border-gray-700">
+              <Link
+                href={`/organizer/dashboard`}
+                className="text-amber-700 hover:text-amber-800 text-sm font-medium inline-flex items-center gap-1"
+              >
+                &larr; Back to dashboard
+              </Link>
+            </div>
           </div>
 
           {/* Tab Navigation — ordered by primary workflow */}
@@ -2493,6 +2506,35 @@ const AddItemsDetailPage = () => {
                       {sortBy === option && (sortOrder === 'asc' ? ' ↑' : ' ↓')}
                     </button>
                   ))}
+                </div>
+              )}
+
+              {/* Status filter — All / Active / Sold segmented control (Patrick feedback
+                  2026-08-02: sold items requested as their own view; UX call was a status
+                  filter here rather than a fourth input-method tab above, since Camera/
+                  Batch/Manual/CSV Import are a different concept — how you ADD an item,
+                  not the status of items already added). Composes with itemSearch. */}
+              {items.length > 0 && (
+                <div className="px-4 py-2 bg-warm-50 dark:bg-gray-900 border-b border-warm-200 dark:border-gray-700 flex items-center gap-2">
+                  <div className="inline-flex rounded-full border border-warm-300 dark:border-gray-600 overflow-hidden">
+                    {([
+                      { key: 'all' as const, label: 'All', count: items.length },
+                      { key: 'active' as const, label: 'Active', count: activeItemCount },
+                      { key: 'sold' as const, label: 'Sold', count: soldItemCount },
+                    ]).map((opt) => (
+                      <button
+                        key={opt.key}
+                        onClick={() => setStatusFilter(opt.key)}
+                        className={`px-3 py-1 text-xs font-medium transition-colors ${
+                          statusFilter === opt.key
+                            ? 'bg-amber-600 text-white'
+                            : 'bg-white dark:bg-gray-800 text-warm-700 dark:text-warm-300 hover:bg-warm-100 dark:hover:bg-gray-700'
+                        }`}
+                      >
+                        {opt.label} ({opt.count})
+                      </button>
+                    ))}
+                  </div>
                 </div>
               )}
 

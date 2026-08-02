@@ -89,8 +89,24 @@ export default function SalePulseWidget({ saleId, followerCount = 0, organizerNa
           <p className="text-xs text-gray-500 dark:text-gray-400">Saves</p>
         </div>
         <div className="text-center">
-          <p className="text-lg font-semibold text-gray-900 dark:text-white">{data.shopperQuestions}</p>
-          <p className="text-xs text-gray-500 dark:text-gray-400">Questions</p>
+          {data.shopperQuestions > 0 ? (
+            <Link
+              href="/messages"
+              className="block hover:opacity-80 transition-opacity"
+              title="Answer shopper questions in Messages"
+            >
+              <p className="text-lg font-semibold text-amber-600 dark:text-amber-400 inline-flex items-center gap-1 justify-center">
+                {data.shopperQuestions}
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 dark:bg-amber-400" aria-hidden="true" />
+              </p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">Questions</p>
+            </Link>
+          ) : (
+            <>
+              <p className="text-lg font-semibold text-gray-900 dark:text-white">{data.shopperQuestions}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">Questions</p>
+            </>
+          )}
         </div>
       </div>
 
