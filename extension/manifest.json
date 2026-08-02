@@ -38,6 +38,14 @@
       "matches": ["https://post.craigslist.org/*"],
       "js": ["fas-craigslist.js"],
       "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://www.facebook.com/marketplace/you/*",
+        "https://www.facebook.com/marketplace/inbox/*"
+      ],
+      "js": ["fas-selectors.js", "fas-tracking.js"],
+      "run_at": "document_idle"
     }
   ]
 }
