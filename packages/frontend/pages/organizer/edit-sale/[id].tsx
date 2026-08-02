@@ -126,6 +126,19 @@ const EditSalePage = () => {
     enabled: !!id,
   });
 
+  // Ownership guard (BQ P1 fix, 2026-08-02): the backend already blocks a non-owner from
+  // saving/deleting this sale, but the page itself rendered the full edit form for anyone
+  // who could view another organizer's Edit Sale URL. Fetch this organizer's own profile id
+  // so we can confirm the loaded sale actually belongs to them before rendering the form.
+  const { data: organizerProfile, isLoading: organizerProfileLoading } = useQuery<{ id: string }>({
+    queryKey: ['edit-sale-organizer-profile'],
+    queryFn: async () => {
+      const response = await api.get('/organizers/me');
+      return response.data;
+    },
+    enabled: !!user,
+  });
+
   // Keep formDataRef in sync with formData state to avoid stale closure in mutations
   useEffect(() => {
     formDataRef.current = formData;
@@ -471,7 +484,7 @@ const EditSalePage = () => {
     }
   };
 
-  if (authLoading || isLoading) {
+  if (authLoading || isLoading || organizerProfileLoading) {
     return (
       <div className="min-h-screen bg-white dark:bg-gray-900 py-8">
         <div className="max-w-2xl mx-auto px-4">
@@ -495,6 +508,26 @@ const EditSalePage = () => {
           <div className="rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 p-6">
             <h1 className="text-lg font-semibold text-red-800 dark:text-red-200 mb-2">Something went wrong</h1>
             <p className="text-red-700 dark:text-red-300 mb-4">We couldn't load this sale. Please refresh the page or go back to your sales list.</p>
+            <Link href="/organizer/sales" className="inline-block bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors">
+              Back to Sales
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Ownership guard (BQ P1 fix, 2026-08-02): don't render the edit form for a sale that
+  // belongs to a different organizer. Mirrors the pattern already used above for a failed
+  // sale load. If the profile fetch itself failed, organizerProfile is undefined and this
+  // check no-ops -- the backend's own ownership check on save/delete remains the real gate.
+  if (organizerProfile && sale.organizerId !== organizerProfile.id) {
+    return (
+      <div className="min-h-screen bg-white dark:bg-gray-900 py-8">
+        <div className="max-w-2xl mx-auto px-4">
+          <div className="rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 p-6">
+            <h1 className="text-lg font-semibold text-red-800 dark:text-red-200 mb-2">Not your sale</h1>
+            <p className="text-red-700 dark:text-red-300 mb-4">This sale belongs to a different organizer account. You don't have access to edit it.</p>
             <Link href="/organizer/sales" className="inline-block bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors">
               Back to Sales
             </Link>
