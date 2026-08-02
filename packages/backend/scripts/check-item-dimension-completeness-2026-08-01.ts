@@ -24,7 +24,7 @@
 // Read-only. Makes zero writes.
 //
 // Run from project root:
-//   npx tsx packages/backend/scripts/check-item-dimension-completeness-2026-08-01.ts
+//   pnpm --filter backend exec tsx scripts/check-item-dimension-completeness-2026-08-01.ts
 
 import { PrismaClient } from '../../database/node_modules/@prisma/client';
 

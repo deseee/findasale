@@ -22,7 +22,7 @@
 //      currently match that tier (i.e. would hit the same silent-failure class).
 //
 // Run from project root:
-//   npx tsx packages/backend/scripts/check-stale-shipping-policies-2026-08-01.ts
+//   pnpm --filter backend exec tsx scripts/check-stale-shipping-policies-2026-08-01.ts
 //
 // Read-only. Makes zero writes and zero eBay mutations. Requires EBAY_PROXY_SECRET
 // in the environment if the Vercel eBay proxy requires it (same as other scripts).

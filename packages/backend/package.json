@@ -9,7 +9,9 @@
     "start": "node dist/index.js",
     "db:generate": "prisma generate --schema=../database/prisma/schema.prisma",
     "test": "jest",
-    "prune:scraped-sales:backfill": "tsx src/scripts/prune-scraped-sales-backfill.ts"
+    "prune:scraped-sales:backfill": "tsx src/scripts/prune-scraped-sales-backfill.ts",
+    "diag:stale-shipping-policies": "tsx scripts/check-stale-shipping-policies-2026-08-01.ts",
+    "diag:item-dimensions": "tsx scripts/check-item-dimension-completeness-2026-08-01.ts"
   },
   "jest": {
     "preset": "ts-jest",
