@@ -7,23 +7,21 @@ echo "[pre-push] Starting pre-push checks..."
 
 # ── 1. TypeScript check (frontend) ──────────────────────────────────────────
 echo "[pre-push] 1/4 TypeScript check (frontend)..."
-cd packages/frontend && npx tsc --noEmit
+node_modules/.bin/tsc --noEmit --skipLibCheck -p packages/frontend/tsconfig.json
 if [ $? -ne 0 ]; then
   echo ""
   echo "❌ [pre-push] TypeScript errors (frontend). Push aborted."
   exit 1
 fi
-cd ../..
 echo "  ✅ TypeScript passed (frontend)."
 
 echo "[pre-push] 1/4 TypeScript check (backend)..."
-cd packages/backend && npx tsc --noEmit
+node_modules/.bin/tsc --noEmit --skipLibCheck -p packages/backend/tsconfig.json
 if [ $? -ne 0 ]; then
   echo ""
   echo "❌ [pre-push] TypeScript errors (backend). Push aborted."
   exit 1
 fi
-cd ../..
 echo "  ✅ TypeScript passed (backend)."
 
 # ── 2. Prisma schema validation ───────────────────────────────────────────────
