@@ -1536,7 +1536,12 @@ export const webhookHandler = async (req: Request, res: Response) => {
             link: `/organizer/sales/${purchase.saleId}`,
             channel: 'OPERATIONAL',
             sendEmail: true,
-          }).catch(() => {});
+          }).catch((err) => {
+            console.error(
+              `[payment_received notification] createNotification failed for purchase ${purchase.id} (organizerUserId=${purchase.sale?.organizer?.userId}):`,
+              err
+            );
+          });
         }
 
         setImmediate(() => {
