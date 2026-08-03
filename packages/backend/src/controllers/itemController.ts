@@ -625,16 +625,13 @@ export const bulkImportCSV = async (req: AuthRequest, res: Response) => {
 };
 // ─── End Feature #395 ─────────────────────────────────────────────────────────
 
-export const getItemById = async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params;
-    const authReq = req as AuthRequest;
-
-    // Use select instead of include to avoid querying columns that may not
-    // exist in production yet (tags) or that crash serialization (embedding).
-    const item = await prisma.item.findUnique({
-      where: { id },
-      select: {
+// Shared field selection for full item-detail responses. Extracted so
+// getItemById (public/shopper-facing, permissive visibility gate) and
+// getItemForEdit (organizer-only, strict-ownership — see below) always return
+// the exact same response shape, avoiding drift between the two read paths.
+// Use select instead of include to avoid querying columns that may not
+// exist in production yet (tags) or that crash serialization (embedding).
+const ITEM_DETAIL_SELECT = {
         id: true,
         saleId: true,
         organizerId: true,
@@ -734,7 +731,16 @@ export const getItemById = async (req: Request, res: Response) => {
         checkoutAttempts: {
           select: { id: true }
         }
-      }
+} as const;
+
+export const getItemById = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const authReq = req as AuthRequest;
+
+    const item = await prisma.item.findUnique({
+      where: { id },
+      select: ITEM_DETAIL_SELECT
     });
 
     if (!item) {
@@ -810,6 +816,90 @@ export const getItemById = async (req: Request, res: Response) => {
     res.json(itemWithCounts);
   } catch (error) {
     console.error('Error fetching item:', error);
+    res.status(500).json({ message: 'Server error while fetching item' });
+  }
+};
+
+// GET /api/items/:id/edit — organizer-only, strict-ownership item fetch dedicated
+// to the edit-item page. getItemById above is intentionally shared with the public
+// shopper-facing item page and therefore uses a permissive "is this item publicly
+// visible" gate (any PUBLISHED+active item, regardless of who is asking) rather than
+// an ownership check. That permissive gate is correct for the public page, but the
+// edit-item frontend was calling that SAME endpoint with no additional client-side
+// ownership check of its own — so a second signed-in user could load (though not
+// save — updateItem's ownership check already correctly rejected the PUT) another
+// organizer's item into the edit form (OWASP A01 / IDOR). This endpoint closes that
+// gap by requiring the SAME ownership check updateItem already enforces, before ever
+// returning item data, and the edit-item page now calls this endpoint instead.
+export const getItemForEdit = async (req: AuthRequest, res: Response) => {
+  try {
+    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    if (!req.user || !hasOrganizerRole) {
+      return res.status(403).json({ message: 'Access denied. Organizer access required.' });
+    }
+
+    const { id } = req.params;
+
+    const item = await prisma.item.findUnique({
+      where: { id },
+      select: ITEM_DETAIL_SELECT
+    });
+
+    if (!item) {
+      return res.status(404).json({ message: 'Item not found' });
+    }
+
+    // Ownership check — mirrors updateItem's sale-based check, extended to also
+    // cover denormalized inventory items (saleId=null) the same way getItemById
+    // already does for its own (looser) visibility gate.
+    let isOwner = req.user.id === item.sale?.organizer?.userId;
+    if (!isOwner && !item.saleId && (item as any).organizerId) {
+      const inventoryOrganizer = await prisma.organizer.findFirst({
+        where: { id: (item as any).organizerId, userId: req.user.id },
+        select: { id: true }
+      });
+      if (inventoryOrganizer) isOwner = true;
+    }
+
+    if (!isOwner) {
+      return res.status(403).json({ message: 'Access denied. Not your item.' });
+    }
+
+    // Auto-close expired auctions (same lazy-close behavior as getItemById)
+    if (item.auctionEndTime && new Date(item.auctionEndTime) < new Date() && !item.auctionClosed) {
+      await prisma.item.update({
+        where: { id: item.id },
+        data: { auctionClosed: true }
+      }).catch(err => console.warn('[getItemForEdit] Failed to auto-close auction:', err));
+      item.auctionClosed = true;
+    }
+
+    const cartCount = item.checkoutAttempts?.length ?? 0;
+    const views = 0;
+
+    let auctionStatus: 'INACTIVE' | 'ACTIVE' | 'ENDING_SOON' | 'ENDED' = 'INACTIVE';
+    if (item.listingType === 'AUCTION' && item.auctionEndTime) {
+      const timeToEnd = new Date(item.auctionEndTime).getTime() - Date.now();
+      if (item.auctionClosed || timeToEnd <= 0) {
+        auctionStatus = 'ENDED';
+      } else if (timeToEnd < 5 * 60 * 1000) {
+        auctionStatus = 'ENDING_SOON';
+      } else {
+        auctionStatus = 'ACTIVE';
+      }
+    }
+
+    const itemWithCounts = {
+      ...item,
+      cartCount,
+      views,
+      auctionStatus,
+      checkoutAttempts: undefined
+    };
+
+    res.json(itemWithCounts);
+  } catch (error) {
+    console.error('Error fetching item for edit:', error);
     res.status(500).json({ message: 'Server error while fetching item' });
   }
 };

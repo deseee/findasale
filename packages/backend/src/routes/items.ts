@@ -3,6 +3,7 @@ import multer from 'multer';
 import { z } from 'zod';
 import {
   getItemById,
+  getItemForEdit,
   getItemsBySaleId,
   createItem,
   updateItem,
@@ -808,6 +809,11 @@ router.post('/bulk/photos', authenticate, async (req, res) => {
 // BUG 3 FIX: Label route must come BEFORE generic /:id route to avoid being shadowed
 // W2: Label PDF
 router.get('/:id/label', authenticate, getSingleItemLabel);
+
+// S-IDOR-edit-item fix: organizer-only, strict-ownership fetch for the edit-item page.
+// Must stay separate from the generic GET /:id below (which is intentionally public/
+// permissive for the shopper-facing item page) — see getItemForEdit for full rationale.
+router.get('/:id/edit', authenticate, getItemForEdit);
 
 router.get('/:id', optionalAuthenticate, getItemById);
 router.get('/', getItemsBySaleId);

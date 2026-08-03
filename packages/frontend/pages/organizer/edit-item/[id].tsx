@@ -411,7 +411,11 @@ const EditItemPage = () => {
   const { data: item, isLoading } = useQuery({
     queryKey: ['item', id],
     queryFn: async () => {
-      const response = await api.get(`/items/${id}`);
+      // S-IDOR-edit-item fix: use the organizer-only, ownership-enforced endpoint
+      // instead of the public/shopper-facing GET /items/:id (which never checked
+      // ownership — a second signed-in user could load another organizer's item
+      // into this edit form even though saving it was already correctly blocked).
+      const response = await api.get(`/items/${id}/edit`);
       return response.data;
     },
     enabled: !!id,
