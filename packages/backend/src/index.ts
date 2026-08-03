@@ -248,6 +248,7 @@ import { bounceSuppressService_runReclassifyBackfillIfNeeded } from './services/
 import { startEbayListingQueueCron } from './jobs/ebayListingQueueCron'; // eBay Queue Mode engine
 import { startEbayEndedListingsSyncCron } from './jobs/ebayEndedListingsSyncCron'; // Feature #244 Phase 3: eBay ended listings sync
 import { startEbayListingSyncCron } from './jobs/ebayListingSyncCron'; // Feature #244 Phase 4: eBay bidirectional listing sync
+import { startEbayStuckOfferRetryCron } from './jobs/ebayStuckOfferRetryCron'; // S1215: auto-retry offers stuck in Pending Publish (offer-aware, never recreates)
 import { registerEbayNotificationSubscription } from './jobs/ebayNotificationSetup'; // Feature #244 Phase 4: real-time sold webhooks
 import { startTierGraceCron } from './jobs/tierGraceCronJob'; // Feature #75: Tier grace period finalization
 import { scheduleReferralRewardAgeGateCron } from './jobs/referralRewardAgeGateJob'; // D-XP-004 Phase 4: Referral reward age gate cron
@@ -1074,6 +1075,10 @@ httpServer.listen(PORT, '0.0.0.0', () => {
 
   // Feature #244 Phase 4: Register eBay bidirectional listing sync cron (every 4 hours — pull eBay changes back)
   startEbayListingSyncCron();
+
+  // S1215: Register eBay stuck-offer retry cron (every 2 hours — auto-recovers items
+  // with ebayOfferId set but ebayListingId null, offer-aware, never re-creates the offer)
+  startEbayStuckOfferRetryCron();
 
   // Feature #244 Phase 4: Register eBay Commerce Notification subscription (real-time sold sync)
   registerEbayNotificationSubscription().catch(err =>
