@@ -47,7 +47,7 @@ import { useDegradationMode } from '../hooks/useDegradationMode'; // Feature #20
 import { LowBandwidthProvider } from '../contexts/LowBandwidthContext'; // Feature #22: Low-Bandwidth Mode
 const LowBandwidthBanner = dynamic(() => import('../components/LowBandwidthBanner'), { ssr: false }); // Feature #22: Low-Bandwidth Mode
 import { useLowBandwidthInitializer } from '../hooks/useLowBandwidthInitializer'; // Feature #22: Low-Bandwidth Mode
-import { useOfflineSync } from '../hooks/useOfflineSync'; // Feature #69: Local-First Offline Mode
+import { OfflineSyncProvider } from '../contexts/OfflineSyncContext'; // Feature #69: Local-First Offline Mode
 import CookieConsentBanner from '../components/CookieConsentBanner';
 import GoogleAnalytics from '../components/GoogleAnalytics';
 
@@ -77,12 +77,6 @@ function PushSubscriber() {
 // Enables prioritization by user impact (tier, points, hunt pass status)
 function SentryUserContextSync() {
   useSentryUserContext();
-  return null;
-}
-
-// Feature #69: Initialize offline sync on app mount
-function OfflineSyncInitializer() {
-  useOfflineSync(); // Initialize IndexedDB, register online/offline listeners, auto-sync on reconnect
   return null;
 }
 
@@ -460,6 +454,7 @@ function MyApp({ Component, pageProps: { session, ...pageProps } }: AppProps) {
           <DegradationProvider>
             <LowBandwidthProvider>
               <QueryClientProvider client={queryClient}>
+              <OfflineSyncProvider>
               <ThemeInitializer />
               <CartProvider>
               <FeedbackProvider>
@@ -486,8 +481,6 @@ function MyApp({ Component, pageProps: { session, ...pageProps } }: AppProps) {
               <UTMCapture />
               {/* Feature #21: Sentry user context sync */}
               <SentryUserContextSync />
-              {/* Feature #69: Offline sync initialization */}
-              <OfflineSyncInitializer />
               {/* Phase 31: OAuth → JWT bridge */}
               <OAuthBridge />
               {/* Phase 27: First-time shopper onboarding */}
@@ -502,6 +495,7 @@ function MyApp({ Component, pageProps: { session, ...pageProps } }: AppProps) {
               <GoogleAnalytics />
               {/* Vercel Speed Insights only — <Analytics/> removed, Web Analytics isn't a paid feature here */}
               <SpeedInsights />
+              </OfflineSyncProvider>
               </QueryClientProvider>
             </LowBandwidthProvider>
           </DegradationProvider>

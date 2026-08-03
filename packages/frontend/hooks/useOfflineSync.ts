@@ -27,6 +27,15 @@ export function useOfflineSync() {
   const [syncError, setSyncError] = useState<string | null>(null);
   const syncInProgressRef = useRef(false);
   const syncRetryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  // Root-cause fix (offline POS reconnect-sync bug, STATE.md S1068/S1098/S1112):
+  // the 'online'/'offline' listener effect below only runs ONCE on mount (its sole dep,
+  // updatePendingCount, is referentially stable across renders), so a direct reference
+  // to `triggerSync` from inside that effect would permanently close over the FIRST
+  // render's isOffline (false) and lastSyncTime (null) forever -- every reconnect sync
+  // request would send `clientState.lastSyncAt: null` regardless of the real last-sync
+  // time. Route every call through this ref (assigned fresh every render, below) so the
+  // mount-once listeners always invoke the CURRENT triggerSync closure.
+  const triggerSyncRef = useRef<() => Promise<void>>(async () => {});
   const { showToast } = useToast();
 
   // Initialize offline DB on mount
@@ -47,7 +56,7 @@ export function useOfflineSync() {
       setSyncError(null);
       await updatePendingCount();
       // Auto-trigger sync after short delay to allow full network restoration
-      setTimeout(() => triggerSync(), 1000);
+      setTimeout(() => triggerSyncRef.current(), 1000);
     };
 
     const handleOffline = () => {
@@ -73,7 +82,7 @@ export function useOfflineSync() {
     if (navigator.onLine) {
       getPendingSync().then((pending: any) => {
         if (pending.length > 0) {
-          setTimeout(() => triggerSync(), 1000);
+          setTimeout(() => triggerSyncRef.current(), 1000);
         }
       }).catch(() => {});
     }
@@ -90,7 +99,7 @@ export function useOfflineSync() {
   /**
    * Trigger sync of all pending operations
    */
-  const triggerSync = useCallback(async () => {
+  const triggerSyncImpl = useCallback(async () => {
     if (syncInProgressRef.current) return;
     if (isOffline) return;
 
@@ -199,7 +208,7 @@ export function useOfflineSync() {
         }
         syncRetryTimeoutRef.current = setTimeout(() => {
           if (navigator.onLine) {
-            triggerSync();
+            triggerSyncRef.current();
           }
         }, SYNC_RETRY_DELAY);
       }
@@ -208,6 +217,12 @@ export function useOfflineSync() {
       setIsSyncing(false);
     }
   }, [isOffline, lastSyncTime, updatePendingCount, showToast]);
+
+  // Keep the ref pointing at the latest triggerSyncImpl closure every render.
+  useEffect(() => {
+    triggerSyncRef.current = triggerSyncImpl;
+  }, [triggerSyncImpl]);
+  const triggerSync = useCallback(() => triggerSyncRef.current(), []);
 
   return {
     isOffline,

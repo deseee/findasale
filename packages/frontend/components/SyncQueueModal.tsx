@@ -6,7 +6,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Trash2, RefreshCw, AlertTriangle } from 'lucide-react';
 import { getPendingSync, clearAllOfflineData, getLastSyncTime } from '../lib/offlineSync';
-import { useOfflineSync } from '../hooks/useOfflineSync';
+import { useOfflineSyncContext } from '../contexts/OfflineSyncContext';
 import { useToast } from './ToastContext';
 import AccessibleModal from './AccessibleModal';
 
@@ -19,15 +19,22 @@ export default function SyncQueueModal({ isOpen, onClose }: SyncQueueModalProps)
   const [queueItems, setQueueItems] = useState<any[]>([]);
   const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const { triggerSync, isSyncing, isOffline } = useOfflineSync();
+  // contextPendingCount (renamed to avoid clashing with the locally-derived `pendingCount`
+  // computed from `queueItems` below, which several existing JSX blocks already depend on)
+  // is only used as an effect dependency to detect when a background sync -- now a single
+  // shared instance via OfflineSyncContext -- has changed the underlying IndexedDB queue.
+  const { triggerSync, isSyncing, isOffline, pendingCount: contextPendingCount } = useOfflineSyncContext();
   const { showToast } = useToast();
 
-  // Load queue items when modal opens
+  // Load queue items when the modal opens, and again whenever the shared context's
+  // pendingCount changes while it's open (e.g. a background sync elsewhere in the app
+  // just confirmed/cleared entries) -- previously this only reloaded on the isOpen
+  // transition, so the list could go stale while the organizer was looking right at it.
   useEffect(() => {
     if (isOpen) {
       loadQueueData();
     }
-  }, [isOpen]);
+  }, [isOpen, contextPendingCount]);
 
   const loadQueueData = async () => {
     setIsLoading(true);
@@ -90,8 +97,8 @@ export default function SyncQueueModal({ isOpen, onClose }: SyncQueueModalProps)
       isOpen={isOpen}
       onClose={onClose}
       ariaLabelledBy="sync-queue-modal-title"
+      contentClassName="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full max-h-[80vh] flex flex-col"
     >
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full max-h-[80vh] flex flex-col">
         {/* Header */}
         <div className="border-b border-gray-200 p-6 flex items-center justify-between">
           <div>
@@ -220,7 +227,6 @@ export default function SyncQueueModal({ isOpen, onClose }: SyncQueueModalProps)
             </button>
           </div>
         </div>
-      </div>
     </AccessibleModal>
   );
 }

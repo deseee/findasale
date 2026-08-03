@@ -351,9 +351,23 @@ app.use((req, res, next) => {
   // allowance, but ONLY for the chrome-extension origin — the web app never sends a
   // chrome-extension origin, so its credentialed cookie refresh still falls through
   // to the generic cors() below byte-for-byte (no downgrade of the web-app path).
+  // findasale-hacker review (2026-08-03, S1128 extension write-path CSRF review):
+  // /api/extension used to reflect ANY Origin header here (the code didn't actually
+  // enforce the "chrome-extension origin only" claim this comment makes — it only
+  // gated /api/auth/refresh that way). That let a browser page on ANY origin pass
+  // CORS preflight for /api/extension/* and fire the actual POST (evil.com can't read
+  // the response without Access-Control-Allow-Credentials, which is correctly never
+  // set here, and the accessToken cookie is SameSite=Lax so it wouldn't ride along on
+  // a cross-site fetch/form POST anyway — so this was not independently exploitable
+  // today, but it silently dropped a real layer of defense-in-depth the comment above
+  // assumed was still in place). Tightened to require isExtensionOrigin (or no Origin
+  // header at all — curl/server-to-server callers never send one and must keep
+  // working) so a browser-JS request from a non-extension origin now fails CORS
+  // preflight outright instead of relying solely on cookie SameSite + missing
+  // Allow-Credentials to hold the line.
   const extReqOrigin = req.headers.origin;
   const isExtensionOrigin = !!extReqOrigin && extReqOrigin.startsWith('chrome-extension://');
-  if (req.path.startsWith('/api/extension') || (req.path === '/api/auth/refresh' && isExtensionOrigin)) {
+  if ((req.path.startsWith('/api/extension') && (isExtensionOrigin || !extReqOrigin)) || (req.path === '/api/auth/refresh' && isExtensionOrigin)) {
     if (extReqOrigin) res.setHeader('Access-Control-Allow-Origin', extReqOrigin);
     res.setHeader('Vary', 'Origin');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');

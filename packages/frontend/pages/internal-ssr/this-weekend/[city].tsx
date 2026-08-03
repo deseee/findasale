@@ -50,6 +50,7 @@ interface ThisWeekendPageProps {
   totalCount: number;
   weekendStart: string;  // ISO string. Friday 00:00
   weekendEnd: string;    // ISO string. Sunday 23:59
+  activeCount: number;   // city-wide ACTIVE (any type) sale count -- drives the noindex gate below, mirrors the sitemap's own thisWeekendUrls >=3 threshold (server-sitemap.xml.tsx)
 }
 
 /** Returns the next Friday–Sunday range (handles all day-of-week cases). */
@@ -85,6 +86,7 @@ export default function ThisWeekendPage({
   totalCount,
   weekendStart,
   weekendEnd,
+  activeCount,
 }: ThisWeekendPageProps) {
   const title = `Sales This Weekend in ${cityName}, ${cityState} | FindA.Sale`;
   const description = `Browse ${totalCount > 0 ? totalCount : ''} sales happening this weekend in ${cityName}, ${cityState}. Estate sales, yard sales, auctions, flea markets, and consignment events.`.trim();
@@ -143,13 +145,24 @@ export default function ThisWeekendPage({
     ],
   };
 
+  // This page is only emitted in the sitemap when the city has >= 3 ACTIVE
+  // (any-type) sales (see server-sitemap.xml.tsx thisWeekendUrls filter). Below
+  // that threshold this page was still unconditionally emitting "index, follow"
+  // regardless of the sitemap gate -- same class of bug already found + fixed in
+  // city/[slug]/[category].tsx (S1087) -- so a thin/gated city stayed indexable
+  // via internal links or direct nav even though the sitemap excluded it. Gate
+  // on activeCount (city-wide active sales), not the weekend-window totalCount,
+  // so this can never disagree with the sitemap's own gate. KEEP IN SYNC with
+  // pages/this-weekend/[city].tsx per this file's own header comment.
+  const isGatedThin = activeCount < 3;
+
   return (
     <>
       <Head>
         <title>{title}</title>
         <meta name="description" content={description} />
         <link rel="canonical" href={canonicalUrl} key="canonical" />
-        <meta name="robots" content="index, follow" />
+        <meta name="robots" content={isGatedThin ? 'noindex, follow' : 'index, follow'} />
         <meta property="og:title" content={title} />
         <meta property="og:description" content={description} />
         <meta property="og:url" content={canonicalUrl} />
@@ -354,6 +367,7 @@ export const getServerSideProps: GetServerSideProps<ThisWeekendPageProps> = asyn
   const { start: friday, end: sunday } = getThisWeekendRange();
 
   let allSales: SaleListing[] = [];
+  let activeCount = 0;
 
   try {
     const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000/api';
@@ -364,6 +378,9 @@ export const getServerSideProps: GetServerSideProps<ThisWeekendPageProps> = asyn
     if (apiRes.ok) {
       const data = await apiRes.json();
       allSales = data.sales ?? [];
+      // City-wide ACTIVE (any-type) count -- same field the sitemap gate reads
+      // via /sales/by-city's activeCount. Used only for isGatedThin above.
+      activeCount = Number(data.activeCount) || 0;
     } else {
       // Endpoint may not support date params — fetch all and filter here
       const fallbackRes = await fetch(
@@ -373,6 +390,7 @@ export const getServerSideProps: GetServerSideProps<ThisWeekendPageProps> = asyn
       if (fallbackRes.ok) {
         const fallbackData = await fallbackRes.json();
         allSales = fallbackData.sales ?? [];
+        activeCount = Number(fallbackData.activeCount) || 0;
       }
     }
   } catch (err) {
@@ -398,6 +416,7 @@ export const getServerSideProps: GetServerSideProps<ThisWeekendPageProps> = asyn
       totalCount: weekendSales.length,
       weekendStart: friday.toISOString(),
       weekendEnd: sunday.toISOString(),
+      activeCount,
     },
   };
 };

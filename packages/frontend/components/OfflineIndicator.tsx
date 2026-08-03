@@ -5,7 +5,7 @@
 
 import React, { useState } from 'react';
 import { AlertCircle, Wifi, WifiOff, ChevronRight } from 'lucide-react';
-import { useOfflineSync } from '../hooks/useOfflineSync';
+import { useOfflineSyncContext } from '../contexts/OfflineSyncContext';
 import SyncQueueModal from './SyncQueueModal';
 
 interface OfflineIndicatorProps {
@@ -13,11 +13,19 @@ interface OfflineIndicatorProps {
 }
 
 export default function OfflineIndicator({ className = '' }: OfflineIndicatorProps) {
-  const { isOffline, isSyncing, pendingCount, syncError } = useOfflineSync();
+  const { isOffline, isSyncing, pendingCount, syncError } = useOfflineSyncContext();
   const [showSyncQueue, setShowSyncQueue] = useState(false);
 
-  // Feature gate: only show if offline or has pending items
-  if (!isOffline && pendingCount === 0) {
+  // Feature gate: only show the banner if offline or has pending items. Root-cause fix
+  // (View Queue bug, STATE.md S1068/S1098/S1112): this used to be an unconditional early
+  // `return null`, which also unmounts <SyncQueueModal> below it. If a background sync
+  // (now a single shared instance via OfflineSyncContext, but the race existed regardless)
+  // clears pendingCount to 0 right as/after the organizer opens the modal, the whole
+  // component -- including the just-opened modal -- disappeared with it. Once opened, the
+  // modal must stay mounted until the organizer explicitly closes it, independent of
+  // whether the banner condition still holds.
+  const shouldShowBanner = isOffline || pendingCount > 0;
+  if (!shouldShowBanner && !showSyncQueue) {
     return null;
   }
 
@@ -25,6 +33,7 @@ export default function OfflineIndicator({ className = '' }: OfflineIndicatorPro
 
   return (
     <>
+      {shouldShowBanner && (
       <div
         className={`fixed top-[92px] md:top-16 left-0 right-0 z-40 transition-all ${
           isError ? 'bg-red-100 border-b border-red-300' : isOffline ? 'bg-yellow-100 border-b border-yellow-300' : 'bg-blue-100 border-b border-blue-300'
@@ -67,11 +76,12 @@ export default function OfflineIndicator({ className = '' }: OfflineIndicatorPro
           )}
         </div>
       </div>
+      )}
 
       {/* Padding to offset fixed banner */}
-      {(isOffline || isSyncing || isError || pendingCount > 0) && <div className="h-[80px]" />}
+      {shouldShowBanner && <div className="h-[80px]" />}
 
-      {/* Sync Queue Modal */}
+      {/* Sync Queue Modal -- stays mounted independent of shouldShowBanner, see guard above */}
       <SyncQueueModal isOpen={showSyncQueue} onClose={() => setShowSyncQueue(false)} />
     </>
   );
