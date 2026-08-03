@@ -35,6 +35,7 @@ import { executeVerifiedRefund, RefundError, sendRefundConfirmationEmail } from 
 import { transactionalEmailService } from '../lib/transactionalEmailService';
 import { assertCheckoutAllowed, assertGuestCheckoutAllowed, recordConfirmedSignal, CheckoutGuardError } from '../services/checkoutGuard'; // S1072 Finding #4: collusion/wash-trade guard
 import { recordPosPaymentLinkSale } from '../services/posPaymentLinkRecorder'; // ADR pos-webhook-idempotency-reconciliation (2026-07-23, S1151)
+import { markHoldInvoicePaid } from '../services/holdInvoicePaymentRecorder'; // payments fix (2026-08-03): shared HoldInvoice-PAID recorder, webhook + reconcile
 import { settleHubOwnerReversalForLeg } from './vendorBoothCartController'; // P1 (2026-07-28): durable hub-owner Transfer reversal settlement
 import { notifyVendorBoothSaleRefunded } from '../services/vendorBoothSaleNotificationService'; // tell the vendor their booth sale was refunded
 
@@ -2387,206 +2388,22 @@ export const webhookHandler = async (req: Request, res: Response) => {
       break;
     }
     case 'charge.succeeded': {
-      // Hold-to-Pay Phase 2: Handle successful charge for hold invoices
+      // Hold-to-Pay Phase 2: Handle successful charge for hold invoices.
+      // Recording logic lives in holdInvoicePaymentRecorder.ts (payments fix, 2026-08-03)
+      // -- shared with invoiceExpiryJob's STRANDED-PAID reconcile backstop so the two
+      // callers can never diverge. See that file's header comment for full context.
       const charge = event.data.object;
       if (charge.payment_intent) {
         const paymentIntent = await stripe().paymentIntents.retrieve(charge.payment_intent as string);
         if (paymentIntent.metadata?.invoiceId) {
           const invoiceId = paymentIntent.metadata.invoiceId;
-
-          // Fetch the invoice with full context
-          const holdInvoice = await prisma.holdInvoice.findUnique({
-            where: { id: invoiceId },
-            include: {
-              shopper: { select: { id: true, email: true, name: true, guildXp: true } },
-              organizer: { select: { id: true, email: true, name: true } },
-              sale: true,
-            },
-          });
-
-          if (!holdInvoice) {
-            console.error(`[hold-invoice] Invoice not found: ${invoiceId}`);
-            break;
-          }
-
-          const holdInvoiceFullySoldOutIds: string[] = [];
-          const holdInvoicePartialSaleUpdates: { itemId: string; remainingStock: number }[] = [];
-          // Idempotency check: if already paid, skip
-          if (holdInvoice.status === 'PAID') {
-            console.warn(`[hold-invoice] Invoice ${invoiceId} already paid, skipping duplicate webhook`);
-            break;
-          }
-
-          // Fetch all items and reservations bundled in this invoice
-          const bundledItems = await prisma.item.findMany({
-            where: { id: { in: holdInvoice.itemIds } },
-          });
-
-          const bundledReservations = await prisma.itemReservation.findMany({
-            where: { itemId: { in: holdInvoice.itemIds } },
-          });
-
           // LOCKED DECISION #1: Calculate organizer payout (total amount - platform fee - Stripe fee)
           const stripeFeeAmount = (charge.amount - (charge.amount - (charge.amount_refunded || 0))) / 100; // convert from cents
-          const organizerPayout = (holdInvoice.totalAmount / 100) - (holdInvoice.platformFeeAmount / 100) - stripeFeeAmount;
-
-          // Update invoice status to PAID
-          await prisma.$transaction(async (tx) => {
-            await tx.holdInvoice.update({
-              where: { id: invoiceId },
-              data: {
-                status: 'PAID',
-                paidAt: new Date(),
-                stripePaymentIntentId: charge.payment_intent as string,
-                stripeFeeAmount: Math.round(stripeFeeAmount * 100),
-              },
-            });
-
-            // Update ALL bundled ItemReservations to CONFIRMED
-            await tx.itemReservation.updateMany({
-              where: { itemId: { in: holdInvoice.itemIds } },
-              data: { status: 'CONFIRMED' },
-            });
-
-            // Update ALL bundled items to SOLD (LOCKED DECISION #6) -- ADR-085 Track B
-            // Phase 1 Step 4: atomic, race-safe stock decrement replaces the old unconditional
-            // updateMany. The bundling business decision (#6) is unchanged, only the mechanism.
-            for (const bundledItemId of holdInvoice.itemIds) {
-              try {
-                const { fullySoldOut, remainingStock } = await sellItemUnits(bundledItemId, 1, tx);
-                if (fullySoldOut) holdInvoiceFullySoldOutIds.push(bundledItemId);
-                else holdInvoicePartialSaleUpdates.push({ itemId: bundledItemId, remainingStock });
-              } catch (stockErr: any) {
-                if (stockErr instanceof InsufficientStockError) {
-                  console.error(`[stripe/hold-invoice] Oversold race on item ${bundledItemId}:`, stockErr.message);
-                } else {
-                  throw stockErr;
-                }
-              }
-            }
-
-            // LOCKED DECISION #5: Create notifications for shopper and organizer
-            const itemList = bundledItems.length > 1
-              ? `${bundledItems.length} items`
-              : `"${bundledItems[0]?.title}"`;
-
-            await tx.notification.createMany({
-              data: [
-                {
-                  userId: holdInvoice.shopperUserId,
-                  type: 'payment_completed',
-                  title: 'Payment confirmed',
-                  body: `Payment confirmed for ${itemList}. The organizer will send shipping/pickup details.`,
-                  link: `/items/${holdInvoice.itemIds[0]}`,
-                  channel: 'OPERATIONAL',
-                },
-                {
-                  userId: holdInvoice.organizerUserId,
-                  type: 'payment_received',
-                  title: 'Payment received',
-                  body: `Payment of $${organizerPayout.toFixed(2)} received for ${itemList}. Payout pending.`,
-                  link: `/organizer/sales/${holdInvoice.saleId}`,
-                  channel: 'OPERATIONAL',
-                },
-              ],
-            });
+          await markHoldInvoicePaid(invoiceId, paymentIntent.id, {
+            source: 'webhook',
+            chargeId: charge.id,
+            stripeFeeAmountCents: Math.round(stripeFeeAmount * 100),
           });
-
-          // Fire-and-forget: end eBay listings for items now fully sold out (not every
-          // bundled item unconditionally -- ADR-085 Track B Phase 1 Step 4)
-          setImmediate(() => {
-            Promise.allSettled(
-              holdInvoiceFullySoldOutIds.map((itemId: string) => endEbayListingIfExists(itemId))
-            ).catch(() => {});
-            Promise.allSettled(
-              holdInvoiceFullySoldOutIds.map((itemId: string) => markShopifyItemSold(itemId))
-            ).catch(() => {});
-            Promise.allSettled(
-              holdInvoiceFullySoldOutIds.map((itemId: string) => notifyFacebookExportedItemSold(itemId))
-            ).catch(() => {});
-          });
-
-          // ADR-087 Phase 4: partial sales (not fully sold out) — revise eBay listing
-          // quantities for any eBay-linked items in this bundle. Fire-and-forget.
-          if (holdInvoicePartialSaleUpdates.length) {
-            setImmediate(() => {
-              Promise.allSettled(
-                holdInvoicePartialSaleUpdates.map(({ itemId, remainingStock }) =>
-                  syncMarketplaceStock(itemId, { fullySoldOut: false, remainingStock })
-                )
-              ).catch(() => {});
-            });
-          }
-
-          // Award XP to shopper (+15 guildXP for payment completion)
-          try {
-            const { awardXp, XP_AWARDS } = await import('../services/xpService');
-            await awardXp(holdInvoice.shopperUserId, 'PAYMENT_COMPLETED', 15, {
-              saleId: holdInvoice.saleId,
-            });
-          } catch (err) {
-            console.warn('[hold-invoice] Failed to award XP:', err);
-          }
-
-          // Emit socket event for live dashboard updates
-          try {
-            const io = getIO();
-            const itemSummary = bundledItems.length > 1
-              ? `${bundledItems.length} items`
-              : bundledItems[0]?.title;
-
-            pushEvent(io, holdInvoice.saleId, {
-              type: 'HOLD_RELEASED',
-              itemTitle: itemSummary,
-              amount: organizerPayout,
-              saleId: holdInvoice.saleId,
-              timestamp: new Date(),
-            });
-          } catch (err) {
-            console.warn('[hold-invoice] Failed to emit socket event:', err);
-          }
-
-          // Send confirmation emails (fire-and-forget)
-          setImmediate(() => {
-            if (true) {
-              const fromEmail = process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'find@outreach.finda.sale';
-              const itemList = bundledItems.length > 1
-                ? `${bundledItems.length} items from ${holdInvoice.sale!.title}`
-                : bundledItems[0]?.title;
-              const totalPaid = (holdInvoice.totalAmount / 100).toFixed(2);
-              const platformFee = (holdInvoice.platformFeeAmount / 100).toFixed(2);
-
-              // Email to shopper
-              transactionalEmailService.emails.send({
-                from: fromEmail,
-                to: holdInvoice.shopper.email,
-                subject: `Payment confirmed for ${itemList}`,
-                html: `
-                  <h2>Payment Confirmed</h2>
-                  <p>Hi ${holdInvoice.shopper.name},</p>
-                  <p>Your payment of $${totalPaid} for <strong>${itemList}</strong> has been confirmed.</p>
-                  <p>The organizer will contact you soon about shipping or pickup details.</p>
-                  <p style="color: #6b7280; font-size: 14px;">Transaction ID: ${invoiceId.slice(0, 8)}</p>
-                `,
-              }).catch((err: unknown) => console.warn('[hold-invoice] Failed to send shopper email:', err));
-
-              // Email to organizer
-              transactionalEmailService.emails.send({
-                from: fromEmail,
-                to: holdInvoice.organizer.email,
-                subject: `Payment received: ${itemList}`,
-                html: `
-                  <h2>Payment Received</h2>
-                  <p>Hi ${holdInvoice.organizer.name},</p>
-                  <p>Payment of $${organizerPayout.toFixed(2)} has been received for <strong>${itemList}</strong>.</p>
-                  <p>Payout will be transferred to your Stripe Connect account within 1-2 business days.</p>
-                  <p style="color: #6b7280; font-size: 14px;">Platform fee: $${platformFee} | Stripe fee: $${stripeFeeAmount.toFixed(2)}</p>
-                `,
-              }).catch((err: unknown) => console.warn('[hold-invoice] Failed to send organizer email:', err));
-            }
-          });
-
-          console.log(`[hold-invoice] Payment completed for invoice ${invoiceId} (${bundledItems.length} items): organizer payout $${organizerPayout.toFixed(2)}`);
         }
       }
       break;

@@ -1,7 +1,9 @@
 import cron from 'node-cron';
+import * as Sentry from '@sentry/node';
 import { prisma } from '../lib/prisma';
 import { cronGuard } from '../utils/cronGuard';
 import { getStripe } from '../utils/stripe';
+import { markHoldInvoicePaid } from '../services/holdInvoicePaymentRecorder'; // payments fix (2026-08-03): STRANDED-PAID reconcile backstop
 
 /**
  * invoiceExpiryJob.ts
@@ -85,6 +87,18 @@ import { getStripe } from '../utils/stripe';
  * Kill-switch: set INVOICE_EXPIRY_RECLAIM_DISABLED=1 to make the job
  * early-return (rollback lever, matching posStrandedSaleReconcileCron.ts's
  * POS_RECONCILE_DISABLED convention).
+ *
+ * Payments fix (2026-08-03): the STRANDED-PAID branch below now actively
+ * reconciles -- calling the shared markHoldInvoicePaid recorder
+ * (holdInvoicePaymentRecorder.ts) instead of only logging for manual
+ * follow-up, since createCombinedInvoice / markSoldAndCreateInvoice now
+ * backfill paymentIntent.metadata.invoiceId so the PaymentIntent id read
+ * off the Stripe session is enough to record the payment directly. A
+ * separate kill-switch, INVOICE_PAID_RECONCILE_DISABLED=1, disables just
+ * this reconcile call (falls back to log-only) without disabling the rest
+ * of this job -- cheap, targeted rollback insurance for this one code path.
+ * This branch firing at all means the webhook missed; that fact alone is
+ * Sentry-alert-worthy regardless of whether the reconcile call succeeds.
  */
 
 const stripe = () => getStripe();
@@ -115,7 +129,7 @@ export const reclaimExpiredInvoices = async (): Promise<void> => {
     console.log(`[invoiceExpiryJob] Checking ${candidates.length} PENDING HoldInvoice row(s) past their own expiresAt.`);
 
     let reclaimed = 0;
-    let skippedPaid = 0;
+    let strandedPaidCount = 0;
     let skippedNoSession = 0;
 
     for (const invoice of candidates) {
@@ -125,15 +139,55 @@ export const reclaimExpiredInvoices = async (): Promise<void> => {
           // PENDING status (see the two confirmed gaps in the header comment).
           const session = await stripe().checkout.sessions.retrieve(invoice.stripeSessionId);
           if (session.status === 'complete' && session.payment_status === 'paid') {
-            console.error(`[invoiceExpiryJob] STRANDED-PAID invoice=${invoice.id} session=${invoice.stripeSessionId} -- Stripe shows this session paid/complete but our DB still has the invoice PENDING past its expiresAt. NOT reverting; needs manual reconciliation.`);
-            skippedPaid++;
+            strandedPaidCount++;
+
+            // Payments fix (2026-08-03): actively reconcile via the shared recorder
+            // instead of only logging -- see holdInvoicePaymentRecorder.ts.
+            let reconcileOutcome = 'SKIPPED (INVOICE_PAID_RECONCILE_DISABLED=1)';
+            if (process.env.INVOICE_PAID_RECONCILE_DISABLED !== '1') {
+              const paymentIntentId = typeof session.payment_intent === 'string'
+                ? session.payment_intent
+                : (session.payment_intent as any)?.id ?? null;
+
+              if (paymentIntentId) {
+                try {
+                  const result = await markHoldInvoicePaid(invoice.id, paymentIntentId, { source: 'reconcile' });
+                  reconcileOutcome = result.recorded
+                    ? 'RECORDED'
+                    : (result.alreadyPaid ? 'ALREADY-PAID (no-op, webhook or a prior run beat this one)' : 'NOT-RECORDED');
+                } catch (recErr: any) {
+                  reconcileOutcome = `ERROR: ${recErr?.message ?? recErr}`;
+                  console.error(`[invoiceExpiryJob] Failed to reconcile STRANDED-PAID invoice=${invoice.id} session=${invoice.stripeSessionId}:`, recErr);
+                }
+              } else {
+                reconcileOutcome = 'SKIPPED (no PaymentIntent id on Stripe session)';
+              }
+            }
+
+            // This branch firing at all means the charge.succeeded webhook missed --
+            // that is the alert-worthy fact itself, regardless of reconcile outcome.
+            const strandedAmount = typeof session.amount_total === 'number' ? (session.amount_total / 100).toFixed(2) : 'unknown';
+            const strandedPaidMsg = `[invoiceExpiryJob] STRANDED-PAID invoice=${invoice.id} session=${invoice.stripeSessionId} amount=$${strandedAmount} -- Stripe shows this session paid/complete but our DB still had the invoice PENDING past its expiresAt (webhook missed). Reconcile outcome: ${reconcileOutcome}.`;
+            console.error(strandedPaidMsg);
+            try {
+              Sentry.captureMessage(strandedPaidMsg, 'error');
+            } catch {
+              // Sentry may not be initialized -- silently continue
+            }
+
             continue;
           }
         } else {
           // No Stripe Checkout Session on this invoice -- sendHoldInvoice
           // ("no actual Stripe Checkout") or a cash-only Open Cart invoice.
           // No ground truth exists to verify a completed cash sale against.
-          console.warn(`[invoiceExpiryJob] NO-SESSION-SKIPPED invoice=${invoice.id} mode=${invoice.invoiceMode} itemIds=${invoice.itemIds.join(',') || '(none)'} -- expired with no stripeSessionId (cash-only or no-checkout invoice). NOT auto-reverting; needs manual/organizer review.`);
+          const noSessionMsg = `[invoiceExpiryJob] NO-SESSION-SKIPPED invoice=${invoice.id} mode=${invoice.invoiceMode} itemIds=${invoice.itemIds.join(',') || '(none)'} -- expired with no stripeSessionId (cash-only or no-checkout invoice). NOT auto-reverting; needs manual/organizer review.`;
+          console.warn(noSessionMsg);
+          try {
+            Sentry.captureMessage(noSessionMsg, 'warning');
+          } catch {
+            // Sentry may not be initialized -- silently continue
+          }
           skippedNoSession++;
           continue;
         }
@@ -204,7 +258,7 @@ export const reclaimExpiredInvoices = async (): Promise<void> => {
       }
     }
 
-    console.log(`[invoiceExpiryJob] Reclaimed ${reclaimed} expired invoice(s); skipped ${skippedPaid} STRANDED-PAID (needs manual reconciliation); skipped ${skippedNoSession} NO-SESSION (needs manual review).`);
+    console.log(`[invoiceExpiryJob] Reclaimed ${reclaimed} expired invoice(s); ${strandedPaidCount} STRANDED-PAID (auto-reconciled where possible, see per-invoice logs + Sentry); skipped ${skippedNoSession} NO-SESSION (needs manual review).`);
   } catch (error) {
     console.error('[invoiceExpiryJob] Error:', error);
   }

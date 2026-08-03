@@ -12,6 +12,7 @@
  */
 
 import { Response } from 'express';
+import * as Sentry from '@sentry/node';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import { getStripe } from '../utils/stripe';
@@ -1133,6 +1134,9 @@ export const createCombinedInvoice = async (req: AuthRequest, res: Response) => 
     }
 
     let stripeSessionId: string | null = null;
+    // Payments fix (2026-08-03): captured here (broad scope) so it survives past the
+    // try block below -- needed for the post-transaction metadata backfill call.
+    let stripePaymentIntentId: string | null = null;
 
     // Create Stripe Checkout Session if cardAmountCents > 0
     if (cardAmountCents > 0) {
@@ -1199,6 +1203,9 @@ export const createCombinedInvoice = async (req: AuthRequest, res: Response) => 
         });
 
         stripeSessionId = stripeSession.id;
+        stripePaymentIntentId = typeof stripeSession.payment_intent === 'string'
+          ? stripeSession.payment_intent
+          : (stripeSession.payment_intent as any)?.id ?? null;
       } catch (stripeError: any) {
         console.error('[pos] Stripe session creation failed:', stripeError);
         return res.status(500).json({
@@ -1239,6 +1246,44 @@ export const createCombinedInvoice = async (req: AuthRequest, res: Response) => 
 
       return inv;
     });
+
+    // Payments fix (2026-08-03): backfill invoiceId onto the PaymentIntent's metadata
+    // now that the HoldInvoice row (and its ID) exists -- it didn't exist yet when the
+    // Checkout Session was created above. The charge.succeeded webhook keys off
+    // paymentIntent.metadata.invoiceId, so without this backfill a payment on this
+    // invoice would never be recorded by the webhook (see holdInvoicePaymentRecorder.ts
+    // header comment; invoiceExpiryJob's STRANDED-PAID reconcile branch is the backstop
+    // for any invoice this still misses). Stripe's metadata.update REPLACES the whole
+    // map, so every existing key must be re-sent, not just the new one. Non-fatal --
+    // never blocks invoice creation, matches the checkout.session.completed handler's
+    // existing non-fatal PaymentIntent-retrieve pattern in stripeController.ts.
+    if (stripePaymentIntentId) {
+      try {
+        await stripe().paymentIntents.update(stripePaymentIntentId, {
+          metadata: {
+            itemIds: bundledItemIds.join(','),
+            shopperId: shopper.id,
+            organizerId: organizer.id,
+            saleId: session.sale!.id,
+            invoiceId: holdInvoice.id,
+          },
+        });
+      } catch (metaErr: any) {
+        const metaErrMsg = `[pos] Non-fatal: failed to backfill invoiceId metadata onto PaymentIntent ${stripePaymentIntentId} for invoice ${holdInvoice.id}: ${metaErr?.message ?? metaErr}`;
+        console.error(metaErrMsg);
+        // Visible alerting, not just a log line: this invoice now depends entirely on
+        // invoiceExpiryJob's STRANDED-PAID reconcile backstop (which only fires after
+        // the invoice's own expiresAt passes) with zero interim visibility otherwise.
+        try {
+          Sentry.captureException(metaErr instanceof Error ? metaErr : new Error(metaErrMsg), {
+            tags: { area: 'hold-invoice-metadata-backfill' },
+            extra: { invoiceId: holdInvoice.id, stripePaymentIntentId },
+          });
+        } catch {
+          // Sentry may not be initialized -- silently continue
+        }
+      }
+    }
 
     // Send invoice email (fire-and-forget)
     setImmediate(async () => {

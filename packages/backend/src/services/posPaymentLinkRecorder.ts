@@ -55,18 +55,26 @@ export async function recordPosPaymentLinkSale(
   let didRecord = false;
 
   await prisma.$transaction(async (tx) => {
-    // Re-read INSIDE the tx so only one of a webhook/reconciler race proceeds.
-    const fresh = await tx.pOSPaymentLink.findUnique({ where: { id: posPaymentLink.id } });
-    if (!fresh || fresh.status === 'COMPLETED') {
-      return; // another path already recorded this sale
-    }
-
-    // Flip to COMPLETED FIRST — a concurrent tx re-reading the row now sees COMPLETED.
-    await tx.pOSPaymentLink.update({
-      where: { id: fresh.id },
+    // Guarded atomic flip: the WHERE clause + UPDATE row lock is what actually
+    // serializes a concurrent webhook/reconciler race — a plain SELECT here would not
+    // lock the row under READ COMMITTED, letting both transactions read stale status.
+    // (Fixed 2026-08-03, findasale-hacker pass — same race class found in
+    // holdInvoicePaymentRecorder.ts; this file was the original reference pattern
+    // and had the identical findUnique-then-update TOCTOU gap.)
+    const flip = await tx.pOSPaymentLink.updateMany({
+      where: { id: posPaymentLink.id, status: { not: 'COMPLETED' } },
       data: { status: 'COMPLETED', completedAt: new Date() },
     });
+    if (flip.count === 0) {
+      return; // another path already recorded this sale — lost the race, no-op
+    }
     didRecord = true;
+
+    // Safe to re-read now — this tx already won the atomic flip above.
+    const fresh = await tx.pOSPaymentLink.findUnique({ where: { id: posPaymentLink.id } });
+    if (!fresh) {
+      return; // unreachable in practice (we just updated this row), defensive only
+    }
 
     if (fresh.itemIds?.length) {
       // ADR-085 Track B Phase 1 Step 4: atomic, race-safe stock decrement. Collects which
