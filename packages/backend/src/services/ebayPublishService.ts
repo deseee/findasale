@@ -380,39 +380,57 @@ type Healer = (ctx: EbayPublishContext, errorBody: string) => Promise<HealResult
 
 /** POST the offer publish endpoint; returns the parsed listingId on success, else null. */
 async function attemptPublish(ctx: EbayPublishContext): Promise<{ ok: boolean; listingId: string | null; errorBody: string }> {
-  const res = await ebayFetch(`/sell/inventory/v1/offer/${ctx.offerId}/publish`, ctx.accessToken, { method: 'POST', body: {} });
-  if (res.ok) {
-    const data = (await res.json().catch(() => ({}))) as any;
-    let listingId = (data?.listingId ?? null) as string | null;
-    if (!listingId) {
-      // eBay confirmed the publish (res.ok) but the response body didn't parse or
-      // didn't include listingId. Previously this silently returned listingId: null,
-      // which the caller treats as a total publish FAILURE even though eBay actually
-      // created a live listing -- resulting in items live on eBay with zero trace in
-      // FindA.Sale (no ebayListingId, no listedOnEbayAt, no ebayQueuedAt). Recover the
-      // listingId via a follow-up GET before giving up. (Fix: eBay sync gap, 2026-07-28.)
-      console.warn(`[eBay Publish] offer ${ctx.offerId}: publish returned ok but no listingId in body -- attempting recovery GET`);
-      try {
-        const offerGetRes = await ebayFetch(`/sell/inventory/v1/offer/${ctx.offerId}`, ctx.accessToken, { method: 'GET' });
-        if (offerGetRes.ok) {
-          const offerData = (await offerGetRes.json().catch(() => ({}))) as any;
-          listingId = (offerData?.listingId ?? null) as string | null;
-          if (listingId) {
-            console.log(`[eBay Publish] offer ${ctx.offerId}: recovered listingId ${listingId} via GET after empty publish response`);
+  // S1215 fix (Q12E tuner / Vivitar flash stuck-offer incident, 2026-08-03): this
+  // publish POST previously had NO try/catch of its own. A network hiccup or the
+  // 15s AbortSignal.timeout() firing inside ebayFetch() threw an uncaught exception
+  // here, which propagated straight out of ebayPublishWithSelfHeal, past every call
+  // site's per-item try/catch, as a generic INTERNAL_ERROR -- AFTER the offer had
+  // already been created and persisted to Item.ebayOfferId by the caller (offer
+  // creation always commits before this function is ever called). Result: an item
+  // permanently stuck with ebayOfferId set and ebayListingId null, no eBay errorId
+  // to dispatch a healer on, and no trace of what happened. Catching here turns a
+  // thrown network/timeout error into a normal { ok: false, errorBody } result so
+  // the loop's existing error-surfacing (and the caller's ebayNeedsReview flagging)
+  // apply uniformly instead of the exception escaping mid-flow.
+  try {
+    const res = await ebayFetch(`/sell/inventory/v1/offer/${ctx.offerId}/publish`, ctx.accessToken, { method: 'POST', body: {} });
+    if (res.ok) {
+      const data = (await res.json().catch(() => ({}))) as any;
+      let listingId = (data?.listingId ?? null) as string | null;
+      if (!listingId) {
+        // eBay confirmed the publish (res.ok) but the response body didn't parse or
+        // didn't include listingId. Previously this silently returned listingId: null,
+        // which the caller treats as a total publish FAILURE even though eBay actually
+        // created a live listing -- resulting in items live on eBay with zero trace in
+        // FindA.Sale (no ebayListingId, no listedOnEbayAt, no ebayQueuedAt). Recover the
+        // listingId via a follow-up GET before giving up. (Fix: eBay sync gap, 2026-07-28.)
+        console.warn(`[eBay Publish] offer ${ctx.offerId}: publish returned ok but no listingId in body -- attempting recovery GET`);
+        try {
+          const offerGetRes = await ebayFetch(`/sell/inventory/v1/offer/${ctx.offerId}`, ctx.accessToken, { method: 'GET' });
+          if (offerGetRes.ok) {
+            const offerData = (await offerGetRes.json().catch(() => ({}))) as any;
+            listingId = (offerData?.listingId ?? null) as string | null;
+            if (listingId) {
+              console.log(`[eBay Publish] offer ${ctx.offerId}: recovered listingId ${listingId} via GET after empty publish response`);
+            } else {
+              console.error(`[eBay Publish] offer ${ctx.offerId}: recovery GET succeeded but still no listingId -- publish may not be fully live yet`);
+            }
           } else {
-            console.error(`[eBay Publish] offer ${ctx.offerId}: recovery GET succeeded but still no listingId -- publish may not be fully live yet`);
+            console.error(`[eBay Publish] offer ${ctx.offerId}: recovery GET failed (HTTP ${offerGetRes.status}) after empty publish response`);
           }
-        } else {
-          console.error(`[eBay Publish] offer ${ctx.offerId}: recovery GET failed (HTTP ${offerGetRes.status}) after empty publish response`);
+        } catch (recoverErr) {
+          console.error(`[eBay Publish] offer ${ctx.offerId}: recovery GET threw:`, recoverErr instanceof Error ? recoverErr.message : String(recoverErr));
         }
-      } catch (recoverErr) {
-        console.error(`[eBay Publish] offer ${ctx.offerId}: recovery GET threw:`, recoverErr instanceof Error ? recoverErr.message : String(recoverErr));
       }
+      return { ok: true, listingId, errorBody: '' };
     }
-    return { ok: true, listingId, errorBody: '' };
+    const errorBody = await res.text().catch(() => '');
+    return { ok: false, listingId: null, errorBody };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[eBay Publish] offer ${ctx.offerId}: publish POST threw (network/timeout) -- treating as failed attempt, not propagating: ${msg}`);
+    return { ok: false, listingId: null, errorBody: `NETWORK_ERROR: ${msg}` };
   }
-  const errorBody = await res.text().catch(() => '');
-  return { ok: false, listingId: null, errorBody };
 }
 
 /** GET the live offer and refresh ctx.sku from it (guards against SKU drift). */

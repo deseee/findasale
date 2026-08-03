@@ -2748,12 +2748,23 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
         let ebayListingId: string | null = healResult.listingId;
 
         if (!healResult.published || !ebayListingId) {
+          // S1215 fix: this item's offer was already created + persisted
+          // (ebayOfferId set above) before this publish attempt ran, so it is now
+          // sitting in the "Pending Publish" half-state regardless of WHY publish
+          // failed. Previously ebayNeedsReview was only ever set for the 25005
+          // category branch below -- any other failure reason (unhealable errorId,
+          // or a network/timeout error now caught in attemptPublish instead of
+          // escaping uncaught) left the item silently stuck with no flag
+          // distinguishing "never retried" from "retried and still broken".
+          // Flagging it here unconditionally lets the stuck-offer retry cron
+          // (ebayStuckOfferRetryCron.ts) safely skip items it already tried and
+          // failed, instead of hammering a permanently-broken offer every run.
+          await prisma.item.update({
+            where: { id: item.id },
+            data: { ebayNeedsReview: true },
+          });
           // 25005 exhausted → surface the manual-category-review result (unchanged UX).
           if (healResult.lastErrorId === '25005') {
-            await prisma.item.update({
-              where: { id: item.id },
-              data: { ebayNeedsReview: true },
-            });
             console.warn(`[eBay] Category review needed for ${sku} — organizer must set eBay category manually`);
             results.push({
               itemId: item.id,
@@ -3363,6 +3374,18 @@ export const publishItemOffer = async (req: AuthRequest, res: Response) => {
     const ebayListingId: string | null = healResult.listingId;
 
     if (!healResult.published || !ebayListingId) {
+      // S1215 fix: this offer already existed (this whole function is the
+      // manual "Publish now" retry path — it only ever calls publish on an
+      // existing item.ebayOfferId, never recreates it) and this attempt just
+      // failed again. Flag it so the stuck-offer retry cron
+      // (ebayStuckOfferRetryCron.ts) doesn't immediately re-hammer the same
+      // broken offer on its next run. Never let this block the error response
+      // the organizer is waiting on.
+      try {
+        await prisma.item.update({ where: { id: item.id }, data: { ebayNeedsReview: true } });
+      } catch (flagErr) {
+        console.warn(`[eBay PublishNow] item=${item.id} failed to set ebayNeedsReview after publish failure (non-fatal):`, (flagErr as Error).message);
+      }
       // Root-cause fix (S1184): same swallow bug as pushSaleToEbay — surface the real
       // eBay error text instead of a generic message so the organizer's toast is
       // actionable (e.g. an invalid/stale fulfillmentPolicyId now names itself).
