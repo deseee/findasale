@@ -49,7 +49,7 @@ import MyTeamsCard from '../../components/MyTeamsCard';
 import MyVendorBoothsCard from '../../components/MyVendorBoothsCard';
 import { isWidgetVisible, getSaleTypeConfig } from '../../lib/dashboard-sale-type-config';
 import { OGBuyerCountBadge } from '../../components/OGBuyerBadge'; // Feature #404: OG Buyer
-import { Clock, ShoppingCart, Megaphone, Pencil, Eye, Copy, Store } from 'lucide-react';
+import { Clock, ShoppingCart, Megaphone, Pencil, Eye, Store } from 'lucide-react';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import SocialPostGenerator from '../../components/SocialPostGenerator';
 import SmartSearchViewsCard from '../../components/SmartSearchViewsCard';
@@ -196,7 +196,7 @@ const OrganizerDashboard = () => {
   // hub *creation* is PRO-gated, hub *listing* is not gated by tier at all, so a
   // PRO-tier hub owner must still see their existing hub here.
   const { data: hubsData } = useQuery<{
-    hubs: Array<{ id: string; name: string; boothCount: number; awaitingConfirmationCount?: number }>;
+    hubs: Array<{ id: string; name: string; boothCount: number; awaitingConfirmationCount?: number; isActive?: boolean }>;
   }>({
     queryKey: ['organizer-hubs', user?.id],
     queryFn: async () => {
@@ -206,7 +206,12 @@ const OrganizerDashboard = () => {
     enabled: !!user?.id && isClient,
   });
 
-  const hubs = hubsData?.hubs ?? [];
+  // Dashboard only ever shows OPEN hubs. listMyHubs (hubController.ts) intentionally
+  // returns closed hubs too (isActive: false) because the hubs management page
+  // (pages/organizer/hubs/index.tsx) needs the full list to build its "Closed markets"
+  // section with Reopen buttons. This summary card is not that page, so a closed hub
+  // (e.g. one the organizer just soft-deleted) is filtered out here instead of upstream.
+  const hubs = (hubsData?.hubs ?? []).filter((hub) => hub.isActive !== false);
   const ownsHubs = hubs.length > 0;
   const totalHubBoothCount = hubs.reduce((sum, hub) => sum + (hub.boothCount ?? 0), 0);
   // Booths a vendor has already claimed that the organizer has not confirmed yet. These
@@ -942,47 +947,6 @@ const OrganizerDashboard = () => {
             </div>
           )}
 
-          {/* Storefront Widget */}
-          {storefrontSlug && isClient && (
-            <div className="bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 rounded-lg p-5 mb-6 flex flex-col sm:flex-row items-start sm:items-center gap-4">
-              <div className="flex items-center gap-3 flex-shrink-0">
-                <div className="w-10 h-10 rounded-full bg-green-100 dark:bg-green-900/40 flex items-center justify-center">
-                  <Store className="w-5 h-5 text-green-700 dark:text-green-400" />
-                </div>
-                <div>
-                  <p className="text-xs font-semibold text-warm-500 dark:text-warm-400 uppercase tracking-wide">Your Storefront</p>
-                  <p className="text-sm font-medium text-warm-900 dark:text-warm-100 truncate max-w-[200px] sm:max-w-xs">
-                    {`https://finda.sale/organizer/storefront/${storefrontSlug}`}
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2 sm:ml-auto flex-shrink-0">
-                <button
-                  onClick={async () => {
-                    const url = `https://finda.sale/organizer/storefront/${storefrontSlug}`;
-                    try {
-                      await navigator.clipboard.writeText(url);
-                      showToast('Storefront link copied!', 'success');
-                    } catch {
-                      showToast('Could not copy link', 'error');
-                    }
-                  }}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-warm-100 dark:bg-gray-700 text-warm-800 dark:text-warm-200 hover:bg-warm-200 dark:hover:bg-gray-600 rounded-lg transition-colors"
-                >
-                  <Copy className="w-3.5 h-3.5" />
-                  Copy Link
-                </button>
-                <Link
-                  href={`/organizer/storefront/${storefrontSlug}`}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
-                >
-                  <Eye className="w-3.5 h-3.5" />
-                  View Storefront
-                </Link>
-              </div>
-            </div>
-          )}
-
           {/* Market Hubs ownership card -- independent of dashboardState (new/active/between);
               hub ownership is orthogonal to whether the organizer also runs an individual sale. */}
           {ownsHubs && (
@@ -1024,18 +988,6 @@ const OrganizerDashboard = () => {
               </div>
             </div>
           )}
-
-          {/* Booths this user RENTS at somebody else's market -- the mirror image of the
-              Market Hubs card directly above. That card reads /api/organizer/hubs
-              (hubController.ts listMyHubs :292), which filters to hubs this organizer
-              OWNS, so it shows a vendor at another person's mall nothing at all. This one
-              reads /api/vendor-booth/my-booths, which is filtered to
-              `userId: req.user.id`. Renders NOTHING when the viewer has no claimed booths,
-              so an organizer who is not also a vendor sees no change. Note this card can
-              only ever reach organizers: dashboard.tsx's auth guard below (:483) sends
-              anyone without the ORGANIZER role to /access-denied, which is why the same
-              component is also mounted standalone at /vendor/booths for pure vendors. */}
-          <MyVendorBoothsCard />
 
           {/* STATE-AWARE CONTENT */}
 
@@ -1890,6 +1842,21 @@ const OrganizerDashboard = () => {
               </div>
             </div>
           )}
+
+          {/* Booths this user RENTS at somebody else's market -- the mirror image of the
+              Market Hubs card above. That card reads /api/organizer/hubs
+              (hubController.ts listMyHubs :292), which filters to hubs this organizer
+              OWNS, so it shows a vendor at another person's mall nothing at all. This one
+              reads /api/vendor-booth/my-booths, which is filtered to
+              `userId: req.user.id`. Renders NOTHING when the viewer has no claimed booths,
+              so an organizer who is not also a vendor sees no change. Note this card can
+              only ever reach organizers: dashboard.tsx's auth guard below (:483) sends
+              anyone without the ORGANIZER role to /access-denied, which is why the same
+              component is also mounted standalone at /vendor/booths for pure vendors.
+              Moved below the state-aware sale content 2026-08-03 per Patrick -- it used to
+              render above the organizer's own active sale, which buried the sale card most
+              organizers actually use under a card most of them never need. */}
+          <MyVendorBoothsCard />
 
         </div>
         )}
