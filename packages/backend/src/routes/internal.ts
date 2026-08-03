@@ -18,6 +18,7 @@ import { runWebsiteEnrichmentBackfill } from '../jobs/websiteEnrichmentJob';
 import { runInternalJob } from '../controllers/internalJobRunnerController';
 import { runListingEnrichmentBatch } from '../controllers/internalListingEnrichmentController';
 import { getBatchOfUngeocodedSales, bulkUpdateGeocodedSales } from '../controllers/internalGeocodingController';
+import { getUnconfirmedWeightBacklog } from '../controllers/internalReportsController';
 import { runOrganizerContactBackfill } from '../controllers/internalOrganizerContactBackfillController';
 import { getPipelineHealth } from '../controllers/pipelineHealthController';
 import { runCategorySync } from '../jobs/categorySyncCron';
@@ -712,6 +713,7 @@ router.get('/outreach/status', requireSecret, async (req: express.Request, res: 
 });
 
 // POST /api/internal/enrich-sale-details
+router.get('/reports/unconfirmed-weight-backlog', getUnconfirmedWeightBacklog);
 router.post('/enrich-sale-details', triggerSaleDetailEnrichment);
 router.get('/enrich-sale-details/status', getSaleDetailEnrichmentStatus);
 router.get('/enrich-sale-details/batch', getBatchOfUnenrichedSales);
