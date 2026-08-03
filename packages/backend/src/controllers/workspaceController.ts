@@ -292,17 +292,32 @@ export const removeMember = async (req: AuthRequest, res: Response) => {
 
 export const listMembers = async (req: AuthRequest, res: Response) => {
   try {
+    if (!req.user?.id) return res.status(401).json({ message: 'Unauthorized' });
     const organizerId = req.user?.organizerProfile?.id;
-    if (!organizerId) return res.status(401).json({ message: 'Unauthorized' });
-    let workspace = await prisma.organizerWorkspace.findUnique({ where: { ownerId: organizerId } });
+    let workspace = organizerId
+      ? await prisma.organizerWorkspace.findUnique({ where: { ownerId: organizerId } })
+      : null;
     if (!workspace) {
-      const membership = await prisma.workspaceMember.findFirst({ where: { organizerId } });
+      // Membership can be keyed by organizerId OR userId (staff/team-member accounts with no
+      // organizer profile) -- see WorkspaceMember schema / requireWorkspaceMember middleware.
+      const membership = await prisma.workspaceMember.findFirst({
+        where: {
+          acceptedAt: { not: null },
+          OR: [
+            ...(organizerId ? [{ organizerId }] : []),
+            { userId: req.user.id },
+          ],
+        },
+      });
       if (membership) workspace = await prisma.organizerWorkspace.findUnique({ where: { id: membership.workspaceId } });
     }
     if (!workspace) return res.status(404).json({ message: 'Workspace not found' });
     const members = await prisma.workspaceMember.findMany({
       where: { workspaceId: workspace.id },
-      include: { organizer: { select: { id: true, businessName: true, profilePhoto: true, user: { select: { email: true } } } } },
+      include: {
+        organizer: { select: { id: true, businessName: true, profilePhoto: true, user: { select: { email: true } } } },
+        user: { select: { id: true, name: true, email: true } },
+      },
       orderBy: { invitedAt: 'desc' },
     });
     return res.json({ workspace: { id: workspace.id, name: workspace.name, slug: workspace.slug, ownerId: workspace.ownerId }, members });
@@ -663,9 +678,8 @@ export const getWorkspaceCostCalculator = async (req: AuthRequest, res: Response
 export const deleteWorkspace = async (req: AuthRequest, res: Response) => {
   try {
     const { workspaceId } = req.params;
-    const organizerId = req.user?.organizerProfile?.id;
 
-    if (!organizerId) return res.status(401).json({ message: 'Unauthorized' });
+    if (!req.user?.id) return res.status(401).json({ message: 'Unauthorized' });
     if (!workspaceId) return res.status(400).json({ message: 'Workspace ID is required' });
 
     const workspace = await prisma.organizerWorkspace.findUnique({
@@ -674,7 +688,11 @@ export const deleteWorkspace = async (req: AuthRequest, res: Response) => {
     });
 
     if (!workspace) return res.status(404).json({ message: 'Workspace not found' });
-    if (workspace.ownerId !== organizerId) return res.status(403).json({ message: 'Only workspace owner can delete the workspace' });
+    // Ownership is inherently organizer-based (OrganizerWorkspace.ownerId -> Organizer, unique) --
+    // an accepted userId-only member can never legitimately be the owner, so this correctly 403s
+    // for them too instead of the previous misleading 401 "Unauthorized".
+    const organizerId = req.user?.organizerProfile?.id;
+    if (!organizerId || workspace.ownerId !== organizerId) return res.status(403).json({ message: 'Only workspace owner can delete the workspace' });
 
     // Cascading delete is handled by Prisma schema
     await prisma.organizerWorkspace.delete({ where: { id: workspaceId } });
@@ -877,9 +895,11 @@ export const getMyWorkspaceMemberships = async (req: AuthRequest, res: Response)
 export const getWorkspaceSaleChat = async (req: any, res: Response) => {
   try {
     const { workspaceId, saleId } = req.params;
-    const organizerId = req.user?.organizerProfile?.id;
 
-    if (!organizerId) return res.status(401).json({ message: 'Unauthorized' });
+    // requireWorkspaceMember() middleware already verified real membership (organizerId- OR
+    // userId-keyed) upstream -- this only needs a basic auth check, not the redundant
+    // organizer-only re-check that used to wrongly 401 userId-only (staff/team-member) members.
+    if (!req.user?.id) return res.status(401).json({ message: 'Unauthorized' });
     if (!workspaceId || !saleId) return res.status(400).json({ message: 'Workspace ID and Sale ID required' });
 
     // Auto-create WorkspaceSaleChat if it doesn't exist
@@ -923,15 +943,30 @@ export const postWorkspaceSaleChat = async (req: any, res: Response) => {
   try {
     const { workspaceId, saleId } = req.params;
     const { message } = req.body;
-    const organizerId = req.user?.organizerProfile?.id;
 
-    if (!organizerId) return res.status(401).json({ message: 'Unauthorized' });
+    // requireWorkspaceMember() middleware already verified real membership (organizerId- OR
+    // userId-keyed) upstream, so auth here is just a basic check.
+    if (!req.user?.id) return res.status(401).json({ message: 'Unauthorized' });
     if (!workspaceId || !saleId) return res.status(400).json({ message: 'Workspace ID and Sale ID required' });
     if (!message || typeof message !== 'string') return res.status(400).json({ message: 'Message is required' });
 
     const trimmedMessage = message.trim();
     if (trimmedMessage.length === 0) return res.status(400).json({ message: 'Message cannot be empty' });
     if (trimmedMessage.length > 1000) return res.status(400).json({ message: 'Message cannot exceed 1000 characters' });
+
+    // KNOWN SEPARATE GAP (not fixed here, root-caused and flagged, not papered over):
+    // WorkspaceChatMessage.organizerId is a required (non-nullable) FK in the current schema --
+    // there is no userId column -- so a userId-only workspace member (a staff/team-member account
+    // with no Organizer profile) still cannot be attributed as a message author. This is a schema
+    // limitation, not the 401-auth bug this pass fixes (membership itself is already correctly
+    // admitted above). A real fix needs a migration (nullable userId + relation on
+    // WorkspaceChatMessage) -- routing to findasale-architect + the Schema Change Protocol rather
+    // than silently working around it here. Until then, this gives an honest 403, not a
+    // misleading 401.
+    const organizerId = req.user?.organizerProfile?.id;
+    if (!organizerId) {
+      return res.status(403).json({ message: 'Posting to team chat currently requires an organizer profile on your account. Ask the workspace owner for help.' });
+    }
 
     // Get or create WorkspaceSaleChat
     let chat = await prisma.workspaceSaleChat.findUnique({
@@ -976,19 +1011,19 @@ export const getWorkspaceTasks = async (req: AuthRequest, res: Response) => {
   try {
     const { workspaceId } = req.params;
     const { saleId } = req.query;
-    const organizerId = req.user?.organizerProfile?.id;
 
-    if (!organizerId) return res.status(401).json({ message: 'Unauthorized' });
+    // requireWorkspaceMember() middleware already verified real membership (organizerId- OR
+    // userId-keyed) upstream. Fetch ALL workspace members (not filtered to the caller) -- the
+    // assignee-name lookup below needs every member's info, not just the caller's own row, which
+    // was the previous behavior and silently broke assignee names for anyone but self.
+    if (!req.user?.id) return res.status(401).json({ message: 'Unauthorized' });
     if (!workspaceId) return res.status(400).json({ message: 'Workspace ID required' });
 
-    // Check workspace membership
     const workspace = await prisma.organizerWorkspace.findUnique({
       where: { id: workspaceId },
-      include: { members: { where: { organizerId }, include: { organizer: { include: { user: true } }, user: true } } },
+      include: { members: { include: { organizer: { include: { user: true } }, user: true } } },
     });
-    if (!workspace || (workspace.ownerId !== organizerId && workspace.members.length === 0)) {
-      return res.status(403).json({ message: 'Not a workspace member' });
-    }
+    if (!workspace) return res.status(404).json({ message: 'Workspace not found' });
 
     // Build query filter
     const where: any = { workspaceId };
@@ -1057,9 +1092,11 @@ export const createWorkspaceTask = async (req: AuthRequest, res: Response) => {
   try {
     const { workspaceId } = req.params;
     const { title, description, dueAt, assignedToId, saleId } = req.body;
-    const organizerId = req.user?.organizerProfile?.id;
 
-    if (!organizerId) return res.status(401).json({ message: 'Unauthorized' });
+    // requireWorkspaceMember() middleware already verified real membership (organizerId- OR
+    // userId-keyed) upstream. The role-permission check below needs the CALLER's own membership
+    // row found the same way, not filtered to organizerId only.
+    if (!req.user?.id) return res.status(401).json({ message: 'Unauthorized' });
     if (!workspaceId) return res.status(400).json({ message: 'Workspace ID required' });
     if (!title || typeof title !== 'string' || title.trim().length === 0) {
       return res.status(400).json({ message: 'Title is required' });
@@ -1069,15 +1106,17 @@ export const createWorkspaceTask = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: 'Sale ID is required' });
     }
 
-    // Check workspace membership and role
+    const organizerId = req.user?.organizerProfile?.id;
     const workspace = await prisma.organizerWorkspace.findUnique({
       where: { id: workspaceId },
-      include: { members: { where: { organizerId } } },
+      include: { members: true },
     });
     if (!workspace) return res.status(404).json({ message: 'Workspace not found' });
 
     const isOwner = workspace.ownerId === organizerId;
-    const member = workspace.members[0];
+    const member = workspace.members.find(
+      (m: any) => (organizerId && m.organizerId === organizerId) || m.userId === req.user!.id
+    );
     const isAdmin = member?.role === 'ADMIN';
     const isManager = member?.role === 'MANAGER';
 
@@ -1122,24 +1161,26 @@ export const updateWorkspaceTask = async (req: AuthRequest, res: Response) => {
   try {
     const { workspaceId, taskId } = req.params;
     const { status, title, description, dueAt, assignedToId } = req.body;
-    const organizerId = req.user?.organizerProfile?.id;
 
-    if (!organizerId) return res.status(401).json({ message: 'Unauthorized' });
+    // requireWorkspaceMember() middleware already verified real membership (organizerId- OR
+    // userId-keyed) upstream. Fetch ALL workspace members so the caller's own membership can be
+    // found regardless of which key it uses, not filtered to organizerId only.
+    if (!req.user?.id) return res.status(401).json({ message: 'Unauthorized' });
     if (!workspaceId || !taskId) return res.status(400).json({ message: 'Workspace ID and Task ID required' });
 
     // Fetch the task
     const task = await prisma.workspaceTask.findUnique({
       where: { id: taskId },
-      include: { workspace: { include: { members: { where: { organizerId } } } } },
+      include: { workspace: { include: { members: true } } },
     });
     if (!task) return res.status(404).json({ message: 'Task not found' });
     if (task.workspaceId !== workspaceId) return res.status(403).json({ message: 'Task does not belong to this workspace' });
 
-    // Check permissions
-    // Find the requesting user's workspace membership
+    // Check permissions -- find the requesting user's own workspace membership (organizerId- OR
+    // userId-keyed)
     const requestingOrganizerId = req.user?.organizerProfile?.id;
     const membership = task.workspace.members.find(
-      (m: any) => m.organizerId === requestingOrganizerId
+      (m: any) => (requestingOrganizerId && m.organizerId === requestingOrganizerId) || m.userId === req.user!.id
     );
     const memberRole = membership?.role;
 
@@ -1212,23 +1253,27 @@ export const updateWorkspaceTask = async (req: AuthRequest, res: Response) => {
 export const deleteWorkspaceTask = async (req: AuthRequest, res: Response) => {
   try {
     const { workspaceId, taskId } = req.params;
-    const organizerId = req.user?.organizerProfile?.id;
 
-    if (!organizerId) return res.status(401).json({ message: 'Unauthorized' });
+    // Same-pattern gap found during this pass (not in the original bug list, fixed here per
+    // "fix everything found in the same file"): requireWorkspaceMember() middleware already
+    // verified real membership (organizerId- OR userId-keyed) upstream. Fetch ALL workspace
+    // members so the caller's own membership can be found regardless of which key it uses.
+    if (!req.user?.id) return res.status(401).json({ message: 'Unauthorized' });
     if (!workspaceId || !taskId) return res.status(400).json({ message: 'Workspace ID and Task ID required' });
 
     // Fetch the task
     const task = await prisma.workspaceTask.findUnique({
       where: { id: taskId },
-      include: { workspace: { include: { members: { where: { organizerId } } } } },
+      include: { workspace: { include: { members: true } } },
     });
     if (!task) return res.status(404).json({ message: 'Task not found' });
     if (task.workspaceId !== workspaceId) return res.status(403).json({ message: 'Task does not belong to this workspace' });
 
-    // Check permissions
+    // Check permissions -- find the requesting user's own workspace membership (organizerId- OR
+    // userId-keyed)
     const requestingOrganizerId = req.user?.organizerProfile?.id;
     const membership = task.workspace.members.find(
-      (m: any) => m.organizerId === requestingOrganizerId
+      (m: any) => (requestingOrganizerId && m.organizerId === requestingOrganizerId) || m.userId === req.user!.id
     );
     const memberRole = membership?.role;
 
