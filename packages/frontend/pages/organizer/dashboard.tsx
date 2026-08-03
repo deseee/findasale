@@ -1557,6 +1557,21 @@ const OrganizerDashboard = () => {
                 );
               })()}
 
+              {/* Booths this user RENTS at somebody else's market -- the mirror image of the
+                  Market Hubs card further up the page. That card reads /api/organizer/hubs
+                  (hubController.ts listMyHubs :292), which filters to hubs this organizer
+                  OWNS, so it shows a vendor at another person's mall nothing at all. This one
+                  reads /api/vendor-booth/my-booths, which is filtered to
+                  `userId: req.user.id`. Renders NOTHING when the viewer has no claimed booths,
+                  so an organizer who is not also a vendor sees no change. Note this card can
+                  only ever reach organizers: dashboard.tsx's auth guard above (:489) sends
+                  anyone without the ORGANIZER role to /access-denied, which is why the same
+                  component is also mounted standalone at /vendor/booths for pure vendors.
+                  Positioned here 2026-08-03 per Patrick's correction -- below the Next Action
+                  Zone ("Review Items" etc.) and above the Sale Progress Tracker Widget, not at
+                  the very bottom of the page as the first pass placed it. */}
+              <MyVendorBoothsCard />
+
               {/* Sale Progress Tracker Widget */}
               {activeSale && (
                 <SaleProgressWidget saleId={activeSale.id} saleTitle={activeSale.title} />
@@ -1842,21 +1857,6 @@ const OrganizerDashboard = () => {
               </div>
             </div>
           )}
-
-          {/* Booths this user RENTS at somebody else's market -- the mirror image of the
-              Market Hubs card above. That card reads /api/organizer/hubs
-              (hubController.ts listMyHubs :292), which filters to hubs this organizer
-              OWNS, so it shows a vendor at another person's mall nothing at all. This one
-              reads /api/vendor-booth/my-booths, which is filtered to
-              `userId: req.user.id`. Renders NOTHING when the viewer has no claimed booths,
-              so an organizer who is not also a vendor sees no change. Note this card can
-              only ever reach organizers: dashboard.tsx's auth guard below (:483) sends
-              anyone without the ORGANIZER role to /access-denied, which is why the same
-              component is also mounted standalone at /vendor/booths for pure vendors.
-              Moved below the state-aware sale content 2026-08-03 per Patrick -- it used to
-              render above the organizer's own active sale, which buried the sale card most
-              organizers actually use under a card most of them never need. */}
-          <MyVendorBoothsCard />
 
         </div>
         )}
