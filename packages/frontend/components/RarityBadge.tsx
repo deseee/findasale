@@ -56,21 +56,6 @@ const RarityBadge: React.FC<RarityBadgeProps> = ({ rarity, size = 'md' }) => {
         </span>
       );
 
-    case 'ULTRA_RARE':
-      return (
-        <span
-          className={`inline-flex items-center gap-1 ${sizeClasses[size]} rounded font-semibold text-purple-700 bg-purple-100 border border-purple-400 shadow-lg`}
-          style={{
-            borderColor: '#9333EA',
-            boxShadow: '0 0 12px rgba(147, 51, 234, 0.5), 0 0 24px rgba(147, 51, 234, 0.25)',
-          }}
-          title="Ultra Rare Item"
-        >
-          <span>✦✦✦</span>
-          Ultra Rare
-        </span>
-      );
-
     case 'LEGENDARY':
       return (
         <>

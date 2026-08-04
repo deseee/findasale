@@ -63,7 +63,7 @@ interface Item {
   reverseFloorPrice?: number; // CD2 Phase 4
   reverseStartDate?: string; // CD2 Phase 4
   isAiTagged?: boolean; // B2: AI tagging disclosure
-  rarity?: string; // Feature #57: Item rarity badge (COMMON | UNCOMMON | RARE | ULTRA_RARE | LEGENDARY)
+  rarity?: string; // Feature #57: Item rarity badge (COMMON | UNCOMMON | RARE | LEGENDARY)
   sale: {
     id: string;
     title: string;

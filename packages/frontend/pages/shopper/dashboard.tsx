@@ -612,7 +612,7 @@ const ShopperDashboard = () => {
                     <span className="text-xl">✅</span>
                     <div className="flex-1">
                       <h3 className="font-semibold text-purple-900 dark:text-purple-300 mb-1">Hunt Pass Active</h3>
-                      <p className="text-sm text-purple-800 dark:text-purple-200">You're earning 1.5x XP on every action and get early access to Rare and Legendary items!</p>
+                      <p className="text-sm text-purple-800 dark:text-purple-200">You're earning 1.5x XP on every action and get 6-hour early access to Legendary items!</p>
                     </div>
                   </div>
                 </div>

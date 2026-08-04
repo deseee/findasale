@@ -231,31 +231,15 @@ export function getRankProgress(currentXp: number) {
 /**
  * Check if user has reached daily XP cap for a given type
  * Returns remaining XP that can be awarded today (0 if cap reached)
- * For TREASURE_HUNT_SCAN, Hunt Pass subscribers get a higher cap (150 instead of 100)
  */
 export async function checkDailyXpCap(
   userId: string,
   type: string
 ): Promise<number> {
-  let cap = DAILY_XP_CAPS[type as keyof typeof DAILY_XP_CAPS];
+  const cap = DAILY_XP_CAPS[type as keyof typeof DAILY_XP_CAPS];
   if (!cap) return Number.MAX_SAFE_INTEGER; // No cap for this type
 
   try {
-    // Hunt Pass bonus: raise TREASURE_HUNT_SCAN cap from 100 to 150
-    if (type === 'TREASURE_HUNT_SCAN') {
-      const user = await prisma.user.findUnique({
-        where: { id: userId },
-        select: {
-          huntPassActive: true,
-          huntPassExpiry: true,
-        },
-      });
-
-      if (user?.huntPassActive && user?.huntPassExpiry && user.huntPassExpiry > new Date()) {
-        cap = 150; // Hunt Pass XP cap for treasure hunt scans
-      }
-    }
-
     const today = new Date();
     today.setUTCHours(0, 0, 0, 0);
 
@@ -768,7 +752,8 @@ export async function computeTreasureHuntScanXp(userId: string, rank: ExplorerRa
  * Replaced by weekly cadence: 7-day active week bonus (STREAK_7DAY_BONUS = 100 XP, once/month)
  * and 30-day anniversary (ANNIVERSARY_30DAY = 250 XP, once/month).
  * This function now awards STREAK_7DAY_BONUS when user hits 7 active days in a calendar month.
- * NOTE (deferred): wire ANNIVERSARY_30DAY into user anniversary tracking (separate feature).
+ * ANNIVERSARY_30DAY is wired separately in jobs/anniversaryXpJob.ts (daily cron,
+ * checks User.createdAt tenure against 30-day multiples) — no longer deferred.
  */
 export async function checkStreakMilestones(
   userId: string,

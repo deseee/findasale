@@ -20,7 +20,17 @@ interface TierBenefits {
 export async function calculateOrganizerTier(organizerId: string): Promise<OrganizerTier> {
   // Count completed (ENDED) sales
   const endedSalesCount = await prisma.sale.count({
-    where: { organizerId, status: 'ENDED' },
+    where: {
+      organizerId,
+      status: 'ENDED',
+      // Substance floor (fraud check, findasale-hacker fix-and-reverify pass): an ENDED
+      // sale with zero items or zero real (non-refunded) purchases has no economic
+      // substance -- without this, an organizer could create-and-end empty sales in a
+      // loop to inflate tier count (BRONZE/SILVER/GOLD) at zero cost. Require at least
+      // one item AND at least one PAID purchase before a sale counts toward tier.
+      items: { some: {} },
+      purchases: { some: { status: 'PAID' } },
+    },
   });
 
   // Count total sold items across all organizer's sales
@@ -113,7 +123,17 @@ export async function getTierProgress(organizerId: string): Promise<{
   itemsNeeded: number;
 }> {
   const endedSalesCount = await prisma.sale.count({
-    where: { organizerId, status: 'ENDED' },
+    where: {
+      organizerId,
+      status: 'ENDED',
+      // Substance floor (fraud check, findasale-hacker fix-and-reverify pass): an ENDED
+      // sale with zero items or zero real (non-refunded) purchases has no economic
+      // substance -- without this, an organizer could create-and-end empty sales in a
+      // loop to inflate tier count (BRONZE/SILVER/GOLD) at zero cost. Require at least
+      // one item AND at least one PAID purchase before a sale counts toward tier.
+      items: { some: {} },
+      purchases: { some: { status: 'PAID' } },
+    },
   });
 
   const soldItemsCount = await prisma.item.count({

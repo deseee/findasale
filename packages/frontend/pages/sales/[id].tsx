@@ -2028,9 +2028,9 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
                               )}
                             </Link>
                             {/* Rarity badge */}
-                            {item.listingType && ['RARE','ULTRA_RARE','LEGENDARY'].includes(item.rarity ?? '') && (
-                              <div className="absolute top-2 left-2 px-1.5 py-0.5 rounded text-xs font-semibold uppercase tracking-wide" style={{ fontFamily: 'ui-monospace, monospace', fontSize: 10, backdropFilter: 'blur(4px)', background: item.rarity === 'LEGENDARY' ? 'rgba(224,168,91,0.18)' : item.rarity === 'ULTRA_RARE' ? 'rgba(196,154,224,0.16)' : 'rgba(157,183,232,0.14)', color: item.rarity === 'LEGENDARY' ? '#E0A85B' : item.rarity === 'ULTRA_RARE' ? '#C49AE0' : '#9DB7E8' }}>
-                                {item.rarity === 'LEGENDARY' ? 'Legendary' : item.rarity === 'ULTRA_RARE' ? 'Ultra rare' : 'Rare'}
+                            {item.listingType && ['RARE','LEGENDARY'].includes(item.rarity ?? '') && (
+                              <div className="absolute top-2 left-2 px-1.5 py-0.5 rounded text-xs font-semibold uppercase tracking-wide" style={{ fontFamily: 'ui-monospace, monospace', fontSize: 10, backdropFilter: 'blur(4px)', background: item.rarity === 'LEGENDARY' ? 'rgba(224,168,91,0.18)' : 'rgba(157,183,232,0.14)', color: item.rarity === 'LEGENDARY' ? '#E0A85B' : '#9DB7E8' }}>
+                                {item.rarity === 'LEGENDARY' ? 'Legendary' : 'Rare'}
                               </div>
                             )}
                             {/* Listing type badge (non-fixed) */}

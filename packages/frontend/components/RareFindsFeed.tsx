@@ -67,11 +67,6 @@ const RareFindsFeed = () => {
       text: 'text-purple-700 dark:text-purple-300',
       badge: '🟣 Rare'
     },
-    ULTRA_RARE: {
-      bg: 'bg-blue-100 dark:bg-blue-900/30',
-      text: 'text-blue-700 dark:text-blue-300',
-      badge: '🔵 Ultra Rare'
-    },
     LEGENDARY: {
       bg: 'bg-yellow-100 dark:bg-yellow-900/30',
       text: 'text-yellow-700 dark:text-yellow-300',

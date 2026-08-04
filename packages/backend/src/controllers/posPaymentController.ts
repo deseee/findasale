@@ -12,6 +12,7 @@ import { notifyFacebookExportedItemSold } from '../services/facebookNudgeService
 import { sellItemUnits, InsufficientStockError } from '../services/itemStockService';
 import { syncMarketplaceStock } from '../services/marketplaceStockSyncService'; // ADR-087 Phase 4: revise-on-partial eBay quantity sync
 import { resolveOrganizerOrTeamMember } from '../utils/posAuth'; // S1183 Fix 1: TEAM_MEMBER fallback for non-venue POS
+import { assertCheckoutAllowed, CheckoutGuardError } from '../services/checkoutGuard'; // S1072 Finding #4 gap fix: POS payment-request self-dealing guard
 
 const stripe = () => getStripe();
 
@@ -160,6 +161,29 @@ export const createPaymentRequest = async (req: AuthRequest, res: Response) => {
     });
 
     if (!shopper) return res.status(404).json({ message: 'Shopper not found' });
+
+    // S1072 Finding #4 gap fix (fix-and-reverify, findasale-hacker): this POS
+    // payment-request flow always has a real, identified buyer (shopperUserId,
+    // validated required above) charged via a Stripe PaymentIntent -- unlike
+    // terminalController.ts's cash/card-present walk-in flows (Purchase.userId is
+    // null there, no verifiable buyer account, correctly log-only via
+    // recordSuspectedSignal), this path is structurally identical to the online
+    // checkout paths (placeBid/placeHold/createCartCheckoutSession) and gets the
+    // same hard block. Fired before any Stripe PaymentIntent is created so a
+    // colluding organizer+buyer pair is rejected before value moves, not after.
+    try {
+      await assertCheckoutAllowed({
+        buyerUserId: shopperUserId,
+        saleId,
+        prisma,
+        context: 'posCreatePaymentRequest',
+      });
+    } catch (guardError) {
+      if (guardError instanceof CheckoutGuardError) {
+        return res.status(403).json({ message: guardError.message });
+      }
+      throw guardError;
+    }
 
     // 60-second duplicate block: check for recent PENDING requests to same shopper
     const recentRequest = await prisma.pOSPaymentRequest.findFirst({

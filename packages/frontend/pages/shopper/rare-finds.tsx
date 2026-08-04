@@ -40,7 +40,7 @@ const RareFindsPage = () => {
   const router = useRouter();
   const { user, isLoading: authLoading } = useAuth();
   const [page, setPage] = useState(0);
-  const [rarity, setRarity] = useState<string>('ALL'); // ALL, RARE, ULTRA_RARE, LEGENDARY
+  const [rarity, setRarity] = useState<string>('ALL'); // ALL, RARE, LEGENDARY
 
   // Determine limit based on rarity filter
   const limit = 20;
@@ -111,11 +111,6 @@ const RareFindsPage = () => {
       text: 'text-purple-700 dark:text-purple-300',
       badge: '🟣 Rare (6h early access)'
     },
-    ULTRA_RARE: {
-      bg: 'bg-blue-100 dark:bg-blue-900/30',
-      text: 'text-blue-700 dark:text-blue-300',
-      badge: '🔵 Ultra Rare (6h early access)'
-    },
     LEGENDARY: {
       bg: 'bg-yellow-100 dark:bg-yellow-900/30',
       text: 'text-yellow-700 dark:text-yellow-300',
@@ -166,16 +161,6 @@ const RareFindsPage = () => {
               }`}
             >
               🟣 Rare
-            </button>
-            <button
-              onClick={() => { setRarity('ULTRA_RARE'); setPage(0); }}
-              className={`px-4 py-2 rounded-lg font-semibold transition-colors ${
-                rarity === 'ULTRA_RARE'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-white dark:bg-gray-800 text-warm-900 dark:text-warm-100 border border-warm-200 dark:border-gray-700 hover:border-blue-300'
-              }`}
-            >
-              🔵 Ultra Rare
             </button>
             <button
               onClick={() => { setRarity('LEGENDARY'); setPage(0); }}

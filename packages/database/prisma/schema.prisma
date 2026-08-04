@@ -2628,7 +2628,6 @@ enum ItemRarity {
   COMMON
   UNCOMMON
   RARE
-  ULTRA_RARE // Phase 2a: deprecated, use RARE instead for new items
   LEGENDARY
 }
 

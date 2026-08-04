@@ -225,6 +225,7 @@ import './jobs/tierLapseJob'; // Feature #75: Tier lapse state logic — daily b
 import './jobs/fraudDetectionJob'; // Feature #73: Daily off-platform transaction detection at 2 AM
 import './jobs/boostExpiryJob';   // Phase 2b: Expire stale ACTIVE BoostPurchase records hourly
 import './jobs/xpExpiryCron';      // D-XP-002: XP expiry system — daily at 02:00 UTC with warning flags
+import './jobs/anniversaryXpJob';  // 30-day account anniversary XP bonus — daily at 02:45 UTC (wires ANNIVERSARY_30DAY into User.createdAt tenure tracking)
 import './jobs/huntPassExpiryCron'; // Hunt Pass: deactivate expired passes daily at 03:00 UTC
 import './jobs/deliverabilityMonitorJob'; // Email deliverability monitoring — Sundays 19:00 UTC
 import './jobs/gmailHealthCron';          // Gmail OAuth health, daily send summary, suspension detect

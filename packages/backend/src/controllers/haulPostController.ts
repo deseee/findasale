@@ -1,7 +1,13 @@
 import { Request, Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
-import { awardXp, XP_AWARDS, MONTHLY_XP_CAPS } from '../services/xpService';
+import { awardXp, XP_AWARDS, checkMonthlyXpCap } from '../services/xpService';
+
+// D-XP-008: HAUL_POST XP is capped at 4 posts/month. MONTHLY_XP_CAPS.HAUL_POST (60)
+// is an XP-total constant (4 posts x 15 XP), not a post-count ceiling — comparing a
+// raw post COUNT against it directly under-enforces the cap 15x over. This constant
+// is the correct post-count ceiling to compare monthlyCount against.
+const MAX_HAUL_POSTS_PER_MONTH = 4;
 
 /**
  * GET /api/haul-posts — public trending feed
@@ -76,7 +82,7 @@ export const createHaulPost = async (req: AuthRequest, res: Response) => {
       },
     });
 
-    if (monthlyCount < MONTHLY_XP_CAPS.HAUL_POST) {
+    if (monthlyCount < MAX_HAUL_POSTS_PER_MONTH) {
       await awardXp((req as any).user.id, 'HAUL_POST', XP_AWARDS.HAUL_POST, {
         description: `Haul post created (id: ${haul.id})`,
       }).catch(err => console.error('[HaulPost] XP award failed:', err));
@@ -89,10 +95,14 @@ export const createHaulPost = async (req: AuthRequest, res: Response) => {
         select: { organizer: { select: { userId: true } } },
       });
       if (sale?.organizer?.userId) {
-        awardXp(sale.organizer.userId, 'ORG_HAUL_FROM_SALE', XP_AWARDS.ORG_HAUL_FROM_SALE, {
-          saleId,
-          description: 'Haul published from your sale'
-        }).catch(err => console.error('[HaulPost] Organizer XP award failed:', err));
+        // MONTHLY_XP_CAPS.ORG_HAUL_FROM_SALE existed as a constant but was never enforced here — add the gate
+        const orgRemaining = await checkMonthlyXpCap(sale.organizer.userId, 'ORG_HAUL_FROM_SALE');
+        if (orgRemaining > 0) {
+          awardXp(sale.organizer.userId, 'ORG_HAUL_FROM_SALE', XP_AWARDS.ORG_HAUL_FROM_SALE, {
+            saleId,
+            description: 'Haul published from your sale'
+          }).catch(err => console.error('[HaulPost] Organizer XP award failed:', err));
+        }
       }
     }
 

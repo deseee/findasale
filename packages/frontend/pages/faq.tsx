@@ -108,7 +108,7 @@ const shopperFAQs: FAQItem[] = [
     question: 'What is the Rare Finds feed?',
     answer: (
       <>
-        Rare Finds is a curated feed exclusively for Hunt Pass subscribers that shows RARE and LEGENDARY items from sales in your area. Hunt Pass members see Rare items 6 hours early and Legendary items 12 hours early. Before the general public. It's the best way to stay ahead of serious competition on the finds that matter most.
+        Rare Finds is a curated feed exclusively for Hunt Pass subscribers that shows RARE and LEGENDARY items from sales in your area. Hunt Pass members see Legendary items 6 hours early, before the general public. It's the best way to stay ahead of serious competition on the finds that matter most.
       </>
     ),
   },
@@ -272,7 +272,7 @@ const shopperFAQs: FAQItem[] = [
     question: 'What is Hunt Pass?',
     answer: (
       <>
-        Hunt Pass is the competitive layer on top of the Explorer's Guild. For $4.99/month you get a 1.5× XP multiplier on all actions, 6-hour early access to Rare items and 12-hour early access to Legendary items, seasonal challenge access with exclusive cosmetics, and the ability to create your own Treasure Trails. Learn more on the <Link href="/shopper/hunt-pass" className="text-amber-600 hover:underline">Hunt Pass page</Link>.
+        Hunt Pass is the competitive layer on top of the Explorer's Guild. For $4.99/month you get a 1.5× XP multiplier on all actions, 6-hour early access to Legendary items, seasonal challenge access with exclusive cosmetics, and the ability to create your own Treasure Trails. Learn more on the <Link href="/shopper/hunt-pass" className="text-amber-600 hover:underline">Hunt Pass page</Link>.
       </>
     ),
   },

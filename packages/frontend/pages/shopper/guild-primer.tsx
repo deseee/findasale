@@ -631,7 +631,7 @@ const GuildPrimerPage = () => {
                     <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50">
                       <td className="px-4 py-3 text-warm-900 dark:text-warm-100">Custom Map Pin</td>
                       <td className="px-4 py-3 text-right font-bold text-purple-600 dark:text-purple-300">1,000 or $10</td>
-                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">Organizer Scout+ / Permanent</td>
+                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">Organizer GOLD / Permanent</td>
                     </tr>
                     <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50">
                       <td className="px-4 py-3 text-warm-900 dark:text-warm-100">Profile Showcase Slot</td>
@@ -669,7 +669,7 @@ const GuildPrimerPage = () => {
                     <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50">
                       <td className="px-4 py-3 text-warm-900 dark:text-warm-100">Bounty Visibility Boost</td>
                       <td className="px-4 py-3 text-right font-bold text-purple-600 dark:text-purple-300">50 or $0.50</td>
-                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">Organizer Scout+ / 7 days</td>
+                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">Organizer BRONZE / 7 days</td>
                     </tr>
                     <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50">
                       <td className="px-4 py-3 text-warm-900 dark:text-warm-100">Wishlist Notification Boost</td>
@@ -791,32 +791,32 @@ const GuildPrimerPage = () => {
                     <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50">
                       <td className="px-4 py-3 text-warm-900 dark:text-warm-100">Sale Bump</td>
                       <td className="px-4 py-3 text-right font-bold text-purple-600 dark:text-purple-300">100 or $1.00</td>
-                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">Organizer Scout+ / 1 hour</td>
+                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">Organizer BRONZE / 1 hour</td>
                     </tr>
                     <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50">
                       <td className="px-4 py-3 text-warm-900 dark:text-warm-100">Early Access Boost</td>
                       <td className="px-4 py-3 text-right font-bold text-purple-600 dark:text-purple-300">200 or $2.00</td>
-                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">Organizer Elite+ / 1 week</td>
+                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">Organizer GOLD / 1 week</td>
                     </tr>
                     <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50">
                       <td className="px-4 py-3 text-warm-900 dark:text-warm-100">Listings Extension (10 listings)</td>
                       <td className="px-4 py-3 text-right font-bold text-purple-600 dark:text-purple-300">250 or $2.50</td>
-                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">Organizer Trusted+ / 1 month</td>
+                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">Organizer SILVER+ / 1 month</td>
                     </tr>
                     <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50">
                       <td className="px-4 py-3 text-warm-900 dark:text-warm-100">Event Sponsorship (7-day)</td>
                       <td className="px-4 py-3 text-right font-bold text-purple-600 dark:text-purple-300">1,000 or $10</td>
-                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">Organizer Elite+ / 7 days</td>
+                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">Organizer GOLD / 7 days</td>
                     </tr>
                     <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50">
                       <td className="px-4 py-3 text-warm-900 dark:text-warm-100">Event Sponsorship (14-day)</td>
                       <td className="px-4 py-3 text-right font-bold text-purple-600 dark:text-purple-300">1,800 or $18</td>
-                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">Organizer Elite+ / 14 days</td>
+                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">Organizer GOLD / 14 days</td>
                     </tr>
                     <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50">
                       <td className="px-4 py-3 text-warm-900 dark:text-warm-100">Treasure Trail Sponsor</td>
                       <td className="px-4 py-3 text-right font-bold text-purple-600 dark:text-purple-300">150 or $1.50</td>
-                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">Organizer Scout+ / Per trail</td>
+                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">Organizer BRONZE / Per trail</td>
                     </tr>
                   </tbody>
                 </table>

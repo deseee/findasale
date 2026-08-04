@@ -1386,7 +1386,7 @@ const EditItemPage = () => {
                     Mark as Legendary
                   </label>
                   <p className="text-xs text-amber-800 dark:text-amber-200 mt-1">
-                    Legendary items are shown early to high-rank shoppers (Sage+) and Hunt Pass subscribers for 4–12 hours before regular release.
+                    Legendary items are shown to Hunt Pass subscribers 6 hours before regular release.
                   </p>
                 </div>
               </div>
