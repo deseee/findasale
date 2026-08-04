@@ -49,10 +49,25 @@ export const GENERIC_PATTERNS = [
 
 /**
  * Return true if the email uses a generic mailbox prefix (info@, admin@, …).
+ *
+ * Boundary-safe match (S1186 fix, 2026-08-04): a pattern only counts when it begins the
+ * local-part (start of string) or immediately follows a non-alphanumeric separator — NOT
+ * when it appears as a bare substring inside a longer word. Plain `.includes()` was wrongly
+ * classifying real business addresses like `estatesales@`, `yardsales@`, `garagesales@`,
+ * and `consignmentsales@` as generic just because they end in "sales@" — live-confirmed
+ * against EstateSalesNet organizer websites, part of the 80.3%→28.5% directory-scraper
+ * email collapse since the 2026-06-22 gate. `info-support@` / `info.support@` etc. still
+ * correctly match (separator-preceded), matching prior intended behavior for those.
  */
 export function isGenericEmail(email: string): boolean {
   const lower = email.toLowerCase().trim();
-  return GENERIC_PATTERNS.some((pattern) => lower.includes(pattern));
+  return GENERIC_PATTERNS.some((pattern) => {
+    const idx = lower.indexOf(pattern);
+    if (idx === -1) return false;
+    if (idx === 0) return true;
+    const charBefore = lower[idx - 1];
+    return !/[a-z0-9]/.test(charBefore);
+  });
 }
 
 /**

@@ -5,6 +5,7 @@ import { randomUUID } from 'crypto';
 import {
   GENERIC_PATTERNS as SHARED_GENERIC_PATTERNS,
   calibrateConfidence as sharedCalibrateConfidence,
+  isGenericEmail as sharedIsGenericEmail,
   type DiscoverySource,
 } from './emailProvenance';
 import { isBlockedWebsiteDomain } from '../config/domainBlocklist';
@@ -351,11 +352,12 @@ async function scrapeWebsiteEmails(domain: string): Promise<{ emails: string[]; 
     }
   }
 
-  // Deduplicate, filter generic patterns, and filter junk/blocklisted addresses
+  // Deduplicate, filter generic patterns, and filter junk/blocklisted addresses.
+  // S1186: was a locally-reimplemented `.includes()` substring check (same bug as the one
+  // fixed in emailProvenance.ts's isGenericEmail) — now delegates to the shared,
+  // boundary-safe helper so this file can't drift out of sync with it again.
   const filtered = [...new Set(emails)].filter(
-    (email) =>
-      !GENERIC_PATTERNS.some((pattern) => email.toLowerCase().includes(pattern)) &&
-      !isJunkEmail(email)
+    (email) => !sharedIsGenericEmail(email) && !isJunkEmail(email)
   );
 
   return { emails: filtered, fetchOk };

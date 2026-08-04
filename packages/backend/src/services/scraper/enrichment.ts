@@ -274,10 +274,24 @@ const ENRICHMENT_MIN_CONFIDENCE = 0.50;
 /**
  * Gate a discovered email through the SAME rules the good path uses before storing it:
  *  1. reject null/generic (info@/admin@/…)
- *  2. reject wrong-entity: if the email domain != the org website domain AND shares no
- *     meaningful token with the business name, it's a wrong-entity guess — reject.
- *  3. compute confidence via the shared calibrateConfidence; reject below the store floor.
+ *  2. hard-reject wrong-entity mega-brand/social/aggregator domains (Disney/Club33-style
+ *     mis-attribution) — never acceptable regardless of confidence.
+ *  3. compute confidence via the shared calibrateConfidence (which already applies a
+ *     domain-mismatch penalty); reject below the store floor.
  * Returns { email, confidence } when acceptable, otherwise null (and logs the reason).
+ *
+ * S1186 (2026-08-04): step 2 used to be a HARD reject on any domain that didn't match the
+ * org's website AND shared no business-name token (`domainMatchesBusiness`). That wrongly
+ * discarded legitimate cases like a personal Gmail contact address published on an
+ * otherwise-clearly-matching business website (e.g. easyestates.net → gexer878@gmail.com,
+ * live-confirmed 2026-08-04) — part of the 80.3%→28.5% directory-scraper email collapse
+ * since the 2026-06-22 gate. `emailDiscoveryService.ts`'s `discoverEmail()` (the daily
+ * email-discovery cron) already handles the identical situation with only a soft
+ * confidence penalty and has run that way in production the whole time — this brings the
+ * one-time initial-enrichment path in line with the cron path already accepted as safe.
+ * The mega-brand/social/aggregator hard-reject (step 2 here) is UNCHANGED and still
+ * unconditional; only the plain "doesn't match, but isn't a known-bad domain either" case
+ * moved from a hard reject to the existing confidence-penalty + floor.
  */
 function acceptDiscoveredEmail(
   email: string | null,
@@ -302,14 +316,14 @@ function acceptDiscoveredEmail(
     return null;
   }
 
-  // Wrong-entity domain guard: email domain doesn't match the org website domain AND
-  // doesn't share a token with the business name → reject (the guard the good path has).
   const eDomReg = registrableDomain(eDom) ?? eDom;
-  const domainMatchesSite = orgDomain != null && eDomReg === orgDomain;
-  if (!domainMatchesSite && !domainMatchesBusiness(eDomReg, businessName)) {
+
+  // Hard reject: mega-brand / social / aggregator domain — never a real organizer's own
+  // email regardless of confidence. Independent of the softer mismatch handling below.
+  if (FAMOUS_UNRELATED_DOMAINS.has(eDomReg)) {
     console.warn(
       `[Enrichment] Rejected email '${normalized}' for ${organizerId} — domain '${eDomReg}' ` +
-      `matches neither website domain '${orgDomain ?? 'none'}' nor business name '${businessName ?? ''}'`
+      `is a blocked mega-brand/social/aggregator host`
     );
     return null;
   }
@@ -318,7 +332,8 @@ function acceptDiscoveredEmail(
   if (confidence < ENRICHMENT_MIN_CONFIDENCE) {
     console.warn(
       `[Enrichment] Discarded email '${normalized}' for ${organizerId} — confidence ` +
-      `${confidence.toFixed(2)} below ${ENRICHMENT_MIN_CONFIDENCE}`
+      `${confidence.toFixed(2)} below ${ENRICHMENT_MIN_CONFIDENCE} ` +
+      `(domain '${eDomReg}' vs website '${orgDomain ?? 'none'}')`
     );
     return null;
   }
