@@ -51,6 +51,10 @@ jobs:
               sys.exit(1)
           "
 
+      - name: Install Playwright browsers (chromium)
+        working-directory: packages/backend
+        run: npx playwright install --with-deps chromium
+
       - name: Run Alabama Phase 2 Scraper
         working-directory: packages/backend
         env:

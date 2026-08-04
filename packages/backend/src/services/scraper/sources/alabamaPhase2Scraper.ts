@@ -280,9 +280,9 @@ function parseResultsTable(html: string): AlabamaLicensee[] {
   // Determine column order from the header row (th preferred, fall back to first td row)
   const headerCells: string[] = [];
   const $headerRow = $rows.first();
-  $headerRow.find('th').each((_i, el) => headerCells.push($(el).text().trim().toLowerCase()));
+  $headerRow.find('th').each((_i, el) => { headerCells.push($(el).text().trim().toLowerCase()); });
   if (headerCells.length === 0) {
-    $headerRow.find('td').each((_i, el) => headerCells.push($(el).text().trim().toLowerCase()));
+    $headerRow.find('td').each((_i, el) => { headerCells.push($(el).text().trim().toLowerCase()); });
   }
 
   const colIndex = (labelPattern: RegExp): number =>
