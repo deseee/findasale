@@ -216,6 +216,7 @@ packages/frontend/public/downloads/*
 
 # Railway CLI binary (installed by Cowork session, not committed)
 .railway-cli/
+CLAUDE_MASTER.md
 
 # CLAUDE.md untracked 2026-07-26 (Patrick: "not comfortable giving away CLAUDE.md at all",
 # S1078 follow-up security sweep). Previously deliberately public; incident history,
