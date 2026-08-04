@@ -26,6 +26,7 @@ export interface SaleWithScore {
     id: string;
     businessName: string;
     reputationTier: string;
+    tier: string;
   };
   favoriteCount: number;
   score: number;
@@ -107,6 +108,7 @@ export async function getPersonalizedFeed(
           id: true,
           businessName: true,
           reputationTier: true,
+          tier: true,
         },
       },
       _count: {
@@ -175,6 +177,14 @@ export async function getPersonalizedFeed(
       // +25 if sale has at least one photo (float photo sales above blank placeholders)
       if (sale.photoUrls && sale.photoUrls.length > 0) {
         score += 25;
+      }
+
+      // Small priority-placement perk for SILVER/GOLD tier organizers (advisory board approved,
+      // kept well under the paid SALE_BUMP boost of +500 so it never competes with that product)
+      if (sale.organizer?.tier === 'GOLD') {
+        score += 30;
+      } else if (sale.organizer?.tier === 'SILVER') {
+        score += 15;
       }
 
         return {
@@ -263,6 +273,14 @@ export async function getPersonalizedFeed(
     // +25 if sale has at least one photo (float photo sales above blank placeholders)
     if (sale.photoUrls && sale.photoUrls.length > 0) {
       score += 25;
+    }
+
+    // Small priority-placement perk for SILVER/GOLD tier organizers (advisory board approved,
+    // kept well under the paid SALE_BUMP boost of +500 so it never competes with that product)
+    if (sale.organizer?.tier === 'GOLD') {
+      score += 30;
+    } else if (sale.organizer?.tier === 'SILVER') {
+      score += 15;
     }
 
     return { ...sale, score };
