@@ -263,17 +263,19 @@ const toNumber = (value: string | undefined | null): number | null => {
 };
 
 // Feature #57: Helper to assign item rarity based on price
-// Auto-assignment tiers: price >= 500 → LEGENDARY, >= 200 → ULTRA_RARE, >= 75 → RARE, >= 25 → UNCOMMON, else → COMMON
+// Auto-assignment tiers: price >= 500 → LEGENDARY, >= 75 → RARE, >= 25 → UNCOMMON, else → COMMON
+// S261 (Architect, locked): ULTRA_RARE removed from the 4-tier scheme (COMMON/UNCOMMON/RARE/LEGENDARY).
+// The former $200-499 ULTRA_RARE band now falls under RARE — its existing >= 75 boundary already covers it,
+// no new price breakpoint introduced.
 const assignRarity = (price: number | undefined | null): ItemRarity => {
   if (!price || price < 25) return ItemRarity.COMMON;
   if (price >= 500) return ItemRarity.LEGENDARY;
-  if (price >= 200) return ItemRarity.ULTRA_RARE;
   if (price >= 75) return ItemRarity.RARE;
   return ItemRarity.UNCOMMON;
 };
 
 // Hunt Pass Feature: Helper to check if item is visible to user based on rarity + Hunt Pass status
-// Rare/Ultra-Rare: 6 hours early access for Hunt Pass holders
+// Rare: 6 hours early access for Hunt Pass holders
 // Legendary: 12 hours early access for Hunt Pass holders
 const isItemVisibleToUser = (
   item: { rarity: string; createdAt: Date },
@@ -286,7 +288,7 @@ const isItemVisibleToUser = (
   if (item.rarity === 'LEGENDARY') {
     // 12 hours early access for Hunt Pass
     return hasHuntPass || hoursSinceCreation >= 12;
-  } else if (item.rarity === 'RARE' || item.rarity === 'ULTRA_RARE') {
+  } else if (item.rarity === 'RARE') {
     // 6 hours early access for Hunt Pass
     return hasHuntPass || hoursSinceCreation >= 6;
   }
@@ -3604,7 +3606,7 @@ export const getRareFindsItems = async (req: AuthRequest, res: Response) => {
     const rareItems = await prisma.item.findMany({
       where: {
         rarity: {
-          in: ['RARE', 'LEGENDARY', 'ULTRA_RARE']
+          in: ['RARE', 'LEGENDARY']
         },
         isActive: true,
         ...PUBLIC_ITEM_FILTER,
@@ -3655,7 +3657,7 @@ export const getRareFindsItems = async (req: AuthRequest, res: Response) => {
     const total = await prisma.item.count({
       where: {
         rarity: {
-          in: ['RARE', 'LEGENDARY', 'ULTRA_RARE']
+          in: ['RARE', 'LEGENDARY']
         },
         isActive: true,
         ...PUBLIC_ITEM_FILTER,

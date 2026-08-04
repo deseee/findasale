@@ -502,7 +502,7 @@ export async function runKentuckyPhase2Scraper(): Promise<void> {
         state: stateCode,
         businessCategory: 'AUCTION_HOUSE',
         isStateLicensed: true,
-        licenseState: 'Kentucky',
+        licenseState: 'KY',
         licenseNumber: rec.licenseNumber || undefined,
         sourceLabel: SOURCE_ID,
       });

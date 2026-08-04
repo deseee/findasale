@@ -436,7 +436,7 @@ export async function runAlabamaPhase2Scraper(): Promise<void> {
         businessCategory: 'AUCTION_HOUSE',
         contactEmail: email || undefined,
         isStateLicensed: true,
-        licenseState: 'Alabama',
+        licenseState: 'AL',
         licenseNumber: licNum,
         sourceLabel: 'Alabama Board of Auctioneers',
       });

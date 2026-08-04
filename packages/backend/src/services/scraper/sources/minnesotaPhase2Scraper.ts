@@ -283,7 +283,7 @@ async function processDataset(
       businessCategory,
       phone: phone || undefined,
       isStateLicensed: true,
-      licenseState: 'Minnesota',
+      licenseState: 'MN',
       licenseNumber: licenseNumber || undefined,
       sourceLabel: SOURCE_ID,
     });
@@ -367,7 +367,7 @@ async function tryMnSosSearch(): Promise<{ matched: number; upserted: number }> 
           state: 'MN',
           businessCategory,
           isStateLicensed: false, // SOS registration, not a professional license
-          licenseState: 'Minnesota',
+          licenseState: 'MN',
           sourceLabel: SOURCE_ID,
         });
       }

@@ -225,7 +225,7 @@ async function parseBulkCsv(csvText: string, professionLabel: string): Promise<n
         businessCategory,
         phone: phone || undefined,
         isStateLicensed: true,
-        licenseState: 'New Jersey',
+        licenseState: 'NJ',
         licenseNumber: licenseNumber || undefined,
         sourceLabel: `NJ Consumer Affairs – ${professionLabel}`,
       });
@@ -591,7 +591,7 @@ async function scrapeDobiPawnbrokers(): Promise<number> {
         state: 'NJ',
         businessCategory: 'RESALE_SHOP',
         isStateLicensed: true,
-        licenseState: 'New Jersey',
+        licenseState: 'NJ',
         licenseNumber: licenseNum || undefined,
         sourceLabel: 'NJ DOBI – Pawnbroker',
       });

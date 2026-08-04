@@ -417,7 +417,7 @@ async function upsertLicenseRecords(records: LicenseRecord[]): Promise<number> {
       state: 'ME',
       businessCategory: 'AUCTION_HOUSE', // all are licensed auctioneers
       isStateLicensed: true,
-      licenseState: 'Maine',
+      licenseState: 'ME',
       licenseNumber: record.licenseNumber || undefined,
       sourceLabel: SOURCE_LABEL,
     });

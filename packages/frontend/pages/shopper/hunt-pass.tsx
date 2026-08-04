@@ -117,7 +117,7 @@ const HuntPassPage = () => {
                       Rare Finds Pass
                     </h3>
                     <p className="text-warm-600 dark:text-warm-400">
-                      Get exclusive early access to Rarity items (Rare, Ultra-Rare, and Legendary) with a dedicated feed for Hunt Pass subscribers. See the best treasures first, so you never miss out on amazing finds.
+                      Get exclusive early access to Rarity items (Rare and Legendary) with a dedicated feed for Hunt Pass subscribers. See the best treasures first, so you never miss out on amazing finds.
                     </p>
                   </div>
                 </div>

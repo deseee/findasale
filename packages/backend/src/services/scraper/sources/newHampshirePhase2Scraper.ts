@@ -331,7 +331,7 @@ export async function runNewHampshirePhase2Scraper(): Promise<void> {
       state: 'NH',
       businessCategory: 'AUCTION_HOUSE',
       isStateLicensed: true,
-      licenseState: 'New Hampshire',
+      licenseState: 'NH',
       licenseNumber: lic.licenseNumber || undefined,
     });
   }

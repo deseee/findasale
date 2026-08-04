@@ -336,7 +336,7 @@ export async function runMassachusettsPhase2Scraper(): Promise<void> {
             phone: phone || undefined,
             website: website || undefined,
             isStateLicensed: true,
-            licenseState: 'Massachusetts',
+            licenseState: 'MA',
             licenseNumber: licenseNumber || undefined,
           });
         } catch (rowErr) {

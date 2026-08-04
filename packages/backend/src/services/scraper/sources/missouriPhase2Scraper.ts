@@ -301,7 +301,7 @@ async function processDelimitedData(text: string): Promise<{ matched: number; up
         contactEmail: email || undefined,
         phone: phone || undefined,
         isStateLicensed: true,
-        licenseState: 'Missouri',
+        licenseState: 'MO',
         licenseNumber: licenseNumber || undefined,
       });
     } catch (rowErr) {
@@ -374,7 +374,7 @@ async function processHtmlRows(rows: string[][]): Promise<{ matched: number; ups
       businessCategory: 'AUCTION_HOUSE',
       phone: phone || undefined,
       isStateLicensed: true,
-      licenseState: 'Missouri',
+      licenseState: 'MO',
       licenseNumber: licenseNumber || undefined,
     });
   }
