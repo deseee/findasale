@@ -125,7 +125,7 @@ const ShopperReputationPage = () => {
                 ⭐ Your Reputation
               </h1>
               <p className="text-lg text-gray-700 dark:text-gray-300">
-                Build trust and unlock community perks as a valued buyer
+                Your reputation score is visible to organizers and shows them you're a reliable buyer
               </p>
             </div>
           </div>
@@ -309,7 +309,7 @@ const ShopperReputationPage = () => {
                       Keep a Clean Record
                     </h3>
                     <p className="text-sm text-gray-600 dark:text-gray-400">
-                      Avoid disputes and chargeback claims. A trustworthy account makes you eligible for special perks and early access.
+                      Avoid disputes and chargeback claims. A clean record builds the trustworthy reputation organizers and other shoppers can see.
                     </p>
                   </div>
                 </div>

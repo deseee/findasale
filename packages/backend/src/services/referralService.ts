@@ -199,6 +199,7 @@ export async function awardOrganizerClaimedXp(
       awardAmount,
       {
         description: `Organizer claim by organizer ${organizerId}`,
+        preMultipliedHuntPassXp: true,
       },
     );
 
@@ -282,6 +283,7 @@ export async function awardProUpgradeXp(
       xpToAward,
       {
         description: `PRO upgrade by organizer ${organizerId}`,
+        preMultipliedHuntPassXp: true,
       },
     );
 

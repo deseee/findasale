@@ -25,7 +25,7 @@ import { closeAuction } from '../services/auctionService'; // Auction close flow
 import { haversineDistance } from '../lib/placesService'; // Geofencing for QR scans
 import { resetRapidDraftDebounce, rapidfireAIDebounce, heldAnalysisItems } from './uploadController'; // Rapidfire Mode: AI analysis debounce
 import { evaluateAutoHighValueFlag, shouldRetainAutoFlag } from '../utils/highValueFlagging'; // Feature #371: Auto high-value flagging
-import { awardXp, XP_AWARDS, spendXp, getSpendableXp, checkMonthlyXpCap } from '../services/xpService'; // Phase 2a: XP awards
+import { awardXp, applyHuntPassMultiplier, XP_AWARDS, spendXp, getSpendableXp, checkMonthlyXpCap } from '../services/xpService'; // Phase 2a: XP awards
 import { getRankBenefits } from '../utils/rankUtils'; // Phase 2b: Legendary early access filtering
 import { enqueueFetchEbayComps } from '../jobs/fetchEbayComps'; // ADR-069 Phase 2: Async eBay comps
 import { enqueueMarketplacePostJob } from '../services/marketplace/marketplacePosterService'; // ADR-083
@@ -1605,8 +1605,10 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
           // Check monthly XP cap for CONDITION_RATING (50 XP/month max)
           const monthlyRemaining = await checkMonthlyXpCap(req.user.id, 'CONDITION_RATING');
           if (monthlyRemaining > 0) {
-            // Award XP to the organizer (capped at remaining monthly allowance)
-            const xpToAward = Math.min(XP_AWARDS.CONDITION_RATING, monthlyRemaining);
+            // Award XP to the organizer (Hunt Pass 1.5x applied pre-cap, capped at remaining monthly allowance)
+            const baseXp = XP_AWARDS.CONDITION_RATING;
+            const multipliedXp = await applyHuntPassMultiplier(req.user.id, baseXp);
+            const xpToAward = Math.min(multipliedXp, monthlyRemaining);
             const xpResult = await awardXp(
               req.user.id,
               'CONDITION_RATING',
@@ -1615,6 +1617,7 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
                 itemId: id,
                 saleId: item.saleId ?? '',
                 description: `Condition rating S-D for item "${updatedItem.title}"`,
+                preMultipliedHuntPassXp: true,
               }
             );
             // Include rank change in response if available
@@ -3384,7 +3387,7 @@ export const recordQrScan = async (req: AuthRequest, res: Response): Promise<voi
     }
 
     // Import awardXp and cap check here to avoid circular dependency
-    const { awardXp, checkDailyXpCap, XP_AWARDS, getRankXpMultiplier } = await import('../services/xpService');
+    const { awardXp, checkDailyXpCap, computeTreasureHuntScanXp } = await import('../services/xpService');
 
     // Check if user has already scanned this item today (prevent duplicate scans)
     const today = new Date();
@@ -3408,10 +3411,10 @@ export const recordQrScan = async (req: AuthRequest, res: Response): Promise<voi
       return;
     }
 
-    // Get user's current rank and Hunt Pass status for XP multiplier calculation
+    // Get user's current rank for XP multiplier calculation
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { explorerRank: true, huntPassActive: true, huntPassExpiry: true },
+      select: { explorerRank: true },
     });
 
     if (!user) {
@@ -3419,15 +3422,8 @@ export const recordQrScan = async (req: AuthRequest, res: Response): Promise<voi
       return;
     }
 
-    // Apply rank-based multiplier to base XP
-    const baseXp = XP_AWARDS.TREASURE_HUNT_SCAN;
-    const rankMultiplier = getRankXpMultiplier(user.explorerRank);
-    let multipliedXp = Math.round(baseXp * rankMultiplier);
-
-    // Apply Hunt Pass bonus: +10% XP on top of rank multiplier
-    if (user.huntPassActive && user.huntPassExpiry && user.huntPassExpiry > new Date()) {
-      multipliedXp = Math.round(multipliedXp * 1.1);
-    }
+    // Shared helper: rank multiplier + Hunt Pass +10% bonus (fetches Hunt Pass status fresh)
+    const multipliedXp = await computeTreasureHuntScanXp(userId, user.explorerRank);
 
     // Check daily cap for TREASURE_HUNT_SCAN XP
     const dailyRemaining = await checkDailyXpCap(userId, 'TREASURE_HUNT_SCAN');
@@ -3441,8 +3437,8 @@ export const recordQrScan = async (req: AuthRequest, res: Response): Promise<voi
       return;
     }
 
-    // Award XP (respecting daily cap and rank multiplier)
-    const xpResult = await awardXp(userId, 'TREASURE_HUNT_SCAN', xpToAward, { itemId });
+    // Award XP (respecting daily cap; rank + Hunt Pass multiplier already applied above)
+    const xpResult = await awardXp(userId, 'TREASURE_HUNT_SCAN', xpToAward, { itemId, preMultipliedHuntPassXp: true });
 
     // Find or create "Item Scout" badge
     let badge = await prisma.badge.findUnique({

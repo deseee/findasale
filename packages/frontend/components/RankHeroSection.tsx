@@ -48,7 +48,7 @@ const RANK_PERKS: Record<ExplorerRank, string[]> = {
 const RANK_THRESHOLDS: Record<ExplorerRank, number> = {
   INITIATE: 0,
   SCOUT: 500,
-  RANGER: 1200,
+  RANGER: 2000,
   SAGE: 5000,
   GRANDMASTER: 12000,
 };

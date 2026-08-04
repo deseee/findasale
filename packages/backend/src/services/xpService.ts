@@ -12,7 +12,7 @@ import { createNotification } from './notificationService';
 export const RANK_THRESHOLDS: Record<ExplorerRank, number> = {
   INITIATE: 0,
   SCOUT: 500,
-  RANGER: 1200,
+  RANGER: 2000,
   SAGE: 5000,
   GRANDMASTER: 12000,
 };
@@ -338,6 +338,10 @@ export async function awardXp(
     purchaseId?: string; // P0 Exploit Fix: link for chargeback claw-back
     description?: string;
     holdUntil?: Date; // P0 Exploit Fix: when this XP becomes spendable
+    // Set true when the caller already applied the Hunt Pass multiplier itself
+    // (cap-clamped awards, or a custom formula like Treasure Hunt scan). When
+    // false/omitted, awardXp() applies the standard 1.5x Hunt Pass multiplier automatically.
+    preMultipliedHuntPassXp?: boolean;
   }
 ): Promise<{ newXp: number; newRank: ExplorerRank; xpAwarded: number; rankIncreased: boolean } | null> {
   try {
@@ -351,12 +355,20 @@ export async function awardXp(
     // Calculate old rank before XP increment
     const oldRank = getRankForXp(user?.guildXp || 0);
 
+    // Hunt Pass 1.5x XP multiplier — applied automatically unless the caller
+    // already applied it (preMultipliedHuntPassXp: true), e.g. cap-clamped
+    // awards or a custom formula like the Treasure Hunt scan helper.
+    let finalAmount = amount;
+    if (!context?.preMultipliedHuntPassXp && user?.huntPassActive && user?.huntPassExpiry && user.huntPassExpiry > new Date()) {
+      finalAmount = Math.round(amount * 1.5);
+    }
+
     // Add transaction record
     await prisma.pointsTransaction.create({
       data: {
         userId,
         type,
-        points: amount,
+        points: finalAmount,
         saleId: context?.saleId,
         itemId: context?.itemId,
         purchaseId: context?.purchaseId, // P0 Exploit Fix
@@ -375,10 +387,10 @@ export async function awardXp(
       where: { id: userId },
       data: {
         guildXp: {
-          increment: amount,
+          increment: finalAmount,
         },
         lifetimeXpEarned: {
-          increment: amount, // Track total XP ever earned
+          increment: finalAmount, // Track total XP ever earned
         },
         lastXpActivityAt: now, // Reset activity timer
         xpExpiresAt: expiresAt, // Recalculate expiry (365 days from now)
@@ -411,7 +423,7 @@ export async function awardXp(
     return {
       newXp: updatedUser.guildXp,
       newRank,
-      xpAwarded: amount,
+      xpAwarded: finalAmount,
       rankIncreased,
     };
   } catch (error) {
@@ -721,6 +733,33 @@ export function getRankXpMultiplier(rank: ExplorerRank): number {
     default:
       return 1.0;
   }
+}
+
+/**
+ * Treasure Hunt clue scan XP — combines rank multiplier with Hunt Pass +10% bonus.
+ * Fetches Hunt Pass status fresh from the DB (does not trust a passed-in cached value).
+ * Callers must pass { preMultipliedHuntPassXp: true } to awardXp() when using this value,
+ * since the Hunt Pass adjustment is already applied here.
+ */
+export async function computeTreasureHuntScanXp(userId: string, rank: ExplorerRank): Promise<number> {
+  const baseXp = XP_AWARDS.TREASURE_HUNT_SCAN;
+  const rankMult = getRankXpMultiplier(rank);
+  let multiplied = Math.round(baseXp * rankMult);
+
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { huntPassActive: true, huntPassExpiry: true },
+    });
+
+    if (user?.huntPassActive && user?.huntPassExpiry && user.huntPassExpiry > new Date()) {
+      multiplied = Math.round(multiplied * 1.1);
+    }
+  } catch (error) {
+    console.error(`[xpService] Failed to check Hunt Pass status for Treasure Hunt scan XP, user ${userId}:`, error);
+  }
+
+  return multiplied;
 }
 
 /**

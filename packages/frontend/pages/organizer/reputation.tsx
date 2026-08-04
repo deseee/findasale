@@ -160,7 +160,7 @@ const OrganizerReputationPage = () => {
               ⭐ Your Reputation Score
             </h1>
             <p className="text-lg text-gray-700 dark:text-gray-300">
-              Build trust with shoppers and unlock premium features
+              Build trust with shoppers and show them you're a reliable organizer to buy from
             </p>
           </div>
         </div>
@@ -380,7 +380,7 @@ const OrganizerReputationPage = () => {
               Ready to boost your sales?
             </h3>
             <p className="text-gray-700 dark:text-gray-300 mb-4">
-              High-reputation organizers get featured placement, verified badges, and access to premium features.
+              A high reputation score builds shopper confidence and helps your sales stand out.
             </p>
             <button
               onClick={() => router.push('/organizer/create-sale')}

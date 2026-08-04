@@ -996,6 +996,7 @@ export const confirmPaymentRequest = async (req: AuthRequest, res: Response) => 
         const multipliedXp = await applyHuntPassMultiplier(posRequest.shopperUserId, baseXp);
         awardXp(posRequest.shopperUserId, 'PURCHASE_COMPLETED', multipliedXp, {
           saleId: posRequest.saleId,
+          preMultipliedHuntPassXp: true,
         }).catch((err: any) =>
           console.error('[XP] Failed to award XP for POS purchase:', err)
         );

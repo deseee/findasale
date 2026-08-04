@@ -29,7 +29,7 @@ export interface RankBenefits {
 export const RANK_THRESHOLDS: Record<ExplorerRank, number> = {
   INITIATE: 0,
   SCOUT: 500,
-  RANGER: 1200,
+  RANGER: 2000,
   SAGE: 5000,
   GRANDMASTER: 12000,
 };
@@ -163,7 +163,7 @@ export function getRankProgressInfo(guildXp: number): RankProgressInfo {
   const thresholds: Record<ExplorerRank, number> = {
     INITIATE: 0,
     SCOUT: 500,
-    RANGER: 1200,
+    RANGER: 2000,
     SAGE: 5000,
     GRANDMASTER: 12000,
   };

@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { AuthRequest } from '../middleware/auth';
-import { awardXp, XP_AWARDS, checkDailyXpCap, getRankXpMultiplier } from '../services/xpService';
+import { awardXp, XP_AWARDS, checkDailyXpCap, computeTreasureHuntScanXp } from '../services/xpService';
 import { haversineDistance } from '../lib/placesService'; // Geofencing for QR scans
 
 /**
@@ -303,17 +303,19 @@ export async function markClueFound(req: AuthRequest, res: Response) {
     });
 
     // Award XP for the clue (respecting daily cap: 100 XP/day, 150 with Hunt Pass)
+    // Uses shared computeTreasureHuntScanXp helper: rank multiplier + Hunt Pass +10% bonus
     let xpEarned = 0;
     let rankIncreased = false;
     let newRank: string | undefined;
     try {
       const dailyRemaining = await checkDailyXpCap(req.user.id, 'TREASURE_HUNT_SCAN');
-      const rankMultiplier = getRankXpMultiplier(req.user.explorerRank ?? 'INITIATE');
-      const xpToAward = Math.min(Math.round(XP_AWARDS.TREASURE_HUNT_SCAN * rankMultiplier), dailyRemaining);
+      const multipliedXp = await computeTreasureHuntScanXp(req.user.id, req.user.explorerRank ?? 'INITIATE');
+      const xpToAward = Math.min(multipliedXp, dailyRemaining);
       if (xpToAward > 0) {
         const xpResult = await awardXp(req.user.id, 'TREASURE_HUNT_SCAN', xpToAward, {
           saleId,
           description: `Treasure Hunt QR Clue found: ${clueId}`,
+          preMultipliedHuntPassXp: true,
         });
         xpEarned = xpToAward;
         if (xpResult) {

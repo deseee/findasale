@@ -1,7 +1,7 @@
 import { Response } from 'express';
 import { prisma } from '../index';
 import { AuthRequest } from '../middleware/auth';
-import { awardXp, checkMonthlyXpCap, XP_AWARDS } from '../services/xpService';
+import { awardXp, applyHuntPassMultiplier, checkMonthlyXpCap, XP_AWARDS } from '../services/xpService';
 import { createNotification } from '../services/notificationService';
 import { checkAndAward } from '../services/achievementService'; // Feature #58: Achievement tracking
 
@@ -50,14 +50,17 @@ export const toggleSaleRSVP = async (req: AuthRequest, res: Response) => {
         console.warn('[achievement] Failed to check SALE_ATTENDED:', err)
       );
 
-      // Award XP for RSVP (capped 10 XP/month)
+      // Award XP for RSVP (capped 10 XP/month, Hunt Pass 1.5x applied pre-cap)
       try {
         const remaining = await checkMonthlyXpCap(req.user.id, 'RSVP');
         if (remaining > 0) {
-          const xpToAward = Math.min(XP_AWARDS.RSVP, remaining);
+          const baseXp = XP_AWARDS.RSVP;
+          const multipliedXp = await applyHuntPassMultiplier(req.user.id, baseXp);
+          const xpToAward = Math.min(multipliedXp, remaining);
           await awardXp(req.user.id, 'RSVP', xpToAward, {
             saleId,
             description: `RSVP to sale: ${sale.title}`,
+            preMultipliedHuntPassXp: true,
           });
         }
       } catch (error) {

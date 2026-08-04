@@ -36,7 +36,7 @@ const RANK_THRESHOLDS: RankInfo[] = [
   {
     rank: 'SCOUT',
     minXp: 500,
-    maxXp: 1199,
+    maxXp: 1999,
     emoji: '🔍',
     label: 'Scout',
     milestone: 'First milestone',
@@ -44,7 +44,7 @@ const RANK_THRESHOLDS: RankInfo[] = [
   },
   {
     rank: 'RANGER',
-    minXp: 1200,
+    minXp: 2000,
     maxXp: 4999,
     emoji: '🎯',
     label: 'Ranger',
@@ -481,8 +481,8 @@ const GuildPrimerPage = () => {
                     <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50">
                       <td className="px-4 py-3 text-warm-900 dark:text-warm-100">Treasure Hunt clue scan</td>
                       <td className="px-4 py-3 text-right font-bold text-purple-600 dark:text-purple-300">3</td>
-                      <td className="px-4 py-3 text-right font-bold text-purple-400 dark:text-purple-300">4</td>
-                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">Per QR clue found. Each clue once</td>
+                      <td className="px-4 py-3 text-right font-bold text-purple-400 dark:text-purple-300">+10%</td>
+                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">Per QR clue found. Each clue once. Hunt Pass adds +10% on top of your rank multiplier — not a flat bonus</td>
                     </tr>
                     <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50">
                       <td className="px-4 py-3 text-warm-900 dark:text-warm-100">Treasure Hunt completion</td>

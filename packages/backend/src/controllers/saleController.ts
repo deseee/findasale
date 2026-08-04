@@ -2129,6 +2129,7 @@ export const checkInToSale = async (req: AuthRequest, res: Response) => {
     const awardResult = await awardXp(userId, 'SALE_CHECKIN', finalXp, {
       saleId,
       description: `Checked in to sale: ${sale.title}`,
+      preMultipliedHuntPassXp: true,
     });
 
     if (!awardResult) {

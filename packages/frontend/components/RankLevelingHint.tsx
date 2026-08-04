@@ -13,7 +13,7 @@ interface RankLevelingHintProps {
 const RANK_THRESHOLDS: Record<ExplorerRank, number> = {
   INITIATE: 0,
   SCOUT: 500,
-  RANGER: 1200,
+  RANGER: 2000,
   SAGE: 5000,
   GRANDMASTER: 12000,
 };
@@ -76,7 +76,7 @@ export const RankLevelingHint: React.FC<RankLevelingHintProps> = ({
               {nextRankInfo.unlock}
             </p>
             <p className="text-xs text-blue-700 dark:text-blue-300 mb-3">
-              <strong>Earn XP by:</strong> Scanning items at sales, making purchases (10 XP per $), or posting hauls (30 XP each)
+              <strong>Earn XP by:</strong> Scanning items at sales, making purchases (10 XP per completed purchase), or posting hauls (15 XP each)
             </p>
             <Link
               href="/sales"

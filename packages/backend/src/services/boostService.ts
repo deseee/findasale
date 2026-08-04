@@ -195,6 +195,11 @@ export async function refundBoost(
   if (boost.paymentMethod === 'XP' && boost.xpCost) {
     await awardXp(boost.userId, 'BOOST_REFUND', boost.xpCost, {
       description: `Refund for ${boost.boostType} boost`,
+      // Mandatory exemption: without this flag a Hunt Pass user could spend XP
+      // on a boost, refund it, and receive back MORE XP than was spent (1.5x on
+      // refund) — a free-XP exploit every cycle. Refund must return exactly what
+      // was paid, never multiplied.
+      preMultipliedHuntPassXp: true,
     });
   } else if (boost.paymentMethod === 'STRIPE' && boost.stripePaymentIntentId) {
     const stripe = getStripe();

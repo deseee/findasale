@@ -1026,6 +1026,7 @@ export const webhookHandler = async (req: Request, res: Response) => {
                   const multipliedXp = await applyHuntPassMultiplier(posRequest.shopperUserId, baseXp);
                   awardXp(posRequest.shopperUserId, 'PURCHASE_COMPLETED', multipliedXp, {
                     saleId: posRequest.saleId,
+                    preMultipliedHuntPassXp: true,
                   }).catch((err: any) =>
                     console.error('[XP] Failed to award XP for POS purchase:', err)
                   );
@@ -1331,6 +1332,7 @@ export const webhookHandler = async (req: Request, res: Response) => {
             saleId: purchase.saleId ?? undefined,
             purchaseId: purchase.id, // P0 Exploit Fix: link for claw-back
             holdUntil, // P0 Exploit Fix: 72-hour hold
+            preMultipliedHuntPassXp: true,
           }).catch(err =>
             console.error('[XP] Failed to award XP for purchase completed:', err)
           );

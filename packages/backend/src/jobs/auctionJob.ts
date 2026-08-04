@@ -151,7 +151,7 @@ export const endAuctions = async () => {
           const monthlyRemaining = await checkMonthlyXpCap(result.highestBid.userId, 'AUCTION');
           if (monthlyRemaining > 0) {
             const xpToAward = Math.min(totalXp, monthlyRemaining);
-            await awardXp(result.highestBid.userId, 'AUCTION_WIN', xpToAward, { itemId: result.item.id, saleId: result.item.sale!.id });
+            await awardXp(result.highestBid.userId, 'AUCTION_WIN', xpToAward, { itemId: result.item.id, saleId: result.item.sale!.id, preMultipliedHuntPassXp: true });
           }
         } catch (err) {
           console.error('[XP] Failed to award XP for auction win:', err);

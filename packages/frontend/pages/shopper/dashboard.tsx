@@ -304,7 +304,7 @@ const ShopperDashboard = () => {
   const RANK_THRESHOLDS: Record<ExplorerRank, number> = {
     INITIATE: 0,
     SCOUT: 500,
-    RANGER: 1200,
+    RANGER: 2000,
     SAGE: 5000,
     GRANDMASTER: 12000,
   };
@@ -312,7 +312,7 @@ const ShopperDashboard = () => {
   // Next rank thresholds (XP required to reach the next rank from current rank)
   const NEXT_RANK_THRESHOLDS: Record<ExplorerRank, number> = {
     INITIATE: 500,
-    SCOUT: 1200,
+    SCOUT: 2000,
     RANGER: 5000,
     SAGE: 12000,
     GRANDMASTER: 12000,
