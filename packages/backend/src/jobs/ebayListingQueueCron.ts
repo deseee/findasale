@@ -76,9 +76,12 @@ async function pushQueuedItem(
         ebayOfferId: true,
         ebayListingId: true,
         ebayListedAt: true,
-        // Weight guard inputs — this cron is a third publish entry point and used to
+        // Weight/dims guard inputs — this cron is a third publish entry point and used to
         // bypass the pre-publish checks in ebayController entirely.
         packageWeightOz: true,
+        packageLengthIn: true,
+        packageWidthIn: true,
+        packageHeightIn: true,
         packageConfirmedByOrganizer: true,
         ebayShippingOverride: true,
       },
@@ -107,17 +110,20 @@ async function pushQueuedItem(
       return false;
     }
 
-    // Weight guard — mirrors validateItemForEbayPublish Guard 2 in ebayController.
+    // Weight/dims guard — mirrors validateItemForEbayPublish Guards 2/2b in ebayController.
     // Queue mode publishes an already-created offer without going back through the
     // controller, so without this check it is a way to publish a shippable item on an
-    // unconfirmed, auto-estimated weight. Returning false leaves the item in the queue
-    // (nothing is dropped or unqueued) so it publishes on a later run once the
-    // organizer confirms the weight. Local-pickup items are exempt.
+    // unconfirmed, auto-estimated weight or a confirmed item missing box dimensions.
+    // Returning false leaves the item in the queue (nothing is dropped or unqueued) so
+    // it publishes on a later run once the organizer confirms weight + dims.
+    // Local-pickup items are exempt.
     if (item.ebayShippingOverride !== 'LOCAL_PICKUP_ONLY') {
       const hasWeight = item.packageWeightOz != null && Number(item.packageWeightOz) > 0;
-      if (!hasWeight || item.packageConfirmedByOrganizer !== true) {
+      const hasDims =
+        item.packageLengthIn != null && item.packageWidthIn != null && item.packageHeightIn != null;
+      if (!hasWeight || item.packageConfirmedByOrganizer !== true || !hasDims) {
         console.warn(
-          `[eBay Queue] Item ${itemId} held in queue: shipping weight not confirmed by organizer (weightOz=${item.packageWeightOz ?? 'null'}, confirmed=${item.packageConfirmedByOrganizer === true})`
+          `[eBay Queue] Item ${itemId} held in queue: shipping weight/dims not confirmed by organizer (weightOz=${item.packageWeightOz ?? 'null'}, confirmed=${item.packageConfirmedByOrganizer === true}, dims=${item.packageLengthIn ?? '?'}x${item.packageWidthIn ?? '?'}x${item.packageHeightIn ?? '?'})`
         );
         return false;
       }

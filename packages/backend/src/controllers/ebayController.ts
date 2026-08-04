@@ -1742,6 +1742,9 @@ export function validateItemForEbayPublish(item: {
   packageWeightOz?: number | null;
   aiPackageWeightOz?: number | null;
   packageConfirmedByOrganizer?: boolean | null;
+  packageLengthIn?: number | null;
+  packageWidthIn?: number | null;
+  packageHeightIn?: number | null;
   ebayShippingOverride?: string | null;
   isbn?: string | null;
   isBookCategory?: boolean;
@@ -1782,6 +1785,25 @@ export function validateItemForEbayPublish(item: {
         code: 'EBAY_WEIGHT_NOT_CONFIRMED',
         message:
           "Confirm this item's shipping weight before publishing. We filled in an estimated weight to start from, but it has not been checked. Open the item, weigh it, correct the weight and box size, and save. If this item is not shipping, mark it Local pickup only.",
+      };
+    }
+
+    // Guard 2b (added 2026-08-04) — package dimensions confirmed alongside weight.
+    // Box size affects eBay's calculated shipping cost as much as weight does (two
+    // items of similar weight but very different size ship for very different
+    // prices), but until now only weight was hard-blocked. An item the organizer has
+    // marked confirmed must actually have all three dimensions set — a confirmed item
+    // with a missing dimension (e.g. confirmed before dimensions were required, or
+    // saved through a path that only touched weight) must not silently publish on an
+    // AI-estimated or absent box size.
+    const lengthIn = item.packageLengthIn != null ? Number(item.packageLengthIn) : null;
+    const widthIn = item.packageWidthIn != null ? Number(item.packageWidthIn) : null;
+    const heightIn = item.packageHeightIn != null ? Number(item.packageHeightIn) : null;
+    if (lengthIn == null || widthIn == null || heightIn == null) {
+      return {
+        code: 'EBAY_PACKAGE_DIMS_NOT_CONFIRMED',
+        message:
+          "Confirm this item's package dimensions (length, width, height) before publishing. Box size affects eBay's calculated shipping cost as much as weight does. Open the item, measure the box, and save. If this item is not shipping, mark it Local pickup only.",
       };
     }
   }
@@ -2292,6 +2314,9 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
           // Read the DB-selected flag, NOT the in-memory value the auto-resolve above
           // may have prefilled — an estimate never counts as organizer confirmation.
           packageConfirmedByOrganizer: item.packageConfirmedByOrganizer,
+          packageLengthIn: item.packageLengthIn != null ? Number(item.packageLengthIn) : null,
+          packageWidthIn: item.packageWidthIn != null ? Number(item.packageWidthIn) : null,
+          packageHeightIn: item.packageHeightIn != null ? Number(item.packageHeightIn) : null,
           ebayShippingOverride: item.ebayShippingOverride,
           isbn: item.isbn,
           isBookCategory,
@@ -3262,6 +3287,9 @@ export const publishItemOffer = async (req: AuthRequest, res: Response) => {
       packageWeightOz: item.packageWeightOz,
       aiPackageWeightOz: item.aiPackageWeightOz,
       packageConfirmedByOrganizer: item.packageConfirmedByOrganizer,
+      packageLengthIn: (item as any).packageLengthIn != null ? Number((item as any).packageLengthIn) : null,
+      packageWidthIn: (item as any).packageWidthIn != null ? Number((item as any).packageWidthIn) : null,
+      packageHeightIn: (item as any).packageHeightIn != null ? Number((item as any).packageHeightIn) : null,
       ebayShippingOverride: item.ebayShippingOverride,
       isbn: item.isbn,
       isBookCategory,

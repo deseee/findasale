@@ -87,3 +87,146 @@ export async function getUnconfirmedWeightBacklog(req: Request, res: Response): 
     res.status(500).json({ message: 'Internal error' });
   }
 }
+
+
+/**
+ * GET /api/internal/reports/diagnose-purchase-notification?purchaseId=<id>
+ * One-off diagnostic for root-causing "organizer never notified of a payment" reports
+ * (e.g. purchase cms6cald1003hgspm3xw6qssk / organizer "Artifact", 2026-07-29). Given a
+ * purchaseId, resolves the full chain purchase -> sale -> organizer -> organizer.userId
+ * (the exact chain the payment_received notification guard in stripeController.ts checks,
+ * `purchase.sale?.organizer?.userId`) and reports whether/where it breaks, plus whether a
+ * matching Notification row exists.
+ *
+ * Notification-match caveat: the Notification model (schema.prisma:2089-2104) has NO field
+ * linking back to a Purchase/PaymentIntent (no purchaseId, no relatedId, no JSON data blob)
+ * -- createNotification() (notificationService.ts) only persists userId/type/title/body/
+ * link/channel. So "does a notification exist for this purchase" cannot be an exact FK
+ * lookup; this endpoint approximates it by matching type='payment_received',
+ * userId=organizer.userId, link=`/organizer/sales/{saleId}` (the exact link the webhook
+ * passes), and createdAt within a window around the purchase's createdAt. This is a
+ * best-effort match, not a guaranteed one -- reported as `notificationMatch` with the
+ * matched row(s) and the window used, so a human can eyeball false positives/negatives.
+ * Read-only. Protected by x-scraper-key header, same pattern as the rest of this file.
+ */
+export async function diagnosePurchaseNotification(req: Request, res: Response): Promise<void> {
+  try {
+    const key = req.headers['x-scraper-key'];
+    if (!process.env.INTERNAL_SCRAPER_KEY || key !== process.env.INTERNAL_SCRAPER_KEY) {
+      res.status(401).json({ message: 'Unauthorized' });
+      return;
+    }
+
+    const purchaseId = req.query.purchaseId;
+    if (!purchaseId || typeof purchaseId !== 'string') {
+      res.status(400).json({ message: 'purchaseId query param is required' });
+      return;
+    }
+
+    const purchase = await prisma.purchase.findUnique({
+      where: { id: purchaseId },
+      select: {
+        id: true,
+        status: true,
+        amount: true,
+        createdAt: true,
+        userId: true,
+        itemId: true,
+        saleId: true,
+        stripePaymentIntentId: true,
+        sale: {
+          select: {
+            id: true,
+            title: true,
+            organizerId: true,
+            organizer: {
+              select: {
+                id: true,
+                businessName: true,
+                userId: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!purchase) {
+      res.json({
+        purchaseFound: false,
+        purchaseId,
+      });
+      return;
+    }
+
+    const salePresent = !!purchase.sale;
+    const organizerPresent = !!purchase.sale?.organizer;
+    const organizerUserId = purchase.sale?.organizer?.userId ?? null;
+
+    // Same window logic used to approximate a match, see caveat in the doc comment above:
+    // +/- 1 hour around the purchase's createdAt (webhook fires the notification
+    // synchronously right after the purchase.status update, so this is generous).
+    const windowMs = 60 * 60 * 1000;
+    const windowStart = new Date(purchase.createdAt.getTime() - windowMs);
+    const windowEnd = new Date(purchase.createdAt.getTime() + windowMs);
+
+    let notificationMatches: Array<{
+      id: string;
+      title: string;
+      body: string;
+      link: string | null;
+      createdAt: Date;
+    }> = [];
+
+    if (organizerUserId && purchase.saleId) {
+      notificationMatches = await prisma.notification.findMany({
+        where: {
+          userId: organizerUserId,
+          type: 'payment_received',
+          link: `/organizer/sales/${purchase.saleId}`,
+          createdAt: { gte: windowStart, lte: windowEnd },
+        },
+        select: {
+          id: true,
+          title: true,
+          body: true,
+          link: true,
+          createdAt: true,
+        },
+        orderBy: { createdAt: 'asc' },
+      });
+    }
+
+    res.json({
+      purchaseFound: true,
+      purchaseId: purchase.id,
+      purchase: {
+        status: purchase.status,
+        amount: purchase.amount,
+        createdAt: purchase.createdAt,
+        userId: purchase.userId,
+        itemId: purchase.itemId,
+        saleId: purchase.saleId,
+        stripePaymentIntentId: purchase.stripePaymentIntentId,
+      },
+      chain: {
+        salePresent,
+        organizerPresent,
+        organizerUserId,
+        guardWouldHavePassed: !!organizerUserId,
+      },
+      notificationMatch: {
+        windowStart,
+        windowEnd,
+        matchedCount: notificationMatches.length,
+        matches: notificationMatches,
+        caveat:
+          'Notification model has no direct purchase FK -- matched by userId + type + link + time window, not an exact join. See doc comment.',
+      },
+    });
+  } catch (err) {
+    console.error('[internalReportsController] diagnosePurchaseNotification failed:', err);
+    res.status(500).json({ message: 'Internal error' });
+  }
+}
+

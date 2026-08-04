@@ -1527,21 +1527,43 @@ export const webhookHandler = async (req: Request, res: Response) => {
         // only -- sendEmail was never passed, so organizers away from the app had no
         // way to learn a sale happened until they opened it. createNotification()
         // (packages/backend/src/lib/notificationService.ts) only emails when told to.
-        if (purchase.sale?.organizer?.userId) {
+        // S1183 follow-up (buyer j drummond / purchase cms6cald1003hgspm3xw6qssk never
+        // notified organizer "Artifact"): added branch + outcome logging so a future
+        // occurrence can be root-caused from Railway logs alone -- distinguishes
+        // (a) the guard being skipped because organizer.userId did not resolve, from
+        // (b) createNotification() being attempted but throwing, vs attempted and
+        // succeeding. Previously this branch had no "skipped" log at all, and the
+        // "attempted" path only logged on failure -- so neither hypothesis was
+        // distinguishable after the fact from logs alone.
+        const notifyOrganizerUserId = purchase.sale?.organizer?.userId;
+        if (notifyOrganizerUserId) {
+          console.log(
+            `[PaymentNotification] Attempting payment_received notification for purchase ${purchase.id} (organizerUserId=${notifyOrganizerUserId})`
+          );
           createNotification({
-            userId: purchase.sale!.organizer.userId,
+            userId: notifyOrganizerUserId,
             type: 'payment_received',
             title: 'Payment received',
             body: `Payment of $${(paymentIntent.amount_received / 100).toFixed(2)} received for "${purchase.item?.title || 'item'}"`,
             link: `/organizer/sales/${purchase.saleId}`,
             channel: 'OPERATIONAL',
             sendEmail: true,
+          }).then(() => {
+            console.log(
+              `[PaymentNotification] createNotification succeeded for purchase ${purchase.id} (organizerUserId=${notifyOrganizerUserId})`
+            );
           }).catch((err) => {
             console.error(
-              `[payment_received notification] createNotification failed for purchase ${purchase.id} (organizerUserId=${purchase.sale?.organizer?.userId}):`,
-              err
+              `[PaymentNotification] createNotification failed for purchase ${purchase.id} (organizerUserId=${notifyOrganizerUserId}):`,
+              err instanceof Error ? (err.stack || err.message) : err
             );
           });
+        } else {
+          console.error(
+            `[PaymentNotification] Skipped payment_received notification for purchase ${purchase.id} -- ` +
+            `organizer.userId did not resolve (saleId=${purchase.saleId ?? 'null'}, ` +
+            `sale present=${!!purchase.sale}, sale.organizer present=${!!purchase.sale?.organizer})`
+          );
         }
 
         setImmediate(() => {

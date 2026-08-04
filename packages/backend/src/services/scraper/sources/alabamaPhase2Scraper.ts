@@ -1,31 +1,86 @@
 /**
  * Alabama State Board of Auctioneers — Auctioneer License Scraper (Phase 2)
- * Source: Alabama Auctioneer Board licensee search API
- *   https://alauc-search.kalmservices.net/api/search/licenses
+ *
+ * Source: Alabama Auctioneers Board licensee search tool (public web UI)
+ *   https://alauc-search.kalmservices.net/
  *   (linked from https://auctioneer.alabama.gov/licensee-search/)
  *
- * The API accepts POST requests with JSON body: { parameters: { lastName: "X" }, turnstileToken: "" }
- * Turnstile is frontend-only — the backend does not enforce token validation.
+ * ROOT CAUSE (confirmed via this file's own prior implementation + task
+ * evidence, 2026-08): the previous version of this scraper called the site's
+ * backing JSON API directly — POST
+ * https://alauc-search.kalmservices.net/api/search/licenses with body
+ * { parameters: { lastName }, turnstileToken: '' }. That endpoint now
+ * hard-rejects every request with "CAPTCHA verification failed" — Cloudflare
+ * Turnstile is backend-enforced (siteverify validated) as of 2026-08, where it
+ * previously was not. A plain fetch() call can never produce a valid Turnstile
+ * token because it never executes Cloudflare's JS challenge — no amount of
+ * URL/endpoint guessing fixes that against a non-JS HTTP client.
  *
- * Response: { jsonColumns: string, jsonContent: string } where jsonContent is a JSON array of licensee objects.
- * Each record has: Name, LicenseNumber, LicenseType, Company, Address, Phone, IssueDate, ExpirationDate, LicenseStatus
+ * FIX: Drive the actual public search page with a real, stealth-patched
+ * headless Chromium browser via Playwright — the same class of tool this
+ * project already uses for other Cloudflare/anti-bot-protected sources (see
+ * saleDetailEnrichment.ts: "Stealth-first: Playwright Chromium + stealth
+ * plugin defeats TLS fingerprinting"). A live manual browser test this
+ * session (searching "Smith" in the Last Name field on the public search
+ * page) returned full results with ZERO Turnstile challenge shown. This
+ * scraper reproduces that human flow: navigate → fill Last Name → click
+ * Search → read the rendered results table.
  *
- * Strategy: iterate A–Z as lastName prefix to fetch all active auctioneers.
- * Deduplicate by LicenseNumber (same licensee may appear in multiple letter queries).
+ * VERIFICATION CAVEAT — read before relying on this in production:
+ * This file was written and TypeScript-traced from a network-isolated
+ * environment. The exact DOM selectors for the Last Name input / Search
+ * button / results table on alauc-search.kalmservices.net were NOT confirmed
+ * via live DOM inspection (no live network access in this session).
+ * Playwright's semantic ARIA-role/label locators are used with CSS-attribute
+ * fallbacks to maximize the odds of a first-run match, and every step logs a
+ * clear diagnostic on failure so a real run's logs will show exactly which
+ * step (if any) did not find its target. UNTIL A LIVE RUN CONFIRMS THIS,
+ * TREAT THE SELECTOR LOGIC AS BEST-EFFORT, NOT VERIFIED.
+ *
+ * OPEN QUESTIONS (flagged, not resolved — need live network access to close):
+ *   1. Roster enumeration: this file keeps the prior A–Z last-name-prefix
+ *      iteration (one request per letter) because that is what the
+ *      previously-working JSON API accepted. It is NOT confirmed that the
+ *      HTML search box on the page behaves the same way for a single-letter
+ *      prefix (vs. requiring a full last name, or supporting an empty/blank
+ *      query to dump the full roster in one pass). This needs a live check —
+ *      searching a blank Last Name, or confirming prefix-matching behavior,
+ *      before trusting full-roster coverage from this scraper.
+ *   2. The results page's "Export CSV" / "Export Excel" buttons were seen
+ *      working in the manual browser test this session but are NOT used
+ *      here — on-page results-table scraping was chosen as the safer
+ *      default because the export buttons' target endpoint/params were not
+ *      captured via browser dev tools this session. Wiring the CSV/Excel
+ *      export instead of table-scraping is a plausible, likely more stable
+ *      follow-up once someone inspects that live network request.
+ *   3. Whether the browser-driven page itself is ever shown an *interactive*
+ *      Turnstile challenge (vs. the invisible/managed pass observed in the
+ *      manual test) under production conditions (Railway's IP range,
+ *      concurrent job load, etc.) is unverified. This file detects and logs
+ *      Turnstile/CAPTCHA markers in the rendered HTML if they appear, but
+ *      does not attempt to solve an interactive challenge.
  *
  * ADR-073: Directory Scraper Phase 2 — State auctioneer licensing data
  */
 
+import { chromium } from 'playwright-extra';
+import StealthPlugin from 'puppeteer-extra-plugin-stealth';
+import * as cheerio from 'cheerio';
 import { defaultRateLimiter } from '../rateLimiter';
 import { batchUpsertScrapedOrganizers, ScrapedOrganizerRow } from '../index';
 import { getRandomUserAgent } from '../userAgents';
 
-const SEARCH_API_URL = 'https://alauc-search.kalmservices.net/api/search/licenses';
-const API_DOMAIN = 'alauc-search.kalmservices.net';
+const SEARCH_PAGE_URL = 'https://alauc-search.kalmservices.net/';
+const DOMAIN = 'alauc-search.kalmservices.net';
 
 const ALPHABET = 'abcdefghijklmnopqrstuvwxyz'.split('');
 
-// False-positive name fragments — exclude row if company name contains any of these
+// Stealth plugin registration — deferred to first browser launch (matches
+// saleDetailEnrichment.ts convention) to avoid crashing at module import
+// time if playwright-extra isn't fully initialised.
+let stealthRegistered = false;
+
+// False-positive name fragments — exclude row if company/licensee name contains any of these
 const EXCLUDE_FRAGMENTS = [
   'real estate',
   'realty',
@@ -58,29 +113,35 @@ function nameIsExcluded(name: string): boolean {
 }
 
 /**
- * Parse city from Address field. Address format: "street|city, ST zip" or "street|city, ST"
+ * Parse city from a combined address string. Handles both the old API's
+ * "street|city, ST zip" pipe-delimited format and a plain
+ * "street, city, ST zip" comma-delimited format (unknown which the live
+ * HTML table will actually use — this is a defensive fallback, only
+ * consulted when the results table does not expose separate City/State
+ * columns; see parseResultsTable).
  */
 function parseCityFromAddress(address: string): string {
   if (!address) return '';
-  // Address uses | as line separator
-  const parts = address.split('|');
+  const parts = address.includes('|') ? address.split('|') : address.split(',');
   const lastLine = (parts[parts.length - 1] || '').trim();
-  // Extract city from "City, ST ZIP" pattern
   const cityMatch = lastLine.match(/^([^,]+),\s*[A-Z]{2}/);
   if (cityMatch) {
     return cityMatch[1].trim();
+  }
+  // Comma-delimited form: city is likely the second-to-last segment
+  if (parts.length >= 2) {
+    return (parts[parts.length - 2] || '').trim();
   }
   return lastLine;
 }
 
 /**
- * Parse state from Address field.
+ * Parse state from a combined address string. See parseCityFromAddress for
+ * format notes.
  */
 function parseStateFromAddress(address: string): string {
   if (!address) return 'AL';
-  const parts = address.split('|');
-  const lastLine = (parts[parts.length - 1] || '').trim();
-  const stateMatch = lastLine.match(/,\s*([A-Z]{2})\s/);
+  const stateMatch = address.match(/\b([A-Z]{2})\s*\d{5}/) || address.match(/,\s*([A-Z]{2})\b/);
   if (stateMatch) {
     return stateMatch[1];
   }
@@ -88,119 +149,252 @@ function parseStateFromAddress(address: string): string {
 }
 
 interface AlabamaLicensee {
-  WorkerId: number;
-  Name: string;
-  LicenseNumber: string;
-  LicenseType: string;
-  LicenseStatus: string;
-  Company: string;
-  Address: string;
-  Phone: string;
-  IssueDate: string;
-  ExpirationDate: string;
-  LicenseId: number;
-  CeuCompleted: string;
-  CeuModal: string;
+  name: string;
+  licenseNumber: string;
+  licenseType: string;
+  licenseStatus: string;
+  company: string;
+  city: string;
+  state: string;
+  address: string;
+  phone: string;
 }
 
-interface SearchResponse {
-  jsonColumns: string;
-  jsonContent: string;
-  error?: string;
-}
+// ---------------------------------------------------------------------------
+// Stealth Playwright browser (Turnstile-protected target — see file header)
+// ---------------------------------------------------------------------------
 
-/**
- * Return true if an error looks like a connect-timeout from undici or the
- * Fetch AbortSignal.timeout() path (TimeoutError / AbortError / UND_ERR_CONNECT_TIMEOUT).
- */
-function isTimeoutError(err: unknown): boolean {
-  if (!(err instanceof Error)) return false;
-  const name = (err as NodeJS.ErrnoException).code ?? err.name ?? '';
-  return (
-    name === 'UND_ERR_CONNECT_TIMEOUT' ||
-    name === 'TimeoutError' ||
-    name === 'AbortError' ||
-    err.name === 'TimeoutError' ||
-    err.name === 'AbortError'
-  );
-}
+type PwBrowser = Awaited<ReturnType<typeof chromium.launch>>;
+type PwPage = Awaited<ReturnType<PwBrowser['newPage']>>;
+type PwLocator = ReturnType<PwPage['locator']>;
 
-/**
- * Execute a single POST to the Alabama auctioneer API for the given letter.
- * Uses a 30-second timeout via AbortSignal.timeout.
- */
-async function fetchOnce(letter: string): Promise<Response> {
-  return fetch(SEARCH_API_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'User-Agent': getRandomUserAgent(),
-      Accept: 'application/json',
-    },
-    body: JSON.stringify({
-      parameters: { lastName: letter },
-      turnstileToken: '',
-    }),
-    signal: AbortSignal.timeout(30000),
+async function launchStealthBrowser(): Promise<PwBrowser> {
+  if (!stealthRegistered) {
+    chromium.use(StealthPlugin());
+    stealthRegistered = true;
+  }
+  return chromium.launch({
+    headless: true,
+    args: [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-blink-features=AutomationControlled',
+    ],
   });
 }
 
 /**
- * Fetch licensees for a given lastName prefix from the Alabama auctioneer API.
- * Retries once (after a 5-second delay) on connect-timeout errors before giving up.
+ * Try a sequence of locator strategies for the Last Name search input.
+ * Returns true if a field was found and filled, false otherwise.
  */
-async function fetchLicenseesByLastName(letter: string): Promise<AlabamaLicensee[]> {
-  await defaultRateLimiter.waitBeforeRequest(API_DOMAIN);
+async function fillLastName(page: PwPage, value: string): Promise<boolean> {
+  const strategies: Array<() => PwLocator> = [
+    () => page.getByLabel(/last\s*name/i),
+    () => page.getByPlaceholder(/last\s*name/i),
+    () => page.locator('input[name*="last" i]'),
+    () => page.locator('input[id*="last" i]'),
+    () => page.locator('input[aria-label*="last" i]'),
+  ];
 
-  let response: Response;
-  try {
-    response = await fetchOnce(letter);
-  } catch (firstErr) {
-    if (isTimeoutError(firstErr)) {
-      console.warn(
-        `[Alabama Phase2] Connect timeout for letter "${letter}" — retrying in 5 s...`
-      );
-      await new Promise((resolve) => setTimeout(resolve, 5000));
-      // Let any second timeout propagate naturally — callers handle it
-      response = await fetchOnce(letter);
-    } else {
-      throw firstErr;
+  for (const strategy of strategies) {
+    try {
+      const locator = strategy();
+      const count = await locator.count();
+      if (count > 0) {
+        await locator.first().fill('');
+        await locator.first().fill(value);
+        return true;
+      }
+    } catch {
+      // try next strategy
+    }
+  }
+  return false;
+}
+
+/**
+ * Try a sequence of locator strategies for the Search submit button.
+ * Returns true if a button was found and clicked, false otherwise.
+ */
+async function clickSearch(page: PwPage): Promise<boolean> {
+  const strategies: Array<() => PwLocator> = [
+    () => page.getByRole('button', { name: /search/i }),
+    () => page.getByRole('button', { name: /submit/i }),
+    () => page.locator('button:has-text("Search")'),
+    () => page.locator('input[type="submit"]'),
+    () => page.locator('button[type="submit"]'),
+  ];
+
+  for (const strategy of strategies) {
+    try {
+      const locator = strategy();
+      const count = await locator.count();
+      if (count > 0) {
+        await locator.first().click();
+        return true;
+      }
+    } catch {
+      // try next strategy
+    }
+  }
+  return false;
+}
+
+/**
+ * Parse the rendered results table into licensee rows.
+ * Column order/labels are unknown (no live DOM access this session) — the
+ * header row is read dynamically and columns are matched by header text
+ * rather than assumed positionally, so this survives minor column reordering.
+ */
+function parseResultsTable(html: string): AlabamaLicensee[] {
+  const $ = cheerio.load(html);
+  const records: AlabamaLicensee[] = [];
+
+  const tableSelectors = [
+    'table.results',
+    'table.search-results',
+    '#results table',
+    '.results-table table',
+    'table',
+  ];
+
+  let $table = $();
+  for (const sel of tableSelectors) {
+    const candidate = $(sel);
+    if (candidate.length > 0 && candidate.find('tr').length > 1) {
+      $table = candidate.first();
+      break;
     }
   }
 
-  if (!response.ok) {
-    console.warn(`[Alabama Phase2] API returned HTTP ${response.status} for letter "${letter}"`);
+  if ($table.length === 0) {
+    return records;
+  }
+
+  const $rows = $table.find('tr');
+  if ($rows.length < 2) {
+    return records;
+  }
+
+  // Determine column order from the header row (th preferred, fall back to first td row)
+  const headerCells: string[] = [];
+  const $headerRow = $rows.first();
+  $headerRow.find('th').each((_i, el) => headerCells.push($(el).text().trim().toLowerCase()));
+  if (headerCells.length === 0) {
+    $headerRow.find('td').each((_i, el) => headerCells.push($(el).text().trim().toLowerCase()));
+  }
+
+  const colIndex = (labelPattern: RegExp): number =>
+    headerCells.findIndex((h) => labelPattern.test(h));
+
+  const nameIdx = colIndex(/name/);
+  const licNumIdx = colIndex(/license\s*(#|no\.?|number)/);
+  const typeIdx = colIndex(/type/);
+  const statusIdx = colIndex(/status/);
+  const companyIdx = colIndex(/compan(y|ies)/);
+  const cityIdx = colIndex(/city/);
+  const stateIdx = colIndex(/^state$/);
+  const addressIdx = colIndex(/address/);
+  const phoneIdx = colIndex(/phone/);
+
+  $rows.each((rowI, el) => {
+    if (rowI === 0 && headerCells.length > 0) return; // skip header row
+
+    const $tds = $(el).find('td');
+    if ($tds.length === 0) return;
+    const cells = $tds.map((_j, td) => $(td).text().trim()).get();
+    if (cells.length === 0) return;
+
+    const get = (idx: number): string => (idx >= 0 && idx < cells.length ? cells[idx] : '');
+
+    const name = nameIdx >= 0 ? get(nameIdx) : cells[0] || '';
+    if (!name || /^(name|licensee name)$/i.test(name)) return;
+
+    records.push({
+      name,
+      licenseNumber: licNumIdx >= 0 ? get(licNumIdx) : '',
+      licenseType: typeIdx >= 0 ? get(typeIdx) : '',
+      licenseStatus: statusIdx >= 0 ? get(statusIdx) : 'Active',
+      company: companyIdx >= 0 ? get(companyIdx) : '',
+      city: cityIdx >= 0 ? get(cityIdx) : '',
+      state: stateIdx >= 0 ? get(stateIdx) : '',
+      address: addressIdx >= 0 ? get(addressIdx) : '',
+      phone: phoneIdx >= 0 ? get(phoneIdx) : '',
+    });
+  });
+
+  return records;
+}
+
+/**
+ * Search for licensees matching a Last Name value on the live page.
+ * Navigates fresh to SEARCH_PAGE_URL for every call (rather than reusing
+ * post-search DOM state) so this works whether the site is a SPA that
+ * updates in place or a traditional form that navigates to a results page —
+ * either way a fresh load guarantees the search form is present and clean.
+ */
+async function fetchLicenseesByLastName(page: PwPage, value: string): Promise<AlabamaLicensee[]> {
+  await defaultRateLimiter.waitBeforeRequest(DOMAIN);
+
+  try {
+    await page.goto(SEARCH_PAGE_URL, { waitUntil: 'networkidle', timeout: 30000 });
+  } catch (err) {
+    console.warn(`[Alabama Phase2] Navigation failed for letter "${value}":`, err);
     return [];
   }
 
-  const data = (await response.json()) as SearchResponse;
-
-  if (data.error) {
-    console.warn(`[Alabama Phase2] API error for letter "${letter}": ${data.error}`);
+  const filled = await fillLastName(page, value);
+  if (!filled) {
+    console.warn(
+      `[Alabama Phase2] Could not find Last Name input for letter "${value}" — ` +
+      'DOM selectors need live verification (see file header VERIFICATION CAVEAT)'
+    );
     return [];
   }
 
-  if (!data.jsonContent) {
+  const clicked = await clickSearch(page);
+  if (!clicked) {
+    console.warn(
+      `[Alabama Phase2] Could not find Search button for letter "${value}" — ` +
+      'DOM selectors need live verification (see file header VERIFICATION CAVEAT)'
+    );
     return [];
   }
 
   try {
-    return JSON.parse(data.jsonContent) as AlabamaLicensee[];
+    await page.waitForLoadState('networkidle', { timeout: 15000 });
   } catch {
-    console.warn(`[Alabama Phase2] Failed to parse jsonContent for letter "${letter}"`);
-    return [];
+    // Results may already be rendered client-side without a further network event — continue.
   }
+
+  const html = await page.content();
+  const lowerHtml = html.toLowerCase();
+  if (
+    lowerHtml.includes('captcha verification failed') ||
+    (lowerHtml.includes('cf-turnstile') && lowerHtml.includes('challenge')) ||
+    lowerHtml.includes('checking if the site connection is secure')
+  ) {
+    console.warn(
+      `[Alabama Phase2] Turnstile/CAPTCHA marker detected in rendered page for letter "${value}" — ` +
+      'the browser-driven path is being challenged too (see file header OPEN QUESTIONS #3)'
+    );
+  }
+
+  return parseResultsTable(html);
 }
 
 /**
  * Alabama State Board of Auctioneers — auctioneer license scraper.
- * Iterates A–Z as lastName prefix to fetch all active auctioneers from the
- * kalmservices.net API. Deduplicates by LicenseNumber. Uses the Company field
- * as the business name for getOrCreateScrapedOrganizer.
+ * Iterates A–Z as lastName prefix to fetch all active auctioneers via a
+ * stealth-patched headless browser against the public search page (the
+ * direct JSON API is Turnstile-blocked — see file header). Deduplicates by
+ * LicenseNumber. Uses the Company field as the business name, falling back
+ * to the licensee Name.
  */
 export async function runAlabamaPhase2Scraper(): Promise<void> {
   console.log('[Alabama Phase2] Starting auctioneer license scraper — Alabama Board of Auctioneers');
-  console.log(`[Alabama Phase2] Source: ${SEARCH_API_URL}`);
+  console.log(`[Alabama Phase2] Source: ${SEARCH_PAGE_URL} (stealth Playwright browser — direct JSON API is Turnstile-blocked, see file header)`);
 
   const seenLicenseNumbers = new Set<string>();
   let totalFetched = 0;
@@ -210,11 +404,24 @@ export async function runAlabamaPhase2Scraper(): Promise<void> {
   let totalSkippedExclude = 0;
   let totalSkippedInactive = 0;
 
+  let browser: PwBrowser | null = null;
+
   try {
+    browser = await launchStealthBrowser();
+    const context = await browser.newContext({
+      userAgent: getRandomUserAgent(),
+      viewport: { width: 1280, height: 800 },
+      locale: 'en-US',
+    });
+    await context.addInitScript(() => {
+      Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+    });
+    const page = await context.newPage();
+
     for (const letter of ALPHABET) {
       console.log(`[Alabama Phase2] Fetching licensees for lastName prefix "${letter}"...`);
 
-      const licensees = await fetchLicenseesByLastName(letter);
+      const licensees = await fetchLicenseesByLastName(page, letter);
       console.log(`[Alabama Phase2] Letter "${letter}": ${licensees.length} results`);
       totalFetched += licensees.length;
 
@@ -223,7 +430,7 @@ export async function runAlabamaPhase2Scraper(): Promise<void> {
 
       for (const lic of licensees) {
         // Deduplicate by LicenseNumber
-        const licNum = (lic.LicenseNumber || '').trim();
+        const licNum = (lic.licenseNumber || '').trim();
         if (!licNum || seenLicenseNumbers.has(licNum)) {
           if (licNum) totalSkippedDupe++;
           continue;
@@ -231,14 +438,14 @@ export async function runAlabamaPhase2Scraper(): Promise<void> {
         seenLicenseNumbers.add(licNum);
 
         // Only active licenses
-        if (lic.LicenseStatus && lic.LicenseStatus.toLowerCase() !== 'active') {
+        if (lic.licenseStatus && lic.licenseStatus.toLowerCase() !== 'active') {
           totalSkippedInactive++;
           continue;
         }
 
         // Use Company name as business; fall back to licensee Name
-        const companyName = (lic.Company || '').trim();
-        const licenseeName = (lic.Name || '').trim();
+        const companyName = (lic.company || '').trim();
+        const licenseeName = (lic.name || '').trim();
         const businessName = companyName || licenseeName;
 
         if (!businessName) continue;
@@ -249,9 +456,10 @@ export async function runAlabamaPhase2Scraper(): Promise<void> {
           continue;
         }
 
-        const city = parseCityFromAddress(lic.Address);
-        const state = parseStateFromAddress(lic.Address);
-        const phone = (lic.Phone || '').trim() || undefined;
+        // Prefer dedicated City/State table columns; fall back to parsing a combined address field
+        const city = (lic.city || '').trim() || parseCityFromAddress(lic.address);
+        const state = (lic.state || '').trim() || parseStateFromAddress(lic.address);
+        const phone = (lic.phone || '').trim() || undefined;
 
         totalMatched++;
 
@@ -259,7 +467,7 @@ export async function runAlabamaPhase2Scraper(): Promise<void> {
           businessName,
           sourceName: 'AlabamaPhase2',
           city: city || 'Alabama',
-          state,
+          state: state || 'AL',
           businessCategory: 'AUCTION_HOUSE',
           phone,
           isStateLicensed: true,
@@ -287,11 +495,23 @@ export async function runAlabamaPhase2Scraper(): Promise<void> {
 
     if (totalMatched === 0) {
       throw new Error(
-        'Alabama Phase2 scraper completed but found zero matching auctioneer records'
+        'Alabama Phase2 scraper completed but found zero matching auctioneer records. ' +
+        'If this is the first run since the 2026-08 Playwright rewrite, check Railway logs ' +
+        'for "Could not find Last Name input / Search button" or Turnstile/CAPTCHA marker ' +
+        'warnings above — the live DOM selectors were not verified against the live site ' +
+        '(see file header VERIFICATION CAVEAT) and may need adjustment.'
       );
     }
   } catch (error) {
     console.error('[Alabama Phase2] Scraper error:', error);
     throw error;
+  } finally {
+    if (browser) {
+      try {
+        await browser.close();
+      } catch (closeErr) {
+        console.warn('[Alabama Phase2] Browser close error (non-fatal):', closeErr);
+      }
+    }
   }
 }
