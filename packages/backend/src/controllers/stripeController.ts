@@ -2678,6 +2678,95 @@ export const webhookHandler = async (req: Request, res: Response) => {
       break;
     }
 
+    case 'payout.paid': {
+      // Payout webhooks (2026-08-04): payout.paid/payout.failed are ACCOUNT-level
+      // Stripe Connect events -- event.data.object is the Payout, and the connected
+      // account id lives on event.account (NOT on the payout object itself, unlike
+      // account.updated where event.data.object IS the account). This handler
+      // resolves event.account back to an Organizer the same way account.updated
+      // resolves account.id -- by matching Organizer.stripeConnectId. See PR notes:
+      // whether this event actually reaches this endpoint depends on the Connect
+      // webhook subscription configured in the Stripe Dashboard (outside this repo) --
+      // this handler is signature-verification-ready (constructEvent above already
+      // falls back to STRIPE_CONNECT_WEBHOOK_SECRET) but cannot self-verify Stripe's
+      // dashboard subscription list from code.
+      const payout = event.data.object as any; // Stripe.Payout
+      const connectedAccountId = (event as any).account as string | undefined;
+
+      if (!connectedAccountId) {
+        console.warn(`[stripe-connect] payout.paid event ${event.id} has no event.account -- cannot resolve organizer, skipping.`);
+        break;
+      }
+
+      try {
+        const organizer = await prisma.organizer.findFirst({
+          where: { stripeConnectId: connectedAccountId },
+          select: { id: true, userId: true },
+        });
+
+        if (organizer) {
+          const amountFormatted = `$${(payout.amount / 100).toFixed(2)} ${(payout.currency || 'usd').toUpperCase()}`;
+          const arrival = payout.arrival_date
+            ? new Date(payout.arrival_date * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+            : null;
+
+          createNotification({
+            userId: organizer.userId,
+            type: 'payout_paid',
+            title: 'Your payout has landed',
+            body: `Your payout of ${amountFormatted} has been sent to your bank account${arrival ? ` (estimated arrival ${arrival})` : ''}.`,
+            link: '/organizer/payouts',
+            channel: 'OPERATIONAL',
+            sendEmail: true,
+          }).catch((err) => console.error(`[stripe-connect] Failed to create payout_paid notification for organizer ${organizer.id}:`, err));
+        } else {
+          console.warn(`[stripe-connect] payout.paid: no Organizer found for connected account ${connectedAccountId}`);
+        }
+      } catch (err) {
+        console.error(`[stripe-connect] Failed to process payout.paid for account ${connectedAccountId}:`, err);
+      }
+      break;
+    }
+
+    case 'payout.failed': {
+      // See payout.paid above for the event.account -> Organizer resolution rationale.
+      const payout = event.data.object as any; // Stripe.Payout
+      const connectedAccountId = (event as any).account as string | undefined;
+
+      if (!connectedAccountId) {
+        console.warn(`[stripe-connect] payout.failed event ${event.id} has no event.account -- cannot resolve organizer, skipping.`);
+        break;
+      }
+
+      try {
+        const organizer = await prisma.organizer.findFirst({
+          where: { stripeConnectId: connectedAccountId },
+          select: { id: true, userId: true },
+        });
+
+        if (organizer) {
+          const amountFormatted = `$${(payout.amount / 100).toFixed(2)} ${(payout.currency || 'usd').toUpperCase()}`;
+          // failure_message/failure_code only -- never expose raw account/routing numbers.
+          const reason = payout.failure_message || payout.failure_code || 'Unknown error -- check your Stripe dashboard for details.';
+
+          createNotification({
+            userId: organizer.userId,
+            type: 'payout_failed',
+            title: 'Your payout failed',
+            body: `Your payout of ${amountFormatted} could not be completed: ${reason}. This usually means a bank account problem -- please check your payout details.`,
+            link: '/organizer/payouts',
+            channel: 'OPERATIONAL',
+            sendEmail: true,
+          }).catch((err) => console.error(`[stripe-connect] Failed to create payout_failed notification for organizer ${organizer.id}:`, err));
+        } else {
+          console.warn(`[stripe-connect] payout.failed: no Organizer found for connected account ${connectedAccountId}`);
+        }
+      } catch (err) {
+        console.error(`[stripe-connect] Failed to process payout.failed for account ${connectedAccountId}:`, err);
+      }
+      break;
+    }
+
     default:
       console.warn(`[stripe] Unhandled event type: ${event.type}`);
   }

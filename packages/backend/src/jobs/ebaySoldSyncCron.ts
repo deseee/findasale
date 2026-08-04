@@ -21,6 +21,7 @@ import { refreshEbayAccessToken, endEbayListingIfExists } from '../controllers/e
 import { notifyFacebookExportedItemSold } from '../services/facebookNudgeService';
 import { markShopifyItemSold } from '../services/shopifyService';
 import { sellItemUnits, InsufficientStockError } from '../services/itemStockService';
+import { createNotification } from '../lib/notificationService';
 
 interface EbayItem {
   id: string;
@@ -295,20 +296,29 @@ export async function syncSoldItemsForOrganizer(organizerId: string): Promise<Sy
           );
         }
 
-        // Notify organizer — one alert per unit sale (idempotent: only on a NEW ledger row)
-        await prisma.notification.create({
-          data: {
-            userId: organizer.userId,
-            type: 'SALE_UPDATE',
-            title: 'Item sold on eBay',
-            body:
-              avail > 1
-                ? `"${matchedItem.title}" sold a unit on eBay (${soldCount} of ${avail}).`
-                : `"${matchedItem.title}" was purchased on eBay and has been marked as sold.`,
-            link: matchedItem.saleId ? `/organizer/sales/${matchedItem.saleId}` : `/organizer/inventory`,
-            notificationChannel: 'IN_APP',
-          },
-        });
+        // Notify organizer — one alert per unit sale (idempotent: only on a NEW ledger row).
+        // Fixed 2026-08-04: this previously wrote a raw in-app-only Notification row
+        // (no email) via prisma.notification.create -- "an item sold" is arguably the
+        // single most important event an organizer needs to know about promptly (they
+        // may still have it out at a physical sale/register -- see the double-sale
+        // Blocked Queue history), so it's switched to the shared createNotification()
+        // helper with sendEmail: true, matching every other sale/payment notification
+        // fixed this session. Same in-app row shape either way (channel still defaults
+        // to 'OPERATIONAL', notificationChannel still defaults to 'IN_APP' at the schema
+        // level even though this call no longer sets it explicitly).
+        await createNotification({
+          userId: organizer.userId,
+          type: 'SALE_UPDATE',
+          title: 'Item sold on eBay',
+          body:
+            avail > 1
+              ? `"${matchedItem.title}" sold a unit on eBay (${soldCount} of ${avail}).`
+              : `"${matchedItem.title}" was purchased on eBay and has been marked as sold.`,
+          link: matchedItem.saleId ? `/organizer/sales/${matchedItem.saleId}` : `/organizer/inventory`,
+          sendEmail: true,
+        }).catch((err) =>
+          console.error(`[eBay Sync] Failed to create sold notification for item ${matchedItem!.id}:`, err)
+        );
 
         console.log(
           `[eBay Sync] Item ${matchedItem.id} ("${matchedItem.title}") — unit sold via eBay order ${order.orderId} (${soldCount}/${avail}${fullySold ? ', now SOLD' : ''})`
