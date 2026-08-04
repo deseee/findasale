@@ -1449,7 +1449,16 @@ export async function getStaticProps(context: GetStaticPropsContext) {
       status: item.status || 'AVAILABLE',
     };
 
-    return { props: { ogData, initialData }, revalidate: 86400 };
+    // ISR write cost: item pages regenerate on the same cadence as sales pages across
+    // an even larger path count (multiple items per sale). Sale pages were widened
+    // 24h -> 7d/30d (isEnded split) 2026-07-29 (~70% of site ISR writes at the time);
+    // items were missed in that pass and stayed at 24h. Same safety justification
+    // applies: live data (price/bids/status) is 100% client-polled post-hydration
+    // (see useQuery calls above) -- this ISR HTML only backs OG tags/JSON-LD for
+    // crawlers and a brief pre-hydration flash. Widened 2026-08-04, Patrick-approved,
+    // via findasale-dev cost-optimization batch (Vercel ISR Writes 345% of cap).
+    const isEnded = item.sale?.status === 'ENDED';
+    return { props: { ogData, initialData }, revalidate: isEnded ? 2592000 : 604800 };
   } catch (error) {
     // Fail open — page still works, OG tags fall back to CSR version
     console.error('[items/[id] getStaticProps error]', error);

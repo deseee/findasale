@@ -16,7 +16,7 @@ import { processDueJobs } from '../services/marketplace/marketplacePosterService
  */
 export function scheduleMarketplacePosterCron(): void {
   cron.schedule(
-    '*/10 * * * *',
+    '1,11,21,31,41,51 * * * *', // staggered off reservationExpiryJob's */10 2026-08-04 cost-optimization batch
     cronGuard(
       { jobName: 'marketplacePoster', alertThresholdConsecutiveFailures: 3 },
       async () => {

@@ -32,7 +32,7 @@ import { postApprovedReplies } from '../services/social/engagementReplyStaging';
  */
 export function scheduleEngagementMonitorCron(): void {
   cron.schedule(
-    '0 * * * *',
+    '8 * * * *', // staggered off saleAutoCloseCron's 0 * * * * 2026-08-04 cost-optimization batch
     cronGuard(
       { jobName: 'engagementMonitorPoll', alertThresholdConsecutiveFailures: 3 },
       async () => {

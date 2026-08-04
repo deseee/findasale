@@ -244,7 +244,7 @@ export const processSaleEndingSoonNotifications = async (): Promise<void> => {
 };
 
 // Run every hour to check for sales ending in ~24 hours
-cron.schedule('0 * * * *', cronGuard({ jobName: 'saleEndingSoonJob' }, async () => {
+cron.schedule('4 * * * *', cronGuard({ jobName: 'saleEndingSoonJob' }, async () => { // staggered off saleAutoCloseCron's 0 * * * * 2026-08-04 cost-optimization batch
   console.log('Running sale ending soon job...');
   try {
     await processSaleEndingSoonNotifications();

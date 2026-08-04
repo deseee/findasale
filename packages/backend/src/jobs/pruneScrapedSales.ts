@@ -178,7 +178,7 @@ export async function pruneScrapedSales(
  */
 export function scheduleScrapedSalePruneCron(): void {
   cron.schedule(
-    '0 4 * * *',
+    '6 4 * * *', // staggered off pricingEngineCircuitBreakerRecovery's 0 4 * * * 2026-08-04 cost-optimization batch
     cronGuard({ jobName: 'pruneScrapedSales' }, async () => {
       if (process.env.PRUNE_ENABLED !== 'true') {
         console.log('[prune-scraped-sales] PRUNE_ENABLED not "true" — skipping run.');

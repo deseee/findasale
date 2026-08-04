@@ -17,8 +17,8 @@ import { prisma } from '../index';
  *   message/review tables to this list.
  * - Each entry uses `createdAt < cutoff`. Every model in the list was schema-verified to
  *   have a `createdAt` field (schema.prisma): ScrapedSalesJob, OutreachAuditLog,
- *   DirectoryCrawlLog. If a future log model lacks `createdAt`, it must be skipped, not
- *   force-fit to another timestamp column.
+ *   DirectoryCrawlLog, CrawlerVisit. If a future log model lacks `createdAt`, it must be
+ *   skipped, not force-fit to another timestamp column.
  * - deleteMany with a `createdAt` lower-bound predicate can never touch recent rows or
  *   rows in any unlisted table.
  *
@@ -61,6 +61,17 @@ export function scheduleLogRetentionCron(): void {
           name: 'DirectoryCrawlLog',
           run: () =>
             prisma.directoryCrawlLog.deleteMany({
+              where: { createdAt: { lt: cutoff } },
+            }),
+        },
+        {
+          // Added 2026-08-04, Patrick-approved cost-optimization batch: CrawlerVisit
+          // (populated by crawlerAnalytics.ts middleware on every detected bot visit,
+          // ~85% GPTBot/ClaudeBot/OAI-SearchBot) was found with no retention policy
+          // anywhere in the codebase, growing 2-8K rows/day unbounded.
+          name: 'CrawlerVisit',
+          run: () =>
+            prisma.crawlerVisit.deleteMany({
               where: { createdAt: { lt: cutoff } },
             }),
         },

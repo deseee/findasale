@@ -12,7 +12,7 @@ import { prisma } from '../lib/prisma';
  * Daily 3 AM UTC: Reset API usage quotas for all sources
  */
 export function scheduleQuotaResetCron(): void {
-  cron.schedule('0 3 * * *', cronGuard({ jobName: 'pricingEngineQuotaReset' }, async () => {
+  cron.schedule('2 3 * * *', cronGuard({ jobName: 'pricingEngineQuotaReset' }, async () => { // staggered off huntPassExpiryCron's 0 3 * * * 2026-08-04 cost-optimization batch
     try {
       await resetDailyQuotas();
     } catch (error) {

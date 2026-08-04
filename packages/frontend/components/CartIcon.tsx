@@ -1,7 +1,11 @@
 /**
  * CartIcon — Shopping bag icon with combined badge (holds + browsing cart count)
  * Displayed in the nav bar; clicking opens the cart drawer
- * Polls /api/reservations/my-holds-full every 30s to track live hold count
+ * Polls /api/reservations/my-holds-full every 5min to track live hold count
+ * (widened from 60s 2026-08-04, Patrick-approved cost-optimization batch --
+ * this query runs sitewide on every page for every logged-in session, a badge
+ * doesn't need sub-5-minute freshness; CartDrawer.tsx polls the same key faster
+ * (30s) but only while the drawer is actually open)
  * Also pulls browsing cart count from useShopperCart hook
  */
 
@@ -39,8 +43,8 @@ const CartIcon: React.FC = () => {
       const response = await api.get('/reservations/my-holds-full');
       return response.data as Hold[];
     },
-    refetchInterval: 60000, // Poll every 60s. Badge doesn't need sub-minute freshness
-    staleTime: 55000,
+    refetchInterval: 300000, // Poll every 5min. Badge doesn't need sub-minute freshness
+    staleTime: 295000,
   });
 
   // Update context with live hold count

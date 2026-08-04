@@ -534,7 +534,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
     enabled: !!id,
     staleTime: 3000, // BUG-11: Cache for 3s to avoid repeated fetches from child components/effects
     retry: (failureCount, error: any) => error?.response?.status === 404 ? false : failureCount < 3,
-    refetchInterval: (query: any) => (query.state.error || query.state.status === 'error') ? false : 5000, // Stop polling if error (status stays 'success' when cached data exists)
+    refetchInterval: (query: any) => (query.state.error || query.state.status === 'error') ? false : 20000, // Stop polling if error (status stays 'success' when cached data exists). Widened 5s->20s 2026-08-04, Patrick-approved cost-optimization batch (Vercel Edge Requests/Fluid CPU/Function Invocations all over Hobby cap) -- ~4x fewer requests per open sale tab, acceptable freshness tradeoff per Patrick sign-off.
     refetchOnWindowFocus: (query: any) => !query.state.error && query.state.status !== 'error', // Don't refetch 404s on tab focus
   });
 

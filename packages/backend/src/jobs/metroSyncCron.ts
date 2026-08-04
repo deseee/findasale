@@ -414,7 +414,7 @@ export function initMetroSyncCron(): void {
   }
 
   // Cron format: minute hour dayOfMonth month dayOfWeek
-  cron.schedule('0 4 * * *', cronGuard({ jobName: 'metroSyncCron' }, async () => {
+  cron.schedule('3 4 * * *', cronGuard({ jobName: 'metroSyncCron' }, async () => { // staggered off pricingEngineCircuitBreakerRecovery's 0 4 * * * 2026-08-04 cost-optimization batch
     await syncAllMetros();
   }));
 

@@ -59,7 +59,7 @@ export function scheduleArchivalCron(): void {
  */
 export function expireStaleVenueCron(): void {
   // Daily at 03:00 UTC
-  cron.schedule('0 3 * * *', cronGuard({ jobName: 'expireStaleVenueCron' }, async () => {
+  cron.schedule('10 3 * * *', cronGuard({ jobName: 'expireStaleVenueCron' }, async () => { // staggered off huntPassExpiryCron's 0 3 * * * 2026-08-04 cost-optimization batch
     const now = new Date();
 
     console.log(`[expire-stale-venue-cron] Starting stale venue expiry sweep (now: ${now.toISOString()})`);

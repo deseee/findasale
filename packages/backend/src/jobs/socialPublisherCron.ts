@@ -14,7 +14,7 @@ import { publishDuePosts } from '../services/social/socialPublisherService';
  */
 export function scheduleSocialPublisherCron(): void {
   cron.schedule(
-    '*/10 * * * *',
+    '8,18,28,38,48,58 * * * *', // staggered off reservationExpiryJob's */10 2026-08-04 cost-optimization batch
     cronGuard(
       { jobName: 'socialPublisher', alertThresholdConsecutiveFailures: 3 },
       async () => {

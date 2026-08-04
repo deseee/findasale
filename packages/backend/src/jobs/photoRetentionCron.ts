@@ -86,7 +86,7 @@ async function deleteFromCloudinary(publicId: string): Promise<boolean> {
 
 export function schedulePhotoRetentionCron(): void {
   // Daily at 3:00 AM UTC (adjustable via cron expression)
-  cron.schedule('0 3 * * *', cronGuard({ jobName: 'photoRetentionCron' }, async () => {
+  cron.schedule('6 3 * * *', cronGuard({ jobName: 'photoRetentionCron' }, async () => { // staggered off huntPassExpiryCron's 0 3 * * * 2026-08-04 cost-optimization batch
     const now = new Date();
       const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
       const oneYearAgo = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);

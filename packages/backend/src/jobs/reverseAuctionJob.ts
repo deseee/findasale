@@ -10,7 +10,7 @@ import { prisma } from '../lib/prisma';
  * - Sends push notifications to users who favorited the item
  */
 
-const job = cron.schedule('0 6 * * *', cronGuard({ jobName: 'reverseAuctionJob' }, async () => {
+const job = cron.schedule('6 6 * * *', cronGuard({ jobName: 'reverseAuctionJob' }, async () => { // staggered off GarageSaleFinder's 0 6 * * * 2026-08-04 cost-optimization batch
   try {
     console.log('[reverseAuctionJob] Starting daily price drop processing...');
 

@@ -82,6 +82,6 @@ export const sweepAbandonedBoothCarts = async (): Promise<void> => {
 };
 
 // Every 10 minutes.
-cron.schedule('*/10 * * * *', cronGuard({ jobName: 'boothCartAbandonmentSweep' }, async () => {
+cron.schedule('4,14,24,34,44,54 * * * *', cronGuard({ jobName: 'boothCartAbandonmentSweep' }, async () => { // staggered off reservationExpiryJob's */10 2026-08-04 cost-optimization batch
   await sweepAbandonedBoothCarts();
 }));

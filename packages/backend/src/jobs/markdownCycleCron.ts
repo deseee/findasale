@@ -19,7 +19,7 @@ import { notifyPriceDropAlerts } from '../services/priceDropService';
  */
 export function scheduleMarkdownCycleCron(): void {
   // 0 3 * * * = 3:00 AM UTC every day
-  cron.schedule('0 3 * * *', cronGuard({ jobName: 'markdownCycleCron' }, async () => {
+  cron.schedule('8 3 * * *', cronGuard({ jobName: 'markdownCycleCron' }, async () => { // staggered off huntPassExpiryCron's 0 3 * * * 2026-08-04 cost-optimization batch
     const now = new Date();
 
     // Find all active markdown cycles

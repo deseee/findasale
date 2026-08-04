@@ -116,6 +116,6 @@ export const reconcileStrandedPosSales = async (): Promise<void> => {
 };
 
 // Every 10 minutes.
-cron.schedule('*/10 * * * *', cronGuard({ jobName: 'posStrandedSaleReconcile' }, async () => {
+cron.schedule('6,16,26,36,46,56 * * * *', cronGuard({ jobName: 'posStrandedSaleReconcile' }, async () => { // staggered off reservationExpiryJob's */10 2026-08-04 cost-optimization batch
   await reconcileStrandedPosSales();
 }));

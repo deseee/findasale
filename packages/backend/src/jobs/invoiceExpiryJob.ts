@@ -265,6 +265,6 @@ export const reclaimExpiredInvoices = async (): Promise<void> => {
 };
 
 // Every 10 minutes, same cadence as reservationExpiryJob.ts.
-cron.schedule('*/10 * * * *', cronGuard({ jobName: 'invoiceExpiryJob' }, async () => {
+cron.schedule('2,12,22,32,42,52 * * * *', cronGuard({ jobName: 'invoiceExpiryJob' }, async () => { // staggered off reservationExpiryJob's */10 2026-08-04 cost-optimization batch
   await reclaimExpiredInvoices();
 }));

@@ -111,6 +111,6 @@ async function auditGeocodingFailureRate(): Promise<void> {
  * This is called during app startup (index.ts)
  */
 export function scheduleGeocodingAuditCron(): void {
-  cron.schedule('0 6 * * *', cronGuard({ jobName: 'geocodingAudit' }, auditGeocodingFailureRate));
+  cron.schedule('3 6 * * *', cronGuard({ jobName: 'geocodingAudit' }, auditGeocodingFailureRate)); // staggered off GarageSaleFinder's 0 6 * * * 2026-08-04 cost-optimization batch
   console.log('[geocodingAudit] Scheduled for 6 AM UTC daily');
 }

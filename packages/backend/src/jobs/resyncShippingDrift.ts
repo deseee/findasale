@@ -238,7 +238,7 @@ export async function resyncShippingDriftSweep(opts?: {
  */
 export const scheduleResyncShippingDriftCron = (): void => {
   cron.schedule(
-    '0 4 * * *',
+    '9 4 * * *', // staggered off pricingEngineCircuitBreakerRecovery's 0 4 * * * 2026-08-04 cost-optimization batch
     cronGuard({ jobName: 'resyncShippingDriftCron' }, async () => {
       console.log('[ResyncShippingDrift] Starting daily carrier-rate drift sweep...');
       try {
