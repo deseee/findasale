@@ -30,7 +30,7 @@ export const sendConsignorItemSold = async (params: {
       preheader: `Your consigned item sold - ${params.itemName}`,
       headline: '🎉 Your item sold!',
       body: `<p>Hi ${params.consignorName},</p>
-        <p>Great news — your <strong>${params.itemName}</strong> just sold for <strong>$${params.itemPrice.toFixed(2)}</strong>.</p>
+        <p>Great news: your <strong>${params.itemName}</strong> just sold for <strong>$${params.itemPrice.toFixed(2)}</strong>.</p>
         <div style="background: #f3f4f6; padding: 16px; border-radius: 8px; margin: 20px 0;">
           <p style="margin: 8px 0; color: #666;">
             <strong>Your payout (after commission):</strong> $${params.consignorPayout.toFixed(2)}

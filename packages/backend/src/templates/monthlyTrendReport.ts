@@ -33,7 +33,7 @@ function formatCrawlerBreakdown(breakdown: Record<string, number>): string {
 
 function crawlerSummaryLine(count: number, prior: number): string {
   if (count === 0) {
-    return 'No search engine visits were recorded for your listings this month. This often means your listings are still being indexed — visibility typically builds over the first 60–90 days.';
+    return 'No search engine visits were recorded for your listings this month. This often means your listings are still being indexed. Visibility typically builds over the first 60–90 days.';
   }
   const changeStr = formatChange(count, prior);
   return `Your listings received <strong>${count} search engine visit${count !== 1 ? 's' : ''}</strong> this month${changeStr}.`;
@@ -69,7 +69,7 @@ export function buildMonthlyTrendReportEmail(
     periodLabel,
   } = data;
 
-  const subject = `Your ${periodLabel} Search Visibility Report — FindA.Sale`;
+  const subject = `FindA.Sale: Your ${periodLabel} Search Visibility Report`;
 
   const indexedChange = formatChange(indexedSaleCount, priorMonthIndexedSaleCount);
   const crawlerSummary = crawlerSummaryLine(crawlerVisitCount, priorMonthCrawlerVisitCount);
@@ -145,7 +145,7 @@ export function buildMonthlyTrendReportEmail(
                   <td style="background-color:${ACCENT_COLOR}; border-left:4px solid ${BRAND_COLOR}; border-radius:4px; padding:16px 20px;">
                     <p style="margin:0; font-size:14px; line-height:1.6; color:#374151;">
                       <strong style="color:${BRAND_COLOR};">Grow your visibility:</strong>
-                      The more listings you add — including photos, descriptions, and prices — the more content search engines can index. Sales with complete details consistently rank higher in local search results.
+                      The more listings you add (including photos, descriptions, and prices), the more content search engines can index. Sales with complete details consistently rank higher in local search results.
                     </p>
                   </td>
                 </tr>

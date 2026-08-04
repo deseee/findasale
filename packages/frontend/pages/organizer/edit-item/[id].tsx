@@ -1573,7 +1573,7 @@ const EditItemPage = () => {
                         {item.packageEstimateSource === 'KEYWORD' || item.packageEstimateSource === 'CATEGORY'
                           ? ' (category default)'
                           : item.packageEstimateSource === 'AI'
-                          ? ' (AI guess from photo)'
+                          ? ' (Auto guess from photo)'
                           : item.packageEstimateSource === 'SEED'
                           ? ' (generic default)'
                           : ''}

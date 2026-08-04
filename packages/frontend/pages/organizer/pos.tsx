@@ -2313,7 +2313,7 @@ export default function POSPage() {
                     <span className="min-w-0">
                       <span className="block text-sm text-warm-900 dark:text-warm-100 truncate">{item.title}</span>
                       <span className="block text-xs text-warm-500 dark:text-warm-400 truncate">
-                        {item.vendorName || 'Unknown booth'}{item.boothNumber ? ` — Booth ${item.boothNumber}` : ''}
+                        {item.vendorName || 'Unknown booth'}{item.boothNumber ? ` (Booth ${item.boothNumber})` : ''}
                       </span>
                     </span>
                     <span className="text-sm font-semibold text-sage-700 ml-2 shrink-0">

@@ -86,7 +86,7 @@ export default function VenueCartPayPage() {
   return (
     <div className="min-h-screen bg-warm-50 dark:bg-gray-900 p-4 flex items-center justify-center">
       <Head>
-        <title>Complete Your Purchase — FindA.Sale</title>
+        <title>Complete Your Purchase | FindA.Sale</title>
         <meta name="robots" content="noindex, nofollow" />
         <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
       </Head>
@@ -98,7 +98,7 @@ export default function VenueCartPayPage() {
             <p className="text-sm text-warm-600 dark:text-warm-400 mt-1">at {hubName}</p>
           )}
           <p className="text-xs text-warm-500 dark:text-warm-500 mt-1">
-            Enter your card below. The cashier will finish your sale once it's confirmed here — you don't need to do anything else.
+            Enter your card below. The cashier will finish your sale once it's confirmed here. You don't need to do anything else.
           </p>
         </div>
 

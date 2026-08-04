@@ -113,8 +113,8 @@ function buildRecapHtml(opts: {
 
   return baseWrapper({
     preheader: hadActivity
-      ? `${saleTitle} recap — ${metrics.totalViews.toLocaleString()} views, ${metrics.itemsSold} sold`
-      : `${saleTitle} has wrapped up — your recap is inside`,
+      ? `${saleTitle} recap: ${metrics.totalViews.toLocaleString()} views, ${metrics.itemsSold} sold`
+      : `${saleTitle} has wrapped up. Your recap is inside`,
     content,
     unsubLabel: 'Manage email preferences',
     unsubUrl,

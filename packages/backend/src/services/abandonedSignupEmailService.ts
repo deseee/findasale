@@ -95,7 +95,7 @@ function buildSignup1hHtml(opts: {
   `;
 
   return baseWrapper({
-    preheader: `You're one step away — post your first sale to go live.`,
+    preheader: `You're one step away. Post your first sale to go live.`,
     content,
     unsubLabel: 'Manage email preferences',
     unsubUrl,

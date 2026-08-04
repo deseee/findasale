@@ -67,7 +67,7 @@ function buildSneakPeekHtml(opts: {
 
   return buildEmail({
     preheader: `Save your spot. Items you won't want to miss.`,
-    headline: `${saleName} — Preview`,
+    headline: `${saleName}: Preview`,
     body,
     ctaText: 'Browse the Full Sale →',
     ctaUrl: saleUrl,
@@ -91,7 +91,7 @@ async function sendSneakPeekEmail(opts: {
     console.log('[presaleSneakPeek] Skipped suppressed recipient:', to);
     return;
   }
-  const subject = `${saleName} starts ${saleDay} — here's a sneak peek`;
+  const subject = `${saleName} starts ${saleDay}. Here's a sneak peek`;
   const html = buildSneakPeekHtml(opts);
 
   try {
