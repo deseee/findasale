@@ -329,17 +329,34 @@ function gateScrapedEmail(
   const eDom = emailDomain(normalized);
   if (!eDom) return null;
   const eDomReg = registrableDomain(eDom) ?? eDom;
-  const siteDom = registrableDomain(website ?? undefined);
-  const matchesSite = siteDom != null && eDomReg === siteDom;
-  if (!matchesSite && !domainMatchesBusiness(eDomReg, businessName)) {
-    console.warn(`[Ingest] Rejected scraped email '${normalized}' — domain '${eDomReg}' matches neither site '${siteDom ?? 'none'}' nor business '${businessName ?? ''}'`);
+
+  // Hard reject: mega-brand / social / aggregator domain — never a real organizer's own
+  // email regardless of site/business match (Disney/Club33-style mis-attribution).
+  if (FAMOUS_UNRELATED_DOMAINS.has(eDomReg)) {
+    console.warn(`[Ingest] Rejected scraped email '${normalized}' — domain '${eDomReg}' is a blocked mega-brand/social/aggregator host`);
     return null;
   }
+
+  // S1186 (2026-08-04): domain mismatch is no longer a hard reject here — a directory
+  // listing's email frequently belongs to the business itself but on a personal/alternate
+  // domain (e.g. a Gmail contact address on an otherwise clearly-matching site). This
+  // whole tier is already stored at low confidence and NOT send-eligible (see below), so
+  // the "wrong-entity" risk this guard existed for is covered by the hard blocklist check
+  // above; a plain mismatch now just drops the confidence a notch instead of discarding
+  // the email outright. Mirrors the same fix applied to enrichment.ts's
+  // acceptDiscoveredEmail() and emailDiscoveryService.ts's discoverEmail() this session.
+  const siteDom = registrableDomain(website ?? undefined);
+  const matchesSite = siteDom != null && eDomReg === siteDom;
+  const matchesBusiness = domainMatchesBusiness(eDomReg, businessName);
+  if (!matchesSite && !matchesBusiness) {
+    console.warn(`[Ingest] Accepted scraped email '${normalized}' at reduced confidence — domain '${eDomReg}' matches neither site '${siteDom ?? 'none'}' nor business '${businessName ?? ''}'`);
+  }
+
   // Directory-listing source: stored but NOT send-eligible until re-discovered/verified.
   return {
     contactEmail: email.trim(),
     emailDiscoveryMethod: 'directory_listing',
-    emailDiscoveryConfidence: 0.3,
+    emailDiscoveryConfidence: (matchesSite || matchesBusiness) ? 0.3 : 0.2,
     emailDiscoveredAt: new Date(),
   };
 }
