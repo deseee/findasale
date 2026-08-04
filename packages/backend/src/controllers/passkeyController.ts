@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../index';
+import { createNotification } from '../lib/notificationService';
 import jwt from 'jsonwebtoken';
 import { randomUUID } from 'crypto';
 import type { Organizer } from '@prisma/client';
@@ -163,6 +164,21 @@ export const registerComplete = async (req: AuthRequest, res: Response) => {
         },
       });
 
+      // Security notification: a new passkey grants full account access, so this is a
+      // classic account-takeover vector (attacker adds their own passkey after phishing
+      // a session). Alert the account owner immediately, in case this wasn't them.
+      // (ADD, S1192 security-notification audit). sendEmail: true.
+      createNotification({
+        userId,
+        type: 'passkey_added',
+        title: 'A new passkey was added to your account',
+        body: `A new passkey ("${newCredential.deviceName || 'Passkey'}") was just registered on your FindA.Sale account. If this was not you, remove it immediately from your account security settings and contact support.`,
+        channel: 'OPERATIONAL',
+        sendEmail: true,
+      }).catch((err) => {
+        console.error('[SecurityNotification] Failed to send passkey_added notification:', err);
+      });
+
       res.status(201).json({
         id: newCredential.id,
         credentialId: newCredential.credentialId,
@@ -236,6 +252,20 @@ export const deletePasskey = async (req: AuthRequest, res: Response) => {
     // Delete the credential
     await prisma.passkeyCredential.delete({
       where: { credentialId },
+    });
+
+    // Security notification: an attacker removing a legitimate passkey (e.g. to lock the
+    // real owner out before adding their own) is also account-takeover-relevant. Alert
+    // the account owner. (ADD, S1192 security-notification audit). sendEmail: true.
+    createNotification({
+      userId,
+      type: 'passkey_removed',
+      title: 'A passkey was removed from your account',
+      body: `A passkey ("${credential.deviceName || 'Passkey'}") was just removed from your FindA.Sale account. If this was not you, contact support immediately.`,
+      channel: 'OPERATIONAL',
+      sendEmail: true,
+    }).catch((err) => {
+      console.error('[SecurityNotification] Failed to send passkey_removed notification:', err);
     });
 
     res.json({ message: 'Passkey deleted successfully' });

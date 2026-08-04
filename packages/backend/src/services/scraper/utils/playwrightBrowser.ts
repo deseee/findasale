@@ -92,6 +92,7 @@ export async function getBrowser(): Promise<Browser> {
   return chromium.launch({
     headless: true,
     args: LAUNCH_ARGS,
+    executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined,
   });
 }
 

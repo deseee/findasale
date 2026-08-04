@@ -76,7 +76,10 @@ async function withBrowserContext<T>(
   const storageState = loadStorageState(account) as any;
   let browser: Browser | undefined;
   try {
-    browser = await chromium.launch({ headless: true });
+    browser = await chromium.launch({
+      headless: true,
+      executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined,
+    });
     const context = await browser.newContext({ storageState });
     try {
       return await fn(context);

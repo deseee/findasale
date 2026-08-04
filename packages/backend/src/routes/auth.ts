@@ -8,6 +8,7 @@ import crypto from 'crypto';
 import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { z } from 'zod';
 import { transactionalEmailService } from '../lib/transactionalEmailService';
+import { createNotification } from '../lib/notificationService';
 
 // Auth validation schemas
 const changePasswordSchema = z.object({
@@ -179,6 +180,20 @@ router.post('/change-password', authenticate, async (req: AuthRequest, res: Resp
       data: { password: hashed, tokenVersion: { increment: 1 } }
     });
 
+    // Security notification: alert the account owner their password changed, in case
+    // this wasn't them (ADD, S1192 security-notification audit). sendEmail: true --
+    // security-sensitive events default to email, not just in-app, per audit directive.
+    createNotification({
+      userId: req.user.id,
+      type: 'password_changed',
+      title: 'Your password was changed',
+      body: 'Your FindA.Sale password was just changed. If this was not you, reset your password immediately and contact support.',
+      channel: 'OPERATIONAL',
+      sendEmail: true,
+    }).catch((err) => {
+      console.error('[SecurityNotification] Failed to send password_changed notification:', err);
+    });
+
     res.clearCookie('accessToken', { httpOnly: true, secure: true, sameSite: 'strict', path: '/' });
     res.clearCookie('refreshToken', { httpOnly: true, secure: true, sameSite: 'strict', path: '/' });
 
@@ -267,6 +282,20 @@ router.post('/reset-password', resetPasswordLimiter, async (req: Request, res: R
         resetTokenExpiry: null,
         tokenVersion: { increment: 1 }
       },
+    });
+
+    // Security notification: alert the account owner their password was reset via the
+    // forgot-password flow, in case this wasn't them (ADD, S1192 security-notification
+    // audit). sendEmail: true -- security-sensitive events default to email.
+    createNotification({
+      userId: user.id,
+      type: 'password_changed',
+      title: 'Your password was reset',
+      body: 'Your FindA.Sale password was just reset via the "forgot password" link. If this was not you, contact support immediately.',
+      channel: 'OPERATIONAL',
+      sendEmail: true,
+    }).catch((err) => {
+      console.error('[SecurityNotification] Failed to send password_changed (reset) notification:', err);
     });
 
     res.json({ message: 'Password reset successfully. You can now log in.' });

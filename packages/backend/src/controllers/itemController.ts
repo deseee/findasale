@@ -1542,6 +1542,15 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
       data: updateData
     });
 
+    // Tell anyone who favorited this item that its price just dropped. Was previously
+    // dead code -- notifyPriceDropAlerts was imported above but never called from any
+    // code path in this file (or anywhere else that edits Item.price).
+    if (price !== undefined) {
+      notifyPriceDropAlerts(id, item.price, updatedItem.price).catch(err =>
+        console.warn(`[priceDrop] price drop alert failed for item ${id}:`, err)
+      );
+    }
+
     // Feature #314: Log price overrides (fire-and-forget, don't block update if logging fails)
     if (price !== undefined && item.saleId) {
       try {

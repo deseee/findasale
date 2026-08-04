@@ -1,6 +1,7 @@
 import cron from 'node-cron';
 import { prisma } from '../index';
 import { cronGuard } from '../utils/cronGuard';
+import { notifyPriceDropAlerts } from '../services/priceDropService';
 
 /**
  * Feature: Automatic Markdown Cycles (PRO Tier)
@@ -96,6 +97,11 @@ export function scheduleMarkdownCycleCron(): void {
                   markdownApplied: true,
                 },
               });
+
+              // Tell anyone who favorited this item that its price just dropped.
+              notifyPriceDropAlerts(item.id, currentPrice, newPrice).catch(err =>
+                console.warn(`[markdown-cycle-cron] price drop alert failed for item ${item.id}:`, err)
+              );
             }
 
             totalMarkdownsApplied += firstMarkdownItems.length;
@@ -114,7 +120,7 @@ export function scheduleMarkdownCycleCron(): void {
                   lte: new Date(now.getTime() - cycle.daysUntilSecond * 24 * 60 * 60 * 1000),
                 },
               },
-              select: { id: true, priceBeforeMarkdown: true },
+              select: { id: true, priceBeforeMarkdown: true, price: true },
             });
 
             if (secondMarkdownItems.length > 0) {
@@ -139,6 +145,16 @@ export function scheduleMarkdownCycleCron(): void {
               console.log(
                 `[markdown-cycle-cron] Applied second markdown (${effectiveSecondPct}% off${isDormDashUrgent ? ' — 2x DORM_DASH rate' : ''}) to ${secondMarkdownItems.length} items for cycle ${cycle.id}`
               );
+
+              // Tell anyone who favorited one of these items that its price just
+              // dropped. Uses each item's own pre-write price (just selected above)
+              // as "old", and the price actually written above as "new" — this
+              // reflects the real DB change regardless of how newPrice was derived.
+              for (const item of secondMarkdownItems) {
+                notifyPriceDropAlerts(item.id, item.price, newPrice).catch(err =>
+                  console.warn(`[markdown-cycle-cron] price drop alert failed for item ${item.id}:`, err)
+                );
+              }
             }
           }
         } catch (cycleError) {

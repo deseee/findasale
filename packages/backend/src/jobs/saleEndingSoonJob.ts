@@ -4,6 +4,7 @@ import { prisma } from '../lib/prisma';
 import { sendPushNotification } from '../utils/webpush';
 import { buildEmail } from '../services/emailTemplateService';
 import { emailService, QuotaExceededError } from '../lib/emailService';
+import { createNotification } from '../lib/notificationService';
 
 
 interface EmailTemplate {
@@ -73,6 +74,7 @@ export const processSaleEndingSoonNotifications = async (): Promise<void> => {
         organizer: {
           select: {
             businessName: true,
+            userId: true,
           },
         },
         subscribers: {
@@ -84,6 +86,7 @@ export const processSaleEndingSoonNotifications = async (): Promise<void> => {
         items: {
           select: {
             category: true,
+            status: true,
           },
         },
       },
@@ -115,6 +118,42 @@ export const processSaleEndingSoonNotifications = async (): Promise<void> => {
           saleUrl,
           topCategories
         );
+
+        // Nudge the organizer too: how many items are still unsold as this sale
+        // heads into its final ~24 hours. Before this, the only "ending soon" signal
+        // went to shopper subscribers -- an organizer with a pile of unsold inventory
+        // had no reason to know their sale was about to end until it just did.
+        // Rides the same endingSoonNotified idempotency guard as the shopper alerts
+        // below (set once, at the end of this sale's processing).
+        if (sale.organizer?.userId) {
+          const itemsRemaining = sale.items.filter(
+            (item) => item.status === 'AVAILABLE' || item.status === 'RESERVED'
+          ).length;
+
+          if (itemsRemaining > 0) {
+            const formattedEndDate = sale.endDate.toLocaleString('en-US', {
+              weekday: 'short',
+              month: 'short',
+              day: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit',
+              hour12: true,
+            });
+
+            createNotification({
+              userId: sale.organizer.userId,
+              type: 'sale_ending_soon_organizer',
+              title: 'Your sale ends soon',
+              body: `"${sale.title}" ends ${formattedEndDate} — ${itemsRemaining} item${itemsRemaining === 1 ? '' : 's'} still unsold.`,
+              link: `/organizer/sales/${sale.id}`,
+              sendEmail: true,
+              emailSubject: `"${sale.title}" ends soon — ${itemsRemaining} item${itemsRemaining === 1 ? '' : 's'} still unsold`,
+              channel: 'OPERATIONAL',
+            }).catch((err) =>
+              console.error(`Failed to send organizer ending-soon notification for sale ${sale.id}:`, err)
+            );
+          }
+        }
 
         // Send notifications to all followers
         for (const subscriber of sale.subscribers) {

@@ -5,9 +5,26 @@ import { prisma } from '../lib/prisma';
 import { buildEmail } from './emailTemplateService';
 import { emailService } from '../lib/emailService';
 import { suppressionService } from './suppressionService';
+import { createNotification } from '../lib/notificationService';
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://finda.sale';
 const FROM_EMAIL = process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'find@outreach.finda.sale';
+
+/**
+ * Read the user's priceAlerts preference (defaults to enabled when unset).
+ * Shared by both the email leg and the in-app leg below so a user who has
+ * turned price alerts off does not still get pinged through the other channel.
+ */
+async function priceAlertsEnabledFor(userId: string): Promise<boolean> {
+  const userPrefs = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { notificationPrefs: true },
+  });
+
+  return userPrefs?.notificationPrefs && typeof userPrefs.notificationPrefs === 'object'
+    ? (userPrefs.notificationPrefs as any).priceAlerts !== false
+    : true; // default to true if not set
+}
 
 /**
  * Send a price drop alert email to a single favoriter.
@@ -25,25 +42,16 @@ async function sendPriceDropEmail(
       console.log('[PriceDrop] Skipped suppressed recipient:', user.email);
       return;
     }
-    // Check user's notification preferences
-    const userPrefs = await prisma.user.findUnique({
-      where: { id: user.id },
-      select: { notificationPrefs: true },
-    });
 
-    const priceAlertsEnabled =
-      userPrefs?.notificationPrefs && typeof userPrefs.notificationPrefs === 'object'
-        ? (userPrefs.notificationPrefs as any).priceAlerts !== false
-        : true; // default to true if not set
-
-    if (!priceAlertsEnabled) {
+    if (!(await priceAlertsEnabledFor(user.id))) {
       console.log(`[PriceDrop] Price alerts disabled for user ${user.id}, skipping email`);
       return;
     }
 
-    const oldPriceStr = (oldPrice / 100).toFixed(2);
-    const newPriceStr = (newPrice / 100).toFixed(2);
-    const savings = (oldPrice - newPrice) / 100;
+    // Item.price is stored as a plain dollar amount (Float), not cents — do not divide by 100.
+    const oldPriceStr = oldPrice.toFixed(2);
+    const newPriceStr = newPrice.toFixed(2);
+    const savings = oldPrice - newPrice;
     const savingsPercent = Math.round(((oldPrice - newPrice) / oldPrice) * 100);
 
     const emailHtml = buildEmail({
@@ -85,8 +93,40 @@ async function sendPriceDropEmail(
 }
 
 /**
+ * Write the in-app inbox notification for a single favoriter. Same preference
+ * gate as the email leg, so opting out of price alerts silences both channels.
+ * Fire-and-forget — all errors are logged but don't block.
+ */
+async function sendPriceDropInApp(
+  user: { id: string },
+  item: { id: string; title: string },
+  oldPrice: number,
+  newPrice: number
+): Promise<void> {
+  try {
+    if (!(await priceAlertsEnabledFor(user.id))) {
+      return;
+    }
+
+    await createNotification({
+      userId: user.id,
+      type: 'price_drop',
+      title: 'Price drop on an item you favorited',
+      body: `"${item.title}" dropped from $${oldPrice.toFixed(2)} to $${newPrice.toFixed(2)}.`,
+      link: `/items/${item.id}`,
+      channel: 'OPERATIONAL',
+    });
+  } catch (error: any) {
+    console.error(`[PriceDrop] Failed to create in-app notification for user ${user.id}:`, error.message);
+    // Non-blocking — don't throw
+  }
+}
+
+/**
  * Notify all favorers of an item that its price dropped.
- * Called after updateItem when price decreases.
+ * Called after a price decrease — from a manual organizer edit or from the
+ * markdown crons (auto-markdown by sale age, and organizer-configured markdown
+ * cycles). Sends both an email and an in-app inbox notification per favoriter.
  */
 export async function notifyPriceDropAlerts(
   itemId: string,
@@ -127,10 +167,13 @@ export async function notifyPriceDropAlerts(
 
     console.log(`[PriceDrop] Sending alerts to ${favorites.length} users for item "${item.title}"`);
 
-    // Send emails to all favorers (fire-and-forget for each)
+    // Send emails + in-app notifications to all favorers (fire-and-forget for each)
     for (const favorite of favorites) {
       setImmediate(async () => {
         await sendPriceDropEmail(favorite.user, item, oldPrice, newPrice);
+      });
+      setImmediate(async () => {
+        await sendPriceDropInApp(favorite.user, item, oldPrice, newPrice);
       });
     }
   } catch (error: any) {

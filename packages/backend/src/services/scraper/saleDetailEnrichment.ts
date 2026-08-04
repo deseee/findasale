@@ -191,6 +191,7 @@ async function getPlaywrightBrowser() {
     }
     playwrightBrowser = await chromium.launch({
       headless: true,
+      executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined,
       args: [
         '--disable-blink-features=AutomationControlled',
         '--disable-dev-shm-usage', // Avoid memory issues in containers

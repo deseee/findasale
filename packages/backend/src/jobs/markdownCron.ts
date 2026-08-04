@@ -1,6 +1,7 @@
 import cron from 'node-cron';
 import { prisma } from '../index';
 import { cronGuard } from '../utils/cronGuard';
+import { notifyPriceDropAlerts } from '../services/priceDropService';
 
 /**
  * Auto-apply markdown to items based on sale age.
@@ -101,6 +102,12 @@ export function scheduleMarkdownCron(): void {
               note: `Day ${Math.floor(dayOffset) + 1} markdown (${(discount * 100).toFixed(0)}% off)`,
             },
           });
+
+          // Tell anyone who favorited this item that its price just dropped —
+          // reuses the same alert used for manual organizer price edits.
+          notifyPriceDropAlerts(item.id, originalPrice, newPrice).catch(err =>
+            console.warn(`[markdown-cron] price drop alert failed for item ${item.id}:`, err)
+          );
 
           totalMarkdowns++;
         }

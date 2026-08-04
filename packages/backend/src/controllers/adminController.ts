@@ -6,6 +6,7 @@ import { getMonthlyAICost, getMonthlyAICostFromLog, resetMonthlyAICost, getMonth
 import { getMonthlyCloudinaryEstimate, getBandwidthThreshold, getTodayCloudinaryUsage, resetTodayCloudinaryUsage } from '../lib/cloudinaryBandwidthTracker';
 import { getEbayRateLimitStatus } from '../lib/ebayRateLimiter';
 import { emailService } from '../lib/emailService';
+import { createNotification } from '../lib/notificationService';
 
 // BUG #2: role display helper — the scalar `user.role` (deprecated) can drift out of
 // sync with the canonical `user.roles[]` array. Compute the highest-precedence role
@@ -501,6 +502,21 @@ export const updateUserRole = async (req: AuthRequest, res: Response) => {
       },
     });
 
+    // Security notification: any admin-initiated role change (including privilege
+    // escalation to ORGANIZER/ADMIN) is an account-security-relevant event for the
+    // affected user, not just an internal audit-log entry. Alert them immediately.
+    // (ADD, S1192 security-notification audit). sendEmail: true.
+    createNotification({
+      userId: updatedUser.id,
+      type: 'account_role_changed',
+      title: 'Your account role was changed',
+      body: `Your FindA.Sale account role was changed to ${role} by an administrator. If you did not expect this, contact support immediately.`,
+      channel: 'OPERATIONAL',
+      sendEmail: true,
+    }).catch((err) => {
+      console.error('[SecurityNotification] Failed to send account_role_changed notification:', err);
+    });
+
     res.json(updatedUser);
   } catch (error) {
     console.error('Error updating user role:', error);
@@ -523,6 +539,20 @@ export const suspendUser = async (req: AuthRequest, res: Response) => {
       },
     });
 
+    // Security notification: the affected user needs to know an admin suspended their
+    // account -- this also doubles as an audit trail for a trust-and-safety action.
+    // (ADD, S1192 security-notification audit). sendEmail: true.
+    createNotification({
+      userId,
+      type: 'account_suspended',
+      title: 'Your account has been suspended',
+      body: `Your FindA.Sale account was suspended by an administrator${suspendReason ? `: ${suspendReason}` : '.'} Contact support if you believe this is an error.`,
+      channel: 'OPERATIONAL',
+      sendEmail: true,
+    }).catch((err) => {
+      console.error('[SecurityNotification] Failed to send account_suspended notification:', err);
+    });
+
     res.json({ success: true, message: 'Account suspended' });
   } catch (error) {
     console.error('Error suspending user:', error);
@@ -541,6 +571,19 @@ export const unsuspendUser = async (req: AuthRequest, res: Response) => {
         suspendedAt: null,
         suspendReason: null,
       },
+    });
+
+    // Security notification: let the user know their account was reinstated.
+    // (ADD, S1192 security-notification audit). sendEmail: true.
+    createNotification({
+      userId,
+      type: 'account_unsuspended',
+      title: 'Your account has been reinstated',
+      body: 'Your FindA.Sale account suspension has been lifted by an administrator. You can now log in normally.',
+      channel: 'OPERATIONAL',
+      sendEmail: true,
+    }).catch((err) => {
+      console.error('[SecurityNotification] Failed to send account_unsuspended notification:', err);
     });
 
     res.json({ success: true, message: 'Account unsuspended' });

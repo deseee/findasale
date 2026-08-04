@@ -1,5 +1,6 @@
 import { prisma } from '../lib/prisma';
 import { awardXp, checkDailyXpCap, XP_AWARDS } from './xpService';
+import { createNotification } from '../lib/notificationService';
 
 /**
  * Appraisal Service — Feature #54: Crowdsourced Appraisal API
@@ -159,10 +160,28 @@ export const calculateConsensus = async (requestId: string) => {
     });
 
     // Update request status to COMPLETED
-    await prisma.appraisalRequest.update({
+    const completedRequest = await prisma.appraisalRequest.update({
       where: { id: requestId },
       data: { status: 'COMPLETED' },
+      select: { submittedByUserId: true, itemTitle: true },
     });
+
+    // Tell the requester their estimate is ready, so they don't have to keep
+    // checking back. Reached exactly once per request: AppraisalConsensus.requestId
+    // is @unique, so the create() above throws (and this code is never reached) on
+    // any later call for a request that already has a consensus record.
+    createNotification({
+      userId: completedRequest.submittedByUserId,
+      type: 'appraisal_ready',
+      title: 'Your community appraisal is ready',
+      body: `The community estimated "${completedRequest.itemTitle}" at $${(finalLow / 100).toFixed(2)}–$${(finalHigh / 100).toFixed(2)}, based on ${responses.length} responses.`,
+      link: '/shopper/appraisals',
+      sendEmail: true,
+      emailSubject: `Your appraisal for "${completedRequest.itemTitle}" is ready`,
+      channel: 'OPERATIONAL',
+    }).catch((err) =>
+      console.error(`[AppraisalService] Failed to notify requester for request ${requestId}:`, err)
+    );
 
     // Award XP to each responder — uses locked value (D-XP-004, cap of 5 selections/day)
     const XP_AWARD_AMOUNT = XP_AWARDS.APPRAISAL_SELECTED;

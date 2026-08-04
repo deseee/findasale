@@ -1954,7 +1954,9 @@ export const webhookHandler = async (req: Request, res: Response) => {
         if (paymentIntentId) {
           const purchase = await prisma.purchase.findFirst({
             where: { stripePaymentIntentId: paymentIntentId },
-            include: { item: { include: { sale: true } }, user: true }
+            // organizer.userId added (2026-08-04 notification audit fix) -- needed to
+            // notify the organizer a chargeback landed against their sale, below.
+            include: { item: { include: { sale: { include: { organizer: { select: { userId: true } } } } } }, user: true }
           });
           if (purchase && purchase.item?.sale) {
             await prisma.purchase.update({
@@ -2015,6 +2017,29 @@ export const webhookHandler = async (req: Request, res: Response) => {
             // Alert if chargeback rate exceeds 0.8%
             if (metrics.transactionCount > 0 && metrics.chargebackCount / metrics.transactionCount > 0.008) {
               console.error(`[stripe] ALERT: Chargeback rate exceeded 0.8% for ${monthYear}:`, metrics);
+            }
+
+            // Notification audit fix (2026-08-04): a Stripe chargeback (bank-level dispute,
+            // distinct from the in-house Dispute model in disputeController.ts) previously
+            // notified NO ONE on the organizer side -- the organizer only found out by
+            // noticing a payout shortfall or checking the Stripe dashboard directly. Same
+            // createNotification shape already used for payment_received above in this file.
+            // Email on -- a chargeback is time-sensitive (organizers can submit evidence to
+            // Stripe within a deadline) and must not rely on the organizer happening to open
+            // the app.
+            const disputeOrganizerUserId = purchase.item.sale!.organizer?.userId;
+            if (disputeOrganizerUserId) {
+              createNotification({
+                userId: disputeOrganizerUserId,
+                type: 'chargeback_opened',
+                title: 'Chargeback filed against a sale',
+                body: `A buyer's bank has filed a chargeback for "${purchase.item?.title || 'an item'}". This may affect your payout -- check Stripe for details and any response deadline.`,
+                link: `/organizer/sales/${purchase.item.sale!.id}`,
+                channel: 'OPERATIONAL',
+                sendEmail: true,
+              }).catch((err) => console.error(`[notification] Failed to create chargeback_opened notification for purchase ${purchase.id}:`, err));
+            } else {
+              console.error(`[stripe] Skipped chargeback_opened notification for purchase ${purchase.id} -- organizer.userId did not resolve`);
             }
           }
         }
@@ -2611,6 +2636,25 @@ export const webhookHandler = async (req: Request, res: Response) => {
               });
               console.log(`[stripe-migration] cutover: organizer ${migratingOrganizer.id} ${oldAccountId} -> ${account.id}`);
 
+              // Fraud-relevant gap fix (2026-08-04): the cutover above silently
+              // repoints Organizer.stripeConnectId -- the field that determines
+              // where this organizer's real payouts land -- with zero notice to
+              // the organizer. Without this, a hijacked/incorrect payout
+              // destination would only be discovered once money failed to show
+              // up. Same createNotification shape already used for
+              // payment_received / refund_issued elsewhere in this file;
+              // sendEmail: true because this is a money-routing change, not a
+              // routine in-app event. Body intentionally omits the raw Stripe
+              // account id and any banking detail.
+              createNotification({
+                userId: migratingOrganizer.userId,
+                type: 'payout_account_updated',
+                title: 'Your payout account details changed',
+                body: 'Your Stripe Connect account was updated as part of a payout routing migration. If you did not expect this, please check your Stripe dashboard.',
+                channel: 'OPERATIONAL',
+                sendEmail: true,
+              }).catch((err) => console.error(`[stripe-migration] Failed to create payout_account_updated notification for organizer ${migratingOrganizer.id}:`, err));
+
               if (oldAccountId) {
                 const boothsCutOver = await prisma.vendorBooth.updateMany({
                   where: { stripeAccountId: oldAccountId },
@@ -2812,6 +2856,25 @@ export const createRefund = async (req: AuthRequest, res: Response) => {
       itemTitle: purchase.item?.title,
       organizerBusinessName: purchase.sale?.organizer?.businessName,
     });
+
+    // Notification audit fix (2026-08-04): sendRefundConfirmationEmail above is a raw
+    // email only -- it never wrote an in-app Notification row, so a buyer who doesn't
+    // open the email (or is a guest with no account to log into) had NO record of the
+    // refund anywhere in the app itself. Same createNotification shape already used for
+    // payment_received above in this file. Guest checkouts have no purchase.userId (see
+    // the guest-checkout comment elsewhere in this file), so this only fires for
+    // registered buyers -- guests still get the email, which is their only channel.
+    if (purchase.userId) {
+      createNotification({
+        userId: purchase.userId,
+        type: 'refund_issued',
+        title: 'Refund issued',
+        body: `A refund of $${refundAmount.toFixed(2)} was issued for "${purchase.item?.title || 'item'}"`,
+        link: '/shopper/purchases',
+        channel: 'OPERATIONAL',
+        sendEmail: false, // sendRefundConfirmationEmail above already sends the email for this event
+      }).catch((err) => console.error('[notification] Failed to create refund_issued notification:', err));
+    }
 
     res.json({
       message: 'Refund issued successfully',

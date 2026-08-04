@@ -2,6 +2,7 @@ import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import { executeVerifiedRefund, RefundError, sendRefundConfirmationEmail } from '../services/refundService'; // P1 fix (2026-07-29): dispute-triggered refunds now actually call Stripe via the shared executeVerifiedRefund path. applyFirstMonthRefundCap/logRefundProcessing no longer used here — see the cap-removal comment below.
+import { createNotification } from '../lib/notificationService'; // Notification audit fix (2026-08-04): same shape/signature already used project-wide (see stripeController.ts) -- no new architecture, just new call sites in this file.
 
 // POST /api/disputes — authenticated buyer creates dispute
 export const createDispute = async (req: AuthRequest, res: Response) => {
@@ -70,6 +71,25 @@ export const createDispute = async (req: AuthRequest, res: Response) => {
         },
       },
     });
+
+    // Notification audit fix (2026-08-04): a dispute filed against an organizer
+    // previously notified NO ONE on the organizer side at all -- confirmed via full read
+    // of this function, zero createNotification/email calls existed here before this fix.
+    // The organizer would only learn a dispute existed if they happened to check
+    // GET /api/disputes/seller. No dedicated organizer-facing disputes page exists in the
+    // frontend today (grepped packages/frontend/pages + components -- only
+    // pages/admin/disputes.tsx consumes dispute data) -- see handoff NEEDS ARCHITECTURE
+    // DECISION list. Linking to /organizer/dashboard (confirmed to exist) rather than a
+    // disputes page that doesn't exist yet.
+    createNotification({
+      userId: organizer.userId,
+      type: 'dispute_opened',
+      title: 'A buyer opened a dispute',
+      body: `A buyer filed a dispute (${reason.replace(/_/g, ' ')}) against one of your sales. Description: "${description.slice(0, 140)}${description.length > 140 ? '…' : ''}"`,
+      link: '/organizer/dashboard',
+      channel: 'OPERATIONAL',
+      sendEmail: true,
+    }).catch((err) => console.error(`[notification] Failed to create dispute_opened notification for dispute ${dispute.id}:`, err));
 
     res.status(201).json({
       message: 'Dispute created successfully',
@@ -342,6 +362,24 @@ export const updateDisputeStatus = async (req: AuthRequest, res: Response) => {
           wasCapped: refundCapApplied,
         });
       }
+
+      // Notification audit fix (2026-08-04): sendRefundConfirmationEmail above is a raw
+      // email only -- mirrors the same gap fixed in stripeController.ts's createRefund
+      // (this dispute-triggered refund path shares executeVerifiedRefund with that
+      // endpoint but had never gotten the equivalent in-app Notification). Using
+      // existingDispute.buyerId, not purchase.userId directly -- the ownership guard
+      // above (`purchase.userId !== existingDispute.buyerId`) already forces these to be
+      // equal for any refund that reaches this point, and existingDispute.buyerId is in
+      // scope here without needing another purchase fetch.
+      createNotification({
+        userId: existingDispute.buyerId,
+        type: 'refund_issued',
+        title: 'Refund issued',
+        body: `Your dispute was resolved with a refund of $${actualRefundedAmount.toFixed(2)}.`,
+        link: '/shopper/purchases',
+        channel: 'OPERATIONAL',
+        sendEmail: false, // sendRefundConfirmationEmail above already sends the email for this event
+      }).catch((err) => console.error(`[notification] Failed to create refund_issued notification for dispute ${id}:`, err));
     }
 
     res.json({
