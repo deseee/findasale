@@ -7,9 +7,6 @@
 import { RateLimiter } from './rateLimiter';
 import { scrapeEstateSalesNet } from './sources/estatesalesnet';
 import { scrapeGarageSaleFinder } from './sources/garageSaleFinder';
-import { scrapeGsalr } from './sources/gsalrScraper';
-import { scrapeYardSaleSearch } from './sources/yardSaleSearchScraper';
-import { scrapeYardSalesNet } from './sources/yardSalesNetScraper';
 import { scrapeFacebookMarketplace } from './sources/facebook-marketplace';
 import { scrapeNAADirectory } from './sources/naaAuctioneerDirectory';
 import { scrapeAuctionNinja } from './sources/auctionNinjaScraper';
@@ -100,46 +97,6 @@ export const SOURCE_REGISTRY: ScraperSourceDef[] = [
     cronSchedule: '0 6 * * *',
     qualityTier: 'medium',
     run: wrapLegacyStats(scrapeGarageSaleFinder),
-  },
-  {
-    // ADR-2026-08-05: new free directory source (architect-approved), robots.txt-verified
-    // permissive. See claude_docs/feature-notes/ADR-2026-08-05-scrapfly-eval-and-new-directory-sources.md
-    id: 'Gsalr',
-    displayName: 'Gsalr.com',
-    type: 'directory',
-    runMode: 'metro-loop',
-    enabled: true,
-    cronSchedule: '30 6 * * *',
-    qualityTier: 'medium',
-    run: wrapLegacyStats(scrapeGsalr),
-  },
-  {
-    // ADR-2026-08-05: new free directory source (architect-approved), robots.txt-verified
-    // permissive. Single fetch per metro (no per-sale detail fetch) — lowest request volume
-    // of the 3 new sources.
-    id: 'YardSaleSearch',
-    displayName: 'YardSaleSearch.com',
-    type: 'directory',
-    runMode: 'metro-loop',
-    enabled: true,
-    cronSchedule: '0 7 * * *',
-    qualityTier: 'medium',
-    run: wrapLegacyStats(scrapeYardSaleSearch),
-  },
-  {
-    // ADR-2026-08-05: new free directory source (architect-approved), robots.txt-verified
-    // permissive. COVERAGE LIMITATION: only ~78 major metros supported (see SUPPORTED_METROS
-    // in yardSalesNetScraper.ts) — the scraper itself skips unsupported metros with zero
-    // network requests, so registering this as a normal metro-loop source is safe and does
-    // NOT hammer the site with requests for metros it doesn't have.
-    id: 'YardSalesNet',
-    displayName: 'YardSales.net',
-    type: 'directory',
-    runMode: 'metro-loop',
-    enabled: true,
-    cronSchedule: '30 7 * * *',
-    qualityTier: 'medium',
-    run: wrapLegacyStats(scrapeYardSalesNet),
   },
   {
     id: 'FacebookMarketplace',

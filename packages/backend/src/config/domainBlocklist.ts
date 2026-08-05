@@ -82,8 +82,12 @@ export const AGGREGATOR_DOMAINS: ReadonlySet<string> = new Set([
   'garagesaletracker.com', // Garage Sale Tracker — direct competitor (findasale-competitor watchlist)
   'offerup.com', // OfferUp — resale marketplace competitor
   'bidsquare.com', // Bidsquare — online auction competitor
-  'yardsalesearch.com', // YardSaleSearch.com — directory scraper source added 2026-08-05, ADR-2026-08-05
-  'yardsales.net', // YardSales.net — directory scraper source added 2026-08-05, ADR-2026-08-05
+  'yardsalesearch.com', // YardSaleSearch.com — Treasure Listings LLC (same operator as gsalr.com/
+  // GarageSaleFinder.com). No active scraper for this domain (2026-08-05: built then reverted —
+  // same syndicated inventory as GarageSaleFinder.com, not a materially different source, see
+  // claude_docs/feature-notes/ADR-2026-08-05-scrapfly-eval-and-new-directory-sources.md). Kept
+  // here defensively — could still appear as a scraped website/email domain via other sources.
+  'yardsales.net', // YardSales.net — same Treasure Listings LLC network, same reasoning as above.
 ]);
 
 // ---------------------------------------------------------------------------

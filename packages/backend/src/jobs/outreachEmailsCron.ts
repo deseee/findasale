@@ -320,32 +320,20 @@ const sendOutreachEmailsInner = async (): Promise<void> => {
       status: { notIn: ['BOUNCED', 'OPTED_OUT', 'CLAIMED', 'ARCHIVED'] },
       organizer: {
         directoryStatus: { not: 'CLOSED' },
-        // BUG FIX (S948): Null-safe consumer-source exclusion.
+        // BUG FIX (S948): Null-safe GarageSaleFinder exclusion.
         // The original `NOT: [{ directoryMostRecentSource: 'GarageSaleFinder' }]` generated
         // SQL: `NOT (directoryMostRecentSource = 'GarageSaleFinder')` which evaluates to
         // `NOT NULL = NULL` (falsy) for records where directoryMostRecentSource IS NULL,
         // silently excluding every null-source US organizer from all tier passes.
         // 22 organizers were stuck for up to 31 days (May 11–June 11 2026).
         // Fix: nest in AND + null-safe OR so null-source records pass the check correctly.
-        // WIDENED 2026-08-05 (ADR-2026-08-05): 3 new consumer-post directory sources added
-        // (Gsalr, YardSaleSearch, YardSalesNet — see scraper/sources/). Each writes its own
-        // literal to directoryMostRecentSource (see ingestScrapedListing/getOrCreateScrapedOrganizer
-        // in services/scraper/index.ts, effectiveSourceLabel = sourceName). All 4 consumer
-        // sources must stay in sync with this list — a source added here without a matching
-        // scraper (or vice versa) either over- or under-excludes real leads. See the bid13.com
-        // hammering incident (S1133/S1134) for why letting a new source silently bypass this
-        // filter is a real risk, not just a data-quality nicety.
         AND: [
           {
-            // Exclude consumer-post directory sources (not organizer businesses).
+            // Exclude GarageSaleFinder (consumer homeowner posts, not organizer businesses).
             // NULL source must pass — those are legitimate leads with no source attribution.
             OR: [
               { directoryMostRecentSource: null },
-              {
-                directoryMostRecentSource: {
-                  notIn: ['GarageSaleFinder', 'Gsalr', 'YardSaleSearch', 'YardSalesNet'],
-                },
-              },
+              { directoryMostRecentSource: { not: 'GarageSaleFinder' } },
             ],
           },
           {
