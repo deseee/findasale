@@ -1,4 +1,5 @@
 import { Response } from 'express';
+import { Prisma } from '@prisma/client';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import { getStripe } from '../utils/stripe';
@@ -185,29 +186,87 @@ export const createPaymentRequest = async (req: AuthRequest, res: Response) => {
       throw guardError;
     }
 
-    // 60-second duplicate block: check for recent PENDING requests to same shopper
-    const recentRequest = await prisma.pOSPaymentRequest.findFirst({
-      where: {
-        shopperUserId,
-        organizerId: organizer.id,
-        saleId,
-        status: 'PENDING',
-        createdAt: {
-          gte: new Date(Date.now() - 60 * 1000), // within last 60 seconds
-        },
-      },
-    });
+    // Platform fee: 10% of the card portion only (for split payments, cash isn't processed by Stripe)
+    const platformFeeCents = Math.round(splitCardAmountCents! * 0.1);
+    const expiresAt = new Date(Date.now() + expiresInSeconds * 1000);
 
-    if (recentRequest) {
+    // P2 idempotency fix (fix-and-reverify batch, same bug class fixed at P1 elsewhere this
+    // batch): the previous "60-second duplicate block" was a plain check-then-act read
+    // (SELECT recent PENDING, then a Stripe round-trip, then INSERT) with a wide race
+    // window -- two near-simultaneous submits (double-tap, or a client retry after a
+    // slow/lost response) could both pass the check and each create their own Stripe
+    // PaymentIntent + POSPaymentRequest, sending the shopper two live charge prompts for
+    // the same cart. Closed by creating the placeholder POSPaymentRequest row FIRST,
+    // inside a SERIALIZABLE transaction that re-does the dedup read and the insert
+    // atomically -- Postgres aborts one side of any genuinely concurrent pair with a
+    // serialization failure (Prisma error code P2034), handled below the same as the old
+    // 429. The Stripe PaymentIntent is then created against the already-claimed row (with
+    // requestId in its metadata from the start -- no follow-up metadata.update needed) and
+    // an idempotencyKey tied to that row.
+    //
+    // NOTE (client-token limitation, per dispatch instructions): a real client-supplied
+    // idempotency token would be a stronger fix (it would also survive a full page
+    // reload/retry, not just concurrent in-flight requests). The organizer POS page
+    // (packages/frontend/pages/organizer/pos.tsx, "Send to Phone" handler, ~L2152-2166)
+    // currently calls `api.post('/pos/payment-request', payload)` with no generated
+    // token, and POSPaymentRequest has no column to store one -- adding both a schema
+    // field and the frontend token-generation/threading is a larger change than this
+    // batch's scope. Flagged here rather than silently skipped: this server-side fix
+    // closes the concurrent-request race (the documented failure mode for this bug
+    // class) but not a slow human double-tap that happens to straddle a page reload.
+    let posRequest;
+    try {
+      posRequest = await prisma.$transaction(
+        async (tx) => {
+          const recentRequest = await tx.pOSPaymentRequest.findFirst({
+            where: {
+              shopperUserId,
+              organizerId: organizer.id,
+              saleId,
+              status: 'PENDING',
+              createdAt: { gte: new Date(Date.now() - 60 * 1000) },
+            },
+          });
+          if (recentRequest) return null; // duplicate -- handled below
+
+          return tx.pOSPaymentRequest.create({
+            data: {
+              organizerId: organizer.id,
+              organizerUserId: organizerUserId,
+              shopperUserId,
+              saleId,
+              itemIds: items.map((i) => i.id), // use only available items (SOLD filtered out above)
+              totalAmountCents,
+              platformFeeCents,
+              expiresAt,
+              isSplitPayment,
+              cashAmountCents: isSplitPayment ? splitCashAmountCents : null,
+              cardAmountCents: isSplitPayment ? splitCardAmountCents : null,
+            },
+          });
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
+      );
+    } catch (err: any) {
+      if (err?.code === 'P2034') {
+        // Genuine concurrent duplicate: Postgres aborted one side of the race.
+        return res.status(429).json({
+          message: 'A payment request was already sent to this shopper in the last 60 seconds',
+        });
+      }
+      console.error('[pos-payment] Failed to create POSPaymentRequest placeholder:', err);
+      return res.status(500).json({ message: 'Failed to create payment request' });
+    }
+
+    if (!posRequest) {
       return res.status(429).json({
         message: 'A payment request was already sent to this shopper in the last 60 seconds',
       });
     }
 
-    // Platform fee: 10% of the card portion only (for split payments, cash isn't processed by Stripe)
-    const platformFeeCents = Math.round(splitCardAmountCents! * 0.1);
-
-    // Create Stripe Payment Intent (for card amount only)
+    // Create Stripe Payment Intent (for card amount only) now that the placeholder row
+    // exists -- idempotencyKey is keyed to the claimed row id so a retry against the SAME
+    // placeholder (e.g. a lost response on our side) can't create a second PaymentIntent.
     let paymentIntent;
     try {
       paymentIntent = await stripe().paymentIntents.create(
@@ -217,7 +276,7 @@ export const createPaymentRequest = async (req: AuthRequest, res: Response) => {
           payment_method_types: ['card'],
           application_fee_amount: platformFeeCents, // 10% of card amount
           metadata: {
-            requestId: '', // will be filled in after DB creation
+            requestId: posRequest.id,
             organizerId: organizer.id,
             organizerUserId: organizerUserId,
             shopperId: shopperUserId,
@@ -228,57 +287,36 @@ export const createPaymentRequest = async (req: AuthRequest, res: Response) => {
         },
         {
           stripeAccount: organizer.stripeConnectId!,
+          idempotencyKey: `pos-payment-request-${posRequest.id}`,
         }
       );
     } catch (err: any) {
       console.error('[pos-payment] Failed to create Stripe Payment Intent:', err);
+      // Release the placeholder so it doesn't permanently block this shopper/sale pair
+      // via the dedup check above.
+      await prisma.pOSPaymentRequest
+        .update({
+          where: { id: posRequest.id },
+          data: { status: 'CANCELLED', declineReason: 'PAYMENT_FAILED' },
+        })
+        .catch((releaseErr) => console.error('[pos-payment] Failed to release placeholder after Stripe error:', releaseErr));
       return res.status(500).json({
         message: 'Failed to create payment intent',
         error: err.message,
       });
     }
 
-    // Create POSPaymentRequest record
-    const expiresAt = new Date(Date.now() + expiresInSeconds * 1000);
-    let posRequest;
+    // Backfill the PaymentIntent onto the now-created row.
     try {
-      posRequest = await prisma.pOSPaymentRequest.create({
+      posRequest = await prisma.pOSPaymentRequest.update({
+        where: { id: posRequest.id },
         data: {
-          organizerId: organizer.id,
-          organizerUserId: organizerUserId,
-          shopperUserId,
-          saleId,
-          itemIds: items.map((i) => i.id), // use only available items (SOLD filtered out above)
-          totalAmountCents,
-          platformFeeCents,
-          expiresAt,
           stripePaymentIntentId: paymentIntent.id,
           clientSecret: paymentIntent.client_secret!,
-          isSplitPayment,
-          cashAmountCents: isSplitPayment ? splitCashAmountCents : null,
-          cardAmountCents: isSplitPayment ? splitCardAmountCents : null,
         },
       });
-
-      // Update PI metadata with requestId
-      await stripe().paymentIntents.update(
-        paymentIntent.id,
-        {
-          metadata: {
-            requestId: posRequest.id,
-            organizerId: organizer.id,
-            organizerUserId: organizerUserId,
-            shopperId: shopperUserId,
-            saleId,
-            source: 'pos_payment_request',
-          },
-        },
-        {
-          stripeAccount: organizer.stripeConnectId!,
-        }
-      );
     } catch (err: any) {
-      console.error('[pos-payment] Failed to create POSPaymentRequest:', err);
+      console.error('[pos-payment] Failed to backfill PaymentIntent onto POSPaymentRequest:', err);
       return res.status(500).json({ message: 'Failed to create payment request' });
     }
 

@@ -1207,6 +1207,11 @@ export const markSoldAndCreateInvoice = async (req: AuthRequest, res: Response) 
 
     const { id: reservationId } = req.params;
 
+    // P2 idempotency fix: holds claimed via the CLAIMING:<holdId> sentinel below --
+    // declared here (function scope) so both the Stripe-error catch and the outer
+    // function catch can release any claim left in flight on any failure path.
+    const claimedHoldIds: string[] = [];
+
     // Fetch the reservation with full context
     const reservation = await prisma.itemReservation.findUnique({
       where: { id: reservationId },
@@ -1261,6 +1266,36 @@ export const markSoldAndCreateInvoice = async (req: AuthRequest, res: Response) 
       return res.json({ invoiceId: existingInvoice.id, stripeSessionId: existingInvoice.stripeSessionId, expiresAt: existingInvoice.expiresAt });
     }
 
+    // P2 idempotency fix (fix-and-reverify batch): the existingInvoice check above is a
+    // plain check-then-act read -- the window between it and the eventual
+    // tx.holdInvoice.create below spans a Stripe network round-trip, so two
+    // near-simultaneous mark-sold clicks (double-tap, or a client retry) could both pass
+    // the check and each create their own Stripe Checkout Session + HoldInvoice for the
+    // same holds. Closed with an atomic per-row claim on each hold BEFORE the Stripe call,
+    // mirroring the 'CLAIMING' sentinel + updateMany-WHERE-null idiom already used
+    // elsewhere in this codebase (vendorBoothCartController.ts transferHubOwnerShareForLeg,
+    // BoothCartLeg.stripeTransferId). ItemReservation.invoiceId is @unique per row, so the
+    // sentinel must be distinct PER ROW (`CLAIMING:<holdId>`), not one shared literal --
+    // a shared literal would collide with itself across a multi-item bundle. Released on
+    // any failure path below (Stripe error catch + the function's outer catch).
+    for (const hold of allShopperHolds) {
+      const claim = await prisma.itemReservation.updateMany({
+        where: { id: hold.id, invoiceId: null, status: { in: ['PENDING', 'CONFIRMED'] } },
+        data: { invoiceId: `CLAIMING:${hold.id}` },
+      });
+      if (claim.count === 1) claimedHoldIds.push(hold.id);
+    }
+    if (claimedHoldIds.length !== allShopperHolds.length) {
+      // Lost the race (or a hold changed state) -- release whatever we did manage to
+      // claim and reject. A concurrent call is (or just did) create the real invoice.
+      if (claimedHoldIds.length > 0) {
+        await prisma.itemReservation
+          .updateMany({ where: { id: { in: claimedHoldIds } }, data: { invoiceId: null } })
+          .catch((releaseErr) => console.error('[hold-invoice] Failed to release claim after partial-claim conflict:', releaseErr));
+      }
+      return res.status(409).json({ message: 'One or more holds are already being invoiced.' });
+    }
+
     // LOCKED DECISION #1: Fee calculation based on organizer tier
     // Calculate total from all bundled items
     const hasPro = organizer.user?.roleSubscriptions?.some(rs => rs.subscriptionTier === 'PRO') ?? false;
@@ -1301,35 +1336,49 @@ export const markSoldAndCreateInvoice = async (req: AuthRequest, res: Response) 
         quantity: 1,
       }));
 
-      stripeSession = await stripe.checkout.sessions.create({
-        payment_method_types: ['card'],
-        mode: 'payment',
-        customer_email: reservation.user.email,
-        line_items,
-        success_url: `${baseUrl}/items?paymentStatus=success`,
-        cancel_url: `${baseUrl}/items?paymentStatus=cancelled`,
-        expires_at: Math.floor(expiresAt.getTime() / 1000), // Unix timestamp
-        // LOCKED DECISION #1: Organizer absorbs Stripe fee via application_fee_amount + transfer_data
-        payment_intent_data: {
+      // P2 idempotency fix: stable per-attempt key. The atomic claim above already
+      // prevents a genuinely concurrent second request from reaching this call, so this
+      // is defense-in-depth against the SDK/network layer retrying the same logical
+      // request (e.g. a transient timeout) creating a second Checkout Session.
+      const idempotencyKey = `mark-sold-invoice-${reservationId}`;
+
+      stripeSession = await stripe.checkout.sessions.create(
+        {
+          payment_method_types: ['card'],
+          mode: 'payment',
+          customer_email: reservation.user.email,
+          line_items,
+          success_url: `${baseUrl}/items?paymentStatus=success`,
+          cancel_url: `${baseUrl}/items?paymentStatus=cancelled`,
+          expires_at: Math.floor(expiresAt.getTime() / 1000), // Unix timestamp
+          // LOCKED DECISION #1: Organizer absorbs Stripe fee via application_fee_amount + transfer_data
+          payment_intent_data: {
+            metadata: {
+              invoiceId: null, // Will be filled after HoldInvoice is created
+              itemIds: bundledItemIds.join(','), // Comma-separated item IDs
+              shopperId: reservation.user.id,
+              organizerId: organizer.id,
+              // reservation.item.saleId! — HoldInvoice path only runs for items in active sales
+              saleId: reservation.item.saleId!,
+            },
+            application_fee_amount: Math.round(totalPlatformFeeAmount * 100),
+            transfer_data: {
+              destination: organizer.stripeConnectId,
+            },
+          },
           metadata: {
-            invoiceId: null, // Will be filled after HoldInvoice is created
-            itemIds: bundledItemIds.join(','), // Comma-separated item IDs
-            shopperId: reservation.user.id,
             organizerId: organizer.id,
-            // reservation.item.saleId! — HoldInvoice path only runs for items in active sales
-            saleId: reservation.item.saleId!,
-          },
-          application_fee_amount: Math.round(totalPlatformFeeAmount * 100),
-          transfer_data: {
-            destination: organizer.stripeConnectId,
           },
         },
-        metadata: {
-          organizerId: organizer.id,
-        },
-      });
+        { idempotencyKey }
+      );
     } catch (stripeError: any) {
       console.error('[hold-invoice] Stripe session creation failed:', stripeError);
+      // P2 idempotency fix: release the claim taken above so these holds aren't
+      // permanently stuck unable to be invoiced.
+      await prisma.itemReservation
+        .updateMany({ where: { id: { in: claimedHoldIds } }, data: { invoiceId: null } })
+        .catch((releaseErr) => console.error('[hold-invoice] Failed to release claim after Stripe error:', releaseErr));
       return res.status(400).json({ message: 'Failed to create Stripe checkout session', error: stripeError.message });
     }
 
@@ -1468,6 +1517,13 @@ export const markSoldAndCreateInvoice = async (req: AuthRequest, res: Response) 
     });
   } catch (error: any) {
     console.error('[hold-invoice] markSoldAndCreateInvoice error:', error);
+    // P2 idempotency fix: release any claim still held (e.g. the final invoice
+    // transaction itself threw) so these holds aren't permanently stuck.
+    if (typeof claimedHoldIds !== 'undefined' && claimedHoldIds.length > 0) {
+      await prisma.itemReservation
+        .updateMany({ where: { id: { in: claimedHoldIds } }, data: { invoiceId: null } })
+        .catch((releaseErr) => console.error('[hold-invoice] Failed to release claim after error:', releaseErr));
+    }
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 };

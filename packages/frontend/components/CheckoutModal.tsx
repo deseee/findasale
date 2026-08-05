@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/router';
 import { loadStripe, Stripe } from '@stripe/stripe-js';
 import {
@@ -316,6 +316,18 @@ const CheckoutModal = ({ itemId, purchaseId: initialPurchaseId, itemTitle, listi
   const [saleDates, setSaleDates] = useState<string>('');
   const [purchaseId, setPurchaseId] = useState<string | undefined>(initialPurchaseId);
 
+  // Guest checkout idempotency fix (2026-08-04): a stable per-mount token so that any
+  // retry of create-payment-intent within this same mounted CheckoutModal reuses the
+  // SAME Stripe idempotency key server-side, instead of minting a brand-new PaymentIntent
+  // (and a new PENDING Purchase row) on every attempt. Generated once on mount and never
+  // regenerated on re-render or retry -- only a fresh mount of this modal gets a new token.
+  const clientTokenRef = useRef<string>('');
+  useEffect(() => {
+    if (!clientTokenRef.current) {
+      clientTokenRef.current = crypto.randomUUID();
+    }
+  }, []);
+
   // Sprint 3: Coupon entry phase — shown before calling create-payment-intent
   const [started, setStarted] = useState(!!initialPurchaseId); // auction resumption skips coupon step
   const [couponInput, setCouponInput] = useState('');
@@ -393,7 +405,7 @@ const CheckoutModal = ({ itemId, purchaseId: initialPurchaseId, itemTitle, listi
             itemId,
             ...(affiliateLinkId ? { affiliateLinkId } : {}),
             ...(trimmedCoupon && !isGuest ? { couponCode: trimmedCoupon } : {}),
-            ...(isGuest ? { guestEmail: guestEmail.trim(), guestName: guestName.trim(), deviceFingerprint } : {}),
+            ...(isGuest ? { guestEmail: guestEmail.trim(), guestName: guestName.trim(), deviceFingerprint, clientToken: clientTokenRef.current } : {}),
           });
           data = response.data;
           if (data.discountApplied > 0) {

@@ -301,9 +301,29 @@ export const approveConsignorSettlementBatch = async (req: AuthRequest, res: Res
     let anyFailure = false;
 
     for (const payout of batch.payouts) {
-      // Skip already-completed money payouts (re-run safety) and manual payouts.
-      if (payout.status === 'COMPLETED') continue;
-      if (payout.status === 'MANUAL_CASH_CHECK') continue;
+      // Atomic claim-before-act (mirrors posStrandedSaleReconcileCron.ts's guarded-flip
+      // pattern and vendorBoothCartController.ts's transferHubOwnerShareForLeg claim --
+      // confirmed gap, ADR-090 §2): the old code read payout.status and acted on it in a
+      // separate step -- a race window a concurrent approve call (double-click, retry)
+      // could slip through and double-process the same payout. This conditional
+      // updateMany only proceeds if nothing else has already claimed or finished this
+      // payout. PROCESSING is a transitional in-flight status (same term already used by
+      // ConsignorSettlementBatch.status above) -- every branch below replaces it with a
+      // real terminal status (MANUAL_CASH_CHECK / SIMULATED / COMPLETED / FAILED) before
+      // this loop iteration ends, so it never becomes a resting state under normal
+      // execution.
+      const claimed = await prisma.consignorPayout.updateMany({
+        where: {
+          id: payout.id,
+          status: { notIn: ['COMPLETED', 'MANUAL_CASH_CHECK', 'PROCESSING'] },
+        },
+        data: { status: 'PROCESSING' },
+      });
+      if (claimed.count === 0) {
+        // Already completed, already manual, or claimed by a concurrent approve call
+        // for this same payout -- skip, do not double-process.
+        continue;
+      }
 
       const consignor = payout.consignor;
       const amountCents = Math.round(Number(payout.netPayout) * 100);
@@ -338,7 +358,13 @@ export const approveConsignorSettlementBatch = async (req: AuthRequest, res: Res
           consignor.stripeAccountId,
           amountCents,
           `Settlement ${batch.id} payout for ${consignor.name}`,
-          organizer.stripeConnectAccountId || undefined
+          organizer.stripeConnectAccountId || undefined,
+          undefined,
+          // Stable idempotency key keyed on the payout row itself (not the batch id --
+          // a payout can be re-approved individually after a partial prior batch
+          // attempt, so the payout is the correct stable unit here): a retry can never
+          // create a second real Stripe transfer for this same payout.
+          `consignor-payout-${payout.id}`
         );
         await prisma.consignorPayout.update({
           where: { id: payout.id },

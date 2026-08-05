@@ -41,16 +41,30 @@ export async function closeAuction(itemId: string): Promise<void> {
       return;
     }
 
+    // P2 idempotency fix (fix-and-reverify batch): the `if (item.auctionClosed)` check
+    // above is a plain check-then-act read -- two concurrent closeAuction() calls for the
+    // same item (e.g. an organizer double-tapping "Close Auction" on the manual endpoint,
+    // POST /:itemId/close-auction in itemController.ts) could both pass it and each create
+    // a Stripe Checkout Session + winner notification for the same auction. Closed with an
+    // atomic conditional updateMany claim (auctionClosed: false -> true), same idiom as
+    // auctionJob.ts's cron-side `tx.item.updateMany({ where: { status: 'AVAILABLE' }, data:
+    // { status: 'AUCTION_ENDED' } })` guard. Only the caller that wins this claim proceeds;
+    // the two later unconditional `auctionClosed: true` writes further down (no-bids branch
+    // and winner branch) are removed since this claim already performs that write.
+    const claim = await prisma.item.updateMany({
+      where: { id: itemId, auctionClosed: false },
+      data: { auctionClosed: true },
+    });
+    if (claim.count === 0) {
+      console.warn(`[auction] Item ${itemId} already closed (lost race to a concurrent close)`);
+      return;
+    }
+
     const highestBid = item.bids[0];
     const organizerId = item.sale!.organizer.userId;
 
     if (!highestBid) {
-      // No bids — just mark closed and notify organizer
-      await prisma.item.update({
-        where: { id: itemId },
-        data: { auctionClosed: true }
-      });
-
+      // No bids — claim above already set auctionClosed: true; just notify organizer.
       await createNotification(
         organizerId,
         'AUCTION_CLOSED',
@@ -79,33 +93,39 @@ export async function closeAuction(itemId: string): Promise<void> {
     // Create Stripe checkout session
     let checkoutUrl: string | null = null;
     try {
-      const session = await getStripe().checkout.sessions.create({
-        payment_method_types: ['card'],
-        mode: 'payment',
-        customer_email: winnerEmail,
-        line_items: [
-          {
-            price_data: {
-              currency: 'usd',
-              product_data: {
-                name: `Auction Winner Payment - ${item.title}`,
-                description: `Winning bid: $${bidAmount.toFixed(2)} + 5% buyer premium`
+      // P2 idempotency fix: the claim above guarantees only one closeAuction() call
+      // reaches this point per item, so this key is defense-in-depth against a
+      // network-level retry of the same logical request creating a second session.
+      const session = await getStripe().checkout.sessions.create(
+        {
+          payment_method_types: ['card'],
+          mode: 'payment',
+          customer_email: winnerEmail,
+          line_items: [
+            {
+              price_data: {
+                currency: 'usd',
+                product_data: {
+                  name: `Auction Winner Payment - ${item.title}`,
+                  description: `Winning bid: $${bidAmount.toFixed(2)} + 5% buyer premium`
+                },
+                unit_amount: amountInCents
               },
-              unit_amount: amountInCents
-            },
-            quantity: 1
+              quantity: 1
+            }
+          ],
+          success_url: `${process.env.FRONTEND_URL || 'https://finda.sale'}/purchase/success?sessionId={CHECKOUT_SESSION_ID}`,
+          // item.saleId! — auction items always have saleId by domain invariant
+          cancel_url: `${process.env.FRONTEND_URL || 'https://finda.sale'}/sales/${item.saleId!}`,
+          metadata: {
+            itemId: item.id,
+            winnerId: winnerId,
+            saleId: item.saleId!,
+            type: 'AUCTION_WINNER'
           }
-        ],
-        success_url: `${process.env.FRONTEND_URL || 'https://finda.sale'}/purchase/success?sessionId={CHECKOUT_SESSION_ID}`,
-        // item.saleId! — auction items always have saleId by domain invariant
-        cancel_url: `${process.env.FRONTEND_URL || 'https://finda.sale'}/sales/${item.saleId!}`,
-        metadata: {
-          itemId: item.id,
-          winnerId: winnerId,
-          saleId: item.saleId!,
-          type: 'AUCTION_WINNER'
-        }
-      });
+        },
+        { idempotencyKey: `auction-close-${item.id}` }
+      );
 
       checkoutUrl = session.url;
     } catch (stripeErr) {
@@ -117,11 +137,14 @@ export async function closeAuction(itemId: string): Promise<void> {
     // write, so a FindA.Sale-native auction win shares one consistent count with
     // every other sale channel (POS/Stripe/eBay/etc). sellItemUnits() flips
     // Item.status to SOLD itself once the pool is exhausted (matching today's
-    // single-unit auction behavior exactly). auctionClosed is a separate flag
-    // that already makes closeAuction idempotent per item (see the
-    // `if (item.auctionClosed)` early-return above), so no additional ledger is
-    // needed here -- unlike the eBay paths, which reconcile a re-deliverable
-    // external order and need the EbaySoldEvent ledger.
+    // single-unit auction behavior exactly). auctionClosed is now made idempotent
+    // by the atomic claim (auctionClosed: false -> true) above -- NOT merely by the
+    // `if (item.auctionClosed)` read-then-act check at the top of this function,
+    // which on its own was NOT sufficient under real concurrency (that was the P2
+    // finding fixed this batch; this comment previously overstated the guarantee).
+    // No additional ledger is needed here for this flag specifically -- unlike the
+    // eBay paths, which reconcile a re-deliverable external order and need the
+    // EbaySoldEvent ledger.
     // NOTE: this call site has no existing endEbayListingIfExists (P3
     // withdraw-on-sellout) hook wired up at all -- a pre-existing gap
     // confirmed by the ADR-087 Phase 4 architect review, out of scope for
@@ -146,10 +169,7 @@ export async function closeAuction(itemId: string): Promise<void> {
       }
     }
 
-    await prisma.item.update({
-      where: { id: itemId },
-      data: { auctionClosed: true }
-    });
+    // auctionClosed already set true by the atomic claim above -- no further write needed.
 
     // Notify winner
     const checkoutCta = checkoutUrl ? `Complete your purchase: ${checkoutUrl}` : 'Contact the organizer to complete payment.';

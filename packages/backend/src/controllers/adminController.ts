@@ -914,6 +914,8 @@ export const getRecentActivity = async (req: AuthRequest, res: Response) => {
           itemId: true, // BUG #3: enable dashboard click-through to the purchased item
           saleId: true, // BUG #3: fallback link target when the purchase has no item
           user: { select: { name: true, email: true } },
+          guestName: true, // BUG FIX 2026-08-04: guest checkout name was captured but never surfaced here
+          buyerEmail: true, // BUG FIX 2026-08-04: same -- admin panel showed "Unknown" for every guest purchase
           item: { select: { title: true } },
         },
         orderBy: { createdAt: 'desc' },

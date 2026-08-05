@@ -447,7 +447,7 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
     // Guest checkout (single-item Buy It Now, 2026-07-18): req.user is optional now that
     // this route uses optionalAuthenticate. createCartCheckoutSession (multi-item cart) is
     // UNCHANGED and still requires auth — guest cart checkout is out of scope this pass.
-    const { itemId, affiliateLinkId, shippingRequested, couponCode, guestEmail, guestName, deviceFingerprint } = req.body;
+    const { itemId, affiliateLinkId, shippingRequested, couponCode, guestEmail, guestName, deviceFingerprint, clientToken } = req.body;
 
     if (!itemId) {
       return res.status(400).json({ message: 'Item ID is required' });
@@ -640,12 +640,19 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
       : totalWithBuyerPremium - discountAmount;                      // Regular: item + shipping - discount only (platform fee from organizer payout)
 
     const couponSuffix = couponId ? `-c${couponId.slice(-6)}` : '';
-    // Guests have no stable identity to key idempotency on across retries — use a per-request
-    // random suffix. A genuine double-submit (e.g. a network retry) is therefore NOT deduped
-    // for guests the way it is for authenticated buyers — known limitation, see Dev Handoff.
+    // Guest idempotency fix (2026-08-04): the frontend (CheckoutModal.tsx) now generates a
+    // stable clientToken ONCE per modal mount and resends it on every create-payment-intent
+    // call for that same checkout session, so a genuine retry (double-click, network retry)
+    // dedupes to the SAME Stripe idempotency key -> SAME PaymentIntent -> the findFirst guard
+    // below reuses the existing PENDING Purchase row instead of inserting a new one. Falls
+    // back to the old random-suffix (never dedupes) behavior if an older/unpatched client
+    // omits clientToken -- known limitation preserved only for that edge case.
+    const guestIdempotencySuffix = clientToken && typeof clientToken === 'string' && clientToken.trim()
+      ? clientToken.trim().slice(0, 100)
+      : crypto.randomUUID();
     const idempotencyKey = req.user
       ? `pi-${itemId}-${req.user.id}${couponSuffix}`
-      : `pi-${itemId}-guest-${crypto.randomUUID()}${couponSuffix}`;
+      : `pi-${itemId}-guest-${guestIdempotencySuffix}${couponSuffix}`;
 
     let paymentIntent;
     const stripeConnectId = item.sale!.organizer.stripeConnectId;
@@ -2227,11 +2234,23 @@ export const webhookHandler = async (req: Request, res: Response) => {
           else if (priceId === process.env.STRIPE_TEAMS_MONTHLY_PRICE_ID) newTier = 'TEAMS';
         }
 
+        // S1197: bump tokenVersion on every tier-affecting update, matching syncTier.ts
+        // (used by billingController.ts's webhook handler). Previously this "normal
+        // update" branch (plain upgrade/downgrade while status stays active/past_due)
+        // never invalidated the stale tier claim baked into already-issued JWTs — the
+        // OTHER branch above (resume from past_due/canceled) did bump it, so the two
+        // handlers disagreed on when a tier change should invalidate old tokens. A
+        // stale JWT's 401 (from the mismatched organizerTokenVersion) is recoverable via
+        // POST /auth/refresh's silent token reissue — see routes/auth.ts refresh handler,
+        // which already re-reads organizer.tokenVersion fresh from the DB — so bumping
+        // here does not force a hard logout, it correctly marks the old token as needing
+        // a refresh.
         await prisma.organizer.update({
           where: { id: organizer.id },
           data: {
             subscriptionStatus: subscription.status,
             subscriptionTier: newTier,
+            tokenVersion: organizer.tokenVersion + 1,
           }
         });
 

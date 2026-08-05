@@ -71,12 +71,18 @@ export const createConnectionToken = async (req: AuthRequest, res: Response) => 
 
 /**
  * POST /api/stripe/terminal/payment-intent
- * Body: { items: [{itemId?: string, amount: number, label?: string}], buyerEmail?: string, saleId?: string }
+ * Body: { items: [{itemId?: string, amount: number, label?: string}], buyerEmail?: string, saleId?: string, clientTransactionId?: string }
  *
  * Creates a Stripe PaymentIntent for a multi-item terminal payment (cart).
  * Uses capture_method: 'manual' (Terminal requires explicit capture after card swipe).
  * Applies same 10% platform fee as online purchases.
  * In simulated mode: PI created on platform account (no Connect account required).
+ *
+ * clientTransactionId (double-tap / retry idempotency fix): optional client-generated UUID,
+ * one per checkout attempt (same cart). On retry with the same value, an existing reusable
+ * PaymentIntent + Purchase set is returned instead of creating a duplicate -- see the
+ * idempotency guard below, which mirrors processCashSaleCore's clientTransactionId replay
+ * check for the cash path.
  */
 export const createTerminalPaymentIntent = async (req: AuthRequest, res: Response) => {
   try {
@@ -84,11 +90,15 @@ export const createTerminalPaymentIntent = async (req: AuthRequest, res: Respons
     const organizer = await resolveOrganizerOrTeamMember(req, res, { requireStripe: !isSimulated });
     if (!organizer) return;
 
-    const { items, buyerEmail, saleId: bodySaleId, cashAmountCents } = req.body as {
+    const { items, buyerEmail, saleId: bodySaleId, cashAmountCents, clientTransactionId } = req.body as {
       items?: Array<{ itemId?: string; amount: number; label?: string }>;
       buyerEmail?: string;
       saleId?: string;  // required when cart contains only misc items (no itemId)
       cashAmountCents?: number;  // optional: amount of cash received for split payments
+      // #561-pattern idempotency guard for the CARD path (mirrors the existing
+      // processCashSaleCore clientTransactionId dedup below): the frontend generates one
+      // UUID per checkout "attempt" (same cart) and resends it on retry/double-tap.
+      clientTransactionId?: string;
     };
 
     // Validate items array
@@ -98,6 +108,66 @@ export const createTerminalPaymentIntent = async (req: AuthRequest, res: Respons
 
     if (!items.every(i => typeof i.amount === 'number' && i.amount > 0)) {
       return res.status(400).json({ message: 'Each item must have a positive amount' });
+    }
+
+    // Idempotency guard (double-tap / network-retry): if this exact card-payment attempt
+    // was already submitted (same clientTransactionId), don't create a second Stripe
+    // PaymentIntent or a second set of PENDING Purchase rows -- mirrors processCashSaleCore's
+    // replay check. Runs before item-availability validation for the same reason as the cash
+    // path: a genuine retry should reuse the already-created PaymentIntent rather than
+    // re-validating item state that may have legitimately moved on (e.g. marked SOLD by this
+    // same in-flight payment's own capture).
+    if (clientTransactionId) {
+      const existingForToken = await prisma.purchase.findMany({
+        where: { clientTransactionId, source: 'POS' },
+      });
+      // Card-path rows only -- a cash-path Purchase uses a `cash_...` placeholder
+      // stripePaymentIntentId, never a real Stripe PI id, so exclude those defensively
+      // (tokens are generated per-flow on the frontend and should never actually collide).
+      const existingCardPurchases = existingForToken.filter(
+        p => p.stripePaymentIntentId && !p.stripePaymentIntentId.startsWith('cash_')
+      );
+
+      if (existingCardPurchases.length > 0) {
+        const existingPiId = existingCardPurchases[0].stripePaymentIntentId!;
+        try {
+          const existingPi = isSimulated
+            ? await stripe().paymentIntents.retrieve(existingPiId)
+            : await stripe().paymentIntents.retrieve(existingPiId, { stripeAccount: organizer.stripeConnectId! });
+
+          const reusableStatuses = ['requires_payment_method', 'requires_confirmation', 'requires_action', 'requires_capture'];
+          if (reusableStatuses.includes(existingPi.status)) {
+            // Still awaiting card presentation/capture -- hand the SAME PI back so the reader
+            // continues the original attempt instead of starting a duplicate one.
+            return res.json({
+              paymentIntentId: existingPi.id,
+              clientSecret: existingPi.client_secret,
+              purchaseIds: existingCardPurchases.map(p => p.id),
+              totalAmount: existingCardPurchases.reduce((sum, p) => sum + p.amount, 0),
+              platformFee: existingCardPurchases.reduce((sum, p) => sum + (p.platformFeeAmount ?? 0), 0),
+            });
+          }
+          if (existingPi.status === 'succeeded') {
+            // Already captured by a prior attempt whose response the client never saw --
+            // never re-charge. Report success so the frontend shows the confirmation instead
+            // of retrying the card flow.
+            return res.json({
+              paymentIntentId: existingPi.id,
+              clientSecret: existingPi.client_secret,
+              purchaseIds: existingCardPurchases.map(p => p.id),
+              totalAmount: existingCardPurchases.reduce((sum, p) => sum + p.amount, 0),
+              platformFee: existingCardPurchases.reduce((sum, p) => sum + (p.platformFeeAmount ?? 0), 0),
+              alreadyCaptured: true,
+            });
+          }
+          // Any other terminal state (canceled, etc.) -- the old attempt is dead and cannot be
+          // reused. Fall through and create a fresh PaymentIntent + Purchase set below. The
+          // frontend only resends a clientTransactionId this old on an intentional retry after
+          // it itself reset the token (see pos.tsx handleCancel), so this path is defensive.
+        } catch (retrieveErr) {
+          console.warn('[terminal] Failed to retrieve existing PaymentIntent for clientTransactionId replay -- creating new:', retrieveErr);
+        }
+      }
     }
 
     // Fetch and validate all items with itemId
@@ -197,9 +267,16 @@ export const createTerminalPaymentIntent = async (req: AuthRequest, res: Respons
         } : {}),
       },
     };
-    const paymentIntent = isSimulated
-      ? await stripe().paymentIntents.create(piParams)
-      : await stripe().paymentIntents.create(piParams, { stripeAccount: organizer.stripeConnectId! });
+    // Stripe idempotencyKey (defense-in-depth alongside the DB-level check above): if a
+    // duplicate request somehow reaches this line with the same clientTransactionId, Stripe
+    // itself returns the SAME PaymentIntent instead of minting a second one.
+    const stripeCreateOptions: { stripeAccount?: string; idempotencyKey?: string } = {};
+    if (!isSimulated) stripeCreateOptions.stripeAccount = organizer.stripeConnectId!;
+    if (clientTransactionId) stripeCreateOptions.idempotencyKey = clientTransactionId;
+    const paymentIntent = await stripe().paymentIntents.create(
+      piParams,
+      Object.keys(stripeCreateOptions).length > 0 ? stripeCreateOptions : undefined
+    );
 
     // Create PENDING Purchase records for each cart item
     const purchaseIds: string[] = [];
@@ -217,6 +294,7 @@ export const createTerminalPaymentIntent = async (req: AuthRequest, res: Respons
           stripePaymentIntentId: paymentIntent.id,
           status: 'PENDING',
           source: 'POS',
+          ...(clientTransactionId ? { clientTransactionId } : {}),
           ...(buyerEmail ? { buyerEmail } : {}),
         },
       });

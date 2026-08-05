@@ -796,7 +796,7 @@ const AdminDashboard = () => {
                   <div className="border-b border-warm-200 dark:border-gray-700 pb-3 last:border-0 text-sm">
                     <div className="flex justify-between items-start">
                       <div>
-                        <p className="font-medium text-warm-900 dark:text-warm-100">{purchase.user?.name || 'Unknown'}</p>
+                        <p className="font-medium text-warm-900 dark:text-warm-100">{purchase.user?.name || purchase.guestName || purchase.buyerEmail || 'Unknown'}</p>
                         <p className="text-warm-600 dark:text-warm-400">{purchase.item?.title || 'Item'}</p>
                       </div>
                       <div className="text-right">

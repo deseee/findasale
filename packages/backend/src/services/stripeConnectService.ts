@@ -296,7 +296,16 @@ export const payConsignorViaACH = async (
   amountCents: number,
   description: string,
   organizerStripeConnectAccountId?: string,
-  sourceChargeId?: string
+  sourceChargeId?: string,
+  // Idempotency fix (confirmed gap, ADR-090 §2 -- see vendorBoothCartController.ts's
+  // transferHubOwnerShareForLeg for the reference pattern this mirrors): OPTIONAL
+  // stable key so a retried call (double-click approve, a caller re-running after a
+  // partial prior attempt) can never create a SECOND real Stripe transfer for the same
+  // logical payout. Callers that don't yet have a stable id to key on (e.g.
+  // stripeConnectController.ts's ad-hoc payConsignor endpoint, which creates its
+  // ConsignorPayout row AFTER the transfer completes) may omit this -- omitting it
+  // preserves the exact prior behavior of sending no idempotency key.
+  idempotencyKey?: string
 ) => {
   try {
     const transferData: Stripe.TransferCreateParams = {
@@ -316,7 +325,10 @@ export const payConsignorViaACH = async (
       transferData.source_transaction = sourceChargeId;
     }
 
-    const transfer = await stripe().transfers.create(transferData);
+    const transfer = await stripe().transfers.create(
+      transferData,
+      idempotencyKey ? { idempotencyKey } : undefined
+    );
 
     return {
       transferId: transfer.id,

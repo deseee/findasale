@@ -32,6 +32,18 @@ import PosManualCard from '../../components/PosManualCard';
 import { PosTierStatus } from '../../lib/types/posTiers';
 import QRCode from 'react-qr-code';
 
+// Generate a client transaction id for POS card-payment idempotency (double-tap / retry
+// guard -- see handleCharge). Prefers crypto.randomUUID() (matches backend
+// Purchase.clientTransactionId expectation, same convention as offlineSync.ts's
+// generateClientTransactionId); falls back to a timestamp+random scheme on older browsers
+// without Web Crypto support.
+function generateClientTransactionId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `local-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+}
+
 // ─── Types ────────────────────────────────────────────────────────────────────────────
 
 interface Sale {
@@ -340,6 +352,12 @@ export default function POSPage() {
 
   // Stripe Terminal SDK ref
   const terminalRef = useRef<any>(null);
+  // POS card-terminal idempotency (double-tap / retry guard): one token per cart "attempt" --
+  // generated lazily on first Charge tap in handleCharge, persists across retries of the SAME
+  // cart (network error, double-tap), reset whenever the cart contents actually change
+  // (addToCart / removeFromCart / clearCart) or the in-flight attempt is explicitly cancelled
+  // (handleCancel) since a cancelled PaymentIntent can never be reused.
+  const clientTransactionIdRef = useRef<string | null>(null);
   const sdkLoadedRef = useRef(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -985,6 +1003,7 @@ export default function POSPage() {
   // ─── Cart operations ────────────────────────────────────────────────────────────────────
 
   const addToCart = (item: Item | { title: string; amount: number }) => {
+    clientTransactionIdRef.current = null;
     if (venueHubId && 'price' in item) {
       addVenueItemToCart(item);
       return;
@@ -1394,6 +1413,7 @@ export default function POSPage() {
   };
 
   const removeFromCart = (cartId: string) => {
+    clientTransactionIdRef.current = null;
     const removedItem = cart.find(c => c.id === cartId);
     setCart(prev => prev.filter(c => c.id !== cartId));
 
@@ -1413,6 +1433,7 @@ export default function POSPage() {
   };
 
   const clearCart = () => {
+    clientTransactionIdRef.current = null;
     setCart([]);
     setNumpadValue('');
     setCashReceived(0);
@@ -1474,6 +1495,14 @@ export default function POSPage() {
         label: c.title,
       }));
 
+      // Idempotency guard (double-tap / retry): reuse the same token across retries of this
+      // exact cart; a fresh token is only issued once the cart actually changes or a prior
+      // attempt is explicitly cancelled (see the ref's declaration comment above).
+      if (!clientTransactionIdRef.current) {
+        clientTransactionIdRef.current = generateClientTransactionId();
+      }
+      const clientTransactionId = clientTransactionIdRef.current;
+
       // Calculate split payment amounts
       const totalAmountCents = Math.round(cartTotal * 100);
       const cashReceivedCents = Math.round(cashReceived * 100);
@@ -1490,6 +1519,7 @@ export default function POSPage() {
       }>('/stripe/terminal/payment-intent', {
         items,
         saleId: selectedSaleId,
+        clientTransactionId,
         ...(buyerEmail.trim() ? { buyerEmail: buyerEmail.trim() } : {}),
         ...(remainingCents > 0 ? { cashAmountCents: cashReceivedCents } : {}),
       });
@@ -1665,6 +1695,9 @@ export default function POSPage() {
         console.error('[pos] Failed to cancel payment intent:', err);
       }
       setPaymentIntentId('');
+      // A cancelled PaymentIntent can never be reused -- force a fresh clientTransactionId
+      // (and Stripe idempotency key) if the organizer retries this cart.
+      clientTransactionIdRef.current = null;
     }
 
     setPaymentStatus('idle');

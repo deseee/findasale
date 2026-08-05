@@ -2209,10 +2209,11 @@ model SavedSearch {
   userId      String
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   name        String
-  filters     Json // Stored search filters: { q, category, radius, lat, lng, priceMin, priceMax, condition, saleStatus, dateFrom, dateTo }
-  notifyOnNew Boolean  @default(false)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  filters        Json // Stored search filters: { q, category, radius, lat, lng, priceMin, priceMax, condition, saleStatus, dateFrom, dateTo }
+  notifyOnNew    Boolean   @default(false)
+  lastNotifiedAt DateTime? // Feature #595: last time this search was checked for new matches (extension deal-alert poller)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   @@index([userId])
 }
@@ -4614,7 +4615,7 @@ model ConsignorPayout {
   // #239 Multi-Consignor Settlement: batch membership + per-payout status
   settlementBatchId String?
   settlementBatch   ConsignorSettlementBatch? @relation(fields: [settlementBatchId], references: [id], onDelete: SetNull)
-  status            String                    @default("PENDING") // PENDING | SIMULATED | COMPLETED | FAILED | MANUAL_CASH_CHECK
+  status            String                    @default("PENDING") // PENDING | PROCESSING | SIMULATED | COMPLETED | FAILED | MANUAL_CASH_CHECK -- PROCESSING is a transitional in-flight claim status set by approveConsignorSettlementBatch's atomic claim-before-Stripe-call (consignorSettlementController.ts), never a resting state
   failureReason     String?
   tierBreakdown     Json? // ADR-096: display-only per-tier split detail for CSV export when consignor.useTieredCommission is true
 

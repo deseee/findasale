@@ -12,6 +12,7 @@
  */
 
 import { Response } from 'express';
+import crypto from 'crypto';
 import * as Sentry from '@sentry/node';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
@@ -1078,6 +1079,49 @@ export const createCombinedInvoice = async (req: AuthRequest, res: Response) => 
       }
     }
 
+    // P2 idempotency fix (fix-and-reverify batch, same bug class as ADR-098 above): this
+    // endpoint had no dedup check against an already-open invoice for this exact cart. The
+    // ADR-098 atomic item-claim below only protects the held-item path (heldReservations.length
+    // > 0) -- a miscItems-only cart (holdIds omitted) has no Item row to atomically claim, so a
+    // double-click or client retry of "Create Invoice" there could create two HoldInvoices (and
+    // two Stripe Checkout Sessions) for the same POS cart. Guard: if a PENDING, non-expired
+    // HoldInvoice already exists for this cartSessionId+shopper with the exact same set of held
+    // item IDs, return it instead of creating a duplicate. (This is a read-then-act check, not a
+    // full DB-level atomic claim -- the miscItems-only case has no item resource to claim
+    // against; combined with the idempotencyKey on the Stripe call below and the fact this is a
+    // lower-risk P2 already partially covered by the ADR-098 item claim for the common
+    // held-items case, this closes the gap without a schema change.)
+    const requestedItemIdsSorted = heldReservations.map((r) => r.item.id).sort();
+    const existingSessionInvoice = await prisma.holdInvoice.findFirst({
+      where: {
+        cartSessionId: sessionId,
+        shopperUserId: shopperId,
+        status: 'PENDING',
+        expiresAt: { gt: new Date() },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (existingSessionInvoice) {
+      const existingItemIdsSorted = [...existingSessionInvoice.itemIds].sort();
+      const sameItems =
+        existingItemIdsSorted.length === requestedItemIdsSorted.length &&
+        existingItemIdsSorted.every((id, i) => id === requestedItemIdsSorted[i]);
+      if (sameItems) {
+        return res.json({
+          invoiceId: existingSessionInvoice.id,
+          stripeSessionId: existingSessionInvoice.stripeSessionId,
+          invoiceMode: existingSessionInvoice.invoiceMode,
+          totalAmountCents: existingSessionInvoice.totalAmount,
+          cashAmountCents: existingSessionInvoice.cashAmountCents,
+          cardAmountCents: existingSessionInvoice.cardAmountCents,
+          platformFeeAmount: existingSessionInvoice.platformFeeAmount,
+          status: existingSessionInvoice.status,
+          expiresAt: existingSessionInvoice.expiresAt,
+          createdAt: existingSessionInvoice.createdAt,
+        });
+      }
+    }
+
     // ADR-098 (2026-07-29): re-verify + atomically claim every held item before invoicing
     // the cart. Same gap as sendHoldInvoice (ADR-098 Section 3 point 1) — this endpoint
     // previously never read Item.status or Purchase, relying solely on
@@ -1189,30 +1233,50 @@ export const createCombinedInvoice = async (req: AuthRequest, res: Response) => 
         }
 
         const baseUrl = process.env.FRONTEND_URL || 'https://finda.sale';
-        const stripeSession = await stripe().checkout.sessions.create({
-          payment_method_types: ['card'],
-          mode: 'payment',
-          customer_email: shopper.email,
-          line_items,
-          success_url: `${baseUrl}/items?paymentStatus=success`,
-          cancel_url: `${baseUrl}/items?paymentStatus=cancelled`,
-          expires_at: Math.floor(expiresAt.getTime() / 1000),
-          payment_intent_data: {
+        // P2 idempotency fix: stable key derived from the cart/session + the exact set of
+        // held items + misc items + cash split -- NOT from expiresAt (which is
+        // time-derived and would defeat the key on every retry). A retry of the identical
+        // "Create Invoice" click reuses the same key so Stripe returns the original
+        // session instead of creating a second one.
+        const idempotencyKeyPayload = {
+          shopperId,
+          invoiceMode,
+          holdIds: (holdIds ?? []).slice().sort(),
+          miscItems: miscItems ?? [],
+          cashAmountCents: finalCashAmountCents,
+        };
+        const idempotencyKey = `pos-invoice-${sessionId}-${crypto
+          .createHash('sha256')
+          .update(JSON.stringify(idempotencyKeyPayload))
+          .digest('hex')
+          .slice(0, 40)}`;
+        const stripeSession = await stripe().checkout.sessions.create(
+          {
+            payment_method_types: ['card'],
+            mode: 'payment',
+            customer_email: shopper.email,
+            line_items,
+            success_url: `${baseUrl}/items?paymentStatus=success`,
+            cancel_url: `${baseUrl}/items?paymentStatus=cancelled`,
+            expires_at: Math.floor(expiresAt.getTime() / 1000),
+            payment_intent_data: {
+              metadata: {
+                itemIds: bundledItemIds.join(','),
+                shopperId: shopper.id,
+                organizerId: organizer.id,
+                saleId: session.sale!.id,
+              },
+              application_fee_amount: platformFeeCents,
+              transfer_data: {
+                destination: organizer.stripeConnectId!,
+              },
+            },
             metadata: {
-              itemIds: bundledItemIds.join(','),
-              shopperId: shopper.id,
               organizerId: organizer.id,
-              saleId: session.sale!.id,
-            },
-            application_fee_amount: platformFeeCents,
-            transfer_data: {
-              destination: organizer.stripeConnectId!,
             },
           },
-          metadata: {
-            organizerId: organizer.id,
-          },
-        });
+          { idempotencyKey }
+        );
 
         stripeSessionId = stripeSession.id;
         stripePaymentIntentId = typeof stripeSession.payment_intent === 'string'
