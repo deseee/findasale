@@ -1090,6 +1090,11 @@ model Item {
   auctionEndTime                  DateTime?
   auctionClosed                   Boolean                 @default(false)
   status                          String                  @default("AVAILABLE") // AVAILABLE, SOLD, RESERVED, INVOICE_ISSUED, AUCTION_ENDED, DONATED
+  // Which channel most recently marked this item SOLD, e.g. 'FB_NATIVE' (Facebook-native-sold
+  // detection cascade, extensionController.ts markItemSoldOnFacebook). Nullable/generic so other
+  // channels (POS, checkout, eBay sync, manual) can populate it later -- currently ONLY the
+  // FB-native-sold cascade sets this. Added 2026-08-05 for sold-channel observability.
+  lastSoldVia                     String?
   category                        String? // eBay L1 category name (e.g. "Home & Garden") — used for shopper browse and wishlist matching
   condition                       String? // NEW | USED | REFURBISHED | PARTS_OR_REPAIR
   conditionGrade                  String? // S | A | B | C | D — null for items not yet graded

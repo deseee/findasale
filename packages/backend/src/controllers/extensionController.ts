@@ -603,6 +603,16 @@ export const markItemSoldOnFacebook = async (req: AuthRequest, res: Response): P
     throw err;
   }
 
+  // Sold-channel observability (2026-08-05): tag this item as sold via the FB-native
+  // detection cascade. Deliberately a separate follow-up write, NOT folded into
+  // commitItemSale() -- that helper is the single ADR-098 atomic status-transition guard
+  // shared by other call sites (itemController.ts, posController.ts) and is documented as
+  // the ONLY function that should write a sale-completing status; widening its signature
+  // for one call site's metadata field is out of scope here. This line only runs on a
+  // genuine fresh transition (the ItemAlreadyCommittedError branch above already returned),
+  // so a repeat/idempotent report never re-stamps the field.
+  await prisma.item.update({ where: { id: itemId }, data: { lastSoldVia: 'FB_NATIVE' } });
+
   endEbayListingIfExists(itemId).catch((err: any) =>
     console.warn(`[eBay] withdraw-on-SOLD (FB-native) failed for item ${itemId}:`, err.message)
   );
