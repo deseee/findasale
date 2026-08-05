@@ -378,15 +378,24 @@ router.post('/refresh', async (req: AuthRequest, res: Response) => {
       return res.status(401).json({ error: 'Session invalidated — please log in again.' });
     }
 
-    // organizerTokenVersion enforcement for organizers — invalidate stale tier claims.
+    // S1197 fix: organizerTokenVersion is INTENTIONALLY not enforced here (it previously
+    // was, matching `authenticate`, and that was the actual root cause of "tier change
+    // forces a hard logout"). organizerTokenVersion exists to make an already-issued
+    // 1h ACCESS token go stale fast when tier changes (see middleware/auth.ts
+    // authenticate()) — every tier-affecting update (syncTier.ts, both Stripe webhook
+    // handlers) bumps it on purpose, on every upgrade AND downgrade. But the refresh
+    // TOKEN embeds organizerTokenVersion from LOGIN time, so applying the same
+    // equality check here meant the refresh token itself went stale in lockstep with
+    // the access token on every tier change — the frontend's 401 interceptor
+    // (lib/api.ts) calls POST /auth/refresh to recover silently, and that call was
+    // ALSO rejected, forcing a full re-login right after a customer just paid for an
+    // upgrade. tokenVersion (below) still gates the refresh token correctly for actual
+    // security events (password reset, logout-all, suspension) — those are rare and
+    // SHOULD force re-auth. Tier changes are not a security event and should not.
+    // The reissued access token always carries the FRESH organizer.tokenVersion read
+    // from the DB just below (S-TIER-RECONCILE), so the new access token is correct
+    // and up to date regardless of what the old refresh token's stale claim said.
     const isOrganizer = freshUser.role === 'ORGANIZER' || freshUser.roles?.includes('ORGANIZER');
-    if (isOrganizer && payload.organizerTokenVersion !== undefined && freshUser.organizer) {
-      if (payload.organizerTokenVersion !== freshUser.organizer.tokenVersion) {
-        res.clearCookie('accessToken', { path: '/' });
-        res.clearCookie('refreshToken', { path: '/' });
-        return res.status(401).json({ error: 'Session invalidated — please log in again.' });
-      }
-    }
 
     // S-TIER-RECONCILE: the refreshed access token previously carried NO
     // `subscriptionTier` claim. AuthContext.resolveOrganizerTier() no longer falls

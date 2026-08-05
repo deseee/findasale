@@ -280,7 +280,57 @@ async function throttledCheckPendingRemovals() {
 // Added because there was previously NO way to tell "did the alarm actually fire" from "it fired
 // but found nothing to do" without opening the service worker's DevTools console -- a
 // stuck/never-firing alarm was indistinguishable from a healthy one with nothing pending.
+// ---- Saved-Search Desktop Deal Alerts (Feature #595, 2026-08-04) ----
+// Polls GET /saved-searches/check-new on its own recurring alarm and fires one desktop
+// notification per saved search (notifyOnNew=true on the shopper's account) that has new
+// matching items since the last check. apiFetch() already returns { ok:false, status:401,
+// error:'not_signed_in' } when there's no finda.sale accessToken cookie, so this naturally
+// no-ops for a signed-out browser -- same auth pattern as the removal/price-sync pollers above,
+// no separate login check needed. Runs on a longer interval than the 20-min removal alarm since
+// deal alerts are not time-sensitive the way a sold-elsewhere removal is.
+const FAS_SAVED_SEARCH_ALARM = 'fasSavedSearchAlerts';
+
+async function ensureSavedSearchAlarm() {
+  const existing = await chrome.alarms.get(FAS_SAVED_SEARCH_ALARM);
+  if (!existing) chrome.alarms.create(FAS_SAVED_SEARCH_ALARM, { periodInMinutes: 25 });
+}
+chrome.runtime.onInstalled.addListener(ensureSavedSearchAlarm);
+chrome.runtime.onStartup.addListener(ensureSavedSearchAlarm);
+
+async function checkSavedSearchAlerts() {
+  const resp = await apiFetch('/saved-searches/check-new');
+  if (!resp.ok) return 'error:' + (resp.error || resp.status);
+  const matches = (resp.data && resp.data.matches) || [];
+  if (!matches.length) return 'no_matches';
+
+  for (const m of matches) {
+    const firstItem = m.items && m.items[0];
+    const notifId = 'fasSavedSearch_' + m.savedSearchId;
+    const url = firstItem ? ('https://finda.sale/sales/' + firstItem.saleId) : 'https://finda.sale/shopper/saved-searches';
+    // Remember the click-through URL per saved search (notifications API carries no payload).
+    await chrome.storage.local.set({ ['fasSavedSearchUrl_' + m.savedSearchId]: url });
+    chrome.notifications.create(notifId, {
+      type: 'basic',
+      iconUrl: 'icon128.png',
+      title: 'FindA.Sale -- new match for "' + m.name + '"',
+      message: m.count === 1 && firstItem
+        ? firstItem.title + (firstItem.price != null ? ' -- $' + firstItem.price : '')
+        : m.count + ' new items match your saved search "' + m.name + '"',
+      priority: 1
+    });
+  }
+  return 'notified:' + matches.length;
+}
+
 chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === FAS_SAVED_SEARCH_ALARM) {
+    return checkSavedSearchAlerts()
+      .catch((e) => 'error:' + String((e && e.message) || e))
+      .then((outcome) => chrome.storage.local.set({
+        fasLastSavedSearchAlarmFiredAt: Date.now(),
+        fasLastSavedSearchOutcome: outcome
+      }));
+  }
   if (alarm.name !== FAS_REMOVAL_ALARM) return;
   // return the combined promise so MV3 keeps the SW alive until BOTH polls complete
   return Promise.all([
@@ -307,15 +357,32 @@ chrome.windows.onFocusChanged.addListener((windowId) => {
   throttledCheckPendingRemovals();
 });
 chrome.notifications.onClicked.addListener((notifId) => {
-  if (notifId !== 'fasPendingRemovals') return;
-  chrome.notifications.clear(notifId);
-  chrome.tabs.create({ url: 'https://www.facebook.com/marketplace/you/selling', active: true });
+  if (notifId === 'fasPendingRemovals') {
+    chrome.notifications.clear(notifId);
+    chrome.tabs.create({ url: 'https://www.facebook.com/marketplace/you/selling', active: true });
+    return;
+  }
+  if (notifId.indexOf('fasSavedSearch_') === 0) {
+    chrome.notifications.clear(notifId);
+    const key = 'fasSavedSearchUrl_' + notifId.slice('fasSavedSearch_'.length);
+    chrome.storage.local.get([key], (st) => {
+      chrome.tabs.create({ url: st[key] || 'https://finda.sale/shopper/saved-searches', active: true });
+    });
+  }
 });
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   (async () => {
     try {
-      if (msg.type === 'getItems') {
+      if (msg.type === 'getGuildXp') {
+        // (#596 Guild/XP Toolbar Tie-In) Read-only reuse of the existing authenticated
+        // GET /api/xp/profile endpoint (packages/backend/src/controllers/xpController.ts) --
+        // same shape the frontend's useXpProfile hook consumes (guildXp, spendableXp,
+        // explorerRank, rankProgress{currentXp,nextRankXp,nextRank}). No new backend
+        // endpoint needed; this just gives the popup the same data over the extension's
+        // existing Bearer-token apiFetch path.
+        sendResponse(await apiFetch('/xp/profile'));
+      } else if (msg.type === 'getItems') {
         // Also check for sold-elsewhere Marketplace removals whenever the popup opens -- the
         // 20-min alarm alone means a just-sold item can sit un-removed for up to 20 min. This
         // makes removals fire on-demand (and makes the flow testable without waiting). Fire-and-

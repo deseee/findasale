@@ -395,33 +395,93 @@ export const authenticateComplete = async (req: Request, res: Response) => {
       // same class of bug as the S1177 tier-resolution fix. Same hasOrganizerRole check
       // already used across saleController.ts.
       let organizerProfile: Organizer | null = null;
+      let subscriptionLapsed = false;
       const hasOrganizerRole = user.roles?.includes('ORGANIZER') || user.role === 'ORGANIZER';
       if (hasOrganizerRole) {
         organizerProfile = await prisma.organizer.findUnique({
           where: { userId: user.id },
         });
+
+        // Feature #75: Check subscription lapse status from roleSubscriptions.
+        // S1197: passkey login previously never computed this at all (see claims fix below).
+        const roleSubscription = await prisma.userRoleSubscription.findFirst({
+          where: {
+            userId: user.id,
+            role: 'ORGANIZER',
+          },
+        });
+
+        if (roleSubscription) {
+          subscriptionLapsed = roleSubscription.tierLapsedAt !== null && roleSubscription.tierResumedAt === null;
+        }
       }
 
-      // Generate JWT — match the format used in login() and register()
+      // S1197: JWT issuance brought in line with authController.ts login()/register()/
+      // oauthLogin()/redeemInvite() — was a hand-rolled duplicate missing roles[],
+      // subscriptionStatus, subscriptionLapsed, emailVerified, createdAt, and issuing a
+      // single 7-day token with no refresh pair. Now issues the same short-lived access
+      // token + httpOnly refresh-token-cookie pair as every other login path, so a
+      // passkey session behaves identically to a password session (silent refresh,
+      // tier-change propagation via /auth/refresh) instead of drifting out of sync.
       const jwtSecret = process.env.JWT_SECRET;
       if (!jwtSecret) throw new Error('JWT_SECRET is not set');
 
+      const userRoles = (user.roles && user.roles.length > 0) ? user.roles : [user.role];
       const token = jwt.sign(
         {
           id: user.id,
           email: user.email,
           name: user.name,
           role: user.role,
+          roles: userRoles,
           referralCode: user.referralCode,
           tokenVersion: user.tokenVersion,
+          emailVerified: user.emailVerified,
           subscriptionTier: organizerProfile?.subscriptionTier ?? 'SIMPLE',
+          subscriptionStatus: organizerProfile?.subscriptionStatus ?? null,
+          subscriptionLapsed: subscriptionLapsed,
           organizerTokenVersion: organizerProfile?.tokenVersion ?? 0,
           onboardingComplete: organizerProfile?.onboardingComplete ?? false,
+          createdAt: user.createdAt.toISOString(),
+          huntPassActive: user.huntPassActive,
+          huntPassExpiry: user.huntPassExpiry,
           guildXp: user.guildXp || 0, // Phase 2a: Explorer's Guild XP
         },
         jwtSecret,
-        { expiresIn: '7d' }
+        { expiresIn: '1h' } // matches authController.ts login() — was '7d'
       );
+
+      // P0 Security Fix pattern (matches authController.ts login()): short-lived access
+      // token + long-lived refresh token, refresh token carries only version claims.
+      const refreshToken = jwt.sign(
+        {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          role: user.role,
+          roles: userRoles,
+          tokenVersion: user.tokenVersion,
+          organizerTokenVersion: organizerProfile?.tokenVersion ?? 0,
+        },
+        process.env.JWT_REFRESH_SECRET || jwtSecret,
+        { expiresIn: '30d' }
+      );
+
+      res.cookie('accessToken', token, {
+        httpOnly: true,
+        secure: true,
+        sameSite: 'lax',
+        path: '/',
+        maxAge: 60 * 60 * 1000, // 1 hour — must match access token expiresIn above
+      });
+
+      res.cookie('refreshToken', refreshToken, {
+        httpOnly: true,
+        secure: true,
+        sameSite: 'lax',
+        path: '/',
+        maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days — must match refresh token expiresIn above
+      });
 
       // Return user without password — include role for frontend redirect logic
       const { password: _, ...userWithoutPassword } = user;

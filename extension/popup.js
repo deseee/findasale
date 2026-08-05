@@ -4,6 +4,20 @@ const $ = (id) => document.getElementById(id);
 let ITEMS = [];
 const selected = new Set();
 
+// (#596 Guild/XP Toolbar Tie-In) Canonical rank emoji/labels + XP floors, mirrored from
+// packages/frontend/pages/shopper/guild-primer.tsx (RANK_THRESHOLDS) and
+// packages/backend/src/services/xpService.ts (RANK_THRESHOLDS) -- these are stable public
+// constants already shown on the finda.sale guild-primer page, not invented here. Kept as a
+// small local map so the popup can render a "X / Y XP to next rank" bar without needing a new
+// backend field (GET /api/xp/profile already returns nextRankXp but not the current-rank floor).
+const GUILD_RANK_META = {
+  INITIATE: { emoji: '\ud83e\udded', label: 'Initiate', floor: 0 },
+  SCOUT: { emoji: '\ud83d\udd0d', label: 'Scout', floor: 500 },
+  RANGER: { emoji: '\ud83c\udfaf', label: 'Ranger', floor: 2000 },
+  SAGE: { emoji: '\u2728', label: 'Sage', floor: 5000 },
+  GRANDMASTER: { emoji: '\ud83d\udc51', label: 'Grandmaster', floor: 12000 },
+};
+
 function send(msg) { return new Promise((res) => chrome.runtime.sendMessage(msg, res)); }
 
 function setStatus(html) { const s = $('status'); s.hidden = false; s.innerHTML = html; }
@@ -17,6 +31,7 @@ async function load() {
     $('signin').onclick = () => chrome.tabs.create({ url: 'https://finda.sale/login' });
     return;
   }
+  loadGuildXp(); // fire-and-forget, best-effort -- auth already confirmed by getItems above; never blocks the item list
   if (!r.ok) { setStatus('Couldn\'t load your items: ' + (r.error || 'unknown error') + '.'); return; }
   ITEMS = (r.data && r.data.items) || [];
   if (!ITEMS.length) { setStatus('No items found. Add items to a sale on FindA.Sale, then come back.'); return; }
@@ -166,5 +181,46 @@ async function startQueue() {
 }
 
 function esc(s) { return String(s || '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+
+// (#596 Guild/XP Toolbar Tie-In) Small retention hook -- surfaces the logged-in user's
+// Explorer's Guild rank + XP progress right in the toolbar popup, reusing the existing
+// authenticated GET /api/xp/profile data (via background.js's new 'getGuildXp' message).
+// Best-effort only: any failure here silently leaves the bar hidden and never blocks or
+// errors the item-listing flow, which is the popup's actual job.
+async function loadGuildXp() {
+  try {
+    const r = await send({ type: 'getGuildXp' });
+    if (r && r.ok && r.data) renderGuildXp(r.data);
+  } catch (e) { /* best-effort -- guild bar just stays hidden */ }
+}
+
+function renderGuildXp(p) {
+  if (!p || !p.explorerRank) return;
+  const meta = GUILD_RANK_META[p.explorerRank] || GUILD_RANK_META.INITIATE;
+  $('guildEmoji').textContent = meta.emoji;
+  $('guildRankLabel').textContent = meta.label;
+
+  const rp = p.rankProgress || {};
+  const fill = $('guildXpFill');
+  const text = $('guildXpText');
+  const guildXp = p.guildXp || 0;
+
+  if (rp.nextRank && rp.nextRankXp != null) {
+    const nextMeta = GUILD_RANK_META[rp.nextRank];
+    const span = rp.nextRankXp - meta.floor;
+    const into = guildXp - meta.floor;
+    const pct = span > 0 ? Math.max(0, Math.min(100, Math.round((into / span) * 100))) : 100;
+    fill.style.width = pct + '%';
+    text.textContent = guildXp + ' / ' + rp.nextRankXp + ' XP to ' + (nextMeta ? nextMeta.label : rp.nextRank);
+  } else {
+    // Already at Grandmaster -- no next rank to progress toward.
+    fill.style.width = '100%';
+    text.textContent = guildXp + ' XP \u00b7 Max rank';
+  }
+
+  $('guildBar').hidden = false;
+}
+
+$('guildBar').onclick = () => chrome.tabs.create({ url: 'https://finda.sale/shopper/guild-primer' });
 
 load();

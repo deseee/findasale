@@ -3,6 +3,11 @@
 <head><meta charset="utf-8"><link rel="stylesheet" href="popup.css"></head>
 <body>
   <header><span class="brand">FindA<b>.</b>Sale</span> <span class="sub">Marketplace Autofill</span></header>
+  <div id="guildBar" class="guildBar" hidden title="Open the Explorer's Guild">
+    <span class="guildRank"><span id="guildEmoji">&#129521;</span> <span id="guildRankLabel">Initiate</span></span>
+    <div class="guildXpTrack"><div id="guildXpFill" class="guildXpFill"></div></div>
+    <span id="guildXpText" class="guildXpText">0 XP</span>
+  </div>
   <div id="status" class="status"></div>
   <div id="controls" class="controls" hidden>
     <label class="chk"><input type="checkbox" id="hideListed" checked> Hide items already listed</label>
