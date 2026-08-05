@@ -118,8 +118,14 @@ export const createTerminalPaymentIntent = async (req: AuthRequest, res: Respons
     // re-validating item state that may have legitimately moved on (e.g. marked SOLD by this
     // same in-flight payment's own capture).
     if (clientTransactionId) {
+      // SECURITY FIX 2026-08-05 (adversarial pass, fix-and-reverify): this lookup was not
+      // scoped to the calling organizer -- clientTransactionId is a client-generated UUID
+      // (practically unguessable) so this was a low-likelihood but real cross-tenant IDOR:
+      // an unscoped match would return ANOTHER organizer's Purchase and hand back that
+      // PaymentIntent's client_secret below. Scoped via the Purchase->Sale relation so a
+      // match can only ever belong to a sale this organizer owns.
       const existingForToken = await prisma.purchase.findMany({
-        where: { clientTransactionId, source: 'POS' },
+        where: { clientTransactionId, source: 'POS', sale: { organizerId: organizer.id } },
       });
       // Card-path rows only -- a cash-path Purchase uses a `cash_...` placeholder
       // stripePaymentIntentId, never a real Stripe PI id, so exclude those defensively
@@ -642,7 +648,11 @@ export async function processCashSaleCore(params: {
   // replay of an already-synced sale should never re-validate item state (the item may have
   // legitimately moved on since the original sync).
   if (clientTransactionId) {
-    const existing = await prisma.purchase.findMany({ where: { clientTransactionId } });
+    // SECURITY FIX 2026-08-05 (adversarial pass, fix-and-reverify -- same class of gap just
+    // fixed in createTerminalPaymentIntent's card path above, this is the cash-path sibling
+    // that was the original precedent for the pattern): scope to this organizer's own sales
+    // so a clientTransactionId collision/guess can't surface another organizer's Purchase rows.
+    const existing = await prisma.purchase.findMany({ where: { clientTransactionId, sale: { organizerId: organizer.id } } });
     if (existing.length > 0) {
       const existingTotal = existing.reduce((sum, p) => sum + p.amount, 0);
       const existingFee = existing.reduce((sum, p) => sum + (p.platformFeeAmount ?? 0), 0);

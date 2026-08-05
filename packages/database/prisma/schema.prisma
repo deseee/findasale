@@ -1779,7 +1779,11 @@ model ItemReservation {
   fraudScore          Float        @default(0.0) // Fraud detection score (0.0-1.0)
   fraudFlags          String[]     @default([]) // Fraud red flags: HIGH_VELOCITY, SUSPICIOUS_PATTERN, etc.
   enRoute             Boolean      @default(false) // Feature #121: shopper was outside geofence but within 10mi (en route grace)
-  invoiceId           String?      @unique // FK to HoldInvoice (optional, set when invoice created)
+  invoiceId           String?      // FK to HoldInvoice (optional, set when invoice created). NOT unique as of 2026-08-05 --
+                                    // a bundled invoice (markSoldAndCreateInvoice covering 2+ held items in one
+                                    // HoldInvoice) sets this to the SAME invoiceId across multiple rows by design.
+                                    // See migration 20260805_drop_item_reservation_invoiceid_unique. The FK
+                                    // constraint (ItemReservation_invoiceId_fkey) is unchanged and still enforced.
   invoice             HoldInvoice? // relation
   createdAt           DateTime     @default(now())
   updatedAt           DateTime     @updatedAt

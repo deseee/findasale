@@ -1200,17 +1200,20 @@ function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: numbe
 // POST /api/reservations/:id/mark-sold — organizer marks held item sold and creates invoice
 // Hold-to-Pay Phase 2: Create Stripe Checkout session for payment collection
 export const markSoldAndCreateInvoice = async (req: AuthRequest, res: Response) => {
+  // P2 idempotency fix: holds claimed via the CLAIMING:<holdId> sentinel below --
+  // declared here, BEFORE the try block, so it is true function-level scope and both
+  // the Stripe-error catch and the outer function catch can see it to release any
+  // claim left in flight on any failure path. (Fix 2026-08-04: originally declared
+  // just inside the try block, which is its own block scope in JS/TS -- the outer
+  // catch could not see it there, causing a real `Cannot find name 'claimedHoldIds'`
+  // compile error caught by CI/local tsc after the initial push.)
+  const claimedHoldIds: string[] = [];
   try {
     if (!req.user) return res.status(401).json({ message: 'Authentication required' });
     const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
     if (!hasOrganizerRole) return res.status(403).json({ message: 'Organizers only' });
 
     const { id: reservationId } = req.params;
-
-    // P2 idempotency fix: holds claimed via the CLAIMING:<holdId> sentinel below --
-    // declared here (function scope) so both the Stripe-error catch and the outer
-    // function catch can release any claim left in flight on any failure path.
-    const claimedHoldIds: string[] = [];
 
     // Fetch the reservation with full context
     const reservation = await prisma.itemReservation.findUnique({

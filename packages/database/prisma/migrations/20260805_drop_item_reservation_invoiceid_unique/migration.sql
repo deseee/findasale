@@ -1,0 +1,30 @@
+-- Drop the UNIQUE constraint on ItemReservation.invoiceId
+--
+-- Root cause (found 2026-08-04/05): markSoldAndCreateInvoice bundles 2+ held items
+-- into ONE HoldInvoice, then does:
+--   tx.itemReservation.updateMany({
+--     where: { id: { in: allShopperHolds.map(h => h.id) } },
+--     data: { invoiceId: holdInvoice.id },
+--   });
+-- This intentionally sets the SAME invoiceId across multiple ItemReservation rows.
+-- The original migration (20260330_add_hold_invoice) declared the column
+-- `"invoiceId" TEXT UNIQUE`, which made this always fail on the 2nd+ row with a
+-- unique-constraint violation -- a genuine bug reproducible on any normal
+-- (non-concurrent) request bundling 2+ held items, not a race condition.
+--
+-- HoldInvoice.itemIds (String[]) already stores the full bundle, and
+-- HoldInvoice.reservationId (separately unique, "first reservation, for backward
+-- compatibility" per code comment) already only tracks one primary reservation --
+-- so the 1:1 assumption baked into ItemReservation.invoiceId's uniqueness was never
+-- correct for the bundled case this code path was written to support.
+--
+-- Confirmed safe to drop: grepped the full backend for any `itemReservation.findUnique`
+-- keyed on invoiceId (Prisma requires a unique field for findUnique) -- none exist.
+-- The one other consumer (invoiceExpiryJob.ts) already uses
+-- `updateMany({ where: { invoiceId: invoice.id }, ... })`, which does not require
+-- uniqueness and is unaffected by this change.
+--
+-- The FK constraint (ItemReservation_invoiceId_fkey) and the column itself are
+-- UNCHANGED -- only the uniqueness requirement is removed.
+
+ALTER TABLE "ItemReservation" DROP CONSTRAINT IF EXISTS "ItemReservation_invoiceId_key";
