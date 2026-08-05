@@ -33,6 +33,8 @@ import {
   getCompSummary,
   getSimilarItems,
   getSitemapItems,
+  getPackageEstimateHandler,
+  getPackageEstimatesBatchHandler,
 } from '../controllers/itemController';
 import { getComps, endEbayListingIfExists } from '../controllers/ebayController'; // Feature #229: eBay price comps; endEbayListingIfExists for withdraw-on-SOLD
 import { markShopifyItemSold } from '../services/shopifyService';
@@ -828,6 +830,11 @@ router.get('/:id/ebay-comps', getItemEbayComps);
 router.post('/:id/analyze', authenticate, analyzeItemTags);
 // Re-analyze: organizer re-runs the Smart tagging pipeline on the item's stored photos (no re-upload), updates suggested fields in place
 router.post('/:id/reanalyze', authenticate, reanalyzeItemForOrganizer);
+// Package-estimation isolation ADR (2026-08-05): read-only, non-persisting package
+// weight/dims estimate endpoints backing the "Get AI estimate" buttons on edit-item
+// and review.tsx. Never write packageWeightOz/dims to the Item row.
+router.get('/:id/package-estimate', authenticate, getPackageEstimateHandler);
+router.post('/package-estimates', authenticate, getPackageEstimatesBatchHandler);
 router.post('/:itemId/close-auction', authenticate, closeAuctionEndpoint);
 
 // Phase 16: Photo management

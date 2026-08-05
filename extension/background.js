@@ -220,6 +220,38 @@ async function notifyManualReviewIfNew(needsManualReview) {
   });
 }
 
+// Builds the 'fasPendingRemovals' notification body for checkPendingRemovals below. Split out
+// because the message now has three distinct cases (removals only, sold-checks only, or both at
+// once) instead of the original single case -- see the 2026-08-05 sold-detection note there.
+function buildRemovalNotificationMessage(removalCount, soldCheckCount) {
+  if (removalCount && soldCheckCount) {
+    return removalCount + ' item' + (removalCount === 1 ? '' : 's') +
+      ' sold elsewhere, plus Facebook listings due for a sync check -- open Marketplace?';
+  }
+  if (removalCount) {
+    return removalCount === 1
+      ? '1 item sold elsewhere — remove it from Facebook Marketplace?'
+      : removalCount + ' items sold elsewhere — remove them from Facebook Marketplace?';
+  }
+  // soldCheckCount only -- nothing has been confirmed sold on Facebook yet at notify time (that
+  // confirmation only happens once the tab opens and fas-remove.js's scan actually runs), so
+  // this deliberately does NOT claim anything sold -- it's a "go check" prompt, not a report.
+  return 'Checking your Facebook listings for items that sold there -- open Marketplace?';
+}
+
+// (2026-08-05) Reverse-direction cross-channel sync (ADR-084 amendment, Part D): also checks
+// GET /extension/pending-sold-checks on this SAME poll -- an item may have sold NATIVELY on
+// Facebook, something FindA.Sale has no other way to learn (same DOM-poll gap as removal
+// itself). Folded into checkPendingRemovals rather than a separate parallel function (the way
+// checkPendingUpdates runs alongside it) because sold-checks CAN trigger the exact same
+// tab-opening side effect removal does (silent mode) -- keeping both possible tab-opening
+// triggers inside ONE sequential function is what guarantees at most one tab ever opens per
+// alarm tick. fas-remove.js's restructured start() runs its own sold-detection scan every time
+// it loads on this page, independent of whether anything was queued for removal, so a single
+// tab open here already covers both jobs -- "one tab visit naturally handles both". No new
+// alarm was added: this still rides the existing FAS_REMOVAL_ALARM 20-min cadence.
+// checkPendingUpdates has no tab-opening side effect (notify-only, Phase A), so it correctly
+// stays a separate, safely-parallel poll -- untouched here.
 async function checkPendingRemovals() {
   const { fasAutoRemoveMode = 'notify' } = await chrome.storage.local.get(['fasAutoRemoveMode']);
   if (fasAutoRemoveMode === 'off') return 'off';
@@ -227,32 +259,45 @@ async function checkPendingRemovals() {
   // prevents overwriting fasRemovalQueue/fasRemovalIndex under an in-progress content script,
   // which would corrupt its queue position. Notify mode never auto-creates a tab, so unaffected.
   if (fasAutoRemoveMode === 'silent' && await silentRemovalInProgress()) return 'skipped_in_progress';
+
   const resp = await apiFetch('/extension/pending-removals');
   if (!resp.ok) return 'error:' + (resp.error || resp.status);
   const items = (resp.data && resp.data.items) || [];
   await notifyManualReviewIfNew(resp.data && resp.data.needsManualReview);
-  if (!items.length) return 'no_items';
 
+  // Sold-checks failure is non-fatal to the removal flow above -- a broken/unreachable
+  // pending-sold-checks call must never block a genuine pending removal from being processed.
+  let soldCheckCount = 0;
+  try {
+    const soldResp = await apiFetch('/extension/pending-sold-checks');
+    if (soldResp.ok) soldCheckCount = ((soldResp.data && soldResp.data.items) || []).length;
+  } catch (e) { /* non-fatal -- see comment above */ }
+
+  if (!items.length && !soldCheckCount) return 'no_items';
+
+  // fasRemovalQueue only ever carries removal-processing candidates -- sold-check candidates
+  // are fetched fresh by fas-remove.js itself (getFacebookSoldChecks) once the tab loads there;
+  // no separate local queue needed for that flow (a single DOM scan against every candidate in
+  // one pass, not runRemovalQueue's sequential per-item tab-lifecycle processing).
   await chrome.storage.local.set({ fasRemovalQueue: items, fasRemovalIndex: 0 });
 
   if (fasAutoRemoveMode === 'silent') {
     await openSilentRemovalTab();
-    return 'silent_removal_started:' + items.length;
+    return 'silent_removal_started:' + items.length + '_soldchecks:' + soldCheckCount;
   }
 
   // 'notify' -- Chrome notification; clicking it opens the removal page in an active tab
   // (the content script picks up the already-stored queue on load, same as the listing flow
-  // never needing an open popup to run).
+  // never needing an open popup to run). Message wording adapts to which of the two reasons
+  // actually triggered this notification -- see buildRemovalNotificationMessage above.
   chrome.notifications.create('fasPendingRemovals', {
     type: 'basic',
     iconUrl: 'icon128.png',
     title: 'FindA.Sale',
-    message: items.length === 1
-      ? '1 item sold elsewhere — remove it from Facebook Marketplace?'
-      : items.length + ' items sold elsewhere — remove them from Facebook Marketplace?',
+    message: buildRemovalNotificationMessage(items.length, soldCheckCount),
     priority: 1
   });
-  return 'notified:' + items.length;
+  return 'notified:' + items.length + '_soldchecks:' + soldCheckCount;
 }
 // Shared 30s throttle for on-demand checks (popup open, startup/install, mode change) so
 // rapid reloads can't spawn duplicate removal tabs. The recurring 20-min alarm path below stays
@@ -470,6 +515,20 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         // see extensionController.ts's getPendingRemovals dead-letter note.
         sendResponse(await apiFetch('/extension/items/' + encodeURIComponent(msg.itemId) + '/removal-skipped',
           { method: 'POST', body: { reason: msg.reason || null } }));
+      } else if (msg.type === 'getFacebookSoldChecks') {
+        // (2026-08-05) Reverse-direction cross-channel sync (ADR-084 amendment, Part D):
+        // fas-remove.js's sold-detection scan asks for the candidate titles to check against
+        // this page's currently-Sold cards. Straight passthrough to the backend -- no local
+        // queue/index needed the way removal has one, since the content script checks every
+        // candidate in a single DOM pass, not sequentially across separate tab lifecycles.
+        sendResponse(await apiFetch('/extension/pending-sold-checks'));
+      } else if (msg.type === 'markItemSoldFromFacebook') {
+        // fas-remove.js confidently matched this item's title against a Sold card on Facebook's
+        // own "Your listings" page -- report it so the backend can commit the SOLD transition
+        // and cascade the eBay/Shopify withdrawal (see markItemSoldOnFacebook in
+        // extensionController.ts). Mirrors markItemRemovedByRemoval's passthrough shape exactly.
+        sendResponse(await apiFetch('/extension/items/' + encodeURIComponent(msg.itemId) + '/sold-on-facebook',
+          { method: 'POST', body: {} }));
       } else if (msg.type === 'removalQueueDone') {
         // fas-remove.js finished the queue -- restore the organizer's tab + close the auto-opened
         // silent-mode removal tab. No-op in notify mode (no fasRemovalTabId tracked there).

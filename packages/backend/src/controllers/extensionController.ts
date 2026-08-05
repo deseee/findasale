@@ -3,7 +3,9 @@ import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import { getWatermarkedUrlWithQR } from '../utils/cloudinaryWatermark';
 import { canRemoveWatermark } from '../utils/watermarkPolicy';
-import { resolvePublishPackageWeight } from './ebayController';
+import { applyNeverShippableOverride, computeEffectivePackageWeight, endEbayListingIfExists } from './ebayController';
+import { markShopifyItemSold } from '../services/shopifyService';
+import { commitItemSale, ItemAlreadyCommittedError } from '../services/itemSaleGuard';
 
 // Facebook Marketplace condition values. Mirrors mapConditionForFacebook() in
 // exportController.ts (kept in sync; trivial pure map — not worth a shared import).
@@ -70,8 +72,11 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
       category: true, condition: true, photoUrls: true, qrEmbedEnabled: true, createdAt: true,
       packageWeightOz: true, aiPackageWeightOz: true, ebayShippingOverride: true, shippingAvailable: true,
       allowBestOffer: true, bestOfferMinimumAmt: true,
-      // ADR fb-package-weight-estimator (2026-07-22): needed to call resolvePublishPackageWeight
-      // below, the same package-weight resolver eBay's publish flow already uses.
+      // ADR fb-package-weight-estimator (2026-07-22): needed to call
+      // computeEffectivePackageWeight below, the same package-weight resolver eBay's
+      // publish flow uses (package-estimation isolation ADR, 2026-08-05: the resolver
+      // is now split into a persisting never-shippable-override helper and a pure,
+      // non-persisting weight/dims compute function).
       ebayCategoryId: true, packageConfirmedByOrganizer: true,
       packageLengthIn: true, packageWidthIn: true, packageHeightIn: true, packageType: true,
       aiPackageDimsJson: true, aiPackageConfidence: true, packageEstimateSource: true,
@@ -84,10 +89,13 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
   // packageWeightOz/aiPackageWeightOz columns -- any item whose upload-time AI photo pass
   // wasn't confident (aiPackageConfidence < 0.5) got NO weight at all and was force-switched
   // to LOCAL_PICKUP_ONLY on Facebook, even when a PackageProfile category/keyword default
-  // existed (e.g. the seeded 'lamp' keyword profile). resolvePublishPackageWeight persists
-  // its result to the Item, so both eBay and Facebook converge on the same stored weight
-  // instead of two channels silently disagreeing. No-ops (single early return, no extra
-  // queries) for any item that already has a confirmed/measured weight or is pickup-only.
+  // existed (e.g. the seeded 'lamp' keyword profile). Package-estimation isolation ADR
+  // (2026-08-05): computeEffectivePackageWeight is now a PURE function -- it is called
+  // fresh on every request and its result is used ONLY to build this response's in-memory
+  // payload below, never persisted to the Item (packageWeightOz/dims on the Item row are
+  // now organizer-confirmed-only). Cheap to recompute -- small PackageProfile table lookups
+  // + already-stored AI columns, no external API calls. No-ops (single early return, no
+  // extra queries) for any item that already has a confirmed/measured weight or is pickup-only.
   for (const it of items) {
     if (it.ebayShippingOverride === 'LOCAL_PICKUP_ONLY') continue;
     // 2026-07-22 follow-up: don't treat a persisted 'SEED' (generic fallback) or 'AI'
@@ -105,35 +113,58 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
       !UNTRUSTED_SOURCES.includes(it.packageEstimateSource || '')
     ) continue;
     try {
-      // resolvePublishPackageWeight (shared with eBay's publish path) unconditionally
-      // short-circuits and returns null whenever packageWeightOz is already set -- it
-      // has no idea *why* a weight is set, only that one is. That's correct for a real
-      // organizer-confirmed or category-matched value, but wrong for a persisted 'SEED'
-      // or 'AI' value we've explicitly decided not to trust on FB: we need the shared
-      // resolver to actually recompute, not treat the untrusted guess as already-resolved.
-      // Pass null here (FB-side only, not touching the shared function's own semantics
-      // used by eBay) so it falls through to a fresh estimate.
+      // Package-estimation isolation ADR (2026-08-05): the old combined
+      // resolvePublishPackageWeight() persisted its resolved estimate straight into
+      // the Item's organizer-facing fields as a side effect. It is now split into
+      // applyNeverShippableOverride() (still persists -- a structural classification,
+      // not a weight guess) and computeEffectivePackageWeight() (pure -- recomputes the
+      // cascade on every call, writes nothing). Facebook has no organizer-confirmation
+      // gate the way eBay's publish path does, so this endpoint genuinely needs a
+      // resolved number; computeEffectivePackageWeight's return value is used ONLY to
+      // build this response's in-memory payload below, never persisted back to the Item.
+      //
+      // computeEffectivePackageWeight unconditionally short-circuits and returns null
+      // whenever packageWeightOz is already set -- it has no idea *why* a weight is
+      // set, only that one is. That's correct for a real organizer-confirmed or
+      // category-matched value, but wrong for a persisted 'SEED' or 'AI' value we've
+      // explicitly decided not to trust on FB: we need the shared resolver to actually
+      // recompute, not treat the untrusted guess as already-resolved. Pass null here
+      // (FB-side only, not touching the shared function's own semantics used by eBay)
+      // so it falls through to a fresh estimate.
       const isUntrustedSource = UNTRUSTED_SOURCES.includes(it.packageEstimateSource || '');
-      const resolved = await resolvePublishPackageWeight({
+
+      const overrideResult = await applyNeverShippableOverride({
         id: it.id,
         title: it.title,
         description: it.description,
         category: it.category,
-        ebayCategoryId: it.ebayCategoryId,
         ebayShippingOverride: it.ebayShippingOverride,
         packageConfirmedByOrganizer: it.packageConfirmedByOrganizer,
-        packageWeightOz: isUntrustedSource ? null : it.packageWeightOz,
-        packageLengthIn: it.packageLengthIn != null ? Number(it.packageLengthIn) : null,
-        packageWidthIn: it.packageWidthIn != null ? Number(it.packageWidthIn) : null,
-        packageHeightIn: it.packageHeightIn != null ? Number(it.packageHeightIn) : null,
-        packageType: it.packageType,
-        aiPackageWeightOz: it.aiPackageWeightOz,
-        aiPackageDimsJson: it.aiPackageDimsJson,
-        aiPackageConfidence: it.aiPackageConfidence != null ? Number(it.aiPackageConfidence) : null,
       });
-      if (resolved && resolved.pickupOnlyForced) {
+
+      const resolved = overrideResult?.pickupOnlyForced
+        ? null
+        : await computeEffectivePackageWeight({
+            id: it.id,
+            title: it.title,
+            description: it.description,
+            category: it.category,
+            ebayCategoryId: it.ebayCategoryId,
+            ebayShippingOverride: it.ebayShippingOverride,
+            packageConfirmedByOrganizer: it.packageConfirmedByOrganizer,
+            packageWeightOz: isUntrustedSource ? null : it.packageWeightOz,
+            packageLengthIn: it.packageLengthIn != null ? Number(it.packageLengthIn) : null,
+            packageWidthIn: it.packageWidthIn != null ? Number(it.packageWidthIn) : null,
+            packageHeightIn: it.packageHeightIn != null ? Number(it.packageHeightIn) : null,
+            packageType: it.packageType,
+            aiPackageWeightOz: it.aiPackageWeightOz,
+            aiPackageDimsJson: it.aiPackageDimsJson,
+            aiPackageConfidence: it.aiPackageConfidence != null ? Number(it.aiPackageConfidence) : null,
+          });
+
+      if (overrideResult?.pickupOnlyForced) {
         // Never-shippable keyword match (e.g. tankless water heater, RO system) --
-        // resolvePublishPackageWeight already persisted ebayShippingOverride to the DB;
+        // applyNeverShippableOverride already persisted ebayShippingOverride to the DB;
         // mirror it in-memory so the shippingOverride computed below reflects pickup-only
         // on THIS response instead of a stale null override from the initial query.
         (it as { ebayShippingOverride: string | null }).ebayShippingOverride = 'LOCAL_PICKUP_ONLY';
@@ -164,7 +195,7 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
         }
       }
     } catch (e: any) {
-      console.warn('[FB AutoWeight] resolvePublishPackageWeight failed for item', it.id, e?.message || e);
+      console.warn('[FB AutoWeight] applyNeverShippableOverride/computeEffectivePackageWeight failed for item', it.id, e?.message || e);
     }
   }
 
@@ -475,5 +506,109 @@ export const markItemPriceSynced = async (req: AuthRequest, res: Response): Prom
     where: { id: itemId },
     data: { marketplaceListedPrice: Math.round(item.price) },
   });
+  res.json({ ok: true });
+};
+
+// GET /api/extension/pending-sold-checks — items currently AVAILABLE that this extension
+// actually posted LIVE to Facebook Marketplace (MarketplaceListingJob action=POST/POSTED,
+// not yet action=REMOVE/REMOVED) -- candidates for the content script's reverse-direction
+// scan (fas-remove.js): "did one of MY live FB listings quietly flip to Sold on Facebook's
+// own UI, with FindA.Sale never told?" Facebook has no webhook/API for this, same "poll a DOM
+// signal" gap as pending-removals/pending-updates above.
+//
+// Deliberately gated on MarketplaceListingJob (the exact postedByItem/removedByItem
+// computation getExtensionItems already does for its `marketplaceListed` flag, and the same
+// set getPendingRemovals filters `stillPending` against) rather than the passive
+// Item.fbExportedAt column. fbExportedAt only means "was included in a CSV/XLSX Marketplace
+// export" at some point in the past -- it says nothing about whether a live Facebook listing
+// currently exists to go check, and using it here would hand the content script titles to
+// search for that may never have actually been posted (or were posted then removed), wasting
+// scan cycles and risking a coincidental title collision on an unrelated FB listing. Only an
+// item this extension itself confirmed POSTED (and not yet REMOVED) can plausibly show up as
+// a Sold card on facebook.com/marketplace/you/selling.
+export const getPendingSoldChecks = async (req: AuthRequest, res: Response): Promise<void> => {
+  const userId = req.user?.id;
+  if (!userId) { res.status(401).json({ message: 'Authentication required' }); return; }
+
+  const organizer = await prisma.organizer.findUnique({ where: { userId } });
+  if (!organizer) { res.status(404).json({ message: 'Organizer profile not found' }); return; }
+
+  const availableItems = await prisma.item.findMany({
+    where: { sale: { organizerId: organizer.id, deletedAt: null }, status: 'AVAILABLE' },
+    select: { id: true, title: true },
+  });
+  if (!availableItems.length) { res.json({ items: [] }); return; }
+
+  const itemIds = availableItems.map((i) => i.id);
+  const jobs = await prisma.marketplaceListingJob.findMany({
+    where: { itemId: { in: itemIds } },
+    select: { itemId: true, action: true, status: true },
+  });
+  const postedByItem = new Set<string>();
+  const removedByItem = new Set<string>();
+  for (const j of jobs) {
+    if (j.action === 'POST' && j.status === 'POSTED') postedByItem.add(j.itemId);
+    if (j.action === 'REMOVE' && j.status === 'REMOVED') removedByItem.add(j.itemId);
+  }
+
+  const items = availableItems
+    .filter((i) => postedByItem.has(i.id) && !removedByItem.has(i.id))
+    .map((i) => ({ id: i.id, title: i.title }));
+
+  res.json({ items });
+};
+
+// POST /api/extension/items/:id/sold-on-facebook — the reverse-direction cascade: the content
+// script's new sold-detection scan (fas-remove.js, SEL.allSoldListingCards()) confidently
+// matched this item's title against a card on facebook.com/marketplace/you/selling that
+// Facebook's OWN UI already shows as Sold ("Mark as available"/"Relist this item"), meaning
+// the item sold NATIVELY on Facebook -- something FindA.Sale had no other way to learn.
+//
+// IDOR: ownership verified via assertItemOwned before any mutation, same pattern as
+// markItemRemoved/markItemListed above -- this is a real, unauthenticated-adjacent,
+// money-relevant mutation reachable from an extension endpoint; ownership is mandatory here,
+// not optional.
+//
+// Idempotent by design: the content script's scan re-runs on the same ~20-min alarm cadence
+// and can report the SAME item sold-on-Facebook more than once before this endpoint's write is
+// reflected back out of getPendingSoldChecks (that list only re-queries AVAILABLE items, so a
+// repeat report can arrive for an item this endpoint already flipped to SOLD moments earlier).
+// commitItemSale's own atomic guard (ADR-098) is what makes a repeat call safe: it can't match
+// `status IN ('AVAILABLE')` a second time and throws ItemAlreadyCommittedError, which this
+// handler treats as a successful no-op -- never an error -- exactly like a second call for an
+// item already sold via any other channel (POS, checkout, eBay sync, etc.).
+//
+// Cascade mirrors itemController.ts's updateItem SOLD-transition block (same ADR-098 call
+// site, same commitItemSale helper) with ONE deliberate omission: notifyFacebookExportedItemSold
+// is NEVER called here. That hook's entire job is telling the extension to go remove the
+// matching Facebook listing -- meaningless in this direction, since the sale happened ON
+// Facebook; there is nothing left to remove there, it is already gone/Sold. eBay + Shopify
+// withdrawal fire exactly as they do for every other SOLD-transition call site (fire-and-forget,
+// same `.catch(err => console.warn(...))` style, never blocking the response).
+export const markItemSoldOnFacebook = async (req: AuthRequest, res: Response): Promise<void> => {
+  const userId = req.user?.id;
+  const itemId = req.params.id;
+  if (!userId) { res.status(401).json({ message: 'Authentication required' }); return; }
+  if (!(await assertItemOwned(userId, itemId))) { res.status(404).json({ message: 'Item not found' }); return; }
+
+  try {
+    await commitItemSale(itemId, 'SOLD', ['AVAILABLE']);
+  } catch (err: any) {
+    if (err instanceof ItemAlreadyCommittedError) {
+      // Already SOLD (this call, a prior poll cycle, or any other channel) -- idempotent
+      // success, never an error. See idempotency note above.
+      res.json({ ok: true });
+      return;
+    }
+    throw err;
+  }
+
+  endEbayListingIfExists(itemId).catch((err: any) =>
+    console.warn(`[eBay] withdraw-on-SOLD (FB-native) failed for item ${itemId}:`, err.message)
+  );
+  markShopifyItemSold(itemId).catch((err: any) =>
+    console.warn(`[Shopify] mark-sold-on-SOLD (FB-native) failed for item ${itemId}:`, err.message)
+  );
+
   res.json({ ok: true });
 };

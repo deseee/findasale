@@ -200,6 +200,40 @@ const EditItemPage = () => {
   // flag is sent only when this is true.
   const [weightTouched, setWeightTouched] = useState(false);
 
+  // ADR-ai-package-estimation-isolation-2026-08-05: explicit, opt-in fetch of the
+  // AI/estimate-cascade weight+dims guess. Only fills the editable fields — never
+  // auto-confirms. Setting weightTouched here mirrors the organizer typing the
+  // values in themselves; the existing Save gate above still requires a deliberate
+  // Save click before packageConfirmedByOrganizer is sent.
+  const [packageEstimateLoading, setPackageEstimateLoading] = useState(false);
+  const handleGetPackageEstimate = async () => {
+    if (!id) return;
+    setPackageEstimateLoading(true);
+    try {
+      const res = await api.get(`/items/${id}/package-estimate`);
+      const result = res.data;
+      if (result?.reason === 'not-applicable' || result?.weightOz == null) {
+        showToast('No estimate available for this item.', 'info');
+        return;
+      }
+      setFormData((prev) => ({
+        ...prev,
+        packageWeightOz: String(Math.round(result.weightOz)),
+        packageLengthIn: result.dims?.length != null ? String(result.dims.length) : prev.packageLengthIn,
+        packageWidthIn: result.dims?.width != null ? String(result.dims.width) : prev.packageWidthIn,
+        packageHeightIn: result.dims?.height != null ? String(result.dims.height) : prev.packageHeightIn,
+        packageType: result.packageType || prev.packageType,
+      }));
+      setWeightTouched(true);
+      showToast('Estimate filled in. Review and save to confirm.', 'success');
+    } catch (err: any) {
+      const message = err?.response?.data?.message || 'Failed to get estimate. Try again.';
+      showToast(message, 'error');
+    } finally {
+      setPackageEstimateLoading(false);
+    }
+  };
+
   // eBay push mutation — S725 always LIVE (DRAFT mode killed)
   const ebayPushMutation = useMutation({
     mutationFn: async ({ itemId }: { itemId: string }) => {
@@ -1546,6 +1580,16 @@ const EditItemPage = () => {
                       <option value="ONE_WAY_PALLET">Pallet (one-way)</option>
                     </select>
                   </div>
+                  {item?.packageConfirmedByOrganizer !== true && (
+                    <button
+                      type="button"
+                      onClick={handleGetPackageEstimate}
+                      disabled={packageEstimateLoading}
+                      className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {packageEstimateLoading ? 'Getting estimate…' : 'Get AI weight & size estimate'}
+                    </button>
+                  )}
                   <div>
                     <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-1">
                       Weight (oz)

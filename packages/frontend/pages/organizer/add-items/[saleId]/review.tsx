@@ -251,6 +251,9 @@ const ReviewPage = () => {
   // (mirrors edit-item/[id].tsx's weightTouched boolean, scoped per-item since this
   // page reviews many items at once).
   const [weightTouched, setWeightTouched] = useState<Set<string>>(new Set());
+  // Per-item loading state for the "Get AI estimate" button
+  // (ADR-ai-package-estimation-isolation-2026-08-05).
+  const [packageEstimateLoadingIds, setPackageEstimateLoadingIds] = useState<Set<string>>(new Set());
 
   const [bulkPrice, setBulkPrice] = useState('');
   const [bulkCategory, setBulkCategory] = useState('');
@@ -712,6 +715,48 @@ const ReviewPage = () => {
       setWeightTouched((prev) => {
         const next = new Set(prev);
         next.add(itemId);
+        return next;
+      });
+    }
+  };
+
+  /**
+   * "Get AI estimate" (ADR-ai-package-estimation-isolation-2026-08-05) — explicit,
+   * opt-in fetch of the AI/estimate-cascade weight+dims guess for a single item.
+   * Only fills this item's editable weight/dims fields — never auto-confirms.
+   * Marking weightTouched here mirrors the organizer typing the values in
+   * themselves; the existing save-payload gate above still requires a deliberate
+   * Save action before packageConfirmedByOrganizer is sent.
+   */
+  const handleGetPackageEstimate = async (item: Item) => {
+    if (packageEstimateLoadingIds.has(item.id)) return;
+    setPackageEstimateLoadingIds((prev) => new Set(prev).add(item.id));
+    try {
+      const res = await api.get(`/items/${item.id}/package-estimate`);
+      const result = res.data;
+      if (result?.reason === 'not-applicable' || result?.weightOz == null) {
+        showToast('No estimate available for this item.', 'info');
+        return;
+      }
+      const state = getEditState(item);
+      const updated: ItemEditState = {
+        ...state,
+        packageWeightOz: Math.round(result.weightOz),
+        packageLengthIn: result.dims?.length != null ? result.dims.length : state.packageLengthIn,
+        packageWidthIn: result.dims?.width != null ? result.dims.width : state.packageWidthIn,
+        packageHeightIn: result.dims?.height != null ? result.dims.height : state.packageHeightIn,
+      };
+      editStates.set(item.id, updated);
+      setEditStates(new Map(editStates));
+      setWeightTouched((prev) => new Set(prev).add(item.id));
+      showToast('Estimate filled in. Review and save to confirm.', 'success');
+    } catch (err: any) {
+      const message = err?.response?.data?.message || 'Failed to get estimate. Try again.';
+      showToast(message, 'error');
+    } finally {
+      setPackageEstimateLoadingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(item.id);
         return next;
       });
     }
@@ -2031,9 +2076,21 @@ const ReviewPage = () => {
                                 </div>
                                 {/* Shipping weight & dimensions (used by eBay push to select fulfillment policy) */}
                                 <div>
-                                  <p className="text-xs font-medium text-blue-700 dark:text-blue-300 mb-2">
-                                    Shipping details <span className="font-normal text-blue-500">(required for eBay)</span>
-                                  </p>
+                                  <div className="flex items-center justify-between mb-2">
+                                    <p className="text-xs font-medium text-blue-700 dark:text-blue-300">
+                                      Shipping details <span className="font-normal text-blue-500">(required for eBay)</span>
+                                    </p>
+                                    {item.packageConfirmedByOrganizer !== true && (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleGetPackageEstimate(item)}
+                                        disabled={packageEstimateLoadingIds.has(item.id)}
+                                        className="text-[11px] font-medium text-blue-600 dark:text-blue-400 hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
+                                      >
+                                        {packageEstimateLoadingIds.has(item.id) ? 'Getting estimate…' : 'Get AI estimate'}
+                                      </button>
+                                    )}
+                                  </div>
                                   <div className="grid grid-cols-2 gap-2">
                                     <div>
                                       <label className="block text-[10px] font-mono uppercase text-blue-600 dark:text-blue-400 mb-1">Weight (oz)</label>

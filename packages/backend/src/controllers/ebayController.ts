@@ -1763,11 +1763,12 @@ export function validateItemForEbayPublish(item: {
   // Guard 2 — shippable item without an organizer-confirmed package weight.
   // Two separate failure modes, both blocked:
   //   a. No weight at all → eBay error 25101 (calculated shipping cannot build a parcel).
-  //   b. A weight exists but nobody confirmed it. The publish path auto-fills an
-  //      estimated weight (category/keyword/seed cascade) so the organizer has a
-  //      starting number, and an estimate is a prefill, not a measurement. Publishing
-  //      on an unconfirmed estimate is what shipped a whole sale of wrongly-rated
-  //      listings, and the organizer eats that shipping difference on every order.
+  //   b. A weight exists but nobody confirmed it. Package-estimation isolation ADR
+  //      (2026-08-05): the publish path no longer auto-fills an estimate into this
+  //      field -- an organizer must explicitly weigh the item or click "Get AI
+  //      estimate" (edit-item/review) and save. Publishing on an unconfirmed estimate
+  //      is what shipped a whole sale of wrongly-rated listings before this guard
+  //      existed, and the organizer eats that shipping difference on every order.
   //      An estimate must never publish on its own.
   // Local-pickup items are exempt — nothing gets boxed, so no weight is needed.
   const isLocalPickup = item.ebayShippingOverride === 'LOCAL_PICKUP_ONLY';
@@ -1784,7 +1785,7 @@ export function validateItemForEbayPublish(item: {
       return {
         code: 'EBAY_WEIGHT_NOT_CONFIRMED',
         message:
-          "Confirm this item's shipping weight before publishing. We filled in an estimated weight to start from, but it has not been checked. Open the item, weigh it, correct the weight and box size, and save. If this item is not shipping, mark it Local pickup only.",
+          "Confirm this item's shipping weight before publishing. Open the item, weigh it (or use \"Get AI estimate\" for a starting number), correct the weight and box size, and save. If this item is not shipping, mark it Local pickup only.",
       };
     }
 
@@ -1825,23 +1826,77 @@ export function validateItemForEbayPublish(item: {
 }
 
 /**
- * Auto-resolve an item's effective shipping package (weight + optional dims) at
- * publish time — mirrors the ADR-089 JIT ISBN resolve. For a SHIPPABLE item (NOT
- * LOCAL_PICKUP_ONLY) that has no confirmed/measured package weight, resolve one
- * automatically BEFORE the offer is built so the listing always goes out with real
- * shipping instead of a soft warning + weightless listing (S1130 bug):
- *   a. JIT-invoke estimatePackageProfile first (category/keyword/AI/seed cascade —
- *      curated PackageProfile data beats an unmeasured single-photo AI guess, mirroring
- *      the ADR-092 plausibility guard and the FB extension's AI distrust decision
- *      (commit b0af249a); always returns a usable weight), else
- *   b. fall back to the raw AI estimate (aiPackageWeightOz + aiPackageDimsJson) only
- *      when the cascade itself failed to produce anything usable (should be rare).
- * Resolved values are persisted back to the Item (reused on future pushes/resyncs) and
- * returned. Returns null when nothing needs resolving (already has a weight, or
- * LOCAL_PICKUP_ONLY) OR — should not happen — when no usable weight could be produced,
- * in which case validateItemForEbayPublish hard-fails the item downstream.
+ * Force LOCAL_PICKUP_ONLY for large plumbed/built-in appliances (tankless water
+ * heaters, RO/whole-house water filtration, water softeners) that are never
+ * realistically shippable via parcel carrier no matter what weight a cascade would
+ * guess (ADR-fb-package-weight-estimator scoping note, 2026-07-22, "large appliances"
+ * gap). This is a structural classification, not a weight/dims estimate -- it is kept
+ * as a persisted side effect (idempotent, materially prevents a broken listing) even
+ * though the weight/dims estimate itself (computeEffectivePackageWeight, below) no
+ * longer persists anything. Only fires when the organizer hasn't already confirmed a
+ * real measured weight or made their own explicit shipping-override decision -- mirrors
+ * the ORGANIZER-wins guarantee in estimatePackageProfile(). Split out of the old
+ * combined resolvePublishPackageWeight() (2026-08-05 ADR, package-estimation isolation)
+ * so callers can get the never-shippable classification without also triggering an
+ * unconfirmed weight/dims write to the organizer-facing fields.
  */
-export async function resolvePublishPackageWeight(item: {
+export async function applyNeverShippableOverride(item: {
+  id: string;
+  title?: string | null;
+  description?: string | null;
+  category?: string | null;
+  ebayShippingOverride?: string | null;
+  packageConfirmedByOrganizer?: boolean | null;
+}): Promise<{ pickupOnlyForced: true } | null> {
+  // Already LOCAL_PICKUP_ONLY (whether from a prior run of this function or an
+  // organizer's own override) -- nothing to do.
+  if (item.ebayShippingOverride === 'LOCAL_PICKUP_ONLY') return null;
+
+  if (
+    !item.packageConfirmedByOrganizer &&
+    !item.ebayShippingOverride &&
+    isNeverShippableItem(item.title, item.description, item.category)
+  ) {
+    try {
+      await prisma.item.update({
+        where: { id: item.id },
+        data: { ebayShippingOverride: 'LOCAL_PICKUP_ONLY' },
+      });
+    } catch (e: any) {
+      console.warn(
+        '[eBay AutoWeight] failed to persist never-shippable pickup-only override for item',
+        item.id,
+        e?.message || e
+      );
+    }
+    console.log(`[eBay AutoWeight] item=${item.id} matched never-shippable keyword — forced LOCAL_PICKUP_ONLY`);
+    return { pickupOnlyForced: true };
+  }
+  return null;
+}
+
+/**
+ * Compute an item's effective shipping package (weight + optional dims) WITHOUT
+ * persisting anything to the Item row. Pure compute: given an item snapshot, runs the
+ * same category/keyword/AI/seed cascade (estimatePackageProfile) the old combined
+ * resolvePublishPackageWeight() used, and returns the resolved value for the caller's
+ * own in-memory/request-scoped use only.
+ *
+ * package-estimation isolation ADR (2026-08-05): an unconfirmed estimate must never
+ * silently land in the organizer-facing packageWeightOz/packageLengthIn/WidthIn/HeightIn
+ * fields -- those fields may only be written by the organizer's own explicit save (see
+ * itemController's package-estimate endpoints + edit-item/review "Get AI estimate"
+ * button) or by the measured-fact exceptions (barcode/catalog enrichment, voice
+ * dictation) that are out of scope for this function. Callers that need a resolved
+ * number for their own request (e.g. building a Facebook Marketplace payload) should
+ * call this function and use the return value locally -- never write it back via
+ * prisma.item.update.
+ *
+ * Returns null when nothing needs resolving (already has a usable weight, or the item
+ * is LOCAL_PICKUP_ONLY) or when no usable weight could be produced (should not happen,
+ * since estimatePackageProfile always falls through to its own SEED default).
+ */
+export async function computeEffectivePackageWeight(item: {
   id: string;
   title?: string | null;
   description?: string | null;
@@ -1868,46 +1923,6 @@ export async function resolvePublishPackageWeight(item: {
 } | null> {
   // Local-pickup items intentionally carry no shipping weight — never touch them.
   if (item.ebayShippingOverride === 'LOCAL_PICKUP_ONLY') return null;
-
-  // Large plumbed/built-in appliances (tankless water heaters, RO/whole-house water
-  // filtration, water softeners) are never realistically shippable via parcel carrier no
-  // matter what weight the cascade below would guess -- force pickup-only using the same
-  // ebayShippingOverride flag an organizer would set manually, instead of letting the item
-  // fall through to a nonsensical shippable default (ADR-fb-package-weight-estimator
-  // scoping note, 2026-07-22, "large appliances" gap). Only fires when the organizer
-  // hasn't already confirmed a real measured weight or made their own explicit
-  // shipping-override decision -- mirrors the ORGANIZER-wins guarantee in
-  // estimatePackageProfile(). Checked before the "already has a weight" short-circuit
-  // below so a stale pre-fix fallback weight on one of these items still gets corrected
-  // instead of persisting forever.
-  if (
-    !item.packageConfirmedByOrganizer &&
-    !item.ebayShippingOverride &&
-    isNeverShippableItem(item.title, item.description, item.category)
-  ) {
-    try {
-      await prisma.item.update({
-        where: { id: item.id },
-        data: { ebayShippingOverride: 'LOCAL_PICKUP_ONLY' },
-      });
-    } catch (e: any) {
-      console.warn(
-        '[eBay AutoWeight] failed to persist never-shippable pickup-only override for item',
-        item.id,
-        e?.message || e
-      );
-    }
-    console.log(`[eBay AutoWeight] item=${item.id} matched never-shippable keyword — forced LOCAL_PICKUP_ONLY`);
-    return {
-      weightOz: 0,
-      lengthIn: null,
-      widthIn: null,
-      heightIn: null,
-      packageType: null,
-      source: 'NEVER_SHIPPABLE',
-      pickupOnlyForced: true,
-    };
-  }
 
   // Already has a usable measured/confirmed weight — nothing to resolve.
   if (item.packageWeightOz != null && Number(item.packageWeightOz) > 0) return null;
@@ -1970,26 +1985,11 @@ export async function resolvePublishPackageWeight(item: {
   const widthIn = dims && dims.width != null ? Number(dims.width) : null;
   const heightIn = dims && dims.height != null ? Number(dims.height) : null;
 
-  // Persist so it's reused on future pushes/resyncs. Never overwrites an organizer
-  // weight — the early return above guarantees we only reach here when weight is missing.
-  try {
-    await prisma.item.update({
-      where: { id: item.id },
-      data: {
-        packageWeightOz: weightOz,
-        ...(lengthIn != null ? { packageLengthIn: lengthIn } : {}),
-        ...(widthIn != null ? { packageWidthIn: widthIn } : {}),
-        ...(heightIn != null ? { packageHeightIn: heightIn } : {}),
-        ...(packageType ? { packageType } : {}),
-        packageEstimateSource: source,
-      },
-    });
-  } catch (e: any) {
-    console.warn('[eBay AutoWeight] persist failed for item', item.id, e?.message || e);
-  }
-
+  // No persist — package-estimation isolation ADR (2026-08-05): this compute-only
+  // function must never write packageWeightOz/dims/packageType/packageEstimateSource to
+  // the Item row. Callers use the return value for their own request-scoped purpose only.
   console.log(
-    `[eBay AutoWeight] item=${item.id} resolved weightOz=${weightOz} dims=${lengthIn ?? '?'}x${widthIn ?? '?'}x${heightIn ?? '?'} source=${source}`
+    `[eBay AutoWeight] item=${item.id} computed (no persist) weightOz=${weightOz} dims=${lengthIn ?? '?'}x${widthIn ?? '?'}x${heightIn ?? '?'} source=${source}`
   );
   return { weightOz, lengthIn, widthIn, heightIn, packageType, source };
 }
@@ -2219,42 +2219,28 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
       try {
         const sku = buildCustomLabel(item.id, organizer, item);
 
-        // Auto-resolve shipping weight/dims for a SHIPPABLE item missing a confirmed
-        // weight BEFORE routing + inventory build, so the listing always ships with a
-        // real weight (S1130: previously warned then listed weightless). Mutates the
-        // in-memory item so resolvePoliciesForItem, the inventory payload, and the
-        // pre-publish guard all see the resolved weight. Never touches LOCAL_PICKUP_ONLY.
-        const autoPkg = await resolvePublishPackageWeight({
+        // Never-shippable structural classification (tankless water heater, RO/whole-
+        // house filtration, water softener, etc.) -- persisted, kept as-is. Split out of
+        // the old combined resolvePublishPackageWeight() (package-estimation isolation
+        // ADR, 2026-08-05): the weight/dims ESTIMATE half of that function is no longer
+        // called here at all -- validateItemForEbayPublish's Guard 2 unconditionally
+        // blocks any item where packageConfirmedByOrganizer !== true, and this call only
+        // ever ran for items with no weight yet (which are, by construction, always
+        // unconfirmed) -- so the old auto-fill-then-persist never changed whether this
+        // push succeeded, it only left a phantom, unmeasured weight in the Item row.
+        const overrideResult = await applyNeverShippableOverride({
           id: item.id,
           title: item.title,
           description: item.description,
           category: item.category,
-          ebayCategoryId: item.ebayCategoryId,
           ebayShippingOverride: item.ebayShippingOverride,
           packageConfirmedByOrganizer: (item as any).packageConfirmedByOrganizer,
-          packageWeightOz: item.packageWeightOz,
-          packageLengthIn: item.packageLengthIn != null ? Number(item.packageLengthIn) : null,
-          packageWidthIn: item.packageWidthIn != null ? Number(item.packageWidthIn) : null,
-          packageHeightIn: item.packageHeightIn != null ? Number(item.packageHeightIn) : null,
-          packageType: item.packageType,
-          aiPackageWeightOz: item.aiPackageWeightOz,
-          aiPackageDimsJson: (item as any).aiPackageDimsJson,
-          aiPackageConfidence: (item as any).aiPackageConfidence,
         });
-        if (autoPkg) {
-          if (autoPkg.pickupOnlyForced) {
-            // Never-shippable keyword match (e.g. tankless water heater, RO system) --
-            // resolvePublishPackageWeight already persisted ebayShippingOverride to the DB;
-            // mirror it in-memory so the routing call right below and the pre-publish guard
-            // both see pickup-only on THIS request instead of a stale null override.
-            (item as any).ebayShippingOverride = 'LOCAL_PICKUP_ONLY';
-          } else {
-            (item as any).packageWeightOz = autoPkg.weightOz;
-            if (autoPkg.lengthIn != null) (item as any).packageLengthIn = autoPkg.lengthIn;
-            if (autoPkg.widthIn != null) (item as any).packageWidthIn = autoPkg.widthIn;
-            if (autoPkg.heightIn != null) (item as any).packageHeightIn = autoPkg.heightIn;
-            if (autoPkg.packageType) (item as any).packageType = autoPkg.packageType;
-          }
+        if (overrideResult?.pickupOnlyForced) {
+          // applyNeverShippableOverride already persisted ebayShippingOverride to the DB;
+          // mirror it in-memory so the routing call right below and the pre-publish guard
+          // both see pickup-only on THIS request instead of a stale null override.
+          (item as any).ebayShippingOverride = 'LOCAL_PICKUP_ONLY';
         }
 
         // Resolve policies for this item based on organizer's routing configuration
@@ -3305,39 +3291,27 @@ export const publishItemOffer = async (req: AuthRequest, res: Response) => {
       }
     }
 
-    // Auto-resolve shipping weight/dims for a SHIPPABLE item missing a confirmed weight
-    // (mirror of pushSaleToEbay). Persists to the Item + mutates the in-memory item so
-    // the guard passes and the live-inventory weight backfill below sends real shipping.
-    const autoPkg = await resolvePublishPackageWeight({
+    // Never-shippable structural classification (mirror of pushSaleToEbay). Split out
+    // of the old combined resolvePublishPackageWeight() (package-estimation isolation
+    // ADR, 2026-08-05) -- only the persisted LOCAL_PICKUP_ONLY classification runs here
+    // now. The weight/dims ESTIMATE half is no longer called: validateItemForEbayPublish
+    // Guard 2 unconditionally blocks any item where packageConfirmedByOrganizer !== true,
+    // and this call only ever ran for items with no weight yet (always unconfirmed by
+    // construction), so the old auto-fill-then-persist never changed whether this publish
+    // succeeded -- it only left a phantom, unmeasured weight in the Item row.
+    const overrideResult = await applyNeverShippableOverride({
       id: item.id,
       title: item.title,
       description: item.description,
       category: item.category,
-      ebayCategoryId: item.ebayCategoryId,
       ebayShippingOverride: item.ebayShippingOverride,
       packageConfirmedByOrganizer: (item as any).packageConfirmedByOrganizer,
-      packageWeightOz: item.packageWeightOz,
-      packageLengthIn: (item as any).packageLengthIn != null ? Number((item as any).packageLengthIn) : null,
-      packageWidthIn: (item as any).packageWidthIn != null ? Number((item as any).packageWidthIn) : null,
-      packageHeightIn: (item as any).packageHeightIn != null ? Number((item as any).packageHeightIn) : null,
-      packageType: (item as any).packageType,
-      aiPackageWeightOz: item.aiPackageWeightOz,
-      aiPackageDimsJson: (item as any).aiPackageDimsJson,
-      aiPackageConfidence: (item as any).aiPackageConfidence,
     });
-    if (autoPkg) {
-      if (autoPkg.pickupOnlyForced) {
-        // Never-shippable keyword match -- mirror the just-persisted DB override in-memory
-        // so validateItemForEbayPublish below sees pickup-only on this same request instead
-        // of a stale null override (see matching comment at the pushSaleToEbay call site).
-        (item as any).ebayShippingOverride = 'LOCAL_PICKUP_ONLY';
-      } else {
-        (item as any).packageWeightOz = autoPkg.weightOz;
-        (item as any).packageLengthIn = autoPkg.lengthIn;
-        (item as any).packageWidthIn = autoPkg.widthIn;
-        (item as any).packageHeightIn = autoPkg.heightIn;
-        if (autoPkg.packageType) (item as any).packageType = autoPkg.packageType;
-      }
+    if (overrideResult?.pickupOnlyForced) {
+      // applyNeverShippableOverride already persisted ebayShippingOverride to the DB;
+      // mirror it in-memory so validateItemForEbayPublish below sees pickup-only on this
+      // same request instead of a stale null override.
+      (item as any).ebayShippingOverride = 'LOCAL_PICKUP_ONLY';
     }
     const prePublishError = validateItemForEbayPublish({
       price: effectivePrice,

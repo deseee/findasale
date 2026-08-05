@@ -278,6 +278,39 @@
     return null; // zero or ambiguous -- caller falls through to the genuine skip+flag path
   }
 
+  // (2026-08-05) Reverse-direction sold detection: FindA.Sale has no way to learn an item sold
+  // NATIVELY on Facebook (no webhook/API -- same DOM-poll gap as everything else in this file).
+  // alreadySoldCardByTitle above checks ONE specific known title; this scans the WHOLE "Your
+  // listings" grid and returns EVERY currently-Sold card's text, so a caller (fas-remove.js) can
+  // check a list of candidate titles against the full set in one DOM pass instead of one query
+  // per candidate. Same marker detection (role="button" elements reading "mark as available" /
+  // "relist this item") and same 8-hop-up DOM walk to find the enclosing card (first ancestor
+  // whose text contains "$" and is longer than 40 chars) as alreadySoldCardByTitle -- kept in
+  // exact sync so a Facebook DOM change only needs fixing in one place, not two. Deduped by card
+  // element (a card can carry both markers at once, same as alreadySoldCardByTitle's cardMap).
+  // Returns [] if nothing is currently Sold. Never filters by title -- the caller does its own
+  // single-confident-match check against this list (same "never guess the wrong listing"
+  // philosophy as listingCardByTitle/alreadySoldCardByTitle).
+  function allSoldListingCards() {
+    const markers = Array.from(document.querySelectorAll('div[role="button"], button, span[role="button"], a[role="button"]'))
+      .filter((b) => {
+        const t = norm(b.textContent);
+        return t === 'mark as available' || t === 'relist this item';
+      });
+    const cardMap = new Map(); // cardEl -> cardText, deduped
+    for (const btn of markers) {
+      let el = btn, hops = 0;
+      while (el && hops < 8) {
+        el = el.parentElement;
+        hops++;
+        if (!el) break;
+        const t = norm(el.textContent);
+        if (t.indexOf('$') !== -1 && t.length > 40) { cardMap.set(el, t); break; }
+      }
+    }
+    return Array.from(cardMap.values()).map((cardText) => ({ cardText }));
+  }
+
   // Facebook's custom div[role="button"] controls (category chips, "Enter exact weight",
   // "Done", the "Change shipping method" modal's "Update" button, etc.) DO respond to
   // script-dispatched (isTrusted:false) events using the sequence below -- confirmed live
@@ -411,7 +444,7 @@
   function isSwitchOn(el) { return !!(el && el.getAttribute('aria-checked') === 'true'); }
 
   window.__FAS_SEL__ = { norm, fieldByLabel, comboByLabel, optionByText, photoInput, chipsAfter, categoryChips, persistentCategoryChips, bestTextMatch,
-    elementByText, radioLabelByText, listingCardByTitle, alreadySoldCardByTitle, realClick, menuCheckboxByText, isMenuChecked, isDisabled, radioOptionByText,
+    elementByText, radioLabelByText, listingCardByTitle, alreadySoldCardByTitle, allSoldListingCards, realClick, menuCheckboxByText, isMenuChecked, isDisabled, radioOptionByText,
     switchByLabel, isSwitchOn, isRadioChecked, weightExactLink, weightExactInputs,
     LABELS: { title: 'Title', price: 'Price', description: 'Description', condition: 'Condition', category: 'Category', offerToggle: 'negotiate', offerMinimum: 'Minimum price' } };
 })();

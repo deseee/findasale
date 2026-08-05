@@ -139,11 +139,15 @@ const EbayEditForm: React.FC<{
     ean: item.ean || '',
     ebaySubtitle: item.ebaySubtitle || '',
     conditionNotes: item.conditionNotes || '',
-    packageWeightOz: item.packageWeightOz ?? item.packageEstimate?.weightOz ?? undefined,
-    packageLengthIn: item.packageLengthIn ?? item.packageEstimate?.lengthIn ?? undefined,
-    packageWidthIn: item.packageWidthIn ?? item.packageEstimate?.widthIn ?? undefined,
-    packageHeightIn: item.packageHeightIn ?? item.packageEstimate?.heightIn ?? undefined,
-    packageType: item.packageType || item.packageEstimate?.packageType || '',
+    // AI/estimate values are NEVER silently prefilled here anymore — they're shown as
+    // inert placeholder text on the inputs instead (see the Shipping section below) and
+    // only reach formData when the organizer explicitly types a value, picks a box
+    // preset, or clicks "Get AI weight & size estimate" (see applyAiEstimate / weightTouched).
+    packageWeightOz: item.packageWeightOz ?? undefined,
+    packageLengthIn: item.packageLengthIn ?? undefined,
+    packageWidthIn: item.packageWidthIn ?? undefined,
+    packageHeightIn: item.packageHeightIn ?? undefined,
+    packageType: item.packageType || '',
     allowBestOffer: item.allowBestOffer || false,
     bestOfferAutoAcceptAmt: item.bestOfferAutoAcceptAmt || undefined,
     bestOfferMinimumAmt: item.bestOfferMinimumAmt || undefined,
@@ -156,6 +160,12 @@ const EbayEditForm: React.FC<{
     offers: false,
   });
 
+  // True once the organizer has actually acted on the weight/dims this session — typed
+  // into the weight box, picked a box preset, or clicked "Get AI weight & size estimate".
+  // Saving while this is still false must NOT confirm the package details (see handleSave)
+  // — mirrors review.tsx's weightTouched Set / edit-item/[id].tsx's weightTouched boolean.
+  const [weightTouched, setWeightTouched] = useState(false);
+
   const applyBoxPreset = (preset: { weightOz: number; lengthIn: number; widthIn: number; heightIn: number; packageType: string }) => {
     setFormData((prev) => ({
       ...prev,
@@ -165,6 +175,27 @@ const EbayEditForm: React.FC<{
       packageHeightIn: preset.heightIn,
       packageType: preset.packageType,
     }));
+    // Picking a preset is a deliberate organizer choice of a real box size — treat it
+    // exactly like typing the values in themselves.
+    setWeightTouched(true);
+  };
+
+  // "Get AI weight & size estimate" — copies the background-computed estimate into the
+  // editable inputs so the organizer can see and review it, exactly like typing it in
+  // themselves. Does NOT call the save API itself — Save is still a separate, deliberate
+  // step the organizer must take afterward for anything to persist or confirm.
+  const applyAiEstimate = () => {
+    if (!item.packageEstimate) return;
+    const estimate = item.packageEstimate;
+    setFormData((prev) => ({
+      ...prev,
+      packageWeightOz: estimate.weightOz,
+      packageLengthIn: estimate.lengthIn,
+      packageWidthIn: estimate.widthIn,
+      packageHeightIn: estimate.heightIn,
+      ...(estimate.packageType ? { packageType: estimate.packageType } : {}),
+    }));
+    setWeightTouched(true);
   };
 
   const toggleSection = (section: keyof typeof expandedSections) => {
@@ -192,9 +223,11 @@ const EbayEditForm: React.FC<{
       allowBestOffer: formData.allowBestOffer,
       bestOfferAutoAcceptAmt: formData.bestOfferAutoAcceptAmt ? Math.max(0, formData.bestOfferAutoAcceptAmt) : undefined,
       bestOfferMinimumAmt: formData.bestOfferMinimumAmt ? Math.max(0, formData.bestOfferMinimumAmt) : undefined,
-      // Organizer reviewed/confirmed the package details — locks against future estimate overwrites.
-      packageConfirmedByOrganizer: true,
-      packageEstimateSource: 'ORGANIZER',
+      // Organizer reviewed/confirmed the package details — but only send the confirm
+      // flags when they actually acted on weight/dims this save (weightTouched). Saving
+      // an untouched, pre-existing estimate must NOT count as confirming it — mirrors
+      // review.tsx / edit-item/[id].tsx exactly.
+      ...(weightTouched ? { packageConfirmedByOrganizer: true, packageEstimateSource: 'ORGANIZER' } : {}),
     };
 
     onSave(item.id, cleanData);
@@ -332,6 +365,15 @@ const EbayEditForm: React.FC<{
                 These package details are an estimate. Review and adjust them, then save to confirm. EBay uses them to charge buyers the right shipping.
               </p>
             )}
+            {isPackageEstimated && item.packageEstimate && (
+              <button
+                type="button"
+                onClick={applyAiEstimate}
+                className="px-2 py-1 rounded text-xs font-medium bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-200 hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors"
+              >
+                Get AI weight & size estimate
+              </button>
+            )}
             {/* Box-size presets */}
             <div>
               <label className="block text-xs font-medium text-warm-700 dark:text-warm-300 mb-1">Pick a box size</label>
@@ -356,8 +398,11 @@ const EbayEditForm: React.FC<{
               <input
                 type="number"
                 value={formData.packageWeightOz || ''}
-                onChange={(e) => handleInputChange('packageWeightOz', e.target.value ? parseInt(e.target.value, 10) : undefined)}
-                placeholder="0"
+                onChange={(e) => {
+                  setWeightTouched(true);
+                  handleInputChange('packageWeightOz', e.target.value ? parseInt(e.target.value, 10) : undefined);
+                }}
+                placeholder={item.packageEstimate?.weightOz != null ? String(item.packageEstimate.weightOz) : '0'}
                 min="0"
                 className="w-full px-2 py-1 text-sm rounded border border-warm-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
                aria-label="0" />
@@ -369,7 +414,7 @@ const EbayEditForm: React.FC<{
                   type="number"
                   value={formData.packageLengthIn || ''}
                   onChange={(e) => handleInputChange('packageLengthIn', e.target.value ? parseFloat(e.target.value) : undefined)}
-                  placeholder="0"
+                  placeholder={item.packageEstimate?.lengthIn != null ? String(item.packageEstimate.lengthIn) : '0'}
                   min="0"
                   step="0.25"
                   className="w-full px-2 py-1 text-sm rounded border border-warm-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
@@ -381,7 +426,7 @@ const EbayEditForm: React.FC<{
                   type="number"
                   value={formData.packageWidthIn || ''}
                   onChange={(e) => handleInputChange('packageWidthIn', e.target.value ? parseFloat(e.target.value) : undefined)}
-                  placeholder="0"
+                  placeholder={item.packageEstimate?.widthIn != null ? String(item.packageEstimate.widthIn) : '0'}
                   min="0"
                   step="0.25"
                   className="w-full px-2 py-1 text-sm rounded border border-warm-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
@@ -393,7 +438,7 @@ const EbayEditForm: React.FC<{
                   type="number"
                   value={formData.packageHeightIn || ''}
                   onChange={(e) => handleInputChange('packageHeightIn', e.target.value ? parseFloat(e.target.value) : undefined)}
-                  placeholder="0"
+                  placeholder={item.packageEstimate?.heightIn != null ? String(item.packageEstimate.heightIn) : '0'}
                   min="0"
                   step="0.25"
                   className="w-full px-2 py-1 text-sm rounded border border-warm-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"

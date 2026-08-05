@@ -29,7 +29,7 @@ import { awardXp, applyHuntPassMultiplier, XP_AWARDS, spendXp, getSpendableXp, c
 import { getRankBenefits } from '../utils/rankUtils'; // Phase 2b: Legendary early access filtering
 import { enqueueFetchEbayComps } from '../jobs/fetchEbayComps'; // ADR-069 Phase 2: Async eBay comps
 import { enqueueMarketplacePostJob } from '../services/marketplace/marketplacePosterService'; // ADR-083
-import { fetchEbayPriceComps, endEbayListingIfExists } from './ebayController'; // Bug #326: live listings for EbayCompTiles image grid; endEbayListingIfExists: P2 S1122 withdraw-on-SOLD
+import { fetchEbayPriceComps, endEbayListingIfExists, computeEffectivePackageWeight } from './ebayController'; // Bug #326: live listings for EbayCompTiles image grid; endEbayListingIfExists: P2 S1122 withdraw-on-SOLD; computeEffectivePackageWeight: package-estimation isolation ADR 2026-08-05
 import { composeDescription, stripShippingPhrases, DescriptionSource } from '../services/descriptionMerger'; // Item Description Authoring Contract (2026-05-12)
 import { checkAndAward } from '../services/achievementService'; // Feature #58: Achievement tracking
 import { notifyFacebookExportedItemSold } from '../services/facebookNudgeService'; // Bug #461: FB nudge on single-item SOLD
@@ -3986,5 +3986,176 @@ export const getSitemapItems = async (req: Request, res: Response) => {
   } catch (error) {
     console.error('[getSitemapItems] Error:', error);
     res.status(500).json({ message: 'Server error fetching sitemap items' });
+  }
+};
+
+// Package-estimation isolation ADR (2026-08-05): read-only, non-persisting endpoints
+// that expose computeEffectivePackageWeight's cascade result to the frontend's
+// "Get AI estimate" buttons (edit-item, review.tsx, PostSaleEbayPanel). Neither handler
+// below ever calls prisma.item.update -- only the organizer's own explicit PUT
+// /items/:id save (with packageConfirmedByOrganizer: true) may persist a resolved
+// weight/dims value into the organizer-facing fields.
+
+// GET /api/items/:id/package-estimate — single item, organizer-owned only.
+export const getPackageEstimateHandler = async (req: AuthRequest, res: Response) => {
+  try {
+    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    if (!req.user || !hasOrganizerRole) {
+      return res.status(403).json({ message: 'Access denied. Organizer access required.' });
+    }
+
+    const { id } = req.params;
+
+    // Ownership pattern mirrors updateItem/reanalyzeItemForOrganizer.
+    const item = await prisma.item.findUnique({
+      where: { id },
+      include: { sale: { include: { organizer: { select: { userId: true } } } } },
+    });
+
+    if (!item) {
+      return res.status(404).json({ message: 'Item not found' });
+    }
+    if (!item.sale || item.sale.organizer.userId !== req.user.id) {
+      return res.status(403).json({ message: 'Access denied. Not your item.' });
+    }
+
+    const resolved = await computeEffectivePackageWeight({
+      id: item.id,
+      title: item.title,
+      description: item.description,
+      category: item.category,
+      ebayCategoryId: item.ebayCategoryId,
+      ebayShippingOverride: item.ebayShippingOverride,
+      packageConfirmedByOrganizer: item.packageConfirmedByOrganizer,
+      packageWeightOz: item.packageWeightOz,
+      packageLengthIn: item.packageLengthIn != null ? Number(item.packageLengthIn) : null,
+      packageWidthIn: item.packageWidthIn != null ? Number(item.packageWidthIn) : null,
+      packageHeightIn: item.packageHeightIn != null ? Number(item.packageHeightIn) : null,
+      packageType: item.packageType,
+      aiPackageWeightOz: item.aiPackageWeightOz,
+      aiPackageDimsJson: item.aiPackageDimsJson,
+      aiPackageConfidence: item.aiPackageConfidence != null ? Number(item.aiPackageConfidence) : null,
+    });
+
+    if (!resolved) {
+      // No estimate available -- e.g. LOCAL_PICKUP_ONLY item, or the item already has a
+      // real (organizer-confirmed or measured) weight. A valid, expected outcome, not a
+      // failure -- respond 200, not an error.
+      return res.status(200).json({
+        weightOz: null,
+        dims: null,
+        packageType: null,
+        confidence: null,
+        source: null,
+        reason: 'not-applicable',
+      });
+    }
+
+    // computeEffectivePackageWeight's return shape does not carry a confidence number
+    // (its AI-fallback tier does not track one either) -- confidence is null here rather
+    // than fabricated. Provenance is still available via `source`.
+    return res.status(200).json({
+      weightOz: resolved.weightOz,
+      dims: { length: resolved.lengthIn, width: resolved.widthIn, height: resolved.heightIn },
+      packageType: resolved.packageType,
+      confidence: null,
+      source: resolved.source,
+    });
+  } catch (error) {
+    console.error('[getPackageEstimateHandler] Error:', error);
+    res.status(500).json({ message: 'Server error computing package estimate' });
+  }
+};
+
+// POST /api/items/package-estimates — batch, for review.tsx's multi-item "Get AI
+// estimate" buttons (avoids N sequential single-item requests). Capped at 100 IDs per
+// request to bound the per-request computation; items not found or not owned by the
+// requesting organizer are silently skipped rather than erroring the whole batch.
+const PACKAGE_ESTIMATE_BATCH_MAX = 100;
+
+export const getPackageEstimatesBatchHandler = async (req: AuthRequest, res: Response) => {
+  try {
+    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    if (!req.user || !hasOrganizerRole) {
+      return res.status(403).json({ message: 'Access denied. Organizer access required.' });
+    }
+
+    const { itemIds } = req.body as { itemIds?: unknown };
+    if (!Array.isArray(itemIds) || itemIds.length === 0) {
+      return res.status(400).json({ message: 'itemIds (a non-empty array of item IDs) is required.' });
+    }
+    if (itemIds.length > PACKAGE_ESTIMATE_BATCH_MAX) {
+      return res.status(400).json({
+        message: `Too many item IDs -- ${itemIds.length} sent, ${PACKAGE_ESTIMATE_BATCH_MAX} max per request.`,
+      });
+    }
+    const idsToUse = itemIds.filter((i): i is string => typeof i === 'string' && i.length > 0);
+    if (idsToUse.length === 0) {
+      return res.status(400).json({ message: 'itemIds must contain at least one non-empty string ID.' });
+    }
+
+    const organizer = await prisma.organizer.findUnique({ where: { userId: req.user.id }, select: { id: true } });
+    if (!organizer) {
+      return res.status(404).json({ message: 'Organizer profile not found' });
+    }
+
+    // Ownership-scoped in the query itself -- any ID not belonging to this organizer's
+    // sales (or not found at all) is simply absent from `items`, so it's skipped below
+    // rather than erroring the whole batch.
+    const items = await prisma.item.findMany({
+      where: { id: { in: idsToUse }, sale: { organizerId: organizer.id } },
+      select: {
+        id: true, title: true, description: true, category: true, ebayCategoryId: true,
+        ebayShippingOverride: true, packageConfirmedByOrganizer: true, packageWeightOz: true,
+        packageLengthIn: true, packageWidthIn: true, packageHeightIn: true, packageType: true,
+        aiPackageWeightOz: true, aiPackageDimsJson: true, aiPackageConfidence: true,
+      },
+    });
+
+    const estimates: Array<{
+      itemId: string;
+      weightOz: number;
+      dims: { length: number | null; width: number | null; height: number | null };
+      packageType: string | null;
+      confidence: null;
+      source: string;
+    }> = [];
+
+    for (const item of items) {
+      const resolved = await computeEffectivePackageWeight({
+        id: item.id,
+        title: item.title,
+        description: item.description,
+        category: item.category,
+        ebayCategoryId: item.ebayCategoryId,
+        ebayShippingOverride: item.ebayShippingOverride,
+        packageConfirmedByOrganizer: item.packageConfirmedByOrganizer,
+        packageWeightOz: item.packageWeightOz,
+        packageLengthIn: item.packageLengthIn != null ? Number(item.packageLengthIn) : null,
+        packageWidthIn: item.packageWidthIn != null ? Number(item.packageWidthIn) : null,
+        packageHeightIn: item.packageHeightIn != null ? Number(item.packageHeightIn) : null,
+        packageType: item.packageType,
+        aiPackageWeightOz: item.aiPackageWeightOz,
+        aiPackageDimsJson: item.aiPackageDimsJson,
+        aiPackageConfidence: item.aiPackageConfidence != null ? Number(item.aiPackageConfidence) : null,
+      });
+      // Not-applicable (pickup-only, or already has a real weight) -- omit rather than
+      // padding the array with a null placeholder, so the frontend just iterates what
+      // came back.
+      if (!resolved) continue;
+      estimates.push({
+        itemId: item.id,
+        weightOz: resolved.weightOz,
+        dims: { length: resolved.lengthIn, width: resolved.widthIn, height: resolved.heightIn },
+        packageType: resolved.packageType,
+        confidence: null,
+        source: resolved.source,
+      });
+    }
+
+    return res.status(200).json({ estimates });
+  } catch (error) {
+    console.error('[getPackageEstimatesBatchHandler] Error:', error);
+    res.status(500).json({ message: 'Server error computing package estimates' });
   }
 };
