@@ -17,6 +17,12 @@ export interface SearchFilters {
   dateTo?: string;
 }
 
+// Feature #595 follow-up: hard cap on saved searches per user. checkNewMatches loops over every
+// notifyOnNew=true search and runs a live Item.findMany for each on every extension poll (every 25
+// min per user) — an unbounded count per user is a real cost/abuse vector. 25 is generous for a
+// real shopper, bounded for abuse.
+const MAX_SAVED_SEARCHES_PER_USER = 25;
+
 // POST /api/saved-searches — create a new saved search
 export const createSavedSearch = async (req: AuthRequest, res: Response) => {
   try {
@@ -24,7 +30,7 @@ export const createSavedSearch = async (req: AuthRequest, res: Response) => {
       return res.status(401).json({ message: 'Authentication required' });
     }
 
-    const { name, filters } = req.body;
+    const { name, filters, notifyOnNew } = req.body;
 
     if (!name || !filters) {
       return res.status(400).json({ message: 'Name and filters are required' });
@@ -34,12 +40,22 @@ export const createSavedSearch = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: 'Name must be a non-empty string' });
     }
 
+    const existingCount = await prisma.savedSearch.count({
+      where: { userId: req.user.id },
+    });
+
+    if (existingCount >= MAX_SAVED_SEARCHES_PER_USER) {
+      return res.status(400).json({
+        message: `You've reached the maximum of ${MAX_SAVED_SEARCHES_PER_USER} saved searches. Delete one to save a new one.`,
+      });
+    }
+
     const savedSearch = await prisma.savedSearch.create({
       data: {
         userId: req.user.id,
         name: name.trim(),
         filters,
-        notifyOnNew: false,
+        notifyOnNew: typeof notifyOnNew === 'boolean' ? notifyOnNew : false,
       },
     });
 

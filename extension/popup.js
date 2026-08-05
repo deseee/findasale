@@ -218,6 +218,28 @@ function renderGuildXp(p) {
     text.textContent = guildXp + ' XP \u00b7 Max rank';
   }
 
+  // (#586 Guild/XP Toolbar Tie-In) Hunt Pass status -- huntPassActive/huntPassExpiry come back
+  // on the same GET /api/xp/profile payload (packages/backend/src/services/xpService.ts
+  // getUserXpProfile), no extra request needed. Shown plainly either way (active w/ expiry, or
+  // not active) rather than hidden when inactive, per spec.
+  const hp = $('guildHuntPass');
+  if (hp) {
+    if (p.huntPassActive) {
+      let expiryText = '';
+      if (p.huntPassExpiry) {
+        const d = new Date(p.huntPassExpiry);
+        if (!isNaN(d.getTime())) {
+          expiryText = ' \u00b7 expires ' + d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+        }
+      }
+      hp.textContent = '\ud83c\udf9f\ufe0f Hunt Pass active' + expiryText;
+      hp.className = 'guildHuntPass active';
+    } else {
+      hp.textContent = 'Hunt Pass: not active';
+      hp.className = 'guildHuntPass';
+    }
+  }
+
   $('guildBar').hidden = false;
 }
 

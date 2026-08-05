@@ -4,12 +4,15 @@ header { padding: 12px 14px; border-bottom: 1px solid #26362d; display: flex; al
 .brand { font-weight: 800; font-size: 16px; } .brand b { color: #4caf6d; }
 .sub { font-size: 11px; color: #9fb6a8; }
 .status { padding: 12px 14px; color: #cfe3d6; font-size: 12px; }
-.guildBar { display: flex; align-items: center; gap: 8px; padding: 8px 14px; border-bottom: 1px solid #26362d; cursor: pointer; }
+.guildBar { display: flex; flex-direction: column; gap: 4px; padding: 8px 14px; border-bottom: 1px solid #26362d; cursor: pointer; }
 .guildBar:hover { background: #182720; }
+.guildBarRow { display: flex; align-items: center; gap: 8px; }
 .guildRank { font-size: 12px; font-weight: 700; color: #eef3ee; white-space: nowrap; flex: 0 0 auto; }
 .guildXpTrack { flex: 1; height: 6px; border-radius: 3px; background: #26362d; overflow: hidden; }
 .guildXpFill { height: 100%; width: 0%; background: #4caf6d; border-radius: 3px; transition: width .3s ease; }
 .guildXpText { font-size: 11px; color: #9fb6a8; white-space: nowrap; flex: 0 0 auto; }
+.guildHuntPass { font-size: 10px; color: #7f9b8a; }
+.guildHuntPass.active { color: #6fd08c; }
 .status a, .status button.link { color: #6fd08c; cursor: pointer; text-decoration: underline; background: none; border: none; font: inherit; padding: 0; }
 .controls { display: flex; justify-content: space-between; align-items: center; padding: 8px 14px; border-bottom: 1px solid #26362d; }
 .chk { font-size: 12px; color: #cfe3d6; } .count { font-size: 12px; color: #9fb6a8; } #selCount { color: #6fd08c; font-weight: 700; }

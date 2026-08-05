@@ -96,6 +96,7 @@ const SavedSearchesPage = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
 
   // Redirect unauthenticated visitors to login.
   useEffect(() => {
@@ -143,6 +144,35 @@ const SavedSearchesPage = () => {
       showToast('Could not delete that search. Please try again.', 'error');
     } finally {
       setDeletingId(null);
+    }
+  };
+
+  const handleToggleNotify = async (id: string, name: string, nextValue: boolean) => {
+    if (togglingId) return; // prevent double-clicks / overlapping toggles
+    setTogglingId(id);
+    // Optimistic update
+    setSearches((prev) =>
+      prev.map((s) => (s.id === id ? { ...s, notifyOnNew: nextValue } : s))
+    );
+    try {
+      const res = await api.patch(`/saved-searches/${id}`, { notifyOnNew: nextValue });
+      const updated = res.data?.savedSearch;
+      if (updated) {
+        setSearches((prev) => prev.map((s) => (s.id === id ? { ...s, ...updated } : s)));
+      }
+      showToast(
+        nextValue ? `You'll be notified of new matches for "${name}"` : `Notifications turned off for "${name}"`,
+        'success'
+      );
+    } catch (err) {
+      console.error('Error updating saved search notify setting:', err);
+      // Roll back the optimistic update
+      setSearches((prev) =>
+        prev.map((s) => (s.id === id ? { ...s, notifyOnNew: !nextValue } : s))
+      );
+      showToast('Could not update notifications. Please try again.', 'error');
+    } finally {
+      setTogglingId(null);
     }
   };
 
@@ -211,11 +241,27 @@ const SavedSearchesPage = () => {
                         </h2>
                       </div>
                       <p className="text-sm text-gray-600 dark:text-gray-400 truncate">{summary}</p>
-                      {search.notifyOnNew && (
-                        <span className="inline-flex items-center gap-1 mt-2 px-2 py-0.5 text-xs rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300">
+                      <div className="flex items-center gap-2 mt-2">
+                        <button
+                          onClick={() => handleToggleNotify(search.id, search.name, !search.notifyOnNew)}
+                          disabled={togglingId === search.id}
+                          className={`flex-shrink-0 relative inline-flex h-6 w-11 items-center rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                            search.notifyOnNew ? 'bg-amber-600' : 'bg-gray-300 dark:bg-gray-600'
+                          }`}
+                          role="switch"
+                          aria-checked={search.notifyOnNew}
+                          aria-label={`Notify on new matches for ${search.name}`}
+                        >
+                          <span
+                            className={`inline-block h-4 w-4 transform rounded-full bg-white dark:bg-gray-800 transition-transform ${
+                              search.notifyOnNew ? 'translate-x-6' : 'translate-x-1'
+                            }`}
+                          />
+                        </button>
+                        <span className="text-xs text-gray-600 dark:text-gray-400">
                           🔔 Notify on new matches
                         </span>
-                      )}
+                      </div>
                     </div>
 
                     <div className="flex items-center gap-2 flex-shrink-0">
