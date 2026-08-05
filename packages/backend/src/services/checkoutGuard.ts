@@ -1,4 +1,5 @@
 import { prisma as prismaClient } from '../lib/prisma';
+import * as Sentry from '@sentry/node';
 
 type PrismaClientLike = typeof prismaClient;
 
@@ -13,6 +14,14 @@ type PrismaClientLike = typeof prismaClient;
  * IMPORTANT: IP address / shared network is NEVER used as a block or self-flag signal.
  * A real customer on the organizer's wifi has their own device + card and must not be
  * blocked. This module never reads or compares IP for any decision.
+ *
+ * Alerting (2026-08 -- ADR-fraud-signal-alerting-dashboard.md): recordConfirmedSignal()
+ * and logBoothCartSignal() both fire Sentry.captureMessage('error') in addition to their
+ * DB/console write -- these are already-blocked, identity-grade collusion attempts, the
+ * highest-confidence signal this system can produce, so they are alert-worthy on their
+ * own regardless of admin review outcome. recordSuspectedSignal() (log-only, PENDING,
+ * cash/terminal) deliberately does NOT alert -- it is routine/expected volume and would
+ * drown out real CONFIRMED events; it stays pull-based via /admin/fraud-signals.
  */
 
 export class CheckoutGuardError extends Error {
@@ -78,6 +87,19 @@ export async function recordConfirmedSignal(
     });
   } catch (err) {
     console.error('[checkoutGuard] Failed to record FraudSignal (non-fatal):', err);
+  }
+
+  // Alert on every CONFIRMED collusion signal regardless of whether the FraudSignal
+  // upsert above succeeded -- the block itself already happened (assertCheckoutAllowed
+  // throws right after calling this), so the alert-worthy fact is real even in the
+  // (rare) case the DB write failed. Never let a Sentry failure affect checkout.
+  try {
+    Sentry.captureMessage(
+      `[checkoutGuard] CONFIRMED ${signalType} -- userId=${userId} saleId=${saleId} itemId=${itemId ?? '(none)'}: ${notes}`,
+      'error'
+    );
+  } catch {
+    // Sentry may not be initialized -- silently continue
   }
 }
 
@@ -364,9 +386,18 @@ function logBoothCartSignal(params: {
   buyerUserId?: string;
   notes: string;
 }): void {
-  console.error(
-    `[checkoutGuard][boothCart] ${params.signalType} — hub=${params.hubId} cart=${params.cartTransactionId} buyer=${params.buyerUserId ?? '(none — cashier self-dealing check)'} [${params.context}] ${params.notes}`
-  );
+  const msg = `[checkoutGuard][boothCart] ${params.signalType} — hub=${params.hubId} cart=${params.cartTransactionId} buyer=${params.buyerUserId ?? '(none — cashier self-dealing check)'} [${params.context}] ${params.notes}`;
+  console.error(msg);
+  // 2026-08 (ADR-fraud-signal-alerting-dashboard.md): this path has no FraudSignal row to
+  // browse (saleId is required/non-nullable, a booth cart has none -- see comment above)
+  // so console.error was its ONLY trace, invisible in production unless someone tails
+  // Railway logs. This is a real, already-blocked collusion attempt (assertBoothCartCheckoutAllowed
+  // throws right after calling this) -- same alert-worthiness as recordConfirmedSignal above.
+  try {
+    Sentry.captureMessage(msg, 'error');
+  } catch {
+    // Sentry may not be initialized -- silently continue
+  }
 }
 
 /**
