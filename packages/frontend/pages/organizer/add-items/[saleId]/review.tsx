@@ -118,6 +118,10 @@ interface Item {
   packageWidthIn?: number | null;
   packageHeightIn?: number | null;
   ebayShippingOverride?: string | null;
+  // Whether the organizer has confirmed a real (non-estimated) weight — required by
+  // validateItemForEbayPublish before a shippable item can push to eBay.
+  packageConfirmedByOrganizer?: boolean | null;
+  packageEstimateSource?: string | null;
   photos?: { url: string }[];
   // eBay product identifiers
   brand?: string | null;
@@ -239,6 +243,14 @@ const ReviewPage = () => {
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
   const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
   const [editStates, setEditStates] = useState<Map<string, ItemEditState>>(new Map());
+  // Tracks which items have had their package weight field edited directly on this
+  // page. eBay publish blocks a shippable item whose weight is only an AI/category
+  // estimate, and the only way out is the organizer confirming a REAL weight. Saving
+  // an untouched, prefilled estimate must NOT count as confirming it, so we only mark
+  // an item's weight as organizer-touched when the weight field itself is edited here
+  // (mirrors edit-item/[id].tsx's weightTouched boolean, scoped per-item since this
+  // page reviews many items at once).
+  const [weightTouched, setWeightTouched] = useState<Set<string>>(new Set());
 
   const [bulkPrice, setBulkPrice] = useState('');
   const [bulkCategory, setBulkCategory] = useState('');
@@ -692,6 +704,17 @@ const ReviewPage = () => {
     const updated = { ...state, [field]: value };
     editStates.set(itemId, updated);
     setEditStates(new Map(editStates));
+    // Organizer edited the weight field itself on this page — record it so the save
+    // payloads below can send packageConfirmedByOrganizer. Never set for the other 3
+    // package fields (length/width/height) — only the weight box drives eBay's
+    // publish-block guard, matching edit-item/[id].tsx's weightTouched exactly.
+    if (field === 'packageWeightOz') {
+      setWeightTouched((prev) => {
+        const next = new Set(prev);
+        next.add(itemId);
+        return next;
+      });
+    }
   };
 
   /**
@@ -825,6 +848,12 @@ const ReviewPage = () => {
         packageLengthIn: editState.packageLengthIn ?? null,
         packageWidthIn: editState.packageWidthIn ?? null,
         packageHeightIn: editState.packageHeightIn ?? null,
+        // Organizer typed a real weight on this page — record it as confirmed so eBay
+        // publish stops treating it as an estimate. Never sent when the weight field
+        // was left untouched (see weightTouched above).
+        ...(weightTouched.has(item.id) && editState.packageWeightOz != null
+          ? { packageConfirmedByOrganizer: true, packageEstimateSource: 'ORGANIZER' }
+          : {}),
         // eBay product identifiers — send '' as null
         brand: editState.brand?.trim() ? editState.brand.trim() : null,
         mpn: editState.mpn?.trim() ? editState.mpn.trim() : null,
@@ -1023,6 +1052,10 @@ const ReviewPage = () => {
           packageLengthIn: editState.packageLengthIn ?? null,
           packageWidthIn: editState.packageWidthIn ?? null,
           packageHeightIn: editState.packageHeightIn ?? null,
+          // Same confirm-on-real-edit rule as handleSaveItem above.
+          ...(weightTouched.has(item.id) && editState.packageWeightOz != null
+            ? { packageConfirmedByOrganizer: true, packageEstimateSource: 'ORGANIZER' }
+            : {}),
           ebayShippingOverride: editState.ebayShippingOverride ?? null,
         },
       });
@@ -1082,6 +1115,10 @@ const ReviewPage = () => {
             packageLengthIn: editState.packageLengthIn ?? null,
             packageWidthIn: editState.packageWidthIn ?? null,
             packageHeightIn: editState.packageHeightIn ?? null,
+            // Same confirm-on-real-edit rule as handleSaveItem above.
+            ...(weightTouched.has(item.id) && editState.packageWeightOz != null
+              ? { packageConfirmedByOrganizer: true, packageEstimateSource: 'ORGANIZER' }
+              : {}),
             ebayShippingOverride: editState.ebayShippingOverride ?? null,
           },
         });
