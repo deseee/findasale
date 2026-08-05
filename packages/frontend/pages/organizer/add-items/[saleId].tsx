@@ -276,6 +276,7 @@ interface RapidItem {
   title?: string;
   category?: string;
   aiError?: string;
+  aiErrorLog?: unknown[];
   photoUrls?: string[];
   autoEnhanced?: boolean;
   ebayListingId?: string;
@@ -392,6 +393,12 @@ const AddItemsDetailPage = () => {
   const [captureMode, setCaptureMode] = useState<'rapidfire' | 'regular'>('rapidfire');
   const [rapidItems, setRapidItems] = useState<RapidItem[]>([]);
   const [previewItemId, setPreviewItemId] = useState<string | null>(null);
+  // Re-analyze from the PreviewModal error banner (mirrors review.tsx's
+  // reanalyzingIds/reanalyzeErrors pattern) — tracks in-flight items and the
+  // last error per item so the modal can show a live "Re-analyzing…" state
+  // and surface a real failure message instead of the previous silent no-op.
+  const [reanalyzingIds, setReanalyzingIds] = useState<Set<string>>(new Set());
+  const [reanalyzeErrors, setReanalyzeErrors] = useState<Map<string, string>>(new Map());
   const [aiPaused, setAiPaused] = useState(false);
   const [addingToItemId, setAddingToItemId] = useState<string | null>(null);
   // Ref to track current append target — avoids stale closure in async processAndUploadRapidPhoto
@@ -495,6 +502,11 @@ const AddItemsDetailPage = () => {
   // Expandable item cards (like review & publish page)
   const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
   const [itemEditState, setItemEditState] = useState<Record<string, { title: string; price: string; category: string; condition: string; description: string; lotNumber: string; stockTotal: string; ebayCategoryId: string; ebayCategoryName: string; packageWeightOz: string }>>({});
+  // Tracks which items had their Weight (oz) field directly edited in this card's inline
+  // eBay & Shipping panel, so handleInlineItemSave knows to send packageConfirmedByOrganizer.
+  // Mirrors review.tsx's weightTouched pattern exactly (scoped per-item id, only the weight
+  // box drives eBay's publish-block guard, not the other package dimension fields).
+  const [inlineWeightTouched, setInlineWeightTouched] = useState<Set<string>>(new Set());
   const [sortBy, setSortBy] = useState<'name' | 'price' | 'status' | 'date'>('date');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   // Collapsed-by-default "eBay & Shipping" sub-section per item in the expanded quick-edit card
@@ -530,6 +542,12 @@ const AddItemsDetailPage = () => {
         ebayCategoryId: state.ebayCategoryId || null,
         ebayCategoryName: state.ebayCategoryName || null,
         packageWeightOz: state.packageWeightOz ? parseInt(state.packageWeightOz, 10) : undefined,
+        // Organizer typed a real weight in this card's inline Weight (oz) field — record it
+        // as confirmed so eBay publish stops treating it as an AI estimate. Never sent when
+        // the field was left untouched (see inlineWeightTouched above; mirrors review.tsx).
+        ...(inlineWeightTouched.has(itemId) && state.packageWeightOz
+          ? { packageConfirmedByOrganizer: true, packageEstimateSource: 'ORGANIZER' }
+          : {}),
       });
       showToast('Item saved', 'success');
       queryClient.invalidateQueries({ queryKey: ['items', saleId] });
@@ -537,7 +555,7 @@ const AddItemsDetailPage = () => {
     } catch {
       showToast('Failed to save item', 'error');
     }
-  }, [itemEditState, saleId, queryClient, showToast]);
+  }, [itemEditState, saleId, queryClient, showToast, inlineWeightTouched]);
 
   // Sort items based on current sort state
   const getSortedItems = useCallback((itemsToSort: any[]) => {
@@ -1635,11 +1653,23 @@ const AddItemsDetailPage = () => {
           return;
         }
 
-        // Timeout: After 30s, stop polling but don't error
+        // Timeout: After 30s, stop polling and surface a needs-attention state so the
+        // item isn't stranded silently. An item can reach here with NO aiErrorLog (backend
+        // never explicitly failed it) and NO title (never completed) — previously this left
+        // it permanently stuck in DRAFT with zero visible error signal, invisible to both the
+        // organizer and the PreviewModal's aiErrored check (confirmed live prod item
+        // cmsges1sr003oqp8qhjis0xc0: aiErrorLog null, isAiTagged false, created 2026-08-05
+        // 18:16, never advanced). Setting aiError here mirrors the explicit-failure branch
+        // above so the amber badge/retry UI actually shows for this case too.
         if (attempts >= maxAttempts) {
           clearInterval(poll);
-          // Don't show error — just stop polling. User can manually review.
-          // The item is still in DRAFT, carousel shows amber badge.
+          setRapidItems((prev) =>
+            prev.map((i) =>
+              i.id === itemId
+                ? { ...i, aiError: 'Auto-tagging is taking longer than expected. Tap to review and fill in manually.' }
+                : i
+            )
+          );
           return;
         }
       } catch (e) {
@@ -1707,6 +1737,65 @@ const AddItemsDetailPage = () => {
 
   const handleDeleteDraft = async (itemId: string) => {
     setRapidItems((prev) => prev.filter((i) => i.id !== itemId));
+  };
+
+  /**
+   * Re-analyze from the PreviewModal error banner (capture-page carousel).
+   * Re-runs the same Smart tagging pipeline as review.tsx's handleReanalyze,
+   * on this item's already-stored photos (no re-upload). On success, updates
+   * the item's title/category in rapidItems and clears the aiError/aiErrorLog
+   * flags so the error banner clears. On failure, surfaces a real message
+   * back into PreviewModal via reanalyzeErrors instead of the previous no-op.
+   */
+  const handleReanalyzeFromPreview = async (itemId: string) => {
+    if (reanalyzingIds.has(itemId)) return;
+
+    setReanalyzeErrors((prev) => {
+      const next = new Map(prev);
+      next.delete(itemId);
+      return next;
+    });
+    setReanalyzingIds((prev) => new Set(prev).add(itemId));
+
+    try {
+      const res = await api.post(`/items/${itemId}/reanalyze`);
+      const updated = res.data?.item;
+
+      setRapidItems((prev) =>
+        prev.map((i) =>
+          i.id !== itemId
+            ? i
+            : {
+                ...i,
+                title: updated?.title ?? i.title,
+                category: updated?.category ?? i.category,
+                // Clear error state now that re-analysis succeeded.
+                aiError: undefined,
+                aiErrorLog: undefined,
+              }
+        )
+      );
+      showToast('Suggestions refreshed from your photos.', 'success');
+    } catch (err: any) {
+      const code = err?.response?.data?.code;
+      let message = err?.response?.data?.message || 'Re-analyze failed. Try again.';
+      if (code === 'AI_QUOTA_EXCEEDED') {
+        message = err?.response?.data?.message || 'Monthly re-analyze limit reached.';
+      } else if (code === 'NO_PHOTOS') {
+        message = 'Add a photo before re-analyzing.';
+      } else if (code === 'AI_UNAVAILABLE') {
+        message = 'Smart tagging is temporarily unavailable. Try again shortly.';
+      } else if (code === 'PHOTO_DOWNLOAD_FAILED') {
+        message = "We couldn't load this item's photos. Try again in a moment.";
+      }
+      setReanalyzeErrors((prev) => new Map(prev).set(itemId, message));
+    } finally {
+      setReanalyzingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(itemId);
+        return next;
+      });
+    }
   };
 
   if (authLoading) {
@@ -2758,7 +2847,12 @@ const AddItemsDetailPage = () => {
                                     type="number"
                                     min={0}
                                     value={editState.packageWeightOz}
-                                    onChange={(e) => setItemEditState((prev) => ({ ...prev, [item.id]: { ...editState, packageWeightOz: e.target.value } }))}
+                                    onChange={(e) => {
+                                      setItemEditState((prev) => ({ ...prev, [item.id]: { ...editState, packageWeightOz: e.target.value } }));
+                                      // Organizer edited the weight field itself — record it so
+                                      // handleInlineItemSave can send packageConfirmedByOrganizer.
+                                      setInlineWeightTouched((prev) => new Set(prev).add(item.id));
+                                    }}
                                     className="w-full px-3 py-1.5 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded text-sm focus:ring-1 focus:ring-amber-500"
                                   />
                                 </div>
@@ -3074,6 +3168,9 @@ const AddItemsDetailPage = () => {
           }}
           onDelete={handleDeleteDraft}
           onRetake={() => setPreviewItemId(null)}
+          onReanalyze={handleReanalyzeFromPreview}
+          reanalyzing={previewItemId ? reanalyzingIds.has(previewItemId) : false}
+          reanalyzeError={previewItemId ? reanalyzeErrors.get(previewItemId) ?? null : null}
         />
       )}
 

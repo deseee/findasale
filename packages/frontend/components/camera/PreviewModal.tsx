@@ -12,6 +12,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { useToast } from '../ToastContext';
 import api from '../../lib/api';
 import { CATEGORIES, CONDITIONS, CONDITION_LABELS } from '../../lib/itemConstants';
@@ -28,6 +29,7 @@ export interface PreviewModalProps {
     condition?: string;
     description?: string;
     aiErrorLog?: object;
+    aiError?: string;
     aiConfidence?: number;
     price?: number;
   };
@@ -40,6 +42,16 @@ export interface PreviewModalProps {
   }) => Promise<void>;
   onDelete: (itemId: string) => void;
   onRetake: (itemId: string) => void;
+  // Re-run Smart tagging on this item's already-stored photos (no re-upload).
+  // Optional so existing PreviewModal call sites (e.g. quality/face-detection
+  // retake flows) that don't wire this up keep working unchanged.
+  onReanalyze?: (itemId: string) => void;
+  // Parent (owns rapidItems state) tracks in-flight re-analyze per item and
+  // passes the current item's loading state down.
+  reanalyzing?: boolean;
+  // Parent-tracked error message for the most recent re-analyze attempt on
+  // this item, shown inline in the error banner below.
+  reanalyzeError?: string | null;
 }
 
 const PreviewModal: React.FC<PreviewModalProps> = ({
@@ -49,6 +61,9 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
   onSave,
   onDelete,
   onRetake,
+  onReanalyze,
+  reanalyzing = false,
+  reanalyzeError = null,
 }) => {
   const { showToast } = useToast();
   const [edits, setEdits] = useState({
@@ -109,7 +124,7 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
 
   if (!isOpen) return null;
 
-  const aiErrored = item.draftStatus === 'DRAFT' && item.aiErrorLog;
+  const aiErrored = item.draftStatus === 'DRAFT' && !!(item.aiErrorLog || item.aiError);
 
   const handleSave = async () => {
     if (!edits.title.trim()) {
@@ -197,13 +212,31 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
         {/* Error banner */}
         {aiErrored && (
           <div className="bg-red-50 dark:bg-red-950/30 border-b border-red-200 dark:border-red-900 p-4 text-sm text-red-700 dark:text-red-400">
-            Analysis failed. Please review and fill in details manually.
-            <button
-              onClick={() => onRetake(item.id)}
-              className="block mt-2 text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 font-medium underline"
-            >
-              Retake photo
-            </button>
+            {item.aiError || 'Analysis failed. Please review and fill in details manually.'}
+            <div className="flex flex-wrap items-center gap-3 mt-2">
+              <button
+                onClick={() => onReanalyze?.(item.id)}
+                disabled={reanalyzing || !(fullItem?.photoUrls?.length || item.thumbnailUrl)}
+                className="text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 font-medium underline disabled:opacity-50 disabled:no-underline disabled:cursor-not-allowed"
+              >
+                {reanalyzing ? 'Re-analyzing…' : 'Re-analyze'}
+              </button>
+              <Link
+                href={`/organizer/edit-item/${item.id}`}
+                className="text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 font-medium underline"
+              >
+                Full Edit
+              </Link>
+              <button
+                onClick={() => onRetake(item.id)}
+                className="text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 font-medium underline"
+              >
+                Retake photo
+              </button>
+            </div>
+            {reanalyzeError && (
+              <p className="mt-2 text-xs text-red-800 dark:text-red-300">{reanalyzeError}</p>
+            )}
           </div>
         )}
 
