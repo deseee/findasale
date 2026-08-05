@@ -1,8 +1,12 @@
 name: Facebook Events Search Scraper
 
 on:
-  schedule:
-    - cron: '0 3 * * *'  # 03:00 UTC daily (full ~301-metro list sharded across 7 days)
+  # PAUSED 2026-08-05 (Patrick decision): source fully blocked (looksBlocked=true on
+  # 215/215 requests, 0 items collected every run 2026-07-28 through 2026-08-04).
+  # Revisit in 1-2 weeks -- re-enable this schedule block or run workflow_dispatch
+  # manually to test. See STATE.md Blocked Queue "Facebook Events scraper" row.
+  # schedule:
+  #   - cron: '0 3 * * *'  # 03:00 UTC daily (full ~301-metro list sharded across 7 days)
   workflow_dispatch:
     inputs:
       all_metros:
