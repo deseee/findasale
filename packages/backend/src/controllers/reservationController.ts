@@ -707,6 +707,19 @@ export const batchUpdateHolds = async (req: AuthRequest, res: Response) => {
           return res.status(400).json({ message: 'Cannot create a checkout link for $0' });
         }
 
+        // Reclaim-gap fix (2026-08-04): CHECKOUT_LINK previously created a Stripe Payment
+        // Link with no expiry tracking at all -- an abandoned link left its item(s) stuck
+        // at INVOICE_ISSUED forever, with zero rows in HoldInvoice for invoiceExpiryJob.ts
+        // to find (Payment Links are a different Stripe object than Checkout Sessions and
+        // predate/postdate that job's design). Fix: derive a real expiry from the
+        // underlying hold(s), same as LOCKED DECISION #7 does for the Checkout-Session
+        // path ("payment window = hold timer remainder / earliest expiry"), and pass it
+        // through so the resulting POSPaymentLink row is reclaimable. See
+        // posStrandedSaleReconcileCron.ts's expiry-based reclaim branch, which now scans
+        // ACTIVE POSPaymentLink rows past their own expiresAt, verifies via Stripe that
+        // the link genuinely was never paid, and reverts the item(s) if so.
+        const linkExpiresAt = new Date(Math.min(...validRouted.map((h) => h.expiresAt.getTime())));
+
         let linkResult;
         try {
           linkResult = await createPaymentLinkInternal({
@@ -717,6 +730,7 @@ export const batchUpdateHolds = async (req: AuthRequest, res: Response) => {
             itemIds,
             amount,
             buyerEmail: validRouted[0].user.email,
+            expiresAt: linkExpiresAt,
           });
         } catch (stripeErr: any) {
           console.error('[settlement] CHECKOUT_LINK payment link creation failed:', stripeErr);

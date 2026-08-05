@@ -28,8 +28,20 @@ export const expireStaleHolds = async (): Promise<void> => {
         where: { id: { in: ids } },
         data: { status: 'EXPIRED' },
       }),
+      // Reclaim-gap fix (2026-08-04): guard added so this unconditional revert can't
+      // race ahead of and bypass the Stripe-verified reclaim jobs (invoiceExpiryJob.ts
+      // for the HoldInvoice/Checkout-Session path, posStrandedSaleReconcileCron.ts's
+      // expiry branch for the CHECKOUT_LINK/Payment-Link path). Both of those jobs
+      // derive their own expiry from this SAME ItemReservation.expiresAt field, so
+      // without this guard this job could revert a possibly-PAID item straight to
+      // AVAILABLE before its payment status is ever checked with Stripe -- a real
+      // double-sell exposure, not just a cosmetic race. Only items still simply
+      // RESERVED (i.e. no invoice/payment-link/POS-cart flow has touched them since
+      // the hold was placed) are reverted here; this mirrors the conditional atomic
+      // updateMany pattern used throughout this subsystem (itemSaleGuard.ts,
+      // invoiceExpiryJob.ts).
       prisma.item.updateMany({
-        where: { id: { in: itemIds } },
+        where: { id: { in: itemIds }, status: 'RESERVED' },
         data: { status: 'AVAILABLE' },
       }),
     ]);

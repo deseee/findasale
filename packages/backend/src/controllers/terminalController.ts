@@ -402,6 +402,34 @@ export const captureTerminalPaymentIntent = async (req: AuthRequest, res: Respon
       }
     }
 
+    // S1072 Finding #4 follow-up: captureTerminalPaymentIntent (card-terminal /
+    // tap-to-pay) has the same walk-in-buyer gap as cashPayment above -- Purchase.userId
+    // is never set for POS captures (see createTerminalPaymentIntent's purchase.create
+    // call, which only sets itemId/saleId/amount/buyerEmail -- never userId), so there
+    // is no verifiable buyer account to hard-block against here either (unlike
+    // posPaymentController.ts's createPaymentRequest, which always has a real
+    // shopperUserId and uses assertCheckoutAllowed() as a hard block instead). Record
+    // the same low-confidence, non-blocking signal against the organizer for admin
+    // review -- fire-and-forget so a signal-recording failure never affects the
+    // already-captured payment or the response sent to the cashier.
+    const signalSaleId = purchases[0]?.saleId;
+    if (signalSaleId) {
+      prisma.organizer
+        .findUnique({ where: { id: organizer.id }, select: { userId: true } })
+        .then(organizerRecord => {
+          if (organizerRecord?.userId) {
+            recordSuspectedSignal({
+              prisma,
+              userId: organizerRecord.userId,
+              saleId: signalSaleId,
+              signalType: 'SELF_DEALING',
+              notes: '[captureTerminalPaymentIntent] Card-terminal (tap-to-pay) sale captured with no verifiable buyer account -- walk-in customer, offsite/unpreventable, logged for review only.',
+            }).catch(err => console.warn('[terminal] recordSuspectedSignal failed (non-fatal):', err));
+          }
+        })
+        .catch(err => console.warn('[terminal] Failed to resolve organizer userId for recordSuspectedSignal (non-fatal):', err));
+    }
+
     res.json({ purchaseIds: purchases.map(p => p.id), status: 'PAID', receiptSent });
   } catch (error) {
     console.error('[terminal] captureTerminalPaymentIntent error:', error);

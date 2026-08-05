@@ -131,7 +131,13 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
         aiPackageDimsJson: it.aiPackageDimsJson,
         aiPackageConfidence: it.aiPackageConfidence != null ? Number(it.aiPackageConfidence) : null,
       });
-      if (resolved && !UNTRUSTED_SOURCES.includes(resolved.source)) {
+      if (resolved && resolved.pickupOnlyForced) {
+        // Never-shippable keyword match (e.g. tankless water heater, RO system) --
+        // resolvePublishPackageWeight already persisted ebayShippingOverride to the DB;
+        // mirror it in-memory so the shippingOverride computed below reflects pickup-only
+        // on THIS response instead of a stale null override from the initial query.
+        (it as { ebayShippingOverride: string | null }).ebayShippingOverride = 'LOCAL_PICKUP_ONLY';
+      } else if (resolved && !UNTRUSTED_SOURCES.includes(resolved.source)) {
         // 'SEED' (generic 24oz/0.25-confidence last-resort guess) and 'AI' (unmeasured
         // single-photo vision guess) are NOT curated PackageProfile rows (those come back
         // as 'CATEGORY'/'KEYWORD') and are not organizer-confirmed either. Per the ADR and

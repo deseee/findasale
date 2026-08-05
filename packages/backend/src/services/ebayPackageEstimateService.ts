@@ -12,6 +12,40 @@
 
 import { prisma } from '../lib/prisma';
 
+/**
+ * Large plumbed/built-in appliances that are never realistically shippable via parcel
+ * carrier, no matter what weight a PackageProfile/AI guess would produce -- these need a
+ * category-level pickup-only rule instead of a shippable-but-wrong-weight default
+ * (ADR-fb-package-weight-estimator, scoping note, 2026-07-22, "large appliances" gap).
+ * Kept tight to plumbed/installed appliances only -- general furniture/appliance handling
+ * (HEAVY_OVERSIZED in ebayShippingClassifier.ts) is a separate, unrelated post-sale
+ * shipping-policy suggestion, not this pre-publish weight-estimate gap, so it is not
+ * extended here to avoid scope creep.
+ */
+const NEVER_SHIPPABLE_KEYWORDS = [
+  'tankless water heater',
+  'water heater',
+  'reverse osmosis',
+  'ro water system',
+  'ro filtration system',
+  'whole house water filtration',
+  'water softener',
+];
+
+/**
+ * True when an item's title/description/category matches a known never-shippable
+ * large-plumbed-appliance keyword (see NEVER_SHIPPABLE_KEYWORDS above).
+ */
+export function isNeverShippableItem(
+  title?: string | null,
+  description?: string | null,
+  category?: string | null
+): boolean {
+  const text = `${title || ''} ${description || ''} ${category || ''}`.toLowerCase();
+  if (!text.trim()) return false;
+  return NEVER_SHIPPABLE_KEYWORDS.some((kw) => text.includes(kw));
+}
+
 export interface PackageEstimateItem {
   id?: string;
   title?: string | null;

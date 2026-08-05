@@ -49,8 +49,17 @@ export async function createPaymentLinkInternal(opts: {
   itemIds: string[];
   amount: number; // dollars
   buyerEmail?: string;
+  // Reclaim-gap fix (2026-08-04): CHECKOUT_LINK settlement router (reservationController.ts
+  // batchUpdateHolds) passes the underlying hold's own expiresAt here so the resulting
+  // POSPaymentLink row carries a REAL expiry that posStrandedSaleReconcileCron.ts can
+  // reclaim against -- mirrors LOCKED DECISION #7 (HoldInvoice/Checkout-Session path:
+  // "payment window = hold timer remainder"). Callers with no underlying hold (the
+  // generic POST /api/pos/payment-links ad-hoc "collect payment" endpoint, which never
+  // flips Item.status) omit this and keep the flat 24h default -- there is no hold
+  // timer to derive from and no INVOICE_ISSUED item for a reclaim job to act on.
+  expiresAt?: Date;
 }): Promise<{ linkId: string; paymentLinkUrl: string; qrCodeDataUrl?: string; amount: number }> {
-  const { organizerId, stripeConnectId, subscriptionTier, saleId, itemIds, amount, buyerEmail } = opts;
+  const { organizerId, stripeConnectId, subscriptionTier, saleId, itemIds, amount, buyerEmail, expiresAt } = opts;
 
   const items = itemIds.length > 0
     ? await prisma.item.findMany({
@@ -109,7 +118,10 @@ export async function createPaymentLinkInternal(opts: {
       amount: amountCents,
       itemIds,
       status: 'ACTIVE',
-      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+      // Reclaim-gap fix (2026-08-04): use the caller-supplied hold expiresAt when present
+      // (CHECKOUT_LINK settlement router) so posStrandedSaleReconcileCron.ts's expiry-based
+      // reclaim branch has a real deadline to act on; ad-hoc/no-hold callers keep the flat 24h.
+      expiresAt: expiresAt ?? new Date(Date.now() + 24 * 60 * 60 * 1000),
     },
   });
 

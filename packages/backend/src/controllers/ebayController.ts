@@ -47,7 +47,7 @@ import {
 } from '../services/ebayRateEstimateService';
 import { resolveItemShipping } from '../services/ebayShippingResolver';
 import { computeNetProceeds, suggestPriceForMargin } from '../services/ebayNetProceedsService';
-import { estimatePackageProfile } from '../services/ebayPackageEstimateService';
+import { estimatePackageProfile, isNeverShippableItem } from '../services/ebayPackageEstimateService';
 import { modelTokenFrom } from '../services/ebayCatalogLookup';
 
 /**
@@ -1864,9 +1864,51 @@ export async function resolvePublishPackageWeight(item: {
   heightIn: number | null;
   packageType: string | null;
   source: string;
+  pickupOnlyForced?: boolean;
 } | null> {
   // Local-pickup items intentionally carry no shipping weight — never touch them.
   if (item.ebayShippingOverride === 'LOCAL_PICKUP_ONLY') return null;
+
+  // Large plumbed/built-in appliances (tankless water heaters, RO/whole-house water
+  // filtration, water softeners) are never realistically shippable via parcel carrier no
+  // matter what weight the cascade below would guess -- force pickup-only using the same
+  // ebayShippingOverride flag an organizer would set manually, instead of letting the item
+  // fall through to a nonsensical shippable default (ADR-fb-package-weight-estimator
+  // scoping note, 2026-07-22, "large appliances" gap). Only fires when the organizer
+  // hasn't already confirmed a real measured weight or made their own explicit
+  // shipping-override decision -- mirrors the ORGANIZER-wins guarantee in
+  // estimatePackageProfile(). Checked before the "already has a weight" short-circuit
+  // below so a stale pre-fix fallback weight on one of these items still gets corrected
+  // instead of persisting forever.
+  if (
+    !item.packageConfirmedByOrganizer &&
+    !item.ebayShippingOverride &&
+    isNeverShippableItem(item.title, item.description, item.category)
+  ) {
+    try {
+      await prisma.item.update({
+        where: { id: item.id },
+        data: { ebayShippingOverride: 'LOCAL_PICKUP_ONLY' },
+      });
+    } catch (e: any) {
+      console.warn(
+        '[eBay AutoWeight] failed to persist never-shippable pickup-only override for item',
+        item.id,
+        e?.message || e
+      );
+    }
+    console.log(`[eBay AutoWeight] item=${item.id} matched never-shippable keyword — forced LOCAL_PICKUP_ONLY`);
+    return {
+      weightOz: 0,
+      lengthIn: null,
+      widthIn: null,
+      heightIn: null,
+      packageType: null,
+      source: 'NEVER_SHIPPABLE',
+      pickupOnlyForced: true,
+    };
+  }
+
   // Already has a usable measured/confirmed weight — nothing to resolve.
   if (item.packageWeightOz != null && Number(item.packageWeightOz) > 0) return null;
 
@@ -2200,11 +2242,19 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
           aiPackageConfidence: (item as any).aiPackageConfidence,
         });
         if (autoPkg) {
-          (item as any).packageWeightOz = autoPkg.weightOz;
-          if (autoPkg.lengthIn != null) (item as any).packageLengthIn = autoPkg.lengthIn;
-          if (autoPkg.widthIn != null) (item as any).packageWidthIn = autoPkg.widthIn;
-          if (autoPkg.heightIn != null) (item as any).packageHeightIn = autoPkg.heightIn;
-          if (autoPkg.packageType) (item as any).packageType = autoPkg.packageType;
+          if (autoPkg.pickupOnlyForced) {
+            // Never-shippable keyword match (e.g. tankless water heater, RO system) --
+            // resolvePublishPackageWeight already persisted ebayShippingOverride to the DB;
+            // mirror it in-memory so the routing call right below and the pre-publish guard
+            // both see pickup-only on THIS request instead of a stale null override.
+            (item as any).ebayShippingOverride = 'LOCAL_PICKUP_ONLY';
+          } else {
+            (item as any).packageWeightOz = autoPkg.weightOz;
+            if (autoPkg.lengthIn != null) (item as any).packageLengthIn = autoPkg.lengthIn;
+            if (autoPkg.widthIn != null) (item as any).packageWidthIn = autoPkg.widthIn;
+            if (autoPkg.heightIn != null) (item as any).packageHeightIn = autoPkg.heightIn;
+            if (autoPkg.packageType) (item as any).packageType = autoPkg.packageType;
+          }
         }
 
         // Resolve policies for this item based on organizer's routing configuration
@@ -3276,11 +3326,18 @@ export const publishItemOffer = async (req: AuthRequest, res: Response) => {
       aiPackageConfidence: (item as any).aiPackageConfidence,
     });
     if (autoPkg) {
-      (item as any).packageWeightOz = autoPkg.weightOz;
-      (item as any).packageLengthIn = autoPkg.lengthIn;
-      (item as any).packageWidthIn = autoPkg.widthIn;
-      (item as any).packageHeightIn = autoPkg.heightIn;
-      if (autoPkg.packageType) (item as any).packageType = autoPkg.packageType;
+      if (autoPkg.pickupOnlyForced) {
+        // Never-shippable keyword match -- mirror the just-persisted DB override in-memory
+        // so validateItemForEbayPublish below sees pickup-only on this same request instead
+        // of a stale null override (see matching comment at the pushSaleToEbay call site).
+        (item as any).ebayShippingOverride = 'LOCAL_PICKUP_ONLY';
+      } else {
+        (item as any).packageWeightOz = autoPkg.weightOz;
+        (item as any).packageLengthIn = autoPkg.lengthIn;
+        (item as any).packageWidthIn = autoPkg.widthIn;
+        (item as any).packageHeightIn = autoPkg.heightIn;
+        if (autoPkg.packageType) (item as any).packageType = autoPkg.packageType;
+      }
     }
     const prePublishError = validateItemForEbayPublish({
       price: effectivePrice,
