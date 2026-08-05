@@ -714,14 +714,39 @@ export async function emailDiscoveryBatchJob(
 
       if (organizers.length === 0) break;
 
-      for (const org of organizers) {
-        const email = await discoverEmail(org.id, { dedup });
-        if (email) {
-          discovered++;
-        } else {
-          skipped++;
+      // Bounded concurrency: process this batch of (up to) 50 organizers in chunks of
+      // CONCURRENCY instead of strictly one at a time. Root-caused via real production
+      // timing data on 2026-08-05: today's run processed 983 organizers over 11 hours
+      // (~40s/org average) against a backlog of roughly 14,000 organizers — at that rate a
+      // full pass would take ~6 days of continuous runtime, which this job never gets since
+      // it's killed mid-run on every backend redeploy (multiple times a day). Each
+      // discoverEmail() call can take up to ~33s worst case (up to 5 sequential website path
+      // fetches at a 5s timeout each, plus an 8s RDAP fallback) — but the bottleneck is pure
+      // I/O wait on slow external websites, not CPU/memory (Railway's own metrics showed <5%
+      // CPU during the sequential run), so it's safe to run several of these waits in
+      // parallel. CONCURRENCY=8 is a middle ground between the old sequential (1) and the
+      // batch size (50): high enough to meaningfully cut wall-clock time (~8x for this
+      // I/O-bound workload), not so high it looks like abusive parallel traffic against many
+      // small independent sites. Concurrency safety already verified: RunDedupGuard.firstTime()
+      // (domainFetchState.ts) is a synchronous Set check with no await inside it, so it's
+      // atomic within one event-loop tick even under concurrent calls; and inside
+      // discoverEmail(), the dedup gate runs BEFORE the DB-backed circuit breaker
+      // (shouldFetch/recordOutcome), so only one organizer per shared domain per run ever
+      // reaches the breaker's read-then-write calls. discoverEmail() itself is untouched.
+      const CONCURRENCY = 8;
+      for (let i = 0; i < organizers.length; i += CONCURRENCY) {
+        const chunk = organizers.slice(i, i + CONCURRENCY);
+        const results = await Promise.all(
+          chunk.map((org) => discoverEmail(org.id, { dedup }))
+        );
+        for (const email of results) {
+          if (email) {
+            discovered++;
+          } else {
+            skipped++;
+          }
+          processed++;
         }
-        processed++;
       }
 
       cursor = organizers[organizers.length - 1]?.id;
