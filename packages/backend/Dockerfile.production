@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-# cache-bust: 2026-08-04T00-55-00Z -- unblock Railway (commit 123e4a665 and its cache-bust env-var redeploy attempt both show status=SKIPPED with zero build logs via Railway MCP list-deployments; confirmed empirically via a 404 on the new endpoint it was supposed to add. Setting DEPLOY_CACHE_BUST as an env var did NOT unblock it this time -- that's a runtime-restart signal, not a source-watch trigger. Forcing via a real Dockerfile change per this file's own documented 2026-07-22 remedy instead.)
+# cache-bust: 2026-08-05T04-10-00Z -- unblock Railway (commit 5382c1ea stuck at status=WAITING with ZERO build logs for 7+ minutes via Railway MCP list-deployments + get-logs, confirmed empirically, not assumed. Same stuck-queue symptom as the 2026-08-04 entry above; applying this file's own documented remedy again.)
 FROM node:20-slim AS base
 
 # Install OpenSSL for Prisma
