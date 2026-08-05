@@ -3362,51 +3362,59 @@ export const publishItemOffer = async (req: AuthRequest, res: Response) => {
     // `FAS-${item.id}` 404s when the organizer has skuAppendDate/Cost/Location toggles
     // enabled. buildCustomLabel applies those toggles so the SKU matches eBay.
     const sku = buildCustomLabel(item.id, organizer, item);
-    // If we just auto-resolved a weight for this item (autoPkg set), the existing eBay
-    // inventory item was likely created without one — merge the resolved weight+dims into
-    // the live inventory item BEFORE publish so calculated shipping can build a parcel
-    // (eBay 25101). Weight+dims only (no packageType) to avoid enum/LSAS conflicts; the
-    // 25101 self-heal still strips a stale packageType if one remains. Non-fatal.
-    if (autoPkg) {
-      try {
-        const invPath = encodeURIComponent(`/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`);
-        const invGet = await fetch(ebayProxyUrl(invPath), {
-          headers: { ...ebayUserHeaders(accessToken), ...ebayProxyHeaders() },
-        });
-        if (invGet.ok) {
-          const invBody = (await invGet.json()) as any;
-          const hasWeight =
-            invBody?.packageWeightAndSize?.weight?.value != null &&
-            Number(invBody.packageWeightAndSize.weight.value) > 0;
-          if (!hasWeight) {
-            invBody.packageWeightAndSize = {
-              weight: { unit: 'OUNCE', value: autoPkg.weightOz },
-              ...(autoPkg.lengthIn && autoPkg.widthIn && autoPkg.heightIn
-                ? {
-                    dimensions: {
-                      unit: 'INCH',
-                      length: autoPkg.lengthIn,
-                      width: autoPkg.widthIn,
-                      height: autoPkg.heightIn,
-                    },
-                  }
-                : {}),
-            };
-            const invPut = await fetch(ebayProxyUrl(invPath), {
-              method: 'PUT',
-              headers: { ...ebayUserHeaders(accessToken), ...ebayProxyHeaders() },
-              body: JSON.stringify(invBody),
-            });
-            if (invPut.ok || invPut.status === 204) {
-              console.log(`[eBay AutoWeight] sku=${sku} live inventory weight backfilled (${autoPkg.weightOz}oz)`);
-            } else {
-              console.warn(`[eBay AutoWeight] sku=${sku} inventory weight PUT failed HTTP ${invPut.status}`);
-            }
+    // CI fix (2026-08-05, post package-estimation-isolation ADR): this block used to
+    // backfill the live eBay inventory item's weight from `autoPkg`, the old auto-resolved
+    // ESTIMATE that resolvePublishPackageWeight() used to compute here. That call was
+    // removed from this function entirely (see the never-shippable-override comment above)
+    // because validateItemForEbayPublish's Guard 2/2b — which already ran above and
+    // returned before reaching this point — now GUARANTEES item.packageWeightOz and all
+    // three dimensions are real, organizer-confirmed, non-null values by the time execution
+    // gets here. So the self-heal purpose of this block (an eBay inventory item created
+    // before a weight existed still has no weight on eBay's side, even though FindA.Sale's
+    // Item row now does) is still real and still worth doing — it just now uses the item's
+    // actual confirmed weight/dims instead of a since-removed estimate. Non-fatal either way.
+    try {
+      const invPath = encodeURIComponent(`/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`);
+      const invGet = await fetch(ebayProxyUrl(invPath), {
+        headers: { ...ebayUserHeaders(accessToken), ...ebayProxyHeaders() },
+      });
+      if (invGet.ok) {
+        const invBody = (await invGet.json()) as any;
+        const hasWeight =
+          invBody?.packageWeightAndSize?.weight?.value != null &&
+          Number(invBody.packageWeightAndSize.weight.value) > 0;
+        if (!hasWeight) {
+          const weightOz = item.packageWeightOz as number;
+          const lengthIn = (item as any).packageLengthIn != null ? Number((item as any).packageLengthIn) : null;
+          const widthIn = (item as any).packageWidthIn != null ? Number((item as any).packageWidthIn) : null;
+          const heightIn = (item as any).packageHeightIn != null ? Number((item as any).packageHeightIn) : null;
+          invBody.packageWeightAndSize = {
+            weight: { unit: 'OUNCE', value: weightOz },
+            ...(lengthIn && widthIn && heightIn
+              ? {
+                  dimensions: {
+                    unit: 'INCH',
+                    length: lengthIn,
+                    width: widthIn,
+                    height: heightIn,
+                  },
+                }
+              : {}),
+          };
+          const invPut = await fetch(ebayProxyUrl(invPath), {
+            method: 'PUT',
+            headers: { ...ebayUserHeaders(accessToken), ...ebayProxyHeaders() },
+            body: JSON.stringify(invBody),
+          });
+          if (invPut.ok || invPut.status === 204) {
+            console.log(`[eBay AutoWeight] sku=${sku} live inventory weight backfilled (${weightOz}oz)`);
+          } else {
+            console.warn(`[eBay AutoWeight] sku=${sku} inventory weight PUT failed HTTP ${invPut.status}`);
           }
         }
-      } catch (e: any) {
-        console.warn('[eBay AutoWeight] live inventory weight backfill threw:', e?.message || e);
       }
+    } catch (e: any) {
+      console.warn('[eBay AutoWeight] live inventory weight backfill threw:', e?.message || e);
     }
     // Publish LIVE via the consolidated self-heal loop (Phase 3, ADR 2026-06-30).
     // Replaces the inline 25021/25002/25101/25005 self-heal blocks. The loop parses
