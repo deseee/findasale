@@ -199,3 +199,168 @@ export function extractPhones(text: string): string[] {
   }
   return matches;
 }
+
+/**
+ * Parse a Gsalr.com sale detail page.
+ * Same shape as GarageSaleFinder (meta startDate/endDate, granular address itemprops)
+ * but Gsalr tags address components separately (streetAddress/addressLocality/addressRegion/
+ * postalCode) rather than one combined text block — no regex split needed.
+ * Verified against a real fetched listing (2026-08-05): itemprop="name" is on the <h1><span>,
+ * not an h2 like GarageSaleFinder; address fields live inside
+ * strong[itemprop="address"][itemtype*="PostalAddress"].
+ */
+export function parseGsalrListing(html: string): Partial<ParsedListing> | null {
+  try {
+    const $ = cheerio.load(html);
+
+    const title = $('h1 span[itemprop="name"]').first().text().trim();
+    const addressBlock = $('strong[itemprop="address"]').first();
+    const street = addressBlock.find('span[itemprop="streetAddress"]').first().text().trim();
+    const city = addressBlock.find('span[itemprop="addressLocality"]').first().text().trim();
+    const state = addressBlock.find('span[itemprop="addressRegion"]').first().text().trim();
+    const zip = addressBlock.find('span[itemprop="postalCode"]').first().text().trim() || undefined;
+
+    const startDateStr = $('meta[itemprop="startDate"]').first().attr('content') ?? '';
+    const endDateStr = $('meta[itemprop="endDate"]').first().attr('content') ?? '';
+
+    if (!title || !city || !state) return null;
+    if (!startDateStr || !endDateStr) return null;
+    const startDate = new Date(startDateStr);
+    const endDate = new Date(endDateStr);
+    if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) return null;
+
+    return {
+      title,
+      address: street, // may be empty — Gsalr hides street address on some listings, same as GarageSaleFinder
+      city,
+      state,
+      zip,
+      startDate,
+      endDate,
+      description: $('#description span[itemprop="description"]').first().text().trim() || undefined,
+      saleType: 'YARD',
+    };
+  } catch (error) {
+    console.error('Error parsing Gsalr listing:', error);
+    return null;
+  }
+}
+
+/**
+ * Parse a YardSaleSearch.com METRO listing page — unlike GarageSaleFinder/Gsalr, this
+ * site embeds full structured data for every sale directly on the metro page (no separate
+ * per-sale detail-page fetch needed). Each sale is a
+ * `div[itemtype="http://schema.org/Event"]` block with a numeric `id` attribute (the
+ * canonical sourceItemId) and nested address/date/description itemprops.
+ * Verified against a real fetched Grand Rapids metro page (2026-08-05).
+ * KNOWN QUIRK: the site tags BOTH state and zip as `addressRegion` (a real markup bug on
+ * their end, not a parsing assumption) — the first occurrence is the 2-letter state, the
+ * second is the 5-digit zip. Handled explicitly below rather than assumed.
+ */
+export interface ParsedYardSaleSearchEntry extends Partial<ParsedListing> {
+  sourceItemId: string;
+}
+
+export function parseYardSaleSearchMetroPage(html: string): ParsedYardSaleSearchEntry[] {
+  const results: ParsedYardSaleSearchEntry[] = [];
+  try {
+    const $ = cheerio.load(html);
+
+    $('div[itemtype="http://schema.org/Event"], div[itemtype="https://schema.org/Event"]').each((_, el) => {
+      const $el = $(el);
+      const sourceItemId = $el.attr('id')?.trim();
+      if (!sourceItemId) return;
+
+      const title = $el.find('h2[itemprop="name"] a[itemprop="url"]').first().text().trim();
+      if (!title) return;
+
+      const addressBlock = $el.find('[itemprop="address"]').first();
+      const city = addressBlock.find('[itemprop="addressLocality"]').first().text().trim();
+      // Both state and zip are tagged addressRegion on this site — take them in document order.
+      const regionSpans = addressBlock.find('[itemprop="addressRegion"]');
+      const state = regionSpans.eq(0).text().trim();
+      const zipRaw = regionSpans.length > 1 ? regionSpans.eq(1).text().trim() : '';
+      const zip = /^\d{5}$/.test(zipRaw) ? zipRaw : undefined;
+
+      const startDateStr = $el.find('meta[itemprop="startDate"]').first().attr('content') ?? '';
+      const endDateStr = $el.find('meta[itemprop="endDate"]').first().attr('content') ?? '';
+      if (!city || !state || !startDateStr || !endDateStr) return;
+
+      const startDate = new Date(startDateStr);
+      const endDate = new Date(endDateStr);
+      if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) return;
+
+      const description = $el.find('[itemprop="description"]').first().text().trim() || undefined;
+
+      results.push({
+        sourceItemId,
+        title,
+        address: '', // hidden-until-day-of on this site, same as GarageSaleFinder/Gsalr
+        city,
+        state,
+        zip,
+        startDate,
+        endDate,
+        description,
+        saleType: 'YARD',
+      });
+    });
+  } catch (error) {
+    console.error('Error parsing YardSaleSearch metro page:', error);
+  }
+  return results;
+}
+
+/**
+ * Parse a YardSales.net sale detail page (/s/{id}).
+ * Unlike Gsalr/YardSaleSearch, this site does NOT tag address components with itemprops —
+ * the full address is plain text inside `.map-address p` ("Street, City, ST ZIP"), so it
+ * needs the same regex-split approach GarageSaleFinder uses for its fallback case.
+ * Verified against a real fetched Detroit-metro listing (2026-08-05).
+ */
+export function parseYardSalesNetListing(html: string): Partial<ParsedListing> | null {
+  try {
+    const $ = cheerio.load(html);
+
+    const title = $('h1[itemprop="name"]').first().text().trim();
+    const addressText = $('.map-address p').first().text().trim().replace(/\s+/g, ' ');
+    const startDateStr = $('meta[itemprop="startDate"]').first().attr('content') ?? '';
+    const endDateStr = $('meta[itemprop="endDate"]').first().attr('content') ?? '';
+
+    if (!title || !addressText) return null;
+    if (!startDateStr || !endDateStr) return null;
+    const startDate = new Date(startDateStr);
+    const endDate = new Date(endDateStr);
+    if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) return null;
+
+    let street = '';
+    let city: string;
+    let state: string;
+    let zip: string | undefined;
+
+    const fullMatch = addressText.match(/^(.+?),\s*(.+?),\s*([A-Z]{2})\s+(\d{5})/);
+    if (fullMatch) {
+      [, street, city, state, zip] = fullMatch;
+    } else {
+      const partialMatch = addressText.match(/^(.+?),\s*([A-Z]{2})\s+(\d{5})/);
+      if (!partialMatch) return null;
+      [, city, state, zip] = partialMatch;
+      city = city.trim();
+    }
+
+    return {
+      title,
+      address: street,
+      city,
+      state,
+      zip,
+      startDate,
+      endDate,
+      description: $('.sale-about [itemprop="description"]').first().text().trim() || undefined,
+      saleType: 'YARD',
+    };
+  } catch (error) {
+    console.error('Error parsing YardSales.net listing:', error);
+    return null;
+  }
+}
