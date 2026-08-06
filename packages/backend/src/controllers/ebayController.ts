@@ -1134,6 +1134,10 @@ export async function saveEbayPolicyMapping(req: AuthRequest, res: Response): Pr
       defaultPaymentPolicyId: body.defaultPaymentPolicyId ?? null,
       defaultDescriptionHtml: body.defaultDescriptionHtml ?? null,
       weightTierMappings: body.weightTierMappings ?? [],
+      // (S1197) cubicTierMappings was read by the routing cascade (ADR-099) but never
+      // accepted here -- the Settings UI could show cubic tiers but any edit made
+      // through it would silently vanish on save. Same shape/pattern as weightTierMappings.
+      cubicTierMappings: body.cubicTierMappings ?? [],
       categoryOverrides: body.categoryOverrides ?? [],
       heavyOversizedPolicyId: body.heavyOversizedPolicyId ?? null,
       fragilePolicyId: body.fragilePolicyId ?? null,

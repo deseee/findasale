@@ -66,6 +66,16 @@ const newClientId = (): string => {
   return `tier_${Date.now()}_${_tierIdCounter}`;
 };
 
+interface CubicTierMapping {
+  maxLengthIn: number;
+  maxWidthIn: number;
+  maxHeightIn: number;
+  policyId: string;
+  policyName: string;
+  // Client-only stable id, same purpose as WeightTierMapping._clientId.
+  _clientId?: string;
+}
+
 interface CategoryOverride {
   categoryId: string;
   categoryName?: string;
@@ -87,6 +97,7 @@ interface PolicyMapping {
   defaultPaymentPolicyId?: string | null;
   defaultDescriptionHtml?: string | null;
   weightTierMappings: WeightTierMapping[];
+  cubicTierMappings: CubicTierMapping[];
   categoryOverrides: CategoryOverride[];
   heavyOversizedPolicyId?: string | null;
   fragilePolicyId?: string | null;
@@ -162,6 +173,7 @@ const EbayPolicySetupPage = () => {
           defaultPaymentPolicyId: null,
           defaultDescriptionHtml: null,
           weightTierMappings: [],
+          cubicTierMappings: [],
           categoryOverrides: [],
           heavyOversizedPolicyId: null,
           fragilePolicyId: null,
@@ -176,6 +188,9 @@ const EbayPolicySetupPage = () => {
         // survive re-renders and (deferred) re-sorts without remounting inputs.
         currentMapping.weightTierMappings = (currentMapping.weightTierMappings || []).map(
           (tier: WeightTierMapping) => ({ ...tier, _clientId: tier._clientId || newClientId() })
+        );
+        currentMapping.cubicTierMappings = (currentMapping.cubicTierMappings || []).map(
+          (tier: CubicTierMapping) => ({ ...tier, _clientId: tier._clientId || newClientId() })
         );
 
         setMapping(currentMapping);
@@ -239,7 +254,12 @@ const EbayPolicySetupPage = () => {
           return aVal - bVal;
         })
         .map(({ _clientId, ...rest }) => rest);
-      const payload = { ...mapping, weightTierMappings: sortedTiers, handlingTimeDays };
+      // Cubic tiers sort by volume ascending -- same canonical order matchCubicTier
+      // (ebayPolicyParser.ts) uses when picking the smallest tier that fits an item.
+      const sortedCubicTiers = [...(mapping.cubicTierMappings || [])]
+        .sort((a, b) => (a.maxLengthIn * a.maxWidthIn * a.maxHeightIn) - (b.maxLengthIn * b.maxWidthIn * b.maxHeightIn))
+        .map(({ _clientId, ...rest }) => rest);
+      const payload = { ...mapping, weightTierMappings: sortedTiers, cubicTierMappings: sortedCubicTiers, handlingTimeDays };
       // Save the policy mapping (existing path)
       await api.post('/ebay/policy-mapping', payload);
       // Save organizer-level eBay defaults and SKU append toggles.
@@ -264,7 +284,11 @@ const EbayPolicySetupPage = () => {
         const bVal = b.maxOz === Infinity ? Number.MAX_VALUE : b.maxOz;
         return aVal - bVal;
       }).map(t => ({ ...t, _clientId: idByMaxOz.get(t) || t._clientId || newClientId() }));
-      const savedMapping = { ...mapping, weightTierMappings: sortedWithIds };
+      const idByCubic = new Map((mapping.cubicTierMappings || []).map(t => [t, t._clientId]));
+      const sortedCubicWithIds = [...(mapping.cubicTierMappings || [])]
+        .sort((a, b) => (a.maxLengthIn * a.maxWidthIn * a.maxHeightIn) - (b.maxLengthIn * b.maxWidthIn * b.maxHeightIn))
+        .map(t => ({ ...t, _clientId: idByCubic.get(t) || t._clientId || newClientId() }));
+      const savedMapping = { ...mapping, weightTierMappings: sortedWithIds, cubicTierMappings: sortedCubicWithIds };
       setMapping(savedMapping);
       setOriginalMapping(JSON.parse(JSON.stringify(savedMapping)));
       setOriginalOrganizerDefaults(JSON.parse(JSON.stringify(organizerDefaults)));
@@ -327,6 +351,30 @@ const EbayPolicySetupPage = () => {
     if (!mapping) return;
     const newTiers = mapping.weightTierMappings.filter((_, i) => i !== index);
     setMapping({ ...mapping, weightTierMappings: newTiers });
+  };
+
+  // Cubic tier handlers (ADR-099) -- same shape as weight-tier handlers above, but
+  // each row has three dimension fields instead of one weight cutoff.
+  const addCubicTier = () => {
+    if (!mapping) return;
+    const newTiers = [
+      ...(mapping.cubicTierMappings || []),
+      { maxLengthIn: 0, maxWidthIn: 0, maxHeightIn: 0, policyId: '', policyName: '', _clientId: newClientId() },
+    ];
+    setMapping({ ...mapping, cubicTierMappings: newTiers });
+  };
+
+  const updateCubicTier = (index: number, field: string, value: any) => {
+    if (!mapping) return;
+    const newTiers = [...(mapping.cubicTierMappings || [])];
+    newTiers[index] = { ...newTiers[index], [field]: value };
+    setMapping({ ...mapping, cubicTierMappings: newTiers });
+  };
+
+  const removeCubicTier = (index: number) => {
+    if (!mapping) return;
+    const newTiers = (mapping.cubicTierMappings || []).filter((_, i) => i !== index);
+    setMapping({ ...mapping, cubicTierMappings: newTiers });
   };
 
   // Category override handlers
@@ -682,6 +730,119 @@ const EbayPolicySetupPage = () => {
 
                   <button
                     onClick={addWeightTier}
+                    className="mt-4 text-sm text-sage-600 hover:text-sage-700 dark:text-sage-400 dark:hover:text-sage-500 font-medium"
+                  >
+                    + Add tier
+                  </button>
+                </div>
+                )}
+
+                {/* Section C2: Cubic-size tiers (ADR-099) -- only relevant in Flat-rate tiers mode.
+                    Weight alone doesn't determine real shipping cost: a light but bulky item (a
+                    lampshade, a large picture frame, a foam-packed fixture) can bill at a much
+                    higher "dimensional weight" than its actual weight once a carrier measures the
+                    box. The table above already accounts for this automatically -- FindA.Sale checks
+                    both and uses whichever is higher before picking a weight tier. This table is for
+                    items where you've built a specific eBay policy sized to the box itself (like
+                    USPS Ground Advantage Cubic pricing), so bulky-but-light items get priced by their
+                    real box size instead of falling back to a generic catch-all. */}
+                {mapping?.shippingMode === 'FLAT_TIERS' && (
+                <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+                  <div className="mb-4">
+                    <h2 className="text-xl font-bold text-gray-900 dark:text-white">Shipping Policy by Box Size</h2>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                      For bulky-but-light items where a carrier bills by box size, not weight (e.g. USPS Ground Advantage Cubic).
+                      Only used when an item overshoots your weight tiers above and has length, width, and height entered.
+                    </p>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-gray-200 dark:border-gray-700">
+                          <th className="text-left py-2 px-3 font-semibold text-gray-700 dark:text-gray-300">Fits within (L x W x H, in)</th>
+                          <th className="text-left py-2 px-3 font-semibold text-gray-700 dark:text-gray-300">Policy</th>
+                          <th className="text-right py-2 px-3 font-semibold text-gray-700 dark:text-gray-300">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(mapping.cubicTierMappings || []).map((tier, index) => (
+                          <tr key={tier._clientId || `cubic-fallback-${index}`} className="border-b border-gray-200 dark:border-gray-700">
+                            <td className="py-3 px-3">
+                              <div className="flex items-center gap-1">
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="0.1"
+                                  value={tier.maxLengthIn || ''}
+                                  onChange={(e) => updateCubicTier(index, 'maxLengthIn', parseFloat(e.target.value) || 0)}
+                                  placeholder="L"
+                                  aria-label="Max length in inches"
+                                  className="w-16 px-2 py-1 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded text-sm focus:outline-none focus:ring-2 focus:ring-sage-600"
+                                />
+                                <span className="text-gray-400">x</span>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="0.1"
+                                  value={tier.maxWidthIn || ''}
+                                  onChange={(e) => updateCubicTier(index, 'maxWidthIn', parseFloat(e.target.value) || 0)}
+                                  placeholder="W"
+                                  aria-label="Max width in inches"
+                                  className="w-16 px-2 py-1 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded text-sm focus:outline-none focus:ring-2 focus:ring-sage-600"
+                                />
+                                <span className="text-gray-400">x</span>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="0.1"
+                                  value={tier.maxHeightIn || ''}
+                                  onChange={(e) => updateCubicTier(index, 'maxHeightIn', parseFloat(e.target.value) || 0)}
+                                  placeholder="H"
+                                  aria-label="Max height in inches"
+                                  className="w-16 px-2 py-1 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded text-sm focus:outline-none focus:ring-2 focus:ring-sage-600"
+                                />
+                              </div>
+                            </td>
+                            <td className="py-3 px-3">
+                              <select
+                                value={tier.policyId || ''}
+                                onChange={(e) => {
+                                  const selectedId = e.target.value;
+                                  const policy = setupData.fulfillmentPolicies.find(p => p.fulfillmentPolicyId === selectedId);
+                                  if (selectedId && policy) {
+                                    if (!mapping) return;
+                                    const newTiers = [...(mapping.cubicTierMappings || [])];
+                                    newTiers[index] = { ...newTiers[index], policyId: selectedId, policyName: policy.name };
+                                    setMapping({ ...mapping, cubicTierMappings: newTiers });
+                                  }
+                                }}
+                                className="w-full px-2 py-1 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded text-sm focus:outline-none focus:ring-2 focus:ring-sage-600"
+                              >
+                                <option value="">Select policy</option>
+                                {setupData.fulfillmentPolicies.map(policy => (
+                                  <option key={policy.fulfillmentPolicyId} value={policy.fulfillmentPolicyId}>
+                                    {policy.name} · {policy.classification}
+                                  </option>
+                                ))}
+                              </select>
+                            </td>
+                            <td className="py-3 px-3 text-right">
+                              <button
+                                onClick={() => removeCubicTier(index)}
+                                className="text-xs text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 font-medium"
+                              >
+                                Delete
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <button
+                    onClick={addCubicTier}
                     className="mt-4 text-sm text-sage-600 hover:text-sage-700 dark:text-sage-400 dark:hover:text-sage-500 font-medium"
                   >
                     + Add tier
