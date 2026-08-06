@@ -47,9 +47,16 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
     // a deleted sale kept surfacing here forever (organizer report: "deleted test sale" items
     // still showing after refresh).
     where: { organizerId: organizer.id, deletedAt: null },
-    select: { id: true, title: true },
+    // city/zip added 2026-08-06: fas-craigslist.js already had the field-fill logic for
+    // geographicArea/postal (item.saleCity/item.saleZip) but this endpoint never actually
+    // supplied them, so Craigslist's own required ZIP field was always left blank -- live-QA'd
+    // by Patrick, confirmed via screenshot (title/price/description filled correctly, ZIP
+    // rejected as missing). Never invents a value if a sale is missing city/zip (isOnlineOnly
+    // sales, for instance) -- fas-craigslist.js already only fills when the value is present.
+    select: { id: true, title: true, city: true, zip: true },
   });
   const saleTitleById = new Map(sales.map((s) => [s.id, s.title]));
+  const saleLocationById = new Map(sales.map((s) => [s.id, { city: s.city, zip: s.zip }]));
 
   const items = await prisma.item.findMany({
     // ADR-084 amendment 2026-07-15: exclude DONT_LIST items -- mirrors PostSaleEbayPanel's
@@ -259,6 +266,10 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
     allowBestOffer: it.allowBestOffer,
     bestOfferMinimumAmt: it.bestOfferMinimumAmt != null ? Number(it.bestOfferMinimumAmt) : null,
     marketplaceListed: postedByItem.has(it.id) && !removedByItem.has(it.id),
+    // Craigslist ZIP/area autofill (2026-08-06) -- fas-craigslist.js reads these exact field
+    // names (item.saleCity / item.saleZip) and only fills when present, never invents a value.
+    saleCity: saleLocationById.get(it.saleId || '')?.city || null,
+    saleZip: saleLocationById.get(it.saleId || '')?.zip || null,
   }));
 
   res.json({

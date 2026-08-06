@@ -1,5 +1,14 @@
 # syntax=docker/dockerfile:1
-# cache-bust: 2026-08-05T04-10-00Z -- unblock Railway (commit 5382c1ea stuck at status=WAITING with ZERO build logs for 7+ minutes via Railway MCP list-deployments + get-logs, confirmed empirically, not assumed. Same stuck-queue symptom as the 2026-08-04 entry above; applying this file's own documented remedy again.)
+# cache-bust: 2026-08-06T02-25-15Z -- unblock Railway (watch-path stranding, CLAUDE.md §10c: the
+# real backend changes for #602/#603 landed in commit 98fc4a57a, but the next two pushes
+# (a6d56f9f9, a15ac32e) were frontend-only fixes -- Railway evaluated watchPatterns against
+# those push tips and SKIPPED the backend deploy both times (confirmed via Railway MCP
+# list-deployments: both show status=SKIPPED). Backend has been running commit f871e74f3
+# (pre-#602/#603) the whole time -- confirmed live: GET /api/extension/sync-health returned
+# a real 404 "Not found" against the Railway domain directly, while the sibling route
+# /api/extension/items correctly returned 401 (route exists, route in question does not).
+# This trivial change touches packages/backend/** to force a fresh deploy that will pick up
+# all currently-committed backend code.
 FROM node:20-slim AS base
 
 # Install OpenSSL for Prisma
