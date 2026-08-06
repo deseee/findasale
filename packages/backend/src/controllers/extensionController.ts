@@ -59,10 +59,15 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
     // by Patrick, confirmed via screenshot (title/price/description filled correctly, ZIP
     // rejected as missing). Never invents a value if a sale is missing city/zip (isOnlineOnly
     // sales, for instance) -- fas-craigslist.js already only fills when the value is present.
-    select: { id: true, title: true, city: true, zip: true },
+    // address added 2026-08-06: geoverify-step fix -- Craigslist's "add map" screen
+    // (?s=geoverify, a step BEFORE the title/price/description form, live-confirmed via a
+    // real guest-posting walkthrough) asks for a street address that our script never filled
+    // because the step wasn't even detected. Sale.address already exists and is exactly the
+    // right data -- same never-invent-a-value rule as city/zip below.
+    select: { id: true, title: true, city: true, zip: true, address: true },
   });
   const saleTitleById = new Map(sales.map((s) => [s.id, s.title]));
-  const saleLocationById = new Map(sales.map((s) => [s.id, { city: s.city, zip: s.zip }]));
+  const saleLocationById = new Map(sales.map((s) => [s.id, { city: s.city, zip: s.zip, address: s.address }]));
 
   const items = await prisma.item.findMany({
     // ADR-084 amendment 2026-07-15: exclude DONT_LIST items -- mirrors PostSaleEbayPanel's
@@ -276,6 +281,9 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
     // names (item.saleCity / item.saleZip) and only fills when present, never invents a value.
     saleCity: saleLocationById.get(it.saleId || '')?.city || null,
     saleZip: saleLocationById.get(it.saleId || '')?.zip || null,
+    // Craigslist geoverify-step street address (2026-08-06) -- fills fas-craigslist.js's
+    // #xstreet0 field on the ?s=geoverify "add map" screen. Same never-invent rule.
+    saleAddress: saleLocationById.get(it.saleId || '')?.address || null,
   }));
 
   res.json({

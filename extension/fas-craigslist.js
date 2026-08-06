@@ -57,7 +57,7 @@
   // posting flow, and is cleared once the flow reaches the images step (end of automation). ----
   function attemptCount(step) { return Number(sessionStorage.getItem('fasCLAttempt_' + step) || '0'); }
   function bumpAttempt(step) { sessionStorage.setItem('fasCLAttempt_' + step, String(attemptCount(step) + 1)); }
-  function clearAttempts() { ['subarea', 'type', 'cat', 'edit'].forEach((s) => sessionStorage.removeItem('fasCLAttempt_' + s)); }
+  function clearAttempts() { ['subarea', 'type', 'cat', 'geoverify', 'edit'].forEach((s) => sessionStorage.removeItem('fasCLAttempt_' + s)); }
   // True (and shows a stop message) when this step has already been auto-submitted twice without
   // Craigslist advancing -- hand it to the human instead of looping.
   function guardStop(step) {
@@ -174,6 +174,7 @@
     const s = norm(new URLSearchParams(location.search).get('s'));
     if (s === 'type' || radioByLabelText('for sale by owner') || /what type of posting/i.test(bodyText())) return 'type';
     if (s === 'cat' || radioByLabelText('general for sale')) return 'cat';
+    if (s === 'geoverify' || (q('#xstreet0') && (q('#postal_code') || q('input[name="postal"]')))) return 'geoverify';
     if (s === 'subarea' || s === 'area') return 'subarea';
     return 'unknown';
   }
@@ -197,6 +198,20 @@
     selectRadio(radio);
     await humanPause(500, 900);
     clickContinueOrThrow('Category');
+  }
+
+  async function doGeoverifyStep(item) {
+    overlay('<b>FindA.Sale</b> - confirming the sale location...');
+    const street = q('#xstreet0');
+    if (street && (item.saleAddress || item.address)) setInputValue(street, item.saleAddress || item.address);
+    const city = q('#city');
+    const cityVal = item.saleCity || item.city || item.geographicArea;
+    if (city && cityVal) setInputValue(city, cityVal);
+    const postal = q('#postal_code') || q('input[name="postal"]');
+    const postalVal = item.saleZip || item.zip || item.postal || item.postalCode;
+    if (postal && postalVal) setInputValue(postal, String(postalVal));
+    await humanPause(500, 900);
+    clickContinueOrThrow('Location');
   }
 
   async function doEditStep(item) {
@@ -263,6 +278,7 @@
     if (step === 'images') { await doImagesStep(item, index, total); return; }
     if (step === 'type') { if (!guardStop('type')) await doTypeStep(); return; }
     if (step === 'cat') { if (!guardStop('cat')) await doCatStep(item); return; }
+    if (step === 'geoverify') { if (!guardStop('geoverify')) await doGeoverifyStep(item); return; }
     // subarea / area / unrecognized location chooser: we can't pick a location confidently (the
     // item carries no Craigslist area), so guide the human rather than guess.
     overlayInfo('Ready to autofill. Choose your Craigslist location/area on this screen and continue - FindA.Sale takes over at the posting details.');

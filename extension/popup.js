@@ -167,6 +167,9 @@ async function startQueue() {
     // corresponding field for the human to complete -- it never invents a city or ZIP.
     city: it.city, geographicArea: it.geographicArea, saleCity: it.saleCity,
     postal: it.postal, postalCode: it.postalCode, zip: it.zip, saleZip: it.saleZip,
+    // 2026-08-06: Craigslist geoverify-step street address ("add map" screen's #xstreet0) --
+    // same never-invent passthrough as the other location fields above.
+    saleAddress: it.saleAddress,
     // 2026-08-06: Craigslist reply-option email -- the organizer's own account email
     // (data we already have), same "fill what we already have, invent nothing" rule.
     email: (ORGANIZER && ORGANIZER.email) || null
