@@ -1620,14 +1620,32 @@ const EditItemPage = () => {
                     </select>
                   </div>
                   {item?.packageConfirmedByOrganizer !== true && (
-                    <button
-                      type="button"
-                      onClick={handleGetPackageEstimate}
-                      disabled={packageEstimateLoading}
-                      className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {packageEstimateLoading ? 'Getting estimate…' : 'Get AI weight & size estimate'}
-                    </button>
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <button
+                        type="button"
+                        onClick={handleGetPackageEstimate}
+                        disabled={packageEstimateLoading}
+                        className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {packageEstimateLoading ? 'Getting estimate…' : 'Get AI weight & size estimate'}
+                      </button>
+                      {/* S-QA-2026-08-06: root-caused live -- an organizer whose displayed weight/dims
+                          are ALREADY correct had no way to confirm them, because the only confirm path
+                          was "edit the Weight field" (weightTouched), and retyping the SAME number never
+                          fires React's onChange (no value delta = no input event = weightTouched stays
+                          false forever), silently blocking eBay publish on EBAY_WEIGHT_NOT_CONFIRMED with
+                          no way out short of a real value change. This button confirms directly, with no
+                          dummy edit required. */}
+                      {formData.packageWeightOz && (
+                        <button
+                          type="button"
+                          onClick={() => setWeightTouched(true)}
+                          className="text-sm font-medium text-green-600 dark:text-green-400 hover:underline"
+                        >
+                          {weightTouched ? '✓ Confirmed -- will save' : 'This is correct as shown'}
+                        </button>
+                      )}
+                    </div>
                   )}
                   <div>
                     <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-1">
