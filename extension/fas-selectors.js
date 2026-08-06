@@ -215,6 +215,39 @@
   // risks marking the WRONG live listing as sold, a materially worse failure than picking
   // Facebook's second-best category suggestion, so this only returns a card on an exact or
   // clean-substring title match, and returns null (caller must skip + flag) otherwise.
+  // (2026-08-06 fix) Facebook's "Your listings" grid only renders an initial page of cards on
+  // load -- confirmed live: an unscrolled page load rendered ~16 cards total, and a genuinely
+  // Sold item from 2+ weeks earlier (a real completed order, confirmed via Facebook's own
+  // Status: Sold filter + search) was completely absent from the DOM at that point. Every
+  // scan function below (listingCardByTitle, alreadySoldCardByTitle, allSoldListingCards) was
+  // therefore silently scanning only that first page -- reporting "no confident match" (removal
+  // direction) or simply never finding a real sold-card match (reverse sold-detection
+  // direction) for anything paginated further down. This was NOT a title-matching bug -- it was
+  // a coverage bug: the DOM being searched never contained the card at all.
+  // Confirmed live 2026-08-06: Facebook's lazy-load pagination does NOT respond to
+  // element.scrollIntoView() or a programmatic window.scrollBy() (both measured as a genuine
+  // no-op -- document.body.innerText.length did not change). It DOES respond to a real
+  // scrollTop increment paired with dispatched wheel + scroll events -- same "Facebook requires
+  // a specific trusted-like event sequence, not just a DOM/property change" pattern as
+  // realClick() above. Stops once two consecutive scroll attempts produce no new content
+  // (reached the true end of the list) or maxScrolls is hit (safety cap so a very large
+  // inventory can never hang a single ~20-min poll cycle indefinitely). Callers: fas-remove.js
+  // start() runs this once per page load, before either the sold-detection scan or the removal
+  // queue touches the DOM, so every card-lookup function below sees the FULL listing set.
+  async function loadAllListingCards(maxScrolls) {
+    const cap = typeof maxScrolls === 'number' ? maxScrolls : 30;
+    let lastLen = document.body.innerText.length;
+    let stableCount = 0;
+    for (let i = 0; i < cap && stableCount < 2; i++) {
+      document.documentElement.scrollTop += 1000;
+      window.dispatchEvent(new WheelEvent('wheel', { deltaY: 1000, bubbles: true, cancelable: true }));
+      document.dispatchEvent(new Event('scroll', { bubbles: true }));
+      await new Promise((r) => setTimeout(r, 500));
+      const len = document.body.innerText.length;
+      if (len === lastLen) { stableCount++; } else { stableCount = 0; lastLen = len; }
+    }
+  }
+
   function listingCardByTitle(title) {
     const want = norm(title);
     if (!want) return null;
@@ -223,7 +256,7 @@
     const candidates = [];
     for (const btn of soldButtons) {
       let el = btn, hops = 0, cardText = null, cardEl = null;
-      while (el && hops < 8) {
+      while (el && hops < 16) {
         el = el.parentElement;
         hops++;
         if (!el) break;
@@ -263,7 +296,7 @@
     const cardMap = new Map(); // cardEl -> cardText, deduped
     for (const btn of markers) {
       let el = btn, hops = 0;
-      while (el && hops < 8) {
+      while (el && hops < 16) {
         el = el.parentElement;
         hops++;
         if (!el) break;
@@ -300,7 +333,7 @@
     const cardMap = new Map(); // cardEl -> cardText, deduped
     for (const btn of markers) {
       let el = btn, hops = 0;
-      while (el && hops < 8) {
+      while (el && hops < 16) {
         el = el.parentElement;
         hops++;
         if (!el) break;
@@ -444,7 +477,7 @@
   function isSwitchOn(el) { return !!(el && el.getAttribute('aria-checked') === 'true'); }
 
   window.__FAS_SEL__ = { norm, fieldByLabel, comboByLabel, optionByText, photoInput, chipsAfter, categoryChips, persistentCategoryChips, bestTextMatch,
-    elementByText, radioLabelByText, listingCardByTitle, alreadySoldCardByTitle, allSoldListingCards, realClick, menuCheckboxByText, isMenuChecked, isDisabled, radioOptionByText,
+    elementByText, radioLabelByText, listingCardByTitle, alreadySoldCardByTitle, allSoldListingCards, loadAllListingCards, realClick, menuCheckboxByText, isMenuChecked, isDisabled, radioOptionByText,
     switchByLabel, isSwitchOn, isRadioChecked, weightExactLink, weightExactInputs,
     LABELS: { title: 'Title', price: 'Price', description: 'Description', condition: 'Condition', category: 'Category', offerToggle: 'negotiate', offerMinimum: 'Minimum price' } };
 })();

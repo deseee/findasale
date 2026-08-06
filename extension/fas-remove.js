@@ -323,6 +323,11 @@
     // contains items already SOLD there -- mutually exclusive sets, so scanning first can never
     // interfere with (or be stale for) the removal pass that follows.
     await sleep(600); // let the listings grid render before searching for cards
+    // (2026-08-06 fix) Load every page of the listings grid into the DOM before either scan
+    // below runs -- see loadAllListingCards in fas-selectors.js for why this is required.
+    // Without this, both the sold-detection scan and the removal queue's card lookups only
+    // ever saw whatever Facebook happened to render on the first page load.
+    await SEL.loadAllListingCards();
     await runSoldDetectionScan();
 
     let q = null;
