@@ -64,6 +64,13 @@ const OrganizerSettingsPage = () => {
   const [fbCatalogEnabled, setFbCatalogEnabled] = useState(false);
   const [fbCatalogOrganizerId, setFbCatalogOrganizerId] = useState<string | null>(null);
   const [fbCatalogSaving, setFbCatalogSaving] = useState(false);
+  // Feature #603 (2026-08-05): platform-wide default best-offer thresholds (percentages).
+  const [defaultBestOfferAcceptPct, setDefaultBestOfferAcceptPct] = useState<string>('');
+  const [defaultBestOfferDeclinePct, setDefaultBestOfferDeclinePct] = useState<string>('');
+  const [savingBestOfferDefaults, setSavingBestOfferDefaults] = useState(false);
+  // Feature #602 (2026-08-05): AI Message-Reply Autosend (price/availability) opt-in, OFF by default.
+  const [autosendPriceAvailabilityEnabled, setAutosendPriceAvailabilityEnabled] = useState(false);
+  const [autosendTogglingSaving, setAutosendTogglingSaving] = useState(false);
   const [hours, setHours] = useState<Array<{ dayOfWeek: number; openTime: string; closeTime: string }>>(
     Array.from({ length: 7 }, (_, i) => ({ dayOfWeek: i, openTime: '09:00', closeTime: '17:00' }))
   );
@@ -397,6 +404,17 @@ const OrganizerSettingsPage = () => {
           setOrganizerTypes(response.data.organizerTypes || []);
           setFbCatalogEnabled(response.data.fbCatalogEnabled || false);
           setFbCatalogOrganizerId(response.data.id || null);
+          setDefaultBestOfferAcceptPct(
+            response.data.defaultBestOfferAcceptPct !== null && response.data.defaultBestOfferAcceptPct !== undefined
+              ? String(response.data.defaultBestOfferAcceptPct)
+              : ''
+          );
+          setDefaultBestOfferDeclinePct(
+            response.data.defaultBestOfferDeclinePct !== null && response.data.defaultBestOfferDeclinePct !== undefined
+              ? String(response.data.defaultBestOfferDeclinePct)
+              : ''
+          );
+          setAutosendPriceAvailabilityEnabled(response.data.autosendPriceAvailabilityEnabled || false);
         }
         // Fetch hours
         try {
@@ -2093,6 +2111,145 @@ const OrganizerSettingsPage = () => {
                   </div>
                 )}
               </div>
+              {/* Feature #603 (2026-08-05): Platform-wide default best-offer thresholds */}
+              <div className="card p-6">
+                <div className="flex items-center gap-2 mb-4">
+                  <h2 className="text-xl font-semibold text-warm-900 dark:text-gray-100">Default Best-Offer Thresholds</h2>
+                  <Tooltip content="Pre-fills the Best Offer accept/decline percentages on new items -- it never overrides a percentage you've already set on an individual item." position="right" />
+                </div>
+                <p className="text-warm-600 dark:text-gray-400 mb-4">
+                  When you turn on Best Offers for an item that has never had a threshold set, these percentages
+                  pre-fill the accept/decline fields so you don't have to type them every time. Suggested starting
+                  point: 10% auto-accept / 25% auto-decline.
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-md">
+                  <div>
+                    <label className="block text-xs font-medium text-warm-600 dark:text-gray-400 mb-1">Auto-accept offers above (%)</label>
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      value={defaultBestOfferAcceptPct}
+                      onChange={(e) => setDefaultBestOfferAcceptPct(e.target.value)}
+                      placeholder="10"
+                      className="w-full px-4 py-2 border border-warm-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-amber-500 bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-warm-600 dark:text-gray-400 mb-1">Auto-decline offers at or below (%)</label>
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      value={defaultBestOfferDeclinePct}
+                      onChange={(e) => setDefaultBestOfferDeclinePct(e.target.value)}
+                      placeholder="25"
+                      className="w-full px-4 py-2 border border-warm-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-amber-500 bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100"
+                    />
+                  </div>
+                </div>
+                {(() => {
+                  const acceptNum = defaultBestOfferAcceptPct === '' ? null : Number(defaultBestOfferAcceptPct);
+                  const declineNum = defaultBestOfferDeclinePct === '' ? null : Number(defaultBestOfferDeclinePct);
+                  const thresholdError =
+                    acceptNum !== null && declineNum !== null && declineNum <= acceptNum
+                      ? 'Auto-decline threshold must be higher than auto-accept threshold.'
+                      : null;
+                  return thresholdError ? (
+                    <p className="text-xs text-red-600 dark:text-red-400 mt-2">{thresholdError}</p>
+                  ) : null;
+                })()}
+                <div className="flex gap-3 mt-4">
+                  <button
+                    onClick={async () => {
+                      const acceptNum = defaultBestOfferAcceptPct === '' ? null : Number(defaultBestOfferAcceptPct);
+                      const declineNum = defaultBestOfferDeclinePct === '' ? null : Number(defaultBestOfferDeclinePct);
+                      if (acceptNum !== null && declineNum !== null && declineNum <= acceptNum) {
+                        showToast('Auto-decline threshold must be higher than auto-accept threshold.', 'error');
+                        return;
+                      }
+                      setSavingBestOfferDefaults(true);
+                      try {
+                        await api.patch('/organizers/me', {
+                          defaultBestOfferAcceptPct: acceptNum,
+                          defaultBestOfferDeclinePct: declineNum,
+                        });
+                        showToast('Default best-offer thresholds saved', 'success');
+                      } catch {
+                        showToast('Failed to save default thresholds', 'error');
+                      } finally {
+                        setSavingBestOfferDefaults(false);
+                      }
+                    }}
+                    disabled={savingBestOfferDefaults}
+                    className="text-sm bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-6 rounded-lg disabled:opacity-50 transition"
+                  >
+                    {savingBestOfferDefaults ? 'Saving...' : 'Save Defaults'}
+                  </button>
+                  <button
+                    onClick={async () => {
+                      setSavingBestOfferDefaults(true);
+                      try {
+                        await api.patch('/organizers/me', {
+                          defaultBestOfferAcceptPct: null,
+                          defaultBestOfferDeclinePct: null,
+                        });
+                        setDefaultBestOfferAcceptPct('');
+                        setDefaultBestOfferDeclinePct('');
+                        showToast('Default best-offer thresholds cleared', 'success');
+                      } catch {
+                        showToast('Failed to clear default thresholds', 'error');
+                      } finally {
+                        setSavingBestOfferDefaults(false);
+                      }
+                    }}
+                    disabled={savingBestOfferDefaults}
+                    className="text-sm bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-warm-700 dark:text-gray-300 font-medium py-2 px-6 rounded-lg disabled:opacity-50 transition"
+                  >
+                    Clear
+                  </button>
+                </div>
+              </div>
+
+              {/* Feature #602 (2026-08-05): AI Message-Reply Autosend -- Price + Availability */}
+              <div className="card p-6">
+                <div className="flex items-center gap-2 mb-4">
+                  <h2 className="text-xl font-semibold text-warm-900 dark:text-gray-100">AI Message-Reply Autosend</h2>
+                  <Tooltip content="Automatically replies to buyer messages that ask about price or availability, using the same thresholds you trust for eBay Best Offers." position="right" />
+                </div>
+                <p className="text-warm-600 dark:text-gray-400 mb-4">
+                  When a Facebook Marketplace buyer asks &quot;still available?&quot; or makes an offer, this can
+                  automatically confirm the price, decline a too-low offer, or confirm availability -- without you
+                  typing a reply. Anything the parser isn&apos;t confident about (a range, a vague number, an
+                  in-between offer, or a status change) is left as a draft for you to send yourself. This
+                  involves confirming or declining real prices to real buyers, so it&apos;s off by default even if
+                  you&apos;ve already turned on other Marketplace Autofill automations.
+                </p>
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <div
+                    onClick={async () => {
+                      const next = !autosendPriceAvailabilityEnabled;
+                      setAutosendTogglingSaving(true);
+                      try {
+                        await api.patch('/organizers/me', { autosendPriceAvailabilityEnabled: next });
+                        setAutosendPriceAvailabilityEnabled(next);
+                        showToast(next ? 'Price/availability autosend enabled' : 'Price/availability autosend disabled', 'success');
+                      } catch {
+                        showToast('Failed to update setting', 'error');
+                      } finally {
+                        setAutosendTogglingSaving(false);
+                      }
+                    }}
+                    className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors cursor-pointer ${autosendPriceAvailabilityEnabled ? 'bg-amber-500' : 'bg-gray-300 dark:bg-gray-600'} ${autosendTogglingSaving ? 'opacity-50 pointer-events-none' : ''}`}
+                  >
+                    <span className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${autosendPriceAvailabilityEnabled ? 'translate-x-5' : 'translate-x-1'}`} />
+                  </div>
+                  <span className="text-sm text-warm-700 dark:text-gray-300">
+                    {autosendPriceAvailabilityEnabled ? 'Autosend is on' : 'Autosend is off'}
+                  </span>
+                </label>
+              </div>
+
             </div>
           )}
 

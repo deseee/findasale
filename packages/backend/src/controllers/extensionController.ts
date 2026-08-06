@@ -6,6 +6,7 @@ import { canRemoveWatermark } from '../utils/watermarkPolicy';
 import { applyNeverShippableOverride, computeEffectivePackageWeight, endEbayListingIfExists } from './ebayController';
 import { markShopifyItemSold } from '../services/shopifyService';
 import { commitItemSale, ItemAlreadyCommittedError } from '../services/itemSaleGuard';
+import { decideMessageAutosend } from '../services/messageAutosendService';
 
 // Facebook Marketplace condition values. Mirrors mapConditionForFacebook() in
 // exportController.ts (kept in sync; trivial pure map — not worth a shared import).
@@ -260,7 +261,16 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
     marketplaceListed: postedByItem.has(it.id) && !removedByItem.has(it.id),
   }));
 
-  res.json({ organizer: { businessName: organizer.businessName }, items: shaped });
+  res.json({
+    organizer: {
+      businessName: organizer.businessName,
+      // Feature #602 (2026-08-05): client-side convenience gate for the content script --
+      // it should not even attempt a message-autosend-decision call when this is false, but
+      // the backend endpoint re-checks it authoritatively regardless (never trust the client).
+      autosendPriceAvailabilityEnabled: (organizer as any).autosendPriceAvailabilityEnabled ?? false,
+    },
+    items: shaped,
+  });
 };
 
 // Verify an item belongs to the requesting organizer; returns the organizer id or null.
@@ -621,4 +631,198 @@ export const markItemSoldOnFacebook = async (req: AuthRequest, res: Response): P
   );
 
   res.json({ ok: true });
+};
+
+// GET /api/extension/sync-health -- organizer-facing summary of Marketplace Autofill
+// activity, powering the "Marketplace Sync Health" card on marketplace-extension.tsx
+// (the organizer's install page, NOT the extension itself -- this is a normal
+// cookie-authenticated web request, unlike the Bearer-only endpoints above).
+// Pure read, no writes, no new schema. Reuses the SAME organizer-scoping pattern as
+// getExtensionItems/getPendingRemovals/getPendingSoldChecks above (sale: { organizerId,
+// deletedAt: null }) and the SAME MAX_REMOVAL_SKIP_ATTEMPTS dead-letter threshold
+// getPendingRemovals uses (~L358 above) -- deliberately not a fourth divergent
+// implementation of the posted/removed-set computation.
+export const getSyncHealth = async (req: AuthRequest, res: Response): Promise<void> => {
+  const userId = req.user?.id;
+  if (!userId) { res.status(401).json({ message: 'Authentication required' }); return; }
+
+  const organizer = await prisma.organizer.findUnique({ where: { userId } });
+  if (!organizer) { res.status(404).json({ message: 'Organizer profile not found' }); return; }
+
+  const sales = await prisma.sale.findMany({
+    where: { organizerId: organizer.id, deletedAt: null },
+    select: { id: true, title: true },
+  });
+  const saleTitleById = new Map(sales.map((s) => [s.id, s.title]));
+
+  // --- lastSyncActivity + activePostedCount ---
+  // Scoped to ALL items under this organizer's non-deleted sales, regardless of
+  // Item.status -- a POST/REMOVE job's history is still real "last activity" even for
+  // an item that has since sold or been archived, unlike the AVAILABLE-only scoping
+  // getExtensionItems/getPendingUpdates use for their listable-item sets above.
+  const allItems = await prisma.item.findMany({
+    where: { sale: { organizerId: organizer.id, deletedAt: null } },
+    select: { id: true },
+  });
+  const allItemIds = allItems.map((i) => i.id);
+  const activityJobs = allItemIds.length
+    ? await prisma.marketplaceListingJob.findMany({
+        where: { itemId: { in: allItemIds } },
+        select: { itemId: true, action: true, status: true, createdAt: true },
+      })
+    : [];
+  const postedByItem = new Set<string>();
+  const removedByItem = new Set<string>();
+  let lastPostAt: Date | null = null;
+  let lastRemoveAt: Date | null = null;
+  for (const j of activityJobs) {
+    if (j.action === 'POST' && j.status === 'POSTED') {
+      postedByItem.add(j.itemId);
+      if (!lastPostAt || j.createdAt > lastPostAt) lastPostAt = j.createdAt;
+    }
+    if (j.action === 'REMOVE' && j.status === 'REMOVED') {
+      removedByItem.add(j.itemId);
+      if (!lastRemoveAt || j.createdAt > lastRemoveAt) lastRemoveAt = j.createdAt;
+    }
+  }
+  const activePostedCount = allItemIds.filter((id) => postedByItem.has(id) && !removedByItem.has(id)).length;
+
+  // --- manualReviewBacklog ---
+  // Mirrors getPendingRemovals' needsManualReview computation exactly (same
+  // MAX_REMOVAL_SKIP_ATTEMPTS threshold declared above, same soldItems/jobs shape),
+  // with a saleTitle join and lastAttemptAt surfaced for display on this card.
+  const soldItems = await prisma.item.findMany({
+    where: { sale: { organizerId: organizer.id, deletedAt: null }, status: 'SOLD' },
+    select: { id: true, title: true, saleId: true },
+  });
+  const soldItemIds = soldItems.map((i) => i.id);
+  const removalJobs = soldItemIds.length
+    ? await prisma.marketplaceListingJob.findMany({
+        where: { itemId: { in: soldItemIds } },
+        select: { itemId: true, action: true, status: true, lastErrorMessage: true, lastAttemptAt: true },
+      })
+    : [];
+  const postedByRemovalItem = new Set<string>();
+  const removedByRemovalItem = new Set<string>();
+  const skipCountByItem = new Map<string, number>();
+  const lastSkipReasonByItem = new Map<string, string | null>();
+  const lastSkipAtByItem = new Map<string, Date>();
+  for (const j of removalJobs) {
+    if (j.action === 'POST' && j.status === 'POSTED') postedByRemovalItem.add(j.itemId);
+    if (j.action === 'REMOVE' && j.status === 'REMOVED') removedByRemovalItem.add(j.itemId);
+    if (j.action === 'REMOVE' && j.status === 'SKIPPED') {
+      skipCountByItem.set(j.itemId, (skipCountByItem.get(j.itemId) || 0) + 1);
+      lastSkipReasonByItem.set(j.itemId, j.lastErrorMessage ?? null);
+      const attemptedAt = j.lastAttemptAt;
+      if (attemptedAt && (!lastSkipAtByItem.has(j.itemId) || attemptedAt > lastSkipAtByItem.get(j.itemId)!)) {
+        lastSkipAtByItem.set(j.itemId, attemptedAt);
+      }
+    }
+  }
+  const stillPendingRemoval = soldItems.filter((i) => postedByRemovalItem.has(i.id) && !removedByRemovalItem.has(i.id));
+  const manualReviewBacklog = stillPendingRemoval
+    .filter((i) => (skipCountByItem.get(i.id) || 0) >= MAX_REMOVAL_SKIP_ATTEMPTS)
+    .map((i) => ({
+      itemId: i.id,
+      title: i.title,
+      saleTitle: saleTitleById.get(i.saleId || '') || 'Sale',
+      skipCount: skipCountByItem.get(i.id) || 0,
+      lastErrorMessage: lastSkipReasonByItem.get(i.id) || null,
+      lastAttemptAt: lastSkipAtByItem.get(i.id)?.toISOString() || null,
+    }));
+
+  // --- recentFbNativeSold ---
+  // Items that sold NATIVELY on Facebook via the reverse-direction cascade
+  // (markItemSoldOnFacebook above sets lastSoldVia='FB_NATIVE'). Capped at the last 30
+  // days / 20 rows -- this card is a recent-activity glance, not a full history.
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  const fbNativeSoldItems = await prisma.item.findMany({
+    where: {
+      sale: { organizerId: organizer.id, deletedAt: null },
+      status: 'SOLD',
+      lastSoldVia: 'FB_NATIVE',
+      updatedAt: { gte: thirtyDaysAgo },
+    },
+    select: { id: true, title: true, saleId: true, updatedAt: true },
+    orderBy: { updatedAt: 'desc' },
+    take: 20,
+  });
+  const recentFbNativeSold = fbNativeSoldItems.map((i) => ({
+    itemId: i.id,
+    title: i.title,
+    saleTitle: saleTitleById.get(i.saleId || '') || 'Sale',
+    soldAt: i.updatedAt.toISOString(),
+  }));
+
+  res.json({
+    lastSyncActivity: {
+      lastPostAt: lastPostAt ? lastPostAt.toISOString() : null,
+      lastRemoveAt: lastRemoveAt ? lastRemoveAt.toISOString() : null,
+      activePostedCount,
+    },
+    manualReviewBacklog,
+    recentFbNativeSold,
+  });
+};
+
+// POST /api/extension/items/:id/message-autosend-decision — Feature #602 (2026-08-05):
+// AI Message-Reply Autosend, Price + Availability. The content script calls this with
+// the latest buyer message text for a Facebook Messenger thread it has matched to this
+// item (title match, same idiom fas-remove.js's sold-detection scan already uses); the
+// response tells it whether to autosend a reply (and what text) or leave it draft-only.
+//
+// IDOR: ownership verified via assertItemOwned before any read/decision, same pattern as
+// every other mutation-adjacent endpoint in this file. The extension is a client and is
+// never trusted for the autosendPriceAvailabilityEnabled gate or the threshold math --
+// both are re-derived server-side inside decideMessageAutosend from the organizer/item
+// rows this handler loads itself.
+//
+// Security self-check (rule 5 of this feature's dispatch spec): parsing is a plain
+// regex extraction of a single unambiguous "$X" figure, never an LLM call -- see
+// messageAutosendService.ts's file-level comment for the full reasoning. A buyer can
+// only trigger an unintended AUTOSENT_ACCEPT by typing a real dollar figure at or above
+// the organizer's OWN configured threshold -- the same trust boundary eBay's built-in
+// Best Offer auto-accept already has today, not a new exploit surface.
+export const decideMessageAutosendForItem = async (req: AuthRequest, res: Response): Promise<void> => {
+  const userId = req.user?.id;
+  const itemId = req.params.id;
+  if (!userId) { res.status(401).json({ message: 'Authentication required' }); return; }
+
+  const messageText = typeof req.body?.messageText === 'string' ? req.body.messageText : '';
+  if (!messageText.trim()) { res.status(400).json({ message: 'messageText is required' }); return; }
+
+  const organizer = await prisma.organizer.findUnique({
+    where: { userId },
+    select: {
+      id: true,
+      autosendPriceAvailabilityEnabled: true,
+      defaultBestOfferAcceptPct: true,
+      defaultBestOfferDeclinePct: true,
+    },
+  });
+  if (!organizer) { res.status(404).json({ message: 'Organizer profile not found' }); return; }
+
+  const item = await prisma.item.findFirst({
+    where: { id: itemId, sale: { organizerId: organizer.id } },
+    select: { id: true, price: true, bestOfferAutoAcceptAmt: true, bestOfferMinimumAmt: true },
+  });
+  if (!item) { res.status(404).json({ message: 'Item not found' }); return; }
+
+  const result = await decideMessageAutosend({
+    organizerId: organizer.id,
+    itemId: item.id,
+    messageText,
+    organizer: {
+      autosendPriceAvailabilityEnabled: organizer.autosendPriceAvailabilityEnabled,
+      defaultBestOfferAcceptPct: organizer.defaultBestOfferAcceptPct,
+      defaultBestOfferDeclinePct: organizer.defaultBestOfferDeclinePct,
+    },
+    item: {
+      price: item.price,
+      bestOfferAutoAcceptAmt: item.bestOfferAutoAcceptAmt,
+      bestOfferMinimumAmt: item.bestOfferMinimumAmt,
+    },
+  });
+
+  res.json(result);
 };

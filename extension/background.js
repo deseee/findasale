@@ -522,6 +522,15 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         // queue/index needed the way removal has one, since the content script checks every
         // candidate in a single DOM pass, not sequentially across separate tab lifecycles.
         sendResponse(await apiFetch('/extension/pending-sold-checks'));
+      } else if (msg.type === 'getMessageAutosendDecision') {
+        // Feature #602 (2026-08-05): fas-messages.js (advisory-only, see its file header --
+        // PENDING LIVE VERIFICATION, never auto-clicks Send) asks the backend how to handle a
+        // buyer message it read on a Marketplace inbox thread. Straight passthrough, same
+        // shape as markItemSoldFromFacebook above -- ownership/threshold logic all lives
+        // server-side (decideMessageAutosendForItem / messageAutosendService.ts), this worker
+        // never evaluates a threshold itself.
+        sendResponse(await apiFetch('/extension/items/' + encodeURIComponent(msg.itemId) + '/message-autosend-decision',
+          { method: 'POST', body: { messageText: msg.messageText || '' } }));
       } else if (msg.type === 'markItemSoldFromFacebook') {
         // fas-remove.js confidently matched this item's title against a Sold card on Facebook's
         // own "Your listings" page -- report it so the backend can commit the SOLD transition

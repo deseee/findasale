@@ -71,10 +71,13 @@ export async function getOrganizerWeeklyStats(organizerId: string): Promise<Orga
   });
 
   // Get purchases in the past 7 days for those sales
+  // status: 'PAID' — revenue must reflect real completed payments only, never
+  // PENDING/FAILED/REFUNDED/DISPUTED Purchase rows (which would overstate revenue).
   const salesIds = activeSales.map((s) => s.id);
   const purchases = await prisma.purchase.findMany({
     where: {
       saleId: { in: salesIds },
+      status: 'PAID',
       createdAt: { gte: sevenDaysAgo },
     },
     select: { amount: true },

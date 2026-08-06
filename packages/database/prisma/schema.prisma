@@ -321,6 +321,20 @@ model Organizer {
   pendingStripeMigrationAccountId String? // ADR-023: new Standard account id while a Networked Onboarding migration is in flight
   stripeMigrationPromptedAt       DateTime? // ADR-023: last time the migration banner was shown -- remind-later throttling only
   removeWatermarkEnabled          Boolean                        @default(false) // PRO: remove FindA.Sale watermark from exports
+  // Feature #603 (2026-08-05): platform-wide default best-offer thresholds. Suggested
+  // pre-fill for the per-item eBay best-offer PERCENTAGE fields on the edit-item form
+  // (Item.bestOfferAutoAcceptAmt/bestOfferMinimumAmt are DOLLAR amounts -- these two
+  // fields are PERCENTAGES, matching the frontend's existing percent-based UI before it
+  // converts to dollars). Never silently overrides an item that already has a value.
+  // Also the fallback threshold source for Feature #602's price-autosend on FB-only
+  // items that were never eBay-cross-listed (no Item-level dollar threshold to read).
+  defaultBestOfferAcceptPct       Int? // suggested default: 10 (organizer real-usage evidenced)
+  defaultBestOfferDeclinePct      Int? // suggested default: 25 (organizer real-usage evidenced)
+  // Feature #602 (2026-08-05): AI Message-Reply Autosend -- Price + Availability.
+  // Separate, deliberately-OFF-by-default opt-in -- distinct from any prior extension
+  // autosend opt-in an organizer may already have enabled, per Patrick's 2026-08-05
+  // decision that this is real-money-adjacent and needs its own conscious opt-in.
+  autosendPriceAvailabilityEnabled Boolean                       @default(false)
   // Phase 17: Reputation
   reputationTier                  String                         @default("NEW") // NEW, TRUSTED, ESTATE_CURATOR
   avgRating                       Float?
@@ -490,6 +504,8 @@ model Organizer {
   // Sentry slow query fix 2026-05-30: denormalized backrelation for Review.organizerId
   reviews                         Review[]                       @relation("OrganizerReviews")
   testimonials                    Testimonial[]                  @relation("OrganizerTestimonials")
+  // Feature #602: AI Message-Reply Autosend decision log (monitoring/observability)
+  messageAutosendLogs             MessageAutosendLog[]
 
   // Corroboration fields — merge conflict resolution
   sourceCount        Int     @default(1)
@@ -1333,6 +1349,8 @@ model Item {
   ebaySoldEvents                  EbaySoldEvent[]
   // ADR-083: Marketplace Poster jobs (post/remove) for this item
   marketplaceJobs                 MarketplaceListingJob[]
+  // Feature #602: AI Message-Reply Autosend decision log (monitoring/observability)
+  messageAutosendLogs              MessageAutosendLog[]
   // ADR-086: rounded price actually pushed to the live Facebook post at last successful
   // list/sync. Compared against Math.round(price) to detect drift for the extension's
   // pending-updates poll. Null = never listed, or listed before this field existed (falls
@@ -5273,6 +5291,41 @@ model MarketplaceListingJob {
 
   @@index([status, scheduledFor])
   @@index([itemId])
+}
+
+// Feature #602 (2026-08-05): AI Message-Reply Autosend -- Price + Availability.
+// Decision log for every buyer message the extension ran through the price/availability
+// autosend engine (messageAutosendService.ts), whether or not it actually autosent.
+// Purpose is observability, not a message inbox -- messageTextSnippet is truncated and
+// exists only to debug parse-confidence issues, never a full conversation store.
+// Feeds 4 monitoring checks (findasale-ops-cost-guard §E, folded in rather than a new
+// one-off dashboard): (1) parse-confidence fallback rate -- category=PRICE rows where
+// decision starts with DRAFT_ONLY_AMBIGUOUS vs total category=PRICE rows; (2)
+// post-autosend-availability-race rate -- compare createdAt on decision=AUTOSENT_AVAILABLE
+// rows against the item's own updatedAt/status-change timestamp; (3)
+// autosends-per-organizer-per-day -- group by organizerId + date where decision starts
+// with AUTOSENT_; (4) zero-threshold-eligible rate -- category=PRICE rows where
+// decision=DRAFT_ONLY_NO_THRESHOLD vs total category=PRICE rows.
+model MessageAutosendLog {
+  id                 String    @id @default(cuid())
+  organizer          Organizer @relation(fields: [organizerId], references: [id], onDelete: Cascade)
+  organizerId        String
+  // Nullable + SetNull: a log row must survive item deletion for monitoring history.
+  item               Item?     @relation(fields: [itemId], references: [id], onDelete: SetNull)
+  itemId             String?
+  category           String // 'PRICE' | 'AVAILABILITY'
+  // 'AUTOSENT_ACCEPT' | 'AUTOSENT_DECLINE' | 'AUTOSENT_AVAILABLE' | 'DRAFT_ONLY_AMBIGUOUS' |
+  // 'DRAFT_ONLY_MIDBAND' | 'DRAFT_ONLY_NO_THRESHOLD' | 'DRAFT_ONLY_NOT_AVAILABLE' |
+  // 'DRAFT_ONLY_FEATURE_DISABLED'
+  decision           String
+  parsedAmount       Decimal?  @db.Decimal(10, 2) // the single unambiguous dollar figure parsed, PRICE category only
+  thresholdSource    String? // 'ITEM_EBAY' | 'ORGANIZER_DEFAULT' -- null when no threshold was available/used
+  messageTextSnippet String? // truncated (see service) -- debugging aid only, not a message store
+  createdAt          DateTime  @default(now())
+
+  @@index([organizerId, createdAt])
+  @@index([itemId])
+  @@index([category, decision])
 }
 
 // ============================================================================

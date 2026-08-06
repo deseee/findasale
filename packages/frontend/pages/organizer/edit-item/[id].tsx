@@ -455,6 +455,19 @@ const EditItemPage = () => {
     enabled: !!id,
   });
 
+  // Feature #603 (2026-08-05): organizer's default best-offer percentages, used ONLY to
+  // pre-fill (never override) this item's accept/decline % fields the first time they're
+  // touched with no prior value. Small, low-frequency-change fetch -- long staleTime avoids
+  // re-fetching on every edit-item page visit in a session.
+  const { data: organizerDefaults } = useQuery({
+    queryKey: ['organizer-best-offer-defaults'],
+    queryFn: async () => {
+      const response = await api.get('/organizers/me');
+      return response.data;
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
   useEffect(() => {
     if (item) {
       // Normalize category to Title Case (e.g. "tools" → "Tools") so the
@@ -543,6 +556,32 @@ const EditItemPage = () => {
       });
     }
   }, [item]);
+
+  // Feature #603 (2026-08-05): pre-fill this item's Best Offer accept/decline % fields
+  // from the organizer's platform-wide defaults, the FIRST time both fields have no prior
+  // value (i.e. the item has never had a per-item percentage set). Runs once per item id
+  // (prefillDefaultsAppliedRef) so it never clobbers an organizer who deliberately clears
+  // the fields back to blank after this effect already ran once for the same item.
+  const prefillDefaultsAppliedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!item || !organizerDefaults || !id) return;
+    if (prefillDefaultsAppliedRef.current === String(id)) return;
+    const hasNoDefaultToOffer =
+      organizerDefaults.defaultBestOfferAcceptPct == null && organizerDefaults.defaultBestOfferDeclinePct == null;
+    if (hasNoDefaultToOffer) return;
+    prefillDefaultsAppliedRef.current = String(id);
+    setFormData((prev) => {
+      // Never override an item that already has a value in either field.
+      if (prev.bestOfferAcceptPct !== '' || prev.bestOfferDeclinePct !== '') return prev;
+      return {
+        ...prev,
+        bestOfferAcceptPct:
+          organizerDefaults.defaultBestOfferAcceptPct != null ? organizerDefaults.defaultBestOfferAcceptPct : prev.bestOfferAcceptPct,
+        bestOfferDeclinePct:
+          organizerDefaults.defaultBestOfferDeclinePct != null ? organizerDefaults.defaultBestOfferDeclinePct : prev.bestOfferDeclinePct,
+      };
+    });
+  }, [item, organizerDefaults, id]);
 
   // Smart local pickup detection — nudge when description/notes mention local pickup
   useEffect(() => {

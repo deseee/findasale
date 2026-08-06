@@ -75,6 +75,13 @@ const organizerProfileSchema = z.object({
   showFollowerCount: z.boolean().optional(),
   // FB Commerce Manager catalog feed toggle
   fbCatalogEnabled: z.boolean().optional(),
+  // Feature #603 (2026-08-05): platform-wide default best-offer thresholds (percentages,
+  // 0-100). Null clears the default -- distinct from 0, which is a real (if unusual) setting.
+  defaultBestOfferAcceptPct: z.number().int().min(0).max(100).nullable().optional(),
+  defaultBestOfferDeclinePct: z.number().int().min(0).max(100).nullable().optional(),
+  // Feature #602 (2026-08-05): AI Message-Reply Autosend opt-in (price/availability),
+  // OFF by default, separate from any prior extension autosend opt-in.
+  autosendPriceAvailabilityEnabled: z.boolean().optional(),
 }).strict();
 
 const awardBadgesSchema = z.object({
@@ -352,7 +359,7 @@ router.patch('/me', authenticate, async (req: AuthRequest, res: Response) => {
     }
 
     const validatedData = organizerProfileSchema.parse(req.body);
-    const { businessName, phone, bio, tagline, yearFounded, onboardingComplete, website, facebook, instagram, etsy, twitterUrl, tiktokUrl, youtubeUrl, pinterestUrl, venmoHandle, zelleHandle, pickupWindows, brandLogoUrl, brandPrimaryColor, brandSecondaryColor, customStorefrontSlug, brandFontFamily, brandBannerImageUrl, brandAccentColor, timezone, byAppointment, organizerTypes, ebayDefaultShippingPolicyId, ebayStoreUrl, address, skuAppendDate, skuAppendCost, skuAppendLocation, showFollowerCount, fbCatalogEnabled } = validatedData;
+    const { businessName, phone, bio, tagline, yearFounded, onboardingComplete, website, facebook, instagram, etsy, twitterUrl, tiktokUrl, youtubeUrl, pinterestUrl, venmoHandle, zelleHandle, pickupWindows, brandLogoUrl, brandPrimaryColor, brandSecondaryColor, customStorefrontSlug, brandFontFamily, brandBannerImageUrl, brandAccentColor, timezone, byAppointment, organizerTypes, ebayDefaultShippingPolicyId, ebayStoreUrl, address, skuAppendDate, skuAppendCost, skuAppendLocation, showFollowerCount, fbCatalogEnabled, defaultBestOfferAcceptPct, defaultBestOfferDeclinePct, autosendPriceAvailabilityEnabled } = validatedData;
 
     const organizer = await prisma.organizer.findUnique({
       where: { userId: req.user.id },
@@ -403,6 +410,9 @@ router.patch('/me', authenticate, async (req: AuthRequest, res: Response) => {
           fbCatalogEnabled,
           ...(fbCatalogEnabled ? { fbCatalogRegisteredAt: new Date() } : {}),
         }),
+        ...(defaultBestOfferAcceptPct !== undefined && { defaultBestOfferAcceptPct }),
+        ...(defaultBestOfferDeclinePct !== undefined && { defaultBestOfferDeclinePct }),
+        ...(autosendPriceAvailabilityEnabled !== undefined && { autosendPriceAvailabilityEnabled }),
       },
     });
 
@@ -587,6 +597,9 @@ router.get('/me', authenticate, checkTierLapse, async (req: AuthRequest, res: Re
       skuAppendCost: (organizer as any).skuAppendCost ?? false,
       skuAppendLocation: (organizer as any).skuAppendLocation ?? false,
       showFollowerCount: (organizer as any).showFollowerCount ?? true,
+      defaultBestOfferAcceptPct: (organizer as any).defaultBestOfferAcceptPct ?? null,
+      defaultBestOfferDeclinePct: (organizer as any).defaultBestOfferDeclinePct ?? null,
+      autosendPriceAvailabilityEnabled: (organizer as any).autosendPriceAvailabilityEnabled ?? false,
     });
   } catch (error) {
     console.error('Error fetching organizer /me profile:', error);

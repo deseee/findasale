@@ -182,6 +182,9 @@ export const getOrganizerInsights = async (req: AuthRequest, res: Response) => {
             price: true,
             status: true,
             category: true,
+            // PAID Purchase amount — the real money-received figure, used for
+            // totalRevenue below instead of listing price (see loop below).
+            purchases: { where: { status: 'PAID' }, select: { amount: true } },
           },
         },
       },
@@ -218,9 +221,16 @@ export const getOrganizerInsights = async (req: AuthRequest, res: Response) => {
 
         if (item.status === 'SOLD' && item.price) {
           totalItemsSold += 1;
-          // Item.price is Float? (number | null) — coerce to number
-          const price = Number(item.price);
-          totalRevenue += price;
+        }
+        // Revenue: sum actual PAID Purchase.amount, not listing price. An item can be
+        // status=SOLD with no Purchase row (e.g. lastSoldVia='FB_NATIVE' extension
+        // cascade, or any sale where no money moved through FindA.Sale's own rails)
+        // and must not inflate this figure by falling back to item.price.
+        if (item.status === 'SOLD') {
+          const paidAmount = item.purchases?.[0]?.amount;
+          if (paidAmount) {
+            totalRevenue += Number(paidAmount);
+          }
         }
 
         if (item.status === 'AVAILABLE') {

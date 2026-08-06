@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { authenticate, requireOrganizer } from '../middleware/auth';
 import { requireTier } from '../middleware/requireTier';
-import { getExtensionItems, markItemListed, markItemRemoved, markItemRemovalSkipped, getPendingRemovals, getPendingUpdates, markItemPriceSynced, getPendingSoldChecks, markItemSoldOnFacebook } from '../controllers/extensionController';
+import { getExtensionItems, markItemListed, markItemRemoved, markItemRemovalSkipped, getPendingRemovals, getPendingUpdates, markItemPriceSynced, getPendingSoldChecks, markItemSoldOnFacebook, getSyncHealth, decideMessageAutosendForItem } from '../controllers/extensionController';
 
 // Endpoints for the FindA.Sale Marketplace Autofill browser extension (ADR-084).
 // Auth is via Bearer token (the organizer's accessToken, read from the finda.sale
@@ -19,5 +19,11 @@ router.post('/items/:id/price-synced', authenticate, requireOrganizer, requireTi
 // Reverse-direction cross-channel sync: item sold NATIVELY on Facebook -> cascade into FindA.Sale.
 router.get('/pending-sold-checks', authenticate, requireOrganizer, requireTier('PRO'), getPendingSoldChecks);
 router.post('/items/:id/sold-on-facebook', authenticate, requireOrganizer, requireTier('PRO'), markItemSoldOnFacebook);
+// Organizer-facing Marketplace Sync Health card on marketplace-extension.tsx -- cookie-authenticated
+// web request (not Bearer/extension-origin), same auth chain as the 9 routes above.
+router.get('/sync-health', authenticate, requireOrganizer, requireTier('PRO'), getSyncHealth);
+// Feature #602 (2026-08-05): AI Message-Reply Autosend decision endpoint -- Bearer-
+// authenticated, same chain as the other extension endpoints above.
+router.post('/items/:id/message-autosend-decision', authenticate, requireOrganizer, requireTier('PRO'), decideMessageAutosendForItem);
 
 export default router;

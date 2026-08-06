@@ -130,13 +130,20 @@ async function computeRecapMetrics(saleId: string): Promise<RecapMetrics> {
     prisma.sale.findUnique({ where: { id: saleId }, select: { qrScanCount: true } }),
     prisma.linkClick.count({ where: { saleId } }),
     prisma.item.count({ where: { saleId } }),
-    prisma.item.findMany({ where: { saleId, status: 'SOLD' }, select: { price: true } }),
+    prisma.item.findMany({
+      where: { saleId, status: 'SOLD' },
+      select: { price: true, purchases: { where: { status: 'PAID' }, select: { amount: true } } },
+    }),
   ]);
 
   const social = await getSaleSocialProof(saleId);
 
   const itemsSold = soldItems.length;
-  const grossRevenue = soldItems.reduce((sum, it) => sum + (it.price ?? 0), 0);
+  // Gross revenue: sum actual PAID Purchase.amount, not listing price. An item can be
+  // status=SOLD with no Purchase row (e.g. lastSoldVia='FB_NATIVE' extension cascade —
+  // sold natively on Facebook, no money moved through FindA.Sale) and must not inflate
+  // this figure by falling back to item.price.
+  const grossRevenue = soldItems.reduce((sum, it) => sum + (it.purchases[0]?.amount ?? 0), 0);
   const totalViews = (sale?.qrScanCount ?? 0) + linkClickCount;
 
   return {

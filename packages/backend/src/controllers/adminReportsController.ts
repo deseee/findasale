@@ -75,6 +75,7 @@ export const getOrganizerPerformance = async (req: AuthRequest, res: Response) =
             JOIN "Sale" ps ON ps.id = p."saleId"
             WHERE ps."organizerId" = o.id
               AND ps."deletedAt" IS NULL
+              AND p.status = 'PAID'
           )                                      AS "totalGmv",
           MAX(s."createdAt")                     AS "lastSaleAt",
           o."createdAt"                          AS "joinedAt"

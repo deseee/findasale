@@ -44,7 +44,7 @@
         "https://www.facebook.com/marketplace/you/*",
         "https://www.facebook.com/marketplace/inbox/*"
       ],
-      "js": ["fas-selectors.js", "fas-tracking.js"],
+      "js": ["fas-selectors.js", "fas-tracking.js", "fas-messages.js"],
       "run_at": "document_idle"
     }
   ]
