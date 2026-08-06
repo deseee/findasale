@@ -28,8 +28,9 @@ import { postO } from './posts/what-sells-collectibles-military-sports-memorabil
 import { postP } from './posts/cataloging-solved-discovery-isnt';
 import { postQ } from './posts/payment-convenience-table-stakes';
 import { postR } from './posts/sale-webpage-vs-buyer-discovery';
+import { postS } from './posts/what-a-30-percent-commission-actually-costs-you';
 
-export const posts: BlogPost[] = [postA, postB, postC, postD, postE, postF, postG, postH, postI, postJ, postK, postL, postM, postN, postO, postP, postQ, postR];
+export const posts: BlogPost[] = [postA, postB, postC, postD, postE, postF, postG, postH, postI, postJ, postK, postL, postM, postN, postO, postP, postQ, postR, postS];
 
 export function getPostBySlug(slug: string): BlogPost | undefined {
   return posts.find((p) => p.slug === slug);
