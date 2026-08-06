@@ -16,6 +16,7 @@ import Head from 'next/head';
 import Link from 'next/link';
 import { useAuth } from '../../components/AuthContext';
 import { useOrganizerTier } from '../../hooks/useOrganizerTier';
+import MarketplaceSyncHealthCard from '../../components/MarketplaceSyncHealthCard';
 
 const MarketplaceExtensionPage = () => {
   const router = useRouter();
@@ -133,7 +134,7 @@ const MarketplaceExtensionPage = () => {
           </div>
 
           {/* Install steps */}
-          <div className="card p-8 mb-8">
+          <div id="install-steps" className="card p-8 mb-8">
             <h2 className="text-xl font-semibold text-warm-900 dark:text-gray-100 mb-6">
               Install it (about 2 minutes)
             </h2>
@@ -247,6 +248,10 @@ const MarketplaceExtensionPage = () => {
               </li>
             </ul>
           </div>
+
+          {/* Marketplace Sync Health -- last post/remove activity, manual-review backlog,
+              recently sold natively on Facebook. See components/MarketplaceSyncHealthCard.tsx. */}
+          <MarketplaceSyncHealthCard />
         </div>
       </div>
     </>
