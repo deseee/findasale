@@ -46,6 +46,26 @@
       button('fas-cl-close', 'Close', false));
     const c = document.getElementById('fas-cl-close'); if (c) c.onclick = () => bar && bar.remove();
   }
+  // Verifies a real publish happened by waiting for the page to leave the pre-publish
+  // "unpublished draft" preview state (?s=preview / the draft banner text) -- same
+  // click-then-confirm shape as fas-content.js's FB publishedOk check. Not independently
+  // observed against a real live Craigslist publish this session (that action is
+  // irreversible and was deliberately never triggered during testing) -- same caveat the
+  // shipped FB version already carries. Fails closed: if it can't confirm, doPreviewStep
+  // reports "couldn't confirm" rather than claiming success.
+  function waitForCraigslistPublish(timeoutMs) {
+    return new Promise((resolve) => {
+      const startedAt = Date.now();
+      const check = () => {
+        const stillDraft = /s=preview/.test(location.search) || /unpublished draft/i.test(bodyText());
+        if (!stillDraft) { resolve(true); return; }
+        if (Date.now() - startedAt >= timeoutMs) { resolve(false); return; }
+        setTimeout(check, 400);
+      };
+      check();
+    });
+  }
+
   function button(id, label, primary) {
     return '<button id="' + id + '" style="margin-top:10px;margin-right:8px;padding:7px 12px;border-radius:8px;border:none;cursor:pointer;' +
       'font-weight:600;font-size:13px;background:' + (primary ? '#3c8c5a' : '#3a4842') + ';color:#fff">' + label + '</button>';
@@ -57,7 +77,7 @@
   // posting flow, and is cleared once the flow reaches the images step (end of automation). ----
   function attemptCount(step) { return Number(sessionStorage.getItem('fasCLAttempt_' + step) || '0'); }
   function bumpAttempt(step) { sessionStorage.setItem('fasCLAttempt_' + step, String(attemptCount(step) + 1)); }
-  function clearAttempts() { ['subarea', 'type', 'cat', 'geoverify', 'edit'].forEach((s) => sessionStorage.removeItem('fasCLAttempt_' + s)); }
+  function clearAttempts() { ['subarea', 'type', 'cat', 'geoverify', 'edit', 'preview'].forEach((s) => sessionStorage.removeItem('fasCLAttempt_' + s)); }
   // True (and shows a stop message) when this step has already been auto-submitted twice without
   // Craigslist advancing -- hand it to the human instead of looping.
   function guardStop(step) {
@@ -287,17 +307,50 @@
     showReviewOverlay(item, index, total, photosOk);
   }
 
-  async function doPreviewStep(item, index, total) {
+  async function doPreviewStep(item, index, total, autoPublish) {
     const photosOk = sessionStorage.getItem('fasCLPhotosOk') !== '0';
     sessionStorage.removeItem('fasCLPhotosOk');
-    showReviewOverlay(item, index, total, photosOk);
+    if (!autoPublish) { showReviewOverlay(item, index, total, photosOk); return; }
+    if (guardStop('preview')) { showReviewOverlay(item, index, total, photosOk); return; }
+
+    const publishBtn = Array.from(document.querySelectorAll('button')).find((b) => norm(b.textContent) === 'publish');
+    if (!publishBtn) {
+      // No publish button here -- most likely Craigslist inserted a phone/email verification
+      // step this script doesn't recognize. Never guess past that; hand off to the human.
+      showReviewOverlay(item, index, total, photosOk);
+      return;
+    }
+
+    overlay('<b>FindA.Sale</b> - publishing <b>' + escapeHtml(item.title) + '</b>...');
+    await humanPause(500, 900);
+    publishBtn.click();
+
+    const published = await waitForCraigslistPublish(6000);
+    if (!published) {
+      overlayError('Publish', 'Clicked publish but couldn\'t confirm it went through -- Craigslist may be asking for phone/email verification. Check this listing yourself before assuming it posted.');
+      return;
+    }
+
+    clearAttempts();
+    const more = (index + 1) < total;
+    overlay('<b>FindA.Sale</b><div style="margin-top:6px">Published <b>' + escapeHtml(item.title) + '</b>.</div>' +
+      (more ? button('fas-cl-next', 'Next item &#9654;', true) : '') +
+      button('fas-cl-close', 'Close', false) +
+      '<div style="margin-top:8px;font-size:11px;color:#9fb6a8">Item ' + (index + 1) + ' of ' + total + '</div>');
+    const next = document.getElementById('fas-cl-next');
+    if (next) next.onclick = async () => {
+      try { await chrome.runtime.sendMessage({ type: 'advanceCraigslistQueue' }); } catch (e) {}
+      location.href = POST_URL;
+    };
+    const close = document.getElementById('fas-cl-close');
+    if (close) close.onclick = () => bar && bar.remove();
   }
 
-  async function run(item, index, total) {
+  async function run(item, index, total, autoPublish) {
     const step = detectStep();
     if (step === 'edit') { if (!guardStop('edit')) await doEditStep(item); return; }
     if (step === 'images') { await doImagesStep(item, index, total); return; }
-    if (step === 'preview') { await doPreviewStep(item, index, total); return; }
+    if (step === 'preview') { await doPreviewStep(item, index, total, autoPublish); return; }
     if (step === 'type') { if (!guardStop('type')) await doTypeStep(); return; }
     if (step === 'cat') { if (!guardStop('cat')) await doCatStep(item); return; }
     if (step === 'geoverify') { if (!guardStop('geoverify')) await doGeoverifyStep(item); return; }
@@ -312,7 +365,7 @@
     if (!queued || !queued.ok || !queued.item) return; // nothing queued -- stay silent (page also loads for normal use)
     await sleep(500); // let the page settle before reading the DOM
     try {
-      await run(queued.item, queued.index, queued.total);
+      await run(queued.item, queued.index, queued.total, queued.autoPublish !== false);
     } catch (e) {
       overlayError((e && e.fasStep) || 'this', (e && e.message) || '');
     }

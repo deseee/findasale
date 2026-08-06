@@ -102,7 +102,9 @@ function currentChannel() { const el = $('channel'); return el ? el.value : 'fac
 function onChannelChange() {
   const ch = currentChannel();
   const fb = ch === 'facebook';
-  const apRow = $('autoPublishRow'); if (apRow) apRow.hidden = !fb;
+  // autoPublishRow (2026-08-06): Publish automatically now applies to Craigslist too --
+  // shown for both channels, no longer FB-only. fas-craigslist.js's doPreviewStep clicks
+  // Craigslist's own publish button when checked, same as fas-content.js already does for FB.
   const fbNote = $('fbPublishNote'); if (fbNote) fbNote.hidden = !fb;
   const clNote = $('clPostNote'); if (clNote) clNote.hidden = fb;
   const removeSetting = document.querySelector('.removeSetting'); if (removeSetting) removeSetting.hidden = !fb;
@@ -178,7 +180,9 @@ async function startQueue() {
   if (currentChannel() === 'craigslist') {
     // Background stores the Craigslist queue AND opens post.craigslist.org; fas-craigslist.js
     // picks the item up on load. Facebook behavior below is unchanged.
-    await send({ type: 'setCraigslistQueue', queue });
+    // autoPublish (2026-08-06): same shared #autoPublish checkbox as the FB flow below.
+    const autoPublish = $('autoPublish').checked;
+    await send({ type: 'setCraigslistQueue', queue, autoPublish });
     window.close();
     return;
   }

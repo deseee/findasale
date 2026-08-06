@@ -486,12 +486,15 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         // tab). fas-craigslist.js reads fasCraigslistQueue/fasCraigslistIndex via
         // getCraigslistQueueItem once post.craigslist.org loads. Kept fully separate from the FB
         // queue keys so the two channels never interfere.
-        await chrome.storage.local.set({ fasCraigslistQueue: msg.queue || [], fasCraigslistIndex: 0 });
+        // autoPublish (2026-08-06): same fasAutoPublish pattern as the FB queue below --
+        // defaults true unless the popup checkbox was explicitly unchecked.
+        await chrome.storage.local.set({ fasCraigslistQueue: msg.queue || [], fasCraigslistIndex: 0, fasCraigslistAutoPublish: msg.autoPublish !== false });
         chrome.tabs.create({ url: CFG.CL_POST_URL });
         sendResponse({ ok: true });
       } else if (msg.type === 'getCraigslistQueueItem') {
-        const { fasCraigslistQueue = [], fasCraigslistIndex = 0 } = await chrome.storage.local.get(['fasCraigslistQueue', 'fasCraigslistIndex']);
-        sendResponse({ ok: true, item: fasCraigslistQueue[fasCraigslistIndex] || null, index: fasCraigslistIndex, total: fasCraigslistQueue.length });
+        const { fasCraigslistQueue = [], fasCraigslistIndex = 0, fasCraigslistAutoPublish = true } =
+          await chrome.storage.local.get(['fasCraigslistQueue', 'fasCraigslistIndex', 'fasCraigslistAutoPublish']);
+        sendResponse({ ok: true, item: fasCraigslistQueue[fasCraigslistIndex] || null, index: fasCraigslistIndex, total: fasCraigslistQueue.length, autoPublish: fasCraigslistAutoPublish });
       } else if (msg.type === 'advanceCraigslistQueue') {
         const st = await chrome.storage.local.get(['fasCraigslistQueue', 'fasCraigslistIndex']);
         const next = (st.fasCraigslistIndex || 0) + 1;
