@@ -52,7 +52,11 @@ export function classifyPolicy(policyName: string): PolicyClassification {
   if (/international|intl|worldwide/i.test(name)) return 'international';
 
   // Category-specific: contains a category keyword (guitar, golf, book, etc.) OR carrier name without weight
-  const hasWeightHint = /\b\d+\s*(oz|lb|pound|ounce)/i.test(name);
+  // S1197 fix: allow an optional '+' between the digit and the unit so "N+ lb"
+  // plus-tier policy names (e.g. "1+ lb Ground Advantage") classify as weight-tier
+  // instead of falling through to 'unknown' -- parseSinglePolicyWeight() already
+  // parses this exact pattern via its own separate regex, so the two were out of sync.
+  const hasWeightHint = /\b\d+\+?\s*(oz|lb|pound|ounce)/i.test(name);
   const hasCategoryKeyword = /\b(guitar|golf|book|media|fragile|freight|bulky)\b/i.test(name);
 
   if (hasCategoryKeyword && !hasWeightHint) return 'category-specific';

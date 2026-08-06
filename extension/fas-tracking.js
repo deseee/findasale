@@ -59,10 +59,22 @@
   // dialog whose text mentions "tracking number". If Facebook's real copy differs,
   // this simply never fires (fails closed, not open) -- acceptable for a first
   // version, but flagged for live QA via the diagnostic warning in scan() below.
+  // (2026-08-06 fix, live-verified) Facebook's real heading on
+  // marketplace/you/shipping_orders is "Your orders", NOT "Orders with delivery" --
+  // Meta's own Help Center doc (the only source this was originally built from) used
+  // different wording than what's actually rendered. Confirmed live against Patrick's
+  // real account this session. Keeping the original guess as a second candidate in case
+  // Facebook renders different copy on some other entry point into the same feature
+  // (e.g. a dialog reached via a notification rather than the list page) -- still no
+  // real completed/shippable order existed on this account to verify
+  // findTrackingDialog() below against, so that one remains unverified (see file header).
   function findOrdersHeading() {
-    const want = 'orders with delivery';
+    const wants = ['your orders', 'orders with delivery'];
     const nodes = Array.from(document.querySelectorAll('h1, h2, [role="heading"]'));
-    return nodes.find((n) => SEL.norm(n.textContent).indexOf(want) !== -1) || null;
+    return nodes.find((n) => {
+      const t = SEL.norm(n.textContent);
+      return wants.some((w) => t.indexOf(w) !== -1);
+    }) || null;
   }
 
   function findTrackingDialog() {
