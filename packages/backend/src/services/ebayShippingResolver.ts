@@ -17,7 +17,7 @@
  */
 
 import { matchWeightTier, WeightTierMapping } from '../utils/ebayPolicyParser';
-import { computeCheapestForOrigin } from './ebayRateEstimateService';
+import { computeCheapestForOrigin, billableLb, DIM_DIVISOR_USPS } from './ebayRateEstimateService';
 import { computeFvfFlatRate, roundUpToBucket } from './ebayFlatRatePolicyService';
 
 /** Where the resolved buyer-shipping amount came from. */
@@ -152,15 +152,20 @@ export async function resolveItemShipping(input: {
   };
 
   // ── FLAT_TIERS organizer: weight-tier match (with gap guard) → else FVF flat ──
+  // (S1197) Match on billable ounces (max of actual vs. dimensional weight), matching
+  // the identical fix in resolvePoliciesForItem (ebayController.ts) -- this file's own
+  // job is to never disagree with that path, so it has to apply the same basis.
   if (shippingMode === 'FLAT_TIERS') {
     const tiers = (mapping?.weightTierMappings as unknown as WeightTierMapping[]) || [];
     if (tiers.length > 0 && weightOz > 0) {
-      const tier = matchWeightTier(weightOz, tiers);
+      const { lb: billableLbForTier } = billableLb(weightOz, dims, DIM_DIVISOR_USPS);
+      const billableOz = billableLbForTier * 16;
+      const tier = matchWeightTier(billableOz, tiers);
       if (tier) {
         // Gap-overshoot guard (mirrors resolvePoliciesForItem): an item that overshot
-        // the granular tiers falls into a much-larger catch-all. weight>16oz AND the
+        // the granular tiers falls into a much-larger catch-all. billable>16oz AND the
         // matched tier covers items at least ~2x heavier → treat as a gap → FVF flat.
-        const isGap = weightOz > 16 && tier.maxOz > weightOz * 2;
+        const isGap = billableOz > 16 && tier.maxOz > billableOz * 2;
         if (isGap) {
           return fvfFlat();
         }

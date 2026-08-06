@@ -26,6 +26,7 @@ import {
   parsePriceFromPolicyName,
   WeightTierMapping,
 } from './ebayPolicyParser';
+import { billableLb, DIM_DIVISOR_USPS } from '../services/ebayRateEstimateService';
 
 /**
  * Parcel-carrier ceiling: 150 lb = 2400 oz. Anything heavier genuinely requires
@@ -140,9 +141,21 @@ function normalizeWeightTiers(raw: unknown): WeightTierMapping[] {
 /**
  * Run a weight (oz) through the ladder and return the parsed dollar price,
  * or null if no tier matches or the matched tier name has no parseable price.
+ *
+ * (S1197) Optional `dims` lets real package dimensions raise the effective ounces
+ * to the carrier's actual billable weight (max of actual vs. L*W*H/139 dimensional
+ * weight) before matching a tier -- same fix applied to resolvePoliciesForItem
+ * (ebayController.ts) and resolveItemShipping (ebayShippingResolver.ts), so a
+ * light-but-bulky item doesn't get quoted a cheap flat rate in the Google feed
+ * that real carriers would never actually honor at that price.
  */
-function priceForWeight(weightOz: number, tiers: WeightTierMapping[]): number | null {
-  const tier = matchWeightTier(weightOz, tiers);
+function priceForWeight(
+  weightOz: number,
+  tiers: WeightTierMapping[],
+  dims?: { length?: number | null; width?: number | null; height?: number | null } | null
+): number | null {
+  const billableOz = dims ? billableLb(weightOz, dims, DIM_DIVISOR_USPS).lb * 16 : weightOz;
+  const tier = matchWeightTier(billableOz, tiers);
   if (!tier) return null;
   return parsePriceFromPolicyName(tier.policyName);
 }
@@ -213,7 +226,11 @@ export function computeItemShipping(
 
   // (d) explicit package weight → exact ladder price, label "flat"
   if (typeof item.packageWeightOz === 'number' && item.packageWeightOz > 0) {
-    const price = priceForWeight(item.packageWeightOz, tiers);
+    const dimsForBilling =
+      toNum(item.packageLengthIn) !== null && toNum(item.packageWidthIn) !== null && toNum(item.packageHeightIn) !== null
+        ? { length: toNum(item.packageLengthIn), width: toNum(item.packageWidthIn), height: toNum(item.packageHeightIn) }
+        : null;
+    const price = priceForWeight(item.packageWeightOz, tiers, dimsForBilling);
     if (price === null) return null; // ladder yields no parseable price → exclude
     return {
       shipping: `${SHIPS_FROM_COUNTRY}::Standard:${price.toFixed(2)} USD`,

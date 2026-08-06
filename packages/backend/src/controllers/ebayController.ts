@@ -43,6 +43,8 @@ import { ensureCalculatedFulfillmentPolicy } from '../services/ebayCalculatedPol
 import { ensureFvfFlatRatePolicy } from '../services/ebayFlatRatePolicyService';
 import {
   computeCheapestForOrigin,
+  billableLb,
+  DIM_DIVISOR_USPS,
   USPS_RATE_EFFECTIVE_DATE,
   UPS_RATE_EFFECTIVE_DATE,
   FEDEX_RATE_EFFECTIVE_DATE,
@@ -4028,10 +4030,32 @@ async function resolvePoliciesForItem(
   let cascadeStep = '';
 
   // 1. Weight-tier match (highest priority after explicit organizer override)
+  //
+  // (S1197) Match on BILLABLE ounces, not raw actual weight: real carriers (and eBay's
+  // own calculated-shipping engine, see ebayRateEstimateService.billableLb) bill on
+  // whichever is greater of actual weight or dimensional weight (L*W*H / 139). A light
+  // but bulky item -- e.g. 2lb actual, 20x20x20in -- has a real dimensional weight of
+  // ~57lb and was previously matched to a cheap low-weight tier because matchWeightTier
+  // never looked at dims at all. That silently under-priced the buyer's shipping charge
+  // by a large margin with no gap-overshoot guard to catch it (the guard only fires when
+  // ACTUAL weight overshoots a tier -- it never ran, because the actual-weight match
+  // "succeeded"). Using billable ounces here closes that hole at the source instead of
+  // only catching it downstream in the gap-overshoot branch.
   const tiers = (mapping.weightTierMappings as unknown as WeightTierMapping[]) || [];
   if (tiers.length > 0 && item.packageWeightOz != null) {
     const weightOz = item.packageWeightOz;
-    const tier = matchWeightTier(weightOz, tiers);
+    const billingDims =
+      item.packageLengthIn != null && item.packageWidthIn != null && item.packageHeightIn != null
+        ? { length: item.packageLengthIn, width: item.packageWidthIn, height: item.packageHeightIn }
+        : null;
+    const { lb: billableLbForTier, basis: weightBasis } = billableLb(weightOz, billingDims, DIM_DIVISOR_USPS);
+    const billableOz = billableLbForTier * 16;
+    if (weightBasis === 'dimensional') {
+      console.log(
+        `[eBay ShippingPick] item=${item.id} dimensional weight (${billableLbForTier.toFixed(1)}lb) exceeds actual (${(weightOz / 16).toFixed(1)}lb) -- matching weight-tier on dimensional weight`
+      );
+    }
+    const tier = matchWeightTier(billableOz, tiers);
     if (tier) {
       // Stale-policy guard (S1184 — root cause of the Vivitar-flash silent push
       // failure): EbayPolicyMapping.weightTierMappings is a manually-saved snapshot
@@ -4095,10 +4119,13 @@ async function resolvePoliciesForItem(
       // Both thresholds (16 oz floor, 2x multiplier) are tunable: the 16 oz floor and
       // 2x ratio prevent false positives on small items that match their correct
       // granular low-weight tiers (those match tightly, ratio near 1).
+      // (S1197) Compares against billableOz, not raw actual weight -- the tier match
+      // above was itself already made on billable (dimensional-aware) weight, so the
+      // overshoot check has to use the same basis or it can mis-fire in both directions.
       if (
         item.packageWeightOz != null &&
-        item.packageWeightOz > 16 &&
-        tier.maxOz > item.packageWeightOz * 2
+        billableOz > 16 &&
+        tier.maxOz > billableOz * 2
       ) {
         // Tier gap: item overshot the organizer's USPS tier table.
         // Before blocking, try the FVF flat-rate path — it provisions a fresh
@@ -4167,16 +4194,18 @@ async function resolvePoliciesForItem(
           };
         }
         console.warn(
-          `[eBay ShippingPick] item=${item.id} tier-gap overshoot: weight=${item.packageWeightOz}oz matched tier maxOz=${tier.maxOz} — blocked to avoid overcharge`
+          `[eBay ShippingPick] item=${item.id} tier-gap overshoot: billable=${billableOz}oz (basis=${weightBasis}, actual=${item.packageWeightOz}oz) matched tier maxOz=${tier.maxOz} — blocked to avoid overcharge`
         );
         await prisma.item.update({
           where: { id: item.id },
           data: { ebayNeedsReview: true },
         });
+        const _billableLbDisplay = (billableOz / 16).toFixed(1);
+        const _dimNote = weightBasis === 'dimensional' ? ` (dimensional weight -- actual is only ~${(item.packageWeightOz / 16).toFixed(1)} lb, but its size bills heavier)` : '';
         return {
           error: 'SHIPPING_TIER_GAP',
           code: 'SHIPPING_TIER_GAP',
-          message: `This item weighs ~${(item.packageWeightOz / 16).toFixed(1)} lb but your nearest shipping tier covers up to ${(tier.maxOz / 16).toFixed(0)} lb — it would be overcharged. Add a shipping tier near ${(item.packageWeightOz / 16).toFixed(0)} lb, or switch to calculated shipping so the buyer is charged the real rate.`,
+          message: `This item bills at ~${_billableLbDisplay} lb${_dimNote} but your nearest shipping tier covers up to ${(tier.maxOz / 16).toFixed(0)} lb — it would be overcharged. Add a shipping tier near ${_billableLbDisplay} lb, or switch to calculated shipping so the buyer is charged the real rate.`,
         };
       }
       fulfillmentPolicyId = tier.policyId;

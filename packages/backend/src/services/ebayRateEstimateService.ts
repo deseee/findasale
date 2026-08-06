@@ -65,7 +65,7 @@ export type ZoneKey = 'z12' | 'z34' | 'z5' | 'z6' | 'z7' | 'z8';
 type RateRow = { maxLb: number; z12: number; z34: number; z5: number; z6: number; z7: number; z8: number };
 
 // Per-carrier dimensional divisors (cubic inches per pound).
-const DIM_DIVISOR_USPS = 139; // USPS switched from 166 to 139 for packages over 1 cubic foot, effective 2026-07-12 (now matches UPS/FedEx)
+export const DIM_DIVISOR_USPS = 139; // USPS switched from 166 to 139 for packages over 1 cubic foot, effective 2026-07-12 (now matches UPS/FedEx)
 const DIM_DIVISOR_UPS = 139;
 const DIM_DIVISOR_FEDEX = 139;
 
@@ -197,7 +197,12 @@ export function coverageZoneForOrigin(origin: { zip?: string | null; lat?: numbe
   return zone;
 }
 
-function billableLb(weightOz: number, dims: { length?: number | null; width?: number | null; height?: number | null } | null, divisor: number): { lb: number; basis: 'actual' | 'dimensional' } {
+// Exported (S1197) so resolvePoliciesForItem's weight-tier match (ebayController.ts) can
+// apply the SAME dimensional-weight floor real carriers actually bill on, instead of
+// matching flat weight-tier policies against raw actual weight alone -- a light-but-bulky
+// item (e.g. 2lb actual, 20x20x20in) was silently under-priced because weight-tier lookup
+// never looked at dims at all, unlike this calculated-shipping path which always has.
+export function billableLb(weightOz: number, dims: { length?: number | null; width?: number | null; height?: number | null } | null, divisor: number): { lb: number; basis: 'actual' | 'dimensional' } {
   const actualOz = Math.max(0, weightOz || 0);
   let dimOz = 0;
   const L = dims?.length ? Number(dims.length) : 0;
