@@ -175,6 +175,7 @@
     if (s === 'type' || radioByLabelText('for sale by owner') || /what type of posting/i.test(bodyText())) return 'type';
     if (s === 'cat' || radioByLabelText('general for sale')) return 'cat';
     if (s === 'geoverify' || (q('#xstreet0') && (q('#postal_code') || q('input[name="postal"]')))) return 'geoverify';
+    if (s === 'preview' || bodyText().toLowerCase().indexOf('unpublished draft') !== -1) return 'preview';
     if (s === 'subarea' || s === 'area') return 'subarea';
     return 'unknown';
   }
@@ -251,10 +252,7 @@
     clickContinueOrThrow('Details');
   }
 
-  async function doImagesStep(item, index, total) {
-    clearAttempts(); // reached the end of the automatable flow -- reset guards for the next item
-    overlay('<b>FindA.Sale</b> - adding photos...');
-    const photosOk = await injectPhotos(item.photoUrls);
+  function showReviewOverlay(item, index, total, photosOk) {
     const more = (index + 1) < total;
     overlay('<b>FindA.Sale</b><div style="margin-top:6px">Filled <b>' + escapeHtml(item.title) + '</b> and added its photos.</div>' +
       '<div style="margin-top:4px;font-size:12px;color:#cfe3d6">Review the posting, complete any phone/email verification, then click Craigslist\'s <b>publish</b> yourself.</div>' +
@@ -272,10 +270,34 @@
     if (close) close.onclick = () => bar && bar.remove();
   }
 
+  async function doImagesStep(item, index, total) {
+    clearAttempts(); // reached the end of the automatable flow -- reset guards for the next item
+    overlay('<b>FindA.Sale</b> - adding photos...');
+    const photosOk = await injectPhotos(item.photoUrls);
+    sessionStorage.setItem('fasCLPhotosOk', photosOk ? '1' : '0');
+    await humanPause(700, 1200);
+    const doneBtn = document.getElementById('doneWithImages');
+    if (doneBtn) {
+      overlay('<b>FindA.Sale</b> - moving to the review screen...');
+      doneBtn.click(); // -> ?s=preview (unpublished draft, NOT live). doPreviewStep takes over there.
+      return;
+    }
+    // Couldn't find Craigslist's own advance button -- fall back to showing the review overlay
+    // right here instead of stranding the human with no guidance.
+    showReviewOverlay(item, index, total, photosOk);
+  }
+
+  async function doPreviewStep(item, index, total) {
+    const photosOk = sessionStorage.getItem('fasCLPhotosOk') !== '0';
+    sessionStorage.removeItem('fasCLPhotosOk');
+    showReviewOverlay(item, index, total, photosOk);
+  }
+
   async function run(item, index, total) {
     const step = detectStep();
     if (step === 'edit') { if (!guardStop('edit')) await doEditStep(item); return; }
     if (step === 'images') { await doImagesStep(item, index, total); return; }
+    if (step === 'preview') { await doPreviewStep(item, index, total); return; }
     if (step === 'type') { if (!guardStop('type')) await doTypeStep(); return; }
     if (step === 'cat') { if (!guardStop('cat')) await doCatStep(item); return; }
     if (step === 'geoverify') { if (!guardStop('geoverify')) await doGeoverifyStep(item); return; }
