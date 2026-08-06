@@ -32,7 +32,13 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
   const userId = req.user?.id;
   if (!userId) { res.status(401).json({ message: 'Authentication required' }); return; }
 
-  const organizer = await prisma.organizer.findUnique({ where: { userId } });
+  const organizer = await prisma.organizer.findUnique({
+    where: { userId },
+    // 2026-08-06: include the account email so Craigslist's own required "email" reply-option
+    // field can be pre-filled from data we already have -- same principle as the saleCity/saleZip
+    // fix above, no reason to leave a field blank that the organizer already gave us at signup.
+    include: { user: { select: { email: true } } },
+  });
   if (!organizer) { res.status(404).json({ message: 'Organizer profile not found' }); return; }
 
   // Apply the finda.sale watermark to photos unless this organizer is allowed to remove it
@@ -279,6 +285,9 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
       // it should not even attempt a message-autosend-decision call when this is false, but
       // the backend endpoint re-checks it authoritatively regardless (never trust the client).
       autosendPriceAvailabilityEnabled: (organizer as any).autosendPriceAvailabilityEnabled ?? false,
+      // 2026-08-06: Craigslist reply-option email autofill -- the organizer's own account
+      // email, data we already collect and store, not invented or guessed.
+      email: organizer.user?.email || null,
     },
     items: shaped,
   });
