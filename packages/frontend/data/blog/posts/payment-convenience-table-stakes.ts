@@ -10,7 +10,7 @@ export const postQ: BlogPost = {
   excerpt: "Tap-to-pay is showing up across sale software now. It's a good trend, but it only solves the moment of payment, not what happens before and after it.",
   body: `## Payment convenience just became the new baseline
 
-If you're comparing sale software in 2026, you'll notice a pattern: cataloging tools that used to compete purely on photo-to-listing speed and pricing accuracy are now adding in-app payment features too. The latest example: contactless tap-to-pay, built directly into the app, using a phone as the card reader instead of a separate device.
+If you're comparing sale software in 2026, you'll notice a pattern: cataloging tools that used to compete purely on photo-to-listing speed and pricing accuracy are now adding in-app payment features too, contactless tap-to-pay built directly into the app, using a phone as the card reader instead of a separate device.
 
 That's a good development for organizers. A buyer standing at a table with cash in one pocket and a card in the other shouldn't have to wait while someone hunts for a card reader or writes a paper receipt to reconcile later. Payment should be as fast as the decision to buy.
 
@@ -18,7 +18,7 @@ But tap-to-pay only solves one moment: the instant a buyer is standing in front 
 
 ## The part that usually gets missed
 
-Most sales, whether it's an estate sale, a yard sale, an auction, or a flea market booth, don't run on a single clean payment moment. An item gets marked sold verbally or on a sticky note. A buyer wants to pay later, or asks for an invoice because they're buying on behalf of someone else. A shopper checks out through a QR code because the line at the table is too long. Each of those is a different payment path, and if the software only handles one of them well, the rest still gets tracked by hand.
+Estate sales, yard sales, auctions, flea market booths: most sales don't run on a single clean payment moment. An item gets marked sold verbally or on a sticky note. A buyer wants to pay later, or asks for an invoice because they're buying on behalf of someone else. A shopper checks out through a QR code because the line at the table is too long. Each of those is a different payment path, and if the software only handles one of them well, the rest still gets tracked by hand.
 
 That's the gap that matters more than any single feature. An organizer juggling a cataloging app, a payment app, and a spreadsheet for everything that doesn't fit neatly into either one hasn't actually solved the payment problem. They've just made one part of it faster.
 

@@ -3,14 +3,14 @@ import { BlogPost } from '../index';
 export const postE: BlogPost = {
   slug: 'estate-sale-organizer-revenue-digital-tools-data',
   title: 'The Numbers Behind Why Modern Organizers Earn More',
-  metaDescription: 'A 2026 industry survey found organizers using three specific digital tools earned 33% more per sale. Here\'s what those tools are, and what the profit margin data says about why it matters now.',
+  metaDescription: 'A 2026 Estate Sale Business Network survey found organizers using three specific digital tools earned 33% more per sale. Here\'s what those tools are, and what the profit margin data says about why it matters now.',
   publishDate: '2026-07-02',
   category: 'guides',
   readingTimeMinutes: 5,
   excerpt: 'A 2026 survey found organizers using QR codes, online previews, and contactless payments together earned 33% more per sale. Here\'s what the margin data says about why that gap matters now.',
   body: `Numbers in the estate sale industry are hard to come by. When they show up, they're worth paying attention to.
 
-A 2026 survey of 2,100 estate sale operators found that organizers using QR codes, online previews, and contactless payments together earned 33% more per sale than those who weren't. The same group drew 41% more buyers under 40.
+A 2026 technology-adoption survey of 2,100 active operators by the Estate Sale Business Network found that organizers using QR codes, online previews, and contactless payments together earned 33% more per sale than those who weren't. The same group drew 41% more buyers under 40.
 
 That's a meaningful gap. On a sale that grosses $8,000, 33% is $2,640. Run 20 sales a year and that adds up fast.
 

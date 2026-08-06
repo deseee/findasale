@@ -101,6 +101,12 @@ function parseMarkdown(body: string): RenderedBlock[] {
   return blocks;
 }
 
+function renderInline(text?: string): React.ReactNode {
+  if (!text) return null;
+  const parts = text.split(/\*\*(.+?)\*\*/g);
+  return parts.map((part, i) => (i % 2 === 1 ? <strong key={i}>{part}</strong> : part));
+}
+
 function MarkdownBody({ body }: { body: string }) {
   const blocks = parseMarkdown(body);
 
@@ -133,7 +139,7 @@ function MarkdownBody({ body }: { body: string }) {
                 className="list-disc list-inside space-y-1 text-warm-700 dark:text-warm-300 mb-4"
               >
                 {block.items?.map((item, j) => (
-                  <li key={j}>{item}</li>
+                  <li key={j}>{renderInline(item)}</li>
                 ))}
               </ul>
             );
@@ -144,7 +150,7 @@ function MarkdownBody({ body }: { body: string }) {
                 className="list-decimal list-inside space-y-1 text-warm-700 dark:text-warm-300 mb-4"
               >
                 {block.items?.map((item, j) => (
-                  <li key={j}>{item}</li>
+                  <li key={j}>{renderInline(item)}</li>
                 ))}
               </ol>
             );
@@ -155,7 +161,7 @@ function MarkdownBody({ body }: { body: string }) {
                 key={idx}
                 className="text-body text-warm-700 dark:text-warm-300 leading-relaxed mb-4"
               >
-                {block.text}
+                {renderInline(block.text)}
               </p>
             );
         }
