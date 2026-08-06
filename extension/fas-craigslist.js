@@ -220,6 +220,14 @@
     const postalVal = item.postal || item.postalCode || item.zip || item.saleZip;
     if (postal && postalVal) setInputValue(postal, String(postalVal));
 
+    // Reply-option email (2026-08-06, live-verified selector against a real
+    // post.craigslist.org edit-details page: input[name="FromEMail"], no id, no login
+    // required -- Craigslist accepts guest posts, it just needs a real email here for its
+    // own mail-relay/confirmation. Filled from the organizer's own account email (data we
+    // already have) -- never invents one, same rule as the location fields above.
+    const email = q('input[name="FromEMail"]');
+    if (email && item.email) setInputValue(email, item.email);
+
     const body = q('#PostingBody') || q('textarea[name="PostingBody"]');
     if (!body) throw hardError('Details', 'Couldn\'t find the posting Description field.');
     setInputValue(body, item.description || '');

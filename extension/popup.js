@@ -2,6 +2,7 @@
 const CFG = self.FAS_CONFIG;
 const $ = (id) => document.getElementById(id);
 let ITEMS = [];
+let ORGANIZER = null;
 const selected = new Set();
 
 // (#596 Guild/XP Toolbar Tie-In) Canonical rank emoji/labels + XP floors, mirrored from
@@ -34,6 +35,7 @@ async function load() {
   loadGuildXp(); // fire-and-forget, best-effort -- auth already confirmed by getItems above; never blocks the item list
   if (!r.ok) { setStatus('Couldn\'t load your items: ' + (r.error || 'unknown error') + '.'); return; }
   ITEMS = (r.data && r.data.items) || [];
+  ORGANIZER = (r.data && r.data.organizer) || null;
   if (!ITEMS.length) { setStatus('No items found. Add items to a sale on FindA.Sale, then come back.'); return; }
   $('status').hidden = true;
   $('controls').hidden = false;
@@ -164,7 +166,10 @@ async function startQueue() {
     // flows through; absent fields stay undefined and fas-craigslist.js simply leaves the
     // corresponding field for the human to complete -- it never invents a city or ZIP.
     city: it.city, geographicArea: it.geographicArea, saleCity: it.saleCity,
-    postal: it.postal, postalCode: it.postalCode, zip: it.zip, saleZip: it.saleZip
+    postal: it.postal, postalCode: it.postalCode, zip: it.zip, saleZip: it.saleZip,
+    // 2026-08-06: Craigslist reply-option email -- the organizer's own account email
+    // (data we already have), same "fill what we already have, invent nothing" rule.
+    email: (ORGANIZER && ORGANIZER.email) || null
   }));
   if (!queue.length) return;
   if (currentChannel() === 'craigslist') {
