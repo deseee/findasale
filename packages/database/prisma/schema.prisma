@@ -694,6 +694,12 @@ model EbayPolicyMapping {
   // Checked BEFORE weight tiers. If item.ebayCategoryId matches, use this policy regardless of weight.
   categoryOverrides Json @default("[]")
 
+  // Cubic-tier mappings (ADR-099) — JSON array of { maxLengthIn: number, maxWidthIn: number,
+  // maxHeightIn: number, policyId: string, policyName: string }. Sorted by volume ascending.
+  // Checked ONLY inside the weight-tier gap-overshoot fallback in resolvePoliciesForItem, not
+  // as an independent top-level cascade step -- see ADR-099 for why.
+  cubicTierMappings Json @default("[]")
+
   // Shipping classification overrides (item.shippingClassification-based routing)
   heavyOversizedPolicyId String? // e.g. "Local Pickup ONLY"
   fragilePolicyId        String?

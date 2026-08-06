@@ -163,6 +163,44 @@ export function matchWeightTier(
 }
 
 /**
+ * (ADR-099) Given an item's three measured dimensions (inches) and a sorted list of
+ * cubic-tier mappings, find the smallest-volume tier whose bounding box contains the item.
+ * Orientation-agnostic: both the item's dims and each tier's dims are sorted largest-to-
+ * smallest before comparing, so a 5x5x24 item is correctly NOT matched against a 24x24x24
+ * tier just because one axis happens to line up, while an item that fits a tier's box in
+ * some rotation IS matched -- eBay's own "to LxWxH" tier description doesn't mandate a
+ * specific orientation.
+ */
+export interface CubicTierMapping {
+  maxLengthIn: number;
+  maxWidthIn: number;
+  maxHeightIn: number;
+  policyId: string;
+  policyName: string;
+}
+
+export function matchCubicTier(
+  lengthIn: number,
+  widthIn: number,
+  heightIn: number,
+  tiers: CubicTierMapping[]
+): CubicTierMapping | null {
+  if (!tiers || tiers.length === 0) return null;
+  const itemDims = [lengthIn, widthIn, heightIn].sort((a, b) => b - a);
+  const sorted = [...tiers].sort(
+    (a, b) =>
+      a.maxLengthIn * a.maxWidthIn * a.maxHeightIn - b.maxLengthIn * b.maxWidthIn * b.maxHeightIn
+  );
+  for (const tier of sorted) {
+    const tierDims = [tier.maxLengthIn, tier.maxWidthIn, tier.maxHeightIn].sort((a, b) => b - a);
+    if (itemDims[0] <= tierDims[0] && itemDims[1] <= tierDims[1] && itemDims[2] <= tierDims[2]) {
+      return tier;
+    }
+  }
+  return null;
+}
+
+/**
  * Convert pounds-or-ounces mixed input into a canonical ounce value.
  * Accepts: { lb?: number, oz?: number } or plain number (assumed ounces).
  */

@@ -30,10 +30,12 @@ import {
   parseWeightTiers,
   classifyPolicy,
   matchWeightTier,
+  matchCubicTier,
   toOunces,
   ParsedWeightTier,
   EbayFulfillmentPolicySummary,
   WeightTierMapping,
+  CubicTierMapping,
 } from '../utils/ebayPolicyParser';
 import { getTierLimit, SubscriptionTier } from '../constants/tierLimits';
 import { domainToL1 } from '../config/ebayCategories';
@@ -4108,6 +4110,47 @@ async function resolvePoliciesForItem(
             ? { length: item.packageLengthIn, width: item.packageWidthIn, height: item.packageHeightIn }
             : null
         );
+
+        // (ADR-099) Before falling back to FVF-flat, try a cubic-tier match -- this is
+        // exactly the "oddly-shaped/bulky item that doesn't fit a flat ounce tier"
+        // scenario the organizer's GA Cubic policies were built for. Only items with
+        // all three measured dimensions can match; anything else falls through to the
+        // existing FVF-flat auto-provision path unchanged below.
+        if (_gapDims) {
+          const cubicTiers = (mapping.cubicTierMappings as unknown as CubicTierMapping[]) || [];
+          const cubicTier = matchCubicTier(
+            Number(_gapDims.length),
+            Number(_gapDims.width),
+            Number(_gapDims.height),
+            cubicTiers
+          );
+          if (cubicTier) {
+            const cubicLivePolicies = smartPickContext?.fetchFulfillmentPolicies
+              ? await smartPickContext.fetchFulfillmentPolicies()
+              : null;
+            const cubicPolicyStillLive =
+              cubicLivePolicies == null ||
+              cubicLivePolicies.some((p: any) => p.fulfillmentPolicyId === cubicTier.policyId);
+            if (cubicPolicyStillLive) {
+              console.log(
+                `[eBay ShippingPick] item=${item.id} tier-gap cubic-tier match policy="${cubicTier.policyName}" (${cubicTier.policyId})`
+              );
+              return {
+                fulfillmentPolicyId: cubicTier.policyId,
+                returnPolicyId: mapping.defaultReturnPolicyId || conn.returnPolicyId || '',
+                paymentPolicyId: mapping.defaultPaymentPolicyId || conn.paymentPolicyId || '',
+                descriptionHtml: mapping.defaultDescriptionHtml ?? null,
+                pushAsDraft: mapping.pushAsDraft ?? false,
+                merchantLocationSource: mapping.merchantLocationSource || conn.merchantLocationSource || 'SALE_ADDRESS',
+                routingReason: `tier-gap-cubic:${cubicTier.policyName}`,
+              };
+            }
+            console.warn(
+              `[eBay ShippingPick] item=${item.id} matched cubic-tier policy "${cubicTier.policyName}" (${cubicTier.policyId}) no longer exists on eBay -- stale EbayPolicyMapping.cubicTierMappings snapshot for organizer=${organizerId}. Falling back to FVF-flat.`
+            );
+          }
+        }
+
         const _gapFvf = await ensureFvfFlatRatePolicy(organizerId, item.packageWeightOz!, _gapDims, _gapFromZip);
         if (_gapFvf) {
           console.log(
