@@ -5,8 +5,15 @@
  * tricks and NO chrome.debugger are needed: ordinary value setters, radio .checked + change, and
  * native button clicks drive the form. Same hard-error-only philosophy as fas-content.js -- it
  * never guesses past a step it can't confidently complete.
- * GUARDRAIL (legal-reviewed): the human owns login, ALL phone/email/CAPTCHA verification, and the
- * FINAL publish click. This script STOPS at the images/review step and NEVER clicks publish.
+ * GUARDRAIL (legal-reviewed): the human owns login and ALL phone/email/CAPTCHA verification --
+ * this script never guesses past a verification step it doesn't recognize (hands off to the human
+ * instead, see showReviewOverlay()). The publish click itself IS automatable and IS performed by
+ * this script (doPreviewStep(), guarded by the shared "Publish automatically" popup checkbox,
+ * checked by default per the 2026-07-17 locked decision: full automation including auto-publish is
+ * non-negotiable, off-by-default toggle language refers to the PRO/TEAMS-only risk-disclosure
+ * framing, not to publish being disabled by default). STALE COMMENT CORRECTED 2026-08-06/07 -- an
+ * earlier version of this file (pre auto-publish) genuinely did stop before publish; that is no
+ * longer true and this comment previously said otherwise, causing real confusion.
  */
 (function () {
   const POST_URL = 'https://post.craigslist.org/';
