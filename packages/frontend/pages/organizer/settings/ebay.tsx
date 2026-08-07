@@ -28,6 +28,22 @@ interface FulfillmentPolicy {
   classification: PolicyClassification;
 }
 
+// Human-readable suffixes for policy classifications shown next to real eBay
+// policy names in dropdowns. Internal-only labels (weight-tier, category-specific,
+// unknown) are intentionally omitted -- a 50+ non-technical organizer has no way
+// to know what they mean and they read like something is broken (UX audit finding 8,
+// claude_docs/ux-spotchecks/ebay-shipping-settings-simplification-2026-08-06.md).
+const READABLE_CLASSIFICATION_LABELS: Partial<Record<PolicyClassification, string>> = {
+  'local-pickup': 'local pickup',
+  'free-shipping': 'free shipping',
+  'calculated': 'calculated',
+  'international': 'international',
+};
+const policySuffix = (classification: PolicyClassification): string => {
+  const label = READABLE_CLASSIFICATION_LABELS[classification];
+  return label ? ` · ${label}` : '';
+};
+
 interface ReturnPolicy {
   returnPolicyId: string;
   name: string;
@@ -118,6 +134,28 @@ interface SetupData {
   handlingTimeDays?: number;
 }
 
+// Client-side weight-tier gap detection. Mirrors the backend's real
+// gap-overshoot guard (packages/backend/src/controllers/ebayController.ts,
+// resolvePoliciesForItem, ~L4132: `tier.maxOz > billableOz * 2`) so this notice
+// and actual routing behavior stay in agreement -- if that backend threshold
+// ever changes, WEIGHT_TIER_GAP_RATIO below must be updated to match (UX audit
+// finding 4 / Dev Handoff Notes 3, ebay-shipping-settings-simplification-2026-08-06.md).
+const WEIGHT_TIER_GAP_RATIO = 2;
+const getWeightTierGaps = (tiers: WeightTierMapping[]): Array<{ fromOz: number; toOz: number }> => {
+  const sorted = [...tiers]
+    .filter((t) => t.maxOz !== Infinity && t.maxOz > 0)
+    .sort((a, b) => a.maxOz - b.maxOz);
+  const gaps: Array<{ fromOz: number; toOz: number }> = [];
+  for (let i = 0; i < sorted.length - 1; i++) {
+    const current = sorted[i].maxOz;
+    const next = sorted[i + 1].maxOz;
+    if (next > current * WEIGHT_TIER_GAP_RATIO) {
+      gaps.push({ fromOz: current, toOz: next });
+    }
+  }
+  return gaps;
+};
+
 const EbayPolicySetupPage = () => {
   const router = useRouter();
   const { user, isLoading: authLoading } = useAuth();
@@ -146,6 +184,14 @@ const EbayPolicySetupPage = () => {
   const [skuAppendLocation, setSkuAppendLocation] = useState(false);
   const [originalSkuToggles, setOriginalSkuToggles] = useState({ skuAppendDate: false, skuAppendCost: false, skuAppendLocation: false });
 
+  // UX simplification pass 2026-08-06: live UNKNOWN-classification item count
+  // (finding 3) + "Check my policies" liveness result (finding 5).
+  const [unknownCount, setUnknownCount] = useState<number | null>(null);
+  const [policyCheck, setPolicyCheck] = useState<{
+    loading: boolean;
+    result: { checkedCount: number; staleCount: number; stalePolicies: Array<{ policyId: string; label: string }> } | null;
+  }>({ loading: false, result: null });
+
   // Fetch setup data on mount
   useEffect(() => {
     if (!authLoading && !user) {
@@ -156,11 +202,15 @@ const EbayPolicySetupPage = () => {
     const fetchSetupData = async () => {
       try {
         setLoading(true);
-        const [setupRes, organizerRes] = await Promise.all([
+        const [setupRes, organizerRes, unknownCountRes] = await Promise.all([
           api.get('/ebay/setup-data'),
           api.get('/organizers/me').catch(() => null), // tolerate failure. Organizer defaults are optional
+          api.get('/ebay/organizer/unknown-classification-count').catch(() => null), // tolerate failure -- count is a nice-to-have, not a blocker
         ]);
         setSetupData(setupRes.data);
+        if (typeof unknownCountRes?.data?.count === 'number') {
+          setUnknownCount(unknownCountRes.data.count);
+        }
         if (typeof setupRes.data.handlingTimeDays === 'number') {
           setHandlingTimeDays(setupRes.data.handlingTimeDays);
           setOriginalHandlingTimeDays(setupRes.data.handlingTimeDays);
@@ -240,6 +290,9 @@ const EbayPolicySetupPage = () => {
     skuAppendLocation !== originalSkuToggles.skuAppendLocation ||
     handlingTimeDays !== originalHandlingTimeDays;
 
+  // UX audit finding 4: non-blocking gap notice in the Weight table below.
+  const weightTierGaps = mapping ? getWeightTierGaps(mapping.weightTierMappings) : [];
+
   const handleSaveMapping = async () => {
     if (!mapping) return;
 
@@ -311,6 +364,20 @@ const EbayPolicySetupPage = () => {
     setSkuAppendDate(originalSkuToggles.skuAppendDate);
     setSkuAppendCost(originalSkuToggles.skuAppendCost);
     setSkuAppendLocation(originalSkuToggles.skuAppendLocation);
+  };
+
+  // "Check my policies" (UX audit finding 5) -- read-only, reuses the organizer's
+  // already-connected eBay OAuth token via the backend's existing fulfillment-policy
+  // fetch. No new integration, no spend implications.
+  const handleCheckPolicies = async () => {
+    setPolicyCheck({ loading: true, result: null });
+    try {
+      const res = await api.get('/ebay/organizer/check-policies');
+      setPolicyCheck({ loading: false, result: res.data });
+    } catch (error: any) {
+      setPolicyCheck({ loading: false, result: null });
+      showToast(error.response?.data?.message || 'Could not check your policies right now', 'error');
+    }
   };
 
   const useSuggestedDefaults = () => {
@@ -460,6 +527,42 @@ const EbayPolicySetupPage = () => {
             </p>
           </div>
 
+          {/* Plain-language routing order + eBay-only scope note + "Check my policies"
+              (UX audit findings 5, 6, 7 -- ebay-shipping-settings-simplification-2026-08-06.md) */}
+          <div className="mb-8 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 space-y-3">
+            <p className="text-sm text-gray-700 dark:text-gray-300">
+              <strong>How FindA.Sale picks your shipping policy:</strong> first, any policy you set on a specific item; then, if you picked one Default shipping policy below, that's always used; otherwise, FindA.Sale works through your weight, box-size, and category rules automatically.
+            </p>
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              These settings control eBay listings only. Facebook Marketplace shipping is handled separately when you post there.
+            </p>
+            <div className="flex flex-wrap items-center gap-3 pt-1">
+              <button
+                type="button"
+                onClick={handleCheckPolicies}
+                disabled={policyCheck.loading}
+                className="text-sm px-3 py-1.5 border border-sage-600 text-sage-600 dark:text-sage-400 dark:border-sage-500 rounded-lg hover:bg-sage-50 dark:hover:bg-sage-900/20 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition"
+              >
+                {policyCheck.loading ? 'Checking…' : 'Check my policies'}
+              </button>
+              {policyCheck.result && policyCheck.result.staleCount === 0 && (
+                <span className="text-sm text-sage-700 dark:text-sage-400">Everything checks out.</span>
+              )}
+              {policyCheck.result && policyCheck.result.staleCount > 0 && (
+                <span className="text-sm text-amber-700 dark:text-amber-400">
+                  {policyCheck.result.staleCount} of your saved policies no longer exist on eBay — listed below so you can fix them.
+                </span>
+              )}
+            </div>
+            {policyCheck.result && policyCheck.result.staleCount > 0 && (
+              <ul className="text-xs text-gray-600 dark:text-gray-400 list-disc list-inside space-y-0.5">
+                {policyCheck.result.stalePolicies.map((p) => (
+                  <li key={p.policyId}>{p.label}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+
           {/* Main content */}
           <div className="space-y-8">
             {setupData && mapping && (
@@ -516,7 +619,7 @@ const EbayPolicySetupPage = () => {
                         <option value="">None</option>
                         {setupData.fulfillmentPolicies.map(policy => (
                           <option key={policy.fulfillmentPolicyId} value={policy.fulfillmentPolicyId}>
-                            {policy.name} · {policy.classification}
+                            {policy.name}{policySuffix(policy.classification)}
                           </option>
                         ))}
                       </select>
@@ -549,15 +652,15 @@ const EbayPolicySetupPage = () => {
                         }
                         className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-sage-600"
                       >
-                        <option value="">Smart-pick (weight tier → calculated → flat-rate → free)</option>
+                        <option value="">Smart-pick (recommended)</option>
                         {setupData.fulfillmentPolicies.map((policy) => (
                           <option key={policy.fulfillmentPolicyId} value={policy.fulfillmentPolicyId}>
-                            {policy.name} · {policy.classification}
+                            {policy.name}{policySuffix(policy.classification)}
                           </option>
                         ))}
                       </select>
                       <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                        Smart-pick chooses the most accurate option from your eBay policies: weight-tier rules first, then calculated shipping, then flat-rate, then free as a last resort. Pick a specific policy to override.
+                        Smart-pick automatically uses the real shipping rate calculated for your buyer whenever it can, otherwise a flat price you've set, and free shipping only as a last resort. Pick a specific policy above to use it for every push instead.
                       </p>
                     </div>
                   </div>
@@ -709,7 +812,7 @@ const EbayPolicySetupPage = () => {
                                 <option value="">Select policy</option>
                                 {setupData.fulfillmentPolicies.map(policy => (
                                   <option key={policy.fulfillmentPolicyId} value={policy.fulfillmentPolicyId}>
-                                    {policy.name} · {policy.classification}
+                                    {policy.name}{policySuffix(policy.classification)}
                                   </option>
                                 ))}
                               </select>
@@ -734,6 +837,16 @@ const EbayPolicySetupPage = () => {
                   >
                     + Add tier
                   </button>
+
+                  {weightTierGaps.length > 0 && (
+                    <div className="mt-4 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 p-3 space-y-1">
+                      {weightTierGaps.map((gap, i) => (
+                        <p key={i} className="text-xs text-amber-800 dark:text-amber-300">
+                          Heads up — you don't have a tier between about {Math.round(gap.fromOz / 16)} lbs and {Math.round(gap.toOz / 16)} lbs. Items in that range will still work, but they'll fall back to an automatic option instead of the price you set. Add a tier here to fix that.
+                        </p>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 )}
 
@@ -822,7 +935,7 @@ const EbayPolicySetupPage = () => {
                                 <option value="">Select policy</option>
                                 {setupData.fulfillmentPolicies.map(policy => (
                                   <option key={policy.fulfillmentPolicyId} value={policy.fulfillmentPolicyId}>
-                                    {policy.name} · {policy.classification}
+                                    {policy.name}{policySuffix(policy.classification)}
                                   </option>
                                 ))}
                               </select>
@@ -850,7 +963,17 @@ const EbayPolicySetupPage = () => {
                 </div>
                 )}
 
-                {/* Section D: Shipping classification overrides */}
+                {/* Section D: Shipping classification overrides.
+                    Gated on shippingMode === 'FLAT_TIERS' (UX audit finding 2 /
+                    Dev Handoff 1b) -- these rules are only reachable in
+                    resolvePoliciesForItem's cascade when the organizer is on
+                    Flat-rate tiers; on Calculated mode they save but do nothing.
+                    This is a visibility-only change, mirroring the pattern the
+                    Weight/Box-Size tables above already use -- it does NOT clear
+                    mapping.heavyOversizedPolicyId/fragilePolicyId/unknownPolicyId,
+                    so nothing the organizer configured is lost if they switch
+                    shipping mode back and forth. */}
+                {mapping?.shippingMode === 'FLAT_TIERS' ? (
                 <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
                   <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Special Shipping Rules</h2>
                   <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
@@ -899,7 +1022,7 @@ const EbayPolicySetupPage = () => {
 
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        For unknown classification (UNKNOWN): use
+                        For items we couldn't automatically categorize: use
                       </label>
                       <select
                         value={mapping.unknownPolicyId || ''}
@@ -913,11 +1036,33 @@ const EbayPolicySetupPage = () => {
                           </option>
                         ))}
                       </select>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                        This can include items that are actually easy to ship — check your item list if this number seems high.
+                        {unknownCount !== null && (
+                          <span className="block mt-1">
+                            You currently have <strong>{unknownCount}</strong> item{unknownCount === 1 ? '' : 's'} in this bucket.
+                          </span>
+                        )}
+                      </p>
                     </div>
                   </div>
                 </div>
+                ) : (
+                <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+                  <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Special Shipping Rules</h2>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    These only apply when you're using Flat-rate tiers above — switch to Flat-rate tiers to use them.
+                  </p>
+                </div>
+                )}
 
-                {/* Section E: Category-specific overrides */}
+                {/* Section E: Category-specific overrides.
+                    Gated on shippingMode === 'FLAT_TIERS' for the same reason as
+                    Section D above (UX audit finding 2 / Dev Handoff 1b) --
+                    category overrides are only reachable in the cascade on
+                    Flat-rate tiers. Visibility-only; mapping.categoryOverrides is
+                    never cleared. */}
+                {mapping?.shippingMode === 'FLAT_TIERS' ? (
                 <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
                   <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Category Overrides</h2>
                   <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
@@ -999,6 +1144,14 @@ const EbayPolicySetupPage = () => {
                     + Add override
                   </button>
                 </div>
+                ) : (
+                <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+                  <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Category Overrides</h2>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    These only apply when you're using Flat-rate tiers above — switch to Flat-rate tiers to use them.
+                  </p>
+                </div>
+                )}
 
                 {/* Section F: Description template */}
                 <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">

@@ -23,6 +23,8 @@ import {
   saveEbayPolicyMapping,
   getShippingNetPreview,
   getSuggestedPriceForMargin,
+  getUnknownShippingClassificationCount,
+  checkEbayPolicyLiveness,
 } from '../controllers/ebayController';
 import { syncSoldItemsForOrganizer } from '../jobs/ebaySoldSyncCron';
 
@@ -106,6 +108,12 @@ router.patch('/organizer/items/:itemId/ebay-shipping', authenticate, setEbayShip
 // never confirmed. Read-only — no eBay API calls, nothing is revised. The
 // organizer confirms each item through the existing PUT /api/items/:id save.
 router.get('/organizer/unconfirmed-weight-listings', authenticate, requireOrganizer, getUnconfirmedWeightListings);
+
+// eBay Settings page (ebay.tsx) simplification pass, 2026-08-06 UX spec.
+// Read-only, organizer-scoped, reuse existing eBay-fetch logic -- see handler
+// docblocks in ebayController.ts for full detail + citations.
+router.get('/organizer/unknown-classification-count', authenticate, requireOrganizer, getUnknownShippingClassificationCount);
+router.get('/organizer/check-policies', authenticate, requireOrganizer, checkEbayPolicyLiveness);
 
 // Feature #244 Phase 2b: eBay Inventory Import
 // Import eBay inventory items into FindA.Sale

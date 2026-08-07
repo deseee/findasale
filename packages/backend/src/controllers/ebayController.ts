@@ -1117,6 +1117,120 @@ export async function getEbaySetupData(req: AuthRequest, res: Response): Promise
 }
 
 /**
+ * Handler: GET /api/ebay/organizer/unknown-classification-count
+ * Returns a simple count of the authenticated organizer's own items currently
+ * classified ebayShippingClassification === 'UNKNOWN' (auto-classification failed --
+ * not a physical property like HEAVY_OVERSIZED/FRAGILE). Used by the eBay settings
+ * page (ebay.tsx) to show the organizer the real blast radius of their "For items
+ * we couldn't automatically categorize" routing choice (UX audit finding 3,
+ * claude_docs/ux-spotchecks/ebay-shipping-settings-simplification-2026-08-06.md).
+ * Read-only, standard organizer-ownership scoping via `sale: { organizerId }` --
+ * same pattern as getUnconfirmedWeightListings above. No cross-tenant read possible.
+ */
+export async function getUnknownShippingClassificationCount(req: AuthRequest, res: Response): Promise<Response> {
+  try {
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ message: 'Authentication required' });
+
+    const organizer = await prisma.organizer.findUnique({ where: { userId } });
+    if (!organizer) return res.status(404).json({ message: 'Organizer profile not found' });
+
+    const count = await prisma.item.count({
+      where: {
+        sale: { organizerId: organizer.id },
+        ebayShippingClassification: 'UNKNOWN',
+      },
+    });
+
+    return res.json({ count });
+  } catch (err: any) {
+    console.error('[eBay] getUnknownShippingClassificationCount error:', err);
+    return res.status(500).json({ message: err.message || 'Failed to count items' });
+  }
+}
+
+/**
+ * Handler: GET /api/ebay/organizer/check-policies
+ * "Check my policies" (UX audit finding 5) -- read-only liveness check for every
+ * eBay fulfillment policyId this organizer has stored anywhere on the settings
+ * page. Reuses fetchAllEbayPolicies() (already called by getEbaySetupData above,
+ * same /sell/account/v1/fulfillment_policy endpoint the push cascade's
+ * fetchFulfillmentPolicies()/getFulfillmentPoliciesOnce() closures call -- see
+ * resolvePoliciesForItem's smartPickContext) rather than adding a new eBay
+ * integration. This is a call against the organizer's OWN already-connected eBay
+ * OAuth token, not a metered/billed third-party API -- no SPEND-gate implications.
+ * No writes. Standard organizer-ownership scoping (organizer.findFirst by
+ * req.user.id) -- no cross-tenant read possible.
+ */
+export async function checkEbayPolicyLiveness(req: AuthRequest, res: Response): Promise<Response> {
+  try {
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ message: 'Authentication required' });
+
+    const organizer = await prisma.organizer.findFirst({
+      where: { userId },
+      include: { ebayConnection: true, ebayPolicyMapping: true },
+    });
+    if (!organizer) return res.status(404).json({ message: 'Organizer profile not found' });
+    if (!organizer.ebayConnection) return res.status(400).json({ message: 'eBay account not connected' });
+
+    const accessToken = await refreshEbayAccessToken(organizer.id);
+    if (!accessToken) return res.status(500).json({ message: 'Failed to refresh eBay access token' });
+
+    const { fulfillmentPolicies } = await fetchAllEbayPolicies(organizer.id, accessToken);
+    const livePolicyIds = new Set(fulfillmentPolicies.map((p: any) => p.fulfillmentPolicyId));
+
+    // Collect every stored policyId + a plain-language label for it, from every
+    // place a policy can be pinned on this settings page (UX spec Dev Handoff 2b list).
+    const stored: Array<{ policyId: string; label: string }> = [];
+    const mapping = organizer.ebayPolicyMapping;
+    if (mapping) {
+      const weightTiers = (mapping.weightTierMappings as any[]) || [];
+      for (const t of weightTiers) {
+        if (t?.policyId) stored.push({ policyId: t.policyId, label: t.policyName || `Weight tier (<=${t.maxOz}oz)` });
+      }
+      const cubicTiers = (mapping.cubicTierMappings as any[]) || [];
+      for (const t of cubicTiers) {
+        if (t?.policyId) stored.push({ policyId: t.policyId, label: t.policyName || 'Box-size tier' });
+      }
+      const categoryOverrides = (mapping.categoryOverrides as any[]) || [];
+      for (const c of categoryOverrides) {
+        if (c?.policyId) stored.push({ policyId: c.policyId, label: c.policyName || `Category override (${c.categoryName || c.categoryId})` });
+      }
+      if (mapping.heavyOversizedPolicyId) stored.push({ policyId: mapping.heavyOversizedPolicyId, label: 'Heavy/oversized items rule' });
+      if (mapping.fragilePolicyId) stored.push({ policyId: mapping.fragilePolicyId, label: 'Fragile items rule' });
+      if (mapping.unknownPolicyId) stored.push({ policyId: mapping.unknownPolicyId, label: "Items we couldn't categorize rule" });
+      if (mapping.defaultFulfillmentPolicyId) stored.push({ policyId: mapping.defaultFulfillmentPolicyId, label: 'Default Fulfillment Policy' });
+    }
+    if (organizer.ebayDefaultShippingPolicyId) {
+      stored.push({ policyId: organizer.ebayDefaultShippingPolicyId, label: 'Push Defaults -- default shipping policy' });
+    }
+
+    // De-dupe by policyId (the same policy can legitimately be reused across
+    // several rules) before checking liveness.
+    const seen = new Set<string>();
+    const staleMap = new Map<string, string>();
+    for (const s of stored) {
+      if (seen.has(s.policyId)) continue;
+      seen.add(s.policyId);
+      if (!livePolicyIds.has(s.policyId)) {
+        staleMap.set(s.policyId, s.label);
+      }
+    }
+    const stalePolicies = Array.from(staleMap.entries()).map(([policyId, label]) => ({ policyId, label }));
+
+    return res.json({
+      checkedCount: seen.size,
+      staleCount: stalePolicies.length,
+      stalePolicies,
+    });
+  } catch (err: any) {
+    console.error('[eBay] checkEbayPolicyLiveness error:', err);
+    return res.status(500).json({ message: err.message || 'Failed to check policies' });
+  }
+}
+
+/**
  * Handler: POST /api/ebay/policy-mapping
  * Saves organizer's policy routing configuration (weight tiers, category overrides, defaults, etc).
  */
