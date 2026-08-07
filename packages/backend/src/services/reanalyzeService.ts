@@ -26,6 +26,7 @@ import { suggestEbayCategoryForTitle } from '../controllers/ebayController';
 import { syncListedItemFieldsToEbay } from '../controllers/itemController';
 import { runModelBakeoff, runGroundedResolution, runVisualResolution } from './modelBakeoffService';
 import { resolveGroundedIdentityInline } from './groundedIdentityService';
+import { classifyEbayShipping } from '../utils/ebayShippingClassifier'; // P0 fix: ebayShippingClassification was never written anywhere
 
 export type ReanalyzeErrorCode =
   | 'ITEM_NOT_FOUND'
@@ -296,6 +297,15 @@ export async function reanalyzeItem(
   if (apply) {
     const data: Record<string, any> = { ...appliedData };
     if (catalogSuggestionWrite !== undefined) data.catalogSuggestions = catalogSuggestionWrite;
+    // P0 fix: keep ebayShippingClassification in sync whenever reanalysis actually
+    // changes category and/or tags (classifyEbayShipping was previously only ever
+    // computed ephemeral for API display in ebayController.ts — never persisted).
+    if (data.category !== undefined || data.tags !== undefined) {
+      data.ebayShippingClassification = classifyEbayShipping(
+        data.category !== undefined ? data.category : item.category,
+        data.tags !== undefined ? data.tags : item.tags,
+      );
+    }
     if (Object.keys(data).length > 0) {
       await prisma.item.update({ where: { id: itemId }, data });
     }

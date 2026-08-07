@@ -41,6 +41,7 @@ import { markShopifyItemSold } from '../services/shopifyService';
 import { notifyFacebookExportedItemSold } from '../services/facebookNudgeService';
 import { authenticate, optionalAuthenticate, AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
+import { classifyEbayShipping } from '../utils/ebayShippingClassifier'; // P0 fix: ebayShippingClassification was never written anywhere
 import { requireTier } from '../middleware/requireTier'; // #65: Tier gating for batch operations
 import { accountAgeGate } from '../middleware/accountAgeGate'; // #93: Account age gate
 import { bidRateLimiter } from '../middleware/bidRateLimiter'; // #95: Bidding velocity limits
@@ -183,6 +184,7 @@ router.post('/bulk', authenticate, requireTier('SIMPLE'), bulkItemsLimiter, asyn
         id: true,
         status: true,
         price: true,
+        category: true,
         tags: true,
         photoUrls: true,
         ebayOfferId: true,
@@ -656,7 +658,11 @@ router.post('/bulk', authenticate, requireTier('SIMPLE'), bulkItemsLimiter, asyn
           newValues[item.id] = updatedTags;
           await prisma.item.update({
             where: { id: item.id },
-            data: { tags: updatedTags },
+            data: {
+              tags: updatedTags,
+              // P0 fix: keep ebayShippingClassification in sync whenever bulk tag ops change tags.
+              ebayShippingClassification: classifyEbayShipping(item.category, updatedTags),
+            },
           });
         }
 
