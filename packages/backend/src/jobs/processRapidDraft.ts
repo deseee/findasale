@@ -11,6 +11,7 @@ import { enrichItem, planEnrichmentApply } from '../services/productEnrichment';
 import { runGroundedIdentityAsync } from '../services/groundedIdentityService';
 import axios from 'axios';
 import { isAnthropicCreditError, alertAnthropicCreditExhausted } from '../lib/anthropicError';
+import { classifyEbayShipping } from '../utils/ebayShippingClassifier'; // P0 fix: ebayShippingClassification was never written anywhere
 
 const OLLAMA_URL = process.env.OLLAMA_URL || 'http://host.docker.internal:11434';
 const OLLAMA_VISION_MODEL = process.env.OLLAMA_VISION_MODEL || 'qwen3-vl:4b';
@@ -372,10 +373,18 @@ export async function processRapidDraft(itemId: string): Promise<void> {
         console.warn(`[rapidfire] enrichment cascade failed for item ${itemId}:`, enrichErr);
       }
 
+      // P0 fix: ebayShippingClassification was never written by any backend write path
+      // (classifyEbayShipping was only ever computed ephemeral for API display in
+      // ebayController.ts) — 100% of items platform-wide were stuck on the schema default
+      // 'UNKNOWN'. Rapidfire is the primary high-volume AI-tagging write path, so classify
+      // here using the exact same final category/tags values being persisted below.
+      const finalCategory = !userEdited.includes('category') ? (aiResult.category || item.category) : item.category;
+      const finalTags = aiResult.tags || [];
+
       const updateData = {
         title: !userEdited.includes('title') ? (aiResult.title || item.title) : item.title,
         description: composedDescription,
-        category: !userEdited.includes('category') ? (aiResult.category || item.category) : item.category,
+        category: finalCategory,
         condition: !userEdited.includes('condition') ? (aiResult.condition || item.condition) : item.condition,
         brand: !userEdited.includes('brand') ? (aiResult.brand || item.brand) : item.brand,
         // Catalog Enrichment: persist AI-read model/part number when organizer hasn't set one.
@@ -384,7 +393,8 @@ export async function processRapidDraft(itemId: string): Promise<void> {
         mpn: !userEdited.includes('mpn') ? (aiResult.mpn || item.mpn) : item.mpn,
         conditionGrade: aiResult.suggestedConditionGrade || item.conditionGrade,
         price: !userEdited.includes('price') ? (refinedPrice ?? item.price) : item.price,
-        tags: aiResult.tags || [],
+        tags: finalTags,
+        ebayShippingClassification: classifyEbayShipping(finalCategory, finalTags),
         isAiTagged: true,
         aiConfidence: aiResult.confidence ?? 0.5,
         draftStatus: 'PENDING_REVIEW' as const,
@@ -458,6 +468,15 @@ export async function processRapidDraft(itemId: string): Promise<void> {
                 mergedData[key] = aiValue;
               }
             }
+          }
+          // P0 fix: the generic loop above would never let AI-computed ebayShippingClassification
+          // through (freshItem.ebayShippingClassification is always a non-empty string default
+          // 'UNKNOWN', which never satisfies `!freshValue`) -- explicitly recompute it here using
+          // whatever category/tags actually ended up in the merge.
+          if (mergedData.category !== undefined || mergedData.tags !== undefined) {
+            const mergedCategory = (mergedData.category !== undefined ? mergedData.category : freshItem.category) as string | null;
+            const mergedTags = (mergedData.tags !== undefined ? mergedData.tags : freshItem.tags) as string[];
+            mergedData.ebayShippingClassification = classifyEbayShipping(mergedCategory, mergedTags);
           }
           // Always set draftStatus to PENDING_REVIEW regardless
           mergedData.draftStatus = 'PENDING_REVIEW';
