@@ -16,10 +16,12 @@ import { discoverEmail } from '../services/emailDiscoveryService';
 import { registrableDomain, domainMatchesBusiness, FAMOUS_UNRELATED_DOMAINS } from '../services/emailProvenance';
 import { isBlockedWebsiteDomain } from '../config/domainBlocklist';
 import { updateDirectoryConfidenceScore } from '../services/directoryConfidenceService';
+import { getCronCursor, saveCronCursor, clearCronCursor } from '../lib/cronCursor';
 
 const BATCH_SIZE = 50;
 const BATCH_DELAY_MS = 2000;
 const MAX_BACKFILL_BATCHES = 200; // safety cap
+const WEBSITE_ENRICHMENT_CRON_JOB_NAME = 'websiteEnrichmentBackfill';
 
 // ─── HERE Places lookup ─────────────────────────────────────────────────────
 
@@ -192,14 +194,26 @@ export async function runWebsiteEnrichmentBackfill(): Promise<void> {
     return;
   }
   console.log('[WebsiteEnrichment] Starting full backfill');
-  let skip = 0;
+
+  // Resume from the last persisted offset (redeploy-safe -- see cronCursor.ts). Offset-based
+  // job (NOT id-cursor): `cursor` holds a stringified skip value. A missing row, unparsable
+  // value, or read failure is not a hard failure: start from the beginning.
+  const savedCursor = await getCronCursor(WEBSITE_ENRICHMENT_CRON_JOB_NAME);
+  let skip = savedCursor !== null ? parseInt(savedCursor, 10) : 0;
+  if (!Number.isFinite(skip) || skip < 0) skip = 0;
   let batchCount = 0;
 
   while (batchCount < MAX_BACKFILL_BATCHES) {
     const fetched = await enrichBatch(skip);
     batchCount++;
-    if (fetched < BATCH_SIZE) break; // last page
+    if (fetched < BATCH_SIZE) {
+      // Full pass complete -- clear the cursor so the next scheduled run starts fresh.
+      await clearCronCursor(WEBSITE_ENRICHMENT_CRON_JOB_NAME);
+      break; // last page
+    }
     skip += BATCH_SIZE;
+    // Persist offset after this successful batch so a mid-run redeploy resumes here.
+    await saveCronCursor(WEBSITE_ENRICHMENT_CRON_JOB_NAME, skip.toString(), fetched);
     await new Promise(resolve => setTimeout(resolve, BATCH_DELAY_MS));
   }
 

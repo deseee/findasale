@@ -6040,3 +6040,22 @@ model DomainFetchState {
 
   @@index([status, nextEligibleAt])
 }
+
+// Resumable-position store for long-running backfill/backlog batch jobs (emailDiscoveryBatchJob,
+// leadScoringService backfill, websiteEnrichmentJob backfill, and future jobs of this shape).
+// Root cause this fixes: these jobs held their cursor only in a local variable, so every Railway
+// redeploy (multiple/day) killed the job mid-run and it restarted from row 1 -- a 14k-row backlog
+// never actually advanced. Read at the top of each job run, upserted after each successful batch.
+// Missing row = start from the beginning.
+//
+// `cursor` is opaque and job-specific: for id-cursor-paginated jobs (emailDiscoveryBatchJob,
+// leadScoringService) it holds a Prisma cuid (the last processed row's id, used as
+// `cursor: { id: cursor }`). For offset-paginated jobs (websiteEnrichmentJob) it holds a
+// stringified integer skip value (parseInt on read). Each job owns its own interpretation --
+// do not assume all jobs are id-cursor jobs.
+model CronCursor {
+  jobName              String   @id // e.g. "emailDiscoveryBatchJob", "leadScoringBackfill", "websiteEnrichmentBackfill"
+  cursor               String?
+  rowsProcessedLastRun Int?    // observability: batch size processed in the most recent run
+  updatedAt            DateTime @updatedAt // doubles as lastRunAt -- touched on every upsert
+}

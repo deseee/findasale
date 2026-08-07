@@ -591,6 +591,74 @@ export async function getOrCreateScrapedOrganizer(
     }
   }
 
+  // Check by esnOrgId if present -- EstateSales.NET's own numeric company ID (record.orgId).
+  // Root cause of the "hansenauctiongroup.com" duplicate-Organizer bug (confirmed via live
+  // DB query 2026-08-07: 15 separate rows created weekly, one per distinct sale city -- the
+  // dedupeKey/name+city fallbacks below never matched because ESN listings for the SAME
+  // organizing company move to a DIFFERENT city every week, so neither the dedupeKey
+  // (name:city) nor the address-contains-city fallback ever hit). esnOrgId is stable per
+  // company regardless of where any individual sale is held, and was already being
+  // captured/threaded through (ScrapedItem.esnOrgId -> this function's esnOrgId param,
+  // @@index([esnOrgId]) already exists on the model) but was never used as a lookup key --
+  // only opportunistically backfilled onto whatever row the weaker city-based fallbacks
+  // happened to match. Confirmed safe as an identity key via a live DB check before
+  // choosing this over a website-domain match: franchise networks that share one website
+  // across many independently-run locations (e.g. grasons.com -- 15+ distinct Grasons
+  // franchise Organizer rows, same website, different owners) each have their OWN distinct
+  // esnOrgId per location, so this never merges genuinely separate businesses the way a
+  // website-domain-based match would have.
+  if (esnOrgId) {
+    const byEsnOrgId = await prisma.organizer.findFirst({
+      where: { esnOrgId },
+      select: { id: true, googlePlaceId: true, foursquareVenueId: true, hereBusinessId: true, contactEmail: true, phone: true, website: true, sourceCount: true, sourcesJson: true, lat: true, lng: true, isStateLicensed: true, licenseState: true, licenseNumber: true },
+    });
+    if (byEsnOrgId) {
+      const updates: Record<string, unknown> = {};
+      if (googlePlaceId && !byEsnOrgId.googlePlaceId) updates.googlePlaceId = googlePlaceId;
+      if (foursquareVenueId && !byEsnOrgId.foursquareVenueId) updates.foursquareVenueId = foursquareVenueId;
+      if (hereBusinessId && !byEsnOrgId.hereBusinessId) updates.hereBusinessId = hereBusinessId;
+      if (businessCategory) updates.businessCategory = businessCategory;
+      const validEmail = isValidExternalEmail(contactEmail);
+      // Provenance + wrong-entity guard (bounce-incident fix): directory-listing emails
+      // are stored as low-confidence/non-send-eligible until re-verified.
+      const emailGate = gateScrapedEmail(validEmail, byEsnOrgId.website ?? website, businessName);
+      if (emailGate && !byEsnOrgId.contactEmail) {
+        updates.contactEmail = emailGate.contactEmail;
+        updates.emailDiscoveryMethod = emailGate.emailDiscoveryMethod;
+        updates.emailDiscoveryConfidence = emailGate.emailDiscoveryConfidence;
+        updates.emailDiscoveredAt = emailGate.emailDiscoveredAt;
+      }
+      if (phone && !byEsnOrgId.phone) updates.phone = phone;
+      applyScrapedWebsite(updates, byEsnOrgId.website, website, businessName, listingUrl);
+      if (lat !== undefined && lat !== null && !byEsnOrgId.lat) updates.lat = lat;
+      if (lng !== undefined && lng !== null && !byEsnOrgId.lng) updates.lng = lng;
+      if (isStateLicensed && !byEsnOrgId.isStateLicensed) updates.isStateLicensed = isStateLicensed;
+      if (licenseState && !byEsnOrgId.licenseState) updates.licenseState = licenseState;
+      if (licenseNumber && !byEsnOrgId.licenseNumber) updates.licenseNumber = licenseNumber;
+      if (effectiveSourceLabel) {
+        updates.directoryMostRecentSource = effectiveSourceLabel;
+        updates.directoryMostRecentAt = new Date();
+      }
+
+      // Corroboration merge: only increment if this sourceName is genuinely new
+      const currentSources = (byEsnOrgId.sourcesJson as any[]) || [];
+      const sourceAlreadyPresent = currentSources.some((s: any) => s.sourceName === sourceName);
+      if (!sourceAlreadyPresent) {
+        const newSourceCount = (byEsnOrgId.sourceCount || 1) + 1;
+        const newSource = { sourceName, sourceId: String(esnOrgId), lastSeen: new Date().toISOString() };
+        updates.sourceCount = newSourceCount;
+        updates.sourcesJson = [...currentSources, newSource];
+        updates.corroborationScore = recalculateCorroborationScore(newSourceCount);
+      }
+      updates.updatedAt = new Date();
+
+      if (Object.keys(updates).length > 0) {
+        await prisma.organizer.update({ where: { id: byEsnOrgId.id }, data: updates });
+      }
+      return byEsnOrgId.id;
+    }
+  }
+
   // Fallback: Try to find existing organizer by dedupeKey first, then normalized businessName + city
   const dedupeKey = generateDedupeKey(businessName, city);
   const byDedupeKey = await prisma.organizer.findFirst({

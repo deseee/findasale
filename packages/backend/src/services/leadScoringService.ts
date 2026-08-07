@@ -19,6 +19,7 @@
  */
 
 import { prisma } from '../lib/prisma';
+import { getCronCursor, saveCronCursor, clearCronCursor } from '../lib/cronCursor';
 
 // ─── Non-resale blocklist ─────────────────────────────────────────────────────
 
@@ -294,6 +295,7 @@ export function calculateLeadScore(org: ScoringInput): LeadScoreResult {
 // ─── Backfill ─────────────────────────────────────────────────────────────────
 
 const BATCH_SIZE = 200;
+const LEAD_SCORING_CRON_JOB_NAME = 'leadScoringBackfill';
 
 export interface BackfillStats {
   total: number;
@@ -338,7 +340,9 @@ export async function runLeadScoringBackfill(): Promise<BackfillStats> {
   stats.total = await prisma.organizer.count({ where: unmanagedWhere });
   console.log(`[leadScoring] Starting backfill for ${stats.total} unmanaged organizers (batch size: ${BATCH_SIZE})`);
 
-  let cursor: string | undefined = undefined;
+  // Resume from the last persisted cursor (redeploy-safe -- see cronCursor.ts). A missing
+  // row or read failure is not a hard failure: start from the beginning.
+  let cursor: string | undefined = (await getCronCursor(LEAD_SCORING_CRON_JOB_NAME)) ?? undefined;
   let batchNum = 0;
 
   while (true) {
@@ -368,7 +372,11 @@ export async function runLeadScoringBackfill(): Promise<BackfillStats> {
       },
     });
 
-    if (batch.length === 0) break;
+    if (batch.length === 0) {
+      // Full pass complete -- clear the cursor so the next scheduled run starts fresh.
+      await clearCronCursor(LEAD_SCORING_CRON_JOB_NAME);
+      break;
+    }
 
     cursor = batch[batch.length - 1].id;
 
@@ -415,7 +423,14 @@ export async function runLeadScoringBackfill(): Promise<BackfillStats> {
       `(${stats.scored}/${stats.total} total)`
     );
 
-    if (batch.length < BATCH_SIZE) break;
+    if (batch.length < BATCH_SIZE) {
+      // Full pass complete -- clear the cursor so the next scheduled run starts fresh.
+      await clearCronCursor(LEAD_SCORING_CRON_JOB_NAME);
+      break;
+    }
+
+    // Persist cursor after this successful batch so a mid-run redeploy resumes here.
+    await saveCronCursor(LEAD_SCORING_CRON_JOB_NAME, cursor ?? null, batch.length);
 
     // Yield between batches to avoid starving live site queries
     await new Promise(r => setTimeout(r, 50));

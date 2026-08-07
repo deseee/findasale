@@ -16,6 +16,7 @@ import {
   createRunDedupGuard,
   type RunDedupGuard,
 } from './scraper/domainFetchState';
+import { getCronCursor, saveCronCursor, clearCronCursor } from '../lib/cronCursor';
 
 /**
  * Email Discovery Service — Free tier pipeline
@@ -684,11 +685,15 @@ function extractDomain(url: string): string | null {
  * Batch job: discover emails for all unmanaged listings without contact email
  * Runs cursor-paginated with batch size 50, 2s delay between batches
  */
+const EMAIL_DISCOVERY_CRON_JOB_NAME = 'emailDiscoveryBatchJob';
+
 export async function emailDiscoveryBatchJob(
   batchSize: number = 50,
   delayMs: number = 2000
 ): Promise<{ processed: number; discovered: number; skipped: number }> {
-  let cursor: string | undefined;
+  // Resume from the last persisted cursor (redeploy-safe -- see cronCursor.ts). A missing row
+  // or read failure is not a hard failure: start from the beginning.
+  let cursor: string | undefined = (await getCronCursor(EMAIL_DISCOVERY_CRON_JOB_NAME)) ?? undefined;
   let processed = 0;
   let discovered = 0;
   let skipped = 0;
@@ -712,7 +717,11 @@ export async function emailDiscoveryBatchJob(
         select: { id: true },
       });
 
-      if (organizers.length === 0) break;
+      if (organizers.length === 0) {
+        // Full pass complete -- clear the cursor so the next scheduled run starts fresh.
+        await clearCronCursor(EMAIL_DISCOVERY_CRON_JOB_NAME);
+        break;
+      }
 
       // Bounded concurrency: process this batch of (up to) 50 organizers in chunks of
       // CONCURRENCY instead of strictly one at a time. Root-caused via real production
@@ -750,6 +759,9 @@ export async function emailDiscoveryBatchJob(
       }
 
       cursor = organizers[organizers.length - 1]?.id;
+
+      // Persist cursor after this successful batch so a mid-run redeploy resumes here.
+      await saveCronCursor(EMAIL_DISCOVERY_CRON_JOB_NAME, cursor ?? null, organizers.length);
 
       // Delay before next batch
       if (organizers.length === batchSize) {
