@@ -200,11 +200,13 @@ const EditItemPage = () => {
   // flag is sent only when this is true.
   const [weightTouched, setWeightTouched] = useState(false);
 
-  // ADR-ai-package-estimation-isolation-2026-08-05: explicit, opt-in fetch of the
-  // AI/estimate-cascade weight+dims guess. Only fills the editable fields — never
-  // auto-confirms. Setting weightTouched here mirrors the organizer typing the
-  // values in themselves; the existing Save gate above still requires a deliberate
-  // Save click before packageConfirmedByOrganizer is sent.
+  // ADR-ai-package-estimation-isolation-2026-08-05, corrected S-QA-2026-08-06: explicit,
+  // opt-in fetch of the AI/estimate-cascade weight+dims guess. Only fills the editable
+  // fields — never auto-confirms. Does NOT set weightTouched itself: a click here alone
+  // (with no further action) must never cause Save to persist packageConfirmedByOrganizer.
+  // The organizer must still separately edit the field or click "This is correct as shown"
+  // (below) before Save will confirm — mirrors the organizer typing the values in
+  // themselves, not merely viewing an AI guess.
   const [packageEstimateLoading, setPackageEstimateLoading] = useState(false);
   const handleGetPackageEstimate = async () => {
     if (!id) return;
@@ -224,8 +226,9 @@ const EditItemPage = () => {
         packageHeightIn: result.dims?.height != null ? String(result.dims.height) : prev.packageHeightIn,
         packageType: result.packageType || prev.packageType,
       }));
-      setWeightTouched(true);
-      showToast('Estimate filled in. Review and save to confirm.', 'success');
+      // Do NOT setWeightTouched(true) here — filling the fields is not confirming them.
+      // The organizer must edit the field or click "This is correct as shown" to confirm.
+      showToast('Estimate filled in. Edit the field or click "This is correct as shown" to confirm.', 'success');
     } catch (err: any) {
       const message = err?.response?.data?.message || 'Failed to get estimate. Try again.';
       showToast(message, 'error');

@@ -181,9 +181,12 @@ const EbayEditForm: React.FC<{
   };
 
   // "Get AI weight & size estimate" — copies the background-computed estimate into the
-  // editable inputs so the organizer can see and review it, exactly like typing it in
-  // themselves. Does NOT call the save API itself — Save is still a separate, deliberate
-  // step the organizer must take afterward for anything to persist or confirm.
+  // editable inputs so the organizer can see and review it. Does NOT call the save API
+  // itself, and does NOT set weightTouched — filling the fields is not confirming them.
+  // (Corrected S-QA-2026-08-06: this previously set weightTouched directly, so clicking
+  // this button and then Save — with zero manual edit — silently confirmed an unreviewed
+  // AI guess. Only a genuine subsequent edit to the weight input, or picking a box
+  // preset via applyBoxPreset, sets weightTouched now.)
   const applyAiEstimate = () => {
     if (!item.packageEstimate) return;
     const estimate = item.packageEstimate;
@@ -195,7 +198,6 @@ const EbayEditForm: React.FC<{
       packageHeightIn: estimate.heightIn,
       ...(estimate.packageType ? { packageType: estimate.packageType } : {}),
     }));
-    setWeightTouched(true);
   };
 
   const toggleSection = (section: keyof typeof expandedSections) => {

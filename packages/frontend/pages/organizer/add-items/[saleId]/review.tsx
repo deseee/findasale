@@ -721,12 +721,13 @@ const ReviewPage = () => {
   };
 
   /**
-   * "Get AI estimate" (ADR-ai-package-estimation-isolation-2026-08-05) — explicit,
-   * opt-in fetch of the AI/estimate-cascade weight+dims guess for a single item.
-   * Only fills this item's editable weight/dims fields — never auto-confirms.
-   * Marking weightTouched here mirrors the organizer typing the values in
-   * themselves; the existing save-payload gate above still requires a deliberate
-   * Save action before packageConfirmedByOrganizer is sent.
+   * "Get AI estimate" (ADR-ai-package-estimation-isolation-2026-08-05, corrected
+   * S-QA-2026-08-06) — explicit, opt-in fetch of the AI/estimate-cascade weight+dims
+   * guess for a single item. Only fills this item's editable weight/dims fields —
+   * never auto-confirms. Does NOT set weightTouched itself: a click here alone (with
+   * no further edit) must never cause Save to persist packageConfirmedByOrganizer.
+   * The organizer must still separately edit the weight field (handleEditChange,
+   * above) before Save will confirm — mirrors edit-item/[id].tsx exactly.
    */
   const handleGetPackageEstimate = async (item: Item) => {
     if (packageEstimateLoadingIds.has(item.id)) return;
@@ -748,8 +749,9 @@ const ReviewPage = () => {
       };
       editStates.set(item.id, updated);
       setEditStates(new Map(editStates));
-      setWeightTouched((prev) => new Set(prev).add(item.id));
-      showToast('Estimate filled in. Review and save to confirm.', 'success');
+      // Do NOT setWeightTouched here — filling the fields is not confirming them.
+      // The organizer must edit the weight field (handleEditChange) to confirm.
+      showToast('Estimate filled in. Edit the weight field to confirm.', 'success');
     } catch (err: any) {
       const message = err?.response?.data?.message || 'Failed to get estimate. Try again.';
       showToast(message, 'error');
