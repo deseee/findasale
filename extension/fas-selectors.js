@@ -293,7 +293,14 @@
         const t = norm(b.textContent);
         return t === 'mark as available' || t === 'relist this item';
       });
-    const cardMap = new Map(); // cardEl -> cardText, deduped
+    // (2026-08-07 fix) Dedupe by normalized TEXT, not element reference. DOM-verified live
+    // 2026-08-07 (Borosilicate Glass Rod item, unfiltered page): "Mark as available" and
+    // "Relist this item" both sit on the SAME real card, but their independent 16-hop walk-up
+    // can land on two different-but-nested ancestor elements that happen to share IDENTICAL
+    // aggregated textContent. Keying by element reference treated those as 2 distinct
+    // candidates and wrongly called one real card "ambiguous" -- keying by the text itself
+    // collapses them back to a single entry.
+    const cardMap = new Map(); // cardText -> cardEl, deduped by text
     for (const btn of markers) {
       let el = btn, hops = 0;
       while (el && hops < 16) {
@@ -301,12 +308,12 @@
         hops++;
         if (!el) break;
         const t = norm(el.textContent);
-        if (t.indexOf('$') !== -1 && t.length > 40) { cardMap.set(el, t); break; }
+        if (t.indexOf('$') !== -1 && t.length > 40) { if (!cardMap.has(t)) cardMap.set(t, el); break; }
       }
     }
     const candidates = Array.from(cardMap.entries())
-      .filter(([, cardText]) => cardText === want || cardText.indexOf(want) !== -1)
-      .map(([cardEl, cardText]) => ({ cardEl, cardText }));
+      .filter(([cardText]) => cardText === want || cardText.indexOf(want) !== -1)
+      .map(([cardText, cardEl]) => ({ cardEl, cardText }));
     if (candidates.length === 1) return candidates[0];
     return null; // zero or ambiguous -- caller falls through to the genuine skip+flag path
   }
@@ -330,7 +337,12 @@
         const t = norm(b.textContent);
         return t === 'mark as available' || t === 'relist this item';
       });
-    const cardMap = new Map(); // cardEl -> cardText, deduped
+    // (2026-08-07 fix) Same element-reference dedup bug as alreadySoldCardByTitle above --
+    // fixed the same way (dedupe by normalized text, not element reference). Without this, a
+    // single real Sold card with two markers could show up TWICE in the returned list, causing
+    // matchSoldCardForTitle in fas-remove.js to see 2 matches for what is actually one card and
+    // wrongly treat it as ambiguous.
+    const seen = new Set(); // normalized card text, deduped
     for (const btn of markers) {
       let el = btn, hops = 0;
       while (el && hops < 16) {
@@ -338,10 +350,10 @@
         hops++;
         if (!el) break;
         const t = norm(el.textContent);
-        if (t.indexOf('$') !== -1 && t.length > 40) { cardMap.set(el, t); break; }
+        if (t.indexOf('$') !== -1 && t.length > 40) { seen.add(t); break; }
       }
     }
-    return Array.from(cardMap.values()).map((cardText) => ({ cardText }));
+    return Array.from(seen).map((cardText) => ({ cardText }));
   }
 
   // Facebook's custom div[role="button"] controls (category chips, "Enter exact weight",

@@ -208,6 +208,46 @@
     return { ok: true };
   }
 
+  // (2026-08-07 fix) Facebook's default "Your listings" grid can omit weeks-old listings from
+  // the DOM entirely, regardless of scrolling -- loadAllListingCards' pagination workaround
+  // above only helps when the card is somewhere in the lazy-loaded feed at all. DOM-verified
+  // live 2026-08-07: 6 items stuck in the removal dead-letter queue for weeks (every retry
+  // reporting "zero or more than one title found") each had EXACTLY ONE unambiguous,
+  // confidently-matchable card once the page was filtered via Facebook's OWN listings search
+  // (?title_search=<title>) -- the cards existed the whole time, they just were never rendered
+  // by the default unfiltered view. Root cause was DOM coverage, not title-matching. Fix: filter
+  // the page to the target title via a REAL navigation (Facebook's React app does not reliably
+  // re-fetch/re-render under a history.pushState-only URL change -- confirmed by defaulting to
+  // the safe option here) before ever scanning for that item's card.
+  function buildTitleSearchUrl(title) {
+    return 'https://www.facebook.com/marketplace/you/selling?title_search=' + encodeURIComponent(title);
+  }
+
+  function currentTitleSearchParam() {
+    try { return new URLSearchParams(window.location.search).get('title_search'); } catch (e) { return null; }
+  }
+
+  function pageAlreadyFilteredFor(title) {
+    const current = currentTitleSearchParam();
+    return !!current && SEL.norm(current) === SEL.norm(title);
+  }
+
+  // Ensures the page is filtered to `item`'s title before running the removal flow against it.
+  // If not already filtered, triggers a real navigation and returns WITHOUT running the removal
+  // flow -- the navigation tears down this script; the fresh content-script load that follows
+  // re-enters start() below, finds the page now correctly filtered, and proceeds directly. If
+  // already filtered (e.g. two consecutive queue items happen to share an identical title), runs
+  // immediately with no redundant navigation.
+  async function ensureFilteredThenRun(item, index, total) {
+    if (pageAlreadyFilteredFor(item.title)) {
+      await runRemovalQueue(item, index, total);
+      return;
+    }
+    window.location.href = buildTitleSearchUrl(item.title);
+    // Real navigation is about to tear down this script's execution context -- nothing more to
+    // do here; do not await/continue past this point.
+  }
+
   async function runRemovalQueue(item, index, total) {
     overlay('<b>FindA.Sale</b> — removing sold item ' + (index + 1) + ' of ' + total + ': <b>' + escapeHtml(item.title) + '</b>…');
     const result = await removeOne(item);
@@ -231,7 +271,10 @@
     // by start() below so a reload during removal ends the queue cleanly instead of throwing.
     try { next = await chrome.runtime.sendMessage({ type: 'advanceRemovalQueue' }); } catch (e) { next = null; }
     if (next && next.ok && next.item) {
-      await runRemovalQueue(next.item, next.index, next.total);
+      // (2026-08-07) Navigate to the next item's title-filtered page rather than continuing to
+      // scan the current (differently-filtered or unfiltered) DOM in place -- see
+      // ensureFilteredThenRun above.
+      await ensureFilteredThenRun(next.item, next.index, next.total);
     } else {
       overlay('<b>FindA.Sale</b> — done removing sold items.');
       setTimeout(() => bar && bar.remove(), 4000);
@@ -327,8 +370,16 @@
     // below runs -- see loadAllListingCards in fas-selectors.js for why this is required.
     // Without this, both the sold-detection scan and the removal queue's card lookups only
     // ever saw whatever Facebook happened to render on the first page load.
-    await SEL.loadAllListingCards();
-    await runSoldDetectionScan();
+    // (2026-08-07 fix) Skip both on a page WE filtered down to a single removal target
+    // (title_search set by ensureFilteredThenRun below) -- sold-detection needs the FULL
+    // unfiltered grid to check many candidate titles at once, so running it against a
+    // near-empty filtered DOM would just be a wasted API call. (An organizer's own manual
+    // Facebook search would also be skipped here; acceptable and rare -- that page load's
+    // opportunistic sold-check is simply deferred to the next poll.)
+    if (!currentTitleSearchParam()) {
+      await SEL.loadAllListingCards();
+      await runSoldDetectionScan();
+    }
 
     let q = null;
     try { q = await chrome.runtime.sendMessage({ type: 'getRemovalQueueItem' }); } catch (e) { /* removal flow unavailable this load -- sold-detection scan above still ran */ }
@@ -346,7 +397,7 @@
       try { await chrome.runtime.sendMessage({ type: 'removalQueueDone' }); } catch (e) {}
       return;
     }
-    await runRemovalQueue(q.item, q.index, q.total);
+    await ensureFilteredThenRun(q.item, q.index, q.total);
   }
 
   start();
