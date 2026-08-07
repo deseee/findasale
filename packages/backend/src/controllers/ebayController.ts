@@ -5275,7 +5275,7 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
             { sale: { organizerId: organizer.id } },
           ],
         },
-        select: { id: true, title: true, listedOnEbayAt: true, ebayCategoryId: true, category: true, draftStatus: true },
+        select: { id: true, title: true, listedOnEbayAt: true, ebayCategoryId: true, category: true, tags: true, draftStatus: true },
       });
       const hits = candidates.filter((c) => normTitleForMatch(c.title) === target);
       if (hits.length === 0) return false;
@@ -5284,6 +5284,9 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
         return false;
       }
       const hit = hits[0];
+      // P0 fix: keep ebayShippingClassification in sync only when this reconciliation
+      // actually changes category (mirrors the same conditional-set pattern as category itself).
+      const willSetCategoryOnReconcile = !hit.category && !!categoryName;
       await prisma.item.update({
         where: { id: hit.id },
         data: {
@@ -5291,6 +5294,7 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
           listedOnEbayAt: hit.listedOnEbayAt ?? new Date(),
           ...(hit.ebayCategoryId || !categoryId ? {} : { ebayCategoryId: categoryId }),
           ...(hit.category || !categoryName ? {} : { category: categoryName }),
+          ...(willSetCategoryOnReconcile ? { ebayShippingClassification: classifyEbayShipping(categoryName, hit.tags) } : {}),
           // Auto-publish on FindA.Sale: this item is confirmed live on eBay, so it
           // should not sit on the "review & publish" queue.
           ...(hit.draftStatus !== 'PUBLISHED' ? { draftStatus: 'PUBLISHED' } : {}),
@@ -5647,6 +5651,14 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
             if (conditionGrade && !existing.conditionGrade) backfill.conditionGrade = conditionGrade;
             if (ebayCategory && !existing.category) backfill.category = ebayCategory;
             if (ebayCategoryTags.length > 0 && (!existing.tags || existing.tags.length === 0)) backfill.tags = ebayCategoryTags;
+            // P0 fix: keep ebayShippingClassification in sync whenever this backfill
+            // actually changes category and/or tags.
+            if (backfill.category !== undefined || backfill.tags !== undefined) {
+              backfill.ebayShippingClassification = classifyEbayShipping(
+                backfill.category !== undefined ? backfill.category : existing.category,
+                backfill.tags !== undefined ? backfill.tags : existing.tags,
+              );
+            }
             // Backfill eBay numeric CategoryID for push-back (always overwrite — import is source of truth)
             if (ebayCategoryIdFromImport && existing.ebayCategoryId !== ebayCategoryIdFromImport) backfill.ebayCategoryId = ebayCategoryIdFromImport;
             // Migrate SKU-stored ebayListingId to numeric eBay ItemID so GetItem enrichment works
@@ -5682,6 +5694,8 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
               category: ebayCategory || undefined,
               ebayCategoryId: ebayCategoryIdFromImport || undefined,
               tags: ebayCategoryTags,
+              // P0 fix: ebayShippingClassification was never written by any backend write path.
+              ebayShippingClassification: classifyEbayShipping(ebayCategory || null, ebayCategoryTags),
               embedding: [],  // populated later when item is indexed for search
             }
           });
@@ -5798,6 +5812,14 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
           const nameValueBlocks = xmlAll(specificsBlock, 'NameValueList');
           const tags: string[] = nameValueBlocks.map(b => xmlVal(b, 'Value')).filter((v): v is string => !!v && v.length > 0).slice(0, 10);
           if (tags.length > 0) backfill.tags = tags;
+          // P0 fix: keep ebayShippingClassification in sync whenever this enrichment pass
+          // actually changes category and/or tags.
+          if (backfill.category !== undefined || backfill.tags !== undefined) {
+            backfill.ebayShippingClassification = classifyEbayShipping(
+              backfill.category !== undefined ? backfill.category : item.category,
+              backfill.tags !== undefined ? backfill.tags : item.tags,
+            );
+          }
           if (Object.keys(backfill).length > 0) {
             await prisma.item.update({ where: { id: item.id }, data: backfill });
             enrichedCount++;

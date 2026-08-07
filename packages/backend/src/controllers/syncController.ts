@@ -7,6 +7,7 @@ import { Request, Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import { processCashSaleCore, CashSaleError } from './terminalController'; // #561 offline cash-checkout replay
+import { classifyEbayShipping } from '../utils/ebayShippingClassifier'; // P0 fix: ebayShippingClassification was never written anywhere
 
 interface SyncOperation {
   type: 'CREATE_ITEM' | 'UPDATE_ITEM' | 'DELETE_ITEM' | 'UPLOAD_PHOTO' | 'CHECKOUT_CASH';
@@ -212,6 +213,8 @@ async function handleCreateItem(operation: SyncOperation, organizerId: string) {
         sku: payload.sku,
         photoUrls: payload.photoUrls || [],
         tags: payload.tags || [],
+        // P0 fix: ebayShippingClassification was never written by any backend write path.
+        ebayShippingClassification: classifyEbayShipping(payload.category ?? null, payload.tags || []),
         saleId: operation.saleId,
         organizerId,
       },
@@ -301,6 +304,12 @@ async function handleUpdateItem(operation: SyncOperation) {
         condition: payload.condition || currentItem.condition,
         photoUrls: Array.isArray(payload.photoUrls) ? payload.photoUrls : currentItem.photoUrls,
         tags: Array.isArray(payload.tags) ? payload.tags : currentItem.tags,
+        // P0 fix: keep ebayShippingClassification in sync with the final category/tags
+        // this operation writes (this endpoint always writes both, with fallback to current).
+        ebayShippingClassification: classifyEbayShipping(
+          payload.category || currentItem.category,
+          Array.isArray(payload.tags) ? payload.tags : currentItem.tags,
+        ),
         updatedAt: new Date(),
       },
     });
