@@ -60,6 +60,16 @@ const SHIPPABLE_KEYWORDS = [
  * @param tags - Array of item tags from AI analysis
  * @returns ShippingClassification
  */
+// Word-boundary keyword match (allows a trailing plural 's') so short keywords like
+// "table" or "organ" don't false-positive inside unrelated words -- "portable",
+// "vegetable", "organizer" should NOT match, but "table"/"tables" and "organ"/"organs"
+// should. Found 2026-08-06 (S1-eBay-shipping-audit): 8 of 27 live HEAVY_OVERSIZED/FRAGILE
+// items were false positives from plain .includes() substring matching before this fix.
+function hasKeyword(keyword: string, text: string): boolean {
+  const escaped = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`\\b${escaped}s?\\b`).test(text);
+}
+
 export function classifyEbayShipping(
   category: string | null,
   tags: string[]
@@ -69,17 +79,17 @@ export function classifyEbayShipping(
   const combinedStr = `${categoryLower} ${tagsLower.join(' ')}`;
 
   // Check HEAVY first — highest priority
-  if (HEAVY_KEYWORDS.some((keyword) => combinedStr.includes(keyword))) {
+  if (HEAVY_KEYWORDS.some((keyword) => hasKeyword(keyword, combinedStr))) {
     return 'HEAVY_OVERSIZED';
   }
 
   // Check FRAGILE second
-  if (FRAGILE_KEYWORDS.some((keyword) => combinedStr.includes(keyword))) {
+  if (FRAGILE_KEYWORDS.some((keyword) => hasKeyword(keyword, combinedStr))) {
     return 'FRAGILE';
   }
 
   // Check SHIPPABLE
-  if (SHIPPABLE_KEYWORDS.some((keyword) => combinedStr.includes(keyword))) {
+  if (SHIPPABLE_KEYWORDS.some((keyword) => hasKeyword(keyword, combinedStr))) {
     return 'SHIPPABLE';
   }
 
