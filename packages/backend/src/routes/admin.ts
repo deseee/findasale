@@ -41,6 +41,7 @@ import {
   sendDirectMessageToUser,
   listAllFraudSignals,
   reviewFraudSignalAdmin,
+  getMarketplaceReviewBacklog,
 } from '../controllers/adminController';
 import {
   createInvite,
@@ -130,6 +131,11 @@ router.patch('/referral-fraud-signals/:signalId/review', reviewFraudSignal);
 // cross-sale). Distinct from the ReferralFraudSignal routes above.
 router.get('/fraud-signals', listAllFraudSignals);
 router.patch('/fraud-signals/:id', reviewFraudSignalAdmin);
+
+// 2026-08-06: platform-wide Facebook Marketplace extension removal dead-letter backlog --
+// see getMarketplaceReviewBacklog in adminController.ts for full context. Already covered
+// by this file's router.use(authenticate, requireAdmin) above.
+router.get('/marketplace-review-backlog', getMarketplaceReviewBacklog);
 
 // ADR-069 Phase 2: Curator review job — automated Encyclopedia promotion
 router.post('/curator/run', runCuratorReviewJob);

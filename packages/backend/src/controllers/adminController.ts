@@ -7,6 +7,7 @@ import { getMonthlyCloudinaryEstimate, getBandwidthThreshold, getTodayCloudinary
 import { getEbayRateLimitStatus } from '../lib/ebayRateLimiter';
 import { emailService } from '../lib/emailService';
 import { createNotification } from '../lib/notificationService';
+import { MAX_REMOVAL_SKIP_ATTEMPTS } from './extensionController';
 
 // BUG #2: role display helper — the scalar `user.role` (deprecated) can drift out of
 // sync with the canonical `user.roles[]` array. Compute the highest-precedence role
@@ -2002,5 +2003,97 @@ export const reviewFraudSignalAdmin = async (req: AuthRequest, res: Response) =>
     console.error('[admin] reviewFraudSignalAdmin error:', error);
     Sentry.captureException(error);
     res.status(500).json({ message: 'Failed to update fraud signal' });
+  }
+};
+
+// GET /api/admin/marketplace-review-backlog — platform-wide, cross-organizer view of the
+// Facebook Marketplace extension's removal dead-letter queue (2026-08-06). Root cause this
+// closes: extensionController.ts's getPendingRemovals/getSyncHealth compute this exact
+// "needsManualReview" / "manualReviewBacklog" set already, but BOTH are organizer-scoped
+// (require a logged-in organizer's own userId) -- Patrick's admin dashboard had zero
+// visibility into stuck items platform-wide. Confirmed live: 6 SOLD items stuck past
+// MAX_REMOVAL_SKIP_ATTEMPTS for one organizer, invisible outside their own extension popup.
+//
+// Deliberately read-only / no pagination -- this is a monitoring gap, not a broken workflow;
+// the backlog is expected to be small (single/low-double-digit items). Reuses the imported
+// MAX_REMOVAL_SKIP_ATTEMPTS constant and mirrors getPendingRemovals'/getSyncHealth's exact
+// postedByItem/removedByItem/skipCount computation rather than inventing a fifth divergent
+// implementation of the same dead-letter logic.
+export const getMarketplaceReviewBacklog = async (req: AuthRequest, res: Response) => {
+  try {
+    // Platform-wide: every SOLD item under any non-deleted sale, regardless of organizer.
+    const soldItems = await prisma.item.findMany({
+      where: { sale: { deletedAt: null }, status: 'SOLD' },
+      select: { id: true, title: true, saleId: true },
+    });
+    if (!soldItems.length) {
+      return res.json({ items: [] });
+    }
+
+    const itemIds = soldItems.map((i) => i.id);
+    const jobs = await prisma.marketplaceListingJob.findMany({
+      where: { itemId: { in: itemIds } },
+      select: { itemId: true, action: true, status: true, lastErrorMessage: true, lastAttemptAt: true },
+    });
+
+    const postedByItem = new Set<string>();
+    const removedByItem = new Set<string>();
+    const skipCountByItem = new Map<string, number>();
+    const lastSkipReasonByItem = new Map<string, string | null>();
+    const lastSkipAtByItem = new Map<string, Date>();
+    for (const j of jobs) {
+      if (j.action === 'POST' && j.status === 'POSTED') postedByItem.add(j.itemId);
+      if (j.action === 'REMOVE' && j.status === 'REMOVED') removedByItem.add(j.itemId);
+      if (j.action === 'REMOVE' && j.status === 'SKIPPED') {
+        skipCountByItem.set(j.itemId, (skipCountByItem.get(j.itemId) || 0) + 1);
+        lastSkipReasonByItem.set(j.itemId, j.lastErrorMessage ?? null);
+        const attemptedAt = j.lastAttemptAt;
+        if (attemptedAt && (!lastSkipAtByItem.has(j.itemId) || attemptedAt > lastSkipAtByItem.get(j.itemId)!)) {
+          lastSkipAtByItem.set(j.itemId, attemptedAt);
+        }
+      }
+    }
+
+    const stillPendingRemoval = soldItems.filter((i) => postedByItem.has(i.id) && !removedByItem.has(i.id));
+    const backlogItems = stillPendingRemoval.filter(
+      (i) => (skipCountByItem.get(i.id) || 0) >= MAX_REMOVAL_SKIP_ATTEMPTS
+    );
+
+    if (!backlogItems.length) {
+      return res.json({ items: [] });
+    }
+
+    // Join sale title + organizer businessName for display -- fetched once for the (small)
+    // backlog set rather than a nested include on the full soldItems query above.
+    const saleIds = [...new Set(backlogItems.map((i) => i.saleId).filter((id): id is string => !!id))];
+    const sales = saleIds.length
+      ? await prisma.sale.findMany({
+          where: { id: { in: saleIds } },
+          select: { id: true, title: true, organizer: { select: { businessName: true } } },
+        })
+      : [];
+    const saleInfoById = new Map(sales.map((s) => [s.id, { saleTitle: s.title, organizerName: s.organizer?.businessName || '(unknown organizer)' }]));
+
+    const items = backlogItems
+      .map((i) => {
+        const saleInfo = i.saleId ? saleInfoById.get(i.saleId) : undefined;
+        return {
+          itemId: i.id,
+          itemTitle: i.title,
+          saleTitle: saleInfo?.saleTitle || '(deleted sale)',
+          organizerName: saleInfo?.organizerName || '(unknown organizer)',
+          skipCount: skipCountByItem.get(i.id) || 0,
+          lastErrorMessage: lastSkipReasonByItem.get(i.id) || null,
+          lastAttemptAt: lastSkipAtByItem.get(i.id)?.toISOString() || null,
+        };
+      })
+      // Most recently stuck first -- surfaces the freshest failures at the top.
+      .sort((a, b) => (b.lastAttemptAt || '').localeCompare(a.lastAttemptAt || ''));
+
+    res.json({ items });
+  } catch (error) {
+    console.error('[admin] getMarketplaceReviewBacklog error:', error);
+    Sentry.captureException(error);
+    res.status(500).json({ message: 'Failed to load marketplace review backlog' });
   }
 };

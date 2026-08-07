@@ -393,7 +393,11 @@ export const markItemRemovalSkipped = async (req: AuthRequest, res: Response): P
 // SKIPPED row (markItemRemovalSkipped), so a permanently-unmatchable item still only gets
 // hammered once per cooldown window, while one that becomes matchable again (client-side fix,
 // title corrected, etc.) gets a real chance to succeed instead of being stuck forever.
-const MAX_REMOVAL_SKIP_ATTEMPTS = 3;
+// Exported (2026-08-06, admin backlog visibility gap): single source of truth for the
+// dead-letter threshold, now also read by adminController.ts's platform-wide
+// getMarketplaceReviewBacklog so the admin view and every organizer-facing computation
+// (getPendingRemovals, getSyncHealth above) can never drift to a second divergent value.
+export const MAX_REMOVAL_SKIP_ATTEMPTS = 3;
 const RETRY_COOLDOWN_MS = 24 * 60 * 60 * 1000; // 24h between retries once past the fast-fail cap
 
 export const getPendingRemovals = async (req: AuthRequest, res: Response): Promise<void> => {

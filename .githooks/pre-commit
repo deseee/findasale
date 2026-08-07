@@ -148,5 +148,12 @@ for file in $STAGED_ALL; do
   done
 done
 
+if [ -f "$HIT_FILE" ]; then
+  rm -f "$HIT_FILE"
+  echo ""
+  echo "   Commit blocked to prevent public-repo-sensitive content exposure."
+  exit 1
+fi
+
 echo "✅ Pre-commit checks passed."
 exit 0
