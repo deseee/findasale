@@ -6,6 +6,7 @@ import { endEbayListingIfExists } from '../controllers/ebayController';
 import { markShopifyItemSold } from '../services/shopifyService';
 import { notifyFacebookExportedItemSold } from '../services/facebookNudgeService';
 import { syncMarketplaceStock } from '../services/marketplaceStockSyncService';
+import { createNotification } from '../lib/notificationService';
 
 /**
  * posPaymentLinkRecorder.ts — ADR pos-webhook-idempotency-reconciliation (2026-07-23, S1151)
@@ -36,6 +37,19 @@ export interface RecordPosPaymentLinkSaleResult {
   /** true if the link was already COMPLETED when this call ran (idempotent no-op). */
   alreadyCompleted: boolean;
   purchaseIds: string[];
+  /**
+   * findasale-hacker adversarial pass, 2026-08-06 (Path A/B/C reclaim-fix review):
+   * items where Stripe genuinely captured payment for THIS link, but sellItemUnits()
+   * threw InsufficientStockError because the item was already sold via a different
+   * channel/buyer by the time this call ran (e.g. posStrandedSaleReconcileCron.ts's
+   * expiry-reclaim branch reverted this exact item to RESERVED after this link's own
+   * expiresAt passed, it was resold to someone else, and THIS link's best-effort Stripe
+   * deactivation call then failed -- letting the original buyer complete a real payment
+   * on a link with no deliverable item left). Real money was captured; no Purchase row
+   * was created for it (see fix below) to avoid a false/duplicate fulfillment record.
+   * Needs organizer/admin manual refund review.
+   */
+  oversoldItemIds: string[];
 }
 
 export async function recordPosPaymentLinkSale(
@@ -46,11 +60,12 @@ export async function recordPosPaymentLinkSale(
 
   // Fast path — already recorded before we even open a transaction.
   if (posPaymentLink.status === 'COMPLETED') {
-    return { recorded: false, alreadyCompleted: true, purchaseIds: [] };
+    return { recorded: false, alreadyCompleted: true, purchaseIds: [], oversoldItemIds: [] };
   }
 
   const fullySoldOutIds: string[] = [];
   const partialSaleUpdates: { itemId: string; remainingStock: number }[] = [];
+  const oversoldItemIds: string[] = [];
   let purchaseIds: string[] = [];
   let didRecord = false;
 
@@ -80,21 +95,38 @@ export async function recordPosPaymentLinkSale(
       // ADR-085 Track B Phase 1 Step 4: atomic, race-safe stock decrement. Collects which
       // items are now fully sold out so the cross-channel removal hooks (fired outside the
       // tx below) only touch those, not every item unconditionally.
+      //
+      // findasale-hacker fix (2026-08-06, Path A/B/C adversarial pass): sellableItemIds
+      // tracks ONLY items where sellItemUnits actually succeeded above. Previously the
+      // Purchase-row loop below used fresh.itemIds unconditionally, so an item that threw
+      // InsufficientStockError here (Stripe genuinely captured payment for this link, but
+      // the item was already sold via a different channel/buyer by the time this ran --
+      // the exact double-fulfillment window opened up by the 2026-08-04 reclaim-expiry fix
+      // in posStrandedSaleReconcileCron.ts) still got a status:'PAID' Purchase row created
+      // for it. That falsely represented the item as fulfilled by this payment (hiding the
+      // fact a refund is owed to the original buyer) and, if ever summed, would double-count
+      // revenue for one physical unit. Only sellableItemIds get a Purchase row now;
+      // oversoldItemIds are surfaced via organizer notification below instead.
+      const sellableItemIds: string[] = [];
       for (const posItemId of fresh.itemIds) {
         try {
           const { fullySoldOut, remainingStock } = await sellItemUnits(posItemId, 1, tx);
           if (fullySoldOut) fullySoldOutIds.push(posItemId);
           else partialSaleUpdates.push({ itemId: posItemId, remainingStock });
+          sellableItemIds.push(posItemId);
         } catch (stockErr: any) {
           if (stockErr instanceof InsufficientStockError) {
-            console.error(`[pos-record/${source}] Oversold race on item ${posItemId}:`, stockErr.message);
+            console.error(`[pos-record/${source}] Oversold race on item ${posItemId} -- Stripe captured payment for link ${fresh.id} but the item was already sold via another channel; NOT creating a PAID Purchase row for it (would misrepresent fulfillment). Flagged for manual refund review:`, stockErr.message);
+            oversoldItemIds.push(posItemId);
           } else {
             throw stockErr;
           }
         }
       }
 
-      const items = await tx.item.findMany({ where: { id: { in: fresh.itemIds } } });
+      const items = sellableItemIds.length
+        ? await tx.item.findMany({ where: { id: { in: sellableItemIds } } })
+        : [];
 
       // Look up organizer tier for fee calculation.
       const posOrganizerTier = fresh.saleId
@@ -164,5 +196,42 @@ export async function recordPosPaymentLinkSale(
     console.log(`[pos-record/${source}] Payment link completed: ${posPaymentLink.stripePaymentLinkId} (link ${posPaymentLink.id})`);
   }
 
-  return { recorded: didRecord, alreadyCompleted: false, purchaseIds };
+  // findasale-hacker fix (2026-08-06): surface oversold/already-sold-elsewhere captures to
+  // the organizer so a real Stripe payment with no matching Purchase record never goes
+  // unnoticed. Fire-and-forget, non-fatal -- mirrors the pattern used for the cross-channel
+  // removal hooks above and the STRANDED-UNRECOVERED / AUTO-RECORDED notifications in
+  // posStrandedSaleReconcileCron.ts.
+  if (oversoldItemIds.length) {
+    setImmediate(async () => {
+      try {
+        const [organizer, oversoldItems] = await Promise.all([
+          prisma.organizer.findUnique({
+            where: { id: posPaymentLink.organizerId },
+            select: { userId: true },
+          }),
+          prisma.item.findMany({
+            where: { id: { in: oversoldItemIds } },
+            select: { id: true, title: true },
+          }),
+        ]);
+        if (!organizer?.userId) {
+          console.error(`[pos-record/${source}] Could not resolve organizer for oversold-payment notification, link=${posPaymentLink.id}, items=${oversoldItemIds.join(',')}`);
+          return;
+        }
+        const titles = oversoldItems.map((i) => `"${i.title}"`).join(', ') || oversoldItemIds.join(', ');
+        await createNotification({
+          userId: organizer.userId,
+          type: 'POS_PAYMENT_NEEDS_REFUND_REVIEW',
+          title: 'Payment captured for an already-sold item — refund review needed',
+          body: `A shopper's payment link for ${titles} was completed at Stripe, but the item had already been sold through another channel by the time FindA.Sale tried to record it. FindA.Sale did NOT record a duplicate sale. Please check your Stripe dashboard for the payment on link ${posPaymentLink.stripePaymentLinkId}${opts.sessionId ? ` (session ${opts.sessionId})` : ''} and issue a refund if appropriate.`,
+          link: '/organizer/pos',
+          channel: 'OPERATIONAL',
+        });
+      } catch (notifErr) {
+        console.error(`[pos-record/${source}] Failed to send oversold-payment notification for link=${posPaymentLink.id}:`, notifErr);
+      }
+    });
+  }
+
+  return { recorded: didRecord, alreadyCompleted: false, purchaseIds, oversoldItemIds };
 }
