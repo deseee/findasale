@@ -19,6 +19,13 @@ function generateCouponCode(): string {
   return crypto.randomBytes(4).toString('hex').toUpperCase();
 }
 
+// Thrown INSIDE an XP-spend + coupon-create transaction to force a rollback (never leaves
+// XP spent with no coupon to show for it). Caught immediately after the transaction to
+// reproduce the exact same HTTP response the pre-transaction code returned. 2026-08-07
+// data-integrity audit finding — see luckyRollController.ts for the companion fix.
+class XpSpendFailedError extends Error {}
+class CouponCodeCollisionError extends Error {}
+
 // ---------------------------------------------------------------------------
 // GET /api/coupons — list authenticated user's active, non-expired coupons
 // ---------------------------------------------------------------------------
@@ -188,49 +195,56 @@ export const generateXpSinkCoupon = async (req: AuthRequest, res: Response) => {
       });
     }
 
-    // Spend 50 XP — spendXp returns false if insufficient balance
-    const spent = await spendXp(organizerId, XP_SINKS.COUPON_GENERATE, 'COUPON_GENERATE', {
-      description: 'Generated $1-off shopper coupon',
-    });
+    // Atomic: XP spend + coupon creation must succeed or roll back TOGETHER. Previously
+    // spendXp() committed on its own line, then code-generation / coupon.create ran after —
+    // a collision-exhaustion or coupon.create failure left the organizer's XP spent with no
+    // coupon to show for it (2026-08-07 data-integrity audit finding).
+    const coupon = await prisma.$transaction(async (tx) => {
+      // Spend 50 XP — spendXp returns false if insufficient balance
+      const spent = await spendXp(
+        organizerId,
+        XP_SINKS.COUPON_GENERATE,
+        'COUPON_GENERATE',
+        { description: 'Generated $1-off shopper coupon' },
+        tx
+      );
 
-    if (!spent) {
-      return res.status(400).json({
-        message: `Failed to spend XP. Please try again.`,
+      if (!spent) {
+        throw new XpSpendFailedError('Failed to spend XP. Please try again.');
+      }
+
+      // Generate unique code — retry up to 3 times on collision
+      let code = '';
+      let existing: Awaited<ReturnType<typeof tx.coupon.findUnique>> = null;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        code = generateCouponCode();
+        existing = await tx.coupon.findUnique({ where: { code } });
+        if (!existing) break;
+      }
+      if (existing) {
+        throw new CouponCodeCollisionError('Failed to generate coupon code — please try again');
+      }
+
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 30);
+
+      return tx.coupon.create({
+        data: {
+          code,
+          userId: organizerId,      // tracks who generated it (for the 5/month cap)
+          discountType: 'FIXED',
+          discountValue: 1.00,
+          status: 'ACTIVE',
+          sourcePurchaseId: null,   // null = XP-sink coupon (not a loyalty award)
+          expiresAt,
+        },
+        select: {
+          code: true,
+          discountValue: true,
+          expiresAt: true,
+          status: true,
+        },
       });
-    }
-
-    // Generate unique code — retry up to 3 times on collision
-    let code = '';
-    let existing: Awaited<ReturnType<typeof prisma.coupon.findUnique>> = null;
-    for (let attempt = 0; attempt < 3; attempt++) {
-      code = generateCouponCode();
-      existing = await prisma.coupon.findUnique({ where: { code } });
-      if (!existing) break;
-    }
-    if (existing) {
-      console.error('[coupon] Failed to generate unique XP sink coupon code after 3 attempts');
-      return res.status(500).json({ message: 'Failed to generate coupon code — please try again' });
-    }
-
-    const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + 30);
-
-    const coupon = await prisma.coupon.create({
-      data: {
-        code,
-        userId: organizerId,      // tracks who generated it (for the 5/month cap)
-        discountType: 'FIXED',
-        discountValue: 1.00,
-        status: 'ACTIVE',
-        sourcePurchaseId: null,   // null = XP-sink coupon (not a loyalty award)
-        expiresAt,
-      },
-      select: {
-        code: true,
-        discountValue: true,
-        expiresAt: true,
-        status: true,
-      },
     });
 
     res.json({
@@ -243,6 +257,13 @@ export const generateXpSinkCoupon = async (req: AuthRequest, res: Response) => {
       message: `Coupon created! Share code ${coupon.code} with a shopper. They apply it at checkout for $1 off. The discount comes out of your payout.`,
     });
   } catch (err) {
+    if (err instanceof XpSpendFailedError) {
+      return res.status(400).json({ message: err.message });
+    }
+    if (err instanceof CouponCodeCollisionError) {
+      console.error('[coupon] Failed to generate unique XP sink coupon code after 3 attempts');
+      return res.status(500).json({ message: err.message });
+    }
     console.error('[coupon] generateXpSinkCoupon error:', err);
     res.status(500).json({ message: 'Failed to generate coupon' });
   }
@@ -329,55 +350,59 @@ export const generateShopperCoupon = async (req: AuthRequest, res: Response) => 
       });
     }
 
-    // Spend XP — spendXp returns false if insufficient balance
-    const spent = await spendXp(shopperId, config.xpCost, 'COUPON_GENERATE', {
-      description: `Generated shopper coupon tier ${shopperTier}: $${config.discount.toFixed(2)} off $${config.minPurchase}+`,
-    });
+    // Atomic: XP spend + coupon creation must succeed or roll back TOGETHER — see the
+    // generateXpSinkCoupon comment above for the incident this closes (2026-08-07 audit).
+    const coupon = await prisma.$transaction(async (tx) => {
+      // Spend XP — spendXp returns false if insufficient balance
+      const spent = await spendXp(
+        shopperId,
+        config.xpCost,
+        'COUPON_GENERATE',
+        { description: `Generated shopper coupon tier ${shopperTier}: $${config.discount.toFixed(2)} off $${config.minPurchase}+` },
+        tx
+      );
 
-    if (!spent) {
-      return res.status(400).json({
-        message: `Failed to spend XP. Please try again.`,
-        required: config.xpCost,
+      if (!spent) {
+        throw new XpSpendFailedError('Failed to spend XP. Please try again.');
+      }
+
+      // Generate unique code — retry up to 3 times on collision
+      let code = '';
+      let existing: Awaited<ReturnType<typeof tx.coupon.findUnique>> = null;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        code = generateCouponCode();
+        existing = await tx.coupon.findUnique({ where: { code } });
+        if (!existing) break;
+      }
+      if (existing) {
+        throw new CouponCodeCollisionError('Failed to generate coupon code — please try again');
+      }
+
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 30); // 30-day expiry
+
+      return tx.coupon.create({
+        data: {
+          code,
+          userId: shopperId,
+          discountType: 'FIXED',
+          discountValue: config.discount,
+          minPurchaseAmount: config.minPurchase,
+          status: 'ACTIVE',
+          sourcePurchaseId: null,
+          generatedFromXp: true,
+          xpTier: shopperTier,
+          xpSpent: config.xpCost,
+          expiresAt,
+        },
+        select: {
+          code: true,
+          discountValue: true,
+          minPurchaseAmount: true,
+          expiresAt: true,
+          xpTier: true,
+        },
       });
-    }
-
-    // Generate unique code — retry up to 3 times on collision
-    let code = '';
-    let existing: Awaited<ReturnType<typeof prisma.coupon.findUnique>> = null;
-    for (let attempt = 0; attempt < 3; attempt++) {
-      code = generateCouponCode();
-      existing = await prisma.coupon.findUnique({ where: { code } });
-      if (!existing) break;
-    }
-    if (existing) {
-      console.error('[coupon] Failed to generate unique shopper coupon code after 3 attempts');
-      return res.status(500).json({ message: 'Failed to generate coupon code — please try again' });
-    }
-
-    const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + 30); // 30-day expiry
-
-    const coupon = await prisma.coupon.create({
-      data: {
-        code,
-        userId: shopperId,
-        discountType: 'FIXED',
-        discountValue: config.discount,
-        minPurchaseAmount: config.minPurchase,
-        status: 'ACTIVE',
-        sourcePurchaseId: null,
-        generatedFromXp: true,
-        xpTier: shopperTier,
-        xpSpent: config.xpCost,
-        expiresAt,
-      },
-      select: {
-        code: true,
-        discountValue: true,
-        minPurchaseAmount: true,
-        expiresAt: true,
-        xpTier: true,
-      },
     });
 
     res.json({
@@ -393,6 +418,13 @@ export const generateShopperCoupon = async (req: AuthRequest, res: Response) => 
       message: `Coupon ready! Use code ${coupon.code} at checkout for $${config.discount.toFixed(2)} off orders over $${config.minPurchase}. Valid for 30 days.`,
     });
   } catch (err) {
+    if (err instanceof XpSpendFailedError) {
+      return res.status(400).json({ message: err.message, required: config.xpCost });
+    }
+    if (err instanceof CouponCodeCollisionError) {
+      console.error('[coupon] Failed to generate unique shopper coupon code after 3 attempts');
+      return res.status(500).json({ message: err.message });
+    }
     console.error('[coupon] generateShopperCoupon error:', err);
     res.status(500).json({ message: 'Failed to generate coupon' });
   }

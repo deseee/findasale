@@ -35,6 +35,7 @@ export const endAuctions = async () => {
     console.log(`Found ${endedAuctions.length} auctions to process`);
 
     for (const item of endedAuctions) {
+      try {
       // P0 Race Fix: Wrap entire auction close logic in transaction with optimistic lock
       const result = await prisma.$transaction(async (tx) => {
         // 1. Atomic update with WHERE-clause guard: only process if not already closed
@@ -217,9 +218,16 @@ export const endAuctions = async () => {
         `Auction ended for item ${result.item.id}. Winner: user ${result.highestBid?.userId || 'none'}, $${result.price}. ` +
         `Payment: ${result.stripePaymentIntentId ? 'PENDING (intent created)' : 'PAID (no Stripe account)'}`
       );
+      } catch (itemError) {
+        // Per-item isolation: one broken auction (e.g. a $transaction failure on a
+        // single row) must not silently swallow the failure the way the outer catch
+        // used to — log it per-item and move on to the next auction in the batch.
+        console.error(`[auctionJob] Failed to process auction for item ${item.id}:`, itemError);
+      }
     }
   } catch (error) {
     console.error('Error in auction end job:', error);
+    throw error;
   }
 };
 

@@ -155,7 +155,7 @@ export async function fetchEbayCompsForItem(itemId: string): Promise<void> {
       3
     );
 
-    console.log(`[fetchEbayComps] Item ${itemId}: fetched ${comps.count} results, median=$${comps.median}, fallbackTier=${fallbackTier}`);
+    console.log(`[fetchEbayComps] Item ${itemId}: fetched ${comps.count} results, median=$${comps.median}, fallbackTier=${fallbackTier}, isMockData=${!!comps.isMockData}`);
 
     // Task 2: Search PriceCharting for relevant categories
     let priceChartingResult: PriceChartingResult | null = null;
@@ -187,54 +187,75 @@ export async function fetchEbayCompsForItem(itemId: string): Promise<void> {
       }
     }
 
-    // Store/update in ItemCompLookup
-    // Feature #314: Also capture the first eBay listing's image URL for comparable display
-    const firstListingImageUrl = comps.listings && comps.listings.length > 0
-      ? comps.listings[0].imageUrl
-      : null;
+    // Data-integrity fix (audit 2026-08-07): getEbayPriceComps() returns an IDENTICAL
+    // fabricated mock object (median=$45, isMockData:true) on EVERY failure path — missing
+    // credentials, daily quota cap, no OAuth token, any 4xx/5xx from eBay, or a thrown error.
+    // comps.count is always 0 on every mock path, so blendedPrice above can only be non-null
+    // here from a genuine PriceCharting HIGH/MEDIUM result (the comps.count===0 branch) —
+    // never from eBay's fabricated median (that requires comps.count>0, which mock data never
+    // has). Only treat this run as having a real price signal if eBay itself returned real
+    // data, or PriceCharting independently supplied one.
+    const hasRealPriceSignal = !comps.isMockData || blendedPrice !== null;
 
-    const now = new Date();
-    const expireAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000); // 7 days
+    if (!hasRealPriceSignal) {
+      // No real data from eBay AND no PriceCharting fallback. Do NOT cache or write the
+      // fabricated $45 placeholder into ItemCompLookup or Item.aiSuggestedPrice — leave
+      // whatever was there before (a real cached price, or nothing) untouched. Also skip
+      // fetchedAt/expireAt so this item is retried on its next enqueue instead of being
+      // falsely treated as "freshly fetched" for 7 days during an outage/quota exhaustion.
+      console.error(`[fetchEbayComps] Item ${itemId}: eBay returned mock/fallback data (${comps.message || 'no message'}) and no PriceCharting signal was available. Skipping ItemCompLookup cache write and aiSuggestedPrice update to avoid corrupting pricing data.`);
+    } else {
+      // Store/update in ItemCompLookup
+      // Feature #314: Also capture the first eBay listing's image URL for comparable display
+      const firstListingImageUrl = comps.listings && comps.listings.length > 0
+        ? comps.listings[0].imageUrl
+        : null;
 
-    const updateData = {
-      ebayPrice: comps.median || null,
-      ebayCondition: item.conditionGrade || null,
-      ebayCategory: item.category || null,
-      ebayImageUrl: firstListingImageUrl,
-      fallbackTier: fallbackTier,
-      source: source,
-      priceChartingId: priceChartingResult?.pcId || null,
-      priceChartingPrice: priceChartingResult ? (priceChartingResult.cibPrice || priceChartingResult.loosePrice || null) : null,
-      priceChartingConfidence: priceChartingResult?.confidence || null,
-      fetchedAt: now,
-      expireAt,
-    };
+      const now = new Date();
+      const expireAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000); // 7 days
 
-    await prisma.itemCompLookup.upsert({
-      where: { itemId },
-      update: updateData,
-      create: {
-        itemId,
-        ...updateData,
-      },
-    });
+      const updateData = {
+        // Never persist eBay's fabricated mock median — null it out even when the overall
+        // record is otherwise legitimate because PriceCharting independently supplied blendedPrice.
+        ebayPrice: comps.isMockData ? null : (comps.median || null),
+        ebayCondition: item.conditionGrade || null,
+        ebayCategory: item.category || null,
+        ebayImageUrl: firstListingImageUrl,
+        fallbackTier: fallbackTier,
+        source: source,
+        priceChartingId: priceChartingResult?.pcId || null,
+        priceChartingPrice: priceChartingResult ? (priceChartingResult.cibPrice || priceChartingResult.loosePrice || null) : null,
+        priceChartingConfidence: priceChartingResult?.confidence || null,
+        fetchedAt: now,
+        expireAt,
+      };
 
-    // D-005 Locked Rule: Only update aiSuggestedPrice if organizer hasn't set an explicit price
-    const finalPrice = blendedPrice !== null ? blendedPrice : comps.median;
-    if (item.price === null && finalPrice && finalPrice > 0) {
-      // Compare: if final price > current AI suggestion, update
-      const currentSuggested = item.aiSuggestedPrice ? parseFloat(item.aiSuggestedPrice.toString()) : 0;
-      if (finalPrice > currentSuggested) {
-        await prisma.item.update({
-          where: { id: itemId },
-          data: { aiSuggestedPrice: finalPrice },
-        });
-        console.log(`[fetchEbayComps] Updated aiSuggestedPrice for item ${itemId} to $${finalPrice.toFixed(2)} (source: ${source})`);
-      } else {
-        console.log(`[fetchEbayComps] Final price $${finalPrice.toFixed(2)} not higher than current $${currentSuggested}; no price update`);
+      await prisma.itemCompLookup.upsert({
+        where: { itemId },
+        update: updateData,
+        create: {
+          itemId,
+          ...updateData,
+        },
+      });
+
+      // D-005 Locked Rule: Only update aiSuggestedPrice if organizer hasn't set an explicit price
+      const finalPrice = blendedPrice !== null ? blendedPrice : comps.median;
+      if (item.price === null && finalPrice && finalPrice > 0) {
+        // Compare: if final price > current AI suggestion, update
+        const currentSuggested = item.aiSuggestedPrice ? parseFloat(item.aiSuggestedPrice.toString()) : 0;
+        if (finalPrice > currentSuggested) {
+          await prisma.item.update({
+            where: { id: itemId },
+            data: { aiSuggestedPrice: finalPrice },
+          });
+          console.log(`[fetchEbayComps] Updated aiSuggestedPrice for item ${itemId} to $${finalPrice.toFixed(2)} (source: ${source})`);
+        } else {
+          console.log(`[fetchEbayComps] Final price $${finalPrice.toFixed(2)} not higher than current $${currentSuggested}; no price update`);
+        }
+      } else if (item.price !== null) {
+        console.log(`[fetchEbayComps] Item ${itemId} has organizer-set price ($${item.price}); not updating aiSuggestedPrice`);
       }
-    } else if (item.price !== null) {
-      console.log(`[fetchEbayComps] Item ${itemId} has organizer-set price ($${item.price}); not updating aiSuggestedPrice`);
     }
 
     console.log(`[fetchEbayComps] Item ${itemId} processed successfully`);

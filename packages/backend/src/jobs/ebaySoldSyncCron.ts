@@ -344,6 +344,7 @@ export async function syncSoldItemsForOrganizer(organizerId: string): Promise<Sy
     );
   } catch (error) {
     console.error(`[eBay Sync ERROR] organizerId ${organizerId}:`, error);
+    throw error;
   }
 
   return result;
@@ -387,6 +388,7 @@ async function syncEbaySoldItems(): Promise<void> {
     console.log('[eBay Sync] Sync cycle complete');
   } catch (error) {
     console.error('[eBay Sync] Fatal error in syncEbaySoldItems:', error);
+    throw error;
   }
 }
 

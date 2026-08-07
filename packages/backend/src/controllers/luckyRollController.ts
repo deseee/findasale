@@ -6,7 +6,6 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { getEligibility, performRoll } from '../services/luckyRollService';
-import { prisma } from '../lib/prisma';
 
 /**
  * GET /api/lucky-roll/eligibility
@@ -37,14 +36,10 @@ export const rollHandler = async (req: AuthRequest, res: Response) => {
   }
 
   try {
+    // performRoll() now creates the COUPON_1 coupon INSIDE the same DB transaction as the
+    // XP deduction (luckyRollService.ts, 2026-08-07 data-integrity fix) — no more
+    // fire-and-forget coupon generation after the response commits.
     const result = await performRoll(req.user.id);
-
-    // If outcome is COUPON_1, generate the coupon (async, fire-and-forget)
-    if (result.outcome === 'COUPON_1') {
-      generateCouponForLuckyRoll(req.user.id).catch((err) =>
-        console.error('[luckyRoll] Failed to generate COUPON_1:', err)
-      );
-    }
 
     return res.json(result);
   } catch (error: any) {
@@ -63,44 +58,3 @@ export const rollHandler = async (req: AuthRequest, res: Response) => {
     return res.status(500).json({ message: 'Failed to perform roll' });
   }
 };
-
-/**
- * Helper: Generate a shopper coupon for COUPON_1 outcome
- * Fire-and-forget async function
- */
-async function generateCouponForLuckyRoll(userId: string): Promise<void> {
-  try {
-    const code = generateCouponCode();
-
-    const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + 30);
-
-    await prisma.coupon.create({
-      data: {
-        code,
-        userId,
-        discountType: 'FIXED',
-        discountValue: 1.0,
-        minPurchaseAmount: 10,
-        status: 'ACTIVE',
-        sourcePurchaseId: null,
-        generatedFromXp: true,
-        xpTier: 'DOLLAR_OFF_TEN',
-        xpSpent: 100,
-        expiresAt,
-      },
-    });
-
-    // NOTE (deferred): Send notification to user with coupon code
-    console.log(`[luckyRoll] Generated COUPON_1 ${code} for user ${userId}`);
-  } catch (error) {
-    console.error('[luckyRoll] Failed to generate coupon for COUPON_1:', error);
-    throw error;
-  }
-}
-
-/** Generate an 8-char uppercase hex code */
-function generateCouponCode(): string {
-  const crypto = require('crypto');
-  return crypto.randomBytes(4).toString('hex').toUpperCase();
-}

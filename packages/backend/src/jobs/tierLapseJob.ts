@@ -148,22 +148,14 @@ export const queueTierLapseWarningsJob = async (): Promise<void> => {
 // Cron format: minute hour day-of-month month day-of-week
 cron.schedule('0 23 * * *', cronGuard({ jobName: 'tierLapseJob' }, async () => {
   console.log('[TierLapse] Running batch tier lapse processing job...');
-  try {
-    await processBatchTierLapsesJob();
-    console.log('[TierLapse] Batch tier lapse processing job completed successfully');
-  } catch (error) {
-    console.error('[TierLapse] Batch tier lapse processing job failed:', error);
-  }
+  await processBatchTierLapsesJob();
+  console.log('[TierLapse] Batch tier lapse processing job completed successfully');
 }));
 
 // Run tier-lapse warning queue daily at 8 AM UTC (12 AM EST)
 cron.schedule('0 8 * * *', cronGuard({ jobName: 'tierLapseJob' }, async () => {
   if (!bulkEmailEnabled()) { console.log('[tierLapseJob] Skipped — bulk email disabled (OUTREACH_ENABLED!=true)'); return; }
   console.log('[TierLapse] Running tier-lapse warning queue job...');
-  try {
-    await queueTierLapseWarningsJob();
-    console.log('[TierLapse] Tier-lapse warning queue job completed successfully');
-  } catch (error) {
-    console.error('[TierLapse] Tier-lapse warning queue job failed:', error);
-  }
+  await queueTierLapseWarningsJob();
+  console.log('[TierLapse] Tier-lapse warning queue job completed successfully');
 }));

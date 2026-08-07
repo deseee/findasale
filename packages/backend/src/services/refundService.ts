@@ -3,6 +3,7 @@ import { getStripe } from '../utils/stripe';
 import { notifyVendorBoothSaleRefunded } from './vendorBoothSaleNotificationService'; // tell the vendor their booth sale was refunded
 import { settleHubOwnerReversalForLeg } from '../controllers/vendorBoothCartController'; // P1 (2026-07-28): durable hub-owner Transfer reversal settlement
 import { transactionalEmailService } from '../lib/transactionalEmailService';
+import { createNotification } from '../lib/notificationService'; // organizer clawback notification (see below)
 
 // Lazy — avoids crash when module loads before dotenv runs (same pattern as stripeController.ts)
 const stripe = () => getStripe();
@@ -336,6 +337,34 @@ export async function executeVerifiedRefund(
   notifyVendorBoothSaleRefunded(purchaseId).catch(err =>
     console.error(`[executeVerifiedRefund] Vendor refund notification failed for purchase ${purchaseId} (non-fatal):`, err)
   );
+
+  // Tell the ORGANIZER their payout was just docked, when the STRIPE_REFUND_LIVE_CLAWBACK
+  // clawback actually fired (see applyOrganizerClawback above -- only reverse_transfer /
+  // refund_application_fee refunds land here, never a booth-cart or clawback-disabled
+  // refund). Root cause of the gap this closes: applyOrganizerClawback silently reduces the
+  // organizer's payout with zero explanation anywhere in the app -- notifyVendorBoothSaleRefunded
+  // above covers a completely different path (booth-cart vendor refunds) and never fires for a
+  // regular destination-charge purchase. Fire-and-forget and never-throwing, same contract as
+  // the vendor notification above: the buyer's refund has already succeeded on Stripe and must
+  // never be disturbed by a notification failure.
+  if (applyOrganizerClawback) {
+    const clawbackOrganizerUserId = purchase.sale?.organizer?.userId;
+    if (clawbackOrganizerUserId) {
+      createNotification({
+        userId: clawbackOrganizerUserId,
+        type: 'refund_clawback',
+        title: 'Refund deducted from your payout',
+        body: `$${refundAmount.toFixed(2)} was deducted from your payout -- "${purchase.item?.title || 'an item'}"'s purchase was refunded.`,
+        link: '/organizer/payouts',
+        channel: 'OPERATIONAL',
+        sendEmail: true,
+      }).catch(err =>
+        console.error(`[executeVerifiedRefund] Organizer clawback notification failed for purchase ${purchaseId} (non-fatal):`, err)
+      );
+    } else {
+      console.error(`[executeVerifiedRefund] Organizer clawback applied for purchase ${purchaseId} but organizer.userId did not resolve -- notification skipped`);
+    }
+  }
 
   // ADR-090 Phase 2 refund clawback: a plain PaymentIntent refund does NOT claw back a
   // completed platform -> hub-owner Transfer — so booth-cart purchases whose leg received a

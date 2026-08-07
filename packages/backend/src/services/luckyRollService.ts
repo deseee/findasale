@@ -369,9 +369,52 @@ export async function performRoll(
       },
     });
 
+    // Coupon creation lives in the SAME transaction as the XP deduction above. Previously
+    // this ran as a separate fire-and-forget call in luckyRollController.ts AFTER this
+    // transaction had already committed — if prisma.coupon.create threw, the user was told
+    // "Coupon awarded," had already permanently lost 100 XP (and outcome=COUPON_1 was
+    // already permanently logged in LuckyRoll above), and no Coupon row ever existed.
+    // Folding it in here means a coupon-create failure rolls back the whole roll — XP
+    // deduction, counters, and the LuckyRoll audit row included. 2026-08-07 data-integrity
+    // audit finding; see couponController.ts for the companion fix.
+    let couponCode: string | null = null;
+    if (outcome === 'COUPON_1') {
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const candidateCode = crypto.randomBytes(4).toString('hex').toUpperCase();
+        const existingCoupon = await tx.coupon.findUnique({ where: { code: candidateCode } });
+        if (!existingCoupon) {
+          couponCode = candidateCode;
+          break;
+        }
+      }
+      if (!couponCode) {
+        throw new Error('[luckyRoll] Failed to generate a unique coupon code after 3 attempts');
+      }
+
+      const couponExpiresAt = new Date();
+      couponExpiresAt.setDate(couponExpiresAt.getDate() + 30);
+
+      await tx.coupon.create({
+        data: {
+          code: couponCode,
+          userId,
+          discountType: 'FIXED',
+          discountValue: 1.0,
+          minPurchaseAmount: 10,
+          status: 'ACTIVE',
+          sourcePurchaseId: null,
+          generatedFromXp: true,
+          xpTier: 'DOLLAR_OFF_TEN',
+          xpSpent: 100,
+          expiresAt: couponExpiresAt,
+        },
+      });
+    }
+
     return {
       newBalance: spent.guildXp - 100 + (xpAwarded ?? 0),
       rollNumber,
+      couponCode,
     };
   });
 
@@ -382,7 +425,7 @@ export async function performRoll(
   return {
     outcome,
     xpAwarded,
-    couponCode: outcome === 'COUPON_1' ? 'PENDING_GENERATION' : null, // Backend coupon generation will happen separately
+    couponCode: result.couponCode, // Real code — generated + persisted inside the same transaction as the XP deduction above
     description,
     celebrationTier,
     rollNumber: result.rollNumber,

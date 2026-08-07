@@ -49,10 +49,17 @@ export const expireStaleHolds = async (): Promise<void> => {
     console.log(`[reservationExpiryJob] Expired ${expired.length} hold(s)`);
   } catch (error) {
     console.error('[reservationExpiryJob] Error:', error);
+    // This job is the double-sell safety valve other jobs rely on (see comment above) --
+    // a silent failure here must not be invisible. Rethrow so cronGuard/Sentry actually
+    // sees it instead of reporting a false "OK".
+    throw error;
   }
 };
 
 // Feature #121: Run every 10 minutes (was 30 min) for faster expiry
 cron.schedule('*/10 * * * *', cronGuard({ jobName: 'reservationExpiryJob' }, async () => {
-  expireStaleHolds();
+  // Previously called without await: cronGuard's fn() resolved immediately without
+  // waiting for expireStaleHolds() to finish, so a rejection here became an unhandled
+  // promise rejection instead of ever reaching cronGuard's catch/Sentry capture.
+  await expireStaleHolds();
 }));

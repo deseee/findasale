@@ -1,4 +1,4 @@
-import { ExplorerRank } from '@prisma/client';
+import { ExplorerRank, Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { createNotification } from './notificationService';
 
@@ -457,6 +457,15 @@ export async function getSpendableXp(userId: string): Promise<number> {
  * Returns true if successful, false if insufficient spendable XP
  * P0 Exploit Fix: Checks holdUntil restrictions (72h for chargebacks, 30d for HP churn)
  */
+// Prisma v5: prisma is $extends-wrapped, so the client `prisma.$transaction(cb)` hands to
+// `cb` is the EXTENDED transaction flavor (Omit<typeof prisma, ITXClientDenyList>), which is
+// NOT assignable to the plain `Prisma.TransactionClient`. Accept either so every call site
+// (base prisma, a raw tx, or an extended interactive-transaction tx) type-checks. Same pattern
+// as itemStockService.ts sellItemUnits (Prisma v5 pitfall, confirmed via CI).
+type SpendXpTx =
+  | Prisma.TransactionClient
+  | Omit<typeof prisma, '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'>;
+
 export async function spendXp(
   userId: string,
   amount: number,
@@ -464,11 +473,17 @@ export async function spendXp(
   context?: {
     saleId?: string;
     description?: string;
-  }
+  },
+  tx?: SpendXpTx
 ): Promise<boolean> {
+  // Optional tx: pass an interactive-transaction client so a caller can fold the XP spend
+  // into a larger atomic transaction (e.g. XP-spend + dependent-record-creation must both
+  // succeed or both roll back — 2026-08-07 data-integrity audit finding, couponController.ts).
+  // Defaults to the module-level prisma singleton, preserving every existing call site.
+  const client: Prisma.TransactionClient = (tx ?? prisma) as Prisma.TransactionClient;
   try {
     // Atomic check-and-decrement: WHERE clause prevents overdraft
-    const result = await prisma.user.updateMany({
+    const result = await client.user.updateMany({
       where: {
         id: userId,
         guildXp: { gte: amount }, // Only succeeds if balance is sufficient
@@ -483,14 +498,14 @@ export async function spendXp(
     }
 
     // Fetch updated user for rank recalculation — use lifetimeXpEarned (permanent milestone)
-    const updatedUser = await prisma.user.findUnique({
+    const updatedUser = await client.user.findUnique({
       where: { id: userId },
       select: { guildXp: true, lifetimeXpEarned: true, explorerRank: true },
     });
     if (!updatedUser) return false;
 
     // Create negative transaction record
-    await prisma.pointsTransaction.create({
+    await client.pointsTransaction.create({
       data: {
         userId,
         type: sinkType,
@@ -512,7 +527,7 @@ export async function spendXp(
     // Never decrease rank below what the user currently holds
     const newRank = lifetimeRankIdx >= currentRankIdx ? lifetimeRank : updatedUser.explorerRank;
     if (newRank !== updatedUser.explorerRank) {
-      await prisma.user.update({
+      await client.user.update({
         where: { id: userId },
         data: { explorerRank: newRank },
       });

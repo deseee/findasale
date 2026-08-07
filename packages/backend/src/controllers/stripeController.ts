@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import crypto from 'crypto';
 import Stripe from 'stripe';
+import * as Sentry from '@sentry/node';
 import { getStripe, getTestStripe } from '../utils/stripe';
 import { AuthRequest } from '../middleware/auth';
 import { createNotification as createNotificationEmail } from '../services/notificationService';
@@ -1081,7 +1082,29 @@ export const webhookHandler = async (req: Request, res: Response) => {
               break; // Exit case — POS payment handled
             }
           } catch (err: any) {
+            // P0 fix (2026-08-07): Stripe already captured this payment before we reach this
+            // block -- if the DB work above throws (e.g. the PAID status update or Purchase
+            // creation never completes), this catch previously only logged. The webhook still
+            // returns 200 to Stripe (no rethrow), so Stripe never retries and the failure had
+            // zero record anywhere. NOT changing retry behavior here (see push-block /
+            // Blocked-Flagged note): the misc-remainder Purchase.create above (no itemId, so
+            // not covered by the (stripePaymentIntentId, itemId) partial unique index) is not
+            // confirmed safe to run twice on a Stripe retry, so only the alert is added.
             console.error(`[pos-payment] Failed to process POS payment request:`, err);
+            try {
+              Sentry.captureException(err instanceof Error ? err : new Error(String(err)), {
+                tags: { area: 'pos-payment-request-webhook-fulfillment' },
+                extra: {
+                  requestId,
+                  paymentIntentId: paymentIntent.id,
+                  amountCents: paymentIntent.amount,
+                  organizerId: paymentIntent.metadata?.organizerId,
+                  organizerUserId: paymentIntent.metadata?.organizerUserId,
+                },
+              });
+            } catch {
+              // Sentry may not be initialized -- silently continue
+            }
           }
         }
       }
@@ -1287,14 +1310,39 @@ export const webhookHandler = async (req: Request, res: Response) => {
             },
             { idempotencyKey: `refund-guest-fraud-${paymentIntent.id}` }
           );
+          // P0 fix (2026-08-07): only mark REFUNDED once Stripe has actually confirmed the
+          // refund. Previously this write ran unconditionally after the try/catch below,
+          // regardless of whether refunds.create succeeded -- a confirmed-fraud purchase
+          // could be mislabeled REFUNDED while the money was never actually returned.
+          await prisma.purchase.updateMany({
+            where: { stripePaymentIntentId: paymentIntent.id },
+            data: { status: 'REFUNDED' },
+          });
+          console.warn(`[checkoutGuard][guest] Blocked fulfillment + refunded PI ${paymentIntent.id} — collusion/self-dealing signal confirmed.`);
         } catch (refundErr) {
+          // P0 fix (2026-08-07): this refund failing means a CONFIRMED-fraudulent charge is
+          // now stuck on the platform -- fulfillment is still blocked (we break below either
+          // way) but no money has moved and, until this fix, nothing recorded that fact
+          // anywhere. 'REFUND_FAILED' is a NEW Purchase.status value -- Purchase.status is a
+          // plain String field (not a Prisma enum; see refundService.ts's documented list:
+          // PENDING, PAID, REFUNDED, FAILED, DISPUTED), so this needs no schema change. No
+          // status already in use in this codebase covers "confirmed-fraud refund attempt
+          // failed, needs manual review" -- this is a judgment call, not a reuse of an
+          // established convention. Flagged for Patrick/QA double-check.
           console.error(`[checkoutGuard][guest] Failed to auto-refund blocked guest PI ${paymentIntent.id}:`, refundErr);
+          await prisma.purchase.updateMany({
+            where: { stripePaymentIntentId: paymentIntent.id },
+            data: { status: 'REFUND_FAILED' },
+          });
+          try {
+            Sentry.captureException(refundErr instanceof Error ? refundErr : new Error(String(refundErr)), {
+              tags: { area: 'guest-fraud-auto-refund-failed' },
+              extra: { paymentIntentId: paymentIntent.id },
+            });
+          } catch {
+            // Sentry may not be initialized -- silently continue
+          }
         }
-        await prisma.purchase.updateMany({
-          where: { stripePaymentIntentId: paymentIntent.id },
-          data: { status: 'REFUNDED' },
-        });
-        console.warn(`[checkoutGuard][guest] Blocked fulfillment + refunded PI ${paymentIntent.id} — collusion/self-dealing signal confirmed.`);
         break;
       }
 
@@ -2053,7 +2101,48 @@ export const webhookHandler = async (req: Request, res: Response) => {
           }
         }
       } catch (err) {
+        // P0 fix (2026-08-07): chargeback handling (status update, chargeback count,
+        // organizer notification) is time-boxed -- Stripe requires evidence within a fixed
+        // deadline. A swallowed failure here previously left zero record anywhere that a
+        // dispute even came in, risking a missed evidence deadline with no visibility.
         console.error(`[stripe] Failed to process dispute ${dispute.id}:`, err);
+        try {
+          // Best-effort organizer lookup for the alert only -- reuses the same charge/PI
+          // lookup as the try block above, wrapped so a repeat failure here can never
+          // block the alert itself from firing.
+          let organizerIdForAlert: string | undefined;
+          try {
+            const chargeIdForAlert = typeof dispute.charge === 'string' ? dispute.charge : dispute.charge?.id;
+            if (chargeIdForAlert) {
+              const chargeForAlert = await stripe().charges.retrieve(chargeIdForAlert);
+              const piIdForAlert = typeof chargeForAlert.payment_intent === 'string'
+                ? chargeForAlert.payment_intent
+                : chargeForAlert.payment_intent?.id ?? null;
+              if (piIdForAlert) {
+                const purchaseForAlert = await prisma.purchase.findFirst({
+                  where: { stripePaymentIntentId: piIdForAlert },
+                  select: { item: { select: { sale: { select: { organizerId: true } } } } },
+                });
+                organizerIdForAlert = purchaseForAlert?.item?.sale?.organizerId;
+              }
+            }
+          } catch {
+            // Best-effort only -- alert still fires without organizer context
+          }
+          Sentry.captureException(err instanceof Error ? err : new Error(String(err)), {
+            tags: { area: 'chargeback-dispute-processing' },
+            extra: {
+              disputeId: dispute.id,
+              chargeId: typeof dispute.charge === 'string' ? dispute.charge : dispute.charge?.id,
+              evidenceDueBy: dispute.evidence_details?.due_by
+                ? new Date(dispute.evidence_details.due_by * 1000).toISOString()
+                : null,
+              organizerId: organizerIdForAlert,
+            },
+          });
+        } catch {
+          // Sentry may not be initialized -- silently continue
+        }
       }
       break;
     }
@@ -2453,7 +2542,25 @@ export const webhookHandler = async (req: Request, res: Response) => {
               `[cart-checkout] Completed — ${cartItemIds.length} items marked SOLD, saleId=${cartSaleId}`
             );
           } catch (cartErr) {
+            // P0 fix (2026-08-07): Purchase-row creation for this cart runs inside a
+            // prisma.$transaction (see above), so a throw here means Stripe already captured
+            // payment but the transaction rolled back cleanly -- no Purchase rows, no stock
+            // decrement. Previously this was only logged: buyer paid, organizer never saw the
+            // sale, and (no rethrow, so still a 200 to Stripe) nothing retried it.
             console.error('[cart-checkout] Webhook handler error:', cartErr);
+            try {
+              Sentry.captureException(cartErr instanceof Error ? cartErr : new Error(String(cartErr)), {
+                tags: { area: 'cart-checkout-purchase-creation' },
+                extra: {
+                  checkoutSessionId: session.id,
+                  amountTotal: session.amount_total,
+                  itemIds: cartItemIds,
+                  saleId: cartSaleId,
+                },
+              });
+            } catch {
+              // Sentry may not be initialized -- silently continue
+            }
           }
         }
       }

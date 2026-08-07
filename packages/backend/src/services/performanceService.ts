@@ -3,6 +3,7 @@
 // No schema changes. All metrics computed on-demand from existing tables with in-memory caching.
 
 import { prisma } from '../lib/prisma';
+import { computeHealthScore } from '../utils/listingHealthScore';
 
 // Simple in-memory cache with TTL
 interface CacheEntry<T> {
@@ -220,21 +221,30 @@ async function computeTopSellingItems(saleId: string, from: Date, to: Date) {
       select: {
         id: true,
         photoUrls: true,
+        title: true,
         description: true,
+        tags: true,
         price: true,
+        conditionGrade: true,
+        category: true,
       },
     });
 
-    // Mock health score computation (0-100 scale)
-    // In real implementation, this would use the Listing Factory utility
+    // Real health score computation — reuses the canonical Listing Health Score
+    // utility (packages/backend/src/utils/listingHealthScore.ts) also used to gate
+    // publishing in itemController.ts. Replaces the previous hardcoded mock formula.
     for (const item of items) {
       const data = itemMap.get(item.id);
       if (data) {
-        let score = 50; // baseline
-        if (item.photoUrls && item.photoUrls.length >= 3) score += 20;
-        if (item.description && item.description.length > 50) score += 15;
-        if (item.price && item.price > 0) score += 15;
-        data.healthScore = Math.min(100, score);
+        data.healthScore = computeHealthScore({
+          photoUrls: item.photoUrls,
+          title: item.title,
+          description: item.description,
+          tags: item.tags,
+          price: item.price,
+          conditionGrade: item.conditionGrade,
+          category: item.category,
+        }).score;
       }
     }
   }
@@ -258,13 +268,18 @@ async function computeTopSellingItems(saleId: string, from: Date, to: Date) {
  * Fallback: (purchases / items) if no favorite data
  */
 async function computeConversionRate(saleId: string, from: Date, to: Date) {
-  const purchaseCount = await prisma.purchase.count({
+  const purchases = await prisma.purchase.findMany({
     where: {
       saleId,
       status: 'PAID',
       createdAt: { gte: from, lte: to },
     },
+    select: {
+      amount: true,
+      userId: true,
+    },
   });
+  const purchaseCount = purchases.length;
 
   const favoriteCount = await prisma.favorite.count({
     where: {
@@ -286,12 +301,32 @@ async function computeConversionRate(saleId: string, from: Date, to: Date) {
     }
   }
 
+  // Real average cart value: sum of paid Purchase.amount / purchase count.
+  // NOTE: this averages per Purchase row (one row per line item), not per checkout
+  // session -- a multi-item cart produces multiple Purchase rows sharing one
+  // stripePaymentIntentId/clientTransactionId. A true "per-order" cart value would
+  // require grouping by that ID first; flagged for a follow-up decision, not done here.
+  const totalPurchaseAmount = purchases.reduce((sum, p) => sum + (p.amount || 0), 0);
+  const averageCartValue = purchaseCount > 0 ? Number((totalPurchaseAmount / purchaseCount).toFixed(2)) : 0;
+
+  // Real repeat buyer rate: share of identified buyers (non-null userId -- POS/guest
+  // checkouts have no persistent account identity and are excluded from this
+  // calculation) who made more than one paid purchase in this date range.
+  const buyerPurchaseCounts = new Map<string, number>();
+  for (const p of purchases) {
+    if (!p.userId) continue;
+    buyerPurchaseCounts.set(p.userId, (buyerPurchaseCounts.get(p.userId) || 0) + 1);
+  }
+  const identifiedBuyerCount = buyerPurchaseCounts.size;
+  const repeatBuyerCount = Array.from(buyerPurchaseCounts.values()).filter(c => c > 1).length;
+  const repeatBuyerRate = identifiedBuyerCount > 0 ? Number((repeatBuyerCount / identifiedBuyerCount).toFixed(4)) : 0;
+
   return {
     conversionRate: Number((rate / 100).toFixed(4)), // Return as decimal (0.48 for 48%)
     conversionRateNote: `${Math.round(rate)}% of favorited items were purchased`,
-    totalUniqueBuyers: purchaseCount, // simplified: count distinct users separately if needed
-    averageCartValue: purchaseCount > 0 ? 204.23 : 0, // placeholder; compute properly in production
-    repeatBuyerRate: 0.25, // placeholder
+    totalUniqueBuyers: purchaseCount, // simplified: count distinct users separately if needed (pre-existing; unchanged, out of scope -- see handoff)
+    averageCartValue,
+    repeatBuyerRate,
   };
 }
 
@@ -306,6 +341,11 @@ async function computeCategoryBreakdown(saleId: string, from: Date, to: Date) {
       category: true,
       price: true,
       status: true,
+      title: true,
+      description: true,
+      tags: true,
+      conditionGrade: true,
+      photoUrls: true,
     },
   });
 
@@ -331,7 +371,18 @@ async function computeCategoryBreakdown(saleId: string, from: Date, to: Date) {
     catData.itemsListed += 1;
     if (item.status === 'SOLD') catData.itemsSold += 1;
     if (item.price) catData.prices.push(item.price);
-    catData.healthScores.push(Math.floor(50 + Math.random() * 50)); // placeholder
+    // Real health score — same canonical utility used above and at publish-time gating.
+    catData.healthScores.push(
+      computeHealthScore({
+        photoUrls: item.photoUrls,
+        title: item.title,
+        description: item.description,
+        tags: item.tags,
+        price: item.price,
+        conditionGrade: item.conditionGrade,
+        category: item.category,
+      }).score
+    );
   }
 
   // Fetch purchases per category to compute revenue

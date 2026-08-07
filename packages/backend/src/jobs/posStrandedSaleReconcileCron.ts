@@ -4,6 +4,7 @@ import { cronGuard } from '../utils/cronGuard';
 import { getStripe } from '../utils/stripe';
 import { createNotification } from '../lib/notificationService';
 import { recordPosPaymentLinkSale } from '../services/posPaymentLinkRecorder';
+import type { POSPaymentLink } from '@prisma/client';
 
 /**
  * posStrandedSaleReconcileCron.ts
@@ -52,6 +53,94 @@ import { recordPosPaymentLinkSale } from '../services/posPaymentLinkRecorder';
 
 const stripe = () => getStripe();
 
+/**
+ * Shared EXPIRED-flip + item-revert + notify + best-effort Stripe-deactivate logic.
+ * Used by BOTH the in-window "own expiresAt passed with no paid Stripe session" branch
+ * AND the >7d STALE_ROW_CUTOFF_DAYS branch -- a stale row is, by construction, already
+ * far past any real payment window (schema.prisma documents POSPaymentLink.expiresAt as
+ * "24h"), so it's exactly as reclaimable as an in-window expired link. Deliberately does
+ * NOT call Stripe to check for a paid session itself -- callers decide whether that check
+ * is safe to run first (the stale-row guard above skips it entirely for ancient rows,
+ * since Stripe will never recognize sandbox/test-era payment link IDs and that call
+ * always fails/floods logs).
+ */
+const reclaimExpiredPaymentLink = async (
+  link: POSPaymentLink,
+  reasonLabel: string
+): Promise<void> => {
+  try {
+    const revertedItemIds = await prisma.$transaction(async (tx) => {
+      // Atomic link flip: only proceed if still ACTIVE -- a concurrent
+      // webhook/reconcile completing this link in the same window wins the
+      // race, same guarded-flip pattern as recordPosPaymentLinkSale.
+      const linkFlip = await tx.pOSPaymentLink.updateMany({
+        where: { id: link.id, status: 'ACTIVE' },
+        data: { status: 'EXPIRED' },
+      });
+      if (linkFlip.count === 0) return [];
+
+      // Only items still INVOICE_ISSUED get reverted. If something else
+      // already moved an item on (SOLD via a race-winning webhook, or this
+      // link was the generic ad-hoc/no-hold endpoint which never flips
+      // Item.status at all), this matches zero rows and is a safe no-op.
+      const stillIssued = await tx.item.findMany({
+        where: { id: { in: link.itemIds }, status: 'INVOICE_ISSUED' },
+        select: { id: true },
+      });
+      const revertIds = stillIssued.map((i) => i.id);
+      if (revertIds.length === 0) return [];
+
+      await tx.item.updateMany({
+        where: { id: { in: revertIds }, status: 'INVOICE_ISSUED' },
+        data: { status: 'RESERVED' },
+      });
+
+      // Mirror invoiceExpiryJob.ts's revert target exactly: back to CONFIRMED,
+      // not AVAILABLE -- reservationExpiryJob.ts remains the single place that
+      // decides a hold's own timer has truly run out.
+      const affectedReservations = await tx.itemReservation.findMany({
+        where: { itemId: { in: revertIds } },
+        select: { userId: true, itemId: true },
+      });
+      await tx.itemReservation.updateMany({
+        where: { itemId: { in: revertIds } },
+        data: { status: 'CONFIRMED' },
+      });
+
+      for (const r of affectedReservations) {
+        await tx.notification.create({
+          data: {
+            userId: r.userId,
+            type: 'invoice_expired',
+            title: 'Payment link expired',
+            body: 'Your payment link expired before payment was completed. Your hold remains active.',
+            link: `/items/${r.itemId}`,
+            channel: 'OPERATIONAL',
+          },
+        });
+      }
+
+      return revertIds;
+    });
+
+    if (revertedItemIds.length > 0) {
+      console.error(`[pos-reconcile] EXPIRED-RECLAIMED link=${link.id} items=${revertedItemIds.join(',')} -- ${reasonLabel}; reverted to RESERVED/CONFIRMED.`);
+    } else {
+      console.log(`[pos-reconcile] EXPIRED-NOOP link=${link.id} -- ${reasonLabel}, but no items still INVOICE_ISSUED (already resolved elsewhere, or an ad-hoc link with no underlying hold).`);
+    }
+
+    // Best-effort Stripe-side deactivation -- non-fatal, mirrors
+    // invoiceExpiryJob.ts's best-effort Checkout Session expire() call.
+    try {
+      await stripe().paymentLinks.update(link.stripePaymentLinkId, { active: false });
+    } catch (deactivateErr: any) {
+      console.warn(`[pos-reconcile] Failed to deactivate Stripe payment link ${link.stripePaymentLinkId} (non-fatal):`, deactivateErr?.message ?? deactivateErr);
+    }
+  } catch (revertErr: any) {
+    console.error(`[pos-reconcile] Failed to reclaim payment link ${link.id} -- will retry next run:`, revertErr?.message ?? revertErr);
+  }
+};
+
 export const reconcileStrandedPosSales = async (): Promise<void> => {
   if (process.env.POS_RECONCILE_DISABLED === '1') {
     console.log('[pos-reconcile] Disabled via POS_RECONCILE_DISABLED=1 -- skipping run.');
@@ -88,7 +177,24 @@ export const reconcileStrandedPosSales = async (): Promise<void> => {
 
   for (const link of candidates) {
     if (link.createdAt < staleRowCutoff) {
-      console.log(`[pos-reconcile] STALE-SKIPPED link=${link.id} createdAt=${link.createdAt.toISOString()} -- older than ${STALE_ROW_CUTOFF_DAYS}d cutoff, not re-checked against Stripe (see stale-row guard note above).`);
+      // Stale-row-cutoff fix (2026-08-07): previously this branch only logged and
+      // skipped -- it never reached the EXPIRED-flip logic below, so these rows sat
+      // ACTIVE forever (confirmed live: rows 58d and 13d old stuck ACTIVE). The Stripe
+      // "was it paid?" call is still intentionally skipped for these rows (see
+      // stale-row guard note above -- Stripe will never recognize sandbox/test-era
+      // payment link IDs and that call always fails/floods logs), but a row this old
+      // is, by construction, already far past any real payment window (schema.prisma
+      // documents POSPaymentLink.expiresAt as "24h"), so it's safe to run the same
+      // EXPIRED-flip + item-revert + notify + best-effort Stripe-deactivate
+      // reconciliation the in-window branch below runs -- just without re-asking
+      // Stripe first.
+      console.log(`[pos-reconcile] STALE-SKIPPED link=${link.id} createdAt=${link.createdAt.toISOString()} -- older than ${STALE_ROW_CUTOFF_DAYS}d cutoff, not re-checked against Stripe (see stale-row guard note above); reconciling locally to EXPIRED.`);
+      if (process.env.POS_PAYMENT_LINK_EXPIRY_RECLAIM_DISABLED !== '1') {
+        await reclaimExpiredPaymentLink(
+          link,
+          `exceeded ${STALE_ROW_CUTOFF_DAYS}d stale-row cutoff (createdAt=${link.createdAt.toISOString()}) without ever resolving`
+        );
+      }
       continue;
     }
 
@@ -105,7 +211,9 @@ export const reconcileStrandedPosSales = async (): Promise<void> => {
       if (!paidSession) {
         // Reclaim-gap fix (2026-08-04): no paid session found -- check whether this
         // link's own expiresAt (see header comment) has passed. If so, revert any of
-        // its items still stuck INVOICE_ISSUED. See header comment for full rationale.
+        // its items still stuck INVOICE_ISSUED via the shared reclaim helper below
+        // (also reused by the STALE_ROW_CUTOFF_DAYS branch above). See header comment
+        // for full rationale.
         const nowTs = new Date();
         const linkExpiresAt = link.expiresAt;
         if (
@@ -113,77 +221,10 @@ export const reconcileStrandedPosSales = async (): Promise<void> => {
           linkExpiresAt < nowTs &&
           process.env.POS_PAYMENT_LINK_EXPIRY_RECLAIM_DISABLED !== '1'
         ) {
-          try {
-            const revertedItemIds = await prisma.$transaction(async (tx) => {
-              // Atomic link flip: only proceed if still ACTIVE -- a concurrent
-              // webhook/reconcile completing this link in the same window wins the
-              // race, same guarded-flip pattern as recordPosPaymentLinkSale.
-              const linkFlip = await tx.pOSPaymentLink.updateMany({
-                where: { id: link.id, status: 'ACTIVE' },
-                data: { status: 'EXPIRED' },
-              });
-              if (linkFlip.count === 0) return [];
-
-              // Only items still INVOICE_ISSUED get reverted. If something else
-              // already moved an item on (SOLD via a race-winning webhook, or this
-              // link was the generic ad-hoc/no-hold endpoint which never flips
-              // Item.status at all), this matches zero rows and is a safe no-op.
-              const stillIssued = await tx.item.findMany({
-                where: { id: { in: link.itemIds }, status: 'INVOICE_ISSUED' },
-                select: { id: true },
-              });
-              const revertIds = stillIssued.map((i) => i.id);
-              if (revertIds.length === 0) return [];
-
-              await tx.item.updateMany({
-                where: { id: { in: revertIds }, status: 'INVOICE_ISSUED' },
-                data: { status: 'RESERVED' },
-              });
-
-              // Mirror invoiceExpiryJob.ts's revert target exactly: back to CONFIRMED,
-              // not AVAILABLE -- reservationExpiryJob.ts remains the single place that
-              // decides a hold's own timer has truly run out.
-              const affectedReservations = await tx.itemReservation.findMany({
-                where: { itemId: { in: revertIds } },
-                select: { userId: true, itemId: true },
-              });
-              await tx.itemReservation.updateMany({
-                where: { itemId: { in: revertIds } },
-                data: { status: 'CONFIRMED' },
-              });
-
-              for (const r of affectedReservations) {
-                await tx.notification.create({
-                  data: {
-                    userId: r.userId,
-                    type: 'invoice_expired',
-                    title: 'Payment link expired',
-                    body: 'Your payment link expired before payment was completed. Your hold remains active.',
-                    link: `/items/${r.itemId}`,
-                    channel: 'OPERATIONAL',
-                  },
-                });
-              }
-
-              return revertIds;
-            });
-
-            if (revertedItemIds.length > 0) {
-              console.error(`[pos-reconcile] EXPIRED-RECLAIMED link=${link.id} items=${revertedItemIds.join(',')} -- CHECKOUT_LINK payment link passed its own expiresAt (${linkExpiresAt.toISOString()}) with no paid Stripe session found; reverted to RESERVED/CONFIRMED.`);
-            } else {
-              console.log(`[pos-reconcile] EXPIRED-NOOP link=${link.id} -- past expiresAt with no paid session, but no items still INVOICE_ISSUED (already resolved elsewhere, or an ad-hoc link with no underlying hold).`);
-            }
-
-            // Best-effort Stripe-side deactivation -- non-fatal, mirrors
-            // invoiceExpiryJob.ts's best-effort Checkout Session expire() call.
-            try {
-              await stripe().paymentLinks.update(link.stripePaymentLinkId, { active: false });
-            } catch (deactivateErr: any) {
-              console.warn(`[pos-reconcile] Failed to deactivate Stripe payment link ${link.stripePaymentLinkId} (non-fatal):`, deactivateErr?.message ?? deactivateErr);
-            }
-          } catch (revertErr: any) {
-            console.error(`[pos-reconcile] Failed to reclaim expired payment link ${link.id} -- will retry next run:`, revertErr?.message ?? revertErr);
-          }
+          await reclaimExpiredPaymentLink(
+            link,
+            `CHECKOUT_LINK payment link passed its own expiresAt (${linkExpiresAt.toISOString()}) with no paid Stripe session found`
+          );
         }
         continue;
       }
