@@ -5276,6 +5276,15 @@ enum MarketplaceJobStatus {
   SKIPPED
 }
 
+// ADR-100 -- Marketplace Listing Auto-Renew (2026-08-06/07). Distinguishes which
+// third-party channel a POST/REMOVE row belongs to -- before this every row was
+// implicitly Facebook (Craigslist never wrote a row at all, see ADR-100 §2.2).
+// Default FACEBOOK preserves backward compatibility with every pre-existing row.
+enum MarketplaceJobPlatform {
+  FACEBOOK
+  CRAIGSLIST
+}
+
 /// One row per (Item, action). Polled by marketplacePosterCron.ts (node-cron,
 /// same job-queue pattern as SocialPost). remoteListingId is required to later
 /// remove a listing -- captured from the Marketplace UI on successful POST.
@@ -5292,11 +5301,21 @@ model MarketplaceListingJob {
   lastAttemptAt    DateTime?
   lastErrorMessage String?
   scheduledFor     DateTime                  @default(now())
+  // ADR-100: which channel this row belongs to. Default FACEBOOK for backward
+  // compatibility -- every row written before this migration is FB (Craigslist had
+  // no write path at all until fas-craigslist.js started calling markListed, ADR-100 §5).
+  platform         MarketplaceJobPlatform    @default(FACEBOOK)
+  // ADR-100: set only on action=POST/status=POSTED rows, as now() + a per-platform
+  // lapse-window (see extensionController.ts markItemListed -- lapse-window days are an
+  // open product question, ADR-100 §7 Q1, currently placeholder constants). Null for
+  // every other row (REMOVE rows, SKIPPED rows, and any row predating this migration).
+  renewDueAt       DateTime?
   createdAt        DateTime                  @default(now())
   updatedAt        DateTime                  @updatedAt
 
   @@index([status, scheduledFor])
   @@index([itemId])
+  @@index([platform, renewDueAt])
 }
 
 // Feature #602 (2026-08-05): AI Message-Reply Autosend -- Price + Availability.

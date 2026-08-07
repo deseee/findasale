@@ -40,6 +40,10 @@
       <p class="note">Checked every ~20 min. When an item sells elsewhere, the extension removes its Facebook listing &mdash; &ldquo;Remove automatically&rdquo; runs in a background tab, &ldquo;Notify me&rdquo; waits for you to click the alert first. The same check also looks the other way: if an item sells right there on Facebook, it's marked sold on FindA.Sale automatically (and its eBay listing withdrawn) &mdash; no extra setup, it uses this same setting. When you change an item's price on FindA.Sale, you'll also get a notification to update it on Facebook yourself &mdash; automatic price updates aren't built yet, so this always just notifies for now, even in &ldquo;Remove automatically&rdquo; mode. &ldquo;Off&rdquo; turns off all of the above.</p>
       <p class="note dim" id="removalDiag">Automatic check status loading&hellip;</p>
     </div>
+    <div class="renewSetting">
+      <label class="chk"><input type="checkbox" id="autoRenew"> Automatically renew expiring listings</label>
+      <p class="note">Checked about once a day. When a listing you posted through the extension is close to expiring on Facebook or Craigslist, FindA.Sale can re-post it for you automatically &mdash; off by default. If Craigslist asks for phone/email verification during a renewal, it stops and sends a notification instead of guessing. Leave unchecked to just get a reminder notification when it's time to renew yourself.</p>
+    </div>
   </footer>
   <script src="config.js"></script>
   <script src="popup.js"></script>

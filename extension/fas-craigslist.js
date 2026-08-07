@@ -331,6 +331,13 @@
       return;
     }
 
+    // ADR-100 (2026-08-06/07): report the confirmed publish server-side so Craigslist listings
+    // are tracked at all (previously zero server-side record existed for this channel, see
+    // ADR-100 §2.2) and so a renewal-due date gets computed. Reuses the EXISTING 'markListed'
+    // message type already handled in background.js -- not a new message. Best-effort: a
+    // failure here must never undo or block the publish that already happened.
+    try { await chrome.runtime.sendMessage({ type: 'markListed', itemId: item.id, remoteListingId: null, platform: 'CRAIGSLIST' }); } catch (e) {}
+
     clearAttempts();
     const more = (index + 1) < total;
     overlay('<b>FindA.Sale</b><div style="margin-top:6px">Published <b>' + escapeHtml(item.title) + '</b>.</div>' +

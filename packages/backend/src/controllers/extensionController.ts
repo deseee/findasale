@@ -312,7 +312,25 @@ async function assertItemOwned(userId: string, itemId: string): Promise<boolean>
   return !!item;
 }
 
+// ADR-100 (2026-08-06/07): Marketplace Listing Auto-Renew. Which channel a POST row belongs
+// to, and how many days after posting that channel's listing is treated as due for renewal.
+// TODO Patrick: confirm lapse-window days per ADR-100 §7 Q1 -- neither platform publishes
+// this as an API-readable value, so these are PLACEHOLDER estimates only, not a final
+// product decision. Do not treat these numbers as validated.
+type MarketplaceRenewalPlatform = 'FACEBOOK' | 'CRAIGSLIST';
+const VALID_RENEWAL_PLATFORMS: MarketplaceRenewalPlatform[] = ['FACEBOOK', 'CRAIGSLIST'];
+const RENEWAL_LAPSE_WINDOW_DAYS: Record<MarketplaceRenewalPlatform, number> = {
+  FACEBOOK: 30, // TODO Patrick: confirm -- placeholder guess only, ADR-100 §7 Q1
+  CRAIGSLIST: 7, // TODO Patrick: confirm -- placeholder guess only, ADR-100 §7 Q1 (Craigslist posts are commonly reported to expire faster than FB)
+};
+// TODO Patrick: confirm notify-lead-time per ADR-100 §7 Q2 -- how many days before renewDueAt
+// the nudge/auto-renewal should fire. Placeholder: same-day (0) until Patrick decides.
+const RENEWAL_NOTIFY_LEAD_TIME_DAYS = 0;
+
 // POST /api/extension/items/:id/listed — record that the organizer listed this item to Marketplace.
+// ADR-100: now accepts an optional `platform` (defaults 'FACEBOOK' -- the only caller that
+// omitted it before this change was the existing FB flow, so default preserves today's
+// behavior exactly) and computes renewDueAt = now() + that platform's lapse-window.
 export const markItemListed = async (req: AuthRequest, res: Response): Promise<void> => {
   const userId = req.user?.id;
   const itemId = req.params.id;
@@ -320,8 +338,15 @@ export const markItemListed = async (req: AuthRequest, res: Response): Promise<v
   if (!(await assertItemOwned(userId, itemId))) { res.status(404).json({ message: 'Item not found' }); return; }
 
   const remoteListingId = typeof req.body?.remoteListingId === 'string' ? req.body.remoteListingId : null;
+  const platformRaw = typeof req.body?.platform === 'string' ? req.body.platform.toUpperCase() : 'FACEBOOK';
+  const platform: MarketplaceRenewalPlatform = (VALID_RENEWAL_PLATFORMS as string[]).includes(platformRaw)
+    ? (platformRaw as MarketplaceRenewalPlatform)
+    : 'FACEBOOK';
+  const lapseDays = RENEWAL_LAPSE_WINDOW_DAYS[platform];
+  const renewDueAt = new Date(Date.now() + lapseDays * 24 * 60 * 60 * 1000);
+
   await prisma.marketplaceListingJob.create({
-    data: { itemId, action: 'POST', status: 'POSTED', remoteListingId },
+    data: { itemId, action: 'POST', status: 'POSTED', remoteListingId, platform, renewDueAt },
   });
   res.json({ ok: true });
 };
@@ -596,6 +621,67 @@ export const getPendingSoldChecks = async (req: AuthRequest, res: Response): Pro
   const items = availableItems
     .filter((i) => postedByItem.has(i.id) && !removedByItem.has(i.id))
     .map((i) => ({ id: i.id, title: i.title }));
+
+  res.json({ items });
+};
+
+// GET /api/extension/pending-renewals -- ADR-100 (2026-08-06/07): items this extension posted
+// to Facebook or Craigslist (MarketplaceListingJob action=POST/POSTED, not yet
+// action=REMOVE/REMOVED) whose per-platform renewDueAt has arrived (within
+// RENEWAL_NOTIFY_LEAD_TIME_DAYS). Same postedByItem/removedByItem set-difference shape as
+// getPendingSoldChecks above -- deliberately not a fourth divergent computation of "is this
+// item's listing still live." saleId is included (unlike getPendingSoldChecks) so the
+// extension's renewal notification can deep-link straight to the item's sale page.
+//
+// Consumed two ways by background.js's renewal alarm (extension/background.js):
+// - fasAutoRenew toggle OFF (default): notify-only, organizer renews manually (ADR-100 §5).
+// - fasAutoRenew toggle ON: background.js separately calls GET /extension/items for full
+//   item fields (title/price/description/photos/etc.) and cross-references by id here to
+//   build a fresh posting queue, reusing fas-content.js/fas-craigslist.js's EXISTING posting
+//   flow rather than duplicating it (ADR-100 §8 amendment).
+export const getPendingRenewals = async (req: AuthRequest, res: Response): Promise<void> => {
+  const userId = req.user?.id;
+  if (!userId) { res.status(401).json({ message: 'Authentication required' }); return; }
+
+  const organizer = await prisma.organizer.findUnique({ where: { userId } });
+  if (!organizer) { res.status(404).json({ message: 'Organizer profile not found' }); return; }
+
+  const availableItems = await prisma.item.findMany({
+    where: { sale: { organizerId: organizer.id, deletedAt: null }, status: 'AVAILABLE' },
+    select: { id: true, title: true, saleId: true },
+  });
+  if (!availableItems.length) { res.json({ items: [] }); return; }
+
+  const itemIds = availableItems.map((i) => i.id);
+  const jobs = await prisma.marketplaceListingJob.findMany({
+    where: { itemId: { in: itemIds } },
+    select: { itemId: true, action: true, status: true, platform: true, renewDueAt: true, createdAt: true },
+    orderBy: { createdAt: 'desc' },
+  });
+  const postedByItem = new Set<string>();
+  const removedByItem = new Set<string>();
+  // jobs is ordered createdAt desc, so the first POST/POSTED row seen per item is the most
+  // recent one -- only set it once so an older renewal job can't overwrite a newer renewDueAt
+  // (same "first-seen wins under desc order" idiom getPendingUpdates uses for remoteListingId).
+  const renewalInfoByItem = new Map<string, { platform: MarketplaceRenewalPlatform; renewDueAt: Date | null }>();
+  for (const j of jobs) {
+    if (j.action === 'POST' && j.status === 'POSTED') {
+      postedByItem.add(j.itemId);
+      if (!renewalInfoByItem.has(j.itemId)) {
+        renewalInfoByItem.set(j.itemId, { platform: j.platform as MarketplaceRenewalPlatform, renewDueAt: j.renewDueAt });
+      }
+    }
+    if (j.action === 'REMOVE' && j.status === 'REMOVED') removedByItem.add(j.itemId);
+  }
+
+  const dueThreshold = Date.now() + RENEWAL_NOTIFY_LEAD_TIME_DAYS * 24 * 60 * 60 * 1000;
+  const items = availableItems
+    .filter((i) => postedByItem.has(i.id) && !removedByItem.has(i.id))
+    .map((i) => ({ id: i.id, title: i.title, saleId: i.saleId, ...renewalInfoByItem.get(i.id)! }))
+    // renewDueAt is null for every pre-ADR-100 row (no backfill, ADR-100 §7 Q4) -- such items
+    // simply never surface a renewal nudge until a fresh POST row is written for them.
+    .filter((i) => i.renewDueAt != null && i.renewDueAt.getTime() <= dueThreshold)
+    .map((i) => ({ id: i.id, title: i.title, saleId: i.saleId, platform: i.platform, renewDueAt: (i.renewDueAt as Date).toISOString() }));
 
   res.json({ items });
 };

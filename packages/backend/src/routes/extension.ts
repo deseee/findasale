@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { authenticate, requireOrganizer } from '../middleware/auth';
 import { requireTier } from '../middleware/requireTier';
-import { getExtensionItems, markItemListed, markItemRemoved, markItemRemovalSkipped, getPendingRemovals, getPendingUpdates, markItemPriceSynced, getPendingSoldChecks, markItemSoldOnFacebook, getSyncHealth, decideMessageAutosendForItem } from '../controllers/extensionController';
+import { getExtensionItems, markItemListed, markItemRemoved, markItemRemovalSkipped, getPendingRemovals, getPendingUpdates, markItemPriceSynced, getPendingSoldChecks, markItemSoldOnFacebook, getSyncHealth, decideMessageAutosendForItem, getPendingRenewals } from '../controllers/extensionController';
 
 // Endpoints for the FindA.Sale Marketplace Autofill browser extension (ADR-084).
 // Auth is via Bearer token (the organizer's accessToken, read from the finda.sale
@@ -25,5 +25,8 @@ router.get('/sync-health', authenticate, requireOrganizer, requireTier('PRO'), g
 // Feature #602 (2026-08-05): AI Message-Reply Autosend decision endpoint -- Bearer-
 // authenticated, same chain as the other extension endpoints above.
 router.post('/items/:id/message-autosend-decision', authenticate, requireOrganizer, requireTier('PRO'), decideMessageAutosendForItem);
+// ADR-100 (2026-08-06/07): Marketplace Listing Auto-Renew -- items posted via the extension
+// whose per-platform renewDueAt has arrived. Same auth/tier gating as every other route here.
+router.get('/pending-renewals', authenticate, requireOrganizer, requireTier('PRO'), getPendingRenewals);
 
 export default router;

@@ -367,6 +367,131 @@ async function checkSavedSearchAlerts() {
   return 'notified:' + matches.length;
 }
 
+// ---- Marketplace Listing Auto-Renew (ADR-100, 2026-08-06/07) ----
+// Polls GET /extension/pending-renewals on its own recurring alarm, same shape as the
+// saved-search alarm above. Default behavior (fasAutoRenew unset/false) is notify-only,
+// mirroring checkSavedSearchAlerts's notification-per-match shape (ADR-100 §5). When the
+// organizer has explicitly opted in via the popup's "Automatically renew" toggle
+// (fasAutoRenew=true, chrome.storage.local, same off-by-default-toggle mechanism as the
+// existing fasAutoRemoveMode/fasQueue autoPublish settings), a due item is instead re-queued
+// through the SAME posting flow fas-content.js/fas-craigslist.js already use for a first-time
+// post -- no duplicated FB/Craigslist automation logic (ADR-100 §8 amendment).
+// TODO Patrick: confirm the alarm's polling interval per ADR-100 §7 Q3 -- renewal isn't
+// time-critical the way the 20-min removal alarm is, so once/day (1440 min) is proposed here
+// as a starting point, not a validated final value.
+const FAS_RENEW_ALARM = 'fasRenewNudge';
+const FAS_RENEW_PERIOD_MINUTES = 1440; // TODO Patrick: confirm per ADR-100 §7 Q3 (placeholder: once/day)
+
+async function ensureRenewAlarm() {
+  const existing = await chrome.alarms.get(FAS_RENEW_ALARM);
+  if (!existing) chrome.alarms.create(FAS_RENEW_ALARM, { periodInMinutes: FAS_RENEW_PERIOD_MINUTES });
+}
+chrome.runtime.onInstalled.addListener(ensureRenewAlarm);
+chrome.runtime.onStartup.addListener(ensureRenewAlarm);
+
+// True when a posting queue for this platform is already mid-run (organizer manually posting,
+// or a prior auto-renew run still in flight) -- auto-renew must never clobber an in-progress
+// queue by overwriting fasQueue/fasCraigslistQueue out from under a live content script.
+// Skips this platform for the current alarm tick; the item stays due and is picked up on the
+// NEXT tick since nothing here marks it renewed until fas-content.js/fas-craigslist.js's own
+// markListed call actually succeeds.
+async function hasActiveQueue(platform) {
+  if (platform === 'CRAIGSLIST') {
+    const { fasCraigslistQueue = [], fasCraigslistIndex = 0 } = await chrome.storage.local.get(['fasCraigslistQueue', 'fasCraigslistIndex']);
+    return fasCraigslistIndex < fasCraigslistQueue.length;
+  }
+  const { fasQueue = [], fasIndex = 0 } = await chrome.storage.local.get(['fasQueue', 'fasIndex']);
+  return fasIndex < fasQueue.length;
+}
+
+// Builds one posting-queue entry from a full /extension/items record. Deliberately mirrors
+// popup.js's startQueue() field list exactly (same never-invent-a-value rule for location
+// fields) -- this is the one place outside popup.js that needs to build a queue entry, since
+// auto-renewal runs with no popup open at all.
+function buildRenewalQueueItem(it, organizerEmail) {
+  return {
+    id: it.id, title: it.title, price: it.price, condition: it.condition,
+    description: it.description, category: it.category, photoUrls: it.photoUrls || [],
+    packageWeightOz: it.packageWeightOz, aiPackageWeightOz: it.aiPackageWeightOz,
+    shippingOverride: it.shippingOverride,
+    allowBestOffer: it.allowBestOffer, bestOfferMinimumAmt: it.bestOfferMinimumAmt,
+    city: it.city, geographicArea: it.geographicArea, saleCity: it.saleCity,
+    postal: it.postal, postalCode: it.postalCode, zip: it.zip, saleZip: it.saleZip,
+    saleAddress: it.saleAddress,
+    email: organizerEmail || null
+  };
+}
+
+// Auto-renew path (fasAutoRenew=true): re-drives the EXISTING posting flow for each due item,
+// exactly as if the organizer had selected it in the popup and clicked "List"/"Post" with
+// "Publish automatically" checked -- autoPublish is forced true here since no human is present
+// to click Publish. Craigslist's own doPreviewStep already stops and hands off to a manual
+// notification if it can't find a publish button (most likely a phone/email/CAPTCHA
+// verification step it doesn't recognize, per fas-craigslist.js's existing guardrail) -- that
+// existing behavior is reused as-is, not re-implemented here (ADR-100 §8's verification
+// boundary requirement).
+async function autoRenewDueItems(dueItems) {
+  if (!dueItems.length) return 'no_items';
+  const itemsResp = await apiFetch('/extension/items');
+  if (!itemsResp.ok) return 'error:' + (itemsResp.error || itemsResp.status);
+  const fullItems = (itemsResp.data && itemsResp.data.items) || [];
+  const organizerEmail = (itemsResp.data && itemsResp.data.organizer && itemsResp.data.organizer.email) || null;
+  const fullItemById = new Map(fullItems.map((it) => [it.id, it]));
+
+  const fbQueue = [];
+  const clQueue = [];
+  for (const due of dueItems) {
+    const full = fullItemById.get(due.id);
+    if (!full) continue; // no longer AVAILABLE/listable -- getExtensionItems already excludes it
+    const entry = buildRenewalQueueItem(full, organizerEmail);
+    if (due.platform === 'CRAIGSLIST') clQueue.push(entry); else fbQueue.push(entry);
+  }
+
+  let started = 0;
+  if (fbQueue.length && !(await hasActiveQueue('FACEBOOK'))) {
+    await chrome.storage.local.set({ fasQueue: fbQueue, fasIndex: 0, fasAutoPublish: true, fasQueueSetAt: Date.now() });
+    chrome.tabs.create({ url: CFG.FB_CREATE_URL, active: false });
+    started += fbQueue.length;
+  }
+  if (clQueue.length && !(await hasActiveQueue('CRAIGSLIST'))) {
+    await chrome.storage.local.set({ fasCraigslistQueue: clQueue, fasCraigslistIndex: 0, fasCraigslistAutoPublish: true });
+    chrome.tabs.create({ url: CFG.CL_POST_URL, active: false });
+    started += clQueue.length;
+  }
+  return started ? 'auto_renew_started:' + started : 'skipped_active_queue';
+}
+
+// Notify-only path (fasAutoRenew=false, the default): mirrors checkSavedSearchAlerts's
+// notification-per-match shape exactly -- one notification per due item, deep-linking to the
+// item's sale page so the organizer lands on the right listing to renew manually.
+async function notifyDueRenewals(dueItems) {
+  if (!dueItems.length) return 'no_items';
+  for (const due of dueItems) {
+    const notifId = 'fasRenewDue_' + due.id;
+    const url = due.saleId ? ('https://finda.sale/sales/' + due.saleId) : 'https://finda.sale/organizer/marketplace-extension';
+    await chrome.storage.local.set({ ['fasRenewUrl_' + due.id]: url });
+    const platformLabel = due.platform === 'CRAIGSLIST' ? 'Craigslist' : 'Facebook Marketplace';
+    chrome.notifications.create(notifId, {
+      type: 'basic',
+      iconUrl: 'icon128.png',
+      title: 'FindA.Sale -- listing due for renewal',
+      message: '"' + due.title + '" is due to be renewed on ' + platformLabel + '.',
+      priority: 1
+    });
+  }
+  return 'notified:' + dueItems.length;
+}
+
+async function checkRenewals() {
+  const resp = await apiFetch('/extension/pending-renewals');
+  if (!resp.ok) return 'error:' + (resp.error || resp.status);
+  const dueItems = (resp.data && resp.data.items) || [];
+  if (!dueItems.length) return 'no_items';
+
+  const { fasAutoRenew = false } = await chrome.storage.local.get(['fasAutoRenew']);
+  return fasAutoRenew ? await autoRenewDueItems(dueItems) : await notifyDueRenewals(dueItems);
+}
+
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === FAS_SAVED_SEARCH_ALARM) {
     return checkSavedSearchAlerts()
@@ -374,6 +499,14 @@ chrome.alarms.onAlarm.addListener((alarm) => {
       .then((outcome) => chrome.storage.local.set({
         fasLastSavedSearchAlarmFiredAt: Date.now(),
         fasLastSavedSearchOutcome: outcome
+      }));
+  }
+  if (alarm.name === FAS_RENEW_ALARM) {
+    return checkRenewals()
+      .catch((e) => 'error:' + String((e && e.message) || e))
+      .then((outcome) => chrome.storage.local.set({
+        fasLastRenewAlarmFiredAt: Date.now(),
+        fasLastRenewOutcome: outcome
       }));
   }
   if (alarm.name !== FAS_REMOVAL_ALARM) return;
@@ -413,6 +546,15 @@ chrome.notifications.onClicked.addListener((notifId) => {
     chrome.storage.local.get([key], (st) => {
       chrome.tabs.create({ url: st[key] || 'https://finda.sale/shopper/saved-searches', active: true });
     });
+    return;
+  }
+  if (notifId.indexOf('fasRenewDue_') === 0) {
+    chrome.notifications.clear(notifId);
+    const itemId = notifId.slice('fasRenewDue_'.length);
+    const key = 'fasRenewUrl_' + itemId;
+    chrome.storage.local.get([key], (st) => {
+      chrome.tabs.create({ url: st[key] || 'https://finda.sale/organizer/marketplace-extension', active: true });
+    });
   }
 });
 
@@ -437,8 +579,11 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         throttledCheckPendingRemovals(); // fire-and-forget; shared 30s throttle
         sendResponse(await apiFetch('/extension/items'));
       } else if (msg.type === 'markListed') {
+        // ADR-100 (2026-08-06/07): platform threaded through -- fas-content.js's FB call site
+        // never sets it (defaults 'FACEBOOK' server-side, matching today's behavior exactly);
+        // fas-craigslist.js's new call site sets 'CRAIGSLIST'.
         sendResponse(await apiFetch('/extension/items/' + encodeURIComponent(msg.itemId) + '/listed',
-          { method: 'POST', body: { remoteListingId: msg.remoteListingId || null } }));
+          { method: 'POST', body: { remoteListingId: msg.remoteListingId || null, platform: msg.platform || 'FACEBOOK' } }));
       } else if (msg.type === 'markRemoved') {
         sendResponse(await apiFetch('/extension/items/' + encodeURIComponent(msg.itemId) + '/removed',
           { method: 'POST', body: {} }));
@@ -554,6 +699,13 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         // immediately (throttled) so switching to 'silent'/'notify' acts without waiting 20 min.
         await ensureRemovalAlarm();
         await throttledCheckPendingRemovals();
+        sendResponse({ ok: true });
+      } else if (msg.type === 'renewModeChanged') {
+        // ADR-100: fasAutoRenew toggle just changed in the popup -- re-assert the alarm (in case
+        // it was ever cleared) so the new mode takes effect on its next scheduled tick. Renewal
+        // isn't time-critical (unlike removal), so this deliberately does NOT also trigger an
+        // immediate poll the way removalModeChanged does above.
+        await ensureRenewAlarm();
         sendResponse({ ok: true });
       } else {
         sendResponse({ ok: false, error: 'unknown_message' });

@@ -45,6 +45,7 @@ async function load() {
   $('channel').onchange = onChannelChange;
   onChannelChange();
   await loadAutoRemoveMode();
+  await loadAutoRenewSetting();
   render();
 }
 
@@ -92,6 +93,22 @@ async function renderRemovalDiag() {
   const manualPart = 'Last opened/refocused check: ' + timeAgo(st.fasLastManualCheckAt) +
     (st.fasLastManualRemovalOutcome ? ' (' + st.fasLastManualRemovalOutcome + ')' : '');
   el.textContent = alarmPart + ' \u00b7 ' + manualPart;
+}
+
+// ADR-100 (2026-08-06/07): "Automatically renew expiring listings" setting -- same
+// chrome.storage.local standing-preference mechanism as fasAutoRemoveMode above (not a new
+// settings mechanism, per ADR-100 §8's explicit instruction to mirror the existing pattern).
+// Off by default (fasAutoRenew defaults false here AND in background.js's checkRenewals --
+// both defaults must agree, since either read site could run first depending on alarm timing).
+async function loadAutoRenewSetting() {
+  const el = $('autoRenew');
+  if (!el) return;
+  const { fasAutoRenew = false } = await chrome.storage.local.get(['fasAutoRenew']);
+  el.checked = fasAutoRenew;
+  el.onchange = async () => {
+    await chrome.storage.local.set({ fasAutoRenew: el.checked });
+    await send({ type: 'renewModeChanged' });
+  };
 }
 
 function currentChannel() { const el = $('channel'); return el ? el.value : 'facebook'; }
