@@ -48,9 +48,19 @@
   // but Facebook nests many unrelated sub-pages under both (selling, purchases, saved,
   // ordinary message threads, etc.) -- re-check the live pathname here before doing
   // anything else on the page.
+  // (2026-08-07 fix, Patrick caught live console noise): narrowed from the original
+  // broad /marketplace/(you|inbox)/ match, which fired the "neither heading nor dialog
+  // found" diagnostic on EVERY /you/ sub-page -- including "Selling", "Purchases", and
+  // "Saved", which were never going to have the shipping-orders heading and aren't a
+  // bug, just an irrelevant page. Facebook's real shipping-orders page is specifically
+  // /marketplace/you/shipping_orders (confirmed live 2026-08-06, see comment on
+  // findOrdersHeading below); inbox stays broadly matched since a tracking dialog could
+  // plausibly surface from any inbox thread per a notification-driven entry point
+  // (unverified, noted in file header) -- only the /you/ prefix gets narrowed here.
   function looksLikeOrderSurface() {
     const path = window.location.pathname || '';
-    return /\/marketplace\/(you|inbox)\//.test(path);
+    if (/\/marketplace\/inbox\//.test(path)) return true;
+    return /\/marketplace\/you\/shipping_orders\b/.test(path);
   }
 
   // ---- Step 2: on-page text gate (BEST GUESS, unverified -- see file header).
