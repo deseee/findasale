@@ -31,6 +31,7 @@ import { enrichItem, planEnrichmentApply } from '../services/productEnrichment';
 import { findCatalogMatches, buildCatalogMatchContext, isCatalogMatchEnabled } from '../services/imageMatchService';
 import { getEbayImageMatch, buildEbayMatchContext } from '../services/ebayImageSearchService';
 import { runGroundedIdentityAsync } from '../services/groundedIdentityService';
+import { classifyEbayShipping } from '../utils/ebayShippingClassifier';
 
 const OLLAMA_URL = process.env.OLLAMA_URL || 'http://host.docker.internal:11434';
 const OLLAMA_VISION_MODEL = process.env.OLLAMA_VISION_MODEL || 'qwen3-vl:4b';
@@ -524,6 +525,11 @@ export const batchAnalyzeImages = async (req: AuthRequest, res: Response): Promi
                 condition: summary.suggestedCondition,
                 price: summary.suggestedPrice ? summary.suggestedPrice * 100 : undefined,
                 tags: summary.suggestedTags,
+                // P0 fix: ebayShippingClassification was never written by any backend
+                // write path — classifyEbayShipping was only ever computed ephemeral for
+                // API display in ebayController.ts. 100% of items were stuck on the schema
+                // default 'UNKNOWN'. Keep it in sync with whatever category/tags land here.
+                ebayShippingClassification: classifyEbayShipping(summary.suggestedCategory ?? null, summary.suggestedTags ?? []),
                 aiConfidence: summary.aiConfidence,
                 ...(ebayCategoryId ? { ebayCategoryId, ebayCategoryName } : {}),
                 // Barcode enrichment: exact-product-match fields. Organizer values win.

@@ -18,6 +18,7 @@ import { pushEvent } from '../services/liveFeedService'; // Feature #70: Live Sa
 import { PUBLIC_ITEM_FILTER } from '../helpers/itemQueries'; // Phase 1B: Rapidfire Mode public item filtering
 import { computeHealthScore, HealthResult } from '../utils/listingHealthScore'; // Sprint 1: Listing Health Score
 import { invalidateCommandCenterCache } from '../services/commandCenterService'; // P2-3: Cache invalidation
+import { classifyEbayShipping } from '../utils/ebayShippingClassifier'; // P0 fix: ebayShippingClassification was never written anywhere
 import { checkSaleOverLimit, checkItemOverPhotoLimit } from '../lib/tierEnforcement'; // Feature #75: Tier lapse enforcement
 import { getClientIp } from '../utils/getClientIp'; // Platform Safety #94: Same-IP Bidder Detection
 import { createNotification } from '../services/notificationService'; // P0: Bid notifications
@@ -1207,6 +1208,10 @@ export const createItem = async (req: AuthRequest, res: Response) => {
         status: status || 'AVAILABLE',
         category: category || null,
         condition: condition || null,
+        // P0 fix: ebayShippingClassification was never written by any backend write path.
+        // tags is not set on manual create (organizer AI tagging happens via a separate
+        // endpoint), so classify against category + empty tags here.
+        ebayShippingClassification: classifyEbayShipping(category || null, []),
         rarity: assignedRarity,
         photoUrls,
         // W1: Shipping
@@ -1441,6 +1446,14 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     if (ebayCategoryName !== undefined) updateData.ebayCategoryName = ebayCategoryName || null;
     if (conditionGrade !== undefined) updateData.conditionGrade = conditionGrade || null; // #145: Persist condition grade
     if (tags !== undefined) updateData.tags = tags; // #145: Persist tags from review page
+    // P0 fix: keep ebayShippingClassification in sync whenever this endpoint changes
+    // category and/or tags (classifyEbayShipping was previously only ever computed
+    // ephemeral for API display in ebayController.ts — never persisted).
+    if (category !== undefined || tags !== undefined) {
+      const classificationCategory = category !== undefined ? (category || null) : item.category;
+      const classificationTags = tags !== undefined ? tags : item.tags;
+      updateData.ebayShippingClassification = classifyEbayShipping(classificationCategory, classificationTags);
+    }
     if (backgroundRemoved !== undefined) updateData.backgroundRemoved = backgroundRemoved === true || backgroundRemoved === 'true'; // #145: Persist background removal state
     if (shippingAvailable !== undefined) updateData.shippingAvailable = shippingAvailable === true || shippingAvailable === 'true';
     if (shippingPrice !== undefined) updateData.shippingPrice = shippingPrice ? parseFloat(shippingPrice) : null;
@@ -2915,6 +2928,8 @@ export const publishItem = async (req: AuthRequest, res: Response) => {
         saleId: true,
         draftStatus: true,
         optimisticLockVersion: true,
+        category: true,
+        tags: true,
         sale: {
           select: {
             organizer: {
@@ -2962,6 +2977,9 @@ export const publishItem = async (req: AuthRequest, res: Response) => {
     if (title !== undefined) { updateData.title = title; publishEditedFields.push('title'); }
     if (price !== undefined) { updateData.price = price !== null ? parseFloat(price) : null; publishEditedFields.push('price'); }
     if (category !== undefined) { updateData.category = category; publishEditedFields.push('category'); }
+    // P0 fix: keep ebayShippingClassification in sync when category changes at publish time
+    // (tags aren't part of this endpoint's body, so reuse the item's current tags).
+    if (category !== undefined) { updateData.ebayShippingClassification = classifyEbayShipping(category, item.tags); }
     if (condition !== undefined) { updateData.condition = condition; publishEditedFields.push('condition'); }
     if (publishEditedFields.length > 0) {
       // Fetch current userEditedFields to merge (item was re-fetched above as fullItem — but we need userEditedFields)
