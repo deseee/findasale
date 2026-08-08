@@ -1,6 +1,14 @@
 import { prisma } from '../lib/prisma';
 import { checkAndAward } from './achievementService';
-import { checkStreakMilestones } from './xpService'; // Phase 2a: XP streak milestones
+// 2026-08-08 fix (roadmap #281, gamedesign decision logged in
+// claude_docs/feature-notes/gamedesign-decisions-2026-08-08.md): checkStreakMilestones
+// import removed. It was wired to this file's consecutive-WEEKEND-visit streak counter
+// (a different feature: early-access-unlock, correctly weekly per the locked "weekly not
+// daily" streak principle), but checkStreakMilestones itself expects "distinct active days
+// THIS CALENDAR MONTH" (its monthly-reset idempotency window only makes sense for a
+// day-count) -- a wrong signal, not a naming mismatch. Disconnected pending a real
+// distinct-active-days tracker, which needs a schema addition -- flagged to
+// findasale-architect as a follow-up, not built here.
 
 /**
  * Get ISO week string: "2026-W12"
@@ -92,10 +100,12 @@ export const recordVisit = async (userId: string): Promise<void> => {
         console.warn('[streak] Failed to award visit achievement:', err)
       );
 
-      // Phase 2a: Check streak milestones (5, 10, 20 day bonuses) — fire-and-forget
-      checkStreakMilestones(userId, newStreak).catch((err) =>
-        console.warn('[xpService] Failed to check streak milestones:', err)
-      );
+      // 2026-08-08 fix (roadmap #281): checkStreakMilestones call REMOVED here -- see the
+      // import-site comment above for why. This weekend-visit streak counter (newStreak)
+      // is NOT the same thing checkStreakMilestones needs (distinct active days this
+      // month); calling it with this value was awarding/blocking STREAK_7DAY_BONUS off
+      // unrelated data. STREAK_7DAY_BONUS (xpService.ts) is now dormant/uncallable until a
+      // real day-tracker exists.
     }
     // If same week, no-op (already visited this week)
   } catch (error) {

@@ -3,7 +3,7 @@ import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { AuthRequest } from '../middleware/auth';
 import { searchNearbyPlaces, haversineDistance, completionBonus } from '../lib/placesService';
-import { spendXp, getSpendableXp } from '../services/xpService';
+import { spendXp, getSpendableXp, awardXp } from '../services/xpService';
 import { referralTrancheService } from '../services/referralTrancheService'; // Feature: Referral tranche system
 
 /**
@@ -342,20 +342,13 @@ export const checkInAtStop = async (req: AuthRequest, res: Response) => {
       },
     });
 
-    // Record XP transaction
-    await prisma.pointsTransaction.create({
-      data: {
-        userId,
-        type: 'TRAIL_STOP_CHECKIN',
-        points: stop.baseXp,
-        description: `Trail stop check-in`,
-      },
-    });
-
-    // Update user's guildXp
-    await prisma.user.update({
-      where: { id: userId },
-      data: { guildXp: { increment: stop.baseXp } },
+    // 2026-08-08 fix (roadmap #268): was raw prisma.pointsTransaction.create +
+    // prisma.user.update, bypassing the shared awardXp() helper -- meant this XP
+    // (real-value: redeemable for $1-off coupons via spendXp()) skipped the fraud-suspect
+    // gate every other XP path enforces, plus lifetimeXpEarned/xpExpiresAt refresh and
+    // rank-up sync. awardXp() now the sole write path for this award.
+    await awardXp(userId, 'TRAIL_STOP_CHECKIN', stop.baseXp, {
+      description: `Trail stop check-in`,
     });
 
     // Check if all stops now complete
@@ -417,36 +410,20 @@ export const checkInAtStop = async (req: AuthRequest, res: Response) => {
           // Never fail the trail completion due to tranche logic
         }
 
-        // Award completion bonus XP to shopper
-        await prisma.pointsTransaction.create({
-          data: {
-            userId,
-            type: 'TRAIL_COMPLETION',
-            points: completionBonusXp,
-            description: `Trail completion bonus (${allCheckIns.length} stops)`,
-          },
+        // Award completion bonus XP to shopper.
+        // 2026-08-08 fix (roadmap #268): same fraud-gate-bypass fix as the per-stop award
+        // above -- routed through the shared awardXp() helper.
+        await awardXp(userId, 'TRAIL_COMPLETION', completionBonusXp, {
+          description: `Trail completion bonus (${allCheckIns.length} stops)`,
         });
 
-        await prisma.user.update({
-          where: { id: userId },
-          data: { guildXp: { increment: completionBonusXp } },
-        });
-
-        // Award organizer 15 XP per unique completion
+        // Award organizer 15 XP per unique completion.
+        // 2026-08-08 fix (roadmap #268): same fraud-gate-bypass fix -- routed through the
+        // shared awardXp() helper.
         if (trail?.organizerId) {
           const organizerId = trail.organizerId;
-          await prisma.pointsTransaction.create({
-            data: {
-              userId: organizerId,
-              type: 'TRAIL_COMPLETION',
-              points: 15,
-              description: `Trail completion reward (shopper completed)`,
-            },
-          });
-
-          await prisma.user.update({
-            where: { id: organizerId },
-            data: { guildXp: { increment: 15 } },
+          await awardXp(organizerId, 'TRAIL_COMPLETION', 15, {
+            description: `Trail completion reward (shopper completed)`,
           });
         }
 

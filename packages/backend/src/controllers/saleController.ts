@@ -1066,8 +1066,17 @@ export const updateSaleStatus = async (req: AuthRequest, res: Response) => {
             console.error('[XP] Failed to check SALE_PUBLISHED XP eligibility:', err)
           );
 
-          // REFERRAL_ORG_FIRST_SALE: Award 50 XP to the shopper who referred this organizer
-          // Fires when the organizer publishes their first sale
+          // REFERRAL_ORG_FIRST_SALE: award the shopper who referred this organizer.
+          // Fires when the organizer publishes their first sale.
+          // 2026-08-08 fix (roadmap #315, CRITICAL double-award): this used to ALSO run an
+          // inline XP-award block here (duplicate of what awardOrgReferralFirstSale already
+          // does below) with a non-description-scoped idempotency check -- on a referrer's
+          // very first qualifying event neither check found a prior transaction, so BOTH
+          // fired: 100 XP instead of 50, plus an extra real 30-day fee-discount extension.
+          // awardOrgReferralFirstSale() (referralService.ts) is the correct, complete,
+          // per-referred-org-idempotent implementation (does the XP award AND the discount
+          // extension) -- it is now the sole path. The duplicate inline block was removed,
+          // not just gated, so there is only ever one code path that can award this XP.
           try {
             // Check if this is the organizer's first published sale
             prisma.sale.count({
@@ -1077,29 +1086,8 @@ export const updateSaleStatus = async (req: AuthRequest, res: Response) => {
               },
             }).then((publishedSaleCount) => {
               if (publishedSaleCount === 1) {
-                // This is their first published sale — find the shopper who referred this organizer
-                prisma.referralReward.findFirst({
-                  where: { referredUserId: org.userId },
-                }).then((referralReward) => {
-                  if (referralReward) {
-                    // Idempotency: only award once — check if referrer already got REFERRAL_ORG_FIRST_SALE
-                    prisma.pointsTransaction.findFirst({
-                      where: {
-                        userId: referralReward.referrerId,
-                        type: 'REFERRAL_ORG_FIRST_SALE',
-                      },
-                    }).then((alreadyAwarded) => {
-                      if (!alreadyAwarded) {
-                        awardXp(referralReward.referrerId, 'REFERRAL_ORG_FIRST_SALE', XP_AWARDS.REFERRAL_ORG_FIRST_SALE, {
-                          saleId: updated.id,
-                          description: `Referred organizer first sale: ${org.userId}`,
-                        }).catch(err => console.error('[XP] Failed to award REFERRAL_ORG_FIRST_SALE:', err));
-                      }
-                    }).catch(err => console.error('[XP] Failed to check REFERRAL_ORG_FIRST_SALE eligibility:', err));
-                  }
-                }).catch(err => console.error('[XP] Failed to find referral reward:', err));
-
-                // Feature #398: Org referral loop — award discount to the organizer who referred this organizer
+                // Feature #398: Org referral loop — award XP + discount to the organizer who
+                // referred this organizer. Sole path (see comment above).
                 awardOrgReferralFirstSale(org.userId).catch(err =>
                   console.error('[referral] org first sale reward error:', err)
                 );

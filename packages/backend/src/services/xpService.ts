@@ -769,6 +769,14 @@ export async function computeTreasureHuntScanXp(userId: string, rank: ExplorerRa
  * This function now awards STREAK_7DAY_BONUS when user hits 7 active days in a calendar month.
  * ANNIVERSARY_30DAY is wired separately in jobs/anniversaryXpJob.ts (daily cron,
  * checks User.createdAt tenure against 30-day multiples) — no longer deferred.
+ *
+ * DORMANT as of 2026-08-08 (roadmap #281 fix, gamedesign decision in
+ * claude_docs/feature-notes/gamedesign-decisions-2026-08-08.md): this function is correctly
+ * built for `activeMonthDays` = distinct active days this calendar month, but its only
+ * caller (streakService.ts's recordVisit) was passing an unrelated consecutive-weekend-visit
+ * counter instead -- that call was removed. Nothing calls this function right now. It stays
+ * dormant/uncallable until a real distinct-active-days-this-month tracker is built (a schema
+ * addition, flagged to findasale-architect) and wired in as the caller.
  */
 export async function checkStreakMilestones(
   userId: string,
