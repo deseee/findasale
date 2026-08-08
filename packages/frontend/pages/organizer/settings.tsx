@@ -56,6 +56,8 @@ const OrganizerSettingsPage = () => {
   const [venmoHandle, setVenmoHandle] = useState('');
   const [zelleHandle, setZelleHandle] = useState('');
   const [pickupWindows, setPickupWindows] = useState('');
+  // Fix (UX audit 2026-08-08): Website & Social disclosure defaults open only if organizer already has data saved there.
+  const [socialSectionOpen, setSocialSectionOpen] = useState(false);
 
   const [address, setAddress] = useState('');
   const [isSaving, setIsSaving] = useState(false);
@@ -389,6 +391,18 @@ const OrganizerSettingsPage = () => {
           setTiktokUrl(response.data.tiktokUrl || '');
           setYoutubeUrl(response.data.youtubeUrl || '');
           setPinterestUrl(response.data.pinterestUrl || '');
+          // Fix (UX audit 2026-08-08): default Website & Social disclosure open only when organizer already has data there.
+          setSocialSectionOpen([
+            response.data.website,
+            response.data.facebook,
+            response.data.instagram,
+            response.data.etsy,
+            response.data.ebayStoreUrl,
+            response.data.twitterUrl,
+            response.data.tiktokUrl,
+            response.data.youtubeUrl,
+            response.data.pinterestUrl,
+          ].some(Boolean));
           setVenmoHandle(response.data.venmoHandle || '');
           setZelleHandle(response.data.zelleHandle || '');
           setPickupWindows(response.data.pickupWindows || '');
@@ -627,7 +641,6 @@ const OrganizerSettingsPage = () => {
         pinterestUrl,
         venmoHandle,
         zelleHandle,
-        pickupWindows,
         timezone,
         byAppointment,
         organizerTypes,
@@ -651,7 +664,6 @@ const OrganizerSettingsPage = () => {
         setPinterestUrl(response.data.pinterestUrl || '');
         setVenmoHandle(response.data.venmoHandle || '');
         setZelleHandle(response.data.zelleHandle || '');
-        setPickupWindows(response.data.pickupWindows || '');
         setTimezone(response.data.timezone || '');
         setByAppointment(response.data.byAppointment || false);
         setOrganizerTypes(response.data.organizerTypes || []);
@@ -670,7 +682,7 @@ const OrganizerSettingsPage = () => {
     setIsSavingHours(true);
     try {
       const hoursToSave = byAppointment ? [] : hours;
-      const patchBody: Record<string, unknown> = { byAppointment };
+      const patchBody: Record<string, unknown> = { byAppointment, pickupWindows };
       if (timezone) patchBody.timezone = timezone;
       await Promise.all([
         api.put('/organizers/me/hours', hoursToSave),
@@ -1386,6 +1398,18 @@ const OrganizerSettingsPage = () => {
                     </div>
                   )}
 
+                  <div>
+                    <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-1">Additional notes (optional)</label>
+                    <p className="text-xs text-warm-500 dark:text-gray-400 mb-1">e.g. holiday hours, pickup instructions</p>
+                    <textarea
+                      value={pickupWindows}
+                      onChange={(e) => setPickupWindows(e.target.value)}
+                      className="w-full px-4 py-2 border border-warm-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-amber-500 bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100"
+                      placeholder="e.g., Closed on holidays. Curbside pickup available by request."
+                      rows={2}
+                    />
+                  </div>
+
                   <button
                     onClick={handleSaveHours}
                     disabled={isSavingHours}
@@ -1483,6 +1507,7 @@ const OrganizerSettingsPage = () => {
               <div className="card p-6">
                 <h2 className="text-xl font-semibold text-warm-900 dark:text-gray-100 mb-4">Business Profile</h2>
                 <div className="space-y-4">
+                <h3 className="text-sm font-semibold uppercase tracking-wide text-warm-500 dark:text-gray-400 mb-1">Business Info</h3>
                 <div>
                   <div className="flex items-center gap-2 mb-1">
                     <label className="block text-sm font-medium text-warm-700 dark:text-gray-300">Name or Business Name <span className="text-red-500">*</span></label>
@@ -1561,160 +1586,7 @@ const OrganizerSettingsPage = () => {
                   />
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-1">Website URL</label>
-                  <input
-                    type="url"
-                    value={website}
-                    onChange={(e) => setWebsite(e.target.value)}
-                    className="w-full px-4 py-2 border border-warm-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-amber-500 bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100"
-                    placeholder="https://example.com"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-1">Facebook Page URL</label>
-                  <input
-                    type="url"
-                    value={facebook}
-                    onChange={(e) => setFacebook(e.target.value)}
-                    className="w-full px-4 py-2 border border-warm-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-amber-500 bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100"
-                    placeholder="https://facebook.com/yourpage"
-                  />
-                </div>
-
-                {/* Facebook Commerce Manager catalog feed */}
-                <div className="border border-warm-200 dark:border-gray-700 rounded-lg p-4 bg-warm-50 dark:bg-gray-800/50">
-                  <p className="text-sm font-semibold text-warm-900 dark:text-warm-100 mb-1">Facebook Commerce Manager Feed</p>
-                  <p className="text-xs text-warm-600 dark:text-gray-400 mb-3">
-                    Paste this URL into Facebook Commerce Manager as a data feed source. Once Facebook
-                    confirms the feed, toggle this on so your listings appear active in your platform dashboard.
-                  </p>
-                  {fbCatalogOrganizerId ? (
-                    <div className="mb-3">
-                      <label className="block text-xs font-medium text-warm-600 dark:text-gray-400 mb-1">Your catalog feed URL</label>
-                      <div className="flex gap-2">
-                        <input
-                          type="text"
-                          readOnly
-                          value={`${typeof window !== 'undefined' ? window.location.origin : 'https://finda.sale'}/api/organizers/${fbCatalogOrganizerId}/export/commerce-feed`}
-                          className="flex-1 px-3 py-2 text-xs border border-warm-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-warm-900 dark:text-gray-100 font-mono"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => {
-                            navigator.clipboard.writeText(`https://finda.sale/api/organizers/${fbCatalogOrganizerId}/export/commerce-feed`);
-                            showToast('Feed URL copied!', 'success');
-                          }}
-                          className="px-3 py-2 text-xs bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-medium transition"
-                        >
-                          Copy
-                        </button>
-                      </div>
-                    </div>
-                  ) : null}
-                  <label className="flex items-center gap-3 cursor-pointer">
-                    <div
-                      onClick={async () => {
-                        const next = !fbCatalogEnabled;
-                        setFbCatalogSaving(true);
-                        try {
-                          await api.patch('/organizers/me', { fbCatalogEnabled: next });
-                          setFbCatalogEnabled(next);
-                          showToast(next ? 'Commerce Manager feed enabled' : 'Commerce Manager feed disabled', 'success');
-                        } catch {
-                          showToast('Failed to update setting', 'error');
-                        } finally {
-                          setFbCatalogSaving(false);
-                        }
-                      }}
-                      className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors cursor-pointer ${fbCatalogEnabled ? 'bg-amber-500' : 'bg-gray-300 dark:bg-gray-600'} ${fbCatalogSaving ? 'opacity-50 pointer-events-none' : ''}`}
-                    >
-                      <span className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${fbCatalogEnabled ? 'translate-x-5' : 'translate-x-1'}`} />
-                    </div>
-                    <span className="text-sm text-warm-700 dark:text-gray-300">
-                      {fbCatalogEnabled ? "I've registered this feed with Facebook" : "I haven't registered this feed yet"}
-                    </span>
-                  </label>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-1">Instagram Profile URL</label>
-                  <input
-                    type="url"
-                    value={instagram}
-                    onChange={(e) => setInstagram(e.target.value)}
-                    className="w-full px-4 py-2 border border-warm-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-amber-500 bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100"
-                    placeholder="https://instagram.com/yourprofile"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-1">Etsy Shop URL</label>
-                  <input
-                    type="url"
-                    value={etsy}
-                    onChange={(e) => setEtsy(e.target.value)}
-                    className="w-full px-4 py-2 border border-warm-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-amber-500 bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100"
-                    placeholder="https://etsy.com/shop/yourshop"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-1">eBay Store URL</label>
-                  <input
-                    type="url"
-                    value={ebayStoreUrl}
-                    onChange={(e) => setEbayStoreUrl(e.target.value)}
-                    className="w-full px-4 py-2 border border-warm-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-amber-500 bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100"
-                    placeholder="https://www.ebay.com/str/your-store-name"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-1">Twitter Profile URL</label>
-                  <input
-                    type="url"
-                    value={twitterUrl}
-                    onChange={(e) => setTwitterUrl(e.target.value)}
-                    className="w-full px-4 py-2 border border-warm-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-amber-500 bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100"
-                    placeholder="https://twitter.com/yourprofile"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-1">TikTok Profile URL</label>
-                  <input
-                    type="url"
-                    value={tiktokUrl}
-                    onChange={(e) => setTiktokUrl(e.target.value)}
-                    className="w-full px-4 py-2 border border-warm-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-amber-500 bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100"
-                    placeholder="https://tiktok.com/@yourprofile"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-1">YouTube Channel URL</label>
-                  <input
-                    type="url"
-                    value={youtubeUrl}
-                    onChange={(e) => setYoutubeUrl(e.target.value)}
-                    className="w-full px-4 py-2 border border-warm-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-amber-500 bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100"
-                    placeholder="https://youtube.com/@yourchannel"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-1">Pinterest Profile URL</label>
-                  <input
-                    type="url"
-                    value={pinterestUrl}
-                    onChange={(e) => setPinterestUrl(e.target.value)}
-                    className="w-full px-4 py-2 border border-warm-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-amber-500 bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100"
-                    placeholder="https://pinterest.com/yourprofile"
-                  />
-                </div>
-
+                <h3 className="text-sm font-semibold uppercase tracking-wide text-warm-500 dark:text-gray-400 mb-1 pt-2 border-t border-warm-200 dark:border-gray-700">How Buyers Pay You</h3>
                 <div>
                   <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-1">Venmo Handle</label>
                   <p className="text-xs text-warm-500 dark:text-gray-400 mb-1">Shown to buyers in the POS when you select Venmo as the payment method.</p>
@@ -1742,16 +1614,168 @@ const OrganizerSettingsPage = () => {
                   />
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-1">Shop Hours</label>
-                  <textarea
-                    value={pickupWindows}
-                    onChange={(e) => setPickupWindows(e.target.value)}
-                    className="w-full px-4 py-2 border border-warm-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-amber-500 bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100"
-                    placeholder="e.g., Mon-Fri: 10am-5pm&#10;Sat: 9am-3pm&#10;Sun: Closed"
-                    rows={3}
-                  />
-                </div>
+                <details
+                  className="pt-2 border-t border-warm-200 dark:border-gray-700"
+                  open={socialSectionOpen}
+                  onToggle={(e) => setSocialSectionOpen(e.currentTarget.open)}
+                >
+                  <summary className="text-sm font-semibold uppercase tracking-wide text-warm-500 dark:text-gray-400 mb-1 cursor-pointer select-none">Website &amp; Social</summary>
+                  <div className="space-y-4 mt-4">
+                  <div>
+                    <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-1">Website URL</label>
+                    <input
+                      type="url"
+                      value={website}
+                      onChange={(e) => setWebsite(e.target.value)}
+                      className="w-full px-4 py-2 border border-warm-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-amber-500 bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100"
+                      placeholder="https://example.com"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-1">Facebook Page URL</label>
+                    <input
+                      type="url"
+                      value={facebook}
+                      onChange={(e) => setFacebook(e.target.value)}
+                      className="w-full px-4 py-2 border border-warm-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-amber-500 bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100"
+                      placeholder="https://facebook.com/yourpage"
+                    />
+                  </div>
+
+                  {/* Facebook Commerce Manager catalog feed */}
+                  <div className="border border-warm-200 dark:border-gray-700 rounded-lg p-4 bg-warm-50 dark:bg-gray-800/50">
+                    <p className="text-sm font-semibold text-warm-900 dark:text-warm-100 mb-1">Facebook Commerce Manager Feed</p>
+                    <p className="text-xs text-warm-600 dark:text-gray-400 mb-3">
+                      Paste this URL into Facebook Commerce Manager as a data feed source. Once Facebook
+                      confirms the feed, toggle this on so your listings appear active in your platform dashboard.
+                    </p>
+                    {fbCatalogOrganizerId ? (
+                      <div className="mb-3">
+                        <label className="block text-xs font-medium text-warm-600 dark:text-gray-400 mb-1">Your catalog feed URL</label>
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            readOnly
+                            value={`${typeof window !== 'undefined' ? window.location.origin : 'https://finda.sale'}/api/organizers/${fbCatalogOrganizerId}/export/commerce-feed`}
+                            className="flex-1 px-3 py-2 text-xs border border-warm-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-warm-900 dark:text-gray-100 font-mono"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              navigator.clipboard.writeText(`https://finda.sale/api/organizers/${fbCatalogOrganizerId}/export/commerce-feed`);
+                              showToast('Feed URL copied!', 'success');
+                            }}
+                            className="px-3 py-2 text-xs bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-medium transition"
+                          >
+                            Copy
+                          </button>
+                        </div>
+                      </div>
+                    ) : null}
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <div
+                        onClick={async () => {
+                          const next = !fbCatalogEnabled;
+                          setFbCatalogSaving(true);
+                          try {
+                            await api.patch('/organizers/me', { fbCatalogEnabled: next });
+                            setFbCatalogEnabled(next);
+                            showToast(next ? 'Commerce Manager feed enabled' : 'Commerce Manager feed disabled', 'success');
+                          } catch {
+                            showToast('Failed to update setting', 'error');
+                          } finally {
+                            setFbCatalogSaving(false);
+                          }
+                        }}
+                        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors cursor-pointer ${fbCatalogEnabled ? 'bg-amber-500' : 'bg-gray-300 dark:bg-gray-600'} ${fbCatalogSaving ? 'opacity-50 pointer-events-none' : ''}`}
+                      >
+                        <span className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${fbCatalogEnabled ? 'translate-x-5' : 'translate-x-1'}`} />
+                      </div>
+                      <span className="text-sm text-warm-700 dark:text-gray-300">
+                        {fbCatalogEnabled ? "I've registered this feed with Facebook" : "I haven't registered this feed yet"}
+                      </span>
+                    </label>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-1">Instagram Profile URL</label>
+                    <input
+                      type="url"
+                      value={instagram}
+                      onChange={(e) => setInstagram(e.target.value)}
+                      className="w-full px-4 py-2 border border-warm-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-amber-500 bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100"
+                      placeholder="https://instagram.com/yourprofile"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-1">Etsy Shop URL</label>
+                    <input
+                      type="url"
+                      value={etsy}
+                      onChange={(e) => setEtsy(e.target.value)}
+                      className="w-full px-4 py-2 border border-warm-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-amber-500 bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100"
+                      placeholder="https://etsy.com/shop/yourshop"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-1">eBay Store URL</label>
+                    <input
+                      type="url"
+                      value={ebayStoreUrl}
+                      onChange={(e) => setEbayStoreUrl(e.target.value)}
+                      className="w-full px-4 py-2 border border-warm-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-amber-500 bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100"
+                      placeholder="https://www.ebay.com/str/your-store-name"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-1">Twitter Profile URL</label>
+                    <input
+                      type="url"
+                      value={twitterUrl}
+                      onChange={(e) => setTwitterUrl(e.target.value)}
+                      className="w-full px-4 py-2 border border-warm-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-amber-500 bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100"
+                      placeholder="https://twitter.com/yourprofile"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-1">TikTok Profile URL</label>
+                    <input
+                      type="url"
+                      value={tiktokUrl}
+                      onChange={(e) => setTiktokUrl(e.target.value)}
+                      className="w-full px-4 py-2 border border-warm-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-amber-500 bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100"
+                      placeholder="https://tiktok.com/@yourprofile"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-1">YouTube Channel URL</label>
+                    <input
+                      type="url"
+                      value={youtubeUrl}
+                      onChange={(e) => setYoutubeUrl(e.target.value)}
+                      className="w-full px-4 py-2 border border-warm-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-amber-500 bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100"
+                      placeholder="https://youtube.com/@yourchannel"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-1">Pinterest Profile URL</label>
+                    <input
+                      type="url"
+                      value={pinterestUrl}
+                      onChange={(e) => setPinterestUrl(e.target.value)}
+                      className="w-full px-4 py-2 border border-warm-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-amber-500 bg-white dark:bg-gray-800 text-warm-900 dark:text-gray-100"
+                      placeholder="https://pinterest.com/yourprofile"
+                    />
+                  </div>
+                  </div>
+                </details>
 
                 <div className="rounded-lg border border-warm-200 dark:border-gray-700 bg-amber-50 dark:bg-amber-900/10 px-4 py-3">
                   <p className="text-xs font-medium text-warm-700 dark:text-gray-300 mb-0.5">Return Window</p>
