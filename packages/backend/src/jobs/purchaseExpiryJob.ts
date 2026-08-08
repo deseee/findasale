@@ -149,6 +149,58 @@ export const reclaimStalePurchases = async (): Promise<void> => {
             const msg = `[purchaseExpiryJob] STRANDED-PAID-RECLAIMED pi=${piId} rows=${result.count} purchaseIds=${group.ids.join(',')} -- Stripe shows succeeded but still PENDING past ${PENDING_EXPIRY_HOURS}h (webhook missed). Flipped to PAID. NOTE: does not replay stock-decrement/eBay-sync side effects -- verify downstream state if this fires often.`;
             console.error(msg);
             try { Sentry.captureMessage(msg, 'error'); } catch { /* Sentry may not be initialized */ }
+
+            // Notification-gap fix (S1195 sweep continuation, 2026-08-08): this branch
+            // previously only Sentry-captured -- a real person paid successfully and
+            // nobody was told. Two audiences, two different reasons:
+            //  - Buyer: their payment DID succeed (this flip IS the proof) -- they need
+            //    to know it went through instead of wondering if they were charged.
+            //  - Organizer: this reclaim explicitly does NOT replay stock-decrement/
+            //    eBay-sync side effects (see msg above) -- their inventory may now be
+            //    silently wrong until they manually check, so they get a distinct,
+            //    more actionable message than the buyer.
+            const strandedItemIds = [...new Set(group.itemIds.filter((iid): iid is string => !!iid))];
+            const itemInfo = strandedItemIds.length > 0
+              ? await prisma.item.findMany({
+                  where: { id: { in: strandedItemIds } },
+                  select: { id: true, title: true, sale: { select: { organizer: { select: { userId: true } } } } },
+                })
+              : [];
+            const itemInfoById = new Map(itemInfo.map((i) => [i.id, i]));
+
+            const notifiedOrganizers = new Set<string>();
+            for (let i = 0; i < group.ids.length; i++) {
+              const userId = group.userIds[i];
+              const itemId = group.itemIds[i];
+              const info = itemId ? itemInfoById.get(itemId) : undefined;
+              const itemTitle = info?.title || 'your item';
+
+              if (userId) {
+                createNotification({
+                  userId,
+                  type: 'purchase_reclaimed_paid',
+                  title: 'Payment confirmed',
+                  body: `Good news -- your payment for "${itemTitle}" went through. There was a brief delay confirming it, but your purchase is now marked paid.`,
+                  link: itemId ? `/items/${itemId}` : undefined,
+                  channel: 'OPERATIONAL',
+                  sendEmail: true,
+                }).catch((err: unknown) => console.error(`[purchaseExpiryJob] Failed to notify buyer ${userId} for pi=${piId}:`, err));
+              }
+
+              const organizerUserId = info?.sale?.organizer?.userId;
+              if (organizerUserId && !notifiedOrganizers.has(organizerUserId)) {
+                notifiedOrganizers.add(organizerUserId);
+                createNotification({
+                  userId: organizerUserId,
+                  type: 'purchase_reclaimed_paid_organizer',
+                  title: 'A delayed payment was just confirmed — please verify your listing',
+                  body: `A payment for "${itemTitle}" was confirmed after a delay in our system. Please double-check this item's stock and any connected marketplace listings (eBay, Facebook, etc.) to make sure they reflect the sale correctly.`,
+                  link: itemId ? `/items/${itemId}` : undefined,
+                  channel: 'OPERATIONAL',
+                  sendEmail: true,
+                }).catch((err: unknown) => console.error(`[purchaseExpiryJob] Failed to notify organizer ${organizerUserId} for pi=${piId}:`, err));
+              }
+            }
           }
         } else if (ABANDONED_STATUSES.has(paymentIntent.status)) {
           const result = await prisma.purchase.updateMany({

@@ -53,6 +53,50 @@ const sendTierLapseWarningEmail = async (
 };
 
 /**
+ * Send "your subscription has lapsed" email — the actual-lapse counterpart to
+ * sendTierLapseWarningEmail below. Notification-gap fix (S1195 sweep continuation,
+ * 2026-08-08): processBatchTierLapsesJob previously only console.log'd a successful
+ * downgrade -- the organizer who had already received the "expires in N days" warning
+ * a week (GRACE_DAYS) earlier was never told the downgrade actually happened. Mirrors
+ * sendTierLapseWarningEmail's template shape so the two emails read as one continuous
+ * story rather than two unrelated system messages.
+ */
+const sendTierLapsedEmail = async (
+  email: string,
+  name: string,
+  previousTier: string
+): Promise<void> => {
+  const billingUrl = `${FRONTEND_URL}/organizer/billing`;
+
+  const html = buildEmail({
+    preheader: `Your ${previousTier} subscription has ended`,
+    headline: 'Your subscription has lapsed',
+    body: `<p>Hi ${name},</p><p>Your FindA.Sale <strong>${previousTier}</strong> subscription has ended, and your account has been downgraded to <strong>SIMPLE</strong> tier.</p><p>You've lost access to ${previousTier}-only features (lower platform fees, higher item limits, and team member seats). Your existing sales and items are unaffected.</p><p>You can reactivate ${previousTier} at any time to restore full access.</p>`,
+    ctaText: 'Reactivate Subscription',
+    ctaUrl: billingUrl,
+    footerNote: `Or visit: ${billingUrl}`,
+  });
+
+  try {
+    if (await suppressionService.isHardSuppressed(email)) {
+      console.log(`[TierLapse] Skipping suppressed address for lapse email: ${email}`);
+      return;
+    }
+    await transactionalEmailService.emails.send({
+      from: FROM_EMAIL,
+      to: email,
+      subject: 'Your FindA.Sale subscription has lapsed',
+      html,
+    });
+    console.log(`✓ Tier-lapsed email sent to ${email}`);
+  } catch (err) {
+    console.error(`✗ Failed to send tier-lapsed email to ${email}:`, err);
+    // Fail open: a failed notification email must not fail the downgrade itself,
+    // which has already been committed to the DB by processTierLapse() at this point.
+  }
+};
+
+/**
  * Daily task 1: Process batch tier lapses (11 PM UTC / 3 PM EST)
  * Catches any subscriptions that expired without firing a webhook
  */
@@ -66,12 +110,24 @@ export const processBatchTierLapsesJob = async (): Promise<void> => {
       `[TierLapse] Batch job complete. Processed: ${results.length}, Success: ${results.filter(r => r.status === 'success').length}, Errors: ${results.filter(r => r.status === 'error').length}`
     );
 
-    // Log detailed results
+    // Log detailed results + notify organizers whose tier just actually lapsed
     for (const result of results) {
       if (result.status === 'success') {
         console.log(
           `[TierLapse] ✓ Tier lapsed for ${result.email}: tier now ${result.tier}`
         );
+        // Only notify when this was an actual downgrade FROM a paid tier -- a
+        // SIMPLE-tier subscription "lapsing" (e.g. a trial of a free tier expiring,
+        // or a re-run finding nothing to change) has no PRO/TEAMS features to lose
+        // and would produce a nonsensical "your SIMPLE subscription has ended,
+        // downgraded to SIMPLE" email.
+        if (result.previousTier && result.previousTier !== 'SIMPLE') {
+          await sendTierLapsedEmail(
+            result.email,
+            result.organizerName || 'Organizer',
+            result.previousTier
+          );
+        }
       } else {
         console.error(
           `[TierLapse] ✗ Failed to lapse ${result.email}: ${result.error}`

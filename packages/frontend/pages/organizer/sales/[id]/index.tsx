@@ -13,7 +13,7 @@ import { useAuth } from '../../../../components/AuthContext';
 import { useToast } from '../../../../components/ToastContext';
 import { useEbayConnection } from '../../../../lib/useEbayConnection';
 import { useOrganizerTier } from '../../../../hooks/useOrganizerTier';
-import { PostSaleEbayPanel } from '../../../../components/PostSaleEbayPanel';
+import { PostSaleEbayPanel, EbayWeightReviewQueue } from '../../../../components/PostSaleEbayPanel';
 import Head from 'next/head';
 import Link from 'next/link';
 import Skeleton from '../../../../components/Skeleton';
@@ -423,7 +423,18 @@ const SaleDetailPage = () => {
             </div>
           )}
 
-          {/* Post-Sale eBay Push Panel */}
+          {/* Weight-confirmation review queue (2026-08-08 fix) — organizer-wide data
+              (any live eBay listing missing a confirmed weight, regardless of which
+              sale it belongs to), so it must NOT be gated behind this one sale's
+              ENDED status the way the post-sale unsold-items panel below correctly
+              is. Previously bundled inside the ENDED-only block, which meant an
+              organizer with zero ended sales had no reachable page to confirm
+              outstanding weights at all. Gated on ebayConnected only (mirrors the
+              other eBay-only UI on this page) -- renders its own graceful
+              loading/error/"nothing to review" states, safe to show on any sale. */}
+          {sale && ebayConnected && <EbayWeightReviewQueue saleId={id as string} />}
+
+          {/* Post-Sale eBay Push Panel (unsold-items handling — genuinely post-sale) */}
           {sale && sale.status === 'ENDED' && (
             <div id="post-sale-panel">
               <PostSaleEbayPanel saleId={id as string} />

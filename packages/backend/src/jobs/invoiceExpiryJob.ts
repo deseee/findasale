@@ -4,6 +4,7 @@ import { prisma } from '../lib/prisma';
 import { cronGuard } from '../utils/cronGuard';
 import { getStripe } from '../utils/stripe';
 import { markHoldInvoicePaid } from '../services/holdInvoicePaymentRecorder'; // payments fix (2026-08-03): STRANDED-PAID reconcile backstop
+import { createNotification } from '../lib/notificationService'; // S1195 sweep continuation (2026-08-08): invoice_expired notification-gap fix
 
 /**
  * invoiceExpiryJob.ts
@@ -222,26 +223,33 @@ export const reclaimExpiredInvoices = async (): Promise<void> => {
             data: { status: 'CONFIRMED', invoiceId: null },
           });
 
-          await tx.notification.create({
-            data: {
-              userId: invoice.shopperUserId,
-              type: 'invoice_expired',
-              title: 'Invoice expired',
-              body:
-                invoice.itemIds.length > 1
-                  ? `Your invoice for ${invoice.itemIds.length} items expired before payment was completed. Your hold remains active.`
-                  : 'Your invoice expired before payment was completed. Your hold remains active.',
-              link: invoice.itemIds[0] ? `/items/${invoice.itemIds[0]}` : null,
-              channel: 'OPERATIONAL',
-            },
-          });
-
           return { reverted: true };
         });
 
         if (!result.reverted) {
           continue;
         }
+
+        // Notification-gap fix (S1195 sweep continuation, 2026-08-08): this previously
+        // wrote a raw tx.notification.create() inside the transaction above, which made
+        // email structurally impossible (the shared createNotification() helper writes
+        // through the global `prisma` client, not a $transaction's `tx`). The shopper's
+        // hold is still active after this revert, but their payment window just closed --
+        // they need to know promptly enough to decide whether to retry, not just whenever
+        // they next happen to open the app. Moved outside the transaction (fire-and-forget,
+        // matching every other post-commit notification in this job's sibling crons).
+        createNotification({
+          userId: invoice.shopperUserId,
+          type: 'invoice_expired',
+          title: 'Invoice expired',
+          body:
+            invoice.itemIds.length > 1
+              ? `Your invoice for ${invoice.itemIds.length} items expired before payment was completed. Your hold remains active.`
+              : 'Your invoice expired before payment was completed. Your hold remains active.',
+          link: invoice.itemIds[0] ? `/items/${invoice.itemIds[0]}` : undefined,
+          channel: 'OPERATIONAL',
+          sendEmail: true,
+        }).catch((err: unknown) => console.error(`[invoiceExpiryJob] Failed to create invoice_expired notification for invoice ${invoice.id}:`, err));
 
         // Best-effort Stripe-side cancellation -- non-fatal, mirrors
         // reservationController.ts's releaseInvoice exactly (Stripe likely

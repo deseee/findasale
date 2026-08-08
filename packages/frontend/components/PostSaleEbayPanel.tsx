@@ -1161,9 +1161,12 @@ function describeEstimateSource(source: string): string {
   }
 }
 
+// 2026-08-08 fix: EbayWeightReviewQueue moved OUT of this composition and is now
+// rendered directly (and unconditionally, not gated on sale.status === 'ENDED') by
+// the sale detail page -- see comment at its call site in
+// pages/organizer/sales/[id]/index.tsx for why. It stays exported above as its own
+// component so that page can import it directly. PostSaleEbayPanel itself is now a
+// thin wrapper around the genuinely-post-sale unsold-items section only.
 export const PostSaleEbayPanel: React.FC<PostSaleEbayPanelProps> = ({ saleId }) => (
-  <>
-    <EbayWeightReviewQueue saleId={saleId} />
-    <PostSaleEbayUnsoldSection saleId={saleId} />
-  </>
+  <PostSaleEbayUnsoldSection saleId={saleId} />
 );

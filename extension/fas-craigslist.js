@@ -31,6 +31,42 @@
     return e;
   }
 
+  // ---- Craigslist login-state detection (2026-08-08, best-effort, DOM-based; informational
+  // only, NEVER a hard gate -- Craigslist fully supports guest posting via email verification,
+  // see the FromEMail field comment in doEditStep below, so "not logged in" must never block
+  // posting). Content scripts cannot read Craigslist's own httpOnly session cookie via
+  // document.cookie, so this reads the page's own account-status chrome instead. Returns
+  // true/false when a clear signal is found on THIS step, or null when this particular step
+  // shows no account chrome at all (many post-flow screens don't) -- null means "genuinely
+  // unknown on this step", never treated as "logged out".
+  function isLoggedIntoCraigslist() {
+    const lower = bodyText().toLowerCase();
+    if (/logged in as/.test(lower)) return true;
+    const clickable = Array.from(document.querySelectorAll('a, button'));
+    const hasLogout = clickable.some((el) => {
+      const t = norm(el.textContent);
+      return t === 'log out' || t === 'logout' || t.indexOf('log out') !== -1;
+    });
+    if (hasLogout) return true;
+    const hasLogin = clickable.some((el) => {
+      const t = norm(el.textContent);
+      return t === 'log in' || t === 'login' || t === 'sign in';
+    });
+    if (hasLogin) return false;
+    return null;
+  }
+
+  // Reports an observed state to the worker (fire-and-forget, best-effort). Only reports a
+  // definite true/false -- a null (unknown-on-this-step) reading is deliberately NOT sent, so it
+  // can never overwrite a real prior reading in chrome.storage.local with "unknown". Used by
+  // background.js's checkRenewals to avoid starting an unattended Craigslist auto-renew run
+  // against a wall it can't get through, and surfaced informationally in the popup.
+  async function reportLoginState() {
+    const state = isLoggedIntoCraigslist();
+    if (state === null) return;
+    try { await chrome.runtime.sendMessage({ type: 'craigslistLoginStateObserved', loggedIn: state }); } catch (e) {}
+  }
+
   // ---- overlay UI (mirrors fas-remove.js's bottom-right bar) ----
   let bar;
   function ensureBar() {
@@ -284,18 +320,33 @@
     overlay('<b>FindA.Sale</b><div style="margin-top:6px">Filled <b>' + escapeHtml(item.title) + '</b> and added its photos.</div>' +
       '<div style="margin-top:4px;font-size:12px;color:#cfe3d6">Review the posting, complete any phone/email verification, then click Craigslist\'s <b>publish</b> yourself.</div>' +
       (!photosOk ? '<div style="color:#ffcf7a;margin-top:6px;font-size:12px">Photos may not have attached -- add them on this screen.</div>' : '') +
-      (more ? button('fas-cl-next', 'I posted - next item &#9654;', true) : '') +
+      // (2026-08-08 fix) Always render the "I posted" confirm button, not just when more items
+      // remain in the queue -- previously the LAST item in a queue had no confirm button at all
+      // (only "Close"), so a manually-published final item was never recorded as listed either.
+      button('fas-cl-next', more ? 'I posted - next item &#9654;' : 'I posted - done', true) +
       button('fas-cl-close', 'Close', false) +
       '<div style="margin-top:8px;font-size:11px;color:#9fb6a8">Item ' + (index + 1) + ' of ' + total + '</div>');
     const next = document.getElementById('fas-cl-next');
     if (next) next.onclick = async () => {
+      // (2026-08-08 fix) This overlay is shown whenever the automated flow hands off to the
+      // human -- "Publish automatically" unchecked, no publish button found (most likely a
+      // phone/email/CAPTCHA verification step), or the images-step advance button was missing.
+      // The "I posted" label IS the organizer's own confirmation that they completed the
+      // posting -- previously this button only advanced the local queue and never told the
+      // backend, so the item had NO server-side listed record and kept showing as postable
+      // (unfiltered by "Hide items already listed") forever. Same markListed call
+      // doPreviewStep's automated-success path already makes; remoteListingId stays null here
+      // too (Craigslist's posting flow never exposes a listing id/url to read back, same as the
+      // automated path).
+      try { await chrome.runtime.sendMessage({ type: 'markListed', itemId: item.id, remoteListingId: null, platform: 'CRAIGSLIST' }); } catch (e) {}
       clearAttempts();
       try { await chrome.runtime.sendMessage({ type: 'advanceCraigslistQueue' }); } catch (e) {}
-      location.href = POST_URL;
+      if (more) { location.href = POST_URL; } else { bar && bar.remove(); }
     };
     const close = document.getElementById('fas-cl-close');
     if (close) close.onclick = () => bar && bar.remove();
   }
+
 
   async function doImagesStep(item, index, total) {
     clearAttempts(); // reached the end of the automatable flow -- reset guards for the next item
@@ -374,10 +425,13 @@
   }
 
   async function start() {
+    await sleep(500); // let the page settle before reading the DOM
+    // (2026-08-08) Independent of whatever's queued -- runs on every post.craigslist.org load,
+    // same "always run" pattern as fas-remove.js's sold-detection scan.
+    reportLoginState();
     let queued;
     try { queued = await chrome.runtime.sendMessage({ type: 'getCraigslistQueueItem' }); } catch (e) { return; }
     if (!queued || !queued.ok || !queued.item) return; // nothing queued -- stay silent (page also loads for normal use)
-    await sleep(500); // let the page settle before reading the DOM
     try {
       await run(queued.item, queued.index, queued.total, queued.autoPublish !== false);
     } catch (e) {

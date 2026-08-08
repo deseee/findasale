@@ -6,6 +6,7 @@
 
 import { TIER_LIMITS } from '../constants/tierLimits';
 import { prisma } from '../lib/prisma';
+import { createNotification } from '../lib/notificationService'; // S1195 sweep continuation (2026-08-08): finalizeGracePeriod notification-gap fix
 
 // Uses shared Prisma singleton (avoids a second connection pool — S1013 perf fix)
 
@@ -118,6 +119,39 @@ export async function finalizeGracePeriod(organizerId: string) {
       graceTierBefore: null
     }
   });
+
+  // Notification-gap fix (S1195 sweep continuation, 2026-08-08): this function is the
+  // "real-event execution" counterpart to the grace period's initial trigger --
+  // triggerGracePeriod() above fires from confirmDowngrade() (billingController.ts),
+  // a direct user action that already gets an immediate API response telling the
+  // organizer their 7-day grace period started. finalizeGracePeriod() runs a week
+  // later from tierGraceCronJob.ts with NO user interaction at all -- until this fix,
+  // an organizer who forgot about (or ignored) their downgrade would come back to
+  // items silently vanished from their dashboard (status: GRACE_LOCKED) and team
+  // members silently locked out, with no record of why. sendEmail: true because this
+  // is a real, immediate loss of access to live inventory -- not something to
+  // discover only by happening to open the app.
+  if (itemsToLock.length > 0 || (organizer.workspace?.members?.length ?? 0) > 0) {
+    const memberCount = organizer.workspace?.members?.length ?? 0;
+    const parts: string[] = [];
+    if (itemsToLock.length > 0) {
+      parts.push(`${itemsToLock.length} item${itemsToLock.length === 1 ? '' : 's'} over your SIMPLE tier limit ${itemsToLock.length === 1 ? 'has' : 'have'} been hidden from your storefront`);
+    }
+    if (memberCount > 0) {
+      parts.push(`${memberCount} team member${memberCount === 1 ? '' : 's'} lost access`);
+    }
+    createNotification({
+      userId: organizer.userId,
+      type: 'grace_period_finalized',
+      title: 'Your grace period ended — some items and access were locked',
+      body: `Your 7-day grace period after downgrading to SIMPLE has ended. ${parts.join(' and ')}. Re-upgrade at any time within 30 days to restore everything automatically.`,
+      link: '/organizer/billing',
+      channel: 'OPERATIONAL',
+      sendEmail: true,
+    }).catch((err: unknown) => {
+      console.error(`[tierGraceService] Failed to send grace_period_finalized notification for organizer ${organizerId}:`, err);
+    });
+  }
 }
 
 /**

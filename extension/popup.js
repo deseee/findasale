@@ -113,6 +113,15 @@ async function loadAutoRenewSetting() {
 
 function currentChannel() { const el = $('channel'); return el ? el.value : 'facebook'; }
 
+// (2026-08-08 fix) marketplaceListed on each item used to be a single any-platform flag --
+// posting to Facebook made an item show LISTED (and get hidden by "Hide items already listed")
+// even on the Craigslist channel, and vice versa. The backend now returns
+// marketplaceListedFacebook / marketplaceListedCraigslist separately (extensionController.ts);
+// this reads whichever one matches the currently-selected channel.
+function currentListedFlag(it) {
+  return currentChannel() === 'craigslist' ? it.marketplaceListedCraigslist === true : it.marketplaceListedFacebook === true;
+}
+
 // Facebook publishes automatically and manages sold-elsewhere removal; Craigslist does neither
 // (the human owns the final publish + all verification), so hide the FB-only controls and show
 // the Craigslist explainer when Craigslist is the selected channel.
@@ -125,7 +134,29 @@ function onChannelChange() {
   const fbNote = $('fbPublishNote'); if (fbNote) fbNote.hidden = !fb;
   const clNote = $('clPostNote'); if (clNote) clNote.hidden = fb;
   const removeSetting = document.querySelector('.removeSetting'); if (removeSetting) removeSetting.hidden = !fb;
+  // (2026-08-08 fix) The item list's LISTED badges/hide-filter are channel-specific (see
+  // currentListedFlag above) but this handler never used to re-render on channel switch, so
+  // switching "Post to" showed stale badges from whichever channel was selected on load.
+  if (!fb) renderCraigslistLoginNote(); else { const n = $('clLoginNote'); if (n) n.hidden = true; }
+  if (ITEMS.length) render();
   updateCount();
+}
+
+// (2026-08-08) Best-effort informational note -- last DOM-observed Craigslist login state from
+// fas-craigslist.js's isLoggedIntoCraigslist (reported via background.js's
+// craigslistLoginStateObserved handler). Never a hard gate, purely context: explains why a
+// guest-posted listing needs the "I posted" confirm click, and why unattended auto-renew will
+// notify instead of posting when the last known state is logged-out. May be stale or
+// never-observed (loggedIn null) -- the note stays hidden in that case rather than guessing.
+async function renderCraigslistLoginNote() {
+  const n = $('clLoginNote');
+  if (!n) return;
+  const r = await send({ type: 'getCraigslistLoginState' });
+  if (!r || !r.ok || r.loggedIn == null) { n.hidden = true; return; }
+  n.hidden = false;
+  n.textContent = r.loggedIn
+    ? 'Craigslist: logged in as of the last check.'
+    : 'Craigslist: not logged in as of the last check \u2014 guest posts need email verification, and unattended auto-renew will notify you instead of posting until you\'re logged in.';
 }
 
 function render() {
@@ -133,7 +164,7 @@ function render() {
   const list = $('list'); list.innerHTML = '';
   const groups = {};
   ITEMS.forEach((it) => {
-    if (hideListed && it.marketplaceListed) return;
+    if (hideListed && currentListedFlag(it)) return;
     (groups[it.saleTitle] = groups[it.saleTitle] || []).push(it);
   });
   const keys = Object.keys(groups);
@@ -151,7 +182,7 @@ function row(it) {
   d.innerHTML = img +
     '<div class="meta"><div class="t">' + esc(it.title) + '</div><div class="p">$' + (it.price != null ? Number(it.price).toFixed(2) : '—') +
     ' · ' + esc(it.condition || '') + '</div></div>' +
-    (it.marketplaceListed ? '<span class="badge">LISTED</span>' : '') +
+    (currentListedFlag(it) ? '<span class="badge">LISTED</span>' : '') +
     '<input type="checkbox" class="cb">';
   const cb = d.querySelector('.cb');
   if (cb) {

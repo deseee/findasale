@@ -190,8 +190,10 @@ export async function processBatchTierLapses() {
     subscriptionId: string;
     userId: string;
     email: string;
+    organizerName?: string | null;
     daysRemaining?: number;
     tier?: string;
+    previousTier?: string;
     error?: string;
   }> = [];
   for (const sub of lapsed) {
@@ -211,18 +213,32 @@ export async function processBatchTierLapses() {
           subscriptionId: sub.id,
           userId: sub.userId,
           email: sub.user.email,
+          organizerName: sub.user.name,
           daysRemaining: Math.ceil((gracePeriodMs - timeSinceLapse) / (24 * 60 * 60 * 1000)),
         });
         continue;
       }
 
-      // Grace period expired — proceed with downgrade
+      // Grace period expired — proceed with downgrade. Capture the PRE-lapse tier
+      // before calling processTierLapse(), which immediately overwrites
+      // subscriptionTier to 'SIMPLE' -- the caller needs to tell the organizer what
+      // they're losing, not just what they're on now.
+      const previousTier = sub.subscriptionTier;
       const updated = await processTierLapse(sub.id);
       results.push({
         status: 'success',
         subscriptionId: sub.id,
         userId: sub.userId,
         email: sub.user.email,
+        // Notification-gap fix (S1195 sweep continuation, 2026-08-08): the caller
+        // (jobs/tierLapseJob.ts processBatchTierLapsesJob) previously only console.log'd
+        // this success result -- the organizer whose tier just actually lapsed (as opposed
+        // to the "expires in N days" pre-warning already sent by queueTierLapseWarningsJob)
+        // was never told. organizerName is threaded through here so that job can send a
+        // "your subscription has lapsed" email in the same rich-template style as
+        // sendTierLapseWarningEmail, instead of a generic "Hi there".
+        organizerName: sub.user.name,
+        previousTier,
         tier: updated.subscriptionTier,
       });
     } catch (error) {
@@ -231,6 +247,7 @@ export async function processBatchTierLapses() {
         subscriptionId: sub.id,
         userId: sub.userId,
         email: sub.user.email,
+        organizerName: sub.user.name,
         error: error instanceof Error ? error.message : 'Unknown error',
       });
     }

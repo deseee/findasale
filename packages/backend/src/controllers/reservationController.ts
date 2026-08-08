@@ -2,6 +2,7 @@ import { Response, Request } from 'express';
 import * as Sentry from '@sentry/node';
 import { prisma } from '../lib/prisma';
 import { AuthRequest } from '../middleware/auth';
+import { createNotification } from '../lib/notificationService'; // S1195 sweep continuation (2026-08-08): payment-deadline notification-gap fixes
 import { getIO } from '../lib/socket';
 import { pushEvent } from '../services/liveFeedService';
 import { pushSaleStatus } from '../services/saleStatusService';
@@ -747,17 +748,21 @@ export const batchUpdateHolds = async (req: AuthRequest, res: Response) => {
         });
 
         // Notify the shopper an invoice/checkout link is ready.
+        // Notification-gap fix (S1195 sweep continuation, 2026-08-08): "payment
+        // requested" is a real deadline -- the checkout link expires at linkExpiresAt
+        // (derived from the hold's own timer above) -- so the shopper needs this
+        // promptly, not just whenever they next happen to open the app. Previously
+        // in-app-only via a raw prisma.notification.create with no email path
+        // available.
         try {
-          await prisma.notification.create({
-            data: {
-              userId: validRouted[0].userId,
-              type: 'invoice_sent',
-              title: 'Payment requested',
-              body: `Payment requested for ${itemIds.length > 1 ? `${itemIds.length} items` : `"${validRouted[0].item.title}"`}. Tap to pay securely.`,
-              link: `/items/${itemIds[0]}`,
-              notificationChannel: 'IN_APP',
-              channel: 'OPERATIONAL',
-            },
+          await createNotification({
+            userId: validRouted[0].userId,
+            type: 'invoice_sent',
+            title: 'Payment requested',
+            body: `Payment requested for ${itemIds.length > 1 ? `${itemIds.length} items` : `"${validRouted[0].item.title}"`}. Tap to pay securely.`,
+            link: `/items/${itemIds[0]}`,
+            channel: 'OPERATIONAL',
+            sendEmail: true,
           });
         } catch (notifErr) {
           console.warn('[settlement] Failed to create checkout notification:', notifErr);
@@ -1417,24 +1422,29 @@ export const markSoldAndCreateInvoice = async (req: AuthRequest, res: Response) 
         data: { status: 'INVOICE_ISSUED' },
       });
 
-      // Create in-app notification for shopper (LOCKED DECISION #5) — mention all items
-      const itemList = bundledItemIds.length > 1
-        ? `${bundledItemIds.length} items`
-        : `"${allShopperHolds[0]?.item.title}"`;
-
-      await tx.notification.create({
-        data: {
-          userId: reservation.user.id,
-          type: 'invoice_sent',
-          title: 'Payment requested',
-          body: `Payment requested for ${itemList}. Complete payment before your hold expires.`,
-          link: `/items/${bundledItemIds[0]}`,
-          channel: 'OPERATIONAL',
-        },
-      });
-
       return holdInvoice;
     });
+
+    // Create notification for shopper (LOCKED DECISION #5) — mention all items.
+    // Notification-gap fix (S1195 sweep continuation, 2026-08-08): moved outside the
+    // transaction above (was a raw tx.notification.create, which made email
+    // structurally impossible -- the shared createNotification() helper writes through
+    // the global `prisma` client, not a $transaction's `tx`) and given sendEmail: true.
+    // "Complete payment before your hold expires" is a real deadline -- exactly the
+    // class of event this sweep is closing the email gap for.
+    const itemList = bundledItemIds.length > 1
+      ? `${bundledItemIds.length} items`
+      : `"${allShopperHolds[0]?.item.title}"`;
+
+    createNotification({
+      userId: reservation.user.id,
+      type: 'invoice_sent',
+      title: 'Payment requested',
+      body: `Payment requested for ${itemList}. Complete payment before your hold expires.`,
+      link: `/items/${bundledItemIds[0]}`,
+      channel: 'OPERATIONAL',
+      sendEmail: true,
+    }).catch((err: unknown) => console.error(`[hold-invoice] Failed to create invoice_sent notification for user ${reservation.user.id}:`, err));
 
     // Payments fix (2026-08-03): backfill invoiceId onto the PaymentIntent's metadata
     // now that the HoldInvoice row (and its ID) exists -- it didn't exist yet when the

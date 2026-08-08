@@ -67,10 +67,47 @@ interface StuckItem {
   draftStatus: string | null;
   ebayListedAt: Date | null;
   sale: { organizerId: string } | null;
+  // Weight/dims guard inputs (S1215-class gap closed 2026-08-08) — see the
+  // check in retryStuckOffer() below for why this cron needs these too.
+  packageWeightOz: number | null;
+  packageLengthIn: number | null;
+  packageWidthIn: number | null;
+  packageHeightIn: number | null;
+  packageConfirmedByOrganizer: boolean | null;
+  ebayShippingOverride: string | null;
 }
 
 async function retryStuckOffer(item: StuckItem, accessToken: string): Promise<boolean> {
   try {
+    // Weight/dims guard (2026-08-08) — mirrors validateItemForEbayPublish Guards 2/2b
+    // in ebayController.ts and the identical check ebayListingQueueCron.ts already has.
+    // This cron is a FOURTH eBay publish entry point (pushSaleToEbay, publishItemOffer,
+    // ebayListingQueueCron, and this one): it calls ebayPublishWithSelfHeal directly on
+    // an existing offer, which — same as Queue Mode — never routes back through
+    // validateItemForEbayPublish. An item only reaches "ebayOfferId set, ebayListingId
+    // null" via a prior call to pushSaleToEbay/publishItemOffer, both of which already
+    // ran the weight guard before creating that offer — but this cron can fire much
+    // later (MIN_STALE_MINUTES=30, cron runs every 2h, and a permanently-stuck item can
+    // sit flagged across many runs), long enough for an organizer to edit the item and
+    // clear packageConfirmedByOrganizer or the weight in between. Without re-checking
+    // here, a later retry could complete a live eBay publish on a since-invalidated
+    // weight. Held items stay in the stuck-offer state (ebayNeedsReview=true) rather
+    // than silently going live — same "leave it queued, don't drop it" behavior Queue
+    // Mode uses. Local-pickup items are exempt, same as everywhere else.
+    if (item.ebayShippingOverride !== 'LOCAL_PICKUP_ONLY') {
+      const hasWeight = item.packageWeightOz != null && Number(item.packageWeightOz) > 0;
+      const hasDims =
+        item.packageLengthIn != null && item.packageWidthIn != null && item.packageHeightIn != null;
+      if (!hasWeight || item.packageConfirmedByOrganizer !== true || !hasDims) {
+        console.warn(
+          `[eBay StuckOfferRetry] item=${item.id} offer=${item.ebayOfferId} held: shipping weight/dims not confirmed by organizer ` +
+            `(weightOz=${item.packageWeightOz ?? 'null'}, confirmed=${item.packageConfirmedByOrganizer === true}, dims=${item.packageLengthIn ?? '?'}x${item.packageWidthIn ?? '?'}x${item.packageHeightIn ?? '?'})`
+        );
+        await prisma.item.update({ where: { id: item.id }, data: { ebayNeedsReview: true } });
+        return false;
+      }
+    }
+
     const healResult = await ebayPublishWithSelfHeal({
       item: {
         id: item.id,
@@ -157,6 +194,12 @@ async function runEbayStuckOfferRetryCron(): Promise<void> {
       draftStatus: true,
       ebayListedAt: true,
       sale: { select: { organizerId: true } },
+      packageWeightOz: true,
+      packageLengthIn: true,
+      packageWidthIn: true,
+      packageHeightIn: true,
+      packageConfirmedByOrganizer: true,
+      ebayShippingOverride: true,
     },
     take: MAX_ITEMS_PER_RUN,
   });

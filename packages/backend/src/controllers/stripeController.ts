@@ -2373,6 +2373,35 @@ export const webhookHandler = async (req: Request, res: Response) => {
             );
           }
         }
+
+        // Notification-gap fix (S1195 sweep continuation, 2026-08-08): a Stripe-side
+        // plan change (e.g. organizer downgrades PRO->SIMPLE or TEAMS->PRO via the
+        // Stripe customer billing portal, distinct from the full-cancellation path
+        // above at 'customer.subscription.deleted' which already emails) previously
+        // updated subscriptionTier silently -- no in-app row, no email. A downgrade is
+        // a real, immediate change to what the organizer can do: getPlatformFeeRate()
+        // (packages/backend/src/utils/feeCalculator.ts) jumps their per-sale platform
+        // fee from 8% (PRO/TEAMS) back to 10% (SIMPLE) on every future sale. Only fires
+        // on an actual downgrade (rank decrease), not on upgrade or a same-tier renewal
+        // sync -- upgrades already get positive reinforcement via the XP award above and
+        // don't need a "your account changed" alert. sendEmail: true, mirroring the
+        // admin-initiated organizer_tier_changed notification in adminController.ts
+        // (same event class, different trigger).
+        const tierRank: Record<'SIMPLE' | 'PRO' | 'TEAMS', number> = { SIMPLE: 0, PRO: 1, TEAMS: 2 };
+        if (tierRank[newTier] < tierRank[oldTier as 'SIMPLE' | 'PRO' | 'TEAMS']) {
+          const newFeePct = newTier === 'SIMPLE' ? '10%' : '8%';
+          createNotification({
+            userId: organizer.user.id,
+            type: 'organizer_tier_changed',
+            title: 'Your FindA.Sale plan has changed',
+            body: `Your organizer account was moved from ${oldTier} to ${newTier} by your payment provider. Your platform fee on future sales is now ${newFeePct}, and any ${oldTier}-only features are no longer available. If this wasn't intentional, check your billing settings.`,
+            link: '/organizer/settings',
+            channel: 'OPERATIONAL',
+            sendEmail: true,
+          }).catch((err: unknown) => {
+            console.error('[SecurityNotification] Failed to send organizer_tier_changed (Stripe-side downgrade) notification:', err);
+          });
+        }
       }
 
       break;
@@ -2777,6 +2806,10 @@ export const webhookHandler = async (req: Request, res: Response) => {
             where: { itemId: { in: holdInvoice.itemIds } },
           });
 
+          const itemList = bundledItems.length > 1
+            ? `${bundledItems.length} items`
+            : `"${bundledItems[0]?.title}"`;
+
           // Update invoice status to EXPIRED
           await prisma.$transaction(async (tx) => {
             await tx.holdInvoice.update({
@@ -2796,23 +2829,26 @@ export const webhookHandler = async (req: Request, res: Response) => {
               where: { id: { in: holdInvoice.itemIds } },
               data: { status: 'RESERVED' },
             });
-
-            // Notify shopper of payment failure
-            const itemList = bundledItems.length > 1
-              ? `${bundledItems.length} items`
-              : `"${bundledItems[0]?.title}"`;
-
-            await tx.notification.create({
-              data: {
-                userId: holdInvoice.shopperUserId,
-                type: 'payment_failed',
-                title: 'Payment failed',
-                body: `Your payment for ${itemList} failed: ${charge.failure_message || 'Unknown error'}. Your holds remain active.`,
-                link: `/items/${holdInvoice.itemIds[0]}`,
-                channel: 'OPERATIONAL',
-              },
-            });
           });
+
+          // Notification-gap fix (S1195 sweep continuation, 2026-08-08): this previously
+          // wrote a raw tx.notification.create() inside the transaction above, which made
+          // email structurally impossible (the shared createNotification() helpers write
+          // through the global `prisma` client, not a $transaction's `tx`). A failed
+          // payment on a hold is genuinely time-sensitive -- the shopper's hold is still
+          // ticking and they need to know to retry before it expires, not just whenever
+          // they next happen to open the app. Moved outside the transaction (fire-and-forget,
+          // same pattern as every other post-commit notification in this file) so it can go
+          // through the email-capable lib/notificationService.ts helper instead.
+          createNotification({
+            userId: holdInvoice.shopperUserId,
+            type: 'payment_failed',
+            title: 'Payment failed',
+            body: `Your payment for ${itemList} failed: ${charge.failure_message || 'Unknown error'}. Your holds remain active.`,
+            link: `/items/${holdInvoice.itemIds[0]}`,
+            channel: 'OPERATIONAL',
+            sendEmail: true,
+          }).catch((err: unknown) => console.error(`[hold-invoice] Failed to create payment_failed notification for invoice ${invoiceId}:`, err));
 
           console.log(`[hold-invoice] Payment failed for invoice ${invoiceId} (${bundledItems.length} items): ${charge.failure_message}`);
         }

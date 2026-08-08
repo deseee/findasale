@@ -304,6 +304,7 @@ if (-not $SkipDB) {
         $dbUrlMaxAttempts = 3
         $dbUrlRetryDelaySec = @(5, 15)  # wait before attempt 2, then before attempt 3
         $connStr = $null
+        $usedStaticFallback = $false
         $dbUrlAttemptLog = New-Object System.Collections.ArrayList
         for ($attempt = 1; $attempt -le $dbUrlMaxAttempts; $attempt++) {
             if ($attempt -gt 1) {
@@ -339,19 +340,40 @@ if (-not $SkipDB) {
                 Log "  [DATABASE] attempt $attempt/$dbUrlMaxAttempts failed to resolve DATABASE_PUBLIC_URL (exit=$railwayExit, ${attemptMs}ms, stderr=`"$stderrForLog`")"
             }
         }
+        # STATIC FALLBACK (added 2026-08-08, per Patrick's direct request following the
+        # 2026-08-07 15:44 UTC recurrence): if the Railway CLI never resolved a connection
+        # string above, fall back to a pre-fetched DATABASE_URL sitting in .secrets.env
+        # (already loaded into $env:DATABASE_URL by the loader above, no code change needed
+        # there). This has zero Railway-CLI/network/auth dependency at run time -- it only
+        # goes stale if the DB password is rotated, and a stale value fails LOUDLY via the
+        # pg_dump exit-code check below (never a silent skip), so it's safe to prefer over
+        # giving up entirely.
+        if (-not $connStr -and $env:DATABASE_URL) {
+            Log "  [DATABASE] Railway CLI resolution failed after $dbUrlMaxAttempts attempt(s) -- falling back to static DATABASE_URL from .secrets.env"
+            $connStr = $env:DATABASE_URL
+            $usedStaticFallback = $true
+        }
         if ($connStr) {
             # Append sslmode if not already present
             if ($connStr -notmatch 'sslmode=') { $connStr = "$connStr`?sslmode=require" }
             pg_dump "$connStr" --format=custom --compress=9 --file=$dumpFile 2>&1
             if ($LASTEXITCODE -eq 0) {
-                Log "  pg_dump via Railway CLI returned exit 0 -- verifying artifact size"
+                if ($usedStaticFallback) {
+                    Log "  pg_dump via static DATABASE_URL fallback returned exit 0 -- verifying artifact size"
+                } else {
+                    Log "  pg_dump via Railway CLI returned exit 0 -- verifying artifact size"
+                }
                 Assert-DbDump $dumpFile
             } else {
-                Add-Failure "DATABASE" "pg_dump with Railway connection string failed (exit $LASTEXITCODE). NO DATABASE DUMP IN THIS BACKUP."
+                if ($usedStaticFallback) {
+                    Add-Failure "DATABASE" "pg_dump with static DATABASE_URL fallback failed (exit $LASTEXITCODE) -- the Railway DB password may have rotated; update .secrets.env's DATABASE_URL from packages/database/.env. NO DATABASE DUMP IN THIS BACKUP."
+                } else {
+                    Add-Failure "DATABASE" "pg_dump with Railway connection string failed (exit $LASTEXITCODE). NO DATABASE DUMP IN THIS BACKUP."
+                }
             }
         } else {
             $diagSummary = ($dbUrlAttemptLog -join ' || ')
-            Add-Failure "DATABASE" "could not get DATABASE_PUBLIC_URL from Railway CLI after $dbUrlMaxAttempts attempt(s). NO DATABASE DUMP IN THIS BACKUP. Diagnostics: $diagSummary"
+            Add-Failure "DATABASE" "could not get DATABASE_PUBLIC_URL from Railway CLI after $dbUrlMaxAttempts attempt(s), and no static DATABASE_URL fallback set in .secrets.env. NO DATABASE DUMP IN THIS BACKUP. Diagnostics: $diagSummary"
         }
     } elseif ($pgDump -and -not $env:PGPASSWORD) {
         Add-Failure "DATABASE" "PGPASSWORD not set in environment -- direct pg_dump fallback unavailable. NO DATABASE DUMP IN THIS BACKUP."

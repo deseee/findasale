@@ -1438,7 +1438,49 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
       // get silently rejected -- terminalController.ts / reservationController.ts already pass
       // ['AVAILABLE', 'RESERVED'] for the same reason (see itemSaleGuard.ts JSDoc); this call site
       // was left at the ['AVAILABLE']-only default in the original ADR-098 pass.
+
+      // Notification-gap fix (S1195 sweep continuation, 2026-08-08): when this manual
+      // "mark sold" override targets a RESERVED item, a DIFFERENT shopper may still hold
+      // an active ItemReservation on it (e.g. the organizer sold it in person / via
+      // another channel while that shopper's hold timer was still counting down).
+      // commitItemSale() below only flips Item.status -- it never touches the
+      // ItemReservation row or tells that shopper their hold is now worthless, leaving
+      // both a dangling active-status reservation row and a silently stranded shopper.
+      // Fetch the active hold BEFORE the commit so we know who to notify. Same "active
+      // hold" status pair (PENDING/CONFIRMED) and same revert+notify shape as
+      // saleController.ts's cancelSale hold-release fix earlier this session.
+      const supersededHold = item.status === 'RESERVED'
+        ? await prisma.itemReservation.findFirst({
+            where: { itemId: id, status: { in: ['PENDING', 'CONFIRMED'] } },
+            select: { id: true, userId: true },
+          })
+        : null;
+
       await commitItemSale(id, 'SOLD', ['AVAILABLE', 'RESERVED']);
+
+      if (supersededHold) {
+        try {
+          await prisma.itemReservation.update({
+            where: { id: supersededHold.id },
+            data: { status: 'CANCELLED' },
+          });
+          createNotification(
+            supersededHold.userId,
+            'item_sold_hold_superseded',
+            'Item no longer available — your hold was released',
+            `"${item.title}" was marked sold by the organizer through another channel. Your hold on this item has been released.`,
+            `/items/${id}`,
+            'OPERATIONAL',
+            true,
+            'Item no longer available — your hold was released'
+          ).catch((err: unknown) => console.error('[updateItem] Failed to create item_sold_hold_superseded notification:', err));
+        } catch (holdRevertErr) {
+          // Non-fatal: the item is already committed SOLD above. Log loudly so this
+          // isn't silently lost -- a failure here leaves the reservation row dangling
+          // and the shopper unnotified, same failure shape cancelSale guards against.
+          console.error(`[updateItem] Failed to revert/notify superseded hold for item ${id}:`, holdRevertErr);
+        }
+      }
     } else if (status !== undefined) {
       updateData.status = status;
     }

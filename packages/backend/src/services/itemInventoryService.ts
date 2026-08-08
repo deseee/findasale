@@ -1,4 +1,5 @@
 import { prisma } from '../lib/prisma';
+import { createNotification } from './notificationService'; // S1195 sweep continuation (2026-08-08): hold-released notification-gap fix
 
 export interface InventoryFilters {
   search?: string;
@@ -175,14 +176,21 @@ export const returnItemsToInventory = async (
         where: { id: reservation.id },
         data: { status: 'EXPIRED' },
       });
-      await prisma.notification.create({
-        data: {
-          userId: reservation.userId,
-          type: 'RESERVATION_CANCELLED',
-          title: 'Hold released',
-          body: `A hold on "${item.title}" was released — the sale has ended.`,
-        },
-      });
+      // Notification-gap fix (S1195 sweep continuation, 2026-08-08): same event class as
+      // saleController.ts's cancelSale hold-release fix earlier this session (a shopper's
+      // active hold disappears out from under them because the sale ended) -- previously
+      // in-app-only via a raw prisma.notification.create with no email path available.
+      // sendEmail: true for consistency with that sibling fix.
+      createNotification(
+        reservation.userId,
+        'RESERVATION_CANCELLED',
+        'Hold released',
+        `A hold on "${item.title}" was released — the sale has ended.`,
+        undefined,
+        'OPERATIONAL',
+        true,
+        'Hold released'
+      ).catch((err: unknown) => console.error(`[itemInventoryService] Failed to create RESERVATION_CANCELLED notification for user ${reservation.userId}:`, err));
     }
 
     // Clear waitlist

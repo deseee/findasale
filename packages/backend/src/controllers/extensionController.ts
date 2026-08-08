@@ -222,14 +222,24 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
   const jobs = itemIds.length
     ? await prisma.marketplaceListingJob.findMany({
         where: { itemId: { in: itemIds } },
-        select: { itemId: true, action: true, status: true },
+        select: { itemId: true, action: true, status: true, platform: true },
       })
     : [];
   const postedByItem = new Set<string>();
   const removedByItem = new Set<string>();
+  // Duplicate-listing suppression fix (2026-08-08): the two any-platform sets above conflate
+  // every channel into one flag, so an item posted on Facebook only was showing as
+  // "already listed" (hidden) when browsing the Craigslist channel too, and vice versa --
+  // neither over- nor under-hiding is correct; the organizer needs to know per-CHANNEL whether
+  // they already posted there. Kept the any-platform sets for backward compatibility
+  // (marketplaceListed field below, no longer read by popup.js but left intact in case anything
+  // else does) and added per-platform sets for the new marketplaceListedFacebook /
+  // marketplaceListedCraigslist fields popup.js now actually filters/badges on.
+  const postedByItemPlatform = new Set<string>(); // key: `${itemId}:${platform}`
+  const removedByItemPlatform = new Set<string>();
   for (const j of jobs) {
-    if (j.action === 'POST' && j.status === 'POSTED') postedByItem.add(j.itemId);
-    if (j.action === 'REMOVE' && j.status === 'REMOVED') removedByItem.add(j.itemId);
+    if (j.action === 'POST' && j.status === 'POSTED') { postedByItem.add(j.itemId); postedByItemPlatform.add(`${j.itemId}:${j.platform}`); }
+    if (j.action === 'REMOVE' && j.status === 'REMOVED') { removedByItem.add(j.itemId); removedByItemPlatform.add(`${j.itemId}:${j.platform}`); }
   }
 
   const shaped = items.map((it) => ({
@@ -277,6 +287,13 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
     allowBestOffer: it.allowBestOffer,
     bestOfferMinimumAmt: it.bestOfferMinimumAmt != null ? Number(it.bestOfferMinimumAmt) : null,
     marketplaceListed: postedByItem.has(it.id) && !removedByItem.has(it.id),
+    // Per-platform listed flags (2026-08-08 fix) -- see the postedByItemPlatform /
+    // removedByItemPlatform comment above. popup.js uses these instead of the any-platform
+    // marketplaceListed field so switching the "Post to" channel shows the correct LISTED
+    // badge / hide-filter for THAT channel, not whichever channel the item happened to be
+    // posted to first.
+    marketplaceListedFacebook: postedByItemPlatform.has(`${it.id}:FACEBOOK`) && !removedByItemPlatform.has(`${it.id}:FACEBOOK`),
+    marketplaceListedCraigslist: postedByItemPlatform.has(`${it.id}:CRAIGSLIST`) && !removedByItemPlatform.has(`${it.id}:CRAIGSLIST`),
     // Craigslist ZIP/area autofill (2026-08-06) -- fas-craigslist.js reads these exact field
     // names (item.saleCity / item.saleZip) and only fills when present, never invents a value.
     saleCity: saleLocationById.get(it.saleId || '')?.city || null,

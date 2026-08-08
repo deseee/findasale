@@ -489,7 +489,28 @@ async function checkRenewals() {
   if (!dueItems.length) return 'no_items';
 
   const { fasAutoRenew = false } = await chrome.storage.local.get(['fasAutoRenew']);
-  return fasAutoRenew ? await autoRenewDueItems(dueItems) : await notifyDueRenewals(dueItems);
+  if (!fasAutoRenew) return await notifyDueRenewals(dueItems);
+
+  // (2026-08-08 login gate) Craigslist auto-renew re-drives the guest-postable posting flow
+  // with no human present -- fine when actually logged into a Craigslist account (verification
+  // is typically skipped for logged-in posters), but likely to silently strand a background tab
+  // at a phone/email/CAPTCHA verification wall when logged out, with nobody there to clear it.
+  // Only acts on a POSITIVELY observed logged-out reading (fasCraigslistLoginState === false,
+  // set by fas-craigslist.js's isLoggedIntoCraigslist via the craigslistLoginStateObserved
+  // message below) -- an unknown/never-observed state (null/undefined, e.g. before the organizer
+  // has ever opened a Craigslist tab on this install) falls through to the original
+  // unconditional auto-renew call, so this can only ever get MORE permissive as real signal
+  // accumulates, never silently disable a feature that used to work.
+  const { fasCraigslistLoginState = null } = await chrome.storage.local.get(['fasCraigslistLoginState']);
+  if (fasCraigslistLoginState === false) {
+    const clDue = dueItems.filter((d) => d.platform === 'CRAIGSLIST');
+    const otherDue = dueItems.filter((d) => d.platform !== 'CRAIGSLIST');
+    const clOutcome = clDue.length ? await notifyDueRenewals(clDue) : 'no_items';
+    const otherOutcome = otherDue.length ? await autoRenewDueItems(otherDue) : 'no_items';
+    return 'cl_notified_logged_out:' + clOutcome + ' other_auto_renewed:' + otherOutcome;
+  }
+
+  return await autoRenewDueItems(dueItems);
 }
 
 chrome.alarms.onAlarm.addListener((alarm) => {
@@ -646,6 +667,19 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         await chrome.storage.local.set({ fasCraigslistIndex: next });
         const item = (st.fasCraigslistQueue || [])[next] || null;
         sendResponse({ ok: true, item, index: next, total: (st.fasCraigslistQueue || []).length });
+      } else if (msg.type === 'craigslistLoginStateObserved') {
+        // (2026-08-08) Best-effort DOM-observed login state reported by fas-craigslist.js's
+        // isLoggedIntoCraigslist(). Only ever a definite true/false (the content script never
+        // reports its own "unknown" reading -- see reportLoginState there). Stored so
+        // checkRenewals above can skip starting an unattended Craigslist auto-renew run when
+        // we've positively observed the organizer is logged out, and so the popup can show the
+        // organizer an informational note (getCraigslistLoginState below).
+        await chrome.storage.local.set({ fasCraigslistLoginState: !!msg.loggedIn, fasCraigslistLoginObservedAt: Date.now() });
+        sendResponse({ ok: true });
+      } else if (msg.type === 'getCraigslistLoginState') {
+        const { fasCraigslistLoginState = null, fasCraigslistLoginObservedAt = null } =
+          await chrome.storage.local.get(['fasCraigslistLoginState', 'fasCraigslistLoginObservedAt']);
+        sendResponse({ ok: true, loggedIn: fasCraigslistLoginState, observedAt: fasCraigslistLoginObservedAt });
       } else if (msg.type === 'getRemovalQueueItem') {
         const { fasRemovalQueue = [], fasRemovalIndex = 0 } = await chrome.storage.local.get(['fasRemovalQueue', 'fasRemovalIndex']);
         sendResponse({ ok: true, item: fasRemovalQueue[fasRemovalIndex] || null, index: fasRemovalIndex, total: fasRemovalQueue.length });

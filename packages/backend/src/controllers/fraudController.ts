@@ -5,6 +5,7 @@ import {
   reviewSignal,
 } from '../services/fraudDetectionService';
 import { prisma } from '../lib/prisma';
+import { createNotification } from '../lib/notificationService'; // S1195 sweep continuation (2026-08-08): suspend/unsuspend notification-gap fix
 
 /**
  * Feature #17: Fraud Controller
@@ -181,16 +182,22 @@ export const suspendOrganizer = async (req: AuthRequest, res: Response) => {
       },
     });
 
-    // Create notification
-    await prisma.notification.create({
-      data: {
-        userId: organizer.userId,
-        type: 'system',
-        title: 'Account Suspended',
-        body: `Your organizer account has been suspended. Reason: ${reason}. Contact support@finda.sale for details.`,
-        read: false,
-        channel: 'OPERATIONAL',
-      },
+    // Notification-gap fix (S1195 sweep continuation, 2026-08-08): this endpoint is a
+    // second, organizer-specific admin suspend path that duplicates adminController.ts's
+    // general-purpose suspendUser -- that one already sends email (S1192 security-
+    // notification audit) but this one, reached from the fraud-review admin UI, was never
+    // brought up to the same standard. An account suspension blocks live access, so the
+    // organizer needs to know immediately, not just whenever they next happen to open the
+    // app (which they may not be able to fully do once suspended).
+    createNotification({
+      userId: organizer.userId,
+      type: 'system',
+      title: 'Account Suspended',
+      body: `Your organizer account has been suspended. Reason: ${reason}. Contact support@finda.sale for details.`,
+      channel: 'OPERATIONAL',
+      sendEmail: true,
+    }).catch((err: unknown) => {
+      console.error(`[SecurityNotification] Failed to send Account Suspended notification for organizer ${id}:`, err);
     });
 
     console.log(`[fraudController] Organizer ${id} suspended: ${reason}`);
@@ -237,16 +244,18 @@ export const unsuspendOrganizer = async (req: AuthRequest, res: Response) => {
       },
     });
 
-    // Create notification
-    await prisma.notification.create({
-      data: {
-        userId: organizer.userId,
-        type: 'system',
-        title: 'Account Restored',
-        body: 'Your organizer account has been restored. You can now continue using all features.',
-        read: false,
-        channel: 'OPERATIONAL',
-      },
+    // Notification-gap fix (S1195 sweep continuation, 2026-08-08): same duplication as
+    // suspendOrganizer above -- match adminController.ts's unsuspendUser, which already
+    // emails (S1192 security-notification audit).
+    createNotification({
+      userId: organizer.userId,
+      type: 'system',
+      title: 'Account Restored',
+      body: 'Your organizer account has been restored. You can now continue using all features.',
+      channel: 'OPERATIONAL',
+      sendEmail: true,
+    }).catch((err: unknown) => {
+      console.error(`[SecurityNotification] Failed to send Account Restored notification for organizer ${id}:`, err);
     });
 
     console.log(`[fraudController] Organizer ${id} unsuspended`);

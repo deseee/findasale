@@ -3,6 +3,7 @@ import * as Sentry from '@sentry/node';
 import { prisma } from '../lib/prisma';
 import { cronGuard } from '../utils/cronGuard';
 import { getStripe } from '../utils/stripe';
+import { createNotification } from '../lib/notificationService'; // S1195 sweep continuation (2026-08-08): STRANDED-PAID notification-gap fix
 
 /**
  * posPaymentRequestExpiryJob.ts
@@ -73,6 +74,8 @@ export const reclaimExpiredPosPaymentRequests = async (): Promise<void> => {
         id: true,
         organizerId: true,
         organizerUserId: true,
+        shopperUserId: true,
+        saleId: true,
         stripePaymentIntentId: true,
         totalAmountCents: true,
         expiresAt: true,
@@ -130,6 +133,35 @@ export const reclaimExpiredPosPaymentRequests = async (): Promise<void> => {
           const msg = `[posPaymentRequestExpiryJob] STRANDED-PAID request=${request.id} pi=${request.stripePaymentIntentId} amount=$${amountDollars} organizerId=${request.organizerId} -- Stripe shows this PaymentIntent succeeded but our DB still had the request PENDING past its expiresAt (client never confirmed). NOT auto-recorded -- confirmPaymentRequest's side-effect chain is not safely replayable from a cron sweep. Needs manual/organizer review.`;
           console.error(msg);
           try { Sentry.captureMessage(msg, 'error'); } catch { /* Sentry may not be initialized */ }
+
+          // Notification-gap fix (S1195 sweep continuation, 2026-08-08): this branch was
+          // Sentry-only, and unlike purchaseExpiryJob.ts's STRANDED-PAID case this one is
+          // NOT auto-recorded at all -- the sale genuinely needs a human to complete it
+          // (confirmPaymentRequest's side-effect chain -- Purchase creation, stock
+          // decrement, marketplace sync -- was never run). The organizer is the one who
+          // must act, so their message is actionable ("go complete this sale manually").
+          // The shopper is told their card WAS charged so they don't panic and dispute
+          // the charge before the organizer has a chance to follow up.
+          createNotification({
+            userId: request.organizerUserId,
+            type: 'pos_payment_stranded_paid',
+            title: 'Action needed: a POS payment succeeded but was never completed',
+            body: `A shopper's card was charged $${amountDollars} for a payment request that expired before it was confirmed in the app. This sale was NOT automatically recorded. Please check Stripe and manually complete or refund this payment.`,
+            link: '/organizer/pos',
+            channel: 'OPERATIONAL',
+            sendEmail: true,
+          }).catch((err: unknown) => console.error(`[posPaymentRequestExpiryJob] Failed to notify organizer ${request.organizerUserId} for request ${request.id}:`, err));
+
+          createNotification({
+            userId: request.shopperUserId,
+            type: 'pos_payment_stranded_paid_shopper',
+            title: 'Your payment went through',
+            body: `Your card was charged $${amountDollars}, but there was a delay confirming your purchase in the app. The organizer has been notified to complete your sale -- if you don't hear back soon, contact them directly.`,
+            link: `/sales/${request.saleId}`,
+            channel: 'OPERATIONAL',
+            sendEmail: true,
+          }).catch((err: unknown) => console.error(`[posPaymentRequestExpiryJob] Failed to notify shopper ${request.shopperUserId} for request ${request.id}:`, err));
+
           continue;
         }
 

@@ -1,4 +1,5 @@
 import { prisma } from '../lib/prisma';
+import { createNotification } from '../lib/notificationService';
 
 /**
  * Feature #106-#109: Anti-Abuse System — Fraud Detection & Tracking Services
@@ -91,23 +92,55 @@ export async function recordChargebackIncident(
 
     // Suspend organizer after 3+ chargebacks
     if (chargebackCount >= 3) {
-      // NOTE (Phase 3): Set suspendedAt on User once field added to schema (#73-phase3)
-      console.warn(`[fraudService] Organizer ${organizerId} should be suspended — schema field pending`);
-
-      // Create notification for admin
-      await prisma.notification.create({
-        data: {
-          userId: organizer.userId,
-          type: 'system',
-          title: 'Account Suspended',
-          body: `Your organizer account has been suspended due to ${chargebackCount} chargeback incidents. Contact support for review.`,
-          read: false,
-        },
+      // Fix (S1195 sweep continuation, 2026-08-08): this previously only console.warn'd
+      // "schema field pending" and sent a notification CLAIMING the account was suspended
+      // WITHOUT ever writing suspendedAt/suspendReason on the User row -- the stale
+      // "#73-phase3" comment implied the field didn't exist yet, but User.suspendedAt /
+      // User.suspendReason have existed in schema.prisma (~L216-217) all along. Organizers
+      // who should have been blocked from login/checkout after repeated chargebacks were
+      // never actually suspended -- a real enforcement gap, not just a notification gap.
+      // Re-check current suspension state directly (organizer.user was fetched before the
+      // signal-counting queries above, so it may be stale) to avoid re-suspending and
+      // re-emailing on every subsequent chargeback once already suspended.
+      const currentUser = await prisma.user.findUnique({
+        where: { id: organizer.userId },
+        select: { suspendedAt: true },
       });
 
-      console.warn(
-        `[fraudService] Organizer ${organizerId} suspended after ${chargebackCount} chargebacks`
-      );
+      if (!currentUser?.suspendedAt) {
+        // Same fields written by the manual admin suspend paths (adminController.ts
+        // suspendUser, fraudController.ts suspendOrganizer) so this automated path has the
+        // same downstream effects: blocks login (authController.ts login), blocks
+        // checkout/purchase (middleware/auth.ts authenticate), blocks refresh-token re-mint
+        // (routes/auth.ts), and forces existing sessions to re-authenticate via the
+        // tokenVersion bump (matches adminController.ts suspendUser).
+        await prisma.user.update({
+          where: { id: organizer.userId },
+          data: {
+            suspendedAt: new Date(),
+            suspendReason: 'SERIAL_CHARGEBACKS', // valid value per schema.prisma comment on suspendReason
+            tokenVersion: { increment: 1 },
+          },
+        });
+
+        // Notify + email the organizer via the shared notification service (matches every
+        // other suspend path in the codebase) -- an in-app-only notification isn't reliable
+        // here since suspension blocks login, so the organizer needs the email to find out.
+        await createNotification({
+          userId: organizer.userId,
+          type: 'account_suspended',
+          title: 'Account Suspended',
+          body: `Your organizer account has been suspended due to ${chargebackCount} chargeback incidents. Contact support@finda.sale for review.`,
+          channel: 'OPERATIONAL',
+          sendEmail: true,
+        }).catch((err: unknown) => {
+          console.error(`[SecurityNotification] Failed to send Account Suspended notification for organizer ${organizerId}:`, err);
+        });
+
+        console.warn(
+          `[fraudService] Organizer ${organizerId} suspended after ${chargebackCount} chargebacks`
+        );
+      }
     }
   } catch (err) {
     console.error('[fraudService] recordChargebackIncident error:', err);

@@ -69,7 +69,7 @@ const reclaimExpiredPaymentLink = async (
   reasonLabel: string
 ): Promise<void> => {
   try {
-    const revertedItemIds = await prisma.$transaction(async (tx) => {
+    const { revertIds: revertedItemIds, affectedReservations } = await prisma.$transaction(async (tx) => {
       // Atomic link flip: only proceed if still ACTIVE -- a concurrent
       // webhook/reconcile completing this link in the same window wins the
       // race, same guarded-flip pattern as recordPosPaymentLinkSale.
@@ -77,7 +77,7 @@ const reclaimExpiredPaymentLink = async (
         where: { id: link.id, status: 'ACTIVE' },
         data: { status: 'EXPIRED' },
       });
-      if (linkFlip.count === 0) return [];
+      if (linkFlip.count === 0) return { revertIds: [] as string[], affectedReservations: [] as { userId: string; itemId: string }[] };
 
       // Only items still INVOICE_ISSUED get reverted. If something else
       // already moved an item on (SOLD via a race-winning webhook, or this
@@ -88,7 +88,7 @@ const reclaimExpiredPaymentLink = async (
         select: { id: true },
       });
       const revertIds = stillIssued.map((i) => i.id);
-      if (revertIds.length === 0) return [];
+      if (revertIds.length === 0) return { revertIds: [] as string[], affectedReservations: [] as { userId: string; itemId: string }[] };
 
       await tx.item.updateMany({
         where: { id: { in: revertIds }, status: 'INVOICE_ISSUED' },
@@ -107,21 +107,28 @@ const reclaimExpiredPaymentLink = async (
         data: { status: 'CONFIRMED' },
       });
 
-      for (const r of affectedReservations) {
-        await tx.notification.create({
-          data: {
-            userId: r.userId,
-            type: 'invoice_expired',
-            title: 'Payment link expired',
-            body: 'Your payment link expired before payment was completed. Your hold remains active.',
-            link: `/items/${r.itemId}`,
-            channel: 'OPERATIONAL',
-          },
-        });
-      }
-
-      return revertIds;
+      return { revertIds, affectedReservations };
     });
+
+    // Notification-gap fix (S1195 sweep continuation, 2026-08-08): this previously wrote
+    // a raw tx.notification.create() per reservation inside the transaction above, which
+    // made email structurally impossible (the shared createNotification() helper writes
+    // through the global `prisma` client, not a $transaction's `tx`). A shopper whose
+    // payment link died still has an active hold ticking down, so they need this promptly
+    // enough to retry -- not just whenever they next happen to open the app. Moved outside
+    // the transaction (fire-and-forget) so it can go through the email-capable
+    // lib/notificationService.ts helper (already imported in this file) instead.
+    for (const r of affectedReservations) {
+      createNotification({
+        userId: r.userId,
+        type: 'invoice_expired',
+        title: 'Payment link expired',
+        body: 'Your payment link expired before payment was completed. Your hold remains active.',
+        link: `/items/${r.itemId}`,
+        channel: 'OPERATIONAL',
+        sendEmail: true,
+      }).catch((err: unknown) => console.error(`[pos-reconcile] Failed to create invoice_expired notification for user ${r.userId}:`, err));
+    }
 
     if (revertedItemIds.length > 0) {
       console.error(`[pos-reconcile] EXPIRED-RECLAIMED link=${link.id} items=${revertedItemIds.join(',')} -- ${reasonLabel}; reverted to RESERVED/CONFIRMED.`);
