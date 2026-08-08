@@ -193,7 +193,7 @@ export const ShippingNetPreview: React.FC<ShippingNetPreviewProps> = ({
             <span className="text-xs font-medium text-warm-600 dark:text-warm-400">Buyer pays for shipping</span>
             <span
               className="text-warm-400 dark:text-warm-500 cursor-help text-xs"
-              title="eBay calculates the exact rate at checkout from the buyer's ZIP code. This is an estimate."
+              title="Priced as one flat rate from this item's weight and box size, set high enough to safely cover shipping to any US buyer. Not a live eBay-calculated per-buyer rate."
             >
               ⓘ
             </span>

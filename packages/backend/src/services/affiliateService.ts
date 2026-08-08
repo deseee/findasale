@@ -141,7 +141,7 @@ export async function generateOrGetAffiliateCode(userId: string): Promise<{
     // Return existing code (idempotent)
     return {
       referralCode: existingUser.affiliateReferralCode,
-      shareUrl: `${process.env.FRONTEND_URL}/auth/register?ref=${existingUser.affiliateReferralCode}`,
+      shareUrl: `${process.env.FRONTEND_URL}/register?aff=${existingUser.affiliateReferralCode}`, // 2026-08-08 fix (roadmap #318): was /auth/register?ref= -- wrong path (no /auth prefix on the real registration page) AND wrong param (?ref= is the separate shopper-to-shopper referral system; the registration page reads the affiliate program's own code from ?aff=, see pages/register.tsx)
       createdAt: existingUser.createdAt,
     };
   }
@@ -158,7 +158,7 @@ export async function generateOrGetAffiliateCode(userId: string): Promise<{
 
   return {
     referralCode: updatedUser.affiliateReferralCode!,
-    shareUrl: `${process.env.FRONTEND_URL}/auth/register?ref=${updatedUser.affiliateReferralCode}`,
+    shareUrl: `${process.env.FRONTEND_URL}/register?aff=${updatedUser.affiliateReferralCode}`, // 2026-08-08 fix (roadmap #318): same URL fix as above
     createdAt: updatedUser.createdAt,
   };
 }
@@ -211,7 +211,7 @@ export async function getAffiliateCodeWithStats(userId: string): Promise<{
 
   return {
     referralCode: user.affiliateReferralCode,
-    shareUrl: `${process.env.FRONTEND_URL}/auth/register?ref=${user.affiliateReferralCode}`,
+    shareUrl: `${process.env.FRONTEND_URL}/register?aff=${user.affiliateReferralCode}`, // 2026-08-08 fix (roadmap #318): same URL fix as above
     createdAt: user.createdAt,
     totalReferrals,
     qualifiedReferrals,

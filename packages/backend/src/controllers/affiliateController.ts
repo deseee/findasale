@@ -391,7 +391,7 @@ export const getAffiliateReferrals = async (req: AuthRequest, res: Response) => 
  *   "unpaidBalance": 15000,    // cents (QUALIFIED but not PAID)
  *   "thisMonthEarnings": 20000, // cents (qualified this month)
  *   "referralCode": "ORG_K9X2L4",
- *   "shareUrl": "https://finda.sale/auth/register?ref=ORG_K9X2L4",
+ *   "shareUrl": "https://finda.sale/register?aff=ORG_K9X2L4",
  *   "recentPayouts": [         // last 5 PAID referrals
  *     {
  *       "amount": 50000,
@@ -464,8 +464,10 @@ export const getEarningsSummary = async (req: AuthRequest, res: Response) => {
     });
 
     const referralCode = user?.affiliateReferralCode || null;
+    // 2026-08-08 fix (roadmap #318): was /auth/register?ref= -- wrong path + wrong param,
+    // see affiliateService.ts for the same fix and full explanation.
     const shareUrl = referralCode
-      ? `${process.env.FRONTEND_URL}/auth/register?ref=${referralCode}`
+      ? `${process.env.FRONTEND_URL}/register?aff=${referralCode}`
       : null;
 
     res.json({

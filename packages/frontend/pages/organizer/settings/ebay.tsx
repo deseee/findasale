@@ -688,7 +688,13 @@ const EbayPolicySetupPage = () => {
                         <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-sage-100 dark:bg-sage-900 text-sage-700 dark:text-sage-200">Recommended</span>
                       </div>
                       <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                        Buyers pay the real shipping rate eBay calculates from their ZIP code. You just confirm each item's weight and box size.
+                        {/* 2026-08-08 fix (roadmap #547): this mode does NOT call eBay's real
+                            per-buyer calculated-shipping API -- it prices one flat rate per item
+                            from its weight and box size, set high enough to safely cover any US
+                            buyer. Copy corrected to stop implying a live eBay rate lookup. */}
+                        We price one flat rate per item from its weight and box size -- set safely
+                        high enough to cover shipping to any US buyer. You just confirm the weight
+                        and box size; buyers see one clear price, no surprises at checkout.
                       </p>
                     </button>
 

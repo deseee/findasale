@@ -173,11 +173,24 @@ const ZIP1_MAX_ZONE: Record<string, ZoneKey> = {
 const coverageZoneCache = new Map<string, ZoneKey>();
 
 /**
- * The carrier zone to the FARTHEST continental-US destination from the organizer's
+ * The carrier zone to the FARTHEST continental-US destination from the sale's
  * origin. Flat-rate is one price for all buyers, so we price to the worst case the
  * seller could ship to — guaranteeing they're never short. Central origins resolve to
  * a lower zone (cheaper, more competitive); corner origins to z7/z8.
- * Prefers geocoded lat/lng; falls back to ZIP first digit; then conservative z6.
+ *
+ * Prefers ZIP (first-digit zone lookup) whenever present -- 2026-08-08 fix (roadmap
+ * #547 / originally S980): every caller in this codebase passes BOTH the sale's own
+ * origin ZIP AND the organizer's profile lat/lng together (grepped project-wide,
+ * confirmed across ebayShippingResolver.ts, ebayFlatRatePolicyService.ts, and both
+ * preview paths in ebayController.ts) -- the organizer's lat/lng is included purely as
+ * a fallback for when a sale has no ZIP on file, not as a preferred signal. The OLD
+ * precedence here checked lat/lng first, which meant an organizer with a geocoded
+ * profile address would have EVERY sale's shipping estimate silently computed from
+ * their own home/profile location instead of that sale's actual origin, even when the
+ * correct sale ZIP was right there in the same call. ZIP-first-digit is coarser than a
+ * haversine calc, but it reflects the CORRECT location; precise-but-wrong beats
+ * imprecise-but-wrong. Falls back to lat/lng only when the sale has no ZIP; then
+ * conservative z6.
  */
 export function coverageZoneForOrigin(origin: { zip?: string | null; lat?: number | null; lng?: number | null }): ZoneKey {
   const key = `${origin.lat ?? ''},${origin.lng ?? ''},${origin.zip ?? ''}`;
@@ -185,11 +198,11 @@ export function coverageZoneForOrigin(origin: { zip?: string | null; lat?: numbe
   if (cached) return cached;
 
   let zone: ZoneKey;
-  if (origin.lat != null && origin.lng != null && !isNaN(origin.lat) && !isNaN(origin.lng)) {
+  if (origin.zip && /^\d/.test(origin.zip)) {
+    zone = ZIP1_MAX_ZONE[origin.zip[0]] ?? 'z6';
+  } else if (origin.lat != null && origin.lng != null && !isNaN(origin.lat) && !isNaN(origin.lng)) {
     const maxMiles = Math.max(...CONUS_CORNERS.map((c) => haversineMiles(origin.lat!, origin.lng!, c.lat, c.lng)));
     zone = milesToZone(maxMiles);
-  } else if (origin.zip && /^\d/.test(origin.zip)) {
-    zone = ZIP1_MAX_ZONE[origin.zip[0]] ?? 'z6';
   } else {
     zone = 'z6';
   }
