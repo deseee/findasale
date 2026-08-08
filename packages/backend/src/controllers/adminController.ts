@@ -696,6 +696,22 @@ export const deleteUser = async (req: AuthRequest, res: Response) => {
       },
     });
 
+    // Notification-gap fix (S1195, 2026-08-08): deleteUser is a soft-delete (deletedAt set,
+    // reversible via restoreUser below) that previously notified nobody -- inconsistent with
+    // suspendUser/unsuspendUser above, which both already notify on an equivalent
+    // trust-and-safety action. sendEmail: true so the user finds out even if they never log
+    // back in (tokenVersion is also bumped, invalidating their existing session).
+    createNotification({
+      userId,
+      type: 'account_deleted',
+      title: 'Your account has been deleted',
+      body: 'Your FindA.Sale account was deleted by an administrator. Contact support if you believe this is an error.',
+      channel: 'OPERATIONAL',
+      sendEmail: true,
+    }).catch((err) => {
+      console.error('[SecurityNotification] Failed to send account_deleted notification:', err);
+    });
+
     res.json({ success: true, message: 'Account deleted' });
   } catch (error) {
     console.error('Error deleting user:', error);
@@ -991,7 +1007,26 @@ export const updateOrganizerTier = async (req: AuthRequest, res: Response) => {
         subscriptionTier: true,
         tokenVersion: true,
         businessName: true,
+        userId: true,
       },
+    });
+
+    // Notification-gap fix (S1195, 2026-08-08): an admin changing an organizer's billing
+    // tier is a real account/billing change (Free->PRO grants features, PRO->SIMPLE removes
+    // them) and previously notified nobody at all -- inconsistent with suspendUser/
+    // unsuspendUser above, which both already notify. sendEmail: true since a tier change
+    // affects what the organizer can do right now, not something they'd only see by
+    // happening to open the app.
+    createNotification({
+      userId: updatedOrganizer.userId,
+      type: 'organizer_tier_changed',
+      title: 'Your FindA.Sale plan has changed',
+      body: `Your organizer account was moved to the ${tier} plan by an administrator.`,
+      link: '/organizer/settings',
+      channel: 'OPERATIONAL',
+      sendEmail: true,
+    }).catch((err) => {
+      console.error('[SecurityNotification] Failed to send organizer_tier_changed notification:', err);
     });
 
     res.json(updatedOrganizer);

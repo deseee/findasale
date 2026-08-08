@@ -1,6 +1,7 @@
 import cron from 'node-cron';
 import { cronGuard } from '../utils/cronGuard';
 import { prisma } from '../lib/prisma';
+import { createNotification } from '../lib/notificationService';
 
 /**
  * Phase 21: Reservation expiry job.
@@ -15,13 +16,28 @@ export const expireStaleHolds = async (): Promise<void> => {
         status: { in: ['PENDING', 'CONFIRMED'] },
         expiresAt: { lt: new Date() },
       },
-      select: { id: true, itemId: true },
+      select: { id: true, itemId: true, userId: true },
     });
 
     if (expired.length === 0) return;
 
     const ids = expired.map((r) => r.id);
     const itemIds = expired.map((r) => r.itemId);
+
+    // Notification-gap fix (S1195, 2026-08-08): determine up front which of these items
+    // are still actually RESERVED, mirroring the SAME guard the item-revert updateMany
+    // below applies. Only a reservation whose item really is being reverted to AVAILABLE
+    // here gets a "your hold expired" notification -- a reservation whose item already
+    // moved on to some other flow (invoice issued, POS cart, sold) is left untouched by
+    // the guarded update below and must not be told something that isn't true.
+    const stillReservedItems = itemIds.length > 0
+      ? await prisma.item.findMany({
+          where: { id: { in: itemIds }, status: 'RESERVED' },
+          select: { id: true, title: true },
+        })
+      : [];
+    const stillReservedItemIds = new Set(stillReservedItems.map((i) => i.id));
+    const itemTitleById = new Map(stillReservedItems.map((i) => [i.id, i.title]));
 
     await prisma.$transaction([
       prisma.itemReservation.updateMany({
@@ -45,6 +61,24 @@ export const expireStaleHolds = async (): Promise<void> => {
         data: { status: 'AVAILABLE' },
       }),
     ]);
+
+    // Notify each shopper whose hold actually expired and released the item. This job
+    // previously had no notification import at all (confirmed gap, S1195 sweep) -- a
+    // shopper's only way to discover their hold was gone was to reopen the item page and
+    // notice it was available to someone else, or that they lost the item entirely.
+    // Fire-and-forget, same pattern as every other notification call site in this codebase
+    // -- must never block or fail this job's core revert logic.
+    for (const r of expired) {
+      if (!stillReservedItemIds.has(r.itemId)) continue;
+      createNotification({
+        userId: r.userId,
+        type: 'hold_expired',
+        title: 'Your hold expired',
+        body: `Your hold on "${itemTitleById.get(r.itemId) || 'an item'}" expired and the item is available again.`,
+        link: `/items/${r.itemId}`,
+        channel: 'OPERATIONAL',
+      }).catch((err) => console.error('[reservationExpiryJob] Failed to create hold_expired notification:', err));
+    }
 
     console.log(`[reservationExpiryJob] Expired ${expired.length} hold(s)`);
   } catch (error) {

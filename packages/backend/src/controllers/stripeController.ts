@@ -2663,11 +2663,88 @@ export const webhookHandler = async (req: Request, res: Response) => {
       const paymentIntentId = charge.payment_intent as string | undefined;
       if (paymentIntentId) {
         try {
+          // Notification-gap fix (S1195, 2026-08-08): a refund issued OUTSIDE app code --
+          // e.g. directly from the Stripe Dashboard, or any future refund path that doesn't
+          // go through executeVerifiedRefund -- previously only flipped Purchase.status here.
+          // The buyer got ZERO notification (no email, no in-app row), unlike the app-initiated
+          // paths (createRefund / disputeController), which both already email + in-app notify
+          // via executeVerifiedRefund + sendRefundConfirmationEmail.
+          // Distinguishing signal: executeVerifiedRefund sets Purchase.refundInitiatedBy
+          // ('organizer' | 'admin' | 'dispute') in the SAME db write that sets status=REFUNDED,
+          // and that write happens synchronously right after the Stripe refund call succeeds --
+          // strictly BEFORE Stripe's async charge.refunded webhook can arrive. So
+          // refundInitiatedBy IS NULL at this point is a reliable signal that this specific
+          // Purchase was never routed through an in-app refund path and has not been notified.
+          const purchasesToNotify = await prisma.purchase.findMany({
+            where: { stripePaymentIntentId: paymentIntentId, refundInitiatedBy: null, status: { not: 'REFUNDED' } },
+            select: {
+              id: true,
+              amount: true,
+              userId: true,
+              user: { select: { email: true, name: true } },
+              item: { select: { title: true } },
+              sale: { select: { organizer: { select: { businessName: true } } } },
+            },
+          });
+
           const result = await prisma.purchase.updateMany({
             where: { stripePaymentIntentId: paymentIntentId },
             data: { status: 'REFUNDED' },
           });
           console.log(`[stripe] charge.refunded: updated ${result.count} purchase(s) for PI ${paymentIntentId} to REFUNDED`);
+
+          if (purchasesToNotify.length > 0) {
+            // Best-effort per-purchase refund amount: charge.amount_refunded is the TOTAL
+            // refunded on the charge so far (cents) -- Stripe does not expose how that splits
+            // across multiple Purchase rows sharing one PI (multi-item cart checkout). Split
+            // evenly as the best available approximation; the common single-purchase-per-PI
+            // case gets the exact amount. Falls back to the purchase's own amount if Stripe
+            // didn't report a refunded total for some reason.
+            const totalRefundedCents = charge.amount_refunded ?? 0;
+            const perPurchaseAmount = totalRefundedCents > 0
+              ? (totalRefundedCents / 100) / purchasesToNotify.length
+              : null;
+
+            for (const p of purchasesToNotify) {
+              const refundAmount = perPurchaseAmount ?? p.amount;
+
+              // Backfill refund-history fields this raw-webhook path never set before (only
+              // `status` was ever written here) -- payoutController.ts's getRefundHistory reads
+              // refundedAmount/refundedAt/refundInitiatedBy, and both were previously left null
+              // forever for any refund issued this way.
+              prisma.purchase.update({
+                where: { id: p.id },
+                data: {
+                  refundedAmount: refundAmount,
+                  refundedAt: new Date(),
+                  refundInitiatedBy: 'stripe_dashboard',
+                },
+              }).catch((err) => console.error(`[stripe] charge.refunded: failed to backfill refund-history fields for purchase ${p.id}:`, err));
+
+              // Same buyer-facing confirmation email every other refund path sends.
+              sendRefundConfirmationEmail({
+                toEmail: p.user?.email,
+                buyerName: p.user?.name,
+                refundAmount,
+                wasCapped: false,
+                itemTitle: p.item?.title,
+                organizerBusinessName: p.sale?.organizer?.businessName,
+              });
+
+              // Same in-app notification shape createRefund uses (email already sent above).
+              if (p.userId) {
+                createNotification({
+                  userId: p.userId,
+                  type: 'refund_issued',
+                  title: 'Refund issued',
+                  body: `A refund of $${refundAmount.toFixed(2)} was issued for "${p.item?.title || 'item'}"`,
+                  link: '/shopper/purchases',
+                  channel: 'OPERATIONAL',
+                  sendEmail: false, // sendRefundConfirmationEmail above already sends the email for this event
+                }).catch((err) => console.error('[notification] Failed to create refund_issued notification (dashboard-refund path):', err));
+              }
+            }
+          }
         } catch (err) {
           console.error(`[stripe] charge.refunded: failed to update purchases for PI ${paymentIntentId}:`, err);
         }

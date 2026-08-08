@@ -2608,7 +2608,13 @@ export const placeBid = async (req: AuthRequest, res: Response) => {
         'You Were Outbid',
         `You were outbid at $${actualBidAmount.toFixed(2)} on ${item.title}`,
         `/items/${itemId}`,
-        'OPERATIONAL'
+        'OPERATIONAL',
+        // S1195 (2026-08-08, notification-gap dispatch): OUTBID is time-critical --
+        // the shopper needs to know fast enough to place a counter-bid before the
+        // auction closes. In-app-only notification was previously the only option
+        // (services/notificationService.ts had no email capability at all).
+        true,
+        `You were outbid on ${item.title}`
       ).catch(err => console.warn('[placeBid] Failed to create outbid notification:', err));
     }
 

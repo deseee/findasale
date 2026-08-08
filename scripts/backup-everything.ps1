@@ -285,8 +285,60 @@ if (-not $SkipDB) {
         # script with a cryptic "cannot call a method on a null-valued expression" instead
         # of hitting the existing Add-Failure path below. Capture raw output first, only
         # call .Trim() when it is actually a non-null string.
-        $rawConnStr = railway run --service Postgres -- cmd /c "echo %DATABASE_PUBLIC_URL%" 2>$null
-        $connStr = if ($rawConnStr) { $rawConnStr.Trim() } else { $null }
+        #
+        # RETRY + DIAGNOSTICS (added 2026-08-08, following the 2026-08-07 15:44 UTC
+        # recurrence -- P1 row in STATE.md Blocked Queue). The prior version made exactly
+        # ONE attempt and threw stderr away via `2>$null`, so a transient network/API blip
+        # was logged identically to a real auth/config bug: just "could not get
+        # DATABASE_PUBLIC_URL from Railway CLI" with nothing else. Direct evidence from that
+        # run (backup-log.txt:4261-4262): RAILWAY_TOKEN was present and a clean 37 chars (no
+        # whitespace-corruption warning fired, ruling out the 2026-07-29 stale/malformed-
+        # token class of bug for this occurrence), and the FAIL line landed just ~1 second
+        # after "[1/6] Database backup..." started -- far faster than a real cold-start CLI
+        # auth+API round trip, which points at a fast-failing transient condition (DNS blip,
+        # connection reset, Railway API hiccup) rather than a slow timeout. This is NOT a
+        # full root-cause of every future occurrence -- it makes the call survive a
+        # transient blip (retry-with-backoff) and, when it still fails, captures the real
+        # exit code / stderr / per-attempt timing that this run's log never had, so the next
+        # occurrence can be root-caused for real instead of re-reading the same one-liner.
+        $dbUrlMaxAttempts = 3
+        $dbUrlRetryDelaySec = @(5, 15)  # wait before attempt 2, then before attempt 3
+        $connStr = $null
+        $dbUrlAttemptLog = New-Object System.Collections.ArrayList
+        for ($attempt = 1; $attempt -le $dbUrlMaxAttempts; $attempt++) {
+            if ($attempt -gt 1) {
+                $waitSec = $dbUrlRetryDelaySec[$attempt - 2]
+                Log "  [DATABASE] retrying DATABASE_PUBLIC_URL resolution (attempt $attempt/$dbUrlMaxAttempts) after ${waitSec}s..."
+                Start-Sleep -Seconds $waitSec
+            }
+            $attemptStart = Get-Date
+            # Merge stderr into the output stream instead of discarding it (the old `2>$null`)
+            # so a real failure reason survives. Native-command stderr lines arrive as
+            # ErrorRecord objects when merged this way; stdout lines arrive as plain strings --
+            # split them back apart below rather than losing which is which.
+            $rawOutput = railway run --service Postgres -- cmd /c "echo %DATABASE_PUBLIC_URL%" 2>&1
+            $railwayExit = $LASTEXITCODE
+            $attemptMs = [math]::Round(((Get-Date) - $attemptStart).TotalMilliseconds)
+            $stdoutLines = @($rawOutput | Where-Object { $_ -isnot [System.Management.Automation.ErrorRecord] })
+            $stderrLines = @($rawOutput | Where-Object { $_ -is [System.Management.Automation.ErrorRecord] } | ForEach-Object { $_.ToString() })
+            $rawConnStr = if ($stdoutLines) { ($stdoutLines -join "`n") } else { $null }
+            $candidateConnStr = if ($rawConnStr) { $rawConnStr.Trim() } else { $null }
+            # Redact before this ever reaches a log line -- never write a token or DB
+            # connection string (which embeds the DB password) to disk. Presence/length/
+            # shape only, per this project's credential-blackout rule (CLAUDE.md S12).
+            $stderrForLog = ($stderrLines -join ' | ')
+            if ($env:RAILWAY_TOKEN) { $stderrForLog = $stderrForLog -replace [regex]::Escape($env:RAILWAY_TOKEN), '[REDACTED_TOKEN]' }
+            $stderrForLog = $stderrForLog -replace '(postgres(?:ql)?://[^:]+:)[^@]+(@)', '$1[REDACTED]$2'
+            if ($stderrForLog.Length -gt 500) { $stderrForLog = $stderrForLog.Substring(0, 500) + '...[truncated]' }
+            [void]$dbUrlAttemptLog.Add("attempt $attempt: exit=$railwayExit, ${attemptMs}ms, stdout-empty=$([string]::IsNullOrWhiteSpace($rawConnStr)), stderr=`"$stderrForLog`"")
+            if ($candidateConnStr) {
+                $connStr = $candidateConnStr
+                Log "  [DATABASE] DATABASE_PUBLIC_URL resolved on attempt $attempt/$dbUrlMaxAttempts (exit=$railwayExit, ${attemptMs}ms)"
+                break
+            } else {
+                Log "  [DATABASE] attempt $attempt/$dbUrlMaxAttempts failed to resolve DATABASE_PUBLIC_URL (exit=$railwayExit, ${attemptMs}ms, stderr=`"$stderrForLog`")"
+            }
+        }
         if ($connStr) {
             # Append sslmode if not already present
             if ($connStr -notmatch 'sslmode=') { $connStr = "$connStr`?sslmode=require" }
@@ -298,7 +350,8 @@ if (-not $SkipDB) {
                 Add-Failure "DATABASE" "pg_dump with Railway connection string failed (exit $LASTEXITCODE). NO DATABASE DUMP IN THIS BACKUP."
             }
         } else {
-            Add-Failure "DATABASE" "could not get DATABASE_PUBLIC_URL from Railway CLI. NO DATABASE DUMP IN THIS BACKUP."
+            $diagSummary = ($dbUrlAttemptLog -join ' || ')
+            Add-Failure "DATABASE" "could not get DATABASE_PUBLIC_URL from Railway CLI after $dbUrlMaxAttempts attempt(s). NO DATABASE DUMP IN THIS BACKUP. Diagnostics: $diagSummary"
         }
     } elseif ($pgDump -and -not $env:PGPASSWORD) {
         Add-Failure "DATABASE" "PGPASSWORD not set in environment -- direct pg_dump fallback unavailable. NO DATABASE DUMP IN THIS BACKUP."

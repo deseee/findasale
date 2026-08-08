@@ -180,7 +180,11 @@ export async function closeAuction(itemId: string): Promise<void> {
       `Congratulations! You won the auction with a bid of $${bidAmount.toFixed(2)}. ${checkoutCta}`,
       // item.saleId! — auction items always have saleId by domain invariant
       checkoutUrl || `/sales/${item.saleId!}`,
-      'OPERATIONAL'
+      'OPERATIONAL',
+      // S1195 (2026-08-08, notification-gap dispatch): AUCTION_WON is time-critical --
+      // email so the winner sees it even if they don't have the app open.
+      true,
+      `You won "${item.title}"!`
     );
 
     // Notify organizer

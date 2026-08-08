@@ -218,7 +218,15 @@ export const endAuctions = async () => {
           'Auction Won!',
           `Congratulations! You won the auction for ${result.item.title} with a bid of $${result.price.toFixed(2)}`,
           `/items/${result.item.id}`,
-          'OPERATIONAL'
+          'OPERATIONAL',
+          // S1195 (2026-08-08, notification-gap dispatch): AUCTION_WON is time-critical --
+          // the winner has a payment window to complete checkout in, so an in-app-only
+          // notification (easy to miss) was a real gap. Note: this call site already
+          // separately emails a payment-link message above (lines ~180-210) when a Stripe
+          // PaymentIntent exists; this second, plainer "you won" email still adds value when
+          // no PaymentIntent was created (no-Stripe-account path) and as a redundant channel.
+          true,
+          `You won the auction for ${result.item.title}!`
         ).catch(err => console.warn('[auctionJob] Failed to create winner notification:', err));
       }
 

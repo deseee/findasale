@@ -6,6 +6,7 @@ import {
   GENERIC_PATTERNS as SHARED_GENERIC_PATTERNS,
   calibrateConfidence as sharedCalibrateConfidence,
   isGenericEmail as sharedIsGenericEmail,
+  registrableDomain,
   type DiscoverySource,
 } from './emailProvenance';
 import { isBlockedWebsiteDomain } from '../config/domainBlocklist';
@@ -490,6 +491,18 @@ export async function discoverEmail(
 
     const website = organizer.website;
 
+    // Domain-COMPARISON value only (www.-stripped) — e.g. confidence calibration and the
+    // RDAP registrant lookup need the real registrable domain, not whatever exact hostname
+    // (possibly "www.example.com") happened to be stored in organizer.website. `domain`
+    // above is left untouched for the actual HTTP fetch / circuit-breaker keys, which must
+    // match the literal hostname that was scraped. Investigated 2026-08-08 while root-causing
+    // the hansenauctiongroup.com www-variant gap: that specific case turned out to be a
+    // correctly-rejected generic info@ address (not this bug), but this raw-hostname vs.
+    // registrable-domain mismatch was found live in the same code path and silently
+    // mis-scores/mis-looks-up EVERY organizer whose stored website starts with "www." —
+    // narrow fix, does not change gate strictness or thresholds.
+    const organizerRegistrableDomain = registrableDomain(organizer.website) ?? domain;
+
     // Anti-abuse gate 1: never fetch aggregator/social/mega-brand hosts wrongly stored as a
     // "website". Mark the organizer exhausted so it stops re-qualifying for this pipeline.
     if (isBlockedWebsiteDomain(website)) {
@@ -531,7 +544,7 @@ export async function discoverEmail(
         0.95,
         'website_scrape',
         emailDomain,
-        domain,
+        organizerRegistrableDomain,
         organizer.address ?? null
       );
       if (confidence < MIN_CONFIDENCE_TO_STORE) {
@@ -546,10 +559,10 @@ export async function discoverEmail(
 
     // Stage 3: RDAP registrant lookup
     // Base confidence 0.80 — owner's email from registrar, high signal but not scraped from site
-    const rdapEmail = await lookupRdapEmail(domain);
+    const rdapEmail = await lookupRdapEmail(organizerRegistrableDomain);
     if (rdapEmail) {
       const emailDomain = rdapEmail.substring(rdapEmail.indexOf('@') + 1).toLowerCase();
-      const confidence = calibrateConfidence(0.80, 'whois', emailDomain, domain, organizer.address ?? null);
+      const confidence = calibrateConfidence(0.80, 'whois', emailDomain, organizerRegistrableDomain, organizer.address ?? null);
       if (confidence >= MIN_CONFIDENCE_TO_STORE) {
         await updateOrganizerEmail(organizerId, rdapEmail, 'whois', confidence);
         return rdapEmail;
