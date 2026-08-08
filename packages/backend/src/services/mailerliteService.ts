@@ -19,6 +19,66 @@ function getApiKey(): string | null {
 }
 
 /**
+ * isTestOrSyntheticEmail — detects QA / security-test / seed-fixture emails so the
+ * registration flow can skip creating a real MailerLite subscriber for them.
+ *
+ * Real incident (2026-08-08): a manual audit of MailerLite subscribers found 26 of 42
+ * (62%) were QA/test/security-test fixture signups — e.g.
+ * hacker-test-a-699fd732@findasale-sectest.invalid, dyntest-mall-41812511@findasale-sectest.invalid,
+ * qa-ga4-test@example.com, purge-test-x-1784862695@example.com, test@example.com,
+ * user1@test.com, and Patrick's own test-session aliases like deseee+s984qa@yahoo.com. All
+ * were manually identified and deleted from MailerLite directly via the API. This function
+ * stops the registration flow from re-creating that same pollution on every future
+ * QA/security-test session.
+ *
+ * Patterns below are deliberately narrow — they only cover shapes actually observed in the
+ * deleted-fixture list, so a real organizer/shopper is never silently skipped. False
+ * negatives here (a test account slipping through) are low-cost and recoverable by hand,
+ * same as today; false positives (a real user never getting subscribed) are the thing to
+ * avoid.
+ *
+ * @param email - the email address to check (case-insensitive)
+ * @returns true if the email matches a known test/synthetic pattern
+ */
+export function isTestOrSyntheticEmail(email: string): boolean {
+  if (!email) return false;
+
+  const lower = email.trim().toLowerCase();
+  const atIndex = lower.lastIndexOf('@');
+  if (atIndex === -1) return false;
+
+  const localPart = lower.slice(0, atIndex);
+  const domain = lower.slice(atIndex + 1);
+
+  // Known test/synthetic domains
+  if (domain === 'example.com' || domain === 'test.com') return true;
+  if (domain.endsWith('.invalid')) return true;
+
+  // Local-part prefixes seen in the deleted-fixture list (covers, among others, the
+  // finda.sale-domain qa-test-pow-2026-07-19c@finda.sale case via the "qa-" prefix —
+  // scoped to the "qa-" prefix specifically so real @finda.sale staff addresses aren't caught)
+  const testPrefixes = ['qa-', 'test-', 'purge-test-', 'dyntest-', 'hacker-test-', 'claimtest', 'fas.qa.'];
+  if (testPrefixes.some((prefix) => localPart.startsWith(prefix))) return true;
+
+  // Exact local-part "test" on any domain (test@anything)
+  if (localPart === 'test') return true;
+
+  // Seed-fixture pattern: user1/user2/user3/user4 as the exact local-part (e.g. user1@test.com)
+  if (/^user[1-4]$/.test(localPart)) return true;
+
+  // Plus-addressed test-session tags, e.g. deseee+s984qa@yahoo.com, +s983test, +s937e2e.
+  // Only matches a "+" segment shaped like s<digits><optional alphanumerics> so a real
+  // alias like real.user+newsletter@gmail.com is never caught.
+  const plusIndex = localPart.indexOf('+');
+  if (plusIndex !== -1) {
+    const tag = localPart.slice(plusIndex + 1);
+    if (/^s\d+[a-z0-9]*$/.test(tag)) return true;
+  }
+
+  return false;
+}
+
+/**
  * markSalePublished — sets the `sale_published` custom field on a MailerLite subscriber.
  *
  * Called when an organizer publishes their first (or any) sale.

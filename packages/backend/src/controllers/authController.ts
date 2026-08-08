@@ -5,7 +5,7 @@ import crypto from 'crypto';
 import { prisma } from '../index';
 import { randomUUID } from 'crypto';
 import { handleReferralBadge } from './userController';
-import { addShopperSubscriber, addOrganizerSubscriber } from '../services/mailerliteService';
+import { addShopperSubscriber, addOrganizerSubscriber, isTestOrSyntheticEmail } from '../services/mailerliteService';
 import { processReferral } from '../services/referralService';
 import { awardXp, XP_AWARDS } from '../services/xpService';
 import { referralTrancheService } from '../services/referralTrancheService';
@@ -420,17 +420,29 @@ export const register = async (req: Request, res: Response) => {
     }
 
     // Subscribe shoppers to weekly digest (fire-and-forget, non-blocking)
+    // Skip known test/synthetic accounts (QA/security-test/seed fixtures) — see
+    // isTestOrSyntheticEmail in mailerliteService.ts for why this exists.
     if (effectiveRole === 'USER') {
-      addShopperSubscriber(user.email, user.name || 'Shopper').catch((err) => {
-        console.error('Failed to subscribe shopper to weekly digest:', err);
-      });
+      if (isTestOrSyntheticEmail(user.email)) {
+        console.log('[mailerlite] Skipping subscribe for test/synthetic email:', user.email);
+      } else {
+        addShopperSubscriber(user.email, user.name || 'Shopper').catch((err) => {
+          console.error('Failed to subscribe shopper to weekly digest:', err);
+        });
+      }
     }
 
     // Subscribe organizers to beta onboarding automation (fire-and-forget, non-blocking)
+    // Skip known test/synthetic accounts (QA/security-test/seed fixtures) — see
+    // isTestOrSyntheticEmail in mailerliteService.ts for why this exists.
     if (effectiveRole === 'ORGANIZER') {
-      addOrganizerSubscriber(user.email, user.name || 'Organizer').catch((err) => {
-        console.error('Failed to subscribe organizer to onboarding automation:', err);
-      });
+      if (isTestOrSyntheticEmail(user.email)) {
+        console.log('[mailerlite] Skipping subscribe for test/synthetic email:', user.email);
+      } else {
+        addOrganizerSubscriber(user.email, user.name || 'Organizer').catch((err) => {
+          console.error('Failed to subscribe organizer to onboarding automation:', err);
+        });
+      }
     }
 
     // Load organizer if user is an organizer (for subscriptionTier in JWT)
@@ -635,17 +647,29 @@ export const oauthLogin = async (req: Request, res: Response) => {
       });
 
       // Subscribe to weekly digest (fire-and-forget, non-blocking)
+      // Skip known test/synthetic accounts (QA/security-test/seed fixtures) — see
+      // isTestOrSyntheticEmail in mailerliteService.ts for why this exists.
       if (effectiveRole === 'USER') {
-        addShopperSubscriber(user.email, user.name || 'Shopper').catch((err) => {
-          console.error('Failed to subscribe OAuth user to weekly digest:', err);
-        });
+        if (isTestOrSyntheticEmail(user.email)) {
+          console.log('[mailerlite] Skipping subscribe for test/synthetic email:', user.email);
+        } else {
+          addShopperSubscriber(user.email, user.name || 'Shopper').catch((err) => {
+            console.error('Failed to subscribe OAuth user to weekly digest:', err);
+          });
+        }
       }
 
       // Subscribe organizers to onboarding automation (fire-and-forget, non-blocking)
+      // Skip known test/synthetic accounts (QA/security-test/seed fixtures) — see
+      // isTestOrSyntheticEmail in mailerliteService.ts for why this exists.
       if (effectiveRole === 'ORGANIZER') {
-        addOrganizerSubscriber(user.email, user.name || 'Organizer').catch((err) => {
-          console.error('Failed to subscribe OAuth organizer to onboarding automation:', err);
-        });
+        if (isTestOrSyntheticEmail(user.email)) {
+          console.log('[mailerlite] Skipping subscribe for test/synthetic email:', user.email);
+        } else {
+          addOrganizerSubscriber(user.email, user.name || 'Organizer').catch((err) => {
+            console.error('Failed to subscribe OAuth organizer to onboarding automation:', err);
+          });
+        }
       }
     }
 
