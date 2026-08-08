@@ -16,6 +16,8 @@ interface User {
   storefrontSlug: string | null;
   suspendedAt: string | null;
   deletedAt: string | null;
+  organizerId: string | null;
+  subscriptionTier: string | null;
 }
 
 interface PaginationInfo {
@@ -40,6 +42,8 @@ const AdminUsers = () => {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [confirmDialog, setConfirmDialog] = useState<{ userId: string; newRole: string } | null>(null);
   const [deleteDialog, setDeleteDialog] = useState<string | null>(null);
+  const [tierDialog, setTierDialog] = useState<{ organizerId: string; userId: string; newTier: string } | null>(null);
+  const [updatingTier, setUpdatingTier] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isLoading && (!user || !user.roles?.includes('ADMIN'))) {
@@ -101,6 +105,20 @@ const AdminUsers = () => {
       setError('Failed to update user role');
     } finally {
       setUpdatingRole(null);
+    }
+  };
+
+  const handleTierChange = async (organizerId: string, userId: string, newTier: string) => {
+    try {
+      setUpdatingTier(organizerId);
+      await api.patch(`/admin/organizers/${organizerId}/tier`, { tier: newTier });
+      setUsers(users.map(u => u.id === userId ? { ...u, subscriptionTier: newTier } : u));
+      setTierDialog(null);
+    } catch (err) {
+      console.error('Error updating organizer tier:', err);
+      setError('Failed to update organizer tier');
+    } finally {
+      setUpdatingTier(null);
     }
   };
 
@@ -306,6 +324,19 @@ const AdminUsers = () => {
                           <option value="ORGANIZER">Organizer</option>
                           <option value="ADMIN">Admin</option>
                         </select>
+                        {u.organizerId && (
+                          <select
+                            value={u.subscriptionTier || 'SIMPLE'}
+                            onChange={(e) => setTierDialog({ organizerId: u.organizerId as string, userId: u.id, newTier: e.target.value })}
+                            disabled={updatingTier === u.organizerId}
+                            title="Organizer plan tier"
+                            className="px-2 py-1 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded text-xs focus:outline-none focus:ring-2 focus:ring-amber-600"
+                          >
+                            <option value="SIMPLE">SIMPLE</option>
+                            <option value="PRO">PRO</option>
+                            <option value="TEAMS">TEAMS</option>
+                          </select>
+                        )}
                         {u.deletedAt ? (
                           <button
                             onClick={() => handleRestore(u.id)}
@@ -387,6 +418,32 @@ const AdminUsers = () => {
                 </button>
                 <button
                   onClick={() => handleRoleChange(confirmDialog.userId, confirmDialog.newRole)}
+                  className="px-4 py-2 bg-amber-600 text-white rounded-md hover:bg-amber-700"
+                >
+                  Confirm
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Tier Change Confirmation Dialog */}
+        {tierDialog && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-sm">
+              <h3 className="text-lg font-bold text-warm-900 dark:text-warm-100 mb-4">Change Organizer Plan</h3>
+              <p className="text-warm-600 dark:text-warm-400 mb-6">
+                Move this organizer to the <strong>{tierDialog.newTier}</strong> plan? They&apos;ll be notified by email and in-app.
+              </p>
+              <div className="flex gap-3 justify-end">
+                <button
+                  onClick={() => setTierDialog(null)}
+                  className="px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-md text-warm-900 dark:text-warm-100 hover:bg-warm-50 dark:hover:bg-gray-700 dark:bg-gray-900"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => handleTierChange(tierDialog.organizerId, tierDialog.userId, tierDialog.newTier)}
                   className="px-4 py-2 bg-amber-600 text-white rounded-md hover:bg-amber-700"
                 >
                   Confirm

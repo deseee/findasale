@@ -2314,6 +2314,18 @@ const CreateSalePage: React.FC = () => {
     try {
       const response = await api.post('/sales', { ...payload, status: 'PUBLISHED' });
       const saleId = response.data.id;
+
+      // P0 fix (2026-08-08, QA session S1196): createSale always creates the sale as
+      // DRAFT -- the backend's saleCreateSchema never accepts a client-supplied status,
+      // so the status:'PUBLISHED' above was silently discarded and every wizard-published
+      // sale stayed invisible to shoppers (public /sales/[id] 404s) while this screen
+      // showed a false "Sale Published -- LIVE NOW" success state. Reuse the existing,
+      // correctly tier-gated PATCH /sales/:id/status endpoint (already used by
+      // dashboard.tsx and edit-sale/[id].tsx) to actually publish it. If this throws
+      // (e.g. tier limit), the catch block below handles it identically to a create
+      // failure and the false-success screen is never shown.
+      await api.patch(`/sales/${saleId}/status`, { status: 'PUBLISHED' });
+
       setPublishedSaleId(saleId);
 
       // GA4 #470: sale_created conversion event

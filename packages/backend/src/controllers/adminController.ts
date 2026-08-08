@@ -424,7 +424,9 @@ export const getUsers = async (req: AuthRequest, res: Response) => {
           _count: { select: { purchases: true } },
           organizer: {
             select: {
+              id: true,
               customStorefrontSlug: true,
+              subscriptionTier: true,
               _count: { select: { sales: true } },
             },
           },
@@ -449,6 +451,11 @@ export const getUsers = async (req: AuthRequest, res: Response) => {
       purchaseCount: user._count.purchases,
       saleCount: user.organizer?._count.sales || 0,
       storefrontSlug: user.organizer?.customStorefrontSlug || null,
+      // QA session 2026-08-08 (P3 fix): expose organizerId + tier so admin/users.tsx
+      // can offer a real tier-change control -- PATCH /organizers/:organizerId/tier
+      // (updateOrganizerTier) previously had zero frontend callers anywhere.
+      organizerId: user.organizer?.id || null,
+      subscriptionTier: user.organizer?.subscriptionTier || null,
     }));
 
     res.json({
