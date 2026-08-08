@@ -1,5 +1,6 @@
 import { Response } from 'express';
 import { Prisma } from '@prisma/client';
+import * as Sentry from '@sentry/node';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import { getStripe } from '../utils/stripe';
@@ -1015,7 +1016,31 @@ export const confirmPaymentRequest = async (req: AuthRequest, res: Response) => 
           data: { status: 'COMPLETED' },
         });
       } catch (err: any) {
-        console.error(`[pos-payment] Failed to mark item ${item.id} as sold:`, err);
+        // P0 fix (2026-08-08, Terminal readiness audit): this is the same failure class
+        // already fixed with a Sentry alert in stripeController.ts's POS-payment-request
+        // webhook fulfillment (search "P0 fix (2026-08-07)" in that file) -- by this point
+        // Stripe has confirmed the PaymentIntent succeeded (verified via
+        // paymentIntents.retrieve above) and posRequest.status is already PAID, so a
+        // failure creating this item's Purchase row or decrementing its stock means money
+        // was captured but the item was never recorded as sold. The catch here already
+        // correctly avoided aborting the rest of the cart (unlike terminalController.ts's
+        // sibling bug, also fixed this pass) -- but it only logged to console, so the
+        // failure had zero record anywhere once server logs rotated. Sentry closes that gap.
+        console.error(`[pos-payment] Failed to mark item ${item.id} as sold (payment already captured, request already PAID):`, err);
+        try {
+          Sentry.captureException(err instanceof Error ? err : new Error(String(err)), {
+            tags: { area: 'pos-payment-request-confirm-post-payment-item-fulfillment' },
+            extra: {
+              requestId,
+              itemId: item.id,
+              organizerUserId: posRequest.organizerUserId,
+              shopperUserId: posRequest.shopperUserId,
+              stripePaymentIntentId: paymentIntent.id,
+            },
+          });
+        } catch {
+          // Sentry may not be initialized -- silently continue
+        }
       }
     }
 

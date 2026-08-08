@@ -9,6 +9,7 @@
  */
 import { Response } from 'express';
 import { randomUUID } from 'crypto';
+import * as Sentry from '@sentry/node';
 import { getStripe } from '../utils/stripe';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
@@ -34,14 +35,87 @@ const stripe = () => getStripe();
 // ─── Endpoints ────────────────────────────────────────────────────────────────
 
 /**
+ * Get-or-create the Stripe Terminal Location for a sale's physical address, caching the
+ * result on Sale.stripeTerminalLocationId so repeat calls (every card swipe re-fetches a
+ * ConnectionToken) don't create a new Location object each time.
+ *
+ * Stripe requires every Terminal reader to be registered to a Location before it can be
+ * used (docs.stripe.com/terminal/fleet/locations-and-zones — "Before you can use a reader,
+ * you must register it to a location"), and a ConnectionToken can optionally be scoped to
+ * one Location so it only unlocks readers registered at that address ("If you provide a
+ * Location, the ConnectionToken is only usable with smart readers assigned to that
+ * Location"). Prior to this fix, no code path anywhere in the repo ever created a Terminal
+ * Location object — an organizer's first real WisePOS E/S700/S710 reader would have had
+ * nothing to register itself to via the API, and every ConnectionToken was unscoped (usable
+ * with ALL readers on the connected account, which is functionally fine for a single-reader
+ * organizer but loses the per-sale-address scoping Stripe's fleet model is built around, and
+ * still leaves reader *registration* itself with no in-app path).
+ *
+ * Locations belong to the organizer's own connected account (direct-charge model — see
+ * "Create a location for accounts using direct charges" in the Stripe docs above), matching
+ * how every other Terminal call in this file is already scoped via `stripeAccount`.
+ *
+ * NOTE: this only creates the Location object. Registering a *physical reader* to it (either
+ * via the Stripe Dashboard's registration-code flow, or a future in-app "add a reader" UI)
+ * remains a separate, one-time hardware-setup step — out of scope for this pass (flagged,
+ * not fixed; see the Terminal-readiness audit notes).
+ */
+async function getOrCreateTerminalLocationForSale(
+  sale: {
+    id: string;
+    title: string;
+    address: string;
+    city: string;
+    state: string;
+    zip: string;
+    stripeTerminalLocationId: string | null;
+  },
+  stripeConnectId: string
+): Promise<string> {
+  if (sale.stripeTerminalLocationId) {
+    return sale.stripeTerminalLocationId;
+  }
+
+  const location = await stripe().terminal.locations.create(
+    {
+      display_name: (sale.title || 'FindA.Sale').slice(0, 1000),
+      address: {
+        line1: sale.address,
+        city: sale.city,
+        state: sale.state,
+        postal_code: sale.zip,
+        country: 'US',
+      },
+    },
+    { stripeAccount: stripeConnectId }
+  );
+
+  await prisma.sale.update({
+    where: { id: sale.id },
+    data: { stripeTerminalLocationId: location.id },
+  });
+
+  return location.id;
+}
+
+/**
  * POST /api/stripe/terminal/connection-token
+ * Body (optional): { saleId?: string }
  * Creates a Stripe Terminal connection token scoped to the organizer's
  * connected Stripe account. The frontend SDK uses this to discover readers.
+ *
+ * When saleId is provided (and belongs to the calling organizer), the token is
+ * additionally scoped to that sale's Stripe Terminal Location — see
+ * getOrCreateTerminalLocationForSale above. saleId is optional so any caller that
+ * hasn't been updated to send it yet still gets a working (account-wide) token
+ * instead of a hard failure.
  */
 export const createConnectionToken = async (req: AuthRequest, res: Response) => {
   try {
     // Simulated mode: skip stripeConnectId requirement — create token on platform account.
     // Stripe allows this for simulated readers, enabling testing without a real Connect account.
+    // Simulated readers auto-discover without real Location registration, so Location scoping
+    // is deliberately skipped in this branch — it would be a no-op at best.
     const isSimulated = process.env.STRIPE_TERMINAL_SIMULATED === 'true';
 
     if (isSimulated) {
@@ -56,9 +130,36 @@ export const createConnectionToken = async (req: AuthRequest, res: Response) => 
     const organizer = await resolveOrganizerOrTeamMember(req, res);
     if (!organizer) return;
 
+    const { saleId } = req.body as { saleId?: string };
+    let locationId: string | undefined;
+    if (saleId) {
+      const sale = await prisma.sale.findUnique({
+        where: { id: saleId },
+        select: {
+          id: true,
+          title: true,
+          address: true,
+          city: true,
+          state: true,
+          zip: true,
+          organizerId: true,
+          stripeTerminalLocationId: true,
+        },
+      });
+      if (sale && sale.organizerId === organizer.id) {
+        try {
+          locationId = await getOrCreateTerminalLocationForSale(sale, organizer.stripeConnectId!);
+        } catch (locErr) {
+          // Never block token issuance on Location setup failing -- fall back to an
+          // unscoped (account-wide) token, matching pre-existing behavior.
+          console.error('[terminal] Failed to get/create Terminal Location for sale — issuing unscoped connection token instead:', locErr);
+        }
+      }
+    }
+
     // Create connection token on the organizer's connected account
     const token = await stripe().terminal.connectionTokens.create(
-      {},
+      locationId ? { location: locationId } : {},
       { stripeAccount: organizer.stripeConnectId! }
     );
 
@@ -427,6 +528,24 @@ export const captureTerminalPaymentIntent = async (req: AuthRequest, res: Respon
 
     // Mark items SOLD -- ADR-085 Track B Phase 1 Step 4: atomic, race-safe stock decrement
     // replaces the old unconditional status update.
+    //
+    // P0 fix (2026-08-08, Terminal readiness audit): payment is ALREADY captured (see
+    // paymentIntents.capture above) and every Purchase row for this PaymentIntent is
+    // ALREADY marked PAID (see the updateMany immediately above this loop) by the time
+    // this per-item stock update runs. The old code `throw stockErr` on any failure here
+    // (oversold race, or any other DB error), which propagated to the outer catch and
+    // returned a 500 "Failed to capture Terminal payment" -- telling the cashier the
+    // payment FAILED when the card had already been charged (see pos.tsx handleCharge's
+    // catch, which shows exactly that message to the cashier). Worse: a retry from that
+    // false-failure state hits the "every purchase already PAID" idempotent short-circuit
+    // above and returns success immediately WITHOUT ever completing the missed stock
+    // update for the item(s) after the one that failed -- money captured, item never
+    // marked SOLD, silently and permanently. This is the exact "money-captured-but-
+    // item-not-recorded" gap flagged by the 2026-08-07 audit sweep for this file. Mirrors
+    // the identical P0 already fixed in stripeController.ts's POS-payment-request webhook
+    // fulfillment (search "P0 fix (2026-08-07)" in that file) -- same failure class, same
+    // fix shape: alert to Sentry so it is never silently lost, keep processing the rest of
+    // the cart, and never turn an already-successful payment into a false failure response.
     for (const p of purchases) {
       if (p.itemId) {
         try {
@@ -443,10 +562,26 @@ export const captureTerminalPaymentIntent = async (req: AuthRequest, res: Respon
             );
           }
         } catch (stockErr: any) {
-          if (stockErr instanceof InsufficientStockError) {
-            console.error(`[terminal] Oversold race on item ${p.itemId} despite captured payment:`, stockErr.message);
+          console.error(
+            `[terminal] Post-capture stock update FAILED for item ${p.itemId} -- payment already captured, Purchase already marked PAID, item was NOT marked SOLD:`,
+            stockErr
+          );
+          try {
+            Sentry.captureException(stockErr instanceof Error ? stockErr : new Error(String(stockErr)), {
+              tags: { area: 'terminal-capture-post-payment-stock-update' },
+              extra: {
+                paymentIntentId,
+                itemId: p.itemId,
+                purchaseId: p.id,
+                organizerId: organizer.id,
+                insufficientStock: stockErr instanceof InsufficientStockError,
+              },
+            });
+          } catch {
+            // Sentry may not be initialized -- silently continue
           }
-          throw stockErr;
+          // Do NOT rethrow -- see the P0 fix note above. The payment already succeeded;
+          // rethrowing here would falsely tell the cashier it didn't.
         }
       }
     }
@@ -737,6 +872,16 @@ export async function processCashSaleCore(params: {
   // Mark items SOLD -- ADR-085 Track B Phase 1 Step 4: atomic, race-safe stock decrement
   // replaces the old unconditional status update. Downstream cross-channel-removal hooks
   // only fire once the item is actually fully sold out, not on every partial sale.
+  // P0 fix (2026-08-08, Terminal readiness audit): every Purchase row for this cart was
+  // ALREADY created above with status PAID, and cash was physically already collected by
+  // the organizer -- both are irreversible facts by the time this loop runs. The old code
+  // `throw stockErr` on any single item's stock-update failure aborted the ENTIRE loop
+  // (leaving every item after the failed one un-processed, no SOLD status, no cross-channel
+  // sync) and propagated to cashPayment's catch, which returned a 500 telling the organizer
+  // the cash sale failed -- when it had already been recorded and the cash already taken.
+  // Same failure class as captureTerminalPaymentIntent's card-path fix above: alert to
+  // Sentry, keep processing the rest of the cart, never let a partial failure masquerade as
+  // a total one.
   for (const item of items) {
     if (item.itemId) {
       let fullySoldOut: boolean;
@@ -744,10 +889,27 @@ export async function processCashSaleCore(params: {
       try {
         ({ fullySoldOut, remainingStock } = await sellItemUnits(item.itemId, 1));
       } catch (stockErr: any) {
-        if (stockErr instanceof InsufficientStockError) {
-          console.error(`[terminal] Oversold race on item ${item.itemId} despite captured payment:`, stockErr.message);
+        console.error(
+          `[terminal] Post-payment stock update FAILED for cash-sale item ${item.itemId} -- Purchase already created as PAID, cash already collected, item was NOT marked SOLD:`,
+          stockErr
+        );
+        try {
+          Sentry.captureException(stockErr instanceof Error ? stockErr : new Error(String(stockErr)), {
+            tags: { area: 'terminal-cash-sale-post-payment-stock-update' },
+            extra: {
+              saleId,
+              itemId: item.itemId,
+              organizerId: organizer.id,
+              insufficientStock: stockErr instanceof InsufficientStockError,
+            },
+          });
+        } catch {
+          // Sentry may not be initialized -- silently continue
         }
-        throw stockErr;
+        // Do NOT rethrow -- see the P0 fix note above. Skip this item's downstream
+        // marketplace sync (its stock state is unresolved) but keep processing the rest
+        // of the cart's items instead of aborting the whole cash sale.
+        continue;
       }
 
       if (fullySoldOut) {

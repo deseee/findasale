@@ -1024,6 +1024,13 @@ model Sale {
   crewInvasionCodes           CrewInvasionCode[]
   // ADR-078 Wave 1: Video Content Pipeline — jobs generated for/about this sale
   videoJobs                   VideoJob[]
+  // Terminal readiness fix (2026-08-08): cached Stripe Terminal Location object id for
+  // this sale's physical address. Stripe requires every card reader to be registered to a
+  // Location before use; this field is get-or-create'd by
+  // terminalController.getOrCreateTerminalLocationForSale so it's only created once per
+  // sale, not on every ConnectionToken fetch. Null until the organizer's first real
+  // (non-simulated) Terminal connection-token request for this sale.
+  stripeTerminalLocationId    String?
   createdAt                   DateTime                   @default(now())
   updatedAt                   DateTime                   @updatedAt
   // Sentry NODEJS-10 fix (partial indexes — raw SQL only, Prisma @@index does not support WHERE predicates):

@@ -190,6 +190,16 @@ export default function POSPage() {
   const [selectedSaleId, setSelectedSaleId] = useState('');
   const [itemSearch, setItemSearch] = useState('');
   const [searchResults, setSearchResults] = useState<Item[]>([]);
+  // Terminal readiness fix (2026-08-08): onFetchConnectionToken below is created once
+  // inside initTerminal (a useCallback with an empty dep array) and can be invoked by the
+  // Stripe Terminal SDK again later (e.g. token refresh) without initTerminal re-running --
+  // a plain closed-over selectedSaleId would go stale if the organizer switches sales after
+  // connecting the reader. This ref is kept in sync via the effect below and read inside
+  // that closure instead.
+  const selectedSaleIdRef = useRef(selectedSaleId);
+  useEffect(() => {
+    selectedSaleIdRef.current = selectedSaleId;
+  }, [selectedSaleId]);
 
   // Cart state
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -631,7 +641,9 @@ export default function POSPage() {
 
       const terminal = StripeTerminal!.create({
         onFetchConnectionToken: async () => {
-          const res = await api.post<{ secret: string }>('/stripe/terminal/connection-token', {});
+          const res = await api.post<{ secret: string }>('/stripe/terminal/connection-token', {
+            ...(selectedSaleIdRef.current ? { saleId: selectedSaleIdRef.current } : {}),
+          });
           return res.data.secret;
         },
         onUnexpectedReaderDisconnect: () => {

@@ -22,7 +22,8 @@ function generateCouponCode(): string {
 // Thrown INSIDE an XP-spend + coupon-create transaction to force a rollback (never leaves
 // XP spent with no coupon to show for it). Caught immediately after the transaction to
 // reproduce the exact same HTTP response the pre-transaction code returned. 2026-08-07
-// data-integrity audit finding — see luckyRollController.ts for the companion fix.
+// data-integrity audit finding — companion fix was in luckyRollController.ts/luckyRollService.ts,
+// removed 2026-08-08 when Lucky Roll was deleted (dead code, superseded by Early Access Cache).
 class XpSpendFailedError extends Error {}
 class CouponCodeCollisionError extends Error {}
 

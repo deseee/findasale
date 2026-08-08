@@ -184,7 +184,6 @@ import ebayRoutes from './routes/ebay';                       // eBay Marketplac
 import ebayTaxonomyRoutes from './routes/ebayTaxonomy';       // Phase C: eBay Taxonomy, Catalog, AI Suggest
 import barcodeRoutes from './routes/barcode';                  // Barcode scan -> eBay Catalog product enrichment
 import shopifyRoutes from './routes/shopify';              // Feature: Shopify Cross-Listing
-import luckyRollRoutes from './routes/lucky-roll';             // Phase 2b: Lucky Roll — weekly XP gacha
 import crewsRoutes from './routes/crews';                       // Phase 2a: Explorer's Guild — Crew Creation
 import discountRuleRoutes from './routes/discountRules';        // Feature #310: Color-tagged Discount Rules
 import markdownCycleRoutes from './routes/markdownCycles';       // Feature: Automatic Markdown Cycles (PRO Tier)
@@ -860,7 +859,6 @@ app.use('/api/ebay', ebayRoutes);                                          // eB
 app.use('/api/ebay', ebayTaxonomyRoutes);                                  // Phase C: eBay Taxonomy + Catalog + AI Suggest
 app.use('/api/barcode', barcodeRoutes);                                    // Barcode scan -> eBay Catalog product enrichment
 app.use('/api/shopify', shopifyRoutes);                              // Feature: Shopify Cross-Listing
-app.use('/api/lucky-roll', luckyRollRoutes);                               // Phase 2b: Lucky Roll — weekly XP gacha
 app.use('/api/crews', crewsRoutes);                                        // Phase 2a: Explorer's Guild — Crew Creation
 app.use('/api/discount-rules', discountRuleRoutes);                         // Feature #310: Color-tagged Discount Rules
 app.use('/api/markdown-cycles', markdownCycleRoutes);                       // Feature: Automatic Markdown Cycles (PRO Tier)
