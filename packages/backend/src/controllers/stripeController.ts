@@ -1592,8 +1592,28 @@ export const webhookHandler = async (req: Request, res: Response) => {
         // succeeding. Previously this branch had no "skipped" log at all, and the
         // "attempted" path only logged on failure -- so neither hypothesis was
         // distinguishable after the fact from logs alone.
+        // S1195 (2026-08-08, notification-gap dispatch): a multi-item cart checkout
+        // (checkout.session.completed's cart_checkout branch) creates N Purchase rows that
+        // all share this exact stripePaymentIntentId (schema.prisma: "one PI may have
+        // multiple Purchase rows (multi-item cart)"). Stripe does not guarantee event
+        // delivery order, so if cart_checkout's transaction commits before this
+        // payment_intent.succeeded webhook runs, `purchase` above resolves to just the
+        // FIRST of those N rows via findFirst(). Sending the single-item notification below
+        // in that case would (a) reference only one of the purchased items' titles, and (b)
+        // duplicate the aggregate cart notification cart_checkout now sends itself (see
+        // "S1195" comment there). Detect via sibling-row count and defer to cart_checkout as
+        // the single source of truth for multi-item cart notifications.
+        const siblingPurchaseCount = await prisma.purchase.count({
+          where: { stripePaymentIntentId: paymentIntent.id },
+        });
         const notifyOrganizerUserId = purchase.sale?.organizer?.userId;
-        if (notifyOrganizerUserId) {
+        if (siblingPurchaseCount > 1) {
+          console.log(
+            `[PaymentNotification] Skipped single-item payment_received notification for purchase ${purchase.id} -- ` +
+            `${siblingPurchaseCount} Purchase rows share PaymentIntent ${paymentIntent.id} (multi-item cart checkout; ` +
+            `notified via checkout.session.completed's cart_checkout branch instead)`
+          );
+        } else if (notifyOrganizerUserId) {
           console.log(
             `[PaymentNotification] Attempting payment_received notification for purchase ${purchase.id} (organizerUserId=${notifyOrganizerUserId})`
           );
@@ -2454,6 +2474,10 @@ export const webhookHandler = async (req: Request, res: Response) => {
         if (cartItemIds.length > 0) {
           const cartFullySoldOutIds: string[] = [];
           const cartPartialSaleUpdates: { itemId: string; remainingStock: number }[] = [];
+          // S1195: populated inside the $transaction below (see cartSale), used after it
+          // commits to send the organizer notification that this branch previously lacked.
+          let cartSaleOrganizerUserId: string | null = null;
+          let cartSaleTitle: string | null = null;
           try {
             await prisma.$transaction(async (tx) => {
               // Fetch items to get current price and confirm they're still AVAILABLE
@@ -2466,12 +2490,21 @@ export const webhookHandler = async (req: Request, res: Response) => {
               const cartSale = cartSaleId
                 ? await tx.sale.findUnique({
                     where: { id: cartSaleId },
-                    select: { organizer: { select: { subscriptionTier: true } } },
+                    select: { title: true, organizer: { select: { subscriptionTier: true, userId: true } } },
                   })
                 : null;
               const cartFeeRate = getPlatformFeeRate(
                 (cartSale?.organizer?.subscriptionTier ?? null) as SubscriptionTier
               );
+              // S1195 (2026-08-08, notification-gap dispatch): captured here (inside the tx
+              // closure, where cartSale is in scope) and read after the transaction commits,
+              // to fire the organizer notification below. Root cause: this branch previously
+              // created N Purchase rows for a multi-item cart checkout and NEVER notified the
+              // organizer at all -- unlike the single-item payment_intent.succeeded path (see
+              // "Notify organizer of payment received" below), which already sends an in-app +
+              // email notification (S1183 fix, 2026-07-29).
+              cartSaleOrganizerUserId = cartSale?.organizer?.userId ?? null;
+              cartSaleTitle = cartSale?.title ?? null;
 
               // Mark all items SOLD -- ADR-085 Track B Phase 1 Step 4: atomic, race-safe
               // stock decrement replaces the old unconditional updateMany. Collects which
@@ -2541,6 +2574,42 @@ export const webhookHandler = async (req: Request, res: Response) => {
             console.log(
               `[cart-checkout] Completed — ${cartItemIds.length} items marked SOLD, saleId=${cartSaleId}`
             );
+
+            // S1195 (2026-08-08, notification-gap dispatch): notify the organizer of this
+            // cart sale. Root cause: this branch created Purchase rows and marked items SOLD
+            // but never notified the organizer -- the organizer only found out about
+            // multi-item online sales by opening the app. Mirrors the exact pattern used by
+            // the single-item "Notify organizer of payment received" block in
+            // payment_intent.succeeded below (same createNotification() from
+            // lib/notificationService.ts, sendEmail: true, same outcome logging shape).
+            if (cartSaleOrganizerUserId) {
+              console.log(
+                `[PaymentNotification] Attempting payment_received notification for cart checkout session ${session.id} (organizerUserId=${cartSaleOrganizerUserId}, items=${cartItemIds.length})`
+              );
+              createNotification({
+                userId: cartSaleOrganizerUserId,
+                type: 'payment_received',
+                title: 'Payment received',
+                body: `Payment of $${((session.amount_total ?? 0) / 100).toFixed(2)} received for ${cartItemIds.length} item${cartItemIds.length === 1 ? '' : 's'}${cartSaleTitle ? ` at "${cartSaleTitle}"` : ''}`,
+                link: `/organizer/sales/${cartSaleId}`,
+                channel: 'OPERATIONAL',
+                sendEmail: true,
+              }).then(() => {
+                console.log(
+                  `[PaymentNotification] createNotification succeeded for cart checkout session ${session.id} (organizerUserId=${cartSaleOrganizerUserId})`
+                );
+              }).catch((err) => {
+                console.error(
+                  `[PaymentNotification] createNotification failed for cart checkout session ${session.id} (organizerUserId=${cartSaleOrganizerUserId}):`,
+                  err instanceof Error ? (err.stack || err.message) : err
+                );
+              });
+            } else {
+              console.error(
+                `[PaymentNotification] Skipped payment_received notification for cart checkout session ${session.id} -- ` +
+                `organizer.userId did not resolve (saleId=${cartSaleId ?? 'null'})`
+              );
+            }
           } catch (cartErr) {
             // P0 fix (2026-08-07): Purchase-row creation for this cart runs inside a
             // prisma.$transaction (see above), so a throw here means Stripe already captured

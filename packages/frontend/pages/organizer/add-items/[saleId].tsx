@@ -614,7 +614,7 @@ const AddItemsDetailPage = () => {
     enabled: !!saleId,
   });
 
-  const { data: items = [], isLoading: itemsLoading } = useQuery({
+  const { data: items = [], isLoading: itemsLoading, isError: itemsError, refetch: refetchItems } = useQuery({
     queryKey: ['items', saleId],
     queryFn: async () => {
       if (!saleId) return [];
@@ -1854,10 +1854,25 @@ const AddItemsDetailPage = () => {
                   {draftCount > 0 && `• ${draftCount} draft`}
                 </>
               )}
-              {items.length === 0 && (
+              {items.length === 0 && !itemsError && (
                 'Add items to your sale using camera capture, batch upload, manual entry, or CSV import.'
               )}
             </p>
+            {/* Distinct error state (D-009 pattern, matches command-center.tsx / calendar.tsx) —
+                a fetch failure must never render identically to the legitimate empty state. */}
+            {itemsError && (
+              <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 mt-2 mb-2">
+                <p className="text-red-700 dark:text-red-200 text-sm font-semibold mb-2">
+                  Couldn't load your items. Your items are still saved — this is just a display issue.
+                </p>
+                <button
+                  onClick={() => refetchItems()}
+                  className="bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors text-sm"
+                >
+                  Try Again
+                </button>
+              </div>
+            )}
             {/* Moved below the item-count line to remove the dead-space top block (Patrick feedback 2026-08-02) */}
             <div className="mt-3 pt-3 border-t border-warm-100 dark:border-gray-700">
               <Link

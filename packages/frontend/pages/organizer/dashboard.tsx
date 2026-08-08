@@ -319,6 +319,7 @@ const OrganizerDashboard = () => {
           saleType: string;
           saleSubtype?: string | null;
           itemCount: number;
+          totalItemCount: number;
           itemsSold: number;
         } | null;
       };
@@ -1590,7 +1591,13 @@ const OrganizerDashboard = () => {
                           <p className="text-sm text-warm-600 dark:text-warm-400">Items Listed</p>
                           <Tooltip content="Total items you've added to this sale" position="top" />
                         </div>
-                        <p className="text-3xl font-bold text-warm-900 dark:text-warm-100">{statsData.items.total ?? '--'}</p>
+                        {/* S1200-audit fix: was reading statsData.items.total (organizer-WIDE,
+                            summed across every sale this organizer owns) instead of the
+                            activeSale-scoped count -- every sibling metric on this card
+                            (Visitors Today, holds) is scoped to just this sale, so this tile
+                            silently showed a bigger, unrelated number. totalItemCount matches
+                            the Add Items page's count exactly (see organizers.ts /stats). */}
+                        <p className="text-3xl font-bold text-warm-900 dark:text-warm-100">{statsData.activeSale.totalItemCount ?? '--'}</p>
                       </Link>
                       <Link href="/organizer/ripples" className="text-center p-3 rounded-lg hover:bg-warm-50 dark:hover:bg-gray-700 transition-colors cursor-pointer">
                         <div className="flex items-center justify-center gap-1 mb-2">

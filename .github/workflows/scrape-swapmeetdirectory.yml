@@ -1,5 +1,16 @@
 name: Scrape SwapmeetDirectory.com
 
+# RE-ARMED 2026-08-08: same root cause already diagnosed and fixed for
+# scrape-propertyroom.yml (see that file's "RE-ARMED 2026-07-05" comment) --
+# a GitHub Actions billing block on 2026-06-24 (payments failed / spending
+# limit) can silently kill a cron-only workflow's schedule registration even
+# after billing is fixed, and the schedule never fires again on its own until
+# the workflow file is touched. This workflow had zero recorded runs since
+# 2026-07-01 despite its cron covering that date (confirmed via STATE.md's
+# scheduler-gap audit: "zero run record at all for 2026-07-01 -- not failed,
+# simply absent, no red X ever fired"). This comment is that re-arming touch,
+# which forces GitHub to re-register the trigger. If it goes silent again
+# after a future billing incident, repeat this (touch any line in this file).
 on:
   schedule:
     - cron: '0 9 1 */3 *'  # Quarterly: 1st of Jan/Apr/Jul/Oct at 09:00 UTC

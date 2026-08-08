@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/router';
 import api from '../lib/api';
 import { useToast } from './ToastContext';
+import { useAuth } from './AuthContext';
 
 interface OnboardingWizardProps {
   onComplete?: () => void;
@@ -10,12 +11,19 @@ interface OnboardingWizardProps {
 const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete }) => {
   const router = useRouter();
   const { showToast } = useToast();
+  const { user } = useAuth();
   const [currentStep, setCurrentStep] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
   const [completionError, setCompletionError] = useState<string | null>(null);
 
-  // Step 1 - Email Verification (stub)
-  const [emailVerified, setEmailVerified] = useState(false);
+  // Step 1 - Email Verification: derived from the real account record
+  // (AuthContext, hydrated from GET /auth/me), not a local stub. OAuth signups
+  // (Google/Facebook) are emailVerified=true at account creation (see authController.ts
+  // oauthLogin); password signups start false until they click the emailed link
+  // (POST /auth/verify-email) or an admin verifies them.
+  const isEmailVerified = user?.emailVerified === true;
+  const [resendState, setResendState] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
+  const [resendError, setResendError] = useState<string | null>(null);
 
   // Step 2 - Profile
   const [businessName, setBusinessName] = useState('');
@@ -35,6 +43,27 @@ const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete }) => {
     }
     // Close the modal
     if (onComplete) onComplete();
+  };
+
+  const handleResendVerification = async () => {
+    if (!user?.email || resendState === 'sending') return;
+    setResendState('sending');
+    setResendError(null);
+    try {
+      // Real endpoint — packages/backend/src/routes/auth.ts POST /auth/resend-verification
+      // (rate limited to 3/hour via verifyEmailLimiter, enumeration-safe generic response).
+      await api.post('/auth/resend-verification', { email: user.email });
+      setResendState('sent');
+      showToast('Verification email sent — check your inbox', 'success');
+      // Backend still enforces the real rate limit; this just re-enables the button
+      // after a short cooldown so it doesn't look permanently stuck.
+      setTimeout(() => setResendState('idle'), 30000);
+    } catch (error: any) {
+      setResendState('error');
+      const message = error.response?.data?.message || 'Failed to resend verification email. Please try again.';
+      setResendError(message);
+      showToast(message, 'error');
+    }
   };
 
   const markOnboardingComplete = async (): Promise<boolean> => {
@@ -163,7 +192,7 @@ const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete }) => {
 
         {/* Content */}
         <div className="p-8">
-          {/* Step 1: Email Verification (STUB) */}
+          {/* Step 1: Email Verification */}
           {currentStep === 1 && (
             <div className="space-y-6">
               <div>
@@ -173,11 +202,54 @@ const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete }) => {
                 </p>
               </div>
 
-              <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-                <p className="text-sm text-blue-900 dark:text-blue-200">
-                  Check your email for a verification link. This helps us send you sale alerts and payment confirmations to the right address.
-                </p>
-              </div>
+              {isEmailVerified ? (
+                <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4 flex items-start gap-3">
+                  <span className="text-green-500 text-lg mt-0.5" aria-hidden="true">✓</span>
+                  <div>
+                    <p className="text-sm font-medium text-green-900 dark:text-green-200">Your email is verified</p>
+                    <p className="text-sm text-green-800 dark:text-green-300 mt-0.5">
+                      {user?.email ? (
+                        <>
+                          <strong>{user.email}</strong> is confirmed.
+                        </>
+                      ) : (
+                        'Your email address is confirmed.'
+                      )}
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                  <p className="text-sm text-blue-900 dark:text-blue-200">
+                    {user?.email ? (
+                      <>
+                        We sent a verification link to <strong>{user.email}</strong>. Check your inbox (and spam
+                        folder) and click the link to verify.
+                      </>
+                    ) : (
+                      'Check your email for a verification link. This helps us send you sale alerts and payment confirmations to the right address.'
+                    )}
+                  </p>
+                  <p className="text-xs text-blue-700 dark:text-blue-300 mt-2">
+                    You can keep setting up your account — you'll just need to verify before publishing a sale.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleResendVerification}
+                    disabled={resendState === 'sending' || resendState === 'sent' || !user?.email}
+                    className="mt-3 text-sm font-medium text-blue-700 dark:text-blue-300 underline hover:text-blue-900 dark:hover:text-blue-100 disabled:opacity-50 disabled:no-underline"
+                  >
+                    {resendState === 'sending'
+                      ? 'Sending...'
+                      : resendState === 'sent'
+                      ? 'Verification email sent ✓'
+                      : 'Resend verification email'}
+                  </button>
+                  {resendState === 'error' && resendError && (
+                    <p className="text-xs text-red-600 dark:text-red-400 mt-2">{resendError}</p>
+                  )}
+                </div>
+              )}
 
               <div className="flex gap-3 pt-4">
                 <button
@@ -187,13 +259,10 @@ const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete }) => {
                   Skip for Now
                 </button>
                 <button
-                  onClick={() => {
-                    setEmailVerified(true);
-                    setCurrentStep(2);
-                  }}
+                  onClick={() => setCurrentStep(2)}
                   className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg transition-colors disabled:opacity-50"
                 >
-                  Verify Email
+                  Continue
                 </button>
               </div>
             </div>
@@ -367,7 +436,7 @@ const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete }) => {
               <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4 text-left">
                 <h3 className="font-semibold text-green-900 dark:text-green-200 mb-2">Completion Status:</h3>
                 <ul className="text-sm text-green-800 dark:text-green-300 space-y-1">
-                  <li>✓ Email verified</li>
+                  <li>{isEmailVerified ? '✓' : '○'} Email verified{!isEmailVerified ? ' (pending — check your inbox)' : ''}</li>
                   <li>✓ Business profile created</li>
                   <li>✓ Payment connected (Stripe)</li>
                   <li>{saleCreated ? '✓' : '○'} First sale created</li>

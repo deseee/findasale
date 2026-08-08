@@ -294,6 +294,17 @@ router.get('/stats', authenticate, async (req: AuthRequest, res: Response) => {
       const itemCount = activeSale.items.filter(
         (i: any) => i.draftStatus !== 'DRAFT'
       ).length;
+      // S1200-audit fix: dashboard's "Items Listed" tile was reading the organizer-WIDE
+      // items.total (summed across every sale this organizer owns) while every sibling
+      // metric on this same card (viewCount, holdCount, itemsSold) is scoped to just
+      // activeSale -- so "Items Listed" silently showed a bigger, unrelated number
+      // (e.g. 193 org-wide vs 191 actually in this sale). totalItemCount mirrors the
+      // add-items page's count exactly: every Item row with this saleId, any draftStatus
+      // (DRAFT/PENDING_REVIEW/PUBLISHED), minus inInventory items -- same exclusion the
+      // organizer-wide `items` aggregate above already applies (see `if (item.inInventory) return;`).
+      const totalItemCount = activeSale.items.filter(
+        (i: any) => !i.inInventory
+      ).length;
       const itemsSold = activeSale.items.filter(
         (i: any) => i.status === 'SOLD'
       ).length;
@@ -321,6 +332,7 @@ router.get('/stats', authenticate, async (req: AuthRequest, res: Response) => {
         viewCount: activeSale.qrScanCount ?? 0,
         holdCount,
         itemCount,
+        totalItemCount,
         itemsSold,
       };
     }

@@ -20,6 +20,13 @@ export const endAuctions = async () => {
           { auctionEndTime: { not: null } },
           { auctionEndTime: { lt: new Date() } },
           { status: 'AVAILABLE' },
+          // P0 cross-path race fix (see claim WHERE below): excludes items already
+          // claimed by auctionService.ts's closeAuction() (organizer manual
+          // "Close Auction" button, POST /:itemId/close-auction) that haven't
+          // flipped `status` away from AVAILABLE yet (e.g. partial stock, no
+          // sellout). Without this, a stale AVAILABLE+auctionClosed:true item
+          // would be re-selected here every 5 minutes.
+          { auctionClosed: false },
         ],
       },
       include: {
@@ -39,13 +46,25 @@ export const endAuctions = async () => {
       // P0 Race Fix: Wrap entire auction close logic in transaction with optimistic lock
       const result = await prisma.$transaction(async (tx) => {
         // 1. Atomic update with WHERE-clause guard: only process if not already closed
+        // P0 cross-path race fix: auctionService.ts's closeAuction() (manual
+        // organizer close, POST /:itemId/close-auction) uses `auctionClosed`
+        // as its own atomic claim field, independent of `status`. Before this
+        // fix, this job's claim only checked/wrote `status`, so a manual close
+        // and this cron tick could both win their respective claims on the
+        // same item (different guard columns don't mutually exclude), causing
+        // double payment collection (Stripe PaymentIntent here + Stripe
+        // Checkout Session in closeAuction()) and duplicate winner
+        // notifications. `auctionClosed` is now the single shared mutex field
+        // both paths check AND write atomically, so whichever claim commits
+        // first blocks the other regardless of which field it inspects.
         const updated = await tx.item.updateMany({
           where: {
             id: item.id,
             status: 'AVAILABLE',
+            auctionClosed: false,
             auctionEndTime: { not: null, lt: new Date() }
           },
-          data: { status: 'AUCTION_ENDED' } // Mark as processing
+          data: { status: 'AUCTION_ENDED', auctionClosed: true } // Mark as processing
         });
 
         if (updated.count === 0) {

@@ -289,8 +289,16 @@ export async function scrapePropertyRoom(
   console.log(`[PropertyRoom] TOTAL — found ${stats.itemsFound}, created ${stats.itemsCreated}, skipped ${stats.itemsSkipped}, failed ${stats.itemsFailed}`);
   console.log('[PropertyRoom] ─────────────────────────────────────────────────────');
 
+  // 2026-08-08: was `console.warn` only -- the script still exited 0 (success)
+  // on zero results, so 5 consecutive weekly "success" runs landed only 38
+  // total rows ever (vs. the scraper's own documented ~4,100-agency universe)
+  // with 0 created in the last 30 days, and nobody was ever alerted (confirmed
+  // via STATE.md). Matches the established convention used by most other
+  // scrapers in this directory (auctionZipScraper.ts, nasmmScraper.ts,
+  // foursquarePlaces.ts, etc. all throw here) so the workflow's "Notify on
+  // failure" step actually fires instead of silently reporting success.
   if (stats.itemsFound === 0) {
-    console.warn('[PropertyRoom] Completed with zero results — partners page may have changed markup');
+    throw new Error('[PropertyRoom] Completed with zero results — partners page may have changed markup');
   }
 
   return stats;

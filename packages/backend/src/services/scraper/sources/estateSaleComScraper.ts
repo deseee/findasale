@@ -349,5 +349,25 @@ export async function scrapeEstateSaleCom(
   }
 
   console.log('[EstateSaleCom] Done. Stats:', JSON.stringify(stats));
+
+  // 2026-08-08: was previously missing entirely -- the script only exited
+  // non-zero on an uncaught exception, never on "ran cleanly but found
+  // nothing". Every one of 51 state-page fetches can (and per STATE.md, did)
+  // return HTTP 200 with a parseable-but-empty table if the site/CDN soft-
+  // blocks bare automated requests -- that produced itemsFound=0 while the
+  // GitHub Actions step still reported "success", so nobody was ever alerted
+  // (confirmed: "4/5 runs 'success' since 2026-06-14, zero Organizer rows
+  // ever created from this source"). Matches the established convention used
+  // by nearly every other scraper in this directory (grep 'zero results' —
+  // auctionZipScraper.ts, nasmmScraper.ts, foursquarePlaces.ts, etc. all
+  // throw here) so the workflow's "Notify on failure" step actually fires.
+  if (stats.itemsFound === 0) {
+    throw new Error(
+      '[EstateSaleCom] Completed with zero results across all 51 state pages -- ' +
+      'site may be soft-blocking automated requests (see per-state block-marker ' +
+      'diagnostics logged above) or markup has changed.',
+    );
+  }
+
   return stats;
 }

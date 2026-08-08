@@ -4,10 +4,24 @@ name: Scrape Licenses & Registries (Phase 2 Batch)
 # Replaces 51 individual workflows that each paid their own pnpm-install +
 # prisma-generate setup and rounded up to a billed minute every Monday.
 #
-# IMPORTANT: trigger is workflow_dispatch ONLY during verification. No cron yet -
-# this must not double-run alongside the 51 originals. A schedule is added (and the
-# originals' crons disabled) only AFTER this batch is proven to land rows for every
-# state via manual dispatch.
+# STALE-COMMENT FIX 2026-08-08: this header used to read "trigger is
+# workflow_dispatch ONLY during verification ... A schedule is added (and the
+# originals' crons disabled) only AFTER this batch is proven ..." while the
+# `on:` block below already had `schedule:` active -- read at face value that
+# looked like the schedule had been turned on prematurely, before the
+# promised verification. Checked directly, not assumed: (1) all 51 individual
+# per-state scrape-*-phase2.yml workflows already have their `schedule:`
+# blocks removed (confirmed by reading every file's `on:` block -- each now
+# has `workflow_dispatch:` only, several explicitly commented "schedule
+# DISABLED"), so there is no double-run risk against this batch; (2)
+# claude_docs/session-log-archive.md records "batched 51 individual phase2
+# license-scraper workflows into ONE weekly workflow ... retired 42
+# individual crons, 9 already stub-disabled ... Batch verified: 48/51 pass"
+# from the real verification run that happened BEFORE the schedule below was
+# added and the 51 originals' crons were retired. So the schedule promotion
+# was correct and the process this comment describes was actually followed --
+# the comment itself was simply never updated afterward to say so. Left here
+# as the historical record of that process; it is DONE, not pending.
 
 on:
   schedule:

@@ -373,7 +373,22 @@ export async function runGeorgiaPhase2Scraper(): Promise<void> {
   console.log(`[GeorgiaPhase2] Fetched: ${totalFetched}, Matched: ${totalMatched}, Upserted: ${totalUpserted}`);
 
   if (totalMatched === 0) {
-    throw new Error(
+    // 2026-08-08: was `throw new Error(...)` -- this guaranteed the
+    // consolidated scrape-licenses-phase2-batch.yml run reported FAILED every
+    // single week (confirmed: 5/5 batch runs failed since 2026-07-06, un-
+    // triaged for a month per STATE.md), because both GA endpoints are
+    // permanently Cloudflare-blocked (see header comment above) -- there is
+    // no live code path today that can ever make totalMatched > 0, so this
+    // was not a transient failure worth re-alerting on every run, it was a
+    // known, permanent, already-accepted condition: the individual
+    // scrape-ga-phase2.yml workflow already reflects this reality
+    // ("schedule DISABLED -- STUB -- no accessible data source"). Throwing
+    // here masked the real pass/fail signal for the other 50 states in the
+    // batch. Now matches the sibling STUB/BROKEN Phase2 scrapers already in
+    // this registry (e.g. delawarePhase2Scraper.ts, kansasPhase2Scraper.ts,
+    // northCarolinaPhase2Scraper.ts) which warn-and-return instead of
+    // throwing for the identical reason.
+    console.warn(
       '[GeorgiaPhase2] Zero matching records — both verify.sos.ga.gov (Cloudflare 403) and ecorp.sos.ga.gov are blocked. ' +
       'Unblock options: (1) Set SCRAPER_API_KEY env var for proxy routing, (2) Submit GA ORA request for bulk auctioneer roster, ' +
       '(3) Purchase bulk data from GA SOS Corporations Division at https://sos.ga.gov/page/commercial-bulk-data-sales'
