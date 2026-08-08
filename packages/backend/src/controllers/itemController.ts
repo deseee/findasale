@@ -750,14 +750,20 @@ export const getItemById = async (req: Request, res: Response) => {
       return res.status(404).json({ message: 'Item not found' });
     }
 
-    // Auto-close expired auctions (Phase 1 P0 fix — ADR-013 lazy close)
-    if (item.auctionEndTime && new Date(item.auctionEndTime) < new Date() && !item.auctionClosed) {
-      await prisma.item.update({
-        where: { id: item.id },
-        data: { auctionClosed: true }
-      }).catch(err => console.warn('[getItemById] Failed to auto-close auction:', err));
-      item.auctionClosed = true;
-    }
+    // ADR-013 lazy-close REMOVED 2026-08-08 (shipped-batch verification finding, roadmap #609
+    // knock-on): this used to write auctionClosed:true directly from a GET/page-view path with
+    // zero payment/winner-notification logic. Today's #609 fix made auctionClosed:false the
+    // required precondition for BOTH the cron (auctionJob.ts) and the manual-close atomic claim
+    // (auctionService.ts) to ever run their real close logic -- so a page view (near-certain to
+    // happen before the 5-min cron) was permanently stranding ended auctions: flag flipped true,
+    // no winner ever charged or notified, no reconciliation job to catch it. Display of the
+    // "ended" state for this response does NOT depend on this write -- auctionStatus below is
+    // already computed independently from auctionEndTime vs now. Real closure (payment + winner
+    // notification) now happens ONLY via the cron / organizer manual-close, both of which use the
+    // atomic auctionClosed:false->true claim. Late-bid rejection is enforced independently and
+    // authoritatively in placeBid() via an explicit auctionEndTime check (see itemController.ts
+    // placeBid), not by this now-removed write.
+    // (item.auctionClosed is left exactly as read from the DB -- not mutated here.)
 
     // Compute cartCount and views
     const cartCount = item.checkoutAttempts?.length ?? 0;
@@ -868,14 +874,9 @@ export const getItemForEdit = async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ message: 'Access denied. Not your item.' });
     }
 
-    // Auto-close expired auctions (same lazy-close behavior as getItemById)
-    if (item.auctionEndTime && new Date(item.auctionEndTime) < new Date() && !item.auctionClosed) {
-      await prisma.item.update({
-        where: { id: item.id },
-        data: { auctionClosed: true }
-      }).catch(err => console.warn('[getItemForEdit] Failed to auto-close auction:', err));
-      item.auctionClosed = true;
-    }
+    // ADR-013 lazy-close REMOVED 2026-08-08 -- same fix and same reasoning as getItemById
+    // above (see that comment for the full explanation). item.auctionClosed is left exactly as
+    // read from the DB -- not mutated here.
 
     const cartCount = item.checkoutAttempts?.length ?? 0;
     const views = 0;
@@ -2475,6 +2476,15 @@ export const placeBid = async (req: AuthRequest, res: Response) => {
     // Reject bids on auctions that have already closed
     if (item.auctionClosed) {
       return res.status(400).json({ message: 'This auction has closed.' });
+    }
+
+    // 2026-08-08 (shipped-batch verification, roadmap #609 knock-on): auctionClosed only flips
+    // true once the cron/manual-close atomic claim has actually run (can lag up to ~5 min behind
+    // real end time now that the old page-view lazy-close write is removed). Enforce the real
+    // deadline directly here so a bid can never be accepted after auctionEndTime has passed,
+    // independent of whether auctionClosed has been set yet.
+    if (item.auctionEndTime && new Date(item.auctionEndTime) <= new Date()) {
+      return res.status(400).json({ message: 'This auction has ended.' });
     }
 
     // Validate bid amount: must be positive number

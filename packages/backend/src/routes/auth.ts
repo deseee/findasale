@@ -121,9 +121,16 @@ router.post('/resend-verification', verifyEmailLimiter, async (req: Request, res
 
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
     const newToken = crypto.randomBytes(32).toString('hex');
+    // 2026-08-08 (shipped-batch verification, roadmap #606 fix): also refresh
+    // emailVerificationTokenExpiry to +24h from now, same as registration does
+    // (authController.ts). Previously only the token itself was reissued -- the
+    // expiry stayed at its original registration-time value, so anyone who waited
+    // past that original 24h window (exactly who "resend" exists for) got a fresh
+    // token that verifyEmail() would reject as already-expired.
+    const newExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000);
     await prisma.user.update({
       where: { id: user.id },
-      data: { emailVerificationToken: newToken }
+      data: { emailVerificationToken: newToken, emailVerificationTokenExpiry: newExpiry }
     });
     const verifyUrl = `${frontendUrl}/verify-email?token=${newToken}`;
     const fromEmail = process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'find@outreach.finda.sale';
