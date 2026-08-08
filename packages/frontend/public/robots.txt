@@ -1,5 +1,6 @@
 User-agent: *
 Allow: /
+Allow: /organizer/storefront/
 Disallow: /organizer/
 Disallow: /shopper/
 Disallow: /admin/
