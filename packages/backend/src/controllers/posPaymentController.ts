@@ -118,12 +118,12 @@ export const createPaymentRequest = async (req: AuthRequest, res: Response) => {
     // Verify sale exists, is PUBLISHED, and belongs to organizer
     const sale = await prisma.sale.findUnique({
       where: { id: saleId },
-      select: { id: true, status: true, organizerId: true, title: true, address: true, city: true, state: true, organizer: { select: { isUnmanagedListing: true } } },
+      select: { id: true, status: true, organizerId: true, title: true, address: true, city: true, state: true, sourceName: true, organizer: { select: { isUnmanagedListing: true } } },
     });
 
 
     // Guard: reject POS on unmanaged listings
-    if (sale?.organizer?.isUnmanagedListing) {
+    if (sale?.sourceName != null && sale?.organizer?.isUnmanagedListing) {
       return res.status(403).json({
         message: 'This listing is not yet claimed by an organizer. Try one of our verified organizer sales.',
         code: 'UNMANAGED_LISTING'

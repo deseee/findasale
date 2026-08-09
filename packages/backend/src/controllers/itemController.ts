@@ -2688,7 +2688,7 @@ export const analyzeItemTags = async (req: AuthRequest, res: Response) => {
 
     const item = await prisma.item.findUnique({
       where: { id },
-      include: { sale: { select: { organizer: { select: { isUnmanagedListing: true, userId: true, id: true, subscriptionTier: true } } } } }
+      include: { sale: { select: { sourceName: true, organizer: { select: { isUnmanagedListing: true, userId: true, id: true, subscriptionTier: true } } } } }
     });
 
     if (!item) {
@@ -2696,7 +2696,7 @@ export const analyzeItemTags = async (req: AuthRequest, res: Response) => {
     }
 
     // Guard: reject actions on unmanaged listings
-    if (item.sale?.organizer?.isUnmanagedListing) {
+    if (item.sale?.sourceName != null && item.sale?.organizer?.isUnmanagedListing) {
       return res.status(403).json({
         message: 'This listing is not yet claimed by an organizer. Try one of our verified organizer sales.',
         code: 'UNMANAGED_LISTING'

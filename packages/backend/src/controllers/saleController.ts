@@ -819,6 +819,69 @@ export const updateSale = async (req: AuthRequest, res: Response) => {
   }
 };
 
+// Shared by cancelSale and deleteSale (S1195 cancelSale fix; extended to deleteSale to close
+// the same notification/hold-release gap -- deleteSale's "Delete Sale" button, the only
+// sale-ending action actually wired to the UI, was leaving active shopper holds dangling and
+// shoppers un-notified). Fetches active holds (ItemReservation PENDING/CONFIRMED) on the given
+// sale's items, reverts the Item back to AVAILABLE (only if still actually RESERVED, same guard
+// reservationExpiryJob.ts uses), cancels the ItemReservation rows, and notifies each affected
+// shopper. Non-fatal on failure -- the sale-ending action itself has already been committed by
+// the caller before this runs.
+async function releaseActiveHoldsAndNotify(params: {
+  saleId: string;
+  items: { id: string; title: string }[];
+  notificationTitle: string;
+  notificationBody: (itemTitle: string) => string;
+}): Promise<number> {
+  const { saleId, items, notificationTitle, notificationBody } = params;
+  const saleItemIds = items.map((i) => i.id);
+  const itemTitleById = new Map(items.map((i) => [i.id, i.title]));
+  const activeHolds = saleItemIds.length > 0
+    ? await prisma.itemReservation.findMany({
+        where: { itemId: { in: saleItemIds }, status: { in: ['PENDING', 'CONFIRMED'] } },
+        select: { id: true, itemId: true, userId: true },
+      })
+    : [];
+
+  if (activeHolds.length === 0) return 0;
+
+  const heldReservationIds = activeHolds.map((h) => h.id);
+  const heldItemIds = activeHolds.map((h) => h.itemId);
+  try {
+    await prisma.$transaction([
+      prisma.itemReservation.updateMany({
+        where: { id: { in: heldReservationIds } },
+        data: { status: 'CANCELLED' },
+      }),
+      // Guarded exactly like reservationExpiryJob.ts's revert: only items still actually
+      // RESERVED are reset to AVAILABLE, so a hold that already moved on to some other flow
+      // (invoice issued, POS cart, sold) is left untouched.
+      prisma.item.updateMany({
+        where: { id: { in: heldItemIds }, status: 'RESERVED' },
+        data: { status: 'AVAILABLE' },
+      }),
+    ]);
+
+    for (const hold of activeHolds) {
+      createNotification({
+        userId: hold.userId,
+        type: 'sale_cancelled_hold_released',
+        title: notificationTitle,
+        body: notificationBody(itemTitleById.get(hold.itemId) || 'an item'),
+        link: `/sales/${saleId}`,
+        channel: 'OPERATIONAL',
+        sendEmail: true,
+      }).catch((err) => console.error(`[releaseActiveHoldsAndNotify] Failed to create sale_cancelled_hold_released notification for sale ${saleId}:`, err));
+    }
+  } catch (holdRevertErr) {
+    // Non-fatal: the sale-ending action itself is already committed by the caller. Log loudly
+    // so this isn't silently lost -- a failure here means holds are left dangling.
+    console.error(`[releaseActiveHoldsAndNotify] Failed to revert/notify active holds for sale ${saleId}:`, holdRevertErr);
+  }
+
+  return activeHolds.length;
+}
+
 export const deleteSale = async (req: AuthRequest, res: Response) => {
   try {
     const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
@@ -850,7 +913,26 @@ export const deleteSale = async (req: AuthRequest, res: Response) => {
       prisma.affiliateLink.count({ where: { saleId: id } }),
     ]);
 
+    // Bug fix (notification-gap dispatch, mirrors S1195 cancelSale fix): deleteSale
+    // previously only set Sale.deletedAt -- any shopper with an active hold
+    // (ItemReservation status PENDING/CONFIRMED) on one of this sale's items was left with
+    // a dangling hold: the Item stayed RESERVED forever and the shopper was never told the
+    // sale was removed. Fetch the sale's items BEFORE the delete write so
+    // releaseActiveHoldsAndNotify knows what to check.
+    const saleItemsForHoldRelease = await prisma.item.findMany({
+      where: { saleId: id },
+      select: { id: true, title: true },
+    });
+
     await prisma.sale.update({ where: { id }, data: { deletedAt: new Date() } });
+
+    const holdsReleasedCount = await releaseActiveHoldsAndNotify({
+      saleId: id,
+      items: saleItemsForHoldRelease,
+      notificationTitle: 'Sale removed — your hold was released',
+      notificationBody: (itemTitle) =>
+        `"${existingSale.title}" was removed by the organizer. Your hold on "${itemTitle}" has been released.`,
+    });
 
     // ADR 2026-07-11: on-demand ISR revalidation — a deleted PUBLISHED sale's own
     // /sales/[id] page will 404 on next visit regardless (soft-deleted); the city
@@ -867,7 +949,7 @@ export const deleteSale = async (req: AuthRequest, res: Response) => {
     res.json({
       message: 'Sale deleted successfully',
       hadActivity,
-      counts: { soldItems: soldItemCount, purchases: purchaseCount, reviews: reviewCount, affiliateLinks: affiliateLinkCount },
+      counts: { soldItems: soldItemCount, purchases: purchaseCount, reviews: reviewCount, affiliateLinks: affiliateLinkCount, holdsReleased: holdsReleasedCount },
     });
   } catch (error) {
     console.error(error);
@@ -1857,24 +1939,6 @@ export const cancelSale = async (req: AuthRequest, res: Response) => {
       });
     }
 
-    // Bug fix (S1195, 2026-08-08, notification-gap dispatch): cancelSale previously ended
-    // here with only the organizer notified below -- any shopper with an active hold
-    // (ItemReservation status PENDING/CONFIRMED -- same "active hold" pair every other
-    // caller in this codebase checks, e.g. reservationController.ts, posController.ts,
-    // reservationExpiryJob.ts) on one of this sale's items was left with a dangling hold:
-    // the Item stayed RESERVED forever (nothing else reverts it once the sale itself is
-    // CANCELLED, not ENDED) and the shopper was never told the sale disappeared out from
-    // under them. Fetch the affected holds BEFORE the update below so we know exactly who
-    // to notify and which items to revert.
-    const saleItemIds = existingSale.items.map((i) => i.id);
-    const itemTitleById = new Map(existingSale.items.map((i) => [i.id, i.title]));
-    const activeHolds = saleItemIds.length > 0
-      ? await prisma.itemReservation.findMany({
-          where: { itemId: { in: saleItemIds }, status: { in: ['PENDING', 'CONFIRMED'] } },
-          select: { id: true, itemId: true, userId: true },
-        })
-      : [];
-
     // #120: Store cancellation reason and mark as cancelled
     const reason = cancellationReason || 'NOT_PROVIDED';
     const cancelled = await prisma.sale.update({
@@ -1885,41 +1949,22 @@ export const cancelSale = async (req: AuthRequest, res: Response) => {
       }
     });
 
-    if (activeHolds.length > 0) {
-      const heldReservationIds = activeHolds.map((h) => h.id);
-      const heldItemIds = activeHolds.map((h) => h.itemId);
-      try {
-        await prisma.$transaction([
-          prisma.itemReservation.updateMany({
-            where: { id: { in: heldReservationIds } },
-            data: { status: 'CANCELLED' },
-          }),
-          // Guarded exactly like reservationExpiryJob.ts's revert: only items still
-          // actually RESERVED are reset to AVAILABLE, so a hold that already moved on to
-          // some other flow (invoice issued, POS cart, sold) is left untouched.
-          prisma.item.updateMany({
-            where: { id: { in: heldItemIds }, status: 'RESERVED' },
-            data: { status: 'AVAILABLE' },
-          }),
-        ]);
-
-        for (const hold of activeHolds) {
-          createNotification({
-            userId: hold.userId,
-            type: 'sale_cancelled_hold_released',
-            title: 'Sale cancelled — your hold was released',
-            body: `"${existingSale.title}" was cancelled by the organizer. Your hold on "${itemTitleById.get(hold.itemId) || 'an item'}" has been released.`,
-            link: `/sales/${id}`,
-            channel: 'OPERATIONAL',
-            sendEmail: true,
-          }).catch((err) => console.error('[cancelSale] Failed to create sale_cancelled_hold_released notification:', err));
-        }
-      } catch (holdRevertErr) {
-        // Non-fatal: the sale itself is already cancelled above. Log loudly so this isn't
-        // silently lost -- a failure here means holds are left dangling on a cancelled sale.
-        console.error(`[cancelSale] Failed to revert/notify active holds for cancelled sale ${id}:`, holdRevertErr);
-      }
-    }
+    // Bug fix (S1195, 2026-08-08, notification-gap dispatch): cancelSale previously ended
+    // here with only the organizer notified below -- any shopper with an active hold
+    // (ItemReservation status PENDING/CONFIRMED -- same "active hold" pair every other
+    // caller in this codebase checks, e.g. reservationController.ts, posController.ts,
+    // reservationExpiryJob.ts) on one of this sale's items was left with a dangling hold:
+    // the Item stayed RESERVED forever (nothing else reverts it once the sale itself is
+    // CANCELLED, not ENDED) and the shopper was never told the sale disappeared out from
+    // under them. Shared with deleteSale via releaseActiveHoldsAndNotify (notification-gap
+    // dispatch, same fix applied to the Delete Sale button).
+    await releaseActiveHoldsAndNotify({
+      saleId: id,
+      items: existingSale.items,
+      notificationTitle: 'Sale cancelled — your hold was released',
+      notificationBody: (itemTitle) =>
+        `"${existingSale.title}" was cancelled by the organizer. Your hold on "${itemTitle}" has been released.`,
+    });
 
     // ADR 2026-07-11: on-demand ISR revalidation — a cancelled sale that was
     // PUBLISHED needs to drop off its city listing page; its own /sales/[id]

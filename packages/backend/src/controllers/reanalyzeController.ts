@@ -34,6 +34,7 @@ export const reanalyzeItemForOrganizer = async (req: AuthRequest, res: Response)
       include: {
         sale: {
           select: {
+            sourceName: true,
             organizer: {
               select: { isUnmanagedListing: true, userId: true, id: true, subscriptionTier: true },
             },
@@ -47,7 +48,7 @@ export const reanalyzeItemForOrganizer = async (req: AuthRequest, res: Response)
     }
 
     // Guard: reject actions on unmanaged listings (mirrors analyzeItemTags).
-    if (item.sale?.organizer?.isUnmanagedListing) {
+    if (item.sale?.sourceName != null && item.sale?.organizer?.isUnmanagedListing) {
       return res.status(403).json({
         message: 'This listing is not yet claimed by an organizer. Try one of our verified organizer sales.',
         code: 'UNMANAGED_LISTING',
