@@ -4,7 +4,7 @@ import Link from 'next/link';
 
 const TermsPage = () => {
   const defaultCity = process.env.NEXT_PUBLIC_DEFAULT_CITY || 'your area';
-  const effectiveDate = 'March 5, 2026';
+  const effectiveDate = 'August 9, 2026';
 
   return (
     <>
@@ -119,14 +119,18 @@ const TermsPage = () => {
               refunds except where required by law or where the item was materially misdescribed.
             </p>
             <p className="text-warm-700 dark:text-warm-300 leading-relaxed mb-3">
-              <strong>Disputes and Refunds:</strong> If you believe a listing is fraudulent, the item is significantly
-              misdescribed, or the Organizer failed to deliver, you must report the issue to{' '}
+              <strong>Disputes and Refunds:</strong> Purchases on FindA.Sale are made directly with the Organizer, and
+              payment is processed on the Organizer&apos;s own Stripe account. If you believe a listing is
+              fraudulent, the item is significantly misdescribed, or the Organizer failed to deliver, you must
+              report the issue to{' '}
               <a href="mailto:support@finda.sale" className="text-amber-600 hover:underline">support@finda.sale</a>{' '}
-              <strong>within 14 days of your purchase</strong>. Include a description of the issue, photos if available,
-              and your order confirmation. FindA.Sale will investigate and contact the Organizer for their response. If
-              fraud is confirmed or the Organizer cannot resolve the issue, FindA.Sale will facilitate a refund. All
-              disputes are reviewed and resolved within 7 days. If resolution cannot be reached, either party may
-              escalate to Stripe for chargeback review.
+              <strong>within 14 days of your purchase</strong>. Include a description of the issue, photos if
+              available, and your order confirmation. FindA.Sale will relay your report to the Organizer and
+              require a response within the timeframe in Section 13. Refunds are issued by the Organizer directly
+              through their own Stripe account. If the Organizer does not respond or does not resolve the issue,
+              FindA.Sale may suspend the Organizer&apos;s account, and you may dispute the charge directly with
+              your card issuer or with Stripe. FindA.Sale does not issue refunds itself and does not control the
+              outcome of a card-issuer dispute.
             </p>
             <p className="text-warm-700 dark:text-warm-300 leading-relaxed mb-3">
               <strong>Contact Support:</strong> Submit disputes via email to{' '}
@@ -257,20 +261,25 @@ const TermsPage = () => {
             <p className="text-warm-700 dark:text-warm-300 leading-relaxed mb-3">
               Disputed purchases must be reported to{' '}
               <a href="mailto:support@finda.sale" className="text-amber-600 hover:underline">support@finda.sale</a>{' '}
-              within 48 hours of the transaction. FindA.Sale will investigate with the organizer within 7 business
-              days. If fraud or material misrepresentation is confirmed, FindA.Sale will facilitate a refund where
-              possible. Buyers who file chargebacks with their card issuer before contacting FindA.Sale support may
-              have their accounts suspended.
+              within 48 hours of the transaction. FindA.Sale will notify the Organizer and require a response
+              within 7 business days per Section 13. Because the Organizer is the merchant of record on the
+              transaction, any refund is issued by the Organizer directly through their Stripe account — FindA.Sale
+              does not hold or control the funds and cannot issue a refund on the Organizer&apos;s behalf. If the
+              Organizer confirms fraud or material misrepresentation and does not resolve it, FindA.Sale may
+              suspend the Organizer&apos;s account. Buyers who file chargebacks with their card issuer before
+              contacting FindA.Sale support may have their accounts suspended.
             </p>
           </section>
 
           <section className="mb-8">
             <h2 className="text-2xl font-semibold text-warm-800 dark:text-warm-200 mb-4">14b. Chargebacks</h2>
             <p className="text-warm-700 dark:text-warm-300 leading-relaxed mb-3">
-              If a buyer disputes a charge with their card issuer, the organizer&apos;s Stripe Connect account will
-              bear any resulting chargeback fees (typically $15 USD per dispute). FindA.Sale does not absorb
-              chargeback costs. Organizers who maintain chargeback rates exceeding 0.5% may have their accounts
-              reviewed or suspended.
+              If a buyer disputes a charge with their card issuer, the dispute is filed directly against the
+              Organizer&apos;s own Stripe account, and the Organizer bears any resulting chargeback fees (typically
+              $15 USD per dispute) and is responsible for responding to the dispute directly through their Stripe
+              Dashboard within Stripe&apos;s deadlines. FindA.Sale does not absorb chargeback costs and does not
+              manage or respond to disputes on the Organizer&apos;s behalf. Organizers who maintain chargeback
+              rates exceeding 0.5% may have their accounts reviewed or suspended.
             </p>
           </section>
 
