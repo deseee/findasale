@@ -39,7 +39,7 @@ import {
 } from '../utils/ebayPolicyParser';
 import { getTierLimit, SubscriptionTier } from '../constants/tierLimits';
 import { domainToL1 } from '../config/ebayCategories';
-import { ensureCalculatedFulfillmentPolicy } from '../services/ebayCalculatedPolicyService';
+import { ensureCalculatedFulfillmentPolicy, ensureCalculatedPolicyWithHandling } from '../services/ebayCalculatedPolicyService';
 import { ensureFvfFlatRatePolicy } from '../services/ebayFlatRatePolicyService';
 import {
   computeCheapestForOrigin,
@@ -4022,16 +4022,43 @@ async function resolvePoliciesForItem(
           message: 'Please set default return and payment policies in eBay Settings.',
         };
       }
-      // FVF-inclusive flat-rate path (S968): items with a known weight use a per-bucket
-      // flat-rate policy priced at ceil(estimatedRate / 0.864) so the organizer nets at
-      // least the USPS label cost after eBay's 13.6% FVF on shipping.
-      // Falls back to calculated policy if provisioning fails.
+      // Real-calculated-shipping-plus-handling path (Patrick decision, replaces
+      // FVF-flat as PRIMARY): buyer pays eBay's real CALCULATED rate at checkout,
+      // plus a packageHandlingCost sized to offset eBay's 13.6% FVF on shipping, so
+      // the organizer still nets at least the estimated USPS label cost. Falls back
+      // to the FVF-flat policy (S968, unchanged) if provisioning fails, and only
+      // soft-blocks if BOTH fail.
       const fromZip = smartPickContext?.fromZip ?? null;
       const dims = (
         item.packageLengthIn != null && item.packageWidthIn != null && item.packageHeightIn != null
           ? { length: item.packageLengthIn, width: item.packageWidthIn, height: item.packageHeightIn }
           : null
       );
+      const calcHandlingResult = await ensureCalculatedPolicyWithHandling(
+        organizerId,
+        item.packageWeightOz!,
+        dims,
+        fromZip
+      );
+      if (calcHandlingResult) {
+        console.log(
+          `[eBay ShippingPick] item=${item.id} calculated-with-handling handlingCost=${calcHandlingResult.handlingCost} bucketedRate=${calcHandlingResult.bucketedRate} policy=${calcHandlingResult.policyId}`
+        );
+        return {
+          fulfillmentPolicyId: calcHandlingResult.policyId,
+          returnPolicyId,
+          paymentPolicyId,
+          descriptionHtml: mapping?.defaultDescriptionHtml ?? null,
+          pushAsDraft: mapping?.pushAsDraft ?? false,
+          merchantLocationSource: mapping?.merchantLocationSource || conn.merchantLocationSource || 'SALE_ADDRESS',
+          routingReason: `calculated-with-handling:${calcHandlingResult.handlingCost}`,
+        };
+      }
+      // Calculated-with-handling provisioning failed — fall back to the existing
+      // FVF-inclusive flat-rate path (S968): items with a known weight use a
+      // per-bucket flat-rate policy priced at ceil(estimatedRate / 0.864) so the
+      // organizer nets at least the USPS label cost after eBay's 13.6% FVF on
+      // shipping.
       const fvfResult = await ensureFvfFlatRatePolicy(
         organizerId,
         item.packageWeightOz!,
@@ -4052,20 +4079,20 @@ async function resolvePoliciesForItem(
           routingReason: `fvf-flat:${fvfResult.flatRate}`,
         };
       }
-      // FVF provisioning failed. We NEVER fall back to eBay calculated shipping
-      // (it leaves the seller short on the 13.6% FVF). Soft-block, flag for review,
-      // and return an actionable error so the organizer can retry or adjust.
+      // Both calculated-with-handling AND FVF-flat provisioning failed. Soft-block,
+      // flag for review, and return an actionable error so the organizer can retry
+      // or adjust.
       await prisma.item.update({
         where: { id: item.id },
         data: { ebayNeedsReview: true },
       }).catch(() => undefined);
       console.warn(
-        `[eBay ShippingPick] item=${item.id} FVF flat provisioning failed — soft-blocked (no calculated fallback)`
+        `[eBay ShippingPick] item=${item.id} calculated-with-handling AND FVF flat provisioning both failed — soft-blocked`
       );
       return {
         error: 'SHIPPING_POLICY_UNAVAILABLE',
         code: 'SHIPPING_POLICY_UNAVAILABLE',
-        message: 'We couldn\'t set up a flat-rate shipping policy for this item right now. Confirm your eBay account is connected with return and payment policies set, then try pushing again. If it keeps failing, check the item\'s package weight and box dimensions.',
+        message: 'We couldn\'t set up a shipping policy for this item right now. Confirm your eBay account is connected with return and payment policies set, then try pushing again. If it keeps failing, check the item\'s package weight and box dimensions.',
       };
     } else if (mapping?.freeShippingOptIn) {
       // Organizer opted into free shipping — fall back to a free/flat policy via smart-pick.
