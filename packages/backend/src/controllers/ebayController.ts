@@ -36,11 +36,13 @@ import {
   EbayFulfillmentPolicySummary,
   WeightTierMapping,
   CubicTierMapping,
+  detectWeightTierGaps,
+  computeGapFillBuckets,
 } from '../utils/ebayPolicyParser';
 import { getTierLimit, SubscriptionTier } from '../constants/tierLimits';
 import { domainToL1 } from '../config/ebayCategories';
 import { ensureCalculatedFulfillmentPolicy, ensureCalculatedPolicyWithHandling } from '../services/ebayCalculatedPolicyService';
-import { ensureFvfFlatRatePolicy } from '../services/ebayFlatRatePolicyService';
+import { ensureFvfFlatRatePolicy, ensureNamedWeightTierPolicy, computeNamedWeightTierRate } from '../services/ebayFlatRatePolicyService';
 import {
   computeCheapestForOrigin,
   billableLb,
@@ -1288,6 +1290,167 @@ export async function saveEbayPolicyMapping(req: AuthRequest, res: Response): Pr
   } catch (err: any) {
     console.error('[eBay] saveEbayPolicyMapping error:', err);
     return res.status(500).json({ error: err.message || 'Failed to save mapping' });
+  }
+}
+
+/**
+ * (S-gap-fill, 2026-08-09) Resolve a "from" ZIP to price a weight-tier bucket for an
+ * organizer with no specific item/sale in context: the organizer's most recently
+ * created sale's ZIP, same source ("sale.zip") getShippingNetPreview and the live
+ * push path already treat as the origin ZIP (ebayController.ts, e.g. L4608, L6805).
+ * Returns null if the organizer has no sale yet -- callers fall back to lat/lng-only
+ * zone estimation (computeCheapestForOrigin handles that).
+ */
+async function resolveOrganizerFromZip(organizerId: string): Promise<string | null> {
+  // Sale.zip is a required (non-nullable) String column -- every sale row has one,
+  // so no null filter is needed (or type-valid) here.
+  const recentSale = await prisma.sale.findFirst({
+    where: { organizerId },
+    orderBy: { createdAt: 'desc' },
+    select: { zip: true },
+  });
+  return recentSale?.zip ?? null;
+}
+
+/**
+ * Handler: GET /api/ebay/weight-tier-gaps/preview
+ *
+ * (S-gap-fill, 2026-08-09) Read-only preview for the "Fill gaps automatically" button
+ * on the eBay settings page (ebay.tsx). Detects gaps in the organizer's weight-tier
+ * ladder using the EXACT SAME algorithm as the page's own gap-warning banners
+ * (detectWeightTierGaps in ebayPolicyParser.ts, ported line-for-line from ebay.tsx's
+ * getWeightTierGaps, same WEIGHT_TIER_GAP_RATIO=2), then computes what NEW tier(s)
+ * would be created to close each gap and what they would cost — via
+ * computeNamedWeightTierRate, the same pricing pipeline ensureNamedWeightTierPolicy
+ * uses to actually provision, so preview and fill can never disagree.
+ *
+ * Makes ZERO eBay API calls and ZERO database writes. Safe to call on every page
+ * load / button click without confirmation.
+ */
+export async function previewWeightTierGapFill(req: AuthRequest, res: Response): Promise<Response> {
+  try {
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ message: 'Authentication required' });
+
+    const organizer = await prisma.organizer.findFirst({
+      where: { userId },
+      include: { ebayPolicyMapping: true },
+    });
+    if (!organizer) return res.status(404).json({ message: 'Organizer profile not found' });
+
+    const tiers = ((organizer.ebayPolicyMapping?.weightTierMappings as unknown) as WeightTierMapping[]) || [];
+    const gaps = detectWeightTierGaps(tiers);
+    if (gaps.length === 0) {
+      return res.json({ gaps: [], newTiers: [] });
+    }
+
+    const fromZip = await resolveOrganizerFromZip(organizer.id);
+    const buckets = computeGapFillBuckets(gaps);
+
+    const newTiers = buckets.map((bucket) => {
+      const rate = computeNamedWeightTierRate(bucket.bucketMaxLb, fromZip, {
+        lat: organizer.lat,
+        lng: organizer.lng,
+      });
+      return {
+        bucketMaxLb: bucket.bucketMaxLb,
+        maxOz: rate.maxOz,
+        policyName: rate.policyName,
+        flatRate: rate.flatRate,
+        closesGapFromOz: bucket.gapFromOz,
+        closesGapToOz: bucket.gapToOz,
+      };
+    });
+
+    return res.json({
+      gaps: gaps.map((g) => ({ fromOz: g.fromOz, toOz: g.toOz, fromLb: g.fromOz / 16, toLb: g.toOz / 16 })),
+      newTiers,
+    });
+  } catch (err: any) {
+    console.error('[eBay] previewWeightTierGapFill error:', err);
+    return res.status(500).json({ error: err.message || 'Failed to preview weight-tier gap fill' });
+  }
+}
+
+/**
+ * Handler: POST /api/ebay/weight-tier-gaps/fill
+ *
+ * (S-gap-fill, 2026-08-09) The confirm step for "Fill gaps automatically": re-detects
+ * the same gaps previewWeightTierGapFill found (weightTierMappings could only have
+ * changed via this same organizer's own save action between preview and confirm, and
+ * re-detecting rather than trusting client-supplied buckets avoids provisioning stale
+ * or tampered tier data), then for real:
+ *   1. Calls ensureNamedWeightTierPolicy per bucket -- creates or adopts a real eBay
+ *      fulfillment policy via the organizer's own connected eBay OAuth token.
+ *   2. Appends the newly created tiers to EbayPolicyMapping.weightTierMappings via the
+ *      same prisma.ebayPolicyMapping.update the "+ Add tier" / Save flow uses
+ *      (saveEbayPolicyMapping above) -- existing entries are never modified or removed.
+ *
+ * Does not touch cubicTierMappings, categoryOverrides, or any other mapping field.
+ */
+export async function fillWeightTierGaps(req: AuthRequest, res: Response): Promise<Response> {
+  try {
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ message: 'Authentication required' });
+
+    const organizer = await prisma.organizer.findFirst({
+      where: { userId },
+      include: { ebayPolicyMapping: true, ebayConnection: true },
+    });
+    if (!organizer) return res.status(404).json({ message: 'Organizer profile not found' });
+    if (!organizer.ebayConnection) return res.status(400).json({ error: 'eBay not connected' });
+
+    const tiers = ((organizer.ebayPolicyMapping?.weightTierMappings as unknown) as WeightTierMapping[]) || [];
+    const gaps = detectWeightTierGaps(tiers);
+    if (gaps.length === 0) {
+      return res.json({ success: true, created: [], weightTierMappings: tiers });
+    }
+
+    const fromZip = await resolveOrganizerFromZip(organizer.id);
+    const buckets = computeGapFillBuckets(gaps);
+
+    const created: WeightTierMapping[] = [];
+    const failed: number[] = [];
+    for (const bucket of buckets) {
+      const result = await ensureNamedWeightTierPolicy(organizer.id, bucket.bucketMaxLb, fromZip);
+      if (result) {
+        created.push({ maxOz: result.maxOz, policyId: result.policyId, policyName: result.policyName });
+      } else {
+        failed.push(bucket.bucketMaxLb);
+      }
+    }
+
+    if (created.length === 0) {
+      return res.status(502).json({
+        error: 'Could not create any new eBay shipping policies. Please try again in a moment.',
+      });
+    }
+
+    // Append-only: existing tiers (including any manually-added or FEDEX/oversized
+    // override entries) are copied through untouched; only the newly created buckets
+    // are added, then the combined list is re-sorted by maxOz for display.
+    const updatedTiers = [...tiers, ...created].sort((a, b) => a.maxOz - b.maxOz);
+
+    const updatedMapping = await prisma.ebayPolicyMapping.update({
+      where: { organizerId: organizer.id },
+      data: { weightTierMappings: updatedTiers as any },
+    });
+
+    if (failed.length > 0) {
+      console.warn(
+        `[eBay] fillWeightTierGaps: ${failed.length}/${buckets.length} buckets failed to provision organizer=${organizer.id} buckets=${failed.join(',')}`
+      );
+    }
+
+    return res.json({
+      success: true,
+      created,
+      partialFailure: failed.length > 0,
+      weightTierMappings: updatedMapping.weightTierMappings,
+    });
+  } catch (err: any) {
+    console.error('[eBay] fillWeightTierGaps error:', err);
+    return res.status(500).json({ error: err.message || 'Failed to fill weight-tier gaps' });
   }
 }
 

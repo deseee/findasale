@@ -167,6 +167,88 @@ export function matchWeightTier(
 }
 
 /**
+ * (S-gap-fill, 2026-08-09) Weight-tier gap ratio -- MUST match
+ * WEIGHT_TIER_GAP_RATIO in packages/frontend/pages/organizer/settings/ebay.tsx
+ * (~L143) exactly. The frontend banner and this backend detector are two
+ * independent implementations of the same algorithm (frontend never imports
+ * backend code, per CLAUDE.md cross-layer rules), so if this ratio ever
+ * changes, the frontend constant must change with it or the banner and the
+ * gap-fill preview/fill endpoints will disagree about what counts as a gap.
+ */
+export const WEIGHT_TIER_GAP_RATIO = 2;
+
+export interface WeightTierGap {
+  fromOz: number;
+  toOz: number;
+}
+
+/**
+ * Detect gaps in an organizer's weight-tier ladder: consecutive tiers (sorted
+ * by maxOz, unbounded/zero tiers excluded) where the next tier's maxOz is more
+ * than WEIGHT_TIER_GAP_RATIO times the current tier's maxOz. Items whose
+ * weight falls in that range route to a fallback instead of the organizer's
+ * intended price.
+ *
+ * Ported line-for-line from ebay.tsx's getWeightTierGaps (~L144-156) so the
+ * gap-fill preview/fill endpoints (ebayController.ts) always detect exactly
+ * the same gaps the settings page's "Heads up" banners already show — do not
+ * change this algorithm without updating ebay.tsx's copy in lockstep.
+ */
+export function detectWeightTierGaps(tiers: WeightTierMapping[]): WeightTierGap[] {
+  const sorted = [...tiers]
+    .filter((t) => t.maxOz !== Infinity && t.maxOz > 0)
+    .sort((a, b) => a.maxOz - b.maxOz);
+  const gaps: WeightTierGap[] = [];
+  for (let i = 0; i < sorted.length - 1; i++) {
+    const current = sorted[i].maxOz;
+    const next = sorted[i + 1].maxOz;
+    if (next > current * WEIGHT_TIER_GAP_RATIO) {
+      gaps.push({ fromOz: current, toOz: next });
+    }
+  }
+  return gaps;
+}
+
+export interface GapFillBucket {
+  bucketMaxLb: number;
+  maxOz: number;
+  gapFromOz: number;
+  gapToOz: number;
+}
+
+/**
+ * (S-gap-fill, 2026-08-09) For each detected gap, compute the new tier
+ * boundaries needed to close it: starting from the gap's lower edge, double
+ * repeatedly (the same WEIGHT_TIER_GAP_RATIO used to detect the gap) until
+ * within range of the gap's upper edge. This guarantees every resulting
+ * boundary — old and new alike — passes detectWeightTierGaps, i.e. filling
+ * never leaves a residual gap.
+ *
+ * Example: gap from 111oz (6+ lb) to 720oz (45 lb catch-all) produces two new
+ * buckets at 222oz (~13.88 lb) and 444oz (~27.75 lb) — 720/444 = 1.62, no gap.
+ *
+ * Shared by both the preview endpoint (rate-only, no writes) and the fill
+ * endpoint (real provisioning) so they can never disagree about which buckets
+ * get created.
+ */
+export function computeGapFillBuckets(gaps: WeightTierGap[]): GapFillBucket[] {
+  const buckets: GapFillBucket[] = [];
+  for (const gap of gaps) {
+    let cur = gap.fromOz;
+    while (gap.toOz > cur * WEIGHT_TIER_GAP_RATIO) {
+      cur = cur * WEIGHT_TIER_GAP_RATIO;
+      buckets.push({
+        bucketMaxLb: Math.round((cur / 16) * 100) / 100,
+        maxOz: Math.round(cur),
+        gapFromOz: gap.fromOz,
+        gapToOz: gap.toOz,
+      });
+    }
+  }
+  return buckets;
+}
+
+/**
  * (ADR-099) Given an item's three measured dimensions (inches) and a sorted list of
  * cubic-tier mappings, find the smallest-volume tier whose bounding box contains the item.
  * Orientation-agnostic: both the item's dims and each tier's dims are sorted largest-to-

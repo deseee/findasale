@@ -225,6 +225,35 @@ export async function ensureFvfFlatRatePolicy(
  * Returns the same shape as a WeightTierMapping entry (ebayPolicyParser.ts) plus the
  * computed flatRate, or null if provisioning failed.
  */
+/**
+ * (S-gap-fill, 2026-08-09) Pure, side-effect-free rate computation for a named
+ * weight-tier bucket -- same pipeline as ensureNamedWeightTierPolicy below
+ * (computeCheapestForOrigin -> computeFvfFlatRate -> roundUpToBucket), extracted
+ * so a preview endpoint can show the organizer what a gap-fill tier WOULD cost
+ * without provisioning a real eBay policy (no fetch, no DB write, no eBay call).
+ * ensureNamedWeightTierPolicy calls this same function internally so preview and
+ * provisioning can never disagree on the price.
+ */
+export function computeNamedWeightTierRate(
+  bucketMaxLb: number,
+  fromZip: string | null | undefined,
+  origin: { lat: number | null | undefined; lng: number | null | undefined }
+): { maxOz: number; policyName: string; flatRate: number } {
+  const maxOz = Math.round(bucketMaxLb * 16);
+
+  // Price at the top of the bucket (no dims — this is a reusable ladder rung, not a
+  // per-item policy), gross up for eBay's FVF on shipping, round UP into the bucket ladder.
+  const cheapest = computeCheapestForOrigin({
+    weightOz: maxOz,
+    dims: null,
+    origin: { zip: fromZip ?? null, lat: origin.lat ?? null, lng: origin.lng ?? null },
+  });
+
+  const flatRate = roundUpToBucket(computeFvfFlatRate(cheapest.rate));
+  const policyName = `${bucketMaxLb}+ lb Ground Advantage $${flatRate.toFixed(2)}`;
+  return { maxOz, policyName, flatRate };
+}
+
 export async function ensureNamedWeightTierPolicy(
   organizerId: string,
   bucketMaxLb: number,
@@ -247,19 +276,13 @@ export async function ensureNamedWeightTierPolicy(
     return null;
   }
 
-  const maxOz = Math.round(bucketMaxLb * 16);
-
-  // Price at the top of the bucket (no dims — this is a reusable ladder rung, not a
-  // per-item policy), gross up for eBay's FVF on shipping, round UP into the bucket ladder.
-  const cheapest = computeCheapestForOrigin({
-    weightOz: maxOz,
-    dims: null,
-    origin: { zip: fromZip ?? null, lat: organizer?.lat ?? null, lng: organizer?.lng ?? null },
+  // Same pricing pipeline as computeNamedWeightTierRate's preview-only call --
+  // provisioning and preview can never disagree because they share this function.
+  const { maxOz, policyName, flatRate } = computeNamedWeightTierRate(bucketMaxLb, fromZip, {
+    lat: organizer?.lat ?? null,
+    lng: organizer?.lng ?? null,
   });
-
-  const flatRate = roundUpToBucket(computeFvfFlatRate(cheapest.rate));
   const flatRateStr = flatRate.toFixed(2);
-  const policyName = `${bucketMaxLb}+ lb Ground Advantage $${flatRateStr}`;
   const handlingTimeDays = conn.handlingTimeDays ?? 3;
 
   // Idempotent: adopt an existing policy with this exact name before creating.
@@ -308,7 +331,7 @@ export async function ensureNamedWeightTierPolicy(
       const data = (await res.json()) as any;
       const policyId: string = data.fulfillmentPolicyId;
       console.log(
-        `[eBay NamedTier] created organizer=${organizerId} bucket=${bucketMaxLb}lb policy=${policyId} name="${policyName}" estimatedRate=${cheapest.rate} carrier=${cheapest.carrier}`
+        `[eBay NamedTier] created organizer=${organizerId} bucket=${bucketMaxLb}lb policy=${policyId} name="${policyName}" flatRate=${flatRate}`
       );
       return { maxOz, policyId, policyName, flatRate };
     }
