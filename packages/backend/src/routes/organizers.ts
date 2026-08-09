@@ -1022,6 +1022,12 @@ router.get('/:id', publicDirectoryRateLimiter, async (req: Request, res: Respons
             attendanceCount: true,
             buyersPremiumPct: true,
             scrapedMetadata: true,
+            sourceName: true, // FIX (public storefront scraper-sale disclosure): needed so the
+            // frontend can render the same "Sourced from public records" badge SaleCard.tsx
+            // already uses on the general marketplace (see components/SaleCard.tsx :315) -- a
+            // scraper-synced Sale row must not present identically to a genuine in-app sale
+            // on the organizer's public storefront. sourceName convention: null = built in-app,
+            // set = scraper-synced (see adminController.ts realSalesCount fix, 2026-08-08).
           },
           take: 200, // P2: bound unbounded public storefront sales list
         },
@@ -1087,6 +1093,12 @@ router.get('/:id', publicDirectoryRateLimiter, async (req: Request, res: Respons
               attendanceCount: true,
               buyersPremiumPct: true,
               scrapedMetadata: true,
+              sourceName: true, // FIX (public storefront scraper-sale disclosure): needed so the
+              // frontend can render the same "Sourced from public records" badge SaleCard.tsx
+              // already uses on the general marketplace (see components/SaleCard.tsx :315) -- a
+              // scraper-synced Sale row must not present identically to a genuine in-app sale
+              // on the organizer's public storefront. sourceName convention: null = built in-app,
+              // set = scraper-synced (see adminController.ts realSalesCount fix, 2026-08-08).
             },
             take: 200, // P2: bound unbounded public storefront sales list
           },

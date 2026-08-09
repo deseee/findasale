@@ -71,6 +71,7 @@ interface Sale {
   isPinned?: boolean;
   attendanceCount?: number | null;
   buyersPremiumPct?: number | null;
+  sourceName?: string | null; // P2: disclosure label for scraper-synced sales (see components/SaleCard.tsx)
 }
 
 // Keys are lowercase to match settings UI values; normalize DB values before lookup.
@@ -749,6 +750,15 @@ const OrganizerStorefront = () => {
                             >
                               Buyer&apos;s Premium: {sale.buyersPremiumPct}%
                             </div>
+                          )}
+
+                          {/* Scraper-sync disclosure (matches components/SaleCard.tsx) — a
+                              directory-scraped Sale row (sourceName set) must not present
+                              identically to a genuine in-app sale on the public storefront. */}
+                          {sale.sourceName && (
+                            <p className="text-[rgba(26,24,20,0.4)] dark:text-[rgba(242,240,234,0.4)] mb-2" style={{ fontSize: 11 }}>
+                              Sourced from public records · details may vary
+                            </p>
                           )}
 
                           {/* Date chip / Retail */}

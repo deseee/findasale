@@ -7,6 +7,7 @@ import { markShopifyItemSold } from '../services/shopifyService';
 import { notifyFacebookExportedItemSold } from '../services/facebookNudgeService';
 import { syncMarketplaceStock } from '../services/marketplaceStockSyncService';
 import { transactionalEmailService } from '../lib/transactionalEmailService';
+import { shouldUseDirectCharge } from './stripeConnectService'; // Purchase-row backfill (2026-08-09): recompute chargeType at payment-confirmation time, mirrors posPaymentLinkRecorder.ts
 
 /**
  * holdInvoicePaymentRecorder.ts — payments fix (2026-08-03)
@@ -37,6 +38,28 @@ import { transactionalEmailService } from '../lib/transactionalEmailService';
  *   2. Inside the $transaction, the row is re-read and the flip to PAID only
  *      proceeds if status !== 'PAID' -- flip-first, so a concurrent webhook/
  *      reconcile race that both reach this point can't double-record.
+ *
+ * Purchase-row backfill (2026-08-09): this function previously flipped HoldInvoice/Item/
+ * ItemReservation state but never created a Purchase row, so refundService.ts's
+ * executeVerifiedRefund (keys off purchaseId) and stripeController.ts's
+ * resolveDisputeContext (keys off Purchase.stripePaymentIntentId) could never find a
+ * record for a Hold-to-Pay sale -- refunds were impossible and disputes silently fell
+ * through to the platform-absorb branch even with STRIPE_DISPUTE_LIVE_CLAWBACK=true.
+ * Fixed by creating one Purchase row per bundled item (mirrors posPaymentLinkRecorder.ts's
+ * proven pattern) inside the SAME $transaction as the PAID flip, sourced entirely from
+ * data already fetched/verified in this function (holdInvoice, bundledItems, the
+ * paymentIntentId parameter). Idempotency mirrors posPaymentLinkRecorder.ts's second
+ * layer: the compound partial unique index on (stripePaymentIntentId, itemId) backstops
+ * the outer flip-guard above -- a P2002 on create is caught and treated as
+ * already-recorded, never thrown. An item that hits InsufficientStockError in the stock
+ * loop below (oversold race) is excluded from Purchase creation, matching
+ * posPaymentLinkRecorder.ts's oversoldItemIds handling (a real captured payment with no
+ * deliverable item is a manual-refund-review case, not a fabricated fulfillment record).
+ * HoldInvoice has no persisted chargeType/stripeAccountId column (same gap documented in
+ * posPaymentLinkRecorder.ts for POSPaymentLink), so DIRECT-vs-DESTINATION is recomputed
+ * here via shouldUseDirectCharge against the sale's organizer -- same known edge case
+ * (can only disagree with the original checkout-time decision if Stripe eligibility or
+ * the allowlist changed in between) already accepted for the POS Payment Link path.
  */
 
 export interface MarkHoldInvoicePaidOpts {
@@ -77,6 +100,10 @@ export async function markHoldInvoicePaid(
 
   const fullySoldOutIds: string[] = [];
   const partialSaleUpdates: { itemId: string; remainingStock: number }[] = [];
+  // Purchase-row backfill (2026-08-09): only items that actually sold in the loop below
+  // get a Purchase row -- mirrors posPaymentLinkRecorder.ts's sellableItemIds/
+  // oversoldItemIds split so a real oversold race never gets a fabricated PAID Purchase.
+  const sellableItemIds: string[] = [];
 
   // Idempotency check (fast path, outside the tx): if already paid, skip.
   if (holdInvoice.status === 'PAID') {
@@ -141,11 +168,103 @@ export async function markHoldInvoicePaid(
         const { fullySoldOut, remainingStock } = await sellItemUnits(bundledItemId, 1, tx);
         if (fullySoldOut) fullySoldOutIds.push(bundledItemId);
         else partialSaleUpdates.push({ itemId: bundledItemId, remainingStock });
+        sellableItemIds.push(bundledItemId);
       } catch (stockErr: any) {
         if (stockErr instanceof InsufficientStockError) {
           console.error(`[hold-invoice/${source}] Oversold race on item ${bundledItemId}:`, stockErr.message);
         } else {
           throw stockErr;
+        }
+      }
+    }
+
+    // Purchase-row backfill (2026-08-09): create one Purchase row per bundled item that
+    // actually sold above, so refundService.ts's executeVerifiedRefund and
+    // stripeController.ts's resolveDisputeContext have a record to find for this
+    // Hold-to-Pay sale. Every field below is sourced from data already fetched/verified
+    // in this function (holdInvoice, bundledItems, the paymentIntentId parameter) -- no
+    // re-derivation through a different path that could drift from what actually
+    // happened. HoldInvoice has no persisted chargeType/stripeAccountId (see header
+    // comment), so DIRECT-vs-DESTINATION is recomputed via the sale's organizer, mirroring
+    // posPaymentLinkRecorder.ts's identical gap for POSPaymentLink.
+    const sellableItemIdSet = new Set(sellableItemIds);
+    const bundledItemPriceSum = bundledItems.reduce((sum, it) => sum + (it.price || 0), 0);
+    const invoicePlatformFeeDollars = holdInvoice.platformFeeAmount / 100;
+
+    const saleOrganizerId = holdInvoice.sale?.organizerId ?? null;
+    const saleOrganizer = saleOrganizerId
+      ? await tx.organizer.findUnique({ where: { id: saleOrganizerId }, select: { stripeConnectId: true } })
+      : null;
+    const useDirect = saleOrganizerId && saleOrganizer?.stripeConnectId
+      ? await shouldUseDirectCharge(saleOrganizerId, saleOrganizer.stripeConnectId)
+      : false;
+
+    for (const bundledItem of bundledItems) {
+      if (!sellableItemIdSet.has(bundledItem.id)) continue; // oversold race -- no Purchase row, matches posPaymentLinkRecorder.ts
+      const itemAmount = bundledItem.price || 0;
+      const itemPlatformFeeAmount = bundledItemPriceSum > 0
+        ? parseFloat(((itemAmount / bundledItemPriceSum) * invoicePlatformFeeDollars).toFixed(2))
+        : 0;
+      try {
+        await tx.purchase.create({
+          data: {
+            userId: holdInvoice.shopperUserId,
+            itemId: bundledItem.id,
+            saleId: holdInvoice.saleId,
+            amount: itemAmount,
+            platformFeeAmount: itemPlatformFeeAmount,
+            status: 'PAID',
+            source: 'ONLINE',
+            stripePaymentIntentId: paymentIntentId,
+            chargeType: useDirect ? 'DIRECT' : 'DESTINATION',
+            ...(useDirect && saleOrganizer?.stripeConnectId ? { stripeAccountId: saleOrganizer.stripeConnectId } : {}),
+          },
+        });
+      } catch (purchaseErr: any) {
+        // Compound partial unique (stripePaymentIntentId, itemId) backstop -- mirrors
+        // posPaymentLinkRecorder.ts: a concurrent webhook/reconcile race that both reach
+        // this insert can't double-create a Purchase row for the same item + PaymentIntent.
+        if (purchaseErr.code === 'P2002') {
+          console.warn(`[hold-invoice/${source}] Purchase already exists for item ${bundledItem.id} on invoice ${invoiceId} — treating as already recorded.`);
+        } else {
+          throw purchaseErr;
+        }
+      }
+    }
+
+    // Purchase-row backfill (2026-08-09) miscItems/cash-only edge case: createCombinedInvoice
+    // (posController.ts) allows an invoice made entirely of request-body `miscItems` with NO
+    // bundled Item rows at all (POS combined cart, e.g. a custom/non-inventory line item) --
+    // holdInvoice.itemIds is legitimately [] here, not an oversold race (oversold items are
+    // already handled by the sellableItemIdSet filter above, which only runs for invoices that
+    // DID have bundled items). miscItems content itself is never persisted on HoldInvoice, so
+    // it cannot be reconstructed as individual Purchase rows here -- but leaving this class of
+    // invoice with ZERO Purchase rows would leave it exactly as unrefundable/undisputable as
+    // the bug this fix closes for item-bundled invoices. One aggregate Purchase row
+    // (itemId: null -- Purchase.itemId is nullable for exactly this kind of non-inventory sale,
+    // same as the existing ALA_CARTE source rows in stripeController.ts) for the invoice's full
+    // totalAmount/platformFeeAmount covers it.
+    if (holdInvoice.itemIds.length === 0) {
+      try {
+        await tx.purchase.create({
+          data: {
+            userId: holdInvoice.shopperUserId,
+            itemId: null,
+            saleId: holdInvoice.saleId,
+            amount: holdInvoice.totalAmount / 100,
+            platformFeeAmount: invoicePlatformFeeDollars,
+            status: 'PAID',
+            source: 'ONLINE',
+            stripePaymentIntentId: paymentIntentId,
+            chargeType: useDirect ? 'DIRECT' : 'DESTINATION',
+            ...(useDirect && saleOrganizer?.stripeConnectId ? { stripeAccountId: saleOrganizer.stripeConnectId } : {}),
+          },
+        });
+      } catch (purchaseErr: any) {
+        if (purchaseErr.code === 'P2002') {
+          console.warn(`[hold-invoice/${source}] Purchase already exists for invoice ${invoiceId} (no bundled items) — treating as already recorded.`);
+        } else {
+          throw purchaseErr;
         }
       }
     }
