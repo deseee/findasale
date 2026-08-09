@@ -18,6 +18,16 @@ const refundClawbackEnabled = (): boolean =>
   process.env.STRIPE_REFUND_LIVE_CLAWBACK === 'true';
 
 /**
+ * Dispute clawback (2026-08-08) -- separate, distinct flag from refundClawbackEnabled above.
+ * Do NOT overload STRIPE_REFUND_LIVE_CLAWBACK; that flag is locked/single-purpose (see its
+ * own comment). Gates the charge.dispute.closed (lost) Transfer Reversal in
+ * stripeController.ts. Default OFF (unset != 'true') -- new money-moving code against a
+ * live account, same rollout discipline as every prior money-path change in this file.
+ */
+export const disputeClawbackEnabled = (): boolean =>
+  process.env.STRIPE_DISPUTE_LIVE_CLAWBACK === 'true';
+
+/**
  * Platform Safety #100: First-Month Refund Cap (50%)
  * If requester account is < 30 days old, cap refund amount at 50% of original
  */

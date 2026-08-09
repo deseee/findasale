@@ -32,7 +32,7 @@ import { markShopifyItemSold } from '../services/shopifyService'; // Feature: Sh
 import { sellItemUnits, InsufficientStockError } from '../services/itemStockService'; // ADR-085 Track B Phase 1 Step 4
 import { syncMarketplaceStock } from '../services/marketplaceStockSyncService'; // ADR-087 Phase 4: revise-on-partial eBay quantity sync
 import { sendConsignorItemSold } from '../services/consignorEmailService'; // Feature #309: Consignor email notifications
-import { executeVerifiedRefund, RefundError, sendRefundConfirmationEmail } from '../services/refundService'; // P1 fix (2026-07-29): shared refund execution (see refundService.ts) + dispute-triggered refund confirmation. applyFirstMonthRefundCap/logRefundProcessing no longer used here — see the cap-removal comment at this file's createRefund call site.
+import { executeVerifiedRefund, RefundError, sendRefundConfirmationEmail, disputeClawbackEnabled } from '../services/refundService'; // P1 fix (2026-07-29): shared refund execution (see refundService.ts) + dispute-triggered refund confirmation. applyFirstMonthRefundCap/logRefundProcessing no longer used here — see the cap-removal comment at this file's createRefund call site.
 import { transactionalEmailService } from '../lib/transactionalEmailService';
 import { assertCheckoutAllowed, assertGuestCheckoutAllowed, recordConfirmedSignal, CheckoutGuardError } from '../services/checkoutGuard'; // S1072 Finding #4: collusion/wash-trade guard
 import { recordPosPaymentLinkSale } from '../services/posPaymentLinkRecorder'; // ADR pos-webhook-idempotency-reconciliation (2026-07-23, S1151)
@@ -116,6 +116,45 @@ const isDestinationCharge = (pi: Stripe.PaymentIntent): boolean =>
 // 2026-07-29 as part of the executeVerifiedRefund extraction. Do not re-add a local copy
 // here; see refundService.ts for the full money-path rationale and the DEFAULT-OFF flag.
 
+/**
+ * Dispute clawback (2026-08-08) — shared resolver for charge.dispute.* webhook cases.
+ *
+ * Given a Dispute object and the webhook event's optional connected-account id
+ * (`event.account`, present when the event was signed with STRIPE_CONNECT_WEBHOOK_SECRET —
+ * i.e. a Direct-charge / booth-cart dispute — absent for a platform/destination-charge
+ * dispute), resolves { charge, paymentIntent, purchase }.
+ *
+ * Fixes a pre-existing gap in the original charge.dispute.created handler (confirmed via
+ * code read, 2026-08-08): its inline charges.retrieve(chargeId) call never passed
+ * { stripeAccount }, so a Direct-charge (booth-cart) dispute's retrieve fails against the
+ * platform account (that charge doesn't exist there) and falls into the outer catch with
+ * ZERO processing — no DISPUTED status, no chargebackCount increment, no organizer/vendor
+ * notification. See the same-named fix applied inline to charge.dispute.created below.
+ */
+const resolveDisputeContext = async (
+  dispute: Stripe.Dispute,
+  connectedAccountId: string | undefined
+): Promise<{
+  charge: Stripe.Charge;
+  paymentIntent: Stripe.PaymentIntent | null;
+  purchase: (Awaited<ReturnType<typeof prisma.purchase.findFirst>>) | null;
+}> => {
+  const chargeId = typeof dispute.charge === 'string' ? dispute.charge : dispute.charge.id;
+  const retrieveOpts = connectedAccountId ? { stripeAccount: connectedAccountId } : undefined;
+  const charge = await stripe().charges.retrieve(chargeId, retrieveOpts);
+  const paymentIntentId = typeof charge.payment_intent === 'string'
+    ? charge.payment_intent
+    : charge.payment_intent?.id ?? null;
+  if (!paymentIntentId) {
+    return { charge, paymentIntent: null, purchase: null };
+  }
+  const paymentIntent = await stripe().paymentIntents.retrieve(paymentIntentId, retrieveOpts);
+  const purchase = await prisma.purchase.findFirst({
+    where: { stripePaymentIntentId: paymentIntentId },
+    include: { item: { include: { sale: { include: { organizer: { select: { id: true, userId: true } } } } } }, user: true },
+  });
+  return { charge, paymentIntent, purchase };
+};
 
 const sendReceiptEmail = async (purchase: {
   id: string;
@@ -2023,7 +2062,13 @@ export const webhookHandler = async (req: Request, res: Response) => {
       try {
         // dispute.charge may be a string ID or an expanded Charge object — normalize to string
         const chargeId = typeof dispute.charge === 'string' ? dispute.charge : dispute.charge.id;
-        const charge = await stripe().charges.retrieve(chargeId);
+        // 2026-08-08 fix: pass { stripeAccount: event.account } when present so a
+        // Direct-charge (booth-cart) dispute's retrieve doesn't fail against the platform
+        // account -- see resolveDisputeContext's comment above for the full gap this closes.
+        const charge = await stripe().charges.retrieve(
+          chargeId,
+          (event as any).account ? { stripeAccount: (event as any).account as string } : undefined
+        );
         // charge.payment_intent may be a string ID or an expanded PaymentIntent object — normalize
         const paymentIntentId = typeof charge.payment_intent === 'string'
           ? charge.payment_intent
@@ -2166,6 +2211,148 @@ export const webhookHandler = async (req: Request, res: Response) => {
       }
       break;
     }
+
+    case 'charge.dispute.closed': {
+      // Dispute clawback (2026-08-08) -- closes the gap where charge.dispute.created
+      // above tracks a dispute but never moves any money: a real chargeback on a
+      // DESTINATION charge auto-debits the PLATFORM's Stripe balance the moment the
+      // dispute is created (Stripe's own mechanics, not something this code controls),
+      // and recovering it from the organizer requires an explicit Transfer Reversal --
+      // which nothing in this codebase did until now. Our own Terms of Service (§14b)
+      // already promises organizers bear chargeback costs; this makes that promise true.
+      //
+      // Fires on CLOSE, not CREATE, and only when status === 'lost' -- deliberately, not
+      // an oversight. Stripe debits the platform balance immediately at .created, before
+      // any outcome is known; reversing the organizer's Transfer that early means a later
+      // WIN (funds returned to the platform) would leave the platform owing the organizer
+      // a second, un-triggered reversal-of-the-reversal. Waiting for a FINAL loss means
+      // the organizer's balance is only ever touched once, and only for a loss that's
+      // actually final -- same "only claw back what's genuinely lost" philosophy already
+      // established by executeVerifiedRefund's PART B clawback (refundService.ts).
+      const dispute = event.data.object as Stripe.Dispute;
+      const connectedAccountId = (event as any).account as string | undefined;
+
+      if (dispute.status !== 'lost') {
+        // Won, warning_closed, etc. -- no money moves. (A "you won" notification is a
+        // reasonable future addition; not required for this fix.)
+        break;
+      }
+
+      try {
+        const { paymentIntent, purchase } = await resolveDisputeContext(dispute, connectedAccountId);
+
+        if (!purchase || !paymentIntent) {
+          console.warn(`[stripe] charge.dispute.closed (lost): could not resolve Purchase for dispute ${dispute.id} -- skipping clawback.`);
+          break;
+        }
+
+        if (!isDestinationCharge(paymentIntent)) {
+          // Direct charge (e.g. booth-cart, on the vendor's own connected account) --
+          // Stripe already debited THAT account directly, per Stripe's own docs. There is
+          // no platform-side Transfer to reverse; nothing to do here.
+          console.log(`[stripe] charge.dispute.closed (lost): PaymentIntent ${paymentIntent.id} is not a destination charge -- no platform-side clawback needed.`);
+          break;
+        }
+
+        if (!disputeClawbackEnabled()) {
+          console.log(`[stripe] charge.dispute.closed (lost): STRIPE_DISPUTE_LIVE_CLAWBACK is off -- skipping reversal for dispute ${dispute.id} (purchase ${purchase.id}).`);
+          break;
+        }
+
+        // TOCTOU claim, same compare-and-swap idiom as executeVerifiedRefund's PAID->
+        // REFUNDING claim (refundService.ts) -- the primary defense against double-
+        // reversal on webhook redelivery. Independent of, and in addition to, the
+        // per-event.id ProcessedWebhookEvent dedup this handler already sits inside,
+        // which only protects the identical event, not a logically-equivalent later one.
+        const claim = await prisma.purchase.updateMany({
+          where: { id: purchase.id, status: 'DISPUTED' },
+          data: { status: 'DISPUTE_LOST' },
+        });
+        if (claim.count !== 1) {
+          console.warn(`[stripe] charge.dispute.closed (lost): purchase ${purchase.id} not in DISPUTED state (already processed or in another transition) -- skipping.`);
+          break;
+        }
+
+        const charge = paymentIntent.latest_charge;
+        const chargeId = typeof charge === 'string' ? charge : charge?.id;
+        const chargeObj = chargeId
+          ? await stripe().charges.retrieve(chargeId, connectedAccountId ? { stripeAccount: connectedAccountId } : undefined)
+          : null;
+        const transferId = chargeObj?.transfer as string | undefined;
+
+        if (!transferId) {
+          // Shouldn't happen for a confirmed destination charge (isDestinationCharge
+          // already passed) -- but never silently mark DISPUTE_LOST with no reversal.
+          await prisma.purchase.updateMany({ where: { id: purchase.id, status: 'DISPUTE_LOST' }, data: { status: 'DISPUTED' } });
+          console.error(`[stripe] charge.dispute.closed (lost): no transfer id on charge ${chargeId} for dispute ${dispute.id} -- reverted claim, flagging.`);
+          Sentry.captureMessage('Dispute clawback: charge has no transfer id', {
+            tags: { area: 'dispute-clawback' },
+            extra: { disputeId: dispute.id, purchaseId: purchase.id, chargeId },
+          });
+          break;
+        }
+
+        try {
+          await stripe().transfers.createReversal(
+            transferId,
+            { amount: dispute.amount, refund_application_fee: true },
+            { idempotencyKey: `dispute-reversal-${dispute.id}`, ...(connectedAccountId ? { stripeAccount: connectedAccountId } : {}) }
+          );
+        } catch (reversalErr) {
+          // Revert the claim so a retry (manual or future redelivery) can still succeed --
+          // never leave DISPUTE_LOST set with no actual money movement behind it.
+          await prisma.purchase.updateMany({ where: { id: purchase.id, status: 'DISPUTE_LOST' }, data: { status: 'DISPUTED' } });
+          console.error(`[stripe] charge.dispute.closed (lost): transfer reversal FAILED for dispute ${dispute.id}, purchase ${purchase.id}:`, reversalErr);
+          Sentry.captureException(reversalErr instanceof Error ? reversalErr : new Error(String(reversalErr)), {
+            tags: { area: 'dispute-clawback' },
+            extra: { disputeId: dispute.id, purchaseId: purchase.id, transferId, amount: dispute.amount },
+          });
+          break;
+        }
+
+        console.log(`[stripe] charge.dispute.closed (lost): reversed transfer ${transferId} for dispute ${dispute.id}, purchase ${purchase.id}, amount=${dispute.amount}`);
+
+        const clawbackOrganizerUserId = purchase.item?.sale?.organizer?.userId;
+        if (clawbackOrganizerUserId) {
+          createNotification({
+            userId: clawbackOrganizerUserId,
+            type: 'chargeback_clawback',
+            title: 'Chargeback deducted from your payout',
+            body: `$${(dispute.amount / 100).toFixed(2)} was deducted from your payout -- a chargeback for "${purchase.item?.title || 'an item'}" was decided against you.`,
+            link: '/organizer/payouts',
+            channel: 'OPERATIONAL',
+            sendEmail: true,
+          }).catch((err) => console.error(`[stripe] chargeback_clawback notification failed for purchase ${purchase.id} (non-fatal):`, err));
+        } else {
+          console.error(`[stripe] charge.dispute.closed (lost): clawback applied for purchase ${purchase.id} but organizer.userId did not resolve -- notification skipped`);
+        }
+      } catch (err) {
+        console.error(`[stripe] Failed to process charge.dispute.closed for dispute ${dispute.id}:`, err);
+        Sentry.captureException(err instanceof Error ? err : new Error(String(err)), {
+          tags: { area: 'dispute-clawback' },
+          extra: { disputeId: dispute.id },
+        });
+      }
+      break;
+    }
+
+    case 'charge.dispute.funds_reinstated': {
+      // Dispute clawback (2026-08-08) -- documented rare edge case: a dispute that was
+      // already marked 'lost' (organizer already clawed back above) later flips to a
+      // Stripe-driven "late win" and Stripe reinstates the funds to the PLATFORM balance.
+      // Nothing here automatically returns that money to the organizer -- that would be
+      // building reversal-of-reversal machinery for a rare, Stripe-timed edge case. This
+      // is deliberately a Sentry alert only, so a human can true-up the organizer manually
+      // via the existing admin refund/adjustment path if it ever fires.
+      const dispute = event.data.object as Stripe.Dispute;
+      console.warn(`[stripe] charge.dispute.funds_reinstated: dispute ${dispute.id} -- funds returned to platform after an earlier 'lost' clawback. Manual organizer true-up may be needed.`);
+      Sentry.captureMessage('Dispute funds reinstated after a prior clawback -- manual organizer true-up may be needed', {
+        tags: { area: 'dispute-late-win-reversal-needed' },
+        extra: { disputeId: dispute.id, chargeId: typeof dispute.charge === 'string' ? dispute.charge : dispute.charge?.id, amount: dispute.amount },
+      });
+      break;
+    }
+
     case 'customer.subscription.deleted': {
       // Feature #75: Tier Lapse State Logic — Subscription cancelled
       const subscription = event.data.object;

@@ -1506,7 +1506,7 @@ model Purchase {
   id                     String                @id @default(cuid())
   amount                 Float
   platformFeeAmount      Float?
-  status                 String                @default("PENDING") // PENDING, PAID, REFUNDED, FAILED, DISPUTED
+  status                 String                @default("PENDING") // PENDING, PAID, REFUNDED, FAILED, DISPUTED, REFUNDING (refundService.ts TOCTOU claim), DISPUTE_LOST (2026-08-08 dispute clawback)
   userId                 String? // Nullable: POS walk-in buyers have no FindA.Sale account
   user                   User?                 @relation(fields: [userId], references: [id], onDelete: SetNull)
   itemId                 String?
