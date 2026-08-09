@@ -97,6 +97,12 @@ export interface Template {
   /** Season E is short-only (no long cut). Additive optional flag; when true the
    *  longCut window mirrors shortCut and the long render is skipped. */
   shortOnly?: boolean;
+  /** When false, excluded from inferTemplate()'s active rotation (footageClassifyService.ts)
+   *  but the definition stays in ALL_TEMPLATES/TEMPLATES_BY_ID so any already-created
+   *  FootageBatch referencing it can still resolve/render. Absent/true = active.
+   *  Season D shelved 2026-08-09 (Patrick decision — needs a second on-camera presenter
+   *  he has not been able to recruit; do not delete, do not auto-select). */
+  active?: boolean;
 }
 
 /** Shared house-style polish baseline. Individual templates override `pacing`. */

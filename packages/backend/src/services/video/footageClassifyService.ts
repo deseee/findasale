@@ -197,7 +197,12 @@ Respond with ONLY valid JSON: {"templateId":"<one id from the list>"}`;
  * normalized top-vs-runner-up margin fed to the §6.2 batch gate.
  */
 export async function inferTemplate(analyses: ClipAnalysis[]): Promise<TemplateInference> {
-  const scored = ALL_TEMPLATES.map((t) => ({ template: t, score: scoreTemplate(t, analyses) }))
+  // ADR-101: shelved templates (active: false, e.g. season-D) are excluded from
+  // inference/scoring entirely -- they stay in ALL_TEMPLATES/TEMPLATES_BY_ID so an
+  // already-created FootageBatch referencing one can still resolve, but a NEW solo
+  // shoot can never be auto-classified into a shelved format.
+  const candidates = ALL_TEMPLATES.filter((t) => t.active !== false);
+  const scored = candidates.map((t) => ({ template: t, score: scoreTemplate(t, analyses) }))
     .sort((a, b) => b.score - a.score);
 
   const scores: Record<string, number> = {};
@@ -211,7 +216,7 @@ export async function inferTemplate(analyses: ClipAnalysis[]): Promise<TemplateI
   // Normalized margin in 0-1. If nothing scored (all zero) confidence is 0.
   const confidence = topScore > 0 ? Math.max(0, Math.min(1, (topScore - runnerScore) / topScore)) : 0;
 
-  let chosenId = top?.template.id ?? ALL_TEMPLATES[0].id;
+  let chosenId = top?.template.id ?? candidates[0].id;
   let rationale = `Rule score selected ${chosenId} (score ${topScore.toFixed(2)} vs runner-up ${runnerScore.toFixed(2)}).`;
 
   // Tiebreak only when the two leaders are genuinely close AND both plausible.

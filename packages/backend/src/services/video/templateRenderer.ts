@@ -631,6 +631,10 @@ async function buildRenderPlan(
   fill: SlotFillResult,
   workDir: string,
   engine: FfmpegRenderEngine,
+  // ADR-101: AMAZON cut skips the FindA.Sale watermark + closing cta_card entirely
+  // (Amazon Influencer review videos must not carry FindA.Sale branding). Default
+  // preserves existing behavior for all five original templates unchanged.
+  renderVariant: 'AMAZON' | 'FINDASALE' = 'FINDASALE',
 ): Promise<RenderPlan> {
   const segments: RenderSegment[] = [];
   let overlayCounter = 0;
@@ -648,6 +652,9 @@ async function buildRenderPlan(
       continue;
     }
     if (synthetic === 'cta_card') {
+      // ADR-101: AMAZON variant never shows the FindA.Sale CTA card -- drop the
+      // slot entirely rather than rendering a blank/silent gap.
+      if (renderVariant === 'AMAZON') continue;
       const cardPath = path.join(workDir, `card-cta-${i}.jpg`);
       await buildCtaCard(cardPath);
       segments.push({ key: slot.key, visualPath: cardPath, isImage: true, hasAudio: false, durationSec, overlays: [] });
@@ -712,13 +719,17 @@ async function buildRenderPlan(
   }
 
   // Logo watermark — best-effort (a fetch failure ships without it).
+  // ADR-101: AMAZON variant renders with NO FindA.Sale watermark at all, by design
+  // (not a fetch failure) -- skip the fetch entirely rather than fetching-then-discarding.
   let logoPath: string | null = null;
-  try {
-    const candidate = path.join(workDir, 'logo.png');
-    await downloadToFile(BRAND_LOGO_URL, candidate);
-    logoPath = candidate;
-  } catch (err: any) {
-    console.warn('[templateRenderer] logo fetch failed, rendering without watermark:', err?.message ?? err);
+  if (renderVariant === 'FINDASALE') {
+    try {
+      const candidate = path.join(workDir, 'logo.png');
+      await downloadToFile(BRAND_LOGO_URL, candidate);
+      logoPath = candidate;
+    } catch (err: any) {
+      console.warn('[templateRenderer] logo fetch failed, rendering without watermark:', err?.message ?? err);
+    }
   }
 
   // Optional music bed — best-effort.
@@ -758,6 +769,9 @@ function collectPriceStats(analyses: ClipAnalysis[]): { paidTotal: number; worth
 function deriveTitleAndDescription(
   template: Template,
   analyses: ClipAnalysis[],
+  // ADR-101: AMAZON variant must never mention FindA.Sale by name -- default
+  // preserves existing behavior for all five original templates unchanged.
+  renderVariant: 'AMAZON' | 'FINDASALE' = 'FINDASALE',
 ): { title: string; description: string } {
   const { paidTotal, worthTotal, findCount } = collectPriceStats(analyses);
   let title: string;
@@ -794,9 +808,24 @@ function deriveTitleAndDescription(
     }
   }
   const bodyLines = lines.slice(0, 8).join('\n');
-  const description = `${bodyLines}${bodyLines ? '\n\n' : ''}${CTA_LINE_1}, ${CTA_LINE_2}, ${CTA_LINE_3}.`;
+  // ADR-101: the FindA.Sale CTA line is FINDASALE-only. AMAZON variant gets a
+  // neutral sign-off instead -- no brand name, no link, matches what Patrick
+  // films and uploads directly to Amazon's own review-video tool.
+  const description = renderVariant === 'AMAZON'
+    ? bodyLines
+    : `${bodyLines}${bodyLines ? '\n\n' : ''}${CTA_LINE_1}, ${CTA_LINE_2}, ${CTA_LINE_3}.`;
 
-  return { title: scrubBrand(title), description: scrubBrand(description) };
+  let safeTitle = scrubBrand(title);
+  let safeDescription = scrubBrand(description);
+  if (renderVariant === 'AMAZON') {
+    // Hard backstop, not just prompt/logic-level avoidance: strip the brand name
+    // outright if it ever slips in (e.g. via a template's own displayName fallback).
+    const stripFindASale = (s: string) => s.replace(/find\s*a\.?\s*sale/gi, '').replace(/\s{2,}/g, ' ').trim();
+    safeTitle = stripFindASale(safeTitle);
+    safeDescription = stripFindASale(safeDescription);
+  }
+
+  return { title: safeTitle, description: safeDescription };
 }
 
 // ---------------------------------------------------------------------------
@@ -1132,7 +1161,7 @@ export async function renderBatch(batchId: string): Promise<RenderBatchResult> {
     // the FULL markdown body (see writeStagedBatchReviewFile's 2026-07-13 fix) --
     // persisted directly into FootageBatch.stagedFile so it survives past this
     // process regardless of environment.
-    const stagedContent = await writeStagedBatchReviewFile({
+    let stagedContent = await writeStagedBatchReviewFile({
       batchId,
       jobId: job.id,
       template,
@@ -1146,6 +1175,30 @@ export async function renderBatch(batchId: string): Promise<RenderBatchResult> {
       analyses,
       rationale: batch.reviewNotes,
     });
+
+    // ADR-101: season-F-amazon-find ALSO renders a second, branding-free cut from
+    // the SAME footage (no re-shoot) for Patrick to upload directly to Amazon's
+    // own Influencer review-video tool. This never creates a second VideoJob and
+    // never enters the SocialPost/publisher pipeline -- it is a plain Cloudinary
+    // URL surfaced in the staged review markdown for manual download. Best-effort:
+    // a failure here never blocks or fails the primary (FindA.Sale-branded) render.
+    if (template.id === 'season-F-amazon-find') {
+      try {
+        const amazonPlan = await buildRenderPlan(template, fill, dir, ffmpegEngine, 'AMAZON');
+        const amazonRendered = await engine.render(amazonPlan, dir);
+        const amazonVideoUrl = await uploadFileToCloudinary(amazonRendered.outputPath, 'findasale/video-auto-amazon');
+        const { title: amazonTitle, description: amazonDescription } = deriveTitleAndDescription(template, analyses, 'AMAZON');
+        stagedContent +=
+          `\n\n---\n\n## Amazon-safe cut (no FindA.Sale branding — upload to Amazon directly)\n\n` +
+          `**Video:** ${amazonVideoUrl}\n\n**Suggested title:** ${amazonTitle}\n\n**Suggested description:** ${amazonDescription}\n\n` +
+          `This cut has no logo watermark and no FindA.Sale CTA card. It is NOT posted by our ` +
+          `publisher and NOT linked to this VideoJob's SocialPost fan-out -- download and upload it ` +
+          `to Amazon's Influencer review-video tool yourself.`;
+      } catch (err: any) {
+        console.warn(`[templateRenderer] Amazon-cut render failed for batch ${batchId} (non-fatal, primary render unaffected):`, err?.message ?? err);
+        stagedContent += `\n\n---\n\n## Amazon-safe cut\n\nFailed to render this run: ${err?.message ?? err}. The FindA.Sale-branded cut above is unaffected.`;
+      }
+    }
 
     await prisma.footageBatch.update({
       where: { id: batchId },

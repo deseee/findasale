@@ -1,4 +1,12 @@
 /**
+ * SHELVED 2026-08-09 (Patrick decision): this format needs a second on-camera
+ * presenter ('Him vs. Her'). Patrick has not been able to recruit one and is
+ * running solo for now. Code kept in place, not deleted, per project no-
+ * destructive-removal policy — `active: false` below excludes it from
+ * inferTemplate()'s active rotation so a solo shoot is never misclassified
+ * as needing a second person. Re-activate by flipping `active` back to true
+ * (or removing the field) if a co-presenter is found later.
+ *
  * Season D — "The $50 Room Challenge" (Collab / Competition) template.
  * Source: claude_docs/marketing/video-seasons/season-D-50-room-challenge.md
  * Format (5 beats): rules ($50 each) -> split-screen map picks -> finds (race,
@@ -24,6 +32,7 @@ export const seasonD50RoomChallenge: Template = {
   id: 'season-D-50-room-challenge',
   displayName: 'The $50 Room Challenge — Collab / Competition',
   purpose: 'PROMO',
+  active: false, // SHELVED 2026-08-09 — see file header comment
   contentSignature: {
     requiredRoles: ['FIND', 'PRICE_REVEAL'],
     boostRoles: ['MAP', 'STYLING', 'CTA'],

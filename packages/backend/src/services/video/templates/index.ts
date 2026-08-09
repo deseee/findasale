@@ -13,6 +13,7 @@ import seasonBResaleRoute from './season-B-resale-route';
 import seasonCMapToMantel from './season-C-map-to-mantel';
 import seasonD50RoomChallenge from './season-D-50-room-challenge';
 import seasonESoldNearYou from './season-E-sold-near-you';
+import seasonFAmazonFind from './season-F-amazon-find';
 
 export {
   seasonARoomStyling,
@@ -20,6 +21,7 @@ export {
   seasonCMapToMantel,
   seasonD50RoomChallenge,
   seasonESoldNearYou,
+  seasonFAmazonFind,
 };
 
 /** All templates in season order. Source of truth for §10 format inference. */
@@ -29,6 +31,7 @@ export const ALL_TEMPLATES: Template[] = [
   seasonCMapToMantel,
   seasonD50RoomChallenge,
   seasonESoldNearYou,
+  seasonFAmazonFind,
 ];
 
 /** id -> Template lookup (e.g. FootageBatch.templateId resolution). */
