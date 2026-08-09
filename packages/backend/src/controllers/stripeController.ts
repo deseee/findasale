@@ -984,8 +984,11 @@ export const webhookHandler = async (req: Request, res: Response) => {
                 // correctly label the Purchase rows this webhook creates as genuine
                 // Direct charges -- see the chargeType comment at the Purchase.create
                 // calls below for the full rationale.
-                organizer: { select: { id: true, name: true, stripeConnectId: true } },
-                sale: { select: { id: true, title: true } },
+                // CI fix (2026-08-09): POSPaymentRequest.organizer is a User relation
+                // (organizerUserId) -- stripeConnectId lives on the real Organizer model,
+                // reached here via sale.organizer instead. TS2353 confirmed by CI run #503.
+                organizer: { select: { id: true, name: true } },
+                sale: { select: { id: true, title: true, organizer: { select: { stripeConnectId: true } } } },
               },
             });
 
@@ -1027,7 +1030,7 @@ export const webhookHandler = async (req: Request, res: Response) => {
                       // own Purchase.create exactly or whichever path wins the race mislabels
                       // the row and breaks refundService.ts's refund-call routing.
                       chargeType: 'DIRECT',
-                      stripeAccountId: posRequest.organizer.stripeConnectId,
+                      stripeAccountId: posRequest.sale.organizer.stripeConnectId,
                     },
                   });
 
@@ -1097,7 +1100,7 @@ export const webhookHandler = async (req: Request, res: Response) => {
                       // findasale-hacker fix (2026-08-09): same genuine-Direct-charge
                       // mislabeling gap as the item-Purchase loop above.
                       chargeType: 'DIRECT',
-                      stripeAccountId: posRequest.organizer.stripeConnectId,
+                      stripeAccountId: posRequest.sale.organizer.stripeConnectId,
                     },
                   });
                 } catch (err: any) {
