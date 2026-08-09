@@ -476,6 +476,7 @@ model Organizer {
   esnOrgId                        Int?
   linkedInUrl                     String?
   esnMemberships                  Json?
+  esnMembershipsR2Key             String? // R2 object key when offloaded (2026-08-09 DB space pass); null = still inline in esnMemberships
   esnPackageType                  String?
   // ADR-073 Phase 2: Contact acquisition fields (migration 20260502000002)
   contactEmail                    String?
@@ -510,6 +511,7 @@ model Organizer {
   // Corroboration fields — merge conflict resolution
   sourceCount        Int     @default(1)
   sourcesJson        Json?
+  sourcesJsonR2Key   String? // R2 object key when offloaded (2026-08-09 DB space pass); null = still inline in sourcesJson
   corroborationScore Decimal @default(0.5) @db.Decimal(3, 2)
   dedupeKey          String? @db.VarChar(255)
 
@@ -997,6 +999,7 @@ model Sale {
   lastScrapedAt               DateTime? // Last time this listing appeared in a scrape
   scrapeVersion               Int? // Scrape update counter
   scrapedMetadata             Json? // Raw API payload for audit/enrichment
+  scrapedMetadataR2Key        String? // R2 object key when offloaded (2026-08-09 DB space pass); null = still inline in scrapedMetadata
   claimEmails                 ClaimEmail[]
   // Feature: Sale Share Links — referral share links for this sale
   shareLinks                  SaleShareLink[]

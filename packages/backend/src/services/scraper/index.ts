@@ -1003,6 +1003,8 @@ export async function getOrCreateScrapedOrganizer(
             esnOrgId,
             googlePlaceId,
             osmNodeId: osmNodeId ?? null,
+            hereBusinessId: hereBusinessId ?? null,
+            foursquareVenueId: foursquareVenueId ?? null,
             businessCategory,
             contactEmail: emailGate?.contactEmail ?? null,
             emailDiscoveryMethod: emailGate?.emailDiscoveryMethod ?? null,
@@ -1039,20 +1041,48 @@ export async function getOrCreateScrapedOrganizer(
       }
     }
   } catch (err: any) {
-    // P2002 = unique constraint on email — the record already exists (race condition
-    // or this business was previously ingested from the same source). Look up the
-    // existing User by the canonical system email and return its organizer ID.
-    // Never create a duplicate with a timestamp suffix.
-    if (err?.code === 'P2002' && err?.meta?.target?.includes('email')) {
-      const existingUser = await prisma.user.findUnique({
-        where: { email: systemEmail },
-        include: { organizer: { select: { id: true } } },
-      });
-      if (existingUser?.organizer?.id) {
-        console.log(`[scraper] P2002 — reusing existing organizer for ${systemEmail}: ${existingUser.organizer.id}`);
-        return existingUser.organizer.id;
+    // P2002 = unique constraint violation — the record already exists (race condition:
+    // two near-simultaneous scraper runs both tried to create a brand-new organizer for
+    // the same identity). Never create a duplicate with a timestamp suffix; fall back to
+    // matching the existing row instead of failing the whole scrape.
+    if (err?.code === 'P2002') {
+      const target: string[] = err?.meta?.target ?? [];
+
+      // Email collision — look up by the canonical system email and return its organizer ID.
+      if (target.includes('email')) {
+        const existingUser = await prisma.user.findUnique({
+          where: { email: systemEmail },
+          include: { organizer: { select: { id: true } } },
+        });
+        if (existingUser?.organizer?.id) {
+          console.log(`[scraper] P2002 (email) — reusing existing organizer for ${systemEmail}: ${existingUser.organizer.id}`);
+          return existingUser.organizer.id;
+        }
+        // If lookup also fails (extremely rare), surface the original error
+        throw err;
       }
-      // If lookup also fails (extremely rare), surface the original error
+
+      // Cross-source ID collision (googlePlaceId / hereBusinessId / foursquareVenueId are all
+      // @unique in schema.prisma and are now set at create time -- see hereBusinessId/
+      // foursquareVenueId fix, 2026-08-09). Mirrors the email fallback above: fall back to
+      // matching the existing row by whichever unique field the DB reported, rather than
+      // throwing and losing the whole scrape item.
+      const uniqueIdField = (['googlePlaceId', 'hereBusinessId', 'foursquareVenueId'] as const).find(
+        (f) => target.includes(f)
+      );
+      if (uniqueIdField) {
+        const idValue = { googlePlaceId, hereBusinessId, foursquareVenueId }[uniqueIdField];
+        if (idValue) {
+          const existingOrg = await prisma.organizer.findFirst({
+            where: { [uniqueIdField]: idValue } as Prisma.OrganizerWhereInput,
+            select: { id: true },
+          });
+          if (existingOrg) {
+            console.log(`[scraper] P2002 (${uniqueIdField}) — reusing existing organizer ${existingOrg.id} for value '${idValue}'`);
+            return existingOrg.id;
+          }
+        }
+      }
       throw err;
     } else {
       throw err;
