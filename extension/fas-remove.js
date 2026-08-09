@@ -336,6 +336,12 @@
     // exactly what's needed to push renewDueAt forward another cycle. remoteListingId stays null
     // (a Renew click doesn't produce a new one, and getPendingUpdates/getPendingSoldChecks only
     // ever key off the MOST RECENT job row per item, so this correctly supersedes the old one).
+    // TEMP DIAGNOSTIC NOTE (2026-08-09): an earlier version of this diagnostic showed a red
+    // overlay() here on failure, but runRenewalQueue's own success overlay (called right after
+    // this function returns, unconditionally on renewOne's result -- NOT on markRenewed's actual
+    // API outcome) reuses the SAME shared bar element and instantly overwrote it -- the error
+    // was real but never visible. Moved the actual diagnostic (console.log + chrome.storage) to
+    // background.js's markListed handler instead, which persists after this tab closes itself.
     try { await chrome.runtime.sendMessage({ type: 'markListed', itemId: item.id, remoteListingId: null, platform: 'FACEBOOK' }); } catch (e) {}
   }
 

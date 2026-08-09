@@ -270,6 +270,7 @@ function mapOsmToOrganizer(
   phone?: string;
   website?: string;
   osmId: string;
+  osmNodeId: string;
 } | null {
   const { tags } = node;
 
@@ -285,8 +286,11 @@ function mapOsmToOrganizer(
   const phone = tags.phone || undefined;
   const website = tags.website || undefined;
   const osmId = `osm:${node.type}:${node.id}`;
+  // Column format per schema.prisma comment on Organizer.osmNodeId: "node/12345" or "way/12345"
+  // (distinct from the osmId dedup key above, which uses ":" and is scoped to this run's in-memory Set).
+  const osmNodeId = `${node.type}/${node.id}`;
 
-  return { name: tags.name, city, state, lat, lng: lon, phone, website, osmId };
+  return { name: tags.name, city, state, lat, lng: lon, phone, website, osmId, osmNodeId };
 }
 
 /**
@@ -317,6 +321,7 @@ export async function runOsmScraper(batchIndex = 0, batchCount = 1): Promise<voi
     phone?: string;
     website?: string;
     osmId: string;
+    osmNodeId: string;
   }> = [];
 
   const seen = new Set<string>();
@@ -364,7 +369,13 @@ export async function runOsmScraper(batchIndex = 0, batchCount = 1): Promise<voi
         item.phone,
         item.website,
         item.lat,
-        item.lng
+        item.lng,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        item.osmNodeId
       );
       if (organizerId) {
         created++;

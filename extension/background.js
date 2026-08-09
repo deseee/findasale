@@ -112,6 +112,44 @@ async function ensureRemovalAlarmAndCheck() {
 chrome.runtime.onInstalled.addListener(ensureRemovalAlarmAndCheck);
 chrome.runtime.onStartup.addListener(ensureRemovalAlarmAndCheck);
 
+// TEMP TEST (2026-08-09, Patrick-approved, "try with star raiders booklet") -- verifies whether
+// the renewal flow (native click + toast-confirmation detection) still completes correctly while
+// openSilentRemovalTab() above opens the tab active:false (see that TEMP TEST comment). Seeds
+// the renewal queue with ONLY this one real, live item (Star Raiders Atari 2600 Instruction
+// Manual Booklet Only, id cmo3esog0000hjqsudz3tcy0m, confirmed via direct Railway DB query
+// 2026-08-09) so this cannot sweep in any other real due listing -- deliberately bypasses the
+// normal checkRenewals()/pending-renewals polling path, which wouldn't have picked this item up
+// anyway (its MarketplaceListingJob.renewDueAt is NULL, confirmed same query). A real successful
+// renewal here writes a real new MarketplaceListingJob POST row for this item (see markRenewed
+// in fas-remove.js) -- verify by querying MarketplaceListingJob for this itemId after the test
+// and checking for a new row newer than 2026-07-31. DELETE this whole block (and revert
+// openSilentRemovalTab's active:false above) once the test result is confirmed either way.
+async function fasTempTestRenewHidden() {
+  // (2026-08-09, narrowed) The Moon Knight #2 run confirmed the real failure via the
+  // background.js markListed diagnostic: apiFetch('/extension/items/.../listed') returned
+  // { ok:false, status:401, error:'not_signed_in' } -- and that specific shape is apiFetch's
+  // OWN early-return (this file, getToken()/apiFetch top) when chrome.cookies.get() finds NO
+  // accessToken cookie at all -- it never even reaches the real fetch or the ADR-088
+  // refresh-on-401 retry logic. No need to burn another real Facebook listing's renew-
+  // eligibility to keep testing this -- checking the cookie directly is instant and free.
+  const cookie = await chrome.cookies.get({ url: CFG.COOKIE_URL, name: CFG.COOKIE_NAME });
+  const diag = {
+    found: !!cookie,
+    expirationDate: cookie ? cookie.expirationDate : null,
+    expirationReadable: cookie && cookie.expirationDate ? new Date(cookie.expirationDate * 1000).toISOString() : null,
+    nowReadable: new Date().toISOString(),
+    session: cookie ? cookie.session : null,
+    domain: cookie ? cookie.domain : null,
+    path: cookie ? cookie.path : null,
+    httpOnly: cookie ? cookie.httpOnly : null,
+    secure: cookie ? cookie.secure : null
+    // deliberately NOT logging cookie.value -- ADR-088 §4, token values never hit console/storage
+  };
+  console.log('[FAS accessToken cookie diagnostic]', JSON.stringify(diag));
+  await chrome.storage.local.set({ fasLastCookieDiagnostic: diag });
+}
+chrome.runtime.onInstalled.addListener(fasTempTestRenewHidden);
+
 // ---- Silent-mode removal tab lifecycle (2026-07-16 fix) ----
 // Silent ("Remove automatically") mode used to open the "Your listings" page in a HIDDEN
 // background tab (active:false). Chrome throttles rendering in background tabs -- React
@@ -151,7 +189,15 @@ async function openSilentRemovalTab() {
   // Remember the organizer's current tab so focus can be restored after the (brief) removal.
   const activeTabs = await chrome.tabs.query({ active: true, currentWindow: true });
   const prevTabId = activeTabs && activeTabs[0] ? activeTabs[0].id : null;
-  // active:true so Facebook actually RENDERS the survey modal (the whole point of this fix).
+  // TEST RESULT (2026-08-09, Patrick-confirmed live): flipped to active:false to test whether
+  // renewal (click + toast detection) survives a genuinely hidden tab. It does NOT -- the tab
+  // sat stuck and only completed the instant Patrick focused it, confirming realClick()'s
+  // `await new Promise((r) => requestAnimationFrame(...))` preamble (fas-selectors.js) is the
+  // same class of failure as the 2026-07-16 removal-survey-modal bug above, just via rAF
+  // starvation instead of a stuck animated modal. Reverted to active:true, the proven-correct
+  // setting for both the removal survey modal AND the renewal click. The sold-detection scan
+  // (pure DOM read, no rAF dependency) was separately confirmed to work fine hidden -- but since
+  // this one shared tab now also carries renewal, it must stay foregrounded regardless.
   const tab = await chrome.tabs.create({ url: FAS_YOU_SELLING_SOLD_FILTER_URL, active: true });
   await chrome.storage.local.set({ fasRemovalTabId: tab.id, fasRemovalPrevTabId: prevTabId, fasRemovalStartedAt: Date.now() });
 }
@@ -663,8 +709,19 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         // ADR-100 (2026-08-06/07): platform threaded through -- fas-content.js's FB call site
         // never sets it (defaults 'FACEBOOK' server-side, matching today's behavior exactly);
         // fas-craigslist.js's new call site sets 'CRAIGSLIST'.
-        sendResponse(await apiFetch('/extension/items/' + encodeURIComponent(msg.itemId) + '/listed',
-          { method: 'POST', body: { remoteListingId: msg.remoteListingId || null, platform: msg.platform || 'FACEBOOK' } }));
+        const markListedResp = await apiFetch('/extension/items/' + encodeURIComponent(msg.itemId) + '/listed',
+          { method: 'POST', body: { remoteListingId: msg.remoteListingId || null, platform: msg.platform || 'FACEBOOK' } });
+        // TEMP DIAGNOSTIC (2026-08-09) -- logged HERE (service worker) instead of in
+        // fas-remove.js's markRenewed(), because that content-script-side log lives in the
+        // "you/selling" tab's own console, and that tab CLOSES ITSELF the instant a renewal
+        // succeeds (see runRenewalQueue) -- the log was gone before it could ever be read.
+        // The service worker persists across the tab's lifecycle and its console is inspectable
+        // anytime after the fact via chrome://extensions -> FindA.Sale -> "service worker" link.
+        // Also written to chrome.storage.local (fasLastMarkListedDiagnostic) as a second,
+        // even-more-durable capture path. Remove this whole block once the root cause is found.
+        console.log('[FAS markListed diagnostic]', JSON.stringify({ itemId: msg.itemId, platform: msg.platform, remoteListingId: msg.remoteListingId, resp: markListedResp }));
+        await chrome.storage.local.set({ fasLastMarkListedDiagnostic: { itemId: msg.itemId, platform: msg.platform, remoteListingId: msg.remoteListingId, resp: markListedResp, at: Date.now() } });
+        sendResponse(markListedResp);
       } else if (msg.type === 'markRemoved') {
         sendResponse(await apiFetch('/extension/items/' + encodeURIComponent(msg.itemId) + '/removed',
           { method: 'POST', body: {} }));
