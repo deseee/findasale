@@ -232,6 +232,25 @@
     return !!current && SEL.norm(current) === SEL.norm(title);
   }
 
+  // (2026-08-09, Patrick) Sold-detection used to scan the FULL unfiltered "Your listings" grid
+  // (loadAllListingCards -- scroll-heavy, mixes 20+ active listings in with whatever's sold),
+  // getting slower as active inventory grows for a check that only cares about sold items.
+  // Facebook's own Seller Hub already offers a server-side filter for exactly this -- confirmed
+  // live 2026-08-09 (Chrome, read-only navigation): this URL shows ONLY sold/out-of-stock
+  // listings (both "View Order" items sold via Facebook's own checkout, and "Mark as available"
+  // items marked unavailable without an order -- allSoldListingCards' existing marker detection
+  // already covers both, unchanged). Scanning this small, pre-filtered page instead decouples
+  // sold-detection performance from total active-listing count.
+  const SOLD_STATUS_FILTER_URL = 'https://www.facebook.com/marketplace/you/selling/?referral_surface=seller_hub&status[0]=OUT_OF_STOCK';
+
+  function currentStatusFilterParam() {
+    try { return new URLSearchParams(window.location.search).get('status[0]'); } catch (e) { return null; }
+  }
+
+  function pageOnSoldFilterView() {
+    return currentStatusFilterParam() === 'OUT_OF_STOCK';
+  }
+
   // Ensures the page is filtered to `item`'s title before running the removal flow against it.
   // If not already filtered, triggers a real navigation and returns WITHOUT running the removal
   // flow -- the navigation tears down this script; the fresh content-script load that follows
@@ -332,17 +351,25 @@
   }
 
   // Renews one item: finds its "Renew listing" button by title (single-confident-match only,
-  // same discipline as removeOne) and clicks it. No survey modal is expected (Renew is a
-  // single-action button, not a multi-step flow like "Mark as sold") -- confirmed by the live
-  // 2026-08-09 check showing it as a direct card-level button, not a menu item. Success is
-  // read from the button's own row: once clicked, Facebook is expected to either remove the
-  // "Renew listing" button (replaced by a disabled/renewed state) or show a toast -- since the
-  // exact post-click DOM signal was not live-verified this pass (verification stopped short of
-  // clicking, per Patrick's "don't submit anything" instruction), this treats a stable ABSENCE
-  // of the row's zero-time-since-renewal state as best-effort and reports success optimistically
-  // after the click if no error is thrown, while still requiring the pre-click match to be
-  // single-confident. If this turns out to under- or over-report success once QA'd live with a
-  // real click, that's the next thing to verify -- not guessed further here.
+  // same discipline as removeOne) and clicks it. No survey modal (Renew is a single-action
+  // button, not a multi-step flow like "Mark as sold").
+  // Success detection (2026-08-09, LIVE-VERIFIED with a real click on the Celestion Vintage 30
+  // G12 Guitar Speaker listing, Patrick-authorized): confirmed the button's own row does NOT
+  // change after a successful renewal (still reads "Renew listing", card still shows the
+  // original "Active - Listed on [date]" text in this view) -- so button/card state is NOT a
+  // usable success signal. What DOES appear is a transient toast reading exactly "Your listing
+  // has been renewed." that shows for a few seconds then self-dismisses. This waits for that
+  // toast (broad text match, not a rigid selector -- the toast's role/class wasn't captured
+  // before it vanished during verification, so matching by its known text is the reliable
+  // option, consistent with how radioOptionByText/elementByText already match by text
+  // elsewhere in this file rather than brittle Facebook-assigned classes).
+  function findRenewedToast() {
+    const all = document.querySelectorAll('*');
+    for (const el of all) {
+      if (el.children.length === 0 && /your listing has been renewed/i.test(el.textContent || '')) return el;
+    }
+    return null;
+  }
   async function renewOne(item) {
     const match = SEL.renewButtonByTitle(item.title);
     if (!match) {
@@ -358,7 +385,10 @@
     }
     await humanPause(300, 600);
     await realClick(match.button);
-    await humanPause(600, 1000); // let Facebook's click handler + any re-render settle
+    const toast = await waitFor(findRenewedToast, 6000).catch(() => null);
+    if (!toast) {
+      return { ok: false, reason: 'Clicked "Renew listing" but never saw the "Your listing has been renewed" confirmation -- check it manually.' };
+    }
     return { ok: true };
   }
 
@@ -480,17 +510,35 @@
     // contains items already SOLD there -- mutually exclusive sets, so scanning first can never
     // interfere with (or be stale for) the removal pass that follows.
     await sleep(600); // let the listings grid render before searching for cards
-    // (2026-08-06 fix) Load every page of the listings grid into the DOM before either scan
-    // below runs -- see loadAllListingCards in fas-selectors.js for why this is required.
-    // Without this, both the sold-detection scan and the removal queue's card lookups only
-    // ever saw whatever Facebook happened to render on the first page load.
-    // (2026-08-07 fix) Skip both on a page WE filtered down to a single removal target
-    // (title_search set by ensureFilteredThenRun below) -- sold-detection needs the FULL
-    // unfiltered grid to check many candidate titles at once, so running it against a
-    // near-empty filtered DOM would just be a wasted API call. (An organizer's own manual
-    // Facebook search would also be skipped here; acceptable and rare -- that page load's
-    // opportunistic sold-check is simply deferred to the next poll.)
-    if (!currentTitleSearchParam()) {
+    // (2026-08-09 restructure, ADR-100 -13) Sold-detection now runs against Facebook's own
+    // OUT_OF_STOCK status-filter view (SOLD_STATUS_FILTER_URL above) instead of the full
+    // unfiltered "Your listings" grid -- confirmed live that this filtered view exists, loads
+    // fast, and shows only sold/unavailable cards with the same "Mark as available"/"Relist
+    // this item" markers allSoldListingCards already looks for. openSilentRemovalTab() and the
+    // fasPendingRemovals notification click (background.js) now both land here directly, so the
+    // common case (organizer's own click, or the periodic silent poll) arrives already filtered
+    // and no extra navigation/reload is needed.
+    //
+    // Three possible page states on load:
+    //   1. On a title_search page (removal/renewal target, set by ensureFilteredThenRun /
+    //      ensureFilteredThenRunRenewal below) -- sold-detection already ran earlier this same
+    //      tab visit; skip straight to queue processing.
+    //   2. On the OUT_OF_STOCK status-filter page -- run the sold-detection scan.
+    //   3. Neither (bare/unfiltered you/selling -- an organizer's own manual navigation, or a
+    //      stale bookmark/notification predating this change) -- navigate to the status-filter
+    //      URL. Navigation tears down this content script; the fresh load re-enters start() and
+    //      lands in case 2 above.
+    const onTitleSearchPage = !!currentTitleSearchParam();
+    const onSoldFilterPage = pageOnSoldFilterView();
+    if (!onTitleSearchPage && !onSoldFilterPage) {
+      window.location.href = SOLD_STATUS_FILTER_URL;
+      return;
+    }
+    if (onSoldFilterPage) {
+      // (2026-08-06 fix) Load every page of the filtered grid into the DOM before scanning --
+      // see loadAllListingCards in fas-selectors.js. The filtered view is normally small enough
+      // to need no scrolling at all, but a high-volume organizer could still have more than one
+      // page of sold items, so this stays in place as a safety net.
       await SEL.loadAllListingCards();
       await runSoldDetectionScan();
     }

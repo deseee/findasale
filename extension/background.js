@@ -6,6 +6,14 @@
 importScripts('config.js');
 const CFG = self.FAS_CONFIG;
 
+// (2026-08-09, ADR-100) The "you/selling" management tab now lands directly on Facebook's own
+// OUT_OF_STOCK status filter instead of the bare unfiltered grid -- fas-remove.js's sold-
+// detection scan runs against this small, pre-filtered view (confirmed live it exists and
+// works), so opening it here means the common case (silent poll, or organizer's own click)
+// needs no extra in-tab navigation before the scan can run. See fas-remove.js's matching
+// SOLD_STATUS_FILTER_URL constant and start() -- both must point at the same URL.
+const FAS_YOU_SELLING_SOLD_FILTER_URL = 'https://www.facebook.com/marketplace/you/selling/?referral_surface=seller_hub&status[0]=OUT_OF_STOCK';
+
 async function getToken() {
   const cookie = await chrome.cookies.get({ url: CFG.COOKIE_URL, name: CFG.COOKIE_NAME });
   return cookie ? cookie.value : null;
@@ -144,7 +152,7 @@ async function openSilentRemovalTab() {
   const activeTabs = await chrome.tabs.query({ active: true, currentWindow: true });
   const prevTabId = activeTabs && activeTabs[0] ? activeTabs[0].id : null;
   // active:true so Facebook actually RENDERS the survey modal (the whole point of this fix).
-  const tab = await chrome.tabs.create({ url: 'https://www.facebook.com/marketplace/you/selling', active: true });
+  const tab = await chrome.tabs.create({ url: FAS_YOU_SELLING_SOLD_FILTER_URL, active: true });
   await chrome.storage.local.set({ fasRemovalTabId: tab.id, fasRemovalPrevTabId: prevTabId, fasRemovalStartedAt: Date.now() });
 }
 
@@ -610,7 +618,7 @@ chrome.windows.onFocusChanged.addListener((windowId) => {
 chrome.notifications.onClicked.addListener((notifId) => {
   if (notifId === 'fasPendingRemovals') {
     chrome.notifications.clear(notifId);
-    chrome.tabs.create({ url: 'https://www.facebook.com/marketplace/you/selling', active: true });
+    chrome.tabs.create({ url: FAS_YOU_SELLING_SOLD_FILTER_URL, active: true });
     return;
   }
   if (notifId.indexOf('fasSavedSearch_') === 0) {
