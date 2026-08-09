@@ -38,6 +38,7 @@ import { assertCheckoutAllowed, assertGuestCheckoutAllowed, recordConfirmedSigna
 import { recordPosPaymentLinkSale } from '../services/posPaymentLinkRecorder'; // ADR pos-webhook-idempotency-reconciliation (2026-07-23, S1151)
 import { markHoldInvoicePaid } from '../services/holdInvoicePaymentRecorder'; // payments fix (2026-08-03): shared HoldInvoice-PAID recorder, webhook + reconcile
 import { settleHubOwnerReversalForLeg } from './vendorBoothCartController'; // P1 (2026-07-28): durable hub-owner Transfer reversal settlement
+import { shouldUseDirectCharge } from '../services/stripeConnectService'; // Direct-charges migration (2026-08-08): staged-rollout routing decision
 import { notifyVendorBoothSaleRefunded } from '../services/vendorBoothSaleNotificationService'; // tell the vendor their booth sale was refunded
 
 // Lazy — avoids crash when module loads before dotenv runs
@@ -693,6 +694,11 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
     let paymentIntent;
     const stripeConnectId = item.sale!.organizer.stripeConnectId;
     const shouldUseConnect = stripeConnectId && !stripeConnectId.startsWith('acct_test_');
+    // Direct-charges migration (2026-08-08): staged-rollout routing decision — live Stripe
+    // eligibility check + allowlist gate, see stripeConnectService.shouldUseDirectCharge.
+    const useDirect = shouldUseConnect
+      ? await shouldUseDirectCharge(item.sale!.organizerId, stripeConnectId)
+      : false;
 
     const basePaymentIntentData = {
       amount: finalPriceCents,
@@ -711,18 +717,33 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
       },
     };
 
+    // Direct-charges migration (2026-08-08): a Direct charge lives on the connected account
+    // itself — drop on_behalf_of/transfer_data (there is no platform-side Transfer) and keep
+    // application_fee_amount; the { stripeAccount } request option below routes the create
+    // call to the connected account. Destination-charge shape (else branch) is UNCHANGED.
+    const paymentIntentCreateParams = useDirect
+      ? {
+          ...basePaymentIntentData,
+          application_fee_amount: platformFeeAmount,
+        }
+      : shouldUseConnect
+        ? {
+            ...basePaymentIntentData,
+            application_fee_amount: platformFeeAmount,
+            on_behalf_of: stripeConnectId,
+            transfer_data: { destination: stripeConnectId },
+          }
+        : basePaymentIntentData;
+
+    const paymentIntentCreateOptions = useDirect
+      ? { idempotencyKey, stripeAccount: stripeConnectId! }
+      : { idempotencyKey };
+
     try {
       // First attempt: with Connect routing if organizer has valid account
       paymentIntent = await stripe().paymentIntents.create(
-        shouldUseConnect
-          ? {
-              ...basePaymentIntentData,
-              application_fee_amount: platformFeeAmount,
-              on_behalf_of: stripeConnectId,
-              transfer_data: { destination: stripeConnectId },
-            }
-          : basePaymentIntentData,
-        { idempotencyKey }
+        paymentIntentCreateParams,
+        paymentIntentCreateOptions
       );
     } catch (stripeError: any) {
       // S1006: Connect routing failed. If the SELLER's connected account can't receive
@@ -771,6 +792,10 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
           platformFeeAmount: platformFeeAmount / 100,
           stripePaymentIntentId: paymentIntent.id,
           status: 'PENDING',
+          // Direct-charges migration (2026-08-08): persisted, authoritative charge shape,
+          // set once here at charge-creation time.
+          chargeType: useDirect ? 'DIRECT' : 'DESTINATION',
+          ...(useDirect ? { stripeAccountId: stripeConnectId! } : {}),
           ...(affiliateLinkId ? { affiliateLinkId } : {}),
           ...(normalizedGuestEmail ? { buyerEmail: normalizedGuestEmail, guestName: normalizedGuestName } : {}),
         }
@@ -955,7 +980,11 @@ export const webhookHandler = async (req: Request, res: Response) => {
               where: { id: requestId },
               include: {
                 shopper: { select: { id: true, email: true, name: true } },
-                organizer: { select: { id: true, name: true } },
+                // findasale-hacker fix (2026-08-09): stripeConnectId needed below to
+                // correctly label the Purchase rows this webhook creates as genuine
+                // Direct charges -- see the chargeType comment at the Purchase.create
+                // calls below for the full rationale.
+                organizer: { select: { id: true, name: true, stripeConnectId: true } },
                 sale: { select: { id: true, title: true } },
               },
             });
@@ -989,6 +1018,16 @@ export const webhookHandler = async (req: Request, res: Response) => {
                       stripePaymentIntentId: `${paymentIntent.id}_${item.id}`,
                       source: 'POS',
                       status: 'PAID',
+                      // findasale-hacker fix (2026-08-09, Direct-charges adversarial pass):
+                      // this webhook branch is the idempotent backstop for the SAME PaymentIntent
+                      // posPaymentController.ts's confirmPaymentRequest creates via
+                      // paymentIntents.create(..., { stripeAccount: organizer.stripeConnectId })
+                      // -- unconditionally a genuine Direct charge (this flow predates the
+                      // Direct-charges migration/allowlist). Must match confirmPaymentRequest's
+                      // own Purchase.create exactly or whichever path wins the race mislabels
+                      // the row and breaks refundService.ts's refund-call routing.
+                      chargeType: 'DIRECT',
+                      stripeAccountId: posRequest.organizer.stripeConnectId,
                     },
                   });
 
@@ -1055,6 +1094,10 @@ export const webhookHandler = async (req: Request, res: Response) => {
                       stripePaymentIntentId: items.length === 0 ? paymentIntent.id : `${paymentIntent.id}_misc`,
                       source: 'POS',
                       status: 'PAID',
+                      // findasale-hacker fix (2026-08-09): same genuine-Direct-charge
+                      // mislabeling gap as the item-Purchase loop above.
+                      chargeType: 'DIRECT',
+                      stripeAccountId: posRequest.organizer.stripeConnectId,
                     },
                   });
                 } catch (err: any) {
@@ -2250,11 +2293,26 @@ export const webhookHandler = async (req: Request, res: Response) => {
           break;
         }
 
-        if (!isDestinationCharge(paymentIntent)) {
+        // Direct-charges migration (2026-08-08): route on the persisted, authoritative
+        // Purchase.chargeType rather than the isDestinationCharge(pi) inference below.
+        // isDestinationCharge is retained ONLY as a defensive secondary check -- if it ever
+        // disagrees with chargeType, that disagreement itself is a bug worth flagging, but
+        // it must never override the persisted field's decision.
+        const inferredDestination = isDestinationCharge(paymentIntent);
+        if (inferredDestination !== (purchase.chargeType === 'DESTINATION')) {
+          console.error(`[dispute-clawback] chargeType/inference mismatch: purchase.chargeType='${purchase.chargeType}' but isDestinationCharge(pi)=${inferredDestination} for PaymentIntent ${paymentIntent.id}, purchase ${purchase.id}`);
+          Sentry.captureMessage('Dispute clawback: chargeType/inference mismatch', {
+            tags: { area: 'dispute-clawback' },
+            extra: { disputeId: dispute.id, purchaseId: purchase.id, paymentIntentId: paymentIntent.id, chargeType: purchase.chargeType, inferredDestination },
+          });
+        }
+
+        if (purchase.chargeType === 'DIRECT') {
           // Direct charge (e.g. booth-cart, on the vendor's own connected account) --
           // Stripe already debited THAT account directly, per Stripe's own docs. There is
-          // no platform-side Transfer to reverse; nothing to do here.
-          console.log(`[stripe] charge.dispute.closed (lost): PaymentIntent ${paymentIntent.id} is not a destination charge -- no platform-side clawback needed.`);
+          // no platform-side Transfer to reverse; nothing to do here. Still logged (not a
+          // silent no-op) so this is auditable.
+          console.log(`[stripe] charge.dispute.closed (lost): Direct-charge dispute lost -- no platform-side reversal needed, liability already on connected account. PaymentIntent ${paymentIntent.id}, purchase ${purchase.id}.`);
           break;
         }
 
@@ -2706,6 +2764,11 @@ export const webhookHandler = async (req: Request, res: Response) => {
         const cartItemIds = session.metadata.itemIds.split(',').filter(Boolean);
         const cartSaleId = session.metadata.saleId ?? null;
         const cartBuyerUserId = session.metadata.buyerUserId ?? null;
+        // Direct-charges migration (2026-08-08): read back the routing decision recorded on
+        // the Session at creation time (createCartCheckoutSession) — chargeType must be set
+        // once at charge-creation time, never inferred after the fact.
+        const cartChargeType = session.metadata.chargeType === 'DIRECT' ? 'DIRECT' : 'DESTINATION';
+        const cartStripeAccountId = session.metadata.stripeAccountId ?? null;
 
         if (cartItemIds.length > 0) {
           const cartFullySoldOutIds: string[] = [];
@@ -2776,6 +2839,10 @@ export const webhookHandler = async (req: Request, res: Response) => {
                       typeof session.payment_intent === 'string'
                         ? session.payment_intent
                         : (session.payment_intent as any)?.id ?? null,
+                    // Direct-charges migration (2026-08-08): persisted, authoritative charge
+                    // shape, carried through from the Session metadata set at creation time.
+                    chargeType: cartChargeType,
+                    ...(cartChargeType === 'DIRECT' && cartStripeAccountId ? { stripeAccountId: cartStripeAccountId } : {}),
                   },
                 });
               }
@@ -4047,6 +4114,15 @@ export const createCartCheckoutSession = async (req: AuthRequest, res: Response)
     const successUrl = `${frontendUrl}/sales/${saleId}?checkout=success`;
     const cancelUrl = `${frontendUrl}/sales/${saleId}`;
 
+    // Apply Connect routing if organizer has a valid Stripe Connect account
+    const shouldUseConnect = stripeConnectId && !stripeConnectId.startsWith('acct_test_');
+    // Direct-charges migration (2026-08-08): staged-rollout routing decision — live Stripe
+    // eligibility check + allowlist gate, see stripeConnectService.shouldUseDirectCharge.
+    const cartOrganizerId = items[0].sale?.organizerId ?? null;
+    const useDirect = shouldUseConnect && cartOrganizerId
+      ? await shouldUseDirectCharge(cartOrganizerId, stripeConnectId)
+      : false;
+
     const baseSessionParams: Stripe.Checkout.SessionCreateParams = {
       mode: 'payment',
       payment_method_types: ['card'],
@@ -4058,37 +4134,63 @@ export const createCartCheckoutSession = async (req: AuthRequest, res: Response)
         itemIds: itemIds.join(','),
         saleId,
         buyerUserId: req.user.id,
+        // Direct-charges migration (2026-08-08): threaded through to the async
+        // checkout.session.completed webhook handler so every Purchase row created there
+        // gets the correct persisted chargeType/stripeAccountId — chargeType is set once
+        // here, at charge-creation time, never inferred later.
+        chargeType: useDirect ? 'DIRECT' : 'DESTINATION',
+        ...(useDirect ? { stripeAccountId: stripeConnectId! } : {}),
       },
     };
 
-    // Apply Connect routing if organizer has a valid Stripe Connect account
-    const shouldUseConnect = stripeConnectId && !stripeConnectId.startsWith('acct_test_');
-    const connectParams = shouldUseConnect
+    // Direct-charges migration (2026-08-08): a Direct charge lives on the connected account
+    // itself — drop on_behalf_of/transfer_data (there is no platform-side Transfer) and route
+    // the Session create call itself to the connected account via the { stripeAccount }
+    // request option. Destination-charge shape (else branch) is UNCHANGED.
+    const connectParams = useDirect
       ? {
           payment_intent_data: {
             application_fee_amount: platformFeeAmount,
-            on_behalf_of: stripeConnectId,
-            transfer_data: { destination: stripeConnectId },
           },
         }
-      : {};
+      : shouldUseConnect
+        ? {
+            payment_intent_data: {
+              application_fee_amount: platformFeeAmount,
+              on_behalf_of: stripeConnectId,
+              transfer_data: { destination: stripeConnectId },
+            },
+          }
+        : {};
+
+    const sessionCreateOptions = useDirect ? { stripeAccount: stripeConnectId! } : undefined;
 
     let session;
     try {
-      session = await stripe().checkout.sessions.create({ ...baseSessionParams, ...connectParams });
+      session = await stripe().checkout.sessions.create({ ...baseSessionParams, ...connectParams }, sessionCreateOptions);
     } catch (connectErr: any) {
-      // If Connect routing fails (e.g. organizer not fully onboarded), retry without Connect
+      // Direct-charges migration (2026-08-08): the old silent platform-absorb fallback that
+      // used to live here (retrying checkout.sessions.create(baseSessionParams) with ZERO
+      // Connect params on insufficient_capabilities_for_transfer) has been REMOVED outright —
+      // it captured the charge on the PLATFORM account while the organizer received nothing.
+      // This applies regardless of Direct/Destination routing: a Connect-routing failure now
+      // always blocks cleanly instead of ever falling through to an un-routed session.create
+      // call. Same 409 pattern as createPaymentIntent's sellerAccountUnusable branch above.
       if (
         shouldUseConnect &&
         (connectErr.code === 'insufficient_capabilities_for_transfer' ||
           connectErr.message?.includes('insufficient_capabilities_for_transfer') ||
           connectErr.message?.includes('does not have the necessary capabilities'))
       ) {
-        console.warn(`[cart-checkout] Connect fallback for ${stripeConnectId}:`, connectErr.code);
-        session = await stripe().checkout.sessions.create(baseSessionParams);
-      } else {
-        throw connectErr;
+        console.warn(
+          `[cart-checkout] Seller account ${stripeConnectId} cannot receive funds (${connectErr.code || connectErr.message}); blocking checkout with friendly message`
+        );
+        return res.status(409).json({
+          message: "This seller isn't set up to accept online payments yet. Please contact the organizer to arrange your purchase.",
+          code: 'SELLER_PAYMENTS_UNAVAILABLE',
+        });
       }
+      throw connectErr;
     }
 
     if (!session.url) {

@@ -5,6 +5,7 @@ import { AuthRequest } from '../middleware/auth';
 import { createNotification } from '../services/notificationService';
 import { awardXp, spendXp, getSpendableXp, XP_AWARDS } from '../services/xpService';
 import { getStripe } from '../utils/stripe';
+import { shouldUseDirectCharge } from '../services/stripeConnectService'; // Direct-charges migration (2026-08-08): staged-rollout routing decision
 
 const stripe = () => getStripe();
 
@@ -824,6 +825,11 @@ export const completeBountyPurchase = async (req: AuthRequest, res: Response) =>
     // Stripe routing: check if organizer has Stripe Connect
     const { stripeConnectId, subscriptionTier } = submission.item.sale!.organizer;
     const shouldUseConnect = stripeConnectId && !stripeConnectId.startsWith('acct_test_');
+    // Direct-charges migration (2026-08-08): staged-rollout routing decision — live Stripe
+    // eligibility check + allowlist gate, see stripeConnectService.shouldUseDirectCharge.
+    const useDirect = shouldUseConnect
+      ? await shouldUseDirectCharge(submission.item.sale!.organizerId, stripeConnectId)
+      : false;
 
     // Calculate platform fee
     const getPlatformFeeRate = (tier: string): number => {
@@ -851,34 +857,49 @@ export const completeBountyPurchase = async (req: AuthRequest, res: Response) =>
         type: 'BOUNTY_SUBMISSION',
       },
     };
+    // Direct-charges migration (2026-08-08): a Direct charge lives on the connected account
+    // itself — drop on_behalf_of/transfer_data (there is no platform-side Transfer) and keep
+    // application_fee_amount; the { stripeAccount } request option below routes the create
+    // call to the connected account. Destination-charge shape (else branch) is UNCHANGED.
+    const paymentIntentCreateParams = useDirect
+      ? {
+          ...basePaymentIntentData,
+          application_fee_amount: platformFeeAmount,
+        }
+      : shouldUseConnect
+        ? {
+            ...basePaymentIntentData,
+            application_fee_amount: platformFeeAmount,
+            on_behalf_of: stripeConnectId,
+            transfer_data: { destination: stripeConnectId },
+          }
+        : basePaymentIntentData;
+    const paymentIntentCreateOptions = useDirect
+      ? { idempotencyKey, stripeAccount: stripeConnectId! }
+      : { idempotencyKey };
     try {
-      paymentIntent = await stripe().paymentIntents.create(
-        shouldUseConnect
-          ? {
-              ...basePaymentIntentData,
-              application_fee_amount: platformFeeAmount,
-              on_behalf_of: stripeConnectId,
-              transfer_data: { destination: stripeConnectId },
-            }
-          : basePaymentIntentData,
-        { idempotencyKey }
-      );
+      paymentIntent = await stripe().paymentIntents.create(paymentIntentCreateParams, paymentIntentCreateOptions);
     } catch (stripeError: any) {
-      // Fallback if Connect fails
+      // Direct-charges migration (2026-08-08) -- HIGHEST PRIORITY fix in this migration: the
+      // old fallback here retried with basePaymentIntentData alone (zero Connect params) on
+      // insufficient_capabilities_for_transfer, silently capturing the charge on the PLATFORM
+      // account while the organizer received nothing. REMOVED outright. A Connect-routing
+      // failure now always blocks cleanly with the same 409 pattern used by createPaymentIntent
+      // / createCartCheckoutSession (stripeController.ts) — no platform-absorb path survives
+      // anywhere in this file after this change.
       if (
         shouldUseConnect &&
         (stripeError.code === 'insufficient_capabilities_for_transfer' ||
           (stripeError.type === 'StripeInvalidRequestError' &&
             stripeError.message?.includes('insufficient_capabilities_for_transfer')))
       ) {
-        console.warn(`[Stripe Connect fallback] Account ${stripeConnectId} not fully onboarded`);
-        paymentIntent = await stripe().paymentIntents.create(
-          basePaymentIntentData,
-          { idempotencyKey: `${idempotencyKey}-fallback` }
-        );
-      } else {
-        throw stripeError;
+        console.warn(`[bounty-purchase] Seller account ${stripeConnectId} cannot receive funds (${stripeError.code || stripeError.message}); blocking checkout with friendly message`);
+        return res.status(409).json({
+          message: "This seller isn't set up to accept online payments yet. Please contact the organizer to arrange your purchase.",
+          code: 'SELLER_PAYMENTS_UNAVAILABLE',
+        });
       }
+      throw stripeError;
     }
 
     // Step 5: Update submission status to PURCHASED
@@ -900,6 +921,10 @@ export const completeBountyPurchase = async (req: AuthRequest, res: Response) =>
         platformFeeAmount: platformFeeAmount / 100,
         stripePaymentIntentId: paymentIntent.id,
         status: 'PENDING',
+        // Direct-charges migration (2026-08-08): persisted, authoritative charge shape, set
+        // once here at charge-creation time.
+        chargeType: useDirect ? 'DIRECT' : 'DESTINATION',
+        ...(useDirect ? { stripeAccountId: stripeConnectId! } : {}),
       },
     });
 

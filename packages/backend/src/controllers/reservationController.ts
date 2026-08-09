@@ -18,6 +18,7 @@ import { checkCrewInvasion } from '../services/crewInvasionService'; // Feature 
 import { emailService } from '../lib/emailService';
 import { suppressionService } from '../services/suppressionService';
 import { getPlatformFeeRate, SubscriptionTier } from '../utils/feeCalculator';
+import { shouldUseDirectCharge } from '../services/stripeConnectService'; // Direct-charges migration (2026-08-08): staged-rollout routing decision
 import { assertCheckoutAllowed, CheckoutGuardError } from '../services/checkoutGuard'; // S1072 Finding #4: collusion/wash-trade guard
 import { createPaymentLinkInternal } from './posController'; // markSold settlement router: reuse Stripe Payment Link + QR
 
@@ -1350,6 +1351,14 @@ export const markSoldAndCreateInvoice = async (req: AuthRequest, res: Response) 
       // request (e.g. a transient timeout) creating a second Checkout Session.
       const idempotencyKey = `mark-sold-invoice-${reservationId}`;
 
+      // Direct-charges migration (2026-08-08): staged-rollout routing decision. NOTE: this
+      // call site's existing shape (below) already omits on_behalf_of -- a pre-existing,
+      // partial destination-charge shape confirmed this session -- left as-is on the non-
+      // Direct path; out of scope to "fix" beyond what this migration specs.
+      const useDirect = organizer.stripeConnectId
+        ? await shouldUseDirectCharge(organizer.id, organizer.stripeConnectId)
+        : false;
+
       stripeSession = await stripe.checkout.sessions.create(
         {
           payment_method_types: ['card'],
@@ -1359,7 +1368,8 @@ export const markSoldAndCreateInvoice = async (req: AuthRequest, res: Response) 
           success_url: `${baseUrl}/items?paymentStatus=success`,
           cancel_url: `${baseUrl}/items?paymentStatus=cancelled`,
           expires_at: Math.floor(expiresAt.getTime() / 1000), // Unix timestamp
-          // LOCKED DECISION #1: Organizer absorbs Stripe fee via application_fee_amount + transfer_data
+          // LOCKED DECISION #1: Organizer absorbs Stripe fee via application_fee_amount
+          // (+ transfer_data on the non-Direct path only -- see useDirect above).
           payment_intent_data: {
             metadata: {
               invoiceId: null, // Will be filled after HoldInvoice is created
@@ -1370,15 +1380,17 @@ export const markSoldAndCreateInvoice = async (req: AuthRequest, res: Response) 
               saleId: reservation.item.saleId!,
             },
             application_fee_amount: Math.round(totalPlatformFeeAmount * 100),
-            transfer_data: {
-              destination: organizer.stripeConnectId,
-            },
+            // Direct-charges migration (2026-08-08): a Direct charge lives on the connected
+            // account itself -- no platform-side Transfer exists, so transfer_data is
+            // dropped on that path (the { stripeAccount } request option below routes the
+            // Session create call itself to the connected account).
+            ...(useDirect ? {} : { transfer_data: { destination: organizer.stripeConnectId } }),
           },
           metadata: {
             organizerId: organizer.id,
           },
         },
-        { idempotencyKey }
+        { idempotencyKey, ...(useDirect ? { stripeAccount: organizer.stripeConnectId! } : {}) }
       );
     } catch (stripeError: any) {
       console.error('[hold-invoice] Stripe session creation failed:', stripeError);

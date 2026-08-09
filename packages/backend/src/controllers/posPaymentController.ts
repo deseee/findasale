@@ -15,6 +15,7 @@ import { sellItemUnits, InsufficientStockError } from '../services/itemStockServ
 import { syncMarketplaceStock } from '../services/marketplaceStockSyncService'; // ADR-087 Phase 4: revise-on-partial eBay quantity sync
 import { resolveOrganizerOrTeamMember } from '../utils/posAuth'; // S1183 Fix 1: TEAM_MEMBER fallback for non-venue POS
 import { assertCheckoutAllowed, CheckoutGuardError } from '../services/checkoutGuard'; // S1072 Finding #4 gap fix: POS payment-request self-dealing guard
+import { getAccountStatus } from '../services/stripeConnectService'; // Direct-charges migration (2026-08-08): live capability preflight
 
 const stripe = () => getStripe();
 
@@ -263,6 +264,28 @@ export const createPaymentRequest = async (req: AuthRequest, res: Response) => {
       return res.status(429).json({
         message: 'A payment request was already sent to this shopper in the last 60 seconds',
       });
+    }
+
+    // Direct-charges migration (2026-08-08): live capability preflight. resolveOrganizerOrTeamMember
+    // only confirms organizer.stripeConnectId is non-null (a cached DB presence check) --
+    // never that Stripe currently reports the account as charge-capable (a DB-cache vs
+    // live-Stripe discrepancy was confirmed for at least one real organizer this session).
+    // Never authorize a real charge against an account Stripe itself doesn't currently
+    // report as charge-capable.
+    try {
+      const liveStatus = await getAccountStatus(organizer.stripeConnectId!);
+      if (!liveStatus.chargesEnabled) {
+        await prisma.pOSPaymentRequest
+          .update({ where: { id: posRequest.id }, data: { status: 'CANCELLED', declineReason: 'PAYMENT_FAILED' } })
+          .catch((releaseErr) => console.error('[pos-payment] Failed to release placeholder after preflight failure:', releaseErr));
+        return res.status(400).json({ message: "This organizer's Stripe account cannot currently accept charges. Please check Stripe onboarding status." });
+      }
+    } catch (statusErr) {
+      console.error('[pos-payment] getAccountStatus preflight failed:', statusErr);
+      await prisma.pOSPaymentRequest
+        .update({ where: { id: posRequest.id }, data: { status: 'CANCELLED', declineReason: 'PAYMENT_FAILED' } })
+        .catch((releaseErr) => console.error('[pos-payment] Failed to release placeholder after preflight error:', releaseErr));
+      return res.status(502).json({ message: "Could not verify the organizer's payment account status. Please try again." });
     }
 
     // Create Stripe Payment Intent (for card amount only) now that the placeholder row
@@ -974,6 +997,17 @@ export const confirmPaymentRequest = async (req: AuthRequest, res: Response) => 
             stripePaymentIntentId: `${paymentIntent.id}_${item.id}`,
             source: 'POS',
             status: 'PAID',
+            // findasale-hacker fix (2026-08-09, Direct-charges adversarial pass): this
+            // PaymentIntent was created above via paymentIntents.create(..., { stripeAccount:
+            // organizerProfile.stripeConnectId }) -- it is UNCONDITIONALLY a genuine Direct
+            // charge on the organizer's own connected account (this flow predates the
+            // Direct-charges migration/allowlist and was never gated by shouldUseDirectCharge).
+            // Leaving chargeType at its schema default ('DESTINATION') would mislabel every
+            // POS Payment Request Purchase row, which breaks refundService.ts's refund-call
+            // routing (it would omit { stripeAccount }, calling refunds.create against a
+            // PaymentIntent that only exists on the connected account -- refund fails outright).
+            chargeType: 'DIRECT',
+            stripeAccountId: organizerProfile.stripeConnectId,
           },
         });
 
@@ -1062,6 +1096,10 @@ export const confirmPaymentRequest = async (req: AuthRequest, res: Response) => 
             stripePaymentIntentId: items.length === 0 ? paymentIntent.id : `${paymentIntent.id}_misc`,
             source: 'POS',
             status: 'PAID',
+            // findasale-hacker fix (2026-08-09): same genuine-Direct-charge mislabeling gap
+            // as the item-Purchase loop above -- see that comment for the full rationale.
+            chargeType: 'DIRECT',
+            stripeAccountId: organizerProfile.stripeConnectId,
           },
         });
       } catch (err: any) {

@@ -1543,6 +1543,14 @@ model Purchase {
   refundedAt             DateTime? // When Stripe confirmed the refund
   refundInitiatedBy      String? // 'organizer' | 'admin' | 'dispute' — who/what triggered the refund
 
+  // Direct-charges migration (2026-08-08): persisted, authoritative charge shape — set once at
+  // charge-creation time, never inferred after the fact. 'DESTINATION' | 'DIRECT'. All existing
+  // rows correctly default to DESTINATION (booth-cart purchases live in the separate
+  // BoothCartLeg table, which already has its own stripeAccountId — naming precedent followed here).
+  chargeType             String                @default("DESTINATION")
+  // Connected account this charge lives on — DIRECT charges only. Pinned at charge-creation time.
+  stripeAccountId        String?
+
   // Compound partial UNIQUE index on (stripePaymentIntentId, itemId) (WHERE
   // stripePaymentIntentId IS NOT NULL), created via raw SQL migration
   // 20260723000000_purchase_pi_itemid_compound_unique. Blocks a duplicate Purchase row for
@@ -1562,6 +1570,7 @@ model Purchase {
   @@index([clientTransactionId])
   @@index([boothCartTransactionId])
   @@index([buyerCardFingerprint]) // guest-checkout collusion lookups (S1072 Finding #4 follow-up)
+  @@index([chargeType])
 }
 
 model SaleSubscriber {

@@ -6,6 +6,7 @@ import { awardXp, applyHuntPassMultiplier, XP_AWARDS, checkMonthlyXpCap } from '
 import { emailService } from '../lib/emailService';
 import { suppressionService } from '../services/suppressionService';
 import { createNotification } from '../services/notificationService';
+import { shouldUseDirectCharge } from '../services/stripeConnectService'; // Direct-charges migration (2026-08-08): staged-rollout routing decision
 const stripe = () => getStripe();
 
 
@@ -113,19 +114,38 @@ export const endAuctions = async () => {
         const feePercent = feeStructure?.feeRate ?? 0.10; // Default to 10% if no FeeStructure row found
 
         let stripePaymentIntentId: string | null = null;
+        // Direct-charges migration (2026-08-08): persisted, authoritative charge shape --
+        // set once here at charge-creation time, defaults to DESTINATION (no route taken /
+        // organizer not onboarded), never inferred after the fact.
+        let purchaseChargeType: string = 'DESTINATION';
+        let purchaseStripeAccountId: string | null = null;
 
         if (currentItem.sale!.organizer.stripeConnectId && highestBid) {
           try {
             const feeAmount = Math.round(price * 100 * feePercent);
-            const paymentIntent = await stripe().paymentIntents.create({
-              amount: Math.round(price * 100),
-              currency: 'usd',
-              metadata: { itemId: currentItem.id, saleId: currentItem.sale!.id, userId: highestBid.userId },
-              application_fee_amount: feeAmount,
-              on_behalf_of: currentItem.sale!.organizer.stripeConnectId,
-              transfer_data: { destination: currentItem.sale!.organizer.stripeConnectId },
-            }, { idempotencyKey: `auction-pi-${currentItem.id}` });
+            const stripeConnectId = currentItem.sale!.organizer.stripeConnectId;
+            const useDirect = await shouldUseDirectCharge(currentItem.sale!.organizerId, stripeConnectId);
+            const paymentIntent = await stripe().paymentIntents.create(
+              useDirect
+                ? {
+                    amount: Math.round(price * 100),
+                    currency: 'usd',
+                    metadata: { itemId: currentItem.id, saleId: currentItem.sale!.id, userId: highestBid.userId },
+                    application_fee_amount: feeAmount,
+                  }
+                : {
+                    amount: Math.round(price * 100),
+                    currency: 'usd',
+                    metadata: { itemId: currentItem.id, saleId: currentItem.sale!.id, userId: highestBid.userId },
+                    application_fee_amount: feeAmount,
+                    on_behalf_of: stripeConnectId,
+                    transfer_data: { destination: stripeConnectId },
+                  },
+              { idempotencyKey: `auction-pi-${currentItem.id}`, ...(useDirect ? { stripeAccount: stripeConnectId } : {}) }
+            );
             stripePaymentIntentId = paymentIntent.id;
+            purchaseChargeType = useDirect ? 'DIRECT' : 'DESTINATION';
+            purchaseStripeAccountId = useDirect ? stripeConnectId : null;
           } catch (err) {
             console.error(`Stripe PaymentIntent creation failed for item ${currentItem.id}:`, err);
           }
@@ -145,6 +165,8 @@ export const endAuctions = async () => {
               stripePaymentIntentId,
               // Only mark PAID when there's no Stripe (organizer not onboarded)
               status: stripePaymentIntentId ? 'PENDING' : 'PAID',
+              chargeType: purchaseChargeType,
+              ...(purchaseStripeAccountId ? { stripeAccountId: purchaseStripeAccountId } : {}),
             },
           });
         }

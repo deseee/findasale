@@ -7,6 +7,7 @@ import { markShopifyItemSold } from '../services/shopifyService';
 import { notifyFacebookExportedItemSold } from '../services/facebookNudgeService';
 import { syncMarketplaceStock } from '../services/marketplaceStockSyncService';
 import { createNotification } from '../lib/notificationService';
+import { shouldUseDirectCharge } from './stripeConnectService'; // Direct-charges migration (2026-08-08)
 
 /**
  * posPaymentLinkRecorder.ts — ADR pos-webhook-idempotency-reconciliation (2026-07-23, S1151)
@@ -128,14 +129,29 @@ export async function recordPosPaymentLinkSale(
         ? await tx.item.findMany({ where: { id: { in: sellableItemIds } } })
         : [];
 
-      // Look up organizer tier for fee calculation.
-      const posOrganizerTier = fresh.saleId
-        ? (await tx.sale.findUnique({
+      // Look up organizer tier + Connect id for fee calculation and Direct-charge routing.
+      const posOrganizerLookup = fresh.saleId
+        ? await tx.sale.findUnique({
             where: { id: fresh.saleId },
-            select: { organizer: { select: { subscriptionTier: true } } },
-          }))?.organizer?.subscriptionTier ?? null
+            select: { organizerId: true, organizer: { select: { subscriptionTier: true, stripeConnectId: true } } },
+          })
         : null;
+      const posOrganizerTier = posOrganizerLookup?.organizer?.subscriptionTier ?? null;
       const posFeeRate = getPlatformFeeRate(posOrganizerTier as SubscriptionTier);
+
+      // Direct-charges migration (2026-08-08): POSPaymentLink has no chargeType/
+      // stripeAccountId column of its own to pin the routing decision at link-creation
+      // time (out of scope for this migration's schema change, which is Purchase-only) --
+      // so this recomputes the SAME live-Stripe-eligibility + allowlist check
+      // (posController.createPaymentLinkInternal already ran it once when the Payment
+      // Link itself was created). In practice this can only disagree with the original
+      // decision if the connected account's Stripe eligibility or the allowlist env var
+      // changed in the window between link creation and completion -- flagged in the dev
+      // handoff as a known edge case, not treated as silently safe.
+      const posStripeConnectId = posOrganizerLookup?.organizer?.stripeConnectId ?? null;
+      const posUseDirect = posOrganizerLookup?.organizerId && posStripeConnectId
+        ? await shouldUseDirectCharge(posOrganizerLookup.organizerId, posStripeConnectId)
+        : false;
 
       const createdPurchaseIds: string[] = [];
       for (const item of items) {
@@ -149,6 +165,8 @@ export async function recordPosPaymentLinkSale(
               status: 'PAID',
               source: 'POS',
               stripePaymentIntentId: `pos_${fresh.id}`,
+              chargeType: posUseDirect ? 'DIRECT' : 'DESTINATION',
+              ...(posUseDirect && posStripeConnectId ? { stripeAccountId: posStripeConnectId } : {}),
             },
           });
           createdPurchaseIds.push(purchase.id);

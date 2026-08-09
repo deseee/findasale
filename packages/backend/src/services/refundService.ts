@@ -285,16 +285,21 @@ export async function executeVerifiedRefund(
     );
   }
 
-  // PART B (2026-07-28), DEFAULT OFF — organizer-initiated destination-charge clawback.
-  // Regular (non-booth-cart) purchases are DESTINATION charges. The predicate below mirrors
-  // createPaymentIntent's `shouldUseConnect` condition (stripeConnectId present and not a
-  // seeded `acct_test_` id) because only the PaymentIntent's id is persisted on Purchase.
-  const organizerConnectId = purchase.sale?.organizer?.stripeConnectId;
-  const isRegularDestinationCharge =
-    !isBoothCartPurchase &&
-    !!organizerConnectId &&
-    !organizerConnectId.startsWith('acct_test_');
+  // Direct-charges migration (2026-08-08): chargeType is a persisted, authoritative field
+  // set once at charge-creation time (createPaymentIntent / checkout session creation) —
+  // never inferred after the fact. Replaces the prior organizerConnectId-presence inference
+  // that lived here. Regular (non-booth-cart) purchases are either DESTINATION or DIRECT.
+  const isDirectCharge = !isBoothCartPurchase && purchase.chargeType === 'DIRECT';
+  const isRegularDestinationCharge = !isBoothCartPurchase && purchase.chargeType === 'DESTINATION';
   const applyOrganizerClawback = refundClawbackEnabled() && isRegularDestinationCharge;
+
+  if (isDirectCharge && !purchase.stripeAccountId) {
+    await prisma.purchase.updateMany({ where: { id: purchaseId, status: 'REFUNDING' }, data: { status: 'PAID' } });
+    throw new RefundError(
+      'This purchase is a Direct charge but has no stripeAccountId on file — cannot resolve which account to refund.',
+      400
+    );
+  }
 
   try {
     await stripe().refunds.create({
@@ -304,14 +309,23 @@ export async function executeVerifiedRefund(
       // booth's own connected account — see stripeController.ts (git history) for the
       // full Stripe-semantics rationale this was moved from, unchanged.
       ...(isBoothCartPurchase ? { refund_application_fee: true } : {}),
+      // Direct-charges migration (2026-08-08): Stripe does NOT auto-refund the application
+      // fee on a Direct charge the way reverse_transfer does for a destination charge — this
+      // must ALWAYS fire for a Direct-charge refund, never gated behind a flag, or the
+      // platform keeps its commission on a refunded sale. No reverse_transfer param — there
+      // is no Transfer object for a Direct charge.
+      ...(isDirectCharge ? { refund_application_fee: true } : {}),
       // PART B (2026-07-28) — DEFAULT OFF, gated on STRIPE_REFUND_LIVE_CLAWBACK.
-      // Mutually exclusive with the booth-cart spread directly above.
+      // Mutually exclusive with the booth-cart and Direct-charge spreads above.
       ...(applyOrganizerClawback
         ? { reverse_transfer: true, refund_application_fee: true }
         : {}),
     }, {
       idempotencyKey: `refund-${purchase.id}`,
       ...(isBoothCartPurchase ? { stripeAccount: boothStripeAccountId! } : {}),
+      // Direct-charges migration (2026-08-08): a Direct charge lives on the connected
+      // account itself, not the platform account — the refund call must be scoped there.
+      ...(isDirectCharge ? { stripeAccount: purchase.stripeAccountId! } : {}),
     });
   } catch (stripeErr) {
     // Stripe failed — revert the claim back to PAID so the caller can retry. Rethrow the

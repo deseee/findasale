@@ -24,6 +24,7 @@ import { getPlatformFeeRate, SubscriptionTier } from '../utils/feeCalculator';
 import { transactionalEmailService } from '../lib/transactionalEmailService';
 import { commitItemSale, ItemAlreadyCommittedError } from '../services/itemSaleGuard'; // ADR-098: atomic double-sell guard
 import { resolveOrganizerOrTeamMember } from '../utils/posAuth'; // S1183 Fix 1: TEAM_MEMBER fallback for non-venue POS
+import { shouldUseDirectCharge } from '../services/stripeConnectService'; // Direct-charges migration (2026-08-08): staged-rollout routing decision
 
 const stripe = () => getStripe();
 
@@ -87,16 +88,31 @@ export async function createPaymentLinkInternal(opts: {
         }),
   });
 
-  const paymentLink = await stripe().paymentLinks.create({
-    line_items: [{ price: adHocPrice.id, quantity: 1 }],
-    after_completion: {
-      type: 'hosted_confirmation' as const,
+  // Direct-charges migration (2026-08-08): staged-rollout routing decision.
+  const validConnectId = !!(stripeConnectId && stripeConnectId.length >= 21);
+  const useDirect = validConnectId
+    ? await shouldUseDirectCharge(organizerId, stripeConnectId!)
+    : false;
+
+  const paymentLink = await stripe().paymentLinks.create(
+    {
+      line_items: [{ price: adHocPrice.id, quantity: 1 }],
+      after_completion: {
+        type: 'hosted_confirmation' as const,
+      },
+      // Direct-charges migration (2026-08-08): a Direct charge lives on the connected
+      // account itself -- drop transfer_data (there is no platform-side Transfer) and keep
+      // application_fee_amount; the { stripeAccount } request option below routes the
+      // create call to the connected account. Destination-charge shape (else branch) is
+      // UNCHANGED.
+      ...(useDirect
+        ? ({ application_fee_amount: platformFeeAmount } as any)
+        : validConnectId
+          ? ({ application_fee_amount: platformFeeAmount, transfer_data: { destination: stripeConnectId } } as any)
+          : {}),
     },
-    ...(stripeConnectId && stripeConnectId.length >= 21 ? {
-      application_fee_amount: platformFeeAmount,
-      transfer_data: { destination: stripeConnectId },
-    } as any : {}),
-  });
+    useDirect ? { stripeAccount: stripeConnectId! } : undefined
+  );
 
   const paymentLinkUrl = paymentLink.url;
   const stripePaymentLinkId = paymentLink.id;
@@ -1250,6 +1266,11 @@ export const createCombinedInvoice = async (req: AuthRequest, res: Response) => 
           .update(JSON.stringify(idempotencyKeyPayload))
           .digest('hex')
           .slice(0, 40)}`;
+        // Direct-charges migration (2026-08-08): staged-rollout routing decision.
+        const useDirect = organizer.stripeConnectId
+          ? await shouldUseDirectCharge(organizer.id, organizer.stripeConnectId)
+          : false;
+
         const stripeSession = await stripe().checkout.sessions.create(
           {
             payment_method_types: ['card'],
@@ -1267,15 +1288,18 @@ export const createCombinedInvoice = async (req: AuthRequest, res: Response) => 
                 saleId: session.sale!.id,
               },
               application_fee_amount: platformFeeCents,
-              transfer_data: {
-                destination: organizer.stripeConnectId!,
-              },
+              // Direct-charges migration (2026-08-08): a Direct charge lives on the
+              // connected account itself -- no platform-side Transfer exists, so
+              // transfer_data is dropped on that path (the { stripeAccount } request
+              // option below routes the Session create call itself to the connected
+              // account).
+              ...(useDirect ? {} : { transfer_data: { destination: organizer.stripeConnectId! } }),
             },
             metadata: {
               organizerId: organizer.id,
             },
           },
-          { idempotencyKey }
+          { idempotencyKey, ...(useDirect ? { stripeAccount: organizer.stripeConnectId! } : {}) }
         );
 
         stripeSessionId = stripeSession.id;

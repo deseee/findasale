@@ -16,6 +16,7 @@ import { notifyVendorOfBoothSale } from '../services/vendorBoothSaleNotification
 import { getOrCreateHouseBooth } from '../services/houseBoothService'; // Fix 2 (2026-08-01): hub owner's own items sell through a synthetic booth
 import { releasePendingCartHold } from '../services/vendorBoothCartLifecycleService'; // extracted cart-release-and-fail core, shared with the abandonment sweep job
 import { Decimal } from '@prisma/client/runtime/library';
+import { getAccountStatus } from '../services/stripeConnectService'; // Direct-charges migration (2026-08-08): live capability preflight
 
 const stripe = () => getStripe();
 
@@ -949,6 +950,20 @@ export const authorizeBoothCartTerminalLeg = async (req: BoothAuthRequest, res: 
           : `Booth "${booth.vendorName}" has not completed Standard-account onboarding`;
         return res.status(400).json({ error: message });
       }
+      // Direct-charges migration (2026-08-08): live capability preflight. The check above
+      // relies on VendorBooth.stripeOnboarded, a cached DB flag that can drift from
+      // Stripe's actual live state (a DB-cache vs live-Stripe discrepancy was confirmed
+      // for at least one real organizer this session) -- never authorize a real charge
+      // against an account Stripe itself doesn't currently report as charge-capable.
+      try {
+        const liveStatus = await getAccountStatus(booth.stripeAccountId!);
+        if (!liveStatus.chargesEnabled) {
+          return res.status(400).json({ error: `Booth "${booth.vendorName}"'s Stripe account cannot currently accept charges. Please check its Stripe onboarding status.` });
+        }
+      } catch (statusErr) {
+        console.error(`[boothCartTerminalAuthorize] getAccountStatus preflight failed for booth ${booth.id}:`, statusErr);
+        return res.status(502).json({ error: "Could not verify the booth's payment account status. Please try again." });
+      }
     }
 
     const items = await resolveBoothLegItems(cart.id, cart.boothsRepresented, vendorBoothId);
@@ -1208,6 +1223,24 @@ export const authorizeBoothCartQrLegs = async (req: BoothAuthRequest, res: Respo
         break;
       }
 
+      // Direct-charges migration (2026-08-08): live capability preflight -- same
+      // DB-cache vs live-Stripe rationale as the Terminal rail's identical check above.
+      try {
+        const liveStatus = await getAccountStatus(booth.stripeAccountId!);
+        if (!liveStatus.chargesEnabled) {
+          failure = {
+            vendorBoothId: booth.id,
+            vendorName: booth.vendorName,
+            message: `Booth "${booth.vendorName}"'s Stripe account cannot currently accept charges. Please check its Stripe onboarding status.`,
+          };
+          break;
+        }
+      } catch (statusErr) {
+        console.error(`[boothCartQrAuthorize] getAccountStatus preflight failed for booth ${booth.id}:`, statusErr);
+        failure = { vendorBoothId: booth.id, vendorName: booth.vendorName, message: "Could not verify the booth's payment account status. Please try again." };
+        break;
+      }
+
       const items = await resolveBoothLegItems(cart.id, cart.boothsRepresented, booth.id);
       const amountCents = Math.round(items.reduce((sum, i) => sum + (i.price || 0), 0) * 100);
       if (amountCents < 50) {
@@ -1358,7 +1391,11 @@ export const authorizeBoothCartQrLegs = async (req: BoothAuthRequest, res: Respo
  */
 async function finalizeCapturedLegs(
   cart: { id: string; boothsRepresented: string[] },
-  legs: Array<{ id: string; vendorBoothId: string; stripePaymentIntentId: string }>
+  // findasale-hacker fix (2026-08-09, Direct-charges adversarial pass): widened to include
+  // rail + stripeAccountId, both already present on every real BoothCartLeg row passed in by
+  // both callers -- needed to correctly label the Purchase rows created below (see comment
+  // at the purchase.create call).
+  legs: Array<{ id: string; vendorBoothId: string; stripePaymentIntentId: string; rail: string; stripeAccountId: string | null }>
 ): Promise<string[]> {
   // Finalize: create Purchase rows (real per-booth PaymentIntent id, or the cash_...
   // placeholder for a cash leg -- stripePaymentIntentId is @unique and non-null either
@@ -1368,6 +1405,19 @@ async function finalizeCapturedLegs(
     const items = await resolveBoothLegItems(cart.id, cart.boothsRepresented, leg.vendorBoothId);
     for (const item of items) {
       try {
+        // findasale-hacker fix (2026-08-09, Direct-charges adversarial pass): a non-CASH
+        // leg's PaymentIntent was captured with { stripeAccount: leg.stripeAccountId } (see
+        // captureBoothCart/QR-rail authorize above) -- a genuine Direct charge on the booth's
+        // own connected account, unconditionally, independent of the Direct-charges
+        // migration's allowlist (booth-cart legs have always worked this way, ADR-020). A
+        // CASH leg (rail === 'CASH') has no real Stripe charge at all (stripePaymentIntentId
+        // is a `cash_...` placeholder) -- DESTINATION is left as the (moot but harmless)
+        // label there. refundService.ts's refund routing for booth-cart purchases keys off
+        // boothCartTransactionId + item.vendorBooth.stripeAccountId, NOT this chargeType/
+        // stripeAccountId pair, so this fix is a correctness/audit-trail fix (stops the
+        // dispute-closed handler's chargeType/inference mismatch Sentry alert from firing on
+        // every real booth-cart dispute) rather than a liability-routing fix.
+        const legIsRealDirectCharge = leg.rail !== 'CASH' && !!leg.stripeAccountId;
         const purchase = await prisma.purchase.create({
           data: {
             userId: null, // walk-in POS: no server-derived shopper identity exists (P0 fix, 2026-07-28)
@@ -1377,6 +1427,8 @@ async function finalizeCapturedLegs(
             source: 'POS',
             status: 'PAID',
             boothCartTransactionId: cart.id,
+            chargeType: legIsRealDirectCharge ? 'DIRECT' : 'DESTINATION',
+            ...(legIsRealDirectCharge ? { stripeAccountId: leg.stripeAccountId! } : {}),
           },
         });
         purchaseIds.push(purchase.id);
@@ -1736,7 +1788,8 @@ export const captureBoothCartCash = async (req: BoothAuthRequest, res: Response)
     }
     const changeCents = cashReceivedCents - totalCents;
 
-    const legs: Array<{ id: string; vendorBoothId: string; stripePaymentIntentId: string; hubOwnerShareAmount: any }> = [];
+    // findasale-hacker fix (2026-08-09): widened to include rail + stripeAccountId so this array's type stays compatible with finalizeCapturedLegs' widened parameter type below -- the actual pushed objects (real BoothCartLeg rows from prisma.boothCartLeg.create) always had both fields already, this only fixes the local type annotation.
+    const legs: Array<{ id: string; vendorBoothId: string; stripePaymentIntentId: string; hubOwnerShareAmount: any; rail: string; stripeAccountId: string | null }> = [];
     for (const { booth, amountCents } of boothAmounts) {
       // Cash-only variant: computes platformFeeCents/hubOwnerShareCents for reporting
       // WITHOUT blocking on the hub owner's Stripe onboarding readiness -- see

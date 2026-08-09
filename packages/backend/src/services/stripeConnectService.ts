@@ -241,10 +241,59 @@ export const getAccountStatus = async (accountId: string) => {
       // controller.fees.payer === 'account'). Additive field, no existing
       // caller destructures this away.
       feesPayer: account.controller?.fees?.payer,
+      // Direct-charges migration (2026-08-08): additive fields, no existing caller
+      // destructures these away. Both confirmed present on the raw
+      // stripe().accounts.retrieve() response this session.
+      cardPaymentsCapability: account.capabilities?.card_payments ?? 'inactive',
+      lossesPayer: account.controller?.losses?.payments,
     };
   } catch (error) {
     console.error('Failed to get account status:', error);
     throw error;
+  }
+};
+
+/**
+ * Direct-charges migration (2026-08-08): an account is eligible to receive Direct charges
+ * only when Stripe confirms BOTH that card_payments is active AND that the connected
+ * account itself bears the liability for card-network losses/disputes (`controller.losses.
+ * payments === 'stripe'`) -- i.e. the account, not the platform, is the merchant of record.
+ * Type is inferred from getAccountStatus's actual return shape rather than a hand-written
+ * interface, so this can never drift from the real function.
+ */
+export const isDirectChargeEligible = (status: Awaited<ReturnType<typeof getAccountStatus>>): boolean =>
+  status.cardPaymentsCapability === 'active' && status.lossesPayer === 'stripe';
+
+/**
+ * Direct-charges migration (2026-08-08) -- staged-rollout routing decision, shared by every
+ * charge-creation call site so the eligibility + allowlist logic lives in exactly one place.
+ *
+ * Deliberately calls getAccountStatus LIVE against Stripe every time (never trusts a cached/
+ * DB-persisted field like Organizer.stripeConnectEnabled or stripeOnboarded) -- a DB-cache vs
+ * live-Stripe discrepancy was confirmed for at least one real organizer this session, and
+ * routing a real charge on stale cached eligibility is a liability-placement bug, not a UX
+ * nicety. STRIPE_DIRECT_CHARGES_ORGANIZER_ALLOWLIST is the staged-rollout gate: unset/empty
+ * (default) means nobody is routed to Direct charges yet, regardless of eligibility.
+ */
+export const shouldUseDirectCharge = async (
+  organizerId: string,
+  stripeConnectId: string | null | undefined
+): Promise<boolean> => {
+  if (!stripeConnectId) return false;
+
+  const allowlist = (process.env.STRIPE_DIRECT_CHARGES_ORGANIZER_ALLOWLIST || '')
+    .split(',')
+    .map((id) => id.trim())
+    .filter(Boolean);
+  if (!allowlist.includes(organizerId)) return false;
+
+  try {
+    const status = await getAccountStatus(stripeConnectId);
+    return isDirectChargeEligible(status);
+  } catch (error) {
+    // Fail closed -- never route to Direct charge on an unresolved eligibility check.
+    console.error(`[shouldUseDirectCharge] getAccountStatus failed for organizer ${organizerId}, account ${stripeConnectId} -- falling back to destination charge:`, error);
+    return false;
   }
 };
 

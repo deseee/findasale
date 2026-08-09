@@ -22,6 +22,7 @@ import { syncMarketplaceStock } from '../services/marketplaceStockSyncService'; 
 import { transactionalEmailService } from '../lib/transactionalEmailService';
 import { recordSuspectedSignal } from '../services/checkoutGuard'; // S1072 Finding #4: cash path is offsite — log-only, never blocked
 import { resolveOrganizerOrTeamMember } from '../utils/posAuth'; // S1183 Fix 1: TEAM_MEMBER fallback for non-venue POS
+import { getAccountStatus } from '../services/stripeConnectService'; // Direct-charges migration (2026-08-08): live capability preflight
 
 const stripe = () => getStripe();
 
@@ -355,6 +356,25 @@ export const createTerminalPaymentIntent = async (req: AuthRequest, res: Respons
       saleId = bodySaleId;
     }
 
+    // Direct-charges migration (2026-08-08): live capability preflight. resolveOrganizerOrTeamMember
+    // only confirms organizer.stripeConnectId is non-null (a cached DB presence check) --
+    // never that Stripe currently reports the account as charge-capable (a DB-cache vs
+    // live-Stripe discrepancy was confirmed for at least one real organizer this session).
+    // Never authorize a real charge against an account Stripe itself doesn't currently
+    // report as charge-capable. Simulated mode never touches a real connected account, so
+    // it is exempt.
+    if (!isSimulated) {
+      try {
+        const liveStatus = await getAccountStatus(organizer.stripeConnectId!);
+        if (!liveStatus.chargesEnabled) {
+          return res.status(400).json({ message: "This organizer's Stripe account cannot currently accept charges. Please check Stripe onboarding status." });
+        }
+      } catch (statusErr) {
+        console.error('[terminal] getAccountStatus preflight failed:', statusErr);
+        return res.status(502).json({ message: "Could not verify the organizer's payment account status. Please try again." });
+      }
+    }
+
     // Create terminal PaymentIntent — platform account in simulated mode, connected account in production
     const piParams = {
       amount: cardAmountCents,
@@ -403,6 +423,19 @@ export const createTerminalPaymentIntent = async (req: AuthRequest, res: Respons
           source: 'POS',
           ...(clientTransactionId ? { clientTransactionId } : {}),
           ...(buyerEmail ? { buyerEmail } : {}),
+          // findasale-hacker fix (2026-08-09, Direct-charges adversarial pass): the
+          // PaymentIntent above was created with { stripeAccount: organizer.stripeConnectId }
+          // whenever !isSimulated (see stripeCreateOptions above) -- a genuine Direct charge
+          // on the organizer's own connected account, unconditionally, independent of the
+          // Direct-charges migration's allowlist (Terminal card-present payments have always
+          // worked this way). Leaving chargeType at its schema default ('DESTINATION') would
+          // mislabel every real Terminal Purchase row, breaking refundService.ts's refund-call
+          // routing (it would omit { stripeAccount }, calling refunds.create against a
+          // PaymentIntent that only exists on the connected account -- refund fails outright).
+          // Simulated mode never touches a real connected account (no stripeAccount option was
+          // passed to paymentIntents.create above), so DESTINATION is the correct label there.
+          chargeType: isSimulated ? 'DESTINATION' : 'DIRECT',
+          ...(!isSimulated ? { stripeAccountId: organizer.stripeConnectId! } : {}),
         },
       });
       purchaseIds.push(purchase.id);
