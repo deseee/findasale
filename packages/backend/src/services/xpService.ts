@@ -770,13 +770,20 @@ export async function computeTreasureHuntScanXp(userId: string, rank: ExplorerRa
  * ANNIVERSARY_30DAY is wired separately in jobs/anniversaryXpJob.ts (daily cron,
  * checks User.createdAt tenure against 30-day multiples) — no longer deferred.
  *
- * DORMANT as of 2026-08-08 (roadmap #281 fix, gamedesign decision in
- * claude_docs/feature-notes/gamedesign-decisions-2026-08-08.md): this function is correctly
- * built for `activeMonthDays` = distinct active days this calendar month, but its only
- * caller (streakService.ts's recordVisit) was passing an unrelated consecutive-weekend-visit
- * counter instead -- that call was removed. Nothing calls this function right now. It stays
- * dormant/uncallable until a real distinct-active-days-this-month tracker is built (a schema
- * addition, flagged to findasale-architect) and wired in as the caller.
+ * DORMANT as of 2026-08-08 (roadmap #281 fix, gamedesign decision + correction in
+ * claude_docs/feature-notes/gamedesign-decisions-2026-08-08.md -- READ THE CORRECTION, not
+ * just the first entry): the real target for this bonus is a genuine 7-CONSECUTIVE-DAY visit
+ * streak (daily granularity, breaks on a missed day), capped to award once per month -- NOT
+ * "7 non-consecutive active days somewhere in a calendar month" (an earlier, wrong read of
+ * this function's own `activeMonthDays` parameter name, corrected same-day after checking the
+ * actual user-facing copy at pages/shopper/guild-primer.tsx:403, "7-day streak bonus...
+ * Active week completion"). Its only caller (streakService.ts's recordVisit) was passing an
+ * unrelated consecutive-WEEKEND-visit counter (weekly granularity, a different feature) --
+ * wrong either way, so that call was removed. Nothing calls this function right now. Stays
+ * dormant/uncallable until a real daily-granularity consecutive-streak tracker is built (a
+ * schema addition -- no such field exists on User or elsewhere today -- flagged to
+ * findasale-architect) and wired in as the caller. Rename `activeMonthDays` to something like
+ * `consecutiveDayStreak` when that lands, so the parameter name stops being misleading.
  */
 export async function checkStreakMilestones(
   userId: string,

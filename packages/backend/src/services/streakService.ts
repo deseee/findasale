@@ -1,13 +1,13 @@
 import { prisma } from '../lib/prisma';
 import { checkAndAward } from './achievementService';
-// 2026-08-08 fix (roadmap #281, gamedesign decision logged in
-// claude_docs/feature-notes/gamedesign-decisions-2026-08-08.md): checkStreakMilestones
-// import removed. It was wired to this file's consecutive-WEEKEND-visit streak counter
-// (a different feature: early-access-unlock, correctly weekly per the locked "weekly not
-// daily" streak principle), but checkStreakMilestones itself expects "distinct active days
-// THIS CALENDAR MONTH" (its monthly-reset idempotency window only makes sense for a
-// day-count) -- a wrong signal, not a naming mismatch. Disconnected pending a real
-// distinct-active-days tracker, which needs a schema addition -- flagged to
+// 2026-08-08 fix (roadmap #281, gamedesign decision + same-day correction logged in
+// claude_docs/feature-notes/gamedesign-decisions-2026-08-08.md -- read the correction):
+// checkStreakMilestones import removed. It was wired to this file's consecutive-WEEKEND-
+// visit streak counter (a different feature: early-access-unlock, correctly weekly per the
+// locked "weekly not daily" streak principle) -- but the real STREAK_7DAY_BONUS target is a
+// genuine 7-CONSECUTIVE-DAY (daily granularity) visit streak capped once/month, which this
+// weekly counter was never going to satisfy either. Disconnected pending a real daily-
+// granularity consecutive-streak tracker, which needs a schema addition -- flagged to
 // findasale-architect as a follow-up, not built here.
 
 /**
@@ -101,11 +101,11 @@ export const recordVisit = async (userId: string): Promise<void> => {
       );
 
       // 2026-08-08 fix (roadmap #281): checkStreakMilestones call REMOVED here -- see the
-      // import-site comment above for why. This weekend-visit streak counter (newStreak)
-      // is NOT the same thing checkStreakMilestones needs (distinct active days this
-      // month); calling it with this value was awarding/blocking STREAK_7DAY_BONUS off
-      // unrelated data. STREAK_7DAY_BONUS (xpService.ts) is now dormant/uncallable until a
-      // real day-tracker exists.
+      // import-site comment above for why. This weekend-visit streak counter (newStreak) is
+      // NOT the same thing checkStreakMilestones needs (a true 7-consecutive-day daily
+      // streak); calling it with this weekly value was awarding/blocking STREAK_7DAY_BONUS
+      // off unrelated data. STREAK_7DAY_BONUS (xpService.ts) is now dormant/uncallable until
+      // a real daily-streak tracker exists.
     }
     // If same week, no-op (already visited this week)
   } catch (error) {
