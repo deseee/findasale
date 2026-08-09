@@ -37,6 +37,24 @@ import CatalogSuggestionPanel from '../../../components/CatalogSuggestionPanel';
 import { ShippingNetPreview } from '../../../components/ShippingNetPreview';
 import { Mic } from 'lucide-react';
 
+// Bug fix (2026-08-08, same P1 data-corruption class as add-items.tsx auctionEndTime
+// fix): item.auctionEndTime is stored as a UTC ISO timestamp. Previously this page did
+// `new Date(item.auctionEndTime).toISOString().slice(0, 16)` to pre-fill the
+// <input type="datetime-local"> -- but .toISOString() always formats in UTC, so the
+// value dropped into a LOCAL-time input as if it were already local. An organizer
+// opening an existing auction item for edit saw the WRONG time, off by their UTC
+// offset. Build the datetime-local value from the Date object's LOCAL getters instead
+// so what's displayed matches what was originally picked.
+function toDatetimeLocalValue(iso: string): string {
+  const d = new Date(iso);
+  const y = d.getFullYear();
+  const mo = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  const h = String(d.getHours()).padStart(2, '0');
+  const mi = String(d.getMinutes()).padStart(2, '0');
+  return `${y}-${mo}-${day}T${h}:${mi}`;
+}
+
 const EditItemPage = () => {
   const router = useRouter();
   const { id } = router.query;
@@ -520,7 +538,7 @@ const EditItemPage = () => {
         tags: item.tags || [],
         status: item.status || 'AVAILABLE',
         listingType: item.listingType || 'FIXED',
-        auctionEndTime: item.auctionEndTime ? new Date(item.auctionEndTime).toISOString().slice(0, 16) : '',
+        auctionEndTime: item.auctionEndTime ? toDatetimeLocalValue(item.auctionEndTime) : '',
         qrEmbedEnabled: item.qrEmbedEnabled !== false,
         isLegendary: item.isLegendary === true,
         tagColor: item.tagColor || '',
@@ -652,6 +670,13 @@ const EditItemPage = () => {
           : null,
         ebayShippingOverride: formData.ebayShippingOverride || null,
         ebayFulfillmentPolicyOverrideId: formData.ebayFulfillmentPolicyOverrideId || null,
+        // Bug fix (2026-08-08, P1 data corruption): same naive-local-string bug as
+        // add-items.tsx / create-sale.tsx -- formData.auctionEndTime comes from
+        // <input type="datetime-local"> as a naive local string with no timezone info.
+        // Sending it unconverted meant the backend (Node, running in UTC) parsed it via
+        // `new Date(str)` AS IF it were already UTC, closing auctions hours early.
+        // Convert to a proper UTC ISO string before sending.
+        auctionEndTime: formData.auctionEndTime ? new Date(formData.auctionEndTime).toISOString() : null,
         // strip UI-only percentage fields
         bestOfferAcceptPct: undefined,
         bestOfferDeclinePct: undefined,

@@ -48,7 +48,12 @@ export default function HubManagePage() {
       lng: data.hub.lng ?? 0,
     });
     if (data.hub.saleDate) {
-      setEventDate(new Date(data.hub.saleDate).toISOString().slice(0, 16));
+      // Build a local-time datetime-local string from the stored UTC timestamp
+      // (toISOString() is always UTC and was showing organizers the wrong local time
+      // when reopening this form -- same bug class fixed elsewhere today).
+      const _d = new Date(data.hub.saleDate);
+      const _localEventDate = `${_d.getFullYear()}-${String(_d.getMonth() + 1).padStart(2, '0')}-${String(_d.getDate()).padStart(2, '0')}T${String(_d.getHours()).padStart(2, '0')}:${String(_d.getMinutes()).padStart(2, '0')}`;
+      setEventDate(_localEventDate);
     }
     if (data.hub.eventName) {
       setEventName(data.hub.eventName);
@@ -72,7 +77,13 @@ export default function HubManagePage() {
     e.preventDefault();
     try {
       await setEventMutation.mutateAsync({
-        saleDate: eventDate,
+        // Bug fix (2026-08-08, same P1 data-corruption class as add-items.tsx
+        // auctionEndTime fix): eventDate is a naive local string from
+        // <input type="datetime-local"> (no timezone info). Sending it unconverted
+        // meant the backend (Node, running in UTC) parsed it via `new Date(str)` AS IF
+        // it were already UTC -- so an organizer picking a local time got the hub event
+        // date stored hours off. Convert to a proper UTC ISO string before sending.
+        saleDate: eventDate ? new Date(eventDate).toISOString() : eventDate,
         eventName: eventName,
       });
       queryClient.invalidateQueries({ queryKey: ['hubs', 'my'] });
