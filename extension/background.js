@@ -45,7 +45,22 @@ async function refreshAccessToken() {
 }
 
 async function apiFetch(path, opts = {}, _retried = false, _token = null) {
-  const token = _token || await getToken();
+  let token = _token || await getToken();
+  // (2026-08-09 fix, ADR-100 root-cause finding) The 1h accessToken is routinely already
+  // EXPIRED (and purged from the cookie store entirely -- Chrome doesn't return expired
+  // cookies) by the time an unattended call fires, especially the 24h renewal alarm. The
+  // refresh-on-401 retry below only ever handled "cookie present, server rejected it" --
+  // it never ran for "cookie already gone", which just fell straight through to the
+  // not_signed_in return with no refresh attempt at all. Confirmed live 2026-08-09: three
+  // real renewal clicks (Celestion, Star Raiders, Yamaha F-325) all showed a successful
+  // "Renewed" toast on Facebook's side while this exact gap silently discarded the
+  // corresponding markListed call every time -- renewDueAt never actually advanced for any
+  // of them. Mirrors the existing _retried-guarded refresh pattern below, just entered from
+  // the missing-cookie path instead of the live-401 path.
+  if (!token && !_retried) {
+    const fresh = await refreshAccessToken();
+    if (fresh) return apiFetch(path, opts, true, fresh);
+  }
   if (!token) return { ok: false, status: 401, error: 'not_signed_in' };
   const res = await fetch(CFG.API_BASE + path, {
     method: opts.method || 'GET',
@@ -111,44 +126,6 @@ async function ensureRemovalAlarmAndCheck() {
 }
 chrome.runtime.onInstalled.addListener(ensureRemovalAlarmAndCheck);
 chrome.runtime.onStartup.addListener(ensureRemovalAlarmAndCheck);
-
-// TEMP TEST (2026-08-09, Patrick-approved, "try with star raiders booklet") -- verifies whether
-// the renewal flow (native click + toast-confirmation detection) still completes correctly while
-// openSilentRemovalTab() above opens the tab active:false (see that TEMP TEST comment). Seeds
-// the renewal queue with ONLY this one real, live item (Star Raiders Atari 2600 Instruction
-// Manual Booklet Only, id cmo3esog0000hjqsudz3tcy0m, confirmed via direct Railway DB query
-// 2026-08-09) so this cannot sweep in any other real due listing -- deliberately bypasses the
-// normal checkRenewals()/pending-renewals polling path, which wouldn't have picked this item up
-// anyway (its MarketplaceListingJob.renewDueAt is NULL, confirmed same query). A real successful
-// renewal here writes a real new MarketplaceListingJob POST row for this item (see markRenewed
-// in fas-remove.js) -- verify by querying MarketplaceListingJob for this itemId after the test
-// and checking for a new row newer than 2026-07-31. DELETE this whole block (and revert
-// openSilentRemovalTab's active:false above) once the test result is confirmed either way.
-async function fasTempTestRenewHidden() {
-  // (2026-08-09, narrowed) The Moon Knight #2 run confirmed the real failure via the
-  // background.js markListed diagnostic: apiFetch('/extension/items/.../listed') returned
-  // { ok:false, status:401, error:'not_signed_in' } -- and that specific shape is apiFetch's
-  // OWN early-return (this file, getToken()/apiFetch top) when chrome.cookies.get() finds NO
-  // accessToken cookie at all -- it never even reaches the real fetch or the ADR-088
-  // refresh-on-401 retry logic. No need to burn another real Facebook listing's renew-
-  // eligibility to keep testing this -- checking the cookie directly is instant and free.
-  const cookie = await chrome.cookies.get({ url: CFG.COOKIE_URL, name: CFG.COOKIE_NAME });
-  const diag = {
-    found: !!cookie,
-    expirationDate: cookie ? cookie.expirationDate : null,
-    expirationReadable: cookie && cookie.expirationDate ? new Date(cookie.expirationDate * 1000).toISOString() : null,
-    nowReadable: new Date().toISOString(),
-    session: cookie ? cookie.session : null,
-    domain: cookie ? cookie.domain : null,
-    path: cookie ? cookie.path : null,
-    httpOnly: cookie ? cookie.httpOnly : null,
-    secure: cookie ? cookie.secure : null
-    // deliberately NOT logging cookie.value -- ADR-088 §4, token values never hit console/storage
-  };
-  console.log('[FAS accessToken cookie diagnostic]', JSON.stringify(diag));
-  await chrome.storage.local.set({ fasLastCookieDiagnostic: diag });
-}
-chrome.runtime.onInstalled.addListener(fasTempTestRenewHidden);
 
 // ---- Silent-mode removal tab lifecycle (2026-07-16 fix) ----
 // Silent ("Remove automatically") mode used to open the "Your listings" page in a HIDDEN
@@ -711,16 +688,13 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         // fas-craigslist.js's new call site sets 'CRAIGSLIST'.
         const markListedResp = await apiFetch('/extension/items/' + encodeURIComponent(msg.itemId) + '/listed',
           { method: 'POST', body: { remoteListingId: msg.remoteListingId || null, platform: msg.platform || 'FACEBOOK' } });
-        // TEMP DIAGNOSTIC (2026-08-09) -- logged HERE (service worker) instead of in
-        // fas-remove.js's markRenewed(), because that content-script-side log lives in the
-        // "you/selling" tab's own console, and that tab CLOSES ITSELF the instant a renewal
-        // succeeds (see runRenewalQueue) -- the log was gone before it could ever be read.
-        // The service worker persists across the tab's lifecycle and its console is inspectable
-        // anytime after the fact via chrome://extensions -> FindA.Sale -> "service worker" link.
-        // Also written to chrome.storage.local (fasLastMarkListedDiagnostic) as a second,
-        // even-more-durable capture path. Remove this whole block once the root cause is found.
-        console.log('[FAS markListed diagnostic]', JSON.stringify({ itemId: msg.itemId, platform: msg.platform, remoteListingId: msg.remoteListingId, resp: markListedResp }));
-        await chrome.storage.local.set({ fasLastMarkListedDiagnostic: { itemId: msg.itemId, platform: msg.platform, remoteListingId: msg.remoteListingId, resp: markListedResp, at: Date.now() } });
+        // (2026-08-09) markListed is called fire-and-forget from fas-remove.js/fas-content.js/
+        // fas-craigslist.js, none of which check the response -- a failure here (auth, 500,
+        // etc.) previously vanished with zero trace anywhere, which is exactly how the
+        // not_signed_in gap fixed in apiFetch() above went unnoticed. Kept as a permanent,
+        // failure-only log (service worker console persists past any tab's lifecycle, unlike
+        // logging from the content-script side) so a regression here is visible again.
+        if (!markListedResp.ok) console.log('[FAS markListed FAILED]', JSON.stringify({ itemId: msg.itemId, platform: msg.platform, resp: markListedResp }));
         sendResponse(markListedResp);
       } else if (msg.type === 'markRemoved') {
         sendResponse(await apiFetch('/extension/items/' + encodeURIComponent(msg.itemId) + '/removed',
