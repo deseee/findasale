@@ -145,6 +145,69 @@ function generateDedupeKey(name: string, city: string): string {
 }
 
 /**
+ * Cross-source fuzzy dedup (2026-08-09): the exact-ID and exact-name+city tiers above only
+ * catch a scraper re-matching its OWN prior wording or a stable external ID. They do NOT
+ * catch a DIFFERENT scraper source writing the same real-world business under different
+ * formatting (e.g. "Grasons of Denver" vs "Grasons Denver Estate Sales") -- that gap is what
+ * lets cross-scraper duplicate Organizer rows build up (see
+ * claude_docs/research/db-management-ideas-2026-08-09.md, Idea 4). This tier requires
+ * corroboration -- never a single fuzzy-name hit alone -- specifically because a naive
+ * same-domain-means-same-business rule is already known to be wrong: grasons.com is shared
+ * by 15+ distinct, independently-owned Grasons franchise locations (confirmed via live DB
+ * query, db-space-accounting-2026-08-09.md §4). See FRANCHISE_DOMAIN_SHARED_FLOOR below.
+ */
+const CROSS_SOURCE_FUZZY_MODE = (process.env.CROSS_SOURCE_FUZZY_DEDUP_MODE || 'shadow').toLowerCase();
+// 'off'    -- tier disabled entirely; behavior identical to before this change.
+// 'shadow' -- computes + logs would-be matches but never links (SAFE DEFAULT -- ships in
+//             this mode; flip to 'live' via the env var only after reviewing shadow logs
+//             for false positives on real scraper traffic).
+// 'live'   -- actually attaches the new source to the matched row instead of creating a new one.
+
+const FUZZY_NAME_FLOOR = 0.30;   // below this, names are unrelated -- never even considered
+const FUZZY_NAME_HIGH = 0.60;    // name+city alone is sufficient at this bar
+const FUZZY_NAME_MEDIUM = 0.40;  // requires a second signal (phone or non-franchise domain) too
+const FRANCHISE_DOMAIN_SHARED_FLOOR = 3; // domain already on >=N distinct organizers => franchise/multi-tenant, ignore as a signal
+
+/**
+ * Bigram Dice coefficient over normalizeName() output. 1.0 = identical after normalization,
+ * 0 = no shared bigrams. Pure string comparison -- no new DB index or extension required,
+ * runs only against the small city-scoped `candidates` list already fetched below.
+ */
+function nameSimilarity(a: string, b: string): number {
+  const na = normalizeName(a);
+  const nb = normalizeName(b);
+  if (!na || !nb) return 0;
+  if (na === nb) return 1;
+  const bigrams = (s: string): string[] => {
+    const out: string[] = [];
+    for (let i = 0; i < s.length - 1; i++) out.push(s.slice(i, i + 2));
+    return out;
+  };
+  const ga = bigrams(na);
+  const gb = bigrams(nb);
+  if (ga.length === 0 || gb.length === 0) return 0;
+  const counts = new Map<string, number>();
+  for (const g of ga) counts.set(g, (counts.get(g) || 0) + 1);
+  let overlap = 0;
+  for (const g of gb) {
+    const c = counts.get(g) || 0;
+    if (c > 0) {
+      overlap++;
+      counts.set(g, c - 1);
+    }
+  }
+  return (2 * overlap) / (ga.length + gb.length);
+}
+
+/** Last-10-digits phone normalization for loose cross-format comparison. Null if too short to trust. */
+function normalizePhoneDigits(phone?: string | null): string | null {
+  if (!phone) return null;
+  const digits = phone.replace(/\D/g, '');
+  if (digits.length < 10) return null;
+  return digits.slice(-10);
+}
+
+/**
  * Decode and sanitise a raw scraped email before storage.
  *
  * Handles the three malformed-email patterns found in the wild:
@@ -777,6 +840,119 @@ export async function getOrCreateScrapedOrganizer(
       await prisma.organizer.update({ where: { id: existing.id }, data: updates });
     }
     return existing.id;
+  }
+
+  // Cross-source fuzzy dedup -- see CROSS_SOURCE_FUZZY_MODE doc comment above. Runs only when
+  // no exact ID / dedupeKey / exact-name match fired above. Scoped to the SAME `candidates`
+  // list already fetched for the exact-name tier (same city, isUnmanagedListing) -- reuses the
+  // existing query instead of adding a new one or a new trigram index on businessName.
+  if (CROSS_SOURCE_FUZZY_MODE !== 'off') {
+    const candidatePhone = normalizePhoneDigits(phone);
+    const candidateDomain = registrableDomain(website);
+    const fuzzyMatches: Array<{ row: (typeof candidates)[number]; score: number; signals: string[] }> = [];
+
+    for (const c of candidates) {
+      const score = nameSimilarity(businessName, c.businessName);
+      if (score < FUZZY_NAME_FLOOR) continue;
+
+      let qualifies = false;
+      const signals: string[] = ['city'];
+
+      if (score >= FUZZY_NAME_HIGH) {
+        qualifies = true;
+      }
+
+      if (!qualifies && score >= FUZZY_NAME_MEDIUM && candidatePhone) {
+        const cPhone = normalizePhoneDigits(c.phone);
+        if (cPhone && cPhone === candidatePhone) {
+          signals.push('phone');
+          qualifies = true;
+        }
+      }
+
+      if (!qualifies && score >= FUZZY_NAME_MEDIUM && candidateDomain && c.website) {
+        const cDomain = registrableDomain(c.website);
+        if (cDomain && cDomain === candidateDomain) {
+          // Franchise-domain guard (grasons.com precedent -- see doc comment above). Reuses
+          // idx_organizer_website_trgm (added 2026-08-08 for Overture `contains` lookups) --
+          // first live use of that index outside the enrichment script it was built for.
+          const domainSharedCount = await prisma.organizer.count({
+            where: { website: { contains: candidateDomain } },
+          });
+          if (domainSharedCount < FRANCHISE_DOMAIN_SHARED_FLOOR) {
+            signals.push('domain');
+            qualifies = true;
+          } else {
+            console.log(
+              `[Ingest] Fuzzy dedup -- ignored domain signal '${candidateDomain}' (shared by ${domainSharedCount} organizers, treated as franchise/multi-tenant)`
+            );
+          }
+        }
+      }
+
+      if (qualifies) fuzzyMatches.push({ row: c, score, signals });
+    }
+
+    if (fuzzyMatches.length === 1) {
+      const match = fuzzyMatches[0];
+      console.log(
+        `[Ingest] Fuzzy dedup ${CROSS_SOURCE_FUZZY_MODE.toUpperCase()} -- '${businessName}' (${city}) ~ existing organizer ${match.row.id} '${match.row.businessName}' score=${match.score.toFixed(2)} signals=${match.signals.join('+')} newSource=${sourceName}`
+      );
+
+      if (CROSS_SOURCE_FUZZY_MODE === 'live') {
+        const updates: Record<string, unknown> = {};
+        if (googlePlaceId && !match.row.googlePlaceId) updates.googlePlaceId = googlePlaceId;
+        if (foursquareVenueId && !match.row.foursquareVenueId) updates.foursquareVenueId = foursquareVenueId;
+        if (hereBusinessId && !match.row.hereBusinessId) updates.hereBusinessId = hereBusinessId;
+        if (esnOrgId) updates.esnOrgId = esnOrgId;
+        if (businessCategory) updates.businessCategory = businessCategory;
+        const validEmail = isValidExternalEmail(contactEmail);
+        const emailGate = gateScrapedEmail(validEmail, match.row.website ?? website, businessName);
+        if (emailGate && !match.row.contactEmail) {
+          updates.contactEmail = emailGate.contactEmail;
+          updates.emailDiscoveryMethod = emailGate.emailDiscoveryMethod;
+          updates.emailDiscoveryConfidence = emailGate.emailDiscoveryConfidence;
+          updates.emailDiscoveredAt = emailGate.emailDiscoveredAt;
+        }
+        if (phone && !match.row.phone) updates.phone = phone;
+        applyScrapedWebsite(updates, match.row.website, website, businessName, listingUrl);
+        if (lat !== undefined && lat !== null && !match.row.lat) updates.lat = lat;
+        if (lng !== undefined && lng !== null && !match.row.lng) updates.lng = lng;
+        if (isStateLicensed && !match.row.isStateLicensed) updates.isStateLicensed = isStateLicensed;
+        if (licenseState && !match.row.licenseState) updates.licenseState = licenseState;
+        if (licenseNumber && !match.row.licenseNumber) updates.licenseNumber = licenseNumber;
+        if (effectiveSourceLabel) {
+          updates.directoryMostRecentSource = effectiveSourceLabel;
+          updates.directoryMostRecentAt = new Date();
+        }
+
+        const currentSources = (match.row.sourcesJson as any[]) || [];
+        const sourceAlreadyPresent = currentSources.some((s: any) => s.sourceName === sourceName);
+        if (!sourceAlreadyPresent) {
+          const newSourceCount = (match.row.sourceCount || 1) + 1;
+          const newSource = {
+            sourceName,
+            sourceId: `fuzzy:${match.signals.join('+')}:${match.score.toFixed(2)}`,
+            lastSeen: new Date().toISOString(),
+          };
+          updates.sourceCount = newSourceCount;
+          updates.sourcesJson = [...currentSources, newSource];
+          updates.corroborationScore = recalculateCorroborationScore(newSourceCount);
+        }
+        updates.updatedAt = new Date();
+        if (!match.row.dedupeKey) updates.dedupeKey = dedupeKey;
+
+        if (Object.keys(updates).length > 0) {
+          await prisma.organizer.update({ where: { id: match.row.id }, data: updates });
+        }
+        return match.row.id;
+      }
+    } else if (fuzzyMatches.length > 1) {
+      console.log(
+        `[Ingest] Fuzzy dedup -- ${fuzzyMatches.length} ambiguous candidates for '${businessName}' (${city}); ` +
+        `not auto-linking (safer to risk a rare duplicate than merge into the wrong business)`
+      );
+    }
   }
 
   // Create new organizer

@@ -20,6 +20,7 @@
 
 import { prisma } from '../lib/prisma';
 import { computeCheapestForOrigin, EBAY_SHIPPING_FVF_RATE } from './ebayRateEstimateService';
+import { refreshEbayAccessToken } from './ebayHttp';
 
 // In-process cache: `${organizerId}:${flatRateStr}` → eBay fulfillmentPolicyId
 const policyCache = new Map<string, string>();
@@ -187,6 +188,149 @@ export async function ensureFvfFlatRatePolicy(
     return null;
   } catch (err) {
     console.warn(`[eBay FvfFlat] provisioning error organizer=${organizerId}`, err);
+    return null;
+  }
+}
+
+/**
+ * (S-gap-fill, 2026-08-09) Provision a named, reusable weight-tier eBay fulfillment
+ * policy at a specific weight bucket -- e.g. "7+ lb Ground Advantage $20.00" -- using
+ * the SAME cheapest-carrier / FVF-gross-up / bucket-rounding pipeline as
+ * ensureFvfFlatRatePolicy above (computeCheapestForOrigin -> computeFvfFlatRate ->
+ * roundUpToBucket). No new pricing formula.
+ *
+ * Distinct from ensureFvfFlatRatePolicy in three ways:
+ *   1. Named for a WEIGHT BUCKET the organizer can reuse across many items ("N+ lb
+ *      Ground Advantage $X.XX"), not a single item's exact flat rate ("FindA.Sale
+ *      Flat $X.XX"). Matches the naming convention of an organizer's existing
+ *      hand-built weight-tier ladder (EbayPolicyMapping.weightTierMappings) so
+ *      ebayPolicyParser.ts's `/\+\s*lb/i` weight-tier classifier still recognizes it.
+ *   2. Priced at the TOP of the bucket (bucketMaxLb, no dims) rather than an item's
+ *      actual measured weight/dims -- this provisions a durable, reusable ladder rung,
+ *      not a one-off per-item policy.
+ *   3. Obtains a guaranteed-fresh access token via refreshEbayAccessToken() (same
+ *      pattern used by checkEbayPolicyLiveness/saveEbayPolicyMapping callers in
+ *      ebayController.ts) instead of reading conn.accessToken directly, since this is
+ *      typically invoked as a one-off provisioning action, not a hot per-item path.
+ *
+ * Root cause this fills: an organizer's manually-built weightTierMappings ladder can
+ * have a gap between its highest granular tier and a much-larger catch-all (e.g.
+ * "6+ lb / <=111oz" then nothing until "45 lb / <=720oz" FedEx catch-all). The
+ * gap-overshoot guard in ebayController.ts / ebayShippingResolver.ts correctly
+ * detects and blocks that overcharge scenario (safe, no fix needed there) -- this
+ * function lets the caller proactively provision the missing rungs so items in the
+ * gap land on a proper shared named tier instead of falling back to a one-off
+ * FVF-flat policy or getting blocked for manual review.
+ *
+ * Returns the same shape as a WeightTierMapping entry (ebayPolicyParser.ts) plus the
+ * computed flatRate, or null if provisioning failed.
+ */
+export async function ensureNamedWeightTierPolicy(
+  organizerId: string,
+  bucketMaxLb: number,
+  fromZip: string | null | undefined
+): Promise<{ maxOz: number; policyId: string; policyName: string; flatRate: number } | null> {
+  const organizer = await prisma.organizer.findUnique({
+    where: { id: organizerId },
+    include: { ebayConnection: true },
+  });
+
+  const conn = organizer?.ebayConnection;
+  if (!conn) {
+    console.warn(`[eBay NamedTier] organizer=${organizerId} not connected`);
+    return null;
+  }
+
+  const accessToken = await refreshEbayAccessToken(organizerId);
+  if (!accessToken) {
+    console.warn(`[eBay NamedTier] organizer=${organizerId} could not obtain a valid access token`);
+    return null;
+  }
+
+  const maxOz = Math.round(bucketMaxLb * 16);
+
+  // Price at the top of the bucket (no dims — this is a reusable ladder rung, not a
+  // per-item policy), gross up for eBay's FVF on shipping, round UP into the bucket ladder.
+  const cheapest = computeCheapestForOrigin({
+    weightOz: maxOz,
+    dims: null,
+    origin: { zip: fromZip ?? null, lat: organizer?.lat ?? null, lng: organizer?.lng ?? null },
+  });
+
+  const flatRate = roundUpToBucket(computeFvfFlatRate(cheapest.rate));
+  const flatRateStr = flatRate.toFixed(2);
+  const policyName = `${bucketMaxLb}+ lb Ground Advantage $${flatRateStr}`;
+  const handlingTimeDays = conn.handlingTimeDays ?? 3;
+
+  // Idempotent: adopt an existing policy with this exact name before creating.
+  const existing = await findExistingFlatRatePolicy(accessToken, policyName);
+  if (existing) {
+    console.log(
+      `[eBay NamedTier] adopted existing organizer=${organizerId} bucket=${bucketMaxLb}lb policy=${existing} name="${policyName}"`
+    );
+    return { maxOz, policyId: existing, policyName, flatRate };
+  }
+
+  const body = {
+    name: policyName,
+    marketplaceId: 'EBAY_US',
+    categoryTypes: [{ name: 'ALL_EXCLUDING_MOTORS_VEHICLES' }],
+    handlingTime: { unit: 'DAY', value: handlingTimeDays },
+    shippingOptions: [
+      {
+        optionType: 'DOMESTIC',
+        costType: 'FLAT_RATE',
+        shippingServices: [
+          {
+            // Generic flat-rate service code (matches ensureFvfFlatRatePolicy and the
+            // organizer's own existing weight-tier policies) -- carrier-specific codes
+            // are CALCULATED-only and rejected by LSAS for FLAT_RATE policies (S975).
+            shippingServiceCode: 'ShippingMethodStandard',
+            shippingCarrierCode: 'GENERIC',
+            shippingCost: { value: flatRateStr, currency: 'USD' },
+            additionalShippingCost: { value: '0.00', currency: 'USD' },
+            sortOrder: 1,
+            freeShipping: false,
+          },
+        ],
+      },
+    ],
+  };
+
+  try {
+    const res = await fetch(ebayProxyUrl('/sell/account/v1/fulfillment_policy'), {
+      method: 'POST',
+      headers: { ...ebayUserHeaders(accessToken), ...ebayProxyHeaders() },
+      body: JSON.stringify(body),
+    });
+
+    if (res.ok) {
+      const data = (await res.json()) as any;
+      const policyId: string = data.fulfillmentPolicyId;
+      console.log(
+        `[eBay NamedTier] created organizer=${organizerId} bucket=${bucketMaxLb}lb policy=${policyId} name="${policyName}" estimatedRate=${cheapest.rate} carrier=${cheapest.carrier}`
+      );
+      return { maxOz, policyId, policyName, flatRate };
+    }
+
+    const errText = await res.text();
+    // 20400 = policy name already exists — adopt it
+    if (errText.includes('20400') || /already exists/i.test(errText)) {
+      const adopted = await findExistingFlatRatePolicy(accessToken, policyName);
+      if (adopted) {
+        console.log(
+          `[eBay NamedTier] adopted on 20400 organizer=${organizerId} bucket=${bucketMaxLb}lb policy=${adopted} name="${policyName}"`
+        );
+        return { maxOz, policyId: adopted, policyName, flatRate };
+      }
+    }
+
+    console.warn(
+      `[eBay NamedTier] create failed organizer=${organizerId} bucket=${bucketMaxLb}lb status=${res.status} err=${errText.slice(0, 200)}`
+    );
+    return null;
+  } catch (err) {
+    console.warn(`[eBay NamedTier] provisioning error organizer=${organizerId} bucket=${bucketMaxLb}lb`, err);
     return null;
   }
 }
