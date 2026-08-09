@@ -134,11 +134,7 @@ const isDestinationCharge = (pi: Stripe.PaymentIntent): boolean =>
 const resolveDisputeContext = async (
   dispute: Stripe.Dispute,
   connectedAccountId: string | undefined
-): Promise<{
-  charge: Stripe.Charge;
-  paymentIntent: Stripe.PaymentIntent | null;
-  purchase: (Awaited<ReturnType<typeof prisma.purchase.findFirst>>) | null;
-}> => {
+) => {
   const chargeId = typeof dispute.charge === 'string' ? dispute.charge : dispute.charge.id;
   const retrieveOpts = connectedAccountId ? { stripeAccount: connectedAccountId } : undefined;
   const charge = await stripe().charges.retrieve(chargeId, retrieveOpts);
