@@ -324,6 +324,7 @@ const AdminUserDetail = () => {
                       p.status === 'PAID' ? 'text-green-600 dark:text-green-400' :
                       p.status === 'REFUNDED' ? 'text-orange-500 dark:text-orange-400' :
                       p.status === 'DISPUTED' ? 'text-red-600 dark:text-red-400' :
+                      p.status === 'DISPUTE_LOST' ? 'text-red-700 dark:text-red-500' :
                       'text-warm-500 dark:text-warm-400'
                     }`}>
                       {p.status}
