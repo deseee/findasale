@@ -17,6 +17,7 @@ import api from '../../../lib/api';
 import { useAuth } from '../../../components/AuthContext';
 import { useToast } from '../../../components/ToastContext';
 import EbayCategoryPicker from '../../../components/EbayCategoryPicker';
+import AccessibleModal from '../../../components/AccessibleModal';
 
 // Type definitions
 type PolicyClassification = 'weight-tier' | 'local-pickup' | 'free-shipping' | 'calculated' | 'category-specific' | 'international' | 'unknown';
@@ -107,6 +108,22 @@ interface SuggestedWeightTier {
   confidence: 'high' | 'medium' | 'low';
 }
 
+// (S-gap-fill, 2026-08-09) "Fill gaps automatically" preview -- what the
+// GET /ebay/weight-tier-gaps/preview endpoint returns. Read-only: computing this
+// makes zero eBay/DB writes on the backend.
+interface GapFillNewTier {
+  bucketMaxLb: number;
+  maxOz: number;
+  policyName: string;
+  flatRate: number;
+  closesGapFromOz: number;
+  closesGapToOz: number;
+}
+interface GapFillPreview {
+  gaps: Array<{ fromOz: number; toOz: number; fromLb: number; toLb: number }>;
+  newTiers: GapFillNewTier[];
+}
+
 interface PolicyMapping {
   defaultFulfillmentPolicyId?: string | null;
   defaultReturnPolicyId?: string | null;
@@ -191,6 +208,12 @@ const EbayPolicySetupPage = () => {
     loading: boolean;
     result: { checkedCount: number; staleCount: number; stalePolicies: Array<{ policyId: string; label: string }> } | null;
   }>({ loading: false, result: null });
+
+  // (S-gap-fill, 2026-08-09) "Fill gaps automatically" -- preview modal state.
+  const [gapFillPreview, setGapFillPreview] = useState<GapFillPreview | null>(null);
+  const [gapFillPreviewLoading, setGapFillPreviewLoading] = useState(false);
+  const [gapFillModalOpen, setGapFillModalOpen] = useState(false);
+  const [gapFillApplying, setGapFillApplying] = useState(false);
 
   // Fetch setup data on mount
   useEffect(() => {
@@ -377,6 +400,68 @@ const EbayPolicySetupPage = () => {
     } catch (error: any) {
       setPolicyCheck({ loading: false, result: null });
       showToast(error.response?.data?.message || 'Could not check your policies right now', 'error');
+    }
+  };
+
+  // (S-gap-fill, 2026-08-09) "Fill gaps automatically" -- step 1: fetch a read-only
+  // preview (zero eBay/DB writes on the backend) and open the confirm modal. The
+  // backend re-detects gaps using the exact same algorithm driving weightTierGaps
+  // above, so what this shows always matches the banner that triggered it.
+  const handleOpenGapFillPreview = async () => {
+    setGapFillPreviewLoading(true);
+    try {
+      const res = await api.get('/ebay/weight-tier-gaps/preview');
+      const preview: GapFillPreview = res.data;
+      if (!preview.newTiers || preview.newTiers.length === 0) {
+        showToast('No gaps to fill right now.', 'info');
+        return;
+      }
+      setGapFillPreview(preview);
+      setGapFillModalOpen(true);
+    } catch (error: any) {
+      showToast(error.response?.data?.error || error.response?.data?.message || 'Could not check for gaps right now', 'error');
+    } finally {
+      setGapFillPreviewLoading(false);
+    }
+  };
+
+  // Step 2: after explicit confirmation, actually provision the real eBay
+  // policies and persist the new tiers. Merges only the newly created tiers into
+  // the existing weightTierMappings array (assigning them fresh client-only ids)
+  // so existing rows never remount and any of the organizer's other in-progress
+  // edits on this page are left untouched.
+  const handleConfirmGapFill = async () => {
+    if (!mapping) return;
+    setGapFillApplying(true);
+    try {
+      const res = await api.post('/ebay/weight-tier-gaps/fill');
+      const created: WeightTierMapping[] = res.data.created || [];
+      const createdWithIds = created.map((tier) => ({ ...tier, _clientId: newClientId() }));
+      const mergeTiers = (tiers: WeightTierMapping[]) =>
+        [...tiers, ...createdWithIds].sort((a, b) => {
+          const aVal = a.maxOz === Infinity ? Number.MAX_VALUE : a.maxOz;
+          const bVal = b.maxOz === Infinity ? Number.MAX_VALUE : b.maxOz;
+          return aVal - bVal;
+        });
+      setMapping((prev) => (prev ? { ...prev, weightTierMappings: mergeTiers(prev.weightTierMappings) } : prev));
+      // These tiers are already saved server-side (the fill endpoint persists them),
+      // so fold them into originalMapping too -- otherwise they'd show as an unsaved
+      // change and the sticky "Discard changes" bar would offer to undo a save that
+      // already happened.
+      setOriginalMapping((prev) => (prev ? { ...prev, weightTierMappings: mergeTiers(prev.weightTierMappings) } : prev));
+      setGapFillModalOpen(false);
+      setGapFillPreview(null);
+      if (created.length === 0) {
+        showToast('Could not create any new shipping policies. Please try again.', 'error');
+      } else if (res.data.partialFailure) {
+        showToast(`Added ${created.length} of ${gapFillPreview?.newTiers.length ?? created.length} tiers -- one or more could not be created. Try again to fill the rest.`, 'error');
+      } else {
+        showToast(`Added ${created.length} shipping ${created.length === 1 ? 'tier' : 'tiers'} to close the gap${created.length === 1 ? '' : 's'}.`, 'success');
+      }
+    } catch (error: any) {
+      showToast(error.response?.data?.error || error.response?.data?.message || 'Failed to fill weight-tier gaps', 'error');
+    } finally {
+      setGapFillApplying(false);
     }
   };
 
@@ -851,6 +936,14 @@ const EbayPolicySetupPage = () => {
                           Heads up — you don't have a tier between about {Math.round(gap.fromOz / 16)} lbs and {Math.round(gap.toOz / 16)} lbs. Items in that range will still work, but they'll fall back to an automatic option instead of the price you set. Add a tier here to fix that.
                         </p>
                       ))}
+                      <button
+                        type="button"
+                        onClick={handleOpenGapFillPreview}
+                        disabled={gapFillPreviewLoading}
+                        className="mt-1 text-xs px-3 py-1.5 border border-amber-600 text-amber-800 dark:text-amber-300 dark:border-amber-500 rounded-lg hover:bg-amber-100 dark:hover:bg-amber-900/40 disabled:opacity-50 disabled:cursor-not-allowed font-semibold transition"
+                      >
+                        {gapFillPreviewLoading ? 'Checking…' : 'Fill gaps automatically'}
+                      </button>
                     </div>
                   )}
                 </div>
@@ -1343,6 +1436,57 @@ const EbayPolicySetupPage = () => {
           <div className="h-20" />
         </div>
       </div>
+
+      {/* (S-gap-fill, 2026-08-09) "Fill gaps automatically" confirm modal -- same
+          AccessibleModal + summary/list/cancel-apply structure as BulkConfirmModal
+          (components/BulkConfirmModal.tsx), the existing confirm-modal pattern used
+          elsewhere in the app. Nothing is created until the organizer clicks
+          "Create N policies" below -- the preview fetch that populated this modal
+          made zero eBay/DB writes. */}
+      {gapFillModalOpen && gapFillPreview && (
+        <AccessibleModal
+          isOpen={true}
+          onClose={() => { if (!gapFillApplying) { setGapFillModalOpen(false); setGapFillPreview(null); } }}
+          ariaLabelledBy="gap-fill-modal-title"
+        >
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md mx-4 shadow-xl border-l-4 border-l-amber-600">
+            <h3 id="gap-fill-modal-title" className="text-lg font-bold mb-2 text-warm-900 dark:text-warm-100">
+              Fill weight-tier gaps
+            </h3>
+            <p className="text-warm-700 dark:text-gray-300 mb-4 text-sm">
+              This creates <span className="font-semibold">{gapFillPreview.newTiers.length}</span> real eBay shipping{' '}
+              {gapFillPreview.newTiers.length === 1 ? 'policy' : 'policies'} on your account and adds{' '}
+              {gapFillPreview.newTiers.length === 1 ? 'it' : 'them'} to your weight-tier table below.
+            </p>
+            <div className="mb-4 p-3 bg-warm-50 dark:bg-gray-700 rounded border border-warm-200 dark:border-gray-600 space-y-2">
+              <p className="text-xs font-semibold text-warm-700 dark:text-gray-300 mb-1">We'll add:</p>
+              <ul className="space-y-1 text-sm text-warm-700 dark:text-gray-200">
+                {gapFillPreview.newTiers.map((tier, i) => (
+                  <li key={i}>
+                    • {tier.policyName}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => { setGapFillModalOpen(false); setGapFillPreview(null); }}
+                disabled={gapFillApplying}
+                className="px-4 py-2 border border-warm-300 dark:border-gray-600 text-warm-700 dark:text-gray-200 rounded hover:bg-warm-50 dark:hover:bg-gray-700 disabled:opacity-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmGapFill}
+                disabled={gapFillApplying}
+                className="px-4 py-2 text-white rounded font-semibold disabled:opacity-50 transition-colors bg-amber-600 hover:bg-amber-700"
+              >
+                {gapFillApplying ? 'Creating…' : `Create ${gapFillPreview.newTiers.length} ${gapFillPreview.newTiers.length === 1 ? 'policy' : 'policies'}`}
+              </button>
+            </div>
+          </div>
+        </AccessibleModal>
+      )}
     </>
   );
 };

@@ -25,6 +25,8 @@ import {
   getSuggestedPriceForMargin,
   getUnknownShippingClassificationCount,
   checkEbayPolicyLiveness,
+  previewWeightTierGapFill,
+  fillWeightTierGaps,
 } from '../controllers/ebayController';
 import { syncSoldItemsForOrganizer } from '../jobs/ebaySoldSyncCron';
 
@@ -42,6 +44,12 @@ router.delete('/connection', authenticate, disconnectEbay);
 // Feature #244 Phase 2c: eBay Policy Routing — per-organizer policy configuration
 router.get('/setup-data', authenticate, getEbaySetupData);
 router.post('/policy-mapping', authenticate, saveEbayPolicyMapping);
+
+// (S-gap-fill, 2026-08-09) "Fill gaps automatically" — weight-tier ladder gap detection
+// + provisioning. Preview makes zero eBay/DB writes; fill provisions real eBay policies
+// via the organizer's own connected OAuth token after explicit UI confirmation.
+router.get('/weight-tier-gaps/preview', authenticate, requireOrganizer, previewWeightTierGapFill);
+router.post('/weight-tier-gaps/fill', authenticate, requireOrganizer, fillWeightTierGaps);
 
 // Calculated-shipping: estimated buyer rate + net proceeds preview
 router.post('/shipping-preview', authenticate, requireOrganizer, getShippingNetPreview);
