@@ -64,6 +64,9 @@ const AdminUserDetail = () => {
   const [refundModalPurchase, setRefundModalPurchase] = useState<Purchase | null>(null);
   const [refundLoading, setRefundLoading] = useState(false);
   const [refundError, setRefundError] = useState('');
+  const [tierDialogTarget, setTierDialogTarget] = useState<string | null>(null);
+  const [tierLoading, setTierLoading] = useState(false);
+  const [tierError, setTierError] = useState('');
 
   useEffect(() => {
     if (!isLoading && (!user || !user.roles?.includes('ADMIN'))) {
@@ -230,9 +233,21 @@ const AdminUserDetail = () => {
                 <dt className="text-warm-500 dark:text-warm-400">Business name</dt>
                 <dd className="text-warm-800 dark:text-warm-200">{userData.organizer.businessName}</dd>
               </div>
-              <div className="flex justify-between text-sm">
+              <div className="flex justify-between items-center text-sm">
                 <dt className="text-warm-500 dark:text-warm-400">Tier</dt>
-                <dd className="text-warm-800 dark:text-warm-200">{userData.organizer.subscriptionTier}</dd>
+                <dd>
+                  <select
+                    value={userData.organizer.subscriptionTier}
+                    onChange={(e) => { setTierDialogTarget(e.target.value); setTierError(''); }}
+                    disabled={tierLoading}
+                    title="Organizer plan tier"
+                    className="px-2 py-1 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded text-xs focus:outline-none focus:ring-2 focus:ring-amber-600"
+                  >
+                    <option value="SIMPLE">SIMPLE</option>
+                    <option value="PRO">PRO</option>
+                    <option value="TEAMS">TEAMS</option>
+                  </select>
+                </dd>
               </div>
               <div className="flex justify-between text-sm">
                 <dt className="text-warm-500 dark:text-warm-400">Total sales</dt>
@@ -477,6 +492,69 @@ const AdminUserDetail = () => {
                 className="px-4 py-2 text-sm font-medium bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded transition-colors"
               >
                 {refundLoading ? 'Refunding…' : 'Refund'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Tier Change Confirmation Modal */}
+      {tierDialogTarget && userData.organizer && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md">
+            <div className="flex items-center justify-between p-5 border-b border-warm-200 dark:border-gray-700">
+              <h2 className="text-base font-semibold text-warm-900 dark:text-warm-100">
+                Change Organizer Plan
+              </h2>
+              <button
+                onClick={() => { if (!tierLoading) { setTierDialogTarget(null); setTierError(''); } }}
+                className="text-warm-400 hover:text-warm-600 dark:text-warm-500 dark:hover:text-warm-300 text-xl leading-none"
+              >
+                ×
+              </button>
+            </div>
+            <div className="p-5 space-y-3">
+              <p className="text-sm text-warm-700 dark:text-warm-300">
+                Move <span className="font-semibold">{userData.organizer.businessName}</span> to the{' '}
+                <span className="font-semibold">{tierDialogTarget}</span> plan? They&apos;ll be notified by
+                email and in-app. This changes their billing and available features immediately.
+              </p>
+              {tierError && (
+                <p className="text-sm text-red-600 dark:text-red-400">{tierError}</p>
+              )}
+            </div>
+            <div className="flex justify-end gap-3 px-5 pb-5">
+              <button
+                onClick={() => { if (!tierLoading) { setTierDialogTarget(null); setTierError(''); } }}
+                disabled={tierLoading}
+                className="px-4 py-2 text-sm text-warm-600 dark:text-warm-400 hover:text-warm-900 dark:hover:text-warm-100 disabled:opacity-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                disabled={tierLoading}
+                onClick={async () => {
+                  const newTier = tierDialogTarget;
+                  const organizerId = userData.organizer?.id;
+                  if (!newTier || !organizerId) return;
+                  setTierLoading(true);
+                  setTierError('');
+                  try {
+                    await api.patch(`/admin/organizers/${organizerId}/tier`, { tier: newTier });
+                    setUserData(prev => prev && prev.organizer ? {
+                      ...prev,
+                      organizer: { ...prev.organizer, subscriptionTier: newTier },
+                    } : prev);
+                    setTierDialogTarget(null);
+                  } catch (err: any) {
+                    setTierError(err?.response?.data?.message || 'Failed to update organizer tier');
+                  } finally {
+                    setTierLoading(false);
+                  }
+                }}
+                className="px-4 py-2 text-sm font-medium bg-amber-600 hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded transition-colors"
+              >
+                {tierLoading ? 'Updating…' : 'Confirm'}
               </button>
             </div>
           </div>
