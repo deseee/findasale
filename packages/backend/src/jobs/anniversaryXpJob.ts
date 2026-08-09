@@ -20,6 +20,19 @@
  * Runs daily at 02:45 UTC — after xpExpiryCron (02:15 UTC), before
  * huntPassExpiryCron (03:00 UTC), in the same daily XP-adjacent job family.
  *
+ * Bug fix 2026-08-09: the candidate query never excluded scraper/prospect
+ * shell User rows (email pattern scraper+...@system.finda.sale, paired 1:1
+ * with Organizer.isUnmanagedListing=true rows -- these accounts never log in
+ * and will never see this XP). Confirmed live: 57,160 of 57,163 existing
+ * ANNIVERSARY_30DAY PointsTransaction rows (99.99%) belong to these shells.
+ * Added an "email" NOT LIKE '%@system.finda.sale' filter to the SQL below,
+ * matching the existing real-user filter convention used elsewhere
+ * (adminController.ts getStats, backfill-warm-emails.ts, seedDirectoryClaimEmails.ts).
+ * This stops NEW junk rows going forward; the 57,159 existing bad rows are
+ * NOT cleaned up here -- that is a separate data-cleanup decision requiring
+ * Patrick's sign-off (see claude_docs/architecture/db-space-accounting-2026-08-09.md
+ * Action 6).
+ *
  * Idempotency: mirrors the pattern already used by hasEarnedTrailBonus() in
  * xpService.ts (PointsTransaction.description contains a stable per-milestone
  * tag), NOT checkStreakMilestones()'s calendar-month window — because 30-day
@@ -60,6 +73,7 @@ async function processAnniversaryXp(): Promise<void> {
       FROM "User"
       WHERE "deletedAt" IS NULL
         AND "fraudSuspect" = false
+        AND "email" NOT LIKE '%@system.finda.sale'
         AND FLOOR(EXTRACT(EPOCH FROM (NOW() - "createdAt")) / 86400)::int >= 30
         AND FLOOR(EXTRACT(EPOCH FROM (NOW() - "createdAt")) / 86400)::int % 30 = 0
     `;
