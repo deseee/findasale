@@ -459,7 +459,10 @@ export async function getOrCreateScrapedOrganizer(
   licenseState?: string,
   licenseNumber?: string,
   sourceLabel?: string,
-  listingUrl?: string
+  listingUrl?: string,
+  // Not a dedup lookup key: unlike hereBusinessId/foursquareVenueId, osmNodeId has no
+  // @unique constraint in schema.prisma -- it's backfilled/stored for traceability only.
+  osmNodeId?: string
 ): Promise<string | null> {
   // ADR-075: Validate businessCategory against allowlist
   const VALID_CATEGORIES = new Set([
@@ -498,13 +501,14 @@ export async function getOrCreateScrapedOrganizer(
   if (googlePlaceId) {
     const byPlaceId = await prisma.organizer.findFirst({
       where: { googlePlaceId },
-      select: { id: true, googlePlaceId: true, foursquareVenueId: true, hereBusinessId: true, contactEmail: true, phone: true, website: true, sourceCount: true, sourcesJson: true, lat: true, lng: true, isStateLicensed: true, licenseState: true, licenseNumber: true },
+      select: { id: true, googlePlaceId: true, foursquareVenueId: true, hereBusinessId: true, osmNodeId: true, contactEmail: true, phone: true, website: true, sourceCount: true, sourcesJson: true, lat: true, lng: true, isStateLicensed: true, licenseState: true, licenseNumber: true },
     });
     if (byPlaceId) {
       // Backfill missing source IDs and email, merge corroboration data
       const updates: Record<string, unknown> = {};
       if (foursquareVenueId && !byPlaceId.foursquareVenueId) updates.foursquareVenueId = foursquareVenueId;
       if (hereBusinessId && !byPlaceId.hereBusinessId) updates.hereBusinessId = hereBusinessId;
+      if (osmNodeId && !byPlaceId.osmNodeId) updates.osmNodeId = osmNodeId;
       if (esnOrgId) updates.esnOrgId = esnOrgId;
       if (businessCategory) updates.businessCategory = businessCategory;
       const validEmail = isValidExternalEmail(contactEmail);
@@ -552,12 +556,13 @@ export async function getOrCreateScrapedOrganizer(
   if (foursquareVenueId) {
     const byFoursquare = await prisma.organizer.findFirst({
       where: { foursquareVenueId },
-      select: { id: true, googlePlaceId: true, foursquareVenueId: true, hereBusinessId: true, contactEmail: true, phone: true, website: true, sourceCount: true, sourcesJson: true, lat: true, lng: true, isStateLicensed: true, licenseState: true, licenseNumber: true },
+      select: { id: true, googlePlaceId: true, foursquareVenueId: true, hereBusinessId: true, osmNodeId: true, contactEmail: true, phone: true, website: true, sourceCount: true, sourcesJson: true, lat: true, lng: true, isStateLicensed: true, licenseState: true, licenseNumber: true },
     });
     if (byFoursquare) {
       const updates: Record<string, unknown> = {};
       if (googlePlaceId && !byFoursquare.googlePlaceId) updates.googlePlaceId = googlePlaceId;
       if (hereBusinessId && !byFoursquare.hereBusinessId) updates.hereBusinessId = hereBusinessId;
+      if (osmNodeId && !byFoursquare.osmNodeId) updates.osmNodeId = osmNodeId;
       if (esnOrgId) updates.esnOrgId = esnOrgId;
       if (businessCategory) updates.businessCategory = businessCategory;
       const validEmail = isValidExternalEmail(contactEmail);
@@ -605,12 +610,13 @@ export async function getOrCreateScrapedOrganizer(
   if (hereBusinessId) {
     const byHere = await prisma.organizer.findFirst({
       where: { hereBusinessId },
-      select: { id: true, googlePlaceId: true, foursquareVenueId: true, hereBusinessId: true, contactEmail: true, phone: true, website: true, sourceCount: true, sourcesJson: true, lat: true, lng: true, isStateLicensed: true, licenseState: true, licenseNumber: true },
+      select: { id: true, googlePlaceId: true, foursquareVenueId: true, hereBusinessId: true, osmNodeId: true, contactEmail: true, phone: true, website: true, sourceCount: true, sourcesJson: true, lat: true, lng: true, isStateLicensed: true, licenseState: true, licenseNumber: true },
     });
     if (byHere) {
       const updates: Record<string, unknown> = {};
       if (googlePlaceId && !byHere.googlePlaceId) updates.googlePlaceId = googlePlaceId;
       if (foursquareVenueId && !byHere.foursquareVenueId) updates.foursquareVenueId = foursquareVenueId;
+      if (osmNodeId && !byHere.osmNodeId) updates.osmNodeId = osmNodeId;
       if (esnOrgId) updates.esnOrgId = esnOrgId;
       if (businessCategory) updates.businessCategory = businessCategory;
       const validEmail = isValidExternalEmail(contactEmail);
@@ -673,13 +679,14 @@ export async function getOrCreateScrapedOrganizer(
   if (esnOrgId) {
     const byEsnOrgId = await prisma.organizer.findFirst({
       where: { esnOrgId },
-      select: { id: true, googlePlaceId: true, foursquareVenueId: true, hereBusinessId: true, contactEmail: true, phone: true, website: true, sourceCount: true, sourcesJson: true, lat: true, lng: true, isStateLicensed: true, licenseState: true, licenseNumber: true },
+      select: { id: true, googlePlaceId: true, foursquareVenueId: true, hereBusinessId: true, osmNodeId: true, contactEmail: true, phone: true, website: true, sourceCount: true, sourcesJson: true, lat: true, lng: true, isStateLicensed: true, licenseState: true, licenseNumber: true },
     });
     if (byEsnOrgId) {
       const updates: Record<string, unknown> = {};
       if (googlePlaceId && !byEsnOrgId.googlePlaceId) updates.googlePlaceId = googlePlaceId;
       if (foursquareVenueId && !byEsnOrgId.foursquareVenueId) updates.foursquareVenueId = foursquareVenueId;
       if (hereBusinessId && !byEsnOrgId.hereBusinessId) updates.hereBusinessId = hereBusinessId;
+      if (osmNodeId && !byEsnOrgId.osmNodeId) updates.osmNodeId = osmNodeId;
       if (businessCategory) updates.businessCategory = businessCategory;
       const validEmail = isValidExternalEmail(contactEmail);
       // Provenance + wrong-entity guard (bounce-incident fix): directory-listing emails
@@ -726,7 +733,7 @@ export async function getOrCreateScrapedOrganizer(
   const dedupeKey = generateDedupeKey(businessName, city);
   const byDedupeKey = await prisma.organizer.findFirst({
     where: { dedupeKey },
-    select: { id: true, businessName: true, googlePlaceId: true, foursquareVenueId: true, hereBusinessId: true, contactEmail: true, phone: true, website: true, sourceCount: true, sourcesJson: true, lat: true, lng: true, isStateLicensed: true, licenseState: true, licenseNumber: true },
+    select: { id: true, businessName: true, googlePlaceId: true, foursquareVenueId: true, hereBusinessId: true, osmNodeId: true, contactEmail: true, phone: true, website: true, sourceCount: true, sourcesJson: true, lat: true, lng: true, isStateLicensed: true, licenseState: true, licenseNumber: true },
   });
 
   if (byDedupeKey) {
@@ -734,6 +741,7 @@ export async function getOrCreateScrapedOrganizer(
     if (googlePlaceId && !byDedupeKey.googlePlaceId) updates.googlePlaceId = googlePlaceId;
     if (foursquareVenueId && !byDedupeKey.foursquareVenueId) updates.foursquareVenueId = foursquareVenueId;
     if (hereBusinessId && !byDedupeKey.hereBusinessId) updates.hereBusinessId = hereBusinessId;
+    if (osmNodeId && !byDedupeKey.osmNodeId) updates.osmNodeId = osmNodeId;
     if (esnOrgId) updates.esnOrgId = esnOrgId;
     if (businessCategory) updates.businessCategory = businessCategory;
     const validEmail = isValidExternalEmail(contactEmail);
@@ -783,7 +791,7 @@ export async function getOrCreateScrapedOrganizer(
       isUnmanagedListing: true,
       address: { contains: city },
     },
-    select: { id: true, businessName: true, googlePlaceId: true, foursquareVenueId: true, hereBusinessId: true, contactEmail: true, phone: true, website: true, dedupeKey: true, sourceCount: true, sourcesJson: true, lat: true, lng: true, isStateLicensed: true, licenseState: true, licenseNumber: true },
+    select: { id: true, businessName: true, googlePlaceId: true, foursquareVenueId: true, hereBusinessId: true, osmNodeId: true, contactEmail: true, phone: true, website: true, dedupeKey: true, sourceCount: true, sourcesJson: true, lat: true, lng: true, isStateLicensed: true, licenseState: true, licenseNumber: true },
   });
 
   const normalizedName = normalizeName(businessName);
@@ -795,6 +803,7 @@ export async function getOrCreateScrapedOrganizer(
     if (googlePlaceId && !existing.googlePlaceId) updates.googlePlaceId = googlePlaceId;
     if (foursquareVenueId && !existing.foursquareVenueId) updates.foursquareVenueId = foursquareVenueId;
     if (hereBusinessId && !existing.hereBusinessId) updates.hereBusinessId = hereBusinessId;
+    if (osmNodeId && !existing.osmNodeId) updates.osmNodeId = osmNodeId;
     if (esnOrgId) updates.esnOrgId = esnOrgId;
     if (businessCategory) updates.businessCategory = businessCategory;
     const validEmail = isValidExternalEmail(contactEmail);
@@ -904,6 +913,7 @@ export async function getOrCreateScrapedOrganizer(
         if (googlePlaceId && !match.row.googlePlaceId) updates.googlePlaceId = googlePlaceId;
         if (foursquareVenueId && !match.row.foursquareVenueId) updates.foursquareVenueId = foursquareVenueId;
         if (hereBusinessId && !match.row.hereBusinessId) updates.hereBusinessId = hereBusinessId;
+        if (osmNodeId && !match.row.osmNodeId) updates.osmNodeId = osmNodeId;
         if (esnOrgId) updates.esnOrgId = esnOrgId;
         if (businessCategory) updates.businessCategory = businessCategory;
         const validEmail = isValidExternalEmail(contactEmail);
@@ -992,6 +1002,7 @@ export async function getOrCreateScrapedOrganizer(
             isUnmanagedListing: true,
             esnOrgId,
             googlePlaceId,
+            osmNodeId: osmNodeId ?? null,
             businessCategory,
             contactEmail: emailGate?.contactEmail ?? null,
             emailDiscoveryMethod: emailGate?.emailDiscoveryMethod ?? null,
