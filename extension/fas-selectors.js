@@ -318,6 +318,40 @@
     return null; // zero or ambiguous -- caller falls through to the genuine skip+flag path
   }
 
+  // ADR-100 §10/§11/§12 (2026-08-09): "Renew listing" button for a specific title on
+  // marketplace/you/selling -- confirmed live 2026-08-09 via Chrome (read-only inspection, no
+  // submit): each Active listing card that hasn't hit Facebook's 5-renewal cap shows a direct
+  // "Renew listing" button alongside "Mark as sold" and "Share". Same single-confident-match
+  // walk-up pattern as listingCardByTitle/alreadySoldCardByTitle (16-hop ancestor search for a
+  // "$"-containing card >40 chars) -- kept as its own function rather than refactoring those
+  // two (both are live-tested; not touching them). Returns null when the button isn't found for
+  // a confidently-matched card -- this is the caller's signal that either (a) the title doesn't
+  // match a live card at all, or (b) the card exists but has no Renew button, i.e. it has HIT
+  // THE 5-RENEWAL CAP and needs Facebook's separate "Delete & relist" flow instead (NOT yet
+  // automated as of this dispatch -- see fas-remove.js renewOne() for the fallback behavior).
+  function renewButtonByTitle(title) {
+    const want = norm(title);
+    if (!want) return null;
+    const buttons = Array.from(document.querySelectorAll('div[role="button"], button, span[role="button"], a[role="button"]'))
+      .filter((b) => norm(b.textContent) === 'renew listing');
+    const candidates = [];
+    for (const btn of buttons) {
+      let el = btn, hops = 0, cardText = null, cardEl = null;
+      while (el && hops < 16) {
+        el = el.parentElement;
+        hops++;
+        if (!el) break;
+        const t = norm(el.textContent);
+        if (t.indexOf('$') !== -1 && t.length > 40) { cardText = t; cardEl = el; break; }
+      }
+      if (cardText && (cardText === want || cardText.indexOf(want) !== -1)) {
+        candidates.push({ button: btn, cardEl, cardText });
+      }
+    }
+    if (candidates.length === 1) return candidates[0];
+    return null; // zero or ambiguous -- caller treats the same as "not found", never guesses
+  }
+
   // (2026-08-05) Reverse-direction sold detection: FindA.Sale has no way to learn an item sold
   // NATIVELY on Facebook (no webhook/API -- same DOM-poll gap as everything else in this file).
   // alreadySoldCardByTitle above checks ONE specific known title; this scans the WHOLE "Your
@@ -489,7 +523,7 @@
   function isSwitchOn(el) { return !!(el && el.getAttribute('aria-checked') === 'true'); }
 
   window.__FAS_SEL__ = { norm, fieldByLabel, comboByLabel, optionByText, photoInput, chipsAfter, categoryChips, persistentCategoryChips, bestTextMatch,
-    elementByText, radioLabelByText, listingCardByTitle, alreadySoldCardByTitle, allSoldListingCards, loadAllListingCards, realClick, menuCheckboxByText, isMenuChecked, isDisabled, radioOptionByText,
+    elementByText, radioLabelByText, listingCardByTitle, alreadySoldCardByTitle, allSoldListingCards, renewButtonByTitle, loadAllListingCards, realClick, menuCheckboxByText, isMenuChecked, isDisabled, radioOptionByText,
     switchByLabel, isSwitchOn, isRadioChecked, weightExactLink, weightExactInputs,
     LABELS: { title: 'Title', price: 'Price', description: 'Description', condition: 'Condition', category: 'Category', offerToggle: 'negotiate', offerMinimum: 'Minimum price' } };
 })();

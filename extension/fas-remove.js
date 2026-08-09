@@ -285,6 +285,120 @@
     }
   }
 
+  // ---- Marketplace Listing Auto-Renew (ADR-100 §10/§11/§12, 2026-08-09) ----
+  // Corrects the original ADR-100 §5/§8 mechanism (renewal = full repost via fas-content.js's
+  // posting-queue flow) after Patrick caught that reposting is wasteful and risks the account
+  // getting flagged for bulk automated reposting, when Facebook already offers a lightweight,
+  // platform-sanctioned "Renew listing" button for exactly this purpose (confirmed live
+  // 2026-08-09 -- see ADR-100 §11). This flow reuses the SAME title_search-filtered navigation
+  // (ensureFilteredThenRun/buildTitleSearchUrl above) and the SAME single-confident-match
+  // discipline as the removal flow -- a title that can't be confidently matched to exactly one
+  // card is skipped and reported, never guessed.
+  //
+  // SCOPE NOTE (honest, not a TODO-and-forget): this dispatch implements ONLY the primary
+  // "click Renew listing" path. Two related cases are deliberately NOT automated yet, because
+  // building them blind would repeat the exact mistake ADR-086 already flagged (guessing at
+  // unverified platform UI):
+  //   (a) Facebook's 5-renewal cap ("Delete & relist" flow) -- confirmed live to exist at a
+  //       DIFFERENT URL (facebook.com/marketplace/selling/relist_items/...) that no content
+  //       script currently targets, reached via client-side routing from the Seller Dashboard,
+  //       not a plain page navigation. Needs its own live-verification pass before automating.
+  //   (b) Craigslist native renew -- the account page's manage-postings links resisted a plain
+  //       DOM query when checked live (ADR-100 §11); needs coordinate-based click verification
+  //       before automating. Craigslist renewal still goes through the existing full-repost path
+  //       unchanged (background.js autoRenewDueItems).
+  // Both (a) and (b) currently fall back to the pre-existing full-repost mechanism (unchanged),
+  // same as every renewal did before this dispatch -- this is a net improvement (the common
+  // case now renews instead of reposts), not a regression for the uncommon cases.
+
+  async function markRenewed(item) {
+    // Reuses the EXISTING markListed endpoint (same one fas-content.js/fas-craigslist.js call
+    // after a first-time post) -- writes a new MarketplaceListingJob action:'POST' row, which is
+    // exactly what's needed to push renewDueAt forward another cycle. remoteListingId stays null
+    // (a Renew click doesn't produce a new one, and getPendingUpdates/getPendingSoldChecks only
+    // ever key off the MOST RECENT job row per item, so this correctly supersedes the old one).
+    try { await chrome.runtime.sendMessage({ type: 'markListed', itemId: item.id, remoteListingId: null, platform: 'FACEBOOK' }); } catch (e) {}
+  }
+
+  // (Scope note, 2026-08-09) Unlike markSkipped() for removal, this deliberately does NOT round-
+  // trip to the backend -- there's no server-side "renewal skipped" state to record: leaving
+  // markRenewed() uncalled is sufficient, since renewDueAt simply stays in the past and
+  // getPendingRenewals will re-serve this item next cycle automatically, no new endpoint needed.
+  // Console-only for now; a Chrome notification for items that skip repeatedly (e.g. permanently
+  // capped at Facebook's 5-renewal limit) would be a reasonable follow-up but isn't built this
+  // pass -- flagged in the dev handoff, not silently omitted.
+  function markRenewalSkipped(item, reason) {
+    console.log('[FindA.Sale] Renewal skipped for "' + item.title + '": ' + reason);
+  }
+
+  // Renews one item: finds its "Renew listing" button by title (single-confident-match only,
+  // same discipline as removeOne) and clicks it. No survey modal is expected (Renew is a
+  // single-action button, not a multi-step flow like "Mark as sold") -- confirmed by the live
+  // 2026-08-09 check showing it as a direct card-level button, not a menu item. Success is
+  // read from the button's own row: once clicked, Facebook is expected to either remove the
+  // "Renew listing" button (replaced by a disabled/renewed state) or show a toast -- since the
+  // exact post-click DOM signal was not live-verified this pass (verification stopped short of
+  // clicking, per Patrick's "don't submit anything" instruction), this treats a stable ABSENCE
+  // of the row's zero-time-since-renewal state as best-effort and reports success optimistically
+  // after the click if no error is thrown, while still requiring the pre-click match to be
+  // single-confident. If this turns out to under- or over-report success once QA'd live with a
+  // real click, that's the next thing to verify -- not guessed further here.
+  async function renewOne(item) {
+    const match = SEL.renewButtonByTitle(item.title);
+    if (!match) {
+      // Distinguish "card not found at all" from "card found but no Renew button" (the 5-
+      // renewal-cap case, ADR-100 §11) using the SAME card lookup listingCardByTitle already
+      // does (it matches on "Mark as sold", which is present on every Active card regardless of
+      // renewal-cap state).
+      const cardStillActive = SEL.listingCardByTitle(item.title);
+      const reason = cardStillActive
+        ? 'Listing found but no "Renew listing" button -- likely hit Facebook\'s 5-renewal cap (needs "Delete & relist", not yet automated).'
+        : 'No confident match for this listing on the page (zero or more than one "' + item.title + '" found) -- skipped, not guessed.';
+      return { ok: false, reason };
+    }
+    await humanPause(300, 600);
+    await realClick(match.button);
+    await humanPause(600, 1000); // let Facebook's click handler + any re-render settle
+    return { ok: true };
+  }
+
+  async function runRenewalQueue(item, index, total) {
+    overlay('<b>FindA.Sale</b> — renewing listing ' + (index + 1) + ' of ' + total + ': <b>' + escapeHtml(item.title) + '</b>…');
+    const result = await renewOne(item);
+    if (result.ok) {
+      await markRenewed(item);
+      overlay('<b>FindA.Sale</b><div style="margin-top:6px">Renewed <b>' + escapeHtml(item.title) + '</b> on Facebook.</div>' +
+        '<div style="margin-top:8px;font-size:11px;color:#9fb6a8">' + (index + 1) + ' of ' + total + '</div>');
+    } else {
+      await markRenewalSkipped(item, result.reason);
+      overlay('<b>FindA.Sale</b><div style="color:#ffcf7a;margin-top:6px;font-size:12px">Skipped <b>' + escapeHtml(item.title) +
+        '</b>: ' + escapeHtml(result.reason) + '</div>' +
+        '<div style="margin-top:8px;font-size:11px;color:#9fb6a8">' + (index + 1) + ' of ' + total + '</div>');
+    }
+    await humanPause(1000, 1800);
+    let next = null;
+    try { next = await chrome.runtime.sendMessage({ type: 'advanceRenewalQueue' }); } catch (e) { next = null; }
+    if (next && next.ok && next.item) {
+      await ensureFilteredThenRunRenewal(next.item, next.index, next.total);
+    } else {
+      overlay('<b>FindA.Sale</b> — done renewing listings.');
+      setTimeout(() => bar && bar.remove(), 4000);
+      // Shared tab-close signal with removal (see start()'s comment) -- not a separate message
+      // type, since renewal and removal now share one you/selling management tab lifecycle.
+      try { await chrome.runtime.sendMessage({ type: 'removalQueueDone' }); } catch (e) {}
+    }
+  }
+
+  // Mirrors ensureFilteredThenRun exactly (same real-navigation-then-reenter pattern), routed to
+  // the renewal queue instead of the removal queue.
+  async function ensureFilteredThenRunRenewal(item, index, total) {
+    if (pageAlreadyFilteredFor(item.title)) {
+      await runRenewalQueue(item, index, total);
+      return;
+    }
+    window.location.href = buildTitleSearchUrl(item.title);
+  }
+
   // ---- Reverse-direction sold detection (ADR-084 amendment, Part D -- 2026-08-05) ----
   // Facebook has no webhook/API to tell FindA.Sale an item sold NATIVELY on Facebook -- same
   // "poll a DOM signal" gap as removal/price-sync above, just running the other direction: an
@@ -383,21 +497,38 @@
 
     let q = null;
     try { q = await chrome.runtime.sendMessage({ type: 'getRemovalQueueItem' }); } catch (e) { /* removal flow unavailable this load -- sold-detection scan above still ran */ }
-    if (!q || !q.ok || !q.item) {
-      // Nothing queued for removal. If the sold-detection scan above is what triggered THIS tab
-      // (silent mode, sold-checks-only, no removal items queued) the auto-opened tab still needs
-      // closing + the organizer's previous tab focus restored -- runRemovalQueue's own tail
-      // normally does this via 'removalQueueDone' once ITS queue finishes, but that message is
-      // never sent when there was no removal queue to process at all. finishSilentRemoval() (the
-      // handler behind this message, background.js) already no-ops harmlessly whenever this
-      // wasn't a silent-mode auto-opened tab -- it only acts on a stored fasRemovalTabId, which
-      // openSilentRemovalTab() is the only thing that ever sets -- so it's safe to send
-      // unconditionally here (covers: notify mode, off mode, and an organizer just browsing this
-      // page normally, none of which ever set fasRemovalTabId).
-      try { await chrome.runtime.sendMessage({ type: 'removalQueueDone' }); } catch (e) {}
+    if (q && q.ok && q.item) {
+      await ensureFilteredThenRun(q.item, q.index, q.total);
       return;
     }
-    await ensureFilteredThenRun(q.item, q.index, q.total);
+
+    // (2026-08-09, ADR-100 §10/§11/§12) Renewal queue check, same shape as removal above.
+    // Checked SECOND, only when nothing was queued for removal -- a removal reflects a real
+    // completed sale elsewhere and always takes priority; a renewal is just a freshness bump,
+    // never time-critical the way removal is. IMPORTANT: do not signal 'removalQueueDone' (which
+    // closes this shared you/selling management tab, see finishSilentRemoval) until BOTH queues
+    // have been checked and are BOTH empty -- signaling done between the two checks would close
+    // the tab out from under a renewal that was about to run in the very same visit, since
+    // removal and renewal now legitimately share one tab/page instead of each having their own.
+    let r = null;
+    try { r = await chrome.runtime.sendMessage({ type: 'getRenewalQueueItem' }); } catch (e) { /* renewal flow unavailable this load */ }
+    if (r && r.ok && r.item) {
+      await ensureFilteredThenRunRenewal(r.item, r.index, r.total);
+      return;
+    }
+
+    // Nothing queued for removal OR renewal. If the sold-detection scan above is what triggered
+    // THIS tab (silent mode, sold-checks-only, nothing queued) the auto-opened tab still needs
+    // closing + the organizer's previous tab focus restored -- runRemovalQueue's/runRenewalQueue's
+    // own tails normally do this via 'removalQueueDone' once THEIR queue finishes, but that
+    // message is never sent when there was nothing queued at all. finishSilentRemoval() (the
+    // handler behind this message, background.js) already no-ops harmlessly whenever this wasn't
+    // a silent-mode auto-opened tab -- it only acts on a stored fasRemovalTabId, which
+    // openSilentRemovalTab() is the only thing that ever sets -- so it's safe to send
+    // unconditionally here (covers: notify mode, off mode, and an organizer just browsing this
+    // page normally, none of which ever set fasRemovalTabId). Renewal reuses this SAME message
+    // (not a separate 'renewalQueueDone') since both flows now share the one tab lifecycle.
+    try { await chrome.runtime.sendMessage({ type: 'removalQueueDone' }); } catch (e) {}
   }
 
   start();

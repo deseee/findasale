@@ -431,14 +431,27 @@ function buildRenewalQueueItem(it, organizerEmail) {
   };
 }
 
-// Auto-renew path (fasAutoRenew=true, now the default): re-drives the EXISTING posting flow for each due item,
-// exactly as if the organizer had selected it in the popup and clicked "List"/"Post" with
-// "Publish automatically" checked -- autoPublish is forced true here since no human is present
-// to click Publish. Craigslist's own doPreviewStep already stops and hands off to a manual
-// notification if it can't find a publish button (most likely a phone/email/CAPTCHA
-// verification step it doesn't recognize, per fas-craigslist.js's existing guardrail) -- that
-// existing behavior is reused as-is, not re-implemented here (ADR-100 §8's verification
-// boundary requirement).
+// Auto-renew path (fasAutoRenew=true, now the default).
+// CORRECTED 2026-08-09 (ADR-100 §10/§11/§12): originally every due item re-drove the full
+// posting flow (a repost) regardless of platform or whether anything actually changed. Patrick
+// caught that this wastes resources and risks the account getting flagged for bulk automated
+// reposting, when Facebook already offers a lightweight, platform-sanctioned "Renew listing"
+// button for exactly this purpose. Due items are now split three ways:
+//   1. FACEBOOK, price unchanged since last post -- native "Renew listing" click via the
+//      lightweight fasRenewalQueue + fas-remove.js's renewOne() (new, see ADR-100 §10/§11).
+//   2. FACEBOOK, price changed since last post -- falls back to the existing full-repost fbQueue
+//      path (unchanged): a plain Renew click doesn't update listing content, only freshness/
+//      position (Craigslist's own docs list "editing" and "renewing" as separate actions for
+//      exactly this reason), so a changed item needs a real repost to carry the new price.
+//   3. CRAIGSLIST -- UNCHANGED, still the full-repost clQueue path for every due item. Native
+//      Craigslist renewal was investigated (ADR-100 §11) but the account page's manage-postings
+//      links resisted a plain DOM query when checked live -- automating it without confirming
+//      the real interaction mechanism would repeat the exact mistake ADR-086 already flagged
+//      (guessing at unverified platform UI). Flagged as a follow-up, not built this pass.
+// "Price changed" reuses the EXISTING getPendingUpdates/marketplaceListedPrice staleness check
+// (ADR-086) -- not rebuilt. Shipping-change detection has no equivalent tracked field to diff
+// against today (no marketplaceListedShippingOverride-style snapshot exists); adding one is a
+// schema change and out of scope for this dispatch -- DECISION NEEDED, flagged in the handoff.
 async function autoRenewDueItems(dueItems) {
   if (!dueItems.length) return 'no_items';
   const itemsResp = await apiFetch('/extension/items');
@@ -447,13 +460,31 @@ async function autoRenewDueItems(dueItems) {
   const organizerEmail = (itemsResp.data && itemsResp.data.organizer && itemsResp.data.organizer.email) || null;
   const fullItemById = new Map(fullItems.map((it) => [it.id, it]));
 
-  const fbQueue = [];
-  const clQueue = [];
+  // Price-staleness set, reused from the existing ADR-086 detector -- a non-fatal fetch: if it
+  // fails, fall back to treating NO items as stale (i.e. everything goes through native renew)
+  // rather than blocking renewal entirely on a secondary endpoint being briefly unreachable.
+  let staleIds = new Set();
+  try {
+    const updatesResp = await apiFetch('/extension/pending-updates');
+    if (updatesResp.ok) {
+      staleIds = new Set(((updatesResp.data && updatesResp.data.items) || []).map((i) => i.id));
+    }
+  } catch (e) { /* non-fatal, see comment above */ }
+
+  const fbQueue = [];       // full-repost fallback (price changed)
+  const clQueue = [];       // full-repost, unchanged for Craigslist (see comment above)
+  const fbRenewQueue = [];  // lightweight native-renew queue: {id, title, saleId}
+
   for (const due of dueItems) {
     const full = fullItemById.get(due.id);
     if (!full) continue; // no longer AVAILABLE/listable -- getExtensionItems already excludes it
-    const entry = buildRenewalQueueItem(full, organizerEmail);
-    if (due.platform === 'CRAIGSLIST') clQueue.push(entry); else fbQueue.push(entry);
+    if (due.platform === 'CRAIGSLIST') {
+      clQueue.push(buildRenewalQueueItem(full, organizerEmail));
+    } else if (staleIds.has(due.id)) {
+      fbQueue.push(buildRenewalQueueItem(full, organizerEmail));
+    } else {
+      fbRenewQueue.push({ id: full.id, title: full.title, saleId: full.saleId });
+    }
   }
 
   let started = 0;
@@ -466,6 +497,17 @@ async function autoRenewDueItems(dueItems) {
     await chrome.storage.local.set({ fasCraigslistQueue: clQueue, fasCraigslistIndex: 0, fasCraigslistAutoPublish: true });
     chrome.tabs.create({ url: CFG.CL_POST_URL, active: false });
     started += clQueue.length;
+  }
+  // Native-renew queue shares the SAME you/selling management tab lifecycle as the removal flow
+  // (silentRemovalInProgress/openSilentRemovalTab/finishSilentRemoval, defined above) rather than
+  // tracking a second independent tab -- both flows target the same page and fas-remove.js's
+  // start() already checks removal-then-renewal in one visit (see its 2026-08-09 comment). Guard
+  // against opening a second tab if a removal (or a prior renewal) is already using it; the
+  // renewal queue stays stored and gets picked up on the NEXT poll/tab-open instead.
+  if (fbRenewQueue.length && !(await silentRemovalInProgress())) {
+    await chrome.storage.local.set({ fasRenewalQueue: fbRenewQueue, fasRenewalIndex: 0 });
+    await openSilentRemovalTab();
+    started += fbRenewQueue.length;
   }
   return started ? 'auto_renew_started:' + started : 'skipped_active_queue';
 }
@@ -699,6 +741,19 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         await chrome.storage.local.set({ fasRemovalIndex: next });
         const item = (st.fasRemovalQueue || [])[next] || null;
         sendResponse({ ok: true, item, index: next, total: (st.fasRemovalQueue || []).length });
+      } else if (msg.type === 'getRenewalQueueItem') {
+        // (2026-08-09, ADR-100 §10/§11/§12) Native-renew queue -- same shape as
+        // getRemovalQueueItem above, deliberately separate storage keys (fasRenewalQueue/
+        // fasRenewalIndex) since it holds different, lighter entries ({id, title, saleId}, no
+        // full item data needed for a Renew click) even though both share one tab lifecycle.
+        const { fasRenewalQueue = [], fasRenewalIndex = 0 } = await chrome.storage.local.get(['fasRenewalQueue', 'fasRenewalIndex']);
+        sendResponse({ ok: true, item: fasRenewalQueue[fasRenewalIndex] || null, index: fasRenewalIndex, total: fasRenewalQueue.length });
+      } else if (msg.type === 'advanceRenewalQueue') {
+        const st = await chrome.storage.local.get(['fasRenewalQueue', 'fasRenewalIndex']);
+        const next = (st.fasRenewalIndex || 0) + 1;
+        await chrome.storage.local.set({ fasRenewalIndex: next });
+        const item = (st.fasRenewalQueue || [])[next] || null;
+        sendResponse({ ok: true, item, index: next, total: (st.fasRenewalQueue || []).length });
       } else if (msg.type === 'markItemRemovedByRemoval') {
         sendResponse(await apiFetch('/extension/items/' + encodeURIComponent(msg.itemId) + '/removed', { method: 'POST', body: {} }));
       } else if (msg.type === 'markItemRemovalSkipped') {
