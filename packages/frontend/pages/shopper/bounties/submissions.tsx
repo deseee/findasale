@@ -422,6 +422,8 @@ export default function SubmissionsPage() {
         <CheckoutModal
           itemId={checkoutSubmission.item.id}
           itemTitle={checkoutSubmission.item.title}
+          organizerName={checkoutSubmission.organizer?.name}
+          saleId={checkoutSubmission.item.saleId}
           onClose={handleCheckoutClose}
           onSuccess={handleCheckoutSuccess}
         />

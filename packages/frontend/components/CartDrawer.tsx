@@ -89,6 +89,22 @@ const CartDrawer: React.FC<CartDrawerProps> = ({ isOpen, onClose }) => {
     enabled: isOpen && !!user?.id,
   });
 
+  // ADR-025 / legal-direct-charges-migration-2026-08-09.md deliverable #1: checkout
+  // disclosure copy needs the organizer's display name. The cart (useShopperCart) only
+  // stores itemIds/saleId locally -- no organizer name is already in-memory here -- so
+  // this reuses the existing public GET /sales/:id endpoint (same one pages/sales/[id].tsx
+  // calls) rather than adding a new backend route. Read-only, cart-checkout-only lookup.
+  const { data: cartSaleData } = useQuery({
+    queryKey: ['cart-sale-organizer', cart.saleId],
+    queryFn: async () => {
+      const response = await api.get(`/sales/${cart.saleId}`);
+      return response.data;
+    },
+    enabled: isOpen && !!cart.saleId && cart.cartCount > 0,
+    staleTime: 5 * 60 * 1000,
+  });
+  const cartOrganizerName: string | undefined = cartSaleData?.organizer?.businessName;
+
   const cancelMutation = useMutation({
     mutationFn: (reservationId: string) => api.delete(`/reservations/${reservationId}`),
     onSuccess: () => {
@@ -461,6 +477,15 @@ const CartDrawer: React.FC<CartDrawerProps> = ({ isOpen, onClose }) => {
 
             {/* Action Buttons */}
             <div className="space-y-2 pt-2">
+              {/* ADR-025 checkout disclosure micro-copy — this cart flow hands off to a
+                  Stripe-hosted Checkout Session (window.location.href below), so this is
+                  the last FindA.Sale-rendered screen before payment; show it here. */}
+              {cart.cartCount > 0 && cartOrganizerName && (
+                <p className="text-xs text-warm-500 dark:text-gray-400 text-center">
+                  Buying from {cartOrganizerName} &middot; Payment processed securely by Stripe.
+                </p>
+              )}
+
               {/* Go to Checkout */}
               <button
                 onClick={handleCheckout}

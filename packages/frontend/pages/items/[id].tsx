@@ -1187,6 +1187,8 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
           itemId={item.id}
           itemTitle={item.title}
           listingType={item.listingType}
+          organizerName={item.sale.organizer?.businessName ?? item.sale.organizer?.name}
+          saleId={item.sale.id}
           onClose={() => setShowCheckoutModal(false)}
           onSuccess={() => {
             setShowCheckoutModal(false);

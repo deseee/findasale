@@ -35,11 +35,13 @@ interface PaymentFormProps {
   buyerPremiumRate?: number; // buyer premium rate as decimal (e.g., 0.05 for 5%)
   isAuction?: boolean;    // true if item is an auction
   purchaseId?: string;    // purchase ID for redirect after success
+  organizerName?: string; // ADR-025 checkout disclosure: organizer display name, threaded from parent page
+  saleId?: string;        // ADR-025 checkout disclosure: used to link to the sale/storefront page
   onClose: () => void;
   onSuccess: () => void;
 }
 
-const PaymentForm = ({ itemTitle, itemPrice, originalAmount, platformFee, discountApplied = 0, buyerPremium = 0, buyerPremiumRate = 0, isAuction = false, purchaseId, saleName, saleAddress, saleDates, onClose, onSuccess }: PaymentFormProps) => {
+const PaymentForm = ({ itemTitle, itemPrice, originalAmount, platformFee, discountApplied = 0, buyerPremium = 0, buyerPremiumRate = 0, isAuction = false, purchaseId, saleName, saleAddress, saleDates, organizerName, saleId, onClose, onSuccess }: PaymentFormProps) => {
   const router = useRouter();
   const { user } = useAuth();
   const stripe = useStripe();
@@ -151,9 +153,36 @@ const PaymentForm = ({ itemTitle, itemPrice, originalAmount, platformFee, discou
           )}
         </div>
 
-        <p className="text-xs text-warm-600 mb-4">
-          Contact the organizer for pickup details.
-        </p>
+        {/* ADR-025 / legal-direct-charges-migration-2026-08-09.md deliverable #1:
+            longer receipt/confirmation disclosure. This inline success screen is the ONLY
+            confirmation guests ever see (they can't reach the authenticated /purchases/[id]
+            page), so it carries the full disclosure rather than just the micro-disclosure. */}
+        {organizerName ? (
+          <p className="text-xs text-warm-600 mb-4 leading-relaxed">
+            This purchase was made directly with <strong>{organizerName}</strong> and processed
+            securely by Stripe. If you have any questions about your order &mdash; pickup,
+            condition, timing &mdash; {organizerName} is who to contact first
+            {saleId ? (
+              <>
+                {' '}via the{' '}
+                <a
+                  href={`/sales/${saleId}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline hover:text-warm-900 dark:text-warm-100"
+                >
+                  sale page
+                </a>
+                .
+              </>
+            ) : '.'}
+            {' '}FindA.Sale is here if you need help finding them or navigating the platform.
+          </p>
+        ) : (
+          <p className="text-xs text-warm-600 mb-4">
+            Contact the organizer for pickup details.
+          </p>
+        )}
 
         <button
           onClick={handleDone}
@@ -268,6 +297,17 @@ const PaymentForm = ({ itemTitle, itemPrice, originalAmount, platformFee, discou
         </span>
       </label>
 
+      {/* ADR-025 / legal-direct-charges-migration-2026-08-09.md deliverable #1:
+          micro-disclosure near the payment button. Ships universally (not gated to the
+          Direct-charges allowlist) -- the organizer is the real seller of record under
+          both the DESTINATION and DIRECT charge shapes, so this statement is honest
+          regardless of which model actually processed this specific purchase. */}
+      {organizerName && (
+        <p className="text-xs text-warm-500 mb-3">
+          Buying from {organizerName} &middot; Payment processed securely by Stripe.
+        </p>
+      )}
+
       <div className="flex gap-3">
         <button
           type="button"
@@ -296,11 +336,13 @@ interface CheckoutModalProps {
   purchaseId?: string;
   itemTitle: string;
   listingType?: string;   // AUCTION, FIXED, etc. (for buyer premium disclosure)
+  organizerName?: string; // ADR-025 checkout disclosure: organizer's display name (businessName), passed by parent page
+  saleId?: string;        // ADR-025 checkout disclosure: sale id, used for storefront link in the inline success screen
   onClose: () => void;
   onSuccess: () => void;
 }
 
-const CheckoutModal = ({ itemId, purchaseId: initialPurchaseId, itemTitle, listingType, onClose, onSuccess }: CheckoutModalProps) => {
+const CheckoutModal = ({ itemId, purchaseId: initialPurchaseId, itemTitle, listingType, organizerName, saleId, onClose, onSuccess }: CheckoutModalProps) => {
   const { user } = useAuth();
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [itemPrice, setItemPrice] = useState(0);
@@ -602,6 +644,8 @@ const CheckoutModal = ({ itemId, purchaseId: initialPurchaseId, itemTitle, listi
                 saleName={saleName}
                 saleAddress={saleAddress}
                 saleDates={saleDates}
+                organizerName={organizerName}
+                saleId={saleId}
                 onClose={onClose}
                 onSuccess={handleSuccess}
               />

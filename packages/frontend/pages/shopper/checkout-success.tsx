@@ -363,15 +363,36 @@ const CheckoutSuccessPage = () => {
             </Link>
           </div>
 
-          {/* Warm closing message */}
+          {/* Warm closing message — ADR-025 / legal-direct-charges-migration-2026-08-09.md
+              deliverable #1: longer receipt/confirmation disclosure copy. Ships universally
+              (not gated to the Direct-charges allowlist) since the organizer is the real
+              seller of record under both charge models. Uses organizer.businessName (the
+              field actually returned by GET /users/purchases/:id) rather than organizer.name
+              used elsewhere on this page — pre-existing field-name mismatch on this page,
+              not introduced or fixed here; flagged separately, out of scope for this change.
+              Falls back to the original generic line if organizer data is ever missing. */}
           <div className="mt-10 text-center text-sm text-gray-600 dark:text-gray-400">
-            <p>
-              Questions about your purchase? Visit your{' '}
-              <Link href="/shopper/messages" className="text-amber-600 hover:text-amber-700 dark:text-amber-500 dark:hover:text-amber-400 font-medium">
-                messages
-              </Link>
-              {' '}to contact the organizer.
-            </p>
+            {organizer?.businessName ? (
+              <p className="max-w-xl mx-auto leading-relaxed">
+                This purchase was made directly with{' '}
+                <span className="font-medium text-gray-700 dark:text-gray-300">{organizer.businessName}</span>{' '}
+                and processed securely by Stripe. If you have any questions about your order &mdash;
+                pickup, condition, timing &mdash; {organizer.businessName} is who to contact first.
+                Send them a message via your{' '}
+                <Link href="/shopper/messages" className="text-amber-600 hover:text-amber-700 dark:text-amber-500 dark:hover:text-amber-400 font-medium">
+                  messages
+                </Link>
+                . FindA.Sale is here if you need help finding them or navigating the platform.
+              </p>
+            ) : (
+              <p>
+                Questions about your purchase? Visit your{' '}
+                <Link href="/shopper/messages" className="text-amber-600 hover:text-amber-700 dark:text-amber-500 dark:hover:text-amber-400 font-medium">
+                  messages
+                </Link>
+                {' '}to contact the organizer.
+              </p>
+            )}
           </div>
         </div>
       </div>

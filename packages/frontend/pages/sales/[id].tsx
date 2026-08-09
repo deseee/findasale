@@ -2534,6 +2534,8 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
         <CheckoutModal
           itemId={checkoutItem.id}
           itemTitle={checkoutItem.title}
+          organizerName={sale.organizer?.businessName}
+          saleId={sale.id}
           onClose={handleCheckoutClose}
           onSuccess={handleCheckoutSuccess}
         />
