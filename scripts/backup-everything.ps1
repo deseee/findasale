@@ -331,7 +331,7 @@ if (-not $SkipDB) {
             if ($env:RAILWAY_TOKEN) { $stderrForLog = $stderrForLog -replace [regex]::Escape($env:RAILWAY_TOKEN), '[REDACTED_TOKEN]' }
             $stderrForLog = $stderrForLog -replace '(postgres(?:ql)?://[^:]+:)[^@]+(@)', '$1[REDACTED]$2'
             if ($stderrForLog.Length -gt 500) { $stderrForLog = $stderrForLog.Substring(0, 500) + '...[truncated]' }
-            [void]$dbUrlAttemptLog.Add("attempt $attempt: exit=$railwayExit, ${attemptMs}ms, stdout-empty=$([string]::IsNullOrWhiteSpace($rawConnStr)), stderr=`"$stderrForLog`"")
+            [void]$dbUrlAttemptLog.Add("attempt ${attempt}: exit=$railwayExit, ${attemptMs}ms, stdout-empty=$([string]::IsNullOrWhiteSpace($rawConnStr)), stderr=`"$stderrForLog`"")
             if ($candidateConnStr) {
                 $connStr = $candidateConnStr
                 Log "  [DATABASE] DATABASE_PUBLIC_URL resolved on attempt $attempt/$dbUrlMaxAttempts (exit=$railwayExit, ${attemptMs}ms)"
