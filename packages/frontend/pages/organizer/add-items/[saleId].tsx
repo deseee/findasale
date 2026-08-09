@@ -846,7 +846,19 @@ const AddItemsDetailPage = () => {
           ...submitData,
           auctionStartPrice: submitData.startingBid ? parseFloat(submitData.startingBid) : null,
           auctionReservePrice: submitData.reservePrice ? parseFloat(submitData.reservePrice) : null,
-          auctionEndTime: submitData.auctionEndTime || null,
+          // Bug fix (2026-08-08, P1 data corruption): datetime-local inputs return a
+          // naive local-time string with no timezone info (e.g. "2026-08-09T14:30").
+          // Sending that string as-is to the backend meant Node (running in UTC on
+          // Railway) parsed it via `new Date(str)` AS IF it were already UTC -- so an
+          // organizer in Eastern time who picked 2:30 PM local got the auction closed
+          // at 2:30 PM UTC, ~4-5 hours early. Confirmed: two real test auctions closed
+          // with zero bids before they could be tested. `new Date(datetimeLocalString)`
+          // (string has both date AND time, no 'Z'/offset) is spec-defined to parse as
+          // LOCAL time in the browser, so building a Date from it here and converting
+          // with .toISOString() is the correct, timezone-safe conversion to send.
+          auctionEndTime: submitData.auctionEndTime
+            ? new Date(submitData.auctionEndTime).toISOString()
+            : null,
         };
         const { startingBid, reservePrice, ...cleanPayload } = submitData;
         submitData = cleanPayload;

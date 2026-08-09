@@ -227,6 +227,32 @@ const DEFAULT_FORM: WizardFormData = {
 const DRAFT_KEY = 'findasale_create_sale_draft';
 
 // ─────────────────────────────────────────────────────────────────────────────
+// DATE HELPERS (local-timezone-safe)
+// ─────────────────────────────────────────────────────────────────────────────
+// Bug fix (2026-08-08, P1): `new Date("YYYY-MM-DD")` parses a date-only ISO string as
+// UTC midnight (per spec). Every US timezone is behind UTC, so once that Date object is
+// read back through LOCAL getters/setters (e.g. `.setHours(0,0,0,0)`, `.toISOString()`
+// after local arithmetic), the represented calendar date silently shifts by one day.
+// Confirmed: an organizer in Eastern time picking their own literal today's start date
+// had it evaluated as yesterday, tripping "Start date must be today or in the future"
+// on a valid date -- and the native date-picker's `min` bound (computed the same way)
+// could similarly block today's date in the evening, since UTC has already rolled to
+// tomorrow while it is still today locally. Fix: always derive "today" and parse
+// "YYYY-MM-DD" date-input values using LOCAL calendar components, never via
+// `new Date(dateOnlyString)` or `.toISOString()`.
+function getLocalDateString(d: Date = new Date()): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function parseLocalDateInput(dateStr: string): Date {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // SHARED PRIMITIVES
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -798,12 +824,12 @@ function Step2({ c, form, setForm, validationErrors, setValidationErrors }: Step
     const errs: Record<string, string> = {};
     const today = new Date(); today.setHours(0, 0, 0, 0);
     if (form.startDate) {
-      const sd = new Date(form.startDate); sd.setHours(0, 0, 0, 0);
+      const sd = parseLocalDateInput(form.startDate);
       if (sd < today) errs.startDate = 'Start date must be today or in the future';
     }
     if (form.startDate && form.endDate) {
-      const sd = new Date(form.startDate); sd.setHours(0, 0, 0, 0);
-      const ed = new Date(form.endDate); ed.setHours(0, 0, 0, 0);
+      const sd = parseLocalDateInput(form.startDate);
+      const ed = parseLocalDateInput(form.endDate);
       if (ed <= sd) errs.endDate = 'End date must be after start date';
     }
     setValidationErrors(prev => ({ ...prev, ...errs }));
@@ -873,7 +899,7 @@ function Step2({ c, form, setForm, validationErrors, setValidationErrors }: Step
                   value={form.startDate}
                   onChange={e => setForm(f => ({ ...f, startDate: e.target.value }))}
                   onBlur={validateDates}
-                  min={new Date().toISOString().split('T')[0]}
+                  min={getLocalDateString()}
                   required
                   style={{ ...inputStyle }}
                 />
@@ -888,7 +914,7 @@ function Step2({ c, form, setForm, validationErrors, setValidationErrors }: Step
                   value={form.endDate}
                   onChange={e => setForm(f => ({ ...f, endDate: e.target.value }))}
                   onBlur={validateDates}
-                  min={form.startDate || new Date().toISOString().split('T')[0]}
+                  min={form.startDate || getLocalDateString()}
                   required
                   style={{ ...inputStyle }}
                 />
@@ -2221,10 +2247,10 @@ const CreateSalePage: React.FC = () => {
         }
         const errs: Record<string, string> = {};
         const today = new Date(); today.setHours(0, 0, 0, 0);
-        const sd = new Date(form.startDate); sd.setHours(0, 0, 0, 0);
+        const sd = parseLocalDateInput(form.startDate);
         if (sd < today) errs.startDate = 'Start date must be today or in the future';
         if (form.endDate) {
-          const ed = new Date(form.endDate); ed.setHours(0, 0, 0, 0);
+          const ed = parseLocalDateInput(form.endDate);
           if (ed <= sd) errs.endDate = 'End date must be after start date';
         }
         if (Object.keys(errs).length > 0) {

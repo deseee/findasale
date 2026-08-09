@@ -43,9 +43,18 @@ export const getStats = async (req: AuthRequest, res: Response) => {
     });
 
     // Real vs scraped sale counts for Data Integrity section
+    // FIX (P1 data integrity, 2026-08-08): this must be a SALE-level provenance check
+    // (sourceName), not the ORGANIZER-level isUnmanagedListing flag. isUnmanagedListing
+    // flips to false the instant an organizer claims their profile (routes/organizers.ts
+    // claim handler), but any Sale rows the directory scraper already synced for that
+    // organizer are never touched by the claim and keep sourceName='EstateSalesNet' (etc.)
+    // -- so the old filter silently reclassified scraper-synced sales as "real" the moment
+    // an organizer claimed their listing. sourceName is set once, at scrape-time ingest
+    // (services/scraper/index.ts ingestScrapedListing), and is never set on a sale an
+    // organizer creates in-app (saleController.ts createSale only spreads the request body).
     const [realSalesCount, scrapedSalesCount] = await Promise.all([
-      prisma.sale.count({ where: { organizer: { isUnmanagedListing: false } } }),
-      prisma.sale.count({ where: { organizer: { isUnmanagedListing: true } } }),
+      prisma.sale.count({ where: { sourceName: null } }),
+      prisma.sale.count({ where: { sourceName: { not: null } } }),
     ]);
 
     const totalPurchases = await prisma.purchase.aggregate({
@@ -210,11 +219,21 @@ export const getStats = async (req: AuthRequest, res: Response) => {
     const haveOrganizer = totalOrganizers;
 
     // Real organizers only for funnel metrics
+    // FIX (P1 data integrity, 2026-08-08): "sales: { some: {} }" and "some sale with
+    // status PUBLISHED/ENDED" both matched a claimed organizer's leftover scraper-synced
+    // Sale rows (status defaults to PUBLISHED at scrape-ingest, sourceName set, publishedAt
+    // never set -- see services/scraper/index.ts ingestScrapedListing). That produced a
+    // false "organizer activation" reading (documented incident: pipeline-briefing-2026-08-07.md
+    // reported 3/3 organizers published a sale; real in-app activation was 0/3 -- see
+    // STATE.md Blocked Queue P1 row, 2026-08-08). createdOneSale now requires a Sale row
+    // with sourceName: null (built in-app, any status). publishedOneSale now requires
+    // publishedAt: { not: null }, which is set only by the real in-app publish action
+    // (saleController.ts status-transition handler) -- the scraper never sets it.
     const createdOneSale = await prisma.organizer.count({
       where: {
         isUnmanagedListing: false,
         sales: {
-          some: {},
+          some: { sourceName: null },
         },
       },
     });
@@ -224,7 +243,7 @@ export const getStats = async (req: AuthRequest, res: Response) => {
         isUnmanagedListing: false,
         sales: {
           some: {
-            status: { in: ['PUBLISHED', 'ENDED'] },
+            publishedAt: { not: null },
           },
         },
       },
@@ -1792,14 +1811,20 @@ export const getDrilldown = async (req: AuthRequest, res: Response) => {
     }
 
     if (metric === 'sales') {
+      // FIX (P1 data integrity, 2026-08-08): real/published/ended/recentReal switched from
+      // the ORGANIZER-level `isUnmanagedListing` flag to the SALE-level `sourceName`
+      // provenance field -- see the identical fix + full rationale on realSalesCount above
+      // (~line 46). `claimed` intentionally stays organizer-scoped: it answers a different
+      // question ("sale volume belonging to claimed accounts"), not "was this sale built
+      // in-app," so it is not part of this data-integrity bug and is left as-is.
       const [realSalesCount, scrapedSalesCount, claimedCount, publishedCount, endedCount, recentReal] = await Promise.all([
-        prisma.sale.count({ where: { organizer: { isUnmanagedListing: false } } }),
-        prisma.sale.count({ where: { organizer: { isUnmanagedListing: true } } }),
+        prisma.sale.count({ where: { sourceName: null } }),
+        prisma.sale.count({ where: { sourceName: { not: null } } }),
         prisma.sale.count({ where: { organizer: { isUnmanagedListing: false, isClaimed: true } } }),
-        prisma.sale.count({ where: { organizer: { isUnmanagedListing: false }, status: 'PUBLISHED' } }),
-        prisma.sale.count({ where: { organizer: { isUnmanagedListing: false }, status: 'ENDED' } }),
+        prisma.sale.count({ where: { sourceName: null, status: 'PUBLISHED' } }),
+        prisma.sale.count({ where: { sourceName: null, status: 'ENDED' } }),
         prisma.sale.findMany({
-          where: { organizer: { isUnmanagedListing: false } },
+          where: { sourceName: null },
           select: { id: true, title: true, status: true, createdAt: true, organizer: { select: { businessName: true } } },
           orderBy: { createdAt: 'desc' },
           take: 20,
@@ -1809,8 +1834,12 @@ export const getDrilldown = async (req: AuthRequest, res: Response) => {
     }
 
     if (metric === 'scrapedsales') {
+      // FIX (P1 data integrity, 2026-08-08): switched from `organizer.isUnmanagedListing: true`
+      // to `sourceName: { not: null }` so this view keeps surfacing a sale's scraper-synced
+      // rows even after the organizer claims their profile (isUnmanagedListing flips to false
+      // on claim, but the scraped Sale row itself is untouched) -- see realSalesCount above.
       const sales = await prisma.sale.findMany({
-        where: { organizer: { isUnmanagedListing: true } },
+        where: { sourceName: { not: null } },
         select: { id: true, title: true, status: true, createdAt: true, organizer: { select: { businessName: true, isClaimed: true } } },
         orderBy: { createdAt: 'desc' },
         take: 20,
