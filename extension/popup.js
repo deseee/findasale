@@ -98,12 +98,14 @@ async function renderRemovalDiag() {
 // ADR-100 (2026-08-06/07): "Automatically renew expiring listings" setting -- same
 // chrome.storage.local standing-preference mechanism as fasAutoRemoveMode above (not a new
 // settings mechanism, per ADR-100 §8's explicit instruction to mirror the existing pattern).
-// Off by default (fasAutoRenew defaults false here AND in background.js's checkRenewals --
-// both defaults must agree, since either read site could run first depending on alarm timing).
+// On by default as of 2026-08-09 (Patrick: "renews should be automated not nudged") --
+// organizer can still opt out. fasAutoRenew defaults true here AND in background.js's
+// checkRenewals -- both defaults must agree, since either read site could run first
+// depending on alarm timing.
 async function loadAutoRenewSetting() {
   const el = $('autoRenew');
   if (!el) return;
-  const { fasAutoRenew = false } = await chrome.storage.local.get(['fasAutoRenew']);
+  const { fasAutoRenew = true } = await chrome.storage.local.get(['fasAutoRenew']);
   el.checked = fasAutoRenew;
   el.onchange = async () => {
     await chrome.storage.local.set({ fasAutoRenew: el.checked });

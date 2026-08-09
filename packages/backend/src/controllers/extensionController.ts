@@ -329,16 +329,17 @@ async function assertItemOwned(userId: string, itemId: string): Promise<boolean>
   return !!item;
 }
 
-// ADR-100 (2026-08-06/07): Marketplace Listing Auto-Renew. Which channel a POST row belongs
-// to, and how many days after posting that channel's listing is treated as due for renewal.
-// TODO Patrick: confirm lapse-window days per ADR-100 §7 Q1 -- neither platform publishes
-// this as an API-readable value, so these are PLACEHOLDER estimates only, not a final
-// product decision. Do not treat these numbers as validated.
+// ADR-100 §7 Q1 CONFIRMED 2026-08-09: Patrick confirmed Facebook leans toward 7 days
+// before the platform surfaces its own renew/delete-relist options, matching Craigslist's
+// published for-sale-category norm (craigslist.org/about/help/faqs/lifespan: free postings
+// live 7-45 days depending on category; for-sale categories are typically the 7-day end).
+// Marketplace Listing Auto-Renew. Which channel a POST row belongs to, and how many days
+// after posting that channel's listing is treated as due for renewal.
 type MarketplaceRenewalPlatform = 'FACEBOOK' | 'CRAIGSLIST';
 const VALID_RENEWAL_PLATFORMS: MarketplaceRenewalPlatform[] = ['FACEBOOK', 'CRAIGSLIST'];
 const RENEWAL_LAPSE_WINDOW_DAYS: Record<MarketplaceRenewalPlatform, number> = {
-  FACEBOOK: 30, // TODO Patrick: confirm -- placeholder guess only, ADR-100 §7 Q1
-  CRAIGSLIST: 7, // TODO Patrick: confirm -- placeholder guess only, ADR-100 §7 Q1 (Craigslist posts are commonly reported to expire faster than FB)
+  FACEBOOK: 7, // ADR-100 §7 Q1 confirmed 2026-08-09 (Patrick) -- was 30, corrected to 7
+  CRAIGSLIST: 7, // ADR-100 §7 Q1 confirmed 2026-08-09 -- matches craigslist.org official for-sale-category norm
 };
 // TODO Patrick: confirm notify-lead-time per ADR-100 §7 Q2 -- how many days before renewDueAt
 // the nudge/auto-renewal should fire. Placeholder: same-day (0) until Patrick decides.

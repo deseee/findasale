@@ -369,13 +369,15 @@ async function checkSavedSearchAlerts() {
 
 // ---- Marketplace Listing Auto-Renew (ADR-100, 2026-08-06/07) ----
 // Polls GET /extension/pending-renewals on its own recurring alarm, same shape as the
-// saved-search alarm above. Default behavior (fasAutoRenew unset/false) is notify-only,
-// mirroring checkSavedSearchAlerts's notification-per-match shape (ADR-100 §5). When the
-// organizer has explicitly opted in via the popup's "Automatically renew" toggle
-// (fasAutoRenew=true, chrome.storage.local, same off-by-default-toggle mechanism as the
-// existing fasAutoRemoveMode/fasQueue autoPublish settings), a due item is instead re-queued
-// through the SAME posting flow fas-content.js/fas-craigslist.js already use for a first-time
-// post -- no duplicated FB/Craigslist automation logic (ADR-100 §8 amendment).
+// saved-search alarm above. Default behavior (fasAutoRenew unset/true, flipped 2026-08-09
+// per Patrick: "renews should be automated not nudged") re-queues the due item through the
+// SAME posting flow fas-content.js/fas-craigslist.js already use for a first-time post -- no
+// duplicated FB/Craigslist automation logic (ADR-100 §8 amendment). The organizer can still
+// opt OUT via the popup's "Automatically renew" toggle (fasAutoRenew=false, chrome.storage.local,
+// same toggle mechanism as the existing fasAutoRemoveMode/fasQueue autoPublish settings) to fall
+// back to notify-only -- this off-switch is kept (not removed) because the Craigslist
+// logged-out safety fallback below still needs a notify-only path to hand off to when
+// unattended auto-post would strand at a verification wall.
 // TODO Patrick: confirm the alarm's polling interval per ADR-100 §7 Q3 -- renewal isn't
 // time-critical the way the 20-min removal alarm is, so once/day (1440 min) is proposed here
 // as a starting point, not a validated final value.
@@ -408,6 +410,13 @@ async function hasActiveQueue(platform) {
 // popup.js's startQueue() field list exactly (same never-invent-a-value rule for location
 // fields) -- this is the one place outside popup.js that needs to build a queue entry, since
 // auto-renewal runs with no popup open at all.
+// Price/shipping-change awareness (2026-08-09, Patrick): `full` comes from a fresh
+// apiFetch('/extension/items') call made at the top of autoRenewDueItems(), i.e. a live DB
+// read at renewal time -- NOT a snapshot cached from the item's original post. So price,
+// shippingOverride, packageWeightOz/aiPackageWeightOz, and allowBestOffer/bestOfferMinimumAmt
+// always reflect whatever the organizer has set as of the renewal moment, automatically --
+// no separate diffing/staleness logic needed, since renewal already re-drives the full posting
+// flow (a new post, not an in-place edit -- neither platform offers an edit API) with current data.
 function buildRenewalQueueItem(it, organizerEmail) {
   return {
     id: it.id, title: it.title, price: it.price, condition: it.condition,
@@ -422,7 +431,7 @@ function buildRenewalQueueItem(it, organizerEmail) {
   };
 }
 
-// Auto-renew path (fasAutoRenew=true): re-drives the EXISTING posting flow for each due item,
+// Auto-renew path (fasAutoRenew=true, now the default): re-drives the EXISTING posting flow for each due item,
 // exactly as if the organizer had selected it in the popup and clicked "List"/"Post" with
 // "Publish automatically" checked -- autoPublish is forced true here since no human is present
 // to click Publish. Craigslist's own doPreviewStep already stops and hands off to a manual
@@ -461,7 +470,7 @@ async function autoRenewDueItems(dueItems) {
   return started ? 'auto_renew_started:' + started : 'skipped_active_queue';
 }
 
-// Notify-only path (fasAutoRenew=false, the default): mirrors checkSavedSearchAlerts's
+// Notify-only path (fasAutoRenew=false, now opt-out only): mirrors checkSavedSearchAlerts's
 // notification-per-match shape exactly -- one notification per due item, deep-linking to the
 // item's sale page so the organizer lands on the right listing to renew manually.
 async function notifyDueRenewals(dueItems) {
@@ -488,7 +497,8 @@ async function checkRenewals() {
   const dueItems = (resp.data && resp.data.items) || [];
   if (!dueItems.length) return 'no_items';
 
-  const { fasAutoRenew = false } = await chrome.storage.local.get(['fasAutoRenew']);
+  // 2026-08-09 (Patrick): default flipped true -- "renews should be automated not nudged".
+  const { fasAutoRenew = true } = await chrome.storage.local.get(['fasAutoRenew']);
   if (!fasAutoRenew) return await notifyDueRenewals(dueItems);
 
   // (2026-08-08 login gate) Craigslist auto-renew re-drives the guest-postable posting flow
