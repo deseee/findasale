@@ -2243,6 +2243,14 @@ export const webhookHandler = async (req: Request, res: Response) => {
 
         if (!purchase || !paymentIntent) {
           console.warn(`[stripe] charge.dispute.closed (lost): could not resolve Purchase for dispute ${dispute.id} -- skipping clawback.`);
+          // findasale-hacker pass (2026-08-08): a 'lost' dispute with no resolvable Purchase
+          // is never safe to silently drop -- Stripe already debited the platform for this,
+          // and with no Purchase we have no organizer to claw it back from at all. Alert so a
+          // human can trace it manually instead of it vanishing into console logs.
+          Sentry.captureMessage('Dispute clawback: could not resolve Purchase/PaymentIntent for a lost dispute', {
+            tags: { area: 'dispute-clawback' },
+            extra: { disputeId: dispute.id, chargeId: typeof dispute.charge === 'string' ? dispute.charge : dispute.charge?.id },
+          });
           break;
         }
 
@@ -2269,7 +2277,23 @@ export const webhookHandler = async (req: Request, res: Response) => {
           data: { status: 'DISPUTE_LOST' },
         });
         if (claim.count !== 1) {
-          console.warn(`[stripe] charge.dispute.closed (lost): purchase ${purchase.id} not in DISPUTED state (already processed or in another transition) -- skipping.`);
+          const currentPurchase = await prisma.purchase.findUnique({ where: { id: purchase.id }, select: { status: true } });
+          if (currentPurchase?.status === 'DISPUTE_LOST') {
+            // Safe, expected no-op: an earlier delivery of this (or an equivalent) event
+            // already completed the clawback. Nothing wrong here.
+            console.log(`[stripe] charge.dispute.closed (lost): purchase ${purchase.id} already DISPUTE_LOST -- clawback already applied, skipping.`);
+          } else {
+            // NOT safe: the purchase never reached DISPUTED in the first place (e.g.
+            // charge.dispute.created's own status update silently failed, or webhook
+            // reordering). The dispute is genuinely lost -- Stripe already debited the
+            // platform -- but nothing will claw it back from the organizer unless a human
+            // intervenes. Must not be a silent console.warn.
+            console.error(`[stripe] charge.dispute.closed (lost): purchase ${purchase.id} was NOT in DISPUTED state (actual: ${currentPurchase?.status ?? 'not found'}) -- clawback skipped, dispute is genuinely lost and platform was debited. Needs manual review.`);
+            Sentry.captureMessage('Dispute clawback skipped: purchase was not in DISPUTED state for a genuinely lost dispute', {
+              tags: { area: 'dispute-clawback' },
+              extra: { disputeId: dispute.id, purchaseId: purchase.id, actualStatus: currentPurchase?.status ?? null },
+            });
+          }
           break;
         }
 
