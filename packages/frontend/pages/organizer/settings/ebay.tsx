@@ -294,7 +294,13 @@ const EbayPolicySetupPage = () => {
         const rows = await Promise.all(
           sampleLbs.map((lbs) =>
             api
-              .post('/ebay/shipping-preview', { weightOz: lbs * 16 })
+              // ADR-102 (roadmap #622): explicit 'SHIPPABLE' classification so
+              // this generic sample-weight preview always shows the computed
+              // rate, instead of accidentally matching the organizer's
+              // unknownPolicyId override (which real unclassified items would
+              // hit -- correct for them, but not what this informational
+              // panel is trying to show).
+              .post('/ebay/shipping-preview', { weightOz: lbs * 16, ebayShippingClassification: 'SHIPPABLE' })
               .then((res) => ({
                 lbs,
                 dollars: typeof res.data?.buyerShipping === 'number' ? res.data.buyerShipping : null,

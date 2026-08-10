@@ -6763,6 +6763,13 @@ export const getShippingNetPreview = async (req: AuthRequest, res: Response): Pr
       dims?: { length?: number; width?: number; height?: number };
       itemPrice?: number;
       ebayCategoryId?: string | null;
+      // ADR-102 (roadmap #622): without this, resolveItemShipping's FLAT_TIERS
+      // branch treats a missing classification as UNKNOWN and can divert into
+      // the organizer's unknownPolicyId override instead of the computed rate
+      // -- correct for a real never-classified item, but wrong for a caller
+      // (like the settings-page sample-rate panel) that wants the plain
+      // computed-rate path. Pass 'SHIPPABLE' explicitly to opt out of overrides.
+      ebayShippingClassification?: string | null;
       fromZip?: string | null;
       toZip?: string | null;
       labelCost?: number;
@@ -6774,6 +6781,7 @@ export const getShippingNetPreview = async (req: AuthRequest, res: Response): Pr
     let dims = body.dims;
     let itemPrice = body.itemPrice;
     let ebayCategoryId: string | null = body.ebayCategoryId ?? null;
+    let ebayShippingClassification: string | null = body.ebayShippingClassification ?? null;
     let saleZip: string | null = null;
     let fulfillmentOverrideId: string | null = null;
 
@@ -6789,6 +6797,7 @@ export const getShippingNetPreview = async (req: AuthRequest, res: Response): Pr
           packageWidthIn: true,
           packageHeightIn: true,
           ebayCategoryId: true,
+          ebayShippingClassification: true,
           sale: { select: { zip: true } },
         },
       });
@@ -6806,6 +6815,7 @@ export const getShippingNetPreview = async (req: AuthRequest, res: Response): Pr
       }
       if (itemPrice == null && item.price != null) itemPrice = Number(item.price);
       if (ebayCategoryId == null) ebayCategoryId = item.ebayCategoryId ?? null;
+      if (ebayShippingClassification == null) ebayShippingClassification = item.ebayShippingClassification ?? null;
       fulfillmentOverrideId = item.ebayFulfillmentPolicyOverrideId ?? null;
     }
 
@@ -6838,6 +6848,7 @@ export const getShippingNetPreview = async (req: AuthRequest, res: Response): Pr
         packageHeightIn: dims?.height ?? null,
         ebayFulfillmentPolicyOverrideId: fulfillmentOverrideId,
         ebayCategoryId: ebayCategoryId,
+        ebayShippingClassification: ebayShippingClassification,
       },
       fromZip: body.fromZip ?? saleZip,
     });
@@ -6938,6 +6949,8 @@ export const getSuggestedPriceForMargin = async (req: AuthRequest, res: Response
       weightOz?: number;
       dims?: { length?: number; width?: number; height?: number };
       ebayCategoryId?: string | null;
+      // ADR-102 (roadmap #622): see matching comment in getShippingNetPreview above.
+      ebayShippingClassification?: string | null;
       fromZip?: string | null;
       toZip?: string | null;
       targetMarginPct?: number;
@@ -6950,6 +6963,7 @@ export const getSuggestedPriceForMargin = async (req: AuthRequest, res: Response
     let weightOz = body.weightOz;
     let dims = body.dims;
     let ebayCategoryId: string | null = body.ebayCategoryId ?? null;
+    let ebayShippingClassification: string | null = body.ebayShippingClassification ?? null;
     let saleZip: string | null = null;
     let fulfillmentOverrideId: string | null = null;
 
@@ -6963,6 +6977,7 @@ export const getSuggestedPriceForMargin = async (req: AuthRequest, res: Response
           packageWidthIn: true,
           packageHeightIn: true,
           ebayCategoryId: true,
+          ebayShippingClassification: true,
           sale: { select: { zip: true } },
         },
       });
@@ -6979,6 +6994,7 @@ export const getSuggestedPriceForMargin = async (req: AuthRequest, res: Response
         };
       }
       if (ebayCategoryId == null) ebayCategoryId = item.ebayCategoryId ?? null;
+      if (ebayShippingClassification == null) ebayShippingClassification = item.ebayShippingClassification ?? null;
       fulfillmentOverrideId = item.ebayFulfillmentPolicyOverrideId ?? null;
     }
 
@@ -7009,6 +7025,7 @@ export const getSuggestedPriceForMargin = async (req: AuthRequest, res: Response
         packageHeightIn: dims?.height ?? null,
         ebayFulfillmentPolicyOverrideId: fulfillmentOverrideId,
         ebayCategoryId: ebayCategoryId,
+        ebayShippingClassification: ebayShippingClassification,
       },
       fromZip: body.fromZip ?? saleZip,
     });
