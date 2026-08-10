@@ -304,13 +304,37 @@ async function checkPendingRemovals() {
     if (soldResp.ok) soldCheckCount = ((soldResp.data && soldResp.data.items) || []).length;
   } catch (e) { /* non-fatal -- see comment above */ }
 
+  // (2026-08-10 fix -- refocus tab-spam, Patrick report "extension going off on facebook with
+  // every focus back on chrome") Sold-checks are a routine "nothing confirmed yet, just rescan"
+  // signal that is essentially ALWAYS > 0 for any organizer with active FB listings -- unlike
+  // items.length (a genuine, comparatively rare, actionable pending removal), it was never meant
+  // to be worth reacting to on every opportunistic call. Root cause: chrome.windows.onFocusChanged
+  // (below) calls throttledCheckPendingRemovals on every window refocus (only a 30s throttle), and
+  // soldCheckCount>0 alone was enough to open a silent-mode tab or re-fire a notification -- in
+  // practice a foreground Facebook tab (or repeat notification) on almost every alt-tab back into
+  // Chrome, for as long as any listing was live. Real removals (items.length>0) still act
+  // immediately below, unchanged -- only the soldCheckCount-only case is now throttled to the same
+  // ~20-min cadence the alarm already runs on, so a routine rescan happens on that cadence
+  // regardless of trigger source, while a genuine sold-elsewhere removal is never delayed.
+  const SOLD_CHECK_MIN_INTERVAL_MS = 20 * 60 * 1000;
+  if (!items.length && soldCheckCount > 0) {
+    const { fasLastSoldCheckActionAt = 0 } = await chrome.storage.local.get(['fasLastSoldCheckActionAt']);
+    if (Date.now() - fasLastSoldCheckActionAt < SOLD_CHECK_MIN_INTERVAL_MS) return 'skipped_soldcheck_throttled';
+  }
+
   if (!items.length && !soldCheckCount) return 'no_items';
 
   // fasRemovalQueue only ever carries removal-processing candidates -- sold-check candidates
   // are fetched fresh by fas-remove.js itself (getFacebookSoldChecks) once the tab loads there;
   // no separate local queue needed for that flow (a single DOM scan against every candidate in
-  // one pass, not runRemovalQueue's sequential per-item tab-lifecycle processing).
-  await chrome.storage.local.set({ fasRemovalQueue: items, fasRemovalIndex: 0 });
+  // one pass, not runRemovalQueue's sequential per-item tab-lifecycle processing). Also stamps
+  // fasLastSoldCheckActionAt whenever soldCheckCount contributed to this action firing, so the
+  // throttle above measures time since the last real action, not time since the last poll.
+  await chrome.storage.local.set({
+    fasRemovalQueue: items,
+    fasRemovalIndex: 0,
+    ...(soldCheckCount > 0 ? { fasLastSoldCheckActionAt: Date.now() } : {})
+  });
 
   if (fasAutoRemoveMode === 'silent') {
     await openSilentRemovalTab();
