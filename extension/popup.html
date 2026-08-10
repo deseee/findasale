@@ -23,6 +23,7 @@
       <select id="channel" class="select">
         <option value="facebook">Facebook Marketplace</option>
         <option value="craigslist">Craigslist</option>
+        <option value="gumtree_au">Gumtree Australia</option>
         <option value="nextdoor" disabled>Nextdoor (coming soon)</option>
       </select>
     </div>
@@ -30,6 +31,8 @@
     <button id="listBtn" class="primary" disabled>List selected on Marketplace</button>
     <p class="note" id="clPostNote" hidden>Fills each posting (for sale by owner) &mdash; title, price, description, location, and photos. With <b>Publish automatically</b> checked, it clicks Craigslist&rsquo;s publish button for you too, stopping to let you finish first if Craigslist asks for phone or email verification. Uncheck to review and publish it yourself.</p>
         <p class="note dim" id="clLoginNote" hidden></p>
+    <p class="note" id="gtPostNote" hidden>Gumtree Australia requires signing in before any part of the posting form can be seen, so this can&rsquo;t be autofilled yet. Opens the posting page, waits for you to sign in, then shows the item&rsquo;s title, price, description, and photo links so you can paste them into Gumtree&rsquo;s form yourself &mdash; click &ldquo;I posted&rdquo; when you&rsquo;re done so FindA.Sale can track it.</p>
+        <p class="note dim" id="gtLoginNote" hidden></p>
     <p class="note" id="fbPublishNote">Fills and publishes each listing automatically, pausing if anything looks off. Uncheck to fill but stop before Publish so you can review first. <span class="dim">(Chrome's &ldquo;debugging this tab&rdquo; banner is normal.)</span></p>
     <div class="removeSetting">
       <label class="chk" for="autoRemoveMode">Keep Facebook listings in sync</label>
@@ -43,7 +46,7 @@
     </div>
     <div class="renewSetting">
       <label class="chk"><input type="checkbox" id="autoRenew"> Automatically renew expiring listings</label>
-      <p class="note">Checked about once a day. When a listing you posted through the extension is close to expiring on Facebook or Craigslist, FindA.Sale can re-post it for you automatically &mdash; off by default. If Craigslist asks for phone/email verification during a renewal, it stops and sends a notification instead of guessing. Leave unchecked to just get a reminder notification when it's time to renew yourself.</p>
+      <p class="note">Checked about once a day. When a listing you posted through the extension is close to expiring on Facebook, Craigslist, or Gumtree Australia, FindA.Sale can re-post it for you automatically &mdash; off by default. If Craigslist or Gumtree Australia asks for phone/email verification during a renewal, or if you're not signed into Gumtree Australia, it stops and sends a notification instead of guessing. Leave unchecked to just get a reminder notification when it's time to renew yourself.</p>
     </div>
   </footer>
   <script src="config.js"></script>

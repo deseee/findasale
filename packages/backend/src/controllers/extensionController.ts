@@ -294,6 +294,9 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
     // posted to first.
     marketplaceListedFacebook: postedByItemPlatform.has(`${it.id}:FACEBOOK`) && !removedByItemPlatform.has(`${it.id}:FACEBOOK`),
     marketplaceListedCraigslist: postedByItemPlatform.has(`${it.id}:CRAIGSLIST`) && !removedByItemPlatform.has(`${it.id}:CRAIGSLIST`),
+    // ADR-102 (2026-08-09): Gumtree Australia -- same per-platform pattern as the two above,
+    // read by popup.js's currentListedFlag() when the 'gumtree_au' channel is selected.
+    marketplaceListedGumtreeAu: postedByItemPlatform.has(`${it.id}:GUMTREE_AU`) && !removedByItemPlatform.has(`${it.id}:GUMTREE_AU`),
     // Craigslist ZIP/area autofill (2026-08-06) -- fas-craigslist.js reads these exact field
     // names (item.saleCity / item.saleZip) and only fills when present, never invents a value.
     saleCity: saleLocationById.get(it.saleId || '')?.city || null,
@@ -335,11 +338,19 @@ async function assertItemOwned(userId: string, itemId: string): Promise<boolean>
 // live 7-45 days depending on category; for-sale categories are typically the 7-day end).
 // Marketplace Listing Auto-Renew. Which channel a POST row belongs to, and how many days
 // after posting that channel's listing is treated as due for renewal.
-type MarketplaceRenewalPlatform = 'FACEBOOK' | 'CRAIGSLIST';
-const VALID_RENEWAL_PLATFORMS: MarketplaceRenewalPlatform[] = ['FACEBOOK', 'CRAIGSLIST'];
+type MarketplaceRenewalPlatform = 'FACEBOOK' | 'CRAIGSLIST' | 'GUMTREE_AU';
+const VALID_RENEWAL_PLATFORMS: MarketplaceRenewalPlatform[] = ['FACEBOOK', 'CRAIGSLIST', 'GUMTREE_AU'];
 const RENEWAL_LAPSE_WINDOW_DAYS: Record<MarketplaceRenewalPlatform, number> = {
   FACEBOOK: 7, // ADR-100 §7 Q1 confirmed 2026-08-09 (Patrick) -- was 30, corrected to 7
   CRAIGSLIST: 7, // ADR-100 §7 Q1 confirmed 2026-08-09 -- matches craigslist.org official for-sale-category norm
+  // ADR-102 (2026-08-09): UNVERIFIED PLACEHOLDER, not a confirmed value -- Gumtree Australia's
+  // own listing-lifespan/renewal cadence has never been checked live (no FindA.Sale Gumtree AU
+  // account exists yet to check it against, see ADR-102 §9). Deliberately set more conservative
+  // than FB/Craigslist's confirmed 7-day figure, following this same file's own precedent of
+  // starting cautious and correcting down only after a real live check (FB started at 30, was
+  // corrected to 7 -- see comment above). Revisit the moment a real Gumtree AU account exists;
+  // do not treat this number as researched.
+  GUMTREE_AU: 14,
 };
 // TODO Patrick: confirm notify-lead-time per ADR-100 §7 Q2 -- how many days before renewDueAt
 // the nudge/auto-renewal should fire. Placeholder: same-day (0) until Patrick decides.

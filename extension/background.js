@@ -433,6 +433,11 @@ async function hasActiveQueue(platform) {
     const { fasCraigslistQueue = [], fasCraigslistIndex = 0 } = await chrome.storage.local.get(['fasCraigslistQueue', 'fasCraigslistIndex']);
     return fasCraigslistIndex < fasCraigslistQueue.length;
   }
+  // ADR-102 (2026-08-09): Gumtree Australia -- same shape as the Craigslist branch above.
+  if (platform === 'GUMTREE_AU') {
+    const { fasGumtreeAuQueue = [], fasGumtreeAuIndex = 0 } = await chrome.storage.local.get(['fasGumtreeAuQueue', 'fasGumtreeAuIndex']);
+    return fasGumtreeAuIndex < fasGumtreeAuQueue.length;
+  }
   const { fasQueue = [], fasIndex = 0 } = await chrome.storage.local.get(['fasQueue', 'fasIndex']);
   return fasIndex < fasQueue.length;
 }
@@ -504,6 +509,10 @@ async function autoRenewDueItems(dueItems) {
 
   const fbQueue = [];       // full-repost fallback (price changed)
   const clQueue = [];       // full-repost, unchanged for Craigslist (see comment above)
+  const gtQueue = [];       // full-repost, unchanged for Gumtree Australia (ADR-102 -- no native
+                             // renew/bump action has ever been verified live, see fas-gumtree-au.js's
+                             // trailing verification-needed list; always reposts, same reasoning as
+                             // Craigslist's clQueue above, never a guessed native-renew click)
   const fbRenewQueue = [];  // lightweight native-renew queue: {id, title, saleId}
 
   for (const due of dueItems) {
@@ -511,6 +520,8 @@ async function autoRenewDueItems(dueItems) {
     if (!full) continue; // no longer AVAILABLE/listable -- getExtensionItems already excludes it
     if (due.platform === 'CRAIGSLIST') {
       clQueue.push(buildRenewalQueueItem(full, organizerEmail));
+    } else if (due.platform === 'GUMTREE_AU') {
+      gtQueue.push(buildRenewalQueueItem(full, organizerEmail));
     } else if (staleIds.has(due.id)) {
       fbQueue.push(buildRenewalQueueItem(full, organizerEmail));
     } else {
@@ -528,6 +539,11 @@ async function autoRenewDueItems(dueItems) {
     await chrome.storage.local.set({ fasCraigslistQueue: clQueue, fasCraigslistIndex: 0, fasCraigslistAutoPublish: true });
     chrome.tabs.create({ url: CFG.CL_POST_URL, active: false });
     started += clQueue.length;
+  }
+  if (gtQueue.length && !(await hasActiveQueue('GUMTREE_AU'))) {
+    await chrome.storage.local.set({ fasGumtreeAuQueue: gtQueue, fasGumtreeAuIndex: 0 });
+    chrome.tabs.create({ url: CFG.GT_POST_URL, active: false });
+    started += gtQueue.length;
   }
   // Native-renew queue shares the SAME you/selling management tab lifecycle as the removal flow
   // (silentRemovalInProgress/openSilentRemovalTab/finishSilentRemoval, defined above) rather than
@@ -552,7 +568,7 @@ async function notifyDueRenewals(dueItems) {
     const notifId = 'fasRenewDue_' + due.id;
     const url = due.saleId ? ('https://finda.sale/sales/' + due.saleId) : 'https://finda.sale/organizer/marketplace-extension';
     await chrome.storage.local.set({ ['fasRenewUrl_' + due.id]: url });
-    const platformLabel = due.platform === 'CRAIGSLIST' ? 'Craigslist' : 'Facebook Marketplace';
+    const platformLabel = due.platform === 'CRAIGSLIST' ? 'Craigslist' : due.platform === 'GUMTREE_AU' ? 'Gumtree Australia' : 'Facebook Marketplace';
     chrome.notifications.create(notifId, {
       type: 'basic',
       iconUrl: 'icon128.png',
@@ -584,13 +600,23 @@ async function checkRenewals() {
   // has ever opened a Craigslist tab on this install) falls through to the original
   // unconditional auto-renew call, so this can only ever get MORE permissive as real signal
   // accumulates, never silently disable a feature that used to work.
-  const { fasCraigslistLoginState = null } = await chrome.storage.local.get(['fasCraigslistLoginState']);
-  if (fasCraigslistLoginState === false) {
-    const clDue = dueItems.filter((d) => d.platform === 'CRAIGSLIST');
-    const otherDue = dueItems.filter((d) => d.platform !== 'CRAIGSLIST');
-    const clOutcome = clDue.length ? await notifyDueRenewals(clDue) : 'no_items';
+  // ADR-102 (2026-08-09): Gumtree Australia gets the SAME logged-out gate as Craigslist above,
+  // for a stronger reason -- its entire posting flow is login-walled (unlike Craigslist, which is
+  // guest-postable), so an unattended auto-renew run against a logged-out Gumtree AU session would
+  // strand at the sign-in wall with nobody there to clear it, every single time. Only acts on a
+  // POSITIVELY observed logged-out reading, same as Craigslist's gate (see the comment above) --
+  // an unknown/never-observed state falls through to auto-renew, same permissive default.
+  const { fasCraigslistLoginState = null, fasGumtreeAuLoginState = null } =
+    await chrome.storage.local.get(['fasCraigslistLoginState', 'fasGumtreeAuLoginState']);
+  if (fasCraigslistLoginState === false || fasGumtreeAuLoginState === false) {
+    const loggedOutPlatforms = [];
+    if (fasCraigslistLoginState === false) loggedOutPlatforms.push('CRAIGSLIST');
+    if (fasGumtreeAuLoginState === false) loggedOutPlatforms.push('GUMTREE_AU');
+    const notifyDue = dueItems.filter((d) => loggedOutPlatforms.includes(d.platform));
+    const otherDue = dueItems.filter((d) => !loggedOutPlatforms.includes(d.platform));
+    const notifyOutcome = notifyDue.length ? await notifyDueRenewals(notifyDue) : 'no_items';
     const otherOutcome = otherDue.length ? await autoRenewDueItems(otherDue) : 'no_items';
-    return 'cl_notified_logged_out:' + clOutcome + ' other_auto_renewed:' + otherOutcome;
+    return 'notified_logged_out:' + notifyOutcome + ' other_auto_renewed:' + otherOutcome;
   }
 
   return await autoRenewDueItems(dueItems);
@@ -771,6 +797,34 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         const { fasCraigslistLoginState = null, fasCraigslistLoginObservedAt = null } =
           await chrome.storage.local.get(['fasCraigslistLoginState', 'fasCraigslistLoginObservedAt']);
         sendResponse({ ok: true, loggedIn: fasCraigslistLoginState, observedAt: fasCraigslistLoginObservedAt });
+      } else if (msg.type === 'setGumtreeAuQueue') {
+        // ADR-102 (2026-08-09): Gumtree Australia channel -- same shape as setCraigslistQueue
+        // above. No autoPublish flag: fas-gumtree-au.js never auto-fills or auto-submits anything
+        // (manual-assist only, see its file header), so there is nothing to toggle yet.
+        await chrome.storage.local.set({ fasGumtreeAuQueue: msg.queue || [], fasGumtreeAuIndex: 0 });
+        chrome.tabs.create({ url: CFG.GT_POST_URL });
+        sendResponse({ ok: true });
+      } else if (msg.type === 'getGumtreeAuQueueItem') {
+        const { fasGumtreeAuQueue = [], fasGumtreeAuIndex = 0 } =
+          await chrome.storage.local.get(['fasGumtreeAuQueue', 'fasGumtreeAuIndex']);
+        sendResponse({ ok: true, item: fasGumtreeAuQueue[fasGumtreeAuIndex] || null, index: fasGumtreeAuIndex, total: fasGumtreeAuQueue.length });
+      } else if (msg.type === 'advanceGumtreeAuQueue') {
+        const st = await chrome.storage.local.get(['fasGumtreeAuQueue', 'fasGumtreeAuIndex']);
+        const next = (st.fasGumtreeAuIndex || 0) + 1;
+        await chrome.storage.local.set({ fasGumtreeAuIndex: next });
+        const item = (st.fasGumtreeAuQueue || [])[next] || null;
+        sendResponse({ ok: true, item, index: next, total: (st.fasGumtreeAuQueue || []).length });
+      } else if (msg.type === 'gumtreeAuLoginStateObserved') {
+        // (ADR-102, 2026-08-09) Same shape as craigslistLoginStateObserved above -- best-effort
+        // DOM-observed reading from fas-gumtree-au.js's isLoggedIntoGumtreeAu(). Only ever a
+        // definite true/false; feeds checkRenewals' logged-out gate above and the popup's
+        // informational note (getGumtreeAuLoginState below).
+        await chrome.storage.local.set({ fasGumtreeAuLoginState: !!msg.loggedIn, fasGumtreeAuLoginObservedAt: Date.now() });
+        sendResponse({ ok: true });
+      } else if (msg.type === 'getGumtreeAuLoginState') {
+        const { fasGumtreeAuLoginState = null, fasGumtreeAuLoginObservedAt = null } =
+          await chrome.storage.local.get(['fasGumtreeAuLoginState', 'fasGumtreeAuLoginObservedAt']);
+        sendResponse({ ok: true, loggedIn: fasGumtreeAuLoginState, observedAt: fasGumtreeAuLoginObservedAt });
       } else if (msg.type === 'getRemovalQueueItem') {
         const { fasRemovalQueue = [], fasRemovalIndex = 0 } = await chrome.storage.local.get(['fasRemovalQueue', 'fasRemovalIndex']);
         sendResponse({ ok: true, item: fasRemovalQueue[fasRemovalIndex] || null, index: fasRemovalIndex, total: fasRemovalQueue.length });

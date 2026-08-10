@@ -5259,6 +5259,11 @@ enum MarketplaceJobStatus {
 enum MarketplaceJobPlatform {
   FACEBOOK
   CRAIGSLIST
+  // ADR-102 (2026-08-09): Gumtree Australia crosslisting. Added live via
+  // `ALTER TYPE ... ADD VALUE IF NOT EXISTS` against Railway (DDL-only, no migration file,
+  // per dev-environment skill Option B) -- this schema.prisma edit brings the source of
+  // truth in sync with the value that already exists in production.
+  GUMTREE_AU
 }
 
 /// One row per (Item, action). Polled by marketplacePosterCron.ts (node-cron,

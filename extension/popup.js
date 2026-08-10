@@ -121,7 +121,10 @@ function currentChannel() { const el = $('channel'); return el ? el.value : 'fac
 // marketplaceListedFacebook / marketplaceListedCraigslist separately (extensionController.ts);
 // this reads whichever one matches the currently-selected channel.
 function currentListedFlag(it) {
-  return currentChannel() === 'craigslist' ? it.marketplaceListedCraigslist === true : it.marketplaceListedFacebook === true;
+  const ch = currentChannel();
+  if (ch === 'craigslist') return it.marketplaceListedCraigslist === true;
+  if (ch === 'gumtree_au') return it.marketplaceListedGumtreeAu === true;
+  return it.marketplaceListedFacebook === true;
 }
 
 // Facebook publishes automatically and manages sold-elsewhere removal; Craigslist does neither
@@ -130,16 +133,23 @@ function currentListedFlag(it) {
 function onChannelChange() {
   const ch = currentChannel();
   const fb = ch === 'facebook';
+  const cl = ch === 'craigslist';
+  const gt = ch === 'gumtree_au';
   // autoPublishRow (2026-08-06): Publish automatically now applies to Craigslist too --
   // shown for both channels, no longer FB-only. fas-craigslist.js's doPreviewStep clicks
   // Craigslist's own publish button when checked, same as fas-content.js already does for FB.
+  // ADR-102 (2026-08-09): hidden for Gumtree Australia -- fas-gumtree-au.js never auto-fills or
+  // auto-submits anything (manual-assist only), so there is nothing for this checkbox to control.
   const fbNote = $('fbPublishNote'); if (fbNote) fbNote.hidden = !fb;
-  const clNote = $('clPostNote'); if (clNote) clNote.hidden = fb;
+  const clNote = $('clPostNote'); if (clNote) clNote.hidden = !cl;
+  const gtNote = $('gtPostNote'); if (gtNote) gtNote.hidden = !gt;
+  const autoPublishRow = $('autoPublishRow'); if (autoPublishRow) autoPublishRow.hidden = gt;
   const removeSetting = document.querySelector('.removeSetting'); if (removeSetting) removeSetting.hidden = !fb;
   // (2026-08-08 fix) The item list's LISTED badges/hide-filter are channel-specific (see
   // currentListedFlag above) but this handler never used to re-render on channel switch, so
   // switching "Post to" showed stale badges from whichever channel was selected on load.
-  if (!fb) renderCraigslistLoginNote(); else { const n = $('clLoginNote'); if (n) n.hidden = true; }
+  if (cl) renderCraigslistLoginNote(); else { const n = $('clLoginNote'); if (n) n.hidden = true; }
+  if (gt) renderGumtreeAuLoginNote(); else { const n = $('gtLoginNote'); if (n) n.hidden = true; }
   if (ITEMS.length) render();
   updateCount();
 }
@@ -159,6 +169,21 @@ async function renderCraigslistLoginNote() {
   n.textContent = r.loggedIn
     ? 'Craigslist: logged in as of the last check.'
     : 'Craigslist: not logged in as of the last check \u2014 guest posts need email verification, and unattended auto-renew will notify you instead of posting until you\'re logged in.';
+}
+
+// (ADR-102, 2026-08-09) Same best-effort informational note as renderCraigslistLoginNote above,
+// for Gumtree Australia -- more load-bearing here since Gumtree AU's ENTIRE posting flow is
+// login-walled (unlike Craigslist's guest-postable flow), so "not logged in" is the single
+// biggest reason an unattended renewal would silently fail to post.
+async function renderGumtreeAuLoginNote() {
+  const n = $('gtLoginNote');
+  if (!n) return;
+  const r = await send({ type: 'getGumtreeAuLoginState' });
+  if (!r || !r.ok || r.loggedIn == null) { n.hidden = true; return; }
+  n.hidden = false;
+  n.textContent = r.loggedIn
+    ? 'Gumtree Australia: logged in as of the last check.'
+    : 'Gumtree Australia: not logged in as of the last check \u2014 sign in before posting, and unattended auto-renew will notify you instead of trying until you\'re logged in.';
 }
 
 function render() {
@@ -201,10 +226,13 @@ function updateCount() {
   $('selCount').textContent = selected.size;
   const btn = $('listBtn');
   btn.disabled = selected.size === 0;
-  const cl = currentChannel() === 'craigslist';
-  const verb = cl ? 'Post' : 'List';
-  const where = cl ? 'on Craigslist' : 'on Marketplace';
-  btn.textContent = selected.size ? verb + ' ' + selected.size + ' ' + where : (cl ? 'Post selected on Craigslist' : 'List selected on Marketplace');
+  const ch = currentChannel();
+  // ADR-102 (2026-08-09): generalized from a single craigslist-vs-not check to a small map so
+  // Gumtree Australia gets its own label without re-deriving this logic a third time.
+  const POST_LABELS = { craigslist: 'on Craigslist', gumtree_au: 'on Gumtree Australia' };
+  const where = POST_LABELS[ch] || 'on Marketplace';
+  const verb = POST_LABELS[ch] ? 'Post' : 'List';
+  btn.textContent = selected.size ? verb + ' ' + selected.size + ' ' + where : (POST_LABELS[ch] ? ('Post selected ' + where) : 'List selected on Marketplace');
 }
 
 async function startQueue() {
@@ -233,6 +261,14 @@ async function startQueue() {
     // autoPublish (2026-08-06): same shared #autoPublish checkbox as the FB flow below.
     const autoPublish = $('autoPublish').checked;
     await send({ type: 'setCraigslistQueue', queue, autoPublish });
+    window.close();
+    return;
+  }
+  if (currentChannel() === 'gumtree_au') {
+    // ADR-102 (2026-08-09): Background stores the queue AND opens the Gumtree AU post-ad page;
+    // fas-gumtree-au.js picks the item up on load. No autoPublish param -- that flow is
+    // manual-assist only, there's nothing to auto-publish yet.
+    await send({ type: 'setGumtreeAuQueue', queue });
     window.close();
     return;
   }

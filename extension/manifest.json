@@ -12,7 +12,8 @@
     "https://res.cloudinary.com/*",
     "https://i.ebayimg.com/*",
     "https://post.craigslist.org/*",
-    "https://*.craigslist.org/*"
+    "https://*.craigslist.org/*",
+    "https://www.gumtree.com.au/*"
   ],
   "icons": { "16": "icon16.png", "48": "icon48.png", "128": "icon128.png" },
   "action": { "default_popup": "popup.html", "default_title": "FindA.Sale Marketplace Autofill", "default_icon": { "16": "icon16.png", "48": "icon48.png", "128": "icon128.png" } },
@@ -37,6 +38,11 @@
     {
       "matches": ["https://post.craigslist.org/*"],
       "js": ["fas-craigslist.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://www.gumtree.com.au/*"],
+      "js": ["fas-gumtree-au.js"],
       "run_at": "document_idle"
     },
     {
