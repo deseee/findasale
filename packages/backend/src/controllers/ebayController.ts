@@ -6697,7 +6697,7 @@ type PreviewShippingResult = {
   buyerShipping: number;
   labelCost: number;
   carrier: 'USPS' | 'UPS' | 'FEDEX';
-  basis: 'actual' | 'dimensional' | 'cubic';
+  basis: 'actual' | 'dimensional' | 'cubic' | 'oversized';
   cheapestRate: number;
   flatPolicy: { name: string; amount: number } | null;
   shippingMode: 'FLAT_TIERS' | 'CALCULATED';

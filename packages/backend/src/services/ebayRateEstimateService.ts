@@ -535,7 +535,7 @@ export interface CheapestRate {
   /** Total additive surcharge folded into `rate` (0 if none triggered). */
   surcharge?: number;
   surchargeType?: 'AHS' | 'LARGE_PACKAGE' | 'USPS_NONSTANDARD' | null;
-  basis: 'actual' | 'dimensional' | 'cubic';
+  basis: 'actual' | 'dimensional' | 'cubic' | 'oversized';
   /** Set when basis === 'cubic' -- which named GA Cubic tier was selected. */
   cubicTierLabel?: string | null;
   zone: ZoneKey;
@@ -678,6 +678,31 @@ export const LARGE_PACKAGE_SURCHARGE_TABLE: Record<ZoneKey, number> = {
 };
 export const LARGE_PACKAGE_MIN_BILLABLE_LB = 90; // ADR-103 §2D
 
+// EBAY-NEGOTIATED SURCHARGE PASS-THROUGH (measured 2026-08-10, live A/B test against
+// ebay.com/shp/calc/rates, origin 49079, 2 zones: z1 dest 49503 Grand Rapids MI, z8
+// dest 98101 Seattle WA). Isolated each surcharge's real delta by comparing UPS Ground
+// quotes for packages that just barely cross vs. stay just under each trigger
+// threshold, holding weight/dims otherwise constant:
+//   AHS weight-trigger (49lb vs 51lb, same small dims): z1 eBay-price delta $21.46 vs
+//     this file's AHS_WEIGHT_SURCHARGE_TABLE[z1] $46.50 (46% pass-through); z8 delta
+//     $23.14 vs table $58.75 (39% pass-through).
+//   Large Package (30x30x15in vs 30x30x21in @ 20lb, crossing 130in L+G): z1 eBay-price
+//     delta $116.29 vs LARGE_PACKAGE_SURCHARGE_TABLE[z1] $254.50 (46% pass-through).
+//   AHS dimension-trigger (46in vs 49in length, same weight), by contrast, measured
+//   CLOSE to the full table value at z1 -- $28.49 actual vs $30.00 modeled, 95%
+//   pass-through -- so dimension-trigger is left undiscounted below. Packaging-trigger
+//   has zero live samples, also left undiscounted.
+// Conclusion: eBay's negotiated UPS contract discounts the AHS-weight and Large-Package
+// accessorial fees MORE steeply than it discounts base freight (base freight measured
+// ~40-53% off list in these same tests) -- charging AHS_WEIGHT_SURCHARGE_TABLE /
+// LARGE_PACKAGE_SURCHARGE_TABLE at face value would overcharge organizers roughly 2x
+// what an eBay FLAT_TIERS/CALCULATED label actually costs. Applying ONE conservative
+// flat multiplier here (deliberately HIGHER than the measured 39-46% range, erring
+// toward not undercharging organizers) rather than a precise per-zone factor -- only 2
+// of 8 zones sampled. PENDING_LIVE_VERIFICATION: z2-z7 untested; QA should keep
+// sampling and this factor should tighten (or split per-zone) as more data lands.
+export const EBAY_NEGOTIATED_SURCHARGE_PASSTHROUGH = 0.50;
+
 // USPS Ground Advantage nonstandard fees (ADR-103 §2D): "length >22-30in: $4.50;
 // length >30in: $10.00; volume >2ft3: ~$21 (one conflicting source says $35 -- verify
 // against Notice 123 before hard-coding)." RESOLVED 2026-08-10: a live web search this
@@ -700,13 +725,31 @@ export const USPS_NONSTANDARD_FEE_TABLE = {
 // this pass, flagged PENDING_LIVE_VERIFICATION same as the rest of this table.
 export const UPS_FEDEX_ABSOLUTE_MAX = { lengthIn: 108, lengthPlusGirthIn: 165, weightLb: 150 };
 // USPS: "Absolute USPS max: 130in combined length+girth, 70lb" (ADR-103 §2D).
-// TODO (ADR-103 follow-up, found 2026-08-10): USPS also has a separate "Oversized" pricing
-// category (108-130in combined length+girth) that REPLACES normal weight-based pricing
-// with FLAT zone-based pricing (~$103.80 zone 1 to ~$272.45 zones 8/9) instead of just
-// hard-blocking at 130in -- not modeled yet. Do not implement this pass; needs its own
-// scoped follow-up (figures need double-checking and it changes the pricing MODEL, not
-// just a number).
 export const USPS_ABSOLUTE_MAX = { lengthPlusGirthIn: 130, weightLb: 70 };
+
+// USPS Oversized pricing (ADR-103 §5 follow-up, RESOLVED 2026-08-10): primary-sourced
+// from USPS Notice 123 (pe.usps.com/text/dmm300/Notice123.htm), "USPS Ground
+// Advantage-Retail > Retail-Parcels" table, "Oversized" row. For any parcel measuring
+// MORE than 108in but NOT MORE than 130in combined length+girth, USPS charges this FLAT
+// zone-based price REGARDLESS OF WEIGHT -- it REPLACES weight-based pricing entirely, it
+// does not add to it (Notice 123 footnote 1 on that table). Retail rates; the source
+// table's zone 9 equals zone 8 ($294.25 both), collapsed onto this file's z1-z8 system.
+export const USPS_OVERSIZED_TABLE: Record<ZoneKey, number> = {
+  z1: 112.10, z2: 124.35, z3: 142.80, z4: 173.45,
+  z5: 203.80, z6: 234.35, z7: 263.70, z8: 294.25,
+};
+
+/** True if real dims put this USPS parcel in the 108-130in combined length+girth
+ *  "Oversized" band (Notice 123), where flat zone pricing replaces weight-based pricing
+ *  entirely. Packages beyond 130in are already hard-blocked via USPS_ABSOLUTE_MAX /
+ *  withinAbsoluteMax(). Uses REAL dims, not dimensional/billable weight -- matches how
+ *  USPS itself measures "combined length and girth" for this rule. */
+function isUspsOversized(dims: PackageDims): boolean {
+  const sorted = sortedRealDims(dims);
+  if (!sorted) return false;
+  const lengthPlusGirth = sorted[0] + 2 * (sorted[1] + sorted[2]);
+  return lengthPlusGirth > 108 && lengthPlusGirth <= USPS_ABSOLUTE_MAX.lengthPlusGirthIn;
+}
 
 /**
  * PENDING_LIVE_VERIFICATION (extrapolated weight bracket, honesty gate, S1201 fix):
@@ -796,7 +839,13 @@ function computeSurchargeForCarrier(
   const largePackageTriggered =
     lengthPlusGirth > 130 || (!!sorted && sorted[0] > 96) || weightLb > 110 || volumeCuIn > 17280;
   if (largePackageTriggered) {
-    return { amount: LARGE_PACKAGE_SURCHARGE_TABLE[zone], type: 'LARGE_PACKAGE', minBillableLb: LARGE_PACKAGE_MIN_BILLABLE_LB };
+    // EBAY_NEGOTIATED_SURCHARGE_PASSTHROUGH applied -- see that constant's comment for
+    // the live measurement this is based on (raw table value overcharges ~2x).
+    return {
+      amount: round2(LARGE_PACKAGE_SURCHARGE_TABLE[zone] * EBAY_NEGOTIATED_SURCHARGE_PASSTHROUGH),
+      type: 'LARGE_PACKAGE',
+      minBillableLb: LARGE_PACKAGE_MIN_BILLABLE_LB,
+    };
   }
 
   const dimensionTriggered = !!sorted && (sorted[0] > 48 || sorted[1] > 30);
@@ -811,7 +860,10 @@ function computeSurchargeForCarrier(
     // file already applies elsewhere (coverageZoneForOrigin, milesToZone) -- rather than
     // defaulting to whichever trigger happened to be checked first.
     const candidateAmounts: number[] = [];
-    if (weightTriggered) candidateAmounts.push(AHS_WEIGHT_SURCHARGE_TABLE[zone]);
+    // EBAY_NEGOTIATED_SURCHARGE_PASSTHROUGH applied to weight-trigger only -- the
+    // dimension-trigger table measured close to eBay's actual charge (see that
+    // constant's comment), so it is used at face value here.
+    if (weightTriggered) candidateAmounts.push(round2(AHS_WEIGHT_SURCHARGE_TABLE[zone] * EBAY_NEGOTIATED_SURCHARGE_PASSTHROUGH));
     if (dimensionTriggered) candidateAmounts.push(AHS_DIMENSION_SURCHARGE_TABLE[zone]);
     if (packagingTriggered) candidateAmounts.push(AHS_PACKAGING_SURCHARGE_TABLE[zone]);
     return { amount: Math.max(...candidateAmounts), type: 'AHS', minBillableLb: null };
@@ -843,9 +895,14 @@ export function estimateCheapestRate(input: {
     const effectiveWeightOz =
       surcharge.minBillableLb != null ? Math.max(input.weightOz, surcharge.minBillableLb * 16) : input.weightOz;
 
-    const { lb, basis } = billableLb(effectiveWeightOz, dims, c.divisor);
+    const { lb, basis: weightBasis } = billableLb(effectiveWeightOz, dims, c.divisor);
     const absoluteMaxLb = c.carrier === 'USPS' ? USPS_ABSOLUTE_MAX.weightLb : UPS_FEDEX_ABSOLUTE_MAX.weightLb;
-    const baseRate = rateFromTable(c.table, lb, input.zone, absoluteMaxLb);
+    // USPS Oversized (108-130in L+G) REPLACES weight-based pricing entirely, regardless
+    // of weight (Notice 123 -- see USPS_OVERSIZED_TABLE comment). Checked with REAL dims,
+    // independent of the dimensional-weight billing path above.
+    const uspsOversized = c.carrier === 'USPS' && isUspsOversized(dims);
+    const basis: CheapestRate['basis'] = uspsOversized ? 'oversized' : weightBasis;
+    const baseRate = uspsOversized ? USPS_OVERSIZED_TABLE[input.zone] : rateFromTable(c.table, lb, input.zone, absoluteMaxLb);
     const rate = round2(baseRate + surcharge.amount);
 
     if (!best || rate < best.rate) {

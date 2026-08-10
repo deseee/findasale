@@ -39,7 +39,7 @@ interface PreviewResponse {
   flatPolicy?: { name: string; amount: number } | null;
   shippingEstimate: {
     rate: number;
-    basis: 'actual' | 'dimensional' | 'cubic'; // ADR-103 Phase 3: cubic-tier pricing
+    basis: 'actual' | 'dimensional' | 'cubic' | 'oversized'; // ADR-103 Phase 3/5: cubic + USPS Oversized flat pricing
     service: string;
     carrier?: 'USPS' | 'UPS' | 'FEDEX' | string;
     labelCost?: number;

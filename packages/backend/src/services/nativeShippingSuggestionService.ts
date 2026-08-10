@@ -37,7 +37,7 @@ export { ShippingHardBlockError };
 
 export interface NativeShippingSuggestion {
   suggestedPrice: number;
-  basis: 'actual' | 'dimensional' | 'cubic';
+  basis: 'actual' | 'dimensional' | 'cubic' | 'oversized';
   zone: ZoneKey;
   carrier: 'USPS' | 'UPS' | 'FEDEX';
   /** The platform fee rate actually used for the gross-up (global FeeStructure
