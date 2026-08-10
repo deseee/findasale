@@ -4589,6 +4589,7 @@ model Consignor {
   phone             String?
   commissionRate    Decimal            @db.Decimal(5, 2) // e.g. 70.00 = organizer pays consignor 70%
   useTieredCommission Boolean          @default(false) // ADR-096: opt-in value-tiered split; false = today's flat commissionRate behavior, unchanged
+  unsoldItemDisposition String?       // 'RETURN' | 'DONATE' | 'RELIST' | null — organizer's plan for this consignor's items if they don't sell, set at onboarding. Informational only (shown in guide/checklist copy); no automation is tied to it yet.
   notes             String?            @db.Text
   portalToken       String             @unique @default(cuid()) // capability URL token — permanent for MVP
   stripeAccountId   String? // Stripe Connect account ID for consignor payouts

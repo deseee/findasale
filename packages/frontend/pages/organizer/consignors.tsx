@@ -25,6 +25,7 @@ interface Consignor {
   email: string | null;
   phone: string | null;
   commissionRate: string | number; // Decimal from Prisma
+  unsoldItemDisposition: string | null; // 'RETURN' | 'DONATE' | 'RELIST' | null
   notes: string | null;
   portalToken: string;
   items: Array<{ id: string; title: string; price: string | number; status: string }>;
@@ -59,6 +60,7 @@ const ConsignorsPage: React.FC = () => {
     phone: '',
     commissionRate: '',
     useTieredCommission: false,
+    unsoldItemDisposition: '',
     notes: '',
   });
 
@@ -98,6 +100,7 @@ const ConsignorsPage: React.FC = () => {
       phone: '',
       commissionRate: '',
       useTieredCommission: false,
+      unsoldItemDisposition: '',
       notes: '',
     });
     setEditingConsignor(null);
@@ -111,6 +114,7 @@ const ConsignorsPage: React.FC = () => {
       phone: consignor.phone || '',
       commissionRate: String(consignor.commissionRate),
       useTieredCommission: Boolean((consignor as any).useTieredCommission),
+      unsoldItemDisposition: consignor.unsoldItemDisposition || '',
       notes: consignor.notes || '',
     });
     setEditingConsignor(consignor);
@@ -123,7 +127,7 @@ const ConsignorsPage: React.FC = () => {
   };
 
   const handleFormChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
   ) => {
     const { name, value, type } = e.target;
     const checked = (e.target as HTMLInputElement).checked;
@@ -151,6 +155,7 @@ const ConsignorsPage: React.FC = () => {
         phone: formData.phone || undefined,
         commissionRate: rate,
         useTieredCommission: formData.useTieredCommission,
+        unsoldItemDisposition: formData.unsoldItemDisposition || null,
         notes: formData.notes || undefined,
       };
 
@@ -461,6 +466,28 @@ const ConsignorsPage: React.FC = () => {
                     </span>
                   </span>
                 </label>
+              </div>
+
+              <div className="mb-6">
+                <label className="block text-sm font-bold text-warm-700 dark:text-warm-300 mb-1">
+                  If items don't sell
+                </label>
+                <select
+                  name="unsoldItemDisposition"
+                  value={formData.unsoldItemDisposition}
+                  onChange={handleFormChange}
+                  className="w-full border border-warm-300 dark:border-gray-600 rounded-lg px-3 py-2 focus:ring-2 focus:ring-amber-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
+                  aria-label="If items don't sell"
+                >
+                  <option value="">Not sure yet</option>
+                  <option value="RETURN">Return to consignor</option>
+                  <option value="DONATE">Donate to charity</option>
+                  <option value="RELIST">Relist next sale</option>
+                </select>
+                <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">
+                  Sets expectations with this consignor up front. This is a reminder for you —
+                  it doesn't move or change anything automatically.
+                </p>
               </div>
 
               <div className="mb-6">

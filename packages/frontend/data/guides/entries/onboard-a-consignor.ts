@@ -27,7 +27,8 @@ You can change the split later, but the agreed percentage locks in at settlement
 2. Tap **Add Consignor**.
 3. Enter their name and email address.
 4. Set the **Payout Split** — enter the consignor's percentage. If they keep 60 cents of every dollar, type \`60\`.
-5. Tap **Save**.
+5. Choose what happens **if items don't sell** — return to the consignor, donate to charity, or relist next sale. This is just a reminder for you; it doesn't move or change anything automatically, but it's worth agreeing on before the sale so there's no surprise at settlement.
+6. Tap **Save**.
 
 The consignor receives an email with a link to their read-only portal. They don't need to create an account.
 

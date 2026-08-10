@@ -89,10 +89,15 @@ export const createConsignor = async (req: AuthRequest, res: Response) => {
       return res.status(401).json({ error: 'Authentication required' });
     }
 
-    const { name, email, phone, commissionRate, notes, useTieredCommission } = req.body;
+    const { name, email, phone, commissionRate, notes, useTieredCommission, unsoldItemDisposition } = req.body;
 
     if (!name || commissionRate === undefined) {
       return res.status(400).json({ error: 'name and commissionRate required' });
+    }
+
+    // Consignor Onboarding: unsold-item disposition is optional, but if provided must be a known value
+    if (unsoldItemDisposition !== undefined && unsoldItemDisposition !== null && !['RETURN', 'DONATE', 'RELIST'].includes(unsoldItemDisposition)) {
+      return res.status(400).json({ error: "unsoldItemDisposition must be 'RETURN', 'DONATE', 'RELIST', or omitted" });
     }
 
     // Get organizer's workspace
@@ -129,6 +134,7 @@ export const createConsignor = async (req: AuthRequest, res: Response) => {
         phone: phone || null,
         commissionRate: new Decimal(rate),
         useTieredCommission: useTieredCommission === true,
+        unsoldItemDisposition: unsoldItemDisposition || null,
         notes: notes || null,
       },
       include: {
@@ -224,7 +230,7 @@ export const updateConsignor = async (req: AuthRequest, res: Response) => {
     }
 
     const { id } = req.params;
-    const { name, email, phone, commissionRate, notes, useTieredCommission } = req.body;
+    const { name, email, phone, commissionRate, notes, useTieredCommission, unsoldItemDisposition } = req.body;
 
     // Get organizer's workspace
     const result = await getOrganizerWorkspace(req.user.id);
@@ -255,6 +261,12 @@ export const updateConsignor = async (req: AuthRequest, res: Response) => {
     if (email !== undefined) updateData.email = email;
     if (phone !== undefined) updateData.phone = phone;
     if (notes !== undefined) updateData.notes = notes;
+    if (unsoldItemDisposition !== undefined) {
+      if (unsoldItemDisposition !== null && !['RETURN', 'DONATE', 'RELIST'].includes(unsoldItemDisposition)) {
+        return res.status(400).json({ error: "unsoldItemDisposition must be 'RETURN', 'DONATE', 'RELIST', or null" });
+      }
+      updateData.unsoldItemDisposition = unsoldItemDisposition;
+    }
 
     if (commissionRate !== undefined) {
       const rate = parseFloat(commissionRate);
