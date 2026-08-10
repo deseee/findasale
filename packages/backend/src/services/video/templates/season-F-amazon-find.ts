@@ -30,8 +30,8 @@ export const seasonFAmazonFind: Template = {
     notes: 'Signature: ONE item, solo talking-to-camera HOOK + FIND, no MAP, no STYLING, no BEFORE/AFTER, no second-person split-screen signal. Shortest, simplest clip set of any template.',
   },
   slots: [
-    { key: 'hook', acceptsRoles: ['HOOK'], required: true, overlay: 'title_card', transitionIn: 'cut', maxMs: 2000, note: '"Here's what I got today" — item already in frame or hand.' },
-    { key: 'find', acceptsRoles: ['FIND', 'PRICE_REVEAL'], required: true, overlay: 'price_pop', transitionIn: 'cut', note: 'Hold the item, say what it is, quick honest take on whether it's worth it.' },
+    { key: 'hook', acceptsRoles: ['HOOK'], required: true, overlay: 'title_card', transitionIn: 'cut', maxMs: 2000, note: `"Here's what I got today" — item already in frame or hand.` },
+    { key: 'find', acceptsRoles: ['FIND', 'PRICE_REVEAL'], required: true, overlay: 'price_pop', transitionIn: 'cut', note: `Hold the item, say what it is, quick honest take on whether it's worth it.` },
     { key: 'cta', acceptsRoles: ['CTA'], required: false, overlay: 'cta_card', transitionIn: 'cut', note: 'FINDASALE variant only — dropped entirely for the AMAZON cut (see file header + templateRenderer renderVariant).' },
   ],
   polish: { ...BASE_POLISH, pacing: { targetShotMs: 2500, hookMaxMs: 2000 } },

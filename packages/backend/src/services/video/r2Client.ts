@@ -112,10 +112,26 @@ export interface RawFootageObject {
 }
 
 /**
+ * Key prefixes that share this bucket for NON-footage storage and must never be
+ * treated as raw video/photo clips. Added 2026-08-10 (same-day incident): the
+ * emergency Postgres-full fix on 2026-08-09 offloaded Organizer.esnMemberships /
+ * Organizer.sourcesJson / Sale.scrapedMetadata (132,004 rows) to THIS bucket
+ * under these prefixes to free DB space (see STATE.md Blocked Queue, P0 LIVE
+ * INCIDENT 2026-08-09). listRawFootage() had no prefix filter, so
+ * footageIngestService began silently ingesting every one of those JSON blobs
+ * as a "footage asset" and footageClassifyService was burning real paid
+ * api.anthropic.com calls (shared production ANTHROPIC_API_KEY, see CLAUDE.md
+ * §0·SPEND) analyzing them as if they were video. Do not remove without also
+ * confirming wherever JSON-column-offload backups land next uses a separate
+ * bucket or one of these same prefixes.
+ */
+const NON_FOOTAGE_KEY_PREFIXES = ['sale-blobs/', 'organizer-blobs/'];
+
+/**
  * List every object currently in the raw-footage bucket and return, for each, a
  * short-TTL presigned GET URL plus its inferred mediaType. Paginates so a bucket
  * with >1000 objects is fully enumerated. Folder-placeholder keys (ending in
- * '/') are skipped.
+ * '/') and known non-footage prefixes (NON_FOOTAGE_KEY_PREFIXES) are skipped.
  */
 export async function listRawFootage(): Promise<RawFootageObject[]> {
   const client = getClient();
@@ -129,6 +145,7 @@ export async function listRawFootage(): Promise<RawFootageObject[]> {
     );
     for (const obj of resp.Contents ?? []) {
       if (!obj.Key || obj.Key.endsWith('/')) continue;
+      if (NON_FOOTAGE_KEY_PREFIXES.some((prefix) => obj.Key!.startsWith(prefix))) continue;
       const url = await getSignedUrl(
         client,
         new GetObjectCommand({ Bucket: bucket, Key: obj.Key }),
