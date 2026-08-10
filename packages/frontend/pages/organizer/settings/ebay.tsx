@@ -500,7 +500,7 @@ const EbayPolicySetupPage = () => {
                 type="button"
                 onClick={handleCheckPolicies}
                 disabled={policyCheck.loading}
-                className="text-sm px-3 py-1.5 border border-sage-600 text-sage-600 dark:text-sage-400 dark:border-sage-500 rounded-lg hover:bg-sage-50 dark:hover:bg-sage-900/20 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition"
+                className="text-sm px-3 py-1.5 border border-sage-600 text-sage-600 dark:text-sage-400 dark:border-sage-500 rounded-lg hover:bg-sage-50 dark:hover:!bg-sage-700/20 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition"
               >
                 {policyCheck.loading ? 'Checking…' : 'Check my policies'}
               </button>
@@ -638,13 +638,13 @@ const EbayPolicySetupPage = () => {
                       onClick={() => mapping && setMapping({ ...mapping, shippingMode: 'CALCULATED' })}
                       className={`text-left rounded-lg border p-4 transition-colors ${
                         (mapping?.shippingMode ?? 'CALCULATED') === 'CALCULATED'
-                          ? 'border-sage-600 bg-sage-50 dark:!bg-sage-900/30 ring-1 ring-sage-600'
+                          ? 'border-sage-600 bg-sage-50 dark:!bg-sage-700/30 ring-1 ring-sage-600'
                           : 'border-gray-200 dark:border-gray-700 hover:border-sage-400'
                       }`}
                     >
                       <div className="flex items-center justify-between">
                         <span className="font-semibold text-gray-900 dark:text-white">Calculated</span>
-                        <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-sage-100 dark:bg-sage-900 text-sage-700 dark:text-sage-200">Recommended</span>
+                        <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-sage-100 dark:!bg-sage-700 text-sage-700 dark:text-sage-200">Recommended</span>
                       </div>
                       <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
                         {/* Corrected again same-day: CALCULATED mode now uses eBay's real
@@ -662,7 +662,7 @@ const EbayPolicySetupPage = () => {
                       onClick={() => mapping && setMapping({ ...mapping, shippingMode: 'FLAT_TIERS' })}
                       className={`text-left rounded-lg border p-4 transition-colors ${
                         mapping?.shippingMode === 'FLAT_TIERS'
-                          ? 'border-sage-600 bg-sage-50 dark:!bg-sage-900/30 ring-1 ring-sage-600'
+                          ? 'border-sage-600 bg-sage-50 dark:!bg-sage-700/30 ring-1 ring-sage-600'
                           : 'border-gray-200 dark:border-gray-700 hover:border-sage-400'
                       }`}
                     >
