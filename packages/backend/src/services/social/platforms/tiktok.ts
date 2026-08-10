@@ -213,7 +213,7 @@ async function publish(params: {
     TIKTOK_VIDEO_INIT_URL,
     {
       post_info: {
-        title: post.title || post.body?.slice(0, 150) || 'FindA.Sale',
+        title: post.body?.slice(0, 150) || 'FindA.Sale',
         privacy_level: privacyLevel,
         disable_duet: false,
         disable_comment: false,
