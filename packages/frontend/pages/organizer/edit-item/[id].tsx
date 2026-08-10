@@ -94,6 +94,9 @@ const EditItemPage = () => {
     packageWidthIn: '',
     packageHeightIn: '',
     packageType: '',
+    // Native FindA.Sale checkout shipping (ADR-104 Sec3) — independent of eBay/tier.
+    shippingAvailable: false,
+    shippingPrice: '',
     // Product identifiers (populated by barcode scan)
     brand: '',
     upc: '',
@@ -254,6 +257,46 @@ const EditItemPage = () => {
       setPackageEstimateLoading(false);
     }
   };
+
+  // ADR-104 Sec3: native-checkout suggested shipping price. Debounced fetch, fires only
+  // when the organizer has shipping enabled and hasn't typed a price yet -- never
+  // overwrites a value the organizer already entered, never auto-submits, and fails
+  // silently (no toast/error UI) so a suggestion-endpoint error never blocks Save -- the
+  // plain manual-entry field keeps working exactly as it does today (ADR-104 Sec3
+  // Rollback/Risk: "If the suggestion endpoint errors, the frontend must fail silently
+  // to the current plain-input behavior").
+  const [shippingSuggestion, setShippingSuggestion] = useState<{ suggestedPrice: number; basis: string; zone: string } | null>(null);
+  const [shippingSuggestionLoading, setShippingSuggestionLoading] = useState(false);
+  const shippingSuggestionDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (shippingSuggestionDebounceRef.current) clearTimeout(shippingSuggestionDebounceRef.current);
+    if (!id || !formData.shippingAvailable || formData.shippingPrice) {
+      setShippingSuggestion(null);
+      return;
+    }
+    shippingSuggestionDebounceRef.current = setTimeout(async () => {
+      setShippingSuggestionLoading(true);
+      try {
+        const params = new URLSearchParams();
+        if (formData.packageWeightOz) params.set('weightOz', formData.packageWeightOz);
+        if (formData.packageLengthIn) params.set('lengthIn', formData.packageLengthIn);
+        if (formData.packageWidthIn) params.set('widthIn', formData.packageWidthIn);
+        if (formData.packageHeightIn) params.set('heightIn', formData.packageHeightIn);
+        if (formData.packageType) params.set('packageType', formData.packageType);
+        const res = await api.get(`/items/${id}/suggested-shipping-price?${params.toString()}`);
+        setShippingSuggestion(res.data);
+      } catch {
+        // Fail silently, per ADR-104 Sec3 Rollback/Risk -- never block plain manual entry.
+        setShippingSuggestion(null);
+      } finally {
+        setShippingSuggestionLoading(false);
+      }
+    }, 500);
+    return () => {
+      if (shippingSuggestionDebounceRef.current) clearTimeout(shippingSuggestionDebounceRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, formData.shippingAvailable, formData.shippingPrice, formData.packageWeightOz, formData.packageLengthIn, formData.packageWidthIn, formData.packageHeightIn, formData.packageType]);
 
   // eBay push mutation — S725 always LIVE (DRAFT mode killed)
   const ebayPushMutation = useMutation({
@@ -553,6 +596,9 @@ const EditItemPage = () => {
         packageWidthIn: item.packageWidthIn !== undefined && item.packageWidthIn !== null ? String(item.packageWidthIn) : '',
         packageHeightIn: item.packageHeightIn !== undefined && item.packageHeightIn !== null ? String(item.packageHeightIn) : '',
         packageType: item.packageType || '',
+        // Native FindA.Sale checkout shipping (ADR-104 Sec3)
+        shippingAvailable: item.shippingAvailable === true,
+        shippingPrice: item.shippingPrice !== undefined && item.shippingPrice !== null ? String(item.shippingPrice) : '',
         // Product identifiers (populated by barcode scan or pre-existing data)
         brand: item.brand || '',
         upc: item.upc || '',
@@ -1587,6 +1633,68 @@ const EditItemPage = () => {
                     ? 'Unpublish'
                     : 'Publish'}
               </button>
+            </div>
+
+            {/* Native FindA.Sale checkout shipping (ADR-104 Sec3) — independent of eBay/
+                tier: applies to every organizer's own Stripe checkout, not just PRO/TEAMS
+                eBay sellers. shippingAvailable/shippingPrice feed stripeController.ts
+                directly (Item.shippingPrice is charged to the buyer as-is at checkout). */}
+            <div className="pt-4 border-t border-warm-200 dark:border-gray-700">
+              <h3 className="text-sm font-semibold text-warm-700 dark:text-warm-300 mb-3">Shipping (FindA.Sale Checkout)</h3>
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="shipping-available"
+                  checked={formData.shippingAvailable}
+                  onChange={(e) => setFormData(prev => ({ ...prev, shippingAvailable: e.target.checked }))}
+                  className="h-4 w-4 rounded border-gray-300 accent-blue-600"
+                />
+                <label htmlFor="shipping-available" className="text-sm font-medium text-gray-700 dark:text-gray-300 cursor-pointer">
+                  Offer shipping for this item
+                </label>
+              </div>
+              {formData.shippingAvailable && (
+                <div className="mt-3">
+                  <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-1">
+                    Shipping Price ($)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="0.00"
+                    value={formData.shippingPrice}
+                    onChange={(e) => setFormData({ ...formData, shippingPrice: e.target.value })}
+                    className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
+                  />
+                  {/* ADR-104 Sec3: computed suggestion, real carrier rates grossed up for
+                      FindA.Sale's own platform fee (not eBay's FVF) -- shown only while the
+                      field is empty, never auto-filled. Fails silently (hint just doesn't
+                      appear) if the suggestion call errors -- must never block Save. */}
+                  {!formData.shippingPrice && shippingSuggestionLoading && (
+                    <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">Getting a suggested price…</p>
+                  )}
+                  {!formData.shippingPrice && !shippingSuggestionLoading && shippingSuggestion && (
+                    <div className="mt-1 flex items-center gap-2 flex-wrap">
+                      <p className="text-xs text-warm-600 dark:text-warm-400">
+                        Suggested: {'$' + shippingSuggestion.suggestedPrice.toFixed(2)} based on real carrier rates
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setFormData((prev) => ({ ...prev, shippingPrice: shippingSuggestion.suggestedPrice.toFixed(2) }))
+                        }
+                        className="text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline"
+                      >
+                        Use this
+                      </button>
+                    </div>
+                  )}
+                  <p className="text-xs text-gray-500 mt-1">
+                    Charged to the buyer at checkout. Suggested prices already include our platform fee so you don&apos;t come up short.
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* Shipping Dimensions — shown for PRO/TEAMS (eBay shipping requires dimensions) */}

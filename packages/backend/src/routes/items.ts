@@ -35,6 +35,7 @@ import {
   getSitemapItems,
   getPackageEstimateHandler,
   getPackageEstimatesBatchHandler,
+  getSuggestedShippingPriceHandler,
 } from '../controllers/itemController';
 import { getComps, endEbayListingIfExists } from '../controllers/ebayController'; // Feature #229: eBay price comps; endEbayListingIfExists for withdraw-on-SOLD
 import { markShopifyItemSold } from '../services/shopifyService';
@@ -841,6 +842,7 @@ router.post('/:id/reanalyze', authenticate, reanalyzeItemForOrganizer);
 // and review.tsx. Never write packageWeightOz/dims to the Item row.
 router.get('/:id/package-estimate', authenticate, getPackageEstimateHandler);
 router.post('/package-estimates', authenticate, getPackageEstimatesBatchHandler);
+router.get('/:id/suggested-shipping-price', authenticate, getSuggestedShippingPriceHandler); // ADR-104 Sec3: native-checkout suggested shipping price
 router.post('/:itemId/close-auction', authenticate, closeAuctionEndpoint);
 
 // Phase 16: Photo management

@@ -38,6 +38,7 @@ import { republishEbayOffer, ebayPublishWithSelfHeal, ensureConditionValidForCat
 import { assertCheckoutAllowed, CheckoutGuardError } from '../services/checkoutGuard'; // S1072 Finding #4: collusion/wash-trade guard
 import { commitItemSale, ItemAlreadyCommittedError } from '../services/itemSaleGuard'; // ADR-098: atomic double-sell guard
 import { removeItemFromShopify, updateShopifyProductFields, markShopifyItemSold } from '../services/shopifyService'; // Cross-platform sync: unpublish on delete + propagate price/quantity edits + mark-sold-elsewhere
+import { suggestNativeShippingPrice, ShippingHardBlockError as NativeShippingHardBlockError } from '../services/nativeShippingSuggestionService'; // ADR-104 Sec3: native-checkout suggested shipping price
 
 /** Decode HTML entities from CSV/eBay data before writing to the DB. */
 function decodeHtmlEntities(str: string): string {
@@ -4233,5 +4234,114 @@ export const getPackageEstimatesBatchHandler = async (req: AuthRequest, res: Res
   } catch (error) {
     console.error('[getPackageEstimatesBatchHandler] Error:', error);
     res.status(500).json({ message: 'Server error computing package estimates' });
+  }
+};
+
+// GET /api/items/:id/suggested-shipping-price — ADR-104 Sec3: native FindA.Sale
+// checkout suggested shipping price. Read-only, non-persisting (never writes
+// Item.shippingPrice) -- the organizer sees the suggestion and types/accepts the
+// final number themselves (ADR-104 Sec3 Contract: "Suggested, not locked"). Mirrors
+// getPackageEstimateHandler's auth/ownership pattern immediately above. Accepts
+// optional weightOz/lengthIn/widthIn/heightIn/packageType query overrides so the
+// frontend can price the organizer's CURRENT unsaved form values (edit-item keeps
+// package fields in local formData until Save), falling back to the item's last
+// persisted package fields when no override is given.
+export const getSuggestedShippingPriceHandler = async (req: AuthRequest, res: Response) => {
+  try {
+    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    if (!req.user || !hasOrganizerRole) {
+      return res.status(403).json({ message: 'Access denied. Organizer access required.' });
+    }
+
+    const { id } = req.params;
+
+    // Ownership pattern mirrors getPackageEstimateHandler/updateItem.
+    const item = await prisma.item.findUnique({
+      where: { id },
+      select: {
+        packageWeightOz: true,
+        packageLengthIn: true,
+        packageWidthIn: true,
+        packageHeightIn: true,
+        packageType: true,
+        sale: {
+          select: {
+            zip: true,
+            organizer: {
+              select: { userId: true, subscriptionTier: true, lat: true, lng: true },
+            },
+          },
+        },
+      },
+    });
+
+    if (!item) {
+      return res.status(404).json({ message: 'Item not found' });
+    }
+    if (!item.sale || item.sale.organizer.userId !== req.user.id) {
+      return res.status(403).json({ message: 'Access denied. Not your item.' });
+    }
+
+    const q = req.query as Record<string, string | undefined>;
+    const weightOzOverride = q.weightOz != null ? parseInt(q.weightOz, 10) : undefined;
+    const lengthInOverride = q.lengthIn != null ? parseFloat(q.lengthIn) : undefined;
+    const widthInOverride = q.widthIn != null ? parseFloat(q.widthIn) : undefined;
+    const heightInOverride = q.heightIn != null ? parseFloat(q.heightIn) : undefined;
+    const packageTypeOverride = q.packageType != null && q.packageType !== '' ? q.packageType : undefined;
+
+    const weightOz =
+      weightOzOverride != null && !isNaN(weightOzOverride) ? weightOzOverride : item.packageWeightOz;
+    const lengthIn =
+      lengthInOverride != null && !isNaN(lengthInOverride)
+        ? lengthInOverride
+        : item.packageLengthIn != null
+        ? Number(item.packageLengthIn)
+        : null;
+    const widthIn =
+      widthInOverride != null && !isNaN(widthInOverride)
+        ? widthInOverride
+        : item.packageWidthIn != null
+        ? Number(item.packageWidthIn)
+        : null;
+    const heightIn =
+      heightInOverride != null && !isNaN(heightInOverride)
+        ? heightInOverride
+        : item.packageHeightIn != null
+        ? Number(item.packageHeightIn)
+        : null;
+    const packageType = packageTypeOverride ?? item.packageType ?? null;
+
+    if (weightOz == null || weightOz <= 0) {
+      return res.status(400).json({
+        code: 'NEEDS_PACKAGE_DETAILS',
+        message: 'A package weight is required to suggest a shipping price.',
+      });
+    }
+
+    try {
+      const suggestion = await suggestNativeShippingPrice({
+        weightOz,
+        dims: { length: lengthIn, width: widthIn, height: heightIn },
+        packageType,
+        origin: {
+          zip: item.sale.zip,
+          lat: item.sale.organizer.lat,
+          lng: item.sale.organizer.lng,
+        },
+        subscriptionTier: item.sale.organizer.subscriptionTier as any,
+      });
+      return res.status(200).json(suggestion);
+    } catch (err) {
+      if (err instanceof NativeShippingHardBlockError) {
+        return res.status(400).json({
+          code: 'PACKAGE_EXCEEDS_CARRIER_LIMITS',
+          message: err.message,
+        });
+      }
+      throw err;
+    }
+  } catch (error) {
+    console.error('[getSuggestedShippingPriceHandler] Error:', error);
+    res.status(500).json({ message: 'Server error computing suggested shipping price' });
   }
 };

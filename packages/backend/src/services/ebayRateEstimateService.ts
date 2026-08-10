@@ -626,53 +626,69 @@ function evaluateCubicTier(dims: PackageDims, weightOz: number): { tierLabel: st
  *  dropdown, packages/frontend/pages/organizer/edit-item/[id].tsx. */
 const AHS_PACKAGING_TYPES = new Set(['ROLL', 'TOUGH_BAGS', 'PARCEL_OR_PADDED_ENVELOPE', 'PADDED_BAGS']);
 
-// AHS (Additional Handling Surcharge), UPS + FedEx, near-identical fee schedules
-// (ADR-103 §2D): "2026 fees by zone: ~$26.50-$46.00 (zone 2) up to ~$33.75-$58.75
-// (zone 7+)". UPS figures are secondary-sourced (3 independent, mutually consistent
-// sources, NOT confirmed against a UPS-published PDF -- ADR-103 §5) pending a direct
-// UPS.com re-check. This engine uses the HIGH end of each given range (conservative,
-// "never be short" -- same principle coverageZoneForOrigin already documents) at the
-// two zones ADR-103 actually gives figures for (2 and 7+), and carries that same
-// high-end figure forward to the adjacent unsourced zones -- z1 mirrors z2, z3-z6
-// mirror z7+ -- rather than inventing an interpolated gradient. Every zone below is
-// PENDING_LIVE_VERIFICATION except z2 and z7/z8, which are ADR-103-sourced (secondary).
-export const AHS_SURCHARGE_TABLE: Record<ZoneKey, number> = {
-  z1: 46.00, // PENDING_LIVE_VERIFICATION -- carried forward from the z2 anchor
-  z2: 46.00, // ADR-103 §2D, secondary-sourced (high end of $26.50-$46.00)
-  z3: 58.75, // PENDING_LIVE_VERIFICATION -- carried forward from the z7+ anchor
-  z4: 58.75, // PENDING_LIVE_VERIFICATION -- carried forward from the z7+ anchor
-  z5: 58.75, // PENDING_LIVE_VERIFICATION -- carried forward from the z7+ anchor
-  z6: 58.75, // PENDING_LIVE_VERIFICATION -- carried forward from the z7+ anchor
-  z7: 58.75, // ADR-103 §2D, secondary-sourced (high end of $33.75-$58.75)
-  z8: 58.75, // ADR-103 §2D, secondary-sourced ("zone 7+" covers 7 and up)
+// AHS (Additional Handling Surcharge), UPS + FedEx, near-identical fee schedules.
+// REAL-ANCHORED 2026-08-10 (ADR-103 §5 follow-up): UPS bills AHS at a DIFFERENT dollar
+// amount depending on WHICH trigger fired -- weight, dimension, or packaging -- not one
+// flat number per zone as the prior single-table model assumed. Pulled directly from
+// UPS's own official PDF this session:
+// https://assets.ups.com/adobe/assets/urn:aaid:aem:f8d97e17-7ef9-48af-b8ce-b5c9bbf0be6a/original/as/preview-accessorial-us-en.pdf
+// "Effective 12/22/2025" column (current 2026 rate card). This resolves the ADR-103 §5
+// gap ("UPS's own site returned empty content on direct fetch this session... Dev should
+// attempt a direct UPS.com pull before hard-coding") with a real primary-source pull --
+// no longer secondary-sourced/PENDING_LIVE_VERIFICATION for the figures below.
+// UPS's real zone chart has 4 bands (2 / 3-4 / 5-6 / 7+), not our 8-band z1-z8 system --
+// mapped per this file's own established z1=z2/z3=z4 convention used elsewhere (base
+// RATE_TABLE, LARGE_PACKAGE_SURCHARGE_TABLE below): UPS "2" -> our z1 AND z2, "3-4" -> z3
+// AND z4, "5-6" -> z5 AND z6, "7+" -> z7 AND z8. This is still an approximation of a real
+// 4-band system onto our 8-band model -- the real UPS zone chart does not split evenly at
+// our z1/z2 or z3/z4 mileage boundary, same caveat already documented for RATE_TABLE above.
+export const AHS_WEIGHT_SURCHARGE_TABLE: Record<ZoneKey, number> = {
+  z1: 46.50, z2: 46.50, // UPS Accessorials PDF, Effective 12/22/2025, weight-triggered, zone 2
+  z3: 50.75, z4: 50.75, // zone 3-4
+  z5: 56.25, z6: 56.25, // zone 5-6
+  z7: 58.75, z8: 58.75, // zone 7+
+};
+export const AHS_DIMENSION_SURCHARGE_TABLE: Record<ZoneKey, number> = {
+  z1: 30.00, z2: 30.00, // UPS Accessorials PDF, Effective 12/22/2025, dimension-triggered, zone 2
+  z3: 33.25, z4: 33.25, // zone 3-4
+  z5: 38.50, z6: 38.50, // zone 5-6
+  z7: 40.50, z8: 40.50, // zone 7+
+};
+export const AHS_PACKAGING_SURCHARGE_TABLE: Record<ZoneKey, number> = {
+  z1: 26.75, z2: 26.75, // UPS Accessorials PDF, Effective 12/22/2025, packaging-triggered, zone 2
+  z3: 31.00, z4: 31.00, // zone 3-4
+  z5: 33.25, z6: 33.25, // zone 5-6
+  z7: 33.75, z8: 33.75, // zone 7+
 };
 
-// Large Package / Oversize surcharge, UPS + FedEx (ADR-103 §2D): "$255 (zone 2) to
-// $330 (zone 7+), plus a 90lb minimum billable weight once triggered." Same
-// carry-forward convention as AHS above -- only z2 and z7/z8 are ADR-103-sourced.
+// Large Package / Oversize surcharge, UPS + FedEx. REAL-ANCHORED 2026-08-10 (ADR-103
+// §5 follow-up): pulled directly from UPS's own official PDF this session -- same
+// source as AHS above (see URL there), "Effective 12/22/2025" column. UPS bills Large
+// Package differently for commercial vs residential addresses; FindA.Sale ships to
+// individual buyers (residential), so the Residential column is used here. (Commercial,
+// for reference/comment only, NOT used: z2=$219.50, z3-4=$239.50, z5-6=$273.00,
+// z7+=$286.00.) Same UPS-4-band -> our-8-band mapping as AHS above (z1=z2/z3=z4/z5=z6/
+// z7=z8) -- still an approximation of the real 4-band system, not an independent
+// re-verification at each of our 8 bands.
 export const LARGE_PACKAGE_SURCHARGE_TABLE: Record<ZoneKey, number> = {
-  z1: 255, // PENDING_LIVE_VERIFICATION -- carried forward from the z2 anchor
-  z2: 255, // ADR-103 §2D
-  z3: 330, // PENDING_LIVE_VERIFICATION -- carried forward from the z7+ anchor
-  z4: 330, // PENDING_LIVE_VERIFICATION -- carried forward from the z7+ anchor
-  z5: 330, // PENDING_LIVE_VERIFICATION -- carried forward from the z7+ anchor
-  z6: 330, // PENDING_LIVE_VERIFICATION -- carried forward from the z7+ anchor
-  z7: 330, // ADR-103 §2D
-  z8: 330, // ADR-103 §2D
+  z1: 254.50, z2: 254.50, // UPS Accessorials PDF, Effective 12/22/2025, Residential, zone 2
+  z3: 274.50, z4: 274.50, // zone 3-4
+  z5: 320.50, z6: 320.50, // zone 5-6
+  z7: 331.00, z8: 331.00, // zone 7+
 };
 export const LARGE_PACKAGE_MIN_BILLABLE_LB = 90; // ADR-103 §2D
 
 // USPS Ground Advantage nonstandard fees (ADR-103 §2D): "length >22-30in: $4.50;
 // length >30in: $10.00; volume >2ft3: ~$21 (one conflicting source says $35 -- verify
-// against Notice 123 before hard-coding)." The $21-vs-$35 conflict is UNRESOLVED
-// (ADR-103 §5) -- this engine uses the conservative $35 figure so a real charge can
-// never exceed what the organizer priced for (never-short principle). Architect/
-// Patrick: confirm against USPS Notice 123 pricing before treating $35 as final; if
-// Notice 123 confirms $21, this is a straightforward one-line correction.
+// against Notice 123 before hard-coding)." RESOLVED 2026-08-10: a live web search this
+// session confirmed via USPS's own current rate summary that $35.00 is correct
+// ("Nonstandard fees rose approximately 17%: length over 22 inches now $4.50, length
+// over 30 inches $10.00, volume over 2 cubic feet $35.00") -- the $21 figure was stale,
+// not a live disagreement. No longer PENDING_LIVE_VERIFICATION.
 export const USPS_NONSTANDARD_FEE_TABLE = {
   lengthOver22Under30In: 4.50,
   lengthOver30In: 10.00,
-  volumeOver2CuFt: 35.00, // PENDING_LIVE_VERIFICATION -- conflict vs $21, see comment above
+  volumeOver2CuFt: 35.00, // confirmed 2026-08-10 via USPS's own current rate summary, see comment above
 };
 
 // Absolute carrier max (ADR-103 §2D): beyond these, the carrier refuses the package
@@ -684,6 +700,12 @@ export const USPS_NONSTANDARD_FEE_TABLE = {
 // this pass, flagged PENDING_LIVE_VERIFICATION same as the rest of this table.
 export const UPS_FEDEX_ABSOLUTE_MAX = { lengthIn: 108, lengthPlusGirthIn: 165, weightLb: 150 };
 // USPS: "Absolute USPS max: 130in combined length+girth, 70lb" (ADR-103 §2D).
+// TODO (ADR-103 follow-up, found 2026-08-10): USPS also has a separate "Oversized" pricing
+// category (108-130in combined length+girth) that REPLACES normal weight-based pricing
+// with FLAT zone-based pricing (~$103.80 zone 1 to ~$272.45 zones 8/9) instead of just
+// hard-blocking at 130in -- not modeled yet. Do not implement this pass; needs its own
+// scoped follow-up (figures need double-checking and it changes the pricing MODEL, not
+// just a number).
 export const USPS_ABSOLUTE_MAX = { lengthPlusGirthIn: 130, weightLb: 70 };
 
 /**
@@ -781,8 +803,18 @@ function computeSurchargeForCarrier(
   const weightTriggered = weightLb > 50;
   const packagingTriggered = !!packageType && AHS_PACKAGING_TYPES.has(packageType);
   if (dimensionTriggered || weightTriggered || packagingTriggered) {
-    // "one surcharge type charged per package even if multiple triggers fire" (ADR-103 §2D).
-    return { amount: AHS_SURCHARGE_TABLE[zone], type: 'AHS', minBillableLb: null };
+    // "one surcharge type charged per package even if multiple triggers fire" (ADR-103 §2D)
+    // -- but UPS/FedEx bill a DIFFERENT dollar amount depending on WHICH trigger fired
+    // (weight/dimension/packaging each have their own fee schedule, see the three
+    // AHS_*_SURCHARGE_TABLE constants above). When multiple triggers fire simultaneously,
+    // charge the HIGHEST of the triggered amounts -- same "never be short" principle this
+    // file already applies elsewhere (coverageZoneForOrigin, milesToZone) -- rather than
+    // defaulting to whichever trigger happened to be checked first.
+    const candidateAmounts: number[] = [];
+    if (weightTriggered) candidateAmounts.push(AHS_WEIGHT_SURCHARGE_TABLE[zone]);
+    if (dimensionTriggered) candidateAmounts.push(AHS_DIMENSION_SURCHARGE_TABLE[zone]);
+    if (packagingTriggered) candidateAmounts.push(AHS_PACKAGING_SURCHARGE_TABLE[zone]);
+    return { amount: Math.max(...candidateAmounts), type: 'AHS', minBillableLb: null };
   }
   return { amount: 0, type: null, minBillableLb: null };
 }
