@@ -107,6 +107,10 @@ export async function resyncShippingDriftSweep(opts?: {
       ebayShippingAmountCents: true,
       ebayShippingRatedAt: true,
       ebayRateVersion: true,
+      // ADR-102 (roadmap #622): needed so the local recompute matches oddball-item
+      // classification/category overrides instead of only the computed rate.
+      ebayShippingClassification: true,
+      ebayCategoryId: true,
       sale: {
         select: {
           zip: true,
@@ -154,6 +158,12 @@ export async function resyncShippingDriftSweep(opts?: {
                     shippingMode: organizer.ebayPolicyMapping.shippingMode,
                     freeShippingOptIn: organizer.ebayPolicyMapping.freeShippingOptIn,
                     weightTierMappings: organizer.ebayPolicyMapping.weightTierMappings,
+                    // ADR-102 (roadmap #622): oddball-item overrides, so this cron's local
+                    // recompute doesn't flag drift for items that are supposed to differ.
+                    categoryOverrides: organizer.ebayPolicyMapping.categoryOverrides,
+                    heavyOversizedPolicyId: organizer.ebayPolicyMapping.heavyOversizedPolicyId,
+                    fragilePolicyId: organizer.ebayPolicyMapping.fragilePolicyId,
+                    unknownPolicyId: organizer.ebayPolicyMapping.unknownPolicyId,
                   }
                 : null,
             }
@@ -177,6 +187,8 @@ export async function resyncShippingDriftSweep(opts?: {
           packageWidthIn: item.packageWidthIn != null ? Number(item.packageWidthIn) : null,
           packageHeightIn: item.packageHeightIn != null ? Number(item.packageHeightIn) : null,
           ebayShippingOverride: item.ebayShippingOverride,
+          ebayShippingClassification: item.ebayShippingClassification,
+          ebayCategoryId: item.ebayCategoryId,
         },
         fromZip: item.sale?.zip ?? null,
       });

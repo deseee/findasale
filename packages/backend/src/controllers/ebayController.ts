@@ -29,15 +29,15 @@ import { canCallEbayPriceComps, trackEbayPriceComps } from '../lib/aiCostTracker
 import {
   parseWeightTiers,
   classifyPolicy,
-  matchWeightTier,
-  matchCubicTier,
-  toOunces,
-  ParsedWeightTier,
   EbayFulfillmentPolicySummary,
   WeightTierMapping,
-  CubicTierMapping,
   detectWeightTierGaps,
   computeGapFillBuckets,
+  // ADR-102 (roadmap #622): matchWeightTier/matchCubicTier/toOunces/ParsedWeightTier/
+  // CubicTierMapping were only used by the now-retired weight-tier-ladder cascade
+  // match (resolvePoliciesForItem). Left un-imported here rather than kept unused --
+  // still exported from ebayPolicyParser.ts for the untouched gap-fill endpoints
+  // (parseWeightTiers/classifyPolicy/detectWeightTierGaps/computeGapFillBuckets stay).
 } from '../utils/ebayPolicyParser';
 import { getTierLimit, SubscriptionTier } from '../constants/tierLimits';
 import { domainToL1 } from '../config/ebayCategories';
@@ -45,8 +45,6 @@ import { ensureCalculatedFulfillmentPolicy, ensureCalculatedPolicyWithHandling }
 import { ensureFvfFlatRatePolicy, ensureNamedWeightTierPolicy, computeNamedWeightTierRate } from '../services/ebayFlatRatePolicyService';
 import {
   computeCheapestForOrigin,
-  billableLb,
-  DIM_DIVISOR_USPS,
   USPS_RATE_EFFECTIVE_DATE,
   UPS_RATE_EFFECTIVE_DATE,
   FEDEX_RATE_EFFECTIVE_DATE,
@@ -4324,202 +4322,40 @@ async function resolvePoliciesForItem(
     };
   }
 
-  // Policy resolution priority (S725 — weight-tier promoted ahead of category
-  // per organizer-configured maxOz rules taking precedence over category routing):
-  //   1. Weight-tier match (organizer's EbayPolicyMapping.weightTierMappings)
-  //   2. Category override (exact ebayCategoryId match)
-  //   3. Shipping classification override (HEAVY_OVERSIZED, FRAGILE)
-  //   4. UNKNOWN classification fallback
-  //   5. Default mapping fulfillment policy
-  //   6. Smart-pick (calculated → flat-rate → free fallback)
+  // Policy resolution priority for FLAT_TIERS organizers (ADR-102, roadmap #622,
+  // 2026-08-10 — replaces the old manually-curated weightTierMappings ladder):
+  //   1. Shipping classification override (HEAVY_OVERSIZED, FRAGILE) — oddball items,
+  //      checked FIRST so a manual override always wins over automatic computation
+  //      (also fixes a pre-existing inconsistency: EbayPolicyMapping.categoryOverrides'
+  //      own schema comment always said "Checked BEFORE weight tiers", but the old
+  //      cascade checked weight tiers first — this reorder now matches that intent).
+  //   2. Category override (exact ebayCategoryId match) — also an oddball/manual override.
+  //   3. UNKNOWN classification fallback (organizer-configured policy for un-classified items).
+  //   4. Computed flat rate (ensureFvfFlatRatePolicy) — the real cheapest USPS/UPS/FedEx
+  //      rate for this item's weight+dims+origin, grossed up for eBay's FVF, bucketed.
+  //      This is the SAME provisioning path CALCULATED mode's flat-fallback already uses
+  //      above (~line 4225) and that the old ladder's own gap-overshoot guard already
+  //      fell back to. It replaces weight-tier-ladder matching as PRIMARY because the old
+  //      ladder went stale (0-1lb, 7-45lb coverage gaps) from being hand-maintained; this
+  //      path can't develop a gap because it's computed fresh on every push. The old
+  //      weightTierMappings/cubicTierMappings data is left in the schema (unused for
+  //      routing now) rather than migrated away — no data loss, trivial revert.
+  //   5. Default mapping fulfillment policy (no weight at all — can't compute a rate).
+  //   6. Smart-pick (calculated → flat-rate → free fallback).
 
   let fulfillmentPolicyId: string | null = null;
   let routingReason = '';
   let cascadeStep = '';
 
-  // 1. Weight-tier match (highest priority after explicit organizer override)
-  //
-  // (S1197) Match on BILLABLE ounces, not raw actual weight: real carriers (and eBay's
-  // own calculated-shipping engine, see ebayRateEstimateService.billableLb) bill on
-  // whichever is greater of actual weight or dimensional weight (L*W*H / 139). A light
-  // but bulky item -- e.g. 2lb actual, 20x20x20in -- has a real dimensional weight of
-  // ~57lb and was previously matched to a cheap low-weight tier because matchWeightTier
-  // never looked at dims at all. That silently under-priced the buyer's shipping charge
-  // by a large margin with no gap-overshoot guard to catch it (the guard only fires when
-  // ACTUAL weight overshoots a tier -- it never ran, because the actual-weight match
-  // "succeeded"). Using billable ounces here closes that hole at the source instead of
-  // only catching it downstream in the gap-overshoot branch.
-  const tiers = (mapping.weightTierMappings as unknown as WeightTierMapping[]) || [];
-  if (tiers.length > 0 && item.packageWeightOz != null) {
-    const weightOz = item.packageWeightOz;
-    const billingDims =
-      item.packageLengthIn != null && item.packageWidthIn != null && item.packageHeightIn != null
-        ? { length: item.packageLengthIn, width: item.packageWidthIn, height: item.packageHeightIn }
-        : null;
-    const { lb: billableLbForTier, basis: weightBasis } = billableLb(weightOz, billingDims, DIM_DIVISOR_USPS);
-    const billableOz = billableLbForTier * 16;
-    if (weightBasis === 'dimensional') {
-      console.log(
-        `[eBay ShippingPick] item=${item.id} dimensional weight (${billableLbForTier.toFixed(1)}lb) exceeds actual (${(weightOz / 16).toFixed(1)}lb) -- matching weight-tier on dimensional weight`
-      );
-    }
-    const tier = matchWeightTier(billableOz, tiers);
-    if (tier) {
-      // Stale-policy guard (S1184 — root cause of the Vivitar-flash silent push
-      // failure): EbayPolicyMapping.weightTierMappings is a manually-saved snapshot
-      // (saveEbayPolicyMapping) that is NEVER auto-refreshed. It goes stale the moment
-      // the organizer edits/renames/deletes/consolidates policies directly on eBay's
-      // Business Policies page (confirmed real-world case: the 2026-07-29 eBay-side
-      // consolidation of the 4oz/8oz/12oz/15oz tiers into one "Ground Advantage Under
-      // 1lb $9.99" policy). Sending a dead fulfillmentPolicyId straight to eBay used to
-      // fail the offer/publish call with zero useful detail surfaced to the organizer.
-      // Validate the matched tier's policyId against the organizer's CURRENT live eBay
-      // fulfillment-policy list (already fetched/cached for smart-pick) before using it;
-      // if it's gone, self-heal via the same FVF-flat provisioning the gap-overshoot
-      // path below already uses, instead of silently submitting a bad id.
-      const livePolicies = smartPickContext?.fetchFulfillmentPolicies
-        ? await smartPickContext.fetchFulfillmentPolicies()
-        : null;
-      const tierPolicyStillLive =
-        livePolicies == null || // couldn't verify (no fetcher provided) — proceed unchanged
-        livePolicies.some((p: any) => p.fulfillmentPolicyId === tier.policyId);
-
-      if (!tierPolicyStillLive) {
-        console.warn(
-          `[eBay ShippingPick] item=${item.id} weight-tier policy "${tier.policyName}" (${tier.policyId}) no longer exists on eBay — stale EbayPolicyMapping.weightTierMappings snapshot for organizer=${organizerId}. Falling back to FVF-flat.`
-        );
-        const _staleFromZip = smartPickContext?.fromZip ?? null;
-        const _staleDims =
-          item.packageLengthIn != null && item.packageWidthIn != null && item.packageHeightIn != null
-            ? { length: item.packageLengthIn, width: item.packageWidthIn, height: item.packageHeightIn }
-            : null;
-        const _staleFvf = await ensureFvfFlatRatePolicy(organizerId, weightOz, _staleDims, _staleFromZip);
-        if (_staleFvf) {
-          return {
-            fulfillmentPolicyId: _staleFvf.policyId,
-            returnPolicyId: mapping.defaultReturnPolicyId || conn.returnPolicyId || '',
-            paymentPolicyId: mapping.defaultPaymentPolicyId || conn.paymentPolicyId || '',
-            descriptionHtml: mapping.defaultDescriptionHtml ?? null,
-            pushAsDraft: mapping.pushAsDraft ?? false,
-            merchantLocationSource: mapping.merchantLocationSource || conn.merchantLocationSource || 'SALE_ADDRESS',
-            routingReason: `stale-tier-fvf-flat:${_staleFvf.flatRate}`,
-          };
-        }
-        await prisma.item.update({
-          where: { id: item.id },
-          data: { ebayNeedsReview: true },
-        });
-        return {
-          error: 'SHIPPING_POLICY_STALE',
-          code: 'SHIPPING_POLICY_STALE',
-          message: `Your shipping tier "${tier.policyName}" no longer exists on eBay (it may have been renamed, merged, or deleted in eBay's Business Policies). Go to eBay Settings and re-sync your shipping tiers, or switch this item to Calculated shipping.`,
-        };
-      }
-
-      // Gap-overshoot guard (S-stopgap): organizer weight-tier maps can have gaps
-      // (e.g. a "6+ lb / ≤111oz" tier, then nothing until "45 lb / ≤720oz").
-      // matchWeightTier picks the smallest tier whose maxOz >= weight, so an item
-      // that overshoots the granular tiers falls into a much-larger catch-all tier
-      // and gets charged that flat rate (an 11 lb item billed at the 45 lb $75 rate).
-      // If the item has a real weight and the matched tier covers items at least ~2x
-      // heavier than this one, it fell through a gap — block the push with an
-      // actionable message instead of silently overcharging.
-      // Both thresholds (16 oz floor, 2x multiplier) are tunable: the 16 oz floor and
-      // 2x ratio prevent false positives on small items that match their correct
-      // granular low-weight tiers (those match tightly, ratio near 1).
-      // (S1197) Compares against billableOz, not raw actual weight -- the tier match
-      // above was itself already made on billable (dimensional-aware) weight, so the
-      // overshoot check has to use the same basis or it can mis-fire in both directions.
-      if (
-        item.packageWeightOz != null &&
-        billableOz > 16 &&
-        tier.maxOz > billableOz * 2
-      ) {
-        // Tier gap: item overshot the organizer's USPS tier table.
-        // Before blocking, try the FVF flat-rate path — it provisions a fresh
-        // eBay policy at the correct USPS rate so the organizer doesn't get
-        // slotted into an oversized catch-all (e.g. 45-lb FedEx $75 for 11 lb).
-        const _gapFromZip = smartPickContext?.fromZip ?? null;
-        const _gapDims = (
-          item.packageLengthIn != null && item.packageWidthIn != null && item.packageHeightIn != null
-            ? { length: item.packageLengthIn, width: item.packageWidthIn, height: item.packageHeightIn }
-            : null
-        );
-
-        // (ADR-099) Before falling back to FVF-flat, try a cubic-tier match -- this is
-        // exactly the "oddly-shaped/bulky item that doesn't fit a flat ounce tier"
-        // scenario the organizer's GA Cubic policies were built for. Only items with
-        // all three measured dimensions can match; anything else falls through to the
-        // existing FVF-flat auto-provision path unchanged below.
-        if (_gapDims) {
-          const cubicTiers = (mapping.cubicTierMappings as unknown as CubicTierMapping[]) || [];
-          const cubicTier = matchCubicTier(
-            Number(_gapDims.length),
-            Number(_gapDims.width),
-            Number(_gapDims.height),
-            cubicTiers
-          );
-          if (cubicTier) {
-            const cubicLivePolicies = smartPickContext?.fetchFulfillmentPolicies
-              ? await smartPickContext.fetchFulfillmentPolicies()
-              : null;
-            const cubicPolicyStillLive =
-              cubicLivePolicies == null ||
-              cubicLivePolicies.some((p: any) => p.fulfillmentPolicyId === cubicTier.policyId);
-            if (cubicPolicyStillLive) {
-              console.log(
-                `[eBay ShippingPick] item=${item.id} tier-gap cubic-tier match policy="${cubicTier.policyName}" (${cubicTier.policyId})`
-              );
-              return {
-                fulfillmentPolicyId: cubicTier.policyId,
-                returnPolicyId: mapping.defaultReturnPolicyId || conn.returnPolicyId || '',
-                paymentPolicyId: mapping.defaultPaymentPolicyId || conn.paymentPolicyId || '',
-                descriptionHtml: mapping.defaultDescriptionHtml ?? null,
-                pushAsDraft: mapping.pushAsDraft ?? false,
-                merchantLocationSource: mapping.merchantLocationSource || conn.merchantLocationSource || 'SALE_ADDRESS',
-                routingReason: `tier-gap-cubic:${cubicTier.policyName}`,
-              };
-            }
-            console.warn(
-              `[eBay ShippingPick] item=${item.id} matched cubic-tier policy "${cubicTier.policyName}" (${cubicTier.policyId}) no longer exists on eBay -- stale EbayPolicyMapping.cubicTierMappings snapshot for organizer=${organizerId}. Falling back to FVF-flat.`
-            );
-          }
-        }
-
-        const _gapFvf = await ensureFvfFlatRatePolicy(organizerId, item.packageWeightOz!, _gapDims, _gapFromZip);
-        if (_gapFvf) {
-          console.log(
-            `[eBay ShippingPick] item=${item.id} tier-gap fvf-flat flatRate=${_gapFvf.flatRate} policy=${_gapFvf.policyId}`
-          );
-          return {
-            fulfillmentPolicyId: _gapFvf.policyId,
-            returnPolicyId: mapping.defaultReturnPolicyId || conn.returnPolicyId || '',
-            paymentPolicyId: mapping.defaultPaymentPolicyId || conn.paymentPolicyId || '',
-            descriptionHtml: mapping.defaultDescriptionHtml ?? null,
-            pushAsDraft: mapping.pushAsDraft ?? false,
-            merchantLocationSource: mapping.merchantLocationSource || conn.merchantLocationSource || 'SALE_ADDRESS',
-            routingReason: `tier-gap-fvf-flat:${_gapFvf.flatRate}`,
-          };
-        }
-        console.warn(
-          `[eBay ShippingPick] item=${item.id} tier-gap overshoot: billable=${billableOz}oz (basis=${weightBasis}, actual=${item.packageWeightOz}oz) matched tier maxOz=${tier.maxOz} — blocked to avoid overcharge`
-        );
-        await prisma.item.update({
-          where: { id: item.id },
-          data: { ebayNeedsReview: true },
-        });
-        const _billableLbDisplay = (billableOz / 16).toFixed(1);
-        const _dimNote = weightBasis === 'dimensional' ? ` (dimensional weight -- actual is only ~${(item.packageWeightOz / 16).toFixed(1)} lb, but its size bills heavier)` : '';
-        return {
-          error: 'SHIPPING_TIER_GAP',
-          code: 'SHIPPING_TIER_GAP',
-          message: `This item bills at ~${_billableLbDisplay} lb${_dimNote} but your nearest shipping tier covers up to ${(tier.maxOz / 16).toFixed(0)} lb — it would be overcharged. Add a shipping tier near ${_billableLbDisplay} lb, or switch to calculated shipping so the buyer is charged the real rate.`,
-        };
-      }
-      fulfillmentPolicyId = tier.policyId;
-      routingReason = `weight-tier:${tier.maxOz}oz`;
-      cascadeStep = 'weight-tier';
-    }
+  // 1. Shipping classification override (oddball items)
+  if (item.ebayShippingClassification === 'HEAVY_OVERSIZED' && mapping.heavyOversizedPolicyId) {
+    fulfillmentPolicyId = mapping.heavyOversizedPolicyId;
+    routingReason = 'classification:HEAVY_OVERSIZED';
+    cascadeStep = 'classification';
+  } else if (item.ebayShippingClassification === 'FRAGILE' && mapping.fragilePolicyId) {
+    fulfillmentPolicyId = mapping.fragilePolicyId;
+    routingReason = 'classification:FRAGILE';
+    cascadeStep = 'classification';
   }
 
   // 2. Category override
@@ -4535,24 +4371,30 @@ async function resolvePoliciesForItem(
     }
   }
 
-  // 3. Shipping classification override
-  if (!fulfillmentPolicyId) {
-    if (item.ebayShippingClassification === 'HEAVY_OVERSIZED' && mapping.heavyOversizedPolicyId) {
-      fulfillmentPolicyId = mapping.heavyOversizedPolicyId;
-      routingReason = 'classification:HEAVY_OVERSIZED';
-      cascadeStep = 'classification';
-    } else if (item.ebayShippingClassification === 'FRAGILE' && mapping.fragilePolicyId) {
-      fulfillmentPolicyId = mapping.fragilePolicyId;
-      routingReason = 'classification:FRAGILE';
-      cascadeStep = 'classification';
-    }
-  }
-
-  // 4. UNKNOWN classification fallback
+  // 3. UNKNOWN classification fallback
   if (!fulfillmentPolicyId && (item.ebayShippingClassification === 'UNKNOWN' || !item.ebayShippingClassification) && mapping.unknownPolicyId) {
     fulfillmentPolicyId = mapping.unknownPolicyId;
     routingReason = 'classification:UNKNOWN';
     cascadeStep = 'classification';
+  }
+
+  // 4. Computed flat rate (ADR-102) — always-fresh real carrier rate, replaces the
+  // manually-curated weight-tier ladder. Requires a real weight to compute against.
+  if (!fulfillmentPolicyId && item.packageWeightOz != null && item.packageWeightOz > 0) {
+    const computedDims = (
+      item.packageLengthIn != null && item.packageWidthIn != null && item.packageHeightIn != null
+        ? { length: Number(item.packageLengthIn), width: Number(item.packageWidthIn), height: Number(item.packageHeightIn) }
+        : null
+    );
+    const computedFromZip = smartPickContext?.fromZip ?? null;
+    const computedFvf = await ensureFvfFlatRatePolicy(organizerId, item.packageWeightOz, computedDims, computedFromZip);
+    if (computedFvf) {
+      fulfillmentPolicyId = computedFvf.policyId;
+      routingReason = `flat-tiers-computed:${computedFvf.flatRate}`;
+      cascadeStep = 'computed-flat';
+    } else {
+      console.warn(`[eBay ShippingPick] item=${item.id} FLAT_TIERS computed-rate provisioning failed — falling through to default/smart-pick`);
+    }
   }
 
   // 5. Default mapping fulfillment policy
@@ -4584,6 +4426,7 @@ async function resolvePoliciesForItem(
   if (fulfillmentPolicyId) {
     console.log(`[eBay ShippingPick] cascade-step=${cascadeStep} reason=${routingReason} weightOz=${item.packageWeightOz ?? 'null'} packageType=${item.packageType ?? 'null'}`);
   }
+
 
   if (!fulfillmentPolicyId) {
     return {
@@ -4741,7 +4584,21 @@ export async function resyncItemShippingPolicy(
                 lat: true,
                 lng: true,
                 ebayPolicyMapping: {
-                  select: { shippingMode: true, freeShippingOptIn: true, weightTierMappings: true },
+                  // ADR-102 (roadmap #622): categoryOverrides/heavyOversizedPolicyId/
+                  // fragilePolicyId/unknownPolicyId are required so resolveItemShipping's
+                  // FLAT_TIERS branch below can check oddball-item overrides before
+                  // falling through to the computed rate -- without these the recorded
+                  // ebayShippingAmountCents would silently use the computed rate even for
+                  // an item routed to a manual override policy.
+                  select: {
+                    shippingMode: true,
+                    freeShippingOptIn: true,
+                    weightTierMappings: true,
+                    categoryOverrides: true,
+                    heavyOversizedPolicyId: true,
+                    fragilePolicyId: true,
+                    unknownPolicyId: true,
+                  },
                 },
               },
             },
@@ -4822,6 +4679,8 @@ export async function resyncItemShippingPolicy(
         packageHeightIn: item.packageHeightIn != null ? Number(item.packageHeightIn) : null,
         ebayShippingOverride: item.ebayShippingOverride,
         ebayFulfillmentPolicyOverrideId: item.ebayFulfillmentPolicyOverrideId,
+        ebayShippingClassification: item.ebayShippingClassification,
+        ebayCategoryId: item.ebayCategoryId,
       },
       fromZip,
     });
@@ -6978,6 +6837,7 @@ export const getShippingNetPreview = async (req: AuthRequest, res: Response): Pr
         packageWidthIn: dims?.width ?? null,
         packageHeightIn: dims?.height ?? null,
         ebayFulfillmentPolicyOverrideId: fulfillmentOverrideId,
+        ebayCategoryId: ebayCategoryId,
       },
       fromZip: body.fromZip ?? saleZip,
     });
@@ -7148,6 +7008,7 @@ export const getSuggestedPriceForMargin = async (req: AuthRequest, res: Response
         packageWidthIn: dims?.width ?? null,
         packageHeightIn: dims?.height ?? null,
         ebayFulfillmentPolicyOverrideId: fulfillmentOverrideId,
+        ebayCategoryId: ebayCategoryId,
       },
       fromZip: body.fromZip ?? saleZip,
     });

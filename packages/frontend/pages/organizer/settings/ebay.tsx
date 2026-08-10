@@ -17,7 +17,6 @@ import api from '../../../lib/api';
 import { useAuth } from '../../../components/AuthContext';
 import { useToast } from '../../../components/ToastContext';
 import EbayCategoryPicker from '../../../components/EbayCategoryPicker';
-import AccessibleModal from '../../../components/AccessibleModal';
 
 // Type definitions
 type PolicyClassification = 'weight-tier' | 'local-pickup' | 'free-shipping' | 'calculated' | 'category-specific' | 'international' | 'unknown';
@@ -108,22 +107,6 @@ interface SuggestedWeightTier {
   confidence: 'high' | 'medium' | 'low';
 }
 
-// (S-gap-fill, 2026-08-09) "Fill gaps automatically" preview -- what the
-// GET /ebay/weight-tier-gaps/preview endpoint returns. Read-only: computing this
-// makes zero eBay/DB writes on the backend.
-interface GapFillNewTier {
-  bucketMaxLb: number;
-  maxOz: number;
-  policyName: string;
-  flatRate: number;
-  closesGapFromOz: number;
-  closesGapToOz: number;
-}
-interface GapFillPreview {
-  gaps: Array<{ fromOz: number; toOz: number; fromLb: number; toLb: number }>;
-  newTiers: GapFillNewTier[];
-}
-
 interface PolicyMapping {
   defaultFulfillmentPolicyId?: string | null;
   defaultReturnPolicyId?: string | null;
@@ -150,28 +133,6 @@ interface SetupData {
   suggestedWeightTiers: SuggestedWeightTier[];
   handlingTimeDays?: number;
 }
-
-// Client-side weight-tier gap detection. Mirrors the backend's real
-// gap-overshoot guard (packages/backend/src/controllers/ebayController.ts,
-// resolvePoliciesForItem, ~L4132: `tier.maxOz > billableOz * 2`) so this notice
-// and actual routing behavior stay in agreement -- if that backend threshold
-// ever changes, WEIGHT_TIER_GAP_RATIO below must be updated to match (UX audit
-// finding 4 / Dev Handoff Notes 3, ebay-shipping-settings-simplification-2026-08-06.md).
-const WEIGHT_TIER_GAP_RATIO = 2;
-const getWeightTierGaps = (tiers: WeightTierMapping[]): Array<{ fromOz: number; toOz: number }> => {
-  const sorted = [...tiers]
-    .filter((t) => t.maxOz !== Infinity && t.maxOz > 0)
-    .sort((a, b) => a.maxOz - b.maxOz);
-  const gaps: Array<{ fromOz: number; toOz: number }> = [];
-  for (let i = 0; i < sorted.length - 1; i++) {
-    const current = sorted[i].maxOz;
-    const next = sorted[i + 1].maxOz;
-    if (next > current * WEIGHT_TIER_GAP_RATIO) {
-      gaps.push({ fromOz: current, toOz: next });
-    }
-  }
-  return gaps;
-};
 
 const EbayPolicySetupPage = () => {
   const router = useRouter();
@@ -209,11 +170,15 @@ const EbayPolicySetupPage = () => {
     result: { checkedCount: number; staleCount: number; stalePolicies: Array<{ policyId: string; label: string }> } | null;
   }>({ loading: false, result: null });
 
-  // (S-gap-fill, 2026-08-09) "Fill gaps automatically" -- preview modal state.
-  const [gapFillPreview, setGapFillPreview] = useState<GapFillPreview | null>(null);
-  const [gapFillPreviewLoading, setGapFillPreviewLoading] = useState(false);
-  const [gapFillModalOpen, setGapFillModalOpen] = useState(false);
-  const [gapFillApplying, setGapFillApplying] = useState(false);
+  // ADR-102 (roadmap #622): read-only computed-rate preview, replacing the
+  // two removed editable weight/box-size tables. Populated by calling the
+  // existing POST /ebay/shipping-preview endpoint (no itemId) with sample
+  // weights -- makes zero eBay/DB writes.
+  const [ratePreview, setRatePreview] = useState<{
+    loading: boolean;
+    rows: Array<{ lbs: number; dollars: number | null }>;
+    error: string | null;
+  }>({ loading: false, rows: [], error: null });
 
   // Fetch setup data on mount
   useEffect(() => {
@@ -313,8 +278,37 @@ const EbayPolicySetupPage = () => {
     skuAppendLocation !== originalSkuToggles.skuAppendLocation ||
     handlingTimeDays !== originalHandlingTimeDays;
 
-  // UX audit finding 4: non-blocking gap notice in the Weight table below.
-  const weightTierGaps = mapping ? getWeightTierGaps(mapping.weightTierMappings) : [];
+  // ADR-102 (roadmap #622): fetch the read-only computed-rate preview once,
+  // the first time the organizer is in Flat-rate tiers mode. Uses the buyer's
+  // real cheapest-carrier rate (same pipeline the push path uses) at sample
+  // weights -- no fromZip passed, so the backend falls back to the organizer's
+  // own lat/lng (resolveItemShipping's existing fallback path).
+  useEffect(() => {
+    if (mapping?.shippingMode !== 'FLAT_TIERS') return;
+    if (ratePreview.rows.length > 0 || ratePreview.loading) return;
+    const sampleLbs = [1, 5, 10, 20];
+    let cancelled = false;
+    setRatePreview({ loading: true, rows: [], error: null });
+    (async () => {
+      try {
+        const rows = await Promise.all(
+          sampleLbs.map((lbs) =>
+            api
+              .post('/ebay/shipping-preview', { weightOz: lbs * 16 })
+              .then((res) => ({
+                lbs,
+                dollars: typeof res.data?.buyerShipping === 'number' ? res.data.buyerShipping : null,
+              }))
+              .catch(() => ({ lbs, dollars: null }))
+          )
+        );
+        if (!cancelled) setRatePreview({ loading: false, rows, error: null });
+      } catch {
+        if (!cancelled) setRatePreview({ loading: false, rows: [], error: 'Could not load the rate preview right now.' });
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [mapping?.shippingMode]);
 
   const handleSaveMapping = async () => {
     if (!mapping) return;
@@ -401,132 +395,6 @@ const EbayPolicySetupPage = () => {
       setPolicyCheck({ loading: false, result: null });
       showToast(error.response?.data?.message || 'Could not check your policies right now', 'error');
     }
-  };
-
-  // (S-gap-fill, 2026-08-09) "Fill gaps automatically" -- step 1: fetch a read-only
-  // preview (zero eBay/DB writes on the backend) and open the confirm modal. The
-  // backend re-detects gaps using the exact same algorithm driving weightTierGaps
-  // above, so what this shows always matches the banner that triggered it.
-  const handleOpenGapFillPreview = async () => {
-    setGapFillPreviewLoading(true);
-    try {
-      const res = await api.get('/ebay/weight-tier-gaps/preview');
-      const preview: GapFillPreview = res.data;
-      if (!preview.newTiers || preview.newTiers.length === 0) {
-        showToast('No gaps to fill right now.', 'info');
-        return;
-      }
-      setGapFillPreview(preview);
-      setGapFillModalOpen(true);
-    } catch (error: any) {
-      showToast(error.response?.data?.error || error.response?.data?.message || 'Could not check for gaps right now', 'error');
-    } finally {
-      setGapFillPreviewLoading(false);
-    }
-  };
-
-  // Step 2: after explicit confirmation, actually provision the real eBay
-  // policies and persist the new tiers. Merges only the newly created tiers into
-  // the existing weightTierMappings array (assigning them fresh client-only ids)
-  // so existing rows never remount and any of the organizer's other in-progress
-  // edits on this page are left untouched.
-  const handleConfirmGapFill = async () => {
-    if (!mapping) return;
-    setGapFillApplying(true);
-    try {
-      const res = await api.post('/ebay/weight-tier-gaps/fill');
-      const created: WeightTierMapping[] = res.data.created || [];
-      const createdWithIds = created.map((tier) => ({ ...tier, _clientId: newClientId() }));
-      const mergeTiers = (tiers: WeightTierMapping[]) =>
-        [...tiers, ...createdWithIds].sort((a, b) => {
-          const aVal = a.maxOz === Infinity ? Number.MAX_VALUE : a.maxOz;
-          const bVal = b.maxOz === Infinity ? Number.MAX_VALUE : b.maxOz;
-          return aVal - bVal;
-        });
-      setMapping((prev) => (prev ? { ...prev, weightTierMappings: mergeTiers(prev.weightTierMappings) } : prev));
-      // These tiers are already saved server-side (the fill endpoint persists them),
-      // so fold them into originalMapping too -- otherwise they'd show as an unsaved
-      // change and the sticky "Discard changes" bar would offer to undo a save that
-      // already happened.
-      setOriginalMapping((prev) => (prev ? { ...prev, weightTierMappings: mergeTiers(prev.weightTierMappings) } : prev));
-      setGapFillModalOpen(false);
-      setGapFillPreview(null);
-      if (created.length === 0) {
-        showToast('Could not create any new shipping policies. Please try again.', 'error');
-      } else if (res.data.partialFailure) {
-        showToast(`Added ${created.length} of ${gapFillPreview?.newTiers.length ?? created.length} tiers -- one or more could not be created. Try again to fill the rest.`, 'error');
-      } else {
-        showToast(`Added ${created.length} shipping ${created.length === 1 ? 'tier' : 'tiers'} to close the gap${created.length === 1 ? '' : 's'}.`, 'success');
-      }
-    } catch (error: any) {
-      showToast(error.response?.data?.error || error.response?.data?.message || 'Failed to fill weight-tier gaps', 'error');
-    } finally {
-      setGapFillApplying(false);
-    }
-  };
-
-  const useSuggestedDefaults = () => {
-    if (!setupData || !mapping) return;
-    const newMapping = { ...mapping };
-    newMapping.weightTierMappings = setupData.suggestedWeightTiers.map(tier => ({
-      maxOz: tier.maxOz,
-      policyId: tier.policyId,
-      policyName: tier.policyName,
-      _clientId: newClientId(),
-    }));
-    setMapping(newMapping);
-    showToast('Applied suggested weight tiers', 'success');
-  };
-
-  // Weight tier handlers
-  const addWeightTier = () => {
-    if (!mapping) return;
-    const newTiers = [
-      ...mapping.weightTierMappings,
-      { maxOz: Infinity, policyId: '', policyName: '', _clientId: newClientId() },
-    ];
-    setMapping({ ...mapping, weightTierMappings: newTiers });
-  };
-
-  // NOTE: do NOT sort here. Sorting on every keystroke causes rows to jump
-  // mid-input and steals focus from the active <input>. Canonical sort happens
-  // once at save time in handleSaveMapping. Backend re-sorts on read for
-  // routing correctness (matchWeightTier in ebayPolicyParser.ts).
-  const updateWeightTier = (index: number, field: string, value: any) => {
-    if (!mapping) return;
-    const newTiers = [...mapping.weightTierMappings];
-    newTiers[index] = { ...newTiers[index], [field]: value };
-    setMapping({ ...mapping, weightTierMappings: newTiers });
-  };
-
-  const removeWeightTier = (index: number) => {
-    if (!mapping) return;
-    const newTiers = mapping.weightTierMappings.filter((_, i) => i !== index);
-    setMapping({ ...mapping, weightTierMappings: newTiers });
-  };
-
-  // Cubic tier handlers (ADR-099) -- same shape as weight-tier handlers above, but
-  // each row has three dimension fields instead of one weight cutoff.
-  const addCubicTier = () => {
-    if (!mapping) return;
-    const newTiers = [
-      ...(mapping.cubicTierMappings || []),
-      { maxLengthIn: 0, maxWidthIn: 0, maxHeightIn: 0, policyId: '', policyName: '', _clientId: newClientId() },
-    ];
-    setMapping({ ...mapping, cubicTierMappings: newTiers });
-  };
-
-  const updateCubicTier = (index: number, field: string, value: any) => {
-    if (!mapping) return;
-    const newTiers = [...(mapping.cubicTierMappings || [])];
-    newTiers[index] = { ...newTiers[index], [field]: value };
-    setMapping({ ...mapping, cubicTierMappings: newTiers });
-  };
-
-  const removeCubicTier = (index: number) => {
-    if (!mapping) return;
-    const newTiers = (mapping.cubicTierMappings || []).filter((_, i) => i !== index);
-    setMapping({ ...mapping, cubicTierMappings: newTiers });
   };
 
   // Category override handlers
@@ -764,7 +632,7 @@ const EbayPolicySetupPage = () => {
                       onClick={() => mapping && setMapping({ ...mapping, shippingMode: 'CALCULATED' })}
                       className={`text-left rounded-lg border p-4 transition-colors ${
                         (mapping?.shippingMode ?? 'CALCULATED') === 'CALCULATED'
-                          ? 'border-sage-600 bg-sage-50 dark:bg-sage-900/30 ring-1 ring-sage-600'
+                          ? 'border-sage-600 bg-sage-50 dark:!bg-sage-900/30 ring-1 ring-sage-600'
                           : 'border-gray-200 dark:border-gray-700 hover:border-sage-400'
                       }`}
                     >
@@ -788,7 +656,7 @@ const EbayPolicySetupPage = () => {
                       onClick={() => mapping && setMapping({ ...mapping, shippingMode: 'FLAT_TIERS' })}
                       className={`text-left rounded-lg border p-4 transition-colors ${
                         mapping?.shippingMode === 'FLAT_TIERS'
-                          ? 'border-sage-600 bg-sage-50 dark:bg-sage-900/30 ring-1 ring-sage-600'
+                          ? 'border-sage-600 bg-sage-50 dark:!bg-sage-900/30 ring-1 ring-sage-600'
                           : 'border-gray-200 dark:border-gray-700 hover:border-sage-400'
                       }`}
                     >
@@ -838,227 +706,58 @@ const EbayPolicySetupPage = () => {
                   </label>
                 </div>
 
-                {/* Section C: Weight-tier matrix — only relevant in Flat-rate tiers mode */}
+                {/* Section C: Computed-rate preview (ADR-102, roadmap #622) -- replaces
+                    the old editable "Shipping Policy by Weight" + "Shipping Policy by
+                    Box Size" tables. Flat-rate tiers mode no longer routes items through
+                    a manually-curated ladder -- every item gets the real cheapest-carrier
+                    rate (USPS/UPS/FedEx, computed fresh) at push time, the same pipeline
+                    Calculated mode's flat-fallback already uses. This panel is read-only:
+                    it shows what buyers will actually be charged at a few sample weights
+                    so organizers aren't looking at a black box, but there's nothing to
+                    edit here -- the rate is always current, so it can't develop the
+                    coverage gaps the old hand-maintained ladder did. */}
                 {mapping?.shippingMode === 'FLAT_TIERS' && (
                 <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <div>
-                      <h2 className="text-xl font-bold text-gray-900 dark:text-white">Shipping Policy by Weight</h2>
-                      <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                        FindA.Sale automatically picks the right policy based on each item's weight.
-                      </p>
-                    </div>
-                    {setupData.suggestedWeightTiers.length > 0 && (
-                      <button
-                        onClick={useSuggestedDefaults}
-                        className="text-sm text-sage-600 hover:text-sage-700 dark:text-sage-400 dark:hover:text-sage-500 font-medium"
-                      >
-                        Use suggested defaults
-                      </button>
-                    )}
-                  </div>
+                  <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-1">Your buyers are charged the real computed rate</h2>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                    FindA.Sale automatically finds the cheapest USPS/UPS/FedEx rate for each item's
+                    weight and box size, every time -- no tiers to maintain, so it never goes stale.
+                    Here's roughly what buyers pay at a few sample weights, shipping from your
+                    sale's origin address.
+                  </p>
 
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-gray-200 dark:border-gray-700">
-                          <th className="text-left py-2 px-3 font-semibold text-gray-700 dark:text-gray-300">Max Weight (oz)</th>
-                          <th className="text-left py-2 px-3 font-semibold text-gray-700 dark:text-gray-300">Policy</th>
-                          <th className="text-right py-2 px-3 font-semibold text-gray-700 dark:text-gray-300">Action</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {mapping.weightTierMappings.map((tier, index) => (
-                          <tr key={tier._clientId || `tier-fallback-${index}`} className="border-b border-gray-200 dark:border-gray-700">
-                            <td className="py-3 px-3">
-                              <input
-                                type="text"
-                                value={tier.maxOz === Infinity ? '' : tier.maxOz}
-                                onChange={(e) => {
-                                  const val = e.target.value === '' ? Infinity : parseFloat(e.target.value);
-                                  updateWeightTier(index, 'maxOz', val);
-                                }}
-                                placeholder="No upper limit"
-                                className="w-full px-2 py-1 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded text-sm focus:outline-none focus:ring-2 focus:ring-sage-600"
-                               aria-label="No upper limit" />
-                              {tier.maxOz === Infinity && (
-                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">No upper limit</p>
-                              )}
-                            </td>
-                            <td className="py-3 px-3">
-                              <select
-                                value={tier.policyId || ''}
-                                onChange={(e) => {
-                                  const selectedId = e.target.value;
-                                  const policy = setupData.fulfillmentPolicies.find(p => p.fulfillmentPolicyId === selectedId);
-                                  if (selectedId && policy) {
-                                    if (!mapping) return;
-                                    const newTiers = [...mapping.weightTierMappings];
-                                    newTiers[index] = { ...newTiers[index], policyId: selectedId, policyName: policy.name };
-                                    setMapping({ ...mapping, weightTierMappings: newTiers });
-                                  }
-                                }}
-                                className="w-full px-2 py-1 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded text-sm focus:outline-none focus:ring-2 focus:ring-sage-600"
-                              >
-                                <option value="">Select policy</option>
-                                {setupData.fulfillmentPolicies.map(policy => (
-                                  <option key={policy.fulfillmentPolicyId} value={policy.fulfillmentPolicyId}>
-                                    {policy.name}{policySuffix(policy.classification)}
-                                  </option>
-                                ))}
-                              </select>
-                            </td>
-                            <td className="py-3 px-3 text-right">
-                              <button
-                                onClick={() => removeWeightTier(index)}
-                                className="text-xs text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 font-medium"
-                              >
-                                Delete
-                              </button>
-                            </td>
+                  {ratePreview.loading && (
+                    <p className="text-sm text-gray-500 dark:text-gray-400">Loading a live rate preview…</p>
+                  )}
+                  {ratePreview.error && (
+                    <p className="text-sm text-red-600 dark:text-red-400">{ratePreview.error}</p>
+                  )}
+                  {!ratePreview.loading && !ratePreview.error && ratePreview.rows.length > 0 && (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b border-gray-200 dark:border-gray-700">
+                            <th className="text-left py-2 px-3 font-semibold text-gray-700 dark:text-gray-300">Item weight</th>
+                            <th className="text-left py-2 px-3 font-semibold text-gray-700 dark:text-gray-300">Buyer pays for shipping</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-
-                  <button
-                    onClick={addWeightTier}
-                    className="mt-4 text-sm text-sage-600 hover:text-sage-700 dark:text-sage-400 dark:hover:text-sage-500 font-medium"
-                  >
-                    + Add tier
-                  </button>
-
-                  {weightTierGaps.length > 0 && (
-                    <div className="mt-4 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 p-3 space-y-1">
-                      {weightTierGaps.map((gap, i) => (
-                        <p key={i} className="text-xs text-amber-800 dark:text-amber-300">
-                          Heads up — you don't have a tier between about {Math.round(gap.fromOz / 16)} lbs and {Math.round(gap.toOz / 16)} lbs. Items in that range will still work, but they'll fall back to an automatic option instead of the price you set. Add a tier here to fix that.
-                        </p>
-                      ))}
-                      <button
-                        type="button"
-                        onClick={handleOpenGapFillPreview}
-                        disabled={gapFillPreviewLoading}
-                        className="mt-1 text-xs px-3 py-1.5 border border-amber-600 text-amber-800 dark:text-amber-300 dark:border-amber-500 rounded-lg hover:bg-amber-100 dark:hover:bg-amber-900/40 disabled:opacity-50 disabled:cursor-not-allowed font-semibold transition"
-                      >
-                        {gapFillPreviewLoading ? 'Checking…' : 'Fill gaps automatically'}
-                      </button>
+                        </thead>
+                        <tbody>
+                          {ratePreview.rows.map((row) => (
+                            <tr key={row.lbs} className="border-b border-gray-200 dark:border-gray-700">
+                              <td className="py-3 px-3 text-gray-900 dark:text-white">{row.lbs} lb{row.lbs === 1 ? '' : 's'}</td>
+                              <td className="py-3 px-3 text-gray-900 dark:text-white">
+                                {row.dollars != null ? `$${row.dollars.toFixed(2)}` : 'Unavailable right now'}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                     </div>
                   )}
-                </div>
-                )}
-
-                {/* Section C2: Cubic-size tiers (ADR-099) -- only relevant in Flat-rate tiers mode.
-                    Weight alone doesn't determine real shipping cost: a light but bulky item (a
-                    lampshade, a large picture frame, a foam-packed fixture) can bill at a much
-                    higher "dimensional weight" than its actual weight once a carrier measures the
-                    box. The table above already accounts for this automatically -- FindA.Sale checks
-                    both and uses whichever is higher before picking a weight tier. This table is for
-                    items where you've built a specific eBay policy sized to the box itself (like
-                    USPS Ground Advantage Cubic pricing), so bulky-but-light items get priced by their
-                    real box size instead of falling back to a generic catch-all. */}
-                {mapping?.shippingMode === 'FLAT_TIERS' && (
-                <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
-                  <div className="mb-4">
-                    <h2 className="text-xl font-bold text-gray-900 dark:text-white">Shipping Policy by Box Size</h2>
-                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                      For bulky-but-light items where a carrier bills by box size, not weight (e.g. USPS Ground Advantage Cubic).
-                      Only used when an item overshoots your weight tiers above and has length, width, and height entered.
-                    </p>
-                  </div>
-
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-gray-200 dark:border-gray-700">
-                          <th className="text-left py-2 px-3 font-semibold text-gray-700 dark:text-gray-300">Fits within (L x W x H, in)</th>
-                          <th className="text-left py-2 px-3 font-semibold text-gray-700 dark:text-gray-300">Policy</th>
-                          <th className="text-right py-2 px-3 font-semibold text-gray-700 dark:text-gray-300">Action</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {(mapping.cubicTierMappings || []).map((tier, index) => (
-                          <tr key={tier._clientId || `cubic-fallback-${index}`} className="border-b border-gray-200 dark:border-gray-700">
-                            <td className="py-3 px-3">
-                              <div className="flex items-center gap-1">
-                                <input
-                                  type="number"
-                                  min="0"
-                                  step="0.1"
-                                  value={tier.maxLengthIn || ''}
-                                  onChange={(e) => updateCubicTier(index, 'maxLengthIn', parseFloat(e.target.value) || 0)}
-                                  placeholder="L"
-                                  aria-label="Max length in inches"
-                                  className="w-16 px-2 py-1 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded text-sm focus:outline-none focus:ring-2 focus:ring-sage-600"
-                                />
-                                <span className="text-gray-400">x</span>
-                                <input
-                                  type="number"
-                                  min="0"
-                                  step="0.1"
-                                  value={tier.maxWidthIn || ''}
-                                  onChange={(e) => updateCubicTier(index, 'maxWidthIn', parseFloat(e.target.value) || 0)}
-                                  placeholder="W"
-                                  aria-label="Max width in inches"
-                                  className="w-16 px-2 py-1 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded text-sm focus:outline-none focus:ring-2 focus:ring-sage-600"
-                                />
-                                <span className="text-gray-400">x</span>
-                                <input
-                                  type="number"
-                                  min="0"
-                                  step="0.1"
-                                  value={tier.maxHeightIn || ''}
-                                  onChange={(e) => updateCubicTier(index, 'maxHeightIn', parseFloat(e.target.value) || 0)}
-                                  placeholder="H"
-                                  aria-label="Max height in inches"
-                                  className="w-16 px-2 py-1 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded text-sm focus:outline-none focus:ring-2 focus:ring-sage-600"
-                                />
-                              </div>
-                            </td>
-                            <td className="py-3 px-3">
-                              <select
-                                value={tier.policyId || ''}
-                                onChange={(e) => {
-                                  const selectedId = e.target.value;
-                                  const policy = setupData.fulfillmentPolicies.find(p => p.fulfillmentPolicyId === selectedId);
-                                  if (selectedId && policy) {
-                                    if (!mapping) return;
-                                    const newTiers = [...(mapping.cubicTierMappings || [])];
-                                    newTiers[index] = { ...newTiers[index], policyId: selectedId, policyName: policy.name };
-                                    setMapping({ ...mapping, cubicTierMappings: newTiers });
-                                  }
-                                }}
-                                className="w-full px-2 py-1 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded text-sm focus:outline-none focus:ring-2 focus:ring-sage-600"
-                              >
-                                <option value="">Select policy</option>
-                                {setupData.fulfillmentPolicies.map(policy => (
-                                  <option key={policy.fulfillmentPolicyId} value={policy.fulfillmentPolicyId}>
-                                    {policy.name}{policySuffix(policy.classification)}
-                                  </option>
-                                ))}
-                              </select>
-                            </td>
-                            <td className="py-3 px-3 text-right">
-                              <button
-                                onClick={() => removeCubicTier(index)}
-                                className="text-xs text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 font-medium"
-                              >
-                                Delete
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-
-                  <button
-                    onClick={addCubicTier}
-                    className="mt-4 text-sm text-sage-600 hover:text-sage-700 dark:text-sage-400 dark:hover:text-sage-500 font-medium"
-                  >
-                    + Add tier
-                  </button>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-4">
+                    Oddball items (heavy/oversized, fragile, or ones we couldn't classify) still use
+                    the manual overrides you set below instead of the computed rate.
+                  </p>
                 </div>
                 )}
 
@@ -1089,7 +788,7 @@ const EbayPolicySetupPage = () => {
                         onChange={(e) => setMapping({ ...mapping, heavyOversizedPolicyId: e.target.value || null })}
                         className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-sage-600"
                       >
-                        <option value="">. None (use weight tier), </option>
+                        <option value="">None (use computed rate)</option>
                         {setupData.fulfillmentPolicies.map(policy => (
                           <option key={policy.fulfillmentPolicyId} value={policy.fulfillmentPolicyId}>
                             {policy.name}
@@ -1110,7 +809,7 @@ const EbayPolicySetupPage = () => {
                         onChange={(e) => setMapping({ ...mapping, fragilePolicyId: e.target.value || null })}
                         className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-sage-600"
                       >
-                        <option value="">. None (use weight tier), </option>
+                        <option value="">None (use computed rate)</option>
                         {setupData.fulfillmentPolicies.map(policy => (
                           <option key={policy.fulfillmentPolicyId} value={policy.fulfillmentPolicyId}>
                             {policy.name}
@@ -1128,7 +827,7 @@ const EbayPolicySetupPage = () => {
                         onChange={(e) => setMapping({ ...mapping, unknownPolicyId: e.target.value || null })}
                         className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-sage-600"
                       >
-                        <option value="">. None (use weight tier), </option>
+                        <option value="">None (use computed rate)</option>
                         {setupData.fulfillmentPolicies.map(policy => (
                           <option key={policy.fulfillmentPolicyId} value={policy.fulfillmentPolicyId}>
                             {policy.name}
@@ -1437,56 +1136,6 @@ const EbayPolicySetupPage = () => {
         </div>
       </div>
 
-      {/* (S-gap-fill, 2026-08-09) "Fill gaps automatically" confirm modal -- same
-          AccessibleModal + summary/list/cancel-apply structure as BulkConfirmModal
-          (components/BulkConfirmModal.tsx), the existing confirm-modal pattern used
-          elsewhere in the app. Nothing is created until the organizer clicks
-          "Create N policies" below -- the preview fetch that populated this modal
-          made zero eBay/DB writes. */}
-      {gapFillModalOpen && gapFillPreview && (
-        <AccessibleModal
-          isOpen={true}
-          onClose={() => { if (!gapFillApplying) { setGapFillModalOpen(false); setGapFillPreview(null); } }}
-          ariaLabelledBy="gap-fill-modal-title"
-        >
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md mx-4 shadow-xl border-l-4 border-l-amber-600">
-            <h3 id="gap-fill-modal-title" className="text-lg font-bold mb-2 text-warm-900 dark:text-warm-100">
-              Fill weight-tier gaps
-            </h3>
-            <p className="text-warm-700 dark:text-gray-300 mb-4 text-sm">
-              This creates <span className="font-semibold">{gapFillPreview.newTiers.length}</span> real eBay shipping{' '}
-              {gapFillPreview.newTiers.length === 1 ? 'policy' : 'policies'} on your account and adds{' '}
-              {gapFillPreview.newTiers.length === 1 ? 'it' : 'them'} to your weight-tier table below.
-            </p>
-            <div className="mb-4 p-3 bg-warm-50 dark:bg-gray-700 rounded border border-warm-200 dark:border-gray-600 space-y-2">
-              <p className="text-xs font-semibold text-warm-700 dark:text-gray-300 mb-1">We'll add:</p>
-              <ul className="space-y-1 text-sm text-warm-700 dark:text-gray-200">
-                {gapFillPreview.newTiers.map((tier, i) => (
-                  <li key={i}>
-                    • {tier.policyName}
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <div className="flex gap-3 justify-end">
-              <button
-                onClick={() => { setGapFillModalOpen(false); setGapFillPreview(null); }}
-                disabled={gapFillApplying}
-                className="px-4 py-2 border border-warm-300 dark:border-gray-600 text-warm-700 dark:text-gray-200 rounded hover:bg-warm-50 dark:hover:bg-gray-700 disabled:opacity-50 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleConfirmGapFill}
-                disabled={gapFillApplying}
-                className="px-4 py-2 text-white rounded font-semibold disabled:opacity-50 transition-colors bg-amber-600 hover:bg-amber-700"
-              >
-                {gapFillApplying ? 'Creating…' : `Create ${gapFillPreview.newTiers.length} ${gapFillPreview.newTiers.length === 1 ? 'policy' : 'policies'}`}
-              </button>
-            </div>
-          </div>
-        </AccessibleModal>
-      )}
     </>
   );
 };

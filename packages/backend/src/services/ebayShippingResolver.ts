@@ -16,8 +16,7 @@
  * back to the FVF-flat compute so the preview never shows a bare/zero number.
  */
 
-import { matchWeightTier, WeightTierMapping } from '../utils/ebayPolicyParser';
-import { computeCheapestForOrigin, billableLb, DIM_DIVISOR_USPS } from './ebayRateEstimateService';
+import { computeCheapestForOrigin } from './ebayRateEstimateService';
 import { computeFvfFlatRate, roundUpToBucket } from './ebayFlatRatePolicyService';
 
 /** Where the resolved buyer-shipping amount came from. */
@@ -45,6 +44,11 @@ export interface ShippingResolverMapping {
   shippingMode?: string | null;
   freeShippingOptIn?: boolean | null;
   weightTierMappings?: unknown;
+  /** ADR-102 (roadmap #622): oddball-item manual overrides, checked before the computed rate. */
+  categoryOverrides?: unknown;
+  heavyOversizedPolicyId?: string | null;
+  fragilePolicyId?: string | null;
+  unknownPolicyId?: string | null;
 }
 
 /** Minimal organizer shape needed to resolve shipping (origin for rate lookup). */
@@ -62,20 +66,9 @@ export interface ShippingResolverItem {
   ebayShippingOverride?: string | null;
   /** Organizer-picked eBay fulfillment policy for THIS item (null = Auto). */
   ebayFulfillmentPolicyOverrideId?: string | null;
-}
-
-/** Parse the `$X.XX` (or `$X`) embedded in a flat-tier policy name → cents, or null. */
-function parsePolicyAmountCents(policyName: string | null | undefined): number | null {
-  if (!policyName) return null;
-  // Use the LAST dollar amount in the name, not the first. eBay envelope tiers are
-  // named like "1oz under $20 Ebay Std Env $1.03" -- "$20" is the envelope program's
-  // item-value eligibility cap, "$1.03" (trailing) is the real shipping price.
-  // Bug confirmed 2026-07-03: preview showed $20 instead of $1.03 for 1/2/3oz tiers.
-  const matches = [...policyName.matchAll(/\$(\d+(?:\.\d{1,2})?)/g)];
-  if (matches.length === 0) return null;
-  const dollars = parseFloat(matches[matches.length - 1][1]);
-  if (!isFinite(dollars)) return null;
-  return Math.round(dollars * 100);
+  /** ADR-102 (roadmap #622): used to check oddball-item overrides before the computed rate. */
+  ebayShippingClassification?: string | null;
+  ebayCategoryId?: string | null;
 }
 
 /** Round a dollar amount to whole cents (avoids float drift before *100). */
@@ -151,39 +144,31 @@ export async function resolveItemShipping(input: {
     };
   };
 
-  // ── FLAT_TIERS organizer: weight-tier match (with gap guard) → else FVF flat ──
-  // (S1197) Match on billable ounces (max of actual vs. dimensional weight), matching
-  // the identical fix in resolvePoliciesForItem (ebayController.ts) -- this file's own
-  // job is to never disagree with that path, so it has to apply the same basis.
+  // ── FLAT_TIERS organizer (ADR-102, roadmap #622): oddball-item manual overrides
+  // (classification / category) win first, then the always-fresh computed rate.
+  // This mirrors resolvePoliciesForItem's new cascade (ebayController.ts) -- this
+  // file's own job is to never disagree with that path, so it has to apply the same
+  // precedence. The old weightTierMappings ladder match is retired (it went stale --
+  // 0-1lb, 7-45lb coverage gaps -- from being hand-maintained); computeCheapestForOrigin
+  // can't develop a gap because it's computed fresh every time.
   if (shippingMode === 'FLAT_TIERS') {
-    const tiers = (mapping?.weightTierMappings as unknown as WeightTierMapping[]) || [];
-    if (tiers.length > 0 && weightOz > 0) {
-      const { lb: billableLbForTier } = billableLb(weightOz, dims, DIM_DIVISOR_USPS);
-      const billableOz = billableLbForTier * 16;
-      const tier = matchWeightTier(billableOz, tiers);
-      if (tier) {
-        // Gap-overshoot guard (mirrors resolvePoliciesForItem): an item that overshot
-        // the granular tiers falls into a much-larger catch-all. billable>16oz AND the
-        // matched tier covers items at least ~2x heavier → treat as a gap → FVF flat.
-        const isGap = billableOz > 16 && tier.maxOz > billableOz * 2;
-        if (isGap) {
-          return fvfFlat();
-        }
-        // Real tier match: parse the embedded $X.XX from the tier name.
-        const cents = parsePolicyAmountCents(tier.policyName);
-        if (cents != null) {
-          return {
-            fulfillmentPolicyId: tier.policyId,
-            buyerAmountCents: cents,
-            policyName: tier.policyName,
-            source: 'weight-tier',
-          };
-        }
-        // Tier name had no parseable amount — fall back to FVF flat compute.
-        return fvfFlat();
+    if (item.ebayShippingClassification === 'HEAVY_OVERSIZED' && mapping?.heavyOversizedPolicyId) {
+      return { fulfillmentPolicyId: mapping.heavyOversizedPolicyId, buyerAmountCents: 0, policyName: null, source: 'custom-override' };
+    }
+    if (item.ebayShippingClassification === 'FRAGILE' && mapping?.fragilePolicyId) {
+      return { fulfillmentPolicyId: mapping.fragilePolicyId, buyerAmountCents: 0, policyName: null, source: 'custom-override' };
+    }
+    const categoryOverrides = (mapping?.categoryOverrides as any[]) || [];
+    if (item.ebayCategoryId) {
+      const match = categoryOverrides.find((c: any) => c.categoryId === item.ebayCategoryId);
+      if (match) {
+        return { fulfillmentPolicyId: match.policyId, buyerAmountCents: 0, policyName: null, source: 'custom-override' };
       }
     }
-    // No tier match (or no tiers / no weight) → FVF flat.
+    if ((item.ebayShippingClassification === 'UNKNOWN' || !item.ebayShippingClassification) && mapping?.unknownPolicyId) {
+      return { fulfillmentPolicyId: mapping.unknownPolicyId, buyerAmountCents: 0, policyName: null, source: 'custom-override' };
+    }
+    // No oddball override matched — always use the computed rate (ADR-102 primary path).
     return fvfFlat();
   }
 
