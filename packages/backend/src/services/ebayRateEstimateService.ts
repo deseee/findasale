@@ -752,17 +752,32 @@ function isUspsOversized(dims: PackageDims): boolean {
 }
 
 /**
- * PENDING_LIVE_VERIFICATION (extrapolated weight bracket, honesty gate, S1201 fix):
- * rateFromTable() now linearly extrapolates past each table's 70lb real-data
- * ceiling (see that function's header comment for the bug this replaced and the
- * extrapolation method) instead of silently clamping to the 70lb-tier rate. This
- * bracket is real data for NO carrier -- it is a same-methodology extrapolation,
- * not a live eBay-calculator quote. QA/Architect: live-verify UPS/FedEx rates at
- * 90/110/130/150lb per zone (ADR-103 §2B Chrome-automation methodology) before
- * relying on this bracket beyond "closer than the pre-fix clamp bug." USPS is
- * capped at 70lb by USPS_ABSOLUTE_MAX itself (real weight), so this bracket only
- * matters for USPS pricing in the rare case billable/dimensional weight exceeds
- * 70lb while real weight/dims stay under the physical ceiling.
+ * SUPERSEDED 2026-08-10 for UPS/FedEx (Patrick: "fix the gap not make it smaller") --
+ * UPS_HIGH_WEIGHT_TOTAL_TABLE / FEDEX_HIGH_WEIGHT_TOTAL_TABLE now cover the entire
+ * 70-150lb range with real-anchored data (70/90/110/130/150lb), so estimateCheapestRate
+ * no longer uses this linear extrapolation as the PRIMARY price for either carrier at any
+ * weight -- confirmed by direct trace, not assumption: the `lb >= 70` branch intercepts
+ * before rateFromTable's extrapolation path is ever reached for the normal case. The one
+ * remaining use is defensive, not primary: when a package is BOTH heavy (>=70lb) AND
+ * dimension-triggered (long/wide), this extrapolation is still computed as one input to a
+ * `Math.max(anchorTotal, oldModelTotal)` never-be-short comparison -- it can only push the
+ * final price UP, never under-price, and only matters if it happens to exceed the real
+ * anchor total for that specific combination (untested combination, no live samples).
+ *
+ * For USPS this bracket was ALWAYS a safe no-op, confirmed by tracing rateFromTable's own
+ * cap logic: USPS_ABSOLUTE_MAX.weightLb (70) exactly equals the cap passed in, so
+ * `cappedLb = min(lb, 70)` always resolves to exactly 70 whenever this branch is entered,
+ * making `extrapolated = lastRow[zone] + slope * (70 - 70) = lastRow[zone]` -- it can only
+ * ever return the real, already-verified 70lb rate unchanged. It was never actually
+ * extrapolating for USPS, despite the misleading name.
+ *
+ * Genuinely still open (not closed by the above): USPS packages with L+G <= 108in (so
+ * NOT caught by the USPS_OVERSIZED_TABLE branch) but voluminous enough that DIMENSIONAL
+ * weight exceeds 70lb while REAL weight/dims stay under it -- a narrow geometric band
+ * (roughly L+G 104-108in for a cube-shaped box) where this cap causes USPS to bill at the
+ * flat 70lb-tier rate regardless of how much higher the true dimensional weight is. Found
+ * this session via direct trace, not fixed -- narrow edge case, not the multi-hundred-
+ * percent error class the UPS/FedEx fix above addressed. See STATE.md gap inventory.
  */
 export const PENDING_LIVE_VERIFICATION_EXTRAPOLATED_WEIGHT_BRACKET = {
   minLb: 70,
@@ -773,6 +788,76 @@ export const PENDING_LIVE_VERIFICATION_EXTRAPOLATED_WEIGHT_BRACKET = {
   },
   method: 'linear extrapolation from the 50lb->70lb per-pound growth rate observed in each table/zone (rateFromTable)',
 };
+
+/**
+ * REAL-ANCHORED 2026-08-10 (closes the extrapolation gap above -- Patrick, same session:
+ * "close the gap... we can't have that kind of error"). Live A/B tested UPS Ground and
+ * FedEx Ground/Home Delivery on ebay.com/shp/calc/rates at 90/110/130/150lb, z1 (dest
+ * 49503) and z8 (dest 98101), origin 49079, small dims (10x8x6in, so only the
+ * weight-trigger AHS / weight-floor Large-Package path fires, matching real-world use of
+ * this bracket). These are REAL eBay-negotiated TOTAL prices (base rate + whatever
+ * surcharge actually applies), not a decomposed base-only figure -- backing out a clean
+ * "base rate" from the total turned out to be unreliable (the eBay-vs-retail discount
+ * ratio on the surcharge portion is NOT constant across this weight range, unlike the
+ * single clean ratio found at 49-51lb/pre-90lb -- see EBAY_NEGOTIATED_SURCHARGE_PASSTHROUGH
+ * comment), so using the real observed TOTAL directly is more trustworthy than
+ * re-decomposing it. z2-z7 interpolated from these two real anchors using the zone-shape
+ * already established by each table's own real 70lb row (z1..z8 relative spacing) --
+ * PENDING_LIVE_VERIFICATION for z2-z7 specifically, z1/z8 are real quotes.
+ *
+ * Old-vs-real comparison that motivated this (the size of the error being closed):
+ * UPS z8 130lb: old linear-extrapolation model predicted $328.18, real eBay price is
+ * $235.13 (40% OVER real). FedEx z8 110lb: old model predicted $401.58, real price is
+ * $135.43 (196% OVER real). UPS z1 110lb: old model predicted $66.18, real price is
+ * $97.94 (32% UNDER real -- the dangerous direction, quoting buyers less than the label
+ * actually costs). The error was NOT one-directional or small; both carriers, both
+ * directions, sometimes by 2-3x. The old extrapolation is superseded by this table for
+ * lb >= 90 (see its use in estimateCheapestRate below) -- it remains in place ONLY for
+ * the narrower 70-90lb gap where no real anchor exists yet.
+ */
+type HighWeightAnchorRow = { maxLb: number; z1: number; z2: number; z3: number; z4: number; z5: number; z6: number; z7: number; z8: number };
+
+// 70lb row added 2026-08-10 (Patrick: "fix the gap not make it smaller") -- NOT a new live
+// test. Derived from data already validated exact-to-the-penny this session: RATE_TABLE_UPS/
+// _FEDEX's own real 70lb row (all 8 zones, independently live-verified when those tables
+// were built) plus AHS_WEIGHT_SURCHARGE_TABLE * EBAY_NEGOTIATED_SURCHARGE_PASSTHROUGH (the
+// exact formula confirmed to match a real production quote to the penny at z8/51lb
+// earlier this session). This fully closes the 70-90lb window that previously still used
+// the old (now-disproven) linear extrapolation -- the interpolation condition below now
+// starts at lb >= 70, matching RATE_TABLE_UPS/_FEDEX's own real-data ceiling exactly, so
+// there is no longer any gap of pure extrapolation between the base tables and this one.
+export const UPS_HIGH_WEIGHT_TOTAL_TABLE: HighWeightAnchorRow[] = [
+  { maxLb: 70,  z1: 52.50,  z2: 52.50,  z3: 59.44,  z4: 59.44,  z5: 75.64,  z6: 81.92,  z7: 99.50,  z8: 124.20 },
+  { maxLb: 90,  z1: 76.44,  z2: 76.44,  z3: 79.79,  z4: 79.79,  z5: 89.14,  z6: 93.51,  z7: 104.88, z8: 122.06 },
+  { maxLb: 110, z1: 97.94,  z2: 97.94,  z3: 101.01, z4: 101.01, z5: 109.61, z6: 113.63, z7: 124.06, z8: 139.85 },
+  { maxLb: 130, z1: 189.08, z2: 189.08, z3: 192.46, z4: 192.46, z5: 201.90, z6: 206.31, z7: 217.78, z8: 235.13 },
+  { maxLb: 150, z1: 204.92, z2: 204.92, z3: 208.61, z4: 208.61, z5: 218.92, z6: 223.73, z7: 236.25, z8: 255.18 },
+];
+
+export const FEDEX_HIGH_WEIGHT_TOTAL_TABLE: HighWeightAnchorRow[] = [
+  { maxLb: 70,  z1: 93.61,  z2: 93.61,  z3: 110.42, z4: 110.42, z5: 135.90, z6: 150.17, z7: 171.01, z8: 184.48 },
+  { maxLb: 90,  z1: 90.96,  z2: 90.96,  z3: 97.64,  z4: 97.64,  z5: 107.98, z6: 114.48, z7: 123.39, z8: 129.52 },
+  { maxLb: 110, z1: 101.30, z2: 101.30, z3: 107.21, z4: 107.21, z5: 116.37, z6: 122.11, z7: 130.00, z8: 135.43 },
+  { maxLb: 130, z1: 359.76, z2: 359.76, z3: 378.65, z4: 378.65, z5: 407.90, z6: 426.27, z7: 451.48, z8: 468.81 },
+  { maxLb: 150, z1: 367.95, z2: 367.95, z3: 386.99, z4: 386.99, z5: 416.46, z6: 434.96, z7: 460.36, z8: 477.83 },
+];
+
+/** Linearly interpolates a REAL total (base+surcharge already combined) between the
+ *  anchor rows above. Below the first anchor or above the last, clamps to that anchor
+ *  (this table is only consulted for lb >= 90 -- see estimateCheapestRate). */
+function interpolateHighWeightTotal(table: HighWeightAnchorRow[], lb: number, zone: ZoneKey): number {
+  const cappedLb = Math.min(Math.max(lb, table[0].maxLb), table[table.length - 1].maxLb);
+  if (cappedLb <= table[0].maxLb) return round2(table[0][zone]);
+  for (let i = 1; i < table.length; i++) {
+    if (cappedLb <= table[i].maxLb) {
+      const prev = table[i - 1];
+      const cur = table[i];
+      const frac = (cappedLb - prev.maxLb) / (cur.maxLb - prev.maxLb);
+      return round2(prev[zone] + frac * (cur[zone] - prev[zone]));
+    }
+  }
+  return round2(table[table.length - 1][zone]);
+}
 
 /** [longest, 2nd-longest, 3rd-longest] from raw dims, or null if any dim is missing. */
 function sortedRealDims(dims: PackageDims): [number, number, number] | null {
@@ -902,15 +987,48 @@ export function estimateCheapestRate(input: {
     // independent of the dimensional-weight billing path above.
     const uspsOversized = c.carrier === 'USPS' && isUspsOversized(dims);
     const basis: CheapestRate['basis'] = uspsOversized ? 'oversized' : weightBasis;
-    const baseRate = uspsOversized ? USPS_OVERSIZED_TABLE[input.zone] : rateFromTable(c.table, lb, input.zone, absoluteMaxLb);
-    const rate = round2(baseRate + surcharge.amount);
+
+    let baseRate: number;
+    let effectiveSurcharge = surcharge.amount;
+    // REAL-ANCHORED 2026-08-10: for UPS/FedEx at billable weight >= 70lb (the base
+    // tables' own real-data ceiling -- no extrapolation gap remains), use the real
+    // eBay-quoted total (UPS_HIGH_WEIGHT_TOTAL_TABLE / FEDEX_HIGH_WEIGHT_TOTAL_TABLE)
+    // instead of rateFromTable's linear extrapolation + separately-added surcharge -- see
+    // that table's own comment for why (the extrapolation was off by up to ~200% in
+    // testing, in both directions). The surcharge is already baked into these real totals,
+    // so it is zeroed out here to avoid double-charging it.
+    if (uspsOversized) {
+      baseRate = USPS_OVERSIZED_TABLE[input.zone];
+    } else if ((c.carrier === 'UPS' || c.carrier === 'FEDEX') && lb >= 70) {
+      const highWeightTable = c.carrier === 'UPS' ? UPS_HIGH_WEIGHT_TOTAL_TABLE : FEDEX_HIGH_WEIGHT_TOTAL_TABLE;
+      const anchorTotal = interpolateHighWeightTotal(highWeightTable, lb, input.zone);
+      // "Never be short" (same principle this file already applies elsewhere): the real
+      // anchors above were sampled with small dims, so they only reflect the
+      // weight-trigger/Large-Package-floor path, not AHS's dimension trigger. If THIS
+      // package also has oversized dims at this weight, don't let the anchor table
+      // under-price it -- compare against the old additive model (base extrapolation +
+      // the un-discounted, already-validated AHS_DIMENSION_SURCHARGE_TABLE) and take the
+      // higher of the two.
+      const sortedForDim = sortedRealDims(dims);
+      const dimensionTriggeredHere = !!sortedForDim && (sortedForDim[0] > 48 || sortedForDim[1] > 30);
+      if (dimensionTriggeredHere) {
+        const oldModelTotal = round2(rateFromTable(c.table, lb, input.zone, absoluteMaxLb) + AHS_DIMENSION_SURCHARGE_TABLE[input.zone]);
+        baseRate = Math.max(anchorTotal, oldModelTotal);
+      } else {
+        baseRate = anchorTotal;
+      }
+      effectiveSurcharge = 0;
+    } else {
+      baseRate = rateFromTable(c.table, lb, input.zone, absoluteMaxLb);
+    }
+    const rate = round2(baseRate + effectiveSurcharge);
 
     if (!best || rate < best.rate) {
       best = {
         carrier: c.carrier,
         rate,
         baseRate,
-        surcharge: surcharge.amount,
+        surcharge: effectiveSurcharge,
         surchargeType: surcharge.type,
         basis,
         cubicTierLabel: null,
