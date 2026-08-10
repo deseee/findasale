@@ -236,11 +236,6 @@ model User {
   boostPurchases BoostPurchase[]
 
   // Phase 2b: Lucky Roll — weekly XP gacha
-  luckyRollPityCount    Int         @default(0) // Consecutive consolation-outcome roll count (0, 1, 2; layer-1 pity fires at 2)
-  luckyRollPityYear     Int         @default(0) // Cumulative roll count this calendar year (layer-2 jackpot guarantee fires every 10)
-  luckyRollLastRolledAt DateTime? // Most recent roll timestamp — enforces weekly cap
-  luckyRollStreakBad    Int         @default(0) // Hidden: consecutive below-break-even count (consolation or 50 XP); streak protection doubles jackpot% at 5
-  luckyRolls            LuckyRoll[]
 
   // Phase 2c: XP Sinks — Custom Map Pin (cosmetic)
   customMapPin String? // Emoji or short string (max 4 chars) for map pin override
@@ -440,12 +435,7 @@ model Organizer {
   directoryStatus                 String                         @default("ACTIVE") // "ACTIVE" | "UNCERTAIN" | "CLOSED" | "REOPENED"
   directoryStatusSetAt            DateTime                       @default(now())
   directoryStatusReason           String?
-  directoryNextCheckAt            DateTime?
-  directoryCheckIntervalDays      Int                            @default(90)
   directoryLastCheckedAt          DateTime?
-  directoryLastCheckedSource      String?
-  directoryDataHash               String? // SHA256 of name|address|city|state for change detection
-  directoryHashUpdatedAt          DateTime?
   directoryMostRecentSource       String? // Last source that updated this record
   directoryMostRecentAt           DateTime?
   hereBusinessId                  String?                        @unique
@@ -453,8 +443,6 @@ model Organizer {
   overtureGersId                  String?                        @unique // Overture Places GERS id (CDLA Permissive 2.0) — overtureEnrichmentJob monthly re-sync key
   osmNodeId                       String? // Format: "node/12345" or "way/12345"
   suppressOutreach                Boolean                        @default(false) // Quebec Bill 96 deferral for QC records
-  directoryNextClaimEmailAt       DateTime?
-  claimEmailIntervalDays          Int                            @default(14)
   claimStatus                     String                         @default("UNCLAIMED") // "UNCLAIMED" | "INVITED" | "CLAIMED" | "OPTED_OUT"
   isClaimed                       Boolean                        @default(true) // True for all organizer-managed listings; scrapers set false
   isUnmanagedListing              Boolean                        @default(false) // True for scraped/unverified listings not yet claimed
@@ -471,7 +459,6 @@ model Organizer {
   fbCatalogRegisteredAt           DateTime?
   // ADR-083: Marketplace Poster opt-in (Playwright, dedicated FindA.Sale-owned accounts)
   marketplaceAutoPostEnabled      Boolean                        @default(false)
-  stripeIdentitySessionId         String?
   // ADR-073 Phase 2: ESN enrichment fields (migration 20260502000001)
   esnOrgId                        Int?
   linkedInUrl                     String?
@@ -519,14 +506,11 @@ model Organizer {
   leadScore           Int?
   leadTier            String?
   lastScoredAt        DateTime?
-  annualSalesEstimate Int?
   hasPhysicalOffice   Boolean?
   isStateLicensed     Boolean?
   licenseState        String?
   licenseNumber       String?
-  staffSizeEstimate   Int?
   reviewCount         Int?
-  reviewVelocity      Float?
 
   // Email discovery tracking (migration 20260508000002)
   emailDiscoveryMethod     String? // 'website_scrape' | 'smtp_probe' | 'pattern_match'
@@ -4234,33 +4218,6 @@ enum BoostStatus {
   PENDING
 }
 
-// Phase 2b: Lucky Roll — weekly XP gacha outcomes
-enum LuckyRollOutcome {
-  CONSOLATION // 10 XP back (35%)
-  XP_50 // 50 XP (28%)
-  XP_100 // 100 XP break-even (15%)
-  XP_200 // 200 XP (10%)
-  COUPON_1 // $1-off coupon, $10+ min purchase (7%)
-  XP_500 // 500 XP jackpot (4%)
-  COSMETIC_RARE // Rare frame badge or username color (1%)
-}
-
-// Phase 2b: Lucky Roll — audit log of all rolls
-model LuckyRoll {
-  id         String           @id @default(cuid())
-  userId     String
-  user       User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  outcome    LuckyRollOutcome
-  xpAwarded  Int? // null for COUPON_1 and COSMETIC_RARE outcomes
-  xpSpent    Int              @default(100)
-  seedHash   String // SHA256(raw seed bytes) — verifiable, not reversible
-  rollNumber Int // user's annual roll sequence number (for pity-year tracking)
-  pityFired  Boolean          @default(false) // true if layer-1 or layer-2 pity modified this roll
-  createdAt  DateTime         @default(now())
-
-  @@index([userId])
-  @@index([userId, createdAt])
-}
 
 // Feature #13: TEAMS Team Collaboration System Models
 
