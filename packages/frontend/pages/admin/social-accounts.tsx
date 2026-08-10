@@ -4,7 +4,7 @@ import { useAuth } from '../../components/AuthContext';
 import api from '../../lib/api';
 
 // Local types (never import from @findasale/shared — breaks Vercel build).
-type SocialPlatform = 'X' | 'YOUTUBE' | 'INSTAGRAM' | 'FACEBOOK_PAGE' | 'PINTEREST';
+type SocialPlatform = 'X' | 'YOUTUBE' | 'INSTAGRAM' | 'FACEBOOK_PAGE' | 'PINTEREST' | 'TIKTOK';
 
 interface SocialAccount {
   id: string;
@@ -41,10 +41,13 @@ interface SocialPost {
   updatedAt: string;
 }
 
-// Platforms with a live publisher module (X = Phase 1a, YOUTUBE = Phase 1b).
+// Platforms with a live publisher module (X = Phase 1a, YOUTUBE = Phase 1b,
+// TIKTOK added 2026-08-10 -- SELF_ONLY-forced until Patrick's API client passes
+// TikTok's audit; see platforms/tiktok.ts header for the real constraint).
 const CONNECTABLE_PLATFORMS: { value: SocialPlatform; label: string }[] = [
   { value: 'X', label: 'X (Twitter)' },
   { value: 'YOUTUBE', label: 'YouTube' },
+  { value: 'TIKTOK', label: 'TikTok' },
 ];
 
 const PLATFORM_LABEL: Record<string, string> = {
@@ -53,6 +56,7 @@ const PLATFORM_LABEL: Record<string, string> = {
   INSTAGRAM: 'Instagram',
   FACEBOOK_PAGE: 'Facebook Page',
   PINTEREST: 'Pinterest',
+  TIKTOK: 'TikTok',
 };
 
 const STATUS_STYLE: Record<string, string> = {

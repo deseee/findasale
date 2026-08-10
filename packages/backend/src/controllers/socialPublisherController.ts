@@ -47,6 +47,7 @@ const VALID_PLATFORMS: SocialPlatform[] = [
   'INSTAGRAM',
   'FACEBOOK_PAGE',
   'PINTEREST',
+  'TIKTOK', // added 2026-08-10
 ];
 
 function isValidPlatform(v: unknown): v is SocialPlatform {
@@ -65,6 +66,7 @@ const PLATFORM_SLUGS: Record<SocialPlatform, string> = {
   INSTAGRAM: 'instagram',
   FACEBOOK_PAGE: 'facebook-page',
   PINTEREST: 'pinterest',
+  TIKTOK: 'tiktok', // added 2026-08-10 -- callback URL: /oauth/callback/tiktok
 };
 
 const SLUG_TO_PLATFORM: Record<string, SocialPlatform> = Object.fromEntries(
