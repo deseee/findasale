@@ -108,7 +108,11 @@ export async function triggerSaleAndCityRevalidation(
  * Fire-and-forget / never throws, matching the rest of this file's style.
  */
 
-const DEBOUNCE_MS = 8000;
+// ADR 2026-08-10 (Vercel Hobby-cap cost pass): widened from 8000ms. Longer
+// window means an active editing session (several saves within a minute or two)
+// still coalesces to a single ISR write, at the cost of the public page staying
+// slightly staler mid-edit — acceptable tradeoff, zero infra cost either way.
+const DEBOUNCE_MS = 60000;
 
 type PendingRevalidation = {
   timer: ReturnType<typeof setTimeout>;

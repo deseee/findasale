@@ -141,6 +141,23 @@ const saleCreateSchema = z.object({
 
 const saleUpdateSchema = saleCreateSchema.partial();
 
+// ADR 2026-08-10 (Vercel Hobby-cap cost pass, see revalidationService.ts /
+// updateSale below): fields on Sale that are actually rendered on the public
+// /sales/[id] page or /city/[slug] listing card. Used to gate on-demand ISR
+// revalidation so edits to internal-only fields (entrance/parking logistics
+// for day-of staff, private organizer notes, retail auto-renew cadence) don't
+// cost a write. Deliberately conservative — anything plausibly public stays
+// in this list; only fields confirmed pure-operational are left out. Keep in
+// sync with schema.prisma's Sale model if new public-facing fields are added.
+const PUBLICLY_RENDERED_SALE_FIELDS = [
+  'title', 'description', 'startDate', 'endDate', 'address', 'city', 'state', 'zip',
+  'lat', 'lng', 'photoUrls', 'tags', 'isAuctionSale', 'saleType', 'saleSubtype',
+  'isCharitySale', 'neighborhood', 'buyersPremiumPct', 'safetyNotes', 'coversFee',
+  'isOnlineOnly', 'dormBuilding', 'moveOutDate', 'treasureHuntEnabled',
+  'treasureHuntCompletionBadge', 'holdsEnabled',
+] as const;
+
+
 // Helper function to convert Decimal values to numbers recursively
 const convertDecimalsToNumbers = (obj: any) => {
   if (!obj) return obj;
@@ -804,9 +821,39 @@ export const updateSale = async (req: AuthRequest, res: Response) => {
     // ADR 2026-07-23: debounced (not immediate) here specifically — autosave-per-blur
     // can fire this on every field edit, so we coalesce rapid consecutive saves to
     // the same sale into a single ISR write (see revalidationService.ts).
+    // ADR 2026-08-10: additionally gated on whether a PUBLICLY_RENDERED_SALE_FIELDS
+    // value actually changed. Compares VALUES, not just key presence, because
+    // several fields on saleCreateSchema carry a zod .default() (isAuctionSale,
+    // isCharitySale, retailAutoRenewDays) that injects a value into the parsed
+    // body even when the client never submitted that field — key-presence alone
+    // would have made this gate a no-op for those. buyersPremiumPct is a Prisma
+    // Decimal on read; normalized to a number before comparing so a resubmit of
+    // the same value doesn't false-trigger.
     if (sale.status === 'PUBLISHED') {
-      const citySlug = citySlugFromCityState(sale.city, sale.state);
-      debouncedTriggerSaleAndCityRevalidation(sale.id, citySlug);
+      const normalizeForCompare = (value: unknown): unknown => {
+        if (value && typeof value === 'object' && 'toNumber' in (value as any)) {
+          return (value as any).toNumber();
+        }
+        return value;
+      };
+
+      const changedPubliclyVisibleField = PUBLICLY_RENDERED_SALE_FIELDS.some((field) => {
+        if (!(field in saleData)) return false;
+        const before = normalizeForCompare((existingSale as any)[field]);
+        const after = normalizeForCompare((saleData as any)[field]);
+        if (before instanceof Date || after instanceof Date) {
+          return new Date(before as any).getTime() !== new Date(after as any).getTime();
+        }
+        if (Array.isArray(before) || Array.isArray(after)) {
+          return JSON.stringify(before) !== JSON.stringify(after);
+        }
+        return before !== after;
+      });
+
+      if (changedPubliclyVisibleField) {
+        const citySlug = citySlugFromCityState(sale.city, sale.state);
+        debouncedTriggerSaleAndCityRevalidation(sale.id, citySlug);
+      }
     }
 
     res.json(convertDecimalsToNumbers(sale));

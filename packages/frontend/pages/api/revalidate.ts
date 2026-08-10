@@ -54,6 +54,18 @@ export default async function handler(
     return res.status(400).json({ message: 'Request body must include a non-empty "paths" array' });
   }
 
+  // ADR 2026-08-10 (Vercel Hobby-cap cost pass): this endpoint is the sole
+  // on-demand-revalidation chokepoint (see file header) — logging call volume
+  // here, cheaply, with no new infra, is what lets a future check answer "how
+  // many writes/day come from application-triggered revalidation" with a real
+  // grep-able number (via Vercel runtime logs) instead of inferring it from
+  // reading backend call sites, which undercounted badly on 2026-08-10 (code
+  // paths implied under 250 sales/12h touched; actual ISR Writes were 4,000+
+  // unique /sales/[id] paths/12h — the gap is presumed traffic-driven
+  // background regeneration, not on-demand calls, but this log line is what
+  // will actually confirm or refute that next time, not another guess).
+  console.log(`[api/revalidate] batch of ${paths.length} path(s) requested`);
+
   const results: RevalidateResult[] = [];
 
   for (const rawPath of paths) {
