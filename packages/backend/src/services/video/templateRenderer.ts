@@ -693,7 +693,12 @@ async function buildRenderPlan(
     }
 
     // Price-pop overlay (real numbers only).
-    if (overlayType === 'price_pop' && a.facts.prices.length > 0) {
+    // ADR-101 fix (2026-08-10): Amazon's Influencer Video Content Guidelines
+    // prohibit any prices/promotions/discount claims in the video itself --
+    // verified live against Amazon's own guidelines page this session (see
+    // STATE.md Blocked Queue). Skip this overlay entirely for the AMAZON cut;
+    // FINDASALE variant (and all other templates) keep it unchanged.
+    if (overlayType === 'price_pop' && a.facts.prices.length > 0 && renderVariant !== 'AMAZON') {
       const p = path.join(workDir, `ov-price-${overlayCounter++}.png`);
       await buildPricePopOverlay(a.facts.prices, p);
       overlays.push({ pngPath: p, start: 0.4, end: durationSec });
@@ -799,11 +804,16 @@ function deriveTitleAndDescription(
     const role: ClipRole = a.role;
     if (role === 'FIND' || role === 'PRICE_REVEAL') {
       const name = a.facts.itemName || captionTextFor(a) || 'A great find';
-      const priceStr = a.facts.prices.length
-        ? a.facts.prices.length >= 2
-          ? ` — paid ${fmtUsd(Math.min(...a.facts.prices))}, worth ${fmtUsd(Math.max(...a.facts.prices))}`
-          : ` — ${fmtUsd(a.facts.prices[0])}`
-        : '';
+      // ADR-101 fix (2026-08-10): same "no prices in Influencer video content"
+      // rule as the overlay above -- the AMAZON variant's description text must
+      // stay price-free too, not just the on-screen overlay.
+      const priceStr = renderVariant === 'AMAZON'
+        ? ''
+        : a.facts.prices.length
+          ? a.facts.prices.length >= 2
+            ? ` — paid ${fmtUsd(Math.min(...a.facts.prices))}, worth ${fmtUsd(Math.max(...a.facts.prices))}`
+            : ` — ${fmtUsd(a.facts.prices[0])}`
+          : '';
       lines.push(`• ${name}${priceStr}`);
     }
   }
