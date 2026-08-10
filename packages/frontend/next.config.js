@@ -405,15 +405,33 @@ const nextConfig = {
       // getStaticProps). CDN cache lifetime (s-maxage) is set to match so
       // Vercel's edge serves cached HTML for the full ISR window instead of
       // re-invoking the origin function on every hit, cutting Edge Request /
-      // Function-invocation volume. stale-while-revalidate=86400 lets the CDN
+      // Function-invocation volume. stale-while-revalidate lets the CDN
       // serve a stale copy while ISR regenerates in the background rather than
-      // blocking the request. (/sales/:id has edge-case revalidate values —
-      // 3600 on fetch failure, 2592000 for ended sales — 86400 is its common
-      // live-sale case and the correct CDN baseline.)
+      // blocking the request.
+      //
+      // FIXED 2026-08-10 (Vercel Hobby-cap cost pass): this header previously
+      // read s-maxage=86400 with a comment claiming that was /sales/:id's
+      // "common live-sale case" — that was stale. getStaticProps below (search
+      // "isEnded ? 2592000 : 604800") has revalidated active sales at 604800s
+      // (7 days) since the 2026-07-29 ADR fix (commit fe4055d73) that widened
+      // this exact window specifically to cut ISR write volume. This header
+      // override was never updated to match, so it silently CAPPED the CDN's
+      // effective cache lifetime at 24h regardless of what getStaticProps
+      // declared — confirmed live via `curl -I https://finda.sale/sales/[id]`
+      // returning s-maxage=86400 on 2026-08-10, undermining the whole point of
+      // that fix for months. On-demand revalidation (revalidationService.ts)
+      // already fires immediately on any real content change (publish/update/
+      // cancel), so this s-maxage is only the worst-case staleness ceiling for
+      // content that somehow changes outside that path — raising it to match
+      // the code's own already-shipped 604800s intent is a config alignment,
+      // not a new behavior. (Ended sales use 2592000/30 days in code; this
+      // header can't vary per-content-state, so 604800 is the correct common
+      // baseline — ended-sale pages simply get a smaller, still-real, share of
+      // the same benefit.)
       {
         source: '/sales/:id',
         headers: [
-          { key: 'Cache-Control', value: 'public, s-maxage=86400, stale-while-revalidate=86400' },
+          { key: 'Cache-Control', value: 'public, s-maxage=604800, stale-while-revalidate=86400' },
         ],
       },
       {

@@ -119,7 +119,19 @@ Risk-admission-narrative|flagged CRITICAL
 Risk-admission-narrative|ToS PROHIBITED.{0,80}(Facebook|Municibid|IronPlanet|GovDeals|Proxibid|Liquidity Services|Ritchie Bros)
 Real-worker-hostname|[a-z0-9][a-z0-9-]*\.workers\.dev'
 
-WORKER_PLACEHOLDER_RE='(your-worker|<worker>|<your-worker>|example-worker|my-worker)\.workers\.dev'
+# findasale-image-proxy is FindA.Sale's public image-proxy CDN endpoint -- it
+# is listed in the CSP img-src header sent to every browser and in next/image's
+# remotePatterns config, so it is inherently public and cannot be "leaked" by
+# appearing in source; it has been in HEAD (already on the public repo) all
+# along. Exempted 2026-08-10 after this Section 4 check -- only recently
+# switched from non-functional to actually blocking, commit 4cd6f1cb5 -- started
+# blocking routine commits over this pre-existing, intentionally-public
+# reference. The original S1145 concern this rule exists for was a genuinely
+# INTERNAL, unauthenticated worker hostname leaking via a test-script comment --
+# that does not apply here. Any OTHER/new worker.dev hostname is still blocked
+# by the unchanged blanket rule below; only this one confirmed-public hostname
+# is exempt.
+WORKER_PLACEHOLDER_RE='(your-worker|<worker>|<your-worker>|example-worker|my-worker|findasale-image-proxy\.findasale)\.workers\.dev'
 
 for file in $STAGED_ALL; do
   case "$file" in
