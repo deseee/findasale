@@ -549,18 +549,15 @@ export interface CheapestRate {
 // Patrick's own live eBay policy list ("GA Cubic 0.1 (to 5x5x6)" ... "GA Cubic 1.0
 // (to 14x12x10)", ~10 discrete tiers, ADR-103 §2C).
 //
-// PENDING_LIVE_VERIFICATION (honesty gate, ADR-103 Phase 3): only the two endpoint
-// tiers below (0.1 and 1.0) are sourced -- directly from ADR-103 §2C, which cites
-// Patrick's real, currently-configured eBay policy names. ADR-103 states ~10 discrete
-// tiers exist between these endpoints (implied 0.1 cu-ft increments, i.e. GA Cubic 0.2
-// through 0.9) but this pass did not capture their box dimensions or prices --
-// inventing them would violate the no-fabrication rule (CLAUDE.md §0·EF). Every tier's
-// flatRate is null until a real price is sourced; evaluateCubicTier() below SKIPS any
-// tier with flatRate === null, so cubic pricing can never be selected as cheaper than
-// weight/dim-weight pricing until real data lands here -- pure plumbing, safe no-op
-// today. QA/Architect: read Patrick's live eBay Business Policies > Shipping list
-// (ebay.com/bp/shippingpolicy) and add the missing GA Cubic 0.2-0.9 rows verbatim
-// (tierLabel, maxLengthIn/maxWidthIn/maxHeightIn, flatRate).
+// LIVE-VERIFIED (honesty gate, ADR-103 Phases 2-5): all 10 tiers below -- dims AND
+// flatRate -- are sourced directly from Patrick's own live eBay Business Policies >
+// Shipping page (ebay.com/bp/shippingpolicy), pasted verbatim and tested Jul 2026.
+// This is real, currently-configured pricing, not extrapolated or estimated data --
+// the PENDING_LIVE_VERIFICATION framing no longer applies to this table. Each tier's
+// flatRate is a ceiling price valid only up to 20lb actual weight -- see the 20lb gate
+// added to evaluateCubicTier() below this pass; Patrick's own data states e.g. "GA
+// Cubic 0.6 ... Actual USPS cost is $19.19 at 5lb, $20.36 at 6-20lb - priced to the
+// ceiling", confirming the flat rate is invalid above 20lb.
 export interface CubicTier {
   tierLabel: string;
   maxLengthIn: number;
@@ -571,9 +568,25 @@ export interface CubicTier {
 }
 
 export const CUBIC_TIER_TABLE: CubicTier[] = [
-  { tierLabel: 'GA Cubic 0.1', maxLengthIn: 5, maxWidthIn: 5, maxHeightIn: 6, flatRate: null }, // PENDING_LIVE_VERIFICATION -- dims sourced (ADR-103 §2C), price not
-  { tierLabel: 'GA Cubic 1.0', maxLengthIn: 14, maxWidthIn: 12, maxHeightIn: 10, flatRate: null }, // PENDING_LIVE_VERIFICATION -- dims sourced (ADR-103 §2C), price not
-];
+  { tierLabel: 'GA Cubic 0.1', maxLengthIn: 5, maxWidthIn: 5, maxHeightIn: 6, flatRate: 10.13 },
+  { tierLabel: 'GA Cubic 0.2', maxLengthIn: 7, maxWidthIn: 7, maxHeightIn: 7, flatRate: 11.84 },
+  { tierLabel: 'GA Cubic 0.3', maxLengthIn: 8, maxWidthIn: 8, maxHeightIn: 8, flatRate: 14.67 },
+  { tierLabel: 'GA Cubic 0.4', maxLengthIn: 8, maxWidthIn: 8, maxHeightIn: 9, flatRate: 17.29 },
+  { tierLabel: 'GA Cubic 0.5', maxLengthIn: 9, maxWidthIn: 9, maxHeightIn: 10, flatRate: 18.90 },
+  { tierLabel: 'GA Cubic 0.6', maxLengthIn: 10, maxWidthIn: 10, maxHeightIn: 10, flatRate: 20.36 },
+  { tierLabel: 'GA Cubic 0.7', maxLengthIn: 10, maxWidthIn: 11, maxHeightIn: 10, flatRate: 21.57 },
+  { tierLabel: 'GA Cubic 0.8', maxLengthIn: 11, maxWidthIn: 11, maxHeightIn: 11, flatRate: 22.71 },
+  { tierLabel: 'GA Cubic 0.9', maxLengthIn: 11, maxWidthIn: 12, maxHeightIn: 11, flatRate: 23.89 },
+  { tierLabel: 'GA Cubic 1.0', maxLengthIn: 14, maxWidthIn: 12, maxHeightIn: 10, flatRate: 25.60 },
+]; // LIVE-VERIFIED -- Patrick's live eBay Business Policies > Shipping page, tested Jul 2026 (ADR-103 Phases 2-5).
+
+/** GA Cubic flat rates are priced to a 20lb ceiling -- Patrick's own live eBay policy
+ *  data states the flat rate is the USPS cost "at 6-20lb" for each tier (e.g. GA Cubic
+ *  0.6: "$19.19 at 5lb, $20.36 at 6-20lb - priced to the ceiling"), i.e. invalid above
+ *  20lb. Added this pass -- found via code read that evaluateCubicTier() previously took
+ *  no weight input at all, so a 25lb item that happened to fit a small box would have
+ *  incorrectly matched the cubic flat rate and been silently underpriced. */
+const CUBIC_TIER_MAX_WEIGHT_LB = 20;
 
 /**
  * Smallest-volume CUBIC_TIER_TABLE entry (with a real, non-null flatRate) whose
@@ -581,7 +594,8 @@ export const CUBIC_TIER_TABLE: CubicTier[] = [
  * matchCubicTier() in ebayPolicyParser.ts (ADR-099), kept independent here since this
  * table is a code-level engine input, not an organizer-uploaded policy mapping.
  */
-function evaluateCubicTier(dims: PackageDims): { tierLabel: string; rate: number } | null {
+function evaluateCubicTier(dims: PackageDims, weightOz: number): { tierLabel: string; rate: number } | null {
+  if (weightOz > CUBIC_TIER_MAX_WEIGHT_LB * 16) return null; // 20lb cubic-rate ceiling -- see comment above
   const L = dims?.length ? Number(dims.length) : 0;
   const W = dims?.width ? Number(dims.width) : 0;
   const H = dims?.height ? Number(dims.height) : 0;
@@ -826,8 +840,10 @@ export function estimateCheapestRate(input: {
 
   // ADR-103 Phase 3: evaluate cubic-tier pricing alongside weight/dim-weight pricing,
   // pick whichever is cheaper (same pattern already used to pick cheapest carrier).
-  // Inert today -- see CUBIC_TIER_TABLE header -- until real per-tier prices land.
-  const cubic = evaluateCubicTier(dims);
+  // Live as of this pass -- CUBIC_TIER_TABLE now has all 10 real tiers (Patrick's live
+  // eBay Business Policies > Shipping page). weightOz is passed through so the 20lb
+  // ceiling gate in evaluateCubicTier() can reject items too heavy for the flat rate.
+  const cubic = evaluateCubicTier(dims, input.weightOz);
   if (cubic && cubic.rate < best!.rate) {
     best = {
       carrier: 'USPS',
