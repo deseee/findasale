@@ -6041,3 +6041,25 @@ model CronCursor {
   rowsProcessedLastRun Int?    // observability: batch size processed in the most recent run
   updatedAt            DateTime @updatedAt // doubles as lastRunAt -- touched on every upsert
 }
+
+// USPS zone-chart cache (ADR-103 Phase 2): lazy per-origin-ZIP3 real zone lookup,
+// replacing the pure-mileage-band approximation with actual USPS zone-chart data
+// where available. A row is written the first time a given originZip3/destZip3 pair
+// is looked up in production (lazy, not a bulk upfront load of ~1000 ZIP3s). Long TTL
+// -- carrier zone charts change rarely -- so `fetchedAt` is read-only metadata for a
+// future staleness check, not currently enforced by any code path.
+// Consumed by coverageZoneForOrigin (ebayRateEstimateService.ts): the "coverage zone"
+// for an origin is the MAX zone across all cached destZip3 rows for that originZip3.
+// Falls back to the 8-band mileage approximation (milesToZone) when no cached entry
+// exists for the origin, or when the live zone-chart fetcher (currently stubbed --
+// see fetchLiveUspsZoneChartEntry TODO) has not yet populated this origin.
+// See claude_docs/architecture/ADR-103-shipping-rate-full-reanchor.md §2A.
+model UspsZoneChartEntry {
+  originZip3 String
+  destZip3   String
+  zone       String // 'z1'..'z8', matches ZoneKey in ebayRateEstimateService.ts
+  fetchedAt  DateTime @default(now())
+
+  @@id([originZip3, destZip3])
+  @@index([originZip3])
+}

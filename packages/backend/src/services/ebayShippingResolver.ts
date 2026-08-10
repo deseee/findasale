@@ -16,7 +16,7 @@
  * back to the FVF-flat compute so the preview never shows a bare/zero number.
  */
 
-import { computeCheapestForOrigin } from './ebayRateEstimateService';
+import { computeCheapestForOrigin, ShippingHardBlockError } from './ebayRateEstimateService';
 import { computeFvfFlatRate, roundUpToBucket } from './ebayFlatRatePolicyService';
 
 /** Where the resolved buyer-shipping amount came from. */
@@ -26,7 +26,11 @@ export type ShippingResolutionSource =
   | 'calculated'
   | 'free'
   | 'local-pickup'
-  | 'custom-override';
+  | 'custom-override'
+  /** ADR-103 Phase 4: item exceeds the absolute carrier max for every modeled
+   *  carrier -- see hardBlockReason for detail. buyerAmountCents is 0 here but
+   *  MUST NOT be treated as free shipping; callers should surface hardBlockReason. */
+  | 'hard-blocked';
 
 export interface ResolveItemShippingResult {
   /** eBay fulfillment policy id when known (weight-tier match); null for preview-only paths. */
@@ -37,6 +41,9 @@ export interface ResolveItemShippingResult {
   policyName: string | null;
   /** Which decision branch produced the amount. */
   source: ShippingResolutionSource;
+  /** ADR-103 Phase 4: set (non-null) only when source === 'hard-blocked' -- a clear,
+   *  human-readable reason the item cannot be auto-priced. */
+  hardBlockReason?: string | null;
 }
 
 /** Minimal mapping shape needed to resolve shipping (subset of EbayPolicyMapping). */
@@ -69,6 +76,8 @@ export interface ShippingResolverItem {
   /** ADR-102 (roadmap #622): used to check oddball-item overrides before the computed rate. */
   ebayShippingClassification?: string | null;
   ebayCategoryId?: string | null;
+  /** ADR-103 Phase 4: packaging-attribute input to the AHS surcharge trigger. */
+  packageType?: string | null;
 }
 
 /** Round a dollar amount to whole cents (avoids float drift before *100). */
@@ -130,18 +139,31 @@ export async function resolveItemShipping(input: {
 
   const shippingMode = mapping?.shippingMode || 'CALCULATED';
 
-  // Lazily computed cheapest carrier rate (reused by fvf-flat + calculated branches).
-  const cheapest = computeCheapestForOrigin({ weightOz, dims, origin });
-
-  // Helper: build the FVF-flat result (gross up cheapest rate, bucket it).
-  const fvfFlat = (): ResolveItemShippingResult => {
-    const flatRate = roundUpToBucket(computeFvfFlatRate(cheapest.rate));
-    return {
-      fulfillmentPolicyId: null,
-      buyerAmountCents: dollarsToCents(flatRate),
-      policyName: `FindA.Sale Flat $${flatRate.toFixed(2)}`,
-      source: 'fvf-flat',
-    };
+  // Helper: build the FVF-flat result (gross up cheapest rate, bucket it). Computes
+  // the cheapest carrier rate LAZILY, only when actually reached -- override paths
+  // above (local-pickup, custom-override, free, FLAT_TIERS oddball overrides) return
+  // before this runs, so they never pay for a rate computation they don't use. ADR-103
+  // Phase 4: computeCheapestForOrigin can throw ShippingHardBlockError for an item that
+  // exceeds every carrier's absolute max -- caught here and surfaced as a 'hard-blocked'
+  // result rather than letting it propagate (an override path shouldn't be affected by
+  // a rate computation it never needed, and a genuinely computed-rate path must not
+  // silently underprice or crash).
+  const fvfFlat = async (): Promise<ResolveItemShippingResult> => {
+    try {
+      const cheapest = await computeCheapestForOrigin({ weightOz, dims, origin, packageType: item.packageType ?? null });
+      const flatRate = roundUpToBucket(computeFvfFlatRate(cheapest.rate));
+      return {
+        fulfillmentPolicyId: null,
+        buyerAmountCents: dollarsToCents(flatRate),
+        policyName: `FindA.Sale Flat $${flatRate.toFixed(2)}`,
+        source: 'fvf-flat',
+      };
+    } catch (err) {
+      if (err instanceof ShippingHardBlockError) {
+        return { fulfillmentPolicyId: null, buyerAmountCents: 0, policyName: null, source: 'hard-blocked', hardBlockReason: err.message };
+      }
+      throw err;
+    }
   };
 
   // ── FLAT_TIERS organizer (ADR-102, roadmap #622): oddball-item manual overrides

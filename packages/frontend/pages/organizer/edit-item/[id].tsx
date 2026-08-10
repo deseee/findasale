@@ -1646,6 +1646,49 @@ const EditItemPage = () => {
                       <option value="FURNITURE">Furniture</option>
                       <option value="ONE_WAY_PALLET">Pallet (one-way)</option>
                     </select>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Soft-sided or padded packaging (Parcel/Padded Envelope, Padded Bag,
+                      Roll/Tube, Tough Bag), items over 50 lb, or boxes longer than 48in can
+                      add a carrier handling surcharge to the shipping cost.
+                    </p>
+                    {(() => {
+                      // ADR-103 Phase 5: organizer-facing guidance on what triggers a
+                      // carrier oversize/handling surcharge and how to avoid it. Mirrors
+                      // the AHS_PACKAGING_TYPES set and dimension thresholds in
+                      // ebayRateEstimateService.ts (backend) -- kept as a local literal
+                      // here per this project's "frontend never imports @findasale/shared"
+                      // rule, not computed from a live rate call.
+                      const AHS_PACKAGING_TYPES = new Set([
+                        'ROLL',
+                        'TOUGH_BAGS',
+                        'PARCEL_OR_PADDED_ENVELOPE',
+                        'PADDED_BAGS',
+                      ]);
+                      const lengthIn = parseFloat(formData.packageLengthIn || '') || 0;
+                      const widthIn = parseFloat(formData.packageWidthIn || '') || 0;
+                      const heightIn = parseFloat(formData.packageHeightIn || '') || 0;
+                      const weightLb = (parseFloat(formData.packageWeightOz || '') || 0) / 16;
+                      const dimsSorted = [lengthIn, widthIn, heightIn].sort((a, b) => b - a);
+                      const packagingTrigger = AHS_PACKAGING_TYPES.has(formData.packageType);
+                      const dimensionTrigger = dimsSorted[0] > 48 || dimsSorted[1] > 30;
+                      const weightTrigger = weightLb > 50;
+                      if (!packagingTrigger && !dimensionTrigger && !weightTrigger) return null;
+                      return (
+                        <div className="mt-2 p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 text-xs text-amber-800 dark:text-amber-200">
+                          <p className="font-medium">This item will likely carry a carrier handling surcharge.</p>
+                          <p className="mt-1">
+                            {packagingTrigger &&
+                              'Soft-sided or padded packaging costs more to handle than a rigid box. '}
+                            {dimensionTrigger &&
+                              'A side longer than 48in (or a second side over 30in) triggers an oversize fee. '}
+                            {weightTrigger && 'Items over 50 lb trigger a weight handling fee. '}
+                            To avoid it, box the item in a rigid corrugated container sized to
+                            its actual dimensions (e.g. a golf bag or guitar case shipped bare
+                            triggers this — boxed, it often doesn&apos;t).
+                          </p>
+                        </div>
+                      );
+                    })()}
                   </div>
                   {item?.packageConfirmedByOrganizer !== true && (
                     <div className="flex items-center gap-3 flex-wrap">

@@ -27,7 +27,7 @@
  */
 
 import { prisma } from '../lib/prisma';
-import { computeCheapestForOrigin } from './ebayRateEstimateService';
+import { computeCheapestForOrigin, ShippingHardBlockError } from './ebayRateEstimateService';
 import { computeFvfFlatRate, roundUpToBucket } from './ebayFlatRatePolicyService';
 
 const CALCULATED_POLICY_NAME = 'FindA.Sale Calculated Domestic';
@@ -189,7 +189,8 @@ export async function ensureCalculatedPolicyWithHandling(
   organizerId: string,
   weightOz: number,
   dims: { length?: number | null; width?: number | null; height?: number | null } | null,
-  fromZip: string | null | undefined
+  fromZip: string | null | undefined,
+  packageType?: string | null
 ): Promise<{ policyId: string; handlingCost: number; bucketedRate: number } | null> {
   const organizer = await prisma.organizer.findUnique({
     where: { id: organizerId },
@@ -205,12 +206,25 @@ export async function ensureCalculatedPolicyWithHandling(
   // Same estimation methodology as ensureFvfFlatRatePolicy: cheapest carrier rate
   // at the organizer's farthest-CONUS coverage zone, rounded UP into the bounded
   // bucket ladder so the bucketed rate is always >= the real estimate and the
-  // policy set stays small/reusable.
-  const cheapest = computeCheapestForOrigin({
-    weightOz,
-    dims: dims ?? null,
-    origin: { zip: fromZip ?? null, lat: organizer?.lat ?? null, lng: organizer?.lng ?? null },
-  });
+  // policy set stays small/reusable. ADR-103 Phase 4: fail safe (return null, same
+  // contract as "organizer not connected") on ShippingHardBlockError rather than
+  // crash -- resolvePoliciesForItem already falls through to ensureFvfFlatRatePolicy,
+  // then to a soft-block-and-flag-for-review, when this returns null.
+  let cheapest;
+  try {
+    cheapest = await computeCheapestForOrigin({
+      weightOz,
+      dims: dims ?? null,
+      origin: { zip: fromZip ?? null, lat: organizer?.lat ?? null, lng: organizer?.lng ?? null },
+      packageType: packageType ?? null,
+    });
+  } catch (err) {
+    if (err instanceof ShippingHardBlockError) {
+      console.warn(`[eBay CalcHandling] organizer=${organizerId} hard-blocked: ${err.message}`);
+      return null;
+    }
+    throw err;
+  }
 
   const bucketedRate = roundUpToBucket(cheapest.rate);
   // Isolate just the FVF markup portion of computeFvfFlatRate as the handling fee:

@@ -14,10 +14,33 @@
  *
  * (2026-07-05: removed dead estimateZoneKey()/estimateBuyerShippingRate() — zero
  * callers anywhere in the repo, fully superseded by the coverage-zone engine below.)
+ *
+ * ADR-103 Phase 2-4 (2026-08-10): real 8-band zone system + lazy per-origin-ZIP3 real
+ * zone-chart cache (UspsZoneChartEntry), cubic-tier pricing evaluated alongside
+ * weight/dim-weight pricing, and additive AHS/Large-Package/USPS-nonstandard oversize
+ * surcharges. See claude_docs/architecture/ADR-103-shipping-rate-full-reanchor.md.
  */
+
+import { prisma } from '../lib/prisma';
 
 /** eBay final value fee rate applied to the shipping portion of the transaction. */
 export const EBAY_SHIPPING_FVF_RATE = 0.136;
+
+/**
+ * Thrown by estimateCheapestRate/computeCheapestForOrigin (ADR-103 Phase 4) when an
+ * item's declared dims/weight exceed the absolute carrier max for EVERY modeled
+ * carrier (USPS 130in length+girth/70lb; UPS+FedEx 108in length OR 165in
+ * length+girth/150lb) -- i.e. it cannot be shipped ground by any carrier this engine
+ * models. Callers MUST catch this and fail safe (return null / a clear "cannot ship"
+ * result) rather than letting it crash a request -- see each call site's try/catch.
+ * Never silently underprice an unshippable item.
+ */
+export class ShippingHardBlockError extends Error {
+  constructor(reason: string) {
+    super(reason);
+    this.name = 'ShippingHardBlockError';
+  }
+}
 
 /**
  * USPS Ground Advantage rates, real-anchored 2026-07-21, z8 CORRECTED 2026-08-10 —
@@ -191,6 +214,39 @@ export const CARRIER_TABLES = [
   { carrier: 'FEDEX' as const, table: RATE_TABLE_FEDEX, divisor: DIM_DIVISOR_FEDEX, effectiveDate: FEDEX_RATE_EFFECTIVE_DATE, source: FEDEX_RATE_SOURCE },
 ];
 
+/**
+ * PENDING_LIVE_VERIFICATION (ADR-103 Phase 2 honesty gate, CLAUDE.md §0·EF): every
+ * (carrier, weightTierMaxLb, zone) cell in this list is a value CARRIED FORWARD from
+ * the pre-ADR-103 6-collapsed-zone tables, not independently re-anchored against a
+ * live eBay-calculator quote at that exact zone. Per each table's own header comment:
+ * z1 currently duplicates the old z12 bucket's value (shared with z2); z3 duplicates
+ * the old z34 bucket's value (shared with z4); z2/z4/z5/z6/z7 are real-quoted ONLY at
+ * the 1lb tier, with every other weight tier in those columns scaled (not directly
+ * quoted) from that single anchor. Only z8 (all weight tiers, all 3 carriers) was
+ * independently live-verified this pass (ADR-103 Phase 1, zip 98357). Consumed by the
+ * QA dispatch that follows this implementation pass -- do not treat any cell surfaced
+ * here as verified. A full per-tier live re-anchor is ADR-103 §2B's repeatable
+ * Chrome-automation methodology (out of scope for this dev pass -- requires live
+ * browser automation against eBay's calculator, not fabricable from this shell).
+ */
+export const PENDING_LIVE_VERIFICATION_CELLS: Array<{ carrier: 'USPS' | 'UPS' | 'FEDEX'; maxLb: number; zone: ZoneKey }> = (() => {
+  const out: Array<{ carrier: 'USPS' | 'UPS' | 'FEDEX'; maxLb: number; zone: ZoneKey }> = [];
+  const carrierTables = [
+    { carrier: 'USPS' as const, table: RATE_TABLE },
+    { carrier: 'UPS' as const, table: RATE_TABLE_UPS },
+    { carrier: 'FEDEX' as const, table: RATE_TABLE_FEDEX },
+  ];
+  for (const { carrier, table } of carrierTables) {
+    for (const row of table) {
+      for (const zone of ['z1', 'z2', 'z3', 'z4', 'z5', 'z6', 'z7'] as ZoneKey[]) {
+        if (row.maxLb === 1) continue; // 1lb anchors are real-quoted per each table's header comments
+        out.push({ carrier, maxLb: row.maxLb, zone });
+      }
+    }
+  }
+  return out;
+})();
+
 // Continental-US extreme corners — max great-circle distance from any origin to
 // one of these approximates the farthest CONUS destination (drives coverage zone).
 const CONUS_CORNERS: Array<{ name: string; lat: number; lng: number }> = [
@@ -306,6 +362,96 @@ export function coverageZoneForOrigin(origin: { zip?: string | null; lat?: numbe
   return zone;
 }
 
+// ── ADR-103 Phase 2: lazy per-origin-ZIP3 real USPS zone-chart cache ───────────────
+// coverageZoneForOrigin() above remains the synchronous 8-band mileage-approximation
+// fallback (unchanged, still exported/used directly by anything that can't await).
+// resolveCoverageZone() below is the async, cache-aware wrapper: it checks
+// UspsZoneChartEntry for real zone-chart rows at this origin's ZIP3 first, and only
+// falls back to the mileage approximation when no cached entry exists.
+
+const ZONE_ORDER: ZoneKey[] = ['z1', 'z2', 'z3', 'z4', 'z5', 'z6', 'z7', 'z8'];
+function maxZone(a: ZoneKey, b: ZoneKey): ZoneKey {
+  return ZONE_ORDER.indexOf(a) >= ZONE_ORDER.indexOf(b) ? a : b;
+}
+
+/** First 3 digits of a US ZIP, or null if the input isn't a valid ZIP prefix. */
+function zip3(zip: string | null | undefined): string | null {
+  if (!zip) return null;
+  const digits = zip.replace(/\D/g, '');
+  return digits.length >= 3 ? digits.slice(0, 3) : null;
+}
+
+// In-process memo for the async cache-chart lookup (separate from coverageZoneCache,
+// which memoizes the sync mileage-only result) -- avoids a repeat DB round-trip for the
+// same originZip3 within a process lifetime. Cleared implicitly on redeploy.
+const zoneChartCache = new Map<string, ZoneKey | null>();
+
+/**
+ * Real USPS zone-chart lookup for an origin ZIP3, from the UspsZoneChartEntry cache
+ * table. Per ADR-103 §2A, the "coverage zone" for an origin is the MAX zone across all
+ * real destination-ZIP3 rows cached for that origin (worst-case-across-real-chart-rows,
+ * same "never be short" principle coverageZoneForOrigin already uses for the mileage
+ * fallback). Returns null (not a zone) when no rows are cached yet for this origin --
+ * caller falls back to the mileage approximation, exactly as documented on
+ * UspsZoneChartEntry in schema.prisma.
+ */
+async function getCachedMaxZoneForOriginZip3(originZip3: string): Promise<ZoneKey | null> {
+  if (zoneChartCache.has(originZip3)) return zoneChartCache.get(originZip3)!;
+  let result: ZoneKey | null = null;
+  try {
+    const rows = await prisma.uspsZoneChartEntry.findMany({
+      where: { originZip3 },
+      select: { zone: true },
+    });
+    for (const row of rows) {
+      const z = row.zone as ZoneKey;
+      if (!ZONE_ORDER.includes(z)) continue; // defensive: ignore malformed cached rows
+      result = result ? maxZone(result, z) : z;
+    }
+  } catch (err) {
+    // DB unavailable / table not yet migrated on this environment -- fail open to the
+    // mileage fallback rather than blocking rate computation.
+    console.warn('[eBay RateEstimate] UspsZoneChartEntry lookup failed, falling back to mileage approximation', err);
+    result = null;
+  }
+  zoneChartCache.set(originZip3, result);
+  return result;
+}
+
+/**
+ * TODO: wire real postcalc.usps.com fetch, see ADR-103 §2A. This is intentionally a
+ * stub -- fetching postcalc.usps.com/DomesticZoneChart requires an HTTP call pattern
+ * not already established anywhere in this codebase (form-post + HTML/CSV scrape, not
+ * a JSON API), and ADR-103's Dev dispatch explicitly does not require building it in
+ * this pass. Currently a no-op (writes nothing, returns without effect) so calling it
+ * is always safe -- once implemented, it should upsert real UspsZoneChartEntry rows for
+ * (originZip3, destZip3) pairs actually seen in production, lazily, on cache miss.
+ */
+async function fetchLiveUspsZoneChartEntry(originZip3: string): Promise<void> {
+  void originZip3;
+  // Not implemented this pass -- see TODO above. Intentionally does nothing.
+  return;
+}
+
+/**
+ * Async, cache-aware coverage zone resolution (ADR-103 Phase 2). Prefers a real
+ * USPS zone-chart cache hit for this origin's ZIP3; falls back to the synchronous
+ * 8-band mileage approximation (coverageZoneForOrigin) when no cache entry exists.
+ * On a cache miss, fires the (currently stubbed, no-op) live fetcher in the
+ * background -- non-blocking, errors swallowed -- so a future real implementation
+ * starts lazily populating the cache with zero additional wiring.
+ */
+export async function resolveCoverageZone(origin: { zip?: string | null; lat?: number | null; lng?: number | null }): Promise<ZoneKey> {
+  const originZip3 = zip3(origin.zip);
+  if (originZip3) {
+    const cached = await getCachedMaxZoneForOriginZip3(originZip3);
+    if (cached) return cached;
+    // Lazy background populate -- stubbed today (see TODO), safe no-op.
+    void fetchLiveUspsZoneChartEntry(originZip3).catch(() => undefined);
+  }
+  return coverageZoneForOrigin(origin);
+}
+
 // Exported (S1197) so resolvePoliciesForItem's weight-tier match (ebayController.ts) can
 // apply the SAME dimensional-weight floor real carriers actually bill on, instead of
 // matching flat weight-tier policies against raw actual weight alone -- a light-but-bulky
@@ -322,43 +468,397 @@ export function billableLb(weightOz: number, dims: { length?: number | null; wid
   return { lb: Math.max(actualOz, dimOz, 1) / 16, basis };
 }
 
-function rateFromTable(table: RateRow[], lb: number, zone: ZoneKey): number {
-  const row = table.find((r) => lb <= r.maxLb) || table[table.length - 1];
-  return round2(row[zone]);
+/**
+ * Looks up (or, for weights beyond the table's real-data ceiling, linearly
+ * extrapolates) a carrier rate for a given billable weight and zone.
+ *
+ * BUG FIXED (S1201, live QA vs ADR-103 Phases 2-5): every RATE_TABLE/_UPS/_FEDEX
+ * table's highest real row is maxLb: 70. The old implementation was
+ * `table.find((r) => lb <= r.maxLb) || table[table.length - 1]` -- for any lb > 70
+ * (which IS reachable: UPS/FedEx ship up to 150lb per UPS_FEDEX_ABSOLUTE_MAX,
+ * enforced by withinAbsoluteMax() before this is ever called, and billable
+ * (dimensional) weight can independently exceed 70lb even on a lighter/bulkier
+ * USPS-eligible package) `.find()` returned undefined and silently fell back to
+ * the LAST row -- pricing a 100lb and a 149lb package identically, as if both
+ * were exactly 70lb. Confirmed against a live eBay-calculator quote (Patrick's
+ * real seller account, origin 49079 -> dest 49503, 100lb/28x28x16in, UPS Ground):
+ * real quote $88.73; old clamp-to-70lb logic computed $75.25 (15% under). ADR-103
+ * §2(D) explicitly requires "hard-block rather than silently underprice" for
+ * out-of-table weights -- clamping violated that.
+ *
+ * PENDING_LIVE_VERIFICATION (extrapolated bracket, honesty gate, CLAUDE.md §0·EF):
+ * there is no live-quoted data above 70lb (this dev pass did not fabricate new
+ * "real" 90/110/130/150lb figures -- see
+ * PENDING_LIVE_VERIFICATION_EXTRAPOLATED_WEIGHT_BRACKET below). Instead of
+ * clamping, this extrapolates LINEARLY past the last real row using the table's
+ * own observed per-pound growth rate between its last two real rows (50lb ->
+ * 70lb), applied forward to the requested weight -- the same "single real anchor
+ * + curve-shape scaling" methodology this file already uses elsewhere (see the
+ * z8 correction comments above), just applied along the weight axis instead of
+ * the zone axis. Not a live quote; closer than the old clamp bug, not "verified."
+ *
+ * absoluteMaxLb caps the extrapolation input at the carrier's own physical
+ * ceiling (USPS_ABSOLUTE_MAX.weightLb = 70, UPS_FEDEX_ABSOLUTE_MAX.weightLb =
+ * 150) -- a second, independent safety cap on the PRICING input itself, since
+ * withinAbsoluteMax() only gates on REAL weight/dims (it can pass a package
+ * whose BILLABLE/dimensional weight is higher), so this prevents a runaway
+ * dimensional-weight value from extrapolating past a weight the carrier would
+ * refuse to ship at all.
+ *
+ * Pure function, no behavior change for any lb <= 70 (the table lookup path is
+ * unchanged).
+ */
+function rateFromTable(table: RateRow[], lb: number, zone: ZoneKey, absoluteMaxLb: number): number {
+  const row = table.find((r) => lb <= r.maxLb);
+  if (row) return round2(row[zone]);
+
+  // Beyond the table's real-data ceiling -- extrapolate linearly from the last
+  // two real rows' observed per-pound growth rate, capped at the carrier's own
+  // absolute max weight.
+  const lastRow = table[table.length - 1];
+  const secondLastRow = table[table.length - 2];
+  const cappedLb = Math.min(lb, absoluteMaxLb);
+  const slope = (lastRow[zone] - secondLastRow[zone]) / (lastRow.maxLb - secondLastRow.maxLb);
+  const extrapolated = lastRow[zone] + slope * (cappedLb - lastRow.maxLb);
+  return round2(extrapolated);
 }
+
+type PackageDims = { length?: number | null; width?: number | null; height?: number | null } | null;
 
 export interface CheapestRate {
   carrier: 'USPS' | 'UPS' | 'FEDEX';
+  /** Final rate the downstream FVF gross-up/bucket-rounding step should use --
+   *  baseRate + applicableSurcharges (ADR-103 Phase 4). */
   rate: number;
-  basis: 'actual' | 'dimensional';
+  /** Carrier table rate before any oversize/AHS/Large-Package/nonstandard surcharge. */
+  baseRate?: number;
+  /** Total additive surcharge folded into `rate` (0 if none triggered). */
+  surcharge?: number;
+  surchargeType?: 'AHS' | 'LARGE_PACKAGE' | 'USPS_NONSTANDARD' | null;
+  basis: 'actual' | 'dimensional' | 'cubic';
+  /** Set when basis === 'cubic' -- which named GA Cubic tier was selected. */
+  cubicTierLabel?: string | null;
   zone: ZoneKey;
   fvfOnShipping: number;
   netToSeller: number;
 }
 
-/** Cheapest carrier rate for an item at a given coverage zone. */
-export function estimateCheapestRate(input: { weightOz: number; dims?: { length?: number | null; width?: number | null; height?: number | null } | null; zone: ZoneKey }): CheapestRate {
+// ── ADR-103 Phase 3: cubic-tier pricing (USPS Ground Advantage Cubic) ──────────────
+// USPS GA Cubic prices small, dense items by box-dimension tier instead of
+// weight/dim-weight -- often cheaper for small heavy items. Named tiers mirror
+// Patrick's own live eBay policy list ("GA Cubic 0.1 (to 5x5x6)" ... "GA Cubic 1.0
+// (to 14x12x10)", ~10 discrete tiers, ADR-103 §2C).
+//
+// PENDING_LIVE_VERIFICATION (honesty gate, ADR-103 Phase 3): only the two endpoint
+// tiers below (0.1 and 1.0) are sourced -- directly from ADR-103 §2C, which cites
+// Patrick's real, currently-configured eBay policy names. ADR-103 states ~10 discrete
+// tiers exist between these endpoints (implied 0.1 cu-ft increments, i.e. GA Cubic 0.2
+// through 0.9) but this pass did not capture their box dimensions or prices --
+// inventing them would violate the no-fabrication rule (CLAUDE.md §0·EF). Every tier's
+// flatRate is null until a real price is sourced; evaluateCubicTier() below SKIPS any
+// tier with flatRate === null, so cubic pricing can never be selected as cheaper than
+// weight/dim-weight pricing until real data lands here -- pure plumbing, safe no-op
+// today. QA/Architect: read Patrick's live eBay Business Policies > Shipping list
+// (ebay.com/bp/shippingpolicy) and add the missing GA Cubic 0.2-0.9 rows verbatim
+// (tierLabel, maxLengthIn/maxWidthIn/maxHeightIn, flatRate).
+export interface CubicTier {
+  tierLabel: string;
+  maxLengthIn: number;
+  maxWidthIn: number;
+  maxHeightIn: number;
+  /** Flat national rate, USD. null = not yet sourced -- tier is skipped until filled. */
+  flatRate: number | null;
+}
+
+export const CUBIC_TIER_TABLE: CubicTier[] = [
+  { tierLabel: 'GA Cubic 0.1', maxLengthIn: 5, maxWidthIn: 5, maxHeightIn: 6, flatRate: null }, // PENDING_LIVE_VERIFICATION -- dims sourced (ADR-103 §2C), price not
+  { tierLabel: 'GA Cubic 1.0', maxLengthIn: 14, maxWidthIn: 12, maxHeightIn: 10, flatRate: null }, // PENDING_LIVE_VERIFICATION -- dims sourced (ADR-103 §2C), price not
+];
+
+/**
+ * Smallest-volume CUBIC_TIER_TABLE entry (with a real, non-null flatRate) whose
+ * bounding box contains the item, orientation-agnostic -- same matching algorithm as
+ * matchCubicTier() in ebayPolicyParser.ts (ADR-099), kept independent here since this
+ * table is a code-level engine input, not an organizer-uploaded policy mapping.
+ */
+function evaluateCubicTier(dims: PackageDims): { tierLabel: string; rate: number } | null {
+  const L = dims?.length ? Number(dims.length) : 0;
+  const W = dims?.width ? Number(dims.width) : 0;
+  const H = dims?.height ? Number(dims.height) : 0;
+  if (!(L > 0 && W > 0 && H > 0)) return null;
+  const itemDims = [L, W, H].sort((a, b) => b - a);
+  const priced = CUBIC_TIER_TABLE.filter((t) => t.flatRate != null);
+  const sorted = [...priced].sort(
+    (a, b) => a.maxLengthIn * a.maxWidthIn * a.maxHeightIn - b.maxLengthIn * b.maxWidthIn * b.maxHeightIn
+  );
+  for (const tier of sorted) {
+    const tierDims = [tier.maxLengthIn, tier.maxWidthIn, tier.maxHeightIn].sort((a, b) => b - a);
+    if (itemDims[0] <= tierDims[0] && itemDims[1] <= tierDims[1] && itemDims[2] <= tierDims[2]) {
+      return { tierLabel: tier.tierLabel, rate: tier.flatRate as number };
+    }
+  }
+  return null;
+}
+
+// ── ADR-103 Phase 4: real oversize / AHS / Large-Package / USPS-nonstandard surcharges ──
+// Sourced from ADR-103 §2(D) exactly, per the honesty gate in this session's dispatch --
+// see the ADR-cited caveats carried forward as comments below. Applied ADDITIVELY to the
+// base carrier rate, BEFORE the FVF gross-up/bucket-rounding step in
+// ebayFlatRatePolicyService.ts (computeFvfFlatRate/roundUpToBucket both operate on
+// CheapestRate.rate, which already includes any surcharge by the time it's returned).
+
+/** Non-rigid/soft-sided/cylindrical packaging that triggers the AHS packaging trigger
+ *  by default (ADR-103 §2D) -- exact string values confirmed against the Package Type
+ *  dropdown, packages/frontend/pages/organizer/edit-item/[id].tsx. */
+const AHS_PACKAGING_TYPES = new Set(['ROLL', 'TOUGH_BAGS', 'PARCEL_OR_PADDED_ENVELOPE', 'PADDED_BAGS']);
+
+// AHS (Additional Handling Surcharge), UPS + FedEx, near-identical fee schedules
+// (ADR-103 §2D): "2026 fees by zone: ~$26.50-$46.00 (zone 2) up to ~$33.75-$58.75
+// (zone 7+)". UPS figures are secondary-sourced (3 independent, mutually consistent
+// sources, NOT confirmed against a UPS-published PDF -- ADR-103 §5) pending a direct
+// UPS.com re-check. This engine uses the HIGH end of each given range (conservative,
+// "never be short" -- same principle coverageZoneForOrigin already documents) at the
+// two zones ADR-103 actually gives figures for (2 and 7+), and carries that same
+// high-end figure forward to the adjacent unsourced zones -- z1 mirrors z2, z3-z6
+// mirror z7+ -- rather than inventing an interpolated gradient. Every zone below is
+// PENDING_LIVE_VERIFICATION except z2 and z7/z8, which are ADR-103-sourced (secondary).
+export const AHS_SURCHARGE_TABLE: Record<ZoneKey, number> = {
+  z1: 46.00, // PENDING_LIVE_VERIFICATION -- carried forward from the z2 anchor
+  z2: 46.00, // ADR-103 §2D, secondary-sourced (high end of $26.50-$46.00)
+  z3: 58.75, // PENDING_LIVE_VERIFICATION -- carried forward from the z7+ anchor
+  z4: 58.75, // PENDING_LIVE_VERIFICATION -- carried forward from the z7+ anchor
+  z5: 58.75, // PENDING_LIVE_VERIFICATION -- carried forward from the z7+ anchor
+  z6: 58.75, // PENDING_LIVE_VERIFICATION -- carried forward from the z7+ anchor
+  z7: 58.75, // ADR-103 §2D, secondary-sourced (high end of $33.75-$58.75)
+  z8: 58.75, // ADR-103 §2D, secondary-sourced ("zone 7+" covers 7 and up)
+};
+
+// Large Package / Oversize surcharge, UPS + FedEx (ADR-103 §2D): "$255 (zone 2) to
+// $330 (zone 7+), plus a 90lb minimum billable weight once triggered." Same
+// carry-forward convention as AHS above -- only z2 and z7/z8 are ADR-103-sourced.
+export const LARGE_PACKAGE_SURCHARGE_TABLE: Record<ZoneKey, number> = {
+  z1: 255, // PENDING_LIVE_VERIFICATION -- carried forward from the z2 anchor
+  z2: 255, // ADR-103 §2D
+  z3: 330, // PENDING_LIVE_VERIFICATION -- carried forward from the z7+ anchor
+  z4: 330, // PENDING_LIVE_VERIFICATION -- carried forward from the z7+ anchor
+  z5: 330, // PENDING_LIVE_VERIFICATION -- carried forward from the z7+ anchor
+  z6: 330, // PENDING_LIVE_VERIFICATION -- carried forward from the z7+ anchor
+  z7: 330, // ADR-103 §2D
+  z8: 330, // ADR-103 §2D
+};
+export const LARGE_PACKAGE_MIN_BILLABLE_LB = 90; // ADR-103 §2D
+
+// USPS Ground Advantage nonstandard fees (ADR-103 §2D): "length >22-30in: $4.50;
+// length >30in: $10.00; volume >2ft3: ~$21 (one conflicting source says $35 -- verify
+// against Notice 123 before hard-coding)." The $21-vs-$35 conflict is UNRESOLVED
+// (ADR-103 §5) -- this engine uses the conservative $35 figure so a real charge can
+// never exceed what the organizer priced for (never-short principle). Architect/
+// Patrick: confirm against USPS Notice 123 pricing before treating $35 as final; if
+// Notice 123 confirms $21, this is a straightforward one-line correction.
+export const USPS_NONSTANDARD_FEE_TABLE = {
+  lengthOver22Under30In: 4.50,
+  lengthOver30In: 10.00,
+  volumeOver2CuFt: 35.00, // PENDING_LIVE_VERIFICATION -- conflict vs $21, see comment above
+};
+
+// Absolute carrier max (ADR-103 §2D): beyond these, the carrier refuses the package
+// (or, for UPS/FedEx, charges a $1,875 "Ground Unauthorized Package" fee instead of
+// shipping it normally) -- hard-block rather than silently underprice.
+// UPS/FedEx: "108in length, 165in length+girth combined" (ADR-103 §2D, primary-sourced
+// dollar amounts; trigger dimensions secondary-sourced per §5). 150lb is a commonly
+// published UPS/FedEx Ground absolute weight limit -- not independently re-verified
+// this pass, flagged PENDING_LIVE_VERIFICATION same as the rest of this table.
+export const UPS_FEDEX_ABSOLUTE_MAX = { lengthIn: 108, lengthPlusGirthIn: 165, weightLb: 150 };
+// USPS: "Absolute USPS max: 130in combined length+girth, 70lb" (ADR-103 §2D).
+export const USPS_ABSOLUTE_MAX = { lengthPlusGirthIn: 130, weightLb: 70 };
+
+/**
+ * PENDING_LIVE_VERIFICATION (extrapolated weight bracket, honesty gate, S1201 fix):
+ * rateFromTable() now linearly extrapolates past each table's 70lb real-data
+ * ceiling (see that function's header comment for the bug this replaced and the
+ * extrapolation method) instead of silently clamping to the 70lb-tier rate. This
+ * bracket is real data for NO carrier -- it is a same-methodology extrapolation,
+ * not a live eBay-calculator quote. QA/Architect: live-verify UPS/FedEx rates at
+ * 90/110/130/150lb per zone (ADR-103 §2B Chrome-automation methodology) before
+ * relying on this bracket beyond "closer than the pre-fix clamp bug." USPS is
+ * capped at 70lb by USPS_ABSOLUTE_MAX itself (real weight), so this bracket only
+ * matters for USPS pricing in the rare case billable/dimensional weight exceeds
+ * 70lb while real weight/dims stay under the physical ceiling.
+ */
+export const PENDING_LIVE_VERIFICATION_EXTRAPOLATED_WEIGHT_BRACKET = {
+  minLb: 70,
+  maxLbByCarrier: {
+    USPS: USPS_ABSOLUTE_MAX.weightLb,
+    UPS: UPS_FEDEX_ABSOLUTE_MAX.weightLb,
+    FEDEX: UPS_FEDEX_ABSOLUTE_MAX.weightLb,
+  },
+  method: 'linear extrapolation from the 50lb->70lb per-pound growth rate observed in each table/zone (rateFromTable)',
+};
+
+/** [longest, 2nd-longest, 3rd-longest] from raw dims, or null if any dim is missing. */
+function sortedRealDims(dims: PackageDims): [number, number, number] | null {
+  const L = dims?.length ? Number(dims.length) : 0;
+  const W = dims?.width ? Number(dims.width) : 0;
+  const H = dims?.height ? Number(dims.height) : 0;
+  if (!(L > 0 && W > 0 && H > 0)) return null;
+  const sorted = [L, W, H].sort((a, b) => b - a) as [number, number, number];
+  return sorted;
+}
+
+/** True if this carrier group can physically carry the item at all (real dims/weight,
+ *  NOT dimensional/billable weight -- absolute max is a physical carrier limit). */
+function withinAbsoluteMax(carrier: 'USPS' | 'UPS' | 'FEDEX', dims: PackageDims, weightOz: number): boolean {
+  const weightLb = Math.max(0, weightOz || 0) / 16;
+  const sorted = sortedRealDims(dims);
+  const lengthPlusGirth = sorted ? sorted[0] + 2 * (sorted[1] + sorted[2]) : 0;
+  if (carrier === 'USPS') {
+    if (weightLb > USPS_ABSOLUTE_MAX.weightLb) return false;
+    if (sorted && lengthPlusGirth > USPS_ABSOLUTE_MAX.lengthPlusGirthIn) return false;
+    return true;
+  }
+  // UPS + FedEx share the same absolute max (ADR-103 §2D).
+  if (weightLb > UPS_FEDEX_ABSOLUTE_MAX.weightLb) return false;
+  if (sorted) {
+    if (sorted[0] > UPS_FEDEX_ABSOLUTE_MAX.lengthIn) return false;
+    if (lengthPlusGirth > UPS_FEDEX_ABSOLUTE_MAX.lengthPlusGirthIn) return false;
+  }
+  return true;
+}
+
+/**
+ * Additive oversize surcharge for one carrier candidate (ADR-103 Phase 4). Uses REAL
+ * dims/weight (not dimensional/billable weight) for trigger checks, matching how real
+ * carriers determine AHS/Large-Package eligibility. Returns the surcharge amount (0 if
+ * none triggered), which type fired, and -- for Large Package only -- the minimum
+ * billable weight floor that should apply to the base-rate lookup itself.
+ */
+function computeSurchargeForCarrier(
+  carrier: 'USPS' | 'UPS' | 'FEDEX',
+  zone: ZoneKey,
+  dims: PackageDims,
+  weightOz: number,
+  packageType: string | null | undefined
+): { amount: number; type: 'AHS' | 'LARGE_PACKAGE' | 'USPS_NONSTANDARD' | null; minBillableLb: number | null } {
+  const weightLb = Math.max(0, weightOz || 0) / 16;
+  const sorted = sortedRealDims(dims);
+  const lengthPlusGirth = sorted ? sorted[0] + 2 * (sorted[1] + sorted[2]) : 0;
+  const volumeCuIn = sorted ? sorted[0] * sorted[1] * sorted[2] : 0;
+
+  if (carrier === 'USPS') {
+    // USPS nonstandard fees are independent, length-band + volume, additive to each other.
+    let fee = 0;
+    if (sorted) {
+      if (sorted[0] > 30) fee += USPS_NONSTANDARD_FEE_TABLE.lengthOver30In;
+      else if (sorted[0] > 22) fee += USPS_NONSTANDARD_FEE_TABLE.lengthOver22Under30In;
+      if (volumeCuIn > 2 * 1728) fee += USPS_NONSTANDARD_FEE_TABLE.volumeOver2CuFt;
+    }
+    return { amount: round2(fee), type: fee > 0 ? 'USPS_NONSTANDARD' : null, minBillableLb: null };
+  }
+
+  // UPS / FedEx: Large Package supersedes AHS when both would trigger (real-carrier
+  // behavior -- a package is billed as ONE surcharge tier, not stacked, ADR-103 §2D).
+  const largePackageTriggered =
+    lengthPlusGirth > 130 || (!!sorted && sorted[0] > 96) || weightLb > 110 || volumeCuIn > 17280;
+  if (largePackageTriggered) {
+    return { amount: LARGE_PACKAGE_SURCHARGE_TABLE[zone], type: 'LARGE_PACKAGE', minBillableLb: LARGE_PACKAGE_MIN_BILLABLE_LB };
+  }
+
+  const dimensionTriggered = !!sorted && (sorted[0] > 48 || sorted[1] > 30);
+  const weightTriggered = weightLb > 50;
+  const packagingTriggered = !!packageType && AHS_PACKAGING_TYPES.has(packageType);
+  if (dimensionTriggered || weightTriggered || packagingTriggered) {
+    // "one surcharge type charged per package even if multiple triggers fire" (ADR-103 §2D).
+    return { amount: AHS_SURCHARGE_TABLE[zone], type: 'AHS', minBillableLb: null };
+  }
+  return { amount: 0, type: null, minBillableLb: null };
+}
+
+/** Cheapest carrier rate for an item at a given coverage zone, including any additive
+ *  oversize surcharge and the cubic-tier alternative (ADR-103 Phases 3-4). Throws
+ *  ShippingHardBlockError if the item exceeds the absolute max for every carrier. */
+export function estimateCheapestRate(input: {
+  weightOz: number;
+  dims?: PackageDims;
+  zone: ZoneKey;
+  packageType?: string | null;
+}): CheapestRate {
   const dims = input.dims ?? null;
   let best: CheapestRate | null = null;
+  let anyCarrierViable = false;
+
   for (const c of CARRIER_TABLES) {
-    const { lb, basis } = billableLb(input.weightOz, dims, c.divisor);
-    const rate = rateFromTable(c.table, lb, input.zone);
+    if (!withinAbsoluteMax(c.carrier, dims, input.weightOz)) continue; // this carrier can't ship it
+    anyCarrierViable = true;
+
+    const surcharge = computeSurchargeForCarrier(c.carrier, input.zone, dims, input.weightOz, input.packageType);
+    // Large Package's 90lb minimum billable weight applies to the BASE rate lookup
+    // itself (ADR-103 §2D), not just the surcharge -- floor the weight used for
+    // billableLb's actual-weight input before computing dim-weight-vs-actual.
+    const effectiveWeightOz =
+      surcharge.minBillableLb != null ? Math.max(input.weightOz, surcharge.minBillableLb * 16) : input.weightOz;
+
+    const { lb, basis } = billableLb(effectiveWeightOz, dims, c.divisor);
+    const absoluteMaxLb = c.carrier === 'USPS' ? USPS_ABSOLUTE_MAX.weightLb : UPS_FEDEX_ABSOLUTE_MAX.weightLb;
+    const baseRate = rateFromTable(c.table, lb, input.zone, absoluteMaxLb);
+    const rate = round2(baseRate + surcharge.amount);
+
     if (!best || rate < best.rate) {
       best = {
         carrier: c.carrier,
         rate,
+        baseRate,
+        surcharge: surcharge.amount,
+        surchargeType: surcharge.type,
         basis,
+        cubicTierLabel: null,
         zone: input.zone,
         fvfOnShipping: round2(rate * EBAY_SHIPPING_FVF_RATE),
         netToSeller: round2(rate - rate * EBAY_SHIPPING_FVF_RATE),
       };
     }
   }
+
+  if (!anyCarrierViable) {
+    throw new ShippingHardBlockError(
+      `Item exceeds the absolute carrier max for USPS, UPS, and FedEx Ground (weight=${round2((input.weightOz || 0) / 16)}lb, dims=${JSON.stringify(dims)}). This item cannot be shipped by any modeled carrier and must not be priced.`
+    );
+  }
+
+  // ADR-103 Phase 3: evaluate cubic-tier pricing alongside weight/dim-weight pricing,
+  // pick whichever is cheaper (same pattern already used to pick cheapest carrier).
+  // Inert today -- see CUBIC_TIER_TABLE header -- until real per-tier prices land.
+  const cubic = evaluateCubicTier(dims);
+  if (cubic && cubic.rate < best!.rate) {
+    best = {
+      carrier: 'USPS',
+      rate: cubic.rate,
+      baseRate: cubic.rate,
+      surcharge: 0,
+      surchargeType: null,
+      basis: 'cubic',
+      cubicTierLabel: cubic.tierLabel,
+      zone: input.zone,
+      fvfOnShipping: round2(cubic.rate * EBAY_SHIPPING_FVF_RATE),
+      netToSeller: round2(cubic.rate - cubic.rate * EBAY_SHIPPING_FVF_RATE),
+    };
+  }
+
   return best!;
 }
 
-/** Resolve the organizer coverage zone, then return the cheapest carrier rate. */
-export function computeCheapestForOrigin(input: { weightOz: number; dims?: { length?: number | null; width?: number | null; height?: number | null } | null; origin: { zip?: string | null; lat?: number | null; lng?: number | null } }): CheapestRate {
-  const zone = coverageZoneForOrigin(input.origin);
-  return estimateCheapestRate({ weightOz: input.weightOz, dims: input.dims ?? null, zone });
+/**
+ * Resolve the organizer coverage zone, then return the cheapest carrier rate
+ * (including any additive oversize surcharge -- ADR-103 Phase 4). Async since
+ * ADR-103 Phase 2's zone resolution can check the UspsZoneChartEntry cache (a DB
+ * read) before falling back to the mileage approximation -- see resolveCoverageZone.
+ * Callers should catch ShippingHardBlockError and fail safe (never crash a request).
+ */
+export async function computeCheapestForOrigin(input: {
+  weightOz: number;
+  dims?: PackageDims;
+  origin: { zip?: string | null; lat?: number | null; lng?: number | null };
+  packageType?: string | null;
+}): Promise<CheapestRate> {
+  const zone = await resolveCoverageZone(input.origin);
+  return estimateCheapestRate({ weightOz: input.weightOz, dims: input.dims ?? null, zone, packageType: input.packageType ?? null });
 }

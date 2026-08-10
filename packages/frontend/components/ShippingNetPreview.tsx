@@ -39,7 +39,7 @@ interface PreviewResponse {
   flatPolicy?: { name: string; amount: number } | null;
   shippingEstimate: {
     rate: number;
-    basis: 'actual' | 'dimensional';
+    basis: 'actual' | 'dimensional' | 'cubic'; // ADR-103 Phase 3: cubic-tier pricing
     service: string;
     carrier?: 'USPS' | 'UPS' | 'FEDEX' | string;
     labelCost?: number;
@@ -127,6 +127,13 @@ export const ShippingNetPreview: React.FC<ShippingNetPreviewProps> = ({
       const code = err.response?.data?.code;
       if (code === 'NEEDS_PACKAGE_DETAILS') {
         setError('Add a package weight to see shipping and net.');
+      } else if (code === 'PACKAGE_EXCEEDS_CARRIER_LIMITS') {
+        // ADR-103 Phase 5: surface the backend's specific reason (weight/dims exceed
+        // every carrier's absolute max) instead of a generic estimate-failed message.
+        setError(
+          err.response?.data?.message ||
+            'This item is too large or heavy for USPS, UPS, or FedEx Ground. Re-box it smaller/lighter, or offer local pickup instead.'
+        );
       } else {
         setError('Could not estimate shipping right now.');
       }

@@ -111,6 +111,9 @@ export async function resyncShippingDriftSweep(opts?: {
       // classification/category overrides instead of only the computed rate.
       ebayShippingClassification: true,
       ebayCategoryId: true,
+      // ADR-103 Phase 4: needed so the local recompute applies the same AHS/oversize
+      // packaging trigger the live listing-push path uses (resolvePoliciesForItem).
+      packageType: true,
       sale: {
         select: {
           zip: true,
@@ -189,9 +192,22 @@ export async function resyncShippingDriftSweep(opts?: {
           ebayShippingOverride: item.ebayShippingOverride,
           ebayShippingClassification: item.ebayShippingClassification,
           ebayCategoryId: item.ebayCategoryId,
+          packageType: item.packageType,
         },
         fromZip: item.sale?.zip ?? null,
       });
+
+      // ADR-103 Phase 4: an item that exceeds every carrier's absolute max resolves to
+      // source 'hard-blocked' with buyerAmountCents=0 -- that 0 is NOT a real computed
+      // rate and must never be written as this item's stored shipping amount (would
+      // silently look like free/underpriced shipping on next read). Skip it; the live
+      // listing-push path's own resolvePoliciesForItem already soft-blocks and flags
+      // items like this for review independently.
+      if (r.source === 'hard-blocked') {
+        console.warn(`[ResyncShippingDrift] item ${item.id} hard-blocked (non-fatal, skipped): ${r.hardBlockReason}`);
+        checked++;
+        continue;
+      }
 
       const newCents = r.buyerAmountCents;
       const stored = item.ebayShippingAmountCents;

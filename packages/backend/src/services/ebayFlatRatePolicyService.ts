@@ -19,7 +19,7 @@
  */
 
 import { prisma } from '../lib/prisma';
-import { computeCheapestForOrigin, EBAY_SHIPPING_FVF_RATE } from './ebayRateEstimateService';
+import { computeCheapestForOrigin, EBAY_SHIPPING_FVF_RATE, ShippingHardBlockError } from './ebayRateEstimateService';
 import { refreshEbayAccessToken } from './ebayHttp';
 
 // In-process cache: `${organizerId}:${flatRateStr}` → eBay fulfillmentPolicyId
@@ -76,7 +76,8 @@ export async function ensureFvfFlatRatePolicy(
   organizerId: string,
   weightOz: number,
   dims: { length?: number | null; width?: number | null; height?: number | null } | null,
-  fromZip: string | null | undefined
+  fromZip: string | null | undefined,
+  packageType?: string | null
 ): Promise<{ policyId: string; flatRate: number } | null> {
   const organizer = await prisma.organizer.findUnique({
     where: { id: organizerId },
@@ -91,11 +92,25 @@ export async function ensureFvfFlatRatePolicy(
 
   // Price at the cheapest carrier for the organizer's farthest-CONUS coverage zone,
   // gross up for eBay's FVF on shipping, then round UP into the bounded bucket ladder.
-  const cheapest = computeCheapestForOrigin({
-    weightOz,
-    dims: dims ?? null,
-    origin: { zip: fromZip ?? null, lat: organizer?.lat ?? null, lng: organizer?.lng ?? null },
-  });
+  // ADR-103 Phase 4: computeCheapestForOrigin can throw ShippingHardBlockError when the
+  // item exceeds every carrier's absolute max -- fail safe (return null, same contract
+  // as "organizer not connected" above) rather than crash; callers already fall through
+  // to the calculated-policy path / soft-block-and-flag-for-review on a null return.
+  let cheapest;
+  try {
+    cheapest = await computeCheapestForOrigin({
+      weightOz,
+      dims: dims ?? null,
+      origin: { zip: fromZip ?? null, lat: organizer?.lat ?? null, lng: organizer?.lng ?? null },
+      packageType: packageType ?? null,
+    });
+  } catch (err) {
+    if (err instanceof ShippingHardBlockError) {
+      console.warn(`[eBay FvfFlat] organizer=${organizerId} hard-blocked: ${err.message}`);
+      return null;
+    }
+    throw err;
+  }
 
   const flatRate = roundUpToBucket(computeFvfFlatRate(cheapest.rate));
   const flatRateStr = flatRate.toFixed(2);
@@ -234,16 +249,22 @@ export async function ensureFvfFlatRatePolicy(
  * ensureNamedWeightTierPolicy calls this same function internally so preview and
  * provisioning can never disagree on the price.
  */
-export function computeNamedWeightTierRate(
+export async function computeNamedWeightTierRate(
   bucketMaxLb: number,
   fromZip: string | null | undefined,
   origin: { lat: number | null | undefined; lng: number | null | undefined }
-): { maxOz: number; policyName: string; flatRate: number } {
+): Promise<{ maxOz: number; policyName: string; flatRate: number }> {
   const maxOz = Math.round(bucketMaxLb * 16);
 
   // Price at the top of the bucket (no dims — this is a reusable ladder rung, not a
-  // per-item policy), gross up for eBay's FVF on shipping, round UP into the bucket ladder.
-  const cheapest = computeCheapestForOrigin({
+  // per-item policy, and out of scope for the AHS/Large-Package dimension/packaging
+  // triggers, which need real per-item dims/packageType -- ADR-103 Phase 4), gross up
+  // for eBay's FVF on shipping, round UP into the bucket ladder. A weight-only bucket
+  // CAN still exceed a carrier's absolute weight max (e.g. a 150lb+ catch-all rung) --
+  // computeCheapestForOrigin throws ShippingHardBlockError in that case; this is a rare,
+  // organizer-configuration-time path (not a live per-item price), so we let it
+  // propagate to the caller rather than silently returning a wrong number.
+  const cheapest = await computeCheapestForOrigin({
     weightOz: maxOz,
     dims: null,
     origin: { zip: fromZip ?? null, lat: origin.lat ?? null, lng: origin.lng ?? null },
@@ -278,10 +299,19 @@ export async function ensureNamedWeightTierPolicy(
 
   // Same pricing pipeline as computeNamedWeightTierRate's preview-only call --
   // provisioning and preview can never disagree because they share this function.
-  const { maxOz, policyName, flatRate } = computeNamedWeightTierRate(bucketMaxLb, fromZip, {
-    lat: organizer?.lat ?? null,
-    lng: organizer?.lng ?? null,
-  });
+  let maxOz: number, policyName: string, flatRate: number;
+  try {
+    ({ maxOz, policyName, flatRate } = await computeNamedWeightTierRate(bucketMaxLb, fromZip, {
+      lat: organizer?.lat ?? null,
+      lng: organizer?.lng ?? null,
+    }));
+  } catch (err) {
+    if (err instanceof ShippingHardBlockError) {
+      console.warn(`[eBay NamedTier] organizer=${organizerId} bucket=${bucketMaxLb}lb hard-blocked: ${err.message}`);
+      return null;
+    }
+    throw err;
+  }
   const flatRateStr = flatRate.toFixed(2);
   const handlingTimeDays = conn.handlingTimeDays ?? 3;
 

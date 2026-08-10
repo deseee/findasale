@@ -48,6 +48,7 @@ import {
   USPS_RATE_EFFECTIVE_DATE,
   UPS_RATE_EFFECTIVE_DATE,
   FEDEX_RATE_EFFECTIVE_DATE,
+  ShippingHardBlockError,
 } from '../services/ebayRateEstimateService';
 import { resolveItemShipping } from '../services/ebayShippingResolver';
 import { computeNetProceeds, suggestPriceForMargin } from '../services/ebayNetProceedsService';
@@ -1345,20 +1346,25 @@ export async function previewWeightTierGapFill(req: AuthRequest, res: Response):
     const fromZip = await resolveOrganizerFromZip(organizer.id);
     const buckets = computeGapFillBuckets(gaps);
 
-    const newTiers = buckets.map((bucket) => {
-      const rate = computeNamedWeightTierRate(bucket.bucketMaxLb, fromZip, {
-        lat: organizer.lat,
-        lng: organizer.lng,
-      });
-      return {
-        bucketMaxLb: bucket.bucketMaxLb,
-        maxOz: rate.maxOz,
-        policyName: rate.policyName,
-        flatRate: rate.flatRate,
-        closesGapFromOz: bucket.gapFromOz,
-        closesGapToOz: bucket.gapToOz,
-      };
-    });
+    // ADR-103 Phase 2: computeNamedWeightTierRate is now async (coverage-zone
+    // resolution can check the UspsZoneChartEntry cache) -- await each bucket in
+    // parallel via Promise.all instead of a synchronous .map().
+    const newTiers = await Promise.all(
+      buckets.map(async (bucket) => {
+        const rate = await computeNamedWeightTierRate(bucket.bucketMaxLb, fromZip, {
+          lat: organizer.lat,
+          lng: organizer.lng,
+        });
+        return {
+          bucketMaxLb: bucket.bucketMaxLb,
+          maxOz: rate.maxOz,
+          policyName: rate.policyName,
+          flatRate: rate.flatRate,
+          closesGapFromOz: bucket.gapFromOz,
+          closesGapToOz: bucket.gapToOz,
+        };
+      })
+    );
 
     return res.json({
       gaps: gaps.map((g) => ({ fromOz: g.fromOz, toOz: g.toOz, fromLb: g.fromOz / 16, toLb: g.toOz / 16 })),
@@ -4199,7 +4205,8 @@ async function resolvePoliciesForItem(
         organizerId,
         item.packageWeightOz!,
         dims,
-        fromZip
+        fromZip,
+        item.packageType // ADR-103 Phase 4: AHS packaging-attribute trigger input
       );
       if (calcHandlingResult) {
         console.log(
@@ -4224,7 +4231,8 @@ async function resolvePoliciesForItem(
         organizerId,
         item.packageWeightOz!,
         dims,
-        fromZip
+        fromZip,
+        item.packageType // ADR-103 Phase 4: AHS packaging-attribute trigger input
       );
       if (fvfResult) {
         console.log(
@@ -4387,7 +4395,7 @@ async function resolvePoliciesForItem(
         : null
     );
     const computedFromZip = smartPickContext?.fromZip ?? null;
-    const computedFvf = await ensureFvfFlatRatePolicy(organizerId, item.packageWeightOz, computedDims, computedFromZip);
+    const computedFvf = await ensureFvfFlatRatePolicy(organizerId, item.packageWeightOz, computedDims, computedFromZip, item.packageType); // ADR-103 Phase 4
     if (computedFvf) {
       fulfillmentPolicyId = computedFvf.policyId;
       routingReason = `flat-tiers-computed:${computedFvf.flatRate}`;
@@ -4681,6 +4689,7 @@ export async function resyncItemShippingPolicy(
         ebayFulfillmentPolicyOverrideId: item.ebayFulfillmentPolicyOverrideId,
         ebayShippingClassification: item.ebayShippingClassification,
         ebayCategoryId: item.ebayCategoryId,
+        packageType: item.packageType, // ADR-103 Phase 4
       },
       fromZip,
     });
@@ -6688,10 +6697,14 @@ type PreviewShippingResult = {
   buyerShipping: number;
   labelCost: number;
   carrier: 'USPS' | 'UPS' | 'FEDEX';
-  basis: 'actual' | 'dimensional';
+  basis: 'actual' | 'dimensional' | 'cubic';
   cheapestRate: number;
   flatPolicy: { name: string; amount: number } | null;
   shippingMode: 'FLAT_TIERS' | 'CALCULATED';
+  /** ADR-103 Phase 4: set (non-null) when the item exceeds the absolute carrier max
+   *  for every modeled carrier -- labelCost/cheapestRate are 0 and MUST NOT be shown
+   *  to the organizer as a real number when this is set. */
+  hardBlockReason?: string | null;
 };
 
 /**
@@ -6700,25 +6713,48 @@ type PreviewShippingResult = {
  * here -- resolveItemShipping (ebayShippingResolver.ts) is the single source of truth
  * for those, shared with the listing-push path so preview and listing can never disagree.
  * labelCost is the organizer's own outlay -- a DIFFERENT number from buyerShipping under
- * FLAT_TIERS.
+ * FLAT_TIERS. Async since ADR-103 Phase 2's computeCheapestForOrigin can check the
+ * UspsZoneChartEntry cache (a DB read); can also throw ShippingHardBlockError (ADR-103
+ * Phase 4) for an item that exceeds every carrier's absolute max -- caught here and
+ * surfaced via hardBlockReason rather than propagating.
  */
-function resolvePreviewShipping(opts: {
+async function resolvePreviewShipping(opts: {
   shippingMode: string;
   weightOz: number;
   dims?: { length?: number; width?: number; height?: number };
   origin: { zip?: string | null; lat?: number | null; lng?: number | null };
   labelCostOverride?: number;
-}): PreviewShippingResult {
-  const cheapest = computeCheapestForOrigin({
-    weightOz: opts.weightOz,
-    dims: opts.dims
-      ? { length: opts.dims.length, width: opts.dims.width, height: opts.dims.height }
-      : null,
-    origin: opts.origin,
-  });
-  const labelCost = opts.labelCostOverride != null ? opts.labelCostOverride : cheapest.rate;
+  packageType?: string | null;
+}): Promise<PreviewShippingResult> {
   const mode: 'FLAT_TIERS' | 'CALCULATED' =
     opts.shippingMode === 'FLAT_TIERS' ? 'FLAT_TIERS' : 'CALCULATED';
+
+  let cheapest;
+  try {
+    cheapest = await computeCheapestForOrigin({
+      weightOz: opts.weightOz,
+      dims: opts.dims
+        ? { length: opts.dims.length, width: opts.dims.width, height: opts.dims.height }
+        : null,
+      origin: opts.origin,
+      packageType: opts.packageType ?? null,
+    });
+  } catch (err) {
+    if (err instanceof ShippingHardBlockError) {
+      return {
+        buyerShipping: 0,
+        labelCost: 0,
+        carrier: 'USPS',
+        basis: 'actual',
+        cheapestRate: 0,
+        flatPolicy: null,
+        shippingMode: mode,
+        hardBlockReason: err.message,
+      };
+    }
+    throw err;
+  }
+  const labelCost = opts.labelCostOverride != null ? opts.labelCostOverride : cheapest.rate;
 
   // buyerShipping + flatPolicy are NOT computed here. resolveItemShipping is the single
   // source of truth for the buyer-paid amount (ADR Part A) — the caller fills those in.
@@ -6732,6 +6768,7 @@ function resolvePreviewShipping(opts: {
     cheapestRate: cheapest.rate,
     flatPolicy: null,
     shippingMode: mode,
+    hardBlockReason: null,
   };
 }
 
@@ -6775,6 +6812,7 @@ export const getShippingNetPreview = async (req: AuthRequest, res: Response): Pr
       labelCost?: number;
       promotedPercent?: number;
       tax?: number;
+      packageType?: string | null; // ADR-103 Phase 4
     };
 
     let weightOz = body.weightOz;
@@ -6782,6 +6820,7 @@ export const getShippingNetPreview = async (req: AuthRequest, res: Response): Pr
     let itemPrice = body.itemPrice;
     let ebayCategoryId: string | null = body.ebayCategoryId ?? null;
     let ebayShippingClassification: string | null = body.ebayShippingClassification ?? null;
+    let packageType: string | null = body.packageType ?? null;
     let saleZip: string | null = null;
     let fulfillmentOverrideId: string | null = null;
 
@@ -6796,6 +6835,7 @@ export const getShippingNetPreview = async (req: AuthRequest, res: Response): Pr
           packageLengthIn: true,
           packageWidthIn: true,
           packageHeightIn: true,
+          packageType: true,
           ebayCategoryId: true,
           ebayShippingClassification: true,
           sale: { select: { zip: true } },
@@ -6817,6 +6857,7 @@ export const getShippingNetPreview = async (req: AuthRequest, res: Response): Pr
       if (ebayCategoryId == null) ebayCategoryId = item.ebayCategoryId ?? null;
       if (ebayShippingClassification == null) ebayShippingClassification = item.ebayShippingClassification ?? null;
       fulfillmentOverrideId = item.ebayFulfillmentPolicyOverrideId ?? null;
+      packageType = item.packageType ?? null;
     }
 
     if (weightOz == null || weightOz <= 0) {
@@ -6830,12 +6871,13 @@ export const getShippingNetPreview = async (req: AuthRequest, res: Response): Pr
     const shippingMode = organizer.ebayPolicyMapping?.shippingMode ?? 'CALCULATED';
 
     // labelCost / carrier / cheapestRate infra (organizer's own outlay).
-    const ship = resolvePreviewShipping({
+    const ship = await resolvePreviewShipping({
       shippingMode,
       weightOz,
       dims,
       origin: { zip: body.fromZip ?? saleZip, lat: organizer.lat, lng: organizer.lng },
       labelCostOverride: body.labelCost,
+      packageType,
     });
     // Single source of truth for what the buyer is charged (matches the live listing).
     const resolved = await resolveItemShipping({
@@ -6849,9 +6891,20 @@ export const getShippingNetPreview = async (req: AuthRequest, res: Response): Pr
         ebayFulfillmentPolicyOverrideId: fulfillmentOverrideId,
         ebayCategoryId: ebayCategoryId,
         ebayShippingClassification: ebayShippingClassification,
+        packageType,
       },
       fromZip: body.fromZip ?? saleZip,
     });
+    // ADR-103 Phase 4: item exceeds the absolute carrier max for every modeled
+    // carrier -- do not fabricate a buyer-shipping number or net-margin calc.
+    if (resolved.source === 'hard-blocked') {
+      return res.status(400).json({
+        code: 'PACKAGE_EXCEEDS_CARRIER_LIMITS',
+        message:
+          resolved.hardBlockReason ||
+          'This item\'s weight or dimensions exceed what USPS, UPS, and FedEx Ground will carry. Re-box it smaller/lighter, or contact the buyer for local pickup.',
+      });
+    }
     // Item uses a custom organizer-picked eBay fulfillment policy — the buyer's shipping
     // is set by that eBay policy, not our calculated/flat model. Be honest: do not
     // fabricate a buyer-shipping number or a net-margin dollar calc.
@@ -6957,6 +7010,7 @@ export const getSuggestedPriceForMargin = async (req: AuthRequest, res: Response
       labelCost?: number;
       promotedPercent?: number;
       tax?: number;
+      packageType?: string | null; // ADR-103 Phase 4
     };
 
     const targetMarginPct = typeof body.targetMarginPct === 'number' ? body.targetMarginPct : 0.3;
@@ -6964,6 +7018,7 @@ export const getSuggestedPriceForMargin = async (req: AuthRequest, res: Response
     let dims = body.dims;
     let ebayCategoryId: string | null = body.ebayCategoryId ?? null;
     let ebayShippingClassification: string | null = body.ebayShippingClassification ?? null;
+    let packageType: string | null = body.packageType ?? null;
     let saleZip: string | null = null;
     let fulfillmentOverrideId: string | null = null;
 
@@ -6976,6 +7031,7 @@ export const getSuggestedPriceForMargin = async (req: AuthRequest, res: Response
           packageLengthIn: true,
           packageWidthIn: true,
           packageHeightIn: true,
+          packageType: true,
           ebayCategoryId: true,
           ebayShippingClassification: true,
           sale: { select: { zip: true } },
@@ -6996,6 +7052,7 @@ export const getSuggestedPriceForMargin = async (req: AuthRequest, res: Response
       if (ebayCategoryId == null) ebayCategoryId = item.ebayCategoryId ?? null;
       if (ebayShippingClassification == null) ebayShippingClassification = item.ebayShippingClassification ?? null;
       fulfillmentOverrideId = item.ebayFulfillmentPolicyOverrideId ?? null;
+      packageType = item.packageType ?? null;
     }
 
     if (weightOz == null || weightOz <= 0) {
@@ -7007,12 +7064,13 @@ export const getSuggestedPriceForMargin = async (req: AuthRequest, res: Response
 
     const freeShippingOptIn = organizer.ebayPolicyMapping?.freeShippingOptIn ?? false;
     const shippingMode = organizer.ebayPolicyMapping?.shippingMode ?? 'CALCULATED';
-    const ship = resolvePreviewShipping({
+    const ship = await resolvePreviewShipping({
       shippingMode,
       weightOz,
       dims,
       origin: { zip: body.fromZip ?? saleZip, lat: organizer.lat, lng: organizer.lng },
       labelCostOverride: body.labelCost,
+      packageType,
     });
     // Single source of truth for what the buyer is charged (matches the live listing).
     const resolved = await resolveItemShipping({
@@ -7026,9 +7084,20 @@ export const getSuggestedPriceForMargin = async (req: AuthRequest, res: Response
         ebayFulfillmentPolicyOverrideId: fulfillmentOverrideId,
         ebayCategoryId: ebayCategoryId,
         ebayShippingClassification: ebayShippingClassification,
+        packageType,
       },
       fromZip: body.fromZip ?? saleZip,
     });
+    // ADR-103 Phase 4: item exceeds the absolute carrier max for every modeled
+    // carrier -- do not fabricate a suggested price off a $0 shipping number.
+    if (resolved.source === 'hard-blocked') {
+      return res.status(400).json({
+        code: 'PACKAGE_EXCEEDS_CARRIER_LIMITS',
+        message:
+          resolved.hardBlockReason ||
+          'This item\'s weight or dimensions exceed what USPS, UPS, and FedEx Ground will carry. Re-box it smaller/lighter, or contact the buyer for local pickup.',
+      });
+    }
     const buyerShipping = resolved.buyerAmountCents / 100;
     const flatPolicy =
       resolved.source === 'weight-tier' || resolved.source === 'fvf-flat'
