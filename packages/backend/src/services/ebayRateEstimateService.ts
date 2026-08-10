@@ -165,8 +165,25 @@ function milesToZone(miles: number): ZoneKey {
 
 // Fallback: max CONUS zone by origin ZIP first digit (coastal/corner regions reach
 // the opposite coast at z8; central regions top out around z7).
+//
+// CORRECTED 2026-08-10: digit '4' (OH/IN/KY/MI) was 'z7', verified wrong via direct
+// haversine computation against a real live sale (Paw Paw MI 49079, lat/lng from the
+// Sale record itself, 42.2177,-85.8905): farthest CONUS corner is San Diego CA at
+// 1823mi / Seattle WA at 1804mi -- both past the 1800mi z7/z8 cutoff, landing in z8.
+// This also matches this file's OWN z8 rate-anchor derivation two sections up, which
+// used this exact origin (49079) reaching Quilcene WA (1828mi) to calibrate the z8
+// rate level -- the zone table contradicted the rate table it feeds. Western Michigan
+// sits right at the z7/z8 boundary; the crude single-digit bucket can't represent that
+// nuance, so per this file's own "never be short" design principle (a flat rate is one
+// price for all buyers -- price to the worst case), digit 4 rounds up to z8. Sanity-
+// checked the other 9 digits against representative-city haversine distances the same
+// way -- all 9 already matched their table zone with real margin, so this was an
+// isolated error, not a systemic one. Caught live 2026-08-10 (Patrick, mid-#622-rollout
+// QA): a real Artifact item's flat rate computed to $7.50 off the buggy z7 zone instead
+// of the correct $8.00 at z8 -- the gap widens substantially at higher weights (roughly
+// $7 at 20lb, $25 at 50lb, comparing the z7 vs z8 columns in RATE_TABLE above).
 const ZIP1_MAX_ZONE: Record<string, ZoneKey> = {
-  '0': 'z8', '1': 'z8', '2': 'z8', '3': 'z8', '4': 'z7',
+  '0': 'z8', '1': 'z8', '2': 'z8', '3': 'z8', '4': 'z8',
   '5': 'z7', '6': 'z7', '7': 'z7', '8': 'z8', '9': 'z8',
 };
 
