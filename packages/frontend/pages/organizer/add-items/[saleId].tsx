@@ -173,7 +173,19 @@ async function cropTo4x3(blob: Blob): Promise<Blob> {
     const url = URL.createObjectURL(blob);
     img.onload = () => {
       try {
-        const targetRatio = 4 / 3;
+        // Bug fix (2026-08-11): this used to force EVERY photo into a 4:3 LANDSCAPE
+        // box regardless of how it was actually shot. A portrait-oriented capture (phone
+        // held vertically -- img.height > img.width) run through a fixed 4:3 landscape
+        // target crops away the majority of the frame's height to force it into a wide
+        // shape, destroying the subject. Confirmed live (Patrick, 2026-08-11): a Contigo
+        // mug item's cover photo shot vertically came back as an unrecognizable close-up
+        // strip; a companion shot of the same item taken with the phone turned horizontal
+        // came through basically fine. Target ratio now matches the SOURCE's own
+        // orientation -- 4:3 for landscape/square sources, 3:4 for portrait sources -- so
+        // the crop still trims a photo to a consistent-ish ratio for card/grid display,
+        // but never flips the subject's actual shape to force it into the wrong box.
+        const isPortraitSource = img.height > img.width;
+        const targetRatio = isPortraitSource ? 3 / 4 : 4 / 3;
         const srcRatio = img.width / img.height;
         let sx = 0,
           sy = 0,
