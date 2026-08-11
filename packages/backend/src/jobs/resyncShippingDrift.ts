@@ -213,6 +213,20 @@ export async function resyncShippingDriftSweep(opts?: {
         continue;
       }
 
+      // (roadmap #624) The item genuinely qualifies for eBay's Standard Envelope program,
+      // but this cheap local recompute deliberately has no eBay policy list to match
+      // against (no eBay call in this cron), so `r.buyerAmountCents` is the FindA.Sale
+      // flat FALLBACK -- not necessarily what the live listing charges, which may sit on
+      // the organizer's own envelope policy at a different price. Comparing the two would
+      // report drift on every run and re-pin the item forever. Skip: the listing-push /
+      // resync path resolves these correctly (with a real policy fetcher) when the item is
+      // next pushed or re-synced.
+      if (r.standardEnvelopeUnmatched) {
+        console.log(`[ResyncShippingDrift] item ${item.id} standard-envelope-eligible — skipped (local recompute cannot match the organizer's real envelope policy)`);
+        checked++;
+        continue;
+      }
+
       const newCents = r.buyerAmountCents;
       const stored = item.ebayShippingAmountCents;
 

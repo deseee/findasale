@@ -11,6 +11,11 @@
  * case it returns the computed amount + name with a null fulfillmentPolicyId (the
  * preview doesn't need the eBay id; the push path provisions/looks-up the id itself).
  *
+ * (roadmap #624) The one case where it DOES return a real eBay fulfillment policy id is
+ * eBay Standard Envelope: those policies already exist on the organizer's own eBay
+ * account, so nothing is provisioned — the policy is looked up (read-only) and returned
+ * as-is. See the fvfFlat helper below.
+ *
  * Weight-tier amount is parsed from the `$X.XX` embedded in the tier's policyName
  * (all current tiers carry it). If a tier name has no parseable amount, we fall
  * back to the FVF-flat compute so the preview never shows a bare/zero number.
@@ -19,11 +24,19 @@
 import { computeCheapestForOrigin, ShippingHardBlockError } from './ebayRateEstimateService';
 import { computeFvfFlatRate, roundUpToBucket } from './ebayFlatRatePolicyService';
 import { computeCalculatedWithHandling } from './ebayCalculatedPolicyService';
+import {
+  matchStandardEnvelopePolicy,
+  EbayFulfillmentPolicySummary,
+} from '../utils/ebayPolicyParser';
 
 /** Where the resolved buyer-shipping amount came from. */
 export type ShippingResolutionSource =
   | 'weight-tier'
   | 'fvf-flat'
+  /** (roadmap #624) The item genuinely qualifies for eBay's Standard Envelope program AND
+   *  the organizer has a real matching envelope policy on their eBay account -- the buyer
+   *  is charged that policy's own rate, not a recomputed FindA.Sale flat fee. */
+  | 'standard-envelope'
   | 'calculated'
   | 'free'
   | 'local-pickup'
@@ -45,6 +58,14 @@ export interface ResolveItemShippingResult {
   /** ADR-103 Phase 4: set (non-null) only when source === 'hard-blocked' -- a clear,
    *  human-readable reason the item cannot be auto-priced. */
   hardBlockReason?: string | null;
+  /** (roadmap #624) True when the item genuinely qualified for eBay Standard Envelope but
+   *  NO real organizer-configured envelope policy could be matched -- either because no
+   *  policy fetcher was supplied (cheap local recompute paths) or the organizer has none
+   *  configured. The result falls back to the FindA.Sale flat fee, but callers that
+   *  compare against a STORED amount (the drift cron) must not treat that fallback as
+   *  authoritative: the live listing may legitimately sit on the organizer's real envelope
+   *  policy at a different price, and re-pinning it would churn every run. */
+  standardEnvelopeUnmatched?: boolean;
 }
 
 /** Minimal mapping shape needed to resolve shipping (subset of EbayPolicyMapping). */
@@ -103,6 +124,13 @@ export async function resolveItemShipping(input: {
   mapping: ShippingResolverMapping | null | undefined;
   item: ShippingResolverItem;
   fromZip?: string | null;
+  /** (roadmap #624) Optional LAZY fetcher for the organizer's live eBay fulfillment
+   *  policies. Invoked at most once, and ONLY when the winning carrier candidate is a
+   *  genuine eBay Standard Envelope match -- so callers that pass it pay nothing on the
+   *  99% of items that aren't envelope-eligible. When omitted, envelope-eligible items
+   *  fall back to the FindA.Sale flat fee with standardEnvelopeUnmatched = true (the
+   *  cheap local recompute in the drift cron deliberately omits it -- no eBay call). */
+  fetchFulfillmentPolicies?: () => Promise<EbayFulfillmentPolicySummary[]>;
 }): Promise<ResolveItemShippingResult> {
   const { organizer, mapping, item } = input;
   const fromZip = input.fromZip ?? null;
@@ -153,15 +181,60 @@ export async function resolveItemShipping(input: {
   // result rather than letting it propagate (an override path shouldn't be affected by
   // a rate computation it never needed, and a genuinely computed-rate path must not
   // silently underprice or crash).
+  //
+  // (roadmap #624, 2026-08-11) One exception now sits IN FRONT of the flat compute: when
+  // the winning candidate is a genuine eBay Standard Envelope match (cheapest.basis ===
+  // 'standard_envelope' -- evaluateStandardEnvelope owns the real category/weight/price/
+  // dimension gates, so this branch never fires on an item that merely happens to be
+  // cheap), eBay prices the item through the SELLER'S OWN envelope policy. Recomputing a
+  // grossed-up FindA.Sale flat fee for it overcharged the buyer and ignored a policy the
+  // organizer had already configured on their eBay account. So: look up the organizer's
+  // real envelope policy and return THAT (real policy id, real name, real rate). If they
+  // have none configured -- or no fetcher was supplied -- fall back to the flat compute
+  // exactly as before, flagged via standardEnvelopeUnmatched so the gap is visible in logs
+  // and the drift cron doesn't churn against it.
   const fvfFlat = async (): Promise<ResolveItemShippingResult> => {
     try {
       const cheapest = await computeCheapestForOrigin({ weightOz, dims, origin, packageType: item.packageType ?? null, categoryId: item.ebayCategoryId ?? null, priceUsd: item.price ?? null });
+
+      let standardEnvelopeUnmatched = false;
+      if (cheapest.basis === 'standard_envelope') {
+        if (input.fetchFulfillmentPolicies) {
+          try {
+            const policies = await input.fetchFulfillmentPolicies();
+            const match = matchStandardEnvelopePolicy(weightOz, item.price ?? null, policies || []);
+            if (match && match.rateUsd != null) {
+              return {
+                fulfillmentPolicyId: match.policyId,
+                buyerAmountCents: dollarsToCents(match.rateUsd),
+                policyName: match.policyName,
+                source: 'standard-envelope',
+              };
+            }
+            // Real opportunity the organizer is missing: the item qualifies for eBay's
+            // envelope program but they have no matching policy set up. Logged (not
+            // silent) so it is visible which organizers should be prompted to add one.
+            console.warn(
+              `[eBay StdEnv] envelope-eligible item has NO matching organizer policy — falling back to FindA.Sale flat (weightOz=${weightOz}, price=${item.price ?? 'null'}, categoryId=${item.ebayCategoryId ?? 'null'}, policiesSeen=${(policies || []).length})`
+            );
+          } catch (fetchErr) {
+            // A failed policy fetch must never break pricing -- fall through to the flat
+            // compute, which is the pre-existing, always-safe answer.
+            console.warn(
+              `[eBay StdEnv] fulfillment policy lookup failed, falling back to FindA.Sale flat: ${(fetchErr as Error)?.message || fetchErr}`
+            );
+          }
+        }
+        standardEnvelopeUnmatched = true;
+      }
+
       const flatRate = roundUpToBucket(computeFvfFlatRate(cheapest.rate));
       return {
         fulfillmentPolicyId: null,
         buyerAmountCents: dollarsToCents(flatRate),
         policyName: `FindA.Sale Flat $${flatRate.toFixed(2)}`,
         source: 'fvf-flat',
+        ...(standardEnvelopeUnmatched ? { standardEnvelopeUnmatched: true } : {}),
       };
     } catch (err) {
       if (err instanceof ShippingHardBlockError) {

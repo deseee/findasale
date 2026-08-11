@@ -919,14 +919,21 @@ function isStandardEnvelopeEligibleCategory(category: string | null | undefined)
  *   - "Postcards" resolves to two real IDs: L1 "Postcards & Supplies" (id=914) and its child
  *     node "Postcards" (id=262041).
  *   - "Stickers & Decals" (id=47357) and "Stamps" (id=260) each matched cleanly, one real ID.
- * - This is a FAST-PATH, not a replacement for the name-substring fallback: evaluateStandardEnvelope
- *   checks this ID list FIRST when a categoryId is available, then falls back to
- *   isStandardEnvelopeEligibleCategory's substring match on the name/path text. Any real item
- *   filed under a category-ID variant not captured here (every query above returned a
- *   relevance-ranked slice, not the full subtree) still gets caught by the fallback as long as
- *   its category name/path text contains one of the 8 strings -- this list only makes matching
- *   MORE precise for the common cases; it never makes eligibility narrower than the pre-existing
- *   name-only gate.
+ * - CORRECTED 2026-08-11 (roadmap #624): this comment previously described an ID-then-name
+ *   FALLBACK ("checks this ID list FIRST ... then falls back to isStandardEnvelopeEligibleCategory's
+ *   substring match ... never makes eligibility narrower than the pre-existing name-only gate").
+ *   The code in evaluateStandardEnvelope has never done that -- it is an either/or, not a
+ *   fallback: `categoryId ? isStandardEnvelopeEligibleCategoryId(categoryId) : isStandardEnvelopeEligibleCategory(category)`.
+ *   Once a categoryId is present, an ID missing from this list means NOT eligible, full stop;
+ *   the name substring is not consulted. The comment was corrected to the code (rather than the
+ *   code widened to the comment) on purpose: this list IS admittedly an incomplete,
+ *   relevance-ranked slice, so an OR-fallback would let a name substring ("Stamps" matching
+ *   "Stamp Albums & Supplies", etc.) re-open eligibility for items eBay would NOT accept into
+ *   the envelope program -- underpricing shipping and, since roadmap #624, potentially routing
+ *   an item onto a real Standard Envelope policy it does not qualify for. Failing CLOSED on an
+ *   unrecognized ID is the safe direction (the item just gets the normal flat/calculated rate).
+ *   The correct way to widen coverage is to ADD the missing real category IDs to this list --
+ *   sourced from eBay's Taxonomy API, same as the ones above -- not to loosen the gate.
  */
 export const EBAY_STANDARD_ENVELOPE_ELIGIBLE_CATEGORY_IDS: readonly string[] = [
   // Patches -- 7 distinct real "Patches" leaf categories (Crafts/Sewing, Militaria x4, Current Militaria, Firefighting)

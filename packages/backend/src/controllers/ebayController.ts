@@ -49,6 +49,10 @@ import {
   UPS_RATE_EFFECTIVE_DATE,
   FEDEX_RATE_EFFECTIVE_DATE,
   ShippingHardBlockError,
+  // (roadmap #624) Cheap local pre-gate for the Standard Envelope lookup below -- the
+  // authoritative eligibility check still lives in evaluateStandardEnvelope.
+  EBAY_STANDARD_ENVELOPE_MAX_WEIGHT_OZ,
+  EBAY_STANDARD_ENVELOPE_MAX_PRICE_USD,
 } from '../services/ebayRateEstimateService';
 import { resolveItemShipping } from '../services/ebayShippingResolver';
 import { computeNetProceeds, suggestPriceForMargin } from '../services/ebayNetProceedsService';
@@ -4346,6 +4350,12 @@ async function resolvePoliciesForItem(
   //      cascade checked weight tiers first — this reorder now matches that intent).
   //   2. Category override (exact ebayCategoryId match) — also an oddball/manual override.
   //   3. UNKNOWN classification fallback (organizer-configured policy for un-classified items).
+  //   3b. eBay Standard Envelope (roadmap #624) — item genuinely qualifies for eBay's
+  //      Standard Envelope program (<=3oz, <$20, eligible category, envelope dims) AND the
+  //      organizer already has a real envelope policy on their eBay account. That real
+  //      policy wins over the computed flat rate below: eBay prices this program through
+  //      the seller's own policy, so recomputing a "FindA.Sale Flat $X.XX" fee for it
+  //      overcharged the buyer and ignored configuration the organizer had already done.
   //   4. Computed flat rate (ensureFvfFlatRatePolicy) — the real cheapest USPS/UPS/FedEx
   //      rate for this item's weight+dims+origin, grossed up for eBay's FVF, bucketed.
   //      This is the SAME provisioning path CALCULATED mode's flat-fallback already uses
@@ -4391,6 +4401,63 @@ async function resolvePoliciesForItem(
     fulfillmentPolicyId = mapping.unknownPolicyId;
     routingReason = 'classification:UNKNOWN';
     cascadeStep = 'classification';
+  }
+
+  // 3b. eBay Standard Envelope (roadmap #624, 2026-08-11) — return the organizer's OWN
+  // configured envelope policy (e.g. "3oz under $20 Ebay Std Env $1.65") instead of
+  // provisioning a FindA.Sale flat-rate policy for an item eBay itself prices through
+  // that program.
+  //
+  // Cheap weight/price pre-gate first (no I/O) so the vast majority of items never pay
+  // for the extra rate computation. resolveItemShipping then runs the AUTHORITATIVE
+  // check (eligible-category allowlist, envelope dimensions, thickness) inside
+  // evaluateStandardEnvelope. Reusing resolveItemShipping here rather than re-deriving
+  // the match is deliberate: it is this project's single source of truth for buyer
+  // shipping, so the push path and the preview cannot drift apart. Wrapped in try/catch —
+  // an envelope lookup must never be able to fail a push; on any error we simply fall
+  // through to the pre-existing computed-flat-rate path below.
+  const envelopePolicyFetcher = smartPickContext?.fetchFulfillmentPolicies;
+  if (
+    !fulfillmentPolicyId &&
+    envelopePolicyFetcher &&
+    item.packageWeightOz != null &&
+    item.packageWeightOz > 0 &&
+    item.packageWeightOz <= EBAY_STANDARD_ENVELOPE_MAX_WEIGHT_OZ &&
+    item.price != null &&
+    item.price < EBAY_STANDARD_ENVELOPE_MAX_PRICE_USD
+  ) {
+    try {
+      const envelopeResolved = await resolveItemShipping({
+        organizer: { lat: organizer.lat, lng: organizer.lng },
+        mapping,
+        item: {
+          packageWeightOz: item.packageWeightOz,
+          packageLengthIn: item.packageLengthIn != null ? Number(item.packageLengthIn) : null,
+          packageWidthIn: item.packageWidthIn != null ? Number(item.packageWidthIn) : null,
+          packageHeightIn: item.packageHeightIn != null ? Number(item.packageHeightIn) : null,
+          ebayShippingOverride: item.ebayShippingOverride ?? null,
+          ebayFulfillmentPolicyOverrideId: item.ebayFulfillmentPolicyOverrideId ?? null,
+          ebayShippingClassification: item.ebayShippingClassification ?? null,
+          ebayCategoryId: item.ebayCategoryId ?? null,
+          packageType: item.packageType ?? null,
+          price: item.price ?? null,
+        },
+        fromZip: smartPickContext?.fromZip ?? null,
+        fetchFulfillmentPolicies: envelopePolicyFetcher,
+      });
+      if (envelopeResolved.source === 'standard-envelope' && envelopeResolved.fulfillmentPolicyId) {
+        fulfillmentPolicyId = envelopeResolved.fulfillmentPolicyId;
+        routingReason = `standard-envelope:${(envelopeResolved.buyerAmountCents / 100).toFixed(2)}`;
+        cascadeStep = 'standard-envelope';
+        console.log(
+          `[eBay ShippingPick] item=${item.id} standard-envelope policy="${envelopeResolved.policyName}" id=${envelopeResolved.fulfillmentPolicyId} buyerAmount=$${(envelopeResolved.buyerAmountCents / 100).toFixed(2)}`
+        );
+      }
+    } catch (envelopeErr: any) {
+      console.warn(
+        `[eBay ShippingPick] item=${item.id} standard-envelope lookup failed (non-fatal, falling through to computed flat rate): ${envelopeErr?.message || envelopeErr}`
+      );
+    }
   }
 
   // 4. Computed flat rate (ADR-102) — always-fresh real carrier rate, replaces the
@@ -4702,6 +4769,11 @@ export async function resyncItemShippingPolicy(
         price: item.price ?? null,
       },
       fromZip,
+      // (roadmap #624) Same fetcher resolvePoliciesForItem just used above. Without it the
+      // STORED ebayShippingAmountCents would be the FindA.Sale flat fallback while the
+      // live offer sits on the organizer's real Standard Envelope policy at a different
+      // price -- permanent phantom drift on every subsequent run.
+      fetchFulfillmentPolicies,
     });
     const buyerAmountCents = shipping.buyerAmountCents;
 
@@ -6703,6 +6775,51 @@ export async function syncEndedListingsForOrganizer(organizerId: string): Promis
 
   return result;
 }
+/**
+ * (roadmap #624) Build a LAZY, once-per-request fetcher for an organizer's live eBay
+ * fulfillment policies, for use as resolveItemShipping's `fetchFulfillmentPolicies`.
+ *
+ * resolveItemShipping only calls it when an item is a genuine eBay Standard Envelope
+ * match, so the preview endpoints pay for zero extra eBay calls on ordinary items. Fails
+ * SOFT in every failure mode (rate-limited, no token, non-200, network throw): returns an
+ * empty list, which makes the envelope lookup miss and the caller fall back to the
+ * pre-existing FindA.Sale flat-rate answer. A shipping preview must never 500 because a
+ * policy list could not be read.
+ */
+function makeFulfillmentPolicyFetcher(organizerId: string): () => Promise<EbayFulfillmentPolicySummary[]> {
+  let cached: EbayFulfillmentPolicySummary[] | null = null;
+  return async (): Promise<EbayFulfillmentPolicySummary[]> => {
+    if (cached) return cached;
+    if (isEbayRateLimited()) {
+      console.warn(`[eBay StdEnv] skipping fulfillment policy fetch for organizer=${organizerId} — eBay rate-limited`);
+      cached = [];
+      return cached;
+    }
+    try {
+      const accessToken = await refreshEbayAccessToken(organizerId);
+      if (!accessToken) {
+        cached = [];
+        return cached;
+      }
+      const res = await fetch(
+        ebayProxyUrl('/sell/account/v1/fulfillment_policy?marketplace_id=EBAY_US&limit=100'),
+        { headers: { ...ebayUserHeaders(accessToken), ...ebayProxyHeaders() } }
+      );
+      if (res.ok) {
+        trackEbayCall();
+        const data = (await res.json()) as any;
+        cached = (data.fulfillmentPolicies || []) as EbayFulfillmentPolicySummary[];
+        return cached;
+      }
+      console.warn(`[eBay StdEnv] fulfillment policy fetch failed for organizer=${organizerId} status=${res.status}`);
+    } catch (err: any) {
+      console.warn(`[eBay StdEnv] fulfillment policy fetch threw for organizer=${organizerId}: ${err?.message || err}`);
+    }
+    cached = [];
+    return cached;
+  };
+}
+
 type PreviewShippingResult = {
   buyerShipping: number;
   labelCost: number;
@@ -6911,6 +7028,11 @@ export const getShippingNetPreview = async (req: AuthRequest, res: Response): Pr
         price: itemPrice ?? null,
       },
       fromZip: body.fromZip ?? saleZip,
+      // (roadmap #624) Lazy — only fires for a genuine Standard Envelope match, so the
+      // preview shows the organizer's REAL envelope policy price, exactly what the
+      // listing-push cascade will assign. Without it the preview and the live listing
+      // would disagree for envelope-eligible items.
+      fetchFulfillmentPolicies: makeFulfillmentPolicyFetcher(organizer.id),
     });
     // ADR-103 Phase 4: item exceeds the absolute carrier max for every modeled
     // carrier -- do not fabricate a buyer-shipping number or net-margin calc.
@@ -6950,8 +7072,11 @@ export const getShippingNetPreview = async (req: AuthRequest, res: Response): Pr
       });
     }
     const buyerShipping = resolved.buyerAmountCents / 100;
+    // (roadmap #624) 'standard-envelope' is included: the organizer IS charged/charging a
+    // real flat amount here, it just comes from their own eBay envelope policy, so the
+    // preview shows that policy's real name rather than a FindA.Sale-branded one.
     const flatPolicy =
-      resolved.source === 'weight-tier' || resolved.source === 'fvf-flat'
+      resolved.source === 'weight-tier' || resolved.source === 'fvf-flat' || resolved.source === 'standard-envelope'
         ? { name: resolved.policyName ?? `FindA.Sale Flat $${buyerShipping.toFixed(2)}`, amount: buyerShipping }
         : null;
     const labelCost = ship.labelCost;
@@ -7110,6 +7235,12 @@ export const getSuggestedPriceForMargin = async (req: AuthRequest, res: Response
         price: null,
       },
       fromZip: body.fromZip ?? saleZip,
+      // (roadmap #624) See the matching note in getShippingNetPreview above. NOTE: this
+      // endpoint solves FOR price, so it passes price: null -- evaluateStandardEnvelope
+      // requires a known price, so an envelope match can never fire here today. The
+      // fetcher is wired anyway so the two preview endpoints stay identical in shape if
+      // this one ever gains a price input.
+      fetchFulfillmentPolicies: makeFulfillmentPolicyFetcher(organizer.id),
     });
     // ADR-103 Phase 4: item exceeds the absolute carrier max for every modeled
     // carrier -- do not fabricate a suggested price off a $0 shipping number.
@@ -7122,8 +7253,11 @@ export const getSuggestedPriceForMargin = async (req: AuthRequest, res: Response
       });
     }
     const buyerShipping = resolved.buyerAmountCents / 100;
+    // (roadmap #624) 'standard-envelope' is included: the organizer IS charged/charging a
+    // real flat amount here, it just comes from their own eBay envelope policy, so the
+    // preview shows that policy's real name rather than a FindA.Sale-branded one.
     const flatPolicy =
-      resolved.source === 'weight-tier' || resolved.source === 'fvf-flat'
+      resolved.source === 'weight-tier' || resolved.source === 'fvf-flat' || resolved.source === 'standard-envelope'
         ? { name: resolved.policyName ?? `FindA.Sale Flat $${buyerShipping.toFixed(2)}`, amount: buyerShipping }
         : null;
     const labelCost = ship.labelCost;

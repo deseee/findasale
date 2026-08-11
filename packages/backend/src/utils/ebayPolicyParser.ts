@@ -15,6 +15,8 @@
  *   "Local Pickup ONLY"                → classifyPolicy() returns 'local-pickup'
  *   "FEDEX GUITAR $34.99"              → classifyPolicy() returns 'category-specific'
  *   "Media Mail Calculated"            → classifyPolicy() returns 'calculated'
+ *   "3oz under $20 Ebay Std Env $1.65" → classifyPolicy() returns 'standard-envelope'
+ *   "Free Std Env under $20"           → classifyPolicy() returns 'standard-envelope', no rate
  */
 
 export interface EbayFulfillmentPolicySummary {
@@ -33,6 +35,12 @@ export interface ParsedWeightTier {
 
 export type PolicyClassification =
   | 'weight-tier'
+  /** eBay Standard Envelope program policy (e.g. "3oz under $20 Ebay Std Env $1.65").
+   *  Deliberately DISTINCT from 'weight-tier': an envelope policy is only valid for
+   *  eBay's 8 eligible categories at <=3oz and item price <$20, so it must never be
+   *  routed to by the generic weight-only ladder (which would put an ineligible item
+   *  on an envelope policy eBay will reject or mis-rate). See matchStandardEnvelopePolicy. */
+  | 'standard-envelope'
   | 'local-pickup'
   | 'free-shipping'
   | 'calculated'
@@ -47,6 +55,15 @@ export function classifyPolicy(policyName: string): PolicyClassification {
   const name = policyName.toLowerCase();
 
   if (/local pickup|pickup only|pickup\s*-?\s*only/i.test(name)) return 'local-pickup';
+
+  // eBay Standard Envelope -- checked BEFORE free-shipping and the weight-hint test
+  // below, because these names carry BOTH ("Free Std Env under $20", "3oz under $20
+  // Ebay Std Env $1.65") and would otherwise be swallowed by the generic weight-tier
+  // classification. Matching them distinctly is what lets the Standard Envelope router
+  // find an organizer's REAL envelope policy instead of recomputing a FindA.Sale flat
+  // fee for an item that genuinely qualifies for eBay's envelope program.
+  if (/\bstd\.?\s*env(elope)?\b|\bstandard\s*envelope\b/i.test(name)) return 'standard-envelope';
+
   if (/\bfree\b.*(ship|domestic|priority)/i.test(name)) return 'free-shipping';
   if (/calculated|calc\s*w[td]/i.test(name)) return 'calculated';
   if (/international|intl|worldwide/i.test(name)) return 'international';
@@ -106,7 +123,10 @@ function parseSinglePolicyWeight(name: string): { minOz?: number; maxOz: number;
 
 /**
  * Parse a list of eBay fulfillment policies into weight-tier rules.
- * Only policies classified as 'weight-tier' are included.
+ * Only policies classified as 'weight-tier' are included -- which now excludes
+ * eBay Standard Envelope policies (they classify as 'standard-envelope'); those are
+ * category-gated and must not be reachable through a weight-only ladder. They are
+ * matched separately by matchStandardEnvelopePolicy below.
  * Results are sorted by maxOz ascending.
  *
  * For "N+ lb" tiers, the highest one has its maxOz promoted to Infinity
@@ -316,4 +336,143 @@ export function parsePriceFromPolicyName(name: string): number | null {
   if (matches.length === 0) return null;
   const value = parseFloat(matches[matches.length - 1][1]);
   return Number.isFinite(value) ? value : null;
+}
+
+// ── eBay Standard Envelope: match an organizer's REAL configured envelope policy ──
+//
+// Why this exists (roadmap #624, 2026-08-11): when an item genuinely qualifies for
+// eBay's Standard Envelope program, eBay prices it through the SELLER'S OWN envelope
+// fulfillment policy (e.g. "3oz under $20 Ebay Std Env $1.65"). Before this, the
+// FLAT_TIERS "Auto (recommended)" path recomputed a grossed-up, bucket-rounded
+// "FindA.Sale Flat $X.XX" fee for those items instead -- overcharging the buyer and
+// bypassing a policy the organizer had already configured on their own eBay account.
+//
+// These helpers are PURE (no eBay call, no DB, no imports from services) so the
+// resolver, the listing-push cascade and unit tests can all share one matching rule.
+
+/** eBay's published Standard Envelope weight ceiling, in ounces. Mirrors
+ *  EBAY_STANDARD_ENVELOPE_MAX_WEIGHT_OZ in services/ebayRateEstimateService.ts -- kept as a
+ *  local copy on purpose so this parser stays dependency-free (utils must not import a
+ *  service that reaches the DB). If eBay ever changes the ceiling, both must change. */
+export const STANDARD_ENVELOPE_MAX_WEIGHT_OZ = 3;
+
+export interface ParsedStandardEnvelopePolicy {
+  policyId: string;
+  policyName: string;
+  /** Upper weight bound in ounces parsed from the name (1, 2 or 3 for eBay's real tiers). */
+  maxOz: number;
+  /** Item-price cap parsed from "under $X" in the name; null when the name states none. */
+  priceCapUsd: number | null;
+  /** Buyer-paid shipping rate parsed from the name; null when the name carries no rate
+   *  (e.g. "Free Std Env under $20" -- the only dollar figure there is the price cap). */
+  rateUsd: number | null;
+}
+
+/**
+ * Extract the item-price CAP from an envelope policy name ("...under $20..." → 20).
+ * Distinct from parsePriceFromPolicyName, which returns the policy's shipping RATE
+ * (the LAST dollar amount in the name).
+ */
+export function parsePriceCapFromPolicyName(name: string): number | null {
+  if (!name) return null;
+  const m = name.match(/under\s*\$\s*(\d+(?:\.\d{1,2})?)/i);
+  if (!m) return null;
+  const value = parseFloat(m[1]);
+  return Number.isFinite(value) ? value : null;
+}
+
+/**
+ * Split an envelope policy name into its price cap and its shipping rate.
+ *
+ * The two can collide: "Free Std Env under $20" contains exactly ONE dollar figure and
+ * it is the CAP, not a rate -- naively taking the last dollar amount would read that
+ * policy as charging the buyer $20 for a $1-ish envelope. So the rate is only accepted
+ * when the last dollar figure in the name is NOT the same one the cap was parsed from.
+ */
+function parseEnvelopeCapAndRate(name: string): { priceCapUsd: number | null; rateUsd: number | null } {
+  const priceCapUsd = parsePriceCapFromPolicyName(name);
+  const capMatch = name.match(/under\s*\$\s*(\d+(?:\.\d{1,2})?)/i);
+  const capDollarIndex =
+    capMatch && capMatch.index != null ? capMatch.index + capMatch[0].indexOf('$') : -1;
+
+  const dollarMatches = [...name.matchAll(/\$\s*(\d+(?:\.\d{1,2})?)/g)];
+  if (dollarMatches.length === 0) return { priceCapUsd, rateUsd: null };
+
+  const last = dollarMatches[dollarMatches.length - 1];
+  if (last.index != null && last.index === capDollarIndex) {
+    return { priceCapUsd, rateUsd: null }; // the only/last dollar figure IS the cap
+  }
+  const rate = parseFloat(last[1]);
+  return { priceCapUsd, rateUsd: Number.isFinite(rate) ? rate : null };
+}
+
+/**
+ * Parse an organizer's live eBay fulfillment policies into Standard Envelope rules.
+ * Only policies classified 'standard-envelope' AND carrying a parseable ounce tier are
+ * returned -- a name with no weight tier (e.g. "Free Std Env under $20") cannot be
+ * safely routed to by weight, so it is intentionally excluded.
+ */
+export function parseStandardEnvelopePolicies(
+  policies: EbayFulfillmentPolicySummary[]
+): ParsedStandardEnvelopePolicy[] {
+  const parsed: ParsedStandardEnvelopePolicy[] = [];
+  for (const policy of policies || []) {
+    if (!policy || !policy.name) continue;
+    if (classifyPolicy(policy.name) !== 'standard-envelope') continue;
+
+    const weight = parseSinglePolicyWeight(policy.name);
+    if (!weight || !Number.isFinite(weight.maxOz)) continue;
+    if (weight.maxOz <= 0 || weight.maxOz > STANDARD_ENVELOPE_MAX_WEIGHT_OZ) continue;
+
+    const { priceCapUsd, rateUsd } = parseEnvelopeCapAndRate(policy.name);
+    parsed.push({
+      policyId: policy.fulfillmentPolicyId,
+      policyName: policy.name,
+      maxOz: weight.maxOz,
+      priceCapUsd,
+      rateUsd,
+    });
+  }
+  parsed.sort((a, b) => a.maxOz - b.maxOz);
+  return parsed;
+}
+
+/**
+ * Pick the organizer's real Standard Envelope policy for an item that has ALREADY been
+ * confirmed envelope-eligible by the rate engine (evaluateStandardEnvelope, which owns
+ * the category/dimension/thickness gates -- this function deliberately does NOT re-derive
+ * them, it only picks the right weight/price tier among the organizer's own policies).
+ *
+ * Rules:
+ *  - weight is rounded UP to the next whole ounce, matching evaluateStandardEnvelope's own
+ *    `Math.ceil(weightOz)` tiering (never charge a lower tier than the item's real weight);
+ *  - the smallest tier that COVERS the item wins (a 1oz item with only a 3oz policy
+ *    configured correctly lands on the 3oz policy);
+ *  - a policy whose name states a price cap only matches when the item price is under it;
+ *  - a policy with no parseable rate is never auto-selected (fails closed -- we will not
+ *    guess what a "free" envelope policy charges the buyer);
+ *  - an unknown item price fails closed (eBay's own gate is price-based).
+ */
+export function matchStandardEnvelopePolicy(
+  weightOz: number,
+  priceUsd: number | null | undefined,
+  policies: EbayFulfillmentPolicySummary[]
+): ParsedStandardEnvelopePolicy | null {
+  if (!Number.isFinite(weightOz) || weightOz <= 0) return null;
+  if (weightOz > STANDARD_ENVELOPE_MAX_WEIGHT_OZ) return null;
+  if (priceUsd == null || !Number.isFinite(priceUsd)) return null;
+
+  const neededOz = Math.max(1, Math.ceil(weightOz));
+  const candidates = parseStandardEnvelopePolicies(policies).filter((p) => {
+    if (p.rateUsd == null || !(p.rateUsd > 0)) return false;
+    if (p.maxOz < neededOz) return false;
+    if (p.priceCapUsd != null && !(priceUsd < p.priceCapUsd)) return false;
+    return true;
+  });
+  if (candidates.length === 0) return null;
+
+  // Smallest covering tier first; on a tie (two policies at the same ounce tier) take the
+  // cheaper one so the buyer is never charged more than the organizer's own configured rate.
+  candidates.sort((a, b) => a.maxOz - b.maxOz || (a.rateUsd ?? 0) - (b.rateUsd ?? 0));
+  return candidates[0];
 }
