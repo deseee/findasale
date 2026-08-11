@@ -62,13 +62,50 @@ function saveRapidCaptureSettings(settings: RapidCaptureSettings): void {
 // the real transforms: packages/frontend/lib/imageUtils.ts getThumbnailUrl (w_200,h_200,
 // c_fill,g_auto -- 1:1, approximate, g_auto can shift it) and packages/backend/src/
 // controllers/socialPostController.ts cropMap (pinterest ar_2:3, tiktok ar_9:16, instagram
-// ar_4:5 -- all c_fill with NO g_auto, so these three are exact, not approximate).
-const CROP_GUIDE_RATIOS: Record<Exclude<CropGuideOverlay, 'none'>, { ratio: string; label: string }> = {
-  thumbnail: { ratio: 'aspect-square', label: 'Thumbnail crop' },
-  pinterest: { ratio: 'aspect-[2/3]', label: 'Pinterest crop' },
-  tiktok: { ratio: 'aspect-[9/16]', label: 'TikTok crop' },
-  instagram: { ratio: 'aspect-[4/5]', label: 'Instagram crop' },
+// ar_4:5 -- all c_fill with NO g_auto, so these three are exact, not approximate). Numeric
+// (width/height) rather than a Tailwind class string -- see computeContainBox below.
+const CROP_GUIDE_RATIOS: Record<Exclude<CropGuideOverlay, 'none'>, { ratio: number; label: string }> = {
+  thumbnail: { ratio: 1, label: 'Thumbnail crop' },
+  pinterest: { ratio: 2 / 3, label: 'Pinterest crop' },
+  tiktok: { ratio: 9 / 16, label: 'TikTok crop' },
+  instagram: { ratio: 4 / 5, label: 'Instagram crop' },
 };
+
+// Bug fix (2026-08-11): the guide box was previously sized with CSS (aspect-ratio + a
+// percentage height + max-width/max-height). Confirmed wrong on a real device twice --
+// correctly centered after the double-inset fix, but the landscape (4:3) box stayed too
+// narrow. Root cause: aspect-ratio combined with an explicit height and a max-width clamp
+// does not reliably re-derive height from the clamped width on real mobile browsers (the
+// spec behavior here is inconsistent across engines) -- the box quietly kept the too-tall
+// height instead of shrinking to match the clamped width, so it read as "not wide enough."
+// Replaced with plain, verifiable arithmetic against REAL measured pixel dimensions
+// (viewfinderSize, from a ResizeObserver below) instead of trusting CSS to resolve it.
+// This single function also replaces the old isLandscape-branching used to position the
+// nested crop-guide (Layer 2) inside Layer 1 -- it naturally picks whichever dimension is
+// the binding constraint for ANY pair of ratios, so a very tall inner ratio (e.g. TikTok
+// 9:16) nested inside a portrait (3:4) Layer 1 is guaranteed to fit without a separate
+// max-width/max-height safety clamp.
+function computeContainBox(
+  containerW: number,
+  containerH: number,
+  ratio: number, // width / height
+  margin = 0
+): { width: number; height: number; left: number; top: number } {
+  const availW = Math.max(containerW - margin * 2, 0);
+  const availH = Math.max(containerH - margin * 2, 0);
+  let width = 0;
+  let height = 0;
+  if (availW > 0 && availH > 0) {
+    if (availW / availH > ratio) {
+      height = availH;
+      width = availH * ratio;
+    } else {
+      width = availW;
+      height = availW / ratio;
+    }
+  }
+  return { width, height, left: (containerW - width) / 2, top: (containerH - height) / 2 };
+}
 
 interface CapturedPhoto {
   blob: Blob;
@@ -176,6 +213,10 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const carouselRef = useRef<HTMLDivElement>(null);
+  // Real measured viewfinder pixel size (2026-08-11), feeds computeContainBox for the
+  // crop-preview guide overlay -- see the ResizeObserver effect and computeContainBox above.
+  const viewfinderRef = useRef<HTMLDivElement>(null);
+  const [viewfinderSize, setViewfinderSize] = useState({ width: 0, height: 0 });
 
   const [photos, setPhotos] = useState<CapturedPhoto[]>([]);
   const [cameraReady, setCameraReady] = useState(false);
@@ -259,6 +300,28 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
       cropGuideOverlay,
     });
   }, [showCornerGuides, showLevelIndicator, showLightingIndicator, flashMode, whiteBalance, timerSeconds, cropGuideOverlay]);
+
+  // Track the viewfinder's REAL rendered pixel size (2026-08-11) -- feeds computeContainBox
+  // for the crop-preview guide overlay. Fires on mount, on any resize (covers orientation
+  // change too, since the row/column layout switch itself resizes this element), and on
+  // isLandscape changes as a belt-and-suspenders re-measure in case the observer callback
+  // and the React re-render land in different ticks.
+  useEffect(() => {
+    const el = viewfinderRef.current;
+    if (!el) return;
+    const measure = () => {
+      setViewfinderSize({ width: el.clientWidth, height: el.clientHeight });
+    };
+    measure();
+    if (typeof ResizeObserver === 'undefined') {
+      // Very old browser fallback -- window resize still catches orientation changes.
+      window.addEventListener('resize', measure);
+      return () => window.removeEventListener('resize', measure);
+    }
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [isLandscape]);
 
   const isRapidfire = mode === 'rapidfire';
   const inAddMode = addingToItemId !== null;
@@ -981,6 +1044,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
 
         {/* Camera viewfinder — flex-1 so it fills remaining space in both portrait (col) and landscape (row) */}
         <div
+          ref={viewfinderRef}
           className="flex-1 relative overflow-hidden z-0 touch-none"
           onTouchStart={(e) => {
             if (e.touches.length === 2) {
@@ -1086,51 +1150,63 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
                   inner guide is a reference, not a guarantee. Pinterest/TikTok/Instagram crop
                   ratios (socialPostController.ts) are intentionally not shown here -- those
                   only apply when explicitly cross-posting, not to default listing photography. */}
-              {showCornerGuides && (
-                // Bug fix (2026-08-11): no manual right-inset here -- unlike the top bar /
-                // mode-hint text (positioned against the outer full-width wrapper), this
-                // overlay already lives inside the "flex-1" viewfinder container, which
-                // flexbox has already narrowed by the 88px controls column in landscape
-                // mode. Adding right:88px again double-subtracted it, making the guide box
-                // too narrow and visibly shifted left (Patrick, 2026-08-11).
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none p-6">
-                  <div className={`relative max-w-full max-h-full h-full ${isLandscape ? 'aspect-[4/3]' : 'aspect-[3/4]'}`}>
-                    {/* Dim everything outside the real crop boundary */}
-                    <div className="absolute inset-0 shadow-[0_0_0_9999px_rgba(0,0,0,0.35)]" />
+              {showCornerGuides && (() => {
+                // Bug fix (2026-08-11, round 2): CSS aspect-ratio sizing produced a box that
+                // was correctly centered (after the earlier double-inset fix) but still too
+                // narrow in landscape -- confirmed on a real device. Now computed with plain
+                // arithmetic against the REAL measured viewfinder size (viewfinderSize, via
+                // the ResizeObserver effect above) instead of trusting CSS to resolve
+                // aspect-ratio + percentage-height + max-width together. See
+                // computeContainBox for the full explanation.
+                const layer1 = computeContainBox(
+                  viewfinderSize.width,
+                  viewfinderSize.height,
+                  isLandscape ? 4 / 3 : 3 / 4,
+                  24 // breathing room from the screen edges, was p-6 (24px) before
+                );
+                const layer2 =
+                  cropGuideOverlay !== 'none' && layer1.width > 0 && layer1.height > 0
+                    ? computeContainBox(layer1.width, layer1.height, CROP_GUIDE_RATIOS[cropGuideOverlay].ratio, 0)
+                    : null;
+                if (layer1.width <= 0 || layer1.height <= 0) return null; // not measured yet
 
-                    {/* Layer 1 — real crop boundary corner brackets, faint white */}
-                    <div className="absolute top-0 left-0 w-10 h-10 border-t-2 border-l-2 border-white/60" />
-                    <div className="absolute top-0 right-0 w-10 h-10 border-t-2 border-r-2 border-white/60" />
-                    <div className="absolute bottom-0 left-0 w-10 h-10 border-b-2 border-l-2 border-white/60" />
-                    <div className="absolute bottom-0 right-0 w-10 h-10 border-b-2 border-r-2 border-white/60" />
-                    <div className="absolute -top-5 left-1/2 -translate-x-1/2 text-white/60 text-xs font-medium whitespace-nowrap">
-                      {isLandscape ? '4:3' : '3:4'}
-                    </div>
+                return (
+                  <div className="absolute inset-0 pointer-events-none">
+                    <div
+                      className="absolute"
+                      style={{ left: layer1.left, top: layer1.top, width: layer1.width, height: layer1.height }}
+                    >
+                      {/* Dim everything outside the real crop boundary */}
+                      <div className="absolute inset-0 shadow-[0_0_0_9999px_rgba(0,0,0,0.35)]" />
 
-                    {/* Layer 2 — nested crop-guide reference, centered inside Layer 1, amber to
-                        distinguish. Ratio/label driven by the cropGuideOverlay selector in the
-                        Settings panel (2026-08-11) -- 'none' hides this layer entirely; Layer 1
-                        (the real crop boundary) still shows regardless, it isn't optional.
-                        max-w-full/max-h-full is a safety clamp: a very tall ratio (e.g. TikTok
-                        9:16) nested inside a portrait (3:4) Layer 1 can geometrically exceed
-                        Layer 1's own height -- clamp rather than let it spill outside the
-                        dimmed boundary. */}
-                    {cropGuideOverlay !== 'none' && (
-                      <div
-                        className={`absolute border border-dashed border-amber-400/70 max-w-full max-h-full ${CROP_GUIDE_RATIOS[cropGuideOverlay].ratio} ${
-                          isLandscape
-                            ? 'top-0 h-full left-1/2 -translate-x-1/2'
-                            : 'left-0 w-full top-1/2 -translate-y-1/2'
-                        }`}
-                      >
-                        <div className="absolute -bottom-5 left-1/2 -translate-x-1/2 text-amber-300/80 text-[10px] whitespace-nowrap">
-                          {CROP_GUIDE_RATIOS[cropGuideOverlay].label}
-                        </div>
+                      {/* Layer 1 — real crop boundary corner brackets, faint white */}
+                      <div className="absolute top-0 left-0 w-10 h-10 border-t-2 border-l-2 border-white/60" />
+                      <div className="absolute top-0 right-0 w-10 h-10 border-t-2 border-r-2 border-white/60" />
+                      <div className="absolute bottom-0 left-0 w-10 h-10 border-b-2 border-l-2 border-white/60" />
+                      <div className="absolute bottom-0 right-0 w-10 h-10 border-b-2 border-r-2 border-white/60" />
+                      <div className="absolute -top-5 left-1/2 -translate-x-1/2 text-white/60 text-xs font-medium whitespace-nowrap">
+                        {isLandscape ? '4:3' : '3:4'}
                       </div>
-                    )}
+
+                      {/* Layer 2 — nested crop-guide reference, positioned via the same
+                          computeContainBox math relative to Layer 1's real pixel box. Ratio/
+                          label driven by the cropGuideOverlay selector in the Settings panel
+                          (2026-08-11) -- 'none' hides this layer entirely; Layer 1 (the real
+                          crop boundary) still shows regardless, it isn't optional. */}
+                      {layer2 && (
+                        <div
+                          className="absolute border border-dashed border-amber-400/70"
+                          style={{ left: layer2.left, top: layer2.top, width: layer2.width, height: layer2.height }}
+                        >
+                          <div className="absolute -bottom-5 left-1/2 -translate-x-1/2 text-amber-300/80 text-[10px] whitespace-nowrap">
+                            {CROP_GUIDE_RATIOS[cropGuideOverlay as Exclude<CropGuideOverlay, 'none'>].label}
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
 
               {/* Level indicator — rotates with device tilt */}
               {showLevelIndicator && (
