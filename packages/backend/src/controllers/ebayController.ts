@@ -4182,6 +4182,66 @@ async function resolvePoliciesForItem(
   // organizers with configured weight tiers are migrated to FLAT_TIERS (backfill).
   const shippingMode = mapping?.shippingMode || 'CALCULATED';
 
+  // ── eBay Standard Envelope pick (roadmap #624) ──────────────────────────────
+  // Return the organizer's OWN configured envelope policy (e.g. "3oz under $20 Ebay Std
+  // Env $1.65") instead of routing an item eBay itself prices through that program onto a
+  // FindA.Sale-provisioned policy. Defined once here and called from BOTH shipping-mode
+  // branches below (2026-08-11 parity fix): it was previously inlined as FLAT_TIERS step
+  // 3b only, and because the CALCULATED branch RETURNS at calculated-with-handling it
+  // could never reach that step -- an envelope-eligible item on a CALCULATED organizer was
+  // quoted eBay's real parcel rate plus handling instead of the ~$1.03-$1.65 envelope rate
+  // the organizer had already set up.
+  //
+  // Cheap weight/price pre-gate first (no I/O) so the vast majority of items never pay for
+  // the extra rate computation. resolveItemShipping then runs the AUTHORITATIVE check
+  // (eligible-category allowlist, envelope dimensions, thickness) inside
+  // evaluateStandardEnvelope. Reusing resolveItemShipping here rather than re-deriving the
+  // match is deliberate: it is this project's single source of truth for buyer shipping, so
+  // the push path and the preview cannot drift apart. Wrapped in try/catch -- an envelope
+  // lookup must never be able to fail a push; on any error the caller simply falls through
+  // to its pre-existing computed-rate path.
+  const pickStandardEnvelopePolicy = async (): Promise<
+    { policyId: string; policyName: string | null; buyerAmountCents: number } | null
+  > => {
+    const envelopePolicyFetcher = smartPickContext?.fetchFulfillmentPolicies;
+    if (!envelopePolicyFetcher) return null;
+    if (item.packageWeightOz == null || item.packageWeightOz <= 0) return null;
+    if (item.packageWeightOz > EBAY_STANDARD_ENVELOPE_MAX_WEIGHT_OZ) return null;
+    if (item.price == null || !(item.price < EBAY_STANDARD_ENVELOPE_MAX_PRICE_USD)) return null;
+    try {
+      const envelopeResolved = await resolveItemShipping({
+        organizer: { lat: organizer.lat, lng: organizer.lng },
+        mapping,
+        item: {
+          packageWeightOz: item.packageWeightOz,
+          packageLengthIn: item.packageLengthIn != null ? Number(item.packageLengthIn) : null,
+          packageWidthIn: item.packageWidthIn != null ? Number(item.packageWidthIn) : null,
+          packageHeightIn: item.packageHeightIn != null ? Number(item.packageHeightIn) : null,
+          ebayShippingOverride: item.ebayShippingOverride ?? null,
+          ebayFulfillmentPolicyOverrideId: item.ebayFulfillmentPolicyOverrideId ?? null,
+          ebayShippingClassification: item.ebayShippingClassification ?? null,
+          ebayCategoryId: item.ebayCategoryId ?? null,
+          packageType: item.packageType ?? null,
+          price: item.price ?? null,
+        },
+        fromZip: smartPickContext?.fromZip ?? null,
+        fetchFulfillmentPolicies: envelopePolicyFetcher,
+      });
+      if (envelopeResolved.source === 'standard-envelope' && envelopeResolved.fulfillmentPolicyId) {
+        return {
+          policyId: envelopeResolved.fulfillmentPolicyId,
+          policyName: envelopeResolved.policyName,
+          buyerAmountCents: envelopeResolved.buyerAmountCents,
+        };
+      }
+    } catch (envelopeErr: any) {
+      console.warn(
+        `[eBay ShippingPick] item=${item.id} standard-envelope lookup failed (non-fatal, falling through to the computed rate): ${envelopeErr?.message || envelopeErr}`
+      );
+    }
+    return null;
+  };
+
   if (shippingMode === 'CALCULATED') {
     const hasWeight = item.packageWeightOz != null && item.packageWeightOz > 0;
 
@@ -4208,6 +4268,26 @@ async function resolvePoliciesForItem(
           ? { length: item.packageLengthIn, width: item.packageWidthIn, height: item.packageHeightIn }
           : null
       );
+      // Standard Envelope wins over calculated-with-handling when the item genuinely
+      // qualifies AND the organizer has a real matching envelope policy (roadmap #624
+      // parity fix, 2026-08-11) -- see pickStandardEnvelopePolicy above. Nothing is
+      // provisioned here; the policy already exists on the organizer's eBay account.
+      const envelopePick = await pickStandardEnvelopePolicy();
+      if (envelopePick) {
+        console.log(
+          `[eBay ShippingPick] item=${item.id} standard-envelope policy="${envelopePick.policyName}" id=${envelopePick.policyId} buyerAmount=$${(envelopePick.buyerAmountCents / 100).toFixed(2)} (CALCULATED mode)`
+        );
+        return {
+          fulfillmentPolicyId: envelopePick.policyId,
+          returnPolicyId,
+          paymentPolicyId,
+          descriptionHtml: mapping?.defaultDescriptionHtml ?? null,
+          pushAsDraft: mapping?.pushAsDraft ?? false,
+          merchantLocationSource: mapping?.merchantLocationSource || conn.merchantLocationSource || 'SALE_ADDRESS',
+          routingReason: `standard-envelope:${(envelopePick.buyerAmountCents / 100).toFixed(2)}`,
+        };
+      }
+
       const calcHandlingResult = await ensureCalculatedPolicyWithHandling(
         organizerId,
         item.packageWeightOz!,
@@ -4403,59 +4483,18 @@ async function resolvePoliciesForItem(
     cascadeStep = 'classification';
   }
 
-  // 3b. eBay Standard Envelope (roadmap #624, 2026-08-11) — return the organizer's OWN
-  // configured envelope policy (e.g. "3oz under $20 Ebay Std Env $1.65") instead of
-  // provisioning a FindA.Sale flat-rate policy for an item eBay itself prices through
-  // that program.
-  //
-  // Cheap weight/price pre-gate first (no I/O) so the vast majority of items never pay
-  // for the extra rate computation. resolveItemShipping then runs the AUTHORITATIVE
-  // check (eligible-category allowlist, envelope dimensions, thickness) inside
-  // evaluateStandardEnvelope. Reusing resolveItemShipping here rather than re-deriving
-  // the match is deliberate: it is this project's single source of truth for buyer
-  // shipping, so the push path and the preview cannot drift apart. Wrapped in try/catch —
-  // an envelope lookup must never be able to fail a push; on any error we simply fall
-  // through to the pre-existing computed-flat-rate path below.
-  const envelopePolicyFetcher = smartPickContext?.fetchFulfillmentPolicies;
-  if (
-    !fulfillmentPolicyId &&
-    envelopePolicyFetcher &&
-    item.packageWeightOz != null &&
-    item.packageWeightOz > 0 &&
-    item.packageWeightOz <= EBAY_STANDARD_ENVELOPE_MAX_WEIGHT_OZ &&
-    item.price != null &&
-    item.price < EBAY_STANDARD_ENVELOPE_MAX_PRICE_USD
-  ) {
-    try {
-      const envelopeResolved = await resolveItemShipping({
-        organizer: { lat: organizer.lat, lng: organizer.lng },
-        mapping,
-        item: {
-          packageWeightOz: item.packageWeightOz,
-          packageLengthIn: item.packageLengthIn != null ? Number(item.packageLengthIn) : null,
-          packageWidthIn: item.packageWidthIn != null ? Number(item.packageWidthIn) : null,
-          packageHeightIn: item.packageHeightIn != null ? Number(item.packageHeightIn) : null,
-          ebayShippingOverride: item.ebayShippingOverride ?? null,
-          ebayFulfillmentPolicyOverrideId: item.ebayFulfillmentPolicyOverrideId ?? null,
-          ebayShippingClassification: item.ebayShippingClassification ?? null,
-          ebayCategoryId: item.ebayCategoryId ?? null,
-          packageType: item.packageType ?? null,
-          price: item.price ?? null,
-        },
-        fromZip: smartPickContext?.fromZip ?? null,
-        fetchFulfillmentPolicies: envelopePolicyFetcher,
-      });
-      if (envelopeResolved.source === 'standard-envelope' && envelopeResolved.fulfillmentPolicyId) {
-        fulfillmentPolicyId = envelopeResolved.fulfillmentPolicyId;
-        routingReason = `standard-envelope:${(envelopeResolved.buyerAmountCents / 100).toFixed(2)}`;
-        cascadeStep = 'standard-envelope';
-        console.log(
-          `[eBay ShippingPick] item=${item.id} standard-envelope policy="${envelopeResolved.policyName}" id=${envelopeResolved.fulfillmentPolicyId} buyerAmount=$${(envelopeResolved.buyerAmountCents / 100).toFixed(2)}`
-        );
-      }
-    } catch (envelopeErr: any) {
-      console.warn(
-        `[eBay ShippingPick] item=${item.id} standard-envelope lookup failed (non-fatal, falling through to computed flat rate): ${envelopeErr?.message || envelopeErr}`
+  // 3b. eBay Standard Envelope (roadmap #624, 2026-08-11) — the organizer's OWN configured
+  // envelope policy beats the computed flat rate below. Logic lives in
+  // pickStandardEnvelopePolicy (defined above, shared with the CALCULATED branch) so the
+  // two shipping modes cannot drift apart.
+  if (!fulfillmentPolicyId) {
+    const envelopePick = await pickStandardEnvelopePolicy();
+    if (envelopePick) {
+      fulfillmentPolicyId = envelopePick.policyId;
+      routingReason = `standard-envelope:${(envelopePick.buyerAmountCents / 100).toFixed(2)}`;
+      cascadeStep = 'standard-envelope';
+      console.log(
+        `[eBay ShippingPick] item=${item.id} standard-envelope policy="${envelopePick.policyName}" id=${envelopePick.policyId} buyerAmount=$${(envelopePick.buyerAmountCents / 100).toFixed(2)}`
       );
     }
   }
@@ -5884,7 +5923,7 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
           organizerId: organizer.id,
           ebayListingId: { not: null },
         },
-        select: { id: true, ebayListingId: true, description: true, category: true, tags: true, conditionGrade: true, photoUrls: true },
+        select: { id: true, ebayListingId: true, description: true, category: true, ebayCategoryId: true, tags: true, conditionGrade: true, photoUrls: true },
       });
 
       // Always enrich ALL eBay items to refresh photos/details on every sync
@@ -5948,6 +5987,21 @@ export const importInventoryFromEbay = async (req: AuthRequest, res: Response) =
           const categoryBlock = itemBlock.match(/<PrimaryCategory>([\s\S]*?)<\/PrimaryCategory>/)?.[1] || '';
           const categoryName = categoryBlock ? xmlVal(categoryBlock, 'CategoryName') : null;
           if (categoryName) backfill.category = categoryName;
+          // ROOT-CAUSE FIX (2026-08-11): this enrichment pass is the ONLY sync path that
+          // re-touches EVERY already-imported eBay item on every sync, and it parsed
+          // <PrimaryCategory> for CategoryName ONLY -- it never read CategoryID. Net effect in
+          // production: 74 live-on-eBay items (all of one organizer's 2026-04-17 import) carried
+          // a correct eBay category NAME while Item.ebayCategoryId stayed permanently NULL.
+          // The one path that DOES capture the numeric ID (the GetMyeBaySelling import block
+          // above, ~line 5803) has never run to completion for that organizer --
+          // EbayConnection.lastEbayInventorySyncAt (written only at the very end of
+          // importEbayInventory) is still NULL in production, so that backfill never fired.
+          // eBay owns this value, so always overwrite when it differs -- same "import is source
+          // of truth" rule the GetMyeBaySelling block already applies to this field.
+          const categoryIdFromEnrich = categoryBlock ? xmlVal(categoryBlock, 'CategoryID') : null;
+          if (categoryIdFromEnrich && item.ebayCategoryId !== categoryIdFromEnrich) {
+            backfill.ebayCategoryId = categoryIdFromEnrich;
+          }
           const specificsBlock = itemBlock.match(/<ItemSpecifics>([\s\S]*?)<\/ItemSpecifics>/)?.[1] || '';
           const nameValueBlocks = xmlAll(specificsBlock, 'NameValueList');
           const tags: string[] = nameValueBlocks.map(b => xmlVal(b, 'Value')).filter((v): v is string => !!v && v.length > 0).slice(0, 10);
@@ -7104,7 +7158,14 @@ export const getShippingNetPreview = async (req: AuthRequest, res: Response): Pr
         service: ship.carrier,
         carrier: ship.carrier,
         isEstimate: true,
-        source: ship.shippingMode === 'FLAT_TIERS' ? 'flat_policy' : 'calculated',
+        // (roadmap #624 parity, 2026-08-11) A standard-envelope resolution is a FLAT policy
+        // regardless of the organizer's shippingMode -- a CALCULATED organizer whose item
+        // lands on their own eBay envelope policy must not be labelled 'calculated', or the
+        // preview tells the organizer eBay will rate it at checkout when it will not.
+        source:
+          resolved.source === 'standard-envelope' || ship.shippingMode === 'FLAT_TIERS'
+            ? 'flat_policy'
+            : 'calculated',
         freeShippingOptIn,
         labelCost,
         netToSeller,
@@ -7286,7 +7347,14 @@ export const getSuggestedPriceForMargin = async (req: AuthRequest, res: Response
         service: ship.carrier,
         carrier: ship.carrier,
         isEstimate: true,
-        source: ship.shippingMode === 'FLAT_TIERS' ? 'flat_policy' : 'calculated',
+        // (roadmap #624 parity, 2026-08-11) A standard-envelope resolution is a FLAT policy
+        // regardless of the organizer's shippingMode -- a CALCULATED organizer whose item
+        // lands on their own eBay envelope policy must not be labelled 'calculated', or the
+        // preview tells the organizer eBay will rate it at checkout when it will not.
+        source:
+          resolved.source === 'standard-envelope' || ship.shippingMode === 'FLAT_TIERS'
+            ? 'flat_policy'
+            : 'calculated',
         freeShippingOptIn,
         labelCost,
         netToSeller,

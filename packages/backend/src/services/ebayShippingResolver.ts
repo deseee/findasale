@@ -14,7 +14,9 @@
  * (roadmap #624) The one case where it DOES return a real eBay fulfillment policy id is
  * eBay Standard Envelope: those policies already exist on the organizer's own eBay
  * account, so nothing is provisioned — the policy is looked up (read-only) and returned
- * as-is. See the fvfFlat helper below.
+ * as-is. See the tryStandardEnvelopePolicy helper below — it is shared by BOTH the
+ * FLAT_TIERS and CALCULATED branches, so envelope-eligible items resolve identically
+ * whichever shipping mode the organizer is on.
  *
  * Weight-tier amount is parsed from the `$X.XX` embedded in the tier's policyName
  * (all current tiers carry it). If a tier name has no parseable amount, we fall
@@ -61,7 +63,8 @@ export interface ResolveItemShippingResult {
   /** (roadmap #624) True when the item genuinely qualified for eBay Standard Envelope but
    *  NO real organizer-configured envelope policy could be matched -- either because no
    *  policy fetcher was supplied (cheap local recompute paths) or the organizer has none
-   *  configured. The result falls back to the FindA.Sale flat fee, but callers that
+   *  configured. The result falls back to this mode's own computed fee (FLAT_TIERS: the
+   *  FindA.Sale flat fee; CALCULATED: calculated-with-handling), but callers that
    *  compare against a STORED amount (the drift cron) must not treat that fallback as
    *  authoritative: the live listing may legitimately sit on the organizer's real envelope
    *  policy at a different price, and re-pinning it would churn every run. */
@@ -127,9 +130,10 @@ export async function resolveItemShipping(input: {
   /** (roadmap #624) Optional LAZY fetcher for the organizer's live eBay fulfillment
    *  policies. Invoked at most once, and ONLY when the winning carrier candidate is a
    *  genuine eBay Standard Envelope match -- so callers that pass it pay nothing on the
-   *  99% of items that aren't envelope-eligible. When omitted, envelope-eligible items
-   *  fall back to the FindA.Sale flat fee with standardEnvelopeUnmatched = true (the
-   *  cheap local recompute in the drift cron deliberately omits it -- no eBay call). */
+   *  99% of items that aren't envelope-eligible. Applies in BOTH shipping modes. When
+   *  omitted, envelope-eligible items fall back to that mode's own computed fee with
+   *  standardEnvelopeUnmatched = true (the cheap local recompute in the drift cron
+   *  deliberately omits it -- no eBay call). */
   fetchFulfillmentPolicies?: () => Promise<EbayFulfillmentPolicySummary[]>;
 }): Promise<ResolveItemShippingResult> {
   const { organizer, mapping, item } = input;
@@ -172,6 +176,46 @@ export async function resolveItemShipping(input: {
 
   const shippingMode = mapping?.shippingMode || 'CALCULATED';
 
+  // (roadmap #624, 2026-08-11) Shared eBay Standard Envelope lookup — used by BOTH
+  // shipping modes. Only ever called AFTER computeCheapestForOrigin has already returned
+  // basis === 'standard_envelope'; evaluateStandardEnvelope (ebayRateEstimateService)
+  // owns the authoritative category / weight / price / dimension gates, so this can never
+  // fire on an item that merely happens to be cheap. Returns the organizer's real
+  // envelope policy when one matches, or null — in which case the caller keeps its own
+  // computed rate and flags standardEnvelopeUnmatched.
+  //
+  // Extracted from the (previously FLAT_TIERS-only) fvfFlat helper so CALCULATED-mode
+  // organizers get identical treatment from one implementation — the two branches cannot
+  // drift apart.
+  const tryStandardEnvelopePolicy = async (): Promise<ResolveItemShippingResult | null> => {
+    if (!input.fetchFulfillmentPolicies) return null;
+    try {
+      const policies = await input.fetchFulfillmentPolicies();
+      const match = matchStandardEnvelopePolicy(weightOz, item.price ?? null, policies || []);
+      if (match && match.rateUsd != null) {
+        return {
+          fulfillmentPolicyId: match.policyId,
+          buyerAmountCents: dollarsToCents(match.rateUsd),
+          policyName: match.policyName,
+          source: 'standard-envelope',
+        };
+      }
+      // Real opportunity the organizer is missing: the item qualifies for eBay's
+      // envelope program but they have no matching policy set up. Logged (not
+      // silent) so it is visible which organizers should be prompted to add one.
+      console.warn(
+        `[eBay StdEnv] envelope-eligible item has NO matching organizer policy — falling back to the FindA.Sale computed rate (mode=${shippingMode}, weightOz=${weightOz}, price=${item.price ?? 'null'}, categoryId=${item.ebayCategoryId ?? 'null'}, policiesSeen=${(policies || []).length})`
+      );
+    } catch (fetchErr) {
+      // A failed policy fetch must never break pricing -- fall through to the caller's
+      // computed rate, which is the pre-existing, always-safe answer.
+      console.warn(
+        `[eBay StdEnv] fulfillment policy lookup failed, falling back to the FindA.Sale computed rate: ${(fetchErr as Error)?.message || fetchErr}`
+      );
+    }
+    return null;
+  };
+
   // Helper: build the FVF-flat result (gross up cheapest rate, bucket it). Computes
   // the cheapest carrier rate LAZILY, only when actually reached -- override paths
   // above (local-pickup, custom-override, free, FLAT_TIERS oddball overrides) return
@@ -199,32 +243,8 @@ export async function resolveItemShipping(input: {
 
       let standardEnvelopeUnmatched = false;
       if (cheapest.basis === 'standard_envelope') {
-        if (input.fetchFulfillmentPolicies) {
-          try {
-            const policies = await input.fetchFulfillmentPolicies();
-            const match = matchStandardEnvelopePolicy(weightOz, item.price ?? null, policies || []);
-            if (match && match.rateUsd != null) {
-              return {
-                fulfillmentPolicyId: match.policyId,
-                buyerAmountCents: dollarsToCents(match.rateUsd),
-                policyName: match.policyName,
-                source: 'standard-envelope',
-              };
-            }
-            // Real opportunity the organizer is missing: the item qualifies for eBay's
-            // envelope program but they have no matching policy set up. Logged (not
-            // silent) so it is visible which organizers should be prompted to add one.
-            console.warn(
-              `[eBay StdEnv] envelope-eligible item has NO matching organizer policy — falling back to FindA.Sale flat (weightOz=${weightOz}, price=${item.price ?? 'null'}, categoryId=${item.ebayCategoryId ?? 'null'}, policiesSeen=${(policies || []).length})`
-            );
-          } catch (fetchErr) {
-            // A failed policy fetch must never break pricing -- fall through to the flat
-            // compute, which is the pre-existing, always-safe answer.
-            console.warn(
-              `[eBay StdEnv] fulfillment policy lookup failed, falling back to FindA.Sale flat: ${(fetchErr as Error)?.message || fetchErr}`
-            );
-          }
-        }
+        const envelope = await tryStandardEnvelopePolicy();
+        if (envelope) return envelope;
         standardEnvelopeUnmatched = true;
       }
 
@@ -285,14 +305,38 @@ export async function resolveItemShipping(input: {
   // ensureCalculatedPolicyWithHandling itself, since that provisions a real eBay
   // fulfillment policy (network + DB writes) on every call -- exactly what this
   // file's header says the preview must never do.
+  //
+  // (roadmap #624, 2026-08-11 — CALCULATED parity) One exception sits IN FRONT of the
+  // calculated-with-handling compute, exactly as it does for FLAT_TIERS above: when the
+  // winning candidate is a genuine eBay Standard Envelope match, eBay prices the item
+  // through the SELLER'S OWN flat envelope policy. Leaving such an item on a calculated
+  // policy is strictly worse than the FLAT_TIERS bug this mirrors — eBay's calculated
+  // rate at checkout is a real parcel rate (Ground Advantage etc.), never the ~$1.03–$1.65
+  // envelope rate, so the buyer is quoted several dollars over a service the organizer
+  // has already configured. shippingMode is a FindA.Sale routing preference, not an eBay
+  // constraint: the fulfillment policy is chosen per-offer, so assigning the organizer's
+  // real flat envelope policy to one item is fully compatible with a CALCULATED-mode
+  // organizer (the same is already true of the custom-override / local-pickup paths above).
+  // If they have no envelope policy configured -- or no fetcher was supplied -- fall back
+  // to calculated-with-handling exactly as before, flagged via standardEnvelopeUnmatched
+  // so the drift cron doesn't churn against it.
   try {
     const cheapest = await computeCheapestForOrigin({ weightOz, dims, origin, packageType: item.packageType ?? null, categoryId: item.ebayCategoryId ?? null, priceUsd: item.price ?? null });
+
+    let standardEnvelopeUnmatched = false;
+    if (cheapest.basis === 'standard_envelope') {
+      const envelope = await tryStandardEnvelopePolicy();
+      if (envelope) return envelope;
+      standardEnvelopeUnmatched = true;
+    }
+
     const { bucketedRate, handlingCost } = computeCalculatedWithHandling(cheapest.rate);
     return {
       fulfillmentPolicyId: null,
       buyerAmountCents: dollarsToCents(bucketedRate + handlingCost),
       policyName: `FindA.Sale Calculated (+$${handlingCost.toFixed(2)} handling)`,
       source: 'calculated',
+      ...(standardEnvelopeUnmatched ? { standardEnvelopeUnmatched: true } : {}),
     };
   } catch (err) {
     if (err instanceof ShippingHardBlockError) {
