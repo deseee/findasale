@@ -41,7 +41,11 @@ export async function runOklahomaphase2Scraper(): Promise<void> {
         Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         'Accept-Language': 'en-US,en;q=0.9',
       },
-      timeout: 30000,
+      // Bumped 2x (was 30000) - GH Actions run #8 (2026-08-10, commit a6e5802) hit
+      // AxiosError: timeout of 30000ms exceeded on this exact call. OK-only fix;
+      // see runLicenseScrapersBatch.ts. PDF-download timeout below (60000) untouched -
+      // not implicated by the failure.
+      timeout: 60000,
       responseType: 'text',
     });
 

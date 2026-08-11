@@ -170,7 +170,9 @@ async function fetchSocrataAllPages(baseUrl: string, domain: string): Promise<st
     const response = await fetch(url, {
       method: 'GET',
       headers: { Accept: 'text/csv,*/*' },
-      signal: AbortSignal.timeout(120000),
+      // Bumped 2x (was 120000) - GH Actions run #8 (2026-08-10, commit a6e5802) hit
+      // TimeoutError at 120,621ms fetching the Socrata CSV. IL-only fix; see runLicenseScrapersBatch.ts.
+      signal: AbortSignal.timeout(240000),
     });
 
     if (!response.ok) {
