@@ -77,20 +77,73 @@ export class ShippingHardBlockError extends Error {
  * 7.8% avg) and dimensional-divisor change (166→139, see DIM_DIVISOR_USPS below).
  * maxLb = inclusive upper bound in pounds. All prices in USD.
  */
+// 2026-08-10, later same session (Patrick: "use the ebay shipping calculator ...
+// that's what it's for" -- correcting two earlier missteps in this same pass: first
+// probing the calculator by trial and error to *find* weight breaks instead of
+// researching the real carrier weight-break structure first, then separately trying to
+// prioritize which tiers to re-test by real-inventory weight distribution instead of by
+// correctness). Research first established the real structural breakpoints (USPS
+// Ground Advantage: distinct real rate at each of the 4/8/12/15.999oz ounce tiers,
+// confirmed DIRECTLY on eBay's calculator -- not assumed from USPS's public July-12
+// commercial-file consolidation, which eBay's own negotiated rate does NOT appear to
+// follow, since a fresh 4oz vs 15.999oz test at z1 returned different prices, $5.24 vs
+// $6.52; UPS Ground and FedEx Ground/Home Delivery: FLAT price for the entire 0-1lb
+// range -- confirmed identical across 4oz/8oz/12oz/15.999oz/1lb at z1, cross-verified 3
+// separate ways (fast JS-driven form fill, slow native-click form fill, and two
+// different box shapes including one sized specifically to disqualify from USPS Cubic
+// eligibility) -- all returned the exact same $7.22 UPS / $14.07 FedEx. This means every
+// pre-existing sub-1lb UPS/FedEx cell in this table was FABRICATED interpolation between
+// a single 1lb anchor and nothing -- there is no real sub-1lb variation to interpolate.
+//
+// z1 (origin 49079 -> Grand Rapids 49503) is now live-quoted at every existing maxLb row
+// through 30lb for all 3 carriers -- see PENDING_LIVE_VERIFICATION_CELLS below for
+// exactly which (carrier, maxLb, zone) cells this closes. Box dims for each weight tier
+// were sized so length*width*height/139 (the dimensional-weight formula this file uses)
+// stays below the tier's actual weight -- verified by cross-checking that changing box
+// shape at a fixed weight (2lb/3lb, two very different box shapes) produced IDENTICAL
+// prices, confirming billable weight was actual weight, not dimensional weight, in
+// every quote used here.
+//
+// IMPORTANT, non-obvious finding: eBay's real negotiated z1 rate curve is NOT smooth or
+// monotonically increasing with weight -- USPS Ground Advantage at z1 actually DIPS from
+// 2lb ($6.68) to 3lb ($5.80), then stays FLAT 3lb-5lb ($5.80 both), and FedEx
+// Ground/Home Delivery is flat at $14.07 from 4oz all the way through 10lb before finally
+// increasing at 14lb ($14.63). This was cross-verified enough times (different box
+// shapes, different form-fill methods) to trust it as genuine eBay pricing rather than a
+// testing artifact -- it likely reflects real irregularities in eBay's own tiered
+// negotiated-discount schedule, not a smooth carrier rate card. This is exactly why this
+// file's prior "single real anchor + assumed curve-shape scaling" methodology could not
+// have produced a correct table even in principle -- the real curve has genuine
+// plateaus and dips that no smooth interpolation would reproduce. Every remaining
+// zone/tier this file scales rather than live-quotes should be read with that caveat.
+//
+// The pre-existing FedEx z1 1lb anchor ($17.59, sourced 2026-07-05) was WRONG -- this
+// pass's real quote at the identical origin/destination/service is $14.07, a ~25%
+// difference. Superseded; the old figure was either stale (rate changed since
+// 2026-07-05) or was never actually tested at this origin (the RATE_TABLE_UPS header
+// comment two sections up notes its own 1lb anchors used origin 49503, not 49079 --
+// raising the possibility the original FedEx anchor did too, despite this file's
+// canonical origin being 49079 everywhere else). Not resolved which; the new number is
+// real-quoted at the canonical origin and supersedes the old one regardless of cause.
+//
+// 50lb and 70lb z1 were deliberately left untouched this pass -- see
+// verifiedThisSession's comment above for why (suspected oversize/AHS surcharge
+// contamination in the larger test box needed to keep dim-weight below actual weight at
+// those tiers).
 const RATE_TABLE: RateRow[] = [
-  { maxLb: 0.25   , z1: 4.75  , z2: 4.75  , z3: 4.93  , z4: 4.93  , z5: 5.27  , z6: 5.45  , z7: 5.54  , z8: 7.93    },
-  { maxLb: 0.5    , z1: 5.22  , z2: 5.22  , z3: 5.42  , z4: 5.42  , z5: 5.75  , z6: 5.85  , z7: 5.93  , z8: 8.4     },
-  { maxLb: 0.75   , z1: 5.33  , z2: 5.33  , z3: 5.53  , z4: 5.53  , z5: 5.89  , z6: 6.12  , z7: 6.24  , z8: 8.89    },
-  { maxLb: 0.9999 , z1: 5.95  , z2: 5.95  , z3: 6.41  , z4: 6.41  , z5: 6.95  , z6: 7.14  , z7: 7.29  , z8: 10.46   },
+  { maxLb: 0.25   , z1: 5.24  , z2: 4.75  , z3: 4.93  , z4: 4.93  , z5: 5.27  , z6: 5.45  , z7: 5.54  , z8: 7.93    },
+  { maxLb: 0.5    , z1: 5.7  , z2: 5.22  , z3: 5.42  , z4: 5.42  , z5: 5.75  , z6: 5.85  , z7: 5.93  , z8: 8.4     },
+  { maxLb: 0.75   , z1: 6.1  , z2: 5.33  , z3: 5.53  , z4: 5.53  , z5: 5.89  , z6: 6.12  , z7: 6.24  , z8: 8.89    },
+  { maxLb: 0.9999 , z1: 6.52  , z2: 5.95  , z3: 6.41  , z4: 6.41  , z5: 6.95  , z6: 7.14  , z7: 7.29  , z8: 10.46   },
   { maxLb: 1      , z1: 6.56  , z2: 6.56  , z3: 7.02  , z4: 7.02  , z5: 7.9   , z6: 8.75  , z7: 9.02  , z8: 13.3    },
-  { maxLb: 2      , z1: 6.89  , z2: 6.89  , z3: 7.29  , z4: 7.29  , z5: 8.99  , z6: 10.52 , z7: 10.85 , z8: 16.04   },
-  { maxLb: 3      , z1: 7.42  , z2: 7.42  , z3: 8.18  , z4: 8.18  , z5: 10.46 , z6: 12.35 , z7: 12.98 , z8: 19.62   },
-  { maxLb: 5      , z1: 8.34  , z2: 8.34  , z3: 9.19  , z4: 9.19  , z5: 12.18 , z6: 14.44 , z7: 15.47 , z8: 23.91   },
-  { maxLb: 7      , z1: 8.57  , z2: 8.57  , z3: 9.78  , z4: 9.78  , z5: 13.47 , z6: 16.04 , z7: 17.38 , z8: 27.21   },
-  { maxLb: 10     , z1: 10.37 , z2: 10.37 , z3: 12.0  , z4: 12.0  , z5: 15.15 , z6: 18.12 , z7: 19.86 , z8: 31.58   },
-  { maxLb: 14     , z1: 12.78 , z2: 12.78 , z3: 14.31 , z4: 14.31 , z5: 18.42 , z6: 21.93 , z7: 24.39 , z8: 39.28   },
-  { maxLb: 20     , z1: 14.37 , z2: 14.37 , z3: 16.38 , z4: 16.38 , z5: 22.53 , z6: 27.55 , z7: 31.34 , z8: 50.33   },
-  { maxLb: 30     , z1: 26.51 , z2: 26.51 , z3: 35.71 , z4: 35.71 , z5: 53.58 , z6: 65.31 , z7: 76.14 , z8: 120.37  },
+  { maxLb: 2      , z1: 6.68  , z2: 6.89  , z3: 7.29  , z4: 7.29  , z5: 8.99  , z6: 10.52 , z7: 10.85 , z8: 16.04   },
+  { maxLb: 3      , z1: 5.8  , z2: 7.42  , z3: 8.18  , z4: 8.18  , z5: 10.46 , z6: 12.35 , z7: 12.98 , z8: 19.62   },
+  { maxLb: 5      , z1: 5.8  , z2: 8.34  , z3: 9.19  , z4: 9.19  , z5: 12.18 , z6: 14.44 , z7: 15.47 , z8: 23.91   },
+  { maxLb: 7      , z1: 7.02  , z2: 8.57  , z3: 9.78  , z4: 9.78  , z5: 13.47 , z6: 16.04 , z7: 17.38 , z8: 27.21   },
+  { maxLb: 10     , z1: 7.55 , z2: 10.37 , z3: 12.0  , z4: 12.0  , z5: 15.15 , z6: 18.12 , z7: 19.86 , z8: 31.58   },
+  { maxLb: 14     , z1: 8.2 , z2: 12.78 , z3: 14.31 , z4: 14.31 , z5: 18.42 , z6: 21.93 , z7: 24.39 , z8: 39.28   },
+  { maxLb: 20     , z1: 8.29 , z2: 14.37 , z3: 16.38 , z4: 16.38 , z5: 22.53 , z6: 27.55 , z7: 31.34 , z8: 50.33   },
+  { maxLb: 30     , z1: 32.38 , z2: 26.51 , z3: 35.71 , z4: 35.71 , z5: 53.58 , z6: 65.31 , z7: 76.14 , z8: 120.37  },
   { maxLb: 50     , z1: 38.52 , z2: 38.52 , z3: 51.95 , z4: 51.95 , z5: 80.99 , z6: 99.89 , z7: 117.45, z8: 187.24  },
   { maxLb: 70     , z1: 47.58 , z2: 47.58 , z3: 62.27 , z4: 62.27 , z5: 100.3 , z6: 124.9 , z7: 147.98, z8: 238.39  },
 ];
@@ -154,19 +207,72 @@ export const FEDEX_RATE_SOURCE = "eBay's own live shipping calculator (ebay.com/
 // distinct, much larger undertaking than this session's other gap-closures -- flagged
 // to Patrick as needing a dedicated future pass (ideally scripted Chrome automation)
 // rather than attempted piecemeal here.
+// 2026-08-10, later same session (Patrick: "use the ebay shipping calculator ...
+// that's what it's for" -- correcting two earlier missteps in this same pass: first
+// probing the calculator by trial and error to *find* weight breaks instead of
+// researching the real carrier weight-break structure first, then separately trying to
+// prioritize which tiers to re-test by real-inventory weight distribution instead of by
+// correctness). Research first established the real structural breakpoints (USPS
+// Ground Advantage: distinct real rate at each of the 4/8/12/15.999oz ounce tiers,
+// confirmed DIRECTLY on eBay's calculator -- not assumed from USPS's public July-12
+// commercial-file consolidation, which eBay's own negotiated rate does NOT appear to
+// follow, since a fresh 4oz vs 15.999oz test at z1 returned different prices, $5.24 vs
+// $6.52; UPS Ground and FedEx Ground/Home Delivery: FLAT price for the entire 0-1lb
+// range -- confirmed identical across 4oz/8oz/12oz/15.999oz/1lb at z1, cross-verified 3
+// separate ways (fast JS-driven form fill, slow native-click form fill, and two
+// different box shapes including one sized specifically to disqualify from USPS Cubic
+// eligibility) -- all returned the exact same $7.22 UPS / $14.07 FedEx. This means every
+// pre-existing sub-1lb UPS/FedEx cell in this table was FABRICATED interpolation between
+// a single 1lb anchor and nothing -- there is no real sub-1lb variation to interpolate.
+//
+// z1 (origin 49079 -> Grand Rapids 49503) is now live-quoted at every existing maxLb row
+// through 30lb for all 3 carriers -- see PENDING_LIVE_VERIFICATION_CELLS below for
+// exactly which (carrier, maxLb, zone) cells this closes. Box dims for each weight tier
+// were sized so length*width*height/139 (the dimensional-weight formula this file uses)
+// stays below the tier's actual weight -- verified by cross-checking that changing box
+// shape at a fixed weight (2lb/3lb, two very different box shapes) produced IDENTICAL
+// prices, confirming billable weight was actual weight, not dimensional weight, in
+// every quote used here.
+//
+// IMPORTANT, non-obvious finding: eBay's real negotiated z1 rate curve is NOT smooth or
+// monotonically increasing with weight -- USPS Ground Advantage at z1 actually DIPS from
+// 2lb ($6.68) to 3lb ($5.80), then stays FLAT 3lb-5lb ($5.80 both), and FedEx
+// Ground/Home Delivery is flat at $14.07 from 4oz all the way through 10lb before finally
+// increasing at 14lb ($14.63). This was cross-verified enough times (different box
+// shapes, different form-fill methods) to trust it as genuine eBay pricing rather than a
+// testing artifact -- it likely reflects real irregularities in eBay's own tiered
+// negotiated-discount schedule, not a smooth carrier rate card. This is exactly why this
+// file's prior "single real anchor + assumed curve-shape scaling" methodology could not
+// have produced a correct table even in principle -- the real curve has genuine
+// plateaus and dips that no smooth interpolation would reproduce. Every remaining
+// zone/tier this file scales rather than live-quotes should be read with that caveat.
+//
+// The pre-existing FedEx z1 1lb anchor ($17.59, sourced 2026-07-05) was WRONG -- this
+// pass's real quote at the identical origin/destination/service is $14.07, a ~25%
+// difference. Superseded; the old figure was either stale (rate changed since
+// 2026-07-05) or was never actually tested at this origin (the RATE_TABLE_UPS header
+// comment two sections up notes its own 1lb anchors used origin 49503, not 49079 --
+// raising the possibility the original FedEx anchor did too, despite this file's
+// canonical origin being 49079 everywhere else). Not resolved which; the new number is
+// real-quoted at the canonical origin and supersedes the old one regardless of cause.
+//
+// 50lb and 70lb z1 were deliberately left untouched this pass -- see
+// verifiedThisSession's comment above for why (suspected oversize/AHS surcharge
+// contamination in the larger test box needed to keep dim-weight below actual weight at
+// those tiers).
 const RATE_TABLE_UPS: RateRow[] = [
-  { maxLb: 0.25   , z1: 6.72  , z2: 6.72  , z3: 6.63  , z4: 6.63  , z5: 7.74  , z6: 7.58  , z7: 8.84  , z8: 10.79   },
-  { maxLb: 0.5    , z1: 6.82  , z2: 6.82  , z3: 6.72  , z4: 6.72  , z5: 7.87  , z6: 7.75  , z7: 9.02  , z8: 11.09   },
-  { maxLb: 0.75   , z1: 6.91  , z2: 6.91  , z3: 6.84  , z4: 6.84  , z5: 8.04  , z6: 7.94  , z7: 9.28  , z8: 11.44   },
-  { maxLb: 0.9999 , z1: 7.03  , z2: 7.03  , z3: 6.99  , z4: 6.99  , z5: 8.25  , z6: 8.17  , z7: 9.57  , z8: 11.79   },
+  { maxLb: 0.25   , z1: 7.22  , z2: 6.72  , z3: 6.63  , z4: 6.63  , z5: 7.74  , z6: 7.58  , z7: 8.84  , z8: 10.79   },
+  { maxLb: 0.5    , z1: 7.22  , z2: 6.82  , z3: 6.72  , z4: 6.72  , z5: 7.87  , z6: 7.75  , z7: 9.02  , z8: 11.09   },
+  { maxLb: 0.75   , z1: 7.22  , z2: 6.91  , z3: 6.84  , z4: 6.84  , z5: 8.04  , z6: 7.94  , z7: 9.28  , z8: 11.44   },
+  { maxLb: 0.9999 , z1: 7.22  , z2: 7.03  , z3: 6.99  , z4: 6.99  , z5: 8.25  , z6: 8.17  , z7: 9.57  , z8: 11.79   },
   { maxLb: 1      , z1: 7.22  , z2: 7.22  , z3: 7.23  , z4: 7.23  , z5: 8.62  , z6: 8.62  , z7: 10.19 , z8: 12.7    },
-  { maxLb: 2      , z1: 7.59  , z2: 7.59  , z3: 7.74  , z4: 7.74  , z5: 9.4   , z6: 9.56  , z7: 11.5  , z8: 14.61   },
-  { maxLb: 3      , z1: 8.03  , z2: 8.03  , z3: 8.28  , z4: 8.28  , z5: 10.22 , z6: 10.53 , z7: 12.82 , z8: 16.44   },
-  { maxLb: 5      , z1: 8.68  , z2: 8.68  , z3: 9.08  , z4: 9.08  , z5: 11.5  , z6: 12.12 , z7: 14.94 , z8: 19.31   },
-  { maxLb: 7      , z1: 9.27  , z2: 9.27  , z3: 9.8   , z4: 9.8   , z5: 12.62 , z6: 13.48 , z7: 16.8  , z8: 21.92   },
+  { maxLb: 2      , z1: 7.29  , z2: 7.59  , z3: 7.74  , z4: 7.74  , z5: 9.4   , z6: 9.56  , z7: 11.5  , z8: 14.61   },
+  { maxLb: 3      , z1: 8.64  , z2: 8.03  , z3: 8.28  , z4: 8.28  , z5: 10.22 , z6: 10.53 , z7: 12.82 , z8: 16.44   },
+  { maxLb: 5      , z1: 9.1  , z2: 8.68  , z3: 9.08  , z4: 9.08  , z5: 11.5  , z6: 12.12 , z7: 14.94 , z8: 19.31   },
+  { maxLb: 7      , z1: 9.87  , z2: 9.27  , z3: 9.8   , z4: 9.8   , z5: 12.62 , z6: 13.48 , z7: 16.8  , z8: 21.92   },
   { maxLb: 10     , z1: 11.27 , z2: 11.27 , z3: 12.95 , z4: 12.95 , z5: 17.59 , z6: 14.78 , z7: 20.63 , z8: 23.84   },
-  { maxLb: 14     , z1: 11.2  , z2: 11.2  , z3: 11.95 , z4: 11.95 , z5: 15.48 , z6: 16.46 , z7: 20.38 , z8: 26.44   },
-  { maxLb: 20     , z1: 12.7  , z2: 12.7  , z3: 13.74 , z4: 13.74 , z5: 18.05 , z6: 19.57 , z7: 24.69 , z8: 32.53   },
+  { maxLb: 14     , z1: 13.85  , z2: 11.2  , z3: 11.95 , z4: 11.95 , z5: 15.48 , z6: 16.46 , z7: 20.38 , z8: 26.44   },
+  { maxLb: 20     , z1: 15.82  , z2: 12.7  , z3: 13.74 , z4: 13.74 , z5: 18.05 , z6: 19.57 , z7: 24.69 , z8: 32.53   },
   { maxLb: 30     , z1: 20.48 , z2: 20.48 , z3: 26.67 , z4: 26.67 , z5: 31.63 , z6: 26.57 , z7: 45.43 , z8: 46.11   },
   { maxLb: 50     , z1: 22.41 , z2: 22.41 , z3: 25.69 , z4: 25.69 , z5: 35.97 , z6: 40.83 , z7: 53.32 , z8: 72.2    },
   { maxLb: 70     , z1: 29.25 , z2: 29.25 , z3: 34.06 , z4: 34.06 , z5: 47.51 , z6: 53.79 , z7: 70.12 , z8: 94.82   },
@@ -225,19 +331,72 @@ const RATE_TABLE_UPS: RateRow[] = [
 // much larger undertaking than this session's other gap-closures -- flagged to Patrick
 // as needing a dedicated future pass (ideally scripted Chrome automation, not manual
 // one-by-one browser calls) rather than attempted piecemeal here.
+// 2026-08-10, later same session (Patrick: "use the ebay shipping calculator ...
+// that's what it's for" -- correcting two earlier missteps in this same pass: first
+// probing the calculator by trial and error to *find* weight breaks instead of
+// researching the real carrier weight-break structure first, then separately trying to
+// prioritize which tiers to re-test by real-inventory weight distribution instead of by
+// correctness). Research first established the real structural breakpoints (USPS
+// Ground Advantage: distinct real rate at each of the 4/8/12/15.999oz ounce tiers,
+// confirmed DIRECTLY on eBay's calculator -- not assumed from USPS's public July-12
+// commercial-file consolidation, which eBay's own negotiated rate does NOT appear to
+// follow, since a fresh 4oz vs 15.999oz test at z1 returned different prices, $5.24 vs
+// $6.52; UPS Ground and FedEx Ground/Home Delivery: FLAT price for the entire 0-1lb
+// range -- confirmed identical across 4oz/8oz/12oz/15.999oz/1lb at z1, cross-verified 3
+// separate ways (fast JS-driven form fill, slow native-click form fill, and two
+// different box shapes including one sized specifically to disqualify from USPS Cubic
+// eligibility) -- all returned the exact same $7.22 UPS / $14.07 FedEx. This means every
+// pre-existing sub-1lb UPS/FedEx cell in this table was FABRICATED interpolation between
+// a single 1lb anchor and nothing -- there is no real sub-1lb variation to interpolate.
+//
+// z1 (origin 49079 -> Grand Rapids 49503) is now live-quoted at every existing maxLb row
+// through 30lb for all 3 carriers -- see PENDING_LIVE_VERIFICATION_CELLS below for
+// exactly which (carrier, maxLb, zone) cells this closes. Box dims for each weight tier
+// were sized so length*width*height/139 (the dimensional-weight formula this file uses)
+// stays below the tier's actual weight -- verified by cross-checking that changing box
+// shape at a fixed weight (2lb/3lb, two very different box shapes) produced IDENTICAL
+// prices, confirming billable weight was actual weight, not dimensional weight, in
+// every quote used here.
+//
+// IMPORTANT, non-obvious finding: eBay's real negotiated z1 rate curve is NOT smooth or
+// monotonically increasing with weight -- USPS Ground Advantage at z1 actually DIPS from
+// 2lb ($6.68) to 3lb ($5.80), then stays FLAT 3lb-5lb ($5.80 both), and FedEx
+// Ground/Home Delivery is flat at $14.07 from 4oz all the way through 10lb before finally
+// increasing at 14lb ($14.63). This was cross-verified enough times (different box
+// shapes, different form-fill methods) to trust it as genuine eBay pricing rather than a
+// testing artifact -- it likely reflects real irregularities in eBay's own tiered
+// negotiated-discount schedule, not a smooth carrier rate card. This is exactly why this
+// file's prior "single real anchor + assumed curve-shape scaling" methodology could not
+// have produced a correct table even in principle -- the real curve has genuine
+// plateaus and dips that no smooth interpolation would reproduce. Every remaining
+// zone/tier this file scales rather than live-quotes should be read with that caveat.
+//
+// The pre-existing FedEx z1 1lb anchor ($17.59, sourced 2026-07-05) was WRONG -- this
+// pass's real quote at the identical origin/destination/service is $14.07, a ~25%
+// difference. Superseded; the old figure was either stale (rate changed since
+// 2026-07-05) or was never actually tested at this origin (the RATE_TABLE_UPS header
+// comment two sections up notes its own 1lb anchors used origin 49503, not 49079 --
+// raising the possibility the original FedEx anchor did too, despite this file's
+// canonical origin being 49079 everywhere else). Not resolved which; the new number is
+// real-quoted at the canonical origin and supersedes the old one regardless of cause.
+//
+// 50lb and 70lb z1 were deliberately left untouched this pass -- see
+// verifiedThisSession's comment above for why (suspected oversize/AHS surcharge
+// contamination in the larger test box needed to keep dim-weight below actual weight at
+// those tiers).
 const RATE_TABLE_FEDEX: RateRow[] = [
-  { maxLb: 0.25   , z1: 16.36 , z2: 16.36 , z3: 16.76 , z4: 16.76 , z5: 17.75 , z6: 17.39 , z7: 17.97 , z8: 17.85    },
-  { maxLb: 0.5    , z1: 16.59 , z2: 16.59 , z3: 16.99 , z4: 16.99 , z5: 18.07 , z6: 17.77 , z7: 18.42 , z8: 18.36    },
-  { maxLb: 0.75   , z1: 16.82 , z2: 16.82 , z3: 17.3  , z4: 17.3  , z5: 18.46 , z6: 18.22 , z7: 18.95 , z8: 18.95    },
-  { maxLb: 0.9999 , z1: 17.13 , z2: 17.13 , z3: 17.68 , z4: 17.68 , z5: 18.94 , z6: 18.75 , z7: 19.56 , z8: 19.53    },
-  { maxLb: 1      , z1: 17.59 , z2: 17.59 , z3: 18.3  , z4: 18.3  , z5: 19.81 , z6: 19.81 , z7: 20.85 , z8: 21.07    },
-  { maxLb: 2      , z1: 18.52 , z2: 18.52 , z3: 19.61 , z4: 19.61 , z5: 21.55 , z6: 21.85 , z7: 23.43 , z8: 24.14    },
-  { maxLb: 3      , z1: 19.52 , z2: 19.52 , z3: 20.84 , z4: 20.84 , z5: 23.38 , z6: 24.12 , z7: 26.08 , z8: 27.07   },
-  { maxLb: 5      , z1: 21.06 , z2: 21.06 , z3: 22.84 , z4: 22.84 , z5: 26.23 , z6: 27.6  , z7: 30.25 , z8: 31.75   },
-  { maxLb: 7      , z1: 22.45 , z2: 22.45 , z3: 24.61 , z4: 24.61 , z5: 28.76 , z6: 30.7  , z7: 34.04 , z8: 35.99   },
+  { maxLb: 0.25   , z1: 14.07 , z2: 16.36 , z3: 16.76 , z4: 16.76 , z5: 17.75 , z6: 17.39 , z7: 17.97 , z8: 17.85    },
+  { maxLb: 0.5    , z1: 14.07 , z2: 16.59 , z3: 16.99 , z4: 16.99 , z5: 18.07 , z6: 17.77 , z7: 18.42 , z8: 18.36    },
+  { maxLb: 0.75   , z1: 14.07 , z2: 16.82 , z3: 17.3  , z4: 17.3  , z5: 18.46 , z6: 18.22 , z7: 18.95 , z8: 18.95    },
+  { maxLb: 0.9999 , z1: 14.07 , z2: 17.13 , z3: 17.68 , z4: 17.68 , z5: 18.94 , z6: 18.75 , z7: 19.56 , z8: 19.53    },
+  { maxLb: 1      , z1: 14.07 , z2: 17.59 , z3: 18.3  , z4: 18.3  , z5: 19.81 , z6: 19.81 , z7: 20.85 , z8: 21.07    },
+  { maxLb: 2      , z1: 14.07 , z2: 18.52 , z3: 19.61 , z4: 19.61 , z5: 21.55 , z6: 21.85 , z7: 23.43 , z8: 24.14    },
+  { maxLb: 3      , z1: 14.07 , z2: 19.52 , z3: 20.84 , z4: 20.84 , z5: 23.38 , z6: 24.12 , z7: 26.08 , z8: 27.07   },
+  { maxLb: 5      , z1: 14.07 , z2: 21.06 , z3: 22.84 , z4: 22.84 , z5: 26.23 , z6: 27.6  , z7: 30.25 , z8: 31.75   },
+  { maxLb: 7      , z1: 14.07 , z2: 22.45 , z3: 24.61 , z4: 24.61 , z5: 28.76 , z6: 30.7  , z7: 34.04 , z8: 35.99   },
   { maxLb: 10     , z1: 14.07 , z2: 14.07 , z3: 14.21 , z4: 14.21 , z5: 15.83 , z6: 15.83 , z7: 17.42 , z8: 17.42   },
-  { maxLb: 14     , z1: 27.0  , z2: 27.0  , z3: 29.91 , z4: 29.91 , z5: 35.18 , z6: 37.43 , z7: 41.25 , z8: 43.31   },
-  { maxLb: 20     , z1: 30.55 , z2: 30.55 , z3: 34.29 , z4: 34.29 , z5: 40.89 , z6: 44.31 , z7: 49.74 , z8: 53.11   },
+  { maxLb: 14     , z1: 14.63  , z2: 27.0  , z3: 29.91 , z4: 29.91 , z5: 35.18 , z6: 37.43 , z7: 41.25 , z8: 43.31   },
+  { maxLb: 20     , z1: 15.31 , z2: 30.55 , z3: 34.29 , z4: 34.29 , z5: 40.89 , z6: 44.31 , z7: 49.74 , z8: 53.11   },
   { maxLb: 30     , z1: 17.01 , z2: 17.01 , z3: 19.00 , z4: 19.00 , z5: 23.09 , z6: 23.09 , z7: 31.00 , z8: 31.00   },
   { maxLb: 50     , z1: 54.0  , z2: 54.0  , z3: 64.28 , z4: 64.28 , z5: 81.62 , z6: 92.55 , z7: 107.51, z8: 46.55   },
   { maxLb: 70     , z1: 70.36 , z2: 70.36 , z3: 85.04 , z4: 85.04 , z5: 107.77, z6: 122.04, z7: 141.63, z8: 155.1   },
@@ -290,6 +449,24 @@ export const PENDING_LIVE_VERIFICATION_CELLS: Array<{ carrier: 'USPS' | 'UPS' | 
   const verifiedThisSession = new Set<string>([
     ...(['z1', 'z2', 'z3', 'z4', 'z5', 'z7'] as ZoneKey[]).flatMap((zone) => [`UPS|10|${zone}`, `UPS|30|${zone}`]),
     ...(['z1', 'z2', 'z3', 'z4', 'z5', 'z6', 'z7'] as ZoneKey[]).flatMap((zone) => [`FEDEX|10|${zone}`, `FEDEX|30|${zone}`]),
+    // 2026-08-10, later same session (Patrick: "use the ebay shipping calculator ... that's
+    // what it's for" -- after first mis-trying to guess/probe-test cutoffs and separately
+    // to prioritize by inventory weight distribution, both corrected by Patrick). z1 (origin
+    // 49079 -> Grand Rapids 49503) is now closed end-to-end for every existing maxLb row at
+    // every weight tier below 30lb, all 3 carriers -- see the header comments on RATE_TABLE /
+    // RATE_TABLE_UPS / RATE_TABLE_FEDEX above for the real quotes and the box-dimension
+    // methodology (billable weight forced to equal actual weight by keeping L*W*H/139 below
+    // the target weight at each tier, so results reflect standard non-cubic, non-dimensional
+    // pricing). 50lb and 70lb z1 were deliberately NOT touched this pass -- large test-box
+    // dims (needed so dim-weight didn't dominate) produced implausible jumps at 70lb (FedEx
+    // $77.51, USPS $78.63) consistent with an oversize/AHS surcharge contaminating the base
+    // rate; re-testing those two cells needs a box sized to avoid any surcharge trigger, left
+    // pending rather than risk shipping a surcharge-inflated "base" rate.
+    ...(['z1'] as ZoneKey[]).flatMap((zone) => (
+      [0.25, 0.5, 0.75, 0.9999, 2, 3, 5, 7, 10, 14, 20, 30].flatMap((maxLb) => [
+        `USPS|${maxLb}|${zone}`, `UPS|${maxLb}|${zone}`, `FEDEX|${maxLb}|${zone}`,
+      ])
+    )),
   ]);
   for (const { carrier, table } of carrierTables) {
     for (const row of table) {
