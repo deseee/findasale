@@ -176,11 +176,11 @@ export const DIM_DIVISOR_USPS = 139; // USPS switched from 166 to 139 for packag
 const DIM_DIVISOR_UPS = 139;
 const DIM_DIVISOR_FEDEX = 139;
 
-export const USPS_RATE_EFFECTIVE_DATE = '2026-08-10';
+export const USPS_RATE_EFFECTIVE_DATE = '2026-08-11';
 export const USPS_RATE_SOURCE = "eBay's own live shipping calculator API (POST /shp/calc/api/shipping/services), Patrick's real seller account, USPS Ground Advantage service, origin ZIP 49079, every maxLb tier x every real zone (z1-z8) individually live-quoted, 2026-08-10";
-export const UPS_RATE_EFFECTIVE_DATE = '2026-08-10';
+export const UPS_RATE_EFFECTIVE_DATE = '2026-08-11';
 export const UPS_RATE_SOURCE = "eBay's own live shipping calculator API (POST /shp/calc/api/shipping/services), Patrick's real seller account, UPS Ground service, every maxLb tier x every real zone (z1-z8) individually live-quoted, 2026-08-10";
-export const FEDEX_RATE_EFFECTIVE_DATE = '2026-08-10';
+export const FEDEX_RATE_EFFECTIVE_DATE = '2026-08-11';
 export const FEDEX_RATE_SOURCE = "eBay's own live shipping calculator API (POST /shp/calc/api/shipping/services), Patrick's real seller account, FedEx Ground/Home Delivery service specifically (NOT the cheaper FedEx Ground Economy tier), every maxLb tier x every real zone (z1-z8) individually live-quoted, 2026-08-10";
 
 // UPS: real-anchored 2026-07-05, z8 CORRECTED 2026-08-10 (ADR-103 Phase 1) — pulled
