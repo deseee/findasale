@@ -34,6 +34,7 @@ import * as Sentry from '@sentry/nextjs';
 import axios from 'axios';
 import api, { postWithRetry } from '../../../lib/api';
 import { getItemImageUrl } from '../../../lib/imageUtils';
+import { computeCropRect } from '../../../lib/cropGeometry';
 import CSVImportModal from '../../../components/CSVImportModal';
 import SmartInventoryUpload from '../../../components/SmartInventoryUpload';
 import { useAuth } from '../../../components/AuthContext';
@@ -184,20 +185,11 @@ async function cropTo4x3(blob: Blob): Promise<Blob> {
         // orientation -- 4:3 for landscape/square sources, 3:4 for portrait sources -- so
         // the crop still trims a photo to a consistent-ish ratio for card/grid display,
         // but never flips the subject's actual shape to force it into the wrong box.
-        const isPortraitSource = img.height > img.width;
-        const targetRatio = isPortraitSource ? 3 / 4 : 4 / 3;
-        const srcRatio = img.width / img.height;
-        let sx = 0,
-          sy = 0,
-          sw = img.width,
-          sh = img.height;
-        if (srcRatio > targetRatio) {
-          sw = Math.floor(img.height * targetRatio);
-          sx = Math.floor((img.width - sw) / 2);
-        } else {
-          sh = Math.floor(img.width / targetRatio);
-          sy = Math.floor((img.height - sh) / 2);
-        }
+        // Bug fix (2026-08-11, round 3): crop-rect math moved to the shared
+        // computeCropRect() in lib/cropGeometry.ts so the RapidCapture live guide
+        // overlay and this real crop can never drift apart again -- same formula,
+        // single source of truth. Behavior here is unchanged.
+        const { sx, sy, sw, sh } = computeCropRect(img.width, img.height);
         const canvas = document.createElement('canvas');
         canvas.width = sw;
         canvas.height = sh;

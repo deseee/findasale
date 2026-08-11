@@ -2,6 +2,7 @@ import React, { useState, useRef, useCallback, useEffect } from 'react';
 import BrightnessIndicator from './camera/BrightnessIndicator';
 import { useVoiceInput } from '../hooks/useVoiceInput';
 import api from '../lib/api';
+import { computeCropRect } from '../lib/cropGeometry';
 import { useToast } from './ToastContext';
 
 /**
@@ -217,6 +218,12 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
   // crop-preview guide overlay -- see the ResizeObserver effect and computeContainBox above.
   const viewfinderRef = useRef<HTMLDivElement>(null);
   const [viewfinderSize, setViewfinderSize] = useState({ width: 0, height: 0 });
+  // Native camera-frame resolution (2026-08-11, round 3) -- this is the coordinate
+  // space cropTo4x3()/computeCropRect() actually operate on (capturePhoto() draws
+  // the full video.videoWidth x video.videoHeight frame to canvas, unrelated to the
+  // on-screen viewfinder container's CSS pixel size above). Populated once the
+  // camera stream is playing -- see the startCamera effect.
+  const [videoNativeSize, setVideoNativeSize] = useState({ width: 0, height: 0 });
 
   const [photos, setPhotos] = useState<CapturedPhoto[]>([]);
   const [cameraReady, setCameraReady] = useState(false);
@@ -441,6 +448,16 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
           videoRef.current.srcObject = stream;
           await videoRef.current.play();
           setCameraReady(true);
+          // Round 3 crop-guide fix (2026-08-11): capture the REAL native frame size
+          // now that the stream is actually playing (videoWidth/videoHeight are 0
+          // until metadata has loaded, which play() waiting on is a reliable proxy
+          // for here -- this effect already gates camera-ready on the same await).
+          if (videoRef.current.videoWidth > 0 && videoRef.current.videoHeight > 0) {
+            setVideoNativeSize({
+              width: videoRef.current.videoWidth,
+              height: videoRef.current.videoHeight,
+            });
+          }
         }
       } catch (err: any) {
         if (!mounted) return;
@@ -1136,6 +1153,15 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
                 autoPlay
                 playsInline
                 muted
+                onLoadedMetadata={() => {
+                  // Belt-and-suspenders re-measure (round 3, 2026-08-11) -- covers
+                  // facingMode/track swaps that fire loadedmetadata again without
+                  // going through the startCamera effect's own play()+measure path.
+                  const v = videoRef.current;
+                  if (v && v.videoWidth > 0 && v.videoHeight > 0) {
+                    setVideoNativeSize({ width: v.videoWidth, height: v.videoHeight });
+                  }
+                }}
                 className="absolute inset-0 w-full h-full object-cover"
               />
 
@@ -1151,24 +1177,40 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
                   ratios (socialPostController.ts) are intentionally not shown here -- those
                   only apply when explicitly cross-posting, not to default listing photography. */}
               {showCornerGuides && (() => {
-                // Bug fix (2026-08-11, round 2): CSS aspect-ratio sizing produced a box that
-                // was correctly centered (after the earlier double-inset fix) but still too
-                // narrow in landscape -- confirmed on a real device. Now computed with plain
-                // arithmetic against the REAL measured viewfinder size (viewfinderSize, via
-                // the ResizeObserver effect above) instead of trusting CSS to resolve
-                // aspect-ratio + percentage-height + max-width together. See
-                // computeContainBox for the full explanation.
-                const layer1 = computeContainBox(
-                  viewfinderSize.width,
-                  viewfinderSize.height,
-                  isLandscape ? 4 / 3 : 3 / 4,
-                  24 // breathing room from the screen edges, was p-6 (24px) before
+                // Bug fix (2026-08-11, round 3): rounds 1 and 2 both sized this box
+                // against viewfinderSize -- the on-screen CSS pixel size of the DISPLAY
+                // container -- which has no fixed relationship to the coordinate space
+                // cropTo4x3() actually crops (the native camera frame, video.videoWidth x
+                // video.videoHeight, captured whole by capturePhoto() and independently
+                // cropped by object-cover for on-screen display only). Confirmed wrong via
+                // a real capture: a shot composed tight to the round-2 guide came back "way
+                // too zoomed out" -- the real crop kept more than the guide showed. Fixed by
+                // mapping the REAL crop rectangle (computeCropRect, shared with cropTo4x3 via
+                // lib/cropGeometry.ts) from native pixel space into on-screen pixel space
+                // using the same centered-cover scale object-cover itself uses, instead of
+                // computing an independent box against the container.
+                const nativeReady = videoNativeSize.width > 0 && videoNativeSize.height > 0;
+                const containerReady = viewfinderSize.width > 0 && viewfinderSize.height > 0;
+                if (!nativeReady || !containerReady) return null; // not measured yet
+
+                const displayScale = Math.max(
+                  viewfinderSize.width / videoNativeSize.width,
+                  viewfinderSize.height / videoNativeSize.height
                 );
+                const displayOffsetX = (viewfinderSize.width - videoNativeSize.width * displayScale) / 2;
+                const displayOffsetY = (viewfinderSize.height - videoNativeSize.height * displayScale) / 2;
+                const cropRect = computeCropRect(videoNativeSize.width, videoNativeSize.height);
+                const layer1 = {
+                  left: displayOffsetX + cropRect.sx * displayScale,
+                  top: displayOffsetY + cropRect.sy * displayScale,
+                  width: cropRect.sw * displayScale,
+                  height: cropRect.sh * displayScale,
+                };
+                const isPortraitFrame = videoNativeSize.height > videoNativeSize.width;
                 const layer2 =
                   cropGuideOverlay !== 'none' && layer1.width > 0 && layer1.height > 0
                     ? computeContainBox(layer1.width, layer1.height, CROP_GUIDE_RATIOS[cropGuideOverlay].ratio, 0)
                     : null;
-                if (layer1.width <= 0 || layer1.height <= 0) return null; // not measured yet
 
                 return (
                   <div className="absolute inset-0 pointer-events-none">
@@ -1185,7 +1227,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
                       <div className="absolute bottom-0 left-0 w-10 h-10 border-b-2 border-l-2 border-white/60" />
                       <div className="absolute bottom-0 right-0 w-10 h-10 border-b-2 border-r-2 border-white/60" />
                       <div className="absolute -top-5 left-1/2 -translate-x-1/2 text-white/60 text-xs font-medium whitespace-nowrap">
-                        {isLandscape ? '4:3' : '3:4'}
+                        {isPortraitFrame ? '3:4' : '4:3'}
                       </div>
 
                       {/* Layer 2 — nested crop-guide reference, positioned via the same
