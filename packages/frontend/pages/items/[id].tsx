@@ -19,7 +19,7 @@ import { useToast } from '../../components/ToastContext';
 import ItemShareButton from '../../components/ItemShareButton';
 import SocialProofMessage from '../../components/SocialProofMessage'; // Feature #54
 import RarityBadge from '../../components/RarityBadge'; // Feature #57
-import { getThumbnailUrl, getOptimizedUrl, getPortrait3x4Url } from '../../lib/imageUtils';
+import { getThumbnailUrl, getOptimizedUrl } from '../../lib/imageUtils';
 import { formatDistanceToNow, parseISO } from 'date-fns';
 import { useHeartAnimation } from '../../hooks/useHeartAnimation';
 import Skeleton from '../../components/Skeleton';
@@ -687,10 +687,10 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
                 className={`relative w-full bg-gray-200 dark:bg-gray-700 rounded-lg overflow-hidden transition ${isSold ? 'cursor-default' : 'cursor-pointer group'}`}
               >
                 <img
-                  key={getPortrait3x4Url(item.photoUrls[selectedPhotoIndex])}
-                  src={getPortrait3x4Url(item.photoUrls[selectedPhotoIndex])}
+                  key={getOptimizedUrl(item.photoUrls[selectedPhotoIndex])}
+                  src={getOptimizedUrl(item.photoUrls[selectedPhotoIndex])}
                   alt={item.title}
-                  className="w-full h-96 object-cover group-hover:opacity-90 transition"
+                  className="w-full h-96 object-contain group-hover:opacity-90 transition"
                 />
                 {isSold && (
                   <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center">
