@@ -89,6 +89,9 @@ export async function suggestNativeShippingPrice(input: {
   origin: { zip?: string | null; lat?: number | null; lng?: number | null };
   subscriptionTier?: SubscriptionTier;
   categoryId?: string | null;
+  /** Item's current listing price -- gates eBay Standard Envelope flat-rate eligibility.
+   *  This is the item's SALE price, not the shipping price being suggested here. */
+  priceUsd?: number | null;
 }): Promise<NativeShippingSuggestion> {
   const [cheapest, feeRate] = await Promise.all([
     computeCheapestForOrigin({
@@ -97,6 +100,7 @@ export async function suggestNativeShippingPrice(input: {
       origin: input.origin,
       packageType: input.packageType ?? null,
       categoryId: input.categoryId ?? null,
+      priceUsd: input.priceUsd ?? null,
     }),
     resolveEffectivePlatformFeeRate(input.subscriptionTier ?? null),
   ]);

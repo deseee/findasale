@@ -114,6 +114,9 @@ export async function resyncShippingDriftSweep(opts?: {
       // ADR-103 Phase 4: needed so the local recompute applies the same AHS/oversize
       // packaging trigger the live listing-push path uses (resolvePoliciesForItem).
       packageType: true,
+      // Needed so the local recompute can evaluate eBay Standard Envelope eligibility
+      // (requires the item's price), same as the live listing-push path.
+      price: true,
       sale: {
         select: {
           zip: true,
@@ -193,6 +196,7 @@ export async function resyncShippingDriftSweep(opts?: {
           ebayShippingClassification: item.ebayShippingClassification,
           ebayCategoryId: item.ebayCategoryId,
           packageType: item.packageType,
+          price: item.price ?? null,
         },
         fromZip: item.sale?.zip ?? null,
       });

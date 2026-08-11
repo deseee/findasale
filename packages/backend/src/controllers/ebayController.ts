@@ -2547,6 +2547,7 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
             category: item.category,
             ebayShippingOverride: item.ebayShippingOverride,
             ebayFulfillmentPolicyOverrideId: item.ebayFulfillmentPolicyOverrideId,
+            price: item.price ?? null,
           },
           { fetchFulfillmentPolicies: getFulfillmentPoliciesOnce, fromZip: sale.zip || null }
         );
@@ -4066,6 +4067,8 @@ async function resolvePoliciesForItem(
     category?: string | null;
     ebayShippingOverride?: string | null;
     ebayFulfillmentPolicyOverrideId?: string | null;
+    /** Item's current listing price -- gates eBay Standard Envelope flat-rate eligibility. */
+    price?: number | null;
   },
   smartPickContext?: {
     fetchFulfillmentPolicies?: () => Promise<any[]>;
@@ -4207,7 +4210,8 @@ async function resolvePoliciesForItem(
         dims,
         fromZip,
         item.packageType, // ADR-103 Phase 4: AHS packaging-attribute trigger input
-        item.ebayCategoryId ?? null
+        item.ebayCategoryId ?? null,
+        item.price ?? null
       );
       if (calcHandlingResult) {
         console.log(
@@ -4234,7 +4238,8 @@ async function resolvePoliciesForItem(
         dims,
         fromZip,
         item.packageType, // ADR-103 Phase 4: AHS packaging-attribute trigger input
-        item.ebayCategoryId ?? null
+        item.ebayCategoryId ?? null,
+        item.price ?? null
       );
       if (fvfResult) {
         console.log(
@@ -4397,7 +4402,7 @@ async function resolvePoliciesForItem(
         : null
     );
     const computedFromZip = smartPickContext?.fromZip ?? null;
-    const computedFvf = await ensureFvfFlatRatePolicy(organizerId, item.packageWeightOz, computedDims, computedFromZip, item.packageType, item.ebayCategoryId ?? null); // ADR-103 Phase 4
+    const computedFvf = await ensureFvfFlatRatePolicy(organizerId, item.packageWeightOz, computedDims, computedFromZip, item.packageType, item.ebayCategoryId ?? null, item.price ?? null); // ADR-103 Phase 4
     if (computedFvf) {
       fulfillmentPolicyId = computedFvf.policyId;
       routingReason = `flat-tiers-computed:${computedFvf.flatRate}`;
@@ -4585,6 +4590,7 @@ export async function resyncItemShippingPolicy(
         category: true,
         ebayShippingOverride: true,
         ebayFulfillmentPolicyOverrideId: true,
+        price: true,
         sale: {
           select: {
             zip: true,
@@ -4670,6 +4676,7 @@ export async function resyncItemShippingPolicy(
         category: item.category,
         ebayShippingOverride: item.ebayShippingOverride,
         ebayFulfillmentPolicyOverrideId: item.ebayFulfillmentPolicyOverrideId,
+        price: item.price ?? null,
       },
       { fetchFulfillmentPolicies, fromZip }
     );
@@ -4692,6 +4699,7 @@ export async function resyncItemShippingPolicy(
         ebayShippingClassification: item.ebayShippingClassification,
         ebayCategoryId: item.ebayCategoryId,
         packageType: item.packageType, // ADR-103 Phase 4
+        price: item.price ?? null,
       },
       fromZip,
     });
@@ -6728,6 +6736,7 @@ async function resolvePreviewShipping(opts: {
   labelCostOverride?: number;
   packageType?: string | null;
   categoryId?: string | null;
+  priceUsd?: number | null;
 }): Promise<PreviewShippingResult> {
   const mode: 'FLAT_TIERS' | 'CALCULATED' =
     opts.shippingMode === 'FLAT_TIERS' ? 'FLAT_TIERS' : 'CALCULATED';
@@ -6742,6 +6751,7 @@ async function resolvePreviewShipping(opts: {
       origin: opts.origin,
       packageType: opts.packageType ?? null,
       categoryId: opts.categoryId ?? null,
+      priceUsd: opts.priceUsd ?? null,
     });
   } catch (err) {
     if (err instanceof ShippingHardBlockError) {
@@ -6883,6 +6893,7 @@ export const getShippingNetPreview = async (req: AuthRequest, res: Response): Pr
       labelCostOverride: body.labelCost,
       packageType,
       categoryId: ebayCategoryId,
+      priceUsd: itemPrice ?? null,
     });
     // Single source of truth for what the buyer is charged (matches the live listing).
     const resolved = await resolveItemShipping({
@@ -6897,6 +6908,7 @@ export const getShippingNetPreview = async (req: AuthRequest, res: Response): Pr
         ebayCategoryId: ebayCategoryId,
         ebayShippingClassification: ebayShippingClassification,
         packageType,
+        price: itemPrice ?? null,
       },
       fromZip: body.fromZip ?? saleZip,
     });
@@ -7077,6 +7089,9 @@ export const getSuggestedPriceForMargin = async (req: AuthRequest, res: Response
       labelCostOverride: body.labelCost,
       packageType,
       categoryId: ebayCategoryId,
+      // getSuggestedPriceForMargin back-solves the item's price from a target margin --
+      // there is no current price to pass here (see matching note on the item literal below).
+      priceUsd: null,
     });
     // Single source of truth for what the buyer is charged (matches the live listing).
     const resolved = await resolveItemShipping({
@@ -7091,6 +7106,8 @@ export const getSuggestedPriceForMargin = async (req: AuthRequest, res: Response
         ebayCategoryId: ebayCategoryId,
         ebayShippingClassification: ebayShippingClassification,
         packageType,
+        // No item price in scope -- this endpoint solves FOR price, it isn't given one.
+        price: null,
       },
       fromZip: body.fromZip ?? saleZip,
     });
