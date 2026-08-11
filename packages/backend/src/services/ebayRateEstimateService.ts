@@ -890,6 +890,72 @@ function isStandardEnvelopeEligibleCategory(category: string | null | undefined)
 }
 
 /**
+ * Real eBay numeric category IDs for the same 8 Standard-Envelope-eligible categories above,
+ * resolved via LIVE calls to eBay's own Taxonomy API (commerce/taxonomy/v1/category_tree/0/
+ * get_category_suggestions) run directly from this session on 2026-08-10, using a
+ * client_credentials app token obtained from EBAY_CLIENT_ID/EBAY_CLIENT_SECRET (pulled via
+ * `railway variables --service backend --kv`, same credentials backend/ebayHttp.ts uses) --
+ * NOT the fabricated static files (ebayCategories.ts / ebay-categories.json, see the comment
+ * above -- still correctly avoided, left untouched).
+ *
+ * IMPORTANT CAVEATS (read before assuming this list is exhaustive or 1:1 with the 8 names):
+ * - get_category_suggestions is a keyword search over LEAF categories, not a "the one true
+ *   ID for this name" lookup. Several of the 8 names are genuinely ambiguous or don't exist
+ *   as their own node in eBay's real taxonomy:
+ *   - "Patches": 7 distinct real leaf categories are literally named "Patches" across
+ *     unrelated trees (Crafts/Sewing id=113337, Militaria id=4725/36078/165782/104015,
+ *     Current Militaria id=48822, Firefighting & Rescue id=39638) -- all 7 included; this is
+ *     every "Patches" node that surfaced in this session's queries, not a guaranteed-complete
+ *     enumeration of every "Patches" node in eBay's full tree.
+ *   - "Trading Cards" has no single node of that exact name -- eBay splits it into "Sports
+ *     Trading Cards" (id=212, under Sports Mem, Cards & Fan Shop) and "Non-Sport Trading
+ *     Cards" (id=182982, under Collectibles); both included.
+ *   - "Greeting Cards" has no single node of that exact name either -- closest real matches
+ *     are "Greeting Cards & Invitations" (id=170098, under Home & Garden) and "Greeting
+ *     Cards & Gift Tags" (id=146324, under Crafts); both included.
+ *   - "Coins & Currency" (this list's/eBay's older name) resolves to eBay's current real L1
+ *     category "Coins & Paper Money" (id=11116).
+ *   - "Seeds" resolves to eBay's real category "Seeds & Bulbs" (id=40605).
+ *   - "Postcards" resolves to two real IDs: L1 "Postcards & Supplies" (id=914) and its child
+ *     node "Postcards" (id=262041).
+ *   - "Stickers & Decals" (id=47357) and "Stamps" (id=260) each matched cleanly, one real ID.
+ * - This is a FAST-PATH, not a replacement for the name-substring fallback: evaluateStandardEnvelope
+ *   checks this ID list FIRST when a categoryId is available, then falls back to
+ *   isStandardEnvelopeEligibleCategory's substring match on the name/path text. Any real item
+ *   filed under a category-ID variant not captured here (every query above returned a
+ *   relevance-ranked slice, not the full subtree) still gets caught by the fallback as long as
+ *   its category name/path text contains one of the 8 strings -- this list only makes matching
+ *   MORE precise for the common cases; it never makes eligibility narrower than the pre-existing
+ *   name-only gate.
+ */
+export const EBAY_STANDARD_ENVELOPE_ELIGIBLE_CATEGORY_IDS: readonly string[] = [
+  // Patches -- 7 distinct real "Patches" leaf categories (Crafts/Sewing, Militaria x4, Current Militaria, Firefighting)
+  '113337', '4725', '36078', '165782', '104015', '48822', '39638',
+  // Stickers & Decals
+  '47357',
+  // Greeting Cards -- 2 real near-matches (Home & Garden tree + Crafts tree)
+  '170098', '146324',
+  // Seeds -- real eBay category name is "Seeds & Bulbs"
+  '40605',
+  // Trading Cards -- eBay splits into Sports Trading Cards (212) and Non-Sport Trading Cards (182982)
+  '212', '182982',
+  // Coins & Currency -- real eBay L1 name is "Coins & Paper Money"
+  '11116',
+  // Postcards -- L1 "Postcards & Supplies" (914) + its "Postcards" child node (262041)
+  '914', '262041',
+  // Stamps
+  '260',
+];
+
+/** Exact membership check against EBAY_STANDARD_ENVELOPE_ELIGIBLE_CATEGORY_IDS -- see that
+ *  constant's comment for sourcing/caveats. Unlike the name-based check, this is an exact
+ *  match, not a substring match (categoryId is a precise numeric ID, no ambiguity to collapse). */
+function isStandardEnvelopeEligibleCategoryId(categoryId: string | null | undefined): boolean {
+  if (!categoryId) return false;
+  return EBAY_STANDARD_ENVELOPE_ELIGIBLE_CATEGORY_IDS.includes(categoryId);
+}
+
+/**
  * eBay Standard Envelope flat rate, if ALL of eBay's published eligibility gates pass:
  * weight <=3oz, envelope outer dims within eBay's published range, thickness (smallest real
  * dim -- see EBAY_STANDARD_ENVELOPE_MAX_THICKNESS_IN's comment) <=0.25in, category is one of
@@ -897,16 +963,26 @@ function isStandardEnvelopeEligibleCategory(category: string | null | undefined)
  * null if ANY gate fails or is unverifiable (dims === null fails closed -- see that same
  * comment). Same shape/pattern as evaluateCubicTier() above: takes the raw inputs, returns
  * either a matched rate or null, no side effects.
+ *
+ * Category check order: categoryId (EBAY_STANDARD_ENVELOPE_ELIGIBLE_CATEGORY_IDS, exact
+ * match against Item.ebayCategoryId, real numeric IDs populated by processRapidDraft.ts /
+ * ebayTaxonomyService.ts's live suggestCategories()) is checked FIRST when provided --
+ * falling back to the category NAME substring match only when no categoryId was passed in,
+ * covering items that predate AI/manual categorization and never got a real ebayCategoryId.
  */
 function evaluateStandardEnvelope(
   dims: PackageDims,
   weightOz: number,
   category: string | null | undefined,
-  priceUsd: number | null | undefined
+  priceUsd: number | null | undefined,
+  categoryId?: string | null
 ): { rate: number } | null {
   if (weightOz <= 0 || weightOz > EBAY_STANDARD_ENVELOPE_MAX_WEIGHT_OZ) return null;
   if (priceUsd == null || !(priceUsd < EBAY_STANDARD_ENVELOPE_MAX_PRICE_USD)) return null;
-  if (!isStandardEnvelopeEligibleCategory(category)) return null;
+  const categoryEligible = categoryId
+    ? isStandardEnvelopeEligibleCategoryId(categoryId)
+    : isStandardEnvelopeEligibleCategory(category);
+  if (!categoryEligible) return null;
 
   const sorted = sortedRealDims(dims);
   if (!sorted) return null; // no dims = thickness/size unverifiable -- fail closed, see comment above
@@ -1399,6 +1475,11 @@ export function estimateCheapestRate(input: {
    *  Standard Envelope eligibility (EBAY_STANDARD_ENVELOPE_ELIGIBLE_CATEGORIES). Omitting
    *  it simply means Standard Envelope is never selected -- no other behavior changes. */
   category?: string | null;
+  /** Real eBay numeric category ID (e.g. item.ebayCategoryId) -- optional, checked FIRST
+   *  against EBAY_STANDARD_ENVELOPE_ELIGIBLE_CATEGORY_IDS when present; falls back to the
+   *  `category` name substring match when omitted. Omitting both simply means Standard
+   *  Envelope is never selected -- no other behavior changes. */
+  categoryId?: string | null;
   /** Item listing price in USD, shipping/handling/tax excluded -- optional, used ONLY for
    *  the Standard Envelope <$20 gate. Omitting it simply means Standard Envelope is never
    *  selected -- no other behavior changes. */
@@ -1515,7 +1596,7 @@ export function estimateCheapestRate(input: {
   // compared directly against whatever `best` already holds. input.category/input.priceUsd
   // are optional -- when omitted, evaluateStandardEnvelope always returns null and this is
   // a no-op, so every existing caller that doesn't pass them is unaffected.
-  const envelope = evaluateStandardEnvelope(dims, input.weightOz, input.category, input.priceUsd);
+  const envelope = evaluateStandardEnvelope(dims, input.weightOz, input.category, input.priceUsd, input.categoryId);
   if (envelope && envelope.rate < best!.rate) {
     best = {
       carrier: 'USPS',
@@ -1548,6 +1629,8 @@ export async function computeCheapestForOrigin(input: {
   packageType?: string | null;
   /** See estimateCheapestRate's `category` -- passed through unchanged, optional. */
   category?: string | null;
+  /** See estimateCheapestRate's `categoryId` -- passed through unchanged, optional. */
+  categoryId?: string | null;
   /** See estimateCheapestRate's `priceUsd` -- passed through unchanged, optional. */
   priceUsd?: number | null;
 }): Promise<CheapestRate> {
@@ -1558,6 +1641,7 @@ export async function computeCheapestForOrigin(input: {
     zone,
     packageType: input.packageType ?? null,
     category: input.category ?? null,
+    categoryId: input.categoryId ?? null,
     priceUsd: input.priceUsd ?? null,
   });
 }
