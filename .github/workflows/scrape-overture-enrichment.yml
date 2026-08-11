@@ -8,7 +8,7 @@ name: Overture/BrightQuery Enrichment (#556)
 #   Community Data License Agreement – Permissive, Version 2.0 (CDLA-Permissive-2.0).
 #   Commercial use permitted; the license text ships in NOTICE-overture.md.
 #
-# Two stages in one job:
+# Two stages, run once per shard (see "Sharding" below):
 #   Stage A — Python + DuckDB queries the Overture Places parquet on AWS Open Data
 #             (anonymous us-west-2 S3, predicate pushdown) → candidates NDJSON.
 #             DuckDB lives ONLY here, never in the backend bundle.
@@ -16,7 +16,28 @@ name: Overture/BrightQuery Enrichment (#556)
 #             existing classifier/dedup/ingest chain (batchUpsertScrapedOrganizers).
 #
 # Pacing: batched DB writes + the existing OUTREACH_DAILY_CAP send gate only.
-# State chunking is for memory bounding, NOT ban-avoidance (open S3, no ban risk).
+# State chunking (via --states / --shard-index / --shard-count) is for memory
+# bounding AND wall-clock bounding, NOT ban-avoidance (open S3, no ban risk).
+#
+# Sharding (added after the fix below): a single unsharded job running all 51
+# states/DC in one go was killed by the GitHub Actions job timeout on every one
+# of the 4 runs since workflow creation (2026-07-06, 2026-07-07, 2026-07-21,
+# 2026-08-06) -- confirmed directly on the 2026-08-06 run (run_id 31086260328):
+# it ran the full timeout-minutes: 240 and was killed mid-Stage-B while still
+# actively creating Organizer records / scoring candidates, i.e. genuinely too
+# slow for the candidate volume in one job -- not a hang, not a concurrency
+# collision. Root cause: Stage B does per-candidate synchronous work with no
+# batching or checkpoint (up to 4 sequential Prisma dedup lookups + a live DNS
+# MX check + a suppression-list check per candidate, all awaited serially in a
+# single-threaded readline loop over the NDJSON file) -- raising the timeout
+# further (120 -> 240) only delayed the wall, it never fixed the throughput.
+# Fix: shard the run across a GitHub Actions `strategy.matrix`, exactly like
+# .github/workflows/scrape-osm.yml already does for its Overpass scrape --
+# extract_overture.py now accepts --shard-index/--shard-count and partitions
+# the state list round-robin (states[shard_index::shard_count]) so each shard
+# queries and ingests a disjoint ~1/6 slice of the US. Each shard is its own
+# Stage A + Stage B pair with its own NDJSON file, comfortably inside a much
+# smaller per-job timeout instead of one job racing the full 240/360 min cap.
 
 on:
   schedule:
@@ -43,16 +64,22 @@ jobs:
   enrich:
     name: Overture Enrichment
     runs-on: ubuntu-latest
-    # Was 120 (2h) -- run #556 hit the hard job-timeout every time since
-    # workflow creation (2026-06-30): confirmed via run-page annotations
-    # "The job has exceeded the maximum execution time of 2h0m0s" /
-    # "The operation was canceled." Not a concurrency collision, not a manual
-    # cancel. Raised to 240 (4h) for real margin -- Stage A (DuckDB predicate
-    # pushdown over the full US Overture Places S3 slice) + Stage B (batched
-    # Prisma classify/dedupe/upsert) is a monthly full-US run, not a quick job,
+    # Sharded 2026-08-11 -- see header comment above. 240 (raised from 120 on
+    # 2026-07-22) was confirmed insufficient by the 2026-08-06 run (run_id
+    # 31086260328: ran the full 240:00, killed mid-Stage-B, still processing).
+    # Rather than raise the single-job timeout again (it would just move the
+    # wall further out for the same per-candidate serial-I/O bottleneck), the
+    # full state list is now split across 6 parallel matrix shards -- same
+    # pattern as .github/workflows/scrape-osm.yml's batch_index. 90 min/shard
+    # is comfortably under GitHub Actions' hard 360 min (6h) job-timeout cap,
     # and this is a public repo so Actions minutes are unlimited/free
-    # (CLAUDE.md Sec 10d) -- no cost reason to keep the timeout tight.
-    timeout-minutes: 240
+    # (CLAUDE.md Sec 10d) -- no cost reason to keep any shard's timeout tight
+    # beyond having real margin.
+    timeout-minutes: 90
+    strategy:
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5]
+      fail-fast: false  # one shard failing shouldn't cancel the others
 
     steps:
       - name: Checkout
@@ -125,14 +152,16 @@ jobs:
             echo "id=$REL" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Stage A — extract Overture candidates (Python + DuckDB)
+      - name: Stage A — extract Overture candidates (Python + DuckDB), shard ${{ matrix.shard }}/6
         run: |
           python3 scripts/overture/extract_overture.py \
             --release "${{ steps.release.outputs.id }}" \
             --states "${{ github.event.inputs.states || 'ALL' }}" \
-            --out "${{ runner.temp }}/overture-candidates.ndjson"
+            --shard-index ${{ matrix.shard }} \
+            --shard-count 6 \
+            --out "${{ runner.temp }}/overture-candidates-${{ matrix.shard }}.ndjson"
 
-      - name: Stage B — ingest candidates (classifier + dedup + upsert)
+      - name: Stage B — ingest candidates (classifier + dedup + upsert), shard ${{ matrix.shard }}/6
         working-directory: packages/backend
         env:
           DATABASE_URL: "${{ secrets.DATABASE_URL }}?connection_limit=3&pool_timeout=20"
@@ -140,5 +169,9 @@ jobs:
           # Provided for parity with the other directory scrapers' auth env. Stage B
           # writes directly via Prisma (DATABASE_URL), so the key is unused here.
           INTERNAL_SCRAPER_KEY: ${{ secrets.INTERNAL_SCRAPER_KEY }}
-          OVERTURE_CANDIDATES_FILE: "${{ runner.temp }}/overture-candidates.ndjson"
-        run: npx tsx src/scripts/runOvertureEnrichment.ts "$OVERTURE_CANDIDATES_FILE"
+          OVERTURE_CANDIDATES_FILE: "${{ runner.temp }}/overture-candidates-${{ matrix.shard }}.ndjson"
+        run: |
+          # Stagger shard starts so 6 parallel jobs don't all open their first
+          # Railway DB connections in the same instant (mirrors scrape-osm.yml).
+          sleep $(( ${{ matrix.shard }} * 20 ))
+          npx tsx src/scripts/runOvertureEnrichment.ts "$OVERTURE_CANDIDATES_FILE"

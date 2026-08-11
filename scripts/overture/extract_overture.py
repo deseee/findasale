@@ -152,8 +152,23 @@ def main():
                     help="Overture release id, e.g. 2026-06-25.0 (use the value from the workflow).")
     ap.add_argument("--states", default="ALL",
                     help="Comma-separated 2-letter states, or ALL.")
+    ap.add_argument("--shard-index", type=int, default=0,
+                    help="0-based shard index for splitting the state list across parallel "
+                         "matrix jobs (see .github/workflows/scrape-overture-enrichment.yml). "
+                         "Default 0 = no sharding when --shard-count is 1.")
+    ap.add_argument("--shard-count", type=int, default=1,
+                    help="Total number of shards. States are assigned round-robin "
+                         "(states[shard_index::shard_count]) so each shard queries a disjoint "
+                         "subset. Default 1 = process the full --states list (no sharding).")
     ap.add_argument("--out", required=True, help="Output NDJSON path.")
     args = ap.parse_args()
+
+    if args.shard_count < 1:
+        print("ERROR: --shard-count must be >= 1", file=sys.stderr)
+        sys.exit(1)
+    if not (0 <= args.shard_index < args.shard_count):
+        print(f"ERROR: --shard-index ({args.shard_index}) must be in [0, {args.shard_count})", file=sys.stderr)
+        sys.exit(1)
 
     if args.states.strip().upper() == "ALL":
         states = list(STATE_BBOX.keys())
@@ -164,6 +179,24 @@ def main():
     if unknown:
         print(f"ERROR: unknown state codes: {unknown}", file=sys.stderr)
         sys.exit(1)
+
+    # Shard partition (round-robin so large/small states interleave across shards rather
+    # than clustering by alphabet in one shard). See
+    # .github/workflows/scrape-overture-enrichment.yml: the unsharded full-US single-job
+    # run (timeout-minutes: 240) was killed by the GitHub Actions job timeout on every run
+    # since workflow creation -- confirmed via the 2026-08-06 run (run_id 31086260328),
+    # which ran the full 240:00 and was killed mid-Stage-B while still actively processing
+    # candidates (i.e. genuinely too slow for the full-US volume in one job, not
+    # stuck/hung). Splitting into N shards via a GitHub Actions matrix (mirroring
+    # .github/workflows/scrape-osm.yml's batch_index pattern) lets each shard finish
+    # comfortably inside a much smaller per-job timeout.
+    if args.shard_count > 1:
+        states = states[args.shard_index::args.shard_count]
+        print(
+            f"[overture-extract] shard {args.shard_index}/{args.shard_count}: "
+            f"{len(states)} states assigned -- {','.join(states) if states else '(none)'}",
+            file=sys.stderr,
+        )
 
     con = duckdb.connect()
     con.execute("INSTALL httpfs; LOAD httpfs;")
