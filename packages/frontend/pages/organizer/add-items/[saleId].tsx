@@ -1697,6 +1697,14 @@ const AddItemsDetailPage = () => {
     const maxAttempts = 10; // 30 seconds (3s * 10)
 
     const poll = setInterval(async () => {
+      // Bug fix (2026-08-11): don't advance the timeout clock (or even hit the API)
+      // while this item is the one currently being added to via "+" -- the backend
+      // deliberately holds analysis for it (hold-analysis / heldAnalysisItems), so
+      // treating that intentional pause as "stuck" produced a false "taking longer
+      // than expected" toast before the organizer had even finished shooting.
+      if (addingToItemIdRef.current === itemId) {
+        return;
+      }
       attempts++;
       try {
         const res = await api.get(`/items/${itemId}`);

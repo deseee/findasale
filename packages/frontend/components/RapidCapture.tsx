@@ -19,6 +19,57 @@ import { useToast } from './ToastContext';
  * Opens fullscreen on mobile, centered modal on desktop (md+).
  */
 
+// Persisted camera settings (Patrick, 2026-08-11): read on mount so the camera opens with
+// the same guides/flash/WB/timer/crop-guide selection as last session instead of resetting
+// every time. Deliberately excludes zoom, torch, and facingMode -- those are per-session
+// device state, not durable preferences. (Zoom silently carrying over between shots was the
+// wrong theory ruled out earlier this session for the crop-cutoff bug -- don't reintroduce
+// that behavior here via persistence.)
+type CropGuideOverlay = 'none' | 'thumbnail' | 'pinterest' | 'tiktok' | 'instagram';
+
+interface RapidCaptureSettings {
+  showCornerGuides: boolean;
+  showLevelIndicator: boolean;
+  showLightingIndicator: boolean;
+  flashMode: 'off' | 'on' | 'auto' | 'torch';
+  whiteBalance: string;
+  timerSeconds: number;
+  cropGuideOverlay: CropGuideOverlay;
+}
+
+const RAPID_CAPTURE_SETTINGS_KEY = 'findasale.rapidCaptureSettings';
+
+function loadRapidCaptureSettings(): Partial<RapidCaptureSettings> {
+  try {
+    const raw = localStorage.getItem(RAPID_CAPTURE_SETTINGS_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {}; // SSR / storage blocked / corrupt JSON -- fall back to defaults
+  }
+}
+
+function saveRapidCaptureSettings(settings: RapidCaptureSettings): void {
+  try {
+    localStorage.setItem(RAPID_CAPTURE_SETTINGS_KEY, JSON.stringify(settings));
+  } catch {
+    // storage blocked or full -- not critical, silently skip
+  }
+}
+
+// Reference ratios for the nested crop-guide overlay (2026-08-11). Keep these in sync with
+// the real transforms: packages/frontend/lib/imageUtils.ts getThumbnailUrl (w_200,h_200,
+// c_fill,g_auto -- 1:1, approximate, g_auto can shift it) and packages/backend/src/
+// controllers/socialPostController.ts cropMap (pinterest ar_2:3, tiktok ar_9:16, instagram
+// ar_4:5 -- all c_fill with NO g_auto, so these three are exact, not approximate).
+const CROP_GUIDE_RATIOS: Record<Exclude<CropGuideOverlay, 'none'>, { ratio: string; label: string }> = {
+  thumbnail: { ratio: 'aspect-square', label: 'Thumbnail crop' },
+  pinterest: { ratio: 'aspect-[2/3]', label: 'Pinterest crop' },
+  tiktok: { ratio: 'aspect-[9/16]', label: 'TikTok crop' },
+  instagram: { ratio: 'aspect-[4/5]', label: 'Instagram crop' },
+};
+
 interface CapturedPhoto {
   blob: Blob;
   previewUrl: string;
@@ -147,14 +198,21 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
   const lastPinchDistance = useRef<number | null>(null);
   const focusRetriggerTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [settingsPanelOpen, setSettingsPanelOpen] = useState(false);
-  const [timerSeconds, setTimerSeconds] = useState(0);
-  const [showCornerGuides, setShowCornerGuides] = useState(true);
-  const [showLevelIndicator, setShowLevelIndicator] = useState(true);
-  const [showLightingIndicator, setShowLightingIndicator] = useState(true);
+  // Persisted settings (2026-08-11) -- read once as initial defaults; see
+  // loadRapidCaptureSettings/saveRapidCaptureSettings above and the sync effect below.
+  const storedSettings = loadRapidCaptureSettings();
+  const [timerSeconds, setTimerSeconds] = useState(storedSettings.timerSeconds ?? 0);
+  const [showCornerGuides, setShowCornerGuides] = useState(storedSettings.showCornerGuides ?? true);
+  const [showLevelIndicator, setShowLevelIndicator] = useState(storedSettings.showLevelIndicator ?? true);
+  const [showLightingIndicator, setShowLightingIndicator] = useState(storedSettings.showLightingIndicator ?? true);
   const [exposureCompensation, setExposureCompensation] = useState(0);
-  const [whiteBalance, setWhiteBalance] = useState('auto');
-  const [flashMode, setFlashMode] = useState<'off' | 'on' | 'auto' | 'torch'>('off');
+  const [whiteBalance, setWhiteBalance] = useState(storedSettings.whiteBalance ?? 'auto');
+  const [flashMode, setFlashMode] = useState<'off' | 'on' | 'auto' | 'torch'>(storedSettings.flashMode ?? 'off');
   const [wbSubOpen, setWbSubOpen] = useState(false);
+  // Crop-guide overlay selector (2026-08-11): which reference crop line shows nested inside
+  // the real 4:3/3:4 crop boundary. 'thumbnail' matches what shipped earlier this session.
+  const [cropGuideOverlay, setCropGuideOverlay] = useState<CropGuideOverlay>(storedSettings.cropGuideOverlay ?? 'thumbnail');
+  const [cropGuideSubOpen, setCropGuideSubOpen] = useState(false);
   const [levelAngle, setLevelAngle] = useState(0);
   const [deviceSupportsOrientation, setDeviceSupportsOrientation] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -186,6 +244,21 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
       screen.orientation?.removeEventListener?.('change', update);
     };
   }, []);
+
+  // Persist settings across sessions (2026-08-11) -- writes on every change to the small
+  // set of durable preferences (guides, level/lighting toggles, flash, WB, timer, crop-guide
+  // selection). Deliberately excludes zoom/torch/facingMode -- see loadRapidCaptureSettings.
+  useEffect(() => {
+    saveRapidCaptureSettings({
+      showCornerGuides,
+      showLevelIndicator,
+      showLightingIndicator,
+      flashMode,
+      whiteBalance,
+      timerSeconds,
+      cropGuideOverlay,
+    });
+  }, [showCornerGuides, showLevelIndicator, showLightingIndicator, flashMode, whiteBalance, timerSeconds, cropGuideOverlay]);
 
   const isRapidfire = mode === 'rapidfire';
   const inAddMode = addingToItemId !== null;
@@ -816,6 +889,44 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
                 ⊞
               </button>
 
+              {/* Crop guide selector -- which reference crop line shows nested inside the
+                  real 4:3/3:4 crop boundary (2026-08-11). Same sub-chip pattern as White
+                  Balance above. Pinterest/TikTok/Instagram are exact c_fill center crops
+                  (no g_auto), unlike the Thumbnail option which Cloudinary's g_auto gravity
+                  can shift slightly off-center. */}
+              <div className="relative w-10">
+                <button
+                  onClick={() => setCropGuideSubOpen(!cropGuideSubOpen)}
+                  className={`w-10 h-10 rounded-full flex items-center justify-center transition-all text-base flex-shrink-0 ${
+                    cropGuideOverlay !== 'none' ? 'bg-white text-black' : 'bg-white/10 text-white/60'
+                  }`}
+                  aria-label="Crop guide"
+                  title="Crop guide overlay"
+                >
+                  ⬚
+                </button>
+
+                {/* Crop guide sub-chip row (extends left from the button) */}
+                {cropGuideSubOpen && (
+                  <div className="absolute right-full mr-2 top-1/2 -translate-y-1/2 z-40 bg-black/80 backdrop-blur-md rounded-full flex items-center gap-1 px-2 py-1.5 shadow-lg whitespace-nowrap pointer-events-auto">
+                    {(['none', 'thumbnail', 'pinterest', 'tiktok', 'instagram'] as CropGuideOverlay[]).map((opt) => (
+                      <button
+                        key={opt}
+                        onClick={() => {
+                          setCropGuideOverlay(opt);
+                          setCropGuideSubOpen(false);
+                        }}
+                        className={`px-2.5 py-1 text-xs rounded-full font-medium transition-colors cursor-pointer ${
+                          cropGuideOverlay === opt ? 'bg-white text-black' : 'bg-white/10 text-white/60'
+                        }`}
+                      >
+                        {opt === 'none' ? 'Off' : opt === 'thumbnail' ? 'Thumb' : opt === 'pinterest' ? 'Pin' : opt === 'tiktok' ? 'TikTok' : 'Insta'}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               {/* Level button */}
               <button
                 onClick={() => setShowLevelIndicator(!showLevelIndicator)}
@@ -976,10 +1087,13 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
                   ratios (socialPostController.ts) are intentionally not shown here -- those
                   only apply when explicitly cross-posting, not to default listing photography. */}
               {showCornerGuides && (
-                <div
-                  className="absolute inset-0 flex items-center justify-center pointer-events-none p-6"
-                  style={{ right: isLandscape ? '88px' : '0' }}
-                >
+                // Bug fix (2026-08-11): no manual right-inset here -- unlike the top bar /
+                // mode-hint text (positioned against the outer full-width wrapper), this
+                // overlay already lives inside the "flex-1" viewfinder container, which
+                // flexbox has already narrowed by the 88px controls column in landscape
+                // mode. Adding right:88px again double-subtracted it, making the guide box
+                // too narrow and visibly shifted left (Patrick, 2026-08-11).
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none p-6">
                   <div className={`relative max-w-full max-h-full h-full ${isLandscape ? 'aspect-[4/3]' : 'aspect-[3/4]'}`}>
                     {/* Dim everything outside the real crop boundary */}
                     <div className="absolute inset-0 shadow-[0_0_0_9999px_rgba(0,0,0,0.35)]" />
@@ -993,18 +1107,27 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
                       {isLandscape ? '4:3' : '3:4'}
                     </div>
 
-                    {/* Layer 2 — nested 1:1 thumbnail-crop guide, centered inside Layer 1, amber to distinguish */}
-                    <div
-                      className={`absolute border border-dashed border-amber-400/70 aspect-square ${
-                        isLandscape
-                          ? 'top-0 h-full left-1/2 -translate-x-1/2'
-                          : 'left-0 w-full top-1/2 -translate-y-1/2'
-                      }`}
-                    >
-                      <div className="absolute -bottom-5 left-1/2 -translate-x-1/2 text-amber-300/80 text-[10px] whitespace-nowrap">
-                        Thumbnail crop
+                    {/* Layer 2 — nested crop-guide reference, centered inside Layer 1, amber to
+                        distinguish. Ratio/label driven by the cropGuideOverlay selector in the
+                        Settings panel (2026-08-11) -- 'none' hides this layer entirely; Layer 1
+                        (the real crop boundary) still shows regardless, it isn't optional.
+                        max-w-full/max-h-full is a safety clamp: a very tall ratio (e.g. TikTok
+                        9:16) nested inside a portrait (3:4) Layer 1 can geometrically exceed
+                        Layer 1's own height -- clamp rather than let it spill outside the
+                        dimmed boundary. */}
+                    {cropGuideOverlay !== 'none' && (
+                      <div
+                        className={`absolute border border-dashed border-amber-400/70 max-w-full max-h-full ${CROP_GUIDE_RATIOS[cropGuideOverlay].ratio} ${
+                          isLandscape
+                            ? 'top-0 h-full left-1/2 -translate-x-1/2'
+                            : 'left-0 w-full top-1/2 -translate-y-1/2'
+                        }`}
+                      >
+                        <div className="absolute -bottom-5 left-1/2 -translate-x-1/2 text-amber-300/80 text-[10px] whitespace-nowrap">
+                          {CROP_GUIDE_RATIOS[cropGuideOverlay].label}
+                        </div>
                       </div>
-                    </div>
+                    )}
                   </div>
                 </div>
               )}
