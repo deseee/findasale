@@ -5,14 +5,20 @@
  * start wiring tik tok up"). Same drop-in shape as x.ts / youtube.ts (ADR-077 §3) --
  * no engine changes, just implement PlatformPublisher and register in index.ts.
  *
- * REAL, IMPORTANT CONSTRAINT (verified live against developers.tiktok.com this
- * session, not assumed): until Patrick's TikTok API client passes TikTok's audit,
- * EVERY post this module creates is forced to SELF_ONLY (private) by TikTok itself,
- * regardless of what privacy_level this code requests. Unaudited clients are also
- * capped at 5 posting users per 24h. This is TikTok's restriction, not a limitation
- * of this code -- see https://developers.tiktok.com/doc/content-posting-api-get-started.
- * `TIKTOK_AUDITED_CLIENT` env var (default unset/false) gates the requested privacy
- * level below; flip it once TikTok's audit actually clears (see STATE.md).
+ * REAL, IMPORTANT CONSTRAINT (corrected 2026-08-10 session, verified live against
+ * developers.tiktok.com's Sandbox Scopes UI -- not assumed): this app has NOT
+ * passed TikTok's audit, and pre-audit apps are NOT grantable the `video.publish`
+ * (Direct Post) scope at all -- it doesn't even appear in the Sandbox's "Add
+ * scopes" list. The only Content Posting scope actually available pre-audit is
+ * `video.upload`, which uploads the video to the creator's TikTok inbox as a
+ * private DRAFT for them to review, edit, and publish themselves inside the
+ * TikTok app -- see https://developers.tiktok.com/doc/content-posting-api-get-started.
+ * Earlier code in this file targeted Direct Post (`video.publish`); that scope
+ * request was rejected outright by TikTok (`invalid_scope`/`error_type=scope`)
+ * when tested live against the Sandbox app this session. Switching to the
+ * inbox/upload flow is not a workaround -- it's the only flow TikTok grants
+ * before audit, and it matches the original product intent (organizer reviews
+ * before it goes live).
  *
  * Auth: TikTok OAuth 2.0 Authorization Code + PKCE (S256), same shape as x.ts/
  * youtube.ts. Client credentials come from env vars TIKTOK_CLIENT_KEY /
@@ -23,21 +29,19 @@
  * rotate on refresh -- always persist whatever refresh_token comes back, even if
  * it looks unchanged.
  *
- * NOT independently verified this session (flagging honestly, matching the
- * convention in youtube.ts's own header comment): the exact authorize-URL param
- * names below (client_key/scope/response_type/redirect_uri/state/code_challenge/
- * code_challenge_method) match TikTok's standard, well-documented OAuth pattern,
- * but the specific Login Kit Web page was not fetched live this session -- verify
- * against https://developers.tiktok.com/doc/login-kit-web before the first real
- * OAuth attempt. The Direct Post video.publish flow (init -> PUT bytes -> poll
- * status) at the bottom of this file WAS verified live against TikTok's Content
- * Posting API docs this session, including the exact request/response shapes.
+ * The authorize-URL param names below (client_key/scope/response_type/
+ * redirect_uri/state/code_challenge/code_challenge_method) were verified live
+ * this session -- the OAuth consent screen loaded correctly once the scope was
+ * corrected to `video.upload`. The upload flow (init -> PUT bytes -> poll status)
+ * uses the same init/status endpoints as Direct Post, just the inbox variant of
+ * the init URL and a smaller request body (no post_info -- see publish() below).
  *
- * Publishing: Direct Post, FILE_UPLOAD source (chunked upload, mirrors youtube.ts's
- * two-step resumable-upload shape). Single-chunk for now (these are 30-45s clips,
- * well under typical size limits) -- if a future clip is large enough to need real
- * multi-chunk splitting, verify TikTok's exact per-chunk size limits against the
- * Media Transfer Guide before assuming this single-chunk path still works:
+ * Publishing: Upload-to-inbox, FILE_UPLOAD source (chunked upload, mirrors
+ * youtube.ts's two-step resumable-upload shape). Single-chunk for now (these are
+ * 30-45s clips, well under typical size limits) -- if a future clip is large
+ * enough to need real multi-chunk splitting, verify TikTok's exact per-chunk size
+ * limits against the Media Transfer Guide before assuming this single-chunk path
+ * still works:
  * https://developers.tiktok.com/doc/content-posting-api-media-transfer-guide
  *
  * SECURITY (ADR-077 / ADR-077a — identical to x.ts/youtube.ts):
@@ -61,12 +65,15 @@ import type { RefreshedTokens } from '../tokenStore';
 
 const TIKTOK_AUTHORIZE_URL = 'https://www.tiktok.com/v2/auth/authorize/';
 const TIKTOK_TOKEN_URL = 'https://open.tiktokapis.com/v2/oauth/token/';
-const TIKTOK_CREATOR_INFO_URL = 'https://open.tiktokapis.com/v2/post/publish/creator_info/query/';
-const TIKTOK_VIDEO_INIT_URL = 'https://open.tiktokapis.com/v2/post/publish/video/init/';
+// Upload-to-inbox endpoint, NOT the Direct Post endpoint (/v2/post/publish/video/init/).
+// video.publish (Direct Post) is not grantable pre-audit -- see file header.
+const TIKTOK_VIDEO_INIT_URL = 'https://open.tiktokapis.com/v2/post/publish/inbox/video/init/';
 const TIKTOK_STATUS_URL = 'https://open.tiktokapis.com/v2/post/publish/status/fetch/';
 
-// video.publish = Direct Post; least privilege for this pipeline's job.
-const TIKTOK_SCOPES = ['video.publish'];
+// video.upload = upload-to-inbox (draft); the only Content Posting scope TikTok
+// grants before this app passes audit. video.publish (Direct Post) is rejected
+// with invalid_scope pre-audit -- see file header.
+const TIKTOK_SCOPES = ['video.upload'];
 
 // Poll the async publish status this many times, 2s apart, before giving up and
 // returning the publish_id anyway (TikTok processes asynchronously -- a pending
@@ -139,9 +146,9 @@ async function exchangeCode(params: {
     refreshToken: data.refresh_token ?? null,
     expiresInSeconds: data.expires_in ?? null,
     platformUserId: data.open_id ?? null,
-    // TikTok's token response doesn't include a display username -- creator_info
-    // query (used at publish time) is the source for that; leave null here rather
-    // than guess.
+    // TikTok's token response doesn't include a display username, and the
+    // upload-to-inbox flow never calls creator_info (that's a Direct Post-only
+    // endpoint) -- leave null here rather than guess.
     platformUsername: null,
   };
 }
@@ -189,13 +196,8 @@ async function publish(params: {
     throw new Error('[tiktok] publish() called with no mediaUrls[0] (video URL) on the post');
   }
 
-  // Query creator info first -- required by TikTok before a direct post (also
-  // surfaces the real privacy_level_options for this creator/account).
-  await axios.post(
-    TIKTOK_CREATOR_INFO_URL,
-    {},
-    { headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json; charset=UTF-8' } }
-  );
+  // NOTE: creator_info query is a Direct Post prerequisite only -- not required
+  // (and not callable with the video.upload scope) for the upload-to-inbox flow.
 
   // Download the rendered clip so we know its real byte size for the FILE_UPLOAD
   // init call (same reason youtube.ts downloads before its resumable upload).
@@ -203,22 +205,14 @@ async function publish(params: {
   const videoBuffer = Buffer.from(videoResp.data);
   const videoSize = videoBuffer.length;
 
-  // Forced SELF_ONLY until TIKTOK_AUDITED_CLIENT is explicitly set true post-audit
-  // -- see file header. Even if this requests something else, TikTok itself will
-  // still force SELF_ONLY on an unaudited client; this just keeps our own request
-  // honest about what will actually happen.
-  const privacyLevel = process.env.TIKTOK_AUDITED_CLIENT === 'true' ? 'PUBLIC_TO_EVERYONE' : 'SELF_ONLY';
-
+  // Upload-to-inbox has no post_info (title/privacy_level/disable_* flags) --
+  // those are Direct Post concepts. The video lands as a private draft in the
+  // creator's TikTok inbox; the creator sets caption/privacy themselves when
+  // they open and publish it in-app. See file header re: video.upload vs
+  // video.publish.
   const initResp = await axios.post(
     TIKTOK_VIDEO_INIT_URL,
     {
-      post_info: {
-        title: post.body?.slice(0, 150) || 'FindA.Sale',
-        privacy_level: privacyLevel,
-        disable_duet: false,
-        disable_comment: false,
-        disable_stitch: false,
-      },
       source_info: {
         source: 'FILE_UPLOAD',
         video_size: videoSize,
