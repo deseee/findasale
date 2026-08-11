@@ -54,7 +54,16 @@ export function useOfflineSync() {
     const handleOnline = async () => {
       setIsOffline(false);
       setSyncError(null);
-      await updatePendingCount();
+      // updatePendingCount() -> getPendingSyncCount() already degrades to 0 on IndexedDB
+      // failure, but this listener isn't awaited by anything, so wrap defensively too —
+      // a future throw here must never become an unhandled promise rejection (Sentry
+      // FINDASALE-NEXTJS-S: "UnknownError: The user denied permission to access the
+      // database" surfaced via this exact reconnect path on Chrome Mobile Android).
+      try {
+        await updatePendingCount();
+      } catch (err) {
+        console.warn('[Offline] updatePendingCount failed on reconnect:', err);
+      }
       // Auto-trigger sync after short delay to allow full network restoration
       setTimeout(() => triggerSyncRef.current(), 1000);
     };

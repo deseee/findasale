@@ -140,11 +140,19 @@ export const useUploadQueue = (saleId: string) => {
           )
         );
 
-        // Persist upload state
-        await saveToIndexedDB({
-          ...item,
-          status: 'uploading',
-        });
+        // Persist upload state — best-effort only. If IndexedDB is unavailable or
+        // permission is denied, the in-memory queue state above already updated, so the
+        // upload still proceeds; don't let a persistence failure become an unhandled
+        // rejection inside this effect (processQueue() is fired-and-forgotten, not
+        // awaited/caught by its caller).
+        try {
+          await saveToIndexedDB({
+            ...item,
+            status: 'uploading',
+          });
+        } catch (e) {
+          console.error('Failed to persist upload state to IndexedDB:', e);
+        }
 
         // Perform upload
         (async () => {
@@ -170,12 +178,16 @@ export const useUploadQueue = (saleId: string) => {
               )
             );
 
-            // Persist and remove blob
-            await saveToIndexedDB({
-              ...item,
-              status: 'done',
-              cloudinaryUrl,
-            });
+            // Persist and remove blob — best-effort, see note above.
+            try {
+              await saveToIndexedDB({
+                ...item,
+                status: 'done',
+                cloudinaryUrl,
+              });
+            } catch (e) {
+              console.error('Failed to persist done state to IndexedDB:', e);
+            }
 
             uploadingRef.current.delete(item.id);
           } catch (error: any) {
@@ -191,12 +203,16 @@ export const useUploadQueue = (saleId: string) => {
               )
             );
 
-            // Persist error state (without blob)
-            await saveToIndexedDB({
-              ...item,
-              status: 'error',
-              error: errorMsg,
-            });
+            // Persist error state (without blob) — best-effort, see note above.
+            try {
+              await saveToIndexedDB({
+                ...item,
+                status: 'error',
+                error: errorMsg,
+              });
+            } catch (e) {
+              console.error('Failed to persist error state to IndexedDB:', e);
+            }
 
             uploadingRef.current.delete(item.id);
           }
@@ -246,7 +262,15 @@ export const useUploadQueue = (saleId: string) => {
     async (id: string) => {
       setQueue((prev) => prev.filter((i) => i.id !== id));
       uploadingRef.current.delete(id);
-      await deleteFromIndexedDB(id);
+      try {
+        await deleteFromIndexedDB(id);
+      } catch (e) {
+        // IndexedDB unavailable/permission-denied — local queue state above already
+        // updated, so the UI reflects the cancel either way. Don't let this become an
+        // unhandled rejection (same failure mode as offlineSync.ts's IndexedDB unavailable
+        // errors).
+        console.error('Failed to delete from IndexedDB (cancel):', e);
+      }
     },
     []
   );
@@ -254,7 +278,11 @@ export const useUploadQueue = (saleId: string) => {
   const clearCompleted = useCallback(async () => {
     const completed = queue.filter((i) => i.status === 'done' || i.status === 'error');
     for (const item of completed) {
-      await deleteFromIndexedDB(item.id);
+      try {
+        await deleteFromIndexedDB(item.id);
+      } catch (e) {
+        console.error('Failed to delete from IndexedDB (clearCompleted):', e);
+      }
     }
     setQueue((prev) =>
       prev.filter((i) => i.status !== 'done' && i.status !== 'error')

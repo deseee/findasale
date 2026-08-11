@@ -316,45 +316,78 @@ export async function recordOfflinePhoto(localItemId: string, photoUrl: string):
  */
 export async function getPendingSync(): Promise<SyncQueueEntry[]> {
   // Degrade gracefully where IndexedDB is unavailable (iOS Private Browsing / insecure
-  // context) so callers on public pages never receive a rejection.
+  // context) so callers on public pages never receive a rejection. Also catches the
+  // ASYNC failure mode (e.g. "UnknownError: The user denied permission to access the
+  // database" — Sentry FINDASALE-NEXTJS-S) where `indexedDB` exists but `.open()`
+  // rejects via onerror; isIndexedDBAvailable() alone only catches the synchronous
+  // undefined-global case (Sentry FINDASALE-NEXTJS-Y).
   if (!isIndexedDBAvailable()) return [];
-  const db = await initOfflineDB();
-  return getAllFromStore(db, 'syncQueue');
+  try {
+    const db = await initOfflineDB();
+    return await getAllFromStore(db, 'syncQueue');
+  } catch (err) {
+    console.warn('[Offline] getPendingSync degraded — IndexedDB unusable:', err);
+    return [];
+  }
 }
 
 /**
  * Get pending sync count
  */
 export async function getPendingSyncCount(): Promise<number> {
-  // Degrade gracefully where IndexedDB is unavailable (see getPendingSync).
+  // Degrade gracefully where IndexedDB is unavailable (see getPendingSync) — including
+  // the async permission-denied failure mode, not just the synchronous undefined-global
+  // case.
   if (!isIndexedDBAvailable()) return 0;
-  const db = await initOfflineDB();
-  const entries = await getAllFromStore(db, 'syncQueue');
-  return entries.filter(e => e.status === 'PENDING').length;
+  try {
+    const db = await initOfflineDB();
+    const entries = await getAllFromStore(db, 'syncQueue');
+    return entries.filter(e => e.status === 'PENDING').length;
+  } catch (err) {
+    console.warn('[Offline] getPendingSyncCount degraded — IndexedDB unusable:', err);
+    return 0;
+  }
 }
 
 /**
  * Get all offline items
  */
 export async function getAllOfflineItems(): Promise<OfflineItem[]> {
-  const db = await initOfflineDB();
-  return getAllFromStore(db, 'offlineItems');
+  // Read-only path used by background/global code (e.g. photoQueue.ts) — degrade to an
+  // empty list rather than throwing when IndexedDB is unavailable or access is denied.
+  try {
+    const db = await initOfflineDB();
+    return await getAllFromStore(db, 'offlineItems');
+  } catch (err) {
+    console.warn('[Offline] getAllOfflineItems degraded — IndexedDB unusable:', err);
+    return [];
+  }
 }
 
 /**
  * Get offline item by localId
  */
 export async function getOfflineItem(localId: string): Promise<OfflineItem | null> {
-  const db = await initOfflineDB();
-  return getFromStore(db, 'offlineItems', localId);
+  try {
+    const db = await initOfflineDB();
+    return await getFromStore(db, 'offlineItems', localId);
+  } catch (err) {
+    console.warn('[Offline] getOfflineItem degraded — IndexedDB unusable:', err);
+    return null;
+  }
 }
 
 /**
  * Get offline item by saleId
  */
 export async function getOfflineItemsBySale(saleId: string): Promise<OfflineItem[]> {
-  const db = await initOfflineDB();
-  return getAllFromIndex(db, 'offlineItems', 'bySaleId', saleId);
+  try {
+    const db = await initOfflineDB();
+    return await getAllFromIndex(db, 'offlineItems', 'bySaleId', saleId);
+  } catch (err) {
+    console.warn('[Offline] getOfflineItemsBySale degraded — IndexedDB unusable:', err);
+    return [];
+  }
 }
 
 /**
@@ -420,8 +453,13 @@ export async function clearAllOfflineData(): Promise<void> {
  * Get last sync timestamp
  */
 export async function getLastSyncTime(): Promise<string | null> {
-  const db = await initOfflineDB();
-  return getMetadata(db, 'lastSyncAt');
+  try {
+    const db = await initOfflineDB();
+    return await getMetadata(db, 'lastSyncAt');
+  } catch (err) {
+    console.warn('[Offline] getLastSyncTime degraded — IndexedDB unusable:', err);
+    return null;
+  }
 }
 
 /**

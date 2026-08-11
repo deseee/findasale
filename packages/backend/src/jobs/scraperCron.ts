@@ -469,6 +469,17 @@ async function runSourceAcrossMetros(source: string): Promise<void> {
 }
 
 /**
+ * Tracks source ids with an in-flight scheduled run. Prevents a slow-running
+ * metro-loop (e.g. GarageSaleFinder, which can take many hours to traverse
+ * NATIONAL_METROS) from overlapping with its own next scheduled trigger —
+ * node-cron has no built-in overlap protection, and overlapping runs against
+ * the same host multiply concurrent request pressure against safeFetch's
+ * per-host rolling-hour cap (see FINDASALE-NODEJS-5W: garagesalefinder.com
+ * exceeded 300 req/hr). Root-caused + fixed 2026-08-11.
+ */
+const runningSources = new Set<string>();
+
+/**
  * Initialize scraper cron jobs.
  * Called once at server startup via src/index.ts.
  */
@@ -512,17 +523,28 @@ export function initScraperCron(): void {
     const { id, cronSchedule, runMode } = sourceDef;
 
     cron.schedule(cronSchedule, cronGuard({ jobName: `scraperCron:${id}` }, async () => {
-      console.log(`[scraperCron] ${id} scheduled run starting`);
-      if (runMode === 'national-once') {
-        // national-once: run once with a placeholder metro (ignored by the source)
-        await runScrapeRun(id, 'national').catch((err) =>
-          console.error(`[scraperCron] ${id} run error:`, err)
-        );
-      } else {
-        // metro-loop: iterate all metros sequentially
-        await runSourceAcrossMetros(id).catch((err) =>
-          console.error(`[scraperCron] ${id} run error:`, err)
-        );
+      // Overlap guard: skip this trigger entirely if the previous scheduled
+      // run for this source hasn't finished yet (see runningSources doc above).
+      if (runningSources.has(id)) {
+        console.warn(`[scraperCron] ${id} scheduled run SKIPPED — previous run still in progress`);
+        return;
+      }
+      runningSources.add(id);
+      try {
+        console.log(`[scraperCron] ${id} scheduled run starting`);
+        if (runMode === 'national-once') {
+          // national-once: run once with a placeholder metro (ignored by the source)
+          await runScrapeRun(id, 'national').catch((err) =>
+            console.error(`[scraperCron] ${id} run error:`, err)
+          );
+        } else {
+          // metro-loop: iterate all metros sequentially
+          await runSourceAcrossMetros(id).catch((err) =>
+            console.error(`[scraperCron] ${id} run error:`, err)
+          );
+        }
+      } finally {
+        runningSources.delete(id);
       }
     }));
 
