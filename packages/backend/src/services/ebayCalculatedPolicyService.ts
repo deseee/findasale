@@ -35,6 +35,26 @@ const CALCULATED_HANDLING_POLICY_NAME_PREFIX = 'FindA.Sale Calculated HC$';
 
 const round2 = (n: number): number => Math.round(n * 100) / 100;
 
+/**
+ * Pure calculation shared between this file's ensureCalculatedPolicyWithHandling
+ * (which provisions the real eBay policy) and ebayShippingResolver.ts's preview
+ * path (which must show the SAME number the push path will actually use, without
+ * provisioning anything). Bucket-then-gross-up, in this exact order -- reordering
+ * (gross-up-then-bucket, the way the older FVF-flat helper computes its own flat
+ * rate) lands on a different total, because bucketing is a nonlinear step function.
+ */
+export function computeCalculatedWithHandling(
+  cheapestRate: number
+): { bucketedRate: number; handlingCost: number } {
+  const bucketedRate = roundUpToBucket(cheapestRate);
+  // Isolate just the FVF markup portion of computeFvfFlatRate as the handling fee:
+  // computeFvfFlatRate(bucketedRate) = bucketedRate / 0.864 (rounded up to the cent).
+  // Subtracting bucketedRate leaves only the markup, applied as a handling charge on
+  // top of the REAL calculated rate instead of replacing it outright.
+  const handlingCost = round2(computeFvfFlatRate(bucketedRate) - bucketedRate);
+  return { bucketedRate, handlingCost };
+}
+
 // In-process cache: `${organizerId}:${bucketedRateStr}` → eBay fulfillmentPolicyId
 const handlingPolicyCache = new Map<string, string>();
 
@@ -226,12 +246,7 @@ export async function ensureCalculatedPolicyWithHandling(
     throw err;
   }
 
-  const bucketedRate = roundUpToBucket(cheapest.rate);
-  // Isolate just the FVF markup portion of computeFvfFlatRate as the handling fee:
-  // computeFvfFlatRate(bucketedRate) = bucketedRate / 0.864 (rounded up to the cent).
-  // Subtracting bucketedRate leaves only the markup, applied here as a handling
-  // charge on top of the REAL calculated rate instead of replacing it outright.
-  const handlingCost = round2(computeFvfFlatRate(bucketedRate) - bucketedRate);
+  const { bucketedRate, handlingCost } = computeCalculatedWithHandling(cheapest.rate);
   const handlingCostStr = handlingCost.toFixed(2);
   const bucketedRateStr = bucketedRate.toFixed(2);
   const policyName = `${CALCULATED_HANDLING_POLICY_NAME_PREFIX}${handlingCostStr}`;

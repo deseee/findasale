@@ -18,6 +18,7 @@
 
 import { computeCheapestForOrigin, ShippingHardBlockError } from './ebayRateEstimateService';
 import { computeFvfFlatRate, roundUpToBucket } from './ebayFlatRatePolicyService';
+import { computeCalculatedWithHandling } from './ebayCalculatedPolicyService';
 
 /** Where the resolved buyer-shipping amount came from. */
 export type ShippingResolutionSource =
@@ -194,9 +195,32 @@ export async function resolveItemShipping(input: {
     return fvfFlat();
   }
 
-  // ── CALCULATED mode: gross up the cheapest rate through the FVF-flat helper so the
-  // preview number equals what the buyer is actually charged. This mirrors the push
-  // path's ensureFvfFlatRatePolicy (roundUpToBucket(computeFvfFlatRate(cheapest.rate)))
-  // so preview == charged; returning the bare carrier rate here understated it. ──
-  return fvfFlat();
+  // ── CALCULATED mode: mirror resolvePoliciesForItem's real routing precedence
+  // (ebayController.ts ~line 4178). The push path's PRIMARY route here is real-
+  // calculated-shipping-plus-handling (ensureCalculatedPolicyWithHandling in
+  // ebayCalculatedPolicyService.ts) -- FVF-flat is only its fallback when eBay
+  // policy provisioning fails. The preview can't know in advance whether
+  // provisioning will succeed on push, so it shows the PRIMARY number, computed
+  // via the SAME shared formula (computeCalculatedWithHandling) the push path
+  // uses -- not re-derived through the FVF-flat helper's gross-up-then-bucket
+  // order, which rounds to a different total than bucket-then-gross-up (bucketing
+  // is a nonlinear step function, so operation order matters). This does NOT call
+  // ensureCalculatedPolicyWithHandling itself, since that provisions a real eBay
+  // fulfillment policy (network + DB writes) on every call -- exactly what this
+  // file's header says the preview must never do.
+  try {
+    const cheapest = await computeCheapestForOrigin({ weightOz, dims, origin, packageType: item.packageType ?? null });
+    const { bucketedRate, handlingCost } = computeCalculatedWithHandling(cheapest.rate);
+    return {
+      fulfillmentPolicyId: null,
+      buyerAmountCents: dollarsToCents(bucketedRate + handlingCost),
+      policyName: `FindA.Sale Calculated (+$${handlingCost.toFixed(2)} handling)`,
+      source: 'calculated',
+    };
+  } catch (err) {
+    if (err instanceof ShippingHardBlockError) {
+      return { fulfillmentPolicyId: null, buyerAmountCents: 0, policyName: null, source: 'hard-blocked', hardBlockReason: err.message };
+    }
+    throw err;
+  }
 }
