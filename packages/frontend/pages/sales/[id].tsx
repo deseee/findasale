@@ -2650,9 +2650,10 @@ export const getStaticProps: GetStaticProps<SaleDetailPageProps> = async ({ para
   const apiUrl = resolveApiBase();
 
   if (!apiUrl) {
+    console.warn('[getStaticProps:fallback] missing-api-url', { id });
     return {
       props: { ogData: null, initialData: null, eventSeriesData: null, noindex: false, unavailableAfter: null },
-      revalidate: 3600,
+      revalidate: 86400,
     };
   }
 
@@ -2665,17 +2666,20 @@ export const getStaticProps: GetStaticProps<SaleDetailPageProps> = async ({ para
     if (!res.ok) {
       if (res.status === 404) {
         // Unknown/deleted sale — return 404 but allow ISR to recheck periodically
+        console.warn('[getStaticProps:fallback] backend-404', { id });
         return { notFound: true, revalidate: 86400 };
       }
+      console.warn('[getStaticProps:fallback] backend-non-2xx', { id, status: res.status });
       return {
         props: { ogData: null, initialData: null, eventSeriesData: null, noindex: false, unavailableAfter: null },
-        revalidate: 3600,
+        revalidate: 86400,
       };
     }
     const sale = await res.json();
 
     if (!sale?.id || !sale?.title) {
       // Sale body empty or malformed — treat as deleted/missing → proper HTTP 404
+      console.warn('[getStaticProps:fallback] malformed-body', { id });
       return { notFound: true, revalidate: 86400 };
     }
 
@@ -2783,10 +2787,10 @@ export const getStaticProps: GetStaticProps<SaleDetailPageProps> = async ({ para
     };
   } catch (err) {
     // Network/timeout/parse failure — render the shell, let the client fetch and ISR retry
-   
+    console.warn('[getStaticProps:fallback] catch-network-error', { id, err: err instanceof Error ? err.message : String(err) });
     return {
       props: { ogData: null, initialData: null, eventSeriesData: null, noindex: false, unavailableAfter: null },
-      revalidate: 3600,
+      revalidate: 86400,
     };
   }
 };
