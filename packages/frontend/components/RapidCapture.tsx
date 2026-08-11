@@ -964,17 +964,47 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
                 className="absolute inset-0 w-full h-full object-cover"
               />
 
-              {/* 4:3 Framing Guide with faint white corner brackets */}
+              {/* Crop-preview guide (2026-08-11): shows the actual boundary cropTo4x3()
+                  will apply -- 4:3 for landscape holds, 3:4 for portrait holds, matching the
+                  orientation-aware fix in add-items/[saleId].tsx -- plus a nested guide for
+                  the 1:1 thumbnail crop Cloudinary generates on top of that (getThumbnailUrl,
+                  w_200,h_200,c_fill,g_auto). Purely visual: capturePhoto() and cropTo4x3()
+                  are unchanged by this, it only previews what they'll do so the photographer
+                  can compose within it. Cloudinary's g_auto gravity on the thumbnail crop can
+                  still shift slightly toward the detected subject if it isn't centered -- this
+                  inner guide is a reference, not a guarantee. Pinterest/TikTok/Instagram crop
+                  ratios (socialPostController.ts) are intentionally not shown here -- those
+                  only apply when explicitly cross-posting, not to default listing photography. */}
               {showCornerGuides && (
-                <div className="absolute inset-0 pointer-events-none">
-                  {/* Corner brackets — faint white, not blue */}
-                  <div className="absolute top-4 left-4 w-10 h-10 border-t-2 border-l-2 border-white/50" />
-                  <div className="absolute top-4 right-4 w-10 h-10 border-t-2 border-r-2 border-white/50" />
-                  <div className="absolute bottom-4 left-4 w-10 h-10 border-b-2 border-l-2 border-white/50" />
-                  <div className="absolute bottom-4 right-4 w-10 h-10 border-b-2 border-r-2 border-white/50" />
-                  {/* Label */}
-                  <div className="absolute top-2 left-1/2 -translate-x-1/2 text-white/35 text-xs">
-                    4:3
+                <div
+                  className="absolute inset-0 flex items-center justify-center pointer-events-none p-6"
+                  style={{ right: isLandscape ? '88px' : '0' }}
+                >
+                  <div className={`relative max-w-full max-h-full h-full ${isLandscape ? 'aspect-[4/3]' : 'aspect-[3/4]'}`}>
+                    {/* Dim everything outside the real crop boundary */}
+                    <div className="absolute inset-0 shadow-[0_0_0_9999px_rgba(0,0,0,0.35)]" />
+
+                    {/* Layer 1 — real crop boundary corner brackets, faint white */}
+                    <div className="absolute top-0 left-0 w-10 h-10 border-t-2 border-l-2 border-white/60" />
+                    <div className="absolute top-0 right-0 w-10 h-10 border-t-2 border-r-2 border-white/60" />
+                    <div className="absolute bottom-0 left-0 w-10 h-10 border-b-2 border-l-2 border-white/60" />
+                    <div className="absolute bottom-0 right-0 w-10 h-10 border-b-2 border-r-2 border-white/60" />
+                    <div className="absolute -top-5 left-1/2 -translate-x-1/2 text-white/60 text-xs font-medium whitespace-nowrap">
+                      {isLandscape ? '4:3' : '3:4'}
+                    </div>
+
+                    {/* Layer 2 — nested 1:1 thumbnail-crop guide, centered inside Layer 1, amber to distinguish */}
+                    <div
+                      className={`absolute border border-dashed border-amber-400/70 aspect-square ${
+                        isLandscape
+                          ? 'top-0 h-full left-1/2 -translate-x-1/2'
+                          : 'left-0 w-full top-1/2 -translate-y-1/2'
+                      }`}
+                    >
+                      <div className="absolute -bottom-5 left-1/2 -translate-x-1/2 text-amber-300/80 text-[10px] whitespace-nowrap">
+                        Thumbnail crop
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}
