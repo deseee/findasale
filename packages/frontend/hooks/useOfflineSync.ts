@@ -115,19 +115,7 @@ export function useOfflineSync() {
     // #561: only resend entries actually awaiting sync. NEEDS_RECONCILIATION entries
     // (a CHECKOUT_CASH replay hit an already-sold item) must NOT be resent every retry —
     // they wait for the organizer to review in SyncQueueModal.
-    // Guarded (Sentry FINDASALE-NEXTJS-Y, 2026-07-24 "Error: IndexedDB unavailable" on
-    // /pricing): getPendingSync() can reject before this function's own try/catch below
-    // even starts. Several callers invoke triggerSync()/triggerSyncRef.current()
-    // fire-and-forget (setTimeout in the reconnect/mount-time checks above, the retry
-    // timer further down) with no .catch() of their own, so an unguarded rejection here
-    // becomes a genuine unhandled promise rejection instead of degrading gracefully.
-    let pending: any[];
-    try {
-      pending = (await getPendingSync()).filter((entry: any) => entry.status === 'PENDING');
-    } catch (err) {
-      console.error('[Offline] getPendingSync failed:', err);
-      return;
-    }
+    const pending = (await getPendingSync()).filter((entry: any) => entry.status === 'PENDING');
     if (pending.length === 0) return;
 
     syncInProgressRef.current = true;

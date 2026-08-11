@@ -34,6 +34,28 @@ Sentry.init({
       v.stacktrace?.frames?.some((f: any) =>
         typeof f.filename === 'string' && f.filename.includes('navigation_performance_logger'))
     )) return null;
+    // Known noise: crypto wallet browser extensions (MetaMask/Coinbase Wallet/etc.) inject a
+    // page provider and reject a pending promise when the extension's background script
+    // disconnects. Confirmed via Sentry event detail (FINDASALE-NEXTJS-J/W, /organizer/dashboard,
+    // issues 7564515249 & 7622992307): the raw rejected object is
+    // { code: 4900, message: "The provider is disconnected from all chains.",
+    //   stack: "...chrome-extension://acmacodkjbdgmoleebolmdjonilkdbch/background.js..." }.
+    // Code 4900 is the standard EIP-1193 ProviderRpcError "Disconnected" code, thrown by the
+    // extension itself -- FindA.Sale has no wallet/web3 integration. Not actionable.
+    const originalException = hint?.originalException as any;
+    if (
+      originalException &&
+      typeof originalException === 'object' &&
+      originalException.code === 4900 &&
+      typeof originalException.message === 'string' &&
+      originalException.message.includes('disconnected from all chains')
+    ) return null;
+    if (
+      originalException &&
+      typeof originalException === 'object' &&
+      typeof originalException.stack === 'string' &&
+      originalException.stack.includes('chrome-extension://')
+    ) return null;
     return event;
   },
 });

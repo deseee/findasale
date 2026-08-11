@@ -3227,8 +3227,16 @@ const AddItemsDetailPage = () => {
             // Guard: if item ID is still temporary (temp-*), wait for real ID
             const previewItem = rapidItems.find((i) => i.id === previewItemId);
             if (!previewItem || previewItem.id.startsWith('temp-')) {
-              showToast('Item is still uploading. Please wait...', 'warning');
-              throw new Error('Item not ready');
+              // Bug fix (2026-08-11): "still uploading" was misleading once the item's
+              // create-item call had already failed (aiError set) -- it will NEVER finish
+              // uploading in that case, so tell the organizer the real state instead.
+              showToast(
+                previewItem?.aiError
+                  ? "This item couldn't be created. Delete it and capture the photo again."
+                  : 'Item is still uploading. Please wait...',
+                previewItem?.aiError ? 'error' : 'warning'
+              );
+              throw new Error(previewItem?.aiError ? "Item couldn't be created" : 'Item not ready');
             }
             try {
               await api.put(`/items/${previewItemId}`, edits);

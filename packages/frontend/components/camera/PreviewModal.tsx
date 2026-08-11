@@ -125,6 +125,12 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
   if (!isOpen) return null;
 
   const aiErrored = item.draftStatus === 'DRAFT' && !!(item.aiErrorLog || item.aiError);
+  // Bug fix (2026-08-11): true when this item's create-item request never actually
+  // succeeded server-side (still showing its local temp- placeholder id -- Sentry
+  // FINDASALE-NEXTJS-T/V). Re-analyze/Full Edit/Retake below all target a real item
+  // id and either 404 or silently no-op against a temp- id, so they're hidden for
+  // this case in favor of the one action that's actually safe: Delete (footer).
+  const isUnsavedTemp = item.id.startsWith('temp-');
 
   const handleSave = async () => {
     if (!edits.title.trim()) {
@@ -213,27 +219,37 @@ const PreviewModal: React.FC<PreviewModalProps> = ({
         {aiErrored && (
           <div className="bg-red-50 dark:bg-red-950/30 border-b border-red-200 dark:border-red-900 p-4 text-sm text-red-700 dark:text-red-400">
             {item.aiError || 'Analysis failed. Please review and fill in details manually.'}
-            <div className="flex flex-wrap items-center gap-3 mt-2">
-              <button
-                onClick={() => onReanalyze?.(item.id)}
-                disabled={reanalyzing || !(fullItem?.photoUrls?.length || item.thumbnailUrl)}
-                className="text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 font-medium underline disabled:opacity-50 disabled:no-underline disabled:cursor-not-allowed"
-              >
-                {reanalyzing ? 'Re-analyzing…' : 'Re-analyze'}
-              </button>
-              <Link
-                href={`/organizer/edit-item/${item.id}`}
-                className="text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 font-medium underline"
-              >
-                Full Edit
-              </Link>
-              <button
-                onClick={() => onRetake(item.id)}
-                className="text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 font-medium underline"
-              >
-                Retake photo
-              </button>
-            </div>
+            {isUnsavedTemp ? (
+              // This item was never actually created server-side -- Re-analyze/Full Edit/
+              // Retake all target a real item id and don't work against a temp- placeholder.
+              // Delete (in the footer below) is the one action that's actually safe here --
+              // it just removes this local placeholder, no server item exists to delete.
+              <p className="mt-2 text-xs text-red-800 dark:text-red-300">
+                This photo couldn't be turned into an item. Use Delete below to remove it, then capture the photo again.
+              </p>
+            ) : (
+              <div className="flex flex-wrap items-center gap-3 mt-2">
+                <button
+                  onClick={() => onReanalyze?.(item.id)}
+                  disabled={reanalyzing || !(fullItem?.photoUrls?.length || item.thumbnailUrl)}
+                  className="text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 font-medium underline disabled:opacity-50 disabled:no-underline disabled:cursor-not-allowed"
+                >
+                  {reanalyzing ? 'Re-analyzing…' : 'Re-analyze'}
+                </button>
+                <Link
+                  href={`/organizer/edit-item/${item.id}`}
+                  className="text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 font-medium underline"
+                >
+                  Full Edit
+                </Link>
+                <button
+                  onClick={() => onRetake(item.id)}
+                  className="text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 font-medium underline"
+                >
+                  Retake photo
+                </button>
+              </div>
+            )}
             {reanalyzeError && (
               <p className="mt-2 text-xs text-red-800 dark:text-red-300">{reanalyzeError}</p>
             )}

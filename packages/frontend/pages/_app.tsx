@@ -86,6 +86,90 @@ function LowBandwidthMonitor() {
   return null;
 }
 
+// Fixes FINDASALE-NEXTJS-10 -- stale-deployment recovery. This project deploys to
+// Vercel on every push to main, at very high frequency (often multiple deploys/hour --
+// see git history / Railway deploy list for comparable frequency on the backend side).
+// A page already open in a browser holds the OLD build's buildId. Next.js client-side
+// navigation -- <Link> clicks AND Next's automatic viewport prefetch of any <Link>
+// (e.g. this exact page's category tabs/breadcrumb links) -- fetches
+// /_next/data/<oldBuildId>/... for the next page's props. Once Vercel has cut over to
+// a newer deployment, that old buildId's data route no longer exists and Vercel's edge
+// returns its HTML 404 page (starts with "<!DOCTYPE html>") instead of JSON. Next's
+// router feeds that body straight into JSON.parse, throwing
+// "SyntaxError: Unexpected token '<'". Confirmed via Sentry FINDASALE-NEXTJS-10
+// (finda.sale/city/davenport-ia/flea-markets, 2026-08-10T20:02:23Z, mechanism:
+// auto.browser.global_handlers.onerror, stacktrace only a minified Next.js router
+// chunk -- no app-code frame, "Users Impacted: 0" / 3 occurrences at one timestamp).
+// Live-verified (2026-08-11) the by-city API, the Option-B middleware rewrite, and the
+// current deployment's own data route all resolve correctly for this exact
+// citySlug/category -- ruling out an application/backend-level cause. This is the same
+// class of gap as the service-worker-registration unhandled-rejection fix above
+// (Sentry FINDASALE-NEXTJS-1): Next.js self-heals a stale *asset chunk* load failure
+// (ChunkLoadError) across a redeploy, but does not self-heal a stale *data*
+// (_next/data JSON) fetch. This component covers that gap by forcing one full reload,
+// which always re-fetches the current build's HTML/buildId fresh.
+function StaleDeploymentRecovery() {
+  const router = useRouter();
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    // Guard against a reload loop if the reloaded page throws the same class of
+    // error again (e.g. a genuinely broken deployment, not just a stale buildId) --
+    // only auto-reload once per minute per browser tab.
+    const RELOAD_GUARD_KEY = 'fsa_stale_build_reload_at';
+    let hasAttemptedInMemory = false;
+
+    const isStaleDeploySignature = (message: unknown): boolean => {
+      if (typeof message !== 'string') return false;
+      return (
+        message.includes("Unexpected token '<'") ||
+        message.includes('is not valid JSON') ||
+        message.includes('ChunkLoadError') ||
+        /Loading (CSS )?chunk [\w-]+ failed/i.test(message)
+      );
+    };
+
+    const attemptRecovery = (message: unknown) => {
+      if (!isStaleDeploySignature(message)) return;
+      try {
+        const last = Number(sessionStorage.getItem(RELOAD_GUARD_KEY) || '0');
+        if (Date.now() - last < 60_000) return; // already tried within the last minute
+        sessionStorage.setItem(RELOAD_GUARD_KEY, String(Date.now()));
+      } catch {
+        // sessionStorage unavailable (e.g. strict private-browsing quota) -- fall back
+        // to the in-memory guard below so a real reload loop still can't happen.
+        if (hasAttemptedInMemory) return;
+        hasAttemptedInMemory = true;
+      }
+      window.location.reload();
+    };
+
+    const handleWindowError = (event: ErrorEvent) => {
+      attemptRecovery(event.message || event.error?.message);
+    };
+    const handleRejection = (event: PromiseRejectionEvent) => {
+      const reason: any = event.reason;
+      attemptRecovery(reason?.message ?? String(reason));
+    };
+    const handleRouteChangeError = (err: unknown) => {
+      attemptRecovery((err as Error)?.message);
+    };
+
+    window.addEventListener('error', handleWindowError);
+    window.addEventListener('unhandledrejection', handleRejection);
+    router.events.on('routeChangeError', handleRouteChangeError);
+
+    return () => {
+      window.removeEventListener('error', handleWindowError);
+      window.removeEventListener('unhandledrejection', handleRejection);
+      router.events.off('routeChangeError', handleRouteChangeError);
+    };
+  }, [router.events]);
+
+  return null;
+}
+
 function ServiceWorkerUpdateNotifier() {
   const { showToast } = useToast();
 
@@ -466,6 +550,7 @@ function MyApp({ Component, pageProps: { session, ...pageProps } }: AppProps) {
               </CartProvider>
               {/* PWA helpers */}
               <ServiceWorkerUpdateNotifier />
+              <StaleDeploymentRecovery />
               <PushSubscriber />
               <InstallPrompt />
               <NudgeBar />
