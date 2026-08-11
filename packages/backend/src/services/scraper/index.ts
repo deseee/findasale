@@ -133,7 +133,7 @@ function geocodeToGrid(lat: number, lng: number, gridSizeMeters: number = 100): 
  * Generate dedupeKey from business name and city.
  * Format: normalized-name:normalized-city
  */
-function generateDedupeKey(name: string, city: string): string {
+export function generateDedupeKey(name: string, city: string): string {
   const normalize = (s: string) =>
     s.toLowerCase()
       .replace(/\s*&\s*/g, ' and ')

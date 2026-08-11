@@ -26,13 +26,29 @@
 
 import * as cheerio from 'cheerio';
 import { RateLimiter } from '../rateLimiter';
-import { getOrCreateScrapedOrganizer } from '../index';
+import { getOrCreateScrapedOrganizer, generateDedupeKey } from '../index';
 import { getRandomUserAgent, getRandomReferer } from '../userAgents';
 import { ScrapeStats } from '../sourceRegistry';
+import { prisma } from '../../../lib/prisma';
 
 const BASE_URL = 'https://www.estatesale.com';
 const SOURCE_NAME = 'EstateSaleCom';
 const BUSINESS_CATEGORY = 'ESTATE_SALE_CO';
+
+// Egress fix — sibling to GarageSaleFinder's Sentry [egress] "host exceeded 300 req/hr" fix.
+// Same anti-pattern: Phase 2 below unconditionally fetched a detail (profile) page for every
+// listing found on Phase 1's state pages, every run, with zero upfront freshness check — cost
+// paid regardless of whether the profile had changed since the last run. Unlike GarageSaleFinder
+// (whose sourceItemId is embedded in the index-page URL itself), EstateSaleCom's Phase 1 state
+// pages already carry {name, city} per company row — the exact same identifying data
+// getOrCreateScrapedOrganizer's dedupeKey tier (index.ts generateDedupeKey) keys off for this
+// source, since EstateSaleCom never passes googlePlaceId/foursquareVenueId/hereBusinessId/
+// esnOrgId. That means the dedupeKey is computable BEFORE the profile fetch, so a batch DB
+// pre-check can skip the fetch entirely for companies this source already confirmed recently.
+// scrape-estatesalecom.yml cron: '0 6 * 3,6,9,12 0' (quarterly, ~91-day cadence). 80 days
+// leaves a safety margin so a slightly early/late run still treats prior-quarter data as
+// stale rather than skipping it.
+const FRESHNESS_WINDOW_MS = 80 * 24 * 60 * 60 * 1000;
 
 const SOCIAL_DOMAINS = [
   'facebook.com', 'twitter.com', 'instagram.com', 'x.com',
@@ -287,8 +303,55 @@ export async function scrapeEstateSaleCom(
     `[EstateSaleCom] Phase 1 complete. Unique profiles to visit: ${profileQueue.length}`,
   );
 
+  // ── Freshness pre-check (egress fix — see FRESHNESS_WINDOW_MS comment above) ──────────
+  const dedupeKeyByProfileUrl = new Map<string, string>();
+  for (const entry of profileQueue) {
+    dedupeKeyByProfileUrl.set(entry.profileUrl, generateDedupeKey(entry.name, entry.city));
+  }
+  const uniqueDedupeKeys = Array.from(new Set(dedupeKeyByProfileUrl.values()));
+
+  const freshDedupeKeys = new Set<string>();
+  if (uniqueDedupeKeys.length > 0) {
+    try {
+      const existingOrgs = await prisma.organizer.findMany({
+        where: { dedupeKey: { in: uniqueDedupeKeys } },
+        select: { dedupeKey: true, sourcesJson: true },
+      });
+      const now = Date.now();
+      for (const org of existingOrgs) {
+        if (!org.dedupeKey) continue;
+        const sources = (org.sourcesJson as Array<{ sourceName?: string; lastSeen?: string }>) ?? [];
+        const ownTouch = sources.find((s) => s.sourceName === SOURCE_NAME);
+        if (ownTouch?.lastSeen) {
+          const lastSeenMs = new Date(ownTouch.lastSeen).getTime();
+          if (!isNaN(lastSeenMs) && now - lastSeenMs < FRESHNESS_WINDOW_MS) {
+            freshDedupeKeys.add(org.dedupeKey);
+          }
+        }
+      }
+    } catch (err) {
+      // Fail open — a freshness pre-check DB error must never block the scrape; fall back
+      // to the prior unconditional-fetch behaviour for this run instead.
+      console.warn('[EstateSaleCom] Freshness pre-check query failed (failing open):', err);
+    }
+  }
+
+  let skippedFresh = 0;
+  if (freshDedupeKeys.size > 0) {
+    console.log(
+      `[EstateSaleCom] Freshness pre-check: ${freshDedupeKeys.size}/${uniqueDedupeKeys.length} companies already confirmed by this source within the last ${Math.round(FRESHNESS_WINDOW_MS / 86400000)} days — skipping their profile fetch.`,
+    );
+  }
+
   // ── Phase 2: visit each profile for contact details ───────────────────────
   for (const entry of profileQueue) {
+    const dedupeKey = dedupeKeyByProfileUrl.get(entry.profileUrl)!;
+    if (freshDedupeKeys.has(dedupeKey)) {
+      skippedFresh++;
+      stats.itemsSkipped++;
+      continue;
+    }
+
     await rateLimiter.waitBeforeRequest('www.estatesale.com');
     const html = await fetchHtml(entry.profileUrl);
 
@@ -348,7 +411,7 @@ export async function scrapeEstateSaleCom(
     }
   }
 
-  console.log('[EstateSaleCom] Done. Stats:', JSON.stringify(stats));
+  console.log('[EstateSaleCom] Done. Stats:', JSON.stringify(stats), `skippedFresh=${skippedFresh}`);
 
   // 2026-08-08: was previously missing entirely -- the script only exited
   // non-zero on an uncaught exception, never on "ran cleanly but found
@@ -361,7 +424,7 @@ export async function scrapeEstateSaleCom(
   // by nearly every other scraper in this directory (grep 'zero results' —
   // auctionZipScraper.ts, nasmmScraper.ts, foursquarePlaces.ts, etc. all
   // throw here) so the workflow's "Notify on failure" step actually fires.
-  if (stats.itemsFound === 0) {
+  if (stats.itemsFound === 0 && skippedFresh === 0) {
     throw new Error(
       '[EstateSaleCom] Completed with zero results across all 51 state pages -- ' +
       'site may be soft-blocking automated requests (see per-state block-marker ' +

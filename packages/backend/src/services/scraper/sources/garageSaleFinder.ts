@@ -16,8 +16,30 @@ import { parseGarageSalesFinderListing, parseGarageSalesFinderGallery, extractEm
 import { ingestScrapedListing, flushFreshnessTouches, flushScraperRevalidation, ScrapedItem } from '../index';
 import { getRandomUserAgent, jitterDelay } from '../userAgents';
 import { safeFetch } from '../safeFetch';
+import { prisma } from '../../../lib/prisma';
 
 const GARAGE_SALES_BASE_URL = 'https://www.garagesalefinder.com';
+
+// Sentry egress-rate-limit fix (host garagesalefinder.com exceeded 300 req/hr, 23+
+// occurrences since 2026-07-19): scrapeGarageSaleFinder() previously fetched the full
+// detail page (and gallery page, if photos exist) for every one of up to 50 sale links
+// per metro on EVERY run, even when we already had a fresh, unchanged copy of that exact
+// listing -- the only dedup logic (ingestScrapedListing -> checkDuplicate, dedupe.ts:124)
+// runs AFTER the HTTP fetch already happened, so the egress cost was paid regardless of
+// whether the fetch was needed. A full run is ~351 metros x up to ~101 requests/metro
+// (detail + gallery), which mathematically cannot fit under the 300/hr cap no matter how
+// the run is paced -- the fix is skipping known-fresh listings BEFORE the fetch, not
+// spreading the run out more or raising the cap.
+//
+// 20 hours was chosen because this source's cron runs roughly once per day
+// (sourceRegistry.ts cronSchedule: '0 6 * * *', i.e. once every 24h). 20h gives ~4h of
+// headroom so a same-day manual/backfill re-run doesn't re-fetch a listing this cron
+// already captured hours earlier, while still being short enough that a listing is never
+// stale for more than one cron cycle -- a genuine price/photo/date change on GSF will be
+// picked up on the very next daily run, not silently skipped for days. This trades a
+// worst-case ~20h staleness window for eliminating the redundant-fetch volume that was
+// actually causing the alert; it is not a cache-forever shortcut.
+const FRESHNESS_WINDOW_MS = 20 * 60 * 60 * 1000; // 20 hours
 
 /**
  * Convert metro slug to GarageSaleFinder URL.
@@ -34,8 +56,8 @@ export async function scrapeGarageSaleFinder(
   metro: string,
   organizerId: string,
   rateLimiter: RateLimiter
-): Promise<{ created: number; updated: number; skipped: number; failed: number }> {
-  const stats = { created: 0, updated: 0, skipped: 0, failed: 0 };
+): Promise<{ created: number; updated: number; skipped: number; failed: number; skippedFresh: number }> {
+  const stats = { created: 0, updated: 0, skipped: 0, failed: 0, skippedFresh: 0 };
 
   try {
     await rateLimiter.loadRobotsTxt(GARAGE_SALES_BASE_URL);
@@ -109,8 +131,50 @@ export async function scrapeGarageSaleFinder(
 
     console.log(`[GarageSaleFinder] Found ${saleLinks.length} sale links in ${metro}`);
 
-    // Process each sale link (cap at 50 per metro per run)
-    for (const saleUrl of saleLinks.slice(0, 50)) {
+    // Cap at 50 per metro per run
+    const candidateUrls = saleLinks.slice(0, 50);
+
+    // Pre-fetch freshness check (egress-rate-limit fix — see FRESHNESS_WINDOW_MS comment
+    // above): one batched query for all candidate URLs in this metro instead of a
+    // per-link query, so we trade zero extra network waste for a single cheap DB round
+    // trip. checkDuplicate()'s primary (and, for this source, only effective — see below)
+    // dedup tier is an exact Sale.sourceUrl match (dedupe.ts:132-144), and
+    // parseGarageSalesFinderSale() always sets sourceUrl to the same saleUrl used here
+    // (garageSaleFinder.ts:237), so sourceUrl is the correct, consistent key to freshness
+    // -check against — it's the same field ingestScrapedListing already dedupes on.
+    // (The sourceItemId tier at dedupe.ts:151-166 matches against scrapedMetadata's
+    // top-level "sourceItemId" JSON key, which this source never actually writes into
+    // scrapedMetadata — see the ScrapedItem returned by parseGarageSalesFinderSale below
+    // — so it never fires for GarageSaleFinder rows; sourceUrl is the only tier that's
+    // ever live for this source, matching this pre-check to real behavior.)
+    // deletedAt/status are intentionally NOT filtered here: checkDuplicate's sourceUrl
+    // tier (dedupe.ts:133-136) also does not filter by deletedAt/status — any existing
+    // sourceUrl match already short-circuits ingestScrapedListing into a skip-and-touch,
+    // never a revive or re-validation. Mirroring that here preserves identical behavior;
+    // it does not skip anything that the post-fetch path would have handled differently.
+    const existingFreshRows = candidateUrls.length
+      ? await prisma.sale.findMany({
+          where: { sourceUrl: { in: candidateUrls } },
+          select: { sourceUrl: true, lastScrapedAt: true },
+        })
+      : [];
+    const freshnessCutoff = Date.now() - FRESHNESS_WINDOW_MS;
+    const freshSourceUrls = new Set(
+      existingFreshRows
+        .filter(row => row.sourceUrl && row.lastScrapedAt && row.lastScrapedAt.getTime() >= freshnessCutoff)
+        .map(row => row.sourceUrl as string)
+    );
+    if (freshSourceUrls.size > 0) {
+      console.log(`[GarageSaleFinder] ${freshSourceUrls.size}/${candidateUrls.length} sale link(s) in ${metro} already fresh (scraped within ${FRESHNESS_WINDOW_MS / 3600000}h) — skipping fetch`);
+    }
+
+    // Process each sale link
+    for (const saleUrl of candidateUrls) {
+      if (freshSourceUrls.has(saleUrl)) {
+        stats.skippedFresh++;
+        continue;
+      }
+
       await jitterDelay(300, 1200);
       const idMatch = saleUrl.match(/\/s\/([A-Za-z0-9]+)\//);
       const saleId = idMatch ? idMatch[1] : '';
@@ -129,6 +193,8 @@ export async function scrapeGarageSaleFinder(
     }
     await flushFreshnessTouches();
     await flushScraperRevalidation();
+
+    console.log(`[GarageSaleFinder] ${metro} done — created=${stats.created} updated=${stats.updated} skipped=${stats.skipped} skippedFresh=${stats.skippedFresh} failed=${stats.failed}`);
 
     rateLimiter.clearBackoff(domain);
     return stats;
