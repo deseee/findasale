@@ -88,6 +88,7 @@ export async function suggestNativeShippingPrice(input: {
   packageType?: string | null;
   origin: { zip?: string | null; lat?: number | null; lng?: number | null };
   subscriptionTier?: SubscriptionTier;
+  categoryId?: string | null;
 }): Promise<NativeShippingSuggestion> {
   const [cheapest, feeRate] = await Promise.all([
     computeCheapestForOrigin({
@@ -95,6 +96,7 @@ export async function suggestNativeShippingPrice(input: {
       dims: input.dims ?? null,
       origin: input.origin,
       packageType: input.packageType ?? null,
+      categoryId: input.categoryId ?? null,
     }),
     resolveEffectivePlatformFeeRate(input.subscriptionTier ?? null),
   ]);

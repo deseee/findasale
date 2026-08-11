@@ -4264,6 +4264,7 @@ export const getSuggestedShippingPriceHandler = async (req: AuthRequest, res: Re
         packageWidthIn: true,
         packageHeightIn: true,
         packageType: true,
+        ebayCategoryId: true,
         sale: {
           select: {
             zip: true,
@@ -4329,6 +4330,7 @@ export const getSuggestedShippingPriceHandler = async (req: AuthRequest, res: Re
           lng: item.sale.organizer.lng,
         },
         subscriptionTier: item.sale.organizer.subscriptionTier as any,
+        categoryId: item.ebayCategoryId ?? null,
       });
       return res.status(200).json(suggestion);
     } catch (err) {

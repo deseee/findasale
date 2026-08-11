@@ -151,7 +151,7 @@ export async function resolveItemShipping(input: {
   // silently underprice or crash).
   const fvfFlat = async (): Promise<ResolveItemShippingResult> => {
     try {
-      const cheapest = await computeCheapestForOrigin({ weightOz, dims, origin, packageType: item.packageType ?? null });
+      const cheapest = await computeCheapestForOrigin({ weightOz, dims, origin, packageType: item.packageType ?? null, categoryId: item.ebayCategoryId ?? null });
       const flatRate = roundUpToBucket(computeFvfFlatRate(cheapest.rate));
       return {
         fulfillmentPolicyId: null,
@@ -209,7 +209,7 @@ export async function resolveItemShipping(input: {
   // fulfillment policy (network + DB writes) on every call -- exactly what this
   // file's header says the preview must never do.
   try {
-    const cheapest = await computeCheapestForOrigin({ weightOz, dims, origin, packageType: item.packageType ?? null });
+    const cheapest = await computeCheapestForOrigin({ weightOz, dims, origin, packageType: item.packageType ?? null, categoryId: item.ebayCategoryId ?? null });
     const { bucketedRate, handlingCost } = computeCalculatedWithHandling(cheapest.rate);
     return {
       fulfillmentPolicyId: null,

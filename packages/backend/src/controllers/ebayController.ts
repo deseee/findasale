@@ -4206,7 +4206,8 @@ async function resolvePoliciesForItem(
         item.packageWeightOz!,
         dims,
         fromZip,
-        item.packageType // ADR-103 Phase 4: AHS packaging-attribute trigger input
+        item.packageType, // ADR-103 Phase 4: AHS packaging-attribute trigger input
+        item.ebayCategoryId ?? null
       );
       if (calcHandlingResult) {
         console.log(
@@ -4232,7 +4233,8 @@ async function resolvePoliciesForItem(
         item.packageWeightOz!,
         dims,
         fromZip,
-        item.packageType // ADR-103 Phase 4: AHS packaging-attribute trigger input
+        item.packageType, // ADR-103 Phase 4: AHS packaging-attribute trigger input
+        item.ebayCategoryId ?? null
       );
       if (fvfResult) {
         console.log(
@@ -4395,7 +4397,7 @@ async function resolvePoliciesForItem(
         : null
     );
     const computedFromZip = smartPickContext?.fromZip ?? null;
-    const computedFvf = await ensureFvfFlatRatePolicy(organizerId, item.packageWeightOz, computedDims, computedFromZip, item.packageType); // ADR-103 Phase 4
+    const computedFvf = await ensureFvfFlatRatePolicy(organizerId, item.packageWeightOz, computedDims, computedFromZip, item.packageType, item.ebayCategoryId ?? null); // ADR-103 Phase 4
     if (computedFvf) {
       fulfillmentPolicyId = computedFvf.policyId;
       routingReason = `flat-tiers-computed:${computedFvf.flatRate}`;
@@ -6725,6 +6727,7 @@ async function resolvePreviewShipping(opts: {
   origin: { zip?: string | null; lat?: number | null; lng?: number | null };
   labelCostOverride?: number;
   packageType?: string | null;
+  categoryId?: string | null;
 }): Promise<PreviewShippingResult> {
   const mode: 'FLAT_TIERS' | 'CALCULATED' =
     opts.shippingMode === 'FLAT_TIERS' ? 'FLAT_TIERS' : 'CALCULATED';
@@ -6738,6 +6741,7 @@ async function resolvePreviewShipping(opts: {
         : null,
       origin: opts.origin,
       packageType: opts.packageType ?? null,
+      categoryId: opts.categoryId ?? null,
     });
   } catch (err) {
     if (err instanceof ShippingHardBlockError) {
@@ -6878,6 +6882,7 @@ export const getShippingNetPreview = async (req: AuthRequest, res: Response): Pr
       origin: { zip: body.fromZip ?? saleZip, lat: organizer.lat, lng: organizer.lng },
       labelCostOverride: body.labelCost,
       packageType,
+      categoryId: ebayCategoryId,
     });
     // Single source of truth for what the buyer is charged (matches the live listing).
     const resolved = await resolveItemShipping({
@@ -7071,6 +7076,7 @@ export const getSuggestedPriceForMargin = async (req: AuthRequest, res: Response
       origin: { zip: body.fromZip ?? saleZip, lat: organizer.lat, lng: organizer.lng },
       labelCostOverride: body.labelCost,
       packageType,
+      categoryId: ebayCategoryId,
     });
     // Single source of truth for what the buyer is charged (matches the live listing).
     const resolved = await resolveItemShipping({

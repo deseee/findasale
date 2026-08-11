@@ -77,7 +77,8 @@ export async function ensureFvfFlatRatePolicy(
   weightOz: number,
   dims: { length?: number | null; width?: number | null; height?: number | null } | null,
   fromZip: string | null | undefined,
-  packageType?: string | null
+  packageType?: string | null,
+  categoryId?: string | null
 ): Promise<{ policyId: string; flatRate: number } | null> {
   const organizer = await prisma.organizer.findUnique({
     where: { id: organizerId },
@@ -103,6 +104,7 @@ export async function ensureFvfFlatRatePolicy(
       dims: dims ?? null,
       origin: { zip: fromZip ?? null, lat: organizer?.lat ?? null, lng: organizer?.lng ?? null },
       packageType: packageType ?? null,
+      categoryId: categoryId ?? null,
     });
   } catch (err) {
     if (err instanceof ShippingHardBlockError) {
@@ -268,6 +270,10 @@ export async function computeNamedWeightTierRate(
     weightOz: maxOz,
     dims: null,
     origin: { zip: fromZip ?? null, lat: origin.lat ?? null, lng: origin.lng ?? null },
+    // No item/categoryId in scope here -- this prices a shared weight-only ladder rung
+    // (see function header), not a specific item, so Standard Envelope eligibility
+    // (which requires a categoryId) intentionally cannot be evaluated for this call.
+    categoryId: null,
   });
 
   const flatRate = roundUpToBucket(computeFvfFlatRate(cheapest.rate));

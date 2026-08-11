@@ -210,7 +210,8 @@ export async function ensureCalculatedPolicyWithHandling(
   weightOz: number,
   dims: { length?: number | null; width?: number | null; height?: number | null } | null,
   fromZip: string | null | undefined,
-  packageType?: string | null
+  packageType?: string | null,
+  categoryId?: string | null
 ): Promise<{ policyId: string; handlingCost: number; bucketedRate: number } | null> {
   const organizer = await prisma.organizer.findUnique({
     where: { id: organizerId },
@@ -237,6 +238,7 @@ export async function ensureCalculatedPolicyWithHandling(
       dims: dims ?? null,
       origin: { zip: fromZip ?? null, lat: organizer?.lat ?? null, lng: organizer?.lng ?? null },
       packageType: packageType ?? null,
+      categoryId: categoryId ?? null,
     });
   } catch (err) {
     if (err instanceof ShippingHardBlockError) {
