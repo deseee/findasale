@@ -415,7 +415,7 @@ const AddItemsDetailPage = () => {
   // with the stale id as a parameter. Fix: track a resolvable promise per temp id created
   // for a new item; any append call targeting a temp- id awaits that specific item's
   // real id before firing, instead of racing it.
-  const tempItemResolvers = useRef<Record<string, { promise: Promise<string>; resolve: (id: string) => void }>>({});
+  const tempItemResolvers = useRef<Record<string, { promise: Promise<string>; resolve: (id: string) => void; reject: (err: Error) => void }>>({});
   // Bug fix (2026-07-14): resolved values are kept here (not deleted) so a
   // still-in-flight append call that reaches resolveAppendTargetId AFTER the item's
   // own creation already resolved doesn't find a missing entry and wrongly throw
@@ -427,13 +427,32 @@ const AddItemsDetailPage = () => {
 
   const registerTempItem = (tempId: string) => {
     let resolveFn!: (id: string) => void;
-    const promise = new Promise<string>((resolve) => { resolveFn = resolve; });
-    tempItemResolvers.current[tempId] = { promise, resolve: resolveFn };
+    let rejectFn!: (err: Error) => void;
+    const promise = new Promise<string>((resolve, reject) => { resolveFn = resolve; rejectFn = reject; });
+    // Swallow unhandled-rejection console warnings for the common case where nothing
+    // ever calls resolveAppendTargetId for this tempId -- Promise.race() there still
+    // observes the same underlying promise's rejection correctly; this parallel .catch
+    // just exists so an unconsumed rejection doesn't log a spurious browser warning.
+    promise.catch(() => {});
+    tempItemResolvers.current[tempId] = { promise, resolve: resolveFn, reject: rejectFn };
   };
 
   const resolveTempItem = (tempId: string, realId: string) => {
     resolvedTempIds.current[tempId] = realId;
     tempItemResolvers.current[tempId]?.resolve(realId);
+    delete tempItemResolvers.current[tempId];
+  };
+
+  // Bug fix (2026-08-11): counterpart to resolveTempItem for the failure path.
+  // Sentry FINDASALE-NEXTJS-V ("Timed out waiting for the item to finish creating.")
+  // fired 31s after a 502 on the item-creation call (FINDASALE-NEXTJS-T) because the
+  // creation call's catch block never resolved OR rejected this tempId's pending
+  // promise -- any append call already waiting on it via resolveAppendTargetId just
+  // sat idle until the hardcoded 20s race timeout fired, surfacing a vague generic
+  // message instead of the real, immediate reason. Rejecting here unblocks that wait
+  // right away with a specific, actionable message.
+  const rejectTempItem = (tempId: string, message: string) => {
+    tempItemResolvers.current[tempId]?.reject(new Error(message));
     delete tempItemResolvers.current[tempId];
   };
 
@@ -1419,6 +1438,13 @@ const AddItemsDetailPage = () => {
         )
       );
       showToast(`Photo failed: ${errorMessage}`, 'error');
+
+      if (!appendToItemId) {
+        // This was a create-new-item call (not an append) -- unblock any append
+        // already waiting on this tempId instead of leaving it to time out. See
+        // rejectTempItem doc above (Sentry FINDASALE-NEXTJS-T/V, 2026-07-18).
+        rejectTempItem(tempId, `This item couldn't be created: ${errorMessage}`);
+      }
     }
   };
 
@@ -1520,7 +1546,21 @@ const AddItemsDetailPage = () => {
         extra: { status: err?.response?.status, responseData: err?.response?.data, hasResponse: !!err?.response },
       });
       const msg = err?.response?.data?.message || err?.message;
-      showToast(msg ? `Upload failed: ${msg}` : 'Upload failed. Please try again.', 'error');
+      const errorMessage = msg ? `Upload failed: ${msg}` : 'Upload failed. Please try again.';
+      showToast(errorMessage, 'error');
+
+      if (!pendingQualityAppendId && pendingQualityTempId) {
+        // Create-new-item call failed after the quality-warning "Use Anyway" resume.
+        // Without this, the temp item stayed on the amber "still processing" icon
+        // forever with no indication it actually failed (Sentry FINDASALE-NEXTJS-V
+        // class of bug) -- mark it failed and unblock any pending append.
+        setRapidItems((prev) =>
+          prev.map((item) =>
+            item.id === pendingQualityTempId ? { ...item, aiError: errorMessage } : item
+          )
+        );
+        rejectTempItem(pendingQualityTempId, `This item couldn't be created: ${errorMessage}`);
+      }
     } finally {
       setPendingQualityBlob(null);
       setPendingQualityTempId(null);
@@ -1617,7 +1657,21 @@ const AddItemsDetailPage = () => {
         extra: { status: err?.response?.status, responseData: err?.response?.data, hasResponse: !!err?.response },
       });
       const msg = err?.response?.data?.message || err?.message;
-      showToast(msg ? `Upload failed: ${msg}` : 'Upload failed. Please try again.', 'error');
+      const errorMessage = msg ? `Upload failed: ${msg}` : 'Upload failed. Please try again.';
+      showToast(errorMessage, 'error');
+
+      if (!pendingFaceAppendId && pendingFaceTempId) {
+        // Create-new-item call failed after the face-detection "Upload Anyway" resume.
+        // Same class of bug as the quality-resume path above -- mark it failed instead
+        // of leaving it stuck on the amber "still processing" icon, and unblock any
+        // pending append waiting on this tempId.
+        setRapidItems((prev) =>
+          prev.map((item) =>
+            item.id === pendingFaceTempId ? { ...item, aiError: errorMessage } : item
+          )
+        );
+        rejectTempItem(pendingFaceTempId, `This item couldn't be created: ${errorMessage}`);
+      }
     } finally {
       setPendingFaceBlob(null);
       setPendingFaceTempId(null);
