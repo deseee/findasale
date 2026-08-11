@@ -491,19 +491,13 @@ export const postStopPhoto = async (req: AuthRequest, res: Response) => {
       },
     });
 
-    // Award +2 XP for posting photo
-    await prisma.pointsTransaction.create({
-      data: {
-        userId,
-        type: 'TRAIL_STOP_CHECKIN',
-        points: 2,
-        description: `Trail stop photo bonus`,
-      },
-    });
-
-    await prisma.user.update({
-      where: { id: userId },
-      data: { guildXp: { increment: 2 } },
+    // Award +2 XP for posting photo.
+    // Fix (same pattern as roadmap #268): was raw prisma.pointsTransaction.create +
+    // prisma.user.update, bypassing the shared awardXp() helper -- meant this XP skipped
+    // the fraud-suspect gate every other XP path enforces, plus lifetimeXpEarned/xpExpiresAt
+    // refresh and rank-up sync. awardXp() now the sole write path for this award.
+    await awardXp(userId, 'TRAIL_STOP_CHECKIN', 2, {
+      description: `Trail stop photo bonus`,
     });
 
     // Link photo to check-in (for reference)
