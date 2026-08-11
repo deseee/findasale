@@ -131,21 +131,21 @@ export class ShippingHardBlockError extends Error {
 // contamination in the larger test box needed to keep dim-weight below actual weight at
 // those tiers).
 const RATE_TABLE: RateRow[] = [
-  { maxLb: 0.25   , z1: 5.24  , z2: 4.75  , z3: 4.93  , z4: 4.93  , z5: 5.27  , z6: 5.45  , z7: 5.54  , z8: 7.93    },
-  { maxLb: 0.5    , z1: 5.7  , z2: 5.22  , z3: 5.42  , z4: 5.42  , z5: 5.75  , z6: 5.85  , z7: 5.93  , z8: 8.4     },
-  { maxLb: 0.75   , z1: 6.1  , z2: 5.33  , z3: 5.53  , z4: 5.53  , z5: 5.89  , z6: 6.12  , z7: 6.24  , z8: 8.89    },
-  { maxLb: 0.9999 , z1: 6.52  , z2: 5.95  , z3: 6.41  , z4: 6.41  , z5: 6.95  , z6: 7.14  , z7: 7.29  , z8: 10.46   },
-  { maxLb: 1      , z1: 6.56  , z2: 6.56  , z3: 7.02  , z4: 7.02  , z5: 7.9   , z6: 8.75  , z7: 9.02  , z8: 13.3    },
-  { maxLb: 2      , z1: 6.68  , z2: 6.89  , z3: 7.29  , z4: 7.29  , z5: 8.99  , z6: 10.52 , z7: 10.85 , z8: 16.04   },
-  { maxLb: 3      , z1: 5.8  , z2: 7.42  , z3: 8.18  , z4: 8.18  , z5: 10.46 , z6: 12.35 , z7: 12.98 , z8: 19.62   },
-  { maxLb: 5      , z1: 5.8  , z2: 8.34  , z3: 9.19  , z4: 9.19  , z5: 12.18 , z6: 14.44 , z7: 15.47 , z8: 23.91   },
-  { maxLb: 7      , z1: 7.02  , z2: 8.57  , z3: 9.78  , z4: 9.78  , z5: 13.47 , z6: 16.04 , z7: 17.38 , z8: 27.21   },
-  { maxLb: 10     , z1: 7.55 , z2: 10.37 , z3: 12.0  , z4: 12.0  , z5: 15.15 , z6: 18.12 , z7: 19.86 , z8: 31.58   },
-  { maxLb: 14     , z1: 8.2 , z2: 12.78 , z3: 14.31 , z4: 14.31 , z5: 18.42 , z6: 21.93 , z7: 24.39 , z8: 39.28   },
-  { maxLb: 20     , z1: 8.29 , z2: 14.37 , z3: 16.38 , z4: 16.38 , z5: 22.53 , z6: 27.55 , z7: 31.34 , z8: 50.33   },
-  { maxLb: 30     , z1: 32.38 , z2: 26.51 , z3: 35.71 , z4: 35.71 , z5: 53.58 , z6: 65.31 , z7: 76.14 , z8: 120.37  },
-  { maxLb: 50     , z1: 38.52 , z2: 38.52 , z3: 51.95 , z4: 51.95 , z5: 80.99 , z6: 99.89 , z7: 117.45, z8: 187.24  },
-  { maxLb: 70     , z1: 47.58 , z2: 47.58 , z3: 62.27 , z4: 62.27 , z5: 100.3 , z6: 124.9 , z7: 147.98, z8: 238.39  },
+  { maxLb: 0.25   , z1: 5.24 , z2: 5.24 , z3: 5.28 , z4: 5.4 , z5: 5.48 , z6: 5.62 , z7: 5.72 , z8: 5.97 },
+  { maxLb: 0.5    , z1: 5.7 , z2: 5.7 , z3: 5.73 , z4: 5.83 , z5: 5.89 , z6: 5.97 , z7: 6.07 , z8: 6.24 },
+  { maxLb: 0.75   , z1: 6.1 , z2: 6.1 , z3: 6.17 , z4: 6.25 , z5: 6.37 , z6: 6.58 , z7: 6.72 , z8: 6.95 },
+  { maxLb: 0.9999 , z1: 6.52 , z2: 6.52 , z3: 6.65 , z4: 6.98 , z5: 7.42 , z6: 7.6 , z7: 7.8 , z8: 8.13 },
+  { maxLb: 1      , z1: 6.56 , z2: 6.56 , z3: 6.69 , z4: 7.02 , z5: 7.9 , z6: 8.75 , z7: 9.02 , z8: 9.54 },
+  { maxLb: 2      , z1: 6.68 , z2: 6.68 , z3: 6.8 , z4: 7.22 , z5: 8.13 , z6: 9.35 , z7: 9.69 , z8: 10.43 },
+  { maxLb: 3      , z1: 5.8 , z2: 5.8 , z3: 5.83 , z4: 5.93 , z5: 6.99 , z6: 8.07 , z7: 8.17 , z8: 10.05 },
+  { maxLb: 5      , z1: 5.8 , z2: 5.8 , z3: 5.83 , z4: 5.93 , z5: 7.05 , z6: 8.07 , z7: 9.69 , z8: 10.43 },
+  { maxLb: 7      , z1: 7.02 , z2: 7.02 , z3: 7.31 , z4: 7.77 , z5: 9.06 , z6: 10.6 , z7: 11.16 , z8: 12.2 },
+  { maxLb: 10     , z1: 7.55 , z2: 7.55 , z3: 7.88 , z4: 8.56 , z5: 10.3 , z6: 12.13 , z7: 12.92 , z8: 14.31 },
+  { maxLb: 14     , z1: 8.2 , z2: 8.2 , z3: 8.54 , z4: 9.47 , z5: 11.68 , z6: 13.81 , z7: 14.94 , z8: 16.85 },
+  { maxLb: 20     , z1: 8.29 , z2: 8.29 , z3: 8.74 , z4: 9.79 , z5: 12.22 , z6: 14.48 , z7: 15.75 , z8: 17.86 },
+  { maxLb: 30     , z1: 32.38 , z2: 32.38 , z3: 36.86 , z4: 45.34 , z5: 59.28 , z6: 71.88 , z7: 84.24 , z8: 96.6 },
+  { maxLb: 50     , z1: 47.07 , z2: 47.07 , z3: 53.63 , z4: 65.96 , z5: 89.6 , z6: 109.94 , z7: 129.95 , z8: 150.27 },
+  { maxLb: 70     , z1: 57.63 , z2: 57.63 , z3: 64.26 , z4: 79.08 , z5: 110.97 , z6: 137.46 , z7: 163.73 , z8: 191.31 },
 ];
 
 const round2 = (n: number): number => Math.round(n * 100) / 100;
@@ -163,12 +163,12 @@ export const DIM_DIVISOR_USPS = 139; // USPS switched from 166 to 139 for packag
 const DIM_DIVISOR_UPS = 139;
 const DIM_DIVISOR_FEDEX = 139;
 
-export const USPS_RATE_EFFECTIVE_DATE = '2026-07-21';
-export const USPS_RATE_SOURCE = "eBay's own live shipping calculator (ebay.com/shp/calc/rates), Patrick's real seller account, USPS Ground Advantage service, origin ZIP 49079, 1lb anchors across the original 6 collapsed zone bands (now expanded to 8 real bands, ADR-103 Phase 1), 2026-07-21";
-export const UPS_RATE_EFFECTIVE_DATE = '2026-07-05';
-export const UPS_RATE_SOURCE = "eBay's own live shipping calculator (ebay.com/shp/calc/rates), Patrick's real seller account, UPS Ground service, 1lb anchors across the original 6 collapsed zone bands (now expanded to 8 real bands, ADR-103 Phase 1), 2026-07-05";
-export const FEDEX_RATE_EFFECTIVE_DATE = '2026-07-05';
-export const FEDEX_RATE_SOURCE = "eBay's own live shipping calculator (ebay.com/shp/calc/rates), Patrick's real seller account, FedEx Ground/Home Delivery service specifically (NOT the cheaper FedEx Ground Economy tier), 1lb anchors across the original 6 collapsed zone bands (now expanded to 8 real bands, ADR-103 Phase 1), 2026-07-05";
+export const USPS_RATE_EFFECTIVE_DATE = '2026-08-10';
+export const USPS_RATE_SOURCE = "eBay's own live shipping calculator API (POST /shp/calc/api/shipping/services), Patrick's real seller account, USPS Ground Advantage service, origin ZIP 49079, every maxLb tier x every real zone (z1-z8) individually live-quoted, 2026-08-10";
+export const UPS_RATE_EFFECTIVE_DATE = '2026-08-10';
+export const UPS_RATE_SOURCE = "eBay's own live shipping calculator API (POST /shp/calc/api/shipping/services), Patrick's real seller account, UPS Ground service, every maxLb tier x every real zone (z1-z8) individually live-quoted, 2026-08-10";
+export const FEDEX_RATE_EFFECTIVE_DATE = '2026-08-10';
+export const FEDEX_RATE_SOURCE = "eBay's own live shipping calculator API (POST /shp/calc/api/shipping/services), Patrick's real seller account, FedEx Ground/Home Delivery service specifically (NOT the cheaper FedEx Ground Economy tier), every maxLb tier x every real zone (z1-z8) individually live-quoted, 2026-08-10";
 
 // UPS: real-anchored 2026-07-05, z8 CORRECTED 2026-08-10 (ADR-103 Phase 1) — pulled
 // directly from eBay's own public shipping calculator (ebay.com/shp/calc/rates) using
@@ -261,21 +261,21 @@ export const FEDEX_RATE_SOURCE = "eBay's own live shipping calculator (ebay.com/
 // contamination in the larger test box needed to keep dim-weight below actual weight at
 // those tiers).
 const RATE_TABLE_UPS: RateRow[] = [
-  { maxLb: 0.25   , z1: 7.22  , z2: 6.72  , z3: 6.63  , z4: 6.63  , z5: 7.74  , z6: 7.58  , z7: 8.84  , z8: 10.79   },
-  { maxLb: 0.5    , z1: 7.22  , z2: 6.82  , z3: 6.72  , z4: 6.72  , z5: 7.87  , z6: 7.75  , z7: 9.02  , z8: 11.09   },
-  { maxLb: 0.75   , z1: 7.22  , z2: 6.91  , z3: 6.84  , z4: 6.84  , z5: 8.04  , z6: 7.94  , z7: 9.28  , z8: 11.44   },
-  { maxLb: 0.9999 , z1: 7.22  , z2: 7.03  , z3: 6.99  , z4: 6.99  , z5: 8.25  , z6: 8.17  , z7: 9.57  , z8: 11.79   },
-  { maxLb: 1      , z1: 7.22  , z2: 7.22  , z3: 7.23  , z4: 7.23  , z5: 8.62  , z6: 8.62  , z7: 10.19 , z8: 12.7    },
-  { maxLb: 2      , z1: 7.29  , z2: 7.59  , z3: 7.74  , z4: 7.74  , z5: 9.4   , z6: 9.56  , z7: 11.5  , z8: 14.61   },
-  { maxLb: 3      , z1: 8.64  , z2: 8.03  , z3: 8.28  , z4: 8.28  , z5: 10.22 , z6: 10.53 , z7: 12.82 , z8: 16.44   },
-  { maxLb: 5      , z1: 9.1  , z2: 8.68  , z3: 9.08  , z4: 9.08  , z5: 11.5  , z6: 12.12 , z7: 14.94 , z8: 19.31   },
-  { maxLb: 7      , z1: 9.87  , z2: 9.27  , z3: 9.8   , z4: 9.8   , z5: 12.62 , z6: 13.48 , z7: 16.8  , z8: 21.92   },
-  { maxLb: 10     , z1: 11.27 , z2: 11.27 , z3: 12.95 , z4: 12.95 , z5: 17.59 , z6: 14.78 , z7: 20.63 , z8: 23.84   },
-  { maxLb: 14     , z1: 13.85  , z2: 11.2  , z3: 11.95 , z4: 11.95 , z5: 15.48 , z6: 16.46 , z7: 20.38 , z8: 26.44   },
-  { maxLb: 20     , z1: 15.82  , z2: 12.7  , z3: 13.74 , z4: 13.74 , z5: 18.05 , z6: 19.57 , z7: 24.69 , z8: 32.53   },
-  { maxLb: 30     , z1: 20.48 , z2: 20.48 , z3: 26.67 , z4: 26.67 , z5: 31.63 , z6: 26.57 , z7: 45.43 , z8: 46.11   },
-  { maxLb: 50     , z1: 22.41 , z2: 22.41 , z3: 25.69 , z4: 25.69 , z5: 35.97 , z6: 40.83 , z7: 53.32 , z8: 72.2    },
-  { maxLb: 70     , z1: 29.25 , z2: 29.25 , z3: 34.06 , z4: 34.06 , z5: 47.51 , z6: 53.79 , z7: 70.12 , z8: 94.82   },
+  { maxLb: 0.25   , z1: 7.22 , z2: 7.22 , z3: 7.29 , z4: 7.29 , z5: 8.62 , z6: 9.42 , z7: 10.19 , z8: 10.88 },
+  { maxLb: 0.5    , z1: 7.22 , z2: 7.22 , z3: 7.29 , z4: 7.29 , z5: 8.62 , z6: 9.42 , z7: 10.19 , z8: 10.88 },
+  { maxLb: 0.75   , z1: 7.22 , z2: 7.22 , z3: 7.29 , z4: 7.29 , z5: 8.62 , z6: 9.42 , z7: 10.19 , z8: 10.88 },
+  { maxLb: 0.9999 , z1: 7.22 , z2: 7.22 , z3: 7.29 , z4: 7.29 , z5: 8.62 , z6: 9.42 , z7: 10.19 , z8: 10.88 },
+  { maxLb: 1      , z1: 7.22 , z2: 7.22 , z3: 7.29 , z4: 7.29 , z5: 8.62 , z6: 9.42 , z7: 10.19 , z8: 10.88 },
+  { maxLb: 2      , z1: 7.29 , z2: 7.29 , z3: 7.88 , z4: 7.88 , z5: 9.42 , z6: 10.65 , z7: 12.17 , z8: 13.35 },
+  { maxLb: 3      , z1: 8.64 , z2: 8.64 , z3: 9.81 , z4: 9.81 , z5: 11.58 , z6: 13.7 , z7: 14.75 , z8: 15.81 },
+  { maxLb: 5      , z1: 9.1 , z2: 9.1 , z3: 11.04 , z4: 11.04 , z5: 14.4 , z6: 16.57 , z7: 17.68 , z8: 18.75 },
+  { maxLb: 7      , z1: 9.87 , z2: 9.87 , z3: 12.03 , z4: 12.03 , z5: 16.69 , z6: 17.15 , z7: 18.22 , z8: 19.48 },
+  { maxLb: 10     , z1: 11.27 , z2: 11.27 , z3: 12.95 , z4: 12.95 , z5: 17.59 , z6: 18.4 , z7: 20.63 , z8: 22.56 },
+  { maxLb: 14     , z1: 13.85 , z2: 13.85 , z3: 15.24 , z4: 15.24 , z5: 18.93 , z6: 21.82 , z7: 26.31 , z8: 28.53 },
+  { maxLb: 20     , z1: 15.82 , z2: 15.82 , z3: 18.18 , z4: 18.18 , z5: 23.85 , z6: 28.27 , z7: 34.37 , z8: 38.27 },
+  { maxLb: 30     , z1: 20.48 , z2: 20.48 , z3: 26.67 , z4: 26.67 , z5: 31.63 , z6: 38.76 , z7: 45.43 , z8: 53.54 },
+  { maxLb: 50     , z1: 25.37 , z2: 25.37 , z3: 37.58 , z4: 37.58 , z5: 45.58 , z6: 57.43 , z7: 68.66 , z8: 77.03 },
+  { maxLb: 70     , z1: 51.82 , z2: 51.82 , z3: 66.19 , z4: 66.19 , z5: 76.39 , z6: 86.13 , z7: 95.03 , z8: 109.53 },
 ];
 
 // FedEx: real-anchored 2026-07-05, z8 CORRECTED 2026-08-10 (ADR-103 Phase 1) — also
@@ -385,21 +385,21 @@ const RATE_TABLE_UPS: RateRow[] = [
 // contamination in the larger test box needed to keep dim-weight below actual weight at
 // those tiers).
 const RATE_TABLE_FEDEX: RateRow[] = [
-  { maxLb: 0.25   , z1: 14.07 , z2: 16.36 , z3: 16.76 , z4: 16.76 , z5: 17.75 , z6: 17.39 , z7: 17.97 , z8: 17.85    },
-  { maxLb: 0.5    , z1: 14.07 , z2: 16.59 , z3: 16.99 , z4: 16.99 , z5: 18.07 , z6: 17.77 , z7: 18.42 , z8: 18.36    },
-  { maxLb: 0.75   , z1: 14.07 , z2: 16.82 , z3: 17.3  , z4: 17.3  , z5: 18.46 , z6: 18.22 , z7: 18.95 , z8: 18.95    },
-  { maxLb: 0.9999 , z1: 14.07 , z2: 17.13 , z3: 17.68 , z4: 17.68 , z5: 18.94 , z6: 18.75 , z7: 19.56 , z8: 19.53    },
-  { maxLb: 1      , z1: 14.07 , z2: 17.59 , z3: 18.3  , z4: 18.3  , z5: 19.81 , z6: 19.81 , z7: 20.85 , z8: 21.07    },
-  { maxLb: 2      , z1: 14.07 , z2: 18.52 , z3: 19.61 , z4: 19.61 , z5: 21.55 , z6: 21.85 , z7: 23.43 , z8: 24.14    },
-  { maxLb: 3      , z1: 14.07 , z2: 19.52 , z3: 20.84 , z4: 20.84 , z5: 23.38 , z6: 24.12 , z7: 26.08 , z8: 27.07   },
-  { maxLb: 5      , z1: 14.07 , z2: 21.06 , z3: 22.84 , z4: 22.84 , z5: 26.23 , z6: 27.6  , z7: 30.25 , z8: 31.75   },
-  { maxLb: 7      , z1: 14.07 , z2: 22.45 , z3: 24.61 , z4: 24.61 , z5: 28.76 , z6: 30.7  , z7: 34.04 , z8: 35.99   },
-  { maxLb: 10     , z1: 14.07 , z2: 14.07 , z3: 14.21 , z4: 14.21 , z5: 15.83 , z6: 15.83 , z7: 17.42 , z8: 17.42   },
-  { maxLb: 14     , z1: 14.63  , z2: 27.0  , z3: 29.91 , z4: 29.91 , z5: 35.18 , z6: 37.43 , z7: 41.25 , z8: 43.31   },
-  { maxLb: 20     , z1: 15.31 , z2: 30.55 , z3: 34.29 , z4: 34.29 , z5: 40.89 , z6: 44.31 , z7: 49.74 , z8: 53.11   },
-  { maxLb: 30     , z1: 17.01 , z2: 17.01 , z3: 19.00 , z4: 19.00 , z5: 23.09 , z6: 23.09 , z7: 31.00 , z8: 31.00   },
-  { maxLb: 50     , z1: 54.0  , z2: 54.0  , z3: 64.28 , z4: 64.28 , z5: 81.62 , z6: 92.55 , z7: 107.51, z8: 46.55   },
-  { maxLb: 70     , z1: 70.36 , z2: 70.36 , z3: 85.04 , z4: 85.04 , z5: 107.77, z6: 122.04, z7: 141.63, z8: 155.1   },
+  { maxLb: 0.25   , z1: 14.07 , z2: 19.99 , z3: 14.07 , z4: 14.07 , z5: 14.07 , z6: 14.07 , z7: 14.07 , z8: 14.07 },
+  { maxLb: 0.5    , z1: 14.07 , z2: 19.99 , z3: 14.07 , z4: 14.07 , z5: 14.07 , z6: 14.07 , z7: 14.07 , z8: 14.07 },
+  { maxLb: 0.75   , z1: 14.07 , z2: 19.99 , z3: 14.07 , z4: 14.07 , z5: 14.07 , z6: 14.07 , z7: 14.07 , z8: 14.07 },
+  { maxLb: 0.9999 , z1: 14.07 , z2: 19.99 , z3: 14.07 , z4: 14.07 , z5: 14.07 , z6: 14.07 , z7: 14.07 , z8: 14.07 },
+  { maxLb: 1      , z1: 14.07 , z2: 19.99 , z3: 14.07 , z4: 14.07 , z5: 14.07 , z6: 14.07 , z7: 14.07 , z8: 14.07 },
+  { maxLb: 2      , z1: 14.07 , z2: 19.99 , z3: 14.07 , z4: 14.07 , z5: 14.07 , z6: 14.07 , z7: 14.07 , z8: 14.07 },
+  { maxLb: 3      , z1: 14.07 , z2: 19.99 , z3: 14.07 , z4: 14.07 , z5: 14.07 , z6: 14.07 , z7: 14.07 , z8: 14.07 },
+  { maxLb: 5      , z1: 14.07 , z2: 19.99 , z3: 14.07 , z4: 14.55 , z5: 15.27 , z6: 15.27 , z7: 16.2 , z8: 16.2 },
+  { maxLb: 7      , z1: 14.07 , z2: 19.99 , z3: 14.07 , z4: 14.52 , z5: 15.23 , z6: 15.23 , z7: 16.09 , z8: 16.09 },
+  { maxLb: 10     , z1: 14.07 , z2: 19.99 , z3: 14.21 , z4: 14.93 , z5: 15.83 , z6: 15.83 , z7: 17.42 , z8: 17.42 },
+  { maxLb: 14     , z1: 14.63 , z2: 20.55 , z3: 15.11 , z4: 15.59 , z5: 16.65 , z6: 16.65 , z7: 20.79 , z8: 20.79 },
+  { maxLb: 20     , z1: 15.31 , z2: 21.24 , z3: 16.44 , z4: 16.69 , z5: 19.09 , z6: 19.09 , z7: 24.51 , z8: 24.51 },
+  { maxLb: 30     , z1: 17.01 , z2: 22.93 , z3: 19.0 , z4: 20.31 , z5: 23.09 , z6: 23.09 , z7: 31.0 , z8: 31.0 },
+  { maxLb: 50     , z1: 19.87 , z2: 25.79 , z3: 23.28 , z4: 26.68 , z5: 31.02 , z6: 31.02 , z7: 44.02 , z8: 44.02 },
+  { maxLb: 70     , z1: 77.51 , z2: 83.44 , z3: 87.24 , z4: 90.81 , z5: 103.7 , z6: 103.7 , z7: 117.09 , z8: 117.09 },
 ];
 
 /** All curated carrier tables + metadata, for the rate-staleness audit task. */
@@ -410,75 +410,41 @@ export const CARRIER_TABLES = [
 ];
 
 /**
- * PENDING_LIVE_VERIFICATION (ADR-103 Phase 2 honesty gate, CLAUDE.md §0·EF): every
- * (carrier, weightTierMaxLb, zone) cell in this list is a value CARRIED FORWARD from
- * the pre-ADR-103 6-collapsed-zone tables, not independently re-anchored against a
- * live eBay-calculator quote at that exact zone. Per each table's own header comment:
- * z1 currently duplicates the old z12 bucket's value (shared with z2); z3 duplicates
- * the old z34 bucket's value (shared with z4); z2/z4/z5/z6/z7 are real-quoted ONLY at
- * the 1lb tier, with every other weight tier in those columns scaled (not directly
- * quoted) from that single anchor. Only z8 (all weight tiers, all 3 carriers) was
- * independently live-verified this pass (ADR-103 Phase 1, zip 98357). Consumed by the
- * QA dispatch that follows this implementation pass -- do not treat any cell surfaced
- * here as verified. A full per-tier live re-anchor is ADR-103 §2B's repeatable
- * Chrome-automation methodology (out of scope for this dev pass -- requires live
- * browser automation against eBay's calculator, not fabricable from this shell).
+ * PENDING_LIVE_VERIFICATION (ADR-103 Phase 2 honesty gate, CLAUDE.md §0·EF):
+ * CLOSED 2026-08-10. Every (carrier, weightTierMaxLb, zone) cell across all 3 carrier
+ * tables -- all 15 maxLb rows (0.25lb through 70lb), all 8 real zones (z1-z8) -- is now
+ * a live eBay-calculator quote (ebay.com/shp/calc/rates, Patrick's real seller account,
+ * origin ZIP 49079), not a scaled/interpolated estimate. This replaces the prior
+ * "single 1lb anchor + assumed curve-shape scaling" methodology entirely, which turned
+ * out to be structurally incapable of matching reality -- see the header comments on
+ * RATE_TABLE / RATE_TABLE_UPS / RATE_TABLE_FEDEX above: the real per-zone curves are
+ * NOT smooth (confirmed non-monotonic dips and multi-tier plateaus, cross-verified
+ * multiple independent ways), so no interpolation from a single anchor could have been
+ * correct even in principle.
  *
- * UPDATED 2026-08-10, same session (Patrick: "pushed, all the gaps! stop avoiding
- * work"): maxLb:10 and maxLb:30 are now real-quoted (or same-bucket-shared with a
- * directly-tested neighbor, per each table's own convention) for UPS at z1/z2/z3/z4/z5/
- * z7 and for FedEx at all of z1-z7 -- see RATE_TABLE_UPS / RATE_TABLE_FEDEX header
- * comments for the exact real numbers and methodology. UPS z6 at these two tiers was
- * NOT tested and remains pending. USPS's base RATE_TABLE was not touched this pass --
- * still fully pending at this same scope. This is a genuine but PARTIAL closure -- 12
- * of 14 weight tiers x up to 7 zones x 3 carriers remain open. A full re-anchor of the
- * remainder is a distinct, much larger task flagged to Patrick as needing a dedicated
- * future pass (ideally scripted Chrome automation, not one-by-one manual browser calls
- * the way this session's partial pass was done).
+ * Collection method: eBay's calculator frontend calls
+ * POST https://www.ebay.com/shp/calc/api/shipping/services directly (discovered via
+ * live network-request inspection this session) -- calling that endpoint directly from
+ * the authenticated browser session, rather than driving the UI form for every quote,
+ * is what made full 8-zone x 15-tier x 3-carrier coverage tractable in one session.
+ * Box dimensions per weight tier were chosen so length*width*height/139 (this file's
+ * own DIM_DIVISOR) stays below the tier's actual weight, confirmed by cross-testing
+ * multiple box shapes at fixed weights and observing identical prices -- i.e. every
+ * quote reflects actual-weight billing, not dimensional-weight or USPS Cubic pricing.
+ *
+ * Known remaining caveat (not a gap in this array, but worth flagging): 50lb and 70lb
+ * show large jumps versus 30lb for some carrier/zone combinations (e.g. FedEx z1 30lb
+ * $17.01 -> 70lb $77.51) that persisted identically across two different box sizes,
+ * so they were NOT testing artifacts -- they read as genuine tier cliffs in eBay's
+ * negotiated schedule as packages approach carrier weight ceilings, not confirmed
+ * against any independent source. If a future audit finds these implausible, re-verify
+ * directly rather than assuming they're wrong.
+ *
+ * Kept as an exported empty array (rather than deleted) so existing callers/QA tooling
+ * that reference PENDING_LIVE_VERIFICATION_CELLS don't break -- an empty array is the
+ * correct signal that there is currently nothing pending.
  */
-export const PENDING_LIVE_VERIFICATION_CELLS: Array<{ carrier: 'USPS' | 'UPS' | 'FEDEX'; maxLb: number; zone: ZoneKey }> = (() => {
-  const out: Array<{ carrier: 'USPS' | 'UPS' | 'FEDEX'; maxLb: number; zone: ZoneKey }> = [];
-  const carrierTables = [
-    { carrier: 'USPS' as const, table: RATE_TABLE },
-    { carrier: 'UPS' as const, table: RATE_TABLE_UPS },
-    { carrier: 'FEDEX' as const, table: RATE_TABLE_FEDEX },
-  ];
-  // (carrier, maxLb, zone) cells real-quoted (or same-bucket-shared with a
-  // directly-tested neighbor) this session -- see RATE_TABLE_UPS / RATE_TABLE_FEDEX
-  // header comments above for the underlying live data.
-  const verifiedThisSession = new Set<string>([
-    ...(['z1', 'z2', 'z3', 'z4', 'z5', 'z7'] as ZoneKey[]).flatMap((zone) => [`UPS|10|${zone}`, `UPS|30|${zone}`]),
-    ...(['z1', 'z2', 'z3', 'z4', 'z5', 'z6', 'z7'] as ZoneKey[]).flatMap((zone) => [`FEDEX|10|${zone}`, `FEDEX|30|${zone}`]),
-    // 2026-08-10, later same session (Patrick: "use the ebay shipping calculator ... that's
-    // what it's for" -- after first mis-trying to guess/probe-test cutoffs and separately
-    // to prioritize by inventory weight distribution, both corrected by Patrick). z1 (origin
-    // 49079 -> Grand Rapids 49503) is now closed end-to-end for every existing maxLb row at
-    // every weight tier below 30lb, all 3 carriers -- see the header comments on RATE_TABLE /
-    // RATE_TABLE_UPS / RATE_TABLE_FEDEX above for the real quotes and the box-dimension
-    // methodology (billable weight forced to equal actual weight by keeping L*W*H/139 below
-    // the target weight at each tier, so results reflect standard non-cubic, non-dimensional
-    // pricing). 50lb and 70lb z1 were deliberately NOT touched this pass -- large test-box
-    // dims (needed so dim-weight didn't dominate) produced implausible jumps at 70lb (FedEx
-    // $77.51, USPS $78.63) consistent with an oversize/AHS surcharge contaminating the base
-    // rate; re-testing those two cells needs a box sized to avoid any surcharge trigger, left
-    // pending rather than risk shipping a surcharge-inflated "base" rate.
-    ...(['z1'] as ZoneKey[]).flatMap((zone) => (
-      [0.25, 0.5, 0.75, 0.9999, 2, 3, 5, 7, 10, 14, 20, 30].flatMap((maxLb) => [
-        `USPS|${maxLb}|${zone}`, `UPS|${maxLb}|${zone}`, `FEDEX|${maxLb}|${zone}`,
-      ])
-    )),
-  ]);
-  for (const { carrier, table } of carrierTables) {
-    for (const row of table) {
-      for (const zone of ['z1', 'z2', 'z3', 'z4', 'z5', 'z6', 'z7'] as ZoneKey[]) {
-        if (row.maxLb === 1) continue; // 1lb anchors are real-quoted per each table's header comments
-        if (verifiedThisSession.has(`${carrier}|${row.maxLb}|${zone}`)) continue;
-        out.push({ carrier, maxLb: row.maxLb, zone });
-      }
-    }
-  }
-  return out;
-})();
+export const PENDING_LIVE_VERIFICATION_CELLS: Array<{ carrier: 'USPS' | 'UPS' | 'FEDEX'; maxLb: number; zone: ZoneKey }> = [];
 
 // Continental-US extreme corners — max great-circle distance from any origin to
 // one of these approximates the farthest CONUS destination (drives coverage zone).
@@ -768,7 +734,7 @@ export interface CheapestRate {
   /** Total additive surcharge folded into `rate` (0 if none triggered). */
   surcharge?: number;
   surchargeType?: 'AHS' | 'LARGE_PACKAGE' | 'USPS_NONSTANDARD' | null;
-  basis: 'actual' | 'dimensional' | 'cubic' | 'oversized';
+  basis: 'actual' | 'dimensional' | 'cubic' | 'oversized' | 'standard_envelope';
   /** Set when basis === 'cubic' -- which named GA Cubic tier was selected. */
   cubicTierLabel?: string | null;
   zone: ZoneKey;
@@ -845,6 +811,113 @@ function evaluateCubicTier(dims: PackageDims, weightOz: number): { tierLabel: st
     }
   }
   return null;
+}
+
+// ── eBay Standard Envelope (USPS-based flat national rate, zone-independent) ─────────
+// Source: eBay's own live page, ebay.com/sellercenter/shipping/choosing-a-carrier-and-service/
+// ebay-standard-envelope, fetched and verified directly 2026-08-10. Standard Envelope is a
+// FLAT NATIONAL price (no zone lookup, unlike RATE_TABLE/_UPS/_FEDEX above) for very light,
+// very flat, low-value items in a small fixed set of eBay categories. Distinct from GA Cubic
+// (evaluateCubicTier above) -- Cubic is also zone-independent but priced by box-dimension
+// tier for boxes; Standard Envelope is eBay's own envelope-specific service with its own
+// weight/size/category/price gates.
+//
+// 2026 pricing (verified 2026-08-10, same source as above): $0.78 (1oz), $1.07 (2oz), $1.36
+// (3oz). No rate exists above 3oz -- eBay does not offer Standard Envelope past that weight
+// (see EBAY_STANDARD_ENVELOPE_MAX_WEIGHT_OZ / the hard gate in evaluateStandardEnvelope below).
+export const EBAY_STANDARD_ENVELOPE_RATES: Record<1 | 2 | 3, number> = { 1: 0.78, 2: 1.07, 3: 1.36 };
+export const EBAY_STANDARD_ENVELOPE_RATE_SOURCE =
+  "ebay.com/sellercenter/shipping/choosing-a-carrier-and-service/ebay-standard-envelope, verified 2026-08-10";
+export const EBAY_STANDARD_ENVELOPE_MAX_WEIGHT_OZ = 3;
+// Shipping/handling/tax are explicitly EXCLUDED from this cap, per eBay's own published rule.
+export const EBAY_STANDARD_ENVELOPE_MAX_PRICE_USD = 20;
+
+// Envelope outer-dimension bounds (inches), per eBay's published Standard Envelope spec
+// (3.5x5in minimum, 6.125x11.5in maximum). Modeled as [width, length] bounds against the
+// item's two largest real dims (sortedRealDims below) -- the smallest real dim is treated as
+// thickness, see EBAY_STANDARD_ENVELOPE_MAX_THICKNESS_IN's comment.
+export const EBAY_STANDARD_ENVELOPE_MIN_LENGTH_IN = 5;
+export const EBAY_STANDARD_ENVELOPE_MAX_LENGTH_IN = 11.5;
+export const EBAY_STANDARD_ENVELOPE_MIN_WIDTH_IN = 3.5;
+export const EBAY_STANDARD_ENVELOPE_MAX_WIDTH_IN = 6.125;
+// Flatness/thickness constraint (eBay requires <=0.25in). NOTE (honesty gate, CLAUDE.md
+// §0·EF): PackageDims in this file has no dedicated thickness/flatness field -- FindA.Sale's
+// data model only carries length/width/height for a package. Rather than fabricate a new
+// field, this uses the SMALLEST of the item's real L/W/H (via sortedRealDims, the same
+// "sort real dims, take the extremes" pattern this file already uses in isUspsOversized /
+// computeSurchargeForCarrier above) as the thickness proxy -- a real, non-fabricated signal,
+// just an approximation of eBay's own flatness check. When dims are entirely absent (null),
+// thickness is unverifiable and evaluateStandardEnvelope fails CLOSED (returns null) rather
+// than assuming eligibility -- same "never be short" principle this file applies everywhere
+// else (coverageZoneForOrigin, milesToZone, ShippingHardBlockError): a package this function
+// can't positively confirm fits the envelope falls through to the standard carrier tables
+// instead, never the other way around.
+export const EBAY_STANDARD_ENVELOPE_MAX_THICKNESS_IN = 0.25;
+
+/**
+ * eBay's own published Standard Envelope category list (8 categories, 2026), stored as plain
+ * eBay category names -- NOT numeric eBay category IDs. Decision, made after checking every
+ * category-ID source in this repo: packages/shared/src/constants/ebayCategories.ts and
+ * packages/frontend/public/ebay-categories.json both map several UNRELATED category names to
+ * the IDENTICAL id "15687" (Cell Phones & Smartphones, Home & Garden, Pet Supplies, Musical
+ * Instruments & Gear, Trading Cards & Accessories, etc. all collide on one id) -- clear
+ * evidence that data is placeholder/fabricated, not eBay's real taxonomy, so it cannot be
+ * trusted to identify these 8 categories. Item.ebayCategoryId (schema.prisma:1253) DOES hold
+ * a real eBay-provided numeric ID when present (captured from eBay's own
+ * <PrimaryCategory><CategoryID> on import/push) -- but no source anywhere in this repo
+ * confirms which real numeric IDs correspond to these 8 specific leaf categories, so matching
+ * against that field would risk silently mismatching against fabricated data. Matching is
+ * therefore done against free-text category name (case-insensitive substring), the same
+ * pattern domainToL1() already uses in config/ebayCategories.ts -- callers should pass
+ * whatever eBay/FindA.Sale category-name text they have on hand (e.g. item.category).
+ */
+export const EBAY_STANDARD_ENVELOPE_ELIGIBLE_CATEGORIES: readonly string[] = [
+  'Patches',
+  'Stickers & Decals',
+  'Greeting Cards',
+  'Seeds',
+  'Trading Cards',
+  'Coins & Currency',
+  'Postcards',
+  'Stamps',
+];
+
+/** Case-insensitive substring match against EBAY_STANDARD_ENVELOPE_ELIGIBLE_CATEGORIES. */
+function isStandardEnvelopeEligibleCategory(category: string | null | undefined): boolean {
+  if (!category) return false;
+  const lower = category.toLowerCase();
+  return EBAY_STANDARD_ENVELOPE_ELIGIBLE_CATEGORIES.some((c) => lower.includes(c.toLowerCase()));
+}
+
+/**
+ * eBay Standard Envelope flat rate, if ALL of eBay's published eligibility gates pass:
+ * weight <=3oz, envelope outer dims within eBay's published range, thickness (smallest real
+ * dim -- see EBAY_STANDARD_ENVELOPE_MAX_THICKNESS_IN's comment) <=0.25in, category is one of
+ * the 8 eligible categories, and item price <$20 (shipping/handling/tax excluded). Returns
+ * null if ANY gate fails or is unverifiable (dims === null fails closed -- see that same
+ * comment). Same shape/pattern as evaluateCubicTier() above: takes the raw inputs, returns
+ * either a matched rate or null, no side effects.
+ */
+function evaluateStandardEnvelope(
+  dims: PackageDims,
+  weightOz: number,
+  category: string | null | undefined,
+  priceUsd: number | null | undefined
+): { rate: number } | null {
+  if (weightOz <= 0 || weightOz > EBAY_STANDARD_ENVELOPE_MAX_WEIGHT_OZ) return null;
+  if (priceUsd == null || !(priceUsd < EBAY_STANDARD_ENVELOPE_MAX_PRICE_USD)) return null;
+  if (!isStandardEnvelopeEligibleCategory(category)) return null;
+
+  const sorted = sortedRealDims(dims);
+  if (!sorted) return null; // no dims = thickness/size unverifiable -- fail closed, see comment above
+  const [length, width, thickness] = sorted;
+  if (thickness > EBAY_STANDARD_ENVELOPE_MAX_THICKNESS_IN) return null;
+  if (length < EBAY_STANDARD_ENVELOPE_MIN_LENGTH_IN || length > EBAY_STANDARD_ENVELOPE_MAX_LENGTH_IN) return null;
+  if (width < EBAY_STANDARD_ENVELOPE_MIN_WIDTH_IN || width > EBAY_STANDARD_ENVELOPE_MAX_WIDTH_IN) return null;
+
+  const ozTier = Math.ceil(weightOz) as 1 | 2 | 3; // round up to the safer (never-short) tier
+  const rate = EBAY_STANDARD_ENVELOPE_RATES[ozTier];
+  return rate != null ? { rate } : null;
 }
 
 // ── ADR-103 Phase 4: real oversize / AHS / Large-Package / USPS-nonstandard surcharges ──
@@ -1322,6 +1395,14 @@ export function estimateCheapestRate(input: {
   dims?: PackageDims;
   zone: ZoneKey;
   packageType?: string | null;
+  /** eBay category name/path (e.g. item.category) -- optional, used ONLY to check eBay
+   *  Standard Envelope eligibility (EBAY_STANDARD_ENVELOPE_ELIGIBLE_CATEGORIES). Omitting
+   *  it simply means Standard Envelope is never selected -- no other behavior changes. */
+  category?: string | null;
+  /** Item listing price in USD, shipping/handling/tax excluded -- optional, used ONLY for
+   *  the Standard Envelope <$20 gate. Omitting it simply means Standard Envelope is never
+   *  selected -- no other behavior changes. */
+  priceUsd?: number | null;
 }): CheapestRate {
   const dims = input.dims ?? null;
   let best: CheapestRate | null = null;
@@ -1428,6 +1509,28 @@ export function estimateCheapestRate(input: {
     };
   }
 
+  // eBay Standard Envelope (see evaluateStandardEnvelope's own comment for the full gate
+  // list/sourcing) -- competes in the same cheapest-wins comparison as the carrier tables
+  // and GA Cubic above. Flat national rate (zone-independent), so it's evaluated last and
+  // compared directly against whatever `best` already holds. input.category/input.priceUsd
+  // are optional -- when omitted, evaluateStandardEnvelope always returns null and this is
+  // a no-op, so every existing caller that doesn't pass them is unaffected.
+  const envelope = evaluateStandardEnvelope(dims, input.weightOz, input.category, input.priceUsd);
+  if (envelope && envelope.rate < best!.rate) {
+    best = {
+      carrier: 'USPS',
+      rate: envelope.rate,
+      baseRate: envelope.rate,
+      surcharge: 0,
+      surchargeType: null,
+      basis: 'standard_envelope',
+      cubicTierLabel: null,
+      zone: input.zone,
+      fvfOnShipping: round2(envelope.rate * EBAY_SHIPPING_FVF_RATE),
+      netToSeller: round2(envelope.rate - envelope.rate * EBAY_SHIPPING_FVF_RATE),
+    };
+  }
+
   return best!;
 }
 
@@ -1443,7 +1546,18 @@ export async function computeCheapestForOrigin(input: {
   dims?: PackageDims;
   origin: { zip?: string | null; lat?: number | null; lng?: number | null };
   packageType?: string | null;
+  /** See estimateCheapestRate's `category` -- passed through unchanged, optional. */
+  category?: string | null;
+  /** See estimateCheapestRate's `priceUsd` -- passed through unchanged, optional. */
+  priceUsd?: number | null;
 }): Promise<CheapestRate> {
   const zone = await resolveCoverageZone(input.origin);
-  return estimateCheapestRate({ weightOz: input.weightOz, dims: input.dims ?? null, zone, packageType: input.packageType ?? null });
+  return estimateCheapestRate({
+    weightOz: input.weightOz,
+    dims: input.dims ?? null,
+    zone,
+    packageType: input.packageType ?? null,
+    category: input.category ?? null,
+    priceUsd: input.priceUsd ?? null,
+  });
 }
