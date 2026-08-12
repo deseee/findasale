@@ -14,6 +14,9 @@ import {
   emailDomain,
   domainMatchesBusiness,
   FAMOUS_UNRELATED_DOMAINS,
+  decodeMailtoCandidate,
+  padHtmlForTextExtraction,
+  stripLeadingPhoneNumberNoise,
   type DiscoverySource,
 } from '../emailProvenance';
 
@@ -372,17 +375,27 @@ async function scrapeWebsiteForEmail(website: string): Promise<string | null> {
       const html = await response.text();
 
       // Priority 1: mailto: href attributes
+      // 2026-08-12 fix: decode URL-encoding before use — see decodeMailtoCandidate()
+      // doc (leading %20 / fully percent-encoded hrefs were stored verbatim otherwise).
       mailtoPattern.lastIndex = 0;
       let match: RegExpExecArray | null;
       while ((match = mailtoPattern.exec(html)) !== null) {
-        const email = match[1].trim().toLowerCase();
+        const email = decodeMailtoCandidate(match[1]).trim().toLowerCase();
         if (email && !excluded.test(email) && !isGenericEmail(email)) return email;
       }
 
       // Priority 2: bare email addresses in page text
+      // 2026-08-12 fix: match against tag-padded text, not raw HTML — two elements
+      // with no whitespace between their tags in the source markup (e.g. a phone
+      // number directly next to an email) otherwise collapse into one glued string
+      // that the local-part character class happily swallows whole. See
+      // padHtmlForTextExtraction() doc. stripLeadingPhoneNumberNoise() is a second,
+      // independent guard for the rarer case where the two sit in the exact same
+      // text node with zero separator, which tag-padding can't fix.
+      const spacedForBareMatch = padHtmlForTextExtraction(html);
       bareEmailPattern.lastIndex = 0;
-      while ((match = bareEmailPattern.exec(html)) !== null) {
-        const email = match[1].trim().toLowerCase();
+      while ((match = bareEmailPattern.exec(spacedForBareMatch)) !== null) {
+        const email = stripLeadingPhoneNumberNoise(match[1].trim().toLowerCase());
         // Skip asset paths that accidentally match the email pattern
         if (/\.(png|jpg|gif|js|css|svg|woff)/.test(email)) continue;
         if (!excluded.test(email) && !isGenericEmail(email)) return email;

@@ -7,6 +7,9 @@ import {
   calibrateConfidence as sharedCalibrateConfidence,
   isGenericEmail as sharedIsGenericEmail,
   registrableDomain,
+  decodeMailtoCandidate,
+  padHtmlForTextExtraction,
+  stripLeadingPhoneNumberNoise,
   type DiscoverySource,
 } from './emailProvenance';
 import { isBlockedWebsiteDomain } from '../config/domainBlocklist';
@@ -318,7 +321,10 @@ async function scrapeWebsiteEmails(domain: string): Promise<{ emails: string[]; 
         if (href) {
           const match = href.match(/mailto:([^?#\s]*)/);
           if (match && match[1]) {
-            const candidate = match[1].trim();
+            // 2026-08-12 fix: decode URL-encoding BEFORE trimming/validating — see
+            // decodeMailtoCandidate() doc for why (leading %20 / fully-encoded hrefs
+            // were being stored verbatim otherwise).
+            const candidate = decodeMailtoCandidate(match[1]).trim();
             // Apply structural checks — malformed mailto hrefs are rare but do occur
             if (!isMalformedCandidate(candidate)) {
               emails.push(candidate);
@@ -328,11 +334,17 @@ async function scrapeWebsiteEmails(domain: string): Promise<{ emails: string[]; 
       });
 
       // Extract emails from text content — preprocess first to strip markdown artifacts
-      const rawText = $('body').text();
+      //
+      // 2026-08-12 fix: cheerio's $('body').text() concatenates every descendant text
+      // node with no separator — pad tag boundaries first so two adjacent-but-unrelated
+      // text nodes (e.g. a phone number next to an email) can never touch. See
+      // padHtmlForTextExtraction() doc.
+      const spacedHtml = padHtmlForTextExtraction(html);
+      const rawText = cheerio.load(spacedHtml)('body').text();
       const cleanText = preprocessTextForExtraction(rawText);
-      const textEmails = (cleanText.match(EMAIL_REGEX) || []).filter(
-        (e) => !isMalformedCandidate(e)
-      );
+      const textEmails = (cleanText.match(EMAIL_REGEX) || [])
+        .map((e) => stripLeadingPhoneNumberNoise(e))
+        .filter((e) => !isMalformedCandidate(e));
       emails.push(...textEmails);
 
       // Parse schema.org Person markup

@@ -257,3 +257,75 @@ export function calibrateConfidence(
   // Floor at 0.10
   return Math.max(score, 0.10);
 }
+
+/**
+ * 2026-08-12 fix (bounce-suppression-sweep root-cause investigation):
+ * Safely URL-decode a captured mailto: href local-part/address.
+ *
+ * Scraped `mailto:` hrefs are frequently URL-encoded — either a stray leading
+ * "%20" (an encoded space, common when the href was hand-typed or copy-pasted
+ * with whitespace) or the ENTIRE local part percent-encoded as a crude anti-spam
+ * obfuscation technique some site builders use. Both were being stored verbatim
+ * with no decoding, producing malformed live-outreach addresses (confirmed: 11
+ * Organizer.scrapedEmail rows with a literal "%20" prefix, 1 fully percent-encoded,
+ * out of 2,423 website_scrape rows scanned 2026-08-12).
+ *
+ * decodeURIComponent throws on malformed escape sequences — on failure this
+ * returns the original raw string unchanged so callers can still run their own
+ * validation/rejection logic rather than silently dropping the candidate.
+ */
+export function decodeMailtoCandidate(raw: string): string {
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return raw;
+  }
+}
+
+/**
+ * 2026-08-12 fix: pad every HTML tag boundary with a space before flattening
+ * markup to plain text for email-regex extraction.
+ *
+ * cheerio's `.text()` (and naive regex-matching against raw HTML) concatenates
+ * adjacent-but-unrelated text nodes with NO separator. A phone number sitting in
+ * one element directly next to an email in a sibling element — with no whitespace
+ * in the source markup between the two tags — collapses into one glued string
+ * (e.g. "209.232.2709hopechestthrift@hospiceheart.org"), and the email-matching
+ * regex's local-part character class happily swallows the leading digits as part
+ * of the "local part". Confirmed against live Organizer rows, both a leading
+ * phone-number prefix and a trailing site-name suffix glued onto a domain/TLD.
+ *
+ * This is intentionally crude (regex-based tag padding, not a full re-serialize)
+ * — it only needs to guarantee whitespace exists between any two elements' text
+ * content before a flattened-text regex runs against it; extra whitespace inside
+ * a single continuous run of text is harmless for email matching.
+ */
+export function padHtmlForTextExtraction(html: string): string {
+  return html.replace(/<(\/?)([a-zA-Z][\w-]*)([^>]*)>/g, ' <$1$2$3> ');
+}
+
+/**
+ * 2026-08-12 fix: defensive secondary guard for the same glued-text failure mode
+ * `padHtmlForTextExtraction` targets — this one catches the (rarer) case where the
+ * phone number and email genuinely sit in the SAME text node with zero separator
+ * in the source markup itself, so tag-padding can't help.
+ *
+ * If a matched candidate's local part starts with a phone-number-shaped digit run
+ * (e.g. "209.232.2709" or "542-4637") immediately followed by 2+ letters with no
+ * separator, strip the numeric run and keep the letters — that's the real local
+ * part bleeding in from adjacent scraped text, not a legitimate email format (RFC
+ * 5321 allows digits in a local part, but never a bare 6-11 digit phone-number
+ * pattern immediately butting into a word with zero separator in real-world use).
+ * Returns the candidate unchanged if it doesn't match this specific shape.
+ */
+export function stripLeadingPhoneNumberNoise(candidate: string): string {
+  const atIdx = candidate.indexOf('@');
+  if (atIdx < 1) return candidate;
+  const local = candidate.substring(0, atIdx);
+  const rest = candidate.substring(atIdx);
+  const phonePrefixMatch = local.match(/^(\d{2,4}[.\-]\d{2,4}[.\-]?\d{0,4})([A-Za-z]{2,}.*)$/);
+  if (phonePrefixMatch && phonePrefixMatch[2]) {
+    return phonePrefixMatch[2] + rest;
+  }
+  return candidate;
+}
