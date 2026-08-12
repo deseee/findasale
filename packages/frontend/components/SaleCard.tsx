@@ -74,7 +74,7 @@ const SaleCard: React.FC<SaleCardProps> = ({ sale, priority = false }) => {
 
   // L-004 edge: treat empty-string / whitespace-only photo URLs as "no photo".
   // Scraped sales can ship photoUrls[0] === "" or "   ", which previously rendered
-  // an <img> with an empty/whitespace src — a blank dark rectangle instead of the
+  // an <img> with an empty/whitespace src: a blank dark rectangle instead of the
   // branded placeholder. Trim and require real content before using the URL.
   const rawPhotoUrl =
     sale.photoUrls && sale.photoUrls.length > 0 ? sale.photoUrls[0] : null;
@@ -98,7 +98,7 @@ const SaleCard: React.FC<SaleCardProps> = ({ sale, priority = false }) => {
     // already loaded/failed from the browser cache by the time this effect runs
     // (common on fast/cached requests, and on SSR-hydrated <img> tags whose
     // download can finish before React attaches onLoad/onError), the native
-    // 'load'/'error' event has already fired and will never fire again — so
+    // 'load'/'error' event has already fired and will never fire again: so
     // onLoad/onError alone leave imgLoaded stuck false forever. Read the DOM's
     // own .complete/.naturalWidth state directly instead of relying on the event.
     const el = imgRef.current;
@@ -111,7 +111,7 @@ const SaleCard: React.FC<SaleCardProps> = ({ sale, priority = false }) => {
   // Compute "happening today" client-side only to avoid SSR/CSR date mismatch (hydration #418)
   useEffect(() => {
     // Bug fix (566-row TODAY/Live badge bug, S1130 diagnostic): permanent-storefront
-    // listings (isOngoing) are always-live directory listings, not one-day events —
+    // listings (isOngoing) are always-live directory listings, not one-day events:
     // never badge them TODAY off their frozen scrape-time date window.
     if (sale.isOngoing) {
       setShowToday(false);
@@ -202,7 +202,7 @@ const SaleCard: React.FC<SaleCardProps> = ({ sale, priority = false }) => {
             loading={priority ? 'eager' : 'lazy'}
           />
         ) : (
-          // Branded no-photo placeholder — tinted tile + FindA.Sale pin (L-004 audit 2026-05-30)
+          // Branded no-photo placeholder: tinted tile + FindA.Sale pin (L-004 audit 2026-05-30)
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-br from-warm-100 to-warm-200 dark:from-gray-700 dark:to-gray-800">
             <svg
               className="w-10 h-10 text-amber-500/70 dark:text-amber-400/70"
@@ -246,14 +246,14 @@ const SaleCard: React.FC<SaleCardProps> = ({ sale, priority = false }) => {
           </div>
         )}
 
-        {/* Brief F: Sale type badge — bottom-left of photo (shows when no lock badge) */}
+        {/* Brief F: Sale type badge, bottom-left of photo (shows when no lock badge) */}
         {sale.saleType && !sale.locked && (
           <div className="absolute bottom-2 left-2">
             <SaleTypeBadge saleType={sale.saleType} size="sm" theme="dark" />
           </div>
         )}
 
-        {/* Rank-Based Early Access: Lock badge — corner only, never covers photo */}
+        {/* Rank-Based Early Access: Lock badge (corner only, never covers photo) */}
         {sale.locked && sale.minutesUntilUnlock !== undefined && (
           <div className="absolute bottom-2 left-2">
             <span className="flex items-center gap-1 px-2 py-1 rounded bg-black/60 backdrop-blur-sm text-white text-xs font-semibold">

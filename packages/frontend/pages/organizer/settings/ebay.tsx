@@ -67,7 +67,7 @@ interface WeightTierMapping {
   policyId: string;
   policyName: string;
   // Client-only stable id to keep React row identity across re-renders/sorts.
-  // Not persisted — stripped before POST in handleSaveMapping.
+  // Not persisted: stripped before POST in handleSaveMapping.
   _clientId?: string;
 }
 
@@ -118,7 +118,7 @@ interface PolicyMapping {
   heavyOversizedPolicyId?: string | null;
   fragilePolicyId?: string | null;
   unknownPolicyId?: string | null;
-  // S725: DRAFT mode removed — pushAsDraft removed from UI; backend ignores it.
+  // S725: DRAFT mode removed: pushAsDraft removed from UI; backend ignores it.
   merchantLocationSource: 'EXISTING' | 'SALE_ADDRESS' | 'ORGANIZER_ADDRESS';
   shippingMode?: 'CALCULATED' | 'FLAT_TIERS';
   freeShippingOptIn?: boolean;
@@ -145,8 +145,8 @@ const EbayPolicySetupPage = () => {
   const [setupData, setSetupData] = useState<SetupData | null>(null);
   const [mapping, setMapping] = useState<PolicyMapping | null>(null);
   const [originalMapping, setOriginalMapping] = useState<PolicyMapping | null>(null);
-  // eBay Push — shipping smart-pick organizer default.
-  // S725: ebayDefaultPublishMode removed (DRAFT mode killed — see ebayController.ts).
+  // eBay Push: shipping smart-pick organizer default.
+  // S725: ebayDefaultPublishMode removed (DRAFT mode killed: see ebayController.ts).
   const [organizerDefaults, setOrganizerDefaults] = useState<{
     ebayDefaultShippingPolicyId: string | null;
   }>({ ebayDefaultShippingPolicyId: null });
@@ -216,7 +216,7 @@ const EbayPolicySetupPage = () => {
           heavyOversizedPolicyId: null,
           fragilePolicyId: null,
           unknownPolicyId: null,
-          // S725: pushAsDraft removed — DRAFT mode killed
+          // S725: pushAsDraft removed: DRAFT mode killed
           merchantLocationSource: 'SALE_ADDRESS',
           shippingMode: 'CALCULATED',
           freeShippingOptIn: false,
@@ -352,7 +352,7 @@ const EbayPolicySetupPage = () => {
         });
       }
       showToast('eBay settings saved', 'success');
-      // Reflect the canonical sort order locally — preserve _clientId so React
+      // Reflect the canonical sort order locally: preserve _clientId so React
       // keys stay stable and inputs don't remount after save.
       const idByMaxOz = new Map(mapping.weightTierMappings.map(t => [t, t._clientId]));
       const sortedWithIds = [...mapping.weightTierMappings].sort((a, b) => {
@@ -509,7 +509,7 @@ const EbayPolicySetupPage = () => {
               )}
               {policyCheck.result && policyCheck.result.staleCount > 0 && (
                 <span className="text-sm text-amber-700 dark:text-amber-400">
-                  {policyCheck.result.staleCount} of your saved policies no longer exist on eBay — listed below so you can fix them.
+                  {policyCheck.result.staleCount} of your saved policies no longer exist on eBay: listed below so you can fix them.
                 </span>
               )}
             </div>
@@ -589,7 +589,7 @@ const EbayPolicySetupPage = () => {
                   </div>
                 </div>
 
-                {/* Section B2: Push defaults — default shipping policy. S725 removed publish-mode (DRAFT was broken-by-design). */}
+                {/* Section B2: Push defaults: default shipping policy. S725 removed publish-mode (DRAFT was broken-by-design). */}
                 <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
                   <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-1">Push Defaults</h2>
                   <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
@@ -841,7 +841,7 @@ const EbayPolicySetupPage = () => {
                         ))}
                       </select>
                       <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                        This can include items that are actually easy to ship — check your item list if this number seems high.
+                        This can include items that are actually easy to ship: check your item list if this number seems high.
                         {unknownCount !== null && (
                           <span className="block mt-1">
                             You currently have <strong>{unknownCount}</strong> item{unknownCount === 1 ? '' : 's'} in this bucket.
@@ -855,7 +855,7 @@ const EbayPolicySetupPage = () => {
                 <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
                   <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Special Shipping Rules</h2>
                   <p className="text-sm text-gray-600 dark:text-gray-400">
-                    These only apply when you're using Flat-rate tiers above — switch to Flat-rate tiers to use them.
+                    These only apply when you're using Flat-rate tiers above: switch to Flat-rate tiers to use them.
                   </p>
                 </div>
                 )}
@@ -952,7 +952,7 @@ const EbayPolicySetupPage = () => {
                 <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
                   <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Category Overrides</h2>
                   <p className="text-sm text-gray-600 dark:text-gray-400">
-                    These only apply when you're using Flat-rate tiers above — switch to Flat-rate tiers to use them.
+                    These only apply when you're using Flat-rate tiers above: switch to Flat-rate tiers to use them.
                   </p>
                 </div>
                 )}
@@ -1115,7 +1115,7 @@ const EbayPolicySetupPage = () => {
             )}
           </div>
 
-          {/* Section H: Save bar (sticky footer — only shown when unsaved changes exist) */}
+          {/* Section H: Save bar (sticky footer: only shown when unsaved changes exist) */}
           {mapping && hasChanges && (
             <div className="fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-gray-700 border-t-2 border-gray-300 dark:border-gray-500 p-4">
               <div className="max-w-4xl mx-auto flex items-center justify-end gap-3">

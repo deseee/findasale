@@ -26,8 +26,8 @@ You can change the split later, but the agreed percentage locks in at settlement
 1. Go to **Organizer → Consignors**.
 2. Tap **Add Consignor**.
 3. Enter their name and email address.
-4. Set the **Payout Split** — enter the consignor's percentage. If they keep 60 cents of every dollar, type \`60\`.
-5. Choose what happens **if items don't sell** — return to the consignor, donate to charity, or relist next sale. This is just a reminder for you; it doesn't move or change anything automatically, but it's worth agreeing on before the sale so there's no surprise at settlement.
+4. Set the **Payout Split**: enter the consignor's percentage. If they keep 60 cents of every dollar, type \`60\`.
+5. Choose what happens **if items don't sell**: return to the consignor, donate to charity, or relist next sale. This is just a reminder for you; it doesn't move or change anything automatically, but it's worth agreeing on before the sale so there's no surprise at settlement.
 6. Tap **Save**.
 
 The consignor receives an email with a link to their read-only portal. They don't need to create an account.
@@ -45,7 +45,7 @@ When you add or edit an item:
 
 That item is now linked to that consignor. You can tag as many items as you need. There's no limit per consignor.
 
-If you forget to tag an item before the sale closes, you can still edit it in settlement. Tagging before close is cleaner — do it at photo time if you can.
+If you forget to tag an item before the sale closes, you can still edit it in settlement. Tagging before close is cleaner: do it at photo time if you can.
 
 ---
 
@@ -57,7 +57,7 @@ When consignors open their portal link, they see:
 - Status for each item: active, on hold, or sold
 - Their running total as items sell
 
-They can't see other consignors' items. They can't see your total revenue. They can't see items that aren't tagged to them. The portal is read-only — they can't edit prices or item details.
+They can't see other consignors' items. They can't see your total revenue. They can't see items that aren't tagged to them. The portal is read-only: they can't edit prices or item details.
 
 If a consignor asks why an item isn't showing up, check that the Consignor field is set on that item.
 
@@ -69,8 +69,8 @@ When you close the sale:
 
 1. Go to **Organizer → Settlement**.
 2. The Settlement hub lists every consignor with their total sold, your cut, and their payout amount.
-3. You can export a line-item breakdown for each consignor as a CSV — useful if they want to see exactly what sold.
-4. Mark the payout as sent after you pay them (bank transfer, check, Venmo — however you've agreed).
+3. You can export a line-item breakdown for each consignor as a CSV: useful if they want to see exactly what sold.
+4. Mark the payout as sent after you pay them (bank transfer, check, Venmo, however you've agreed).
 
 FindA.Sale does not initiate the payout to the consignor. That part is between you and them. The Settlement hub gives you the number; you make the payment.
 
@@ -82,7 +82,7 @@ FindA.Sale does not initiate the payout to the consignor. That part is between y
 Yes. You can add a consignor and start tagging their items at any point before close.
 
 **Can a consignor have a different split for different items?**
-Not directly. The split is set per consignor. If you need different rates for the same person across different categories, the workaround is to create two separate consignor entries (example: "Maria — Jewelry" at 70% and "Maria — Furniture" at 50%).
+Not directly. The split is set per consignor. If you need different rates for the same person across different categories, the workaround is to create two separate consignor entries (example: "Maria: Jewelry" at 70% and "Maria: Furniture" at 50%).
 
 **What if I forget to tag an item before the sale closes?**
 You can still assign it in the Settlement hub before you mark the consignor as paid. Do it before you export their line items.
@@ -94,7 +94,7 @@ Yes. The consignor system works the same way for yard sales, flea market booths,
 Not automatically in real time. Their portal updates as sales happen, so they can check it. If you want to notify them, you'd do that manually.
 
 **What if an item is returned or a hold falls through?**
-If a held item is released, the status resets to active in the consignor's portal automatically. Returns after close need to be handled manually in Settlement — adjust the line item before you export.
+If a held item is released, the status resets to active in the consignor's portal automatically. Returns after close need to be handled manually in Settlement: adjust the line item before you export.
 
 ---
 
@@ -108,27 +108,27 @@ If a held item is released, the status resets to active in the consignor's porta
 
 ## Video script
 
-**[60-second VO script — screen recording over app UI]**
+**[60-second VO script: screen recording over app UI]**
 
 ---
 
 **[0:00–0:08]**
-If you're selling items on behalf of someone else — a client, a family, a neighbor — FindA.Sale tracks their items separately and calculates their payout automatically.
+If you're selling items on behalf of someone else (a client, a family, a neighbor), FindA.Sale tracks their items separately and calculates their payout automatically.
 
 **[0:08–0:18]**
-Go to Organizer, then Consignors. Tap Add Consignor. Enter their name, their email, and the percentage they keep. Say they keep 60% — type 60. Save it.
+Go to Organizer, then Consignors. Tap Add Consignor. Enter their name, their email, and the percentage they keep. Say they keep 60%: type 60. Save it.
 
 **[0:18–0:25]**
-They'll get an email with a link to their portal. They can check what sold and what's still active. Read-only — they can't change anything.
+They'll get an email with a link to their portal. They can check what sold and what's still active. Read-only: they can't change anything.
 
 **[0:25–0:38]**
 Now tag their items. Open any item in your inventory. Find the Consignor dropdown and pick their name. Do that for every item that belongs to them. You can do it at photo time or anytime before close.
 
 **[0:38–0:50]**
-When the sale closes, go to Settlement. Their total is already calculated — what sold, your cut, what you owe them. Export the line items as a CSV if they want the details.
+When the sale closes, go to Settlement. Their total is already calculated: what sold, your cut, what you owe them. Export the line items as a CSV if they want the details.
 
 **[0:50–1:00]**
-You make the payment however you've agreed — bank transfer, check, whatever. Mark it paid in FindA.Sale. That's it. No spreadsheet math, no manual tallying.`,
+You make the payment however you've agreed: bank transfer, check, whatever. Mark it paid in FindA.Sale. That's it. No spreadsheet math, no manual tallying.`,
 };
 
 export default entry;

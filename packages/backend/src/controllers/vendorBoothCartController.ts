@@ -125,7 +125,7 @@ async function computeLegFeeSplit(params: {
       return {
         blocked: true,
         reason:
-          "This hub's owner has not completed Stripe onboarding yet — checkout is unavailable for booths with a revenue-share agreement until they do.",
+          "This hub's owner has not completed Stripe onboarding yet. Checkout is unavailable for booths with a revenue-share agreement until they do.",
       };
     }
   }
@@ -1637,7 +1637,7 @@ export const captureBoothCart = async (req: BoothAuthRequest, res: Response) => 
     if (captureFailed.length > 0) {
       await releaseCaptureLock();
       return res.status(207).json({
-        error: 'Some booths captured, others did not — needs manual reconciliation',
+        error: 'Some booths captured, others did not: needs manual reconciliation',
         captured: captured.map((l) => l.vendorBoothId),
         failed: captureFailed,
       });
@@ -1868,7 +1868,7 @@ export const cancelBoothCart = async (req: BoothAuthRequest, res: Response) => {
     if (!cart) return res.status(404).json({ error: 'Cart not found' });
     if (!callerOwnsCart(req.boothAuth, cart)) return res.status(403).json({ error: CART_NOT_YOURS_ERROR });
     if (cart.status === 'COMPLETED') {
-      return res.status(409).json({ error: 'Cart is already completed — cannot cancel, use refund instead' });
+      return res.status(409).json({ error: 'Cart is already completed. Cannot cancel; use refund instead.' });
     }
     if (cart.status === 'FAILED') {
       return res.status(200).json({ success: true, message: 'Cart already cancelled' });
@@ -1878,7 +1878,7 @@ export const cancelBoothCart = async (req: BoothAuthRequest, res: Response) => {
       // call racing a concurrent /capture call could try to release/cancel legs the
       // capture loop is actively finalizing -- this closes that window for the entire
       // duration of a capture attempt (see captureBoothCart's capture lock).
-      return res.status(409).json({ error: 'Cart is currently being captured — cannot cancel right now, try again shortly' });
+      return res.status(409).json({ error: 'Cart is currently being captured. Cannot cancel right now; try again shortly.' });
     }
 
     // Core release logic (Stripe-leg-cancel + item-release + status-flip-to-FAILED) is

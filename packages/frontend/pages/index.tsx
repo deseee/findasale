@@ -114,7 +114,7 @@ const HomePage = ({ initialSalesData }: HomePageProps) => {
     }
   }, [router.isReady, router.query.q]);
 
-  // Auto-scroll removed — was causing jarring jump on every keystroke
+  // Auto-scroll removed: was causing jarring jump on every keystroke
 
   const { data: feedData, isLoading, isError, refetch } = useQuery({
     queryKey: ['feed', userLocation?.lat, userLocation?.lng],
@@ -158,7 +158,7 @@ const HomePage = ({ initialSalesData }: HomePageProps) => {
   }, [sales]);
   const hasMapPins = mapPins.length > 0;
 
-  // Search API query — call backend FTS when searchQuery is >= 2 chars
+  // Search API query: call backend FTS when searchQuery is >= 2 chars
   const { data: searchResults, isLoading: isSearching, isError: isSearchError } = useQuery({
     queryKey: ['search', searchQuery, saleTypeFilter, saleSubtypeFilter],
     queryFn: async () => {
@@ -424,7 +424,7 @@ const HomePage = ({ initialSalesData }: HomePageProps) => {
           <section className="mb-12">
             <div>
               <div className="rounded-xl border border-warm-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden flex flex-col">
-                {/* Map Section — only render when at least one sale has coords */}
+                {/* Map Section: only render when at least one sale has coords */}
                 {!isLoading && hasMapPins && (
                   <div className="w-full" style={{ height: '220px' }}>
                     <SaleMap
@@ -455,7 +455,7 @@ const HomePage = ({ initialSalesData }: HomePageProps) => {
             </div>
           </section>
 
-          {/* Discovery banners — moved below the map (CLS S968): they load async, so
+          {/* Discovery banners: moved below the map (CLS S968): they load async, so
               keeping them above the map/sales shifted primary content on mount */}
           <CityHeatBanner />
           <TreasureHuntBanner />

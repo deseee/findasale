@@ -104,7 +104,7 @@ const ActivityFeed = ({ saleId }: Props) => {
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mb-8">
       <h2 className="text-lg font-bold text-warm-900 dark:text-gray-100 mb-4">Live Activity</h2>
 
-      {/* Feature 34: Hype Meter — real-time viewer count */}
+      {/* Feature 34: Hype Meter (real-time viewer count) */}
       <div className="mb-4">
         <HypeMeter saleId={saleId} />
       </div>

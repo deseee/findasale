@@ -36,9 +36,9 @@ const RegisterPage = () => {
   const [claimOrganizerId, setClaimOrganizerId] = useState<string | null>(null);
   const errorRef = useRef<HTMLDivElement>(null);
 
-  // P0 SECURITY FIX (2026-07-19): first-party proof-of-work challenge state — replaces
+  // P0 SECURITY FIX (2026-07-19): first-party proof-of-work challenge state: replaces
   // removed Cloudflare Turnstile (blocked outright by standard ad-block). See ADR at
-  // claude_docs/feature-notes/adr-registration-pow-2026-07-19.md. Entirely same-origin —
+  // claude_docs/feature-notes/adr-registration-pow-2026-07-19.md. Entirely same-origin:
   // no third-party script, no visible widget, solved silently in the background.
   const [challengeToken, setChallengeToken] = useState<string | null>(null);
   const [challengeNonce, setChallengeNonce] = useState<string | null>(null);
@@ -47,7 +47,7 @@ const RegisterPage = () => {
   // Pre-fill referral codes and claim params from URL
   // ?ref= for shopper-to-shopper referral rewards (existing system)
   // ?aff= for organizer-to-organizer affiliate program (new system)
-  // ?claim= for organizer profile claim flow — Feature #443
+  // ?claim= for organizer profile claim flow: Feature #443
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const ref = params.get('ref');
@@ -56,7 +56,7 @@ const RegisterPage = () => {
     const claim = params.get('claim');
     if (ref) setFormData(prev => ({ ...prev, referralCode: ref }));
     if (aff) setFormData(prev => ({ ...prev, affiliateReferralCode: aff }));
-    // Invite codes are for organizer beta access — pre-select ORGANIZER role
+    // Invite codes are for organizer beta access: pre-select ORGANIZER role
     if (invite) setFormData(prev => ({ ...prev, inviteCode: invite.toUpperCase(), role: 'ORGANIZER' }));
     // Claim flow: arriving from organizer profile "Claim This Profile" button
     if (claim) {
@@ -67,7 +67,7 @@ const RegisterPage = () => {
   }, []);
 
   // P0 SECURITY FIX (2026-07-19): fetch + solve the first-party proof-of-work challenge.
-  // Runs silently in the background on mount — typically resolves in well under a second.
+  // Runs silently in the background on mount: typically resolves in well under a second.
   // Batches digest computations (WebCrypto SubtleCrypto, not a pure-JS hash) instead of
   // awaiting one nonce at a time, to avoid per-iteration microtask overhead.
   useEffect(() => {
@@ -170,7 +170,7 @@ const RegisterPage = () => {
           canvasSignal = canvas.toDataURL();
         }
       } catch (e) {
-        // Canvas not available or blocked — no-op
+        // Canvas not available or blocked: no-op
       }
 
       if (canvasSignal) signals.push(canvasSignal);
@@ -213,7 +213,7 @@ const RegisterPage = () => {
     }
 
     // P0 SECURITY FIX (2026-07-19): require a solved verification challenge before submitting.
-    // The backend independently re-verifies it and fails closed — this is a UX guard only.
+    // The backend independently re-verifies it and fails closed: this is a UX guard only.
     if (!challengeToken || !challengeNonce) {
       setError(challengeError
         ? "Couldn't prepare the registration form. Please refresh the page and try again."
@@ -255,7 +255,7 @@ const RegisterPage = () => {
         payload.businessAddress = formData.businessAddress;
         payload.consentOrganizer = organizerEmailConsent;
         // BUG FIX (2026-07-20): tell the backend this signup is claiming an existing
-        // listing so it doesn't auto-create a colliding blank Organizer profile — see
+        // listing so it doesn't auto-create a colliding blank Organizer profile: see
         // authController.ts register(). Read fresh from sessionStorage (not just the
         // claimOrganizerId state var) since this is the same value set on mount.
         const pendingClaimId = sessionStorage.getItem('claimOrganizerId');
@@ -291,7 +291,7 @@ const RegisterPage = () => {
           router.push('/organizer/dashboard?welcomed=workspace');
         }
       } else if (response.data.user.roles?.includes('ORGANIZER')) {
-        // Feature #443: claim flow — fire claim endpoint if arrived from organizer profile page
+        // Feature #443: claim flow: fire claim endpoint if arrived from organizer profile page
         const storedClaimId = sessionStorage.getItem('claimOrganizerId');
         if (storedClaimId) {
           sessionStorage.removeItem('claimOrganizerId');
@@ -299,9 +299,9 @@ const RegisterPage = () => {
             await api.post(`/organizers/${storedClaimId}/claim-oauth`);
             router.push('/organizer/dashboard?claimed=true');
           } catch (claimErr: any) {
-            // BUG FIX (2026-07-20): this used to be swallowed silently — the user landed
+            // BUG FIX (2026-07-20): this used to be swallowed silently: the user landed
             // on the dashboard believing they'd claimed their listing when they hadn't.
-            // Account creation still succeeded (they're logged in), so don't block that —
+            // Account creation still succeeded (they're logged in), so don't block that,
             // but tell them the claim itself didn't go through instead of hiding it.
             console.error('[register] claim-oauth failed:', claimErr);
             const claimMsg = claimErr?.response?.data?.error === 'ALREADY_CLAIMED'
@@ -380,7 +380,7 @@ const RegisterPage = () => {
               </div>
             </div>
           )}
-          {/* P0 SECURITY FIX (2026-07-19): honeypot — visually hidden from real users, off the
+          {/* P0 SECURITY FIX (2026-07-19): honeypot: visually hidden from real users, off the
               accessibility tree and tab order. Bots that blanket-fill visible-looking inputs
               trip it; the backend rejects silently without revealing why. */}
           <input
@@ -541,7 +541,7 @@ const RegisterPage = () => {
               <div className="h-0 rounded-b-md border-b border-x border-warm-300 dark:border-gray-600" />
             )}
           </div>
-          {/* #369: Quebec Block — friendly notice when QC selected */}
+          {/* #369: Quebec Block: friendly notice when QC selected */}
           {formData.country === 'CA' && formData.province === 'QC' && (
             <div className="rounded-md bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 p-4">
               <p className="text-sm text-amber-700 dark:text-amber-200 font-medium">Quebec support is coming soon</p>
@@ -715,7 +715,7 @@ const RegisterPage = () => {
             </button>
           </div>
         </form>
-        {/* Phase 31: Social login — always registers as Shopper (USER); upgrade in settings */}
+        {/* Phase 31: Social login: always registers as Shopper (USER); upgrade in settings */}
         <div className="relative">
           <div className="absolute inset-0 flex items-center">
             <div className="w-full border-t border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100" />

@@ -20,7 +20,7 @@ Ripples collects public activity tied to your sale:
 - Haul posts that mention your sale or tag items from it
 - Shares made through the built-in promote flow
 
-It is not a full social media monitor. It only captures activity that runs through FindA.Sale's own share and promote tools, or haul posts submitted directly through the app. Private shares — texts, direct messages, emails someone forwarded — do not appear here.
+It is not a full social media monitor. It only captures activity that runs through FindA.Sale's own share and promote tools, or haul posts submitted directly through the app. Private shares (texts, direct messages, emails someone forwarded) do not appear here.
 
 Think of it as the part of your word-of-mouth that is visible.
 
@@ -30,7 +30,7 @@ Think of it as the part of your word-of-mouth that is visible.
 
 Go to [/organizer/ripples](/organizer/ripples), or tap the Ripples link inside your sale dashboard.
 
-If your sale has gotten recent activity, you may also see a dashboard notification — "Your sale is getting attention" — with a direct link.
+If your sale has gotten recent activity, you may also see a dashboard notification, "Your sale is getting attention," with a direct link.
 
 ---
 
@@ -39,7 +39,7 @@ If your sale has gotten recent activity, you may also see a dashboard notificati
 Ripples displays a chronological feed. Each entry shows:
 
 - The platform the share went to (Facebook, Instagram, etc.) or the type of activity (haul post, promote share)
-- A snippet of the content where available — the caption they wrote, or the haul post text
+- A snippet of the content where available: the caption they wrote, or the haul post text
 - Share count or reach estimate where the platform provides it
 
 Entries are sorted with the most recent at the top. Activity from older sales stays visible for 60 days after close.
@@ -52,7 +52,7 @@ Entries are sorted with the most recent at the top. Activity from older sales st
 
 **Find haul posts worth sharing.** A shopper who posts a great haul photo is doing your marketing for you. With their permission, sharing that post to your own social accounts is more effective than anything you could write yourself. Ripples makes those posts easy to find.
 
-**Send a thank-you discount.** If you can identify a shopper who shared your sale and drove visible traffic, consider sending them a discount code for their next purchase. It costs you little and turns a one-time sharer into a repeat advocate. You can do this from the shopper's hold or purchase record — find them in your sale's transaction list and send a code from there.
+**Send a thank-you discount.** If you can identify a shopper who shared your sale and drove visible traffic, consider sending them a discount code for their next purchase. It costs you little and turns a one-time sharer into a repeat advocate. You can do this from the shopper's hold or purchase record: find them in your sale's transaction list and send a code from there.
 
 **Spot emerging interest before the sale opens.** If shares are climbing while your sale is still in pre-sale mode, you may want to add more inventory photos or bump your hold limit to capture the demand.
 
@@ -75,7 +75,7 @@ This means Ripples shows you a subset of your real-world reach. The actual numbe
 No. It is only visible to the organizer who runs the sale.
 
 **Does Ripples update in real time?**
-It updates within a few minutes of activity. You do not need to refresh manually — the feed pulls fresh data each time you open the page.
+It updates within a few minutes of activity. You do not need to refresh manually: the feed pulls fresh data each time you open the page.
 
 **Can I download the Ripples data?**
 Not currently. You can screenshot entries or note them manually. Export functionality may be added in a future update.
@@ -84,7 +84,7 @@ Not currently. You can screenshot entries or note them manually. Export function
 Content in Ripples reflects what shoppers posted publicly through FindA.Sale tools. If a haul post or share contains something that violates platform rules, use the flag option on the entry. If something looks like a data error, contact FindA.Sale support.
 
 **Does Ripples work for all sale types?**
-Yes — yard sales, flea markets, auctions, consignment sales, permanent storefronts. Any sale type that can be shared through the platform generates Ripples data.
+Yes: yard sales, flea markets, auctions, consignment sales, permanent storefronts. Any sale type that can be shared through the platform generates Ripples data.
 
 ---
 

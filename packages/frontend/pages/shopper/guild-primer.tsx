@@ -97,7 +97,7 @@ const GuildPrimerPage = () => {
               Your Journey to Mastery
             </p>
             <p className="text-lg text-warm-600 dark:text-warm-400">
-              Earn XP, climb ranks, unlock exclusive rewards. Every action counts.
+              Earn XP, climb ranks, and grab the rewards at each tier. Every action counts.
             </p>
 
             {/* Personalized Progress Bar */}
@@ -482,7 +482,7 @@ const GuildPrimerPage = () => {
                       <td className="px-4 py-3 text-warm-900 dark:text-warm-100">Treasure Hunt clue scan</td>
                       <td className="px-4 py-3 text-right font-bold text-purple-600 dark:text-purple-300">3</td>
                       <td className="px-4 py-3 text-right font-bold text-purple-400 dark:text-purple-300">+10%</td>
-                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">Per QR clue found. Each clue once. Hunt Pass adds +10% on top of your rank multiplier — not a flat bonus</td>
+                      <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs">Per QR clue found. Each clue once. Hunt Pass adds +10% on top of your rank multiplier (not a flat bonus)</td>
                     </tr>
                     <tr className="hover:bg-warm-50 dark:hover:bg-gray-700/50">
                       <td className="px-4 py-3 text-warm-900 dark:text-warm-100">Treasure Hunt completion</td>

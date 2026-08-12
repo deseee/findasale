@@ -50,11 +50,11 @@ const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete }) => {
     setResendState('sending');
     setResendError(null);
     try {
-      // Real endpoint — packages/backend/src/routes/auth.ts POST /auth/resend-verification
+      // Real endpoint: packages/backend/src/routes/auth.ts POST /auth/resend-verification
       // (rate limited to 3/hour via verifyEmailLimiter, enumeration-safe generic response).
       await api.post('/auth/resend-verification', { email: user.email });
       setResendState('sent');
-      showToast('Verification email sent — check your inbox', 'success');
+      showToast('Verification email sent. Check your inbox', 'success');
       // Backend still enforces the real rate limit; this just re-enables the button
       // after a short cooldown so it doesn't look permanently stuck.
       setTimeout(() => setResendState('idle'), 30000);
@@ -231,7 +231,7 @@ const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete }) => {
                     )}
                   </p>
                   <p className="text-xs text-blue-700 dark:text-blue-300 mt-2">
-                    You can keep setting up your account — you'll just need to verify before publishing a sale.
+                    You can keep setting up your account. You'll just need to verify before publishing a sale.
                   </p>
                   <button
                     type="button"
@@ -436,7 +436,7 @@ const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete }) => {
               <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4 text-left">
                 <h3 className="font-semibold text-green-900 dark:text-green-200 mb-2">Completion Status:</h3>
                 <ul className="text-sm text-green-800 dark:text-green-300 space-y-1">
-                  <li>{isEmailVerified ? '✓' : '○'} Email verified{!isEmailVerified ? ' (pending — check your inbox)' : ''}</li>
+                  <li>{isEmailVerified ? '✓' : '○'} Email verified{!isEmailVerified ? ' (pending, check your inbox)' : ''}</li>
                   <li>✓ Business profile created</li>
                   <li>✓ Payment connected (Stripe)</li>
                   <li>{saleCreated ? '✓' : '○'} First sale created</li>

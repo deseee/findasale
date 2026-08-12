@@ -1,5 +1,5 @@
 /**
- * SaleTypeBadge — Brief F · Sale type badge system
+ * SaleTypeBadge: Brief F · Sale type badge system
  *
  * Reusable pill/badge for each sale type. Differentiation via icon + label
  * (not color). Charity/Benefit gets a secondary heart indicator.
@@ -159,7 +159,7 @@ const SaleTypeBadge: React.FC<SaleTypeBadgeProps> = ({
   const s = SIZE_MAP[size];
   const t = THEME_MAP[theme];
 
-  // Online-only overrides everything — shows shipping icon
+  // Online-only overrides everything: shows shipping icon
   if (isOnlineOnly) {
     return (
       <span
@@ -213,7 +213,7 @@ const SaleTypeBadge: React.FC<SaleTypeBadgeProps> = ({
         <TypeIcon name={icon} size={s.iconSize} />
       </span>
       {label}
-      {/* Charity heart — secondary indicator per Brief F spec */}
+      {/* Charity heart: secondary indicator per Brief F spec */}
       {isCharity && (
         <span
           style={{
@@ -234,7 +234,7 @@ const SaleTypeBadge: React.FC<SaleTypeBadgeProps> = ({
 export default SaleTypeBadge;
 
 /**
- * Charity heart overlay — used on sale card photo (top-right corner)
+ * Charity heart overlay: used on sale card photo (top-right corner)
  * per Brief F spec: "Overlaid on the sale-card photo (top-right)".
  * Separate export so SaleCard can position it independently.
  */

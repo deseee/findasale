@@ -976,7 +976,7 @@ export const deleteSale = async (req: AuthRequest, res: Response) => {
     const holdsReleasedCount = await releaseActiveHoldsAndNotify({
       saleId: id,
       items: saleItemsForHoldRelease,
-      notificationTitle: 'Sale removed — your hold was released',
+      notificationTitle: 'Sale removed. Your hold was released.',
       notificationBody: (itemTitle) =>
         `"${existingSale.title}" was removed by the organizer. Your hold on "${itemTitle}" has been released.`,
     });
@@ -1395,7 +1395,7 @@ export const generateIcal = async (req: Request, res: Response) => {
 
     const location = `${sale.address}\\, ${sale.city}\\, ${sale.state} ${sale.zip}`;
     const baseDescription = esc(sale.description || '') + (sale.description ? '\\n\\n' : '') + `View items online: ${saleUrl}`;
-    const description = baseDescription + (!canRemoveWatermark(sale.organizer) ? '\\n\\nShared via FindA.Sale — finda.sale' : '');
+    const description = baseDescription + (!canRemoveWatermark(sale.organizer) ? '\\n\\nShared via FindA.Sale: finda.sale' : '');
 
     const ical = [
       'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//FindA.Sale//FindA.Sale//EN',
@@ -1767,7 +1767,7 @@ export const generateSaleDescriptionHandler = async (req: AuthRequest, res: Resp
   }
 
   if (!isAnthropicAvailable()) {
-    res.status(503).json({ message: 'AI description service unavailable' });
+    res.status(503).json({ message: 'Smart description service unavailable' });
     return;
   }
 
@@ -1783,7 +1783,7 @@ export const generateSaleDescriptionHandler = async (req: AuthRequest, res: Resp
     });
 
     if (!description) {
-      res.status(503).json({ message: 'AI description service unavailable' });
+      res.status(503).json({ message: 'Smart description service unavailable' });
       return;
     }
 
@@ -2008,7 +2008,7 @@ export const cancelSale = async (req: AuthRequest, res: Response) => {
     await releaseActiveHoldsAndNotify({
       saleId: id,
       items: existingSale.items,
-      notificationTitle: 'Sale cancelled — your hold was released',
+      notificationTitle: 'Sale cancelled. Your hold was released.',
       notificationBody: (itemTitle) =>
         `"${existingSale.title}" was cancelled by the organizer. Your hold on "${itemTitle}" has been released.`,
     });

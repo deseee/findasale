@@ -411,7 +411,7 @@ export const importItemsFromCSV = async (req: AuthRequest, res: Response) => {
 
     if (itemsToCreate.length === 0) {
       return res.status(400).json({
-        message: 'No valid rows found — all rows failed validation',
+        message: 'No valid rows found. All rows failed validation.',
         errors: rowErrors,
       });
     }
@@ -1469,12 +1469,12 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
           createNotification(
             supersededHold.userId,
             'item_sold_hold_superseded',
-            'Item no longer available — your hold was released',
+            'Item no longer available. Your hold was released.',
             `"${item.title}" was marked sold by the organizer through another channel. Your hold on this item has been released.`,
             `/items/${id}`,
             'OPERATIONAL',
             true,
-            'Item no longer available — your hold was released'
+            'Item no longer available. Your hold was released.'
           ).catch((err: unknown) => console.error('[updateItem] Failed to create item_sold_hold_superseded notification:', err));
         } catch (holdRevertErr) {
           // Non-fatal: the item is already committed SOLD above. Log loudly so this
@@ -2897,7 +2897,7 @@ export const reorderItemPhotos = async (req: AuthRequest, res: Response) => {
     const existing = new Set(item.photoUrls);
     const allValid = photoUrls.every((u: any) => typeof u === 'string' && existing.has(u));
     if (!allValid || photoUrls.length !== item.photoUrls.length) {
-      return res.status(400).json({ message: 'Invalid photoUrls — can only reorder existing photos' });
+      return res.status(400).json({ message: 'Invalid photoUrls. Can only reorder existing photos.' });
     }
     const updated = await prisma.item.update({
       where: { id },

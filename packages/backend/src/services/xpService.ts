@@ -944,7 +944,7 @@ export async function clawBackChargebackXp(
         type: 'CHARGEBACK_XP_CLAWBACK', // Audit record for reverse
         points: -totalXpToRemove,
         purchaseId,
-        description: `Chargeback dispute — XP reversed from purchase ${purchaseId}`,
+        description: `Chargeback dispute: XP reversed from purchase ${purchaseId}`,
       },
     });
 

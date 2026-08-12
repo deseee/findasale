@@ -9,7 +9,7 @@ import { Template, BASE_POLISH } from './types';
 
 export const seasonCMapToMantel: Template = {
   id: 'season-C-map-to-mantel',
-  displayName: 'Map to Mantel — Single-Item Story',
+  displayName: 'Map to Mantel, Single-Item Story',
   purpose: 'ATTENTION',
   contentSignature: {
     requiredRoles: ['HOOK', 'FIND'],

@@ -37,12 +37,12 @@ If you've run a sale and had people pushing at the entrance, set up the queue ne
 ### 1. Print the entrance QR code
 
 Go to \`/organizer/qr-codes\`.
-Find the **Line Queue** type (not the item QR or sale share QR — this one specifically).
+Find the **Line Queue** type (not the item QR or sale share QR, this one specifically).
 Print it on a sheet of paper or, better, laminate it.
 Tape it to a sign or stake at your entrance.
 
 The QR code links directly to the queue join page for your sale.
-Shoppers don't need the app installed — it opens in their browser.
+Shoppers don't need the app installed: it opens in their browser.
 
 ### 2. Post it somewhere visible
 
@@ -72,13 +72,13 @@ You'll see:
 
 When a shopper finishes and leaves, tap **Next**.
 The next person in line gets a push notification: their number, a prompt to come in, and an estimated wait.
-They don't need to be standing at the door — they can wait in their car.
+They don't need to be standing at the door: they can wait in their car.
 
 ### How shoppers see their place
 
 After scanning the QR and joining, shoppers see their number and position ("You're 4th in line").
 The number updates in real time as people ahead of them enter.
-When you call them, their phone shows: "You're up — head to the entrance now."
+When you call them, their phone shows: "You're up, head to the entrance now."
 
 ### If someone doesn't come
 
@@ -112,7 +112,7 @@ Shoppers who don't get the push notification (phone muted, no signal) see a bann
 Both screens live in your organizer nav.
 On a tablet: open the queue in one tab, POS in another.
 On two phones: queue on one, POS on the other.
-You don't need separate accounts or devices — it's the same login.
+You don't need separate accounts or devices: it's the same login.
 
 ---
 
@@ -120,23 +120,23 @@ You don't need separate accounts or devices — it's the same login.
 
 **Do shoppers need the FindA.Sale app?**
 No. The queue join page opens in a browser. They tap Join, that's it.
-If they have the app installed, it can send push notifications instead of browser notifications — that's more reliable. But the browser version works fine.
+If they have the app installed, it can send push notifications instead of browser notifications: that's more reliable. But the browser version works fine.
 
 **What if shoppers ignore the queue and crowd the door anyway?**
 The queue doesn't physically stop anyone. It's a tool, not a barrier.
-Post a sign: "Please scan the QR to enter — we're managing capacity." Most people comply when there's a clear system.
+Post a sign: "Please scan the QR to enter, we're managing capacity." Most people comply when there's a clear system.
 
 **Can I see how long each person has been waiting?**
 Yes. The queue screen shows wait time next to each position. If someone's been waiting 45 minutes and you've moved fast, you'll notice.
 
 **What if I have two staff members managing entry?**
-They can both have the queue open. Only one person should tap Next at a time — otherwise you'll double-call. Assign one person to the queue screen.
+They can both have the queue open. Only one person should tap Next at a time: otherwise you'll double-call. Assign one person to the queue screen.
 
 **Can shoppers check their position without being there?**
 Yes. The queue page is live. They can check from the car, from down the block, anywhere. Their number is linked to their browser session.
 
 **Does the queue work at multi-day sales?**
-You can run it each day. Close the queue at the end of day one and reopen at the start of day two. Positions don't carry over — everyone starts fresh each morning.
+You can run it each day. Close the queue at the end of day one and reopen at the start of day two. Positions don't carry over: everyone starts fresh each morning.
 
 **What if I don't have cell service at my location?**
 Push notifications need cell service on the shopper's phone. The queue itself runs on your device. If shoppers are in a dead zone, they'll need to check the queue page manually or you'll need to call numbers out loud. A mix of digital and verbal works fine.

@@ -9,7 +9,7 @@ const CAMP_ID = '5339148447';
 
 /**
  * Build an eBay Partner Network affiliate link by appending EPN tracking
- * parameters directly to the eBay listing URL (current EPN link format —
+ * parameters directly to the eBay listing URL (current EPN link format:
  * rover.ebay.com redirect links are deprecated and rejected by eBay).
  * Ref: https://partnerhelp.ebay.com/helpcenter/s/article/What-are-the-parameters-of-an-EPN-link
  */
@@ -19,7 +19,7 @@ const buildEpnUrl = (url: string): string =>
   `${url}${url.includes('?') ? '&' : '?'}${EPN_PARAMS}`;
 
 /**
- * EbayCompTiles — Shopper-facing display of comparable eBay listings.
+ * EbayCompTiles: Shopper-facing display of comparable eBay listings.
  *
  * Shows up to 3 eBay listings with EPN affiliate links so shoppers can
  * see what comparable items sell for on eBay. Cards are fully clickable
@@ -66,7 +66,7 @@ const EbayCompTiles: React.FC<EbayCompTilesProps> = ({ itemId }: EbayCompTilesPr
         See what comparable items are selling for
       </p>
 
-      {/* Grid — 3 columns desktop, horizontal scroll mobile */}
+      {/* Grid: 3 columns desktop, horizontal scroll mobile */}
       <div className="grid grid-cols-3 gap-2 sm:gap-3 overflow-x-auto">
         {displayComps.map((comp: EbayComp) => (
           <CompCard key={comp.id} comp={comp} />
@@ -82,7 +82,7 @@ const EbayCompTiles: React.FC<EbayCompTilesProps> = ({ itemId }: EbayCompTilesPr
 };
 
 /**
- * CompCard — Individual clickable eBay comp card with EPN affiliate link.
+ * CompCard: Individual clickable eBay comp card with EPN affiliate link.
  */
 const CompCard: React.FC<{ comp: EbayComp }> = ({ comp }: { comp: EbayComp }) => {
   const price = comp.ebayPrice ? `$${comp.ebayPrice.toFixed(2)}` : 'See price';

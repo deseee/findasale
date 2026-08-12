@@ -193,7 +193,7 @@ export const reclaimStalePurchases = async (): Promise<void> => {
                 createNotification({
                   userId: organizerUserId,
                   type: 'purchase_reclaimed_paid_organizer',
-                  title: 'A delayed payment was just confirmed — please verify your listing',
+                  title: 'A delayed payment was just confirmed. Please verify your listing.',
                   body: `A payment for "${itemTitle}" was confirmed after a delay in our system. Please double-check this item's stock and any connected marketplace listings (eBay, Facebook, etc.) to make sure they reflect the sale correctly.`,
                   link: itemId ? `/items/${itemId}` : undefined,
                   channel: 'OPERATIONAL',

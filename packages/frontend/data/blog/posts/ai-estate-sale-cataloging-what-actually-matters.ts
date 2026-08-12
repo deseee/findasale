@@ -7,16 +7,16 @@ export const postD: BlogPost = {
   publishDate: '2026-07-02',
   category: 'guides',
   readingTimeMinutes: 5,
-  excerpt: 'A year ago, AI cataloging was a differentiator. Now it\'s on every competitor\'s feature page. The question has shifted from "does this platform have it?" to "does it actually work when I need it?"',
-  body: `A year ago, AI cataloging was a differentiator. A handful of platforms offered it and made it the centerpiece of their pitch. Now it's on every competitor's feature page. MaxSold, SimpleConsign, Gavelbase, the Valuable app used by Blue Moon franchise organizers, the list of "we have AI tagging" claims is long and getting longer.
+  excerpt: 'A year ago, smart cataloging was a differentiator. Now it\'s on every competitor\'s feature page. The question has shifted from "does this platform have it?" to "does it actually work when I need it?"',
+  body: `A year ago, smart cataloging was a differentiator. A handful of platforms offered it and made it the centerpiece of their pitch. Now it's on every competitor's feature page. MaxSold, SimpleConsign, Gavelbase, the Valuable app used by Blue Moon franchise organizers, the list of "we have AI tagging" claims is long and getting longer.
 
-Which means the question has shifted. It's no longer "does this platform have AI cataloging?" It's "does this platform's AI cataloging actually work when I need it?"
+Which means the question has shifted. It's no longer "does this platform have smart cataloging?" It's "does this platform's smart cataloging actually work when I need it?"
 
 Those are very different questions, and most platforms only answer the first one well.
 
 The first has a simple yes or no answer, and it's now yes for almost everyone. The second depends on what happens when you're standing in someone's house at 7am with 300 items to catalog before doors open at 9, your phone is on carrier signal instead of WiFi, and you can't afford to lose an hour to a frozen upload screen or a batch of descriptions so generic you have to rewrite them all anyway.
 
-"AI cataloging" as a feature can mean a lot of things. At the generous end, the system looks at your photo, identifies the item accurately, generates a useful title and description, and suggests a price based on comparable sold items. You review it, adjust if needed, and move on. The loop is fast.
+"smart cataloging" as a feature can mean a lot of things. At the generous end, the system looks at your photo, identifies the item accurately, generates a useful title and description, and suggests a price based on comparable sold items. You review it, adjust if needed, and move on. The loop is fast.
 
 At the less generous end, which is most of what exists right now, the system generates a description that's technically accurate and completely useless: "ceramic bowl, decorative item, good condition." You already knew it was a bowl. What you needed was "McCoy pottery planter, circa 1960s, yellow glaze, minor crazing, excellent condition," so the collector browsing the preview the night before knows it's worth driving 40 minutes for.
 

@@ -295,7 +295,7 @@ function RanksPage() {
     <>
       <Head>
         <title>Explorer Rank Benefits | FindA.Sale</title>
-        <meta name="description" content="Explore all Explorer rank benefits and unlock exclusive perks." />
+        <meta name="description" content="Explore all Explorer rank benefits and see what each rank grants." />
       </Head>
 
       <div className="min-h-screen bg-warm-50 dark:bg-gray-900 py-12 px-4">

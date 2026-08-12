@@ -77,17 +77,17 @@ export const generateSocialPost = async (req: AuthRequest, res: Response) => {
     const userId = req.user?.id;
 
     if (!process.env.ANTHROPIC_API_KEY) {
-      return res.status(503).json({ message: 'AI service unavailable' });
+      return res.status(503).json({ message: 'Suggested post service unavailable' });
     }
 
     // Feature #104: Check AI cost ceiling
     if (await isAICostCeilingExceeded()) {
-      return res.status(503).json({ message: 'AI service temporarily unavailable due to resource limits. Please try again later.' });
+      return res.status(503).json({ message: 'Temporarily unavailable due to demand. Please try again shortly.' });
     }
 
     // Fix B: absolute daily AI call-count cap
     if (!(await isAIDailyCallCapAvailable())) {
-      return res.status(503).json({ message: 'AI service temporarily unavailable due to resource limits. Please try again later.' });
+      return res.status(503).json({ message: 'Temporarily unavailable due to demand. Please try again shortly.' });
     }
 
     if (!saleId || !platform) {

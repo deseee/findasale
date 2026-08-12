@@ -185,7 +185,7 @@ export const returnItemsToInventory = async (
         reservation.userId,
         'RESERVATION_CANCELLED',
         'Hold released',
-        `A hold on "${item.title}" was released — the sale has ended.`,
+        `A hold on "${item.title}" was released: the sale has ended.`,
         undefined,
         'OPERATIONAL',
         true,

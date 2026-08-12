@@ -340,7 +340,7 @@ export const createConnectAccount = async (req: AuthRequest, res: Response) => {
         }
       } else if (type === 'rate_limit_error') {
         statusCode = 503;
-        message = 'Too many requests — please try again in a minute';
+        message = 'Too many requests. Please try again in a minute.';
       } else {
         message = error.message;
       }
@@ -358,7 +358,7 @@ export const createConnectAccount = async (req: AuthRequest, res: Response) => {
         }
       } else if (type === 'rate_limit_error') {
         statusCode = 503;
-        message = 'Too many requests — please try again in a minute';
+        message = 'Too many requests. Please try again in a minute.';
       }
     }
 
@@ -3866,7 +3866,7 @@ export const testCheckoutSession = async (req: AuthRequest, res: Response) => {
     }
 
     const testStripe = getTestStripe();
-    const productName = type === 'auction' ? 'Test Auction Checkout — $1.00' : 'Test Online Checkout — $1.00';
+    const productName = type === 'auction' ? 'Test Auction Checkout ($1.00)' : 'Test Online Checkout ($1.00)';
 
     const session = await testStripe.checkout.sessions.create({
       mode: 'payment',

@@ -213,7 +213,7 @@ export const endAuctions = async () => {
                 subject: `You won: ${result.item.title}`,
                 html: `
                   <div style="font-family:sans-serif;max-width:600px;margin:0 auto">
-                    <h2>Congratulations — you won the auction!</h2>
+                    <h2>Congratulations, you won the auction!</h2>
                     <p>Your winning bid of <strong>$${result.price.toFixed(2)}</strong> was accepted for <strong>${result.item.title}</strong>.</p>
                     <p>Please complete your payment within 48 hours to secure the item.</p>
                     <a href="${payUrl}" style="display:inline-block;background:#2563eb;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:bold;margin-top:16px">

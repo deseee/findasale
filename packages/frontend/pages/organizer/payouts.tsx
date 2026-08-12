@@ -93,7 +93,7 @@ const OrganizerPayoutsPage = () => {
 
   // Refund History (2026-07-29): organizer-facing trace of refunds against their own sales.
   // getEarningsBreakdown above hardcodes status: 'PAID', so a REFUNDED purchase silently
-  // disappears from the Earnings Breakdown table — this card is where it shows up instead.
+  // disappears from the Earnings Breakdown table: this card is where it shows up instead.
   interface RefundHistoryItem {
     purchaseId: string;
     itemTitle: string;
@@ -169,9 +169,9 @@ const OrganizerPayoutsPage = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['earnings-breakdown'] });
       queryClient.invalidateQueries({ queryKey: ['stripe-balance'] });
-      // Without this, the refunded purchase vanishes from Earnings Breakdown (correct —
+      // Without this, the refunded purchase vanishes from Earnings Breakdown (correct,
       // that list is status:'PAID' only) but does NOT appear in Refund History until its
-      // 2-minute staleTime lapses or the page is manually refreshed — the UI would silently
+      // 2-minute staleTime lapses or the page is manually refreshed: the UI would silently
       // fail to reflect the refund it just issued.
       queryClient.invalidateQueries({ queryKey: ['refund-history'] });
       showToast('Refund issued', 'success');
@@ -300,7 +300,7 @@ const OrganizerPayoutsPage = () => {
             )}
           </div>
 
-          {/* Cash Fee Balance card — shown only when balance > 0 */}
+          {/* Cash Fee Balance card: shown only when balance > 0 */}
           {cashFeeBalance > 0 && (
             <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
               <h2 className="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-4">
@@ -417,7 +417,7 @@ const OrganizerPayoutsPage = () => {
                 )}
               </div>
 
-              {/* Cash fee deduction info — shown only if balance > 0 */}
+              {/* Cash fee deduction info: shown only if balance > 0 */}
               {cashFeeBalance > 0 && (
                 <div className="rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 p-3 space-y-1">
                   <div className="flex justify-between text-sm">
@@ -466,7 +466,7 @@ const OrganizerPayoutsPage = () => {
             </form>
           </div>
 
-          {/* Earnings Breakdown — Feature #9 */}
+          {/* Earnings Breakdown: Feature #9 */}
           <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
             <div className="flex items-center justify-between mb-1">
               <h2 className="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">

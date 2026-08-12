@@ -8,7 +8,7 @@ const entry: GuideEntry = {
   priority: 3,
   relatedGuides: ['holds-for-shoppers', 'bidding-on-auctions', 'loot-log'],
   videoUrl: undefined,
-  body: `A pay request is how organizers collect payment through FindA.Sale. The organizer sets a dollar amount, attaches the items you're paying for, and sends it to you. You review it, confirm the items and total look right, and pay — all inside the app.
+  body: `A pay request is how organizers collect payment through FindA.Sale. The organizer sets a dollar amount, attaches the items you're paying for, and sends it to you. You review it, confirm the items and total look right, and pay, all inside the app.
 
 Pay requests come through after a hold, after winning an auction, when you've agreed to ship an item, or any time an organizer needs a deposit or partial payment before pickup.
 
@@ -16,7 +16,7 @@ Pay requests come through after a hold, after winning an auction, when you've ag
 
 ## How to know a request is real
 
-Real pay requests arrive through your FindA.Sale notifications — in the app, not by text, not by email, not through Venmo, Zelle, Cash App, or any other personal payment tool.
+Real pay requests arrive through your FindA.Sale notifications, in the app, not by text, not by email, not through Venmo, Zelle, Cash App, or any other personal payment tool.
 
 If you receive a Venmo request from a name you don't recognize, or a text asking you to pay before you get to a sale, that is not from FindA.Sale. Real organizers use the app. If something feels off, open FindA.Sale directly and check your notification bell. If no request is there, it didn't come from us.
 
@@ -24,7 +24,7 @@ If you receive a Venmo request from a name you don't recognize, or a text asking
 
 ## How to pay a request
 
-**Step 1.** Tap the notification when it arrives. You can also find pay requests under **Notifications** in your shopper menu — look for the payment bell icon.
+**Step 1.** Tap the notification when it arrives. You can also find pay requests under **Notifications** in your shopper menu: look for the payment bell icon.
 
 **Step 2.** Review the request. You'll see the organizer's name, the items listed, the amount due, and any notes the organizer added (for example, "shipping to be calculated separately" or "deposit for large furniture pickup").
 
@@ -58,7 +58,7 @@ If you need more time, message the organizer through the app before the window c
 
 If the amount is different from what you expected, or the item list doesn't match what you agreed to, message the organizer directly through the sale page before paying.
 
-Tap the organizer's name on the pay request screen to open a message thread. Describe what you expected versus what you see. Most discrepancies are honest mistakes — a shipping cost that wasn't calculated yet, or an item accidentally included twice.
+Tap the organizer's name on the pay request screen to open a message thread. Describe what you expected versus what you see. Most discrepancies are honest mistakes: a shipping cost that wasn't calculated yet, or an item accidentally included twice.
 
 If you pay and then believe the charge was incorrect, contact the organizer first. If you can't reach them, use the Report button on the pay request.
 
@@ -66,7 +66,7 @@ If you pay and then believe the charge was incorrect, contact the organizer firs
 
 ## A note on safety
 
-FindA.Sale organizers do not have your phone number or personal payment account. They communicate through the app's message system and send pay requests through the app. If someone claims to be a FindA.Sale organizer and asks you to pay outside the app — stop. Do not pay. Report it through the Help link at the bottom of any page.
+FindA.Sale organizers do not have your phone number or personal payment account. They communicate through the app's message system and send pay requests through the app. If someone claims to be a FindA.Sale organizer and asks you to pay outside the app, stop. Do not pay. Report it through the Help link at the bottom of any page.
 
 Legitimate use of external payments does happen: if you pay cash in person at a sale, the organizer may mark the item as sold manually. That's normal. What's not normal is a stranger asking you to send money before you've ever been to the sale.
 
@@ -75,7 +75,7 @@ Legitimate use of external payments does happen: if you pay cash in person at a 
 ## Common questions
 
 **Can I pay with cash instead?**
-Yes. Many sales are cash-in-hand at the door. Pay requests are for remote payment — shipping, deposits, auction wins where you can't be there in person. If you're paying cash on-site, you don't need to do anything in the app beforehand.
+Yes. Many sales are cash-in-hand at the door. Pay requests are for remote payment: shipping, deposits, auction wins where you can't be there in person. If you're paying cash on-site, you don't need to do anything in the app beforehand.
 
 **How long do I have to pay a request?**
 The organizer sets the window. You'll see the expiry time on the request screen. It's usually between 15 minutes and 24 hours depending on the situation.

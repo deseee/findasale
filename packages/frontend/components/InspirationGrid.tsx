@@ -26,7 +26,7 @@ interface InspirationGridProps {
 }
 
 /**
- * InspirationGrid — Masonry card grid of items for #78 Inspiration Page
+ * InspirationGrid: Masonry card grid of items for #78 Inspiration Page
  * 2-col mobile, 3-col desktop. Each card links to item detail.
  */
 const InspirationGrid: React.FC<InspirationGridProps> = ({ items, isLoading = false }) => {
@@ -125,7 +125,7 @@ const InspirationGrid: React.FC<InspirationGridProps> = ({ items, isLoading = fa
                   <span className="text-xs text-warm-500 dark:text-gray-400">No image</span>
                 </div>
               )}
-              {/* Favorite Button — top-right */}
+              {/* Favorite Button: top-right */}
               <div className="absolute top-2 right-2 flex flex-col gap-2 items-end">
                 <FavoriteButton itemId={item.id} variant="icon" size="md" />
               </div>

@@ -178,7 +178,7 @@ const ItemCard: React.FC<ItemCardProps> = ({
   // Reset image loading state when the photo URL changes
   // This ensures new images load even if the component instance is reused.
   // Also covers the case where the image is already complete (loaded or
-  // failed) from browser cache by the time this effect runs — the native
+  // failed) from browser cache by the time this effect runs: the native
   // load/error event fired before onLoad/onError were attached, so we read
   // .complete/.naturalWidth directly instead of relying solely on the event.
   useEffect(() => {
@@ -297,7 +297,7 @@ const ItemCard: React.FC<ItemCardProps> = ({
             </div>
           )}
 
-          {/* Status badge — top-left */}
+          {/* Status badge: top-left */}
           {badge && (
             <span
               className={`absolute top-2 left-2 px-2 py-0.5 rounded text-xs font-bold shadow ${badge.className}`}
@@ -306,49 +306,49 @@ const ItemCard: React.FC<ItemCardProps> = ({
             </span>
           )}
 
-          {/* Ranking badge (top 3 trending) — top-left alternative */}
+          {/* Ranking badge (top 3 trending): top-left alternative */}
           {shouldShowRankingBadge && (
             <span className="absolute top-2 left-2 bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full shadow">
               🔥 Hot
             </span>
           )}
 
-          {/* Boost badge — top-right corner (highest priority) */}
+          {/* Boost badge: top-right corner (highest priority) */}
           {item.boost && item.boost.status === 'ACTIVE' && (
             <div className="absolute top-2 right-2">
               <BoostBadge boostType={item.boost.boostType} size="sm" />
             </div>
           )}
 
-          {/* Favorite count badge — top-right (trending) — positioned below boost if present */}
+          {/* Favorite count badge: top-right (trending), positioned below boost if present */}
           {shouldShowFavoriteCount && !item.boost && (
             <div className="absolute top-2 right-2 bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm text-xs font-semibold px-2 py-0.5 rounded-full text-warm-700 dark:text-amber-400 shadow">
               ❤️ {(item as any)._count?.favorites}
             </div>
           )}
 
-          {/* Rarity badge — top-right overlay */}
+          {/* Rarity badge: top-right overlay */}
           {showRarity && item.rarity && item.rarity !== 'COMMON' && !shouldShowFavoriteCount && !item.boost && (
             <div className="absolute top-2 right-2">
               <RarityBadge rarity={item.rarity} size="sm" />
             </div>
           )}
 
-          {/* Favorite button — top-right overlay (when not showing favorite count) */}
+          {/* Favorite button: top-right overlay (when not showing favorite count) */}
           {showFavoriteButton && !shouldShowFavoriteCount && (
             <div className="absolute top-2 right-2">
               <FavoriteButton itemId={item.id} variant="icon" size="md" />
             </div>
           )}
 
-          {/* Favorite button — overlay when showing favorite count (trending layout) */}
+          {/* Favorite button: overlay when showing favorite count (trending layout) */}
           {showFavoriteButton && shouldShowFavoriteCount && (
             <div className="absolute bottom-2 right-2">
               <FavoriteButton itemId={item.id} variant="icon" size="md" />
             </div>
           )}
 
-          {/* AI tagging disclosure badge — bottom-right */}
+          {/* AI tagging disclosure badge: bottom-right */}
           {showAiTagged && item.isAiTagged && (
             <span
               className="absolute bottom-2 right-2 px-1.5 py-0.5 rounded bg-black/60 text-white text-[9px] font-semibold leading-none"
@@ -358,14 +358,14 @@ const ItemCard: React.FC<ItemCardProps> = ({
             </span>
           )}
 
-          {/* Feature 67: Countdown Timer — centered overlay (only when within 24h) */}
+          {/* Feature 67: Countdown Timer, centered overlay (only when within 24h) */}
           {showCountdown && shouldShowCountdownTimer() && item.auctionEndTime && (
             <div className="absolute inset-0 flex items-center justify-center bg-black/30 backdrop-blur-sm">
               <CountdownTimer targetDate={item.auctionEndTime} />
             </div>
           )}
 
-          {/* Feature 67: Social Proof Badge — bottom-left */}
+          {/* Feature 67: Social Proof Badge (bottom-left) */}
           {showSocialProof && socialProof && socialProof.totalEngagement > 0 && (
             <div className="absolute bottom-2 left-2">
               <SocialProofBadge
@@ -421,7 +421,7 @@ const ItemCard: React.FC<ItemCardProps> = ({
           <p className="text-xs text-warm-500 dark:text-gray-400 truncate">{item.businessName}</p>
         )}
 
-        {/* Price and countdown — flex with auto spacing */}
+        {/* Price and countdown: flex with auto spacing */}
         {(showPrice || showCountdown) && (
           <div className="flex items-center justify-between mt-auto">
             {showPrice && displayPrice !== undefined && (

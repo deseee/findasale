@@ -375,14 +375,14 @@ router.post('/refresh', async (req: AuthRequest, res: Response) => {
     if (freshUser.suspendedAt) {
       res.clearCookie('accessToken', { path: '/' });
       res.clearCookie('refreshToken', { path: '/' });
-      return res.status(401).json({ error: 'Session invalidated — please log in again.' });
+      return res.status(401).json({ error: 'Session invalidated. Please log in again.' });
     }
 
     // tokenVersion enforcement (matches authenticate): reject stale/invalidated sessions.
     if (payload.tokenVersion === undefined ? freshUser.tokenVersion > 0 : payload.tokenVersion !== freshUser.tokenVersion) {
       res.clearCookie('accessToken', { path: '/' });
       res.clearCookie('refreshToken', { path: '/' });
-      return res.status(401).json({ error: 'Session invalidated — please log in again.' });
+      return res.status(401).json({ error: 'Session invalidated. Please log in again.' });
     }
 
     // S1197 fix: organizerTokenVersion is INTENTIONALLY not enforced here (it previously

@@ -144,10 +144,10 @@ export const processSaleEndingSoonNotifications = async (): Promise<void> => {
               userId: sale.organizer.userId,
               type: 'sale_ending_soon_organizer',
               title: 'Your sale ends soon',
-              body: `"${sale.title}" ends ${formattedEndDate} — ${itemsRemaining} item${itemsRemaining === 1 ? '' : 's'} still unsold.`,
+              body: `"${sale.title}" ends ${formattedEndDate}. ${itemsRemaining} item${itemsRemaining === 1 ? '' : 's'} still unsold.`,
               link: `/organizer/sales/${sale.id}`,
               sendEmail: true,
-              emailSubject: `"${sale.title}" ends soon — ${itemsRemaining} item${itemsRemaining === 1 ? '' : 's'} still unsold`,
+              emailSubject: `"${sale.title}" ends soon: ${itemsRemaining} item${itemsRemaining === 1 ? '' : 's'} still unsold`,
               channel: 'OPERATIONAL',
             }).catch((err) =>
               console.error(`Failed to send organizer ending-soon notification for sale ${sale.id}:`, err)

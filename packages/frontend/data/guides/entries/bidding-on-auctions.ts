@@ -8,7 +8,7 @@ const entry: GuideEntry = {
   priority: 2,
   relatedGuides: ['holds-for-shoppers', 'pay-requests', 'condition-grades-for-shoppers'],
   videoUrl: undefined,
-  body: `Some organizers run sales where items go to the highest bidder instead of selling at a fixed price. Those items look different from regular listings — you'll see a current bid amount, a timer, and a Bid button instead of a price tag and Buy button.
+  body: `Some organizers run sales where items go to the highest bidder instead of selling at a fixed price. Those items look different from regular listings: you'll see a current bid amount, a timer, and a Bid button instead of a price tag and Buy button.
 
 Fixed-price items and auction items can appear in the same sale. Look for the **Auction** badge on the item card to tell them apart.
 
@@ -28,13 +28,13 @@ Fixed-price items and auction items can appear in the same sale. Look for the **
 
 ## Reserve price
 
-Some items have a reserve — a minimum price the organizer is willing to accept. If the current bid is below the reserve, the item card shows **Reserve not met**. The item won't sell unless bidding reaches that floor. The reserve amount itself is not shown.
+Some items have a reserve: a minimum price the organizer is willing to accept. If the current bid is below the reserve, the item card shows **Reserve not met**. The item won't sell unless bidding reaches that floor. The reserve amount itself is not shown.
 
 ---
 
 ## Auto-extend
 
-If a bid comes in during the last two minutes of an auction, the clock extends automatically — usually by two minutes. This prevents last-second sniping and gives everyone a fair shot. Keep an eye on the timer near the end.
+If a bid comes in during the last two minutes of an auction, the clock extends automatically, usually by two minutes. This prevents last-second sniping and gives everyone a fair shot. Keep an eye on the timer near the end.
 
 ---
 
@@ -42,7 +42,7 @@ If a bid comes in during the last two minutes of an auction, the clock extends a
 
 You'll get a notification as soon as the auction closes. After that, the organizer sends a pay request through the app with the final amount plus any applicable buyer's fee.
 
-Pay the request through your FindA.Sale notification. The organizer will confirm pickup details — date, time, and location — in a follow-up message.
+Pay the request through your FindA.Sale notification. The organizer will confirm pickup details (date, time, and location) in a follow-up message.
 
 ---
 

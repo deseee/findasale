@@ -145,7 +145,7 @@ const OrganizerInsightsPage = () => {
   const [customFrom, setCustomFrom] = useState<Date | undefined>();
   const [customTo, setCustomTo] = useState<Date | undefined>();
 
-  // Fetch aggregate insights data — hooks before any conditional return
+  // Fetch aggregate insights data: hooks before any conditional return
   const { data: insights, isLoading: insightsLoading, error, isError: insightsError } = useQuery({
     queryKey: ['organizer-insights', user?.id],
     queryFn: async () => {
@@ -194,7 +194,7 @@ const OrganizerInsightsPage = () => {
     enabled: !!user?.id,
   });
 
-  // Auth guard — after all hooks
+  // Auth guard: after all hooks
   if (!authLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
     router.push('/login');
     return null;
@@ -317,7 +317,7 @@ const OrganizerInsightsPage = () => {
           {/* Show per-sale metrics if a sale is selected, otherwise aggregate metrics */}
           {!selectedSaleId ? (
             <>
-              {/* Key Metrics Cards — Aggregate Data */}
+              {/* Key Metrics Cards: Aggregate Data */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
                 {/* Total Sales */}
                 <div className="card p-6 dark:bg-gray-800 dark:border-gray-700">
@@ -453,7 +453,7 @@ const OrganizerInsightsPage = () => {
             </>
           ) : null}
 
-          {/* Items by Category — only show when viewing aggregate data */}
+          {/* Items by Category: only show when viewing aggregate data */}
           {!selectedSaleId && insights.categoryBreakdown.length > 0 && (
             <div className="card p-6 dark:bg-gray-800 dark:border-gray-700">
               <h3 className="text-lg font-semibold text-warm-900 dark:text-warm-100 mb-6">Items by Category</h3>
@@ -482,7 +482,7 @@ const OrganizerInsightsPage = () => {
             </div>
           )}
 
-          {/* Top Items Table — only show when viewing aggregate data */}
+          {/* Top Items Table: only show when viewing aggregate data */}
           {!selectedSaleId && insights.topItems.length > 0 && (
             <div className="card p-6 dark:bg-gray-800 dark:border-gray-700">
               <h3 className="text-lg font-semibold text-warm-900 dark:text-warm-100 mb-6">Top Items (by price)</h3>
@@ -525,7 +525,7 @@ const OrganizerInsightsPage = () => {
             </div>
           )}
 
-          {/* Empty State — only show when viewing aggregate data */}
+          {/* Empty State: only show when viewing aggregate data */}
           {!selectedSaleId && insights.totalItems === 0 && (
             <div className="card p-12 text-center dark:bg-gray-800 dark:border-gray-700">
               <p className="text-warm-600 dark:text-warm-400 mb-4">No items listed yet.</p>
@@ -626,7 +626,7 @@ const OrganizerInsightsPage = () => {
                 {/* Hold Metrics */}
                 <HoldMetricsCard data={metricsData.metrics.holdMetrics} />
 
-                {/* Post Performance Card — #18 */}
+                {/* Post Performance Card: #18 */}
                 <PostPerformanceCard
                   saleId={selectedSaleId}
                   stats={clickStats}

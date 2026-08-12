@@ -1,5 +1,5 @@
 /**
- * Phase 29: Full-text search page — /search?q=
+ * Phase 29: Full-text search page: /search?q=
  * CD2 Phase 3: Adds visual search support via photo upload
  * Searches across published sales and available items with tabbed results.
  * Advanced filters: price range, condition, category, sale status, sort
@@ -16,7 +16,7 @@ import SearchFilterPanel, { SearchFilters } from '../components/SearchFilterPane
 import SearchSuggestions from '../components/SearchSuggestions';
 import EmptyState from '../components/EmptyState';
 import { SkeletonGrid } from '../components/SkeletonCards';
-// Sprint 4b — FTS item search
+// Sprint 4b: FTS item search
 import ItemSearch from '../components/ItemSearch';
 import FilterSidebar from '../components/FilterSidebar';
 import ItemSearchResults from '../components/ItemSearchResults';
@@ -262,7 +262,7 @@ const SearchPage = () => {
           }} />
         </form>
 
-        {/* Save Search — lets shoppers store the current query + filters for later */}
+        {/* Save Search: lets shoppers store the current query + filters for later */}
         {q && q.length >= 2 && (
           <div className="mb-6 flex flex-wrap items-center justify-center gap-3 max-w-2xl mx-auto">
             <button
@@ -285,7 +285,7 @@ const SearchPage = () => {
           </div>
         )}
 
-        {/* Error message — shows when main search API fails */}
+        {/* Error message: shows when main search API fails */}
         {q && q.length >= 2 && isError && (
           <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-300 dark:border-red-700 rounded-lg text-center">
             <p className="text-red-800 dark:text-red-300 font-semibold mb-3">Search failed. Please check your connection and try again.</p>
@@ -293,7 +293,7 @@ const SearchPage = () => {
           </div>
         )}
 
-        {/* Mobile filter panel — hidden on items tab (uses FilterSidebar drawer instead) */}
+        {/* Mobile filter panel: hidden on items tab (uses FilterSidebar drawer instead) */}
         {q && q.length >= 2 && isMobile && tab !== 'items' && (
           <SearchFilterPanel
             filters={filters}
@@ -348,7 +348,7 @@ const SearchPage = () => {
 
         {/* Two-column layout: desktop sidebar always visible, results gated by query length */}
         <div className="flex gap-6">
-          {/* Desktop filter sidebar — FTS facets on items tab, generic panel elsewhere */}
+          {/* Desktop filter sidebar: FTS facets on items tab, generic panel elsewhere */}
           {!isMobile && tab === 'items' ? (
             <FilterSidebar
               filters={itemFilters}
@@ -366,9 +366,9 @@ const SearchPage = () => {
             />
           ) : null}
 
-          {/* Main content area — results gated by query */}
+          {/* Main content area: results gated by query */}
           <div className="flex-1 min-w-0">
-            {/* Empty / short query state — inside flex so sidebar stays top-aligned */}
+            {/* Empty / short query state: inside flex so sidebar stays top-aligned */}
             {!q && !isShowingVisualResults && (
               <div className="text-center py-16">
                 <p className="text-warm-500 dark:text-warm-400 text-lg mb-6">What are you looking for?</p>
@@ -461,7 +461,7 @@ const SearchPage = () => {
                       </section>
                     )}
 
-                    {/* Items — Sprint 4b: FTS-powered on items tab, generic on all tab */}
+                    {/* Items: Sprint 4b: FTS-powered on items tab, generic on all tab */}
                     {tab === 'all' && (
                       <section>
                         <h2 className="text-lg font-semibold text-warm-900 dark:text-warm-100 mb-4">

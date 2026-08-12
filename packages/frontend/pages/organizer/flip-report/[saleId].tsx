@@ -173,7 +173,7 @@ export default function FlipReportPage() {
             </div>
           </div>
 
-          {/* ROI Summary Cards — Feature #407: only show when at least one item has costBasis */}
+          {/* ROI Summary Cards: Feature #407: only show when at least one item has costBasis */}
           {flipReport.itemsWithCostBasis > 0 && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
               <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 print:border print:border-gray-300 dark:border-gray-600 print:shadow-none">
@@ -338,7 +338,7 @@ export default function FlipReportPage() {
             </ul>
           </div>
 
-          {/* Feature #300: Return to Inventory — show when there are unsold items */}
+          {/* Feature #300: Return to Inventory: show when there are unsold items */}
           {flipReport.unsoldItems.length > 0 && (
             <div className="mt-8 print:hidden">
               <ReturnToInventoryPanel

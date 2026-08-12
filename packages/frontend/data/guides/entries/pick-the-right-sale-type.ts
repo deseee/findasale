@@ -10,7 +10,7 @@ const entry: GuideEntry = {
   videoUrl: undefined,
   body: `Choosing the right sale type matters before you publish.
 It controls which features are available and how your sale appears in search.
-You can change it in edit-sale before publishing — not after.
+You can change it in edit-sale before publishing, not after.
 
 ---
 
@@ -40,7 +40,7 @@ Prices tend to be low, turnover is fast, and setup is minimal.
 ## Flea Market
 
 A flea market is a multi-vendor event where each vendor manages their own inventory.
-As the organizer, you host the space — vendors each handle their own table or booth.
+As the organizer, you host the space: vendors each handle their own table or booth.
 
 **Best for:** Organizers running a market where multiple sellers participate, indoor or outdoor.
 
@@ -114,7 +114,7 @@ Yes. An Auction sale type supports both bidding items and buy-now items. Set ind
 Pick Consignment if tracking consignor payouts matters to you. If consignment is a small part of your business and you don't need payout reports, Estate Sale works fine.
 
 **Can a flea market vendor use FindA.Sale for their own booth?**
-Yes — a vendor can create their own sale listing independent of the market organizer. The market organizer's Flea Market sale type is for managing the event itself, not individual vendor storefronts.
+Yes: a vendor can create their own sale listing independent of the market organizer. The market organizer's Flea Market sale type is for managing the event itself, not individual vendor storefronts.
 
 **What's the difference between Auction and Estate Sale with high-value items?**
 Estate Sale items have a fixed asking price. Auction items go to the highest bidder. If you want to let buyers compete on price, choose Auction. If you want to set prices yourself, choose Estate Sale.

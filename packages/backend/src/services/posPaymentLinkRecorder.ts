@@ -240,7 +240,7 @@ export async function recordPosPaymentLinkSale(
         await createNotification({
           userId: organizer.userId,
           type: 'POS_PAYMENT_NEEDS_REFUND_REVIEW',
-          title: 'Payment captured for an already-sold item — refund review needed',
+          title: 'Payment captured for an already-sold item: refund review needed',
           body: `A shopper's payment link for ${titles} was completed at Stripe, but the item had already been sold through another channel by the time FindA.Sale tried to record it. FindA.Sale did NOT record a duplicate sale. Please check your Stripe dashboard for the payment on link ${posPaymentLink.stripePaymentLinkId}${opts.sessionId ? ` (session ${opts.sessionId})` : ''} and issue a refund if appropriate.`,
           link: '/organizer/pos',
           channel: 'OPERATIONAL',

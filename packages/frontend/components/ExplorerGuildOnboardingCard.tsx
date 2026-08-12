@@ -56,7 +56,7 @@ const ExplorerGuildOnboardingCard: React.FC<ExplorerGuildOnboardingCardProps> = 
               Welcome to Explorer's Guild
             </h3>
             <p className="text-sm text-blue-700 dark:text-blue-300">
-              Earn XP and unlock perks as you explore
+              Earn XP as you explore, and cash it in for perks
             </p>
           </div>
         </div>

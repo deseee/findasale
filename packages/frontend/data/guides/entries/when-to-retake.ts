@@ -14,7 +14,7 @@ const entry: GuideEntry = {
 
 ## What the orange retake nudge means
 
-The retake nudge is not a blocker. Items with this warning can still be published — it's a suggestion that the photo may be harder for buyers to evaluate or that it may affect how accurately the app identifies the item and suggests a title or price.
+The retake nudge is not a blocker. Items with this warning can still be published: it's a suggestion that the photo may be harder for buyers to evaluate or that it may affect how accurately the app identifies the item and suggests a title or price.
 
 The nudge fires based on a few detectable issues: blur, clipping (item cut off), low contrast, overexposure, and competing objects in the frame. It doesn't catch everything, and it sometimes flags photos that are actually fine.
 
@@ -38,25 +38,25 @@ The judgment call is yours. Here's how to make it quickly.
 
 ### Subject cut off
 
-**What it looks like:** Part of the item is missing from the frame — a corner clipped, a handle not visible, a drawer front not fully shown.
+**What it looks like:** Part of the item is missing from the frame: a corner clipped, a handle not visible, a drawer front not fully shown.
 
 **Why it matters:** Buyers assume something is wrong with the missing part. For furniture, clipped legs or tops read as damage. For items with lids or handles, buyers want to see the whole form.
 
 **When to retake:** Almost always. Step back until the whole item fits in frame, then shoot again. This takes five seconds.
 
-**When to skip:** If the clipped part is clearly irrelevant — a rug photographed from above where the outer inch is cut off, a stack of books where you can see every spine. Buyers understand the item is complete.
+**When to skip:** If the clipped part is clearly irrelevant, a rug photographed from above where the outer inch is cut off, a stack of books where you can see every spine. Buyers understand the item is complete.
 
 ---
 
 ### Competing items in frame
 
-**What it looks like:** Other items are clearly visible behind or beside the item you're selling — other merchandise, your own hands or feet, a pet, furniture from the room.
+**What it looks like:** Other items are clearly visible behind or beside the item you're selling: other merchandise, your own hands or feet, a pet, furniture from the room.
 
 **Why it matters:** Buyers sometimes ask about the wrong item. Price recognition is also less accurate when the frame is cluttered with competing objects.
 
 **When to retake:** If another item is so prominent that a buyer might reasonably think it's part of the lot, reshoot. Move the extra items or step in closer to exclude them.
 
-**When to skip:** Background context that's clearly just the sale environment (a shelf behind a lamp, a table in the distance). Buyers understand they're looking at a sale with lots of items. The nudge fires frequently in this case — don't let it chase you into retaking every photo taken in a room.
+**When to skip:** Background context that's clearly just the sale environment (a shelf behind a lamp, a table in the distance). Buyers understand they're looking at a sale with lots of items. The nudge fires frequently in this case: don't let it chase you into retaking every photo taken in a room.
 
 ---
 
@@ -128,11 +128,11 @@ There's no limit, but retaking everything the nudge flags will slow you down sig
 **Will bad photos affect my sale ranking or visibility?**
 Not directly. But items with clearer photos tend to get more views because buyers click on what they can actually see. For your highest-priced items, photo quality matters to your sale's revenue even if it doesn't affect algorithmic ranking.
 
-**What if I can't reshoot right now — the sale is starting in an hour?**
+**What if I can't reshoot right now, the sale is starting in an hour?**
 Publish what you have. A mediocre photo is better than no listing. If the item doesn't sell at the event, you can reshoot it afterward for an online listing or next sale.
 
 **The nudge keeps firing on all my photos even when they look fine. What's wrong?**
-Most likely the shooting environment. Very consistent backgrounds (heavily patterned carpet, lots of items in frame) can trigger the detection more often than it should. Check one or two flagged items carefully. If they look fine to you, publish and move on — the nudge is calibrated for common cases and misses on unusual setups.
+Most likely the shooting environment. Very consistent backgrounds (heavily patterned carpet, lots of items in frame) can trigger the detection more often than it should. Check one or two flagged items carefully. If they look fine to you, publish and move on: the nudge is calibrated for common cases and misses on unusual setups.
 
 ---
 

@@ -84,10 +84,10 @@ export async function runGmailOAuthHealthCheck(): Promise<void> {
     console.error(`[GmailHealth] OAuth token check FAILED: ${errMsg}`);
 
     await sendResendAlert(
-      '🔴 Gmail OAuth token BROKEN — outreach pipeline dead',
+      '🔴 Gmail OAuth token BROKEN: outreach pipeline dead',
       `
         <p><strong>🔴 CRITICAL:</strong> The Gmail OAuth refresh token is no longer valid.</p>
-        <p>The outreach pipeline is <strong>dead</strong> — no emails can be sent until the token is re-authorized.</p>
+        <p>The outreach pipeline is <strong>dead</strong>: no emails can be sent until the token is re-authorized.</p>
         <p><strong>Error:</strong> <code>${errMsg}</code></p>
         <p><strong>To fix:</strong> Re-run the Gmail OAuth flow and update <code>GMAIL_REFRESH_TOKEN</code> in Railway env vars.</p>
         <p style="color:#666;font-size:12px">FindA.Sale · gmailHealthCron.ts · runGmailOAuthHealthCheck</p>
@@ -201,7 +201,7 @@ export async function runSuspensionDetect(): Promise<void> {
     data: { alertSentAt: new Date() },
   });
 
-  const subject = `🚫 Outreach pipeline BLOCKED — quota exhausted (${log.count}/${HARD_LIMIT})`;
+  const subject = `🚫 Outreach pipeline BLOCKED: quota exhausted (${log.count}/${HARD_LIMIT})`;
   const html = `
     <p><strong>🚫 PIPELINE BLOCKED:</strong> The outreach pipeline is currently disabled.</p>
     <p>Today's Gmail quota has been exhausted: <strong>${log.count.toLocaleString()} of ${HARD_LIMIT.toLocaleString()}</strong> emails sent.</p>

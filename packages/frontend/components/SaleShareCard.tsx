@@ -97,7 +97,7 @@ const SaleShareCard: React.FC<SaleShareCardProps> = ({
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/50 p-6 mb-8">
       <h2 className="text-lg font-bold text-warm-900 dark:text-gray-100 mb-4">Share this sale</h2>
 
-      {/* Copy Link — amber filled (primary action) */}
+      {/* Copy Link: amber filled (primary action) */}
       <button
         onClick={copyToClipboard}
         className="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-3 rounded mb-3 transition-colors text-sm"
@@ -105,7 +105,7 @@ const SaleShareCard: React.FC<SaleShareCardProps> = ({
         Copy Link
       </button>
 
-      {/* Social buttons — solid brand color backgrounds */}
+      {/* Social buttons: solid brand color backgrounds */}
       <div className="space-y-2">
         <button
           onClick={handleFacebookShare}

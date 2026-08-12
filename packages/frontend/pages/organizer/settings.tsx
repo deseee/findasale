@@ -810,7 +810,7 @@ const OrganizerSettingsPage = () => {
                 {tier === 'SIMPLE' && (
                   <div className="mb-6 p-4 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
                     <p className="text-sm text-amber-800 dark:text-amber-200 mb-3">
-                      Unlock powerful features to grow your business.
+                      See what PRO adds: lower fees, Brand Kit, and Smart Pricing.
                     </p>
                     <Link
                       href="/pricing"
@@ -2238,7 +2238,7 @@ const OrganizerSettingsPage = () => {
               {/* Feature #602 (2026-08-05): AI Message-Reply Autosend -- Price + Availability */}
               <div className="card p-6">
                 <div className="flex items-center gap-2 mb-4">
-                  <h2 className="text-xl font-semibold text-warm-900 dark:text-gray-100">AI Message-Reply Autosend</h2>
+                  <h2 className="text-xl font-semibold text-warm-900 dark:text-gray-100">Smart Message-Reply Autosend</h2>
                   <Tooltip content="Automatically replies to buyer messages that ask about price or availability, using the same thresholds you trust for eBay Best Offers." position="right" />
                 </div>
                 <p className="text-warm-600 dark:text-gray-400 mb-4">

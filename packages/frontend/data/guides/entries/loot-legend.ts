@@ -10,7 +10,7 @@ const entry: GuideEntry = {
   videoUrl: undefined,
   body: `# The Loot Legend: your lifetime stats and finds
 
-The Loot Legend is a lifetime summary of your FindA.Sale activity. It lives at [/shopper/loot-legend](/shopper/loot-legend) and it's yours — a record of every item you've bought, every sale you've attended, and every streak you've kept.
+The Loot Legend is a lifetime summary of your FindA.Sale activity. It lives at [/shopper/loot-legend](/shopper/loot-legend) and it's yours: a record of every item you've bought, every sale you've attended, and every streak you've kept.
 
 ---
 
@@ -44,13 +44,13 @@ The Loot Legend is a personal record of your collecting history. It's useful in 
 
 **Remembering where you found something.** "Where did I get that lamp?" is answerable if you've been buying through FindA.Sale. Your purchase history feeds into the Loot Legend.
 
-**Seeing your hunting patterns.** Most active months. Most visited city. Most repeat organizer. These numbers tell you something about your habits — and sometimes they're surprising.
+**Seeing your hunting patterns.** Most active months. Most visited city. Most repeat organizer. These numbers tell you something about your habits, and sometimes they're surprising.
 
 ---
 
 ## How it connects to your rank
 
-Your rank is driven by XP. Your XP is driven by the actions tracked in your Loot Legend. Purchases, reviews, haul posts, referrals — they're all recorded here and they're all feeding your rank in real time.
+Your rank is driven by XP. Your XP is driven by the actions tracked in your Loot Legend. Purchases, reviews, haul posts, referrals: they're all recorded here and they're all feeding your rank in real time.
 
 The Loot Legend doesn't control your rank directly. It's more like a receipt: it shows the accumulated evidence of why you're at the rank you're at.
 
@@ -60,7 +60,7 @@ The Loot Legend doesn't control your rank directly. It's more like a receipt: it
 
 Your Loot Legend is private by default. Only you see it.
 
-You can make the summary public from your profile settings (Profile → Settings → Public Loot Legend). When you do, other shoppers can see your summary stats — total items, rank, favorite categories, most visited city, current and best streak. They cannot see your spending amounts or your purchase history.
+You can make the summary public from your profile settings (Profile → Settings → Public Loot Legend). When you do, other shoppers can see your summary stats: total items, rank, favorite categories, most visited city, current and best streak. They cannot see your spending amounts or your purchase history.
 
 If you want to keep everything private, leave the default setting as-is. Your stats are still fully visible to you either way.
 

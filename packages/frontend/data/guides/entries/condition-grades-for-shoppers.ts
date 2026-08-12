@@ -8,11 +8,11 @@ const entry: GuideEntry = {
   priority: 1,
   relatedGuides: ['holds-for-shoppers', 'bidding-on-auctions'],
   videoUrl: undefined,
-  body: `Every item on FindA.Sale gets a condition grade — S, A, B, C, or D — assigned by the organizer before the sale goes live. A person looked at the item and made a call. It was not assigned by an automated system.
+  body: `Every item on FindA.Sale gets a condition grade (S, A, B, C, or D) assigned by the organizer before the sale goes live. A person looked at the item and made a call. It was not assigned by an automated system.
 
 The grade tells you what to expect when you arrive. An A-grade lamp should look close to new. A C-grade dresser will have visible wear you can live with. A D-grade item is sold as-is, no surprises.
 
-Grades get assigned when the organizer photographs and lists each item — usually one or two days before a sale opens. You can filter search results by condition if you're only looking for certain quality levels.
+Grades get assigned when the organizer photographs and lists each item, usually one or two days before a sale opens. You can filter search results by condition if you're only looking for certain quality levels.
 
 ---
 
@@ -28,7 +28,7 @@ That page has side-by-side examples across common item types: furniture, clothin
 
 ## If the grade looks wrong
 
-Message the organizer through the item page before you drive out. Ask for an extra photo or clarification. Organizers are usually happy to send one — it saves both of you a trip.
+Message the organizer through the item page before you drive out. Ask for an extra photo or clarification. Organizers are usually happy to send one. It saves both of you a trip.
 
 Don't assume the grade was set maliciously. Condition is subjective. A quick message resolves most disagreements.
 
@@ -37,7 +37,7 @@ Don't assume the grade was set maliciously. Condition is subjective. A quick mes
 ## Common questions
 
 **Who assigns the grade?**
-The organizer — the person running the estate sale, yard sale, flea market booth, or consignment shop. They grade based on what they see at the item.
+The organizer: the person running the estate sale, yard sale, flea market booth, or consignment shop. They grade based on what they see at the item.
 
 **Can I search by condition grade?**
 Yes. Use the Condition filter on any search results page or sale browse page.

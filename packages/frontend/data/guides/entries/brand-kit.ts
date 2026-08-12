@@ -14,11 +14,11 @@ const entry: GuideEntry = {
 
 ## What the brand kit includes
 
-**Logo** — your business logo or a simple wordmark. Once uploaded, it appears on share cards, print templates, and your public organizer profile. Shoppers who follow multiple organizers use logos to tell listings apart at a glance.
+**Logo**: your business logo or a simple wordmark. Once uploaded, it appears on share cards, print templates, and your public organizer profile. Shoppers who follow multiple organizers use logos to tell listings apart at a glance.
 
-**Accent color** — a single color that appears as the background or highlight on your share cards and print card. Pick a color that matches your logo or one you use consistently. If you do not pick one, FindA.Sale uses a neutral default.
+**Accent color**: a single color that appears as the background or highlight on your share cards and print card. Pick a color that matches your logo or one you use consistently. If you do not pick one, FindA.Sale uses a neutral default.
 
-**Storefront URL** — a custom short address for your organizer profile. Example: finda.sale/janes-treasures. This is the link you share when promoting your business generally, not a specific sale. It points to your profile page where shoppers can see all your active and past sales.
+**Storefront URL**: a custom short address for your organizer profile. Example: finda.sale/janes-treasures. This is the link you share when promoting your business generally, not a specific sale. It points to your profile page where shoppers can see all your active and past sales.
 
 ---
 
@@ -26,7 +26,7 @@ const entry: GuideEntry = {
 
 Share cards with a logo and consistent color look intentional. They perform better in local Facebook groups and on Instagram because they stand out from plain text posts and generic images.
 
-Print materials — the flyer template, yard sign card, and print card from the promote page — all pull from your brand kit. If your logo is in the brand kit, it shows up on every printable automatically. You do not need to add it manually each time.
+Print materials (the flyer template, yard sign card, and print card from the promote page) all pull from your brand kit. If your logo is in the brand kit, it shows up on every printable automatically. You do not need to add it manually each time.
 
 Your storefront URL is the address to put on business cards, in your email signature, and anywhere you want to send repeat customers. It never changes even as individual sale listings come and go.
 
@@ -45,7 +45,7 @@ Go to /organizer/brand-kit. You will see three sections: Logo, Accent Color, and
 **File requirements:**
 - PNG or JPG
 - Minimum 400x400 pixels recommended
-- PNG with a transparent background works best — your logo will sit cleanly on any card color without a white box around it
+- PNG with a transparent background works best: your logo will sit cleanly on any card color without a white box around it
 - File size under 5 MB
 
 If your logo has a white background and it looks odd on colored cards, ask your designer (or a print shop) for a PNG version with transparency. Most logo files exist in both formats.
@@ -56,13 +56,13 @@ If your logo has a white background and it looks odd on colored cards, ask your 
 2. Enter a hex code if you know it (example: #2E4A7C), or use the color picker to select visually
 3. Tap **Save**
 
-Pick a color you already use — your vehicle wrap color, your business card color, or even just a color you like. Consistency across your materials is what builds recognition with repeat shoppers.
+Pick a color you already use: your vehicle wrap color, your business card color, or even just a color you like. Consistency across your materials is what builds recognition with repeat shoppers.
 
 ### Storefront URL
 
 1. Tap the field next to **Your storefront URL**
-2. Type the short name you want — letters, numbers, and hyphens only, no spaces
-3. Tap **Check availability** — the system will tell you if that slug is taken
+2. Type the short name you want: letters, numbers, and hyphens only, no spaces
+3. Tap **Check availability**: the system will tell you if that slug is taken
 4. Tap **Save** once you have a name that is available
 
 Examples of good storefront slugs:
@@ -109,11 +109,11 @@ Not currently. One brand kit applies to all sales under your organizer account. 
 
 **What happens to my old share cards if I change my accent color?**
 
-Old share cards you already downloaded or posted are not affected — they are static images. New cards generated after you save the new color will use the updated color.
+Old share cards you already downloaded or posted are not affected: they are static images. New cards generated after you save the new color will use the updated color.
 
 **Is my storefront URL the same as my sale listing URL?**
 
-No. Your storefront URL (finda.sale/your-slug) points to your organizer profile — all your sales in one place. Each individual sale has its own listing URL. Use the storefront URL for general promotion and repeat-customer outreach.
+No. Your storefront URL (finda.sale/your-slug) points to your organizer profile: all your sales in one place. Each individual sale has its own listing URL. Use the storefront URL for general promotion and repeat-customer outreach.
 
 ---
 

@@ -63,7 +63,7 @@ import ClaimListingBanner from '../../components/ClaimListingBanner'; // Feature
 import SaleFloorMap from '../../components/SaleFloorMap'; // #416: Floor Map
 import ReviewsSection from '../../components/ReviewsSection';
 
-// M-005: Sale-type display labels (shared by badge + meta copy) — audit 2026-05-30
+// M-005: Sale-type display labels (shared by badge + meta copy): audit 2026-05-30
 const SALE_TYPE_LABELS: Record<string, string> = {
   ESTATE: 'Estate Sale', ESTATE_SALE: 'Estate Sale', YARD: 'Yard Sale', YARD_SALE: 'Yard Sale',
   GARAGE: 'Garage Sale', MOVING: 'Moving Sale', DOWNSIZING: 'Downsizing Sale', AUCTION: 'Auction',
@@ -74,7 +74,7 @@ const SALE_TYPE_LABELS: Record<string, string> = {
 };
 
 // M-005: Infer a sale type from the title when the stored type is missing or untrusted.
-// Order matters — more specific keywords first. Returns null when nothing matches.
+// Order matters: more specific keywords first. Returns null when nothing matches.
 function inferSaleTypeFromTitle(title?: string | null): string | null {
   if (!title) return null;
   const t = title.toLowerCase();
@@ -92,7 +92,7 @@ function inferSaleTypeFromTitle(title?: string | null): string | null {
   return null;
 }
 
-// M-005: Resolve the sale type to DISPLAY. Organizer intent always wins — a real
+// M-005: Resolve the sale type to DISPLAY. Organizer intent always wins: a real
 // organizer-set type is never overridden. Title inference is used only when:
 //   (a) no stored type at all, or the stored value is a generic UNKNOWN, OR
 //   (b) the listing is a scraped/unmanaged directory record (untrusted default) AND
@@ -109,7 +109,7 @@ function resolveSaleType(
   if (!stored || stored === 'UNKNOWN') return inferred ?? stored ?? null;
   // Scraped listing with an untrusted default: if the title strongly implies a
   // different type, prefer the inferred one. (Organizer intent does not apply to
-  // unmanaged scraped records — there is no organizer-set value to respect.)
+  // unmanaged scraped records: there is no organizer-set value to respect.)
   if (isUnmanaged && inferred && inferred !== stored) return inferred;
   return stored;
 }
@@ -217,7 +217,7 @@ interface Bid {
   createdAt: string;
 }
 
-// SSR-fetched data for OG tags — avoids CSR hydration race with Facebook bot
+// SSR-fetched data for OG tags: avoids CSR hydration race with Facebook bot
 interface OGSaleData {
   id: string;
   title: string;
@@ -252,7 +252,7 @@ interface InitialSaleData {
   organizer: {
     businessName: string;
   };
-  // #439: Per-item Product schema — only populated for claimed sales
+  // #439: Per-item Product schema: only populated for claimed sales
   isClaimed: boolean;
   items: Array<{
     title: string;
@@ -264,7 +264,7 @@ interface InitialSaleData {
   }>;
 }
 
-// #450: EventSeries schema data — fetched server-side when organizer has ≥3 recurring sales
+// #450: EventSeries schema data: fetched server-side when organizer has ≥3 recurring sales
 interface EventSeriesData {
   isRecurring: boolean;
   organizerName: string | null;
@@ -284,13 +284,13 @@ interface SaleDetailPageProps {
   initialData?: InitialSaleData | null;
   eventSeriesData?: EventSeriesData | null;
   noindex?: boolean;
-  // S1071: Google unavailable_after date (YYYY-MM-DD) — endDate + 30 days for PUBLISHED
+  // S1071: Google unavailable_after date (YYYY-MM-DD): endDate + 30 days for PUBLISHED
   // sales with a real end date. Null for ENDED (noindex instead) and permanent storefronts.
   unavailableAfter?: string | null;
 }
 
 /**
- * GuestSaleAlert — no-login email capture for logged-out sale-page visitors.
+ * GuestSaleAlert: no-login email capture for logged-out sale-page visitors.
  * Strangers arriving from a shared link can get alerts WITHOUT being bounced to /login.
  * Reuses the existing public POST /search/notify endpoint (no auth required).
  */
@@ -302,7 +302,7 @@ const GuestSaleAlert: React.FC<{ saleTitle: string; saleCity: string }> = ({ sal
     try {
       await api.post('/search/notify', { email, query: saleTitle, city: saleCity });
     } catch {
-      // Swallow — show success regardless to avoid leaking whether an email is on file
+      // Swallow: show success regardless to avoid leaking whether an email is on file
     }
     setSubmitted(true);
   };
@@ -390,7 +390,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
   // false, so it now also stops polling when the tab is hidden. Net effect: half the
   // invocations from this page with zero change to foreground live-update freshness.
 
-  // Track QR scan — fires once when utm_source=qr_sign is in the URL
+  // Track QR scan: fires once when utm_source=qr_sign is in the URL
   useEffect(() => {
     if (!id || typeof window === 'undefined') return;
     const params = new URLSearchParams(window.location.search);
@@ -401,9 +401,9 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
 
   // Facebook Commerce Manager: build the cart from a forwarded checkout link.
   // /checkout (getServerSideProps) redirects here with fbCheckout=ITEM:QTY,ITEM2:QTY2
-  // and an optional coupon — this used to be done in checkout.tsx itself via a
+  // and an optional coupon: this used to be done in checkout.tsx itself via a
   // client-only useEffect, which meant the checkout URL never produced a real
-  // HTTP redirect (Meta's checkout-URL validator flagged this — 2026-07-06 fix).
+  // HTTP redirect (Meta's checkout-URL validator flagged this: 2026-07-06 fix).
   useEffect(() => {
     if (!router.isReady) return;
     const { fbCheckout, coupon } = router.query;
@@ -442,7 +442,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
       } catch (err) {
         console.warn('[fbCheckout] Failed to build cart from Facebook checkout link:', err);
       } finally {
-        // Clean fbCheckout/coupon from the URL — cart=open (handled below) stays.
+        // Clean fbCheckout/coupon from the URL: cart=open (handled below) stays.
         const { fbCheckout: _fb, coupon: _c, ...rest } = router.query;
         void router.replace({ pathname: router.pathname, query: rest }, undefined, { shallow: true });
       }
@@ -491,7 +491,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
     if (!id || !user) return;
 
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      // Check if user has active holds at this sale — if so, warn before leaving
+      // Check if user has active holds at this sale: if so, warn before leaving
       api.get('/reservations/shopper').then((res) => {
         const userHoldsAtSale = (res.data || []).filter((h: any) => h.item?.sale?.id === id);
         if (userHoldsAtSale && userHoldsAtSale.length > 0) {
@@ -553,7 +553,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
   // Feature #67: Fetch social proof metrics for this sale
   const { data: saleSocialProof, isLoading: socialProofLoading } = useSaleSocialProof(id as string, saleExists);
 
-  // #403: Family Bundle Pricing — fetch active bundles for this sale
+  // #403: Family Bundle Pricing: fetch active bundles for this sale
   const { data: saleBundles } = useQuery<Array<{
     id: string;
     title: string;
@@ -609,7 +609,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
   };
 
   const handleAddToCart = (item: any) => {
-    // Phase 1: Smart Cart — add item to localStorage cart
+    // Phase 1: Smart Cart: add item to localStorage cart
     const newCartItem = {
       id: item.id,
       title: item.title,
@@ -777,7 +777,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
   // component has mounted on the client. During the server render and the first
   // pre-mount client pass, `sale` from useQuery is always undefined (the query has
   // not resolved), which previously caused these early returns to fire and ship an
-  // EMPTY <head> — blank og:title/JSON-LD for social unfurlers and crawlers.
+  // EMPTY <head>: blank og:title/JSON-LD for social unfurlers and crawlers.
   // When `!mounted`, we fall through to the SSR head-rendering block below, which
   // renders the full og + JSON-LD markup from the getStaticProps props
   // (ogData / initialData / eventSeriesData). This keeps all interactive/CSR
@@ -836,7 +836,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
   const saleEndDate = sale ? parseISO(sale.endDate) : null;
   const now = new Date();
   const saleHasStarted = saleStartDate ? now >= saleStartDate : false;
-  // Permanent storefronts (isOngoing) never "end" — they are always live.
+  // Permanent storefronts (isOngoing) never "end": they are always live.
   const saleHasEnded = sale?.isOngoing ? false : (saleEndDate ? now >= saleEndDate : false);
 
   // M-005: Type used for the display badge + meta copy. Organizer intent wins;
@@ -850,7 +850,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
     ? (SALE_TYPE_LABELS[displaySaleType] ?? displaySaleType.replace(/_/g, ' '))
     : null;
 
-  // Feature #43: OG Image Generator — transform photoUrls to photos format for SaleOGMeta
+  // Feature #43: OG Image Generator: transform photoUrls to photos format for SaleOGMeta
   const saleForOGMeta = sale ? {
     ...sale,
     photos: sale.photoUrls.map(url => ({ url })),
@@ -860,7 +860,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
   const isSaleLocked = sale?.locked === true;
   const showRankUpCta = xpProfile?.explorerRank === 'INITIATE' && isSaleLocked;
 
-  // Build SSR OG head once — rendered in all return paths so FB bot sees it immediately
+  // Build SSR OG head once: rendered in all return paths so FB bot sees it immediately
   const ogHead = ogData ? (
     <SaleOGMeta
       sale={{
@@ -885,7 +885,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
     return (
       <>
         {ogHead}
-        {/* Bug #449/#457 + S1071: noindex for ALL ENDED sales — must render SSR so crawlers see it */}
+        {/* Bug #449/#457 + S1071: noindex for ALL ENDED sales: must render SSR so crawlers see it */}
         {noindex && (
           <Head>
             <meta name="robots" content="noindex" />
@@ -898,7 +898,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
             <meta name="robots" content={`unavailable_after: ${unavailableAfter}`} />
           </Head>
         )}
-        {/* Bug #432: JSON-LD from SSR initialData — rendered server-side so crawlers receive it */}
+        {/* Bug #432: JSON-LD from SSR initialData: rendered server-side so crawlers receive it */}
         {initialData && (
           <Head>
             <script type="application/ld+json" dangerouslySetInnerHTML={{
@@ -1109,11 +1109,11 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
   return (
     <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
       {ogHead ? (
-        // SSR version — render the already-built ogHead element directly.
+        // SSR version: render the already-built ogHead element directly.
         // Rendering <SaleOGMeta> again here would inject duplicate OG tags into <head>.
         ogHead
       ) : (
-        // CSR fallback — used only when getStaticProps didn't return ogData
+        // CSR fallback: used only when getStaticProps didn't return ogData
         sale ? (
           <Head>
             <title>{sale.title} – FindA.Sale</title>
@@ -1134,7 +1134,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
         ) : null
       )}
 
-      {/* Bug #449/#457 + S1071: noindex for ALL ENDED sales — rendered in both SSR and CSR paths */}
+      {/* Bug #449/#457 + S1071: noindex for ALL ENDED sales: rendered in both SSR and CSR paths */}
       {noindex && (
         <Head>
           <meta name="robots" content="noindex" />
@@ -1213,7 +1213,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
               },
               'paymentAccepted': ['CreditCard', 'Cash', 'PaymentService'],
               ...(sale.status?.toUpperCase() === 'ENDED' ? {
-                // #GSC-fix: only override eventStatus here — 'offers' availability is
+                // #GSC-fix: only override eventStatus here: 'offers' availability is
                 // already status-derived above, so we no longer clobber lowPrice/highPrice/
                 // offerCount/url/validFrom by replacing the whole offers object.
                 'eventStatus': 'https://schema.org/EventRescheduled',
@@ -1249,7 +1249,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
         </Head>
       )}
 
-      {/* #439: Per-item Product schema — only for claimed sales with server-side items */}
+      {/* #439: Per-item Product schema: only for claimed sales with server-side items */}
       {initialData && initialData.isClaimed && initialData.items.length > 0 && (
         <Head>
           <script type="application/ld+json" dangerouslySetInnerHTML={{
@@ -1293,7 +1293,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
         </Head>
       )}
 
-      {/* #450: EventSeries JSON-LD — only when organizer has ≥3 recurring sales of the same type */}
+      {/* #450: EventSeries JSON-LD: only when organizer has ≥3 recurring sales of the same type */}
       {eventSeriesData && eventSeriesData.isRecurring && eventSeriesData.organizerName && initialData && (
         <Head>
           <script type="application/ld+json" dangerouslySetInnerHTML={{
@@ -1361,7 +1361,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
       {!isSaleLocked && sale && (
       <main className="min-h-screen bg-[#F4EFE7] dark:bg-[#0B0F17] text-[#1A1814] dark:text-[#F2F0EA]">
 
-        {/* Machine-readable context for AI crawlers — sr-only, not display:none (cloaking-safe) */}
+        {/* Machine-readable context for AI crawlers: sr-only, not display:none (cloaking-safe) */}
         {sale.organizer && (
           <div className="sr-only" aria-hidden="true">
             <p>Sale listing managed by {sale.organizer.businessName} on FindA.Sale.</p>
@@ -1403,7 +1403,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
               style={{ background: 'linear-gradient(180deg, rgba(11,15,23,0.0) 30%, rgba(11,15,23,0.85) 100%)' }}
             />
 
-            {/* Status + type pills — top left */}
+            {/* Status + type pills: top left */}
             <div className="absolute top-5 left-6 flex gap-2 flex-wrap">
               {/* Status pill */}
               {(() => {
@@ -1429,7 +1429,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
                   </span>
                 );
               })()}
-              {/* Sale type pill — M-005: inferred display type (organizer intent wins) */}
+              {/* Sale type pill: M-005: inferred display type (organizer intent wins) */}
               {displaySaleTypeLabel && (
                 <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-mono tracking-wide" style={{ background: 'rgba(255,255,255,0.12)', color: '#F2F0EA', border: '1px solid rgba(255,255,255,0.18)' }}>
                   {displaySaleTypeLabel}
@@ -1437,7 +1437,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
               )}
             </div>
 
-            {/* Photo counter — top right */}
+            {/* Photo counter: top right */}
             {sale.photoUrls.length > 1 && (
               <div
                 className="absolute top-5 right-6 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs cursor-pointer"
@@ -1449,7 +1449,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
               </div>
             )}
 
-            {/* Title block — bottom of hero */}
+            {/* Title block: bottom of hero */}
             <div className="absolute bottom-7 left-6 right-6 text-[#F2F0EA]">
               <h1 style={{ fontFamily: '"Inter Tight", "Inter", sans-serif', fontSize: 'clamp(28px, 4vw, 44px)', fontWeight: 600, letterSpacing: '-0.025em', lineHeight: 1.05, margin: 0, maxWidth: 820 }}>
                 {sale.title}
@@ -1633,20 +1633,20 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
                         })}
                       </div>
                       <div className="mt-4 pt-4 border-t border-black/8 dark:border-white/8 flex flex-col gap-2">
-                        {/* Compact action row — save, remind, share, calendar */}
+                        {/* Compact action row: save, remind, share, calendar */}
                         <div className="flex items-center gap-2">
                           <FavoriteButton saleId={sale.id} variant="icon" size="md" />
-                          {/* Remind Me only for logged-in users — for logged-out it's a dead-end ("sign in" toast). Logged-out visitors get the no-login GuestSaleAlert below instead. */}
+                          {/* Remind Me only for logged-in users: for logged-out it's a dead-end ("sign in" toast). Logged-out visitors get the no-login GuestSaleAlert below instead. */}
                           {user && <div className="flex-1 min-w-0"><RemindMeButton saleId={sale.id} saleName={sale.title} disabled={saleHasEnded} /></div>}
                           <div className="flex-1 min-w-0"><SaleShareButton saleId={sale.id} saleTitle={sale.title} saleLocation={`${sale.city}, ${sale.state}`} saleDate={sale.startDate} userId={user?.id} /></div>
                           {!saleHasEnded && (
                             <div className="flex-1 min-w-0"><AddToCalendarButton saleId={sale.id} title={sale.title} startDate={sale.startDate} endDate={sale.endDate} address={sale.address} city={sale.city} state={sale.state} description={sale.description} /></div>
                           )}
                         </div>
-                        {/* Primary CTA — Going */}
+                        {/* Primary CTA: Going */}
                         {user && !saleHasEnded && <SaleRSVPButton saleId={sale.id} />}
                         {!saleHasEnded && <RSVPBadge saleId={sale.id} saleTitle={sale.title} />}
-                        {/* Bug #158: Waitlist — notify me when new items are added */}
+                        {/* Bug #158: Waitlist: notify me when new items are added */}
                         {user && (sale.status === 'PUBLISHED' || sale.status === 'ACTIVE') && (
                           <SaleWaitlistButton saleId={sale.id} />
                         )}
@@ -1712,7 +1712,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
               )}
             </section>
 
-            {/* Where to Go — mobile only (mirrors desktop aside) */}
+            {/* Where to Go: mobile only (mirrors desktop aside) */}
             <div className="lg:hidden rounded-xl border border-black/10 dark:border-white/8 bg-[#FBF8F2] dark:bg-[#121826] overflow-hidden">
               <div className="px-4 pt-4 pb-2">
                 <div className="text-xs uppercase tracking-widest mb-1.5 text-[rgba(26,24,20,0.4)] dark:text-[rgba(242,240,234,0.4)]" style={{ fontFamily: 'ui-monospace, monospace', letterSpacing: '0.1em' }}>Where to go</div>
@@ -1726,7 +1726,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
                   height="160px"
                 />
               ) : (sale.address || sale.city) ? (
-                /* M-006: No coords but we have an address — offer a maps link instead of a dead "Location not available" box */
+                /* M-006: No coords but we have an address: offer a maps link instead of a dead "Location not available" box */
                 <a
                   href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(sale.address ? `${sale.address}, ${sale.city}, ${sale.state} ${sale.zip || ''}`.trim() : `${sale.city}, ${sale.state}`)}`}
                   target="_blank"
@@ -1828,7 +1828,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
               </section>
             )}
 
-            {/* Buyer's premium disclosure — placed directly above items so bidders see the financial disclosure before bidding */}
+            {/* Buyer's premium disclosure: placed directly above items so bidders see the financial disclosure before bidding */}
             {sale.buyersPremiumPct && sale.buyersPremiumPct > 0 && (
               <div className="rounded-xl p-4 border border-amber-200 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/30">
                 <p className="text-sm font-medium text-amber-900 dark:text-amber-200">
@@ -1863,7 +1863,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
                   ? sale.tags.join(' ')
                   : sale.title;
                 const searchQuery = rawTerms.split(/\s+/).slice(0, 3).join(' ');
-                // Current EPN link format — params appended directly to the ebay.com URL
+                // Current EPN link format: params appended directly to the ebay.com URL
                 // (rover.ebay.com redirect links are deprecated and rejected by eBay).
                 const ebaySearchUrl =
                   'https://www.ebay.com/sch/i.html?_nkw=' + encodeURIComponent(searchQuery) +
@@ -2012,7 +2012,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
                         Showing {Math.min(currentItemPage * effectivePerPage, filteredSorted.length) - (currentItemPage - 1) * effectivePerPage} of {filteredSorted.length} items
                       </p>
                     )}
-                    {/* Photo-first item grid — 2 col mobile, 3 col md, 4 col lg */}
+                    {/* Photo-first item grid: 2 col mobile, 3 col md, 4 col lg */}
                     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
                       {pagedItems.map((item) => (
                         <div key={item.id} className="rounded-xl overflow-hidden border border-black/10 dark:border-white/8 bg-[#FFFFFF] dark:bg-[#19202F] flex flex-col">
@@ -2314,14 +2314,14 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
               )}
             </section>
 
-            {/* Holds & shipping — mobile */}
+            {/* Holds & shipping: mobile */}
             <div className="lg:hidden rounded-xl p-4 text-xs leading-relaxed text-[rgba(26,24,20,0.5)] dark:text-[rgba(242,240,234,0.5)] bg-black/5 dark:bg-white/5">
               <div className="font-medium mb-1.5 uppercase tracking-wider text-[10px] text-[rgba(26,24,20,0.62)] dark:text-[rgba(242,240,234,0.62)]" style={{ fontFamily: 'ui-monospace, monospace', letterSpacing: '0.08em' }}>Holds & shipping</div>
               Holds last <strong className="text-[#1A1814] dark:text-[#F2F0EA]">{sale.holdDurationHours || 48} hours</strong> after a yellow tag. Items marked "ships" are paid via Stripe and sent within 3 business days.
               {sale.returnWindowHours && <div className="mt-1">Returns accepted within {sale.returnWindowHours}h of pickup.</div>}
             </div>
 
-            {/* Share card — mobile */}
+            {/* Share card: mobile */}
             <div className="lg:hidden">
               <SaleShareCard saleId={sale.id} saleTitle={sale.title} userId={user?.id} />
             </div>
@@ -2331,7 +2331,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
               <SimilarItems itemId={sale.items[0].id} category={sale.items[0].category || 'general'} />
             )}
 
-            {/* Bug #160: Reviews — shoppers can submit a review after the sale */}
+            {/* Bug #160: Reviews: shoppers can submit a review after the sale */}
             <ReviewsSection mode="sale" saleId={sale.id} saleStatus={sale.status} />
 
           </div>{/* end MAIN COLUMN */}
@@ -2354,7 +2354,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
                   height="160px"
                 />
               ) : (sale.address || sale.city) ? (
-                /* M-006: No coords but we have an address — offer a maps link instead of a dead "Location not available" box */
+                /* M-006: No coords but we have an address: offer a maps link instead of a dead "Location not available" box */
                 <a
                   href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(sale.address ? `${sale.address}, ${sale.city}, ${sale.state} ${sale.zip || ''}`.trim() : `${sale.city}, ${sale.state}`)}`}
                   target="_blank"
@@ -2485,10 +2485,10 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
           </aside>
         </div>{/* end two-col grid */}
 
-      {/* SEO Internal Links — city + sale-type discovery (helps Google index /city/* pages) */}
+      {/* SEO Internal Links: city + sale-type discovery (helps Google index /city/* pages) */}
       {sale?.city && sale?.state && (() => {
         // Was a 4th hand-rolled slug chain; now the one shared generator (2026-07-28).
-        // Null when the city cannot yield a valid slug — render no links rather
+        // Null when the city cannot yield a valid slug: render no links rather
         // than link to a URL the by-city API would reject with a 400.
         const citySlug = canonicalCitySlug(sale.city, sale.state);
         if (!citySlug) return null;
@@ -2569,10 +2569,10 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
         />
       )}
 
-      {/* Phase 1: Smart Cart — floating action button */}
+      {/* Phase 1: Smart Cart: floating action button */}
       <ShopperCartFAB onClick={openCart} />
 
-      {/* Phase 1: Smart Cart — switch sale confirmation modal */}
+      {/* Phase 1: Smart Cart: switch sale confirmation modal */}
       {showSwitchSaleModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg max-w-sm p-6">
@@ -2614,7 +2614,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
 export default SaleDetailPage;
 
 /**
- * Feature #33 — Share Card Factory + SEO-1 fix
+ * Feature #33: Share Card Factory + SEO-1 fix
  * Fetch sale data at build/revalidation time (ISR) so OG meta tags + JSON-LD are
  * present in the initial HTML before client-side React hydration. This is required
  * for Facebook/Twitter/iMessage/Slack/WhatsApp bots which do not execute JavaScript
@@ -2637,7 +2637,7 @@ function resolveApiBase(): string | null {
 }
 
 export const getStaticPaths: GetStaticPaths = async () => {
-  // Sale IDs are effectively unbounded and change constantly — do NOT pre-render any
+  // Sale IDs are effectively unbounded and change constantly: do NOT pre-render any
   // at build time. fallback:'blocking' renders on first request, then ISR caches it.
   return {
     paths: [],
@@ -2665,7 +2665,7 @@ export const getStaticProps: GetStaticProps<SaleDetailPageProps> = async ({ para
 
     if (!res.ok) {
       if (res.status === 404) {
-        // Unknown/deleted sale — return 404 but allow ISR to recheck periodically
+        // Unknown/deleted sale: return 404 but allow ISR to recheck periodically
         console.warn('[getStaticProps:fallback] backend-404', { id });
         return { notFound: true, revalidate: 86400 };
       }
@@ -2678,7 +2678,7 @@ export const getStaticProps: GetStaticProps<SaleDetailPageProps> = async ({ para
     const sale = await res.json();
 
     if (!sale?.id || !sale?.title) {
-      // Sale body empty or malformed — treat as deleted/missing → proper HTTP 404
+      // Sale body empty or malformed: treat as deleted/missing → proper HTTP 404
       console.warn('[getStaticProps:fallback] malformed-body', { id });
       return { notFound: true, revalidate: 86400 };
     }
@@ -2768,7 +2768,7 @@ export const getStaticProps: GetStaticProps<SaleDetailPageProps> = async ({ para
           };
             }
       } catch (seriesErr) {
-        // EventSeries is non-critical enrichment — log and continue with null
+        // EventSeries is non-critical enrichment: log and continue with null
         console.error('[getStaticProps] EventSeries fetch failed:', seriesErr);
       }
     }
@@ -2786,7 +2786,7 @@ export const getStaticProps: GetStaticProps<SaleDetailPageProps> = async ({ para
       revalidate: isEnded ? 2592000 : 604800,
     };
   } catch (err) {
-    // Network/timeout/parse failure — render the shell, let the client fetch and ISR retry
+    // Network/timeout/parse failure: render the shell, let the client fetch and ISR retry
     console.warn('[getStaticProps:fallback] catch-network-error', { id, err: err instanceof Error ? err.message : String(err) });
     return {
       props: { ogData: null, initialData: null, eventSeriesData: null, noindex: false, unavailableAfter: null },

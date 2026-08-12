@@ -192,7 +192,7 @@ async function main(): Promise<void> {
     const { city, state, zip } = parsed;
 
     // Mirror herePlaces title format: "<name> — <label> in <city>, <state>"
-    const title = `${org.businessName} — ${FLEA_LABEL} in ${city}, ${state}`;
+    const title = `${org.businessName}, ${FLEA_LABEL} in ${city}, ${state}`;
 
     if (samples.length < 10) {
       samples.push({

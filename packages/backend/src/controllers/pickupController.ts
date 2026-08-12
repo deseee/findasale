@@ -36,7 +36,7 @@ export const createSlot = async (req: AuthRequest, res: Response) => {
     });
     if (!sale) return res.status(404).json({ message: 'Sale not found' });
     if (sale.organizer.userId !== req.user.id) {
-      return res.status(403).json({ message: 'Access denied — you do not own this sale' });
+      return res.status(403).json({ message: 'Access denied. You do not own this sale.' });
     }
 
     const slot = await prisma.pickupSlot.create({
@@ -80,7 +80,7 @@ export const createSlotsBatch = async (req: AuthRequest, res: Response) => {
     });
     if (!sale) return res.status(404).json({ message: 'Sale not found' });
     if (sale.organizer.userId !== req.user.id) {
-      return res.status(403).json({ message: 'Access denied — you do not own this sale' });
+      return res.status(403).json({ message: 'Access denied. You do not own this sale.' });
     }
 
     // Validate and prepare all slots

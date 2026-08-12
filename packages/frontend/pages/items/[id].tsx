@@ -131,7 +131,7 @@ interface BidHistory {
   };
 }
 
-// SSR-fetched data for OG tags — avoids CSR hydration race with Facebook bot
+// SSR-fetched data for OG tags: avoids CSR hydration race with Facebook bot
 interface OGItemData {
   id: string;
   title: string;
@@ -249,7 +249,7 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
     },
   });
 
-  // Purchase status query — check if user has purchased this item
+  // Purchase status query: check if user has purchased this item
   const { data: purchaseStatus } = useQuery({
     queryKey: ['purchase-status', id, user?.id],
     enabled: !!id && !!user?.id,
@@ -332,14 +332,14 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
   // Animation hook
   const { triggerAnimation: triggerHeartAnimation } = useHeartAnimation();
 
-  // SSR guard — prevents browser-only code from executing during server-side render.
+  // SSR guard: prevents browser-only code from executing during server-side render.
   // React Query v5 isLoading = isPending && isFetching; during SSR isFetching=false so
   // isLoading=false, which bypasses the skeleton guard and crashes on undefined `item`.
   // The mounted flag ensures we only render the full component tree client-side.
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
 
-  // GA4 #470: item_viewed conversion event — fires once per page load when item data arrives
+  // GA4 #470: item_viewed conversion event: fires once per page load when item data arrives
   useEffect(() => {
     if (!item?.id) return;
     if (typeof window !== 'undefined' && window.gtag) {
@@ -358,7 +358,7 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
     let newSocket: Socket | null = null;
 
     import('socket.io-client').then(({ io }) => {
-      // S708: accessToken is in an httpOnly cookie — withCredentials carries it on handshake
+      // S708: accessToken is in an httpOnly cookie: withCredentials carries it on handshake
       newSocket = io(process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001', {
         withCredentials: true,
         reconnection: true,
@@ -426,10 +426,10 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
   };
 
   const handleBuyNow = async () => {
-    // Guest checkout (single-item Buy It Now, 2026-07-18): no login gate — guests complete
+    // Guest checkout (single-item Buy It Now, 2026-07-18): no login gate: guests complete
     // checkout via Stripe without a FindA.Sale account. CheckoutModal collects guest
     // email/name when there is no logged-in user. Multi-item cart Add-to-Cart flow is
-    // UNCHANGED and still requires login — cart guest checkout is out of scope this pass.
+    // UNCHANGED and still requires login: cart guest checkout is out of scope this pass.
     // GA4 #465 Tier 2: checkout_initiated
     if (typeof window !== 'undefined' && window.gtag) {
       window.gtag('event', 'checkout_initiated', { event_category: 'engagement', item_id: String(id) });
@@ -438,7 +438,7 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
     setShowCheckoutModal(true);
   };
 
-  // Phase 1: Smart Cart — add to browsing cart
+  // Phase 1: Smart Cart: add to browsing cart
   const handleAddToSmartCart = (item: Item) => {
     if (!user) {
       showToast('Please log in to add items to cart', 'warning');
@@ -465,7 +465,7 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
     showToast('Added to cart', 'success');
   };
 
-  // Phase 1: Smart Cart — confirm sale switch
+  // Phase 1: Smart Cart: confirm sale switch
   const handleConfirmSwitchSale = () => {
     if (pendingCartItem) {
       shopperCart.switchSale(pendingCartItem.saleId);
@@ -497,7 +497,7 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
     }
   };
 
-  // Build SSR OG head once — rendered in all return paths so FB bot sees it immediately
+  // Build SSR OG head once: rendered in all return paths so FB bot sees it immediately
   const ogHead = ogData ? (
     <ItemOGMeta
       item={{
@@ -521,7 +521,7 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
     return (
       <>
         {ogHead}
-      {/* S1071: /items/[id] is unconditionally noindex — 44 of 226 GSC crawled-rejected
+      {/* S1071: /items/[id] is unconditionally noindex: 44 of 226 GSC crawled-rejected
           URLs were item leaf pages; board approved removing the class from the index.
           Sitemap already excludes items. Pages stay fully functional for users. */}
       <Head>
@@ -553,8 +553,8 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
   const isReverseAuction = item.reverseAuction === true;
   const isSold = item.status === 'SOLD';
 
-  // ADR-087 P2 (D5): Multi-unit stock — units remaining for the public storefront.
-  // Single-unit items (stockTotal null/1) show nothing new — the 99% case, no regression.
+  // ADR-087 P2 (D5): Multi-unit stock: units remaining for the public storefront.
+  // Single-unit items (stockTotal null/1) show nothing new: the 99% case, no regression.
   const stockTotalUnits = item.stockTotal ?? 1;
   const unitsRemaining = stockTotalUnits - (item.stockSold ?? 0);
   const showUnitsAvailable = stockTotalUnits > 1 && !isAuction && !isReverseAuction && !isSold && unitsRemaining > 0;
@@ -584,7 +584,7 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
   return (
     <>
       {ogHead ? (
-        // SSR version — full OG image with watermark policy applied
+        // SSR version: full OG image with watermark policy applied
         <ItemOGMeta
           item={{ ...item, photos: item.photoUrls.map(url => ({ url })) }}
           saleName={item.sale?.title || 'FindA.Sale'}
@@ -593,7 +593,7 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
           canonicalUrl={`https://finda.sale/items/${item.id}`}
         />
       ) : (
-        // CSR fallback — used only when getStaticProps didn't return ogData
+        // CSR fallback: used only when getStaticProps didn't return ogData
         <ItemOGMeta
           item={{ ...item, photos: item.photoUrls.map(url => ({ url })) }}
           saleName={item.sale?.title || 'FindA.Sale'}
@@ -602,7 +602,7 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
         />
       )}
 
-      {/* S1071: /items/[id] is unconditionally noindex — 44 of 226 GSC crawled-rejected
+      {/* S1071: /items/[id] is unconditionally noindex: 44 of 226 GSC crawled-rejected
           URLs were item leaf pages; board approved removing the class from the index.
           Sitemap already excludes items. Pages stay fully functional for users. */}
       <Head>
@@ -623,7 +623,7 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
               // Add optional fields only if data exists
               if (item.description) schema.description = item.description;
 
-              // Image(s) — include all available photos for rich snippets
+              // Image(s): include all available photos for rich snippets
               if (item.photoUrls && item.photoUrls.length > 0) {
                 schema.image = item.photoUrls.length === 1
                   ? item.photoUrls[0]
@@ -788,7 +788,7 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
                     Starting Price: ${item.auctionStartPrice.toFixed(2)}
                   </div>
                 )}
-                {/* Reserve status display (Phase 1 P0 fix — ADR-013) */}
+                {/* Reserve status display (Phase 1 P0 fix: ADR-013) */}
                 {isAuction && item.auctionReservePrice && item.auctionReservePrice > 0 && (
                   <div className={`text-sm font-medium ${
                     (item.currentBid ?? 0) >= item.auctionReservePrice
@@ -821,7 +821,7 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
                     )}
                   </div>
                 )}
-                {/* P2 #6: Reverse auction — floor and daily drop display */}
+                {/* P2 #6: Reverse auction: floor and daily drop display */}
                 {isReverseAuction && (item.reverseFloorPrice ?? 0) > 0 && (
                   <div className="text-sm text-gray-600 dark:text-gray-400 space-y-0.5">
                     <div>Floor Price: ${(item.reverseFloorPrice ?? 0).toFixed(2)}</div>
@@ -867,7 +867,7 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
                 </div>
               )}
 
-              {/* Description — whitespace-pre-wrap so the "— Item details —" sentinel
+              {/* Description: whitespace-pre-wrap so the "— Item details —" sentinel
                   from server-side voice+auto merge renders as a section break (2026-05-12). */}
               <div className="text-gray-700 dark:text-gray-300 text-sm leading-relaxed">
                 <p className="whitespace-pre-wrap">{item.description}</p>
@@ -920,7 +920,7 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
                     📱 QR
                   </button>
                 )}
-                {/* Hold-to-Pay: Organizer "Mark Sold" button — only for the sale owner, not any organizer */}
+                {/* Hold-to-Pay: Organizer "Mark Sold" button: only for the sale owner, not any organizer */}
                 {user?.roles?.includes('ORGANIZER') && user?.id === item.sale.organizer?.userId && item.status === 'RESERVED' && (
                   <button
                     onClick={() => setShowHoldToPayModal(true)}
@@ -1049,7 +1049,7 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
                         Buy It Now
                       </button>
 
-                      {/* Phase 1: Smart Cart — Add to cart button */}
+                      {/* Phase 1: Smart Cart: Add to cart button */}
                       {item.status === 'AVAILABLE' && (
                         <button
                           onClick={() => handleAddToSmartCart(item)}
@@ -1066,7 +1066,7 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
                         </button>
                       )}
 
-                      {/* Auction Item — Place Bid Button */}
+                      {/* Auction Item: Place Bid Button */}
                       {isAuction && item.status === 'AVAILABLE' && item.auctionEndTime && mounted && new Date(item.auctionEndTime) > new Date() && !item.auctionClosed && (
                         <button
                           onClick={() => {
@@ -1087,7 +1087,7 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
                         </button>
                       )}
 
-                      {/* Feature #121: Hold Button — AVAILABLE items only */}
+                      {/* Feature #121: Hold Button: AVAILABLE items only */}
                       {item.status === 'AVAILABLE' && (
                         <HoldButton
                           item={{ id: item.id, title: item.title, sale: item.sale ? { id: item.sale.id, title: item.sale.title } : undefined }}
@@ -1097,7 +1097,7 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
                         />
                       )}
 
-                      {/* ADR-097: Message about this item — item-scoped variant, distinct from
+                      {/* ADR-097: Message about this item: item-scoped variant, distinct from
                           the sale-level "Message Organizer" button on sales/[id].tsx */}
                       {item.organizerId && (
                         <button
@@ -1159,7 +1159,7 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
             </div>
           )}
 
-          {/* Buying Pool — BuyingPoolCard has internal shouldShow gate (price > $100, status AVAILABLE) */}
+          {/* Buying Pool: BuyingPoolCard has internal shouldShow gate (price > $100, status AVAILABLE) */}
           <BuyingPoolCard
             itemId={item.id}
             itemPrice={item.price}
@@ -1167,7 +1167,7 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
             userId={user?.id}
           />
 
-          {/* Similar Items — shown when item is sold */}
+          {/* Similar Items: shown when item is sold */}
           {isSold && (
             <SimilarItemsGrid
               currentItemId={item.id}
@@ -1176,7 +1176,7 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
             />
           )}
 
-          {/* eBay comparable listings — shown for all items via EPN affiliate links */}
+          {/* eBay comparable listings: shown for all items via EPN affiliate links */}
           <EbayCompTiles itemId={item.id} />
         </div>
       </div>
@@ -1192,7 +1192,7 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
           onClose={() => setShowCheckoutModal(false)}
           onSuccess={() => {
             setShowCheckoutModal(false);
-            // Redirect to confirmation page — will query most recent purchase
+            // Redirect to confirmation page: will query most recent purchase
             router.push('/shopper/checkout-success');
           }}
         />
@@ -1232,7 +1232,7 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
         />
       )}
 
-      {/* Bid Modal — Place Auction Bid */}
+      {/* Bid Modal: Place Auction Bid */}
       {bidModalOpen && item && (
         <BidModal
           item={{
@@ -1251,7 +1251,7 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
         />
       )}
 
-      {/* ADR-097: Message about this item — item-scoped compose modal */}
+      {/* ADR-097: Message about this item: item-scoped compose modal */}
       {item && item.organizerId && (
         <MessageComposeModal
           open={itemMessageModalOpen}
@@ -1263,10 +1263,10 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
         />
       )}
 
-      {/* Phase 1: Smart Cart — floating action button */}
+      {/* Phase 1: Smart Cart: floating action button */}
       {item && <ShopperCartFAB onClick={openCart} />}
 
-      {/* Phase 1: Smart Cart — switch sale confirmation modal */}
+      {/* Phase 1: Smart Cart: switch sale confirmation modal */}
       {showSwitchSaleModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg max-w-sm p-6">
@@ -1382,13 +1382,13 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
 export default ItemDetail;
 
 /**
- * Feature #33 — Share Card Factory
+ * Feature #33: Share Card Factory
  * Fetch item data server-side so OG meta tags are present in the initial HTML
  * before client-side React hydration. This is required for Facebook/Twitter bots
  * which do not execute JavaScript when scraping pages.
  */
 export async function getStaticPaths(): Promise<GetStaticPathsResult> {
-  // Empty paths — no pages pre-built at build time.
+  // Empty paths: no pages pre-built at build time.
   // fallback: 'blocking' means first hit is server-rendered and then CDN-cached.
   return { paths: [], fallback: 'blocking' };
 }
@@ -1396,7 +1396,7 @@ export async function getStaticPaths(): Promise<GetStaticPathsResult> {
 export async function getStaticProps(context: GetStaticPropsContext) {
   const { id } = context.params as { id: string };
   // Use INTERNAL_API_URL (server-only) if set; fall back to NEXT_PUBLIC_API_URL.
-  // Never falls back to localhost — that hangs and kills the Vercel function timeout.
+  // Never falls back to localhost: that hangs and kills the Vercel function timeout.
   const apiUrl =
     process.env.INTERNAL_API_URL ||
     process.env.NEXT_PUBLIC_API_URL ||
@@ -1407,7 +1407,7 @@ export async function getStaticProps(context: GetStaticPropsContext) {
   }
 
   try {
-    // 3s timeout — fail fast so Vercel function never hangs waiting for localhost
+    // 3s timeout: fail fast so Vercel function never hangs waiting for localhost
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 3000);
     const res = await fetch(`${apiUrl}/items/${id}`, { signal: controller.signal });
@@ -1462,7 +1462,7 @@ export async function getStaticProps(context: GetStaticPropsContext) {
     const isEnded = item.sale?.status === 'ENDED';
     return { props: { ogData, initialData }, revalidate: isEnded ? 2592000 : 604800 };
   } catch (error) {
-    // Fail open — page still works, OG tags fall back to CSR version
+    // Fail open: page still works, OG tags fall back to CSR version
     console.error('[items/[id] getStaticProps error]', error);
     return { props: { ogData: null, initialData: null }, revalidate: 86400 };
   }

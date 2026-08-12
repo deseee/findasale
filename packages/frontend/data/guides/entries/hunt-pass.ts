@@ -16,7 +16,7 @@ Hunt Pass is a monthly subscription that unlocks early access to rare and legend
 
 ## What Hunt Pass includes
 
-**Early Access to rare and legendary items.** This is the main reason people subscribe. When an organizer marks an item as Rare or Legendary, Hunt Pass members see it 30 minutes before it goes live to everyone else. That matters when there's only one of something — and at estate sales, auctions, and consignment shops, there usually is only one.
+**Early Access to rare and legendary items.** This is the main reason people subscribe. When an organizer marks an item as Rare or Legendary, Hunt Pass members see it 30 minutes before it goes live to everyone else. That matters when there's only one of something, and at estate sales, auctions, and consignment shops, there usually is only one.
 
 **Longer hold times.** Hunt Pass members get extended hold windows on items they reserve. You have more time to get to the sale without losing your item.
 
@@ -28,7 +28,7 @@ Hunt Pass is a monthly subscription that unlocks early access to rare and legend
 
 ## What it costs
 
-Current pricing is at [finda.sale/pricing](/pricing). Check there — the price may change and that page is always current.
+Current pricing is at [finda.sale/pricing](/pricing). Check there: the price may change and that page is always current.
 
 ---
 
@@ -72,7 +72,7 @@ No. Early Access means you see it first. You still need to hold or buy it before
 Your XP history and rank stay intact. Early Access resumes immediately when you resubscribe. Nothing is lost.
 
 **Can I pause instead of canceling?**
-Not currently. You can cancel and resubscribe any month — there's no penalty.
+Not currently. You can cancel and resubscribe any month: there's no penalty.
 
 **Does the XP bonus stack with achievements?**
 Yes. Bonus XP from Hunt Pass applies on top of base XP from actions. Achievement XP is awarded separately.
@@ -92,7 +92,7 @@ Items tagged Rare or Legendary by the organizer. You'll see the badge on the ite
 
 ## Explainer video script
 
-*Format: 45-second vertical (9:16). No on-screen text needed — VO carries it.*
+*Format: 45-second vertical (9:16). No on-screen text needed: VO carries it.*
 
 ---
 
@@ -101,7 +101,7 @@ Items tagged Rare or Legendary by the organizer. You'll see the badge on the ite
 VO: "You showed up on time. But someone else got there first."
 
 **[0:07–0:14]**
-*Shot: Phone notification — "Rare item added. Available to Hunt Pass members for 30 minutes."*
+*Shot: Phone notification: "Rare item added. Available to Hunt Pass members for 30 minutes."*
 VO: "Hunt Pass gives you a 30-minute head start on rare and legendary items before they go public."
 
 **[0:15–0:22]**
@@ -110,7 +110,7 @@ VO: "You see it, you hold it, it's yours. Before anyone else even knows it exist
 
 **[0:23–0:30]**
 *Shot: XP counter ticking up on dashboard.*
-VO: "You also earn bonus XP on every action while your pass is active. Posts, saves, check-ins — it all moves faster."
+VO: "You also earn bonus XP on every action while your pass is active. Posts, saves, check-ins: it all moves faster."
 
 **[0:31–0:38]**
 *Shot: Profile with Hunt Pass badge. Organizer "Hunt Pass preview" label on a sale listing.*

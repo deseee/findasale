@@ -74,7 +74,7 @@ const SalePlanPage = () => {
     setPosTestLoading(true);
     try {
       await api.post('/stripe/test-transaction', { saleId, amount: 1, paymentMethod: 'direct' });
-      // live_pos is auto-detected from DB (hasTestTransaction) — invalidate so it refetches
+      // live_pos is auto-detected from DB (hasTestTransaction): invalidate so it refetches
       queryClient.invalidateQueries({ queryKey: ['checklist', saleId] });
       showToast('POS test passed. No inventory affected ✓', 'success');
     } catch {
@@ -390,7 +390,7 @@ const SalePlanPage = () => {
                         <div className="border-t border-gray-200 dark:border-gray-700 p-4 space-y-3">
                           {stageTasks.map((task) => (
                             <div key={task.id} className="flex items-start gap-3 group">
-                              {/* Checkbox — always present for non-auto tasks */}
+                              {/* Checkbox: always present for non-auto tasks */}
                               {!task.isAuto && (
                                 <button
                                   onClick={() => updateTask({ itemId: task.id, completed: !task.completed })}
@@ -407,7 +407,7 @@ const SalePlanPage = () => {
                                 </button>
                               )}
 
-                              {/* Checkbox — disabled state for auto tasks */}
+                              {/* Checkbox: disabled state for auto tasks */}
                               {task.isAuto && (
                                 <div
                                   className={`

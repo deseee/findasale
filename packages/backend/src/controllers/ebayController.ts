@@ -249,7 +249,7 @@ async function getEbayPriceComps(
         compsRunAt: new Date().toISOString(),
         listings: [],
         isMockData: true,
-        message: 'eBay credentials not configured — showing sample data',
+        message: 'eBay credentials not configured. Showing sample data.',
       };
     }
 
@@ -268,7 +268,7 @@ async function getEbayPriceComps(
       return {
         min: 25, max: 75, median: 45, count: 0, suggestedPrice: 45,
         compsRunAt: new Date().toISOString(), listings: [], isMockData: true,
-        message: 'Daily price comps limit reached — showing sample data',
+        message: 'Daily price comps limit reached. Showing sample data.',
       };
     }
 
@@ -278,7 +278,7 @@ async function getEbayPriceComps(
       return {
         min: 25, max: 75, median: 45, count: 0, suggestedPrice: 45,
         compsRunAt: new Date().toISOString(), listings: [], isMockData: true,
-        message: 'eBay token unavailable — showing sample data',
+        message: 'eBay token unavailable. Showing sample data.',
       };
     }
 
@@ -344,7 +344,7 @@ async function getEbayPriceComps(
       return {
         min: 25, max: 75, median: 45, count: 0, suggestedPrice: 45,
         compsRunAt: new Date().toISOString(), listings: [], isMockData: true,
-        message: 'eBay API error — showing sample data',
+        message: 'eBay API error. Showing sample data.',
       };
     }
 
@@ -421,7 +421,7 @@ async function getEbayPriceComps(
       compsRunAt: new Date().toISOString(),
       listings: [],
       isMockData: true,
-      message: 'Error fetching eBay data — showing sample data',
+      message: 'Error fetching eBay data. Showing sample data.',
     };
   }
 }
@@ -496,7 +496,7 @@ export const getComps = async (req: AuthRequest, res: Response) => {
       compsRunAt: new Date().toISOString(),
       listings: [],
       isMockData: true,
-      message: 'Server error — showing sample data',
+      message: 'Server error. Showing sample data.',
     });
   }
 };
@@ -2078,7 +2078,7 @@ export function validateItemForEbayPublish(item: {
       return {
         code: 'EBAY_WEIGHT_NOT_CONFIRMED',
         message:
-          "Confirm this item's shipping weight before publishing. Open the item, weigh it (or use \"Get AI estimate\" for a starting number), correct the weight and box size, and save. If this item is not shipping, mark it Local pickup only.",
+          "Confirm this item's shipping weight before publishing. Open the item, weigh it (or use \"Get Smart estimate\" for a starting number), correct the weight and box size, and save. If this item is not shipping, mark it Local pickup only.",
       };
     }
 
@@ -2111,7 +2111,7 @@ export function validateItemForEbayPublish(item: {
     return {
       code: 'EBAY_BOOK_NO_ISBN',
       message:
-        "This book needs an ISBN to list on eBay — we couldn't read it from the photos or find it by title. Add the book's ISBN (usually near the barcode) and try again.",
+        "This book needs an ISBN to list on eBay. We couldn't read it from the photos or find it by title. Add the book's ISBN (usually near the barcode) and try again.",
     };
   }
 
@@ -4382,7 +4382,7 @@ async function resolvePoliciesForItem(
       return {
         error: 'NEEDS_PACKAGE_DETAILS',
         code: 'NEEDS_PACKAGE_DETAILS',
-        message: 'Add the package weight and box dimensions so eBay can calculate the buyer\'s shipping rate — or turn on free shipping in eBay Settings.',
+        message: 'Add the package weight and box dimensions so eBay can calculate the buyer\'s shipping rate, or turn on free shipping in eBay Settings.',
       };
     }
     // Fall through to the flat-tier / smart-pick cascade below as a safety net.
@@ -4394,7 +4394,7 @@ async function resolvePoliciesForItem(
       return {
         error: 'POLICIES_NOT_CONFIGURED',
         code: 'POLICIES_NOT_CONFIGURED',
-        message: 'Please complete eBay setup in Settings — pick your default policies before pushing.',
+        message: 'Please complete eBay setup in Settings: pick your default policies before pushing.',
       };
     }
     // Prefer smart-pick over the stale connection-default fulfillment policy when we have policies to choose from.
@@ -4407,7 +4407,7 @@ async function resolvePoliciesForItem(
       return {
         error: 'POLICIES_NOT_CONFIGURED',
         code: 'POLICIES_NOT_CONFIGURED',
-        message: 'Please complete eBay setup in Settings — pick your default policies before pushing.',
+        message: 'Please complete eBay setup in Settings: pick your default policies before pushing.',
       };
     }
     return {
@@ -7109,7 +7109,7 @@ export const getShippingNetPreview = async (req: AuthRequest, res: Response): Pr
         shippingMode: ship.shippingMode,
         flatPolicy: null,
         customPolicy: true,
-        message: 'Custom eBay policy selected — buyer shipping is set by your eBay policy.',
+        message: 'Custom eBay policy selected. Buyer shipping is set by your eBay policy.',
         shippingEstimate: {
           rate: ship.cheapestRate,
           basis: ship.basis,

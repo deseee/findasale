@@ -10,7 +10,7 @@ const entry: GuideEntry = {
   videoUrl: undefined,
   body: `A bounty is a buyer's public request. They post what they're looking for and what they'll pay. You can fulfill it if you come across the item.
 
-Example: a shopper posts "Looking for a Singer Featherweight sewing machine — willing to pay $150." You find one at an estate clearing. You claim the bounty. They're pre-committed to buy it at your next sale.
+Example: a shopper posts "Looking for a Singer Featherweight sewing machine, willing to pay $150." You find one at an estate clearing. You claim the bounty. They're pre-committed to buy it at your next sale.
 
 Bounties let you presell inventory before your sale opens and learn what buyers actually want before you source.
 
@@ -32,7 +32,7 @@ Bounties expire if they go unclaimed or if the buyer cancels.
 
 ## How to claim a bounty
 
-1. Find a bounty you can fulfill — you either have the item or expect to find one.
+1. Find a bounty you can fulfill: you either have the item or expect to find one.
 2. Tap **I Found This**.
 3. Enter the item details: photos, condition, your asking price.
 4. Tap **Submit**.
@@ -47,7 +47,7 @@ If they don't confirm within 48 hours, the bounty reopens and you can list the i
 
 ## What happens when multiple organizers claim the same bounty
 
-Multiple organizers can attempt to fulfill the same bounty. The buyer reviews claims in the order they came in and confirms the first one that meets their needs. If your claim isn't chosen, the item is yours to list at full price — you're not locked out of anything.
+Multiple organizers can attempt to fulfill the same bounty. The buyer reviews claims in the order they came in and confirms the first one that meets their needs. If your claim isn't chosen, the item is yours to list at full price. You're not locked out of anything.
 
 First to have the item confirmed wins the pre-committed buyer.
 
@@ -66,7 +66,7 @@ First to have the item confirmed wins the pre-committed buyer.
 ## Common questions
 
 **Do I have to honor the buyer's target price?**
-No. You enter your asking price when you claim a bounty. If your price is higher than what they said they'd pay, they can decline. The target price is what they're aiming for — it's not a binding cap on you.
+No. You enter your asking price when you claim a bounty. If your price is higher than what they said they'd pay, they can decline. The target price is what they're aiming for. It's not a binding cap on you.
 
 **What if I claim a bounty and then can't find the item?**
 You can withdraw your claim before the buyer confirms. Go to the bounty and tap Withdraw. The bounty reopens for other organizers.
@@ -81,7 +81,7 @@ No. Communication goes through FindA.Sale. The buyer isn't given your phone or e
 No. Bounties are posted by shoppers. Organizers claim them. If you want to signal what you're looking for as a buyer yourself, you'd use a personal shopper account.
 
 **What if the buyer backs out after confirming?**
-That's rare, but it happens. If a buyer confirms and then cancels, the pre-committed flag is removed from your item and you list it normally. The buyer's account tracks their claim history — serial cancelers lose the ability to post bounties.
+That's rare, but it happens. If a buyer confirms and then cancels, the pre-committed flag is removed from your item and you list it normally. The buyer's account tracks their claim history: serial cancelers lose the ability to post bounties.
 
 ---
 

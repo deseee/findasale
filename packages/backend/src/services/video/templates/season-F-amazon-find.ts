@@ -19,7 +19,7 @@ import { Template, BASE_POLISH } from './types';
 
 export const seasonFAmazonFind: Template = {
   id: 'season-F-amazon-find',
-  displayName: 'Amazon Find — Solo Product Review',
+  displayName: 'Amazon Find, Solo Product Review',
   purpose: 'ATTENTION',
   contentSignature: {
     requiredRoles: ['HOOK', 'FIND'],

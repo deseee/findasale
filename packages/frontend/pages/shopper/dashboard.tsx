@@ -60,7 +60,7 @@ function QrModal({ qrDataUrl, referralLink, onClose, showToast }: QrModalProps) 
       try {
         await navigator.share({ title: 'FindA.Sale', url: link });
       } catch {
-        // User cancelled — no toast needed
+        // User cancelled: no toast needed
       }
     } else {
       try {
@@ -291,7 +291,7 @@ const ShopperDashboard = () => {
   // Fetch XP profile for rank progress
   const { data: xpProfile, isLoading: xpLoading, isError: xpError } = useXpProfile(!!user?.id);
 
-  // Redirect unauthenticated users — must come AFTER all hook calls
+  // Redirect unauthenticated users: must come AFTER all hook calls
   if (!isLoading && !user) {
     router.push('/login?redirect=/shopper/dashboard');
     return null;
@@ -300,7 +300,7 @@ const ShopperDashboard = () => {
   // Check if any critical fetch has failed
   const hasError = purchasesError || userDataError || followsError || invoicesError || holdsError || xpError;
 
-  // Rank threshold configuration — must match backend xpService.ts RANK_THRESHOLDS
+  // Rank threshold configuration: must match backend xpService.ts RANK_THRESHOLDS
   const RANK_THRESHOLDS: Record<ExplorerRank, number> = {
     INITIATE: 0,
     SCOUT: 500,
@@ -343,7 +343,7 @@ const ShopperDashboard = () => {
       </Head>
       <div className="min-h-screen bg-warm-50 dark:bg-gray-900">
         <div className="max-w-6xl mx-auto px-4 py-8">
-          {/* Error banner — shows if any critical fetch fails */}
+          {/* Error banner: shows if any critical fetch fails */}
           {hasError && (
             <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-300 dark:border-red-700 rounded-lg">
               <p className="text-red-800 dark:text-red-300 font-semibold">Something went wrong loading your dashboard. Please refresh.</p>
@@ -559,7 +559,7 @@ const ShopperDashboard = () => {
             <div className="space-y-6">
               {/* Achievements now live on /shopper/explorer-profile only (S540 dedup) */}
 
-              {/* Hold-to-Pay: Pending Payments Section — Priority #1 */}
+              {/* Hold-to-Pay: Pending Payments Section: Priority #1 */}
               {pendingInvoices && pendingInvoices.length > 0 && (
                 <div>
                   <h2 className="text-xl font-bold text-warm-900 dark:text-warm-100 mb-4">
@@ -591,7 +591,7 @@ const ShopperDashboard = () => {
                 </div>
               )}
 
-              {/* Your Collections — Priority #2 (after pending payments) */}
+              {/* Your Collections: Priority #2 (after pending payments) */}
               <YourWishlists />
 
               {/* Recently Viewed */}
@@ -600,7 +600,7 @@ const ShopperDashboard = () => {
               {/* My Teams Card */}
               <MyTeamsCard />
 
-              {/* Rank Benefits — what the shopper's current rank unlocks */}
+              {/* Rank Benefits: what the shopper's current rank unlocks */}
               {xpProfile && !xpLoading && (
                 <RankBenefitsCard rank={xpProfile.explorerRank} />
               )}
@@ -618,14 +618,14 @@ const ShopperDashboard = () => {
                 </div>
               )}
 
-              {/* Rare Finds Feed — Hunt Pass only */}
+              {/* Rare Finds Feed: Hunt Pass only */}
               {userData && userData.huntPassActive && (
                 <RareFindsFeed />
               )}
 
               <ActivitySummary />
 
-              {/* SalesNearYou hidden per Patrick feedback — feature not working */}
+              {/* SalesNearYou hidden per Patrick feedback: feature not working */}
               {false && <SalesNearYou />}
 
               <FlashDealsBanner />

@@ -9,7 +9,7 @@ const entry: GuideEntry = {
   relatedGuides: ['pick-the-right-sale-type', 'create-your-first-sale', 'multi-location-hubs'],
   videoUrl: undefined,
   body: `Retail Mode keeps your storefront open all the time.
-No start or end date, no manual republishing — your items stay live and searchable until you mark them sold or remove them.
+No start or end date, no manual republishing. Your items stay live and searchable until you mark them sold or remove them.
 Retail Mode is available on PRO and TEAMS tiers.
 
 ---
@@ -24,7 +24,7 @@ New items go live the moment you publish them.
 Nothing expires on a close date.
 
 Instead of a countdown timer, your listing shows an **Always Open** badge.
-Shoppers know they can check back anytime — there's no rush.
+Shoppers know they can check back anytime: there's no rush.
 
 ---
 
@@ -73,7 +73,7 @@ Renewing moves your storefront to the top of recently-updated listings in search
 It also resets the "last updated" timestamp shoppers see on your profile.
 
 You don't have to do anything for the renewal to happen.
-There's no email, no button to click — it runs on its own.
+There's no email, no button to click: it runs on its own.
 
 ---
 
@@ -108,7 +108,7 @@ If you stop adding new inventory, old items stay listed until you remove them or
 ## Common questions
 
 **Can I still run timed sales alongside Retail Mode?**
-Yes. Retail Mode is a setting on your storefront. You can still create separate timed sales for specific events — an estate liquidation, an auction, a weekend pop-up. Those run independently alongside your always-open storefront.
+Yes. Retail Mode is a setting on your storefront. You can still create separate timed sales for specific events: an estate liquidation, an auction, a weekend pop-up. Those run independently alongside your always-open storefront.
 
 **What happens to my existing items if I turn Retail Mode on?**
 All your currently-listed items remain live. Nothing is removed or reset when you enable Retail Mode. The change is to how your storefront behaves going forward.
@@ -117,13 +117,13 @@ All your currently-listed items remain live. Nothing is removed or reset when yo
 Yes. Go to Settings → Retail Mode and toggle it off. Your storefront reverts to standard sale behavior and you'll need to set a new start and end date. Existing items are not affected.
 
 **Does Retail Mode cost extra on top of PRO or TEAMS?**
-No. Retail Mode is included in the PRO and TEAMS tiers — no additional charge.
+No. Retail Mode is included in the PRO and TEAMS tiers, at no additional charge.
 
 **I'm on the Free plan. Can I use Retail Mode?**
 No. Retail Mode requires PRO or higher. Upgrade your account to PRO to enable it.
 
 **Will shoppers know my store is in Retail Mode?**
-They'll see the "Always Open" badge on your storefront instead of a countdown or date range. They won't see the words "Retail Mode" — just the badge.
+They'll see the "Always Open" badge on your storefront instead of a countdown or date range. They won't see the words "Retail Mode," just the badge.
 
 ---
 

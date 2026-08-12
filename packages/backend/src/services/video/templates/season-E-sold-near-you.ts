@@ -10,7 +10,7 @@ import { Template, BASE_POLISH } from './types';
 
 export const seasonESoldNearYou: Template = {
   id: 'season-E-sold-near-you',
-  displayName: 'Sold in Your Neighborhood — Weekly Discovery',
+  displayName: 'Sold in Your Neighborhood, Weekly Discovery',
   purpose: 'ATTENTION',
   contentSignature: {
     requiredRoles: ['MAP'],

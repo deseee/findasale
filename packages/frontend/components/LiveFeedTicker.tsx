@@ -2,7 +2,7 @@ import React from 'react';
 import { useLiveFeed, FeedEvent } from '../hooks/useLiveFeed';
 
 /**
- * LiveFeedTicker — Feature #70: Live activity ticker component
+ * LiveFeedTicker (Feature #70: Live activity ticker component)
  * Shows a compact card with the last 5 sale events (SOLD, HOLD, etc.)
  * Displays icon + item title + relative time
  * Hides if not connected and no events (graceful degradation)
@@ -95,7 +95,7 @@ export const LiveFeedTicker: React.FC<LiveFeedTickerProps> = ({ saleId }) => {
         </p>
       )}
 
-      {/* Connection status indicator — hidden per H-001 */}
+      {/* Connection status indicator: hidden per H-001 */}
     </div>
   );
 };

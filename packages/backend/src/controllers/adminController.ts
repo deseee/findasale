@@ -1972,7 +1972,7 @@ export const sendDirectMessageToUser = async (req: AuthRequest, res: Response) =
           ${body.trim().split('\n').map((line: string) => `<p>${line || '&nbsp;'}</p>`).join('')}
           <hr style="border: none; border-top: 1px solid #eee; margin: 24px 0;" />
           <p style="color: #666; font-size: 12px;">
-            — The FindA.Sale Team<br/>
+            The FindA.Sale Team<br/>
             <a href="https://finda.sale">finda.sale</a>
           </p>
         </div>

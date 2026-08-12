@@ -46,7 +46,7 @@ const HuntPassPage = () => {
               Hunt Pass
             </h1>
             <p className="text-lg text-warm-600 dark:text-warm-400">
-              Unlock premium shopper features and earn rewards faster
+              Get more scans, early access to rare finds, and faster rewards
             </p>
           </div>
 

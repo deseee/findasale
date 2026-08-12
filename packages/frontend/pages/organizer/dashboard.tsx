@@ -1,10 +1,10 @@
 /**
- * Organizer Dashboard — Redesigned S350
+ * Organizer Dashboard: Redesigned S350
  *
  * State-aware dashboard for organizers showing:
- * - State 1: New organizer (0 sales) — welcome hero + 3-step path + benefits
- * - State 2: Active organizer (DRAFT or PUBLISHED sale) — sale status widget + quick actions + tier progress
- * - State 3: Between sales (all ENDED) — congratulations + past sales archive
+ * - State 1: New organizer (0 sales): welcome hero + 3-step path + benefits
+ * - State 2: Active organizer (DRAFT or PUBLISHED sale): sale status widget + quick actions + tier progress
+ * - State 3: Between sales (all ENDED): congratulations + past sales archive
  */
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -143,7 +143,7 @@ const OrganizerDashboard = () => {
 
   useEffect(() => {
     setIsClient(true);
-    // Feature #443: 1-click OAuth claim — show success toast on redirect
+    // Feature #443: 1-click OAuth claim: show success toast on redirect
     if (router.isReady && router.query.claimed === 'true') {
       showToast('Listing claimed successfully! This is now your dashboard.', 'success');
       router.replace('/organizer/dashboard', undefined, { shallow: true });
@@ -155,7 +155,7 @@ const OrganizerDashboard = () => {
       // Remove query param from URL
       router.push('/organizer/dashboard', undefined, { shallow: true });
     }
-    // Show onboarding modal once for new organizers — only if localStorage hasn't marked it dismissed
+    // Show onboarding modal once for new organizers: only if localStorage hasn't marked it dismissed
     if (typeof window !== 'undefined' && !localStorage.getItem('onboardingModalDismissed')) {
       setShowOnboardingModal(true);
     }
@@ -485,7 +485,7 @@ const OrganizerDashboard = () => {
     staleTime: 60_000,
   });
 
-  // Auth guard — after all hooks
+  // Auth guard: after all hooks
   if (!authLoading && (!user || !(user.roles?.includes('ORGANIZER') || user.role === 'ORGANIZER' || user.role === 'ADMIN'))) {
     router.push('/access-denied');
     return null;
@@ -588,12 +588,12 @@ const OrganizerDashboard = () => {
         <title>Organizer Dashboard - FindA.Sale</title>
       </Head>
 
-      {/* Onboarding Modal — 3-screen intro for new organizers */}
+      {/* Onboarding Modal: 3-screen intro for new organizers */}
       {showOnboardingModal && !isLoading && dashboardState === 'new' && !(typeof window !== 'undefined' && localStorage.getItem('onboardingModalDismissed')) && (
         <OrganizerOnboardingModal onDismiss={() => setShowOnboardingModal(false)} />
       )}
 
-      {/* TEAMS Onboarding Wizard — for new TEAMS-tier organizers */}
+      {/* TEAMS Onboarding Wizard: for new TEAMS-tier organizers */}
       {showTeamsOnboardingWizard && (
         <TeamsOnboardingWizard
           onComplete={() => setShowTeamsOnboardingWizard(false)}
@@ -675,7 +675,7 @@ const OrganizerDashboard = () => {
             migrationPending={orgProfile?.migrationPending}
           />
 
-          {/* Email Verification Banner — S512: show until emailVerified === true */}
+          {/* Email Verification Banner: S512: show until emailVerified === true */}
           {user?.emailVerified === false && (
             <div className="mb-4 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 p-4 flex items-start gap-3">
               <span className="text-amber-500 text-lg mt-0.5" aria-hidden="true">✉️</span>
@@ -708,7 +708,7 @@ const OrganizerDashboard = () => {
             </div>
           )}
 
-          {/* Grace Period Banner — active when downgrade grace period is running */}
+          {/* Grace Period Banner: active when downgrade grace period is running */}
           {orgProfile?.graceEndAt && new Date(orgProfile.graceEndAt) > new Date() && (
             <div className="mb-4 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 p-4 flex items-center justify-between">
               <div>
@@ -725,7 +725,7 @@ const OrganizerDashboard = () => {
             </div>
           )}
 
-          {/* Consolidated Action Bar — always visible */}
+          {/* Consolidated Action Bar: always visible */}
           <div className="flex flex-wrap gap-2 mb-4 relative">
             <Link href="/organizer/create-sale" className="rounded-full px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 transition-colors">
               + New Sale
@@ -847,7 +847,7 @@ const OrganizerDashboard = () => {
             </Link>
           </div>
 
-          {/* Tier Lapse Banner — sticky, non-dismissible until payment is updated */}
+          {/* Tier Lapse Banner: sticky, non-dismissible until payment is updated */}
           {orgProfile?.subscriptionLapsed && (
             <div className="bg-amber-50 dark:bg-amber-900/20 border-l-4 border-amber-400 dark:border-amber-600 p-4 mb-4 rounded">
               <div className="flex items-start justify-between">
@@ -875,7 +875,7 @@ const OrganizerDashboard = () => {
             </div>
           )}
 
-          {/* Tier Progress Widget — show upgrade CTAs for SIMPLE and PRO tiers */}
+          {/* Tier Progress Widget: show upgrade CTAs for SIMPLE and PRO tiers */}
           {isClient && user?.organizerTier === 'SIMPLE' && (
             <>
               <h2 className="sr-only">Subscription Status and Tier Options</h2>
@@ -896,7 +896,7 @@ const OrganizerDashboard = () => {
             </>
           )}
 
-          {/* PRO Upgrade Nudge — shown to SIMPLE tier organizers with 3+ completed sales */}
+          {/* PRO Upgrade Nudge: shown to SIMPLE tier organizers with 3+ completed sales */}
           {isClient && user?.organizerTier === 'SIMPLE' && analyticsData?.completedSalesCount >= 3 && !dismissedProNudge && (
             <div className="bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-6 mb-8">
               <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
@@ -1081,7 +1081,7 @@ const OrganizerDashboard = () => {
           {dashboardState === 'active' && activeSale && (
             // STATE 2: Active Organizer (DRAFT or PUBLISHED sale)
             <div className="space-y-6 mb-8">
-              {/* Sale Status Widget (HIGHEST PRIORITY) — Enhanced with urgency + dynamic CTA */}
+              {/* Sale Status Widget (HIGHEST PRIORITY): Enhanced with urgency + dynamic CTA */}
               {activeSale && (
                 <div className="bg-white dark:bg-gray-800 border border-warm-200 dark:border-gray-700 rounded-lg p-6 overflow-hidden">
                   <Link href={`/organizer/edit-sale/${activeSale.id}`} className="block">
@@ -1159,7 +1159,7 @@ const OrganizerDashboard = () => {
                                   {urgency.text}
                                 </span>
                               ) : null; })()}
-                              {/* Weather Strip — own row on mobile, inline with badges on desktop */}
+                              {/* Weather Strip: own row on mobile, inline with badges on desktop */}
                               <div className="w-full sm:w-auto sm:flex-shrink-0">
                                 <WeatherStrip saleStartDate={activeSale.startDate} saleCity={activeSale.city} status={activeSale?.status === 'PUBLISHED' ? 'LIVE' : undefined} />
                               </div>
@@ -1339,7 +1339,7 @@ const OrganizerDashboard = () => {
                 </div>
               )}
 
-              {/* Earnings/Payout Alert — conditional banner */}
+              {/* Earnings/Payout Alert: conditional banner */}
               {cashFeeBalance > 0 && (
                 <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg p-4 flex items-center justify-between">
                   <div>
@@ -1352,7 +1352,7 @@ const OrganizerDashboard = () => {
                 </div>
               )}
 
-              {/* Next Action Zone — 6-condition logic tree */}
+              {/* Next Action Zone: 6-condition logic tree */}
               {statsData?.activeSale && (() => {
                 const { status, id, holdCount } = statsData.activeSale;
                 const { draft, available } = statsData.items;
@@ -1443,7 +1443,7 @@ const OrganizerDashboard = () => {
                   );
                 }
 
-                // Condition 6: Default (healthy) — smart contextual nudge
+                // Condition 6: Default (healthy): smart contextual nudge
                 // Check item count first (use draft count if available)
                 const itemCount = available || (statsData.items.total - statsData.items.draft) || 0;
 
@@ -1478,7 +1478,7 @@ const OrganizerDashboard = () => {
                 );
               })()}
 
-              {/* Other Active Sales — Collapsible Section (positioned before Real-Time Metrics) */}
+              {/* Other Active Sales: Collapsible Section (positioned before Real-Time Metrics) */}
               {(() => {
                 const otherActiveSales = salesData?.filter(
                   (s: Sale) =>
@@ -1730,7 +1730,7 @@ const OrganizerDashboard = () => {
                 </div>
               )}
 
-              {/* Feature #228: Dashboard Widgets — State 2 (active sale) */}
+              {/* Feature #228: Dashboard Widgets: State 2 (active sale) */}
               {activeSale && (
                 <>
                   {/* Widget Grid */}
@@ -1751,16 +1751,16 @@ const OrganizerDashboard = () => {
                 </>
               )}
 
-              {/* Search Engine Visibility card — #446 GEO Phase 7 */}
+              {/* Search Engine Visibility card: #446 GEO Phase 7 */}
               <SmartSearchViewsCard />
 
-              {/* Platform Reach Widget — shows headline platform stats */}
+              {/* Platform Reach Widget: shows headline platform stats */}
               <PlatformHighlightsWidget />
 
-              {/* Demand Signals card — #454 Organizer Demand Dashboard */}
+              {/* Demand Signals card: #454 Organizer Demand Dashboard */}
               <DemandSignalsCard />
 
-              {/* My Teams Card — show team workspaces user is a member of */}
+              {/* My Teams Card: show team workspaces user is a member of */}
               <div className="mt-8 pt-8 border-t border-warm-200 dark:border-gray-700">
                 <MyTeamsCard />
               </div>
@@ -1780,7 +1780,7 @@ const OrganizerDashboard = () => {
                 </Link>
               </div>
 
-              {/* Feature #228: Post-Sale Momentum + Efficiency Coaching — State 3 */}
+              {/* Feature #228: Post-Sale Momentum + Efficiency Coaching: State 3 */}
               {salesData && salesData.length > 0 && (() => {
                 const mostRecentEnded = salesData
                   .filter((s: Sale) => s.status === 'ENDED')

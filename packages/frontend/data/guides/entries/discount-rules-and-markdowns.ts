@@ -26,7 +26,7 @@ Use rules when you know the day you want a discount to kick in. Use cycles when 
 
 ### What they do
 
-A discount rule targets a group of items — by category, tag, or color — and applies a price reduction on a day you specify.
+A discount rule targets a group of items (by category, tag, or color) and applies a price reduction on a day you specify.
 
 Examples:
 - "All furniture priced over $50 gets 25% off on day 2."
@@ -39,7 +39,7 @@ The rule fires automatically. You don't touch anything on sale day.
 
 1. Go to **/organizer/discount-rules**.
 2. Tap **New Rule**.
-3. Name the rule — something you'll recognize: "Day 2 furniture markdown."
+3. Name the rule, something you'll recognize: "Day 2 furniture markdown."
 4. Set the target: All items / by category / by color tag / by price range.
 5. Set the discount: percentage off or flat dollar amount.
 6. Set the trigger: a specific sale date, a day number (Day 1, Day 2), or an hour window on a specific day.
@@ -59,7 +59,7 @@ The rule activates automatically when the trigger condition is met during your s
 
 ### What they do
 
-A markdown cycle drops an item's price on a schedule — every few hours, every day — until the item reaches a floor price you set.
+A markdown cycle drops an item's price on a schedule (every few hours, every day) until the item reaches a floor price you set.
 
 Example: An auction item opens at $150. You set a cycle: drop 10% every 6 hours, floor at $50. If it doesn't sell by close, it'll have moved through five price points on its own.
 

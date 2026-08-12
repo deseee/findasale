@@ -88,7 +88,7 @@ export const getMyReceipts = async (req: AuthRequest, res: Response) => {
         issuedAt: first.createdAt,
         total,
         items: group.map((p) => ({
-          itemTitle: p.item?.title ?? (p.sale?.title ? `${p.sale.title} — Purchase` : 'POS Purchase'),
+          itemTitle: p.item?.title ?? (p.sale?.title ? `${p.sale.title} Purchase` : 'POS Purchase'),
           photoUrl: undefined,
           price: p.amount,
           // ADR-020: itemized per-vendor label so a multi-booth cart receipt shows

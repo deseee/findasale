@@ -128,7 +128,7 @@ const MapPage = ({ initialSales }: MapPageProps) => {
   // Auto-locate only when permission is already granted.
   // Avoids the iOS Safari race condition (getCurrentPosition fires PERMISSION_DENIED
   // before the user can tap Allow on the dialog). Older iOS without the Permissions
-  // API falls through the .catch silently — user taps My Location instead.
+  // API falls through the .catch silently: user taps My Location instead.
   useEffect(() => {
     if (!navigator.geolocation) return;
     navigator.permissions
@@ -192,7 +192,7 @@ const MapPage = ({ initialSales }: MapPageProps) => {
     return result;
   }, [sales, dateFilter, saleTypeFilter]);
 
-  // Convert filtered sales to map pins (derived data — no state needed)
+  // Convert filtered sales to map pins (derived data: no state needed)
   const filteredPins = useMemo(() => {
     // Build a Set of sale IDs that have an active SALE_BUMP boost
     const featuredSaleIds = new Set(
@@ -248,7 +248,7 @@ const MapPage = ({ initialSales }: MapPageProps) => {
       console.error('Error getting location:', error);
       if (error.code === 1) {
         // PERMISSION_DENIED
-        // Detect iOS Safari (standalone PWA) vs browser — different settings path
+        // Detect iOS Safari (standalone PWA) vs browser: different settings path
         const isStandalone = (window.navigator as Navigator & { standalone?: boolean }).standalone === true;
         const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
         if (isIOS && isStandalone) {
@@ -259,7 +259,7 @@ const MapPage = ({ initialSales }: MapPageProps) => {
           showToast('Location permission denied. Allow location access in your browser settings and try again.', 'error');
         }
       } else if (error.code === 3) {
-        // TIMEOUT — GPS cold start on mobile; retry with low accuracy
+        // TIMEOUT: GPS cold start on mobile; retry with low accuracy
         navigator.geolocation.getCurrentPosition(
           onSuccess,
           () => showToast('Location request timed out. Make sure Location Services are on and try again.', 'error'),
@@ -520,7 +520,7 @@ const MapPage = ({ initialSales }: MapPageProps) => {
         )}
       </section>
 
-      {/* SSR fallback content — server-rendered sale list so crawlers (and no-JS visitors)
+      {/* SSR fallback content: server-rendered sale list so crawlers (and no-JS visitors)
           see real content on first paint. Fixes GSC Soft 404 first detected 2026-07-25:
           page previously shipped zero server-rendered sale data, only nav/footer chrome. */}
       {initialSales.length > 0 && (
@@ -545,7 +545,7 @@ const MapPage = ({ initialSales }: MapPageProps) => {
         </section>
       )}
 
-      {/* D3: Route Builder — collapsible panel below map */}
+      {/* D3: Route Builder: collapsible panel below map */}
       {!isLoading && !isError && (
         <div id="route-builder">
           <RouteBuilder sales={filteredSales} />

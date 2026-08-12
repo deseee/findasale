@@ -167,7 +167,7 @@ export async function getOrganizerActivityFeed(
         type: 'hold' as const,
         saleName: hold.item.sale?.title || 'Unknown Sale',
         saleId: hold.item.saleId || '',
-        message: `Item held — expires in ${Math.ceil((hold.expiresAt.getTime() - Date.now()) / 60 / 60 / 1000)}h`,
+        message: `Item held, expires in ${Math.ceil((hold.expiresAt.getTime() - Date.now()) / 60 / 60 / 1000)}h`,
         timestamp: hold.createdAt.toISOString(),
       }))
     );

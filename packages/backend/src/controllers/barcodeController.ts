@@ -34,7 +34,7 @@ export const lookupBarcode = async (req: AuthRequest, res: Response): Promise<vo
 
   // Numeric barcode types must consist solely of digits
   if (NUMERIC_CODE_TYPES.has(upperType) && !/^\d+$/.test(trimmedCode)) {
-    res.status(400).json({ message: `Invalid ${codeType} barcode — expected digits only` });
+    res.status(400).json({ message: `Invalid ${codeType} barcode. Expected digits only.` });
     return;
   }
 
@@ -44,7 +44,7 @@ export const lookupBarcode = async (req: AuthRequest, res: Response): Promise<vo
     result = await lookupByBarcode(trimmedCode, codeType);
   } catch (err: any) {
     console.error('[barcodeController] Lookup error:', err?.message ?? err);
-    res.status(500).json({ message: 'Lookup failed — try again or fill in manually' });
+    res.status(500).json({ message: 'Lookup failed. Try again or fill in manually.' });
     return;
   }
 

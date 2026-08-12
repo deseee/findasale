@@ -18,7 +18,7 @@ The rewards grow as your streak gets longer.
 
 ## Where to see your streak
 
-The streak widget is on your shopper dashboard. It shows your current streak and your all-time best streak. Both numbers are preserved — your best streak doesn't disappear when you break a current one.
+The streak widget is on your shopper dashboard. It shows your current streak and your all-time best streak. Both numbers are preserved: your best streak doesn't disappear when you break a current one.
 
 You can also see both numbers in the stats section of your profile.
 
@@ -26,7 +26,7 @@ You can also see both numbers in the stats section of your profile.
 
 ## What streaks earn you
 
-XP per login increases as your streak grows. The per-day amount goes up at certain streak milestones — so a 30-day streak earns more per login than a 7-day streak.
+XP per login increases as your streak grows. The per-day amount goes up at certain streak milestones, so a 30-day streak earns more per login than a 7-day streak.
 
 The current values are in the [Guild Primer](/shopper/guild-primer). Check there for the exact per-day amounts and milestone bonuses. These can be adjusted over time and the Guild Primer reflects the current state.
 
@@ -44,7 +44,7 @@ If you're on your phone, opening the app and letting it load to your dashboard i
 
 ## How to protect your streak when you travel
 
-Your streak is tied to your account, not your device. Log in from any phone, tablet, or computer — the streak continues regardless of which device you use.
+Your streak is tied to your account, not your device. Log in from any phone, tablet, or computer: the streak continues regardless of which device you use.
 
 If you're traveling somewhere with spotty reception, plan ahead. Log in before you lose signal. Even a brief connection is enough to register the login.
 
@@ -58,13 +58,13 @@ The counter resets to 1. You start a new streak from that day.
 
 Your best streak is preserved. It stays in your profile history as your all-time record, even after you break it.
 
-You don't lose any XP you already earned from the previous streak. The XP was awarded day by day — breaking the streak doesn't claw it back.
+You don't lose any XP you already earned from the previous streak. The XP was awarded day by day: breaking the streak doesn't claw it back.
 
 ---
 
 ## Streaks and achievements
 
-Long streaks unlock streak-related achievements. These are separate from the XP you earn on the streak itself — achievements award their own one-time XP bonus when you hit the milestone.
+Long streaks unlock streak-related achievements. These are separate from the XP you earn on the streak itself: achievements award their own one-time XP bonus when you hit the milestone.
 
 See [Achievements and the Hall of Fame](/guides/achievements) for how achievement XP works.
 
@@ -73,13 +73,13 @@ See [Achievements and the Hall of Fame](/guides/achievements) for how achievemen
 ## Common questions
 
 **Does buying something count as a login?**
-Yes. Any authenticated action — viewing your dashboard, checking a hold, making a purchase — registers as a login for streak purposes.
+Yes. Any authenticated action (viewing your dashboard, checking a hold, making a purchase) registers as a login for streak purposes.
 
 **Can I recover a broken streak?**
 No. There's no purchase or workaround that restores a broken streak. You start over at 1.
 
 **Does my streak affect my rank?**
-Indirectly. Your streak generates daily XP, and XP drives rank. The streak itself isn't a rank factor — the XP it produces is.
+Indirectly. Your streak generates daily XP, and XP drives rank. The streak itself isn't a rank factor: the XP it produces is.
 
 **Do streaks show on my public profile?**
 Your current streak and best streak appear in your public Loot Legend stats if you have your profile set to public.
@@ -88,7 +88,7 @@ Your current streak and best streak appear in your public Loot Legend stats if y
 Contact support with the date. Platform downtime that prevents a login is the one exception where streaks can be manually reviewed.
 
 **Is there a cap on streak length?**
-No. You can maintain a streak indefinitely. The XP per login continues to increase at milestones — check the [Guild Primer](/shopper/guild-primer) for how far the milestone increases go.
+No. You can maintain a streak indefinitely. The XP per login continues to increase at milestones: check the [Guild Primer](/shopper/guild-primer) for how far the milestone increases go.
 
 ---
 

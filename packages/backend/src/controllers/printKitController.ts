@@ -1724,7 +1724,7 @@ export const getFullSignKitPDF = async (req: AuthRequest, res: Response) => {
       doc.addPage({ size: 'LETTER', margin: 0 });
 
       const clueLabel = clue.category
-        ? `Clue #${clue.index} — ${clue.category}`
+        ? `Clue #${clue.index}: ${clue.category}`
         : `Clue #${clue.index}`;
 
       doc

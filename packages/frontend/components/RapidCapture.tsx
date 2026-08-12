@@ -6,7 +6,7 @@ import { computeCropRect } from '../lib/cropGeometry';
 import { useToast } from './ToastContext';
 
 /**
- * RapidCapture — Phase 14b camera overlay (refactored)
+ * RapidCapture: Phase 14b camera overlay (refactored)
  *
  * Integrated camera experience matching design spec:
  * - Mode toggle (Rapidfire | Regular) built into camera top bar
@@ -145,7 +145,7 @@ interface RapidCaptureProps {
   onAddToItem: (itemId: string) => void;
   /** Called when user taps a rapidItems thumbnail to preview it */
   onThumbnailTap: (itemId: string) => void;
-  /** Called when user taps Review button — navigate to review page */
+  /** Called when user taps Review button: navigate to review page */
   onNavigateToReview: () => void;
   /** Count of items in PENDING_REVIEW state (for Review button badge) */
   readyCount: number;
@@ -155,14 +155,14 @@ interface RapidCaptureProps {
   onDeletePhoto?: (index: number) => void;
   /** Called when user clicks "Enhance All" button */
   onEnhanceAll?: () => void;
-  /** Quality overlay state (Tier 2 or 3 warning) — renders overlay inside camera if set */
+  /** Quality overlay state (Tier 2 or 3 warning): renders overlay inside camera if set */
   qualityOverlay?: {
     tier: 2 | 3;
     onUsePhoto: () => void;
     onRetake: () => void;
     onSkip: () => void;
   } | null;
-  /** Face detection overlay state — renders modal inside camera if set */
+  /** Face detection overlay state: renders modal inside camera if set */
   faceDetectionOverlay?: {
     onUploadAnyway: () => void;
     onRetake: () => void;
@@ -267,11 +267,11 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
   const [pendingPhotoRole, setPendingPhotoRole] = useState<string | null>(null);
   const [firstPhotoTaken, setFirstPhotoTaken] = useState(false);
 
-  // Landscape orientation detection — uses matchMedia for initial state + resize listener
+  // Landscape orientation detection: uses matchMedia for initial state + resize listener
   const [isLandscape, setIsLandscape] = useState(false);
 
   useEffect(() => {
-    // Use window.innerWidth > innerHeight via resize event — fires reliably on all
+    // Use window.innerWidth > innerHeight via resize event: fires reliably on all
     // mobile browsers (iOS Safari, Android Chrome) when orientation changes.
     // matchMedia 'change' is less reliable on some mobile WebKit versions.
     const update = () => setIsLandscape(window.innerWidth > window.innerHeight);
@@ -370,7 +370,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
           }
         })
         .catch(() => {
-          // Permission denied or not available — show static fallback
+          // Permission denied or not available: show static fallback
           setDeviceSupportsOrientation(false);
         });
     } else {
@@ -426,7 +426,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
               await videoTrack.applyConstraints({ advanced: [{ focusMode: 'continuous' } as any] });
             }
           } catch {
-            // Silently fail — not supported on this device/browser
+            // Silently fail: not supported on this device/browser
           }
 
           // Feature 2: Detect zoom support
@@ -477,13 +477,13 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
     if (isObscured) return;
     if (videoRef.current && streamRef.current) {
       videoRef.current.play().catch(() => {
-        // Autoplay can reject if the tab lost focus in the same tick — not fatal, the
+        // Autoplay can reject if the tab lost focus in the same tick: not fatal, the
         // next user interaction (or the effect re-running) will retry.
       });
     }
   }, [isObscured]);
 
-  // Phase 3: Pre-capture quality check — sample video brightness every 2 seconds
+  // Phase 3: Pre-capture quality check (sample video brightness every 2 seconds)
   // Brightness sampling handled by BrightnessIndicator component
 
   // Capture a photo from the video stream
@@ -556,11 +556,11 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
           timestamp: Date.now(),
         };
 
-        // Only call onPhotoCapture in rapidfire mode — regular mode defers to Analyze button
+        // Only call onPhotoCapture in rapidfire mode: regular mode defers to Analyze button
         if (isRapidfire) {
           onPhotoCapture?.(photo);
           
-          // Feature #341: Multi-angle prompt disabled — revisit in roadmap
+          // Feature #341: Multi-angle prompt disabled (revisit in roadmap)
           if (!firstPhotoTaken) {
             setFirstPhotoTaken(true);
           }
@@ -592,7 +592,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
   // Routes through POST /items/:id/description/append (Item Description Authoring Contract, 2026-05-12)
   // so voice transcripts append before any auto-generated content instead of overwriting it.
   // Also calls /voice/extract to get structured fields (weight, dims) and passes them
-  // to the append endpoint in one request — fills empty fields, never overwrites existing.
+  // to the append endpoint in one request: fills empty fields, never overwrites existing.
   const handleVoiceInput = useCallback(async (itemId: string, transcript: string) => {
     if (!transcript.trim()) {
       return;
@@ -605,7 +605,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
     }
 
     try {
-      // Extract structured fields from transcript (weight, dims, etc.) — best-effort
+      // Extract structured fields from transcript (weight, dims, etc.): best-effort
       let extractedWeight: number | undefined;
       let extractedLength: number | undefined;
       let extractedWidth: number | undefined;
@@ -625,10 +625,10 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
           extractedLocationTag = extract.locationTag;
         }
       } catch {
-        // Extract is best-effort — never block the append on failure
+        // Extract is best-effort: never block the append on failure
       }
 
-      // Single append call — passes transcript + any extracted dimensions.
+      // Single append call: passes transcript + any extracted dimensions.
       // Backend only writes dimensions if item fields are currently null.
       const appendRes = await api.post(`/items/${itemId}/description/append`, {
         text: transcript,
@@ -682,7 +682,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
   const handleSelectPhotoRole = useCallback((role: string | null) => {
     setPendingPhotoRole(role);
     if (role === null) {
-      // Skip — dismiss prompt
+      // Skip: dismiss prompt
       setShowMultiAnglePrompt(false);
     }
     // If a role is selected, keep prompt open so next photo can be captured with that role
@@ -755,10 +755,10 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
   }, [zoomRange, zoomSupported]);
 
   // handleDone removed 2026-05-13 along with the Done button. onComplete prop kept on the
-  // interface for callsite stability — callers never need to receive a programmatic completion
+  // interface for callsite stability: callers never need to receive a programmatic completion
   // because both onComplete and onCancel were wired to identical cleanup paths in practice.
 
-  // Cancel — stop camera, clean up
+  // Cancel: stop camera, clean up
   const handleCancel = useCallback(() => {
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((t) => t.stop());
@@ -767,7 +767,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
     onCancel();
   }, [photos, onCancel]);
 
-  // Handle mode change — reset all captured photos and counters when switching
+  // Handle mode change: reset all captured photos and counters when switching
   const handleModeChange = useCallback((newMode: 'rapidfire' | 'regular') => {
     if (newMode !== mode) {
       // Revoke blob URLs for any photos captured in the outgoing mode
@@ -833,7 +833,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
             ))}
           </div>
 
-          {/* Right: Settings button. Done button removed 2026-05-13 — was crowding the
+          {/* Right: Settings button. Done button removed 2026-05-13: it was crowding the
               Settings gear in rapidfire mode. Both consumer pages treat onComplete and
               onCancel the same way (close overlay + invalidate query), so the X button
               on the left of the top bar handles the exit path. */}
@@ -862,7 +862,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
           </div>
         </div>
 
-        {/* Settings pill — drops vertically from gear button */}
+        {/* Settings pill: drops vertically from gear button */}
         {settingsPanelOpen && (
           <>
             {/* Backdrop for tap-outside */}
@@ -877,12 +877,12 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
               }}
             />
 
-            {/* Main settings pill (vertical column) — in landscape offset by controls column width */}
+            {/* Main settings pill (vertical column): in landscape offset by controls column width */}
             <div
               className="absolute z-30 bg-black/75 backdrop-blur-md rounded-2xl flex flex-col items-center gap-1 px-2 py-2 shadow-lg transition-all duration-150"
               style={{ top: '68px', right: isLandscape ? '96px' : '16px' }}
             >
-              {/* Flash/Torch button — cycles: Off → On → Auto → Torch */}
+              {/* Flash/Torch button (cycles: Off → On → Auto → Torch) */}
               <button
                 onClick={() => {
                   let modes: Array<'off' | 'on' | 'auto' | 'torch'>;
@@ -1061,7 +1061,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
           </>
         )}
 
-        {/* Mode hint text — in landscape, constrain right edge so it doesn't overlap the controls column */}
+        {/* Mode hint text: in landscape, constrain right edge so it doesn't overlap the controls column */}
         <div
           className="absolute left-0 z-10 flex justify-center pointer-events-none"
           style={{ top: '54px', right: isLandscape ? '88px' : '0' }}
@@ -1076,7 +1076,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
         </div>
 
 
-        {/* Camera viewfinder — flex-1 so it fills remaining space in both portrait (col) and landscape (row) */}
+        {/* Camera viewfinder: flex-1 so it fills remaining space in both portrait (col) and landscape (row) */}
         <div
           ref={viewfinderRef}
           className="flex-1 relative overflow-hidden z-0 touch-none"
@@ -1099,7 +1099,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
           }}
           onTouchEnd={(e) => {
             if (e.changedTouches.length === 1 && lastPinchDistance.current === null) {
-              // Single tap — attempt tap-to-focus
+              // Single tap: attempt tap-to-focus
               const touch = e.changedTouches[0];
               const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
               const x = (touch.clientX - rect.left) / rect.width;
@@ -1122,7 +1122,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
             }
             if (e.touches.length < 2) {
               lastPinchDistance.current = null;
-              // Pinch ended — cancel the debounce and refocus immediately
+              // Pinch ended: cancel the debounce and refocus immediately
               if (focusRetriggerTimer.current) clearTimeout(focusRetriggerTimer.current);
               if (streamRef.current) {
                 const vt = streamRef.current.getVideoTracks()[0];
@@ -1222,7 +1222,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
                       {/* Dim everything outside the real crop boundary */}
                       <div className="absolute inset-0 shadow-[0_0_0_9999px_rgba(0,0,0,0.35)]" />
 
-                      {/* Layer 1 — real crop boundary corner brackets, faint white */}
+                      {/* Layer 1: real crop boundary corner brackets, faint white */}
                       <div className="absolute top-0 left-0 w-10 h-10 border-t-2 border-l-2 border-white/60" />
                       <div className="absolute top-0 right-0 w-10 h-10 border-t-2 border-r-2 border-white/60" />
                       <div className="absolute bottom-0 left-0 w-10 h-10 border-b-2 border-l-2 border-white/60" />
@@ -1231,7 +1231,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
                         {cropRect.targetRatio > 1 ? '4:3' : '3:4'}
                       </div>
 
-                      {/* Layer 2 — nested crop-guide reference, positioned via the same
+                      {/* Layer 2: nested crop-guide reference, positioned via the same
                           computeContainBox math relative to Layer 1's real pixel box. Ratio/
                           label driven by the cropGuideOverlay selector in the Settings panel
                           (2026-08-11) -- 'none' hides this layer entirely; Layer 1 (the real
@@ -1251,7 +1251,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
                 );
               })()}
 
-              {/* Level indicator — rotates with device tilt */}
+              {/* Level indicator: rotates with device tilt */}
               {showLevelIndicator && (
                 <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
                   <div className="relative w-20 h-0.5">
@@ -1286,7 +1286,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
                 </div>
               )}
 
-              {/* Zoom pill — horizontal tappable levels */}
+              {/* Zoom pill: horizontal tappable levels */}
               {zoomSupported && (
                 <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 bg-black/40 backdrop-blur-sm rounded-full flex items-center gap-0 p-1">
                   {/* Always show 1× */}
@@ -1498,8 +1498,8 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
             </div>
           )}
 
-          {/* Stats line (compact, text-xs) — hidden in landscape (column is too narrow) */}
-          {/* Stats line — single unified row for both modes */}
+          {/* Stats line (compact, text-xs): hidden in landscape (column is too narrow) */}
+          {/* Stats line: single unified row for both modes */}
           {!isLandscape && (rapidItems.length > 0 || (!isRapidfire && photosThisItem > 0)) && (
             <div className="text-center text-xs text-white/60 px-4 py-1 flex items-center justify-center gap-2 h-6">
               {/* Pending photos + Analyze (regular mode only) */}
@@ -1601,7 +1601,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
               Portrait: shutter floats above a horizontal scroll strip.
               Landscape: shutter at top of column, thumbnails scroll vertically below. */}
           <div className={isLandscape ? 'flex flex-col items-center flex-1 overflow-hidden' : 'relative min-h-[76px]'}>
-            {/* Landscape shutter button — positioned at top of the right column */}
+            {/* Landscape shutter button: positioned at top of the right column */}
             {isLandscape && (
               <button
                 onClick={capturePhoto}
@@ -1626,7 +1626,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
               </button>
             )}
 
-            {/* Scroll strip — portrait: horizontal; landscape: vertical */}
+            {/* Scroll strip (portrait: horizontal; landscape: vertical) */}
             <div
               ref={carouselRef}
               className={isLandscape
@@ -1639,7 +1639,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
               className={isLandscape ? 'flex flex-col items-center gap-2 py-2 w-full' : 'flex items-center gap-2'}
               style={isLandscape ? undefined : { paddingLeft: 'calc(50% + 40px)', paddingRight: '16px' }}
             >
-              {/* Thumbnail carousel — all analyzed items (both modes) */}
+              {/* Thumbnail carousel: all analyzed items (both modes) */}
               {rapidItems.length > 0 && rapidItems.map((item) => {
                   const isAddingTo = addingToItemId === item.id;
                   const status = !item.thumbnailUrl
@@ -1659,7 +1659,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
                       onClick={() => onThumbnailTap(item.id)}
                       title={item.title || 'Item'}
                     >
-                      {/* Image container — overflow-hidden for rounded corners, no badge clipping */}
+                      {/* Image container: overflow-hidden for rounded corners, no badge clipping */}
                       <div className={`w-full h-full rounded-lg overflow-hidden border flex items-center justify-center ${
                         isAddingTo ? 'border-amber-400 bg-amber-900/30' : 'border-white/40 bg-white/10'
                       }`}>
@@ -1690,7 +1690,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
                         </div>
                       )}
 
-                      {/* Status badge (top-right) — on outer div, not clipped */}
+                      {/* Status badge (top-right): on outer div, not clipped */}
                       {item.thumbnailUrl && (
                         <div
                           className={`absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold z-10 ${status.bgColor} ${status.iconColor}`}
@@ -1704,7 +1704,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
                         <div className="absolute -top-1 -left-1 text-xs z-10">✨</div>
                       )}
 
-                      {/* + button — always visible and clickable, bigger (w-7 h-7), corner-tucked */}
+                      {/* + button: always visible and clickable, bigger (w-7 h-7), corner-tucked */}
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -1793,7 +1793,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
               )}
             </button>}
 
-            {/* Feature #341: Multi-angle role prompt removed — revisit in roadmap */}
+            {/* Feature #341: Multi-angle role prompt removed (revisit in roadmap) */}
           </div>
         </div>
 
@@ -1848,7 +1848,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
 
 
 /**
- * VoiceTagButtonThumbnail — Lightweight inline voice input button for thumbnail
+ * VoiceTagButtonThumbnail: Lightweight inline voice input button for thumbnail
  * Used in rapidfire mode to capture description for a specific item
  */
 interface VoiceTagButtonThumbnailProps {
@@ -1873,7 +1873,7 @@ const VoiceTagButtonThumbnail: React.FC<VoiceTagButtonThumbnailProps> = ({
    * getUserMedia directly. If the permission state is 'prompt' (user dismissed
    * an earlier prompt without choosing), Chrome will re-show the dialog. If
    * permission is fully 'denied' at the site level, getUserMedia fails too
-   * and we fall through to instructional copy. Pure browser API — web pages
+   * and we fall through to instructional copy. Pure browser API: web pages
    * cannot programmatically open chrome:// settings.
    */
   const attemptMicRecovery = async (): Promise<boolean> => {

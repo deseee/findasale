@@ -1,5 +1,5 @@
 /**
- * PostSaleEbayPanel — Post-sale eBay push workflow component
+ * PostSaleEbayPanel: Post-sale eBay push workflow component
  *
  * Displays unsold items from a completed sale with shipping classification.
  * Allows organizers to select items, set shipping overrides, and push to eBay.
@@ -139,7 +139,7 @@ const EbayEditForm: React.FC<{
     ean: item.ean || '',
     ebaySubtitle: item.ebaySubtitle || '',
     conditionNotes: item.conditionNotes || '',
-    // AI/estimate values are NEVER silently prefilled here anymore — they're shown as
+    // AI/estimate values are NEVER silently prefilled here anymore: they're shown as
     // inert placeholder text on the inputs instead (see the Shipping section below) and
     // only reach formData when the organizer explicitly types a value, picks a box
     // preset, or clicks "Get AI weight & size estimate" (see applyAiEstimate / weightTouched).
@@ -160,10 +160,10 @@ const EbayEditForm: React.FC<{
     offers: false,
   });
 
-  // True once the organizer has actually acted on the weight/dims this session — typed
+  // True once the organizer has actually acted on the weight/dims this session: typed
   // into the weight box, picked a box preset, or clicked "Get AI weight & size estimate".
   // Saving while this is still false must NOT confirm the package details (see handleSave)
-  // — mirrors review.tsx's weightTouched Set / edit-item/[id].tsx's weightTouched boolean.
+  // Mirrors review.tsx's weightTouched Set / edit-item/[id].tsx's weightTouched boolean.
   const [weightTouched, setWeightTouched] = useState(false);
 
   const applyBoxPreset = (preset: { weightOz: number; lengthIn: number; widthIn: number; heightIn: number; packageType: string }) => {
@@ -175,16 +175,16 @@ const EbayEditForm: React.FC<{
       packageHeightIn: preset.heightIn,
       packageType: preset.packageType,
     }));
-    // Picking a preset is a deliberate organizer choice of a real box size — treat it
+    // Picking a preset is a deliberate organizer choice of a real box size: treat it
     // exactly like typing the values in themselves.
     setWeightTouched(true);
   };
 
-  // "Get AI weight & size estimate" — copies the background-computed estimate into the
+  // "Get AI weight & size estimate": copies the background-computed estimate into the
   // editable inputs so the organizer can see and review it. Does NOT call the save API
-  // itself, and does NOT set weightTouched — filling the fields is not confirming them.
+  // itself, and does NOT set weightTouched: filling the fields is not confirming them.
   // (Corrected S-QA-2026-08-06: this previously set weightTouched directly, so clicking
-  // this button and then Save — with zero manual edit — silently confirmed an unreviewed
+  // this button and then Save (with zero manual edit) silently confirmed an unreviewed
   // AI guess. Only a genuine subsequent edit to the weight input, or picking a box
   // preset via applyBoxPreset, sets weightTouched now.)
   const applyAiEstimate = () => {
@@ -225,9 +225,9 @@ const EbayEditForm: React.FC<{
       allowBestOffer: formData.allowBestOffer,
       bestOfferAutoAcceptAmt: formData.bestOfferAutoAcceptAmt ? Math.max(0, formData.bestOfferAutoAcceptAmt) : undefined,
       bestOfferMinimumAmt: formData.bestOfferMinimumAmt ? Math.max(0, formData.bestOfferMinimumAmt) : undefined,
-      // Organizer reviewed/confirmed the package details — but only send the confirm
+      // Organizer reviewed/confirmed the package details: but only send the confirm
       // flags when they actually acted on weight/dims this save (weightTouched). Saving
-      // an untouched, pre-existing estimate must NOT count as confirming it — mirrors
+      // an untouched, pre-existing estimate must NOT count as confirming it: mirrors
       // review.tsx / edit-item/[id].tsx exactly.
       ...(weightTouched ? { packageConfirmedByOrganizer: true, packageEstimateSource: 'ORGANIZER' } : {}),
     };
@@ -373,7 +373,7 @@ const EbayEditForm: React.FC<{
                 onClick={applyAiEstimate}
                 className="px-2 py-1 rounded text-xs font-medium bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-200 hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors"
               >
-                Get AI weight & size estimate
+                Get Smart weight & size estimate
               </button>
             )}
             {/* Box-size presets */}
@@ -619,7 +619,7 @@ const PostSaleEbayUnsoldSection: React.FC<PostSaleEbayPanelProps> = ({ saleId })
     },
   });
 
-  // Mutation for pushing items to eBay — S725 LIVE only (DRAFT mode killed)
+  // Mutation for pushing items to eBay: S725 LIVE only (DRAFT mode killed)
   const pushToEbayMutation = useMutation({
     mutationFn: async ({ itemIds }: { itemIds: string[] }) => {
       return api.post(`/ebay/organizer/sales/${saleId}/ebay-push`, {
@@ -873,7 +873,7 @@ const PostSaleEbayUnsoldSection: React.FC<PostSaleEbayPanelProps> = ({ saleId })
             })}
           </div>
 
-          {/* Push button — S725 single LIVE button (DRAFT mode killed) */}
+          {/* Push button: S725 single LIVE button (DRAFT mode killed) */}
           <div className="flex gap-2">
             <button
               onClick={handlePush}
@@ -906,7 +906,7 @@ const PostSaleEbayUnsoldSection: React.FC<PostSaleEbayPanelProps> = ({ saleId })
 // Listings that went live on eBay before publishing required a confirmed weight.
 // They are still out there charging buyers a shipping price built from a guess.
 // This section lists them so the organizer can check each one. Nothing is sent
-// to eBay from here — the organizer saves each item through the same
+// to eBay from here: the organizer saves each item through the same
 // "Save eBay Details" form used elsewhere in this panel, which is what marks the
 // package confirmed.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1050,7 +1050,7 @@ export const EbayWeightReviewQueue: React.FC<{ saleId?: string }> = ({ saleId })
         Nothing is sent to eBay until you save.
       </p>
 
-      {/* Severity counts — the two problems are not the same */}
+      {/* Severity counts: the two problems are not the same */}
       <div className="flex flex-wrap gap-2 mb-4">
         {missing > 0 && (
           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-semibold bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-200">

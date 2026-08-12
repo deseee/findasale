@@ -197,7 +197,7 @@ export const authenticate = async (req: AuthRequest, res: Response, next: NextFu
     // P0-1 Fix: Validate organizerTokenVersion for organizers — invalidate stale tier claims
     if ((decoded.role === 'ORGANIZER' || decoded.roles?.includes('ORGANIZER')) && decoded.organizerTokenVersion !== undefined && user.organizer) {
       if (decoded.organizerTokenVersion !== user.organizer.tokenVersion) {
-        return res.status(401).json({ message: 'Session invalidated — please log in again.' });
+        return res.status(401).json({ message: 'Session invalidated. Please log in again.' });
       }
     }
 

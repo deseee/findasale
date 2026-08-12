@@ -1,5 +1,5 @@
 /**
- * CartIcon — Shopping bag icon with combined badge (holds + browsing cart count)
+ * CartIcon: Shopping bag icon with combined badge (holds + browsing cart count)
  * Displayed in the nav bar; clicking opens the cart drawer
  * Polls /api/reservations/my-holds-full every 5min to track live hold count
  * (widened from 60s 2026-08-04, Patrick-approved cost-optimization batch --
@@ -70,7 +70,7 @@ const CartIcon: React.FC = () => {
       {/* Shopping cart icon */}
       <ShoppingCart size={22} />
 
-      {/* Combined count badge — only show if > 0 */}
+      {/* Combined count badge: only show if > 0 */}
       {combinedCount > 0 && (
         <span className="absolute -top-1 -right-1 inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-white dark:text-white transform translate-x-0 translate-y-0 bg-amber-500 rounded-full">
           {combinedCount > 99 ? '99+' : combinedCount}

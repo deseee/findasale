@@ -25,7 +25,7 @@ import { prisma } from '../lib/prisma';
 export class InsufficientStockError extends Error {
   constructor(itemId: string, requested: number, remaining: number) {
     super(
-      `Cannot sell ${requested} unit(s) of item ${itemId} — only ${remaining} remaining.`
+      `Cannot sell ${requested} unit(s) of item ${itemId}: only ${remaining} remaining.`
     );
     this.name = 'InsufficientStockError';
   }

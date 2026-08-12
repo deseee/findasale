@@ -88,7 +88,7 @@ const ALL_TASKS: TaskDefinition[] = [
   // Stage 5: Wrapping Up
   { id: 'wrap_signs_down', stage: 'Wrapping Up', label: 'Signs taken down', isAuto: false },
   { id: 'wrap_property_cleared', stage: 'Wrapping Up', label: 'Property cleaned up and cleared', isAuto: false },
-  { id: 'wrap_items_sorted', stage: 'Wrapping Up', label: 'Unsold items sorted — donate, relist, or discard', isAuto: false, link: '/organizer/inventory' },
+  { id: 'wrap_items_sorted', stage: 'Wrapping Up', label: 'Unsold items sorted: donate, relist, or discard', isAuto: false, link: '/organizer/inventory' },
   { id: 'wrap_donation_scheduled', stage: 'Wrapping Up', label: 'Donation pickup scheduled', isAuto: false },
   { id: 'wrap_relist', stage: 'Wrapping Up', label: 'Valuable items relisted for sale', isAuto: false, link: '/organizer/sales/{saleId}' },
   { id: 'wrap_messages', stage: 'Wrapping Up', label: 'Shopper messages answered', isAuto: false, link: '/organizer/messages' },

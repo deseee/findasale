@@ -1,5 +1,5 @@
 /**
- * BoostPurchaseModal — Dual-rail boost purchase UI
+ * BoostPurchaseModal: Dual-rail boost purchase UI
  * Phase 2b: XP rail (instant) or Stripe rail (PaymentElement flow)
  *
  * Usage:
@@ -363,7 +363,7 @@ export default function BoostPurchaseModal({
               </button>
             )}
 
-            {/* Stripe — click to load PaymentElement */}
+            {/* Stripe: click to load PaymentElement */}
             {rail === 'STRIPE' && (
               <button
                 onClick={handleStripePurchase}

@@ -62,7 +62,7 @@ export async function notifyFacebookExportedItemSold(itemId: string): Promise<vo
       organizerUserId,
       'SALE_UPDATE',
       `Mark sold on ${fbPlatformName}`,
-      `"${item.title}" sold on FindA.Sale — don't forget to mark it sold on ${fbPlatformName} too.`,
+      `"${item.title}" sold on FindA.Sale. Don't forget to mark it sold on ${fbPlatformName} too.`,
       fbUrl,
       'OPERATIONAL'
     );

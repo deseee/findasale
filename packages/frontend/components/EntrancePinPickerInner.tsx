@@ -58,7 +58,7 @@ const MapClickHandler: React.FC<{
   return null;
 };
 
-// Forces Leaflet to recalculate container size after mount — fixes 1px tile bug
+// Forces Leaflet to recalculate container size after mount: fixes 1px tile bug
 const MapResizer: React.FC = () => {
   const map = useMap();
   useEffect(() => {
@@ -101,7 +101,7 @@ const EntrancePinPickerInner: React.FC<EntrancePinPickerInnerProps> = ({
 
   return (
     <>
-      {/* Leaflet CSS — must be in browser context; placed at fragment root so React can hoist it */}
+      {/* Leaflet CSS: must be in browser context; placed at fragment root so React can hoist it */}
       <link
         rel="stylesheet"
         href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"

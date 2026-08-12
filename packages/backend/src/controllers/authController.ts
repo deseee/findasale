@@ -45,7 +45,7 @@ export const getRegistrationChallenge = async (req: Request, res: Response) => {
     res.json({ token, difficulty });
   } catch (error) {
     console.error('[auth] Failed to issue registration challenge:', error);
-    res.status(500).json({ message: 'Server misconfigured — could not issue verification challenge.' });
+    res.status(500).json({ message: 'Server misconfigured. Could not issue verification challenge.' });
   }
 };
 
@@ -342,7 +342,7 @@ export const register = async (req: Request, res: Response) => {
             <p><a href="${verifyLink}" style="display: inline-block; padding: 10px 20px; background-color: #b45309; color: white; text-decoration: none; border-radius: 4px;">Verify Email Address</a></p>
             <p>This link will expire in 7 days.</p>
             <p>If you didn't create this account, you can ignore this email.</p>
-            <p>— FindA.Sale Team</p>
+            <p>The FindA.Sale Team</p>
           `,
         });
       } catch (emailError) {
@@ -822,7 +822,7 @@ export const requestPasswordReset = async (req: Request, res: Response) => {
           <p><a href="${process.env.FRONTEND_URL}/reset-password?token=${resetToken}" style="display: inline-block; padding: 10px 20px; background-color: #b45309; color: white; text-decoration: none; border-radius: 4px;">Reset Password</a></p>
           <p>This link will expire in 1 hour.</p>
           <p>If you didn't request a password reset, you can ignore this email.</p>
-          <p>— FindA.Sale Team</p>
+          <p>The FindA.Sale Team</p>
         `,
       });
     } catch (emailError) {

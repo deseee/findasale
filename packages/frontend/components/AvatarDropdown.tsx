@@ -261,7 +261,7 @@ const AvatarDropdown: React.FC<AvatarDropdownProps> = ({ onBecomeOrganizer }) =>
                 )}
               </div>
             </div>
-            {/* Rank + XP progress — compact inline style, fresh from API */}
+            {/* Rank + XP progress: compact inline style, fresh from API */}
             {freshExplorerRank && (
               <div className="mt-2 space-y-1">
                 <div className="flex items-center gap-1.5">
@@ -474,7 +474,7 @@ const AvatarDropdown: React.FC<AvatarDropdownProps> = ({ onBecomeOrganizer }) =>
                 <span>Organizer Dashboard</span>
               </Link>
 
-              {/* Your Sales Section — Collapsible */}
+              {/* Your Sales Section: Collapsible */}
               <button
                 onClick={() => setOrgToolsOpen(!orgToolsOpen)}
                 className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
@@ -550,7 +550,7 @@ const AvatarDropdown: React.FC<AvatarDropdownProps> = ({ onBecomeOrganizer }) =>
                 </>
               )}
 
-              {/* In-Sale Tools Section — Collapsible */}
+              {/* In-Sale Tools Section: Collapsible */}
               <button
                 onClick={() => setInSaleToolsOpen(!inSaleToolsOpen)}
                 className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
@@ -625,7 +625,7 @@ const AvatarDropdown: React.FC<AvatarDropdownProps> = ({ onBecomeOrganizer }) =>
                 </>
               )}
 
-              {/* Post Sales Section — Collapsible */}
+              {/* Post Sales Section: Collapsible */}
               <button
                 onClick={() => setPostSalesOpen(!postSalesOpen)}
                 className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
@@ -711,15 +711,15 @@ const AvatarDropdown: React.FC<AvatarDropdownProps> = ({ onBecomeOrganizer }) =>
                 </>
               )}
 
-              {/* Upgrade/Subscription link — before Pro Tools */}
+              {/* Upgrade/Subscription link: before Pro Tools */}
               <Link
                 href="/organizer/subscription"
                 className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-amber-600 dark:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
                 onClick={() => setIsOpen(false)}
               >
                 <Sparkles size={16} />
-                {/* S-TIER-RECONCILE: unknown tier must not render upgrade copy —
-                    a TEAMS customer being asked to "Upgrade to PRO" is a billing-trust bug. */}
+                {/* S-TIER-RECONCILE: unknown tier must not render upgrade copy.
+                    A TEAMS customer being asked to "Upgrade to PRO" is a billing-trust bug. */}
                 <span>{!tierKnown
                   ? 'Subscription'
                   : canAccess('TEAMS')
@@ -739,7 +739,7 @@ const AvatarDropdown: React.FC<AvatarDropdownProps> = ({ onBecomeOrganizer }) =>
                 <span>Refer Organizers</span>
               </Link>
 
-              {/* Pro Tools Section — Collapsible */}
+              {/* Pro Tools Section: Collapsible */}
               <button
                 onClick={() => setProToolsOpen(!proToolsOpen)}
                 className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-purple-600 dark:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
@@ -859,7 +859,7 @@ const AvatarDropdown: React.FC<AvatarDropdownProps> = ({ onBecomeOrganizer }) =>
                 </>
               )}
 
-              {/* Teams Section — Collapsible (TEAMS tier or ADMIN) */}
+              {/* Teams Section: Collapsible (TEAMS tier or ADMIN) */}
               {(isTeams || isAdmin) && (
                 <>
                   <button
@@ -898,10 +898,10 @@ const AvatarDropdown: React.FC<AvatarDropdownProps> = ({ onBecomeOrganizer }) =>
             </>
           )}
 
-          {/* SHOPPER Menu Items — only show if USER role exists */}
+          {/* SHOPPER Menu Items: only show if USER role exists */}
           {isUser && (
             <>
-              {/* Shopper Dashboard — always show for users (even dual-role) with subtle indicator */}
+              {/* Shopper Dashboard: always show for users (even dual-role) with subtle indicator */}
               <Link
                 href="/shopper/dashboard"
                 className="flex items-center gap-2 px-3 py-2 text-sm text-warm-900 dark:text-warm-100 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
@@ -927,7 +927,7 @@ const AvatarDropdown: React.FC<AvatarDropdownProps> = ({ onBecomeOrganizer }) =>
                 </span>
               </button>
 
-              {/* My Collection Section — Collapsible */}
+              {/* My Collection Section: Collapsible */}
               <button
                 onClick={() => setMyCollectionOpen(!myCollectionOpen)}
                 className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
@@ -995,7 +995,7 @@ const AvatarDropdown: React.FC<AvatarDropdownProps> = ({ onBecomeOrganizer }) =>
                 </>
               )}
 
-              {/* Explore Section — Collapsible */}
+              {/* Explore Section: Collapsible */}
               <button
                 onClick={() => setExploreOpen(!exploreOpen)}
                 className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
@@ -1104,7 +1104,7 @@ const AvatarDropdown: React.FC<AvatarDropdownProps> = ({ onBecomeOrganizer }) =>
                 </>
               )}
 
-              {/* Connect Section — Collapsible */}
+              {/* Connect Section: Collapsible */}
               <button
                 onClick={() => setConnectOpen(!connectOpen)}
                 className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
@@ -1208,7 +1208,7 @@ const AvatarDropdown: React.FC<AvatarDropdownProps> = ({ onBecomeOrganizer }) =>
                 <span>Hunt Pass</span>
               </Link>
 
-              {/* Hunt Exclusives Section — Collapsible */}
+              {/* Hunt Exclusives Section: Collapsible */}
               <button
                 onClick={() => setHuntPassOpen(!huntPassOpen)}
                 className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"

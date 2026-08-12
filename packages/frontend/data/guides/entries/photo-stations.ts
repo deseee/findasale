@@ -34,7 +34,7 @@ You can always mix approaches: use a station for small items and shoot furniture
 ## What you need
 
 **Surface**
-A folding table works well. Card table, picnic table, workbench — anything flat and stable at roughly waist height. Shooting at waist height keeps the camera roughly level with items rather than angled down from above.
+A folding table works well. Card table, picnic table, workbench: anything flat and stable at roughly waist height. Shooting at waist height keeps the camera roughly level with items rather than angled down from above.
 
 If you don't have a table available, the floor works for flat items (rugs, artwork, clothing). You'll be kneeling or squatting, but a clean floor with a backdrop over it photographs well.
 
@@ -65,7 +65,7 @@ You don't need to buy lighting equipment. If you're photographing regularly (con
 ## Setting up the station
 
 **Step 1: Place your table near the light source.**
-If you're using a window, position the table so the window is to the side of the item — not behind it (backlit) and not directly in front of it (glare on screen). Side lighting shows texture and depth.
+If you're using a window, position the table so the window is to the side of the item: not behind it (backlit) and not directly in front of it (glare on screen). Side lighting shows texture and depth.
 
 **Step 2: Set up the backdrop.**
 Lean a piece of foam core against a wall behind the table so it curves down across the table surface. This creates a seamless background with no visible edge between vertical and horizontal surfaces. If you're using a sheet, drape it over the back of a chair or tape it to the wall, then let it fall across the table surface.
@@ -74,14 +74,14 @@ Lean a piece of foam core against a wall behind the table so it curves down acro
 Before photographing everything, take one test shot and look at it critically. Check: is the item lit evenly? Is the backdrop visible and plain? Is there any glare? Adjust your table position, lamp angle, or camera position until the test shot looks right.
 
 **Step 4: Mark your camera position.**
-Once you have a good test shot, note where you're standing or mark the floor with a piece of tape. Consistency matters — if you're always shooting from the same spot at the same distance, every photo has the same framing and you spend less time adjusting per item.
+Once you have a good test shot, note where you're standing or mark the floor with a piece of tape. Consistency matters: if you're always shooting from the same spot at the same distance, every photo has the same framing and you spend less time adjusting per item.
 
 ---
 
 ## Running the station session
 
 **Stage items before you start photographing.**
-Group items near the station before you begin — everything you're going to photograph in that session. This prevents constant back-and-forth and helps you notice when items are missing or when you need to add something you forgot.
+Group items near the station before you begin: everything you're going to photograph in that session. This prevents constant back-and-forth and helps you notice when items are missing or when you need to add something you forgot.
 
 **Bring items to the station, don't move the station.**
 The whole point is a fixed, consistent setup. Move the items, not the camera position or the light.
@@ -90,7 +90,7 @@ The whole point is a fixed, consistent setup. Move the items, not the camera pos
 If you have a helper, this split is the most efficient use of two people. One person handles the camera and shoots; the other retrieves items, removes price tags that shouldn't be in the photo, orients items correctly, and hands them to the photographer. See [Running a photo session with helpers](#) for how to coordinate this.
 
 **Photograph similar items in batches.**
-Group clothing together, books together, small collectibles together. This helps with review queue efficiency — you'll be correcting similar auto-suggested titles in a row rather than jumping between categories.
+Group clothing together, books together, small collectibles together. This helps with review queue efficiency: you'll be correcting similar auto-suggested titles in a row rather than jumping between categories.
 
 ---
 
@@ -99,7 +99,7 @@ Group clothing together, books together, small collectibles together. This helps
 For a sale spread across multiple rooms, you have two options:
 
 **Option 1: One central station, stage items there.**
-Bring items to one photo station location — usually the room with the best light. Works well if items are small enough to carry easily and if the setup and staging time is reasonable for the volume you have.
+Bring items to one photo station location: usually the room with the best light. Works well if items are small enough to carry easily and if the setup and staging time is reasonable for the volume you have.
 
 **Option 2: One station per room.**
 Set up a simple backdrop and identify the best lighting spot in each room. You photograph in each room without moving items between rooms. This is faster for furniture-heavy rooms and for items that are too awkward to carry. The tradeoff is inconsistent lighting between rooms, which is usually fine.
@@ -114,14 +114,14 @@ If you're setting up ahead of the sale and need to convert the space back for bu
 
 - Don't leave the backdrop up if it blocks sale traffic flow
 - Photograph your furniture and large items in-place before the station goes up, or after it comes down
-- Keep the foam core boards — they reuse across sales
+- Keep the foam core boards: they reuse across sales
 
 ---
 
 ## Common questions
 
 **Do I need to buy foam core? Can I use a sheet?**
-A sheet works fine as long as it's flat and not wrinkled. The advantage of foam core is that it holds its shape — sheets sag or shift and require adjusting between photos. For occasional use, a flat sheet is good enough. For repeated use (consignment, regular sales), foam core is worth it.
+A sheet works fine as long as it's flat and not wrinkled. The advantage of foam core is that it holds its shape: sheets sag or shift and require adjusting between photos. For occasional use, a flat sheet is good enough. For repeated use (consignment, regular sales), foam core is worth it.
 
 **What color backdrop should I use?**
 White or light gray for most items. Black works well for jewelry and shiny metal items where a light background would cause glare. Avoid backgrounds that are the same color as the items you're photographing.

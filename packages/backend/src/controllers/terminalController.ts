@@ -717,7 +717,7 @@ export const cancelTerminalPaymentIntent = async (req: AuthRequest, res: Respons
     }
 
     if (purchases.some(p => p.status === 'PAID')) {
-      return res.status(400).json({ message: 'Cannot cancel a completed payment — use refund instead' });
+      return res.status(400).json({ message: 'Cannot cancel a completed payment. Use refund instead.' });
     }
 
     // Cancel the PaymentIntent — platform account in simulated mode, connected account in production
@@ -1094,7 +1094,7 @@ export const cashPayment = async (req: AuthRequest, res: Response) => {
         userId: sale.organizer.userId,
         saleId,
         signalType: 'SELF_DEALING',
-        notes: '[cashPayment] Cash sale recorded with no verifiable buyer account — offsite/unpreventable, logged for review only.',
+        notes: '[cashPayment] Cash sale recorded with no verifiable buyer account: offsite/unpreventable, logged for review only.',
       }).catch(err => console.warn('[terminal] recordSuspectedSignal failed (non-fatal):', err));
     }
 

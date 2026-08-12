@@ -1,9 +1,9 @@
 /**
- * Label Sheet Composer — batch QR pricetag builder for Avery 5160
+ * Label Sheet Composer: batch QR pricetag builder for Avery 5160
  *
  * Two input modes:
- *   1. Preset chips — tap a cheat-sheet price, set qty, add to batch
- *   2. Pull from catalog — search priced items, select, add to batch
+ *   1. Preset chips: tap a cheat-sheet price, set qty, add to batch
+ *   2. Pull from catalog: search priced items, select, add to batch
  *
  * Output: PDF labels with real QR codes, formatted for Avery 5160 (3×10 = 30/page)
  */
@@ -62,7 +62,7 @@ const COLS = 3;
 const ROWS = 10;
 
 // ---------------------------------------------------------------------------
-// Color band mapping — preview only
+// Color band mapping: preview only
 // ---------------------------------------------------------------------------
 function getPriceBandColor(price: number): string {
   if (price <= 0.75) return 'bg-stone-200';
@@ -406,7 +406,7 @@ export default function LabelComposerPage() {
     refreshSavedBatches();
   }, [saleId, initialized, refreshSavedBatches]);
 
-  // Keyboard shortcuts (handler refs resolved at call time — safe to declare before handlePrint/handleSaveBatch)
+  // Keyboard shortcuts (handler refs resolved at call time: safe to declare before handlePrint/handleSaveBatch)
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'p') {
@@ -626,7 +626,7 @@ export default function LabelComposerPage() {
 
         <div className="max-w-7xl mx-auto px-4 py-6">
           <div className="grid grid-cols-1 lg:grid-cols-[1.15fr_1fr] gap-6">
-            {/* ==================== LEFT — Tag Mixer ==================== */}
+            {/* ==================== LEFT: Tag Mixer ==================== */}
             <div className="space-y-5">
               {/* Price Presets */}
               <div className="bg-white dark:bg-gray-800 rounded-lg border border-warm-200 dark:border-gray-700 p-4">
@@ -853,9 +853,9 @@ export default function LabelComposerPage() {
               </div>
             </div>
 
-            {/* ==================== RIGHT — Live Sheet Preview ==================== */}
+            {/* ==================== RIGHT: Live Sheet Preview ==================== */}
             <div className="space-y-5">
-              {/* Starting position — collapsed by default, ABOVE the preview */}
+              {/* Starting position: collapsed by default, ABOVE the preview */}
               <div className="bg-white dark:bg-gray-800 rounded-lg border border-warm-200 dark:border-gray-700">
                 <button
                   type="button"
@@ -966,7 +966,7 @@ export default function LabelComposerPage() {
                         >
                           {/* Mini QR placeholder */}
                           <div className="absolute left-[3px] top-[3px] w-[10px] h-[10px] bg-gray-800 opacity-40 rounded-[1px]" />
-                          {/* Date — moved to top-right corner */}
+                          {/* Date: moved to top-right corner */}
                           <span className="absolute top-[2px] right-[3px] text-[6px] opacity-90 font-mono">
                             {saleDateRange}
                           </span>
@@ -984,7 +984,7 @@ export default function LabelComposerPage() {
                               </span>
                             ) : null}
                           </div>
-                          {/* Room — per-item; rendered where the date used to be */}
+                          {/* Room: per-item; rendered where the date used to be */}
                           {label.room ? (
                             <span className="absolute bottom-[2px] right-[3px] left-[3px] text-[6px] opacity-90 font-mono truncate text-right">
                               {label.room}

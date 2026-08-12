@@ -62,7 +62,7 @@ export const bidRateLimiter = async (req: AuthRequest, res: Response, next: Next
 
     if (bidTimestamps.length >= maxBids) {
       return res.status(429).json({
-        message: 'Bidding too fast — please slow down'
+        message: 'Bidding too fast. Please slow down.'
       });
     }
 

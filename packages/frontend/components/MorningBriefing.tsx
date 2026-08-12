@@ -666,7 +666,7 @@ export default function MorningBriefing({ briefing, workspaceId, workspaceName, 
 
     const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
 
-    // S708: accessToken is in an httpOnly cookie — withCredentials carries it on handshake
+    // S708: accessToken is in an httpOnly cookie (withCredentials carries it on handshake)
     const socket = io(socketUrl, {
       auth: { token: token || undefined },
       withCredentials: true,
@@ -813,7 +813,7 @@ export default function MorningBriefing({ briefing, workspaceId, workspaceName, 
 
         {/* Two-column layout */}
         <div className="flex gap-8 pt-6">
-          {/* Left column — morning read */}
+          {/* Left column: morning read */}
           <div className="flex-[0_0_58%] min-w-0">
             <Countdown startDate={sale.startDate} />
             <VitalsStrip rsvpCount={briefing.rsvpCount} cashFloat={sale.cashFloat} startDate={sale.startDate} />
@@ -832,7 +832,7 @@ export default function MorningBriefing({ briefing, workspaceId, workspaceName, 
             </div>
           </div>
 
-          {/* Right column — live room */}
+          {/* Right column: live room */}
           <div className="flex-[0_0_38%] min-w-0 flex flex-col gap-4">
             <TeamRoster
               team={team}

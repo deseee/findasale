@@ -1,12 +1,12 @@
 /**
- * Price Research Panel Component — Condensed Layout v2
+ * Price Research Panel Component: Condensed Layout v2
  *
  * Consolidates 5 pricing/valuation tools into one collapsible section:
- * 1. AI Estimate — read-only if item has estimatedValue or aiSuggestedPrice
- * 2. Suggest Price (💡) — PriceSuggestion component
- * 3. eBay Price Comps (💰) — eBay search results
- * 4. Platform Comps (💰) — ValuationWidget (PRO-only)
- * 5. Request Community Appraisal (🤝) — crowdsourced valuation
+ * 1. AI Estimate: read-only if item has estimatedValue or aiSuggestedPrice
+ * 2. Suggest Price (💡): PriceSuggestion component
+ * 3. eBay Price Comps (💰): eBay search results
+ * 4. Platform Comps (💰): ValuationWidget (PRO-only)
+ * 5. Request Community Appraisal (🤝): crowdsourced valuation
  *
  * Props:
  * - itemId: string (for ValuationWidget)
@@ -160,7 +160,7 @@ const PriceResearchPanel: React.FC<PriceResearchPanelProps> = ({
   return (
     <>
       <div className="border border-warm-200 dark:border-gray-700 rounded-lg overflow-hidden bg-white dark:bg-gray-800">
-        {/* Collapsible Header — Condensed */}
+        {/* Collapsible Header: Condensed */}
         <button
           type="button"
           onClick={() => setIsCollapsed(!isCollapsed)}
@@ -181,7 +181,7 @@ const PriceResearchPanel: React.FC<PriceResearchPanelProps> = ({
           </span>
         </button>
 
-      {/* Panel Content — Redesigned Layout per UX Spec */}
+      {/* Panel Content: Redesigned Layout per UX Spec */}
       {!isCollapsed && (
         <div className="border-t border-warm-200 dark:border-gray-700 px-4 py-3 space-y-0">
           {/* Section 1: AI Smart Estimate (If Available) */}

@@ -1,5 +1,5 @@
 /**
- * Marketplace Extension Removal Review Backlog — platform-wide admin view (2026-08-06)
+ * Marketplace Extension Removal Review Backlog: platform-wide admin view (2026-08-06)
  *
  * The Facebook Marketplace extension marks a SOLD item's live FB listing for removal, and
  * when it can't confidently match the item to a Facebook card (title match fails, Sold flip
@@ -141,12 +141,12 @@ const AdminMarketplaceReviewBacklog = () => {
                     </td>
                     <td className="px-4 py-3 text-right text-amber-700 dark:text-amber-400 font-medium">{record.skipCount}</td>
                     <td className="px-4 py-3 text-warm-600 dark:text-warm-400 text-xs max-w-xs">
-                      {record.lastErrorMessage || '—'}
+                      {record.lastErrorMessage || 'N/A'}
                     </td>
                     <td className="px-4 py-3 text-right text-warm-500 dark:text-warm-400 text-xs whitespace-nowrap">
                       {record.lastAttemptAt
                         ? `${new Date(record.lastAttemptAt).toLocaleDateString()} ${new Date(record.lastAttemptAt).toLocaleTimeString()}`
-                        : '—'}
+                        : 'N/A'}
                     </td>
                   </tr>
                 ))}

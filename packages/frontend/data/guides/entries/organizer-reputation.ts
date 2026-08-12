@@ -18,15 +18,15 @@ After a sale closes, FindA.Sale sends shoppers a short review prompt. Ratings ar
 
 ## What the review count tells you
 
-More reviews mean a longer track record. An organizer with 3 stars and 4 reviews is newer to the platform — that is not automatically a red flag, but it is less data. An organizer with 4.7 stars and 60 reviews has run a lot of sales and shoppers consistently had good experiences.
+More reviews mean a longer track record. An organizer with 3 stars and 4 reviews is newer to the platform. That is not automatically a red flag, but it is less data. An organizer with 4.7 stars and 60 reviews has run a lot of sales and shoppers consistently had good experiences.
 
 Look at recency too. A cluster of recent reviews matters more than a high average built on reviews from two years ago.
 
 ## What the badges mean
 
-**Verified Organizer** — the organizer has connected a payout account and completed at least one sale on FindA.Sale. Basic identity confirmed.
+**Verified Organizer**: the organizer has connected a payout account and completed at least one sale on FindA.Sale. Basic identity confirmed.
 
-**Founding Organizer** — an early adopter who has been running sales on the platform since the early days. Not a quality rating, just tenure.
+**Founding Organizer**: an early adopter who has been running sales on the platform since the early days. Not a quality rating, just tenure.
 
 Badges do not replace the star rating. Read both.
 
@@ -36,7 +36,7 @@ Before you make the trip, check three things:
 
 1. **Completed sales count.** A higher number means more experience running sales through the platform.
 2. **Review recency.** Scroll past the average and look at the most recent 3–5 reviews. If the most recent reviews are positive, that is a good sign.
-3. **Organizer responses.** Some organizers reply to reviews — good or bad. A thoughtful response to a negative review tells you more about how they operate than the review itself does.
+3. **Organizer responses.** Some organizers reply to reviews, good or bad. A thoughtful response to a negative review tells you more about how they operate than the review itself does.
 
 ## What organizers can and cannot do with their rating
 
@@ -46,7 +46,7 @@ This means the rating you see is the real one.
 
 ## What to do if you had a bad experience
 
-Leave an honest review. Describe what happened — item condition, pickup process, communication. Your review helps other shoppers decide whether to make the trip. It also gives the organizer a chance to respond and, if they are serious about their reputation, to do better next time.
+Leave an honest review. Describe what happened: item condition, pickup process, communication. Your review helps other shoppers decide whether to make the trip. It also gives the organizer a chance to respond and, if they are serious about their reputation, to do better next time.
 
 If the issue involves a disputed item or a refund, see [How disputes and refunds work](/guides/disputes-and-refunds).
 

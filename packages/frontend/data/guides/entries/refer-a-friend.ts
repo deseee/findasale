@@ -14,7 +14,7 @@ const entry: GuideEntry = {
 
 ## How it works
 
-**Get your link.** Go to [/shopper/referrals](/shopper/referrals). Your personal referral link is at the top. Copy it and share it however you want — text, social media, wherever.
+**Get your link.** Go to [/shopper/referrals](/shopper/referrals). Your personal referral link is at the top. Copy it and share it however you want: text, social media, wherever.
 
 **Your friend signs up.** When they click your link and create an account, they are connected to you.
 
@@ -28,7 +28,7 @@ Your [referrals dashboard](/shopper/referrals) shows everyone you have referred,
 
 ## Current reward amounts
 
-Reward amounts update periodically. The current amounts are always shown on your [referrals page](/shopper/referrals) — that page is the source of truth, not this guide.
+Reward amounts update periodically. The current amounts are always shown on your [referrals page](/shopper/referrals); that page is the source of truth, not this guide.
 
 ---
 

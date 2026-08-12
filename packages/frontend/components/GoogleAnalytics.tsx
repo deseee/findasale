@@ -33,7 +33,7 @@ export default function GoogleAnalytics() {
             window.gtag = gtag;
             gtag('js', new Date());
 
-            // Default to denied — only upgrade after explicit user consent
+            // Default to denied: only upgrade after explicit user consent
             gtag('consent', 'default', {
               analytics_storage: 'denied',
               ad_storage: 'denied',
@@ -54,7 +54,7 @@ export default function GoogleAnalytics() {
           `,
         }}
       />
-      {/* Consent bridge — listens for the banner accept/decline and updates gtag */}
+      {/* Consent bridge: listens for the banner accept/decline and updates gtag */}
       <ConsentBridge />
     </>
   );

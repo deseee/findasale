@@ -1,5 +1,5 @@
 /**
- * PosPaymentQr — Payment QR Code Component
+ * PosPaymentQr: Payment QR Code Component
  *
  * Displays payment QR code for shopper self-checkout.
  * States: idle (generate button), generating (spinner), waiting (QR displayed), paid (confirmation)
@@ -140,7 +140,7 @@ export default function PosPaymentQr({
                 {copied ? '✓ Copied!' : 'Copy Link'}
               </button>
             </div>
-            {/* Email Link button — shown when buyer email is known */}
+            {/* Email Link button: shown when buyer email is known */}
             {buyerEmail && paymentLinkUrl && onEmailLink && (
               <button
                 onClick={handleEmailLink}

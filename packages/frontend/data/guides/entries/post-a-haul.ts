@@ -8,7 +8,7 @@ const entry: GuideEntry = {
   priority: 1,
   relatedGuides: ['crews', 'leaderboard-and-league', 'treasure-trails-shopper'],
   videoUrl: undefined,
-  body: `A haul post is a public photo and caption showing items you bought at a sale. It takes under a minute to post, shows up on the organizer's sale page and your shopper profile, and helps other shoppers see what kinds of finds a sale typically offers. You earn XP every time you post one — check [/shopper/guild-primer](/shopper/guild-primer) for the current amount.
+  body: `A haul post is a public photo and caption showing items you bought at a sale. It takes under a minute to post, shows up on the organizer's sale page and your shopper profile, and helps other shoppers see what kinds of finds a sale typically offers. You earn XP every time you post one: check [/shopper/guild-primer](/shopper/guild-primer) for the current amount.
 
 ---
 
@@ -16,13 +16,13 @@ const entry: GuideEntry = {
 
 A haul post is a short show-and-tell: one or more photos of what you bought, plus a caption. That's it.
 
-It's not a review of the organizer. It's not a complaint board. It's a look at what you walked out with — a Fiesta ware set, a cast iron skillet, a rack of vintage denim. Other shoppers can browse haul posts to get a feel for what a sale carries before they drive over.
+It's not a review of the organizer. It's not a complaint board. It's a look at what you walked out with: a Fiesta ware set, a cast iron skillet, a rack of vintage denim. Other shoppers can browse haul posts to get a feel for what a sale carries before they drive over.
 
 Haul posts are visible in three places:
 
-- **Your shopper profile** — anyone who looks you up can see your haul history.
-- **The organizer's sale page** — haul posts from all shoppers are collected under that sale.
-- **The community feed** — recent haul posts from all shoppers surface here, sorted by date.
+- **Your shopper profile**: anyone who looks you up can see your haul history.
+- **The organizer's sale page**: haul posts from all shoppers are collected under that sale.
+- **The community feed**: recent haul posts from all shoppers surface here, sorted by date.
 
 Organizers can share your haul post to their own social media (with your attribution). It helps them, and it gets your finds in front of more people.
 
@@ -35,7 +35,7 @@ Organizers can share your haul post to their own social media (with your attribu
 1. Complete a purchase or check out at a sale.
 2. On the confirmation screen, tap **Post a Haul**.
 3. Upload a photo from your camera roll or take one on the spot.
-4. Write a short caption. Include what the item is and what you paid. Example: *"Fiesta ware set — $12. Couldn't leave it."*
+4. Write a short caption. Include what the item is and what you paid. Example: *"Fiesta ware set: $12. Couldn't leave it."*
 5. Tap **Post**. Done.
 
 This is the fastest path. The sale is already linked, so you skip the selection step.
@@ -60,7 +60,7 @@ You can post up to one haul per sale visit. If you bought from multiple sales th
 You don't need a studio setup. You do need a clear photo and a real caption.
 
 **Photo tips:**
-- Lay items flat on a neutral surface — a wood floor or a plain table works.
+- Lay items flat on a neutral surface: a wood floor or a plain table works.
 - Natural light beats overhead indoor lighting.
 - If you're posting multiple items, arrange them so each one is visible.
 - One sharp photo beats three blurry ones.
@@ -69,7 +69,7 @@ You don't need a studio setup. You do need a clear photo and a real caption.
 - Name the item. "Pottery" tells no one anything. "McCoy cookie jar" tells everyone something.
 - Mention what you paid. This is the detail other shoppers care most about.
 - Keep it short. One or two sentences is plenty.
-- Skip the hashtags — they don't do anything on FindA.Sale.
+- Skip the hashtags: they don't do anything on FindA.Sale.
 
 **Good example:** *"Mid-century teak credenza, $45 from the Riverside estate sale. It needed a cleaning but the legs are solid."*
 
@@ -94,13 +94,13 @@ When you post, you're doing three things at once:
 ## Common questions
 
 **Can I post a haul without making a purchase?**
-No. Haul posts are tied to a sale you attended and made a purchase at. This keeps the feed honest — it's about real finds at real sales.
+No. Haul posts are tied to a sale you attended and made a purchase at. This keeps the feed honest: it's about real finds at real sales.
 
 **Can I edit or delete a haul post after I publish it?**
 Yes. Go to [/shopper/haul-posts](/shopper/haul-posts), find the post, and tap the three-dot menu. You can edit the caption or photo, or delete the post entirely. Deleting a post removes the XP you earned for it.
 
 **Does the organizer have to approve my haul post?**
-No. Your post goes live immediately. Organizers can flag a post if it's inaccurate or violates the terms — but that's rare. You control what you post.
+No. Your post goes live immediately. Organizers can flag a post if it's inaccurate or violates the terms, but that's rare. You control what you post.
 
 **Can I tag other shoppers in a haul post?**
 Not at this time. You can mention items you found together with your Crew in the caption, but there's no formal tagging system yet.
@@ -109,15 +109,15 @@ Not at this time. You can mention items you found together with your Crew in the
 Other shoppers can flag a haul post as inaccurate. Repeated inaccurate posts can affect your shopper standing. Keep it real.
 
 **Does the haul post link back to the item listing?**
-Only if the item is still listed in the sale. Once a sale closes and items are marked sold, the link may not be active — but the post stays on your profile.
+Only if the item is still listed in the sale. Once a sale closes and items are marked sold, the link may not be active, but the post stays on your profile.
 
 ---
 
 ## Related guides
 
-- [Create or join a Crew](crews) — share haul posts with your shopping group before posting to the community.
-- [The leaderboard and monthly league](leaderboard-and-league) — see how haul posts contribute to your monthly XP total.
-- [Walk a Treasure Trail](treasure-trails-shopper) — plan a multi-sale route and document your finds from each stop.
+- [Create or join a Crew](crews): share haul posts with your shopping group before posting to the community.
+- [The leaderboard and monthly league](leaderboard-and-league): see how haul posts contribute to your monthly XP total.
+- [Walk a Treasure Trail](treasure-trails-shopper): plan a multi-sale route and document your finds from each stop.
 
 ---
 
@@ -137,7 +137,7 @@ VO: "You just picked something up at a sale. Before you leave the confirmation s
 [0:05–0:15]
 *Screen: camera/upload prompt appears. User selects a photo from camera roll. Photo appears in the post composer.*
 
-VO: "Upload a photo — one clear shot of what you found. Natural light helps."
+VO: "Upload a photo: one clear shot of what you found. Natural light helps."
 
 ---
 

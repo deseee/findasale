@@ -1,5 +1,5 @@
 /**
- * /organizer/pos — Stripe Terminal POS v2
+ * /organizer/pos: Stripe Terminal POS v2
  *
  * In-person payment screen with multi-item cart, quick-add buttons, cash payments, and numpad.
  * Reader: BBPOS WisePOS E / S700 (WiFi, internet discovery mode)
@@ -268,7 +268,7 @@ export default function POSPage() {
   const [loadedHold, setLoadedHold] = useState<HoldItem | null>(null);
   const [holdsRefreshInterval, setHoldsRefreshInterval] = useState<NodeJS.Timeout | null>(null);
   const [cancellingSalesId, setCancellingSalesId] = useState<string | null>(null);
-  // Cart share request — tracks whether organizer has requested the shopper share their cart
+  // Cart share request: tracks whether organizer has requested the shopper share their cart
   const [cartShareRequesting, setCartShareRequesting] = useState(false);
   const [cartShareSent, setCartShareSent] = useState(false);
 
@@ -413,7 +413,7 @@ export default function POSPage() {
     },
     enabled: !!user, // S1183 Fix 1: backend (resolveOrganizerOrTeamMember) is the real gate now
     refetchInterval: (query) => {
-      // Socket handles real-time updates — poll only as a fallback every 5s
+      // Socket handles real-time updates: poll only as a fallback every 5s
       const d = (query as any).state?.data as PendingPayment[] | undefined;
       return d && d.length > 0 ? 5000 : false;
     },
@@ -426,8 +426,8 @@ export default function POSPage() {
       const prev = prevActivePendingRef.current;
 
       // Polling-based flash fallback: detect when a PENDING/ACCEPTED payment disappears from the list.
-      // Skip payments the cashier explicitly cancelled — those are NOT paid.
-      // Verify actual status before showing the banner — disappearance could mean DECLINED, not PAID.
+      // Skip payments the cashier explicitly cancelled: those are NOT paid.
+      // Verify actual status before showing the banner: disappearance could mean DECLINED, not PAID.
       if (prev.length > 0 && activePendingPayments.length < prev.length) {
         const disappeared = prev.filter(p =>
           !activePendingPayments.find(c => c.id === p.id) &&
@@ -450,7 +450,7 @@ export default function POSPage() {
                 setSuccessMessage('');
                 setPaymentStatus('idle');
               }
-              // DECLINED or other terminal states: do nothing — no banner, no cart clear
+              // DECLINED or other terminal states: do nothing: no banner, no cart clear
             })
             .catch(() => {
               // If status check fails, don't show banner (safe default)
@@ -861,7 +861,7 @@ export default function POSPage() {
       oscillator.start(ctx.currentTime);
       oscillator.stop(ctx.currentTime + 0.4);
     } catch (e) {
-      // Audio not available — fail silently
+      // Audio not available: fail silently
     }
   }, []);
 
@@ -878,7 +878,7 @@ export default function POSPage() {
     let socketInstance: any = null;
 
     // Match the fallback URL pattern used by useLiveFeed.ts and usePOSPaymentRequest.ts
-    // NEXT_PUBLIC_API_URL is like https://backend.railway.app/api — strip /api suffix for socket base
+    // NEXT_PUBLIC_API_URL is like https://backend.railway.app/api: strip /api suffix for socket base
     const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL ||
       (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001').replace(/\/api\/?$/, '');
     const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
@@ -887,7 +887,7 @@ export default function POSPage() {
     import('socket.io-client').then(({ io }) => {
       if (!isMounted) return;
 
-      // S708: accessToken is in an httpOnly cookie — withCredentials carries it on handshake
+      // S708: accessToken is in an httpOnly cookie: withCredentials carries it on handshake
       socketInstance = io(socketUrl, {
         auth: token ? { token } : {},
         withCredentials: true,
@@ -907,7 +907,7 @@ export default function POSPage() {
         if (status === 'PAID') {
           // Use ref to get latest pending payments without stale closure
           const payment = pendingPaymentsRef.current.find(p => p.id === requestId);
-          // Show banner regardless — fall back to event data if payment not yet in list
+          // Show banner regardless: fall back to event data if payment not yet in list
           setPaidBanner({
             shopperName: payment?.shopperName || 'Shopper',
             displayAmount: payment?.displayAmount || (event.totalAmountCents ? `$${(event.totalAmountCents / 100).toFixed(2)}` : ''),
@@ -944,7 +944,7 @@ export default function POSPage() {
 
       socketInstance.on('POS_PAYMENT_STATUS', handlePaymentStatus);
 
-      // Feature #408: Scan & Split — listen for simultaneous QR scans on the same item
+      // Feature #408: Scan & Split: listen for simultaneous QR scans on the same item
       socketInstance.on('SCAN_AND_SPLIT', (event: { itemId: string; scannerIds: string[]; scannedAt: number }) => {
         if (!isMounted) return;
         // Auto-open the split-bill panel with the scanned item in context
@@ -1584,7 +1584,7 @@ export default function POSPage() {
     }));
 
     // #561 offline POS transaction queuing: queue the cash sale instead of hard-failing
-    // when there's no connectivity. Card (Stripe Terminal) swipes stay online-only —
+    // when there's no connectivity. Card (Stripe Terminal) swipes stay online-only:
     // this only applies to the cash flow, which needs no live processor.
     const queueOffline = async () => {
       const { recordOfflineCashCheckout } = await import('../../lib/offlineSync');
@@ -1601,7 +1601,7 @@ export default function POSPage() {
       clearCart();
     };
 
-    // Already known offline — skip the network round-trip entirely and queue immediately.
+    // Already known offline: skip the network round-trip entirely and queue immediately.
     if (typeof navigator !== 'undefined' && navigator.onLine === false) {
       try {
         await queueOffline();
@@ -1632,7 +1632,7 @@ export default function POSPage() {
       clearCart();
     } catch (err: any) {
       // No response reached the server → connectivity failure, queue for offline retry.
-      // A server-returned error (4xx/5xx) means the request WAS received and rejected —
+      // A server-returned error (4xx/5xx) means the request WAS received and rejected:
       // that's a real failure (e.g. item already sold), not a connectivity issue, so it
       // must still surface to the organizer rather than silently queue.
       if (!err?.response) {
@@ -1651,7 +1651,7 @@ export default function POSPage() {
     }
   };
 
-  // Venmo / Zelle — organizer collects full amount peer-to-peer outside app.
+  // Venmo / Zelle: organizer collects full amount peer-to-peer outside app.
   // Platform fee is captured via Stripe deduction from organizer's payout.
   const handlePeerToPeerPayment = async (method: 'venmo' | 'zelle') => {
     if (!cart.length || !selectedSaleId) return;
@@ -1766,7 +1766,7 @@ export default function POSPage() {
     const tapX = (e.clientX - rect.left) * scaleX;
     const tapY = (e.clientY - rect.top) * scaleY;
 
-    // Crop a 35%-wide square around the tap — large enough to capture the QR,
+    // Crop a 35%-wide square around the tap: large enough to capture the QR,
     // small enough to exclude neighbouring QR codes on the sheet
     const cropSize = video.videoWidth * 0.35;
     const cropX = Math.max(0, tapX - cropSize / 2);
@@ -2010,12 +2010,12 @@ export default function POSPage() {
         // _t busts Railway/browser cache that causes 304 with stale empty data
         const sessionRes = await api.get<{ sessions: LinkedCart[] }>(`/pos/sessions?saleId=${selectedSaleId}&_t=${Date.now()}`);
         const freshSessions = sessionRes.data.sessions || [];
-        // Match by shopperId OR email — covers guest/account edge cases
+        // Match by shopperId OR email: covers guest/account edge cases
         const shopperCart = freshSessions.find(
           lc => (hold.shopperId && lc.shopperId === hold.shopperId) || lc.shopperEmail === hold.shopperEmail
         );
         if (shopperCart && shopperCart.cartItems.length > 0) {
-          // Use the proven pull flow — calls /pull endpoint then adds items exactly like the UI button does
+          // Use the proven pull flow: calls /pull endpoint then adds items exactly like the UI button does
           await handleAddLinkedCart(shopperCart.id, shopperCart.cartItems, shopperCart.shopperId, shopperCart.shopperEmail);
           mergedCount += shopperCart.cartItems.length;
         } else if (freshSessions.length === 0) {
@@ -2030,7 +2030,7 @@ export default function POSPage() {
     }
 
     if (otherHolds.length > 0 && mergedCount === otherHolds.length) {
-      // Only other holds merged (no linked cart) — show count
+      // Only other holds merged (no linked cart): show count
       showToast(`Loaded hold + ${mergedCount} item${mergedCount !== 1 ? 's' : ''} for ${hold.shopperName}`, 'success');
     } else if (mergedCount === 0) {
       showToast(`Loaded hold for ${hold.shopperName}`, 'success');
@@ -2046,7 +2046,7 @@ export default function POSPage() {
       await api.post(`/pos/holds/${hold.reservationId}/request-cart`);
       setCartShareSent(true);
       showToast(`Cart request sent to ${hold.shopperName}'s phone`, 'success');
-      // Poll for cart after a short delay — shopper's device may auto-share
+      // Poll for cart after a short delay: shopper's device may auto-share
       setTimeout(async () => {
         if (!selectedSaleId) return;
         try {
@@ -2124,7 +2124,7 @@ export default function POSPage() {
   ) => {
     try {
       await api.post(`/pos/sessions/${sessionId}/pull`);
-      // Add items to cart — pass catalog item id so itemIds are captured in payment requests
+      // Add items to cart: pass catalog item id so itemIds are captured in payment requests
       cartItems.forEach(item => {
         if (item.id) {
           addToCart({ id: item.id, title: item.title, price: item.price, status: 'AVAILABLE', photoUrls: item.photoUrl ? [item.photoUrl] : [], sku: null } as Item);
@@ -3097,7 +3097,7 @@ export default function POSPage() {
               <span className="text-xl">📧</span>
               <span className="text-xs">Invoice</span>
             </button>
-            {/* Venmo — peer-to-peer, organizer collects outside app, platform fee via Stripe */}
+            {/* Venmo: peer-to-peer, organizer collects outside app, platform fee via Stripe */}
             <button
               onClick={() => setPaymentMode('venmo')}
               className={`py-4 rounded-xl font-semibold transition flex flex-col items-center gap-1 ${
@@ -3109,7 +3109,7 @@ export default function POSPage() {
               <span className="text-xl">💜</span>
               <span className="text-xs">Venmo</span>
             </button>
-            {/* Zelle — peer-to-peer, organizer collects outside app, platform fee via Stripe */}
+            {/* Zelle: peer-to-peer, organizer collects outside app, platform fee via Stripe */}
             <button
               onClick={() => setPaymentMode('zelle')}
               className={`py-4 rounded-xl font-semibold transition flex flex-col items-center gap-1 ${
@@ -3121,7 +3121,7 @@ export default function POSPage() {
               <span className="text-xl">⚡</span>
               <span className="text-xs">Zelle</span>
             </button>
-            {/* Send to Phone — visible only when a shopper is linked via QR or cart pull */}
+            {/* Send to Phone: visible only when a shopper is linked via QR or cart pull */}
             {(linkedShopperId || linkedShopperData?.id) && (
               <button
                 onClick={handleSendToPhone}
@@ -3375,7 +3375,7 @@ export default function POSPage() {
               >
                 📧 Send Invoice to {loadedHold.shopperEmail}
               </button>
-              {/* Request Cart — sends push to shopper's device to auto-share their cart */}
+              {/* Request Cart: sends push to shopper's device to auto-share their cart */}
               {!cartShareSent ? (
                 <button
                   onClick={() => { setCartShareSent(false); handleRequestCartShare(loadedHold); }}

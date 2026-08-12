@@ -1,5 +1,5 @@
 /**
- * BroadcastComposer — Brief E · Broadcast Composer
+ * BroadcastComposer: Brief E · Broadcast Composer
  *
  * Two-panel desktop composer (compose left, live preview right).
  * Mobile: single column with Compose / Preview tab toggle.
@@ -172,7 +172,7 @@ const EmailPreview = ({
           <Icon name="star" size={14} />
         </div>
 
-        {/* Email body — always parchment per design */}
+        {/* Email body: always parchment per design */}
         <div className="bg-[#F4EFE7] text-[#1A1814] px-8 py-6">
           <h3
             className="font-display text-xl font-semibold leading-tight"
@@ -449,7 +449,7 @@ const UpgradeGate = ({ followerCount }: { followerCount: number }) => (
 // ---------- Main BroadcastComposer ----------
 
 export interface BroadcastComposerProps {
-  /** Organizer's subscription tier — 'SIMPLE' | 'PRO' | 'TEAMS' */
+  /** Organizer's subscription tier: 'SIMPLE' | 'PRO' | 'TEAMS' */
   tier?: string;
   /** Number of followers this organizer has */
   followerCount?: number;
@@ -459,7 +459,7 @@ export interface BroadcastComposerProps {
   publishedSales?: PublishedSale[];
   /** Timestamp of the last sent broadcast (ISO string) */
   lastSentAt?: string | null;
-  /** Called after a successful send — parent should refresh broadcasts list */
+  /** Called after a successful send: parent should refresh broadcasts list */
   onSent?: (recipientCount: number) => void;
   /** Called when user clicks "Back" / close */
   onClose?: () => void;
@@ -497,7 +497,7 @@ const BroadcastComposer: React.FC<BroadcastComposerProps> = ({
   const [showSaleDropdown, setShowSaleDropdown] = useState(false);
   const [showLinkInput, setShowLinkInput] = useState(false);
 
-  // Debounced preview — updates 300ms after user stops typing
+  // Debounced preview: updates 300ms after user stops typing
   const [previewSubject, setPreviewSubject] = useState('');
   const [previewBody, setPreviewBody] = useState('');
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);

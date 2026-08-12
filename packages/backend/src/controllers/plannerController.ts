@@ -61,21 +61,21 @@ export async function handlePlannerChat(req: Request, res: Response): Promise<vo
     // Validate API key
     if (!ANTHROPIC_API_KEY) {
       console.error('ANTHROPIC_API_KEY not configured');
-      res.status(503).json({ message: 'AI service unavailable. Please try again later.' });
+      res.status(503).json({ message: 'Assistant unavailable. Please try again later.' });
       return;
     }
 
     // Feature #104: Check AI cost ceiling
     if (await isAICostCeilingExceeded()) {
       console.warn('[planner-chat] AI cost ceiling exceeded');
-      res.status(503).json({ message: 'AI service temporarily unavailable due to resource limits. Please try again later.' });
+      res.status(503).json({ message: 'Assistant temporarily unavailable due to demand. Please try again shortly.' });
       return;
     }
 
     // Fix B: absolute daily AI call-count cap
     if (!(await isAIDailyCallCapAvailable())) {
       console.warn('[planner-chat] AI daily call cap reached (AI_DAILY_CALL_CAP)');
-      res.status(503).json({ message: 'AI service temporarily unavailable due to resource limits. Please try again later.' });
+      res.status(503).json({ message: 'Assistant temporarily unavailable due to demand. Please try again shortly.' });
       return;
     }
 
@@ -111,7 +111,7 @@ export async function handlePlannerChat(req: Request, res: Response): Promise<vo
     await trackAICall();
 
     if (!reply) {
-      res.status(500).json({ message: 'No response from AI service' });
+      res.status(500).json({ message: 'No response from the planning assistant' });
       return;
     }
 
@@ -127,11 +127,11 @@ export async function handlePlannerChat(req: Request, res: Response): Promise<vo
 
     if (axios.isAxiosError(error)) {
       if (error.response?.status === 401) {
-        res.status(503).json({ message: 'AI service authentication failed' });
+        res.status(503).json({ message: 'Planning assistant authentication failed' });
         return;
       }
       if (error.response?.status === 429) {
-        res.status(429).json({ message: 'AI service rate limit exceeded. Please try again shortly.' });
+        res.status(429).json({ message: 'Too many requests. Please try again shortly.' });
         return;
       }
     }

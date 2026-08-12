@@ -546,7 +546,7 @@ router.get('/me', authenticate, checkTierLapse, async (req: AuthRequest, res: Re
       if (avgRating < 4.5) parts.push('a 4.5+ average rating');
       progressMessage = parts.length > 0
         ? `Need ${parts.join(', ')} to reach Estate Curator.`
-        : 'You qualify for Estate Curator — tier recalculation runs weekly.';
+        : 'You qualify for Estate Curator. Tier recalculation runs weekly.';
     } else {
       progressMessage = "You've reached the highest tier!";
     }

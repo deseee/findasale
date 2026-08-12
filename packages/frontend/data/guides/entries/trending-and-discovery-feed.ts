@@ -16,7 +16,7 @@ Not sure what you're looking for today? These three features are built for brows
 
 ## Trending items
 
-The trending section on the homepage shows items with recent activity — saves, views, and holds across all active sales near you.
+The trending section on the homepage shows items with recent activity: saves, views, and holds across all active sales near you.
 
 When an item is trending, people are paying attention to it. That usually means the price is right, the condition is good, or it's just unusual enough that people keep tapping it.
 
@@ -48,7 +48,7 @@ Good for: "I need a dresser" or "I'm buying all the vintage cookware I can carry
 
 ## The inspiration feed on the homepage
 
-The homepage feed shows items based on what you've been saving and searching. If you've been saving mid-century furniture and searching for vinyl records, the feed will surface more of that — without you having to search again.
+The homepage feed shows items based on what you've been saving and searching. If you've been saving mid-century furniture and searching for vinyl records, the feed will surface more of that, without you having to search again.
 
 It's personalized based on your save history and past search activity. Browse, heart what you like, and the feed gets sharper over time.
 
@@ -58,20 +58,20 @@ No two shoppers see the same homepage. A shopper who saves kitchen items sees ki
 
 ## When to use each
 
-**Trending** — You want to see what's popular right now. You trust that if other people are looking at something, it's worth a second look.
+**Trending**: you want to see what's popular right now. You trust that if other people are looking at something, it's worth a second look.
 
-**Surprise Me** — You have time to kill. You want to find something you wouldn't have searched for. You like spontaneous shopping.
+**Surprise Me**: you have time to kill. You want to find something you wouldn't have searched for. You like spontaneous shopping.
 
-**Categories** — You have a specific type of item in mind but not a specific sale. You want to shop the category across all nearby sales at once.
+**Categories**: you have a specific type of item in mind but not a specific sale. You want to shop the category across all nearby sales at once.
 
-**Inspiration feed** — You want to scroll based on your own taste. You've been using the app for a while and want the homepage to reflect what you care about.
+**Inspiration feed**: you want to scroll based on your own taste. You've been using the app for a while and want the homepage to reflect what you care about.
 
 ---
 
 ## Common questions
 
 **Q: Can I adjust what shows up in my inspiration feed?**
-Browse, save items, and search — those signals shape the feed. The more you use the app, the more relevant it gets. You can reset it by clearing your save history in Settings > Privacy.
+Browse, save items, and search: those signals shape the feed. The more you use the app, the more relevant it gets. You can reset it by clearing your save history in Settings > Privacy.
 
 **Q: Does Surprise Me repeat sales?**
 Sometimes. If you've tapped through everything in your area, it may cycle back. Expand your distance filter or try a different day when more sales are active.

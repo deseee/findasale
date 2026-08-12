@@ -485,7 +485,7 @@ const ConsignorsPage: React.FC = () => {
                   <option value="RELIST">Relist next sale</option>
                 </select>
                 <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">
-                  Sets expectations with this consignor up front. This is a reminder for you —
+                  Sets expectations with this consignor up front. This is a reminder for you:
                   it doesn't move or change anything automatically.
                 </p>
               </div>

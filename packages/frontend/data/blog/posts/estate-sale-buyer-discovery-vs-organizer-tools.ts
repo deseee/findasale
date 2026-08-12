@@ -3,14 +3,14 @@ import { BlogPost } from '../index';
 export const postG: BlogPost = {
   slug: 'estate-sale-buyer-discovery-vs-organizer-tools',
   title: 'Great Sale Software Won\'t Fill Your Sale. This Will.',
-  metaDescription: 'Five estate sale platforms now offer AI tagging, Stripe payments, and mobile POS. Feature parity is real. The gap nobody\'s talking about: organizer tools help you run the sale. They don\'t bring buyers to it.',
+  metaDescription: 'Five estate sale platforms now offer smart tagging, Stripe payments, and mobile POS. Feature parity is real. The gap nobody\'s talking about: organizer tools help you run the sale. They don\'t bring buyers to it.',
   publishDate: '2026-07-02',
   category: 'guides',
   readingTimeMinutes: 5,
-  excerpt: 'The operational tools have gotten genuinely good. AI tagging works, Tap to Pay works, Stripe checkout works. Here\'s what none of those platforms are built to do: get buyers into your sale.',
+  excerpt: 'The operational tools have gotten genuinely good. Smart tagging works, Tap to Pay works, Stripe checkout works. Here\'s what none of those platforms are built to do: get buyers into your sale.',
   body: `If you're evaluating estate sale software right now, here's the honest state of the market: the operational tools have gotten genuinely good.
 
-AI tagging works. Tap to Pay works. Mobile inventory works. Stripe-based checkout works. Multiple platforms offer all of these, some at $190 a month or more, some at lower price points, some with a free tier. If you've been running sales the old way and want to modernize your workflow, there are real options out there.
+Smart tagging works. Tap to Pay works. Mobile inventory works. Stripe-based checkout works. Multiple platforms offer all of these, some at $190 a month or more, some at lower price points, some with a free tier. If you've been running sales the old way and want to modernize your workflow, there are real options out there.
 
 Here's what none of those platforms are built to do: get buyers into your sale.
 
@@ -24,7 +24,7 @@ Discovery-first means something different in practice. It starts with search: yo
 
 Each of those touchpoints builds on the last. An organizer running 20 sales a year on a platform where buyers can follow them isn't starting from zero every time. They're building an audience with every listing. The buyer who came to last month's sale and followed the organizer gets a notification the moment the next one goes live. That's not ad spend. That's a network effect built into the workflow itself.
 
-The compounding effect is what matters most here. No operational tool, not an AI tagger, not a Stripe integration, not an inventory manager, builds you an audience. Those tools help you run a better sale for buyers who already decided to come. A discovery-first platform builds the pipeline so the buyers who haven't found you yet eventually become part of your regular attendance.
+The compounding effect is what matters most here. No operational tool, not a smart tagger, not a Stripe integration, not an inventory manager, builds you an audience. Those tools help you run a better sale for buyers who already decided to come. A discovery-first platform builds the pipeline so the buyers who haven't found you yet eventually become part of your regular attendance.
 
 The operational tools still matter. You need reliable photo upload, integrated checkout, and a clean sale setup process. None of that is optional anymore; buyers expect a professional experience, and the tools to deliver it exist. But those tools are infrastructure. They don't create demand on their own.
 

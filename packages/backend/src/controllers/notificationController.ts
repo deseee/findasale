@@ -257,7 +257,7 @@ const buildDigestHtml = (userName: string, sales: any[], frontendUrl: string, un
     <!-- Greeting -->
     <p style="color:#374151;font-size:15px;margin-bottom:20px;">
       Hi ${firstNameOf(userName)},<br><br>
-      Here are the sales happening this weekend${nearYou ? ' near you' : ''} — estate sales, yard sales, auctions, flea markets, and more. Don't miss out!
+      Here are the sales happening this weekend${nearYou ? ' near you' : ''}: estate sales, yard sales, auctions, flea markets, and more. Don't miss out!
     </p>
 
     <!-- Sale cards -->

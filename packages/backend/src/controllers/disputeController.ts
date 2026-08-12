@@ -277,7 +277,7 @@ export const updateDisputeStatus = async (req: AuthRequest, res: Response) => {
       const purchase = await prisma.purchase.findUnique({ where: { id: existingDispute.orderId } });
       if (!purchase) {
         return res.status(400).json({
-          message: "This dispute's orderId does not correspond to a real purchase — cannot process refund, needs manual investigation.",
+          message: "This dispute's orderId does not correspond to a real purchase. Cannot process refund; needs manual investigation.",
         });
       }
       if (
@@ -286,7 +286,7 @@ export const updateDisputeStatus = async (req: AuthRequest, res: Response) => {
         (purchase.itemId && purchase.itemId !== existingDispute.itemId)
       ) {
         return res.status(400).json({
-          message: "This dispute's orderId does not match the dispute's buyer/sale/item — refusing to refund, needs manual investigation.",
+          message: "This dispute's orderId does not match the dispute's buyer/sale/item. Refusing to refund; needs manual investigation.",
         });
       }
 

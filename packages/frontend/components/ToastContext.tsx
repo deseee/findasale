@@ -1,5 +1,5 @@
 /**
- * ToastContext — Global toast notifications for FindA.Sale
+ * ToastContext: Global toast notifications for FindA.Sale
  *
  * A lightweight context + provider for showing transient alerts throughout the app.
  * Usage:
@@ -10,7 +10,7 @@
 
 import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
 
-// Phase 27: added 'points' type — renders in amber at bottom-right above BottomTabNav
+// Phase 27: added 'points' type (renders in amber at bottom-right above BottomTabNav)
 export type ToastType = 'success' | 'error' | 'info' | 'warning' | 'points';
 
 interface Toast {
@@ -57,7 +57,7 @@ export const ToastProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     <ToastContext.Provider value={{ showToast }}>
       {children}
 
-      {/* Standard toasts — top-right, cleared above header */}
+      {/* Standard toasts: top-right, cleared above header */}
       <div className="fixed top-14 md:top-20 right-4 z-50 space-y-2">
         {standardToasts.map((toast) => (
           <div
@@ -76,7 +76,7 @@ export const ToastProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         ))}
       </div>
 
-      {/* Points toasts — bottom-right, above BottomTabNav */}
+      {/* Points toasts: bottom-right, above BottomTabNav */}
       <div className="fixed bottom-20 right-4 z-50 space-y-2">
         {pointsToasts.map((toast) => (
           <div

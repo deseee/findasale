@@ -32,7 +32,7 @@ export const createFlashDeal = async (req: AuthRequest, res: Response) => {
 
     // Feature #300: Flash deals require item to be in an active sale
     if (!item.saleId) {
-      return res.status(400).json({ message: 'Item is not in a sale — cannot create flash deal' });
+      return res.status(400).json({ message: 'Item is not in a sale. Cannot create flash deal.' });
     }
 
     // Verify organizer owns this sale
@@ -84,7 +84,7 @@ export const createFlashDeal = async (req: AuthRequest, res: Response) => {
             sub.user!.id,
             'flash_deal',
             '⚡ Flash Deal',
-            `${validated.discountPct}% off ${item.title} — limited time!`,
+            `${validated.discountPct}% off ${item.title}. Limited time!`,
             `/sales/${item.saleId}`,
             'OPERATIONAL'
           ).catch((err: unknown) => console.error('[notification] Failed to create flash deal notification:', err))

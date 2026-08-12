@@ -108,7 +108,7 @@ export const notifySaleWaitlist = async (req: AuthRequest, res: Response) => {
 <tr><td style="padding:28px 32px;">
 <p style="font-size:15px;color:#374151;margin:0 0 16px;">Hi ${entry.user.name},</p>
 <p style="font-size:15px;color:#374151;margin:0 0 24px;">
-You're on the waitlist for <strong>${sale.title}</strong> — new items have just been added.
+You're on the waitlist for <strong>${sale.title}</strong>. New items have just been added.
 Browse before they sell out!
 </p>
 <div style="text-align:center;margin-top:24px;">

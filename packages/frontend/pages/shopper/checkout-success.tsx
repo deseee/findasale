@@ -225,7 +225,7 @@ const CheckoutSuccessPage = () => {
             </div>
           )}
 
-          {/* Pickup Scheduling — only shown when buyer is NOT physically at the sale */}
+          {/* Pickup Scheduling: only shown when buyer is NOT physically at the sale */}
           {sale?.id && isAtSale === false && (
             <div className="mb-8">
               <PickupBookingCard saleId={sale.id} />
@@ -363,12 +363,12 @@ const CheckoutSuccessPage = () => {
             </Link>
           </div>
 
-          {/* Warm closing message — ADR-025 / legal-direct-charges-migration-2026-08-09.md
+          {/* Warm closing message: ADR-025 / legal-direct-charges-migration-2026-08-09.md
               deliverable #1: longer receipt/confirmation disclosure copy. Ships universally
               (not gated to the Direct-charges allowlist) since the organizer is the real
               seller of record under both charge models. Uses organizer.businessName (the
               field actually returned by GET /users/purchases/:id) rather than organizer.name
-              used elsewhere on this page — pre-existing field-name mismatch on this page,
+              used elsewhere on this page: pre-existing field-name mismatch on this page,
               not introduced or fixed here; flagged separately, out of scope for this change.
               Falls back to the original generic line if organizer data is ever missing. */}
           <div className="mt-10 text-center text-sm text-gray-600 dark:text-gray-400">

@@ -175,7 +175,7 @@ export function buildAcceptReply(amount: number): string {
 }
 
 export function buildDeclineReply(floorReferenceAmount: number): string {
-  return `Thanks for the offer, but I can't go that low — best I can do is $${floorReferenceAmount.toFixed(2)}.`;
+  return `Thanks for the offer, but I can't go that low. Best I can do is $${floorReferenceAmount.toFixed(2)}.`;
 }
 
 export const AVAILABLE_REPLY = 'Yes, still available!';

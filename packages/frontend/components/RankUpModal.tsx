@@ -132,7 +132,7 @@ export const RankUpModal: React.FC<RankUpModalProps> = ({ rank, onDismiss }) => 
 
           {/* Subtitle */}
           <p className="text-center text-sm text-gray-600 dark:text-gray-400 mb-6">
-            Unlock new features and abilities
+            Here's what's new at this rank
           </p>
 
           {/* Top Benefits Preview */}
@@ -157,7 +157,7 @@ export const RankUpModal: React.FC<RankUpModalProps> = ({ rank, onDismiss }) => 
           <div className="flex gap-3">
             <button
               onClick={() => {
-                // Navigate to loyalty page — route TBD by Architect
+                // Navigate to loyalty page: route TBD by Architect
                 onDismiss();
               }}
               className="flex-1 px-4 py-2 bg-sage-600 hover:bg-sage-700 dark:bg-sage-600 dark:hover:bg-sage-700 text-white rounded-lg font-medium transition-colors"

@@ -1,5 +1,5 @@
 /**
- * Smart Review Queue (Brief D — Session 5 redesign)
+ * Smart Review Queue (Brief D: Session 5 redesign)
  *
  * Organizer reviews AI-suggested fields for PENDING_REVIEW items before publishing.
  * Design tokens from fs-shared.jsx / FS_TONES light palette.
@@ -118,7 +118,7 @@ interface Item {
   packageWidthIn?: number | null;
   packageHeightIn?: number | null;
   ebayShippingOverride?: string | null;
-  // Whether the organizer has confirmed a real (non-estimated) weight — required by
+  // Whether the organizer has confirmed a real (non-estimated) weight: required by
   // validateItemForEbayPublish before a shippable item can push to eBay.
   packageConfirmedByOrganizer?: boolean | null;
   packageEstimateSource?: string | null;
@@ -173,7 +173,7 @@ function buildCloudinaryUrl(
   return url.replace('/upload/', `/upload/${transforms.join(',')}/`);
 }
 
-// Tag grouping — classify tags into display buckets for the review UI
+// Tag grouping: classify tags into display buckets for the review UI
 const TAG_GROUP_KEYWORDS: Record<string, string[]> = {
   Material: ['brass', 'cast iron', 'iron', 'oak', 'walnut', 'silver', 'gold', 'copper', 'bronze', 'glass', 'ceramic', 'porcelain', 'leather', 'wool', 'linen', 'cotton', 'chrome', 'aluminum', 'wood', 'stone', 'marble', 'velvet', 'enamel', 'tin', 'pewter'],
   Era: ['mid-century', 'victorian', 'art deco', 'art nouveau', '1940s', '1950s', '1960s', '1970s', '1980s', 'antique', 'vintage', 'retro', 'edwardian', 'georgian', 'colonial', 'craftsman'],
@@ -356,7 +356,7 @@ const ReviewPage = () => {
   }, [items, handleItemsLoaded]);
 
   // Sync dimension fields from fresh server data into already-initialized editStates.
-  // getEditState only initialises once — a voice note that saves packageWeightOz etc.
+  // getEditState only initialises once: a voice note that saves packageWeightOz etc.
   // triggers a query refetch, but the cached editState keeps stale (empty) values
   // unless we merge the new server values here.
   React.useEffect(() => {
@@ -499,7 +499,7 @@ const ReviewPage = () => {
       if (successCount > 0) {
         showToast(`${successCount} item${successCount !== 1 ? 's' : ''} pushed to eBay`, 'success');
       } else if (results.length === 0 && errorCount === 0) {
-        // API succeeded but returned no results array — treat as full success
+        // API succeeded but returned no results array: treat as full success
         showToast('Item pushed to eBay', 'success');
       }
       queryClient.invalidateQueries({ queryKey: ['items', saleId, 'review'] });
@@ -692,7 +692,7 @@ const ReviewPage = () => {
         packageWidthIn: item.packageWidthIn ?? undefined,
         packageHeightIn: item.packageHeightIn ?? undefined,
         ebayShippingOverride: item.ebayShippingOverride ?? null,
-        // eBay product identifiers — seed from DB (default to '')
+        // eBay product identifiers: seed from DB (default to '')
         brand: item.brand ?? '',
         mpn: item.mpn ?? '',
         upc: item.upc ?? '',
@@ -707,9 +707,9 @@ const ReviewPage = () => {
     const updated = { ...state, [field]: value };
     editStates.set(itemId, updated);
     setEditStates(new Map(editStates));
-    // Organizer edited the weight field itself on this page — record it so the save
+    // Organizer edited the weight field itself on this page: record it so the save
     // payloads below can send packageConfirmedByOrganizer. Never set for the other 3
-    // package fields (length/width/height) — only the weight box drives eBay's
+    // package fields (length/width/height): only the weight box drives eBay's
     // publish-block guard, matching edit-item/[id].tsx's weightTouched exactly.
     if (field === 'packageWeightOz') {
       setWeightTouched((prev) => {
@@ -722,12 +722,12 @@ const ReviewPage = () => {
 
   /**
    * "Get AI estimate" (ADR-ai-package-estimation-isolation-2026-08-05, corrected
-   * S-QA-2026-08-06) — explicit, opt-in fetch of the AI/estimate-cascade weight+dims
-   * guess for a single item. Only fills this item's editable weight/dims fields —
+   * S-QA-2026-08-06): explicit, opt-in fetch of the AI/estimate-cascade weight+dims
+   * guess for a single item. Only fills this item's editable weight/dims fields:
    * never auto-confirms. Does NOT set weightTouched itself: a click here alone (with
    * no further edit) must never cause Save to persist packageConfirmedByOrganizer.
    * The organizer must still separately edit the weight field (handleEditChange,
-   * above) before Save will confirm — mirrors edit-item/[id].tsx exactly.
+   * above) before Save will confirm: mirrors edit-item/[id].tsx exactly.
    */
   const handleGetPackageEstimate = async (item: Item) => {
     if (packageEstimateLoadingIds.has(item.id)) return;
@@ -749,7 +749,7 @@ const ReviewPage = () => {
       };
       editStates.set(item.id, updated);
       setEditStates(new Map(editStates));
-      // Do NOT setWeightTouched here — filling the fields is not confirming them.
+      // Do NOT setWeightTouched here: filling the fields is not confirming them.
       // The organizer must edit the weight field (handleEditChange) to confirm.
       showToast('Estimate filled in. Edit the weight field to confirm.', 'success');
     } catch (err: any) {
@@ -767,7 +767,7 @@ const ReviewPage = () => {
   /**
    * Re-analyze: re-run the Smart tagging pipeline on the item's ALREADY-STORED photos
    * (no re-upload) and refresh the suggested fields in place. Price is never touched.
-   * Overwrites title/description/category/condition/tags — the confirm dialog in
+   * Overwrites title/description/category/condition/tags: the confirm dialog in
    * requestReanalyze() warns the organizer first so manual edits aren't lost silently.
    */
   const handleReanalyze = async (item: Item) => {
@@ -808,7 +808,7 @@ const ReviewPage = () => {
           brand: updated.brand ?? state.brand,
           mpn: updated.mpn ?? state.mpn,
           upc: updated.upc ?? state.upc,
-          // Price is intentionally NOT changed — organizer pricing always wins.
+          // Price is intentionally NOT changed: organizer pricing always wins.
         };
         editStates.set(item.id, next);
         setEditStates(new Map(editStates));
@@ -895,13 +895,13 @@ const ReviewPage = () => {
         packageLengthIn: editState.packageLengthIn ?? null,
         packageWidthIn: editState.packageWidthIn ?? null,
         packageHeightIn: editState.packageHeightIn ?? null,
-        // Organizer typed a real weight on this page — record it as confirmed so eBay
+        // Organizer typed a real weight on this page: record it as confirmed so eBay
         // publish stops treating it as an estimate. Never sent when the weight field
         // was left untouched (see weightTouched above).
         ...(weightTouched.has(item.id) && editState.packageWeightOz != null
           ? { packageConfirmedByOrganizer: true, packageEstimateSource: 'ORGANIZER' }
           : {}),
-        // eBay product identifiers — send '' as null
+        // eBay product identifiers: send '' as null
         brand: editState.brand?.trim() ? editState.brand.trim() : null,
         mpn: editState.mpn?.trim() ? editState.mpn.trim() : null,
         upc: editState.upc?.trim() ? editState.upc.trim() : null,
@@ -1049,7 +1049,7 @@ const ReviewPage = () => {
         handleEditChange(item.id, 'price', response.data.suggested);
       }
     } catch {
-      // Best-effort — silent failure, keep existing price
+      // Best-effort: silent failure, keep existing price
     } finally {
       setRefreshingPriceItemId(null);
     }
@@ -1172,7 +1172,7 @@ const ReviewPage = () => {
         await api.post(`/items/${item.id}/publish`);
         setApprovedIds(prev => new Set(prev).add(item.id));
       } catch {
-        // silent per-item — overall toast shown below
+        // silent per-item: overall toast shown below
       }
     }
     queryClient.invalidateQueries({ queryKey: ['items', saleId, 'review'] });
@@ -1385,7 +1385,7 @@ const ReviewPage = () => {
                     <p className="text-sm font-semibold text-[#1A1814] dark:text-[#F5F5F0] whitespace-nowrap">{pendingItems.length} pending review</p>
                     <p className="text-xs text-[rgba(26,24,20,0.62)] dark:text-[#B8B8BA] whitespace-nowrap">{publishedCount} of {totalCount} published</p>
                   </div>
-                  {/* Progress bar — hidden on very small screens */}
+                  {/* Progress bar: hidden on very small screens */}
                   <div className="hidden sm:block w-28">
                     <div className="h-1.5 rounded-full bg-black/6 overflow-hidden">
                       <div
@@ -1399,7 +1399,7 @@ const ReviewPage = () => {
                   </div>
                 </div>
 
-                {/* Right: actions — flex-shrink-0 keeps them together */}
+                {/* Right: actions: flex-shrink-0 keeps them together */}
                 <div className="flex items-center gap-2 flex-shrink-0">
                   <button
                     onClick={() => setShowDiscardAllModal(true)}
@@ -1613,10 +1613,10 @@ const ReviewPage = () => {
                         </div>
                       )}
 
-                      {/* Desktop layout: photo | fields | price rail — stacks on mobile */}
+                      {/* Desktop layout: photo | fields | price rail: stacks on mobile */}
                       <div className="flex flex-col sm:flex-row gap-4 sm:gap-5">
 
-                        {/* Thumbnail — full width on mobile, fixed width on sm+ */}
+                        {/* Thumbnail: full width on mobile, fixed width on sm+ */}
                         <div className="flex-shrink-0 w-full sm:w-32">
                           <div className="flex sm:block gap-3 items-start">
                           <button
@@ -1705,7 +1705,7 @@ const ReviewPage = () => {
                             </div>
                           </div>
 
-                          {/* Brand / MPN / UPC row — eBay product identifiers */}
+                          {/* Brand / MPN / UPC row: eBay product identifiers */}
                           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                             <div>
                               <label className="block text-[10px] font-mono tracking-widest uppercase text-[rgba(26,24,20,0.6)] dark:text-[#B8B8BA] mb-1">
@@ -1817,16 +1817,16 @@ const ReviewPage = () => {
                           </div>
                         </div>
 
-                        {/* Right rail: price + actions — full width on mobile, fixed on sm+ */}
+                        {/* Right rail: price + actions: full width on mobile, fixed on sm+ */}
                         <div className="w-full sm:flex-shrink-0 sm:w-52 flex flex-col gap-3">
 
-                          {/* ── PRICE FIELD — Critical rule: never pre-fill aiSuggestedPrice ── */}
+                          {/* ── PRICE FIELD: Critical rule: never pre-fill aiSuggestedPrice ── */}
                           <div>
                             <div className="flex items-center justify-between mb-1.5">
                               <label className={`text-[10px] font-mono tracking-widest uppercase ${hasError ? 'text-[#C04A2B]' : 'text-[rgba(26,24,20,0.4)] dark:text-[#B8B8BA]'}`}>
                                 Your price{hasError ? ' · Required' : ''}
                               </label>
-                              {/* aiSuggestedPrice reference — display only from PriceSuggestion */}
+                              {/* aiSuggestedPrice reference: display only from PriceSuggestion */}
                             </div>
                             {/* PriceSuggestion shows the Smart reference price (read-only) */}
                             <div className="mb-1.5">
@@ -1837,7 +1837,7 @@ const ReviewPage = () => {
                                 onApplyPrice={(price) => setPriceInput(item.id, String(price))}
                               />
                             </div>
-                            {/* Price input — starts empty, organizer must type */}
+                            {/* Price input: starts empty, organizer must type */}
                             <div
                               className="flex items-center gap-1 px-3 py-2.5 rounded-lg border-2 bg-white dark:bg-[#3A3A3C] transition-colors"
                               style={{ borderColor: hasError ? '#C04A2B' : 'rgba(20,18,14,0.18)' }}
@@ -1916,7 +1916,7 @@ const ReviewPage = () => {
                         </div>
                       </div>
 
-                      {/* Expanded detail panel — toggle */}
+                      {/* Expanded detail panel: toggle */}
                       <div className="mt-4 pt-4 border-t border-black/8">
                         <button
                           type="button"
@@ -2089,7 +2089,7 @@ const ReviewPage = () => {
                                         disabled={packageEstimateLoadingIds.has(item.id)}
                                         className="text-[11px] font-medium text-blue-600 dark:text-blue-400 hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
                                       >
-                                        {packageEstimateLoadingIds.has(item.id) ? 'Getting estimate…' : 'Get AI estimate'}
+                                        {packageEstimateLoadingIds.has(item.id) ? 'Getting estimate…' : 'Get Smart estimate'}
                                       </button>
                                     )}
                                   </div>

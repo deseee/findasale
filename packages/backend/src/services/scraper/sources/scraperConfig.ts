@@ -573,7 +573,7 @@ export async function scrapeGooglePlacesQuery(
 
       const item: ScrapedItem = {
         // Sale fields
-        title: `${place.name} — ${queryConfig.label} in ${city}, ${state}`,
+        title: `${place.name}, ${queryConfig.label} in ${city}, ${state}`,
         address: '',        // Street address not returned by Text Search
         city,
         state,

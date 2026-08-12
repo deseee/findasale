@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { useOrganizerTier, SubscriptionTier } from '../hooks/useOrganizerTier';
 
 /**
- * TierGate — Wraps page content with a blurred overlay + upgrade CTA
+ * TierGate: Wraps page content with a blurred overlay + upgrade CTA
  * when the current organizer's tier is below the required level.
  *
  * Usage:
@@ -28,12 +28,12 @@ export default function TierGate({
 }: TierGateProps) {
   const { canAccess, tier } = useOrganizerTier();
 
-  // User has access — render children normally
+  // User has access: render children normally
   if (canAccess(requiredTier)) {
     return <>{children}</>;
   }
 
-  // User does NOT have access — show blurred content with overlay
+  // User does NOT have access: show blurred content with overlay
   return (
     <div className="relative">
       {/* Blurred/grayed page content behind overlay */}
@@ -45,7 +45,7 @@ export default function TierGate({
         {children}
       </div>
 
-      {/* Overlay card — centered on screen */}
+      {/* Overlay card: centered on screen */}
       <div className="fixed inset-0 z-40 flex items-center justify-center p-4">
         {/* Semi-transparent backdrop */}
         <div className="absolute inset-0 bg-white/60 dark:bg-gray-900/70" />

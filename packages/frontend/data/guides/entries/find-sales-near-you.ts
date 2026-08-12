@@ -10,7 +10,7 @@ const entry: GuideEntry = {
   videoUrl: undefined,
   body: `# Find Sales Near You: Map, Search, and Calendar
 
-Looking for a yard sale, auction, or consignment haul this weekend? FindA.Sale shows you everything happening within your radius — then filters by what you actually want. There are three ways to find sales: the map, the search bar, and the calendar.
+Looking for a yard sale, auction, or consignment haul this weekend? FindA.Sale shows you everything happening within your radius, then filters by what you actually want. There are three ways to find sales: the map, the search bar, and the calendar.
 
 ---
 
@@ -18,13 +18,13 @@ Looking for a yard sale, auction, or consignment haul this weekend? FindA.Sale s
 
 ### 1. The map
 
-Tap the map pin icon on the homepage. You'll see colored pins scattered across your area — each one is an active or upcoming sale.
+Tap the map pin icon on the homepage. You'll see colored pins scattered across your area: each one is an active or upcoming sale.
 
 Drag the map to pan. Pinch to zoom in on a neighborhood. Tap any pin to see the sale name, type, address, and opening date. Tap again to open the full listing.
 
 ### 2. The search bar
 
-Type a city name, zip code, or neighborhood. Results appear instantly — sales sorted by distance from that location.
+Type a city name, zip code, or neighborhood. Results appear instantly: sales sorted by distance from that location.
 
 Use this when you're searching a specific area instead of "near me." Good for road trips or checking what's happening in a town you're visiting.
 
@@ -40,9 +40,9 @@ Tap a day to see all sales starting on that date. Useful for planning a Saturday
 
 Once you're looking at the map or list, tap "Filter" to narrow things down:
 
-- **Sale type** — Yard sale, estate sale, auction, flea market, consignment, or any combination.
-- **Date range** — Only show sales that start (or are still running) within a date window.
-- **Distance** — Set a radius in miles from your current location.
+- **Sale type**: Yard sale, estate sale, auction, flea market, consignment, or any combination.
+- **Date range**: Only show sales that start (or are still running) within a date window.
+- **Distance**: Set a radius in miles from your current location.
 
 Filters stay set until you clear them. If the list looks empty, check your filters first.
 
@@ -50,7 +50,7 @@ Filters stay set until you clear them. If the list looks empty, check your filte
 
 ## Saved searches and alerts
 
-Type a search you run often — like "Grand Rapids yard sales" — then tap the bell icon. The app will notify you when a new sale matches that search and gets posted.
+Type a search you run often (like "Grand Rapids yard sales"), then tap the bell icon. The app will notify you when a new sale matches that search and gets posted.
 
 You can manage your saved searches in your profile under Settings > Saved Searches. Delete or pause any alert at any time.
 
@@ -58,7 +58,7 @@ You can manage your saved searches in your profile under Settings > Saved Search
 
 ## "Active now" vs. "Upcoming"
 
-Sales can show up before they start. That's intentional — organizers post early so you can plan ahead.
+Sales can show up before they start. That's intentional: organizers post early so you can plan ahead.
 
 **Active now** means the sale is open today. Show up and shop.
 

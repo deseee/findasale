@@ -20,7 +20,7 @@ Organizers flag items as Rare or Legendary when they're high-value, unusual, or 
 
 **Rare** items are things like vintage cameras, signed books, quality mid-century furniture, or anything the organizer considers above the typical inventory for that sale. One organizer's Rare might be a 1940s vanity. Another's might be a full set of matching cast iron.
 
-**Legendary** items are a step above — one-of-a-kind pieces, items with verified provenance, or exceptionally high-value finds. A Legendary tag is used sparingly.
+**Legendary** items are a step above: one-of-a-kind pieces, items with verified provenance, or exceptionally high-value finds. A Legendary tag is used sparingly.
 
 Both appear with a badge on the item card. You can filter by Rarity in the search bar to see only tagged items.
 
@@ -43,7 +43,7 @@ When the 30-minute window closes, the item goes fully public. Any shopper can ho
 
 ## Why 30 minutes matters
 
-At estate sales, consignment shops, auctions, and flea markets, one-of-a-kind items don't sit. They get claimed fast — sometimes within the first few minutes of going live.
+At estate sales, consignment shops, auctions, and flea markets, one-of-a-kind items don't sit. They get claimed fast, sometimes within the first few minutes of going live.
 
 If you're a free shopper and you see a Rare item for the first time, it may already have a hold on it. The window was already open and someone else moved first.
 
@@ -64,7 +64,7 @@ Hunt Pass members also get push notifications when a Rare or Legendary item matc
 
 ## What happens after Early Access ends
 
-The item goes fully public. Every shopper on the platform can see it, hold it, or buy it. The badge stays on the listing so shoppers know what tier it is — but th`,
+The item goes fully public. Every shopper on the platform can see it, hold it, or buy it. The badge stays on the listing so shoppers know what tier it is, but th`,
 };
 
 export default entry;

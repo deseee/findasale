@@ -146,7 +146,7 @@ const ProfilePage = () => {
     );
   }
 
-  // Check if user is organizer or admin — hide shopper-only sections (Hunt Pass, Bids, etc.)
+  // Check if user is organizer or admin: hide shopper-only sections (Hunt Pass, Bids, etc.)
   // Use user.role (single field, always reliable) NOT user.roles array (defaults to ["USER"] for legacy accounts)
   const isOrganizerOnly = user.role === 'ORGANIZER' || user.role === 'ADMIN';
 
@@ -263,7 +263,7 @@ const ProfilePage = () => {
           </>
         )}
 
-        {/* My Bids Section — only for shoppers */}
+        {/* My Bids Section: only for shoppers */}
         {!isOrganizerOnly && (
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mb-8">
             <h2 className="text-2xl font-bold text-warm-900 dark:text-warm-100 mb-4">My Bids</h2>
@@ -389,7 +389,7 @@ const ProfilePage = () => {
           </div>
         )}
 
-        {/* Hunt Pass Section — only for shoppers */}
+        {/* Hunt Pass Section: only for shoppers */}
         {!isOrganizerOnly && (
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mb-8">
             <div className="flex items-center justify-between">
@@ -422,7 +422,7 @@ const ProfilePage = () => {
           </div>
         )}
 
-        {/* Explorer Rank Card — only for shoppers */}
+        {/* Explorer Rank Card: only for shoppers */}
         {!isOrganizerOnly && (
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mb-8">
             <h2 className="text-2xl font-bold text-warm-900 dark:text-warm-100 mb-1">🏆 Explorer Rank</h2>
@@ -438,7 +438,7 @@ const ProfilePage = () => {
           </div>
         )}
 
-        {/* Badges Section — only for shoppers */}
+        {/* Badges Section: only for shoppers */}
         {!isOrganizerOnly && (
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mb-8">
             <h2 className="text-2xl font-bold text-warm-900 dark:text-warm-100 mb-4">Badges</h2>
@@ -474,7 +474,7 @@ const ProfilePage = () => {
           </div>
         )}
 
-        {/* Showcase Section — moved after badges */}
+        {/* Showcase Section: moved after badges */}
         {!isOrganizerOnly && showcaseData && (
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mb-8">
             <h2 className="text-2xl font-bold text-warm-900 dark:text-warm-100 mb-4">Showcase</h2>
@@ -581,7 +581,7 @@ const ProfilePage = () => {
           </div>
         )}
 
-        {/* Referrals Section — only for shoppers */}
+        {/* Referrals Section: only for shoppers */}
         {!isOrganizerOnly && (
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mb-8">
             <h2 className="text-2xl font-bold text-warm-900 dark:text-warm-100 mb-4">My Referrals</h2>
@@ -611,7 +611,7 @@ const ProfilePage = () => {
         )}
 
 
-        {/* Task #7: Referral Rewards Widget — only for shoppers */}
+        {/* Task #7: Referral Rewards Widget: only for shoppers */}
         {!isOrganizerOnly && <ReferralWidget />}
       </main>
     </div>

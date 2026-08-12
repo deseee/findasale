@@ -10,7 +10,7 @@ const entry: GuideEntry = {
   videoUrl: undefined,
   body: `A yard sign at the street corner sends shoppers to your driveway. A QR code on that sign sends them to your full listing before they even get out of the car. This guide covers where to get signs made, where to place them, and how to add a scannable QR code that tracks clicks in your dashboard.
 
-For QR code basics — what they are and how to generate one — see /guide#qr-codes. This guide focuses on the physical sign side.
+For QR code basics (what they are and how to generate one), see /guide#qr-codes. This guide focuses on the physical sign side.
 
 ---
 
@@ -30,9 +30,9 @@ Standard yard sign size is 18x24 inches. Go bigger (24x36) if you are placing on
 
 **3 blocks out in each direction** from your sale address. Signs that far out catch people before they have already passed your turn.
 
-**Street corners** at the nearest main road. This is your highest-value spot — drivers slowing for a light have time to read it.
+**Street corners** at the nearest main road. This is your highest-value spot: drivers slowing for a light have time to read it.
 
-**Driveway entrance** on the day of the sale. This is the confirmation sign — it tells people they found the right place.
+**Driveway entrance** on the day of the sale. This is the confirmation sign: it tells people they found the right place.
 
 **Arrow direction matters.** Point the arrow the direction a driver needs to turn or continue. A sign with an arrow pointing left when the sale is to the right is worse than no sign at all. Double-check before you drive away.
 
@@ -43,12 +43,12 @@ Put signs out the evening before your sale starts. Pick them up the same day the
 ## Adding a QR code to your sign
 
 1. Go to /organizer/qr-codes in your dashboard
-2. Your sale's QR code is already generated — tap **Download PNG**
+2. Your sale's QR code is already generated: tap **Download PNG**
 3. Send the PNG to your print shop when you order, or drop it into your sign design file
 4. Ask the print shop to place it in the lower right corner at 3 inches square minimum
 5. Include the short URL below the QR code as a fallback (printed below the image)
 
-Shoppers scan the QR code and land on your full FindA.Sale listing — photos, categories, dates, address, and anything else you have added.
+Shoppers scan the QR code and land on your full FindA.Sale listing: photos, categories, dates, address, and anything else you have added.
 
 Your dashboard at /organizer/qr-codes shows the scan count. If one sign location is getting 10x more scans than another, that tells you where to put signs next time.
 

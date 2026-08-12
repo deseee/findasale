@@ -8,17 +8,17 @@ const entry: GuideEntry = {
   priority: 3,
   relatedGuides: ['promote-page', 'brand-kit', 'send-sale-updates'],
   videoUrl: undefined,
-  body: `Share cards are pre-designed image files with your sale details already in them — sale name, dates, featured categories, and a link. Pick a theme, download the image or share it directly, and post it alongside your text in any Facebook group, on Instagram, or in a text message. Image posts get significantly more attention in local groups than text-only posts.
+  body: `Share cards are pre-designed image files with your sale details already in them: sale name, dates, featured categories, and a link. Pick a theme, download the image or share it directly, and post it alongside your text in any Facebook group, on Instagram, or in a text message. Image posts get significantly more attention in local groups than text-only posts.
 
 ---
 
 ## What share cards are
 
-A share card is a static image — like a flyer, but sized for social media. It looks designed even if you have never used a design tool. Your sale name, dates, and categories pull in automatically from your listing.
+A share card is a static image: like a flyer, but sized for social media. It looks designed even if you have never used a design tool. Your sale name, dates, and categories pull in automatically from your listing.
 
 If you have a logo and accent color in your brand kit, those appear on the card. If not, the card uses a clean default style that still looks intentional.
 
-Share cards are not the same as the pre-filled social media text on the promote page. The text and the image are separate. Use both together for the best result — image posts with a link in the caption outperform text-only posts and image-only posts.
+Share cards are not the same as the pre-filled social media text on the promote page. The text and the image are separate. Use both together for the best result: image posts with a link in the caption outperform text-only posts and image-only posts.
 
 ---
 
@@ -26,7 +26,7 @@ Share cards are not the same as the pre-filled social media text on the promote 
 
 1. Go to /organizer/promote
 2. Scroll to the **Print & Share** section
-3. You will see 3–5 card themes — tap each one to preview it with your sale details
+3. You will see 3–5 card themes: tap each one to preview it with your sale details
 4. Pick the theme you want
 5. Tap **Download** to save the image to your device, or tap **Share** to open your phone's share sheet and send directly
 
@@ -36,7 +36,7 @@ That is all. The image is ready to post.
 
 ## Choosing a theme
 
-Themes are visual styles — different color palettes, layouts, and typography. All of them include the same information (your sale name, dates, categories). The differences are aesthetic.
+Themes are visual styles: different color palettes, layouts, and typography. All of them include the same information (your sale name, dates, categories). The differences are aesthetic.
 
 A few tips:
 - Pick the theme that matches your accent color if you have one set in your brand kit
@@ -87,7 +87,7 @@ Attach the share card image to an email blast or paste it into the body of an em
 
 In local Facebook groups, image posts receive substantially more engagement than text-only posts. The exact difference varies by group and timing, but the pattern is consistent: people scroll past text, people stop for images.
 
-A share card paired with clear text and a link is the most effective single thing you can post to a local group. It is also the fastest — download, attach, paste caption, post. Under 3 minutes.
+A share card paired with clear text and a link is the most effective single thing you can post to a local group. It is also the fastest: download, attach, paste caption, post. Under 3 minutes.
 
 ---
 
@@ -99,11 +99,11 @@ Text posts work. Share cards work better, especially in visual platforms like In
 
 **Can I edit the card to add a specific item?**
 
-Not directly inside FindA.Sale — the card generates from your listing details. If you want to customize further, download the image and open it in any basic photo editor or app (Canva, Google Photos, iPhone Photos) to add a text overlay.
+Not directly inside FindA.Sale: the card generates from your listing details. If you want to customize further, download the image and open it in any basic photo editor or app (Canva, Google Photos, iPhone Photos) to add a text overlay.
 
 **What size are the share cards?**
 
-Cards are sized for social sharing — 1080x1080 pixels (square format) which works on Facebook, Instagram feed, and most messaging apps. Instagram Stories crop to 1080x1920, but square images post to Stories without issue by adding a background.
+Cards are sized for social sharing: 1080x1080 pixels (square format) which works on Facebook, Instagram feed, and most messaging apps. Instagram Stories crop to 1080x1920, but square images post to Stories without issue by adding a background.
 
 **Will the card update automatically if I change my listing?**
 
@@ -111,7 +111,7 @@ No. The card is a static image generated at the time you download it. If you mak
 
 **How is a share card different from a print card?**
 
-Share cards are sized for screens and social media. The print card (from the promote page or print kit) is sized for paper — 4x6 or half-page, higher resolution, formatted for physical printing. Use share cards for posting online; use print cards for handing out or posting on bulletin boards.
+Share cards are sized for screens and social media. The print card (from the promote page or print kit) is sized for paper: 4x6 or half-page, higher resolution, formatted for physical printing. Use share cards for posting online; use print cards for handing out or posting on bulletin boards.
 
 **Can I use the same share card for multiple sales?**
 

@@ -39,7 +39,7 @@ const EbayCategoryPicker: React.FC<EbayCategoryPickerProps> = ({
   placeholder = 'Search and select an eBay category...',
   defaultSearch,
 }) => {
-  // defaultSearch is used as a hint label only — NOT auto-populated into the search input
+  // defaultSearch is used as a hint label only: NOT auto-populated into the search input
   // to avoid triggering noisy empty-result dropdowns on mount.
   const [input, setInput] = useState('');
   const [suggestions, setSuggestions] = useState<CategorySuggestion[]>([]);
@@ -52,7 +52,7 @@ const EbayCategoryPicker: React.FC<EbayCategoryPickerProps> = ({
   const abortControllerRef = useRef<AbortController | null>(null);
 
   // Pre-populate the confirmed-selection chip from a saved ebayCategoryName so a
-  // resolved/edited category is always visible (ADR 2026-06-14 — it previously
+  // resolved/edited category is always visible (ADR 2026-06-14, it previously
   // rendered blank when only an ID was saved). Item data loads async, so this fires
   // when ebayCategoryName arrives; the L1 sublabel tracks `value` once it loads too.
   useEffect(() => {
@@ -89,7 +89,7 @@ const EbayCategoryPicker: React.FC<EbayCategoryPickerProps> = ({
         setSuggestions(response.data.suggestions || []);
         setIsOpen(true);
       } catch (err: any) {
-        // Suppress abort/cancel errors from debounce — not real failures
+        // Suppress abort/cancel errors from debounce: not real failures
         const isCancelled = err.name === 'AbortError' || err.name === 'CanceledError' || err.name === 'CancelledError';
         if (!isCancelled) {
           const status = err?.response?.status;
@@ -149,7 +149,7 @@ const EbayCategoryPicker: React.FC<EbayCategoryPickerProps> = ({
         </label>
       )}
 
-      {/* Confirmed selection chip — shown when a leaf category has been selected */}
+      {/* Confirmed selection chip: shown when a leaf category has been selected */}
       {selectedLeaf ? (
         <div className="flex items-center gap-2 px-3 py-2 bg-warm-100 dark:bg-[#3A3A3C] border border-warm-300 dark:border-[#3A3A3C] rounded-lg">
           <div className="flex-1 min-w-0">
@@ -172,9 +172,9 @@ const EbayCategoryPicker: React.FC<EbayCategoryPickerProps> = ({
           </button>
         </div>
       ) : (
-        /* Search input — shown when no selection confirmed */
+        /* Search input: shown when no selection confirmed */
         <div className="relative">
-          {/* Current category hint — show AI-tagged category as a soft badge */}
+          {/* Current category hint: show AI-tagged category as a soft badge */}
           {defaultSearch && !input && (
             <div className="mb-1.5 flex items-center gap-1.5">
               <span className="text-[10px] font-mono text-warm-500 dark:text-[#B8B8BA] uppercase tracking-wide">Current:</span>

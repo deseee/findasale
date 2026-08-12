@@ -24,7 +24,7 @@ This guide explains how to create templates, how to use one inside a conversatio
 
 Go to \`/organizer/message-templates\` and tap **New Template**.
 
-Give it a short name for your own reference — you're the only one who sees the name.
+Give it a short name for your own reference: you're the only one who sees the name.
 Write the message text.
 Save it.
 
@@ -37,7 +37,7 @@ Find the shopper's thread and tap into it.
 Tap the **Templates** icon (looks like a stack of lines) above the text field.
 Your saved templates appear in a list.
 Tap one to load it into the text box.
-Edit if needed — maybe swap out a time or item name.
+Edit if needed, maybe swap out a time or item name.
 Tap Send.
 
 The shopper sees a normal message. It doesn't say "template" anywhere on their end.
@@ -54,7 +54,7 @@ Each thread shows:
 - Last message (theirs or yours)
 - Unread indicator if they replied and you haven't seen it
 
-Tap a thread to open it. Replies are text — back and forth, same as a text message.
+Tap a thread to open it. Replies are text: back and forth, same as a text message.
 
 What shoppers see: messages arrive as app notifications (or browser notifications if they're not using the app). They can reply from the notification or from their message tab. Responses land back in your inbox.
 
@@ -68,7 +68,7 @@ These cover most of what organizers message about:
 
 **Hold expired.** "Your hold on [item] has expired. The item is back on the floor. Let me know if you'd like to arrange another time."
 
-**Item sold before arrival.** "I'm sorry — [item] sold before you arrived. I'll keep an eye out for something similar and let you know. Thanks for your patience."
+**Item sold before arrival.** "I'm sorry, [item] sold before you arrived. I'll keep an eye out for something similar and let you know. Thanks for your patience."
 
 Use these as starting points and adjust the wording to match how you talk.
 
@@ -80,7 +80,7 @@ Use these as starting points and adjust the wording to match how you talk.
 Yes. When you approve a hold from \`/organizer/holds\`, you can trigger a message to the shopper. If you've saved a hold confirmation template, it loads automatically. Edit and send.
 
 **Do templates support variables like [item name]?**
-You can include placeholder text like \`[item]\` or \`[time]\` — but the app doesn't fill them in automatically. You fill them in before sending. It's still faster than typing the whole message.
+You can include placeholder text like \`[item]\` or \`[time]\`, but the app doesn't fill them in automatically. You fill them in before sending. It's still faster than typing the whole message.
 
 **Can I have different templates for different sales?**
 Templates are account-wide, not sale-specific. Name them clearly so you know which ones fit which situation.

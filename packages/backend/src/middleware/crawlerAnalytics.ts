@@ -59,7 +59,7 @@ async function sendFirstCrawlNotification(saleId: string): Promise<void> {
       html:
         '<p>Hi ' + recipientName + ',</p>' +
         '<p>Your sale <strong>' + saleTitle + '</strong> on FindA.Sale was just discovered by a search engine.</p>' +
-        '<p>This means it may start appearing in search results — including smart search assistants that help shoppers find local sales.</p>' +
+        '<p>This means it may start appearing in search results, including smart search assistants that help shoppers find local sales.</p>' +
         '<p>To rank higher in results, make sure your listing has:</p>' +
         '<ul>' +
         '<li>Clear, descriptive photos</li>' +

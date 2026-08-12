@@ -84,9 +84,9 @@ const EditItemPage = () => {
     tagColor: '',
     // Feature #311: Multi-Location Inventory View
     locationId: null as string | null,
-    // Feature #407: Flip Tracker ROI — cost basis
+    // Feature #407: Flip Tracker ROI: cost basis
     costBasis: '',
-    // Feature #411: Dorm Dash — room/area tag
+    // Feature #411: Dorm Dash: room/area tag
     roomTag: '',
     // Shipping dimensions
     packageWeightOz: '',
@@ -94,7 +94,7 @@ const EditItemPage = () => {
     packageWidthIn: '',
     packageHeightIn: '',
     packageType: '',
-    // Native FindA.Sale checkout shipping (ADR-104 Sec3) — independent of eBay/tier.
+    // Native FindA.Sale checkout shipping (ADR-104 Sec3): independent of eBay/tier.
     shippingAvailable: false,
     shippingPrice: '',
     // Product identifiers (populated by barcode scan)
@@ -111,7 +111,7 @@ const EditItemPage = () => {
     ebayFulfillmentPolicyOverrideId: null as string | null,
   });
 
-  // Local raw-text mirrors for quantity/stockTotal inputs — lets the field
+  // Local raw-text mirrors for quantity/stockTotal inputs: lets the field
   // go through an empty intermediate state while typing instead of snapping
   // back to 1 on every keystroke. Clamped to a valid integer (min 1) on blur.
   const [quantityText, setQuantityText] = useState(String(formData.quantity ?? 1));
@@ -223,10 +223,10 @@ const EditItemPage = () => {
 
   // ADR-ai-package-estimation-isolation-2026-08-05, corrected S-QA-2026-08-06: explicit,
   // opt-in fetch of the AI/estimate-cascade weight+dims guess. Only fills the editable
-  // fields — never auto-confirms. Does NOT set weightTouched itself: a click here alone
+  // fields: never auto-confirms. Does NOT set weightTouched itself: a click here alone
   // (with no further action) must never cause Save to persist packageConfirmedByOrganizer.
   // The organizer must still separately edit the field or click "This is correct as shown"
-  // (below) before Save will confirm — mirrors the organizer typing the values in
+  // (below) before Save will confirm: mirrors the organizer typing the values in
   // themselves, not merely viewing an AI guess.
   const [packageEstimateLoading, setPackageEstimateLoading] = useState(false);
   const handleGetPackageEstimate = async () => {
@@ -247,7 +247,7 @@ const EditItemPage = () => {
         packageHeightIn: result.dims?.height != null ? String(result.dims.height) : prev.packageHeightIn,
         packageType: result.packageType || prev.packageType,
       }));
-      // Do NOT setWeightTouched(true) here — filling the fields is not confirming them.
+      // Do NOT setWeightTouched(true) here: filling the fields is not confirming them.
       // The organizer must edit the field or click "This is correct as shown" to confirm.
       showToast('Estimate filled in. Edit the field or click "This is correct as shown" to confirm.', 'success');
     } catch (err: any) {
@@ -298,7 +298,7 @@ const EditItemPage = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, formData.shippingAvailable, formData.shippingPrice, formData.packageWeightOz, formData.packageLengthIn, formData.packageWidthIn, formData.packageHeightIn, formData.packageType]);
 
-  // eBay push mutation — S725 always LIVE (DRAFT mode killed)
+  // eBay push mutation: S725 always LIVE (DRAFT mode killed)
   const ebayPushMutation = useMutation({
     mutationFn: async ({ itemId }: { itemId: string }) => {
       if (!item?.saleId) throw new Error('Sale ID not found');
@@ -331,7 +331,7 @@ const EditItemPage = () => {
     },
   });
 
-  // S725: Publish-now mutation — publishes an existing unpublished offer LIVE.
+  // S725: Publish-now mutation: publishes an existing unpublished offer LIVE.
   const ebayPublishMutation = useMutation({
     mutationFn: async ({ itemId }: { itemId: string }) => {
       return api.post(`/ebay/items/${itemId}/publish`);
@@ -365,7 +365,7 @@ const EditItemPage = () => {
     const savePayload = {
       ...formData,
       packageWeightOz: toIntOrNull(formData.packageWeightOz),
-      // Organizer typed a real weight on this page — record it as confirmed so eBay
+      // Organizer typed a real weight on this page: record it as confirmed so eBay
       // publish stops treating it as an estimate. Never sent when the box was left
       // untouched (see weightTouched).
       ...(weightTouched && toIntOrNull(formData.packageWeightOz) !== null
@@ -405,7 +405,7 @@ const EditItemPage = () => {
     setEbayPushPending(true);
     try {
       // Auto-save current form state first so eBay push uses the latest values (not stale DB state).
-      // Inline PUT (not updateMutation) — updateMutation.onSuccess navigates to /dashboard which would abort the push.
+      // Inline PUT (not updateMutation): updateMutation.onSuccess navigates to /dashboard which would abort the push.
       await saveFormState();
     } catch (err) {
       setEbayPushPending(false);
@@ -511,7 +511,7 @@ const EditItemPage = () => {
     queryFn: async () => {
       // S-IDOR-edit-item fix: use the organizer-only, ownership-enforced endpoint
       // instead of the public/shopper-facing GET /items/:id (which never checked
-      // ownership — a second signed-in user could load another organizer's item
+      // ownership: a second signed-in user could load another organizer's item
       // into this edit form even though saving it was already correctly blocked).
       const response = await api.get(`/items/${id}/edit`);
       return response.data;
@@ -603,7 +603,7 @@ const EditItemPage = () => {
         brand: item.brand || '',
         upc: item.upc || '',
         mpn: item.mpn || '',
-        // eBay Best Offers — reverse-compute percentages from stored dollar amounts
+        // eBay Best Offers: reverse-compute percentages from stored dollar amounts
         allowBestOffer: item.allowBestOffer === true,
         bestOfferAcceptPct: (() => {
           const price = parseFloat(item.price);
@@ -650,7 +650,7 @@ const EditItemPage = () => {
     });
   }, [item, organizerDefaults, id]);
 
-  // Smart local pickup detection — nudge when description/notes mention local pickup
+  // Smart local pickup detection: nudge when description/notes mention local pickup
   useEffect(() => {
     const localPickupPhrases = /local\s*pickup|pickup\s*only|no\s*shipping|will\s*not\s*ship|local\s*only/i;
     const text = `${formData.description || ''} ${(formData as any).conditionNotes || ''}`;
@@ -836,7 +836,7 @@ const EditItemPage = () => {
     },
   });
 
-  // Auth guard — placed after all hooks to comply with Rules of Hooks
+  // Auth guard: placed after all hooks to comply with Rules of Hooks
   if (!authLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
     router.push('/login');
     return null;
@@ -1127,7 +1127,7 @@ const EditItemPage = () => {
               </div>
             </div>
 
-            {/* Catalog enrichment suggestions — additive, renders only when present.
+            {/* Catalog enrichment suggestions: additive, renders only when present.
                 Accepting fills the form field; existing Save flow persists it. */}
             {item?.catalogSuggestions && (
               <CatalogSuggestionPanel
@@ -1251,19 +1251,19 @@ const EditItemPage = () => {
                 className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
               />
 
-              {/* Encyclopedia Inline Tip — price guidance from Encyclopedia */}
+              {/* Encyclopedia Inline Tip: price guidance from Encyclopedia */}
               <EncyclopediaInlineTip
                 category={formData.category}
                 tags={formData.tags}
                 title={formData.title}
               />
-              {/* eBay Comp Tiles — comparable sales reference */}
+              {/* eBay Comp Tiles: comparable sales reference */}
               {id && <EbayCompTiles itemId={id as string} />}
 
-              {/* Feature #338: Multi-source pricing comp summary — auto-fetches on load */}
+              {/* Feature #338: Multi-source pricing comp summary: auto-fetches on load */}
               {id && <PricingCompSummary itemId={id as string} itemTitle={formData.title} />}
 
-              {/* Price Research Panel — consolidated pricing tools */}
+              {/* Price Research Panel: consolidated pricing tools */}
               <div className="mt-3">
                 {id && (
                   <PriceResearchPanel
@@ -1292,7 +1292,7 @@ const EditItemPage = () => {
               {id && <PricingSignalBanners itemId={id as string} currentPrice={formData.price ? parseFloat(formData.price) : undefined} />}
             </div>
 
-            {/* Feature #407: Flip Tracker ROI — Cost Basis */}
+            {/* Feature #407: Flip Tracker ROI: Cost Basis */}
             <div>
               <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">
                 Cost Basis <span className="text-warm-400 dark:text-warm-500 font-normal">(optional)</span>
@@ -1309,7 +1309,7 @@ const EditItemPage = () => {
               <p className="text-xs text-warm-500 dark:text-warm-400 mt-1">What did you pay for this? Used to calculate ROI in Flip Report.</p>
             </div>
 
-            {/* Feature #411: Dorm Dash — Room / Area Tag */}
+            {/* Feature #411: Dorm Dash: Room / Area Tag */}
             <div>
               <div className="flex items-center gap-2 mb-2">
                 <label className="block text-sm font-medium text-warm-700 dark:text-warm-300">
@@ -1635,7 +1635,7 @@ const EditItemPage = () => {
               </button>
             </div>
 
-            {/* Native FindA.Sale checkout shipping (ADR-104 Sec3) — independent of eBay/
+            {/* Native FindA.Sale checkout shipping (ADR-104 Sec3): independent of eBay/
                 tier: applies to every organizer's own Stripe checkout, not just PRO/TEAMS
                 eBay sellers. shippingAvailable/shippingPrice feed stripeController.ts
                 directly (Item.shippingPrice is charged to the buyer as-is at checkout). */}
@@ -1697,7 +1697,7 @@ const EditItemPage = () => {
               )}
             </div>
 
-            {/* Shipping Dimensions — shown for PRO/TEAMS (eBay shipping requires dimensions) */}
+            {/* Shipping Dimensions: shown for PRO/TEAMS (eBay shipping requires dimensions) */}
             {tier !== 'SIMPLE' && (
               <div className="pt-4 border-t border-warm-200 dark:border-gray-700">
                 <h3 className="text-sm font-semibold text-warm-700 dark:text-warm-300 mb-3">Shipping Dimensions</h3>
@@ -1792,7 +1792,7 @@ const EditItemPage = () => {
                             {weightTrigger && 'Items over 50 lb trigger a weight handling fee. '}
                             To avoid it, box the item in a rigid corrugated container sized to
                             its actual dimensions (e.g. a golf bag or guitar case shipped bare
-                            triggers this — boxed, it often doesn&apos;t).
+                            triggers this: boxed, it often doesn&apos;t).
                           </p>
                         </div>
                       );
@@ -1806,7 +1806,7 @@ const EditItemPage = () => {
                         disabled={packageEstimateLoading}
                         className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
                       >
-                        {packageEstimateLoading ? 'Getting estimate…' : 'Get AI weight & size estimate'}
+                        {packageEstimateLoading ? 'Getting estimate…' : 'Get Smart weight & size estimate'}
                       </button>
                       {/* S-QA-2026-08-06: root-caused live -- an organizer whose displayed weight/dims
                           are ALREADY correct had no way to confirm them, because the only confirm path
@@ -1906,7 +1906,7 @@ const EditItemPage = () => {
                     </div>
                   </div>
 
-                  {/* Shipping net preview — buyer cost + organizer net estimate */}
+                  {/* Shipping net preview: buyer cost + organizer net estimate */}
                   {formData.packageWeightOz && (
                     <div className="mt-3">
                       <ShippingNetPreview
@@ -2061,7 +2061,7 @@ const EditItemPage = () => {
               </div>
             )}
 
-            {/* eBay Push Section — S725 three states: Live / Pending Publish / Push */}
+            {/* eBay Push Section: S725 three states: Live / Pending Publish / Push */}
             {tier !== 'SIMPLE' && (
               <div className="pt-4 border-t border-warm-200 dark:border-gray-700">
                 {/* Pre-publish hint (2026-07-16): warn about eBay 25016 (sub-$0.99)
@@ -2232,7 +2232,7 @@ const EditItemPage = () => {
         </div>
       </div>
 
-      {/* Barcode scanner modal — full-viewport, outside page scroll container */}
+      {/* Barcode scanner modal: full-viewport, outside page scroll container */}
       {barcodeScannerOpen && (
         <BarcodeScanner
           onScan={handleBarcodeScan}

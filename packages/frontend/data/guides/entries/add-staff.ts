@@ -14,7 +14,7 @@ const entry: GuideEntry = {
 
 ## Why use staff accounts instead of sharing your login
 
-When multiple people use the same login, there's no way to know who did what. A staff member who prices an item incorrectly, marks something sold by accident, or skips the review queue — you have no record of it. Staff accounts fix that. Every action is logged to the person who took it.
+When multiple people use the same login, there's no way to know who did what. A staff member who prices an item incorrectly, marks something sold by accident, or skips the review queue: you have no record of it. Staff accounts fix that. Every action is logged to the person who took it.
 
 Staff accounts are available on the **Teams plan**.
 
@@ -56,9 +56,9 @@ Use Scanner for helpers who are walking the floor before a sale photographing it
 ### Inventory
 
 **Can do:**
-- Edit item details — title, description, condition, category
+- Edit item details: title, description, condition, category
 - Set and adjust prices
-- Manage the review queue — approve, reject, or request re-photo
+- Manage the review queue: approve, reject, or request re-photo
 
 **Can't do:**
 - Publish a sale
@@ -80,7 +80,7 @@ Use Inventory for your pricing lead or a trusted helper who knows the merchandis
 - Publish or close a sale
 - Access finances
 
-Use Floor Staff for helpers who are running the checkout table on sale day. They can ring up customers and move the line — they can't change what anything costs.
+Use Floor Staff for helpers who are running the checkout table on sale day. They can ring up customers and move the line: they can't change what anything costs.
 
 ---
 
@@ -112,7 +112,7 @@ If a staff member already has a FindA.Sale account (as a shopper, for example), 
 2. Tap the staff member's name.
 3. Tap **Remove**.
 
-Their access is revoked immediately. Their account isn't deleted — they can still use FindA.Sale as a shopper. They just lose access to your organization's dashboard and sales.
+Their access is revoked immediately. Their account isn't deleted: they can still use FindA.Sale as a shopper. They just lose access to your organization's dashboard and sales.
 
 ---
 
@@ -134,10 +134,10 @@ Staff accounts are included in the Teams plan. There's no per-seat fee.
 Yes. If someone helps two different organizers, they can accept invites from both. They switch between organizations from their account menu.
 
 **What if a staff member forgets their password?**
-They use the standard "Forgot password" flow on the login page. You can't reset their password for them — each account is independent.
+They use the standard "Forgot password" flow on the login page. You can't reset their password for them: each account is independent.
 
 **Can I limit a Scanner to specific sales only?**
-Not currently. Staff roles apply across your entire organization. If you need sale-specific restrictions, contact support — it's on the roadmap.
+Not currently. Staff roles apply across your entire organization. If you need sale-specific restrictions, contact support: it's on the roadmap.
 
 **Can a Manager publish a sale without my approval?**
 Yes. Manager is a full-trust role. If you want someone to handle everything except the final publish, give them the Inventory role instead and keep the publish step for yourself.

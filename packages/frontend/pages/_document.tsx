@@ -7,7 +7,7 @@ export default function Document() {
         {/* PWA manifest */}
         <link rel="manifest" href="/manifest.json" />
 
-        {/* Theme color — warm amber accent */}
+        {/* Theme color: warm amber accent */}
         <meta name="theme-color" content="#F97316" />
 
         {/* iOS PWA support */}
@@ -27,7 +27,7 @@ export default function Document() {
         <meta name="msapplication-TileImage" content="/icons/icon-144x144.png" />
         <meta name="msapplication-config" content="none" />
 
-        {/* Default SEO meta — pages should override these with next/head */}
+        {/* Default SEO meta: pages should override these with next/head */}
         <meta
           name="description"
           content="FindA.Sale. Discover estate sales, yard sales, garage sales, auctions, flea markets, and more near you. Browse items, favorite sales, and buy online."
@@ -35,19 +35,19 @@ export default function Document() {
         <meta name="keywords" content="estate sales, yard sales, garage sales, auctions, flea markets, antiques, thrift, local sales" />
         <meta name="author" content="FindA.Sale" />
 
-        {/* Facebook app id — global, never overridden per-page, so safe in next/document <Head>.
+        {/* Facebook app id: global, never overridden per-page, so safe in next/document <Head>.
             NOTE: og:type, og:site_name, and twitter:card defaults were MOVED to _app.tsx
             (next/head). next/document <Head> tags are NOT deduped against next/head, so any
             structural default emitted here that a page also sets produced a DUPLICATE tag
             (FB Sharing Debugger saw twitter:card twice). Keep only never-overridden tags here. */}
         <meta property="fb:app_id" content="4380032288935833" />
 
-        {/* Viewport — explicit initial-scale=1 so Android PWA renders at true device width (was showing 320px on Pixel 6a — S548) */}
+        {/* Viewport (explicit initial-scale=1 so Android PWA renders at true device width (was showing 320px on Pixel 6a)S548) */}
         <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
         <meta name="format-detection" content="telephone=no" />
         <meta name="mobile-web-app-capable" content="yes" />
 
-        {/* Google Fonts — CD1: Fraunces (serif headings) + Inter (body) */}
+        {/* Google Fonts: CD1: Fraunces (serif headings) + Inter (body) */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link

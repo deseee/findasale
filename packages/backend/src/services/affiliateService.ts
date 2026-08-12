@@ -313,7 +313,7 @@ export async function qualifyReferralAndCalculatePayout(
   if (referral.referredUserId !== referredUserId) {
     return {
       success: false,
-      error: 'Referred user mismatch — this code was issued to a different user',
+      error: 'Referred user mismatch: this code was issued to a different user',
     };
   }
 
@@ -321,7 +321,7 @@ export async function qualifyReferralAndCalculatePayout(
   if (referral.status !== 'PENDING') {
     return {
       success: false,
-      error: `Referral is already ${referral.status} — cannot re-qualify`,
+      error: `Referral is already ${referral.status}. Cannot re-qualify.`,
     };
   }
 

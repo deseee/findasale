@@ -17,7 +17,7 @@ const entry: GuideEntry = {
 **Photographer (you or whoever knows the app):**
 - Holds the phone and shoots
 - Monitors photo quality between shots
-- Manages the app — starts and ends sessions, handles errors
+- Manages the app: starts and ends sessions, handles errors
 - Makes calls on whether to retake a photo
 
 **Handler (your helper):**
@@ -63,7 +63,7 @@ The handler brings one item at a time. The photographer checks it's oriented cor
 It seems efficient to stage 10 items in a row, but it creates confusion about what's been shot and what hasn't. One item at a time, done pile after.
 
 **Mark your progress.**
-If you're working through shelves or a room with a lot of items, a simple physical marker helps — a piece of blue painter's tape on the shelf you just finished, or a folded piece of paper. Helps both people know where you left off if you take a break.
+If you're working through shelves or a room with a lot of items, a simple physical marker helps: a piece of blue painter's tape on the shelf you just finished, or a folded piece of paper. Helps both people know where you left off if you take a break.
 
 ---
 
@@ -82,7 +82,7 @@ Their photos will go into the same review queue as yours. You review and approve
 
 ## Splitting the review queue afterward
 
-When two people have photographed items in the same session, all photos end up in a shared review queue. You don't need to separate them by who shot what — the queue just shows every unreviewed item regardless of who captured it.
+When two people have photographed items in the same session, all photos end up in a shared review queue. You don't need to separate them by who shot what: the queue just shows every unreviewed item regardless of who captured it.
 
 **One reviewer is faster.** The review queue is where you confirm titles, set prices, and make condition calls. These are judgment decisions that generally go faster when one person is doing all of them, because they're not re-reading each other's decisions or waiting for input.
 
@@ -98,16 +98,16 @@ When two people have photographed items in the same session, all photos end up i
 Establish a clear signal: you say "next" or tap their arm when you're ready. Don't leave it to them to guess. A few seconds of extra waiting is cheaper than retaking photos because the previous item was still on screen.
 
 **Can two people shoot with the app at the same time on different phones?**
-If both people have accounts and are both members of the sale, yes — each can run their own rapidfire session independently and the photos will merge in the review queue. This works well for very large sales or auctions where one room per person is a reasonable split. Make sure you agree in advance on which person is covering which area so you don't double-photograph items.
+If both people have accounts and are both members of the sale, yes, each can run their own rapidfire session independently and the photos will merge in the review queue. This works well for very large sales or auctions where one room per person is a reasonable split. Make sure you agree in advance on which person is covering which area so you don't double-photograph items.
 
 **What if the helper photographs something I wanted to skip?**
 Delete it in review. Tap the item, tap the trash icon. It won't go live unless it's approved.
 
-**How do I handle it if the helper makes a mistake during the session — like photographing something blurry or cut off?**
+**How do I handle it if the helper makes a mistake during the session, like photographing something blurry or cut off?**
 The retake decision happens in review, not in the session. Note it and move on; you'll see it in the queue and can decide whether to reshoot then. Stopping the session to re-do individual shots slows everyone down unless the photo is genuinely unusable.
 
 **Is there a way to see who took which photo in the review queue?**
-Currently the queue doesn't attribute photos by team member — it just shows the queue in session order. If attribution matters (for consignment, auditing, or quality tracking), keep a simple written log during the session: item name and who photographed it.
+Currently the queue doesn't attribute photos by team member: it just shows the queue in session order. If attribution matters (for consignment, auditing, or quality tracking), keep a simple written log during the session: item name and who photographed it.
 
 ---
 

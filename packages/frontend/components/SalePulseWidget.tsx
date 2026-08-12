@@ -1,5 +1,5 @@
 /**
- * Sale Pulse Widget — Feature #230
+ * Sale Pulse Widget: Feature #230
  * Engagement score card with buzz meter (0-100), 3 sub-metrics, "Boost visibility" link.
  * Brief E: Includes "Message your followers" quick-compose entry point.
  */
@@ -117,7 +117,7 @@ export default function SalePulseWidget({ saleId, followerCount = 0, organizerNa
         >
           Boost visibility →
         </Link>
-        {/* Brief E: Quick-compose entry point — opens BroadcastComposer pre-loaded with Sale Day template */}
+        {/* Brief E: Quick-compose entry point (opens BroadcastComposer pre-loaded with Sale Day template) */}
         {followerCount > 0 && (
           <button
             type="button"

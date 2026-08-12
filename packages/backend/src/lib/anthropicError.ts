@@ -82,7 +82,7 @@ export async function alertAnthropicCreditExhausted(context: string): Promise<vo
 
     const title = 'Anthropic API out of credit';
     const body =
-      `AI features are degraded — the Anthropic API returned an out-of-credit error ` +
+      `AI features are degraded. The Anthropic API returned an out-of-credit error ` +
       `(context: ${context}). Top up the Anthropic account to restore AI features. ` +
       `This alert is throttled to once every 6 hours.`;
 

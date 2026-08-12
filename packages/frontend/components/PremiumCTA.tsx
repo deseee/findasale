@@ -12,12 +12,12 @@ interface PremiumCTAProps {
 }
 
 /**
- * PremiumCTA — Call-to-action card for upgrading to premium tier
+ * PremiumCTA: Call-to-action card for upgrading to premium tier
  * Shows benefits and links to upgrade page
  */
 const PremiumCTA: React.FC<PremiumCTAProps> = ({
   tier = 'SIMPLE',
-  title = 'Unlock Premium Features',
+  title = 'See What PRO Adds',
   description = 'Upgrade to PRO to unlock advanced tools and analytics.',
   benefits = [
     'Brand Kit customization',

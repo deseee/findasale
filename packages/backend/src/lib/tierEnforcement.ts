@@ -99,7 +99,7 @@ export async function checkAITagLimit(
     tagCount,
     limit,
     message: tagCount >= limit
-      ? `Used ${tagCount} AI tags this month (limit: ${limit})`
+      ? `Used ${tagCount} smart tags this month (limit: ${limit})`
       : undefined,
   };
 }

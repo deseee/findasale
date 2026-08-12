@@ -109,7 +109,7 @@ const EditSalePage = () => {
     return distance > 0.0045; // Beyond ~0.5 miles / 0.8 km
   };
 
-  // Auth guard — must live in useEffect to avoid Rules of Hooks violation (early return before useQuery)
+  // Auth guard: must live in useEffect to avoid Rules of Hooks violation (early return before useQuery)
   useEffect(() => {
     if (!authLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
       router.push('/login');
@@ -258,14 +258,14 @@ const EditSalePage = () => {
         ...rest,
         startDate: rest.startDate ? new Date(`${rest.startDate}T${startTime}`).toISOString() : rest.startDate,
         endDate: rest.endDate ? new Date(`${rest.endDate}T${endTime}`).toISOString() : rest.endDate,
-        // Feature #411: Dorm Dash — convert date-only string to ISO datetime for backend
+        // Feature #411: Dorm Dash: convert date-only string to ISO datetime for backend
         moveOutDate: rest.moveOutDate ? new Date(`${rest.moveOutDate}T23:59:59`).toISOString() : undefined,
       };
 
       // First update the sale (includes treasure hunt fields and holdsEnabled)
       await api.put(`/sales/${id}`, saleData);
 
-      // Then update markdown config — PRO-only endpoint, silently skip for lower tiers
+      // Then update markdown config: PRO-only endpoint, silently skip for lower tiers
       try {
         await api.put(`/sales/${id}/markdown-config`, {
           markdownEnabled,
@@ -273,7 +273,7 @@ const EditSalePage = () => {
         });
       } catch (err: any) {
         if (err?.response?.status !== 403) throw err;
-        // 403 = user isn't PRO — markdown settings not saved, but sale update succeeded
+        // 403 = user isn't PRO: markdown settings not saved, but sale update succeeded
       }
     },
     onSuccess: () => {
@@ -375,7 +375,7 @@ const EditSalePage = () => {
     try {
       const newStatus = sale.status === 'PUBLISHED' ? 'ENDED' : 'PUBLISHED';
 
-      // #132: À La Carte — Show modal if trying to publish and on SIMPLE tier
+      // #132: À La Carte: Show modal if trying to publish and on SIMPLE tier
       if (newStatus === 'PUBLISHED' && sale.status === 'DRAFT' && user?.organizerTier === 'SIMPLE') {
         setShowAlaCarteModal(true);
         setIsTogglingStatus(false);
@@ -426,7 +426,7 @@ const EditSalePage = () => {
     }
   };
 
-  // Sale deletion (soft-delete server-side) — organizer no longer needs this sale.
+  // Sale deletion (soft-delete server-side): organizer no longer needs this sale.
   const handleDeleteSale = () => {
     if (!id || !sale) return;
     setConfirmState({
@@ -465,7 +465,7 @@ const EditSalePage = () => {
     }, 300);
   };
 
-  // #132: À La Carte — Update sale status after successful checkout
+  // #132: À La Carte: Update sale status after successful checkout
   const handleAlaCarteSuccess = async () => {
     if (!id || !sale) return;
     try {
@@ -888,7 +888,7 @@ const EditSalePage = () => {
               </datalist>
             </div>
 
-            {/* Feature 35: Front Door Locator — entrance/parking pin */}
+            {/* Feature 35: Front Door Locator: entrance/parking pin */}
             {sale?.lat && sale?.lng ? (
               <div className="mt-6">
                 <label className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-2">
@@ -1046,7 +1046,7 @@ const EditSalePage = () => {
               </div>
             ) : null}
 
-            {/* Feature #84: Approach Notes — day-of info for shoppers */}
+            {/* Feature #84: Approach Notes: day-of info for shoppers */}
             <div className="border-t border-warm-300 dark:border-gray-600 pt-6 mt-6">
               <div className="flex items-center justify-between gap-2 mb-2">
                 <label htmlFor="edit-notes" className="block text-sm font-medium text-warm-700 dark:text-gray-300">
@@ -1152,7 +1152,7 @@ const EditSalePage = () => {
                   </label>
                 </div>
 
-                {/* Feature #397: Crew Invasion — group discount opt-in */}
+                {/* Feature #397: Crew Invasion: group discount opt-in */}
                 <div className="flex items-start space-x-3 pt-4">
                   <input
                     type="checkbox"
@@ -1172,7 +1172,7 @@ const EditSalePage = () => {
                   </label>
                 </div>
 
-                {/* S696 Wave 2: Cover the Fee — AUCTION only */}
+                {/* S696 Wave 2: Cover the Fee: AUCTION only */}
                 {formData.saleType === 'AUCTION' && (
                   <div className="flex items-start space-x-3 pt-4">
                     <input
@@ -1217,7 +1217,7 @@ const EditSalePage = () => {
               <p className="text-xs text-warm-400 dark:text-gray-500 mt-1 text-right">{formData.safetyNotes.length}/1000</p>
             </div>
 
-            {/* Feature #411: Dorm Dash Phase 2 — dorm-specific fields */}
+            {/* Feature #411: Dorm Dash Phase 2: dorm-specific fields */}
             {formData.saleType === 'DORM_DASH' && (
               <div className="border-t border-warm-300 dark:border-gray-600 pt-6 mt-6">
                 <h3 className="text-sm font-medium text-warm-700 dark:text-gray-300 mb-4">Dorm Dash Details</h3>
@@ -1255,7 +1255,7 @@ const EditSalePage = () => {
               </div>
             )}
 
-            {/* S696 Wave 2: Sale Floor Map — managed via item room tags */}
+            {/* S696 Wave 2: Sale Floor Map: managed via item room tags */}
             <div className="border-t border-warm-300 dark:border-gray-600 pt-6 mt-6">
               <h3 className="text-sm font-medium text-warm-700 dark:text-gray-300 mb-1">Sale Floor Map</h3>
               <p className="text-sm text-warm-500 dark:text-gray-400 mb-3">
@@ -1269,7 +1269,7 @@ const EditSalePage = () => {
               </Link>
             </div>
 
-            {/* S696 Wave 2: Bundle Pricing — managed in add-items */}
+            {/* S696 Wave 2: Bundle Pricing: managed in add-items */}
             <div className="border-t border-warm-300 dark:border-gray-600 pt-6 mt-6">
               <h3 className="text-sm font-medium text-warm-700 dark:text-gray-300 mb-1">Bundle Pricing</h3>
               <p className="text-sm text-warm-500 dark:text-gray-400 mb-3">
@@ -1283,7 +1283,7 @@ const EditSalePage = () => {
               </Link>
             </div>
 
-            {/* S696 Wave 2: Donation Kit — managed via settlement */}
+            {/* S696 Wave 2: Donation Kit: managed via settlement */}
             <div className="border-t border-warm-300 dark:border-gray-600 pt-6 mt-6">
               <h3 className="text-sm font-medium text-warm-700 dark:text-gray-300 mb-1">Donation Kit</h3>
               <p className="text-sm text-warm-500 dark:text-gray-400 mb-3">

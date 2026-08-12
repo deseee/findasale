@@ -411,16 +411,16 @@ export const analyzePhotoWithAI = async (req: Request, res: Response): Promise<v
       const raw = response.data.response.replace(/```json\n?|\n?```/g, '').trim();
       parsed = JSON.parse(raw);
     } catch {
-      res.status(422).json({ message: 'AI returned unparseable response', raw: response.data.response });
+      res.status(422).json({ message: "Couldn't read that response. Please try again.", raw: response.data.response });
       return;
     }
 
     res.json(parsed);
   } catch (error: any) {
     if (error.code === 'ECONNREFUSED') {
-      res.status(503).json({ message: 'AI service unavailable' });
+      res.status(503).json({ message: 'Smart tagging service unavailable' });
     } else if (error.code === 'ETIMEDOUT' || error.message?.includes('timeout')) {
-      res.status(504).json({ message: 'AI service timed out' });
+      res.status(504).json({ message: 'Smart tagging timed out. Please try again.' });
     } else {
       console.error('analyzePhotoWithAI error:', error);
       res.status(500).json({ message: 'Photo analysis failed' });

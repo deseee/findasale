@@ -1,4 +1,4 @@
-// SaleMapInner.tsx — actual Leaflet implementation (browser-only, loaded dynamically)
+// SaleMapInner.tsx: actual Leaflet implementation (browser-only, loaded dynamically)
 import { useEffect, useState } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMap, CircleMarker } from 'react-leaflet';
 import EntranceMarker from './EntranceMarker'; // Feature 35: Front Door Locator
@@ -27,12 +27,12 @@ interface ActiveTrail {
   stops: TrailStop[];
 }
 
-// Leaflet icon initialization — only on browser (this module is already guarded by dynamic + ssr:false)
+// Leaflet icon initialization: only on browser (this module is already guarded by dynamic + ssr:false)
 let L: any;
 let orangeIcon: any, greenIcon: any, amberIcon: any, grayIcon: any;
 
 if (typeof window !== 'undefined') {
-  // Leaflet is CJS — no .default export. Fall back to the module itself if .default is undefined.
+  // Leaflet is CJS: no .default export. Fall back to the module itself if .default is undefined.
   const leafletModule = require('leaflet');
   L = leafletModule.default ?? leafletModule;
 
@@ -110,7 +110,7 @@ const InvalidateMapSize = () => {
     if (!map) return;
 
     // invalidateSize() alone re-reads the container dimensions but does NOT always
-    // re-run Leaflet's _resetView — if the map-pane transform was committed as the
+    // re-run Leaflet's _resetView: if the map-pane transform was committed as the
     // identity matrix at init (CSS not yet applied, container size still zero), the
     // pane stays at translate3d(0,0,0) and every marker renders at its raw layer
     // point, thousands of px off-screen. Forcing setView(center, zoom) after the
@@ -123,7 +123,7 @@ const InvalidateMapSize = () => {
       map.setView(map.getCenter(), map.getZoom(), { animate: false, reset: true } as any);
     };
 
-    // Run on the next frame and again after a short delay — covers the case where
+    // Run on the next frame and again after a short delay: covers the case where
     // the parent's height (calc(100vh - 200px)) is still being laid out at mount.
     const raf = requestAnimationFrame(resetProjection);
     const t = setTimeout(resetProjection, 250);
@@ -151,7 +151,7 @@ interface SaleMapInnerProps {
   center?: [number, number];
   zoom?: number;
   singlePin?: { lat: number; lng: number; label: string };
-  /** Feature 35: Front Door Locator — entrance/parking pin */
+  /** Feature 35: Front Door Locator (entrance/parking pin) */
   entrancePin?: { lat: number; lng: number; note?: string };
   height?: string;
   userLocation?: { lat: number; lng: number } | null;
@@ -160,10 +160,10 @@ interface SaleMapInnerProps {
   onHeatmapCellClick?: (tile: HeatmapTile) => void;
   /** Feature #39: Photo Op Stations */
   photoOpStations?: PhotoOpStation[];
-  /** Feature: Trail Activation Mode — show trail stops on map */
+  /** Feature: Trail Activation Mode (show trail stops on map) */
   activeTrail?: ActiveTrail | null;
   setActiveTrail?: (trail: ActiveTrail | null) => void;
-  // (hasFeaturedBoost is passed through SalePin — no extra prop needed)
+  // (hasFeaturedBoost is passed through SalePin, no extra prop needed)
 }
 
 const SaleMapInner = ({
@@ -249,7 +249,7 @@ const SaleMapInner = ({
           </Marker>
         )}
 
-        {/* Feature 35: Front Door Locator — entrance/parking pin */}
+        {/* Feature 35: Front Door Locator (entrance/parking pin) */}
         {singlePin && entrancePin && (
           <EntranceMarker
             entranceLat={entrancePin.lat}
@@ -258,7 +258,7 @@ const SaleMapInner = ({
           />
         )}
 
-        {/* Feature #39: Photo Op Stations — selfie spot markers */}
+        {/* Feature #39: Photo Op Stations (selfie spot markers) */}
         {singlePin && photoOpStations && photoOpStations.map((station) => (
           <PhotoOpMarker key={station.id} station={station} />
         ))}
@@ -381,7 +381,7 @@ const SaleMapInner = ({
           );
         })}
 
-        {/* Trail stop markers — only show when activeTrail is set */}
+        {/* Trail stop markers: only show when activeTrail is set */}
         {activeTrail && activeTrail.stops && activeTrail.stops.map((stop) => (
           <CircleMarker
             key={stop.id}

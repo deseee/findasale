@@ -142,7 +142,7 @@ const FeedPage = ({ initialSales }: FeedPageProps) => {
           </div>
         )}
 
-        {/* Empty state — personalized but no new sales */}
+        {/* Empty state: personalized but no new sales */}
         {!isLoading && !isError && data?.sales.length === 0 && data.personalized && (
           <EmptyState
             icon="🏡"
@@ -152,7 +152,7 @@ const FeedPage = ({ initialSales }: FeedPageProps) => {
           />
         )}
 
-        {/* Empty state — not following anyone */}
+        {/* Empty state: not following anyone */}
         {!isLoading && !isError && data?.sales.length === 0 && !data?.personalized && (
           <EmptyState
             icon="🔍"

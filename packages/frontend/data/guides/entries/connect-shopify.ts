@@ -16,7 +16,7 @@ This is a TEAMS tier feature.
 
 ## Who this is for
 
-You already have a Shopify store. You run sales — estate sales, consignment events, flea market booths — and you want those items visible to your online customers without double data entry. When something sells on either platform, you want the other to know.
+You already have a Shopify store. You run sales (estate sales, consignment events, flea market booths) and you want those items visible to your online customers without double data entry. When something sells on either platform, you want the other to know.
 
 If you don't have a Shopify store, this guide doesn't apply yet.
 
@@ -85,13 +85,13 @@ Shopify is for your online storefront. The in-person sale tools stay in FindA.Sa
 
 When an item sells through FindA.Sale (in-person or online), the matching Shopify product is automatically set to out-of-stock so it stops selling on your storefront.
 
-Sync currently runs one direction: FindA.Sale → Shopify. If an item sells **on Shopify first**, FindA.Sale is not notified automatically — mark it sold in FindA.Sale yourself so the two stay in agreement. Two-way (Shopify → FindA.Sale) sync is planned but not available yet.
+Sync currently runs one direction: FindA.Sale → Shopify. If an item sells **on Shopify first**, FindA.Sale is not notified automatically: mark it sold in FindA.Sale yourself so the two stay in agreement. Two-way (Shopify → FindA.Sale) sync is planned but not available yet.
 
 ---
 
 ## Remove an item from Shopify
 
-FindA.Sale does not currently unpublish or delete items from Shopify on its own. To take a product down, open your Shopify admin and unpublish or delete it there. (When an item sells through FindA.Sale, its Shopify product is automatically set to out-of-stock so it stops selling — see Sold-status sync above.)
+FindA.Sale does not currently unpublish or delete items from Shopify on its own. To take a product down, open your Shopify admin and unpublish or delete it there. (When an item sells through FindA.Sale, its Shopify product is automatically set to out-of-stock so it stops selling (see Sold-status sync above).)
 
 ---
 
@@ -104,13 +104,13 @@ Yes. Shopify cross-listing is a TEAMS feature. If you're on PRO or below, the Sh
 Not yet from FindA.Sale directly. Items are pushed as active by default. To change a product to a draft, edit it in your Shopify admin after it appears.
 
 **What if my Shopify store has existing products with the same name?**
-FindA.Sale creates new products — it doesn't match or update existing ones. You'll end up with duplicates if you push items you've already listed manually. Clean up the manual duplicates in Shopify after switching to this workflow.
+FindA.Sale creates new products. It doesn't match or update existing ones. You'll end up with duplicates if you push items you've already listed manually. Clean up the manual duplicates in Shopify after switching to this workflow.
 
 **Can I push all my items at once?**
 Not with a single button yet. You push items one at a time with **Push to Shopify**. If you have a large inventory, work through your review queue and push items in batches.
 
 **What happens to the Shopify product if I delete the item in FindA.Sale?**
-The product stays in Shopify. Removing it from FindA.Sale does not remove it from your store — delete it in Shopify separately if needed.
+The product stays in Shopify. Removing it from FindA.Sale does not remove it from your store: delete it in Shopify separately if needed.
 
 **Does Shopify pricing stay in sync if I change the price in FindA.Sale?**
 Not automatically. The price is sent to Shopify only at the moment you push the item. If you change the price in FindA.Sale afterward, update it in your Shopify admin to match. (Pushing the same item again creates a second product in Shopify rather than updating the first, so edit in Shopify rather than re-pushing.)

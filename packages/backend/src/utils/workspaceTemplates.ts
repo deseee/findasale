@@ -28,7 +28,7 @@ export const WORKSPACE_TEMPLATES: Record<string, WorkspaceTemplate> = {
 
   SOLO: {
     name: 'Solo',
-    description: 'Just you — full admin control',
+    description: 'Just you, full admin control',
     isSystemDefault: true,
     roles: {
       OWNER: Object.values(WORKSPACE_PERMISSIONS),

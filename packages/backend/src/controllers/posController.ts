@@ -83,7 +83,7 @@ export async function createPaymentLinkInternal(opts: {
       ? { product: genericProductId }
       : {
           product_data: {
-            name: `FindA.Sale — ${items.map(i => i.title).join(', ').slice(0, 200) || 'Item Sale'}`,
+            name: `FindA.Sale: ${items.map(i => i.title).join(', ').slice(0, 200) || 'Item Sale'}`,
           },
         }),
   });
@@ -760,7 +760,7 @@ export const sendPaymentLinkEmail = async (req: AuthRequest, res: Response) => {
     const amountStr = amount ? `$${Number(amount).toFixed(2)}` : 'your items';
     const html = buildEmail({
       preheader: `Your payment link is ready`,
-      headline: `Pay ${amountStr} — tap the button below`,
+      headline: `Pay ${amountStr}. Tap the button below.`,
       body: `<p>The organizer has sent you a secure payment link for ${amountStr}. Tap below to pay from your phone.</p>`,
       ctaText: 'Pay Now',
       ctaUrl: paymentLinkUrl,
@@ -770,7 +770,7 @@ export const sendPaymentLinkEmail = async (req: AuthRequest, res: Response) => {
     await transactionalEmailService.emails.send({
       from: fromEmail,
       to: buyerEmail,
-      subject: `Your checkout is ready — ${amountStr}`,
+      subject: `Your checkout is ready: ${amountStr}`,
       html,
     });
 

@@ -18,7 +18,7 @@ Here is where it comes from and how to grow it.
 
 After a sale closes, FindA.Sale sends a review prompt to shoppers who made a purchase or confirmed a hold at that sale. They rate their experience from 1 to 5 stars and can leave a written comment.
 
-You cannot request a review manually or send shoppers a separate prompt. The platform handles outreach automatically — 24 hours after sale close. This keeps the process consistent and prevents any appearance of review pressure.
+You cannot request a review manually or send shoppers a separate prompt. The platform handles outreach automatically, 24 hours after sale close. This keeps the process consistent and prevents any appearance of review pressure.
 
 Reviews are based on purchases only. Shoppers who browsed but did not buy cannot leave a rating.
 
@@ -28,7 +28,7 @@ Reviews are based on purchases only. Shoppers who browsed but did not buy cannot
 
 **Search placement.** FindA.Sale surfaces organizers with stronger ratings higher in results when shoppers search by category, city, or sale type. A higher rating is one of the factors that determines whether your sale appears in the first few results or deeper in the list.
 
-**Featured placement eligibility.** Certain promotional spots — including weekend featured sales and city landing page highlights — require a minimum rating threshold. Organizers below that threshold are not eligible regardless of their plan tier.
+**Featured placement eligibility.** Certain promotional spots, including weekend featured sales and city landing page highlights, require a minimum rating threshold. Organizers below that threshold are not eligible regardless of their plan tier.
 
 **Shopper trust.** When a shopper lands on your profile for the first time, your star average and review count are displayed prominently. Most shoppers make a judgment call in the first few seconds. A solid rating with recent reviews is the fastest way to clear that hurdle.
 
@@ -66,7 +66,7 @@ Read it before you react. Sometimes a negative review describes a genuine proble
 Either way, respond the same way:
 
 1. Acknowledge what the shopper experienced, even if you see it differently.
-2. Explain what happened if there is relevant context — briefly.
+2. Explain what happened if there is relevant context, briefly.
 3. Say what you would do differently or what you have already changed.
 
 Do not argue. Do not ask FindA.Sale to remove the review because you disagree with it. Reviewers are protected as long as their content does not violate platform rules. A professional response to a tough review often leaves a better impression than no response at all.
@@ -82,7 +82,7 @@ The **Verified Organizer** badge appears on your profile once you have:
 - Connected a payout account
 - Completed at least one sale on FindA.Sale
 
-It signals to shoppers that you are an active seller with basic identity confirmed on the platform. It is not a quality rating — it is a baseline trust marker. Most shoppers look for this before placing a hold with an unfamiliar organizer.
+It signals to shoppers that you are an active seller with basic identity confirmed on the platform. It is not a quality rating. It is a baseline trust marker. Most shoppers look for this before placing a hold with an unfamiliar organizer.
 
 ---
 
@@ -97,7 +97,7 @@ Most shoppers weigh recency more than total count. An organizer with 8 recent re
 ## Common questions
 
 **Can I ask shoppers to leave a review?**
-You can mention that you appreciate reviews — in person at pickup or in your sale description — but the platform handles the formal review prompt. Do not send shoppers direct messages asking them to rate you. That reads as pressure and can backfire.
+You can mention that you appreciate reviews (in person at pickup or in your sale description), but the platform handles the formal review prompt. Do not send shoppers direct messages asking them to rate you. That reads as pressure and can backfire.
 
 **What if a shopper never got the review prompt?**
 Review prompts go to the email address on the shopper's account. If they did not receive it, it may have gone to spam. You cannot re-send it manually, but the shopper can leave a review from your organizer profile page directly.

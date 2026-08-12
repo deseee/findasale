@@ -346,7 +346,7 @@ export const approveConsignorSettlementBatch = async (req: AuthRequest, res: Res
             method: 'ACH',
             notes: payout.notes
               ? `${payout.notes} | simulated (live transfers OFF)`
-              : 'Simulated payout — live transfers OFF',
+              : 'Simulated payout (live transfers OFF)',
           },
         });
         continue;
@@ -419,9 +419,9 @@ export const approveConsignorSettlementBatch = async (req: AuthRequest, res: Res
       liveTransfersEnabled: live,
       message: live
         ? anyFailure
-          ? 'Settlement processed with some failures — see per-consignor status.'
+          ? 'Settlement processed with some failures. See per-consignor status.'
           : 'Settlement processed. ACH transfers issued.'
-        : 'Settlement approved in test mode. Transfers simulated — no money moved (live transfers OFF).',
+        : 'Settlement approved in test mode. Transfers simulated: no money moved (live transfers OFF).',
     });
   } catch (error) {
     console.error('[approveConsignorSettlementBatch] Error:', error);

@@ -9,7 +9,7 @@ import { Template, BASE_POLISH } from './types';
 
 export const seasonBResaleRoute: Template = {
   id: 'season-B-resale-route',
-  displayName: 'The Resale Route — Reseller Sourcing',
+  displayName: 'The Resale Route, Reseller Sourcing',
   purpose: 'PROMO',
   contentSignature: {
     requiredRoles: ['MAP', 'PRICE_REVEAL'],

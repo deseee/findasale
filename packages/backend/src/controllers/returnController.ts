@@ -19,7 +19,7 @@ export const requestReturnHandler = async (req: AuthRequest, res: Response) => {
 
     if (!result) {
       return res.status(400).json({
-        message: 'Cannot create return request — purchase not found, return window closed, or request already exists',
+        message: 'Cannot create return request: purchase not found, return window closed, or request already exists',
       });
     }
 
@@ -60,7 +60,7 @@ export const resolveReturnHandler = async (req: AuthRequest, res: Response) => {
 
     if (!success) {
       return res.status(400).json({
-        message: 'Cannot resolve return request — not found or unauthorized',
+        message: 'Cannot resolve return request: not found or unauthorized',
       });
     }
 

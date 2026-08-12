@@ -32,7 +32,7 @@ With Hubs, each location gets its own pin and its own item list.
 
 Use Hubs when the locations are part of the same event and you want shoppers to see them together.
 
-Create separate sales when the events are independent — different dates, different inventory, different organizers.
+Create separate sales when the events are independent: different dates, different inventory, different organizers.
 
 ---
 
@@ -62,7 +62,7 @@ When you add or edit an item:
 
 Items without a hub assigned default to the primary sale address.
 
-You can reassign items to a different hub at any time — useful if inventory moves between locations during a multi-day sale.
+You can reassign items to a different hub at any time: useful if inventory moves between locations during a multi-day sale.
 
 ---
 
@@ -84,7 +84,7 @@ The POS (point-of-sale) runs per location.
 Staff at the main house run a POS session from that location.
 Staff at the overflow warehouse run a separate POS session from that location.
 
-When a staff member marks an item sold in a POS session, it marks that item as sold across the entire sale — the item won't show as available at any other hub.
+When a staff member marks an item sold in a POS session, it marks that item as sold across the entire sale: the item won't show as available at any other hub.
 
 You don't need separate devices for each hub, but each POS session should be opened and run from the correct hub location so the inventory stays accurate.
 
@@ -93,10 +93,10 @@ You don't need separate devices for each hub, but each POS session should be ope
 ## Common questions
 
 **Can I add Hubs after the sale is already published?**
-Yes. You can add, edit, or remove Hubs at any time — before or after publishing. Changes take effect immediately.
+Yes. You can add, edit, or remove Hubs at any time: before or after publishing. Changes take effect immediately.
 
 **What happens if I remove a Hub that has items assigned to it?**
-Items assigned to that Hub revert to the primary sale address. They don't disappear — you'll need to reassign them to another Hub or leave them at the primary address.
+Items assigned to that Hub revert to the primary sale address. They don't disappear: you'll need to reassign them to another Hub or leave them at the primary address.
 
 **Can different staff members run POS at each Hub at the same time?**
 Yes. Multiple POS sessions can run simultaneously across different hubs. Sold status syncs across all sessions in real time, so the same item won't be marked sold twice.
@@ -105,7 +105,7 @@ Yes. Multiple POS sessions can run simultaneously across different hubs. Sold st
 Yes. Auction items can be assigned to a Hub. The Hub label appears on the item card so winning bidders know where to pick up.
 
 **Can I name a Hub anything?**
-Yes. Use names that make sense to a shopper — "Front Yard," "Garage," "Back Storage" all work fine.
+Yes. Use names that make sense to a shopper: "Front Yard," "Garage," "Back Storage" all work fine.
 
 ---
 

@@ -143,7 +143,7 @@ export async function finalizeGracePeriod(organizerId: string) {
     createNotification({
       userId: organizer.userId,
       type: 'grace_period_finalized',
-      title: 'Your grace period ended — some items and access were locked',
+      title: 'Your grace period ended: some items and access were locked',
       body: `Your 7-day grace period after downgrading to SIMPLE has ended. ${parts.join(' and ')}. Re-upgrade at any time within 30 days to restore everything automatically.`,
       link: '/organizer/billing',
       channel: 'OPERATIONAL',

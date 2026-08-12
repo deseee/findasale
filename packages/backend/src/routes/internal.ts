@@ -722,7 +722,7 @@ router.post('/enrich-sale-details/bulk', bulkUpsertEnrichedSales);
 
 // POST /api/internal/category-sync/trigger
 router.post('/category-sync/trigger', requireSecret, async (req: express.Request, res: express.Response) => {
-  res.json({ ok: true, message: 'Category sync started — check Railway logs for results' });
+  res.json({ ok: true, message: 'Category sync started. Check Railway logs for results.' });
   try {
     await runCategorySync();
   } catch (err: any) {

@@ -57,7 +57,7 @@ const OrganizerReputation: React.FC<OrganizerReputationProps> = ({ organizerId }
     return null;
   }
 
-  // Normalize API response shape — backend may return saleCount or salesCount
+  // Normalize API response shape: backend may return saleCount or salesCount
   const salesCount = reputation.salesCount ?? (reputation as any).saleCount ?? 0;
 
   // New Organizer badge (score is null or 0 with isNew flag)
@@ -91,7 +91,7 @@ const OrganizerReputation: React.FC<OrganizerReputationProps> = ({ organizerId }
         )}
       </div>
 
-      {/* Breakdown Details — only shown when backend returns breakdown object */}
+      {/* Breakdown Details: only shown when backend returns breakdown object */}
       {reputation.breakdown && (
         <div className="text-xs text-warm-500 dark:text-gray-400 grid grid-cols-2 gap-2 pt-2 border-t border-warm-200 dark:border-gray-700">
           <div>

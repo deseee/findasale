@@ -14,7 +14,7 @@ Settlement is the five-step process that happens after your sale closes.
 You review what sold, confirm what each consignor is owed, export the report, and your payout goes to your bank.
 The whole thing usually takes under ten minutes.
 
-For a deeper look at how payouts work — timing, bank connection, and failure states — see [Connect Stripe and receive your first payout](/guides/connect-stripe-and-receive-your-first-payout).
+For a deeper look at how payouts work (timing, bank connection, and failure states), see [Connect Stripe and receive your first payout](/guides/connect-stripe-and-receive-your-first-payout).
 
 ---
 
@@ -24,18 +24,18 @@ For a deeper look at how payouts work — timing, bank connection, and failure s
 
 Go to your sale and tap **End Sale**.
 This locks the POS and stops new transactions.
-Don't close the sale while shoppers are still picking up — items need to be in the sold state before you finalize.
+Don't close the sale while shoppers are still picking up: items need to be in the sold state before you finalize.
 
 ### Step 2: Open the Settlement hub
 
 A **Settle Up** button appears at the top of your sale dashboard.
 Tap it.
-You'll see gross revenue broken down by payment method (cash, Venmo/Zelle, Stripe), a total item count, and — if you have consignors — each consignor's section.
+You'll see gross revenue broken down by payment method (cash, Venmo/Zelle, Stripe), a total item count, and, if you have consignors, each consignor's section.
 
 ### Step 3: Review consignor splits
 
 Each consignor row shows the items they brought, total revenue from those items, their split percentage, and what they're owed.
-Adjust the split or flag an item for dispute now — you can't edit after you finalize.
+Adjust the split or flag an item for dispute now: you can't edit after you finalize.
 
 **Common mistake:** closing the sale before all pickups happen.
 If a consignor comes to collect unsold items after you've settled, those items are already archived.
@@ -56,7 +56,7 @@ Once you finalize settlement, Stripe initiates a transfer to your connected bank
 Standard timing is 2–5 business days.
 You'll get an email when it lands.
 
-The platform fee is deducted before your payout is calculated — it's not a separate charge.
+The platform fee is deducted before your payout is calculated. It's not a separate charge.
 
 ---
 
@@ -76,7 +76,7 @@ Add them manually in the Settlement hub before you export. There's an "Add cash 
 **Do I need Stripe to settle?**
 You need Stripe to receive your platform payout to a bank account. If you collected only cash or Venmo/Zelle and want to skip the payout step, you can export the PDF and mark settlement complete without initiating a Stripe transfer.
 
-**Can I settle a partial sale — items from one day of a multi-day sale?**
+**Can I settle a partial sale (items from one day of a multi-day sale)?**
 No. Settlement covers the entire sale when it closes. Run separate sales in the app if you need separate settlement periods.
 
 **What happens to unsold consignor items?**

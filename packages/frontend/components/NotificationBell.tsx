@@ -145,7 +145,7 @@ const NotificationBell = () => {
         )}
       </button>
 
-      {/* Dropdown Panel — fixed + viewport-clamped below lg (matches the lg:hidden mobile
+      {/* Dropdown Panel: fixed + viewport-clamped below lg (matches the lg:hidden mobile
           icon row in Layout.tsx where this bell is NOT the rightmost icon, so anchoring
           via `absolute right-0` off the bell's own ~40px wrapper pushed the 320px panel
           off-screen on narrow viewports, e.g. Pixel 6a 412px). At lg+ the bell sits in the

@@ -153,7 +153,7 @@ export const sendBoothCartReceiptEmail = async (cartTransactionId: string): Prom
 
     const boothSectionsHtml = Array.from(byBooth.values())
       .map((group) => {
-        const itemsHtml = group.items.map((i) => `<li>${i.title} — $${i.amount.toFixed(2)}</li>`).join('');
+        const itemsHtml = group.items.map((i) => `<li>${i.title}: $${i.amount.toFixed(2)}</li>`).join('');
         return `<div style="margin-bottom:16px;"><strong>${group.boothName}${group.boothNumber ? ` (Booth ${group.boothNumber})` : ''}: $${group.subtotal.toFixed(2)}</strong><ul>${itemsHtml}</ul></div>`;
       })
       .join('');
@@ -170,10 +170,10 @@ export const sendBoothCartReceiptEmail = async (cartTransactionId: string): Prom
     const anyCashLeg = cart.legs.some((l) => l.rail === 'CASH');
     const allCashLegs = cart.legs.length > 0 && cart.legs.every((l) => l.rail === 'CASH');
     const multiVendorIntro = allCashLegs
-      ? `Your cart included items from ${byBooth.size} vendor booth${byBooth.size === 1 ? '' : 's'}, paid for in cash — the breakdown below shows what you paid each booth.`
+      ? `Your cart included items from ${byBooth.size} vendor booth${byBooth.size === 1 ? '' : 's'}, paid for in cash. The breakdown below shows what you paid each booth.`
       : anyCashLeg
-        ? `Your cart included items from ${byBooth.size} vendor booth${byBooth.size === 1 ? '' : 's'} — some booths were charged to your card and some were paid in cash, so your card statement will show fewer than ${byBooth.size} lines. The breakdown below shows what you paid each booth.`
-        : `Your cart included items from ${byBooth.size} vendor booth${byBooth.size === 1 ? '' : 's'} — each is billed separately, so your card statement will show ${byBooth.size} separate line${byBooth.size === 1 ? '' : 's'} matching the breakdown below.`;
+        ? `Your cart included items from ${byBooth.size} vendor booth${byBooth.size === 1 ? '' : 's'}. Some booths were charged to your card and some were paid in cash, so your card statement will show fewer than ${byBooth.size} lines. The breakdown below shows what you paid each booth.`
+        : `Your cart included items from ${byBooth.size} vendor booth${byBooth.size === 1 ? '' : 's'}. Each is billed separately, so your card statement will show ${byBooth.size} separate line${byBooth.size === 1 ? '' : 's'} matching the breakdown below.`;
 
     const html = buildEmail({
       preheader: 'Your itemized receipt from FindA.Sale',

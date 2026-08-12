@@ -414,7 +414,7 @@ router.post('/send-test-email', sendTestEmailLimiter, async (req: any, res: any)
 
     // Domain block guard — applies to both rails (belt-and-suspenders)
     if (isEmailDomainBlocked(toAddress)) {
-      return res.status(400).json({ success: false, error: 'Recipient domain blocked — cannot send to this address' });
+      return res.status(400).json({ success: false, error: 'Recipient domain blocked. Cannot send to this address.' });
     }
 
     if (rail === 'gmail') {

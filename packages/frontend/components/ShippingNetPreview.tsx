@@ -1,12 +1,12 @@
 /**
- * ShippingNetPreview — live two-column strip showing estimated buyer shipping and
+ * ShippingNetPreview: live two-column strip showing estimated buyer shipping and
  * the organizer's estimated net proceeds for an eBay listing. Includes an
  * expandable fee breakdown and a low-price guardrail that warns ONLY when the
  * organizer's entered price is below the fee-safe floor (the point where eBay
  * fees + shipping would eat most of their money).
  *
  * The guardrail is silent on normal items. When it fires, the organizer can
- * accept the floor price — it is never auto-applied.
+ * accept the floor price: it is never auto-applied.
  * Calls POST /api/ebay/shipping-preview (debounced).
  */
 
@@ -161,7 +161,7 @@ export const ShippingNetPreview: React.FC<ShippingNetPreviewProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [weightOz, dims?.length, dims?.width, dims?.height, itemPrice, ebayCategoryId, fromZip]);
 
-  // Empty state — no weight yet.
+  // Empty state: no weight yet.
   if (!hasInputs) {
     return (
       <div className="rounded-lg border border-dashed border-warm-300 dark:border-gray-600 bg-warm-50 dark:bg-gray-800 p-3 text-sm text-warm-600 dark:text-warm-400">
@@ -170,7 +170,7 @@ export const ShippingNetPreview: React.FC<ShippingNetPreviewProps> = ({
     );
   }
 
-  // Custom per-item eBay policy — buyer shipping is governed by the organizer's
+  // Custom per-item eBay policy: buyer shipping is governed by the organizer's
   // chosen eBay policy, not our calculated/flat model. Show an honest note instead
   // of a fabricated shipping/net number.
   if (!loading && data && data.customPolicy) {
@@ -291,7 +291,7 @@ export const ShippingNetPreview: React.FC<ShippingNetPreviewProps> = ({
         </div>
       )}
 
-      {/* Low-price guardrail — only when the entered price is below the fee-safe floor */}
+      {/* Low-price guardrail: only when the entered price is below the fee-safe floor */}
       {showGuardrail && floorPrice != null && itemPrice != null && data && (
         <div className="rounded-md border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/30 p-3 space-y-2">
           <div className="flex items-start gap-2">

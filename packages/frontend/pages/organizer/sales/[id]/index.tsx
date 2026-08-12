@@ -71,7 +71,7 @@ const SaleDetailPage = () => {
   const { data: items = [], isLoading: itemsLoading, refetch: refetchItems } = useQuery({
     queryKey: ['items', id, 'by-sale'],
     queryFn: async () => {
-      // Use organizer-authenticated drafts endpoint — bypasses Hunt Pass rarity
+      // Use organizer-authenticated drafts endpoint: bypasses Hunt Pass rarity
       // filter that hides RARE items the organizer owns within 6h.
       const response = await api.get(`/items/drafts?saleId=${id}&limit=1000`);
       return (response.data.items || response.data) as Item[];
@@ -79,7 +79,7 @@ const SaleDetailPage = () => {
     enabled: !!id,
   });
 
-  // eBay push mutation — S725 sends LIVE only (DRAFT mode killed).
+  // eBay push mutation: S725 sends LIVE only (DRAFT mode killed).
   const ebayPushMutation = useMutation({
     mutationFn: async ({ itemIds }: { itemIds: string[] }) => {
       return api.post(`/ebay/organizer/sales/${id}/ebay-push`, { itemIds });
@@ -114,7 +114,7 @@ const SaleDetailPage = () => {
     },
   });
 
-  // S725: "Publish to eBay now" — publishes an existing unpublished Inventory API
+  // S725: "Publish to eBay now": publishes an existing unpublished Inventory API
   // offer (ebayOfferId set, ebayListingId null) so it goes LIVE without a fresh push.
   const ebayPublishMutation = useMutation({
     mutationFn: async ({ itemId }: { itemId: string }) => {
@@ -302,7 +302,7 @@ const SaleDetailPage = () => {
                       </p>
                     )}
 
-                    {/* eBay Status Badge — S725 three states: Live / Pending Publish / none */}
+                    {/* eBay Status Badge: S725 three states: Live / Pending Publish / none */}
                     {item.ebayListingId && (
                       <a
                         href={`https://www.ebay.com/itm/${item.ebayListingId}`}
@@ -347,7 +347,7 @@ const SaleDetailPage = () => {
                         Edit
                       </Link>
 
-                      {/* Push to eBay — S725 single LIVE button (DRAFT mode killed).
+                      {/* Push to eBay: S725 single LIVE button (DRAFT mode killed).
                           Hidden when an unpublished offer already exists; in that case
                           the "Publish now" inline button (in the Pending Publish badge above)
                           handles the publish step. */}
@@ -423,7 +423,7 @@ const SaleDetailPage = () => {
             </div>
           )}
 
-          {/* Weight-confirmation review queue (2026-08-08 fix) — organizer-wide data
+          {/* Weight-confirmation review queue (2026-08-08 fix): organizer-wide data
               (any live eBay listing missing a confirmed weight, regardless of which
               sale it belongs to), so it must NOT be gated behind this one sale's
               ENDED status the way the post-sale unsold-items panel below correctly
@@ -434,7 +434,7 @@ const SaleDetailPage = () => {
               loading/error/"nothing to review" states, safe to show on any sale. */}
           {sale && ebayConnected && <EbayWeightReviewQueue saleId={id as string} />}
 
-          {/* Post-Sale eBay Push Panel (unsold-items handling — genuinely post-sale) */}
+          {/* Post-Sale eBay Push Panel (unsold-items handling: genuinely post-sale) */}
           {sale && sale.status === 'ENDED' && (
             <div id="post-sale-panel">
               <PostSaleEbayPanel saleId={id as string} />

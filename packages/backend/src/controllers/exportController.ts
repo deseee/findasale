@@ -414,7 +414,7 @@ export const exportCraigslistText = async (
     lines.push('--- SALE DETAILS ---');
     lines.push(sale.title);
     lines.push(
-      `When: ${formatDate(sale.startDate)} — ${formatDate(sale.endDate)}`
+      `When: ${formatDate(sale.startDate)} to ${formatDate(sale.endDate)}`
     );
     lines.push(
       `Where: ${sale.address}, ${sale.city}, ${sale.state || ''} ${sale.zip || ''}`.trim()
@@ -428,7 +428,7 @@ export const exportCraigslistText = async (
     sale.items.forEach((item) => {
       lines.push(item.title);
       const priceStr = item.price ? `$${item.price.toFixed(2)}` : 'Contact for price';
-      const conditionStr = item.condition ? ` — ${item.condition}` : '';
+      const conditionStr = item.condition ? `, ${item.condition}` : '';
       lines.push(`${priceStr}${conditionStr}`);
       if (item.description) {
         lines.push(item.description);

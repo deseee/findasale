@@ -5,8 +5,8 @@
  * via html5-qrcode (already in package.json). Uses the environment-facing camera.
  *
  * Props:
- *   onScan(code, codeType)  — called once on first successful decode; camera stops
- *   onCancel()              — called when user taps Cancel
+ *   onScan(code, codeType): called once on first successful decode; camera stops
+ *   onCancel(): called when user taps Cancel
  */
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
@@ -50,7 +50,7 @@ function toCatalogCodeType(htmlFormatName: string): string {
   if (htmlFormatName.startsWith('UPC')) return 'UPC';
   if (htmlFormatName.startsWith('EAN')) return 'EAN';
   if (htmlFormatName === 'QR') return 'QR';
-  // ISBN is EAN-13 with 978/979 prefix — backend handles it as EAN
+  // ISBN is EAN-13 with 978/979 prefix: backend handles it as EAN
   return 'EAN';
 }
 
@@ -59,7 +59,7 @@ const SCANNER_ELEMENT_ID = 'barcode-scanner-viewfinder';
 const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onScan, onCancel }) => {
   const [scanState, setScanState] = useState<ScanState>('requesting');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  // html5-qrcode instance stored in a ref — avoid re-renders
+  // html5-qrcode instance stored in a ref: avoid re-renders
   const scannerRef = useRef<any>(null);
   const hasFiredRef = useRef(false);
 
@@ -69,7 +69,7 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onScan, onCancel }) => 
         await scannerRef.current.stop();
         scannerRef.current.clear();
       } catch {
-        // Scanner may not be running — safe to ignore
+        // Scanner may not be running: safe to ignore
       }
       scannerRef.current = null;
     }
@@ -125,7 +125,7 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onScan, onCancel }) => 
           });
         },
         () => {
-          // per-frame error — expected when no barcode is in frame; ignore
+          // per-frame error: expected when no barcode is in frame; ignore
         },
       );
       setScanState('scanning');
@@ -249,7 +249,7 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onScan, onCancel }) => 
         </div>
       </div>
 
-      {/* CSS animation for scan line — inline style tag */}
+      {/* CSS animation for scan line: inline style tag */}
       <style>{`
         @keyframes barcode-scan-line {
           0%   { transform: translateY(-44px); opacity: 0.4; }

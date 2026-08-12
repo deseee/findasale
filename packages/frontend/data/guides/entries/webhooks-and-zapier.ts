@@ -8,7 +8,7 @@ const entry: GuideEntry = {
   priority: 2,
   relatedGuides: ['connect-shopify', 'message-templates-and-the-built-in-inbox'],
   videoUrl: undefined,
-  body: `When something happens in your sale — an item sells, a hold is placed, a shopper follows you — FindA.Sale can send that event to another tool automatically. You don't need to check FindA.Sale to know. Your spreadsheet, your Slack, your CRM can all hear it in real time.
+  body: `When something happens in your sale (an item sells, a hold is placed, a shopper follows you), FindA.Sale can send that event to another tool automatically. You don't need to check FindA.Sale to know. Your spreadsheet, your Slack, your CRM can all hear it in real time.
 
 The two ways to do this: webhooks (for developers or tools that accept raw data) and Zapier (for everyone else, no code needed).
 
@@ -44,7 +44,7 @@ If your tool is in Zapier's app library, you can connect it to FindA.Sale withou
 2. Search for FindA.Sale as the trigger app.
 3. Select the event you want to trigger on (item sold, new follower, etc.).
 4. Connect your FindA.Sale account when prompted.
-5. Set up the action — what Zapier does when the event fires.
+5. Set up the action: what Zapier does when the event fires.
 
 **Common Zaps organizers use:**
 - New item sold → add a row in Google Sheets (running sales log)
@@ -53,7 +53,7 @@ If your tool is in Zapier's app library, you can connect it to FindA.Sale withou
 - Hold placed → send yourself an SMS
 - Sale closed → create a task in Notion or Trello to start settlement
 
-You can also combine Zaps with filters — for example, only log items to your spreadsheet if the sale price was over $50.
+You can also combine Zaps with filters, for example, only log items to your spreadsheet if the sale price was over $50.
 
 ---
 

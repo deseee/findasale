@@ -14,7 +14,7 @@ const entry: GuideEntry = {
 
 ## Why Stripe is required
 
-FindA.Sale uses Stripe Connect to move money from shoppers to you. Without a connected Stripe account, shoppers can still place holds and pay cash in person — but you can't process card payments or receive online payouts. Most organizers connect Stripe before their first sale goes live.
+FindA.Sale uses Stripe Connect to move money from shoppers to you. Without a connected Stripe account, shoppers can still place holds and pay cash in person, but you can't process card payments or receive online payouts. Most organizers connect Stripe before their first sale goes live.
 
 ---
 
@@ -23,7 +23,7 @@ FindA.Sale uses Stripe Connect to move money from shoppers to you. Without a con
 1. Go to **Settings → Payouts**.
 2. Click **Connect with Stripe**.
 3. Stripe opens its own onboarding flow. Enter your name, date of birth, and either a bank account (routing and account numbers) or a debit card.
-4. You'll also provide the last four digits of your Social Security number. This is standard identity verification — the same thing any business bank account requires.
+4. You'll also provide the last four digits of your Social Security number. This is standard identity verification: the same thing any business bank account requires.
 5. Review and submit. Stripe confirms most accounts immediately.
 
 That's it. Once Stripe confirms your account, the Payouts page in Settings shows a green "Connected" status.
@@ -32,19 +32,19 @@ That's it. Once Stripe confirms your account, the Payouts page in Settings shows
 
 ## What Stripe needs and why
 
-Stripe is a licensed payment processor. They're required by law to verify the identity of anyone who receives payouts. The information they ask for — name, DOB, last four of SSN — is the minimum required by financial regulations. FindA.Sale does not store or see this information. It goes directly to Stripe.
+Stripe is a licensed payment processor. They're required by law to verify the identity of anyone who receives payouts. The information they ask for (name, DOB, last four of SSN) is the minimum required by financial regulations. FindA.Sale does not store or see this information. It goes directly to Stripe.
 
 ---
 
 ## How long it takes
 
-Most accounts are approved immediately after you submit. Some accounts go through a manual review by Stripe, which can take one to two business days. If your account is under review, Stripe will email you directly. In the meantime, you can still build and publish your sale — you just won't be able to process card payments until the review clears.
+Most accounts are approved immediately after you submit. Some accounts go through a manual review by Stripe, which can take one to two business days. If your account is under review, Stripe will email you directly. In the meantime, you can still build and publish your sale: you just won't be able to process card payments until the review clears.
 
 ---
 
 ## When payouts arrive
 
-After a sale closes, you initiate a settlement from your dashboard. Funds arrive in your bank account two to five business days later. If you connected a debit card instead of a bank account, you can choose instant payout — funds arrive within minutes for a small fee (typically 1.5%, minimum $0.50). The fee is charged by Stripe, not FindA.Sale.
+After a sale closes, you initiate a settlement from your dashboard. Funds arrive in your bank account two to five business days later. If you connected a debit card instead of a bank account, you can choose instant payout: funds arrive within minutes for a small fee (typically 1.5%, minimum $0.50). The fee is charged by Stripe, not FindA.Sale.
 
 ---
 
@@ -57,7 +57,7 @@ You can run a sale without Stripe. Shoppers can place holds and pay cash at pick
 ## Common questions
 
 **Is it safe to give Stripe my SSN?**
-Yes. Stripe is one of the largest payment processors in the world and holds a banking license. They are required to verify identity for anyone receiving payouts — it's the same requirement your bank has. FindA.Sale never sees your SSN.
+Yes. Stripe is one of the largest payment processors in the world and holds a banking license. They are required to verify identity for anyone receiving payouts: it's the same requirement your bank has. FindA.Sale never sees your SSN.
 
 **Can I use a business bank account instead of a personal one?**
 Yes. Stripe accepts both personal and business bank accounts. If you use a business account, you'll enter your EIN instead of your SSN.
@@ -75,15 +75,15 @@ FindA.Sale charges 10% on all sales, regardless of your plan. This is deducted b
 
 ## Video script
 
-*(90-second VO — screen recording of Settings → Payouts through confirmed connection)*
+*(90-second VO: screen recording of Settings → Payouts through confirmed connection)*
 
 "Let's get Stripe connected so you can start receiving payouts.
 
-Head to Settings, then Payouts, and click Connect with Stripe. This opens Stripe's own setup page — it's separate from FindA.Sale.
+Head to Settings, then Payouts, and click Connect with Stripe. This opens Stripe's own setup page: it's separate from FindA.Sale.
 
-Stripe will ask for your name, date of birth, and a bank account or debit card. You'll also enter the last four digits of your Social Security number. That's standard identity verification — the same thing a bank account requires. FindA.Sale never sees this information.
+Stripe will ask for your name, date of birth, and a bank account or debit card. You'll also enter the last four digits of your Social Security number. That's standard identity verification: the same thing a bank account requires. FindA.Sale never sees this information.
 
-Most accounts are approved immediately. If Stripe needs to review yours, they'll email you — it usually takes a day or two.
+Most accounts are approved immediately. If Stripe needs to review yours, they'll email you: it usually takes a day or two.
 
 Once you're approved, come back to Settings → Payouts. You'll see a green Connected status. You're ready to accept card payments.
 

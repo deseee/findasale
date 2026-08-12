@@ -59,7 +59,7 @@ const getEmailTemplate = (reminder: ReminderEmail, unsubToken: string): { subjec
   const timeOnly = reminder.startDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
 
   const subject = reminder.reminderType === 'one-day'
-    ? `Your sale is tomorrow — ${reminder.saleName}`
+    ? `Your sale is tomorrow: ${reminder.saleName}`
     : `${reminder.saleName} starts in 2 hours!`;
 
   const html = buildSaleDayReminderEmail({
@@ -224,7 +224,7 @@ export const processReminderEmails = async (): Promise<void> => {
           for (const ps of pushSubs) {
             await sendPushNotification(ps, {
               title: `Tomorrow: ${sale.title}`,
-              body: `${sale.address}, ${sale.city} — starts tomorrow`,
+              body: `${sale.address}, ${sale.city}. Starts tomorrow.`,
               url: saleUrl,
             }, { userId: subscriber.userId, type: 'SALE_REMINDER_ONE_DAY' }).catch(err => console.warn(`Push failed for user ${subscriber.userId}:`, err.message));
           }
@@ -285,7 +285,7 @@ export const processReminderEmails = async (): Promise<void> => {
           for (const ps of pushSubs) {
             await sendPushNotification(ps, {
               title: `Starting soon: ${sale.title}`,
-              body: `${sale.address}, ${sale.city} — starts in about 2 hours`,
+              body: `${sale.address}, ${sale.city}. Starts in about 2 hours.`,
               url: saleUrl,
             }, { userId: subscriber.userId, type: 'SALE_REMINDER_TWO_HOURS' }).catch(err => console.warn(`Push failed for user ${subscriber.userId}:`, err.message));
           }

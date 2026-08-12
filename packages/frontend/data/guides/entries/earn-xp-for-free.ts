@@ -10,7 +10,7 @@ const entry: GuideEntry = {
   videoUrl: undefined,
   body: `# Earning XP without spending: 12 ways that cost nothing
 
-Most XP comes from things you'd do anyway — logging in, saving items you like, telling a friend about a sale. None of these require a purchase or a subscription.
+Most XP comes from things you'd do anyway: logging in, saving items you like, telling a friend about a sale. None of these require a purchase or a subscription.
 
 For exact XP amounts, visit the [Guild Primer](/shopper/guild-primer). The values are updated there when they change. This guide covers what the actions are.
 
@@ -34,7 +34,7 @@ Browse any sale and save an item. No purchase needed. XP awarded per save.
 Bought something at a sale? Post a photo and caption showing what you found. One of the highest XP-per-action options available for free.
 
 **6. Write a review.**
-After visiting a sale — in person or online — leave a review. Rate the organizer and describe what the sale was like. XP awarded per published review.
+After visiting a sale (in person or online), leave a review. Rate the organizer and describe what the sale was like. XP awarded per published review.
 
 **7. Refer a friend.**
 Share your referral link. When the person signs up and completes their first interaction, XP is awarded to you. One of the highest single-action XP sources.
@@ -70,10 +70,10 @@ XP amounts can change. The [Guild Primer](/shopper/guild-primer) always has the 
 Most earn XP every time (saves, shares, reviews, RSVPs). Some are one-time (completing your profile, first achievement). The Guild Primer notes which are repeatable.
 
 **Is there a daily XP cap?**
-Check the Guild Primer — this can vary and is subject to change.
+Check the Guild Primer: this can vary and is subject to change.
 
 **Does Hunt Pass affect free XP?**
-Yes. Hunt Pass members earn a multiplier on XP from actions they already take. The free actions above still earn XP without Hunt Pass — you just earn more of it with one.
+Yes. Hunt Pass members earn a multiplier on XP from actions they already take. The free actions above still earn XP without Hunt Pass. You just earn more of it with one.
 
 **Can I earn XP from sales I didn't attend in person?**
 Yes. RSVPs, follows, reviews of online sales, and shares all earn XP without being physically present.

@@ -1,5 +1,5 @@
 /**
- * CartDrawer — Unified drawer showing holds + browsing cart
+ * CartDrawer: Unified drawer showing holds + browsing cart
  * Two sections: "On Hold" (items on hold with timers) and "Saved in Cart" (browsing cart items)
  * Footer shows combined subtotals and primary CTA "Go to Checkout"
  * Animated slide-in from right with backdrop overlay. Full dark mode support.
@@ -195,7 +195,7 @@ const CartDrawer: React.FC<CartDrawerProps> = ({ isOpen, onClose }) => {
       try {
         await navigator.share({ title: 'FindA.Sale', url: link });
       } catch {
-        // User cancelled — no toast needed
+        // User cancelled: no toast needed
       }
     } else {
       try {
@@ -223,7 +223,7 @@ const CartDrawer: React.FC<CartDrawerProps> = ({ isOpen, onClose }) => {
 
   return (
     <>
-      {/* Backdrop overlay — click to close */}
+      {/* Backdrop overlay: click to close */}
       {isOpen && (
         <div
           className="fixed inset-0 bg-black bg-opacity-50 z-40 transition-opacity"
@@ -268,7 +268,7 @@ const CartDrawer: React.FC<CartDrawerProps> = ({ isOpen, onClose }) => {
           </button>
         </div>
 
-        {/* Content — scrollable */}
+        {/* Content: scrollable */}
         <div className="flex-1 overflow-y-auto">
           {isLoading && cart.cartCount === 0 ? (
             <div className="p-4 text-center text-warm-600 dark:text-gray-400">
@@ -446,7 +446,7 @@ const CartDrawer: React.FC<CartDrawerProps> = ({ isOpen, onClose }) => {
           )}
         </div>
 
-        {/* Footer — totals & action buttons */}
+        {/* Footer: totals & action buttons */}
         {hasContent && (
           <div className="border-t border-warm-200 dark:border-gray-700 p-4 space-y-3">
             {/* Subtotals */}
@@ -477,7 +477,7 @@ const CartDrawer: React.FC<CartDrawerProps> = ({ isOpen, onClose }) => {
 
             {/* Action Buttons */}
             <div className="space-y-2 pt-2">
-              {/* ADR-025 checkout disclosure micro-copy — this cart flow hands off to a
+              {/* ADR-025 checkout disclosure micro-copy: this cart flow hands off to a
                   Stripe-hosted Checkout Session (window.location.href below), so this is
                   the last FindA.Sale-rendered screen before payment; show it here. */}
               {cart.cartCount > 0 && cartOrganizerName && (

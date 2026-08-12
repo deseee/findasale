@@ -3,7 +3,7 @@ import { BlogPost } from '../index';
 export const postP: BlogPost = {
   slug: 'cataloging-solved-discovery-isnt',
   title: "Cataloging Your Sale Just Got Easier. Getting Buyers to Find It Didn't.",
-  metaDescription: "AI-powered cataloging tools are everywhere in 2026. Here's why that solves only half the problem, and what buyer discovery still costs organizers.",
+  metaDescription: "Smart cataloging tools are everywhere in 2026. Here's why that solves only half the problem, and what buyer discovery still costs organizers.",
   publishDate: '2026-08-13',
   category: 'guides',
   readingTimeMinutes: 5,

@@ -30,7 +30,7 @@ import { Template, BASE_POLISH } from './types';
 
 export const seasonD50RoomChallenge: Template = {
   id: 'season-D-50-room-challenge',
-  displayName: 'The $50 Room Challenge — Collab / Competition',
+  displayName: 'The $50 Room Challenge, Collab / Competition',
   purpose: 'PROMO',
   active: false, // SHELVED 2026-08-09 — see file header comment
   contentSignature: {

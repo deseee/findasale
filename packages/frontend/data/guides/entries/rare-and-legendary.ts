@@ -8,27 +8,27 @@ const entry: GuideEntry = {
   priority: 2,
   relatedGuides: ['review-queue', 'pricing-items', 'categories-and-tags'],
   videoUrl: undefined,
-  body: `Some items in your sale may appear in the review queue with a **Rare** or **Legendary** badge. These aren't grades you assign manually — they're suggested by the app based on what the photo recognition identifies. You confirm or dismiss them before publishing.
+  body: `Some items in your sale may appear in the review queue with a **Rare** or **Legendary** badge. These aren't grades you assign manually: they're suggested by the app based on what the photo recognition identifies. You confirm or dismiss them before publishing.
 
 Here's what the tags mean and why they matter.
 
 ---
 
-## Rare — high-value or unusual items
+## Rare: high-value or unusual items
 
-A **Rare** tag means the item has been identified as higher-value or harder-to-find than a typical sale item — based on brand, category, estimated age, or recognizable collectibility. Rare items surface in a dedicated filter that active shoppers check regularly.
+A **Rare** tag means the item has been identified as higher-value or harder-to-find than a typical sale item: based on brand, category, estimated age, or recognizable collectibility. Rare items surface in a dedicated filter that active shoppers check regularly.
 
 Examples that typically earn a Rare tag: signed pieces, limited-production items, discontinued product lines, vintage electronics in working condition, specific collectible brands (pottery marks, silverware hallmarks, first-edition books).
 
-The tag does not automatically raise the price. It affects discoverability — Rare-tagged items appear in a filtered view that general items don't.
+The tag does not automatically raise the price. It affects discoverability: Rare-tagged items appear in a filtered view that general items don't.
 
 ---
 
-## Legendary — exceptional items with featured placement
+## Legendary: exceptional items with featured placement
 
 A **Legendary** tag is applied to items that the app identifies as exceptional: unusually rare, high-value, or likely to generate significant shopper interest. Legendary items receive featured placement above the standard listing view.
 
-Legendary is less common than Rare. Most sales have zero or one Legendary item. If an item is flagged Legendary, review the photo and the suggested price carefully — these items attract more shopper attention, so accuracy matters more.
+Legendary is less common than Rare. Most sales have zero or one Legendary item. If an item is flagged Legendary, review the photo and the suggested price carefully: these items attract more shopper attention, so accuracy matters more.
 
 ---
 
@@ -41,13 +41,13 @@ To dismiss: tap the badge and select **Remove tag**. The item publishes without 
 
 You can add a Rare tag manually if you believe an item qualifies and the app didn't catch it. Open the item detail view, tap **Tags**, and select Rare from the rarity options.
 
-You cannot manually assign Legendary — that designation is reserved for items that meet the threshold automatically.
+You cannot manually assign Legendary: that designation is reserved for items that meet the threshold automatically.
 
 ---
 
 ## Full rarity breakdown from the shopper's perspective
 
-Shoppers see rarity tags and filter by them — but the full explanation of what Rare and Legendary mean to a shopper (how they use the filter, what Guild points are involved, what Legendary placement looks like on the listing page) lives in the shopper guide:
+Shoppers see rarity tags and filter by them, but the full explanation of what Rare and Legendary mean to a shopper (how they use the filter, what Guild points are involved, what Legendary placement looks like on the listing page) lives in the shopper guide:
 
 **[View the full Rarity and Guild Primer →](/shopper/guild-primer)**
 

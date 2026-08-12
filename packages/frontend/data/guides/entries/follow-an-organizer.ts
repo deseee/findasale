@@ -10,7 +10,7 @@ const entry: GuideEntry = {
   videoUrl: undefined,
   body: `# Following an Organizer (and What It Gets You)
 
-If there's a consignment shop, auction house, or estate sale company you check every month — follow them. You'll get a push notification the moment they post a new sale, so you're not the last to know.
+If there's a consignment shop, auction house, or estate sale company you check every month, follow them. You'll get a push notification the moment they post a new sale, so you're not the last to know.
 
 ---
 
@@ -26,9 +26,9 @@ To find an organizer's profile: tap their name on any sale listing or any item c
 
 ## What following gets you
 
-- **Push notification** — The moment they publish a new sale, you get pinged.
-- **Feed priority** — Their sales appear at the top of your Following feed (home screen, Following tab).
-- **Follower count** — Your follow shows up in their total. Other shoppers use that count to gauge how established an organizer is. Following a good organizer helps other shoppers find them too.
+- **Push notification**: the moment they publish a new sale, you get pinged.
+- **Feed priority**: their sales appear at the top of your Following feed (home screen, Following tab).
+- **Follower count**: your follow shows up in their total. Other shoppers use that count to gauge how established an organizer is. Following a good organizer helps other shoppers find them too.
 
 ---
 

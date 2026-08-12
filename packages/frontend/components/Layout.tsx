@@ -99,7 +99,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
   const [isClient, setIsClient] = useState(false);
   const { data: unreadMessages } = useUnreadMessages(!!user);
   const { data: xpProfile } = useXpProfile(isClient && !!user);
-  // Derived role flags — must be after isClient declaration
+  // Derived role flags (must be after isClient declaration)
   const isOrganizer = isClient && user?.roles?.includes('ORGANIZER');
   const isUser = isClient && user?.roles?.includes('USER');
   const isAdmin = isClient && user?.roles?.includes('ADMIN');
@@ -179,7 +179,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
     }
   }, [isSearchOpen]);
 
-  // CART_SHARE_REQUEST — organizer requested shopper share their cart
+  // CART_SHARE_REQUEST: organizer requested shopper share their cart
   // Auto-shares and opens the cart drawer so the organizer sees it immediately
   useEffect(() => {
     if (!user?.id) return;
@@ -215,13 +215,13 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
           showToast('Cashier requested your cart. Tap Share Cart to check out.', 'info');
         }
       } else {
-        // Cart is empty or on a different sale — just notify
+        // Cart is empty or on a different sale: just notify
         showToast('Cashier is ready for you. Open your cart and tap Share.', 'info');
       }
       openCart();
     });
 
-    // Feature #397: Crew Invasion — notify shopper when their crew triggers a group discount
+    // Feature #397: Crew Invasion (notify shopper when their crew triggers a group discount)
     socket.on('CREW_INVASION_TRIGGERED', (data: {
       saleId: string;
       crewId: string;
@@ -555,7 +555,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
         )}
         {user?.roles?.includes('USER') && (
           <>
-            {/* Shopper Dashboard — always show for users (even dual-role) with subtle indicator */}
+            {/* Shopper Dashboard: always show for users (even dual-role) with subtle indicator */}
             <Link href="/shopper/dashboard" className="flex items-center gap-2 px-3 py-2 text-warm-900 dark:text-warm-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md">
               <LayoutDashboard size={16} className="text-indigo-600" />
               <div className="flex flex-col">
@@ -777,7 +777,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
   return (
     <div className="min-h-screen flex flex-col overflow-x-hidden">
       <OfflineIndicator /> {/* Feature #69: Local-First Offline Mode */}
-      {/* Skip to main content — keyboard/screen reader accessibility */}
+      {/* Skip to main content: keyboard/screen reader accessibility */}
       <a
         href="#main-content"
         className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-[100] focus:px-4 focus:py-2 focus:bg-amber-600 focus:text-white focus:rounded-md focus:font-medium"
@@ -852,7 +852,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                 )}
               </div>
 
-              {/* Desktop collapsible search — overlays nav when open */}
+              {/* Desktop collapsible search: overlays nav when open */}
               <div className="relative flex items-center">
                 <button
                   onClick={() => setIsSearchOpen(prev => !prev)}
@@ -1051,7 +1051,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
           <div className="space-y-1" role="navigation" aria-label="Authenticated navigation">
             {isClient && user?.roles?.includes('ORGANIZER') ? (
               <>
-                {/* User info — name, email, rank badge, XP bar */}
+                {/* User info: name, email, rank badge, XP bar */}
                 {isClient && user && (
                   <div className="px-3 py-2 mb-1 border-b border-warm-200 dark:border-gray-700">
                     <p className="text-sm font-semibold text-warm-900 dark:text-warm-100 truncate">{user.name || user.email}</p>
@@ -1087,7 +1087,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                   </div>
                 )}
 
-                {/* ADMIN Section — Collapsible (ADMIN role) */}
+                {/* ADMIN Section: Collapsible (ADMIN role) */}
                 {isAdmin && (
                   <>
                     <Link href="/admin" className="block px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md font-medium">
@@ -1160,7 +1160,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                   <LayoutDashboard size={14} className="inline mr-2 text-amber-600" /> Organizer Dashboard
                 </Link>
 
-                {/* Your Sales Section — Collapsible */}
+                {/* Your Sales Section: Collapsible */}
                 <button
                   onClick={() => setMobileYourSalesOpen(!mobileYourSalesOpen)}
                   className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
@@ -1200,7 +1200,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                   </>
                 )}
 
-                {/* In-Sale Tools Section — Collapsible */}
+                {/* In-Sale Tools Section: Collapsible */}
                 <button
                   onClick={() => setMobileInSaleToolsOpen(!mobileInSaleToolsOpen)}
                   className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
@@ -1234,7 +1234,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                   </>
                 )}
 
-                {/* Post Sales Section — Collapsible */}
+                {/* Post Sales Section: Collapsible */}
                 <button
                   onClick={() => setMobilePostSalesOpen(!mobilePostSalesOpen)}
                   className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
@@ -1279,7 +1279,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                   <Zap size={14} className="inline mr-2" /> {!tierKnown ? 'Subscription' : canAccess('TEAMS') ? 'Subscription' : canAccess('PRO') ? 'Upgrade to TEAMS' : 'Upgrade to PRO'}
                 </Link>
 
-                {/* Pro Tools Section — Collapsible */}
+                {/* Pro Tools Section: Collapsible */}
                 <button
                   onClick={() => setMobileProToolsOpen(!mobileProToolsOpen)}
                   className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-purple-600 dark:text-purple-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
@@ -1316,7 +1316,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                   </>
                 )}
 
-                {/* TEAMS Section — Collapsible (TEAMS tier) */}
+                {/* TEAMS Section: Collapsible (TEAMS tier) */}
                 {(isTeams || isAdmin) && (
                   <>
                     <button
@@ -1381,7 +1381,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                       </span>
                     </button>
 
-                    {/* My Collection Section — Collapsible */}
+                    {/* My Collection Section: Collapsible */}
                     <button
                       onClick={() => setMobileShopperCollectionOpen(!mobileShopperCollectionOpen)}
                       className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
@@ -1415,7 +1415,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                       </>
                     )}
 
-                    {/* Explore Section — Collapsible */}
+                    {/* Explore Section: Collapsible */}
                     <button
                       onClick={() => setMobileShopperExploreOpen(!mobileShopperExploreOpen)}
                       className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
@@ -1467,7 +1467,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                       </>
                     )}
 
-                    {/* Connect Section — Collapsible */}
+                    {/* Connect Section: Collapsible */}
                     <button
                       onClick={() => setMobileInSaleToolsOpen(!mobileInSaleToolsOpen)}
                       className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
@@ -1518,7 +1518,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                       <Ticket size={14} className="inline mr-2 text-amber-500" /> Hunt Pass
                     </Link>
 
-                    {/* Hunt Exclusives Section — Collapsible */}
+                    {/* Hunt Exclusives Section: Collapsible */}
                     <button
                       onClick={() => setMobileDualRoleHuntPassOpen(!mobileDualRoleHuntPassOpen)}
                       className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
@@ -1551,7 +1551,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
               </>
             ) : isClient && user && user?.roles?.includes('USER') ? (
               <>
-                {/* User info — name, email, rank badge, XP bar */}
+                {/* User info: name, email, rank badge, XP bar */}
                 <div className="px-3 py-2 mb-1 border-b border-warm-200 dark:border-gray-700">
                   <p className="text-sm font-semibold text-warm-900 dark:text-warm-100 truncate">{user.name || user.email}</p>
                   <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{user.email}</p>
@@ -1629,7 +1629,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                   </span>
                 </button>
 
-                {/* My Collection Section — Collapsible */}
+                    {/* My Collection Section: Collapsible */}
                 <button
                   onClick={() => setMobileExplorerOpen(!mobileExplorerOpen)}
                   className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
@@ -1663,7 +1663,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                   </>
                 )}
 
-                {/* Explore Section — Collapsible */}
+                    {/* Explore Section: Collapsible */}
                 <button
                   onClick={() => setMobileProToolsOpen(!mobileProToolsOpen)}
                   className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
@@ -1712,7 +1712,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                   </>
                 )}
 
-                {/* Connect Section — Collapsible */}
+                    {/* Connect Section: Collapsible */}
                 <button
                   onClick={() => setMobileShopperCollectionOpen(!mobileShopperCollectionOpen)}
                   className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
@@ -1763,7 +1763,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
                   <Ticket size={14} className="inline mr-2 text-amber-500" /> Hunt Pass
                 </Link>
 
-                {/* Hunt Exclusives Section — Collapsible */}
+                    {/* Hunt Exclusives Section: Collapsible */}
                 <button
                   onClick={() => setMobileHuntPassOpen(!mobileHuntPassOpen)}
                   className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-md transition-colors"
@@ -1861,7 +1861,7 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
       <div
         className="flex-grow pt-[92px] md:pt-16 pb-15 md:pb-0"
       >
-        {/* Feature #75: Tier Lapse Banner — hard gate for past_due organizers */}
+        {/* Feature #75: Tier Lapse Banner (hard gate for past_due organizers) */}
         {isClient && isOrganizer && isLapsed && (
           <div className="bg-amber-50 dark:bg-amber-950/40 border-b-2 border-amber-300 dark:border-amber-700 px-4 py-3 sticky top-[92px] md:top-16 z-40">
             <div className="container mx-auto flex items-center justify-between gap-4">
@@ -1885,10 +1885,10 @@ const Layout = ({ children, noFooter }: { children: React.ReactNode; noFooter?: 
         </main>
       </div>
 
-      {/* Bottom tab navigation — mobile only */}
+      {/* Bottom tab navigation: mobile only */}
       <BottomTabNav />
 
-      {/* Footer — hidden if noFooter prop is true (e.g., for chat pages) */}
+      {/* Footer: hidden if noFooter prop is true (e.g., for chat pages) */}
       {!noFooter && (
       <footer className="bg-warm-800 dark:bg-gray-950 text-white py-8">
         <div className="container mx-auto px-4">

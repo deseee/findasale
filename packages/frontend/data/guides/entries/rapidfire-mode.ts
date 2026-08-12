@@ -8,7 +8,7 @@ const entry: GuideEntry = {
   priority: 1,
   relatedGuides: ['lighting-and-framing', 'when-to-retake', 'multi-angle-photos'],
   videoUrl: undefined,
-  body: `Rapidfire mode lets you photograph every item in a sale without stopping to type titles, set prices, or fill in details. You take photos — one per item — and move on. The app queues everything for review, where you confirm prices and fix anything that needs attention. Most organizers photograph 100 items in about an hour.
+  body: `Rapidfire mode lets you photograph every item in a sale without stopping to type titles, set prices, or fill in details. You take photos (one per item) and move on. The app queues everything for review, where you confirm prices and fix anything that needs attention. Most organizers photograph 100 items in about an hour.
 
 This guide is for anyone running a sale with a lot of items: yard sales, estate sales, flea market booths, consignment drop-offs, auctions. If you're listing more than 10 items, use this mode.
 
@@ -20,7 +20,7 @@ This guide is for anyone running a sale with a lot of items: yard sales, estate 
 
 **Clear space.** If you're shooting items in place (on a shelf, in a box), you don't need to do anything. If you want cleaner shots, pull items to a flat surface with good light first. See [Setting up photo stations](#) if you have a lot of small items.
 
-**Set your phone to landscape.** Hold it sideways — wide end horizontal. This matches how most buyers browse on desktop, and it fills the frame better for wide or flat items like artwork, trays, and folded clothing.
+**Set your phone to landscape.** Hold it sideways: wide end horizontal. This matches how most buyers browse on desktop, and it fills the frame better for wide or flat items like artwork, trays, and folded clothing.
 
 ---
 
@@ -37,13 +37,13 @@ This guide is for anyone running a sale with a lot of items: yard sales, estate 
 
 **One item, one photo, move forward.**
 
-Point the camera at the item, tap the shutter, and the app advances automatically. You don't tap a "Next" button — the app moves you to the next frame the moment a photo is confirmed.
+Point the camera at the item, tap the shutter, and the app advances automatically. You don't tap a "Next" button: the app moves you to the next frame the moment a photo is confirmed.
 
 A few things to know:
 
 - **Keep the item in the frame.** It doesn't need to be perfectly centered, but don't let it get cut off. The short edge of the item should have a little breathing room on both sides.
-- **Get close enough.** The item should fill most of the frame — roughly 70–80% of what you see on screen. If it's smaller than that, take one step closer.
-- **You can retake immediately.** If you know a photo came out blurry or cut off, tap the back arrow and reshoot. Don't overthink it — if it looks usable, move on and fix it in review.
+- **Get close enough.** The item should fill most of the frame: roughly 70–80% of what you see on screen. If it's smaller than that, take one step closer.
+- **You can retake immediately.** If you know a photo came out blurry or cut off, tap the back arrow and reshoot. Don't overthink it: if it looks usable, move on and fix it in review.
 - **Don't stop to name anything.** Titles, categories, and prices all happen in the review queue. Your only job right now is to capture every item.
 
 **Moving through a room:** Work in rows or sections so you don't double-photograph anything. Left to right, shelf by shelf, table by table. Some organizers put a small sticky note on items they've photographed if they're worried about skipping something.
@@ -54,13 +54,13 @@ A few things to know:
 
 **Clothing:** Lay it flat on a table or hang it on a hook. Don't photograph it balled up or still in a bag.
 
-**Small jewelry and coins:** Set them on a solid-color surface — a white piece of cardstock works well. Get the phone as close as it will focus. Tap the screen on the item to make sure the camera is focusing there, not on the background.
+**Small jewelry and coins:** Set them on a solid-color surface: a white piece of cardstock works well. Get the phone as close as it will focus. Tap the screen on the item to make sure the camera is focusing there, not on the background.
 
 **Furniture:** Step back until the whole piece fits in frame. Get the front face straight-on, not at a sharp angle.
 
 **Stacked or boxed items:** If it's clearly one lot (a set of dishes, a bag of tools), photograph it as one item. If you want to sell pieces individually, photograph each piece separately.
 
-**Electronics:** Photograph the front face. If there's a model number or serial number visible on the device itself, that's worth capturing — you can add a second angle in review.
+**Electronics:** Photograph the front face. If there's a model number or serial number visible on the device itself, that's worth capturing: you can add a second angle in review.
 
 ---
 
@@ -71,11 +71,11 @@ When you're done photographing, tap **Review Items** (or it may prompt you autom
 The review queue shows every item you photographed. For each one:
 
 1. **Check the title.** The app suggests a title based on what it sees in the photo. If it's wrong, tap to correct it.
-2. **Review the price.** A suggested price appears based on comparable sales. Tap it to adjust. Your price always wins — the suggestion is just a starting point.
+2. **Review the price.** A suggested price appears based on comparable sales. Tap it to adjust. Your price always wins: the suggestion is just a starting point.
 3. **Check the condition.** The app picks a default. Change it if needed.
 4. **Mark it ready.** Tap **Save** or **Approve** to move it to your active listing.
 
-The orange **Retake** nudge appears on any photo where the image quality may affect how well buyers can see the item. You can skip the retake and publish anyway — it's a suggestion, not a blocker. See [Why some photos need a retake](#) for what triggers it and when it matters.
+The orange **Retake** nudge appears on any photo where the image quality may affect how well buyers can see the item. You can skip the retake and publish anyway: it's a suggestion, not a blocker. See [Why some photos need a retake](#) for what triggers it and when it matters.
 
 **You don't have to finish review in one sitting.** Items stay in the queue until you approve them. You can photograph the whole sale, walk away, and come back to review later.
 
@@ -84,7 +84,7 @@ The orange **Retake** nudge appears on any photo where the image quality may aff
 ## Common questions
 
 **How long does this actually take?**
-For a typical yard sale or estate sale room (20–30 items), most organizers finish photographing in about 15–20 minutes. Review adds time on top — budget a few minutes per 10 items if you're checking prices carefully.
+For a typical yard sale or estate sale room (20–30 items), most organizers finish photographing in about 15–20 minutes. Review adds time on top: budget a few minutes per 10 items if you're checking prices carefully.
 
 **What if I photographed an item twice?**
 Delete the duplicate in review. Tap the item, then tap the trash icon. Only approved items get listed.
@@ -93,7 +93,7 @@ Delete the duplicate in review. Tap the item, then tap the trash icon. Only appr
 Yes. You can start a rapidfire session, photograph one room or one table, stop, and come back later. Each session adds to the same review queue.
 
 **What if the title suggestion is completely wrong?**
-Tap the title field and type the correct name. This happens most often with very old items, specialty tools, or handmade goods where the photo recognition doesn't have strong reference data. Just correct it — it takes five seconds.
+Tap the title field and type the correct name. This happens most often with very old items, specialty tools, or handmade goods where the photo recognition doesn't have strong reference data. Just correct it: it takes five seconds.
 
 **Do I have to photograph everything in one pass?**
 No. Some organizers do a first pass the night before and a second pass the morning of the sale to catch items they pulled out overnight. The queue holds everything until you're ready.
@@ -117,13 +117,13 @@ Yes. Anyone you've added to your sale as a member can run a rapidfire session. T
 
 ---
 
-**[0:00–0:08] Opening — phone in landscape, sale in background**
+**[0:00–0:08] Opening: phone in landscape, sale in background**
 
 You've got a table full of stuff and you need it listed fast. Here's how to photograph a whole sale in one pass.
 
 **[0:08–0:20] Navigating to rapidfire mode**
 
-Open the app. Tap Add Items, then Rapidfire Mode. The camera opens immediately — you're already in it.
+Open the app. Tap Add Items, then Rapidfire Mode. The camera opens immediately: you're already in it.
 
 **[0:20–0:38] Shooting items**
 
@@ -153,7 +153,7 @@ The orange Retake nudge means a photo might be hard for buyers to read. You can 
 
 That's it. Photo session, review queue, done.
 
-Most organizers get through a hundred items in about an hour — shooting and reviewing. The bulk of that time is in the review queue confirming prices.
+Most organizers get through a hundred items in about an hour: shooting and reviewing. The bulk of that time is in the review queue confirming prices.
 
 Tap Add Items to get started.
 

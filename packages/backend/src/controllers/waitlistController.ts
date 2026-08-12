@@ -61,7 +61,7 @@ const sendWaitlistNotificationEmail = async (
                     : ''
                 }
                 <div style="color:#6b7280; font-size:13px; margin-bottom:4px;">From: ${saleName}</div>
-                <p style="font-size:13px; color:#6b7280; margin:12px 0 0;">Act fast — it won't last long!</p>
+                <p style="font-size:13px; color:#6b7280; margin:12px 0 0;">Act fast, it won't last long!</p>
               </div>
 
               <!-- CTA -->

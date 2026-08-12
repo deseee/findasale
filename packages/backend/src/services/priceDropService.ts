@@ -71,7 +71,7 @@ async function sendPriceDropEmail(
             Save $${savings.toFixed(2)} (${savingsPercent}% off)
           </p>
         </div>
-        <p>This deal won't last long — check it out before it sells!</p>
+        <p>This deal won't last long, check it out before it sells!</p>
       `,
       ctaText: 'View Item',
       ctaUrl: `${FRONTEND_URL}/items/${item.id}`,
@@ -81,7 +81,7 @@ async function sendPriceDropEmail(
     await emailService.emails.send({
       from: FROM_EMAIL,
       to: user.email,
-      subject: `💰 Price drop on "${item.title}" — now $${newPriceStr}`,
+      subject: `💰 Price drop on "${item.title}": now $${newPriceStr}`,
       html: emailHtml,
     });
 

@@ -8,7 +8,7 @@ const entry: GuideEntry = {
   priority: 1,
   relatedGuides: ['share-cards', 'send-sale-updates', 'where-to-post-flyers'],
   videoUrl: undefined,
-  body: `The promote page generates ready-to-post content for Facebook, Instagram, Nextdoor, X/Twitter, Reddit, email, text message, and a print card — all from your sale details. Open it once, customize the text if you want, and share directly or copy the pre-filled posts into each platform. This guide walks through every tab and gives you timing guidelines for each channel.
+  body: `The promote page generates ready-to-post content for Facebook, Instagram, Nextdoor, X/Twitter, Reddit, email, text message, and a print card: all from your sale details. Open it once, customize the text if you want, and share directly or copy the pre-filled posts into each platform. This guide walks through every tab and gives you timing guidelines for each channel.
 
 ---
 
@@ -29,7 +29,7 @@ This tab shows pre-filled text for each platform. The text pulls from your sale 
 **How to customize:**
 1. Tap the platform you want (Facebook, Instagram, Nextdoor, X/Twitter, Reddit)
 2. Read the pre-filled post in the text box
-3. Edit anything you want — add a specific item, change the tone, shorten it
+3. Edit anything you want: add a specific item, change the tone, shorten it
 4. Tap **Copy** to copy to clipboard, then paste it into the platform
 5. Or tap **Share** on mobile to open the platform's share sheet directly
 
@@ -53,7 +53,7 @@ Spotlight submits your sale for featured placement in the FindA.Sale feed. Featu
 
 To submit for Spotlight:
 1. Open the Spotlight tab
-2. Review your sale preview card — this is what shoppers see in the feed
+2. Review your sale preview card: this is what shoppers see in the feed
 3. Tap **Submit for Spotlight**
 
 Spotlight availability depends on your plan. Check /organizer/promote for current availability.
@@ -92,7 +92,7 @@ Download the PDF from the promote page and print at home or at any copy shop.
 
 **Can I post to all platforms at once?**
 
-Not automatically. Each platform has different formatting and character limits, so the promote page optimizes each post separately. Copy and post to each platform individually — it takes about 5 minutes total.
+Not automatically. Each platform has different formatting and character limits, so the promote page optimizes each post separately. Copy and post to each platform individually: it takes about 5 minutes total.
 
 **What if my sale details change after I post?**
 
@@ -100,7 +100,7 @@ Update your sale listing. The FindA.Sale link in your posts always points to you
 
 **Do I have to use the pre-filled text?**
 
-No. It is a starting point. Edit freely. If you delete something by accident, close and reopen the tab — the original text reloads.
+No. It is a starting point. Edit freely. If you delete something by accident, close and reopen the tab: the original text reloads.
 
 **Can I reshare the same post?**
 
@@ -108,7 +108,7 @@ Yes. For Facebook and Nextdoor, resharing or commenting on your own post the day
 
 **Does the promote page work for all sale types?**
 
-Yes — yard sales, auctions, flea market booths, consignment events, and estate sales all use the same promote page. The pre-filled text adapts to your sale type.
+Yes, yard sales, auctions, flea market booths, consignment events, and estate sales all use the same promote page. The pre-filled text adapts to your sale type.
 
 **What is the difference between the promote page and share cards?**
 
@@ -124,7 +124,7 @@ The promote page generates text posts and handles sharing. Share cards (on the P
 
 *[Promote page opens. Social Posts tab visible with Facebook post pre-filled.]*
 
-"The promote page generates ready-to-post content for eight platforms. Start with Facebook — the text is already filled in with your sale details."
+"The promote page generates ready-to-post content for eight platforms. Start with Facebook: the text is already filled in with your sale details."
 
 *[Tap into the text box, edit one word, tap Copy.]*
 
@@ -132,7 +132,7 @@ The promote page generates text posts and handles sharing. Share cards (on the P
 
 *[Switch to Nextdoor tab.]*
 
-"Nextdoor gets a separate post. Post this one five days out — it stays visible longer."
+"Nextdoor gets a separate post. Post this one five days out: it stays visible longer."
 
 *[Switch to Spotlight tab.]*
 
@@ -144,7 +144,7 @@ The promote page generates text posts and handles sharing. Share cards (on the P
 
 *[Return to main promote page, tap Print Card.]*
 
-"The print card gives you a half-page handout with a QR code — print it and leave a stack at a coffee shop or bulletin board."
+"The print card gives you a half-page handout with a QR code: print it and leave a stack at a coffee shop or bulletin board."
 
 *[End on promote page overview.]*
 

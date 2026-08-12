@@ -280,7 +280,7 @@ export async function executeVerifiedRefund(
   if (isBoothCartPurchase && !boothStripeAccountId) {
     await prisma.purchase.updateMany({ where: { id: purchaseId, status: 'REFUNDING' }, data: { status: 'PAID' } });
     throw new RefundError(
-      "This item's vendor booth has no Stripe account on file — cannot resolve which account to refund.",
+      "This item's vendor booth has no Stripe account on file. Cannot resolve which account to refund.",
       400
     );
   }
@@ -296,7 +296,7 @@ export async function executeVerifiedRefund(
   if (isDirectCharge && !purchase.stripeAccountId) {
     await prisma.purchase.updateMany({ where: { id: purchaseId, status: 'REFUNDING' }, data: { status: 'PAID' } });
     throw new RefundError(
-      'This purchase is a Direct charge but has no stripeAccountId on file — cannot resolve which account to refund.',
+      'This purchase is a Direct charge but has no stripeAccountId on file. Cannot resolve which account to refund.',
       400
     );
   }

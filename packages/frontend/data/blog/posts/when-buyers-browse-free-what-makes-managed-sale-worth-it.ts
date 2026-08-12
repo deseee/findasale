@@ -26,7 +26,7 @@ For one or two items, a motivated individual can manage it. For 300 items across
 
 Here's what doesn't show up in the free-listing pitch: the buyer experience at a well-run secondary sale is genuinely different from scrolling a marketplace.
 
-A curated sale, with preview photos, room-by-room organization, consistent pricing, and a clear sale day experience, attracts a different kind of buyer. Not just a casual browser hoping to find a deal, but a collector who drove 40 minutes because the photos told them something specific was there. A vintage reseller who trusts that a professional ran the sale and priced it accordingly.
+A curated sale, with preview photos, room-by-room organization, consistent pricing, and a clear sale day experience, attracts a different kind of buyer. A collector who drove 40 minutes because the photos told them something specific was there, not a casual browser hoping to find a deal. A vintage reseller who trusts that a professional ran the sale and priced it accordingly.
 
 These buyers show up early, purchase multiple items, and return to your next sale. A free marketplace listing attracts whoever happens to search that day. A well-run sale builds a buyer audience that follows you.
 

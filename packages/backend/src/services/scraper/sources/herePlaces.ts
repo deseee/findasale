@@ -335,7 +335,7 @@ export async function scrapeHEREQuery(
       const website = place.contacts?.[0]?.www?.[0]?.value ?? null;
 
       const item: ScrapedItem = {
-        title: `${place.title} — ${queryConfig.label} in ${city}, ${state}`,
+        title: `${place.title}, ${queryConfig.label} in ${city}, ${state}`,
         address: place.address?.label ?? '',
         city,
         state,

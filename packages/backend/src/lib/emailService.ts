@@ -42,12 +42,12 @@ async function sendQuotaAlert(count: number, limit: number, reason: 'warning' | 
   try {
     const resend = new Resend(apiKey);
     const subject = reason === 'hard_stop'
-      ? `🚨 Gmail send BLOCKED — daily limit reached (${count}/${limit})`
-      : `⚠️ Gmail quota warning — ${count}/${limit} emails sent today`;
+      ? `🚨 Gmail send BLOCKED: daily limit reached (${count}/${limit})`
+      : `⚠️ Gmail quota warning: ${count}/${limit} emails sent today`;
     const html = `
       <p><strong>${reason === 'hard_stop' ? '🚨 BLOCKED' : '⚠️ WARNING'}:</strong> outreach@finda.sale has sent <strong>${count} of ${limit}</strong> allowed emails today.</p>
       <p>${reason === 'hard_stop'
-        ? 'Further sends are <strong>blocked by the application</strong> until midnight UTC. No action needed — the pipeline will resume tomorrow.'
+        ? 'Further sends are <strong>blocked by the application</strong> until midnight UTC. No action needed: the pipeline will resume tomorrow.'
         : `Approaching the daily hard limit. The pipeline will auto-block at ${limit} sends.`
       }</p>
       <p>To change the limit: set <code>GMAIL_DAILY_HARD_LIMIT</code> in Railway env vars (current: ${limit}).</p>

@@ -288,7 +288,7 @@ const shopperFAQs: FAQItem[] = [
     question: 'What are Treasure Trails?',
     answer: (
       <>
-        Treasure Trails are curated multi-stop local experiences. For example, a Saturday estate sale plus a vintage shop downtown plus a scenic café on the way home. You check in at each stop and earn a tiered completion bonus (40 XP for 3 stops, scaling up to 80 XP for 7+ stops) when you finish. Trail access scales with rank: Ranger gets 3 per week, Sage gets unlimited. Hunt Pass subscribers can create and share their own trails. Full XP details are in <Link href="/shopper/guild-primer" className="text-amber-600 hover:underline">the Guild walkthrough</Link>.
+        Treasure Trails are curated multi-stop local experiences. For example, a Saturday morning hitting a yard sale, an estate sale, and a scenic café on the way home. You check in at each stop and earn a tiered completion bonus (40 XP for 3 stops, scaling up to 80 XP for 7+ stops) when you finish. Trail access scales with rank: Ranger gets 3 per week, Sage gets unlimited. Hunt Pass subscribers can create and share their own trails. Full XP details are in <Link href="/shopper/guild-primer" className="text-amber-600 hover:underline">the Guild walkthrough</Link>.
       </>
     ),
   },

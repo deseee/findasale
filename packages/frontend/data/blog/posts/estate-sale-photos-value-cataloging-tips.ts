@@ -3,7 +3,7 @@ import { BlogPost } from '../index';
 export const postC: BlogPost = {
   slug: 'estate-sale-photos-value-cataloging-tips',
   title: 'Why Your Estate Sale Photos Are Worth More Than You Think',
-  metaDescription: 'Buyers shop by photo, not by description. Better photos mean higher prices. Here\'s what that means for how you set up inventory, and how AI cataloging changes the math.',
+  metaDescription: 'Buyers shop by photo, not by description. Better photos mean higher prices. Here\'s what that means for how you set up inventory, and how smart cataloging changes the math.',
   publishDate: '2026-07-02',
   category: 'tips',
   readingTimeMinutes: 5,
@@ -22,7 +22,7 @@ The challenge is that cataloging a 200-item sale by hand takes a long time. Phot
 
 That's where smart cataloging tools change the math, and it's worth understanding what they actually do versus what most of them claim to do. At their best, you take the photo and the system suggests a title, a category, and a price based on comparable sold items. You review and confirm, or adjust if the suggestion is off, then move to the next item. The loop is photograph, review, publish. Not photograph, then type everything from scratch.
 
-The catch is that "AI cataloging" now shows up in the marketing materials of nearly every estate sale platform. What varies a lot is whether it actually works when you're on-site with 300 items and a two-hour setup window, or whether it only works well in a demo and falls apart in the field.
+The catch is that "smart cataloging" now shows up in the marketing materials of nearly every estate sale platform. What varies a lot is whether it actually works when you're on-site with 300 items and a two-hour setup window, or whether it only works well in a demo and falls apart in the field.
 
 Here's a practical way to test any cataloging tool before you commit to it: bring 10 items with varying descriptions, a piece of vintage clothing, a kitchen appliance, a set of tools, something collectible, and run them through in a real setup. How many descriptions are actually usable as-is? How many need a full rewrite? How long does the photo upload take on your phone, on your actual WiFi?
 

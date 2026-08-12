@@ -58,7 +58,7 @@ export const createTestimonial = async (req: AuthRequest, res: Response) => {
     });
 
     return res.status(201).json({
-      message: 'Thank you — your testimonial has been received.',
+      message: 'Thank you. Your testimonial has been received.',
       testimonial,
     });
   } catch (error) {

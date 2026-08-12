@@ -10,7 +10,7 @@ const entry: GuideEntry = {
   videoUrl: undefined,
   body: `# Save Items to Your Wishlist and Get Notified
 
-Stop checking the same listing every morning hoping that dresser is still there. Save it to your wishlist and we'll notify you the moment anything changes — price drop, sale going live, item sold.
+Stop checking the same listing every morning hoping that dresser is still there. Save it to your wishlist and we'll notify you the moment anything changes: price drop, sale going live, item sold.
 
 ---
 
@@ -34,10 +34,10 @@ You can also get there from your profile: tap your avatar in the top right, then
 
 When something changes on an item you've saved, you'll get a notification:
 
-- **Price drop** — The organizer lowered the price.
-- **Sale going live** — The sale that item belongs to just opened.
-- **Sale ending soon** — The sale closes within 24 hours and this item is still available.
-- **Item sold** — Someone bought it or the organizer marked it sold.
+- **Price drop**: The organizer lowered the price.
+- **Sale going live**: The sale that item belongs to just opened.
+- **Sale ending soon**: The sale closes within 24 hours and this item is still available.
+- **Item sold**: Someone bought it or the organizer marked it sold.
 
 Not every organizer enables all of these. If an organizer doesn't update their inventory in real time, some alerts won't fire. You'll see what's available for each item in the notification settings.
 
@@ -49,7 +49,7 @@ These are two different things and it's worth knowing the difference.
 
 A **wishlist save** is passive. You're bookmarking the item so you can find it again and get alerts. The organizer doesn't see it. No commitment.
 
-A **hold** is active. You're asking the organizer to reserve the item for you for a set period — usually 24 to 48 hours. Holds are visible to the organizer and may require a response. Some organizers charge a small hold deposit.
+A **hold** is active. You're asking the organizer to reserve the item for you for a set period: usually 24 to 48 hours. Holds are visible to the organizer and may require a response. Some organizers charge a small hold deposit.
 
 If you just want to track something, save it. If you're serious and don't want it to disappear, request a hold.
 
@@ -66,7 +66,7 @@ You can also swipe left on an item in the wishlist view to remove it.
 ## Common questions
 
 **Q: Will the organizer know I saved their item?**
-No. Your wishlist is private. The organizer can only see holds and messages — not saves.
+No. Your wishlist is private. The organizer can only see holds and messages, not saves.
 
 **Q: I'm not getting notifications. What's wrong?**
 Check two things: your phone's notification settings for FindA.Sale (Settings > Notifications on iOS or Android), and your in-app preferences (Profile > Settings > Notifications). Both have to allow them.
@@ -81,7 +81,7 @@ It stays in your wishlist marked Ended or Sold. You can remove it manually or le
 Not the whole list. But you can open any item and share its link via text or social media. The other person can view that item and save it to their own wishlist.
 
 **Q: Do I need an account?**
-Yes. Wishlists sync across your devices, so an account is required. Sign up with email or use a social login — takes about a minute.
+Yes. Wishlists sync across your devices, so an account is required. Sign up with email or use a social login: takes about a minute.
 
 ---
 

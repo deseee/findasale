@@ -123,13 +123,13 @@ export async function getPipelineHealth(req: Request, res: Response): Promise<vo
     ]);
 
     notes.push(
-      'geocoding.geocoded_24h uses Sale.updatedAt as a proxy — no dedicated geocodedAt column exists; count may include sales updated for other reasons.'
+      'geocoding.geocoded_24h uses Sale.updatedAt as a proxy: no dedicated geocodedAt column exists; count may include sales updated for other reasons.'
     );
     notes.push(
-      'enrichment.ai_enriched_24h uses Sale.lastScrapedAt as a proxy for ESN detail-enrichment freshness — no dedicated enrichedAt column exists.'
+      'enrichment.ai_enriched_24h uses Sale.lastScrapedAt as a proxy for ESN detail-enrichment freshness: no dedicated enrichedAt column exists.'
     );
     notes.push(
-      'organizer_backfill.contact_filled_24h uses Organizer.updatedAt as a proxy — no dedicated contactFilledAt column exists; count may include unrelated organizer updates.'
+      'organizer_backfill.contact_filled_24h uses Organizer.updatedAt as a proxy: no dedicated contactFilledAt column exists; count may include unrelated organizer updates.'
     );
 
     res.status(200).json({

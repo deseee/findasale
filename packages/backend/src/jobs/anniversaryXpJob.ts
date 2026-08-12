@@ -109,7 +109,7 @@ async function processAnniversaryXp(): Promise<void> {
       // also enforces the fraudSuspect block internally (defense in depth —
       // this job already filters fraudSuspect = false in the SQL above).
       const result = await awardXp(candidate.id, 'ANNIVERSARY_30DAY', XP_AWARDS.ANNIVERSARY_30DAY, {
-        description: `30-day anniversary bonus — milestone ${milestoneNumber} (${candidate.days_tenure} days tenure) [${milestoneTag}]`,
+        description: `30-day anniversary bonus: milestone ${milestoneNumber} (${candidate.days_tenure} days tenure) [${milestoneTag}]`,
       });
 
       if (result) {

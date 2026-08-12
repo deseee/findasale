@@ -1,5 +1,5 @@
 /**
- * ShopperCartDrawer — Browsing cart drawer (Phase 1 Smart Cart)
+ * ShopperCartDrawer: Browsing cart drawer (Phase 1 Smart Cart)
  * Shows localStorage cart items separate from holds/reservations.
  * Slide-in from right, shows summary and allows removal.
  */
@@ -71,7 +71,7 @@ const ShopperCartDrawer: React.FC<ShopperCartDrawerProps> = ({ isOpen, onClose, 
 
   return (
     <>
-      {/* Backdrop overlay — click to close */}
+      {/* Backdrop overlay: click to close */}
       {isOpen && (
         <div
           className="fixed inset-0 bg-black bg-opacity-50 z-40 transition-opacity"
@@ -109,7 +109,7 @@ const ShopperCartDrawer: React.FC<ShopperCartDrawerProps> = ({ isOpen, onClose, 
           </button>
         </div>
 
-        {/* Content — scrollable */}
+        {/* Content: scrollable */}
         <div className="flex-1 overflow-y-auto">
           {!cart.isHydrated ? (
             <div className="p-4 text-center text-warm-600 dark:text-gray-400">
@@ -188,7 +188,7 @@ const ShopperCartDrawer: React.FC<ShopperCartDrawerProps> = ({ isOpen, onClose, 
           )}
         </div>
 
-        {/* Footer — total price & action buttons */}
+        {/* Footer: total price & action buttons */}
         {cart.items.length > 0 && (
           <div className="border-t border-warm-200 dark:border-gray-700 p-4 space-y-3">
             <div className="flex justify-between items-center">
@@ -208,7 +208,7 @@ const ShopperCartDrawer: React.FC<ShopperCartDrawerProps> = ({ isOpen, onClose, 
                 Continue Shopping
               </button>
 
-              {/* Go to Checkout — login gate for unauthenticated shoppers (e.g. Facebook) */}
+              {/* Go to Checkout: login gate for unauthenticated shoppers (e.g. Facebook) */}
               {user ? (
                 <button
                   onClick={() => {

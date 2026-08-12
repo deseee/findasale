@@ -3,8 +3,8 @@
  *
  * Tabs:
  * - Manual Entry: standard form + photo upload
- * - Camera (auto-tag — one item): capture → auto-fill → review or auto-create
- * - Batch (auto-tag — multiple): SmartInventoryUpload for bulk photo processing
+ * - Camera (auto-tag: one item): capture → auto-fill → review or auto-create
+ * - Batch (auto-tag: multiple): SmartInventoryUpload for bulk photo processing
  * - CSV: modal trigger
  *
  * Phase 3 additions (Camera Workflow v2):
@@ -20,7 +20,7 @@
  * Session 132 fixes:
  * - Removed Qty column from item list (quantity not in Prisma schema)
  * - Removed Quantity input from manual entry form
- * - Fixed bulk update URL: /items/bulk (was /items/bulk-update — silent 404)
+ * - Fixed bulk update URL: /items/bulk (was /items/bulk-update: silent 404)
  * - Restored Camera tab: wired RapidCapture with auto-analysis flow
  * - Camera: capture → upload → auto-analyze → pre-fill manual form → review
  * - maxPhotos=5 per camera session (one-item-at-a-time flow)
@@ -63,7 +63,7 @@ import VoiceTagButton from '../../../components/VoiceTagButton'; // Feature #42:
 import BountyMatchModal from '../../../components/BountyMatchModal';
 import EbayCategoryPicker from '../../../components/EbayCategoryPicker';
 
-// Feature flag — hides "Enhance All" button until backend endpoint exists.
+// Feature flag: hides "Enhance All" button until backend endpoint exists.
 // Set NEXT_PUBLIC_ENABLE_ENHANCE_ALL=true to enable.
 const ENHANCE_ALL_ENABLED = process.env.NEXT_PUBLIC_ENABLE_ENHANCE_ALL === 'true';
 
@@ -366,7 +366,7 @@ const AddItemsDetailPage = () => {
   const inMutationFlight = useRef<boolean>(false);
 
   // Feature #42: Voice-to-tag input
-  // `transcript` intentionally NOT destructured — handleVoiceExtract receives the final
+  // `transcript` intentionally NOT destructured: handleVoiceExtract receives the final
   // transcript directly from stopListening's return to avoid the S724 closure race.
   const { isSupported: voiceSupported, isListening, startListening, stopListening } = useVoiceInput();
   const [voiceLoading, setVoiceLoading] = useState(false);
@@ -380,7 +380,7 @@ const AddItemsDetailPage = () => {
   // Client-side search/filter for the saved-items list (helps when a sale has 100+ items)
   const [itemSearch, setItemSearch] = useState('');
   // Sold-items filter (Patrick feedback 2026-08-02): segmented control, not a separate
-  // input-method tab — composes with itemSearch rather than replacing it.
+  // input-method tab: composes with itemSearch rather than replacing it.
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'sold'>('all');
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [deleteConfirmTitle, setDeleteConfirmTitle] = useState<string>('');
@@ -398,14 +398,14 @@ const AddItemsDetailPage = () => {
   const [rapidItems, setRapidItems] = useState<RapidItem[]>([]);
   const [previewItemId, setPreviewItemId] = useState<string | null>(null);
   // Re-analyze from the PreviewModal error banner (mirrors review.tsx's
-  // reanalyzingIds/reanalyzeErrors pattern) — tracks in-flight items and the
+  // reanalyzingIds/reanalyzeErrors pattern): tracks in-flight items and the
   // last error per item so the modal can show a live "Re-analyzing…" state
   // and surface a real failure message instead of the previous silent no-op.
   const [reanalyzingIds, setReanalyzingIds] = useState<Set<string>>(new Set());
   const [reanalyzeErrors, setReanalyzeErrors] = useState<Map<string, string>>(new Map());
   const [aiPaused, setAiPaused] = useState(false);
   const [addingToItemId, setAddingToItemId] = useState<string | null>(null);
-  // Ref to track current append target — avoids stale closure in async processAndUploadRapidPhoto
+  // Ref to track current append target: avoids stale closure in async processAndUploadRapidPhoto
   // This ref is read at upload time, not capture time, so it always has the latest value
   const addingToItemIdRef = useRef<string | null>(null);
   // Bug fix (2026-07-03): rapidfire's "+" (append to item) races against that same
@@ -466,7 +466,7 @@ const AddItemsDetailPage = () => {
   // attempting a request that would just 404.
   const resolveAppendTargetId = async (appendToItemId: string): Promise<string> => {
     if (!appendToItemId.startsWith('temp-')) return appendToItemId;
-    // Check the resolved-value cache first (see resolvedTempIds doc above) — the
+    // Check the resolved-value cache first (see resolvedTempIds doc above): the
     // target item may have already finished creating even though this specific
     // append call is only now reaching this point.
     const alreadyResolved = resolvedTempIds.current[appendToItemId];
@@ -497,7 +497,7 @@ const AddItemsDetailPage = () => {
   const [pendingFaceTempId, setPendingFaceTempId] = useState<string | null>(null);
   const [pendingFaceAppendId, setPendingFaceAppendId] = useState<string | null>(null);
 
-  // Bundle delete confirmation state — replaces native confirm() at row level
+  // Bundle delete confirmation state: replaces native confirm() at row level
   const [confirmingBundleId, setConfirmingBundleId] = useState<string | null>(null);
 
   // Bounty match modal state
@@ -565,7 +565,7 @@ const AddItemsDetailPage = () => {
         ebayCategoryId: state.ebayCategoryId || null,
         ebayCategoryName: state.ebayCategoryName || null,
         packageWeightOz: state.packageWeightOz ? parseInt(state.packageWeightOz, 10) : undefined,
-        // Organizer typed a real weight in this card's inline Weight (oz) field — record it
+        // Organizer typed a real weight in this card's inline Weight (oz) field: record it
         // as confirmed so eBay publish stops treating it as an AI estimate. Never sent when
         // the field was left untouched (see inlineWeightTouched above; mirrors review.tsx).
         ...(inlineWeightTouched.has(itemId) && state.packageWeightOz
@@ -641,7 +641,7 @@ const AddItemsDetailPage = () => {
     queryKey: ['items', saleId],
     queryFn: async () => {
       if (!saleId) return [];
-      // Use organizer-authenticated drafts endpoint — avoids Hunt Pass rarity
+      // Use organizer-authenticated drafts endpoint: avoids Hunt Pass rarity
       // filter that hides RARE items owned by the organizer within 6h.
       const response = await api.get(`/items/drafts?saleId=${saleId}`);
       return response.data || [];
@@ -846,7 +846,7 @@ const AddItemsDetailPage = () => {
     return () => clearInterval(interval);
   }, [rapidItems, aiPaused]);
 
-  // Hoisted preview URL for pendingFaceBlob — prevents per-render leak of object URLs.
+  // Hoisted preview URL for pendingFaceBlob: prevents per-render leak of object URLs.
   // Memoized so we only create one URL per blob, and revoked on unmount/blob change.
   const pendingFacePreviewUrl = useMemo(
     () => (pendingFaceBlob ? URL.createObjectURL(pendingFaceBlob) : null),
@@ -1016,7 +1016,7 @@ const AddItemsDetailPage = () => {
         error.response?.data?.message || 'Failed to update items';
       showToast(message, 'error');
 
-      // Bug fix S1163: backend names this field "failed", not "errors" — this check
+      // Bug fix S1163: backend names this field "failed", not "errors": this check
       // never matched, so the all-items-rejected case (e.g. "already sold") only ever
       // showed the generic toast above and never opened the detail modal with the
       // real per-item reason.
@@ -1047,7 +1047,7 @@ const AddItemsDetailPage = () => {
       }
     },
     onError: (error: any) => {
-      // Silently fail — matching is a bonus feature
+      // Silently fail: matching is a bonus feature
       if (process.env.NODE_ENV !== 'production') console.error('Bounty matching error:', error);
     },
   });
@@ -1058,7 +1058,7 @@ const AddItemsDetailPage = () => {
     return null;
   }
 
-  // P1-A: Loading guard — don't render if saleId is falsy
+  // P1-A: Loading guard: don't render if saleId is falsy
   if (!saleId) {
     return null;
   }
@@ -1230,7 +1230,7 @@ const AddItemsDetailPage = () => {
       ]);
       registerTempItem(tempId); // only new-item creations can later be an append target
     }
-    // Append mode: skip temp entry — target item is already in rapidItems
+    // Append mode: skip temp entry: target item is already in rapidItems
 
     // Non-blocking background pipeline
     // appendId non-null → appends to existing item; null → creates new item
@@ -1242,7 +1242,7 @@ const AddItemsDetailPage = () => {
     );
   };
 
-  // Background upload handler for rapidfire photos — called async from onPhotoCapture
+  // Background upload handler for rapidfire photos: called async from onPhotoCapture
   // Processes one photo: enhance → crop → quality check → face detect → upload
   // On success: swaps temp ID with real itemId
   // Does NOT block the camera; runs in background
@@ -1291,7 +1291,7 @@ const AddItemsDetailPage = () => {
       // 4. Face detection
       const hasFace = await detectFace(processedBlob);
       if (hasFace) {
-        // Face detected — show modal overlay inside camera
+        // Face detected: show modal overlay inside camera
         setPendingFaceBlob(processedBlob);
         setPendingFaceTempId(tempId);
         setPendingFaceAppendId(appendToItemId);
@@ -1353,7 +1353,7 @@ const AddItemsDetailPage = () => {
         if (addingToItemIdRef.current === tempId) {
           addingToItemIdRef.current = itemId;
           setAddingToItemId(itemId);
-          // Hold the backend 4.5s auto-analysis debounce — user is adding more photos
+          // Hold the backend 4.5s auto-analysis debounce: user is adding more photos
           api.post(`/items/${itemId}/hold-analysis`).catch(() => {}); // fire-and-forget
         }
 
@@ -1423,15 +1423,15 @@ const AddItemsDetailPage = () => {
       } else if (!axios.isAxiosError(err) && err instanceof Error && err.message) {
         // Bug fix (2026-07-14): a plain client-thrown Error (not an HTTP/network
         // failure) was previously falling into the "no response" branch below and
-        // getting relabeled "Network error — check your connection and try again",
+        // getting relabeled "Network error: check your connection and try again",
         // even on a fully healthy connection. These errors already carry an accurate,
         // user-friendly message (e.g. "The item you were adding this photo to is no
-        // longer available.") — show that instead of a misleading network message.
+        // longer available."): show that instead of a misleading network message.
         // Confirmed via Sentry FINDASALE-NEXTJS-Q, 2026-07-14 (real organizer test account).
         errorMessage = err.message;
       } else if (!err.response) {
         // No response at all on a real AxiosError = genuine network-level failure
-        // (offline, DNS, request aborted) — distinct from a server error or a plain
+        // (offline, DNS, request aborted): distinct from a server error or a plain
         // client-side Error, worth telling the user which it was.
         errorMessage = 'Network error. Check your connection and try again';
       }
@@ -1452,7 +1452,7 @@ const AddItemsDetailPage = () => {
     }
   };
 
-  // Rapidfire mode handler — simplified after S305 refactor
+  // Rapidfire mode handler: simplified after S305 refactor
   // Background uploads now happen in onPhotoCapture as photos are captured
   // This handler just closes the camera when user taps "Done"
   const handleRapidCameraComplete = async (photos: { blob: Blob; previewUrl: string }[]) => {
@@ -1463,7 +1463,7 @@ const AddItemsDetailPage = () => {
     setAddingToItemId(null);
     addingToItemIdRef.current = null;
 
-    // Close camera — uploads already happened in background via onPhotoCapture
+    // Close camera: uploads already happened in background via onPhotoCapture
     setCameraOpen(false);
   };
 
@@ -1496,7 +1496,7 @@ const AddItemsDetailPage = () => {
 
       // 5. Upload
       if (pendingQualityAppendId) {
-        // Bug fix (2026-07-03): same temp-id race as processAndUploadRapidPhoto — wait
+        // Bug fix (2026-07-03): same temp-id race as processAndUploadRapidPhoto: wait
         // for the real item id instead of racing it.
         const resolvedAppendId = await resolveAppendTargetId(pendingQualityAppendId);
         // Append photo to existing item
@@ -1607,7 +1607,7 @@ const AddItemsDetailPage = () => {
       // Resume upload from phase 5 (face detection passed)
       // 5. Upload
       if (pendingFaceAppendId) {
-        // Bug fix (2026-07-03): same temp-id race as processAndUploadRapidPhoto — wait
+        // Bug fix (2026-07-03): same temp-id race as processAndUploadRapidPhoto: wait
         // for the real item id instead of racing it.
         const resolvedAppendId = await resolveAppendTargetId(pendingFaceAppendId);
         // Append photo to existing item
@@ -1733,7 +1733,7 @@ const AddItemsDetailPage = () => {
 
         // Timeout: After 30s, stop polling and surface a needs-attention state so the
         // item isn't stranded silently. An item can reach here with NO aiErrorLog (backend
-        // never explicitly failed it) and NO title (never completed) — previously this left
+        // never explicitly failed it) and NO title (never completed): previously this left
         // it permanently stuck in DRAFT with zero visible error signal, invisible to both the
         // organizer and the PreviewModal's aiErrored check (confirmed live prod item
         // cmsges1sr003oqp8qhjis0xc0: aiErrorLog null, isAiTagged false, created 2026-08-05
@@ -1751,7 +1751,7 @@ const AddItemsDetailPage = () => {
           return;
         }
       } catch (e) {
-        // Network error during poll — continue polling, don't fail
+        // Network error during poll: continue polling, don't fail
         console.warn('[pollForAI] Network error, continuing:', e);
       }
     }, 3000); // Poll every 3 seconds
@@ -1936,12 +1936,12 @@ const AddItemsDetailPage = () => {
                 'Add items to your sale using camera capture, batch upload, manual entry, or CSV import.'
               )}
             </p>
-            {/* Distinct error state (D-009 pattern, matches command-center.tsx / calendar.tsx) —
+            {/* Distinct error state (D-009 pattern, matches command-center.tsx / calendar.tsx):
                 a fetch failure must never render identically to the legitimate empty state. */}
             {itemsError && (
               <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 mt-2 mb-2">
                 <p className="text-red-700 dark:text-red-200 text-sm font-semibold mb-2">
-                  Couldn't load your items. Your items are still saved — this is just a display issue.
+                  Couldn't load your items. Your items are still saved: this is just a display issue.
                 </p>
                 <button
                   onClick={() => refetchItems()}
@@ -1962,7 +1962,7 @@ const AddItemsDetailPage = () => {
             </div>
           </div>
 
-          {/* Tab Navigation — ordered by primary workflow */}
+          {/* Tab Navigation: ordered by primary workflow */}
           <div className="flex gap-2 mb-6 flex-wrap">
             {(['camera', 'batch', 'manual'] as ActiveTab[]).map((tab) => (
               <button
@@ -2001,7 +2001,7 @@ const AddItemsDetailPage = () => {
                   createMutation.mutate();
                 }}
               >
-                {/* Photo strip — top, like a card thumbnail */}
+                {/* Photo strip: top, like a card thumbnail */}
                 <div className="bg-warm-50 dark:bg-gray-900 border-b border-warm-200 dark:border-gray-700 p-4">
                   {formData.photoUrls.length > 0 ? (
                     <div className="flex gap-2 flex-wrap">
@@ -2070,7 +2070,7 @@ const AddItemsDetailPage = () => {
                   />
                 </div>
 
-                {/* Core fields — compact 2-col grid */}
+                {/* Core fields: compact 2-col grid */}
                 <div className="px-4 py-4 space-y-3">
                   <div>
                     <label className="block text-xs font-medium text-warm-700 dark:text-warm-300 mb-1">Title *</label>
@@ -2352,7 +2352,7 @@ const AddItemsDetailPage = () => {
               </h2>
 
               <div className="space-y-5">
-                {/* Open Camera button — always at top */}
+                {/* Open Camera button: always at top */}
                 <div className="flex justify-center">
                   <button
                     onClick={() => setCameraOpen(true)}
@@ -2407,14 +2407,14 @@ const AddItemsDetailPage = () => {
               addingToItemId={addingToItemId}
               onAddToItem={(id) => {
                 if (addingToItemId === id) {
-                  // Exiting add-mode — release the auto-analysis hold so backend restarts 4.5s debounce
+                  // Exiting add-mode: release the auto-analysis hold so backend restarts 4.5s debounce
                   if (!id.startsWith('temp-')) {
                     api.post(`/items/${id}/release-analysis`).catch(() => {});
                   }
                   setAddingToItemId(null);
                   addingToItemIdRef.current = null;
                 } else {
-                  // Entering add-mode — hold auto-analysis if we already have a real ID
+                  // Entering add-mode: hold auto-analysis if we already have a real ID
                   if (!id.startsWith('temp-')) {
                     api.post(`/items/${id}/hold-analysis`).catch(() => {});
                   }
@@ -2585,7 +2585,7 @@ const AddItemsDetailPage = () => {
                 </div>
               </div>
 
-              {/* Sticky Top Toolbar — positioned ABOVE table for proper sticky behavior */}
+              {/* Sticky Top Toolbar: positioned ABOVE table for proper sticky behavior */}
               {selectedItems.size > 0 && (
                 <div className="sticky top-0 z-30 bg-amber-600 dark:bg-amber-800 text-white border-b border-amber-700 dark:border-amber-900 px-4 py-3 shadow-md space-y-2">
                   {/* Row 1: select-all + count + Hide + Show + Delete */}
@@ -2691,10 +2691,10 @@ const AddItemsDetailPage = () => {
                 </div>
               )}
 
-              {/* Status filter — All / Active / Sold segmented control (Patrick feedback
+              {/* Status filter: All / Active / Sold segmented control (Patrick feedback
                   2026-08-02: sold items requested as their own view; UX call was a status
                   filter here rather than a fourth input-method tab above, since Camera/
-                  Batch/Manual/CSV Import are a different concept — how you ADD an item,
+                  Batch/Manual/CSV Import are a different concept: how you ADD an item,
                   not the status of items already added). Composes with itemSearch. */}
               {items.length > 0 && (
                 <div className="px-4 py-2 bg-warm-50 dark:bg-gray-900 border-b border-warm-200 dark:border-gray-700 flex items-center gap-2">
@@ -2766,7 +2766,7 @@ const AddItemsDetailPage = () => {
                           />
                           <span className="text-warm-400 text-sm">{isExpanded ? '▲' : '▼'}</span>
                         </div>
-                        {/* Thumbnail — links to public item page (no target="_blank" to preserve PWA back-navigation) */}
+                        {/* Thumbnail: links to public item page (no target="_blank" to preserve PWA back-navigation) */}
                         <a
                           href={`/items/${item.id}`}
                           onClick={(e) => e.stopPropagation()}
@@ -2783,7 +2783,7 @@ const AddItemsDetailPage = () => {
                             <div className="w-14 h-14 bg-gray-200 dark:bg-gray-700 rounded border border-warm-200 dark:border-gray-700 flex items-center justify-center text-gray-400 text-xl">📷</div>
                           )}
                         </a>
-                        {/* Title — plain text, no navigation link */}
+                        {/* Title: plain text, no navigation link */}
                         <div className="flex-1 min-w-0">
                           <span className="font-semibold text-amber-700 truncate inline-block max-w-full text-sm">
                             {item.title || 'Untitled'}
@@ -2942,7 +2942,7 @@ const AddItemsDetailPage = () => {
                                     value={editState.packageWeightOz}
                                     onChange={(e) => {
                                       setItemEditState((prev) => ({ ...prev, [item.id]: { ...editState, packageWeightOz: e.target.value } }));
-                                      // Organizer edited the weight field itself — record it so
+                                      // Organizer edited the weight field itself: record it so
                                       // handleInlineItemSave can send packageConfirmedByOrganizer.
                                       setInlineWeightTouched((prev) => new Set(prev).add(item.id));
                                     }}
@@ -3564,7 +3564,7 @@ const AddItemsDetailPage = () => {
         confirmLabel="Delete"
         variant="danger"
         onConfirm={() => {
-          // Persisted (saved) items must hit the API — handleDeleteDraft only
+          // Persisted (saved) items must hit the API: handleDeleteDraft only
           // mutates local rapidItems state, so saved items never actually deleted.
           if (deleteConfirmId) deleteMutation.mutate(deleteConfirmId);
           // deleteMutation.onSuccess clears deleteConfirmId; keep modal open until then.

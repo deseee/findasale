@@ -28,7 +28,7 @@ It's easy to treat these as the same problem because they both happen around the
 
 Cataloging is about making a sale look good once someone finds it: clear photos, accurate prices, an organized list. Discovery is about making sure someone finds it in the first place. A tool can be excellent at the first and contribute nothing to the second.
 
-This is the same dynamic we've pointed out with AI-powered cataloging tools that generate pricing and descriptions automatically. They make preparation faster. They don't put a single additional buyer at your sale. A public sale webpage is the same shape of improvement: better presentation, no built-in audience.
+This is the same dynamic we've pointed out with smart cataloging tools that generate pricing and descriptions automatically. They make preparation faster. They don't put a single additional buyer at your sale. A public sale webpage is the same shape of improvement: better presentation, no built-in audience.
 
 ## What actually closes the gap
 

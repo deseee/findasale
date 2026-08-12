@@ -239,7 +239,7 @@ export async function getFlipReport(saleId: string, organizerId: string): Promis
     if (catRate >= 75) {
       const catName = (bestCategory.category || 'Other').toLowerCase();
       recommendations.push({
-        text: `Your ${catName} items sold exceptionally well — prioritize this category in future sales.`,
+        text: `Your ${catName} items sold exceptionally well. Prioritize this category in future sales.`,
         type: 'positive',
       });
     }

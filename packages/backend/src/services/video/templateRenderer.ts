@@ -785,7 +785,7 @@ function deriveTitleAndDescription(
       title = findCount > 0 ? `${findCount} finds near you this weekend` : 'What is near you this weekend';
       break;
     case 'season-B-resale-route':
-      title = paidTotal > 0 ? `The Resale Route — paid ${fmtUsd(paidTotal)}, worth ${fmtUsd(worthTotal)}` : 'The Resale Route';
+      title = paidTotal > 0 ? `The Resale Route: paid ${fmtUsd(paidTotal)}, worth ${fmtUsd(worthTotal)}` : 'The Resale Route';
       break;
     case 'season-A-room-styling':
       title = paidTotal > 0 ? `Styled a room for ${fmtUsd(paidTotal)}` : template.displayName;
@@ -811,8 +811,8 @@ function deriveTitleAndDescription(
         ? ''
         : a.facts.prices.length
           ? a.facts.prices.length >= 2
-            ? ` — paid ${fmtUsd(Math.min(...a.facts.prices))}, worth ${fmtUsd(Math.max(...a.facts.prices))}`
-            : ` — ${fmtUsd(a.facts.prices[0])}`
+            ? ` (paid ${fmtUsd(Math.min(...a.facts.prices))}, worth ${fmtUsd(Math.max(...a.facts.prices))})`
+            : ` (${fmtUsd(a.facts.prices[0])})`
           : '';
       lines.push(`• ${name}${priceStr}`);
     }

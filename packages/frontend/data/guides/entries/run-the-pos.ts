@@ -90,7 +90,7 @@ One device handles both.
 The POS stays open in offline mode for cash transactions.
 You can still add items and tap Confirm.
 The sale logs locally and syncs when your connection comes back.
-Venmo, Zelle, and Stripe links need a connection — those are on the shopper's device anyway.
+Venmo, Zelle, and Stripe links need a connection: those are on the shopper's device anyway.
 
 ---
 
@@ -98,7 +98,7 @@ Venmo, Zelle, and Stripe links need a connection — those are on the shopper's 
 
 **Can I adjust the price at checkout?**
 Not from the POS cart directly. Edit the listing price first, then add the item to the cart.
-For a one-off discount, complete the checkout at the listed price and accept a lower cash amount — just note it for your records.
+For a one-off discount, complete the checkout at the listed price and accept a lower cash amount, just note it for your records.
 
 **What if I scan an item that's already sold?**
 The POS won't add it to the cart. Sold items are filtered out of scan results.

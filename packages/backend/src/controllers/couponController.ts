@@ -180,7 +180,7 @@ export const generateXpSinkCoupon = async (req: AuthRequest, res: Response) => {
 
     if (thisMonthCount >= 5) {
       return res.status(429).json({
-        message: 'Monthly limit reached — you can generate up to 5 coupons per month.',
+        message: 'Monthly limit reached. You can generate up to 5 coupons per month.',
         generated: thisMonthCount,
         limit: 5,
       });
@@ -223,7 +223,7 @@ export const generateXpSinkCoupon = async (req: AuthRequest, res: Response) => {
         if (!existing) break;
       }
       if (existing) {
-        throw new CouponCodeCollisionError('Failed to generate coupon code — please try again');
+        throw new CouponCodeCollisionError('Failed to generate coupon code. Please try again.');
       }
 
       const expiresAt = new Date();
@@ -376,7 +376,7 @@ export const generateShopperCoupon = async (req: AuthRequest, res: Response) => 
         if (!existing) break;
       }
       if (existing) {
-        throw new CouponCodeCollisionError('Failed to generate coupon code — please try again');
+        throw new CouponCodeCollisionError('Failed to generate coupon code. Please try again.');
       }
 
       const expiresAt = new Date();

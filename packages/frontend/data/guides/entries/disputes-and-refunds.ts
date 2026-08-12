@@ -16,7 +16,7 @@ const entry: GuideEntry = {
 
 File a dispute if:
 
-- An item was significantly not as described — wrong condition, missing parts, major damage not shown or mentioned in the listing
+- An item was significantly not as described: wrong condition, missing parts, major damage not shown or mentioned in the listing
 - A hold was active and confirmed but the item was not available when you arrived for pickup
 
 Do not file a dispute because:
@@ -31,7 +31,7 @@ If the organizer's sale clearly states "all sales final" and the item was accura
 
 ## Message the organizer first
 
-Before filing a formal dispute, send the organizer a message through the sale detail page. Most issues — a hold mix-up, a missing item, a condition question — get sorted out in one or two messages. Organizers who care about their reputation will respond quickly and make it right.
+Before filing a formal dispute, send the organizer a message through the sale detail page. Most issues (a hold mix-up, a missing item, a condition question) get sorted out in one or two messages. Organizers who care about their reputation will respond quickly and make it right.
 
 If you do not hear back within 24 hours, or if the response does not resolve the issue, proceed to a formal dispute.
 
@@ -52,13 +52,13 @@ You will get a confirmation that your dispute was received. The FindA.Sale team 
 
 FindA.Sale contacts both the shopper and the organizer to understand what happened. Both sides can submit information. The team makes a determination based on the listing, the communication record, and the evidence provided.
 
-You do not need to follow up repeatedly — the team will reach out if they need more information.
+You do not need to follow up repeatedly: the team will reach out if they need more information.
 
 ---
 
 ## What refunds look like
 
-**Purchases processed through FindA.Sale payments:** If a refund is approved, it goes back to the original payment method within 3–5 business days. FindA.Sale initiates the refund — you do not need to contact your bank.
+**Purchases processed through FindA.Sale payments:** If a refund is approved, it goes back to the original payment method within 3–5 business days. FindA.Sale initiates the refund. You do not need to contact your bank.
 
 **Cash transactions:** FindA.Sale cannot process a cash refund directly. If the dispute is resolved in your favor, FindA.Sale will facilitate a resolution with the organizer, but cash refunds are handled between the shopper and organizer. The platform can document the outcome and flag the organizer's account if they do not follow through.
 
@@ -84,7 +84,7 @@ No. FindA.Sale's dispute process only covers transactions that went through the 
 You can appeal once by replying to the dispute resolution email with new information or evidence you did not include initially. Appeals are reviewed by a different member of the team. The appeal decision is final.
 
 **Does filing a dispute affect the organizer's rating?**
-Filing a dispute alone does not change their rating. After the dispute is resolved, you still have the option to leave a review for the sale. Your review — accurate and honest — is separate from the dispute outcome.
+Filing a dispute alone does not change their rating. After the dispute is resolved, you still have the option to leave a review for the sale. Your review, accurate and honest, is separate from the dispute outcome.
 
 **Can an organizer file a dispute against a shopper?**
 Organizers can report shoppers who do not show up for confirmed holds or who engage in abusive behavior. This is handled through the organizer's hold management tools and the report option on the shopper's hold record.

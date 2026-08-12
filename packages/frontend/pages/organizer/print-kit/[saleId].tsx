@@ -106,7 +106,7 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
     enabled: !!saleId && typeof saleId === 'string',
   });
 
-  // Fetch treasure hunt clues — endpoint is public, no isPro gate needed here
+  // Fetch treasure hunt clues: endpoint is public, no isPro gate needed here
   const { data: clues } = useQuery<Array<{id: string; category: string | null; createdAt: string}>>({
     queryKey: ['print-kit-clues', saleId],
     queryFn: async () => {
@@ -116,7 +116,7 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
     enabled: !!saleId && typeof saleId === 'string',
   });
 
-  // Fetch organizer watermark setting — determines whether to show finda.sale branding
+  // Fetch organizer watermark setting: determines whether to show finda.sale branding
   const { data: watermarkData } = useQuery<{ removeWatermarkEnabled: boolean }>({
     queryKey: ['print-kit-watermark'],
     queryFn: async () => {
@@ -151,7 +151,7 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
     organizerProfile?.subscriptionTier === 'TEAMS' &&
     watermarkData?.removeWatermarkEnabled === true;
 
-  // #31: Brand kit colors — applied to print templates for PRO/TEAMS organizers
+  // #31: Brand kit colors: applied to print templates for PRO/TEAMS organizers
   const brandPrimary = organizerProfile?.brandPrimaryColor || '#1f2937';
   const brandSecondary = organizerProfile?.brandSecondaryColor || '#374151';
 
@@ -187,7 +187,7 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
     setTimeout(() => { w.print(); w.close(); }, 600);
   };
 
-  // Download file with auth cookie (JWT is httpOnly cookie — credentials:include sends it automatically).
+  // Download file with auth cookie (JWT is httpOnly cookie: credentials:include sends it automatically).
   // Always use the /api proxy (same-origin) so SameSite=Lax cookies are transmitted;
   // calling the Railway URL directly cross-origin would suppress the cookie.
   const downloadAuthenticatedFile = async (url: string, filename: string) => {
@@ -478,7 +478,7 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
             color: black;
           }
         }
-        /* Screen preview — compact readable layout, not print-sized */
+        /* Screen preview: compact readable layout, not print-sized */
         @media screen {
           .item-tags-grid {
             height: auto;
@@ -683,7 +683,7 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
                   </div>
                 </div>
 
-                {/* Label Sheet Composer — prominent CTA */}
+                {/* Label Sheet Composer: prominent CTA */}
                 <div className="mt-4 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                   <div>
                     <h3 className="font-bold text-warm-900 dark:text-warm-100">Label Sheet Composer</h3>
@@ -857,7 +857,7 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
                 </div>
               )}
 
-              {/* Section 3 — Check-In / Queue QR (PRO/TEAMS only) */}
+              {/* Section 3: Check-In / Queue QR (PRO/TEAMS only) */}
               {isPro && (
                 <div className="qr-full-page bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 print:shadow-none print:rounded-none">
                   <div className="flex-1 flex flex-col justify-center items-center">
@@ -872,7 +872,7 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
                 </div>
               )}
 
-              {/* Section 4 — Treasure Hunt Clues QR (PRO/TEAMS only) — one full page per clue */}
+              {/* Section 4 (Treasure Hunt Clues QR (PRO/TEAMS only))one full page per clue */}
               {isPro && clues && clues.length > 0 && clues.map((clue, idx) => (
                 <div key={clue.id} className="qr-full-page bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 print:shadow-none print:rounded-none">
                   <div className="flex-1 flex flex-col justify-center items-center">
@@ -887,7 +887,7 @@ const PrintKitPage: React.FC<PrintKitPageProps> = () => {
                 </div>
               ))}
 
-              {/* Section 5 — Photo Station QR (all tiers, last print page) */}
+              {/* Section 5: Photo Station QR (all tiers, last print page) */}
               <div className="qr-full-page qr-full-page-last bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 print:shadow-none print:rounded-none">
                 <div className="flex-1 flex flex-col justify-center items-center">
                   <img

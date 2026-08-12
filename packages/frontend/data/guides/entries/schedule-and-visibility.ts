@@ -16,9 +16,9 @@ Set both before you publish.
 
 ## Date fields
 
-**Start Date** — the first day your sale is open to the public.
+**Start Date**: the first day your sale is open to the public.
 
-**End Date** — the last day your sale is open. For a one-day yard sale, start and end dates are the same.
+**End Date**: the last day your sale is open. For a one-day yard sale, start and end dates are the same.
 
 For a multi-day auction or estate sale, set the full date range.
 Each day in the range will show on your public listing.
@@ -27,9 +27,9 @@ Each day in the range will show on your public listing.
 
 ## Time fields
 
-**Start Time** — when the doors open on your first day.
+**Start Time**: when the doors open on your first day.
 
-**End Time** — when the sale closes for in-person shoppers on each day.
+**End Time**: when the sale closes for in-person shoppers on each day.
 
 End time is about in-person access, not when online listings expire.
 Online items stay visible until you close or unpublish the sale.
@@ -60,7 +60,7 @@ How far in advance should you publish before your start date?
 | Consignment | 7–10 days |
 
 These are guidelines. You can publish as little as one day in advance.
-But shoppers who follow saved-sale notifications need time to plan — especially for multi-day events.
+But shoppers who follow saved-sale notifications need time to plan, especially for multi-day events.
 
 ---
 
@@ -87,7 +87,7 @@ Example: Your estate sale starts Saturday the 15th. With a 7-day window, it appe
 ## What "Active Now" means in search
 
 Once your sale start date has passed and the sale is published, it shows as **Active Now** in search results.
-Shoppers see this as a currently-open event — not a preview.
+Shoppers see this as a currently-open event, not a preview.
 
 Sales past their end date are automatically marked closed and drop out of active search.
 They remain accessible by direct link for a short time after closing.
@@ -97,7 +97,7 @@ They remain accessible by direct link for a short time after closing.
 ## Common questions
 
 **I set the dates wrong. Can I fix it after publishing?**
-Yes. Open the sale from your dashboard, tap **Edit Sale**, and update the dates. The sale stays published — no need to unpublish first.
+Yes. Open the sale from your dashboard, tap **Edit Sale**, and update the dates. The sale stays published: no need to unpublish first.
 
 **My sale is published but it's not showing in search yet. Is something wrong?**
 Check your Visibility Window. If your sale starts in 10 days and your window is set to 7 days, it won't appear in search for another 3 days. Extend the Visibility Window in edit-sale to make it appear sooner.

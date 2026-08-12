@@ -8,7 +8,7 @@ const entry: GuideEntry = {
   priority: 2,
   relatedGuides: ['promote-page', 'share-cards', 'brand-kit'],
   videoUrl: undefined,
-  body: `Followers are shoppers who tapped Follow on your organizer profile or on one of your past sale listings. When you send them an update, it goes directly to their FindA.Sale inbox — no algorithm, no feed competition. This guide covers how to send an update, what to write, and how often to send without burning people out.
+  body: `Followers are shoppers who tapped Follow on your organizer profile or on one of your past sale listings. When you send them an update, it goes directly to their FindA.Sale inbox: no algorithm, no feed competition. This guide covers how to send an update, what to write, and how often to send without burning people out.
 
 ---
 
@@ -25,7 +25,7 @@ Followers receive updates in their FindA.Sale notification inbox. Depending on t
 ## How to send an update
 
 1. Go to /organizer/send-update, or tap your follower count on the dashboard
-2. Your active or upcoming sale is pre-selected — confirm it is the right one
+2. Your active or upcoming sale is pre-selected: confirm it is the right one
 3. Type your message in the text field (see "What to write" below)
 4. Tap **Preview** to see how it looks before sending
 5. Tap **Send to followers**
@@ -39,7 +39,7 @@ That is it. All followers who have notifications on receive the message. You wil
 Good updates are specific. Bad updates are vague.
 
 **Good:**
-- "New furniture added Wednesday — dining table, 6 chairs, and a dresser set. Sale runs through Sunday."
+- "New furniture added Wednesday: dining table, 6 chairs, and a dresser set. Sale runs through Sunday."
 - "Added 3 boxes of vintage kitchen items this morning. Prices dropped on remaining tools."
 - "Preview day tomorrow, Thursday 4–6pm. First look before the public sale Friday–Saturday."
 
@@ -58,7 +58,7 @@ Write like you are texting a regular customer. One to three sentences. Specific 
 
 | Good update | Why it works |
 |-------------|-------------|
-| "Furniture added — bedroom set, two end tables, full-length mirror. Sale ends Sunday." | Names specific items. Gives a deadline. |
+| "Furniture added: bedroom set, two end tables, full-length mirror. Sale ends Sunday." | Names specific items. Gives a deadline. |
 | "Prices cut on everything in the tool section. Come early Saturday." | Signals urgency. Tells them when to show up. |
 | "Preview Thursday 5–7pm for followers only." | Exclusive access. Strong reason to act. |
 
@@ -75,19 +75,19 @@ Write like you are texting a regular customer. One to three sentences. Specific 
 **2–3 updates per active sale is the right range for most sales.**
 
 A typical schedule:
-1. **Opening announcement** — send the day before or morning of your first day
-2. **Mid-sale update** — send when you add new items, cut prices, or have something specific to announce
-3. **Final day reminder** — send the morning of your last day with a "last chance" note
+1. **Opening announcement**: send the day before or morning of your first day
+2. **Mid-sale update**: send when you add new items, cut prices, or have something specific to announce
+3. **Final day reminder**: send the morning of your last day with a "last chance" note
 
 Do not send updates just to send them. If nothing has changed, skip the update. Followers who get empty updates stop opening them.
 
-For sales longer than a week, you can send one additional update if there is a genuine reason — a new batch of items, a price drop day, a preview event.
+For sales longer than a week, you can send one additional update if there is a genuine reason: a new batch of items, a price drop day, a preview event.
 
 ---
 
 ## Preview before sending
 
-Always tap **Preview** before you send. The preview shows exactly what followers will see in their inbox — your message, your sale name, the date, and a link to the listing. Check for typos and confirm the sale details look right.
+Always tap **Preview** before you send. The preview shows exactly what followers will see in their inbox: your message, your sale name, the date, and a link to the listing. Check for typos and confirm the sale details look right.
 
 You cannot unsend an update once it goes out. The preview step takes 10 seconds and catches most mistakes.
 
@@ -95,7 +95,7 @@ You cannot unsend an update once it goes out. The preview step takes 10 seconds 
 
 ## Common questions
 
-**Who gets the update — just followers of this sale, or all my followers?**
+**Who gets the update: just followers of this sale, or all my followers?**
 
 All followers of your organizer profile receive the update, plus anyone who followed this specific sale listing. Both groups are included.
 

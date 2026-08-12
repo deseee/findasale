@@ -14,7 +14,7 @@ export default function SplitPaymentInput({
   const [cashInputValue, setCashInputValue] = useState('');
 
   const cardAmountCents = Math.max(0, totalAmountCents - cashAmountCents);
-  // Platform fee is 10% flat on the total transaction — card portion must cover it
+  // Platform fee is 10% flat on the total transaction: card portion must cover it
   const platformFeeCents = Math.round(totalAmountCents * 0.1);
   const totalAmount = totalAmountCents / 100;
   const cardAmount = cardAmountCents / 100;
@@ -84,7 +84,7 @@ export default function SplitPaymentInput({
           <p className={`text-2xl font-bold ${isCardValid ? 'text-sage-700 dark:text-sage-400' : 'text-red-600 dark:text-red-400'}`}>
             ${cardAmount.toFixed(2)}
           </p>
-          {/* Platform fee is internal — not shown to organizer or shopper */}
+          {/* Platform fee is internal: not shown to organizer or shopper */}
         </div>
         {!isCardValid && (
           <p className="text-xs text-red-600 dark:text-red-400 mt-1">

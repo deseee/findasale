@@ -108,7 +108,7 @@ export default function DemandSignalsCard({ maxLocal = 10 }: DemandSignalsCardPr
             </div>
           )}
 
-          {/* National demand pills — secondary context */}
+          {/* National demand pills: secondary context */}
           {hasNational && (
             <div className="mb-4">
               <p className="text-xs font-medium text-violet-700 dark:text-violet-300 mb-2">

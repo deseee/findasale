@@ -33,7 +33,7 @@ Two common uses:
 1. Go to **/organizer/color-rules**.
 2. Tap **New Rule**.
 3. Pick a color from the palette.
-4. Give it a name — something your staff will recognize: "Sunday 50% off" or "Consignor — Jane."
+4. Give it a name, something your staff will recognize: "Sunday 50% off" or "Consignor: Jane."
 5. Set the modifier:
    - A percentage discount: "50% off"
    - A flat dollar amount: "$5 off"
@@ -91,7 +91,7 @@ This is the most common use of color rules.
 
 **Day one:** All items get yellow tags. Full price.
 
-**After close on day one:** Walk the floor. Swap yellow tags for green or red depending on what you want to move. No repricing needed — the color does the work.
+**After close on day one:** Walk the floor. Swap yellow tags for green or red depending on what you want to move. No repricing needed: the color does the work.
 
 **Day two:** Staff handles pricing based on the sticker. You don't touch the app.
 
@@ -114,7 +114,7 @@ As items sell, the color on the record tells you who gets paid. Export the sold 
 ## Common questions
 
 **Can I use color rules across multiple sales?**
-Color rules are set per sale. If you run the same setup frequently, you'll create the rules each time — they don't carry over automatically right now.
+Color rules are set per sale. If you run the same setup frequently, you'll create the rules each time: they don't carry over automatically right now.
 
 **What if an item has no color tag?**
 It has no modifier applied. It sells at whatever price you set for it. Color rules are optional per item.
@@ -129,7 +129,7 @@ No. Color tags are for your internal use. Shoppers see the final price, not the 
 Yes. Deleting a rule removes it from any new assignments. Items already tagged keep their color visually but the modifier is cleared.
 
 **Do color rules interact with discount rules?**
-They can stack — an item with a color-rule modifier could also fall under a discount rule. Check your effective prices in the inventory view before sale day if you're using both.
+They can stack: an item with a color-rule modifier could also fall under a discount rule. Check your effective prices in the inventory view before sale day if you're using both.
 
 ---
 

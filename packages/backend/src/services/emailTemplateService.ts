@@ -553,7 +553,7 @@ export function buildNewSaleAlertEmail(opts: {
     ${buildCTARow('View the sale →', sale.saleUrl, referralLine)}
   `;
 
-  return baseWrapper({ preheader: `${organizerName} just posted a new sale — ${sale.title}`, content, unsubLabel: 'Stop alerts from organizers I follow', unsubUrl: opts.unsubUrl });
+  return baseWrapper({ preheader: `${organizerName} just posted a new sale: ${sale.title}`, content, unsubLabel: 'Stop alerts from organizers I follow', unsubUrl: opts.unsubUrl });
 }
 
 /** Email 2 — Shopper: Sale day reminder */
@@ -624,7 +624,7 @@ export function buildOrganizerWeeklyDigestEmail(opts: {
     ${buildCTARow('View your dashboard →', dashboardUrl)}
   `;
 
-  return baseWrapper({ preheader: `Your week at FindA.Sale — ${metrics[0]?.stat || ''} ${metrics[0]?.label || 'views'}`, content, unsubLabel: 'Manage email preferences', unsubUrl: opts.unsubUrl });
+  return baseWrapper({ preheader: `Your week at FindA.Sale: ${metrics[0]?.stat || ''} ${metrics[0]?.label || 'views'}`, content, unsubLabel: 'Manage email preferences', unsubUrl: opts.unsubUrl });
 }
 
 /** Email 6 — Shopper: Smart match alert */
@@ -647,7 +647,7 @@ export function buildSmartMatchEmail(opts: {
     ${buildCTARow('View this item →', item.itemUrl, secondaryLink)}
   `;
 
-  return baseWrapper({ preheader: `Found something that might be yours — ${item.title}`, content, unsubLabel: 'Stop smart match alerts', unsubUrl: opts.unsubUrl });
+  return baseWrapper({ preheader: `Found something that might be yours: ${item.title}`, content, unsubLabel: 'Stop smart match alerts', unsubUrl: opts.unsubUrl });
 }
 
 // Re-export buildStepIndicator for use in onboarding service

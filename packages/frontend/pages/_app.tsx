@@ -1,5 +1,5 @@
 import '../styles/globals.css';
-// Leaflet base stylesheet — imported globally so it is present in the bundle BEFORE
+// Leaflet base stylesheet: imported globally so it is present in the bundle BEFORE
 // the map ever mounts. Previously loaded via an async <link> inside SaleMapInner,
 // which race-loaded: Leaflet would init the map before .leaflet-map-pane got its
 // CSS, leaving the pane stuck at the identity transform so markers projected
@@ -8,14 +8,14 @@ import '../styles/globals.css';
 import 'leaflet/dist/leaflet.css';
 import type { AppProps } from 'next/app';
 import dynamic from 'next/dynamic';
-// SSR-skip — @vercel/speed-insights ESM build does `import { useEffect } from "react"`,
+// SSR-skip: @vercel/speed-insights ESM build does `import { useEffect } from "react"`,
 // which fails Node's strict ESM loader against react@18 CJS and 500s every SSR page.
 // ssr:false defers it to the browser, where React is loaded as a real module.
-// NOTE (2026-07-23): <Analytics/> from @vercel/analytics was removed here — Vercel Web
+// NOTE (2026-07-23): <Analytics/> from @vercel/analytics was removed here: Vercel Web
 // Analytics is a paid Hobby add-on that isn't enabled on this project (confirmed via
 // 404 from the Analytics API), so its beacon to /_vercel/insights/view was pure wasted
 // Edge Request traffic (~376 req/day, see Firewall Traffic "Top Request Paths").
-// Speed Insights is a separate product/beacon — left in place, not confirmed unpaid.
+// Speed Insights is a separate product/beacon: left in place, not confirmed unpaid.
 const SpeedInsights = dynamic(
   () => import('@vercel/speed-insights/next').then((m) => m.SpeedInsights),
   { ssr: false }
@@ -51,7 +51,7 @@ import { OfflineSyncProvider } from '../contexts/OfflineSyncContext'; // Feature
 import CookieConsentBanner from '../components/CookieConsentBanner';
 import GoogleAnalytics from '../components/GoogleAnalytics';
 
-// #63 Dark Mode — Apply theme class on mount to prevent FOUC
+// #63 Dark Mode: Apply theme class on mount to prevent FOUC
 function ThemeInitializer() {
   useTheme(); // Side effect: applies dark/light class to <html> on mount
 
@@ -66,7 +66,7 @@ function ThemeInitializer() {
   return null;
 }
 
-// SW update notifier — renders a dismissible toast when a new service worker is waiting
+// SW update notifier: renders a dismissible toast when a new service worker is waiting
 // Registers the user's browser for push notifications once they're logged in
 function PushSubscriber() {
   usePushSubscription();
@@ -177,7 +177,7 @@ function ServiceWorkerUpdateNotifier() {
     if (typeof window === 'undefined' || !('serviceWorker' in navigator)) return;
 
     const handleControllerChange = () => {
-      // A new SW has taken control — prompt user to reload for the latest version
+      // A new SW has taken control: prompt user to reload for the latest version
       showToast('A new version is available. Reload to update.', 'info');
     };
 
@@ -188,7 +188,7 @@ function ServiceWorkerUpdateNotifier() {
     // unhandled rejections on 404 pages (Sentry FINDASALE-NEXTJS-1, 47 events).
     if (process.env.NODE_ENV === 'production') {
       navigator.serviceWorker.register('/sw.js').catch((err) => {
-        // Registration failure is non-fatal — the app works without a service worker.
+        // Registration failure is non-fatal: the app works without a service worker.
         console.warn('[SW] registration failed (non-critical):', err);
       });
     }
@@ -211,7 +211,7 @@ function OAuthBridge() {
 
   useEffect(() => {
     const oauthProfile = (session as any)?.oauthProfile;
-    // P1 Security Fix: Removed `!user` guard — previously, an existing JWT session for
+    // P1 Security Fix: Removed `!user` guard: previously, an existing JWT session for
     // account A would prevent the OAuth exchange for account B from firing, leaving the
     // user silently stuck on account A's session after completing Google OAuth as account B.
     // The exchange must always run when there is a pending oauthProfile, regardless of
@@ -222,7 +222,7 @@ function OAuthBridge() {
       // POST directly from browser → Next.js proxy (beforeFiles) → Railway
       // This ensures Railway's Set-Cookie headers reach the BROWSER, not Vercel
       // Note: Raw fetch intentionally used here (not api axios instance).
-      // The CSRF middleware skips /auth/oauth — see packages/backend/src/middleware/csrf.ts.
+      // The CSRF middleware skips /auth/oauth: see packages/backend/src/middleware/csrf.ts.
       // If the CSRF skip list is ever changed, this call must be updated to include x-csrf-token.
       fetch('/api/auth/oauth', {
         method: 'POST',
@@ -250,7 +250,7 @@ function OAuthBridge() {
             });
             return;
           }
-          // Rate limit or server error — redirect to login with explanation instead of silently landing unlogged
+          // Rate limit or server error: redirect to login with explanation instead of silently landing unlogged
           if (status === 429 || (!ok && !data?.token)) {
             const msg = status === 429
               ? 'Too many login attempts. Please try again in 15 minutes.'
@@ -262,13 +262,13 @@ function OAuthBridge() {
           }
           if (ok && data?.token) {
             login(data.token);
-            // Feature #443: 1-click OAuth claim — attempt claim before redirect
+            // Feature #443: 1-click OAuth claim: attempt claim before redirect
             const claimOrganizerId = typeof window !== 'undefined'
               ? sessionStorage.getItem('claimOrganizerId')
               : null;
             if (claimOrganizerId) {
               sessionStorage.removeItem('claimOrganizerId');
-              // BUG FIX (2026-07-20): this previously only caught network-level throws —
+              // BUG FIX (2026-07-20): this previously only caught network-level throws:
               // fetch() does NOT reject on a non-2xx response (e.g. 409 ALREADY_ORGANIZER /
               // ALREADY_CLAIMED), so a failed claim fell straight through to the unconditional
               // "?claimed=true" redirect below with no error ever surfaced. This is the most
@@ -306,7 +306,7 @@ function OAuthBridge() {
               const destination = data.returnTo || (isOrganizer ? '/organizer/dashboard' : '/');
               router.replace(destination);
             } catch (_e) {
-              // Token decode failed — stay on current page
+              // Token decode failed: stay on current page
             }
           }
           // Sign out of NextAuth session (no longer needed)
@@ -395,10 +395,10 @@ function RateLimitListener() {
  * produces a redirectCount=3 chain that strips query params before router.isReady
  * fires. Reading window.location.search on initial mount captures the original URL
  * before any client-side redirect normalises it away.
- * (Fixes #462/#463/#464 — outreach attribution silently broken on Vercel.)
+ * (Fixes #462/#463/#464: outreach attribution silently broken on Vercel.)
  */
 function UTMCapture() {
-  // #462/#463/#464 — Three-source UTM capture:
+  // #462/#463/#464: Three-source UTM capture:
   //
   // Root cause confirmed S836: Chrome incognito strips utm_* params at browser level
   // before the request is sent. Server-side fixes cannot intercept them.
@@ -417,7 +417,7 @@ function UTMCapture() {
     const urlParams = new URLSearchParams(window.location.search);
     const saleId = urlParams.get('saleId') ?? undefined;
 
-    // --- Source 1: fsa_* params (Chrome-safe — email outreach links) ---
+    // --- Source 1: fsa_* params (Chrome-safe: email outreach links) ---
     let utm_source: string | undefined = urlParams.get('fsa_src') ?? undefined;
     let utm_medium: string | undefined = urlParams.get('fsa_med') ?? undefined;
     let utm_campaign: string | undefined = urlParams.get('fsa_cmp') ?? undefined;
@@ -523,7 +523,7 @@ function MyApp({ Component, pageProps: { session, ...pageProps } }: AppProps) {
     <SessionProvider session={session} basePath="/api/auth">
       <Head>
         <link rel="canonical" href={canonicalUrl} key="canonical" />
-        {/* OG/Twitter structural defaults — emitted in next/head (NOT _document) so that
+        {/* OG/Twitter structural defaults: emitted in next/head (NOT _document) so that
             page-level <Head> tags with the same property/name AUTO-OVERRIDE them via
             next/head dedup, leaving exactly one tag. Do NOT add key props to these meta
             tags: next/head auto-dedupes meta by property/name only when no key is present;
@@ -576,9 +576,9 @@ function MyApp({ Component, pageProps: { session, ...pageProps } }: AppProps) {
               <RankUpManager />
               {/* Cookie Consent Banner */}
               <CookieConsentBanner />
-              {/* GA4 — consent-gated, env-var-controlled */}
+              {/* GA4: consent-gated, env-var-controlled */}
               <GoogleAnalytics />
-              {/* Vercel Speed Insights only — <Analytics/> removed, Web Analytics isn't a paid feature here */}
+              {/* Vercel Speed Insights only: <Analytics/> removed, Web Analytics isn't a paid feature here */}
               <SpeedInsights />
               </OfflineSyncProvider>
               </QueryClientProvider>

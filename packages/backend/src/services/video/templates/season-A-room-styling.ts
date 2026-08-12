@@ -9,7 +9,7 @@ import { Template, BASE_POLISH } from './types';
 
 export const seasonARoomStyling: Template = {
   id: 'season-A-room-styling',
-  displayName: 'Found It On FindA.Sale — Room Styling',
+  displayName: 'Found It On FindA.Sale, Room Styling',
   purpose: 'PROMO',
   contentSignature: {
     requiredRoles: ['BEFORE', 'AFTER'],

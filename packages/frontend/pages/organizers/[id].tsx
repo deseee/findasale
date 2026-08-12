@@ -247,7 +247,7 @@ const OrganizerProfilePage = ({ organizer: staticOrganizer }: OrganizerPageProps
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdSafe(breadcrumbSchema) }} />
       </Head>
 
-      {/* Trust bar — unclaimed only */}
+      {/* Trust bar: unclaimed only */}
       {organizer.isUnmanagedListing && (
         <div className="bg-amber-950 border-b border-amber-800 px-4 py-2.5 flex items-start gap-3">
           <span className="text-base flex-shrink-0 mt-0.5">📋</span>
@@ -531,7 +531,7 @@ const OrganizerProfilePage = ({ organizer: staticOrganizer }: OrganizerPageProps
           </div>
         </div>
 
-        {/* Shopper Activity — locked for unclaimed */}
+        {/* Shopper Activity: locked for unclaimed */}
         {organizer.isUnmanagedListing && (
           <section className="mb-6">
             <h2 className="text-xl font-bold text-warm-900 dark:text-gray-100 mb-3">📈 Your Shopper Activity</h2>
@@ -570,7 +570,7 @@ const OrganizerProfilePage = ({ organizer: staticOrganizer }: OrganizerPageProps
           </section>
         )}
 
-        {/* Buyer Insights — locked for unclaimed */}
+        {/* Buyer Insights: locked for unclaimed */}
         {organizer.isUnmanagedListing && (
           <section className="mb-6">
             <h2 className="text-xl font-bold text-warm-900 dark:text-gray-100 mb-3">🧠 Buyer Insights</h2>
@@ -640,7 +640,7 @@ const OrganizerProfilePage = ({ organizer: staticOrganizer }: OrganizerPageProps
           )}
         </div>
 
-        {/* Sale History Intelligence — locked for unclaimed */}
+        {/* Sale History Intelligence: locked for unclaimed */}
         {organizer.isUnmanagedListing && (
           <section className="mt-6 mb-8">
             <h2 className="text-xl font-bold text-warm-900 dark:text-gray-100 mb-3">🏅 Your Sale History Intelligence</h2>
@@ -693,7 +693,7 @@ const OrganizerProfilePage = ({ organizer: staticOrganizer }: OrganizerPageProps
         )}
       </main>
 
-      {/* Sticky bottom bar — shows after hero CTA scrolls off */}
+      {/* Sticky bottom bar: shows after hero CTA scrolls off */}
       {organizer.isUnmanagedListing && stickyVisible && (
         <div className="fixed bottom-0 left-0 right-0 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-md border-t border-gray-200 dark:border-zinc-700 px-4 py-3 flex items-center gap-3 z-50 shadow-lg">
           <div className="flex-1 text-sm text-gray-700 dark:text-gray-300 leading-tight min-w-0">
@@ -782,7 +782,7 @@ const SaleCard = ({ sale }: { sale: Sale }) => {
 
   // Reset image loading state when the photo URL changes, and cover the case
   // where the image is already complete (loaded or failed) from browser cache
-  // by the time this effect runs — the native load/error event fired before
+  // by the time this effect runs: the native load/error event fired before
   // onLoad/onError were attached, so read .complete/.naturalWidth directly.
   useEffect(() => {
     setImgLoaded(false);
@@ -873,7 +873,7 @@ const SaleCard = ({ sale }: { sale: Sale }) => {
  * PERF-1: Converted from getServerSideProps → getStaticProps + ISR (fallback:'blocking')
  * to match the working pattern in pages/sales/[id].tsx. getServerSideProps hit the
  * backend/DB on every request and was confirmed the single highest per-call CPU cost
- * among real-traffic routes (~366ms avg) — a major contributor to Vercel Fluid Active
+ * among real-traffic routes (~366ms avg): a major contributor to Vercel Fluid Active
  * CPU exceeding the Hobby-tier cap. ISR caches the rendered page and revalidates on a
  * fixed interval instead of re-fetching on every request.
  *
@@ -911,7 +911,7 @@ export const getStaticProps: GetStaticProps<OrganizerPageProps> = async ({ param
 
   // Fast-fail malformed IDs (e.g. "cmoog3bkr000=" from malformed links/bots).
   // Cuid2 IDs are 24 alphanumeric chars. Anything outside [a-z0-9] at 20–30 chars
-  // is invalid — skip the API call entirely and return 404 immediately. Preserved
+  // is invalid: skip the API call entirely and return 404 immediately. Preserved
   // unchanged from the prior getServerSideProps guard (stops a specific bot/malformed
   // link crash cascade).
   if (!id || !/^[a-z0-9]{20,30}$/.test(id)) {

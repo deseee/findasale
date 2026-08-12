@@ -87,7 +87,7 @@ export const getEarningsPdf = async (req: AuthRequest, res: Response) => {
 <body>
 <div class="header">
   <div class="logo">FindA.Sale</div>
-  <h1>Earnings Summary — ${year}</h1>
+  <h1>Earnings Summary (${year})</h1>
   <div class="meta">Organizer: ${organizer.businessName} &nbsp;|&nbsp; Generated: ${new Date().toLocaleDateString()}</div>
 </div>
 

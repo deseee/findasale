@@ -363,9 +363,9 @@ export const approveVendorBoothSettlementBatch = async (req: AuthRequest, res: R
       liveTransfersEnabled: live,
       message: live
         ? anyFailure
-          ? 'Settlement processed with some failures — see per-booth status.'
+          ? 'Settlement processed with some failures. See per-booth status.'
           : 'Settlement processed. Stripe transfers issued.'
-        : 'Settlement approved in test mode. Transfers simulated — no money moved (VENDOR_BOOTH_LIVE_TRANSFERS OFF).',
+        : 'Settlement approved in test mode. Transfers simulated: no money moved (VENDOR_BOOTH_LIVE_TRANSFERS OFF).',
     });
   } catch (error) {
     console.error('[approveVendorBoothSettlementBatch] Error:', error);

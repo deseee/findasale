@@ -8,19 +8,19 @@ const entry: GuideEntry = {
   priority: 1,
   relatedGuides: ['print-inventory-sheets', 'discount-rules-and-markdowns'],
   videoUrl: undefined,
-  body: `A hold lets a shopper reserve an item before they arrive to pick it up. You stay in control — you approve or deny, set the window, and release the item if they don't show.
+  body: `A hold lets a shopper reserve an item before they arrive to pick it up. You stay in control: you approve or deny, set the window, and release the item if they don't show.
 
 ---
 
 ## How holds work
 
-When a shopper taps "Hold this item," you get a push notification. The item is flagged as Held in your inventory but stays in your count — it is not marked sold until you confirm the transaction.
+When a shopper taps "Hold this item," you get a push notification. The item is flagged as Held in your inventory but stays in your count: it is not marked sold until you confirm the transaction.
 
 From there, three things can happen:
 
-- You approve the hold — the shopper gets a confirmation with the pickup window.
-- You deny it — the item returns to Available and the shopper is notified.
-- You do nothing — after a short window, the hold auto-approves.
+- You approve the hold: the shopper gets a confirmation with the pickup window.
+- You deny it: the item returns to Available and the shopper is notified.
+- You do nothing: after a short window, the hold auto-approves.
 
 The auto-approve default keeps things moving during a busy sale day. You can turn it off in your sale settings if you prefer manual review for every request.
 
@@ -30,7 +30,7 @@ The auto-approve default keeps things moving during a busy sale day. You can tur
 
 Go to **/organizer/holds**.
 
-The list shows all active holds across your sales. Filter by sale or sort by expiry time — holds closest to expiring appear at the top so nothing slips through.
+The list shows all active holds across your sales. Filter by sale or sort by expiry time: holds closest to expiring appear at the top so nothing slips through.
 
 Each hold card shows:
 
@@ -59,7 +59,7 @@ Sometimes a shopper is running late and asks for more time. To extend:
 2. Tap the hold card to open details.
 3. Tap **Extend**.
 4. Pick the new expiration window.
-5. Save — the shopper is notified automatically.
+5. Save: the shopper is notified automatically.
 
 You can extend a hold as many times as you want before it expires.
 
@@ -71,7 +71,7 @@ If an item sells in person or you no longer want to honor the hold:
 
 1. Open the hold in **/organizer/holds**.
 2. Tap **Cancel**.
-3. Confirm — the shopper gets a notification that the hold was released.
+3. Confirm: the shopper gets a notification that the hold was released.
 
 The item status immediately returns to Available.
 
@@ -86,7 +86,7 @@ At that point you have two options:
 - Leave it in Available so other shoppers can claim it.
 - Mark it sold if you ended up selling it in person during the hold window.
 
-Expired holds do not charge or penalize the shopper — holds are not payments.
+Expired holds do not charge or penalize the shopper: holds are not payments.
 
 ---
 
@@ -129,11 +129,11 @@ Cancel the hold from **/organizer/holds**. The item returns to Available. The ho
 
 ## Video script
 
-**[45-second VO — screen recording of /organizer/holds]**
+**[45-second VO: screen recording of /organizer/holds]**
 
 When a shopper requests a hold, you'll get a push notification right away.
 
-Tap it — or go to /organizer/holds — to see everything waiting on your approval.
+Tap it (or go to /organizer/holds) to see everything waiting on your approval.
 
 Holds are sorted by expiry time so the most urgent ones are always at the top.
 
@@ -143,7 +143,7 @@ Need to give them more time? Tap Extend, pick a new window, save. Done.
 
 If the item sells in person before pickup, tap Cancel. The item goes back to Available and the shopper gets a heads-up.
 
-If the hold window runs out and nobody picks up — no action needed. The item flips back to Available on its own.
+If the hold window runs out and nobody picks up: no action needed. The item flips back to Available on its own.
 
 Holds don't affect your sold count until you confirm the sale. They're a reservation tool, not a payment.`,
 };

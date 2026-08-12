@@ -21,7 +21,7 @@ Each label includes:
 - Condition grade (optional)
 - A QR code that links to the item's detail page on FindA.Sale
 
-The QR code is the part that earns its space. A shopper can scan a label on a dresser, pull up the full listing — photos, measurements, condition notes — and decide whether to buy without hunting you down to ask questions.
+The QR code is the part that earns its space. A shopper can scan a label on a dresser, pull up the full listing (photos, measurements, condition notes), and decide whether to buy without hunting you down to ask questions.
 
 ---
 
@@ -29,7 +29,7 @@ The QR code is the part that earns its space. A shopper can scan a label on a dr
 
 Go to **/organizer/label-composer**.
 
-You can also reach it from your inventory list — select items and tap **Actions -> Print Labels**.
+You can also reach it from your inventory list: select items and tap **Actions -> Print Labels**.
 
 ---
 
@@ -39,7 +39,7 @@ You can also reach it from your inventory list — select items and tap **Action
 2. Select the sale.
 3. Choose the items you want labels for. You can select all, select by category, or pick individually.
 4. Set the label size. The default is **Avery 5160** (30 labels per sheet, 1" x 2-5/8"). This is the most common adhesive label sheet you will find at any office store.
-5. Toggle condition grade on or off — useful for high-value items, less useful for bulk lots.
+5. Toggle condition grade on or off: useful for high-value items, less useful for bulk lots.
 6. Tap **Download PDF**.
 7. Open in any PDF viewer and print.
 
@@ -52,11 +52,11 @@ Load your label sheets into the printer with the sticky side face-up (or follow 
 Every label includes a QR code tied to that specific item on FindA.Sale.
 
 When a shopper scans it:
-- They see the full item listing — photos, price, condition, any notes you added.
+- They see the full item listing: photos, price, condition, any notes you added.
 - They can save it to their wishlist.
 - They can request a hold directly from the listing.
 
-This is useful for large or fragile items where shoppers want to look before committing — furniture, art, appliances. Put the label somewhere visible. Let the listing answer their questions so you can keep moving.
+This is useful for large or fragile items where shoppers want to look before committing: furniture, art, appliances. Put the label somewhere visible. Let the listing answer their questions so you can keep moving.
 
 ---
 
@@ -97,10 +97,10 @@ For a one-day indoor sale, standard Avery 5160 is fine. For a multi-day outdoor 
 Currently Avery 5160 (30-up, 1" x 2-5/8"). Additional sizes are on the roadmap. If you need a different size, download the PDF and use your printer's scaling to adjust.
 
 **Can I include a barcode instead of (or in addition to) a QR code?**
-Not currently. QR codes only. Barcodes require a scanner and a matching database — QR codes work with any smartphone camera.
+Not currently. QR codes only. Barcodes require a scanner and a matching database: QR codes work with any smartphone camera.
 
 **What happens if an item sells and someone scans the old label?**
-The item listing updates to "Sold" automatically when you mark it. The QR code still works — it just shows the item as no longer available.
+The item listing updates to "Sold" automatically when you mark it. The QR code still works: it just shows the item as no longer available.
 
 **Can I generate labels for items that have not been priced yet?**
 No. Items need a price set before they can appear in the label composer. Items without a price are filtered out of the selection list.
@@ -109,7 +109,7 @@ No. Items need a price set before they can appear in the label composer. Items w
 Yes. Just select the specific items you need on the label composer page and generate a new PDF. You do not need to reprint the full sale.
 
 **Do labels work offline?**
-The label itself is printed — no app needed to display it. The QR code requires an internet connection when scanned. If a shopper is offline, the code will not load. The printed price and item name are always visible regardless.
+The label itself is printed: no app needed to display it. The QR code requires an internet connection when scanned. If a shopper is offline, the code will not load. The printed price and item name are always visible regardless.
 
 ---
 

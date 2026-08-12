@@ -1,9 +1,9 @@
 /**
- * XP Store — Tabbed interface showing Shopper and Organizer perks
+ * XP Store: Tabbed interface showing Shopper and Organizer perks
  * Available to all logged-in users. Two tabs visible regardless of role:
  * - Shopper tab: Discount coupons, rarity boost, cosmetics, coming-soon perks
  * - Organizer tab: Discount code generator, boosts, coming-soon perks
- * No role gating — both tabs open to everyone.
+ * No role gating: both tabs open to everyone.
  */
 
 import React, { useState } from 'react';
@@ -220,7 +220,7 @@ const CouponsPage = () => {
           </p>
         </div>
 
-        {/* Streak / XP Progress — visible when arriving from /shopper/loyalty */}
+        {/* Streak / XP Progress: visible when arriving from /shopper/loyalty */}
         <div className="mb-6">
           <StreakWidget />
         </div>
@@ -512,7 +512,7 @@ const CouponsPage = () => {
           </div>
         )}
 
-        {/* Active Coupons List — Always visible below tabs */}
+        {/* Active Coupons List: Always visible below tabs */}
         <div className="mt-12">
           <h2 className="text-2xl font-bold text-warm-900 dark:text-warm-100 mb-4">Your Active Coupons</h2>
 
@@ -575,7 +575,7 @@ const CouponsPage = () => {
         </div>
       </main>
 
-      {/* Rarity Boost Modal — no role gate */}
+      {/* Rarity Boost Modal: no role gate */}
       <RarityBoostModal
         isOpen={showRarityBoostModal}
         onClose={() => setShowRarityBoostModal(false)}
@@ -590,7 +590,7 @@ const CouponsPage = () => {
 };
 
 /**
- * ComingSoonCard — placeholder card for future XP store perks
+ * ComingSoonCard: placeholder card for future XP store perks
  */
 const ComingSoonCard = ({ title, description, cost }: { title: string; description: string; cost: number }) => (
   <div className="relative bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-300 dark:border-gray-600 opacity-60">

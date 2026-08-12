@@ -204,11 +204,11 @@ router.post('/bulk', authenticate, requireTier('SIMPLE'), bulkItemsLimiter, asyn
 
     // P2 Bug 4: User-friendly error message mapping for internal statuses
     const statusFriendlyNames: Record<string, string> = {
-      PENDING_REVIEW: 'Item is pending review — you can modify it after review completes.',
-      PUBLISHED: 'Item is published — unpublish it first to make this change.',
-      AVAILABLE: 'Item is available — hold or reserve it before this action.',
+      PENDING_REVIEW: 'Item is pending review. You can modify it after review completes.',
+      PUBLISHED: 'Item is published. Unpublish it first to make this change.',
+      AVAILABLE: 'Item is available. Hold or reserve it before this action.',
       SOLD: 'Item has been sold and cannot be modified.',
-      RESERVED: 'Item has been reserved — release the hold first.',
+      RESERVED: 'Item has been reserved. Release the hold first.',
       DRAFT: 'Item is a draft.',
     };
 
@@ -252,7 +252,7 @@ router.post('/bulk', authenticate, requireTier('SIMPLE'), bulkItemsLimiter, asyn
     // If all validation errors (no items passed validation), return 400
     if (confirmedIds.length === 0) {
       return res.status(400).json({
-        message: `Cannot ${operation} — status constraints violated for all item(s)`,
+        message: `Cannot ${operation}: status constraints violated for all item(s)`,
         succeeded: [],
         failed,
       });
@@ -265,7 +265,7 @@ router.post('/bulk', authenticate, requireTier('SIMPLE'), bulkItemsLimiter, asyn
       switch (operation) {
         case 'delete': {
           return res.json({
-            message: 'Dry run — no changes applied',
+            message: 'Dry run: no changes applied',
             count: confirmedIds.length,
             affectedIds: confirmedIds,
             wouldChange: true,
@@ -283,7 +283,7 @@ router.post('/bulk', authenticate, requireTier('SIMPLE'), bulkItemsLimiter, asyn
             newValues[item.id] = value as string;
           }
           return res.json({
-            message: 'Dry run — no changes applied',
+            message: 'Dry run: no changes applied',
             count: confirmedIds.length,
             affectedIds: confirmedIds,
             wouldChange: true,
@@ -302,7 +302,7 @@ router.post('/bulk', authenticate, requireTier('SIMPLE'), bulkItemsLimiter, asyn
             newValues[item.id] = value as string;
           }
           return res.json({
-            message: 'Dry run — no changes applied',
+            message: 'Dry run: no changes applied',
             count: confirmedIds.length,
             affectedIds: confirmedIds,
             wouldChange: true,
@@ -325,7 +325,7 @@ router.post('/bulk', authenticate, requireTier('SIMPLE'), bulkItemsLimiter, asyn
             }
           }
           return res.json({
-            message: 'Dry run — no changes applied',
+            message: 'Dry run: no changes applied',
             count: confirmedIds.length,
             affectedIds: confirmedIds,
             wouldChange: Object.keys(oldValues).length > 0,
@@ -345,7 +345,7 @@ router.post('/bulk', authenticate, requireTier('SIMPLE'), bulkItemsLimiter, asyn
             newValues[item.id] = Math.max(0, parseFloat(price.toFixed(2)));
           }
           return res.json({
-            message: 'Dry run — no changes applied',
+            message: 'Dry run: no changes applied',
             count: confirmedIds.length,
             affectedIds: confirmedIds,
             wouldChange: true,
@@ -362,7 +362,7 @@ router.post('/bulk', authenticate, requireTier('SIMPLE'), bulkItemsLimiter, asyn
             newValues[item.id] = isActive;
           }
           return res.json({
-            message: 'Dry run — no changes applied',
+            message: 'Dry run: no changes applied',
             count: confirmedIds.length,
             affectedIds: confirmedIds,
             wouldChange: true,
@@ -379,7 +379,7 @@ router.post('/bulk', authenticate, requireTier('SIMPLE'), bulkItemsLimiter, asyn
             newValues[item.id] = bgRemoved;
           }
           return res.json({
-            message: 'Dry run — no changes applied',
+            message: 'Dry run: no changes applied',
             count: confirmedIds.length,
             affectedIds: confirmedIds,
             wouldChange: true,
@@ -395,7 +395,7 @@ router.post('/bulk', authenticate, requireTier('SIMPLE'), bulkItemsLimiter, asyn
             return res.status(400).json({ message: `draftStatus value must be one of: ${allowed.join(', ')}` });
           }
           return res.json({
-            message: 'Dry run — no changes applied',
+            message: 'Dry run: no changes applied',
             count: confirmedIds.length,
             affectedIds: confirmedIds,
             wouldChange: true,
@@ -409,10 +409,10 @@ router.post('/bulk', authenticate, requireTier('SIMPLE'), bulkItemsLimiter, asyn
           }
           const { action, tags: tagList } = value as { action: string; tags: string[] };
           if (!Array.isArray(tagList) || !['add', 'remove'].includes(action)) {
-            return res.status(400).json({ message: 'Invalid tags operation — action must be "add" or "remove"' });
+            return res.status(400).json({ message: 'Invalid tags operation. Action must be "add" or "remove".' });
           }
           return res.json({
-            message: 'Dry run — no changes applied',
+            message: 'Dry run: no changes applied',
             count: confirmedIds.length,
             affectedIds: confirmedIds,
             wouldChange: true,
@@ -627,14 +627,14 @@ router.post('/bulk', authenticate, requireTier('SIMPLE'), bulkItemsLimiter, asyn
         }
         const { action, tags: tagList } = value as { action: string; tags: string[] };
         if (!Array.isArray(tagList) || !['add', 'remove'].includes(action)) {
-          return res.status(400).json({ message: 'Invalid tags operation — action must be "add" or "remove"' });
+          return res.status(400).json({ message: 'Invalid tags operation. Action must be "add" or "remove".' });
         }
 
         // P2 #10: Use shared CURATED_TAGS from tagVocabulary
         const invalidTags = tagList.filter((t) => !CURATED_TAGS.includes(t.toLowerCase() as any));
         if (invalidTags.length > 0) {
           return res.status(400).json({
-            message: `Invalid tag(s): ${invalidTags.join(', ')} — use only curated tags`,
+            message: `Invalid tag(s): ${invalidTags.join(', ')}. Use only curated tags.`,
           });
         }
 
@@ -735,7 +735,7 @@ router.post('/bulk/photos', authenticate, async (req, res) => {
     // Dry-run mode
     if (dryRun) {
       return res.json({
-        message: 'Dry run — no changes applied',
+        message: 'Dry run: no changes applied',
         count: items.length,
         affectedIds: items.map((i) => i.id),
         wouldChange: true,

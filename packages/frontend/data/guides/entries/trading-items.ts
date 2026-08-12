@@ -8,7 +8,7 @@ const entry: GuideEntry = {
   priority: 2,
   relatedGuides: ['holds-for-shoppers', 'loot-log', 'pay-requests'],
   videoUrl: undefined,
-  body: `The trade feature lets you propose a swap instead of (or alongside) a cash purchase. You offer something you own in exchange for something another shopper has, or for an item listed in an active sale. Both parties review the proposal and accept or decline. No cash changes hands through the trade itself — if a sale item is involved, the organizer still processes the physical exchange.
+  body: `The trade feature lets you propose a swap instead of (or alongside) a cash purchase. You offer something you own in exchange for something another shopper has, or for an item listed in an active sale. Both parties review the proposal and accept or decline. No cash changes hands through the trade itself: if a sale item is involved, the organizer still processes the physical exchange.
 
 Trades work best for collector-to-collector swaps, or when you spot something at a sale and realize you have something perfect to offer in return.
 
@@ -16,7 +16,7 @@ Trades work best for collector-to-collector swaps, or when you spot something at
 
 ## What you can trade
 
-You can offer items from your own collection — things you already own that you're willing to give up. The other person sees a photo and description of what you're offering before they decide.
+You can offer items from your own collection: things you already own that you're willing to give up. The other person sees a photo and description of what you're offering before they decide.
 
 You can propose a trade on an item from an active sale (fixed-price items only, not auction items currently being bid on) or on an item another shopper has listed in their profile as available to trade.
 
@@ -24,7 +24,7 @@ You can propose a trade on an item from an active sale (fixed-price items only, 
 
 ## How to start a trade
 
-**Step 1.** Find the item you want. Open its detail page — on a sale listing or another shopper's profile.
+**Step 1.** Find the item you want. Open its detail page, on a sale listing or another shopper's profile.
 
 **Step 2.** Tap **Trade**. This opens the trade proposal screen.
 
@@ -46,7 +46,7 @@ If they counter, you'll get a notification and can respond from your own Trades 
 
 ## How acceptance works
 
-When both parties confirm, the trade is marked as agreed. If the trade involves a sale item, the organizer gets a notification that you've agreed to swap. The organizer decides whether to honor the trade — they are not bound to accept it.
+When both parties confirm, the trade is marked as agreed. If the trade involves a sale item, the organizer gets a notification that you've agreed to swap. The organizer decides whether to honor the trade: they are not bound to accept it.
 
 Physical exchange still happens in person. The trade agreement is a mutual intent, not a binding contract. Payment processing (if any cash difference is involved) goes through a pay request from the organizer.
 
@@ -66,7 +66,7 @@ Value-gap trades: Sometimes you want something priced above what you'd pay in ca
 
 ## What trades can't do
 
-A trade does not replace payment to an organizer. If you're trading for a sale item, the organizer still receives payment — whether that's cash in hand at pickup or a pay request through the app. The trade is an arrangement between you and the other shopper or between you and the organizer. It does not create a zero-cash transaction at the organizer's expense.
+A trade does not replace payment to an organizer. If you're trading for a sale item, the organizer still receives payment, whether that's cash in hand at pickup or a pay request through the app. The trade is an arrangement between you and the other shopper or between you and the organizer. It does not create a zero-cash transaction at the organizer's expense.
 
 Trades also don't work on auction items that are actively being bid on. Fixed-price items only.
 
@@ -74,7 +74,7 @@ Trades also don't work on auction items that are actively being bid on. Fixed-pr
 
 ## Keeping track of your trades
 
-Open **Trades** in your shopper menu to see all active proposals — ones you've sent and ones you've received. Each shows the status: Pending, Accepted, Declined, Countered, or Completed.
+Open **Trades** in your shopper menu to see all active proposals: ones you've sent and ones you've received. Each shows the status: Pending, Accepted, Declined, Countered, or Completed.
 
 Completed trades move to your trade history. Items you traded away are noted in your loot log if they were previously logged there.
 
@@ -83,7 +83,7 @@ Completed trades move to your trade history. Items you traded away are noted in 
 ## Common questions
 
 **Do I have to have items listed to trade?**
-No. You can propose a trade with a photo of anything you own — you don't need a pre-existing listing. Add it on the spot from the trade proposal screen.
+No. You can propose a trade with a photo of anything you own. You don't need a pre-existing listing. Add it on the spot from the trade proposal screen.
 
 **Can an organizer decline a trade for a sale item?**
 Yes. Organizers are not required to accept trades. The trade agreement between shoppers is a starting point, not a guarantee.

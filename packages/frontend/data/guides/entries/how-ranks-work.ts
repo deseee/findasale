@@ -10,7 +10,7 @@ const entry: GuideEntry = {
   videoUrl: undefined,
   body: `# How ranks work (Initiate to Grandmaster)
 
-There are six shopper ranks on FindA.Sale, from Initiate to Grandmaster. Your rank reflects your activity history on the platform — how much you've hunted, posted, and engaged. It appears on your profile and affects a few things that matter.
+There are six shopper ranks on FindA.Sale, from Initiate to Grandmaster. Your rank reflects your activity history on the platform: how much you've hunted, posted, and engaged. It appears on your profile and affects a few things that matter.
 
 ---
 
@@ -38,7 +38,7 @@ The [Guild Primer](/shopper/guild-primer) is the single source of truth for this
 - The XP-to-rank conversion table
 - Which actions earn XP and how much
 
-Go there for the numbers. This guide covers the concept — the Guild Primer covers the mechanics.
+Go there for the numbers. This guide covers the concept; the Guild Primer covers the mechanics.
 
 **[View the Guild Primer →](/shopper/guild-primer)**
 
@@ -78,12 +78,12 @@ Post hauls, refer friends, and keep your login streak going. Those are the highe
 
 ## Explainer video script
 
-*Format: 30-second vertical (9:16). VO only — no on-screen text needed.*
+*Format: 30-second vertical (9:16). VO only, no on-screen text needed.*
 
 ---
 
 **[0:00–0:06]**
-*Shot: Profile card — rank badge reads "Initiate."*
+*Shot: Profile card, rank badge reads "Initiate."*
 VO: "Every shopper starts as an Initiate. Your rank goes up from there."
 
 **[0:07–0:14]**

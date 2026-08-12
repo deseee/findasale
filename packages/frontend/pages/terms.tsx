@@ -263,7 +263,7 @@ const TermsPage = () => {
               <a href="mailto:support@finda.sale" className="text-amber-600 hover:underline">support@finda.sale</a>{' '}
               within 48 hours of the transaction. FindA.Sale will notify the Organizer and require a response
               within 7 business days per Section 13. Because the Organizer is the merchant of record on the
-              transaction, any refund is issued by the Organizer directly through their Stripe account — FindA.Sale
+              transaction, any refund is issued by the Organizer directly through their Stripe account. FindA.Sale
               does not hold or control the funds and cannot issue a refund on the Organizer&apos;s behalf. If the
               Organizer confirms fraud or material misrepresentation and does not resolve it, FindA.Sale may
               suspend the Organizer&apos;s account. Buyers who file chargebacks with their card issuer before

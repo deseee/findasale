@@ -917,7 +917,7 @@ export const deleteAccount = async (req: AuthRequest, res: Response) => {
           ? blockers.join(' and ')
           : `${blockers.slice(0, -1).join(', ')}, and ${blockers[blockers.length - 1]}`;
       return res.status(400).json({
-        message: `We can't delete your account just yet — you still have ${blockerList} tied to it. Please contact support@finda.sale so we can help transfer or close these out safely, then we'll take care of the rest.`,
+        message: `We can't delete your account just yet. You still have ${blockerList} tied to it. Please contact support@finda.sale so we can help transfer or close these out safely, then we'll take care of the rest.`,
       });
     }
 

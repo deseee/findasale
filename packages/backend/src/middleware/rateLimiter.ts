@@ -133,7 +133,7 @@ export const aiAnalyzeLimiter = rateLimit({
   max: 50,
   keyGenerator: getKeyGenerator,
   validate: false,
-  message: 'Too many AI analysis requests. Maximum 50 per hour.',
+  message: 'Too many smart-tagging requests. Maximum 50 per hour.',
   standardHeaders: false,
   legacyHeaders: false,
 });

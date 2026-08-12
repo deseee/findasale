@@ -103,7 +103,7 @@ const PaymentForm = ({ itemTitle, itemPrice, originalAmount, platformFee, discou
 
   const handleDone = () => {
     // Guest checkout (2026-07-18): /purchases/[id] requires a logged-in session (it looks up
-    // the purchase via an authenticated endpoint) — redirecting a guest there would immediately
+    // the purchase via an authenticated endpoint): redirecting a guest there would immediately
     // bounce them to /login right after they just paid. Guests already saw the full inline
     // confirmation screen above (item, total, sale info) and get an emailed receipt, so for
     // guests "Done" just closes the modal. Authenticated buyers keep the persistent page.
@@ -330,7 +330,7 @@ const PaymentForm = ({ itemTitle, itemPrice, originalAmount, platformFee, discou
 };
 
 // Outer modal that fetches the payment intent and sets up Elements.
-// Pass either itemId (new purchase) OR purchaseId (resume existing — e.g. auction winner).
+// Pass either itemId (new purchase) OR purchaseId (resume existing, e.g. auction winner).
 interface CheckoutModalProps {
   itemId?: string;
   purchaseId?: string;
@@ -370,20 +370,20 @@ const CheckoutModal = ({ itemId, purchaseId: initialPurchaseId, itemTitle, listi
     }
   }, []);
 
-  // Sprint 3: Coupon entry phase — shown before calling create-payment-intent
+  // Sprint 3: Coupon entry phase (shown before calling create-payment-intent)
   const [started, setStarted] = useState(!!initialPurchaseId); // auction resumption skips coupon step
   const [couponInput, setCouponInput] = useState('');
 
   // Guest checkout (2026-07-18): email + name collected up front (before the PaymentIntent
   // exists) since this is a plain PaymentIntent + Elements flow, not a hosted Stripe Checkout
-  // Session — there's no Stripe-native guest email step to lean on here. Coupons are
+  // Session: there's no Stripe-native guest email step to lean on here. Coupons are
   // per-account XP rewards, so guests never see the coupon field (mutually exclusive with it).
   const [guestEmail, setGuestEmail] = useState('');
   const [guestName, setGuestName] = useState('');
   const [guestFieldError, setGuestFieldError] = useState<string | null>(null);
   const isGuest = !user;
 
-  // Platform Safety #118 pattern (mirrors register.tsx's generateDeviceFingerprint) — same
+  // Platform Safety #118 pattern (mirrors register.tsx's generateDeviceFingerprint): same
   // browser-signal fingerprint used at signup, reused here so a guest checkout can be
   // pre-payment-compared against the sale organizer's stored device fingerprint
   // (checkoutGuard.ts assertGuestCheckoutAllowed, S1072 Finding #4 follow-up).
@@ -406,7 +406,7 @@ const CheckoutModal = ({ itemId, purchaseId: initialPurchaseId, itemTitle, listi
           canvasSignal = canvas.toDataURL();
         }
       } catch (e) {
-        // Canvas not available or blocked — no-op
+        // Canvas not available or blocked: no-op
       }
       if (canvasSignal) signals.push(canvasSignal);
       return btoa(signals.join('|'));
@@ -503,7 +503,7 @@ const CheckoutModal = ({ itemId, purchaseId: initialPurchaseId, itemTitle, listi
         </button>
       </div>
 
-      {/* Guest contact info (guests only) + Sprint 3 coupon entry (accounts only) —
+      {/* Guest contact info (guests only) + Sprint 3 coupon entry (accounts only):
           shown before payment form loads. Coupons are per-account XP rewards, so a guest
           never sees that field; a logged-in buyer never sees the guest fields. */}
       {!started && !purchaseId && (
@@ -606,7 +606,7 @@ const CheckoutModal = ({ itemId, purchaseId: initialPurchaseId, itemTitle, listi
             <div className="p-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded text-red-700 dark:text-red-300 text-sm mb-4" role="alert" id="checkout-load-error">
               {/* S1006: render the actual server message so buyers see WHY (was a bare "Try Again") */}
               <p className="mb-2 font-medium">{loadError}</p>
-              {/* Allow user to retry — clears error and reloads payment intent */}
+              {/* Allow user to retry: clears error and reloads payment intent */}
               <button
                 className="block text-xs underline text-red-600 hover:text-red-800 font-medium"
                 onClick={() => { setLoadError(null); }}

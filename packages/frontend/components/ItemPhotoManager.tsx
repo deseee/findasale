@@ -1,5 +1,5 @@
 /**
- * ItemPhotoManager — Phase 16: Advanced photo pipeline
+ * ItemPhotoManager (Phase 16: Advanced photo pipeline)
  *
  * Organizer-facing component for managing photos on an item:
  * - Upload new photos (via /api/upload/item-photo → /api/items/:id/photos)
@@ -71,7 +71,7 @@ const ItemPhotoManager: React.FC<ItemPhotoManagerProps> = ({
         // Step 1: Upload to Cloudinary via the existing upload endpoint
         const formData = new FormData();
         // Field name must match upload.single('photo') on POST /api/upload/item-photo.
-        // 'image' caused Multer "Unexpected field" error — backend expects 'photo'.
+        // 'image' caused Multer "Unexpected field" error: backend expects 'photo'.
         formData.append('photo', file);
         const uploadRes = await api.post('/upload/item-photo', formData, {
           headers: { 'Content-Type': 'multipart/form-data' },
@@ -181,7 +181,7 @@ const ItemPhotoManager: React.FC<ItemPhotoManagerProps> = ({
                 </span>
               )}
 
-              {/* Delete button — top-right, always visible on mobile */}
+              {/* Delete button: top-right, always visible on mobile */}
               <button
                 type="button"
                 onClick={() => handleDelete(i)}
@@ -191,7 +191,7 @@ const ItemPhotoManager: React.FC<ItemPhotoManagerProps> = ({
                 ×
               </button>
 
-              {/* Reorder arrows — bottom, always visible on mobile */}
+              {/* Reorder arrows: bottom, always visible on mobile */}
               <div className="absolute bottom-1 left-1/2 -translate-x-1/2 flex gap-1 opacity-80 hover:opacity-100 transition-opacity">
                 {i > 0 && (
                   <button

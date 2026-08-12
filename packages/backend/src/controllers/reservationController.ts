@@ -1248,7 +1248,7 @@ export const markSoldAndCreateInvoice = async (req: AuthRequest, res: Response) 
     // Verify organizer owns the sale
     const organizer = reservation.item.sale!.organizer;
     if (organizer.userId !== req.user.id) {
-      return res.status(403).json({ message: 'Access denied — you do not own this sale' });
+      return res.status(403).json({ message: 'Access denied. You do not own this sale.' });
     }
 
     // Query ALL active reservations for this shopper at this sale
@@ -1721,7 +1721,7 @@ export const releaseInvoice = async (req: AuthRequest, res: Response) => {
       where: { userId: req.user.id },
     });
     if (reservation.item.sale!.organizerId !== userOrganizer2?.id) {
-      return res.status(403).json({ message: 'Access denied — you do not own this sale' });
+      return res.status(403).json({ message: 'Access denied. You do not own this sale.' });
     }
 
     const stripe = require('../utils/stripe').getStripe();
