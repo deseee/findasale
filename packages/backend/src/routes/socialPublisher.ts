@@ -26,6 +26,7 @@ import {
   startConnect,
   oauthCallback,
   disconnectAccount,
+  connectBluesky,
   listPosts,
   createPost,
   cancelPost,
@@ -48,6 +49,8 @@ router.use(authenticate, requireAdmin);
 // Accounts
 router.get('/accounts', listAccounts);
 router.post('/connect', startConnect);
+// Bluesky's real connect path (handle + app password, not OAuth redirect) -- ADR-105.
+router.post('/connect-bluesky', connectBluesky);
 router.post('/disconnect', disconnectAccount);
 
 // Posts / publish queue

@@ -11,6 +11,7 @@ import type { PlatformPublisher } from './types';
 import { xPublisher } from './x';
 import { youtubePublisher } from './youtube';
 import { tiktokPublisher } from './tiktok';
+import { blueskyPublisher } from './bluesky';
 
 /**
  * Registered publishers. X (Phase 1a), YOUTUBE (Phase 1b), TIKTOK (added
@@ -26,6 +27,7 @@ const PUBLISHERS: Partial<Record<SocialPlatform, PlatformPublisher>> = {
   X: xPublisher,
   YOUTUBE: youtubePublisher,          // Phase 1b — YouTube Shorts
   TIKTOK: tiktokPublisher,            // added 2026-08-10 — SELF_ONLY until audit clears
+  BLUESKY: blueskyPublisher,          // added 2026-08-12 — ADR-105, app-password connect
   // INSTAGRAM: metaPublisher,        // Phase 2
   // FACEBOOK_PAGE: metaPublisher,    // Phase 2
   // PINTEREST: pinterestPublisher,   // Phase 3

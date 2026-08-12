@@ -5348,6 +5348,7 @@ enum SocialPlatform {
   FACEBOOK_PAGE
   PINTEREST
   TIKTOK // added 2026-08-10 -- Content Posting API, ADR-077 drop-in pattern
+  BLUESKY // added 2026-08-12 -- ADR-105, app-password connect (not OAuth redirect)
 }
 
 enum SocialPostStatus {

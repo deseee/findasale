@@ -24,6 +24,7 @@ import { prisma } from '../lib/prisma';
 import type { SocialPlatform } from '@prisma/client';
 import { getPublisher, isPlatformSupported } from '../services/social/platforms';
 import { upsertAccount, scrubTokens } from '../services/social/tokenStore';
+import { loginWithAppPassword } from '../services/social/platforms/bluesky';
 
 // Account fields safe to return to an admin client — NEVER accessToken/refreshToken.
 const ACCOUNT_PUBLIC_SELECT = {
@@ -48,6 +49,7 @@ const VALID_PLATFORMS: SocialPlatform[] = [
   'FACEBOOK_PAGE',
   'PINTEREST',
   'TIKTOK', // added 2026-08-10
+  'BLUESKY', // added 2026-08-12 -- ADR-105
 ];
 
 function isValidPlatform(v: unknown): v is SocialPlatform {
@@ -67,6 +69,8 @@ const PLATFORM_SLUGS: Record<SocialPlatform, string> = {
   FACEBOOK_PAGE: 'facebook-page',
   PINTEREST: 'pinterest',
   TIKTOK: 'tiktok', // added 2026-08-10 -- callback URL: /oauth/callback/tiktok
+  BLUESKY: 'bluesky', // added 2026-08-12 -- required for Record exhaustiveness only;
+  // Bluesky never actually hits /oauth/callback/bluesky (app-password connect, see bluesky.ts)
 };
 
 const SLUG_TO_PLATFORM: Record<string, SocialPlatform> = Object.fromEntries(
@@ -139,6 +143,12 @@ export const startConnect = async (req: AuthRequest, res: Response) => {
     if (!isPlatformSupported(platform)) {
       return res.status(400).json({ message: `Platform ${platform} is not yet supported` });
     }
+    // BLUESKY doesn't use the OAuth-redirect flow -- app-password connect only (ADR-105).
+    if (platform === 'BLUESKY') {
+      return res.status(400).json({
+        message: 'Bluesky connects via POST /api/social-publisher/connect-bluesky (handle + app password), not this endpoint.',
+      });
+    }
 
     const publisher = getPublisher(platform)!;
     const state = crypto.randomBytes(24).toString('hex');
@@ -153,6 +163,53 @@ export const startConnect = async (req: AuthRequest, res: Response) => {
   } catch (err) {
     console.error('[socialPublisher] startConnect error:', err instanceof Error ? scrubTokens(err.message) : err);
     return res.status(500).json({ message: 'Failed to start connect flow' });
+  }
+};
+
+/**
+ * POST /api/social-publisher/connect-bluesky — Bluesky's real connect path (ADR-105).
+ * Body: { handle: string; appPassword: string }. Not part of the shared OAuth-redirect
+ * flow above -- Bluesky exchanges a handle + app password directly for a session via
+ * com.atproto.server.createSession (see bluesky.ts). The app password itself is NEVER
+ * persisted; only the resulting accessJwt/refreshJwt are stored, encrypted, via the
+ * same tokenStore.upsertAccount chokepoint every other platform uses.
+ */
+export const connectBluesky = async (req: AuthRequest, res: Response) => {
+  try {
+    const handle = req.body?.handle;
+    const appPassword = req.body?.appPassword;
+    if (typeof handle !== 'string' || !handle.trim()) {
+      return res.status(400).json({ message: 'handle is required' });
+    }
+    if (typeof appPassword !== 'string' || !appPassword.trim()) {
+      return res.status(400).json({ message: 'appPassword is required' });
+    }
+
+    const session = await loginWithAppPassword({ handle: handle.trim(), appPassword: appPassword.trim() });
+
+    const account = await upsertAccount({
+      platform: 'BLUESKY',
+      accessToken: session.accessToken,
+      refreshToken: session.refreshToken,
+      tokenExpiresAt: new Date(Date.now() + session.expiresInSeconds * 1000),
+      platformUserId: session.platformUserId,
+      platformUsername: session.platformUsername,
+    });
+
+    return res.json({
+      account: {
+        id: account.id,
+        platform: account.platform,
+        platformUsername: account.platformUsername,
+        connectedAt: account.connectedAt,
+      },
+    });
+  } catch (err) {
+    // scrubTokens defensively strips anything token-shaped -- the app password itself
+    // is short and human-typed, not token-shaped, so it is NOT guaranteed scrubbed by
+    // that regex; log a fixed string instead of the raw error to be safe.
+    console.error('[socialPublisher] connectBluesky error:', err instanceof Error ? scrubTokens(err.message) : 'unknown error');
+    return res.status(500).json({ message: 'Failed to connect Bluesky account -- check handle and app password' });
   }
 };
 

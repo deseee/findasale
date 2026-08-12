@@ -4,7 +4,7 @@ import { useAuth } from '../../components/AuthContext';
 import api from '../../lib/api';
 
 // Local types (never import from @findasale/shared — breaks Vercel build).
-type SocialPlatform = 'X' | 'YOUTUBE' | 'INSTAGRAM' | 'FACEBOOK_PAGE' | 'PINTEREST' | 'TIKTOK';
+type SocialPlatform = 'X' | 'YOUTUBE' | 'INSTAGRAM' | 'FACEBOOK_PAGE' | 'PINTEREST' | 'TIKTOK' | 'BLUESKY';
 
 interface SocialAccount {
   id: string;
@@ -41,13 +41,22 @@ interface SocialPost {
   updatedAt: string;
 }
 
-// Platforms with a live publisher module (X = Phase 1a, YOUTUBE = Phase 1b,
-// TIKTOK added 2026-08-10 -- SELF_ONLY-forced until Patrick's API client passes
-// TikTok's audit; see platforms/tiktok.ts header for the real constraint).
+// Platforms that use the shared OAuth-redirect Connect/Disconnect button (X = Phase 1a,
+// YOUTUBE = Phase 1b, TIKTOK added 2026-08-10 -- SELF_ONLY-forced until Patrick's API
+// client passes TikTok's audit; see platforms/tiktok.ts header for the real constraint).
+// BLUESKY is NOT here -- it connects via handle + app password (ADR-105), rendered as
+// its own small form below the Platforms card instead of a redirect button.
 const CONNECTABLE_PLATFORMS: { value: SocialPlatform; label: string }[] = [
   { value: 'X', label: 'X (Twitter)' },
   { value: 'YOUTUBE', label: 'YouTube' },
   { value: 'TIKTOK', label: 'TikTok' },
+];
+
+// Every platform with a live publisher module, for the Create Test Post platform
+// dropdown -- includes BLUESKY even though it isn't in CONNECTABLE_PLATFORMS above.
+const CREATE_POST_PLATFORMS: { value: SocialPlatform; label: string }[] = [
+  ...CONNECTABLE_PLATFORMS,
+  { value: 'BLUESKY', label: 'Bluesky' },
 ];
 
 const PLATFORM_LABEL: Record<string, string> = {
@@ -57,6 +66,7 @@ const PLATFORM_LABEL: Record<string, string> = {
   FACEBOOK_PAGE: 'Facebook Page',
   PINTEREST: 'Pinterest',
   TIKTOK: 'TikTok',
+  BLUESKY: 'Bluesky',
 };
 
 const STATUS_STYLE: Record<string, string> = {
@@ -86,6 +96,11 @@ const AdminSocialAccounts = () => {
 
   // Connect / disconnect busy state (per platform).
   const [busyPlatform, setBusyPlatform] = useState<SocialPlatform | null>(null);
+
+  // Bluesky connect form (handle + app password -- not part of the OAuth redirect flow).
+  const [blueskyHandle, setBlueskyHandle] = useState('');
+  const [blueskyAppPassword, setBlueskyAppPassword] = useState('');
+  const [blueskyConnecting, setBlueskyConnecting] = useState(false);
 
   // Create-test-post form.
   const [formPlatform, setFormPlatform] = useState<SocialPlatform>('X');
@@ -173,6 +188,35 @@ const AdminSocialAccounts = () => {
       setError(err?.response?.data?.message || `Failed to disconnect ${PLATFORM_LABEL[platform]}`);
     } finally {
       setBusyPlatform(null);
+    }
+  };
+
+  // Bluesky's real connect path -- handle + app password, posted directly to
+  // /connect-bluesky (ADR-105). Not routed through handleConnect's OAuth redirect.
+  const handleConnectBluesky = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setNotice('');
+    if (!blueskyHandle.trim() || !blueskyAppPassword.trim()) {
+      setError('Bluesky handle and app password are both required.');
+      return;
+    }
+    setBlueskyConnecting(true);
+    try {
+      const res = await api.post('/social-publisher/connect-bluesky', {
+        handle: blueskyHandle.trim(),
+        appPassword: blueskyAppPassword.trim(),
+      });
+      const username = res.data?.account?.platformUsername;
+      setNotice(`Connected Bluesky${username ? ` (@${username})` : ''}.`);
+      setBlueskyHandle('');
+      setBlueskyAppPassword(''); // never keep the app password in memory longer than needed
+      await loadAccounts();
+    } catch (err: any) {
+      console.error('Connect Bluesky error:', err);
+      setError(err?.response?.data?.message || 'Failed to connect Bluesky — check handle and app password');
+    } finally {
+      setBlueskyConnecting(false);
     }
   };
 
@@ -329,6 +373,71 @@ const AdminSocialAccounts = () => {
         </div>
       </div>
 
+      {/* ── Connect Bluesky (handle + app password, not OAuth redirect — ADR-105) ──── */}
+      <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 mb-6">
+        <h2 className="text-xl font-semibold text-warm-900 dark:text-warm-100 mb-1">Bluesky</h2>
+        <p className="text-sm text-warm-600 dark:text-warm-400 mb-4">
+          Bluesky connects with an account handle and an{' '}
+          <a
+            href="https://bsky.app/settings/app-passwords"
+            target="_blank"
+            rel="noreferrer"
+            className="underline"
+          >
+            app password
+          </a>
+          , not the redirect flow above — no review process required.
+        </p>
+        {connectedPlatforms.has('BLUESKY') ? (
+          <div className="flex items-center justify-between border border-warm-200 dark:border-gray-700 rounded-md px-4 py-3">
+            <div>
+              <span className="font-medium text-warm-900 dark:text-warm-100">Bluesky</span>
+              <span className="ml-3 inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300">
+                Connected
+              </span>
+            </div>
+            <button
+              onClick={() => handleDisconnect('BLUESKY')}
+              disabled={busyPlatform === 'BLUESKY'}
+              className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition disabled:opacity-50"
+            >
+              {busyPlatform === 'BLUESKY' ? 'Working…' : 'Disconnect'}
+            </button>
+          </div>
+        ) : (
+          <form onSubmit={handleConnectBluesky} className="flex flex-col gap-3 sm:flex-row sm:items-end">
+            <div className="flex flex-col gap-1 flex-1">
+              <label className="text-sm font-medium text-warm-700 dark:text-warm-300">Handle</label>
+              <input
+                type="text"
+                value={blueskyHandle}
+                onChange={(e) => setBlueskyHandle(e.target.value)}
+                placeholder="findasale.bsky.social"
+                className="px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-600"
+              />
+            </div>
+            <div className="flex flex-col gap-1 flex-1">
+              <label className="text-sm font-medium text-warm-700 dark:text-warm-300">App password</label>
+              <input
+                type="password"
+                value={blueskyAppPassword}
+                onChange={(e) => setBlueskyAppPassword(e.target.value)}
+                placeholder="xxxx-xxxx-xxxx-xxxx"
+                autoComplete="off"
+                className="px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-600"
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={blueskyConnecting}
+              className="px-4 py-2 bg-amber-600 text-white rounded-md hover:bg-amber-700 transition disabled:opacity-50 whitespace-nowrap"
+            >
+              {blueskyConnecting ? 'Connecting…' : 'Connect Bluesky'}
+            </button>
+          </form>
+        )}
+      </div>
+
       {/* ── Connected accounts detail ─────────────────────────────────── */}
       <div className="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden mb-6">
         <div className="px-6 py-4 border-b border-warm-200 dark:border-gray-700">
@@ -380,7 +489,7 @@ const AdminSocialAccounts = () => {
               onChange={(e) => setFormPlatform(e.target.value as SocialPlatform)}
               className="px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-600"
             >
-              {CONNECTABLE_PLATFORMS.map(({ value, label }) => (
+              {CREATE_POST_PLATFORMS.map(({ value, label }) => (
                 <option key={value} value={value}>{label}</option>
               ))}
             </select>
