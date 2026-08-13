@@ -147,7 +147,8 @@ const GAP_FILL_PROFILES: Profile[] = [
   { keyword: 'guitar', weightOz: 96, lengthIn: 40, widthIn: 14, heightIn: 5, packageType: 'LARGE_PACKAGE', confidence: 0.45 },
 
   // Comics -- zero prior coverage, high per-batch volume for this organizer.
-  { category: 'Comic Books & Memorabilia', keyword: 'comic', weightOz: 4, lengthIn: 8, widthIn: 6, heightIn: 1, packageType: 'PACKAGE_THICK_ENVELOPE', confidence: 0.7 },
+  // 2026-08-13 (Patrick): corrected from 8x6x1 -- a comic's long edge (Modern ~10.25in, Golden/Silver ~10.5in) didn't fit an 8in box. Real packed size is ~11x8x1 (bag+board+rigid mailer).
+  { category: 'Comic Books & Memorabilia', keyword: 'comic', weightOz: 4, lengthIn: 11, widthIn: 8, heightIn: 1, packageType: 'PACKAGE_THICK_ENVELOPE', confidence: 0.7 },
 
   // Tobacciana -- zero prior coverage, recurring category for this organizer.
   { keyword: 'cigar box', weightOz: 24, lengthIn: 10, widthIn: 8, heightIn: 4, packageType: 'MAILING_BOX', confidence: 0.55 },
