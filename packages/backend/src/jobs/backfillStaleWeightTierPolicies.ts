@@ -134,7 +134,10 @@ export async function backfillStaleWeightTierPoliciesSweep(opts?: {
       packageWeightOz: { gt: 0 },
       ebayFulfillmentPolicyId: { not: null },
       OR: [{ ebayShippingOverride: null }, { ebayShippingOverride: { not: 'LOCAL_PICKUP_ONLY' } }],
-      sale: opts?.organizerId ? { organizerId: opts.organizerId } : { organizerId: { not: null } },
+      // Sale.organizerId is a required (non-nullable) scalar -- "any sale" needs no
+      // filter at all here; items with no sale are excluded downstream in the loop below
+      // (organizerId ?? skip), matching resyncShippingDrift.ts's own orphan-guard pattern.
+      ...(opts?.organizerId ? { sale: { organizerId: opts.organizerId } } : {}),
     },
     take: limit,
     select: {
