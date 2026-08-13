@@ -133,6 +133,7 @@ import { runVermontPhase2Scraper } from '../services/scraper/sources/vermontPhas
 import { runWestVirginiaPhase2Scraper } from '../services/scraper/sources/westVirginiaPhase2Scraper';
 import * as Sentry from '@sentry/node';
 import { resyncShippingDriftSweep } from '../jobs/resyncShippingDrift'; // ADR shipping-resync Phase 3 / Part C: bulk rate-drift re-pin
+import { backfillStaleWeightTierPoliciesSweep } from '../jobs/backfillStaleWeightTierPolicies'; // ADR-102 one-time backfill: re-pin items still on pre-migration weight-tier eBay policies
 
 const router = express.Router();
 
@@ -1097,6 +1098,35 @@ router.post('/resync-shipping-drift', requireSecret, async (req: express.Request
   } catch (err: any) {
     console.error('[ResyncShippingDrift] route error:', err?.message || err);
     res.status(500).json({ error: 'resync-shipping-drift failed', detail: String(err?.message || err) });
+  }
+});
+
+// POST /api/internal/backfill-stale-weight-tier-policies
+// ADR-102 (roadmap #622, 2026-08-10) migration backfill: items pushed BEFORE that date
+// are still pinned to their original hand-named weight-tier eBay policy (e.g. "Ground
+// Advantage Under 1lb $9.99") -- resyncShippingDriftSweep above never catches these,
+// since it only re-examines items whose carrier RATE-VERSION drifted, not items still on
+// the pre-ADR-102 ROUTING SCHEME. One-time in nature: once every item has been touched,
+// candidates permanently hits 0 (new pushes already land on the current cascade).
+// Body: { limit?: number, dryRun?: boolean, organizerId?: string }. dryRun:true fetches
+// each organizer's live policy list (read-only) and reports candidates without spending
+// any re-pin calls or writes. organizerId scopes the sweep to one organizer (e.g. the
+// initial ArtifactMI run) -- omit to sweep every organizer with an EbayConnection.
+router.post('/backfill-stale-weight-tier-policies', requireSecret, async (req: express.Request, res: express.Response) => {
+  try {
+    const rawLimit = req.body?.limit;
+    const limit =
+      typeof rawLimit === 'number' && Number.isFinite(rawLimit) && rawLimit > 0
+        ? Math.floor(rawLimit)
+        : undefined;
+    const dryRun = req.body?.dryRun === true;
+    const organizerId = typeof req.body?.organizerId === 'string' ? req.body.organizerId : undefined;
+
+    const summary = await backfillStaleWeightTierPoliciesSweep({ limit, dryRun, organizerId });
+    res.json(summary);
+  } catch (err: any) {
+    console.error('[BackfillStaleWeightTier] route error:', err?.message || err);
+    res.status(500).json({ error: 'backfill-stale-weight-tier-policies failed', detail: String(err?.message || err) });
   }
 });
 
