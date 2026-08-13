@@ -15,104 +15,100 @@
  * self-heal: the only existing resync job, resyncShippingDriftSweep
  * (resyncShippingDrift.ts), only re-examines items whose stored
  * ebayRateVersion is stale relative to CARRIER RATE-TABLE changes -- "still on
- * the pre-ADR-102 routing scheme" isn't a condition it checks, and it never
- * will be (that job intentionally stamps an item current the moment its
- * computed amount stops drifting, which does nothing to fix a categorically
- * wrong policy TYPE that happens to still price close to the new amount).
+ * the pre-ADR-102 routing scheme" isn't a condition it checks.
  *
- * This sweep finds exactly those items -- live, weighted, currently pinned to
- * a policy that classifies as 'weight-tier' via classifyPolicy() among the
- * organizer's LIVE synced eBay policies -- and calls the existing
+ * DESIGN NOTE (2026-08-13, corrected after the first production dry run):
+ * The original version of this sweep pre-filtered candidates by fetching each
+ * organizer's live eBay fulfillment-policy list and classifying the item's
+ * CURRENTLY STORED `ebayFulfillmentPolicyId` via classifyPolicy() -- only
+ * items pinned to a policy that classified as 'weight-tier' were touched. A
+ * live dry run against organizer Artifact (organizerId
+ * cmnxueoas0005tfv8brnc0kky) returned candidates:0, which looked wrong given
+ * eBay's own Business Policies page showed 60+ listings still on weight-tier
+ * policies. Direct production DB reads (read-only) found the real cause: of
+ * Artifact's 122 live eBay listings tracked in FindA.Sale, 80 have
+ * `ebayFulfillmentPolicyId = NULL` -- the policy applied at push time was
+ * simply never recorded back to FindA.Sale's DB. Of the 42 that DO have a
+ * stored value, only 5 pointed at a weight-tier policy (all already SOLD).
+ * The classification pre-filter can only ever see what FindA.Sale itself
+ * recorded, so for this organizer (and likely others with the same gap) it
+ * was blind to the majority of affected listings by design, not by bug.
+ *
+ * FIX: do not pre-classify anything. Call the existing
  * resyncItemShippingPolicy(itemId) (ebayController.ts, already used by
- * resyncShippingDriftSweep) to re-resolve them through the CURRENT
- * authoritative cascade (resolvePoliciesForItem) and re-pin only when the
- * resolved policy actually differs. One-time in nature (once every item has
- * been touched, the candidate set is permanently empty going forward -- new
- * pushes already land on the current cascade), but written as a resumable,
- * rate-limit-respecting sweep like resyncShippingDriftSweep since a single
- * organizer can have 50+ listings on one stale policy alone, easily exceeding
- * one day's eBay call budget.
+ * resyncShippingDriftSweep) unconditionally for every live, weighted,
+ * non-local-pickup item -- including ones with a NULL stored policy id.
+ * resyncItemShippingPolicy already resolves the CURRENT authoritative policy
+ * via the live cascade (resolvePoliciesForItem) and only calls the eBay PUT +
+ * writes to the DB when the resolved policy actually differs from what's
+ * stored (`routing.fulfillmentPolicyId !== item.ebayFulfillmentPolicyId`) --
+ * for a NULL stored value this is always true, so it naturally backfills the
+ * missing data; for an item whose stored value already matches, it is a safe
+ * no-op. This also removes the need to fetch/classify each organizer's live
+ * policy list at all -- one fewer eBay call per organizer, and one fewer way
+ * for this sweep to silently see nothing (do not reintroduce a
+ * classifyPolicy()-based pre-filter here; it is what caused the false
+ * candidates:0 result described above).
+ *
+ * One-time in nature (once every item has been touched, a re-run finds
+ * nothing left to change), but written as a resumable, rate-limit-respecting
+ * sweep like resyncShippingDriftSweep since a single organizer can have 100+
+ * eligible listings, easily exceeding what's sensible in one call.
  *
  * Deliberately NOT a cron job (unlike resyncShippingDriftSweep) -- this is a
  * one-time migration, not a recurring drift check. Call
- * backfillStaleWeightTierPoliciesSweep() directly (e.g. from a one-off script
- * or an internal trigger) until candidates hits 0.
+ * backfillStaleWeightTierPoliciesSweep() directly (e.g. via the internal
+ * route in routes/internal.ts) until itemsExamined hits 0.
  */
 import { prisma } from '../index';
 import { resyncItemShippingPolicy } from '../controllers/ebayController';
-import { isEbayRateLimited, trackEbayCall } from '../lib/ebayRateLimiter';
-import {
-  refreshEbayAccessToken,
-  ebayProxyUrl,
-  ebayProxyHeaders,
-  ebayUserHeaders,
-} from '../services/ebayHttp';
-import { classifyPolicy, EbayFulfillmentPolicySummary } from '../utils/ebayPolicyParser';
+import { isEbayRateLimited } from '../lib/ebayRateLimiter';
 
 export interface BackfillStaleWeightTierExample {
   itemId: string;
   title: string;
-  oldPolicyName: string;
+  oldPolicyId: string | null;
   repinned: boolean;
 }
 
 export interface BackfillStaleWeightTierResult {
-  /** Live, weighted items examined this sweep (before per-organizer policy classification). */
+  /** Live, weighted, non-local-pickup items matching the base query this sweep (candidate pool). */
   itemsExamined: number;
-  /** Distinct organizers whose live eBay policy list was fetched this sweep. */
+  /** Distinct organizers represented among itemsExamined. */
   organizersExamined: number;
-  /** Items found currently pinned to a policy that classifies as 'weight-tier' -- the actual backfill target set. */
+  /**
+   * In a REAL run: same as itemsExamined (every matching item gets a real resyncItemShippingPolicy
+   * attempt -- there is no pre-classification step anymore, see the file header for why). In a
+   * DRY RUN: also itemsExamined -- this is a COUNT-ONLY preview. There is no cheap local recompute
+   * available here (unlike resyncShippingDrift.ts's resolveItemShipping), so a dry run cannot predict
+   * which of these items will actually change without calling resyncItemShippingPolicy itself, which
+   * makes real eBay calls. Do not read `repinned` as meaningful in a dry run -- it is always 0.
+   */
   candidates: number;
-  /** Items re-pinned to a new (different) policy via resyncItemShippingPolicy. In dryRun this counts would-be re-pins without calling it. */
+  /** Items resyncItemShippingPolicy actually re-pinned to a different policy. Always 0 in a dry run. */
   repinned: number;
-  /** Candidates skipped (already resolved to the same policy, resync failed non-fatally, or organizer's policy list could not be fetched). */
+  /** Items examined that resulted in no change (already correct) or a non-fatal per-item failure. Always 0 in a dry run. */
   skipped: number;
   /** True if the eBay daily call budget ran out mid-sweep (loop short-circuited; re-run later to resume). */
   rateLimited: boolean;
-  /** True if no eBay re-pin calls or local writes were performed (preview only; the policy-list fetch itself still happens, it is read-only). */
+  /** True if no eBay calls or writes were performed (preview only -- itemsExamined/organizersExamined come from a DB read alone). */
   dryRun: boolean;
-  /** Up to 15 example item/policy pairs for handoff reporting. */
+  /** Up to 15 example item results for handoff reporting. */
   examples: BackfillStaleWeightTierExample[];
 }
 
 /**
- * Fetch an organizer's LIVE synced eBay fulfillment policies (read-only, one
- * eBay call). Mirrors the identical inline fetcher already used inside
- * resyncItemShippingPolicy (ebayController.ts) -- kept as a local copy here
- * rather than exporting that controller's private helper, since it is a
- * small, self-contained read with no side effects.
- */
-async function fetchLivePolicies(organizerId: string): Promise<EbayFulfillmentPolicySummary[]> {
-  if (isEbayRateLimited()) return [];
-  const accessToken = await refreshEbayAccessToken(organizerId);
-  if (!accessToken) return [];
-  try {
-    const res = await fetch(
-      ebayProxyUrl('/sell/account/v1/fulfillment_policy?marketplace_id=EBAY_US&limit=100'),
-      { headers: { ...ebayUserHeaders(accessToken), ...ebayProxyHeaders() } }
-    );
-    if (!res.ok) return [];
-    trackEbayCall();
-    const data = (await res.json()) as any;
-    return (data.fulfillmentPolicies || []) as EbayFulfillmentPolicySummary[];
-  } catch (err) {
-    console.warn(`[BackfillStaleWeightTier] fulfillment policy fetch failed for organizer=${organizerId}: ${(err as Error).message}`);
-    return [];
-  }
-}
-
-/**
- * Sweep live listings still pinned to a pre-ADR-102 weight-tier eBay policy
- * and re-pin them onto the current routing cascade.
+ * Sweep live listings for a stale or missing eBay fulfillment policy and
+ * re-pin them onto the current routing cascade. See file header for the
+ * 2026-08-13 design correction (no stored-field pre-filter).
  *
  * @param opts.limit        Max candidate items to examine (default 200).
- * @param opts.dryRun        When true, identify and count candidates (still fetches each
- *                            organizer's live policy list -- read-only) but performs no
- *                            re-pin calls and no writes.
+ * @param opts.dryRun        When true, only counts candidates via a DB read -- makes
+ *                            no eBay calls and no writes. See BackfillStaleWeightTierResult
+ *                            doc comments: repinned/skipped are always 0 in a dry run.
  * @param opts.organizerId   Scope the sweep to a single organizer (e.g. the initial
- *                            ArtifactMI run). Omit to sweep all organizers with an
- *                            active EbayConnection, matching resyncShippingDriftSweep's
- *                            own all-organizers default.
+ *                            Artifact run, organizerId cmnxueoas0005tfv8brnc0kky). Omit
+ *                            to sweep every organizer with a matching item.
  */
 export async function backfillStaleWeightTierPoliciesSweep(opts?: {
   limit?: number;
@@ -122,17 +118,18 @@ export async function backfillStaleWeightTierPoliciesSweep(opts?: {
   const limit = opts?.limit ?? 200;
   const dryRun = opts?.dryRun ?? false;
 
-  // Candidate items: live, weighted, not local-pickup-only, carrying a fulfillment
-  // policy id -- same base gating resyncItemShippingPolicy itself enforces (it would
-  // otherwise return 'not-live'/'no-weight'/'local-pickup' for these), checked here too
-  // so the sweep doesn't burn eBay calls on items it already knows will be skipped.
+  // Candidate items: live, weighted, not local-pickup-only -- same base gating
+  // resyncItemShippingPolicy itself enforces (it would otherwise return
+  // 'not-live'/'no-weight'/'local-pickup' for these), checked here too so the sweep
+  // doesn't spend a call on an item it already knows will be a no-op. Deliberately NOT
+  // filtering on ebayFulfillmentPolicyId -- a NULL value is exactly one of the cases
+  // this sweep exists to fix (see file header).
   const items = await prisma.item.findMany({
     where: {
       ebayListingId: { not: null },
       ebayOfferId: { not: null },
       status: 'AVAILABLE',
       packageWeightOz: { gt: 0 },
-      ebayFulfillmentPolicyId: { not: null },
       OR: [{ ebayShippingOverride: null }, { ebayShippingOverride: { not: 'LOCAL_PICKUP_ONLY' } }],
       // Sale.organizerId is a required (non-nullable) scalar -- "any sale" needs no
       // filter at all here; items with no sale are excluded downstream in the loop below
@@ -149,81 +146,75 @@ export async function backfillStaleWeightTierPoliciesSweep(opts?: {
   });
 
   const itemsExamined = items.length;
-  let organizersExamined = 0;
-  let candidates = 0;
+  const organizerIds = new Set<string>();
+  for (const item of items) {
+    if (item.sale?.organizerId) organizerIds.add(item.sale.organizerId);
+  }
+  const organizersExamined = organizerIds.size;
+
+  const examples: BackfillStaleWeightTierExample[] = [];
+
+  if (dryRun) {
+    // Count-only preview -- no eBay calls, no writes. See result doc comments above.
+    for (const item of items) {
+      if (examples.length >= 15) break;
+      examples.push({
+        itemId: item.id,
+        title: item.title,
+        oldPolicyId: item.ebayFulfillmentPolicyId,
+        repinned: false,
+      });
+    }
+    return {
+      itemsExamined,
+      organizersExamined,
+      candidates: itemsExamined,
+      repinned: 0,
+      skipped: 0,
+      rateLimited: false,
+      dryRun: true,
+      examples,
+    };
+  }
+
   let repinned = 0;
   let skipped = 0;
   let rateLimited = false;
-  const examples: BackfillStaleWeightTierExample[] = [];
 
-  // Group by organizer so the policy-list fetch happens once per organizer, not once per item.
-  const byOrganizer = new Map<string, typeof items>();
   for (const item of items) {
-    const organizerId = item.sale?.organizerId;
-    if (!organizerId) continue;
-    const bucket = byOrganizer.get(organizerId);
-    if (bucket) bucket.push(item);
-    else byOrganizer.set(organizerId, [item]);
-  }
-
-  outer: for (const [organizerId, orgItems] of byOrganizer) {
     if (isEbayRateLimited()) {
       rateLimited = true;
       break;
     }
-    organizersExamined++;
-
-    const policies = await fetchLivePolicies(organizerId);
-    if (policies.length === 0) {
-      // Couldn't fetch this organizer's live policies (no token, rate-limited, or
-      // transient failure) -- can't classify, so skip without counting as a candidate.
-      skipped += orgItems.length;
-      continue;
-    }
-
-    const policyNameById = new Map(policies.map((p) => [p.fulfillmentPolicyId, p.name]));
-    const weightTierPolicyIds = new Set(
-      policies.filter((p) => classifyPolicy(p.name) === 'weight-tier').map((p) => p.fulfillmentPolicyId)
-    );
-
-    for (const item of orgItems) {
-      const currentPolicyId = item.ebayFulfillmentPolicyId as string;
-      if (!weightTierPolicyIds.has(currentPolicyId)) {
-        skipped++;
-        continue;
-      }
-
-      candidates++;
-      const oldPolicyName = policyNameById.get(currentPolicyId) || currentPolicyId;
-
-      if (dryRun) {
+    try {
+      const res = await resyncItemShippingPolicy(item.id);
+      if (res.changed) {
+        repinned++;
         if (examples.length < 15) {
-          examples.push({ itemId: item.id, title: item.title, oldPolicyName, repinned: false });
+          examples.push({
+            itemId: item.id,
+            title: item.title,
+            oldPolicyId: item.ebayFulfillmentPolicyId,
+            repinned: true,
+          });
         }
-        continue;
-      }
-
-      if (isEbayRateLimited()) {
-        rateLimited = true;
-        break outer;
-      }
-
-      try {
-        const res = await resyncItemShippingPolicy(item.id);
-        if (res.changed) {
-          repinned++;
-          if (examples.length < 15) {
-            examples.push({ itemId: item.id, title: item.title, oldPolicyName, repinned: true });
-          }
-        } else {
-          skipped++;
-        }
-      } catch (err) {
-        console.warn(`[BackfillStaleWeightTier] item ${item.id} failed (non-fatal): ${(err as Error).message}`);
+      } else {
         skipped++;
       }
+    } catch (err) {
+      console.warn(`[BackfillStaleWeightTier] item ${item.id} failed (non-fatal): ${(err as Error).message}`);
+      skipped++;
     }
   }
 
-  return { itemsExamined, organizersExamined, candidates, repinned, skipped, rateLimited, dryRun, examples };
+  return {
+    itemsExamined,
+    organizersExamined,
+    candidates: itemsExamined,
+    repinned,
+    skipped,
+    rateLimited,
+    dryRun: false,
+    examples,
+  };
 }
