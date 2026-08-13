@@ -1969,6 +1969,79 @@ const ReviewPage = () => {
                               />
                             </div>
 
+                            {/* Package weight & dimensions (2026-08-13, moved here per Patrick: general item data, not eBay-only -- also used for eBay fulfillment-policy selection) */}
+                            <div>
+                              <div className="flex items-center justify-between mb-2">
+                                <p className="text-xs font-medium text-blue-700 dark:text-blue-300">
+                                  Shipping details <span className="font-normal text-blue-500">(required for eBay)</span>
+                                </p>
+                                {item.packageConfirmedByOrganizer !== true && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleGetPackageEstimate(item)}
+                                    disabled={packageEstimateLoadingIds.has(item.id)}
+                                    className="text-[11px] font-medium text-blue-600 dark:text-blue-400 hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
+                                  >
+                                    {packageEstimateLoadingIds.has(item.id) ? 'Getting estimate…' : 'Get Smart estimate'}
+                                  </button>
+                                )}
+                              </div>
+                              <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                  <label className="block text-[10px] font-mono uppercase text-blue-600 dark:text-blue-400 mb-1">Weight (oz)</label>
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    step="0.5"
+                                    placeholder="e.g. 16"
+                                    aria-label="Package weight in ounces"
+                                    value={editState.packageWeightOz ?? ''}
+                                    onChange={(e) => handleEditChange(item.id, 'packageWeightOz', e.target.value ? Number(e.target.value) : undefined)}
+                                    className="w-full border border-blue-200 dark:border-blue-700 bg-white dark:bg-[#3A3A3C] text-[#1A1814] dark:text-[#F5F5F0] rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400/40"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-[10px] font-mono uppercase text-blue-600 dark:text-blue-400 mb-1">Length (in)</label>
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    step="0.5"
+                                    placeholder="e.g. 12"
+                                    aria-label="Package length in inches"
+                                    value={editState.packageLengthIn ?? ''}
+                                    onChange={(e) => handleEditChange(item.id, 'packageLengthIn', e.target.value ? Number(e.target.value) : undefined)}
+                                    className="w-full border border-blue-200 dark:border-blue-700 bg-white dark:bg-[#3A3A3C] text-[#1A1814] dark:text-[#F5F5F0] rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400/40"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-[10px] font-mono uppercase text-blue-600 dark:text-blue-400 mb-1">Width (in)</label>
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    step="0.5"
+                                    placeholder="e.g. 8"
+                                    aria-label="Package width in inches"
+                                    value={editState.packageWidthIn ?? ''}
+                                    onChange={(e) => handleEditChange(item.id, 'packageWidthIn', e.target.value ? Number(e.target.value) : undefined)}
+                                    className="w-full border border-blue-200 dark:border-blue-700 bg-white dark:bg-[#3A3A3C] text-[#1A1814] dark:text-[#F5F5F0] rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400/40"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-[10px] font-mono uppercase text-blue-600 dark:text-blue-400 mb-1">Height (in)</label>
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    step="0.5"
+                                    placeholder="e.g. 4"
+                                    aria-label="Package height in inches"
+                                    value={editState.packageHeightIn ?? ''}
+                                    onChange={(e) => handleEditChange(item.id, 'packageHeightIn', e.target.value ? Number(e.target.value) : undefined)}
+                                    className="w-full border border-blue-200 dark:border-blue-700 bg-white dark:bg-[#3A3A3C] text-[#1A1814] dark:text-[#F5F5F0] rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400/40"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+
                             {/* Condition grade */}
                             <div>
                               <label className="text-xs font-medium text-[rgba(26,24,20,0.62)] dark:text-[#B8B8BA] mb-1 block">
@@ -2050,7 +2123,7 @@ const ReviewPage = () => {
                               </div>
                             </div>
 
-                            {/* eBay push toggle + shipping fields */}
+                            {/* eBay push toggle (weight/dims moved above, under Description -- see 2026-08-13 comment) */}
                             {ebayConnected && tier !== 'SIMPLE' && (
                               <div className="space-y-3 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg">
                                 <div className="flex items-center gap-2">
@@ -2075,78 +2148,6 @@ const ReviewPage = () => {
                                   <label htmlFor={`local-pickup-${item.id}`} className="text-sm text-blue-700 dark:text-blue-300 cursor-pointer">
                                     Local pickup only (skip eBay shipping)
                                   </label>
-                                </div>
-                                {/* Shipping weight & dimensions (used by eBay push to select fulfillment policy) */}
-                                <div>
-                                  <div className="flex items-center justify-between mb-2">
-                                    <p className="text-xs font-medium text-blue-700 dark:text-blue-300">
-                                      Shipping details <span className="font-normal text-blue-500">(required for eBay)</span>
-                                    </p>
-                                    {item.packageConfirmedByOrganizer !== true && (
-                                      <button
-                                        type="button"
-                                        onClick={() => handleGetPackageEstimate(item)}
-                                        disabled={packageEstimateLoadingIds.has(item.id)}
-                                        className="text-[11px] font-medium text-blue-600 dark:text-blue-400 hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
-                                      >
-                                        {packageEstimateLoadingIds.has(item.id) ? 'Getting estimate…' : 'Get Smart estimate'}
-                                      </button>
-                                    )}
-                                  </div>
-                                  <div className="grid grid-cols-2 gap-2">
-                                    <div>
-                                      <label className="block text-[10px] font-mono uppercase text-blue-600 dark:text-blue-400 mb-1">Weight (oz)</label>
-                                      <input
-                                        type="number"
-                                        min="0"
-                                        step="0.5"
-                                        placeholder="e.g. 16"
-                                        aria-label="Package weight in ounces"
-                                        value={editState.packageWeightOz ?? ''}
-                                        onChange={(e) => handleEditChange(item.id, 'packageWeightOz', e.target.value ? Number(e.target.value) : undefined)}
-                                        className="w-full border border-blue-200 dark:border-blue-700 bg-white dark:bg-[#3A3A3C] text-[#1A1814] dark:text-[#F5F5F0] rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400/40"
-                                      />
-                                    </div>
-                                    <div>
-                                      <label className="block text-[10px] font-mono uppercase text-blue-600 dark:text-blue-400 mb-1">Length (in)</label>
-                                      <input
-                                        type="number"
-                                        min="0"
-                                        step="0.5"
-                                        placeholder="e.g. 12"
-                                        aria-label="Package length in inches"
-                                        value={editState.packageLengthIn ?? ''}
-                                        onChange={(e) => handleEditChange(item.id, 'packageLengthIn', e.target.value ? Number(e.target.value) : undefined)}
-                                        className="w-full border border-blue-200 dark:border-blue-700 bg-white dark:bg-[#3A3A3C] text-[#1A1814] dark:text-[#F5F5F0] rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400/40"
-                                      />
-                                    </div>
-                                    <div>
-                                      <label className="block text-[10px] font-mono uppercase text-blue-600 dark:text-blue-400 mb-1">Width (in)</label>
-                                      <input
-                                        type="number"
-                                        min="0"
-                                        step="0.5"
-                                        placeholder="e.g. 8"
-                                        aria-label="Package width in inches"
-                                        value={editState.packageWidthIn ?? ''}
-                                        onChange={(e) => handleEditChange(item.id, 'packageWidthIn', e.target.value ? Number(e.target.value) : undefined)}
-                                        className="w-full border border-blue-200 dark:border-blue-700 bg-white dark:bg-[#3A3A3C] text-[#1A1814] dark:text-[#F5F5F0] rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400/40"
-                                      />
-                                    </div>
-                                    <div>
-                                      <label className="block text-[10px] font-mono uppercase text-blue-600 dark:text-blue-400 mb-1">Height (in)</label>
-                                      <input
-                                        type="number"
-                                        min="0"
-                                        step="0.5"
-                                        placeholder="e.g. 4"
-                                        aria-label="Package height in inches"
-                                        value={editState.packageHeightIn ?? ''}
-                                        onChange={(e) => handleEditChange(item.id, 'packageHeightIn', e.target.value ? Number(e.target.value) : undefined)}
-                                        className="w-full border border-blue-200 dark:border-blue-700 bg-white dark:bg-[#3A3A3C] text-[#1A1814] dark:text-[#F5F5F0] rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400/40"
-                                      />
-                                    </div>
-                                  </div>
                                 </div>
                               </div>
                             )}

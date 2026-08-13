@@ -56,6 +56,12 @@ const PrintInventoryPage = () => {
   const [isExporting, setIsExporting] = useState(false);
   const [showExportDropdown, setShowExportDropdown] = useState(false);
   const [isPrintKitLoading, setIsPrintKitLoading] = useState(false);
+  // (2026-08-13, Patrick) Sold items were rendering unfiltered in this list (status
+  // column shows SOLD alongside AVAILABLE/ON_HOLD with no way to exclude them) -- this
+  // page is the one organizer-facing item list that had no existing status filter at
+  // all (sales/[id]/index.tsx and inventory.tsx both already default to AVAILABLE-only).
+  // Default OFF so existing behavior (all items shown) doesn't silently change.
+  const [hideSold, setHideSold] = useState(false);
 
   // Fetch organizer's sales — same endpoint as dashboard
   const { data: salesData, isLoading: salesLoading } = useQuery<Sale[]>({
@@ -96,6 +102,7 @@ const PrintInventoryPage = () => {
     inventoryData.forEach((saleData) => {
       grouped[saleData.saleId] = { saleTitle: saleData.saleTitle, categories: {} };
       saleData.items.forEach((item) => {
+        if (hideSold && item.status === 'SOLD') return;
         const category = item.category || 'Uncategorized';
         if (!grouped[saleData.saleId].categories[category]) {
           grouped[saleData.saleId].categories[category] = [];
@@ -104,7 +111,7 @@ const PrintInventoryPage = () => {
       });
     });
     setGroupedData(grouped);
-  }, [inventoryData]);
+  }, [inventoryData, hideSold]);
 
   // Redirect if not authenticated or not an organizer
   if (!authLoading && (!user || !user.roles?.includes('ORGANIZER'))) {
@@ -450,6 +457,15 @@ const PrintInventoryPage = () => {
                     </option>
                   ))}
                 </select>
+                <label className="mt-4 flex items-center gap-2 cursor-pointer w-fit">
+                  <input
+                    type="checkbox"
+                    checked={hideSold}
+                    onChange={(e) => setHideSold(e.target.checked)}
+                    className="h-4 w-4 rounded border-warm-300 dark:border-gray-600 accent-amber-600"
+                  />
+                  <span className="text-sm font-semibold text-warm-900 dark:text-warm-100">Hide sold items</span>
+                </label>
               </div>
 
               {/* Sales with grouped items */}
