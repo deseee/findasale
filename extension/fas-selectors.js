@@ -365,11 +365,30 @@
   // Returns [] if nothing is currently Sold. Never filters by title -- the caller does its own
   // single-confident-match check against this list (same "never guess the wrong listing"
   // philosophy as listingCardByTitle/alreadySoldCardByTitle).
+  //
+  // (2026-08-13 fix, real bug) Until this fix, the marker list below ONLY matched
+  // 'mark as available' / 'relist this item' -- the state Facebook shows when a seller
+  // manually marks a listing sold/unavailable with NO real order. It had NO marker for
+  // Facebook's own Checkout flow, which instead shows a "View Order" control on the card
+  // once a buyer actually purchases through Facebook. A stale comment elsewhere in this
+  // codebase (fas-remove.js, near openSilentRemovalTab) claimed both cases were already
+  // covered here -- they were not; only the manual-mark-sold case was ever implemented.
+  // Confirmed live in production 2026-08-13: an item sold via Facebook Checkout (real
+  // "View Order" button present) was never detected, never reported to
+  // POST /api/extension/items/:id/sold-on-facebook, and stayed falsely AVAILABLE on both
+  // FindA.Sale and eBay indefinitely. Adding 'view order' as a third marker, same
+  // selector/matching pattern as the other two (not a new selector strategy).
+  // NOT LIVE-VERIFIED: this dispatch could not confirm 'View Order' actually renders as
+  // one of div[role="button"] / button / span[role="button"] / a[role="button"] on a real
+  // Facebook Checkout-sold card (it may instead be a plain, non-role <a> navigation link to
+  // Commerce Manager, in which case this selector will miss it). Needs a Chrome QA
+  // spot-check against a real Facebook-Checkout-sold listing before this is trusted at
+  // scale -- see this dispatch's handoff.
   function allSoldListingCards() {
     const markers = Array.from(document.querySelectorAll('div[role="button"], button, span[role="button"], a[role="button"]'))
       .filter((b) => {
         const t = norm(b.textContent);
-        return t === 'mark as available' || t === 'relist this item';
+        return t === 'mark as available' || t === 'relist this item' || t === 'view order';
       });
     // (2026-08-07 fix) Same element-reference dedup bug as alreadySoldCardByTitle above --
     // fixed the same way (dedupe by normalized text, not element reference). Without this, a

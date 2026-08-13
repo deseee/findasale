@@ -238,9 +238,19 @@
   // Facebook's own Seller Hub already offers a server-side filter for exactly this -- confirmed
   // live 2026-08-09 (Chrome, read-only navigation): this URL shows ONLY sold/out-of-stock
   // listings (both "View Order" items sold via Facebook's own checkout, and "Mark as available"
-  // items marked unavailable without an order -- allSoldListingCards' existing marker detection
-  // already covers both, unchanged). Scanning this small, pre-filtered page instead decouples
-  // sold-detection performance from total active-listing count.
+  // items marked unavailable without an order). Scanning this small, pre-filtered page instead
+  // decouples sold-detection performance from total active-listing count.
+  //
+  // CORRECTION (2026-08-13): the claim above that allSoldListingCards' marker detection
+  // "already covers both" was WRONG at the time it was written -- that function only ever
+  // matched the 'mark as available'/'relist this item' markers (the no-order manual-sold
+  // case). It had no marker for "View Order" (the real-Facebook-Checkout-order case) until
+  // this same date, when a real production item (sold via Facebook Checkout, confirmed "View
+  // Order" button present) was found still falsely AVAILABLE on FindA.Sale/eBay because of
+  // this exact gap. allSoldListingCards() in fas-selectors.js now also matches 'view order'
+  // -- so this URL-filter optimization's premise (both sold-states land on this filtered
+  // page) is accurate, but is only actually detected end-to-end as of the 2026-08-13 fix,
+  // not since 2026-08-09 as originally claimed here.
   const SOLD_STATUS_FILTER_URL = 'https://www.facebook.com/marketplace/you/selling/?referral_surface=seller_hub&status[0]=OUT_OF_STOCK';
 
   function currentStatusFilterParam() {

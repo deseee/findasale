@@ -134,6 +134,9 @@ import { runWestVirginiaPhase2Scraper } from '../services/scraper/sources/westVi
 import * as Sentry from '@sentry/node';
 import { resyncShippingDriftSweep } from '../jobs/resyncShippingDrift'; // ADR shipping-resync Phase 3 / Part C: bulk rate-drift re-pin
 import { backfillStaleWeightTierPoliciesSweep } from '../jobs/backfillStaleWeightTierPolicies'; // ADR-102 one-time backfill: re-pin items still on pre-migration weight-tier eBay policies
+import { endEbayListingIfExists } from '../controllers/ebayController'; // used by /mark-item-sold-elsewhere below
+import { markShopifyItemSold } from '../services/shopifyService';
+import { commitItemSale, ItemAlreadyCommittedError } from '../services/itemSaleGuard';
 
 const router = express.Router();
 
@@ -1150,6 +1153,61 @@ router.post('/backfill-stale-weight-tier-policies', requireSecret, async (req: e
   } catch (err: any) {
     console.error('[BackfillStaleWeightTier] route error:', err?.message || err);
     res.status(500).json({ error: 'backfill-stale-weight-tier-policies failed', detail: String(err?.message || err) });
+  }
+});
+
+// POST /api/internal/mark-item-sold-elsewhere
+// (2026-08-13, real bug fix) Corrects items the Facebook Checkout sold-detection gap left
+// falsely AVAILABLE -- see extension/fas-selectors.js allSoldListingCards()'s 2026-08-13 fix
+// comment for the full root-cause writeup. Until that fix, an item sold via Facebook's own
+// Checkout (showing a "View Order" button, as opposed to being manually marked sold) was
+// NEVER reported to POST /api/extension/items/:id/sold-on-facebook (extensionController.ts
+// markItemSoldOnFacebook), so it never transitioned to SOLD and never had its eBay listing
+// ended. This route does EXACTLY what that handler does for a single item, minus the
+// req.user-based ownership check (not needed -- this route is already secret-gated and the
+// itemId is supplied explicitly by an operator who has already confirmed the real-world sale,
+// not derived from any user-facing input).
+// Body: { itemId: string, soldVia?: string }. soldVia defaults to 'FB_NATIVE' (same tag
+// markItemSoldOnFacebook uses) -- pass a different value if correcting an item known to have
+// sold via a different out-of-band channel this same class of gap could affect.
+// Reuses the SAME commitItemSale atomic guard (ADR-098) as every other SOLD-transition call
+// site in this codebase -- no new sale-completion logic invented here.
+router.post('/mark-item-sold-elsewhere', requireSecret, async (req: express.Request, res: express.Response) => {
+  try {
+    const itemId = typeof req.body?.itemId === 'string' ? req.body.itemId : undefined;
+    if (!itemId) {
+      res.status(400).json({ error: 'itemId (string) is required' });
+      return;
+    }
+    const soldVia = typeof req.body?.soldVia === 'string' && req.body.soldVia.length > 0 ? req.body.soldVia : 'FB_NATIVE';
+
+    try {
+      await commitItemSale(itemId, 'SOLD', ['AVAILABLE']);
+    } catch (err: any) {
+      if (err instanceof ItemAlreadyCommittedError) {
+        // Already SOLD (this call, a prior poll cycle, or any other channel) -- idempotent
+        // success, never an error. Same handling as markItemSoldOnFacebook.
+        res.json({ ok: true, alreadyCommitted: true });
+        return;
+      }
+      throw err;
+    }
+
+    // Sold-channel observability -- same follow-up write markItemSoldOnFacebook performs on a
+    // genuine fresh transition (the ItemAlreadyCommittedError branch above already returned).
+    await prisma.item.update({ where: { id: itemId }, data: { lastSoldVia: soldVia } });
+
+    endEbayListingIfExists(itemId).catch((err: any) =>
+      console.warn(`[eBay] withdraw-on-SOLD (mark-item-sold-elsewhere) failed for item ${itemId}:`, err.message)
+    );
+    markShopifyItemSold(itemId).catch((err: any) =>
+      console.warn(`[Shopify] mark-sold-on-SOLD (mark-item-sold-elsewhere) failed for item ${itemId}:`, err.message)
+    );
+
+    res.json({ ok: true, alreadyCommitted: false });
+  } catch (err: any) {
+    console.error('[MarkItemSoldElsewhere] route error:', err?.message || err);
+    res.status(500).json({ error: 'mark-item-sold-elsewhere failed', detail: String(err?.message || err) });
   }
 });
 
