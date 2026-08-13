@@ -381,7 +381,9 @@ const AddItemsDetailPage = () => {
   const [itemSearch, setItemSearch] = useState('');
   // Sold-items filter (Patrick feedback 2026-08-02): segmented control, not a separate
   // input-method tab: composes with itemSearch rather than replacing it.
-  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'sold'>('all');
+  // Default 'active' (2026-08-13, Patrick confirmed): hide sold items by default so they
+  // don't clutter the add-items list; organizer can still switch to All or Sold via the tabs.
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'sold'>('active');
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [deleteConfirmTitle, setDeleteConfirmTitle] = useState<string>('');
   const [bulkPrice, setBulkPrice] = useState('');
@@ -524,7 +526,7 @@ const AddItemsDetailPage = () => {
 
   // Expandable item cards (like review & publish page)
   const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
-  const [itemEditState, setItemEditState] = useState<Record<string, { title: string; price: string; category: string; condition: string; description: string; lotNumber: string; stockTotal: string; ebayCategoryId: string; ebayCategoryName: string; packageWeightOz: string }>>({});
+  const [itemEditState, setItemEditState] = useState<Record<string, { title: string; price: string; category: string; condition: string; description: string; lotNumber: string; stockTotal: string; ebayCategoryId: string; ebayCategoryName: string; packageWeightOz: string; packageLengthIn: string; packageWidthIn: string; packageHeightIn: string }>>({});
   // Tracks which items had their Weight (oz) field directly edited in this card's inline
   // eBay & Shipping panel, so handleInlineItemSave knows to send packageConfirmedByOrganizer.
   // Mirrors review.tsx's weightTouched pattern exactly (scoped per-item id, only the weight
@@ -547,6 +549,9 @@ const AddItemsDetailPage = () => {
       ebayCategoryId: item.ebayCategoryId || '',
       ebayCategoryName: item.ebayCategoryName || '',
       packageWeightOz: item.packageWeightOz != null ? item.packageWeightOz.toString() : '',
+      packageLengthIn: item.packageLengthIn != null ? item.packageLengthIn.toString() : '',
+      packageWidthIn: item.packageWidthIn != null ? item.packageWidthIn.toString() : '',
+      packageHeightIn: item.packageHeightIn != null ? item.packageHeightIn.toString() : '',
     };
   }, [itemEditState]);
 
@@ -565,6 +570,9 @@ const AddItemsDetailPage = () => {
         ebayCategoryId: state.ebayCategoryId || null,
         ebayCategoryName: state.ebayCategoryName || null,
         packageWeightOz: state.packageWeightOz ? parseInt(state.packageWeightOz, 10) : undefined,
+        packageLengthIn: state.packageLengthIn ? parseFloat(state.packageLengthIn) : undefined,
+        packageWidthIn: state.packageWidthIn ? parseFloat(state.packageWidthIn) : undefined,
+        packageHeightIn: state.packageHeightIn ? parseFloat(state.packageHeightIn) : undefined,
         // Organizer typed a real weight in this card's inline Weight (oz) field: record it
         // as confirmed so eBay publish stops treating it as an AI estimate. Never sent when
         // the field was left untouched (see inlineWeightTouched above; mirrors review.tsx).
@@ -2888,6 +2896,63 @@ const AddItemsDetailPage = () => {
                               className="w-full px-3 py-1.5 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded text-sm focus:ring-1 focus:ring-amber-500"
                             />
                           </div>
+                          {/* Package weight & dimensions -- 2026-08-13, moved here per Patrick:
+                              needs to be immediately under Description, not buried in the eBay
+                              Category accordion. Weight already existed inline; Length/Width/Height
+                              are new on this page -- previously only settable via "Full Edit". */}
+                          <div>
+                            <p className="block text-xs font-medium text-warm-700 dark:text-warm-300 mb-1">Weight &amp; dimensions</p>
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <label className="block text-[10px] font-mono uppercase text-warm-500 dark:text-warm-400 mb-1">Weight (oz)</label>
+                                <input
+                                  type="number"
+                                  min={0}
+                                  value={editState.packageWeightOz}
+                                  onChange={(e) => {
+                                    setItemEditState((prev) => ({ ...prev, [item.id]: { ...editState, packageWeightOz: e.target.value } }));
+                                    // Organizer edited the weight field itself: record it so
+                                    // handleInlineItemSave can send packageConfirmedByOrganizer.
+                                    setInlineWeightTouched((prev) => new Set(prev).add(item.id));
+                                  }}
+                                  className="w-full px-3 py-1.5 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded text-sm focus:ring-1 focus:ring-amber-500"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-[10px] font-mono uppercase text-warm-500 dark:text-warm-400 mb-1">Length (in)</label>
+                                <input
+                                  type="number"
+                                  min={0}
+                                  step="0.5"
+                                  value={editState.packageLengthIn}
+                                  onChange={(e) => setItemEditState((prev) => ({ ...prev, [item.id]: { ...editState, packageLengthIn: e.target.value } }))}
+                                  className="w-full px-3 py-1.5 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded text-sm focus:ring-1 focus:ring-amber-500"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-[10px] font-mono uppercase text-warm-500 dark:text-warm-400 mb-1">Width (in)</label>
+                                <input
+                                  type="number"
+                                  min={0}
+                                  step="0.5"
+                                  value={editState.packageWidthIn}
+                                  onChange={(e) => setItemEditState((prev) => ({ ...prev, [item.id]: { ...editState, packageWidthIn: e.target.value } }))}
+                                  className="w-full px-3 py-1.5 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded text-sm focus:ring-1 focus:ring-amber-500"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-[10px] font-mono uppercase text-warm-500 dark:text-warm-400 mb-1">Height (in)</label>
+                                <input
+                                  type="number"
+                                  min={0}
+                                  step="0.5"
+                                  value={editState.packageHeightIn}
+                                  onChange={(e) => setItemEditState((prev) => ({ ...prev, [item.id]: { ...editState, packageHeightIn: e.target.value } }))}
+                                  className="w-full px-3 py-1.5 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded text-sm focus:ring-1 focus:ring-amber-500"
+                                />
+                              </div>
+                            </div>
+                          </div>
                           {item.listingType === 'AUCTION' && (
                             <div>
                               <label className="block text-xs font-medium text-warm-700 dark:text-warm-300 mb-1">
@@ -2903,19 +2968,22 @@ const AddItemsDetailPage = () => {
                               />
                             </div>
                           )}
-                          {/* Collapsed-by-default eBay & Shipping section (Patrick's ask 2026-07-26:
-                              this replaces the old always-visible internal-taxonomy Category field, 
+                          {/* Collapsed-by-default eBay Category section (Patrick's ask 2026-07-26:
+                              this replaces the old always-visible internal-taxonomy Category field,
                               eBay category is what shipping-weight estimation and eBay publish actually
                               key off, and AI photo analysis already auto-suggests it during capture, so
                               it rarely needs a manual touch at this stage. UX + Customer Champion signed
-                              off on collapsed-by-default rather than always-visible. */}
+                              off on collapsed-by-default rather than always-visible.
+                              (2026-08-13, Patrick: weight/dimensions moved OUT of this section --
+                              see the unconditional Package weight & dimensions block right under
+                              Description below. This accordion now holds only the eBay category picker.) */}
                           <div className="border border-warm-200 dark:border-gray-700 rounded-lg">
                             <button
                               type="button"
                               onClick={() => setItemEbaySectionOpen((prev) => ({ ...prev, [item.id]: !prev[item.id] }))}
                               className="w-full flex items-center justify-between px-3 py-2 text-xs font-medium text-warm-700 dark:text-warm-300 hover:bg-warm-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
                             >
-                              <span>eBay &amp; Shipping{editState.ebayCategoryName ? `. ${editState.ebayCategoryName}` : ''}</span>
+                              <span>eBay Category{editState.ebayCategoryName ? `. ${editState.ebayCategoryName}` : ''}</span>
                               <span className="text-warm-400">{itemEbaySectionOpen[item.id] ? '▲' : '▼'}</span>
                             </button>
                             {itemEbaySectionOpen[item.id] && (
@@ -2934,21 +3002,6 @@ const AddItemsDetailPage = () => {
                                   label="Category"
                                   placeholder="Search and select an eBay category..."
                                 />
-                                <div>
-                                  <label className="block text-xs font-medium text-warm-700 dark:text-warm-300 mb-1">Weight (oz)</label>
-                                  <input
-                                    type="number"
-                                    min={0}
-                                    value={editState.packageWeightOz}
-                                    onChange={(e) => {
-                                      setItemEditState((prev) => ({ ...prev, [item.id]: { ...editState, packageWeightOz: e.target.value } }));
-                                      // Organizer edited the weight field itself: record it so
-                                      // handleInlineItemSave can send packageConfirmedByOrganizer.
-                                      setInlineWeightTouched((prev) => new Set(prev).add(item.id));
-                                    }}
-                                    className="w-full px-3 py-1.5 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded text-sm focus:ring-1 focus:ring-amber-500"
-                                  />
-                                </div>
                               </div>
                             )}
                           </div>
