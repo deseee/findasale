@@ -1108,10 +1108,19 @@ router.post('/resync-shipping-drift', requireSecret, async (req: express.Request
 // since it only re-examines items whose carrier RATE-VERSION drifted, not items still on
 // the pre-ADR-102 ROUTING SCHEME. One-time in nature: once every item has been touched,
 // candidates permanently hits 0 (new pushes already land on the current cascade).
-// Body: { limit?: number, dryRun?: boolean, organizerId?: string }. dryRun:true fetches
-// each organizer's live policy list (read-only) and reports candidates without spending
-// any re-pin calls or writes. organizerId scopes the sweep to one organizer (e.g. the
-// initial ArtifactMI run) -- omit to sweep every organizer with an EbayConnection.
+// Body: { limit?: number, nativeLimit?: number, includeOfferBased?: boolean,
+// includeNative?: boolean, dryRun?: boolean, organizerId?: string }. dryRun:true reports
+// candidates via a DB read only -- no eBay calls, no writes. organizerId scopes the sweep
+// to one organizer (e.g. the initial ArtifactMI run) -- omit to sweep every organizer with
+// a matching item.
+// EXTENSION (2026-08-13): now covers two populations -- offer-based items (ebayOfferId set,
+// via resyncItemShippingPolicy/Inventory API) and native/imported items (ebayListingId set,
+// ebayOfferId NULL, via reviseNativeListingShippingPolicy/Trading API ReviseItem -- see
+// backfillStaleWeightTierPolicies.ts file header). nativeLimit/includeOfferBased/includeNative
+// let a caller isolate a small first test of the native path, e.g.
+// { organizerId: "...", includeOfferBased: false, nativeLimit: 3, dryRun: false }, before
+// running the full backlog -- the native ReviseItem path was not live-tested as an actual
+// write before this route shipped.
 router.post('/backfill-stale-weight-tier-policies', requireSecret, async (req: express.Request, res: express.Response) => {
   try {
     const rawLimit = req.body?.limit;
@@ -1119,10 +1128,24 @@ router.post('/backfill-stale-weight-tier-policies', requireSecret, async (req: e
       typeof rawLimit === 'number' && Number.isFinite(rawLimit) && rawLimit > 0
         ? Math.floor(rawLimit)
         : undefined;
+    const rawNativeLimit = req.body?.nativeLimit;
+    const nativeLimit =
+      typeof rawNativeLimit === 'number' && Number.isFinite(rawNativeLimit) && rawNativeLimit > 0
+        ? Math.floor(rawNativeLimit)
+        : undefined;
+    const includeOfferBased = req.body?.includeOfferBased === undefined ? undefined : req.body?.includeOfferBased === true;
+    const includeNative = req.body?.includeNative === undefined ? undefined : req.body?.includeNative === true;
     const dryRun = req.body?.dryRun === true;
     const organizerId = typeof req.body?.organizerId === 'string' ? req.body.organizerId : undefined;
 
-    const summary = await backfillStaleWeightTierPoliciesSweep({ limit, dryRun, organizerId });
+    const summary = await backfillStaleWeightTierPoliciesSweep({
+      limit,
+      nativeLimit,
+      includeOfferBased,
+      includeNative,
+      dryRun,
+      organizerId,
+    });
     res.json(summary);
   } catch (err: any) {
     console.error('[BackfillStaleWeightTier] route error:', err?.message || err);

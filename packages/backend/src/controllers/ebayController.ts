@@ -4857,6 +4857,271 @@ export async function resyncItemShippingPolicy(
     return { changed: false, reason: 'exception' };
   }
 }
+
+
+/**
+ * Re-resolve and (if changed) re-apply the shipping policy for a NATIVE eBay
+ * listing -- one that has ebayListingId but NO ebayOfferId, meaning it was
+ * imported/synced into FindA.Sale (via GetItem/GetMyeBaySelling sync) but was
+ * never pushed through FindA.Sale's own Inventory-API publish flow, so no
+ * Offer object exists for it. resyncItemShippingPolicy() (above) requires
+ * ebayOfferId and cannot touch these -- it applies policy changes via the
+ * Inventory API PUT /sell/inventory/v1/offer/{offerId}, which only works on
+ * offers FindA.Sale itself created.
+ *
+ * This function instead uses the older eBay Trading API's ReviseItem call,
+ * which can attach a Business Policy shipping profile directly to a listing
+ * by ItemID -- no Offer object required. Per eBay's SellerProfilesType
+ * reference (developer.ebay.com/devzone/xml/docs/reference/ebay/types/
+ * SellerProfilesType.html, confirmed live 2026-08-13), ReviseItem accepts:
+ *   <SellerProfiles><SellerShippingProfile><ShippingProfileID>{id}
+ *   </ShippingProfileID></SellerShippingProfile></SellerProfiles>
+ * -- eBay's documented, current mechanism for updating just the shipping
+ * policy on an existing listing by ItemID.
+ *
+ * Same conservative contract as resyncItemShippingPolicy: only re-pins when
+ * the resolved policy id actually differs from the stored applied id, never
+ * auto-prices a no-weight or LOCAL_PICKUP_ONLY item, respects the rate
+ * limiter, and never throws. Returns { changed, reason }.
+ *
+ * NOTE (2026-08-13): only the Trading API GetItem (a read) was verified live
+ * against this organizer's account this session -- a real ReviseItem write
+ * was NOT live-tested. Callers driving this at scale should start with a
+ * small limit and spot-check eBay's actual listing page before running
+ * against a full backlog. See backfillStaleWeightTierPolicies.ts's dry-run
+ * guidance.
+ */
+export async function reviseNativeListingShippingPolicy(
+  itemId: string
+): Promise<{ changed: boolean; reason: string }> {
+  try {
+    const item = await prisma.item.findUnique({
+      where: { id: itemId },
+      select: {
+        id: true,
+        ebayListingId: true,
+        ebayOfferId: true,
+        ebayFulfillmentPolicyId: true,
+        ebayShippingAmountCents: true,
+        packageWeightOz: true,
+        packageLengthIn: true,
+        packageWidthIn: true,
+        packageHeightIn: true,
+        packageType: true,
+        ebayShippingClassification: true,
+        ebayCategoryId: true,
+        category: true,
+        ebayShippingOverride: true,
+        ebayFulfillmentPolicyOverrideId: true,
+        price: true,
+        sale: {
+          select: {
+            zip: true,
+            organizer: {
+              select: {
+                id: true,
+                lat: true,
+                lng: true,
+                ebayPolicyMapping: {
+                  select: {
+                    shippingMode: true,
+                    freeShippingOptIn: true,
+                    weightTierMappings: true,
+                    categoryOverrides: true,
+                    heavyOversizedPolicyId: true,
+                    fragilePolicyId: true,
+                    unknownPolicyId: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!item) return { changed: false, reason: 'not-found' };
+    // This function exists specifically for the no-offer case -- ebayOfferId
+    // is deliberately NOT required here (that's resyncItemShippingPolicy's job).
+    if (!item.ebayListingId) return { changed: false, reason: 'no-listing-id' };
+
+    const organizer = item.sale?.organizer;
+    if (!organizer) return { changed: false, reason: 'no-organizer' };
+
+    // Same safety gates as resyncItemShippingPolicy: never auto-price an item
+    // with no weight, and never convert a local-pickup-only listing onto a
+    // shipping policy -- these need the organizer to add a weight / clear the
+    // pickup override, they must not be guessed.
+    if (item.packageWeightOz == null || item.packageWeightOz <= 0) return { changed: false, reason: 'no-weight' };
+    if (item.ebayShippingOverride === 'LOCAL_PICKUP_ONLY') return { changed: false, reason: 'local-pickup' };
+
+    // Don't spend eBay calls when rate-limited.
+    if (isEbayRateLimited()) return { changed: false, reason: 'rate-limited' };
+
+    const accessToken = await refreshEbayAccessToken(organizer.id);
+    if (!accessToken) return { changed: false, reason: 'no-token' };
+
+    const fromZip = item.sale?.zip || null;
+
+    // Authoritative new policy id (provisions FVF-flat via ensureFvfFlatRatePolicy
+    // when needed). Pass a fetcher so resolvePoliciesForItem can look up real ids.
+    const fetchFulfillmentPolicies = async (): Promise<any[]> => {
+      try {
+        const res = await fetch(
+          ebayProxyUrl('/sell/account/v1/fulfillment_policy?marketplace_id=EBAY_US&limit=100'),
+          { headers: { ...ebayUserHeaders(accessToken), ...ebayProxyHeaders() } }
+        );
+        if (res.ok) {
+          trackEbayCall();
+          const data = (await res.json()) as any;
+          return data.fulfillmentPolicies || [];
+        }
+      } catch (err) {
+        console.warn('[eBay ReviseNativeShipping] fulfillment policy fetch failed:', (err as Error).message);
+      }
+      return [];
+    };
+
+    const routing = await resolvePoliciesForItem(
+      organizer.id,
+      {
+        id: item.id,
+        packageWeightOz: item.packageWeightOz,
+        packageLengthIn: item.packageLengthIn != null ? Number(item.packageLengthIn) : null,
+        packageWidthIn: item.packageWidthIn != null ? Number(item.packageWidthIn) : null,
+        packageHeightIn: item.packageHeightIn != null ? Number(item.packageHeightIn) : null,
+        packageType: item.packageType,
+        ebayShippingClassification: item.ebayShippingClassification,
+        ebayCategoryId: item.ebayCategoryId,
+        category: item.category,
+        ebayShippingOverride: item.ebayShippingOverride,
+        ebayFulfillmentPolicyOverrideId: item.ebayFulfillmentPolicyOverrideId,
+        price: item.price ?? null,
+      },
+      { fetchFulfillmentPolicies, fromZip }
+    );
+
+    if ('error' in routing) {
+      return { changed: false, reason: routing.code };
+    }
+
+    // Only re-pin the live listing when the resolved policy id actually differs.
+    if (routing.fulfillmentPolicyId === item.ebayFulfillmentPolicyId) {
+      // Still refresh the rated amount/version so drift detection has current
+      // data on file, matching resyncItemShippingPolicy's own no-change branch.
+      const unchangedShipping = await resolveItemShipping({
+        organizer: { lat: organizer.lat, lng: organizer.lng },
+        mapping: organizer.ebayPolicyMapping,
+        item: {
+          packageWeightOz: item.packageWeightOz,
+          packageLengthIn: item.packageLengthIn != null ? Number(item.packageLengthIn) : null,
+          packageWidthIn: item.packageWidthIn != null ? Number(item.packageWidthIn) : null,
+          packageHeightIn: item.packageHeightIn != null ? Number(item.packageHeightIn) : null,
+          ebayShippingOverride: item.ebayShippingOverride,
+          ebayFulfillmentPolicyOverrideId: item.ebayFulfillmentPolicyOverrideId,
+          ebayShippingClassification: item.ebayShippingClassification,
+          ebayCategoryId: item.ebayCategoryId,
+          packageType: item.packageType,
+          price: item.price ?? null,
+        },
+        fromZip,
+        fetchFulfillmentPolicies,
+      });
+      await prisma.item.update({
+        where: { id: item.id },
+        data: {
+          ebayShippingAmountCents: unchangedShipping.buyerAmountCents,
+          ebayShippingRatedAt: new Date(),
+          ebayRateVersion: currentEbayRateVersion(),
+        },
+      });
+      return { changed: false, reason: 'already-current' };
+    }
+
+    // Trading API ReviseItem -- attaches the resolved Business Policy shipping
+    // profile directly to the listing by ItemID. No Offer object involved.
+    const reviseXml = `<?xml version="1.0" encoding="utf-8"?>
+<ReviseItemRequest xmlns="urn:ebay:apis:eBLBaseComponents">
+  <Item>
+    <ItemID>${item.ebayListingId}</ItemID>
+    <SellerProfiles>
+      <SellerShippingProfile>
+        <ShippingProfileID>${routing.fulfillmentPolicyId}</ShippingProfileID>
+      </SellerShippingProfile>
+    </SellerProfiles>
+  </Item>
+</ReviseItemRequest>`;
+
+    const reviseRes = await fetch(ebayProxyUrl('/ws/api.dll'), {
+      method: 'POST',
+      headers: {
+        'X-EBAY-API-CALL-NAME': 'ReviseItem',
+        'X-EBAY-API-SITEID': '0',
+        'X-EBAY-API-COMPATIBILITY-LEVEL': '967',
+        'X-EBAY-API-APP-NAME': process.env.EBAY_CLIENT_ID || '',
+        'X-EBAY-API-IAF-TOKEN': accessToken,
+        'Content-Type': 'text/xml',
+        ...ebayProxyHeaders(),
+      },
+      body: reviseXml,
+    });
+
+    if (!reviseRes.ok) {
+      const t = await reviseRes.text().catch(() => '');
+      console.warn(`[eBay ReviseNativeShipping] ReviseItem HTTP failed for item ${item.id}: ${reviseRes.status} ${t.slice(0, 300)}`);
+      return { changed: false, reason: `HTTP_${reviseRes.status}` };
+    }
+    trackEbayCall();
+
+    const reviseText = await reviseRes.text();
+    const ack = xmlVal(reviseText, 'Ack');
+    if (ack && ack !== 'Success' && ack !== 'Warning') {
+      const errMsg = xmlVal(reviseText, 'LongMessage') || xmlVal(reviseText, 'ShortMessage') || 'Unknown error';
+      console.warn(`[eBay ReviseNativeShipping] ReviseItem rejected for item ${item.id}: ${ack} ${errMsg}`);
+      return { changed: false, reason: `${ack}:${errMsg}`.slice(0, 120) };
+    }
+
+    // New buyer-facing shipping amount (for drift detection / persistence) --
+    // same computation resyncItemShippingPolicy uses.
+    const shipping = await resolveItemShipping({
+      organizer: { lat: organizer.lat, lng: organizer.lng },
+      mapping: organizer.ebayPolicyMapping,
+      item: {
+        packageWeightOz: item.packageWeightOz,
+        packageLengthIn: item.packageLengthIn != null ? Number(item.packageLengthIn) : null,
+        packageWidthIn: item.packageWidthIn != null ? Number(item.packageWidthIn) : null,
+        packageHeightIn: item.packageHeightIn != null ? Number(item.packageHeightIn) : null,
+        ebayShippingOverride: item.ebayShippingOverride,
+        ebayFulfillmentPolicyOverrideId: item.ebayFulfillmentPolicyOverrideId,
+        ebayShippingClassification: item.ebayShippingClassification,
+        ebayCategoryId: item.ebayCategoryId,
+        packageType: item.packageType,
+        price: item.price ?? null,
+      },
+      fromZip,
+      fetchFulfillmentPolicies,
+    });
+    const buyerAmountCents = shipping.buyerAmountCents;
+
+    await prisma.item.update({
+      where: { id: item.id },
+      data: {
+        ebayFulfillmentPolicyId: routing.fulfillmentPolicyId,
+        ebayShippingAmountCents: buyerAmountCents,
+        ebayShippingRatedAt: new Date(),
+        ebayRateVersion: currentEbayRateVersion(),
+      },
+    });
+    console.log(
+      `[eBay ReviseNativeShipping] item=${item.id} (native listing ${item.ebayListingId}) re-pinned policy ${item.ebayFulfillmentPolicyId ?? '(none)'} -> ${routing.fulfillmentPolicyId} ($${(buyerAmountCents / 100).toFixed(2)})`
+    );
+    return { changed: true, reason: 'repinned' };
+  } catch (err) {
+    console.warn(`[eBay ReviseNativeShipping] reviseNativeListingShippingPolicy threw for item ${itemId}:`, (err as Error).message);
+    return { changed: false, reason: 'exception' };
+  }
+}
+
 /**
  * Helper: Map condition ID to eBay Inventory API condition enum.
  * Trading API IDs → Inventory API string enums (NOT the same scale).

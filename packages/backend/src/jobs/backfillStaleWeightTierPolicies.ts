@@ -50,6 +50,41 @@
  * classifyPolicy()-based pre-filter here; it is what caused the false
  * candidates:0 result described above).
  *
+ * EXTENSION (2026-08-13, same day, Patrick-directed): the sweep above only
+ * ever covered items with BOTH ebayListingId AND ebayOfferId set -- i.e.
+ * items FindA.Sale itself pushed through its Inventory-API publish flow. For
+ * organizer Artifact, 67 AVAILABLE items have ebayListingId set but
+ * ebayOfferId NULL: eBay listings imported/synced INTO FindA.Sale's Item
+ * table (via GetItem/GetMyeBaySelling sync) but never pushed through
+ * FindA.Sale's own publish flow, so no Offer object exists for them.
+ * resyncItemShippingPolicy() immediately bails ('not-live') for these since
+ * it applies policy changes via the Inventory API PUT
+ * /sell/inventory/v1/offer/{offerId}, which only works on offers FindA.Sale
+ * itself created. Patrick's explicit direction: these items exist as real
+ * rows in FindA.Sale's own database and are in scope regardless of how they
+ * got there -- "they're in our system now... make it work."
+ *
+ * Fix: this sweep now examines TWO populations per organizer --
+ *  (a) offer-based items (ebayOfferId set) -> resyncItemShippingPolicy()
+ *      (Inventory API PUT), same as before.
+ *  (b) native/imported items (ebayListingId set, ebayOfferId NULL) ->
+ *      reviseNativeListingShippingPolicy() (ebayController.ts, new
+ *      2026-08-13) -- Trading API ReviseItem, attaches the resolved Business
+ *      Policy shipping profile directly to the listing by ItemID, no Offer
+ *      object required. Counters are tracked SEPARATELY for each population
+ *      (offerBased* / native*) so a result stays diagnosable -- the first
+ *      version of this file's silent failures (candidates:0 due to the
+ *      classification pre-filter, described above) already burned one round
+ *      of debugging this session from a merged, opaque number.
+ *
+ * The native path was NOT live-tested as an actual ReviseItem write as of
+ * 2026-08-13 (only Trading API GetItem, a read, was verified live this
+ * session). opts.nativeLimit and opts.includeOfferBased/opts.includeNative
+ * exist so a caller can isolate and spot-check a small native batch (e.g.
+ * { organizerId, includeOfferBased: false, nativeLimit: 3, dryRun: false })
+ * before running the full backlog -- see reviseNativeListingShippingPolicy's
+ * own doc comment in ebayController.ts for the same guidance.
+ *
  * One-time in nature (once every item has been touched, a re-run finds
  * nothing left to change), but written as a resumable, rate-limit-respecting
  * sweep like resyncShippingDriftSweep since a single organizer can have 100+
@@ -61,7 +96,7 @@
  * route in routes/internal.ts) until itemsExamined hits 0.
  */
 import { prisma } from '../index';
-import { resyncItemShippingPolicy } from '../controllers/ebayController';
+import { resyncItemShippingPolicy, reviseNativeListingShippingPolicy } from '../controllers/ebayController';
 import { isEbayRateLimited } from '../lib/ebayRateLimiter';
 
 export interface BackfillStaleWeightTierExample {
@@ -69,107 +104,150 @@ export interface BackfillStaleWeightTierExample {
   title: string;
   oldPolicyId: string | null;
   repinned: boolean;
+  /** Which population this item came from -- 'offer' (Inventory API) or 'native' (Trading API ReviseItem). */
+  kind: 'offer' | 'native';
 }
 
 export interface BackfillStaleWeightTierResult {
-  /** Live, weighted, non-local-pickup items matching the base query this sweep (candidate pool). */
+  /** Live, weighted, non-local-pickup items matching the base query this sweep (candidate pool, both populations combined). */
   itemsExamined: number;
-  /** Distinct organizers represented among itemsExamined. */
+  /** Distinct organizers represented among itemsExamined (both populations combined). */
   organizersExamined: number;
+  /** Offer-based candidates examined (ebayOfferId set) -- resyncItemShippingPolicy path. */
+  offerBasedExamined: number;
+  /** Native/imported candidates examined (ebayListingId set, ebayOfferId NULL) -- reviseNativeListingShippingPolicy path. */
+  nativeExamined: number;
   /**
-   * In a REAL run: same as itemsExamined (every matching item gets a real resyncItemShippingPolicy
-   * attempt -- there is no pre-classification step anymore, see the file header for why). In a
-   * DRY RUN: also itemsExamined -- this is a COUNT-ONLY preview. There is no cheap local recompute
-   * available here (unlike resyncShippingDrift.ts's resolveItemShipping), so a dry run cannot predict
-   * which of these items will actually change without calling resyncItemShippingPolicy itself, which
-   * makes real eBay calls. Do not read `repinned` as meaningful in a dry run -- it is always 0.
+   * In a REAL run: same as itemsExamined (every matching item gets a real resync/revise
+   * attempt -- there is no pre-classification step, see file header for why). In a DRY RUN:
+   * also itemsExamined -- this is a COUNT-ONLY preview. There is no cheap local recompute
+   * available here (unlike resyncShippingDrift.ts's resolveItemShipping), so a dry run cannot
+   * predict which of these items will actually change without calling resync/revise itself,
+   * which makes real eBay calls. Do not read `repinned` as meaningful in a dry run -- it is
+   * always 0.
    */
   candidates: number;
-  /** Items resyncItemShippingPolicy actually re-pinned to a different policy. Always 0 in a dry run. */
+  /** Items actually re-pinned to a different policy (both populations combined). Always 0 in a dry run. */
   repinned: number;
-  /** Items examined that resulted in no change (already correct) or a non-fatal per-item failure. Always 0 in a dry run. */
+  /** Offer-based items actually re-pinned. Always 0 in a dry run. */
+  offerBasedRepinned: number;
+  /** Native items actually re-pinned. Always 0 in a dry run. */
+  nativeRepinned: number;
+  /** Items examined that resulted in no change (already correct) or a non-fatal per-item failure (both populations combined). Always 0 in a dry run. */
   skipped: number;
   /** True if the eBay daily call budget ran out mid-sweep (loop short-circuited; re-run later to resume). */
   rateLimited: boolean;
-  /** True if no eBay calls or writes were performed (preview only -- itemsExamined/organizersExamined come from a DB read alone). */
+  /** True if no eBay calls or writes were performed (preview only -- counts come from a DB read alone). */
   dryRun: boolean;
-  /** Up to 15 example item results for handoff reporting. */
+  /** Up to 15 example item results per population for handoff reporting. */
   examples: BackfillStaleWeightTierExample[];
 }
 
 /**
  * Sweep live listings for a stale or missing eBay fulfillment policy and
  * re-pin them onto the current routing cascade. See file header for the
- * 2026-08-13 design correction (no stored-field pre-filter).
+ * 2026-08-13 design corrections (no stored-field pre-filter; native/no-offer
+ * listings now included via the Trading API ReviseItem path).
  *
- * @param opts.limit        Max candidate items to examine (default 200).
- * @param opts.dryRun        When true, only counts candidates via a DB read -- makes
- *                            no eBay calls and no writes. See BackfillStaleWeightTierResult
- *                            doc comments: repinned/skipped are always 0 in a dry run.
- * @param opts.organizerId   Scope the sweep to a single organizer (e.g. the initial
- *                            Artifact run, organizerId cmnxueoas0005tfv8brnc0kky). Omit
- *                            to sweep every organizer with a matching item.
+ * @param opts.limit               Max offer-based candidate items to examine (default 200).
+ * @param opts.nativeLimit         Max native/no-offer candidate items to examine (default: same as opts.limit).
+ *                                   Set separately from `limit` to run a small, isolated first test of the
+ *                                   native path (see file header / reviseNativeListingShippingPolicy doc comment).
+ * @param opts.includeOfferBased   Whether to examine offer-based items at all (default true).
+ * @param opts.includeNative       Whether to examine native/no-offer items at all (default true).
+ * @param opts.dryRun               When true, only counts candidates via a DB read -- makes
+ *                                   no eBay calls and no writes. See BackfillStaleWeightTierResult
+ *                                   doc comments: repinned/skipped are always 0 in a dry run.
+ * @param opts.organizerId          Scope the sweep to a single organizer (e.g. the initial
+ *                                   Artifact run, organizerId cmnxueoas0005tfv8brnc0kky). Omit
+ *                                   to sweep every organizer with a matching item.
  */
 export async function backfillStaleWeightTierPoliciesSweep(opts?: {
   limit?: number;
+  nativeLimit?: number;
+  includeOfferBased?: boolean;
+  includeNative?: boolean;
   dryRun?: boolean;
   organizerId?: string;
 }): Promise<BackfillStaleWeightTierResult> {
   const limit = opts?.limit ?? 200;
+  const nativeLimit = opts?.nativeLimit ?? limit;
+  const includeOfferBased = opts?.includeOfferBased ?? true;
+  const includeNative = opts?.includeNative ?? true;
   const dryRun = opts?.dryRun ?? false;
 
-  // Candidate items: live, weighted, not local-pickup-only -- same base gating
-  // resyncItemShippingPolicy itself enforces (it would otherwise return
-  // 'not-live'/'no-weight'/'local-pickup' for these), checked here too so the sweep
-  // doesn't spend a call on an item it already knows will be a no-op. Deliberately NOT
-  // filtering on ebayFulfillmentPolicyId -- a NULL value is exactly one of the cases
-  // this sweep exists to fix (see file header).
-  const items = await prisma.item.findMany({
-    where: {
-      ebayListingId: { not: null },
-      ebayOfferId: { not: null },
-      status: 'AVAILABLE',
-      packageWeightOz: { gt: 0 },
-      OR: [{ ebayShippingOverride: null }, { ebayShippingOverride: { not: 'LOCAL_PICKUP_ONLY' } }],
-      // Sale.organizerId is a required (non-nullable) scalar -- "any sale" needs no
-      // filter at all here; items with no sale are excluded downstream in the loop below
-      // (organizerId ?? skip), matching resyncShippingDrift.ts's own orphan-guard pattern.
-      ...(opts?.organizerId ? { sale: { organizerId: opts.organizerId } } : {}),
-    },
-    take: limit,
-    select: {
-      id: true,
-      title: true,
-      ebayFulfillmentPolicyId: true,
-      sale: { select: { organizerId: true } },
-    },
-  });
+  // Shared base gating -- same conditions resyncItemShippingPolicy /
+  // reviseNativeListingShippingPolicy themselves enforce (no-weight and
+  // local-pickup-only items would otherwise return a no-op 'no-weight' /
+  // 'local-pickup' reason), checked here too so the sweep doesn't spend a
+  // call on an item it already knows will be a no-op. Deliberately NOT
+  // filtering on ebayFulfillmentPolicyId -- a NULL value is exactly one of
+  // the cases this sweep exists to fix (see file header).
+  const baseWhere = {
+    status: 'AVAILABLE' as const,
+    packageWeightOz: { gt: 0 },
+    OR: [{ ebayShippingOverride: null }, { ebayShippingOverride: { not: 'LOCAL_PICKUP_ONLY' } }],
+    // Sale.organizerId is a required (non-nullable) scalar -- "any sale" needs no
+    // filter at all here; items with no sale are excluded downstream (organizer
+    // relation missing -> resync/revise both return 'no-organizer').
+    ...(opts?.organizerId ? { sale: { organizerId: opts.organizerId } } : {}),
+  };
 
-  const itemsExamined = items.length;
+  const selectShape = {
+    id: true,
+    title: true,
+    ebayFulfillmentPolicyId: true,
+    sale: { select: { organizerId: true } },
+  } as const;
+
+  const offerBasedItems = includeOfferBased
+    ? await prisma.item.findMany({
+        where: { ...baseWhere, ebayListingId: { not: null }, ebayOfferId: { not: null } },
+        take: limit,
+        select: selectShape,
+      })
+    : [];
+
+  const nativeItems = includeNative
+    ? await prisma.item.findMany({
+        where: { ...baseWhere, ebayListingId: { not: null }, ebayOfferId: null },
+        take: nativeLimit,
+        select: selectShape,
+      })
+    : [];
+
+  const offerBasedExamined = offerBasedItems.length;
+  const nativeExamined = nativeItems.length;
+  const itemsExamined = offerBasedExamined + nativeExamined;
+
   const organizerIds = new Set<string>();
-  for (const item of items) {
+  for (const item of [...offerBasedItems, ...nativeItems]) {
     if (item.sale?.organizerId) organizerIds.add(item.sale.organizerId);
   }
   const organizersExamined = organizerIds.size;
 
   const examples: BackfillStaleWeightTierExample[] = [];
+  const EXAMPLES_PER_KIND = 15;
 
   if (dryRun) {
     // Count-only preview -- no eBay calls, no writes. See result doc comments above.
-    for (const item of items) {
-      if (examples.length >= 15) break;
-      examples.push({
-        itemId: item.id,
-        title: item.title,
-        oldPolicyId: item.ebayFulfillmentPolicyId,
-        repinned: false,
-      });
+    for (const item of offerBasedItems) {
+      if (examples.filter(e => e.kind === 'offer').length >= EXAMPLES_PER_KIND) break;
+      examples.push({ itemId: item.id, title: item.title, oldPolicyId: item.ebayFulfillmentPolicyId, repinned: false, kind: 'offer' });
+    }
+    for (const item of nativeItems) {
+      if (examples.filter(e => e.kind === 'native').length >= EXAMPLES_PER_KIND) break;
+      examples.push({ itemId: item.id, title: item.title, oldPolicyId: item.ebayFulfillmentPolicyId, repinned: false, kind: 'native' });
     }
     return {
       itemsExamined,
       organizersExamined,
+      offerBasedExamined,
+      nativeExamined,
       candidates: itemsExamined,
       repinned: 0,
+      offerBasedRepinned: 0,
+      nativeRepinned: 0,
       skipped: 0,
       rateLimited: false,
       dryRun: true,
@@ -177,11 +255,12 @@ export async function backfillStaleWeightTierPoliciesSweep(opts?: {
     };
   }
 
-  let repinned = 0;
+  let offerBasedRepinned = 0;
+  let nativeRepinned = 0;
   let skipped = 0;
   let rateLimited = false;
 
-  for (const item of items) {
+  for (const item of offerBasedItems) {
     if (isEbayRateLimited()) {
       rateLimited = true;
       break;
@@ -189,29 +268,51 @@ export async function backfillStaleWeightTierPoliciesSweep(opts?: {
     try {
       const res = await resyncItemShippingPolicy(item.id);
       if (res.changed) {
-        repinned++;
-        if (examples.length < 15) {
-          examples.push({
-            itemId: item.id,
-            title: item.title,
-            oldPolicyId: item.ebayFulfillmentPolicyId,
-            repinned: true,
-          });
+        offerBasedRepinned++;
+        if (examples.filter(e => e.kind === 'offer').length < EXAMPLES_PER_KIND) {
+          examples.push({ itemId: item.id, title: item.title, oldPolicyId: item.ebayFulfillmentPolicyId, repinned: true, kind: 'offer' });
         }
       } else {
         skipped++;
       }
     } catch (err) {
-      console.warn(`[BackfillStaleWeightTier] item ${item.id} failed (non-fatal): ${(err as Error).message}`);
+      console.warn(`[BackfillStaleWeightTier] offer-based item ${item.id} failed (non-fatal): ${(err as Error).message}`);
       skipped++;
+    }
+  }
+
+  if (!rateLimited) {
+    for (const item of nativeItems) {
+      if (isEbayRateLimited()) {
+        rateLimited = true;
+        break;
+      }
+      try {
+        const res = await reviseNativeListingShippingPolicy(item.id);
+        if (res.changed) {
+          nativeRepinned++;
+          if (examples.filter(e => e.kind === 'native').length < EXAMPLES_PER_KIND) {
+            examples.push({ itemId: item.id, title: item.title, oldPolicyId: item.ebayFulfillmentPolicyId, repinned: true, kind: 'native' });
+          }
+        } else {
+          skipped++;
+        }
+      } catch (err) {
+        console.warn(`[BackfillStaleWeightTier] native item ${item.id} failed (non-fatal): ${(err as Error).message}`);
+        skipped++;
+      }
     }
   }
 
   return {
     itemsExamined,
     organizersExamined,
+    offerBasedExamined,
+    nativeExamined,
     candidates: itemsExamined,
-    repinned,
+    repinned: offerBasedRepinned + nativeRepinned,
+    offerBasedRepinned,
+    nativeRepinned,
     skipped,
     rateLimited,
     dryRun: false,
