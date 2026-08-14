@@ -1238,10 +1238,10 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
                           crop boundary) still shows regardless, it isn't optional. */}
                       {layer2 && (
                         <div
-                          className="absolute border border-dashed border-amber-400/70"
+                          className="absolute border border-dashed border-cyan-400/80"
                           style={{ left: layer2.left, top: layer2.top, width: layer2.width, height: layer2.height }}
                         >
-                          <div className="absolute -bottom-5 left-1/2 -translate-x-1/2 text-amber-300/80 text-[10px] whitespace-nowrap">
+                          <div className="absolute -bottom-5 left-1/2 -translate-x-1/2 text-cyan-300/90 text-[10px] whitespace-nowrap">
                             {CROP_GUIDE_RATIOS[cropGuideOverlay as Exclude<CropGuideOverlay, 'none'>].label}
                           </div>
                         </div>
