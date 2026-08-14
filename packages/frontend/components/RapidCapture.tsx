@@ -1238,7 +1238,7 @@ const RapidCapture: React.FC<RapidCaptureProps> = ({
                           crop boundary) still shows regardless, it isn't optional. */}
                       {layer2 && (
                         <div
-                          className="absolute border border-dashed border-cyan-400/80"
+                          className="absolute border border-dashed border-cyan-400/80 shadow-[0_0_3px_1px_rgba(0,0,0,0.35)]"
                           style={{ left: layer2.left, top: layer2.top, width: layer2.width, height: layer2.height }}
                         >
                           <div className="absolute -bottom-5 left-1/2 -translate-x-1/2 text-cyan-300/90 text-[10px] whitespace-nowrap">
