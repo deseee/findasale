@@ -2753,6 +2753,9 @@ const AddItemsDetailPage = () => {
                               ebayCategoryId: item.ebayCategoryId || '',
                               ebayCategoryName: item.ebayCategoryName || '',
                               packageWeightOz: item.packageWeightOz != null ? item.packageWeightOz.toString() : '',
+                              packageLengthIn: item.packageLengthIn != null ? item.packageLengthIn.toString() : '',
+                              packageWidthIn: item.packageWidthIn != null ? item.packageWidthIn.toString() : '',
+                              packageHeightIn: item.packageHeightIn != null ? item.packageHeightIn.toString() : '',
                             }}));
                           }
                         }}
