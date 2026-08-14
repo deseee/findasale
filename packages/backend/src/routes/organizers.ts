@@ -370,19 +370,6 @@ router.patch('/me', authenticate, async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ message: 'Organizer access required.' });
     }
 
-    // (2026-08-14 diagnostic, temporary) Best-offer defaults save reports success but
-    // the two columns land null -- updatedAt DOES bump, so the row is genuinely being
-    // written, no other code path touches these fields, and no schema/write-logic bug was
-    // found on read-through. The only way Prisma writes literal null here is if the
-    // request body itself carried null for both fields. Logging the raw incoming values
-    // (never previously logged) to see exactly what the server receives on the next
-    // attempt, before removing this once the real cause is confirmed.
-    if ('defaultBestOfferAcceptPct' in req.body || 'defaultBestOfferDeclinePct' in req.body) {
-      console.log(
-        `[BestOfferDefaults] PATCH /organizers/me raw body: defaultBestOfferAcceptPct=${JSON.stringify(req.body.defaultBestOfferAcceptPct)} (${typeof req.body.defaultBestOfferAcceptPct}), defaultBestOfferDeclinePct=${JSON.stringify(req.body.defaultBestOfferDeclinePct)} (${typeof req.body.defaultBestOfferDeclinePct}), userId=${req.user?.id}`
-      );
-    }
-
     const validatedData = organizerProfileSchema.parse(req.body);
     const { businessName, phone, bio, tagline, yearFounded, onboardingComplete, website, facebook, instagram, etsy, twitterUrl, tiktokUrl, youtubeUrl, pinterestUrl, venmoHandle, zelleHandle, pickupWindows, brandLogoUrl, brandPrimaryColor, brandSecondaryColor, customStorefrontSlug, brandFontFamily, brandBannerImageUrl, brandAccentColor, timezone, byAppointment, organizerTypes, ebayDefaultShippingPolicyId, ebayStoreUrl, address, skuAppendDate, skuAppendCost, skuAppendLocation, showFollowerCount, fbCatalogEnabled, defaultBestOfferAcceptPct, defaultBestOfferDeclinePct, autosendPriceAvailabilityEnabled } = validatedData;
 

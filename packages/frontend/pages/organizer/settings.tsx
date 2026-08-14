@@ -418,15 +418,24 @@ const OrganizerSettingsPage = () => {
           setOrganizerTypes(response.data.organizerTypes || []);
           setFbCatalogEnabled(response.data.fbCatalogEnabled || false);
           setFbCatalogOrganizerId(response.data.id || null);
+          // BUG FIX (2026-08-14): previously fell back to '' when the organizer had no saved
+          // default yet. The inputs' placeholder="10"/"25" text then LOOKED identical to a real
+          // typed value (confirmed via live repro: find-tool/a11y snapshot and casual glance both
+          // read the placeholder as if it were the value), so Patrick clicked Save without typing
+          // anything and the app silently PATCHed {defaultBestOfferAcceptPct: null, ...} every time
+          // -- confirmed via captured XHR body and a live GET showing both fields still null in DB
+          // after 3 separate "saved" attempts. Fix: pre-fill the actual editable state with the
+          // suggested 10/25 defaults (matching the card's own copy) so Save always sends a real,
+          // intentional value instead of silently no-op'ing to null.
           setDefaultBestOfferAcceptPct(
             response.data.defaultBestOfferAcceptPct !== null && response.data.defaultBestOfferAcceptPct !== undefined
               ? String(response.data.defaultBestOfferAcceptPct)
-              : ''
+              : '10'
           );
           setDefaultBestOfferDeclinePct(
             response.data.defaultBestOfferDeclinePct !== null && response.data.defaultBestOfferDeclinePct !== undefined
               ? String(response.data.defaultBestOfferDeclinePct)
-              : ''
+              : '25'
           );
           setAutosendPriceAvailabilityEnabled(response.data.autosendPriceAvailabilityEnabled || false);
         }
