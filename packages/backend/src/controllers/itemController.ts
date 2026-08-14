@@ -850,9 +850,20 @@ export const getItemForEdit = async (req: AuthRequest, res: Response) => {
 
     const { id } = req.params;
 
+    // (2026-08-14 bug fix) allowBestOffer/bestOfferAutoAcceptAmt/bestOfferMinimumAmt are
+    // deliberately NOT in the shared ITEM_DETAIL_SELECT -- that select is also used by the
+    // PUBLIC shopper-facing getItemById below, and these are the seller's accept/decline
+    // negotiation thresholds; exposing them to a shopper would let them lowball exactly at
+    // the floor. Extend the select with those 3 fields ONLY here, on the organizer-only,
+    // ownership-checked edit endpoint -- never add them to the shared constant itself.
+    // Root cause this was covering for: updateItem writes these correctly (confirmed via
+    // direct DB read after a real save), but no read path ever returned them, so every
+    // refetch of this endpoint (including the one the eBay-push success handler triggers
+    // via queryClient.invalidateQueries) reset the edit-item form's percent fields back to
+    // blank, because the reverse dollars-to-percent calc always saw undefined amounts.
     const item = await prisma.item.findUnique({
       where: { id },
-      select: ITEM_DETAIL_SELECT
+      select: { ...ITEM_DETAIL_SELECT, allowBestOffer: true, bestOfferAutoAcceptAmt: true, bestOfferMinimumAmt: true }
     });
 
     if (!item) {
