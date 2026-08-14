@@ -2552,6 +2552,7 @@ export const pushSaleToEbay = async (req: AuthRequest, res: Response) => {
             ebayShippingOverride: item.ebayShippingOverride,
             ebayFulfillmentPolicyOverrideId: item.ebayFulfillmentPolicyOverrideId,
             price: item.price ?? null,
+            packageConfirmedByOrganizer: (item as any).packageConfirmedByOrganizer,
           },
           { fetchFulfillmentPolicies: getFulfillmentPoliciesOnce, fromZip: sale.zip || null }
         );
@@ -4073,6 +4074,10 @@ async function resolvePoliciesForItem(
     ebayFulfillmentPolicyOverrideId?: string | null;
     /** Item's current listing price -- gates eBay Standard Envelope flat-rate eligibility. */
     price?: number | null;
+    /** (2026-08-14) Organizer-confirmed weight/dims vs. an unconfirmed AI estimate --
+     *  gates the UNKNOWN-classification fallback below (see that comment). Optional,
+     *  permissive-by-default: undefined behaves as before. */
+    packageConfirmedByOrganizer?: boolean | null;
   },
   smartPickContext?: {
     fetchFulfillmentPolicies?: () => Promise<any[]>;
@@ -4476,8 +4481,34 @@ async function resolvePoliciesForItem(
     }
   }
 
-  // 3. UNKNOWN classification fallback
-  if (!fulfillmentPolicyId && (item.ebayShippingClassification === 'UNKNOWN' || !item.ebayShippingClassification) && mapping.unknownPolicyId) {
+  // 3. UNKNOWN classification fallback -- ONLY when we genuinely have nothing to
+  // compute a rate from. classifyEbayShipping() reads item.category/item.tags against a
+  // small hardcoded keyword list -- categories like "Musical Instruments & Gear" or
+  // "Business & Industrial:...:Pipe Fittings" don't match ANY of it and fall through to
+  // UNKNOWN, but that says nothing about whether the item is actually shippable. An item
+  // with a real, organizer-entered weight + full dimensions isn't unknown -- it's just a
+  // category the classifier doesn't recognize. Confirmed 2026-08-14: a fully-measured
+  // ukulele (24oz, 19x8x3in, packageConfirmedByOrganizer=true) was silently landing on
+  // this organizer's unknownPolicyId, which turned out to be eBay's real "Local Pickup
+  // ONLY" policy (verified live via GET /sell/account/v1/fulfillment_policy) -- giving
+  // real buyers zero shipping option on an obviously shippable item. Gate this branch to
+  // only fire when weight or dims are actually missing; a measured item falls through to
+  // step 4 (computed flat rate) below instead, which itself hard-blocks anything too big/
+  // heavy for every modeled carrier (via ensureFvfFlatRatePolicy -> ShippingHardBlockError)
+  // rather than silently defaulting a large/expensive item to local-pickup-only.
+  const hasMeasuredPackage =
+    item.packageWeightOz != null &&
+    item.packageWeightOz > 0 &&
+    item.packageLengthIn != null &&
+    item.packageWidthIn != null &&
+    item.packageHeightIn != null &&
+    item.packageConfirmedByOrganizer !== false;
+  if (
+    !fulfillmentPolicyId &&
+    (item.ebayShippingClassification === 'UNKNOWN' || !item.ebayShippingClassification) &&
+    mapping.unknownPolicyId &&
+    !hasMeasuredPackage
+  ) {
     fulfillmentPolicyId = mapping.unknownPolicyId;
     routingReason = 'classification:UNKNOWN';
     cascadeStep = 'classification';
@@ -4691,6 +4722,7 @@ export async function resyncItemShippingPolicy(
         packageWidthIn: true,
         packageHeightIn: true,
         packageType: true,
+        packageConfirmedByOrganizer: true,
         ebayShippingClassification: true,
         ebayCategoryId: true,
         category: true,
@@ -4783,6 +4815,7 @@ export async function resyncItemShippingPolicy(
         ebayShippingOverride: item.ebayShippingOverride,
         ebayFulfillmentPolicyOverrideId: item.ebayFulfillmentPolicyOverrideId,
         price: item.price ?? null,
+        packageConfirmedByOrganizer: item.packageConfirmedByOrganizer,
       },
       { fetchFulfillmentPolicies, fromZip }
     );
@@ -4806,6 +4839,7 @@ export async function resyncItemShippingPolicy(
         ebayCategoryId: item.ebayCategoryId,
         packageType: item.packageType, // ADR-103 Phase 4
         price: item.price ?? null,
+        packageConfirmedByOrganizer: item.packageConfirmedByOrganizer,
       },
       fromZip,
       // (roadmap #624) Same fetcher resolvePoliciesForItem just used above. Without it the
@@ -4908,6 +4942,7 @@ export async function reviseNativeListingShippingPolicy(
         packageWidthIn: true,
         packageHeightIn: true,
         packageType: true,
+        packageConfirmedByOrganizer: true,
         ebayShippingClassification: true,
         ebayCategoryId: true,
         category: true,
@@ -4997,6 +5032,7 @@ export async function reviseNativeListingShippingPolicy(
         ebayShippingOverride: item.ebayShippingOverride,
         ebayFulfillmentPolicyOverrideId: item.ebayFulfillmentPolicyOverrideId,
         price: item.price ?? null,
+        packageConfirmedByOrganizer: item.packageConfirmedByOrganizer,
       },
       { fetchFulfillmentPolicies, fromZip }
     );
@@ -5023,6 +5059,7 @@ export async function reviseNativeListingShippingPolicy(
           ebayCategoryId: item.ebayCategoryId,
           packageType: item.packageType,
           price: item.price ?? null,
+          packageConfirmedByOrganizer: item.packageConfirmedByOrganizer,
         },
         fromZip,
         fetchFulfillmentPolicies,
@@ -5097,6 +5134,7 @@ export async function reviseNativeListingShippingPolicy(
         ebayCategoryId: item.ebayCategoryId,
         packageType: item.packageType,
         price: item.price ?? null,
+        packageConfirmedByOrganizer: item.packageConfirmedByOrganizer,
       },
       fromZip,
       fetchFulfillmentPolicies,

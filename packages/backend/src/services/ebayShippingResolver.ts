@@ -107,6 +107,15 @@ export interface ShippingResolverItem {
    *  (evaluateStandardEnvelope requires priceUsd < the envelope max -- see
    *  ebayRateEstimateService.ts). */
   price?: number | null;
+  /** (2026-08-14) Whether the organizer has explicitly confirmed packageWeightOz/dims
+   *  (vs. an unconfirmed AI estimate). OPTIONAL and permissive-by-default: callers that
+   *  don't pass it (the shipping-preview endpoints, where the caller-provided numbers ARE
+   *  the confirmation for preview purposes) are unaffected. Real DB-backed callers
+   *  (resolvePoliciesForItem's push/resync paths) pass the real flag so an unconfirmed,
+   *  possibly-fabricated AI estimate (see ebayController.ts's UNKNOWN-fallback comment for
+   *  the "guitar priced from a 3oz/5x4x2in guess" example) can never silently escape the
+   *  organizer's UNKNOWN-classification safety policy. */
+  packageConfirmedByOrganizer?: boolean | null;
 }
 
 /** Round a dollar amount to whole cents (avoids float drift before *100). */
@@ -285,10 +294,22 @@ export async function resolveItemShipping(input: {
         return { fulfillmentPolicyId: match.policyId, buyerAmountCents: 0, policyName: null, source: 'custom-override' };
       }
     }
-    if ((item.ebayShippingClassification === 'UNKNOWN' || !item.ebayShippingClassification) && mapping?.unknownPolicyId) {
+    // (2026-08-14) Only fall back to the organizer's UNKNOWN policy when we genuinely
+    // have nothing to compute a rate from -- mirrors the same gate in ebayController.ts
+    // resolvePoliciesForItem (the live push/resync path) so preview and push can never
+    // disagree, per this file's own header contract. See that file's comment for the
+    // full root-cause writeup (classifyEbayShipping's narrow keyword list vs. a real
+    // organizer-measured weight+dims).
+    const hasMeasuredPackage = weightOz > 0 && dims != null && item.packageConfirmedByOrganizer !== false;
+    if (
+      (item.ebayShippingClassification === 'UNKNOWN' || !item.ebayShippingClassification) &&
+      mapping?.unknownPolicyId &&
+      !hasMeasuredPackage
+    ) {
       return { fulfillmentPolicyId: mapping.unknownPolicyId, buyerAmountCents: 0, policyName: null, source: 'custom-override' };
     }
-    // No oddball override matched — always use the computed rate (ADR-102 primary path).
+    // No oddball override matched (or the item is measured enough to compute a real
+    // rate) — always use the computed rate (ADR-102 primary path).
     return fvfFlat();
   }
 

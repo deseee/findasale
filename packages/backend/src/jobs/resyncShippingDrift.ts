@@ -117,6 +117,11 @@ export async function resyncShippingDriftSweep(opts?: {
       // Needed so the local recompute can evaluate eBay Standard Envelope eligibility
       // (requires the item's price), same as the live listing-push path.
       price: true,
+      // (2026-08-14) Needed so this cheap local recompute applies the SAME UNKNOWN-
+      // classification gate ebayController.ts's resolvePoliciesForItem / resyncItemShippingPolicy
+      // now use -- otherwise this sweep's drift comparison could disagree with what the real
+      // re-pin call would do for an item whose weight/dims exist but were never organizer-confirmed.
+      packageConfirmedByOrganizer: true,
       sale: {
         select: {
           zip: true,
@@ -197,6 +202,7 @@ export async function resyncShippingDriftSweep(opts?: {
           ebayCategoryId: item.ebayCategoryId,
           packageType: item.packageType,
           price: item.price ?? null,
+          packageConfirmedByOrganizer: item.packageConfirmedByOrganizer,
         },
         fromZip: item.sale?.zip ?? null,
       });
