@@ -800,6 +800,116 @@ const heal25005: Healer = async (ctx) => {
 };
 
 /**
+ * 25007 -- offer/listing references a fulfillment policy eBay no longer recognizes
+ * ("The eBay listing associated with the inventory item, or the unpublished offer
+ * has invalid data in the associated Fulfillment policy. You've provided an invalid
+ * shipping policy."). Confirmed live 2026-08-14 (Vivitar-flash item
+ * cmsaozd8600vnjgvqfajiohfm, offer 221915356011): the offer's stored
+ * listingPolicies.fulfillmentPolicyId (295437971011) 404s ("No Record Found") on a
+ * direct GET /sell/account/v1/fulfillment_policy/{id} -- the policy itself no longer
+ * exists on eBay (organizer-side deletion, or a prior provisioning left a dead
+ * reference), and nothing previously re-resolved a fresh one before retrying publish.
+ * A prior fix (S1184, referenced above at EbayPublishResult.lastErrorMessage) only
+ * surfaced this error's real text to the toast -- it did not repair it, so the item
+ * stayed permanently stuck (ebayNeedsReview=true excludes it from
+ * ebayStuckOfferRetryCron's own retry pool once flagged).
+ *
+ * Fix: re-run the SAME routing cascade the original push used (resolvePoliciesForItem,
+ * lazily imported from ebayController -- same pattern heal25005 already uses above, to
+ * avoid a static circular dependency), apply the freshly-resolved policy id to the
+ * existing offer (applyFulfillmentPolicyToOffer, the same primitive the resync/revise
+ * paths already use), and retry publish.
+ */
+const heal25007: Healer = async (ctx) => {
+  try {
+    const dbItem = await prisma.item.findUnique({
+      where: { id: ctx.item.id },
+      select: {
+        packageWeightOz: true,
+        packageLengthIn: true,
+        packageWidthIn: true,
+        packageHeightIn: true,
+        packageType: true,
+        packageConfirmedByOrganizer: true,
+        ebayShippingClassification: true,
+        ebayCategoryId: true,
+        category: true,
+        ebayShippingOverride: true,
+        ebayFulfillmentPolicyOverrideId: true,
+        price: true,
+        sale: { select: { zip: true, organizerId: true } },
+      },
+    });
+    const organizerId = dbItem?.sale?.organizerId;
+    if (!dbItem || !organizerId) {
+      console.warn(`[eBay SelfHeal 25007] item ${ctx.item.id}: could not load item/organizer -- bailing`);
+      return { published: false, retry: false };
+    }
+
+    const fetchFulfillmentPolicies = async (): Promise<any[]> => {
+      try {
+        const res = await ebayFetch(
+          '/sell/account/v1/fulfillment_policy?marketplace_id=EBAY_US&limit=100',
+          ctx.accessToken,
+          { method: 'GET' }
+        );
+        if (res.ok) {
+          const data = (await res.json()) as any;
+          return data.fulfillmentPolicies || [];
+        }
+      } catch (err) {
+        console.warn('[eBay SelfHeal 25007] fulfillment policy fetch failed:', (err as Error).message);
+      }
+      return [];
+    };
+
+    const { resolvePoliciesForItem, applyFulfillmentPolicyToOffer } = await import('../controllers/ebayController');
+    const routing = await resolvePoliciesForItem(
+      organizerId,
+      {
+        id: ctx.item.id,
+        packageWeightOz: dbItem.packageWeightOz,
+        packageLengthIn: dbItem.packageLengthIn != null ? Number(dbItem.packageLengthIn) : null,
+        packageWidthIn: dbItem.packageWidthIn != null ? Number(dbItem.packageWidthIn) : null,
+        packageHeightIn: dbItem.packageHeightIn != null ? Number(dbItem.packageHeightIn) : null,
+        packageType: dbItem.packageType,
+        ebayShippingClassification: dbItem.ebayShippingClassification,
+        ebayCategoryId: dbItem.ebayCategoryId,
+        category: dbItem.category,
+        ebayShippingOverride: dbItem.ebayShippingOverride,
+        ebayFulfillmentPolicyOverrideId: dbItem.ebayFulfillmentPolicyOverrideId,
+        price: dbItem.price != null ? Number(dbItem.price) : null,
+        packageConfirmedByOrganizer: dbItem.packageConfirmedByOrganizer,
+      },
+      { fetchFulfillmentPolicies, fromZip: dbItem.sale?.zip ?? null }
+    );
+
+    if ('error' in routing) {
+      console.warn(`[eBay SelfHeal 25007] item ${ctx.item.id}: routing failed (${routing.code}) -- bailing`);
+      return { published: false, retry: false };
+    }
+
+    const applied = await applyFulfillmentPolicyToOffer(ctx.offerId, routing.fulfillmentPolicyId, ctx.accessToken);
+    if (!applied.success) {
+      console.warn(
+        `[eBay SelfHeal 25007] item ${ctx.item.id}: failed to apply fresh policy ${routing.fulfillmentPolicyId} to offer ${ctx.offerId}`
+      );
+      return { published: false, retry: false };
+    }
+
+    console.log(
+      `[eBay SelfHeal 25007] item ${ctx.item.id}: applied fresh fulfillment policy ${routing.fulfillmentPolicyId} to offer ${ctx.offerId} -- retrying publish`
+    );
+    const pub = await attemptPublish(ctx);
+    if (pub.ok) return { published: true, listingId: pub.listingId, retry: false };
+    return { published: false, retry: true };
+  } catch (err) {
+    console.error('[eBay SelfHeal 25007] threw:', (err as Error).message);
+    return { published: false, retry: false };
+  }
+};
+
+/**
  * Registry mapping eBay errorId → healer. New eBay error codes are added here in
  * exactly one place (ADR constraint). Heal order is emergent: the loop reads the
  * returned errorId and dispatches to the matching entry.
@@ -809,6 +919,7 @@ const HEALERS: Record<string, Healer> = {
   '25021': heal25021,
   '25101': heal25101,
   '25002': heal25002,
+  '25007': heal25007,
 };
 
 /** Ordered errorIds to probe in an error body (registry order). */

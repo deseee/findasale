@@ -4058,7 +4058,11 @@ interface PolicyRoutingResult {
   routingReason: string;
 }
 
-async function resolvePoliciesForItem(
+// Exported (2026-08-14) so ebayPublishService.ts's 25007 self-healer can lazily import
+// and reuse this SAME routing cascade rather than re-deriving it -- mirrors the existing
+// lazy-import pattern that file already uses for suggestEbayCategoryForTitle (heal25005),
+// which avoids a static circular dependency (ebayPublishService is itself imported here).
+export async function resolvePoliciesForItem(
   organizerId: string,
   item: {
     id: string;
