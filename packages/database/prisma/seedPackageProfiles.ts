@@ -55,6 +55,19 @@ const PROFILES: Profile[] = [
 
   // Books / media
   { category: 'Books', keyword: 'book', weightOz: 20, lengthIn: 10, widthIn: 8, heightIn: 2, packageType: 'PACKAGE_THICK_ENVELOPE', confidence: 0.7 },
+  // Magazines -- added 2026-08-15 (Patrick live report: magazines had zero PackageProfile
+  // coverage, so real listed magazines never got a resolved weight and always fell through
+  // to Facebook's local-pickup-only fallback). Matches 'Books & Magazines:Magazines' category
+  // text and the bare keyword. Weight/dims sized for a typical single glossy magazine.
+  { category: 'Magazines', keyword: 'magazine', weightOz: 6, lengthIn: 11, widthIn: 9, heightIn: 1, packageType: 'PACKAGE_THICK_ENVELOPE', confidence: 0.65 },
+  // Category-only rows (keyword omitted so PackageProfile step-3 exact-category-match
+  // can reach them -- a row with both category+keyword set is only ever reached via the
+  // keyword/title path, never the category path, per ebayPackageEstimateService.ts's own
+  // `keyword: null` filter on the category query). Exact strings observed in production
+  // for real magazine listings, including the legacy HTML-entity-encoded variant.
+  { category: 'Books &amp; Magazines:Magazines', weightOz: 6, lengthIn: 11, widthIn: 9, heightIn: 1, packageType: 'PACKAGE_THICK_ENVELOPE', confidence: 0.6 },
+  { category: 'Books & Magazines', weightOz: 6, lengthIn: 11, widthIn: 9, heightIn: 1, packageType: 'PACKAGE_THICK_ENVELOPE', confidence: 0.6 },
+  { category: 'Books & Magazines:Magazines', weightOz: 6, lengthIn: 11, widthIn: 9, heightIn: 1, packageType: 'PACKAGE_THICK_ENVELOPE', confidence: 0.6 },
   { keyword: 'hardcover', weightOz: 32, lengthIn: 11, widthIn: 9, heightIn: 2, packageType: 'PACKAGE_THICK_ENVELOPE', confidence: 0.65 },
   { keyword: 'vinyl', weightOz: 12, lengthIn: 13, widthIn: 13, heightIn: 1, packageType: 'PACKAGE_THICK_ENVELOPE', confidence: 0.7 },
   { keyword: 'record', weightOz: 12, lengthIn: 13, widthIn: 13, heightIn: 1, packageType: 'PACKAGE_THICK_ENVELOPE', confidence: 0.65 },

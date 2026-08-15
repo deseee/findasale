@@ -58,9 +58,22 @@ const FB_COIN_CURRENCY_CATEGORY_IDS: readonly string[] = [
 // comment) in case an older FindA.Sale item still carries that stale text.
 const FB_COIN_CURRENCY_NAME_KEYWORDS: readonly string[] = ['coin', 'currency', 'paper money'];
 
+// NARROWED 2026-08-15 (Patrick correction, same day this gate first shipped): Facebook's
+// Commerce Policy prohibits actual currency/coins/paper money -- it does NOT prohibit
+// numismatic ACCESSORIES (tubes, holders, capsules, flips, albums, slabs, display cases,
+// storage pages). A bare substring match on "coin" also matches free-text categories like
+// "Coin Tubes & Holders" or "Coin Display Slabs", wrongly blocking sellable supply items
+// that are not restricted at all. If the category text also contains one of these accessory
+// terms, it is NOT treated as restricted -- "it's only currency itself, not accessories."
+const FB_COIN_ACCESSORY_EXCLUDE_KEYWORDS: readonly string[] = [
+  'tube', 'holder', 'capsule', 'flip', 'album', 'slab', 'sleeve', 'case', 'display',
+  'book', 'page', 'mount', 'folder', 'box', 'organizer', 'storage',
+];
+
 /** True when an item is a coin/currency item and therefore cannot be listed on Facebook
  *  Marketplace per Facebook's Commerce Policy. FACEBOOK-SPECIFIC -- callers must never use
- *  this to gate eBay, native checkout, or any other platform's eligibility. */
+ *  this to gate eBay, native checkout, or any other platform's eligibility. Accessories
+ *  (tubes/holders/slabs/etc.) are explicitly excluded -- see FB_COIN_ACCESSORY_EXCLUDE_KEYWORDS. */
 function isFacebookRestrictedCoinOrCurrencyItem(
   category: string | null | undefined,
   ebayCategoryId: string | null | undefined
@@ -68,7 +81,10 @@ function isFacebookRestrictedCoinOrCurrencyItem(
   if (ebayCategoryId && FB_COIN_CURRENCY_CATEGORY_IDS.includes(ebayCategoryId)) return true;
   if (!category) return false;
   const lower = category.toLowerCase();
-  return FB_COIN_CURRENCY_NAME_KEYWORDS.some((kw) => lower.includes(kw));
+  const isCoinOrCurrencyText = FB_COIN_CURRENCY_NAME_KEYWORDS.some((kw) => lower.includes(kw));
+  if (!isCoinOrCurrencyText) return false;
+  const isAccessory = FB_COIN_ACCESSORY_EXCLUDE_KEYWORDS.some((kw) => lower.includes(kw));
+  return !isAccessory;
 }
 
 // GET /api/extension/items — the organizer's listable items + Marketplace status.
