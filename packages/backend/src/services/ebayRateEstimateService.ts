@@ -909,7 +909,7 @@ export const EBAY_STANDARD_ENVELOPE_ELIGIBLE_CATEGORIES: readonly string[] = [
   'Greeting Cards',
   'Seeds',
   'Trading Cards',
-  'Coins & Currency',
+  'Coins & Paper Money',
   'Postcards',
   'Stamps',
 ];
@@ -945,8 +945,13 @@ function isStandardEnvelopeEligibleCategory(category: string | null | undefined)
  *   - "Greeting Cards" has no single node of that exact name either -- closest real matches
  *     are "Greeting Cards & Invitations" (id=170098, under Home & Garden) and "Greeting
  *     Cards & Gift Tags" (id=146324, under Crafts); both included.
- *   - "Coins & Currency" (this list's/eBay's older name) resolves to eBay's current real L1
- *     category "Coins & Paper Money" (id=11116).
+ *   - "Coins & Currency" was eBay's older/deprecated name for this category; eBay's current
+ *     real L1 category name is "Coins & Paper Money" (id=11116). FIXED 2026-08-15 (roadmap
+ *     bug fix): EBAY_STANDARD_ENVELOPE_ELIGIBLE_CATEGORIES above previously still contained
+ *     the stale "Coins & Currency" string, so the name-match path never matched real items
+ *     whose category text reads "Coins & Paper Money" (see Item.category values in prod --
+ *     confirmed via direct DB read, e.g. item cmrnnve7w000np9wafg2vs0jx). Updated to the
+ *     current name.
  *   - "Seeds" resolves to eBay's real category "Seeds & Bulbs" (id=40605).
  *   - "Postcards" resolves to two real IDs: L1 "Postcards & Supplies" (id=914) and its child
  *     node "Postcards" (id=262041).
@@ -956,8 +961,9 @@ function isStandardEnvelopeEligibleCategory(category: string | null | undefined)
  *   substring match ... never makes eligibility narrower than the pre-existing name-only gate").
  *   The code in evaluateStandardEnvelope has never done that -- it is an either/or, not a
  *   fallback: `categoryId ? isStandardEnvelopeEligibleCategoryId(categoryId) : isStandardEnvelopeEligibleCategory(category)`.
- *   Once a categoryId is present, an ID missing from this list means NOT eligible, full stop;
- *   the name substring is not consulted. The comment was corrected to the code (rather than the
+ *   Once a categoryId is present, an ID missing from BOTH this list AND
+ *   EBAY_STANDARD_ENVELOPE_CATEGORY_ID_DESCENDANTS (below) means NOT eligible, full stop; the
+ *   name substring is not consulted. The comment was corrected to the code (rather than the
  *   code widened to the comment) on purpose: this list IS admittedly an incomplete,
  *   relevance-ranked slice, so an OR-fallback would let a name substring ("Stamps" matching
  *   "Stamp Albums & Supplies", etc.) re-open eligibility for items eBay would NOT accept into
@@ -966,6 +972,21 @@ function isStandardEnvelopeEligibleCategory(category: string | null | undefined)
  *   unrecognized ID is the safe direction (the item just gets the normal flat/calculated rate).
  *   The correct way to widen coverage is to ADD the missing real category IDs to this list --
  *   sourced from eBay's Taxonomy API, same as the ones above -- not to loosen the gate.
+ *
+ * FIXED 2026-08-15 (confirmed bug, prior-session investigation): this list only ever held the
+ * L1 PARENT id for each of the 8 categories (e.g. '11116' for Coins & Paper Money). Real item
+ * data never carries an L1 categoryId -- Item.ebayCategoryId (schema.prisma:1257) is captured
+ * from eBay's own <PrimaryCategory><CategoryID>, which is always a LEAF (child/grandchild)
+ * category id, e.g. '11981' ("Eisenhower (1971-78)" dollars, a real descendant of 11116).
+ * Exact/strict membership against this L1-only list therefore always failed for genuinely
+ * eligible coin items once a categoryId was present -- the ID check could never succeed, and
+ * (per the either/or rule above) the name fallback was never consulted either, so these items
+ * silently lost Standard Envelope eligibility entirely. isStandardEnvelopeEligibleCategoryId
+ * is now lineage-aware: eligible if categoryId matches a root in this list directly, OR is a
+ * known descendant of one (see EBAY_STANDARD_ENVELOPE_CATEGORY_ID_DESCENDANTS below). This is
+ * a minimal, extend-as-observed descendant map -- NOT a general eBay taxonomy/ancestor client
+ * (out of scope; no such client or ancestor/parent data structure exists anywhere else in this
+ * repo as of this fix, confirmed by grep across packages/backend/src/services/).
  */
 export const EBAY_STANDARD_ENVELOPE_ELIGIBLE_CATEGORY_IDS: readonly string[] = [
   // Patches -- 7 distinct real "Patches" leaf categories (Crafts/Sewing, Militaria x4, Current Militaria, Firefighting)
@@ -978,7 +999,11 @@ export const EBAY_STANDARD_ENVELOPE_ELIGIBLE_CATEGORY_IDS: readonly string[] = [
   '40605',
   // Trading Cards -- eBay splits into Sports Trading Cards (212) and Non-Sport Trading Cards (182982)
   '212', '182982',
-  // Coins & Currency -- real eBay L1 name is "Coins & Paper Money"
+  // Coins & Paper Money (eBay's current name; this list previously used the stale/older
+  // "Coins & Currency" name in EBAY_STANDARD_ENVELOPE_ELIGIBLE_CATEGORIES -- fixed 2026-08-15).
+  // '11116' is the L1 PARENT id. Real coin listings resolve to a CHILD leaf id (e.g. '11981'
+  // Eisenhower (1971-78) dollars) -- see EBAY_STANDARD_ENVELOPE_CATEGORY_ID_DESCENDANTS below
+  // and isStandardEnvelopeEligibleCategoryId's lineage-aware match (fixed 2026-08-15).
   '11116',
   // Postcards -- L1 "Postcards & Supplies" (914) + its "Postcards" child node (262041)
   '914', '262041',
@@ -986,12 +1011,33 @@ export const EBAY_STANDARD_ENVELOPE_ELIGIBLE_CATEGORY_IDS: readonly string[] = [
   '260',
 ];
 
-/** Exact membership check against EBAY_STANDARD_ENVELOPE_ELIGIBLE_CATEGORY_IDS -- see that
- *  constant's comment for sourcing/caveats. Unlike the name-based check, this is an exact
- *  match, not a substring match (categoryId is a precise numeric ID, no ambiguity to collapse). */
+/**
+ * Known child/leaf category IDs for the Standard-Envelope-eligible ROOT ids above, keyed by
+ * root id, confirmed as real descendants of that root (not fabricated, not a full eBay
+ * taxonomy pull -- see FIXED 2026-08-15 note above for why this exists and why it is
+ * deliberately minimal rather than a general ancestor/taxonomy client).
+ *
+ * Currently populated: '11116' (Coins & Paper Money) -> '11981' ("Eisenhower (1971-78)"
+ * dollars), the specific real leaf category confirmed in the prior-session investigation that
+ * this fix is based on. Extend this map (do not loosen isStandardEnvelopeEligibleCategoryId's
+ * matching logic) as more real descendant leaf ids are confirmed for these roots.
+ */
+export const EBAY_STANDARD_ENVELOPE_CATEGORY_ID_DESCENDANTS: Readonly<Record<string, readonly string[]>> = {
+  '11116': ['11981'], // Coins & Paper Money -> Eisenhower (1971-78) dollars
+};
+
+/** Lineage-aware membership check against EBAY_STANDARD_ENVELOPE_ELIGIBLE_CATEGORY_IDS --
+ *  see that constant's comment for sourcing/caveats. Eligible if categoryId is an exact
+ *  (root) match, OR is a known child/descendant of one of those roots per
+ *  EBAY_STANDARD_ENVELOPE_CATEGORY_ID_DESCENDANTS. Both checks are exact-string membership
+ *  tests, never a substring match (categoryId is a precise numeric ID, no ambiguity to
+ *  collapse) -- unlike the name-based check, which does substring-match on free text. */
 function isStandardEnvelopeEligibleCategoryId(categoryId: string | null | undefined): boolean {
   if (!categoryId) return false;
-  return EBAY_STANDARD_ENVELOPE_ELIGIBLE_CATEGORY_IDS.includes(categoryId);
+  if (EBAY_STANDARD_ENVELOPE_ELIGIBLE_CATEGORY_IDS.includes(categoryId)) return true;
+  return Object.values(EBAY_STANDARD_ENVELOPE_CATEGORY_ID_DESCENDANTS).some((descendants) =>
+    descendants.includes(categoryId)
+  );
 }
 
 /**

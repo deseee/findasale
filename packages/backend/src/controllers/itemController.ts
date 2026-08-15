@@ -660,6 +660,8 @@ const ITEM_DETAIL_SELECT = {
         photoUrls: true,
         shippingAvailable: true,
         shippingPrice: true,
+        shippingPriceSource: true,
+        shippingPriceConfirmedByOrganizer: true,
         listingType: true,
         isAiTagged: true,
         isActive: true,

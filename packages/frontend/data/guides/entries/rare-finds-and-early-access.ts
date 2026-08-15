@@ -64,7 +64,7 @@ Hunt Pass members also get push notifications when a Rare or Legendary item matc
 
 ## What happens after Early Access ends
 
-The item goes fully public. Every shopper on the platform can see it, hold it, or buy it. The badge stays on the listing so shoppers know what tier it is, but th`,
+The item goes fully public. Every shopper on the platform can see it, hold it, or buy it. The badge stays on the listing so shoppers know what tier it is, but the timing advantage is gone. Once the 30-minute window closes, it's the same listing for every shopper: whoever holds or buys it first gets it, subscriber or not.`,
 };
 
 export default entry;
