@@ -868,6 +868,13 @@ export const EBAY_STANDARD_ENVELOPE_MAX_PRICE_USD = 20;
 // (3.5x5in minimum, 6.125x11.5in maximum). Modeled as [width, length] bounds against the
 // item's two largest real dims (sortedRealDims below) -- the smallest real dim is treated as
 // thickness, see EBAY_STANDARD_ENVELOPE_MAX_THICKNESS_IN's comment.
+//
+// CHANGED 2026-08-15 (Patrick approved -- see evaluateStandardEnvelope's doc comment below for
+// the full rationale): these four length/width bounds, plus EBAY_STANDARD_ENVELOPE_MAX_THICKNESS_IN
+// just below, are NO LONGER consulted by evaluateStandardEnvelope for the 8 category-eligible
+// families -- weight+price+category alone now govern eligibility for those. Left defined
+// (unused by that function as of this change) in case a future real per-item measurement input
+// needs a dims check again -- do not delete without confirming nothing else needs them.
 export const EBAY_STANDARD_ENVELOPE_MIN_LENGTH_IN = 5;
 export const EBAY_STANDARD_ENVELOPE_MAX_LENGTH_IN = 11.5;
 export const EBAY_STANDARD_ENVELOPE_MIN_WIDTH_IN = 3.5;
@@ -1041,13 +1048,32 @@ function isStandardEnvelopeEligibleCategoryId(categoryId: string | null | undefi
 }
 
 /**
- * eBay Standard Envelope flat rate, if ALL of eBay's published eligibility gates pass:
- * weight <=3oz, envelope outer dims within eBay's published range, thickness (smallest real
- * dim -- see EBAY_STANDARD_ENVELOPE_MAX_THICKNESS_IN's comment) <=0.25in, category is one of
- * the 8 eligible categories, and item price <$20 (shipping/handling/tax excluded). Returns
- * null if ANY gate fails or is unverifiable (dims === null fails closed -- see that same
- * comment). Same shape/pattern as evaluateCubicTier() above: takes the raw inputs, returns
- * either a matched rate or null, no side effects.
+ * eBay Standard Envelope flat rate, if weight <=3oz, item price <$20 (shipping/handling/tax
+ * excluded), AND category is one of the 8 eligible categories. Returns null if any of those
+ * THREE gates fails.
+ *
+ * CHANGED 2026-08-15 (Patrick approved, production investigation 2026-08-11/15): this used to
+ * be a FOUR-gate check that also required envelope outer dims within eBay's published range and
+ * thickness (smallest real dim) <=0.25in (EBAY_STANDARD_ENVELOPE_MAX_THICKNESS_IN /
+ * _MIN/MAX_LENGTH_IN / _MIN/MAX_WIDTH_IN). That dims gate is now intentionally SKIPPED once
+ * weight/price/category all pass. Real evidence: eBay coin listings ARE on eBay's own live
+ * Standard Envelope service at qualifying weight, but their recorded package dims (and this
+ * platform's own 'coin' PackageProfile default) are generic box-shaped placeholders (e.g. 1+
+ * inch "thickness") that failed the old dims gate -- even though eBay itself clearly is not
+ * enforcing dims this strictly for its own envelope program (it accepted these exact listings
+ * without valid thin-envelope dims on file). This pattern is not coin-specific -- it can affect
+ * any of the 8 category-eligible families (coins, stamps, postcards, trading cards, patches,
+ * stickers, seeds, greeting cards) wherever recorded/default dims are generic rather than a
+ * real precise measurement. Decision: for these 8 category-eligible families, trust
+ * weight+price+category alone and skip the dims check entirely. Categories OUTSIDE this set are
+ * completely unaffected -- they never reach the dims code path in the first place (dims were
+ * only ever consulted for items that already passed the category gate), so this change cannot
+ * alter eligibility for any non-matching item. The dims constants themselves
+ * (EBAY_STANDARD_ENVELOPE_MAX_THICKNESS_IN etc.) are left in place, unused by this function as
+ * of this change, in case a future real per-item measurement input needs them again.
+ *
+ * Same shape/pattern as evaluateCubicTier() above: takes the raw inputs, returns either a
+ * matched rate or null, no side effects.
  *
  * Category check order: categoryId (EBAY_STANDARD_ENVELOPE_ELIGIBLE_CATEGORY_IDS, exact
  * match against Item.ebayCategoryId, real numeric IDs populated by processRapidDraft.ts /
@@ -1069,12 +1095,18 @@ function evaluateStandardEnvelope(
     : isStandardEnvelopeEligibleCategory(category);
   if (!categoryEligible) return null;
 
-  const sorted = sortedRealDims(dims);
-  if (!sorted) return null; // no dims = thickness/size unverifiable -- fail closed, see comment above
-  const [length, width, thickness] = sorted;
-  if (thickness > EBAY_STANDARD_ENVELOPE_MAX_THICKNESS_IN) return null;
-  if (length < EBAY_STANDARD_ENVELOPE_MIN_LENGTH_IN || length > EBAY_STANDARD_ENVELOPE_MAX_LENGTH_IN) return null;
-  if (width < EBAY_STANDARD_ENVELOPE_MIN_WIDTH_IN || width > EBAY_STANDARD_ENVELOPE_MAX_WIDTH_IN) return null;
+  // Patrick approved 2026-08-15 (see doc comment above): once weight, price, AND category all
+  // pass, the physical-dims gate (thickness/length/width, `dims`) is intentionally SKIPPED for
+  // these 8 category-eligible families -- real eBay coin-listing evidence showed eBay itself
+  // does not enforce dims this strictly for its own live envelope program, while this
+  // platform's generic/placeholder recorded dims (e.g. box-shaped PackageProfile defaults)
+  // were failing that gate for items eBay had already accepted. `dims` is intentionally no
+  // longer read in this function -- do not resurrect a dims check here; the correct place to
+  // add stricter physical verification, if ever needed, is a real per-item measurement input,
+  // not the generic default/placeholder dims this repo currently carries. Category-ineligible
+  // items never reach this point (see `if (!categoryEligible) return null;` above) and are
+  // completely unaffected by this change -- they still fall through to the normal
+  // flat/calculated-rate path exactly as before.
 
   const ozTier = Math.ceil(weightOz) as 1 | 2 | 3; // round up to the safer (never-short) tier
   const rate = EBAY_STANDARD_ENVELOPE_RATES[ozTier];
