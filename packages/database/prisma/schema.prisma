@@ -1121,6 +1121,10 @@ model Item {
   // W1: Shipping
   shippingAvailable               Boolean                 @default(false)
   shippingPrice                   Float?
+  // ADR-106 (2026-08-15): native-checkout shipping auto-pricing provenance -- mirrors
+  // packageEstimateSource/packageConfirmedByOrganizer pattern verbatim (~line 1275 below).
+  shippingPriceSource             String? // AUTO | ORGANIZER -- provenance of shippingPrice
+  shippingPriceConfirmedByOrganizer Boolean               @default(false) // True once organizer explicitly edits/confirms shipping -- never silently overwritten by auto-suggest after this flips true
   // B1: Item listing/transaction type — FIXED | AUCTION | REVERSE_AUCTION | LIVE_DROP | POS
   listingType                     String                  @default("FIXED")
   // CD2: Live Drop — item hidden until liveDropAt time
@@ -5349,6 +5353,8 @@ enum SocialPlatform {
   PINTEREST
   TIKTOK // added 2026-08-10 -- Content Posting API, ADR-077 drop-in pattern
   BLUESKY // added 2026-08-12 -- ADR-105, app-password connect (not OAuth redirect)
+  THREADS // added 2026-08-15 -- ADR-105 / roadmap #625, real migration (see
+  // packages/database/prisma/migrations/20260815120000_add_threads_social_platform)
 }
 
 enum SocialPostStatus {

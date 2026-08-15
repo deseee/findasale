@@ -24,6 +24,7 @@ jest.mock('../ebayRateEstimateService', () => ({
 jest.mock('../ebayFlatRatePolicyService', () => ({
   computeFvfFlatRate: (rate: number) => rate,
   roundUpToBucket: (rate: number) => rate,
+  applyCharmPricing: (rate: number) => rate,
 }));
 
 jest.mock('../ebayCalculatedPolicyService', () => ({

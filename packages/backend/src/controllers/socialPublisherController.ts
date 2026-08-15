@@ -50,6 +50,7 @@ const VALID_PLATFORMS: SocialPlatform[] = [
   'PINTEREST',
   'TIKTOK', // added 2026-08-10
   'BLUESKY', // added 2026-08-12 -- ADR-105
+  'THREADS', // added 2026-08-15 -- ADR-105 / roadmap #625
 ];
 
 function isValidPlatform(v: unknown): v is SocialPlatform {
@@ -71,6 +72,7 @@ const PLATFORM_SLUGS: Record<SocialPlatform, string> = {
   TIKTOK: 'tiktok', // added 2026-08-10 -- callback URL: /oauth/callback/tiktok
   BLUESKY: 'bluesky', // added 2026-08-12 -- required for Record exhaustiveness only;
   // Bluesky never actually hits /oauth/callback/bluesky (app-password connect, see bluesky.ts)
+  THREADS: 'threads', // added 2026-08-15 -- ADR-105 / roadmap #625, callback URL: /oauth/callback/threads
 };
 
 const SLUG_TO_PLATFORM: Record<string, SocialPlatform> = Object.fromEntries(

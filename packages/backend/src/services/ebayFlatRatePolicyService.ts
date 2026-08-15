@@ -66,6 +66,24 @@ export function roundUpToBucket(rate: number): number {
 }
 
 /**
+ * Charm-price a bucketed rate (Patrick, 2026-08-14): $10.00 -> $9.99, $14.00 -> $13.99.
+ * Subtracts one cent from the already-bucketed rate. Applied ONLY at the buyer-facing
+ * FLAT-RATE policy price call sites (ensureFvfFlatRatePolicy, computeNamedWeightTierRate
+ * / ensureNamedWeightTierPolicy, and their preview twin in ebayShippingResolver.ts's
+ * fvfFlat()) -- deliberately NOT baked into roundUpToBucket() itself, which is also
+ * shared by ebayCalculatedPolicyService.ts's computeCalculatedWithHandling (an internal
+ * bucketedRate used only to back out a handling-fee markup on a CALCULATED policy, never
+ * shown to the buyer as a standalone charge) and nativeShippingSuggestionService.ts's
+ * native-checkout price suggestion (a distinct, non-"flat rate policy" feature, out of
+ * scope for this request). Note this trades away roundUpToBucket's "seller never short"
+ * guarantee by exactly $0.01 -- an intentional, Patrick-approved tradeoff for charm
+ * pricing, not an oversight.
+ */
+export function applyCharmPricing(bucketedRate: number): number {
+  return Math.round((bucketedRate - 0.01) * 100) / 100;
+}
+
+/**
  * Compute the flat rate for an item given its weight, dims, and fromZip,
  * then get-or-create the matching eBay fulfillment policy for the organizer.
  *
@@ -116,7 +134,7 @@ export async function ensureFvfFlatRatePolicy(
     throw err;
   }
 
-  const flatRate = roundUpToBucket(computeFvfFlatRate(cheapest.rate));
+  const flatRate = applyCharmPricing(roundUpToBucket(computeFvfFlatRate(cheapest.rate)));
   const flatRateStr = flatRate.toFixed(2);
   const policyName = `${POLICY_NAME_PREFIX}${flatRateStr}`;
 
@@ -280,7 +298,7 @@ export async function computeNamedWeightTierRate(
     priceUsd: null,
   });
 
-  const flatRate = roundUpToBucket(computeFvfFlatRate(cheapest.rate));
+  const flatRate = applyCharmPricing(roundUpToBucket(computeFvfFlatRate(cheapest.rate)));
   const policyName = `${bucketMaxLb}+ lb Ground Advantage $${flatRate.toFixed(2)}`;
   return { maxOz, policyName, flatRate };
 }

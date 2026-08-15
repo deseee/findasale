@@ -1230,6 +1230,13 @@ export const createItem = async (req: AuthRequest, res: Response) => {
         // W1: Shipping
         shippingAvailable: shippingAvailable === true || shippingAvailable === 'true',
         shippingPrice: shippingPrice ? parseFloat(shippingPrice) : null,
+        // ADR-106: an organizer who explicitly sets shipping at item-creation time has
+        // confirmed it -- locks provenance the same way updateItem's explicit-edit path
+        // does, so a later auto-suggest pass (once package weight becomes known) never
+        // overwrites a value the organizer typed in on create.
+        ...(shippingAvailable !== undefined || shippingPrice !== undefined
+          ? { shippingPriceConfirmedByOrganizer: true, shippingPriceSource: 'ORGANIZER' }
+          : {}),
         // B1: Listing type — Feature #5: Default to FIXED if not provided; already validated above
         listingType: listingType || 'FIXED',
         // CD2 Phase 4: Reverse Auction — deprecated, maintained for backwards compat
@@ -1284,6 +1291,48 @@ export const createItem = async (req: AuthRequest, res: Response) => {
     res.status(500).json({ message: 'Server error while creating item' });
   }
 };
+
+/**
+ * ADR-106 (2026-08-15): shared auto-suggest-and-set helper for native (non-eBay)
+ * checkout shipping. Wraps suggestNativeShippingPrice() (ADR-104 Sec3, the same
+ * engine getSuggestedShippingPriceHandler already calls on-demand) and returns the
+ * Item fields to write, or null when no confident auto-price should be written.
+ * Callers MUST fail safe on null -- never block or fail the caller's save on this
+ * (mirrors ADR-104 Sec3 Rollback: "the frontend must fail silently").
+ */
+async function computeAutoShippingPatch(input: {
+  itemId: string;
+  weightOz: number;
+  dims: { length: number | null; width: number | null; height: number | null };
+  packageType: string | null;
+  origin: { zip: string | null; lat: number | null; lng: number | null };
+  subscriptionTier: string | null;
+  categoryId: string | null;
+  priceUsd: number | null;
+}): Promise<{ shippingAvailable: true; shippingPrice: number; shippingPriceSource: 'AUTO' } | null> {
+  try {
+    const suggestion = await suggestNativeShippingPrice({
+      weightOz: input.weightOz,
+      dims: input.dims,
+      packageType: input.packageType,
+      origin: input.origin,
+      subscriptionTier: input.subscriptionTier as any,
+      categoryId: input.categoryId,
+      priceUsd: input.priceUsd,
+    });
+    return { shippingAvailable: true, shippingPrice: suggestion.suggestedPrice, shippingPriceSource: 'AUTO' };
+  } catch (err) {
+    if (err instanceof NativeShippingHardBlockError) {
+      // ADR-104 Sec3 Rollback contract: fail safe -- leave shippingAvailable as-is
+      // (today's manual behavior), never flip it or write a price for a package that
+      // exceeds carrier limits for every modeled carrier.
+      console.log(`[ADR-106 auto-shipping] hard-blocked for item ${input.itemId}: ${(err as Error).message}`);
+    } else {
+      console.warn(`[ADR-106 auto-shipping] failed for item ${input.itemId} (non-fatal):`, (err as Error).message);
+    }
+    return null;
+  }
+}
 
 export const updateItem = async (req: AuthRequest, res: Response) => {
   try {
@@ -1364,10 +1413,19 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
       });
     }
 
-    // Fetch item to verify ownership
+    // Fetch item to verify ownership. ADR-106: also pull sale.zip + organizer
+    // lat/lng/subscriptionTier -- the same origin/fee context
+    // getSuggestedShippingPriceHandler already reads -- so the auto-suggest-and-set
+    // logic below can call suggestNativeShippingPrice() without a second query.
     const item = await prisma.item.findUnique({
       where: { id },
-      include: { sale: { include: { organizer: { select: { userId: true } } } } }
+      include: {
+        sale: {
+          include: {
+            organizer: { select: { userId: true, subscriptionTier: true, lat: true, lng: true } },
+          },
+        },
+      },
     });
 
     if (!item) {
@@ -1598,6 +1656,87 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     if (ebayFulfillmentPolicyOverrideId !== undefined) updateData.ebayFulfillmentPolicyOverrideId = ebayFulfillmentPolicyOverrideId || null;
     if (packageConfirmedByOrganizer !== undefined) updateData.packageConfirmedByOrganizer = packageConfirmedByOrganizer === true || packageConfirmedByOrganizer === 'true';
     if (packageEstimateSource !== undefined) updateData.packageEstimateSource = packageEstimateSource || null;
+
+    // ADR-106 (2026-08-15): native-checkout shipping auto-pricing. Two mutually
+    // exclusive branches, matching the Contract in
+    // claude_docs/architecture/ADR-106-native-checkout-shipping-autopricing.md:
+    //   (a) The organizer's PATCH body explicitly includes shippingAvailable/
+    //       shippingPrice -- a REAL edit, not an incidental re-save of unrelated
+    //       fields (the edit-item frontend only sends these keys when the organizer
+    //       actually touched the checkbox/price input -- see shippingTouched there).
+    //       Lock provenance to ORGANIZER so auto-suggest never overwrites it again.
+    //   (b) Otherwise, if this save leaves the item's package weight known and
+    //       shipping is not yet organizer-confirmed, call suggestNativeShippingPrice()
+    //       (same engine getSuggestedShippingPriceHandler already exposes on-demand)
+    //       and auto-set shippingAvailable/shippingPrice/shippingPriceSource='AUTO'.
+    //       Skips items explicitly marked local-pickup-only via ebayShippingOverride
+    //       (same field the FB extension already checks -- extensionController.ts
+    //       L281) per ADR-106 Risk.
+    const organizerExplicitlySettingShipping = shippingAvailable !== undefined || shippingPrice !== undefined;
+    if (organizerExplicitlySettingShipping) {
+      updateData.shippingPriceConfirmedByOrganizer = true;
+      updateData.shippingPriceSource = 'ORGANIZER';
+    } else {
+      const priorShippingConfirmed = item.shippingPriceConfirmedByOrganizer === true;
+      const priorShippingSource = item.shippingPriceSource ?? null;
+
+      const packageFieldsTouched =
+        packageWeightOz !== undefined ||
+        packageLengthIn !== undefined ||
+        packageWidthIn !== undefined ||
+        packageHeightIn !== undefined ||
+        packageType !== undefined;
+
+      const effWeightOz = packageWeightOz !== undefined
+        ? (packageWeightOz === null ? null : Number(packageWeightOz))
+        : item.packageWeightOz;
+      const effLengthIn = packageLengthIn !== undefined
+        ? (packageLengthIn === null ? null : Number(packageLengthIn))
+        : (item.packageLengthIn != null ? Number(item.packageLengthIn) : null);
+      const effWidthIn = packageWidthIn !== undefined
+        ? (packageWidthIn === null ? null : Number(packageWidthIn))
+        : (item.packageWidthIn != null ? Number(item.packageWidthIn) : null);
+      const effHeightIn = packageHeightIn !== undefined
+        ? (packageHeightIn === null ? null : Number(packageHeightIn))
+        : (item.packageHeightIn != null ? Number(item.packageHeightIn) : null);
+      const effPackageType = packageType !== undefined ? (packageType || null) : item.packageType;
+      const effEbayCategoryId = ebayCategoryId !== undefined ? (ebayCategoryId || null) : item.ebayCategoryId;
+      const effPrice = price !== undefined ? (price ? parseFloat(price) : null) : item.price;
+      const effEbayShippingOverride = ebayShippingOverride !== undefined ? (ebayShippingOverride || null) : item.ebayShippingOverride;
+
+      // Backfill case: weight already known from some other write path (AI batch
+      // analyze, processRapidDraft, voice-appended dims, etc.) but this item was
+      // never auto-priced through this endpoint -- catch it up on the next touch of
+      // this item via updateItem, not only on a request that literally changes weight.
+      const neverAutoPricedYet = priorShippingSource == null && item.shippingPrice == null;
+
+      const hasOrigin = item.sale != null && (item.sale.zip != null || (item.sale.organizer.lat != null && item.sale.organizer.lng != null));
+
+      const shouldAttemptAutoSuggest =
+        !priorShippingConfirmed &&
+        effEbayShippingOverride !== 'LOCAL_PICKUP_ONLY' &&
+        effWeightOz != null && effWeightOz > 0 &&
+        (packageFieldsTouched || neverAutoPricedYet) &&
+        hasOrigin;
+
+      if (shouldAttemptAutoSuggest) {
+        const shippingPatch = await computeAutoShippingPatch({
+          itemId: id,
+          weightOz: effWeightOz as number,
+          dims: { length: effLengthIn, width: effWidthIn, height: effHeightIn },
+          packageType: effPackageType,
+          origin: {
+            zip: item.sale!.zip,
+            lat: item.sale!.organizer.lat,
+            lng: item.sale!.organizer.lng,
+          },
+          subscriptionTier: item.sale!.organizer.subscriptionTier,
+          categoryId: effEbayCategoryId ?? null,
+          priceUsd: effPrice ?? null,
+        });
+        if (shippingPatch) Object.assign(updateData, shippingPatch);
+      }
+    }
 
     // D-006: Update userEditedFields array to track which fields organizer has explicitly set
     // This prevents AI results from overwriting organizer-set values during rapid processing

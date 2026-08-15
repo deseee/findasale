@@ -24,7 +24,7 @@
  */
 
 import { computeCheapestForOrigin, ShippingHardBlockError } from './ebayRateEstimateService';
-import { computeFvfFlatRate, roundUpToBucket } from './ebayFlatRatePolicyService';
+import { computeFvfFlatRate, roundUpToBucket, applyCharmPricing } from './ebayFlatRatePolicyService';
 import { computeCalculatedWithHandling } from './ebayCalculatedPolicyService';
 import {
   matchStandardEnvelopePolicy,
@@ -257,7 +257,7 @@ export async function resolveItemShipping(input: {
         standardEnvelopeUnmatched = true;
       }
 
-      const flatRate = roundUpToBucket(computeFvfFlatRate(cheapest.rate));
+      const flatRate = applyCharmPricing(roundUpToBucket(computeFvfFlatRate(cheapest.rate)));
       return {
         fulfillmentPolicyId: null,
         buyerAmountCents: dollarsToCents(flatRate),

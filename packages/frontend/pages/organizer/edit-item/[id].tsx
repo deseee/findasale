@@ -221,6 +221,16 @@ const EditItemPage = () => {
   // flag is sent only when this is true.
   const [weightTouched, setWeightTouched] = useState(false);
 
+  // ADR-106 (2026-08-15): mirrors weightTouched's "real edit vs. incidental re-save"
+  // contract for native-checkout shipping. shippingAvailable/shippingPrice are only
+  // included in the PATCH payload when the organizer actually interacts with the
+  // checkbox or price input -- otherwise the backend's own auto-suggest logic (based
+  // on package weight becoming known) keeps ownership of these fields, and a plain
+  // save of an unrelated field (title, price, description, etc.) never silently locks
+  // shippingPriceConfirmedByOrganizer=true just because formData always carries the
+  // current shippingAvailable/shippingPrice values.
+  const [shippingTouched, setShippingTouched] = useState(false);
+
   // ADR-ai-package-estimation-isolation-2026-08-05, corrected S-QA-2026-08-06: explicit,
   // opt-in fetch of the AI/estimate-cascade weight+dims guess. Only fills the editable
   // fields: never auto-confirms. Does NOT set weightTouched itself: a click here alone
@@ -716,6 +726,17 @@ const EditItemPage = () => {
           : null,
         ebayShippingOverride: formData.ebayShippingOverride || null,
         ebayFulfillmentPolicyOverrideId: formData.ebayFulfillmentPolicyOverrideId || null,
+        // ADR-106 (2026-08-15): only send shippingAvailable/shippingPrice as an
+        // explicit organizer edit when the organizer actually touched the shipping
+        // checkbox/price input this session (shippingTouched) -- otherwise omit both
+        // keys entirely (JSON.stringify drops `undefined` values) so a save of an
+        // unrelated field never gets mistaken by the backend for a real shipping edit
+        // and never locks shippingPriceConfirmedByOrganizer. Backend auto-suggest keeps
+        // pricing this item off the package weight until the organizer really does edit it.
+        shippingAvailable: shippingTouched ? formData.shippingAvailable : undefined,
+        shippingPrice: shippingTouched
+          ? (formData.shippingPrice ? parseFloat(formData.shippingPrice) : null)
+          : undefined,
         // Bug fix (2026-08-08, P1 data corruption): same naive-local-string bug as
         // add-items.tsx / create-sale.tsx -- formData.auctionEndTime comes from
         // <input type="datetime-local"> as a naive local string with no timezone info.
@@ -1646,13 +1667,30 @@ const EditItemPage = () => {
                   type="checkbox"
                   id="shipping-available"
                   checked={formData.shippingAvailable}
-                  onChange={(e) => setFormData(prev => ({ ...prev, shippingAvailable: e.target.checked }))}
+                  onChange={(e) => {
+                    setShippingTouched(true);
+                    setFormData(prev => ({ ...prev, shippingAvailable: e.target.checked }));
+                  }}
                   className="h-4 w-4 rounded border-gray-300 accent-blue-600"
                 />
                 <label htmlFor="shipping-available" className="text-sm font-medium text-gray-700 dark:text-gray-300 cursor-pointer">
                   Offer shipping for this item
                 </label>
               </div>
+              {/* ADR-106 (2026-08-15): the checkbox above already reflects the backend's
+                  auto-computed value on load (formData.shippingAvailable is seeded from
+                  item.shippingAvailable) -- this badge just discloses WHY it's pre-checked
+                  with a price already filled in, mirroring the "Estimated" provenance badge
+                  used for package weight below. Hidden the moment the organizer touches
+                  shipping themselves (shippingTouched) or has already confirmed it before. */}
+              {formData.shippingAvailable &&
+                item?.shippingPriceSource === 'AUTO' &&
+                item?.shippingPriceConfirmedByOrganizer !== true &&
+                !shippingTouched && (
+                  <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                    Auto-priced from real carrier rates. Edit the price below if you want to change it.
+                  </p>
+              )}
               {formData.shippingAvailable && (
                 <div className="mt-3">
                   <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-1">
@@ -1664,7 +1702,10 @@ const EditItemPage = () => {
                     step="0.01"
                     placeholder="0.00"
                     value={formData.shippingPrice}
-                    onChange={(e) => setFormData({ ...formData, shippingPrice: e.target.value })}
+                    onChange={(e) => {
+                      setShippingTouched(true);
+                      setFormData({ ...formData, shippingPrice: e.target.value });
+                    }}
                     className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
                   />
                   {/* ADR-104 Sec3: computed suggestion, real carrier rates grossed up for
@@ -1681,9 +1722,10 @@ const EditItemPage = () => {
                       </p>
                       <button
                         type="button"
-                        onClick={() =>
-                          setFormData((prev) => ({ ...prev, shippingPrice: shippingSuggestion.suggestedPrice.toFixed(2) }))
-                        }
+                        onClick={() => {
+                          setShippingTouched(true);
+                          setFormData((prev) => ({ ...prev, shippingPrice: shippingSuggestion.suggestedPrice.toFixed(2) }));
+                        }}
                         className="text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline"
                       >
                         Use this

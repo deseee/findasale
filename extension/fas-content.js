@@ -671,11 +671,16 @@
     await clickButton('Publish', 'Audience');
 
     // Confirm it actually went through rather than assuming success: the create-flow URL
-    // should disappear within a few seconds of a real publish. NOT independently verified
-    // against a real Publish click this session (stopped short of that on Patrick's live
-    // draft) -- if this heuristic ever mis-fires, it fails toward a hard-error stop, never
-    // toward a false "published" mark.
-    const publishedOk = await waitFor(() => (location.href.indexOf('/marketplace/create/') === -1 ? true : null), 10000)
+    // should disappear within a few seconds of a real publish.
+    // 2026-08-15 fix (Patrick live report, magazine crosslist -- "Clicked Publish but
+    // couldn't confirm it went through"; Patrick manually finished the publish on Facebook's
+    // side and the item still showed available to push after reopening): the ORIGINAL fixed
+    // 10s window was too tight for Facebook's own post-publish redirect under real-world
+    // network/render load -- widened to 20s to cut down on false-timeout hard errors before
+    // ever reaching the catch-path fix below. Still fails toward a hard-error stop on a
+    // genuine timeout, never toward an automatic false "published" mark -- that half of the
+    // original design intent is unchanged; only the window is longer.
+    const publishedOk = await waitFor(() => (location.href.indexOf('/marketplace/create/') === -1 ? true : null), 20000)
       .catch(() => false);
     if (!publishedOk) throw hardError('Publish', 'Clicked Publish but couldn\'t confirm it went through -- check this listing manually.');
 
@@ -708,11 +713,41 @@
       await advanceAuto();
     } catch (e) {
       const step = (e && e.fasStep) || 'unknown';
+      // 2026-08-15 fix (Patrick live report -- magazine crosslist stalled on Publish-step
+      // confirm, Patrick manually confirmed the listing WAS live on Facebook, but the item kept
+      // showing "available to push" after reopening the extension). Root cause: mark() /
+      // markListed was only ever called from runQueue's success path (see the try block above)
+      // -- NEVER from this catch block -- so any hard error here, including a Publish-step
+      // confirm-heuristic timeout AFTER Facebook's own Publish button was actually clicked,
+      // silently dropped the outcome with no way for FindA.Sale's DB to ever learn the listing
+      // went live. There is still no reconciliation API to independently ask Facebook whether a
+      // given listing exists (same gap noted in the original ADR-084 comment above), so this does
+      // NOT auto-call mark() on a bare timeout -- that would risk a false "published" mark exactly
+      // as the original design intentionally avoided. Instead, ONLY for the Publish step
+      // specifically (the one case where we know for certain the Publish click itself succeeded,
+      // since clickButton('Publish', ...) above did not throw), surface an explicit organizer
+      // action: a button that calls mark() only when the organizer confirms they personally
+      // checked Facebook and the listing is really live. All other step failures (title/price/
+      // condition/category/delivery/etc.) keep the original Close-only behavior unchanged.
+      const isPublishConfirmGap = step === 'Publish';
       overlay('<b>FindA.Sale</b><div style="color:#ffcf7a;margin-top:6px;font-size:12px">Stopped on the <b>' + escapeHtml(step) +
         '</b> step: ' + escapeHtml((e && e.message) || 'something didn\'t match.') +
-        ' Nothing further was published automatically -- check this listing, then reopen the extension to continue.</div>' +
-        btn('fas-skip', 'Close', false));
+        (isPublishConfirmGap
+          ? ' Facebook\'s Publish button was clicked, but FindA.Sale couldn\'t confirm the page moved on. If you checked Facebook and the listing IS live, click below so FindA.Sale stops offering to re-push this item -- otherwise just close this and check it manually.'
+          : ' Nothing further was published automatically -- check this listing, then reopen the extension to continue.') +
+        '</div>' +
+        (isPublishConfirmGap
+          ? btn('fas-confirm-published', 'It published -- mark done & continue', true) + btn('fas-skip', 'Not sure / skip', false)
+          : btn('fas-skip', 'Close', false)));
       const s = document.getElementById('fas-skip'); if (s) s.onclick = () => bar.remove();
+      if (isPublishConfirmGap) {
+        const c = document.getElementById('fas-confirm-published');
+        // No confirmed remoteListingId exists for this path (the URL-based capture never
+        // resolved) -- pass null, same fail-closed convention the manual-publish path (see
+        // autoPublish===false above) already uses for "we know it published but not the exact
+        // remote URL".
+        if (c) c.onclick = async () => { await mark(item, null); await advanceAuto(); };
+      }
     }
   }
 

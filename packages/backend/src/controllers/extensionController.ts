@@ -222,7 +222,7 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
   const jobs = itemIds.length
     ? await prisma.marketplaceListingJob.findMany({
         where: { itemId: { in: itemIds } },
-        select: { itemId: true, action: true, status: true, platform: true },
+        select: { itemId: true, action: true, status: true, platform: true, createdAt: true },
       })
     : [];
   const postedByItem = new Set<string>();
@@ -237,9 +237,31 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
   // marketplaceListedCraigslist fields popup.js now actually filters/badges on.
   const postedByItemPlatform = new Set<string>(); // key: `${itemId}:${platform}`
   const removedByItemPlatform = new Set<string>();
+  // BUG FIX (2026-08-15, "Silent Service" NES cartridge cmrqprbs80063l0susxwmzv5b -- Patrick
+  // live FB crosslisting report): the loop below used to add to postedBy*/removedBy* for
+  // EVERY POST/POSTED or REMOVE/REMOVED row seen, with no time-ordering. Real job history:
+  // POST/POSTED (7/19) -> REMOVE/REMOVED (7/20) -> POST/POSTED again (7/23, 7/24, 8/14 with
+  // renewDueAt set, proving the repost genuinely succeeded). Because a REMOVE/REMOVED row
+  // existed ANYWHERE in history, the item was permanently flagged removed/available-to-push
+  // even after later successful reposts. Status must reflect only the MOST RECENT job row per
+  // item+platform. Find the latest row per key by createdAt first, then derive posted/removed
+  // from that single latest row alone.
+  const latestByItemPlatform = new Map<string, { itemId: string; action: string; status: string; createdAt: Date }>();
   for (const j of jobs) {
-    if (j.action === 'POST' && j.status === 'POSTED') { postedByItem.add(j.itemId); postedByItemPlatform.add(`${j.itemId}:${j.platform}`); }
-    if (j.action === 'REMOVE' && j.status === 'REMOVED') { removedByItem.add(j.itemId); removedByItemPlatform.add(`${j.itemId}:${j.platform}`); }
+    const key = `${j.itemId}:${j.platform}`;
+    const existing = latestByItemPlatform.get(key);
+    if (!existing || j.createdAt > existing.createdAt) {
+      latestByItemPlatform.set(key, { itemId: j.itemId, action: j.action, status: j.status, createdAt: j.createdAt });
+    }
+  }
+  for (const [key, latest] of latestByItemPlatform) {
+    if (latest.action === 'POST' && latest.status === 'POSTED') {
+      postedByItem.add(latest.itemId);
+      postedByItemPlatform.add(key);
+    } else if (latest.action === 'REMOVE' && latest.status === 'REMOVED') {
+      removedByItem.add(latest.itemId);
+      removedByItemPlatform.add(key);
+    }
   }
 
   const shaped = items.map((it) => ({
