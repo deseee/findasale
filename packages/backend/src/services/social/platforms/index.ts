@@ -15,23 +15,23 @@ import { blueskyPublisher } from './bluesky';
 import { threadsPublisher } from './threads';
 import { instagramPublisher } from './instagram';
 import { facebookPagePublisher } from './facebookPage';
+import { pinterestPublisher } from './pinterest';
 
 /**
  * Registered publishers. X (Phase 1a), YOUTUBE (Phase 1b), TIKTOK (added
  * 2026-08-10), BLUESKY (added 2026-08-12), and THREADS / INSTAGRAM /
- * FACEBOOK_PAGE (added 2026-08-15, ADR-105 / roadmap #625) are live modules.
- * PINTEREST remains absent until its module lands (later dispatch).
+ * FACEBOOK_PAGE (added 2026-08-15, ADR-105 / roadmap #625) and PINTEREST (added 2026-08-15, ADR-105 Phase 3) are live modules.
  *
  * TIKTOK note: the module is wired end-to-end, but every post it creates will be
  * forced SELF_ONLY by TikTok itself until Patrick's API client passes TikTok's
  * audit (see tiktok.ts header + STATE.md) -- registering it here does NOT mean
  * public TikTok posting is live yet.
  *
- * THREADS / INSTAGRAM / FACEBOOK_PAGE note: code-only as of 2026-08-15 -- no live
- * OAuth connect or live post has been run for any of the three (dispatch
- * constraint). Registering them here makes /connect + /oauth/callback reachable
- * for the first live-connect attempt; see each module's header comment for its
- * token lifecycle and any flagged assumptions.
+ * THREADS / INSTAGRAM / FACEBOOK_PAGE / PINTEREST note: code-only as of
+ * 2026-08-15 -- no live OAuth connect or live post has been run for any of the
+ * four (dispatch constraint). Registering them here makes /connect +
+ * /oauth/callback reachable for the first live-connect attempt; see each
+ * module's header comment for its token lifecycle and any flagged assumptions.
  */
 const PUBLISHERS: Partial<Record<SocialPlatform, PlatformPublisher>> = {
   X: xPublisher,
@@ -41,7 +41,7 @@ const PUBLISHERS: Partial<Record<SocialPlatform, PlatformPublisher>> = {
   THREADS: threadsPublisher,          // added 2026-08-15 — ADR-105 / roadmap #625
   INSTAGRAM: instagramPublisher,      // added 2026-08-15 — ADR-105 / roadmap #625
   FACEBOOK_PAGE: facebookPagePublisher, // added 2026-08-15 — ADR-105 / roadmap #625
-  // PINTEREST: pinterestPublisher,   // Phase 3
+  PINTEREST: pinterestPublisher,      // added 2026-08-15 — ADR-105 Phase 3
 };
 
 /** Returns the publisher for a platform, or null if not yet implemented. */

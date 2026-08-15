@@ -44,9 +44,10 @@ interface SocialPost {
 // Platforms that use the shared OAuth-redirect Connect/Disconnect button (X = Phase 1a,
 // YOUTUBE = Phase 1b, TIKTOK added 2026-08-10 -- SELF_ONLY-forced until Patrick's API
 // client passes TikTok's audit; see platforms/tiktok.ts header for the real constraint).
-// THREADS / INSTAGRAM / FACEBOOK_PAGE added 2026-08-15 (ADR-105 / roadmap #625) -- all
-// three use the standard OAuth-redirect flow too (see each platform module's header
-// comment for its specific token lifecycle). Code-only until the first live connect.
+// THREADS / INSTAGRAM / FACEBOOK_PAGE / PINTEREST added 2026-08-15 (ADR-105 /
+// roadmap #625, PINTEREST Phase 3) -- all four use the standard OAuth-redirect flow
+// too (see each platform module's header comment for its specific token lifecycle).
+// Code-only until the first live connect.
 // BLUESKY is NOT here -- it connects via handle + app password (ADR-105), rendered as
 // its own small form below the Platforms card instead of a redirect button.
 const CONNECTABLE_PLATFORMS: { value: SocialPlatform; label: string }[] = [
@@ -56,6 +57,7 @@ const CONNECTABLE_PLATFORMS: { value: SocialPlatform; label: string }[] = [
   { value: 'THREADS', label: 'Threads' },
   { value: 'INSTAGRAM', label: 'Instagram' },
   { value: 'FACEBOOK_PAGE', label: 'Facebook Page' },
+  { value: 'PINTEREST', label: 'Pinterest' },
 ];
 
 // Every platform with a live publisher module, for the Create Test Post platform
