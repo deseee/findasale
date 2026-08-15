@@ -68,6 +68,25 @@ const PROFILES: Profile[] = [
   { category: 'Books &amp; Magazines:Magazines', weightOz: 6, lengthIn: 11, widthIn: 9, heightIn: 1, packageType: 'PACKAGE_THICK_ENVELOPE', confidence: 0.6 },
   { category: 'Books & Magazines', weightOz: 6, lengthIn: 11, widthIn: 9, heightIn: 1, packageType: 'PACKAGE_THICK_ENVELOPE', confidence: 0.6 },
   { category: 'Books & Magazines:Magazines', weightOz: 6, lengthIn: 11, widthIn: 9, heightIn: 1, packageType: 'PACKAGE_THICK_ENVELOPE', confidence: 0.6 },
+
+  // Category-gap audit follow-up (2026-08-15, same session) -- real production items with
+  // no PackageProfile coverage, found via the same 'what's actually AVAILABLE with no
+  // confirmed weight' audit methodology used for magazines above. Music's 48-item gap was
+  // mostly a false alarm (42/48 already match the existing vinyl/record keywords -- this is
+  // just a low-confidence catch-all for the box-set/plain-'Album' titles that don't).
+  { category: 'Music', weightOz: 12, lengthIn: 13, widthIn: 13, heightIn: 1, packageType: 'PACKAGE_THICK_ENVELOPE', confidence: 0.5 },
+  { keyword: 'antler', weightOz: 8, lengthIn: 14, widthIn: 6, heightIn: 4, packageType: 'MAILING_BOX', confidence: 0.5 },
+  { keyword: 'shoe rack', weightOz: 48, lengthIn: 20, widthIn: 14, heightIn: 6, packageType: 'MAILING_BOX', confidence: 0.5 },
+  { keyword: 'sash lock', weightOz: 4, lengthIn: 6, widthIn: 4, heightIn: 2, packageType: 'PACKAGE_THICK_ENVELOPE', confidence: 0.6 },
+  { keyword: 'wall mount', weightOz: 16, lengthIn: 12, widthIn: 10, heightIn: 3, packageType: 'PACKAGE_THICK_ENVELOPE', confidence: 0.5 },
+  { keyword: 'golf', weightOz: 28, lengthIn: 40, widthIn: 6, heightIn: 4, packageType: 'LARGE_PACKAGE', confidence: 0.5 },
+  { keyword: 'skates', weightOz: 64, lengthIn: 14, widthIn: 10, heightIn: 8, packageType: 'MAILING_BOX', confidence: 0.55 },
+  { keyword: 'swim cuffs', weightOz: 4, lengthIn: 8, widthIn: 6, heightIn: 2, packageType: 'PACKAGE_THICK_ENVELOPE', confidence: 0.6 },
+  { keyword: 'crock', weightOz: 64, lengthIn: 13, widthIn: 12, heightIn: 9, packageType: 'MAILING_BOX', confidence: 0.55 },
+  { keyword: 'cufflink', weightOz: 3, lengthIn: 5, widthIn: 4, heightIn: 2, packageType: 'PACKAGE_THICK_ENVELOPE', confidence: 0.65 },
+  { keyword: 'cigar mold', weightOz: 32, lengthIn: 14, widthIn: 8, heightIn: 6, packageType: 'MAILING_BOX', confidence: 0.55 },
+  { keyword: 'spittoon', weightOz: 24, lengthIn: 10, widthIn: 10, heightIn: 8, packageType: 'MAILING_BOX', confidence: 0.55 },
+  { category: 'Pottery & Glass', weightOz: 24, lengthIn: 11, widthIn: 11, heightIn: 6, packageType: 'MAILING_BOX', confidence: 0.45 },
   { keyword: 'hardcover', weightOz: 32, lengthIn: 11, widthIn: 9, heightIn: 2, packageType: 'PACKAGE_THICK_ENVELOPE', confidence: 0.65 },
   { keyword: 'vinyl', weightOz: 12, lengthIn: 13, widthIn: 13, heightIn: 1, packageType: 'PACKAGE_THICK_ENVELOPE', confidence: 0.7 },
   { keyword: 'record', weightOz: 12, lengthIn: 13, widthIn: 13, heightIn: 1, packageType: 'PACKAGE_THICK_ENVELOPE', confidence: 0.65 },

@@ -212,11 +212,18 @@ function row(it) {
   // same item stays fully selectable on Craigslist/Gumtree AU. The backend's markItemListed is
   // still the authoritative reject -- this is UI guidance, not the real gate.
   const fbBlocked = currentChannel() === 'facebook' && it.facebookRestricted === true;
+  // "Already posted on Facebook?" manual mark -- covers the case where the organizer posted
+  // this item to Facebook by hand (extension automation stalled, or they just did it
+  // themselves on facebook.com). Only offered on the Facebook channel, only for an item this
+  // extension doesn't already think is posted there, and never for a coin/currency item (same
+  // Facebook Commerce Policy restriction that blocks the normal push -- see fbBlocked above).
+  const showMarkPosted = currentChannel() === 'facebook' && !fbBlocked && !currentListedFlag(it);
   d.innerHTML = img +
     '<div class="meta"><div class="t">' + esc(it.title) + '</div><div class="p">$' + (it.price != null ? Number(it.price).toFixed(2) : '—') +
     ' · ' + esc(it.condition || '') + '</div></div>' +
     (currentListedFlag(it) ? '<span class="badge">LISTED</span>' : '') +
     (fbBlocked ? '<span class="badge badge-blocked" title="' + esc(it.facebookRestrictedReason || 'Not allowed on Facebook Marketplace') + '">NOT ALLOWED ON FB</span>' : '') +
+    (showMarkPosted ? '<button type="button" class="markPostedBtn" title="I already posted this item to Facebook myself, outside the extension">Already posted?</button>' : '') +
     '<input type="checkbox" class="cb"' + (fbBlocked ? ' disabled title="' + esc(it.facebookRestrictedReason || 'Not allowed on Facebook Marketplace') + '"' : '') + '>';
   const cb = d.querySelector('.cb');
   if (fbBlocked) {
@@ -229,7 +236,36 @@ function row(it) {
     d.onclick = (e) => { if (e.target !== cb) toggle(); };
     cb.onclick = (e) => { e.stopPropagation(); sync(it.id, cb.checked); };
   }
+  if (showMarkPosted) {
+    const markBtn = d.querySelector('.markPostedBtn');
+    if (markBtn) markBtn.onclick = (e) => { e.stopPropagation(); markAlreadyPosted(it, markBtn); };
+  }
   return d;
+}
+
+// Manual "I already posted this on Facebook myself" action (see showMarkPosted in row() above).
+// Calls the extension worker's markAlreadyPosted passthrough (background.js), which hits the
+// backend's POST /extension/items/:id/mark-posted (extensionController.ts
+// markItemAlreadyPostedManually) -- writes a real MarketplaceListingJob POST/POSTED row, the
+// same shape a genuine automated post creates, so the item both stops showing as "available to
+// push" and re-enters reverse sold-detection. On success, updates local state in place (same
+// optimistic-update approach as sync()/updateCount() elsewhere in this file) and re-renders
+// instead of re-fetching the whole item list.
+async function markAlreadyPosted(it, btn) {
+  btn.disabled = true;
+  btn.textContent = 'Marking…';
+  const r = await send({ type: 'markAlreadyPosted', itemId: it.id });
+  if (!r || !r.ok) {
+    btn.disabled = false;
+    btn.textContent = 'Already posted?';
+    const msg = (r && r.error) || 'Something went wrong. Please try again.';
+    setStatus(esc(msg));
+    setTimeout(() => { if ($('controls') && !$('controls').hidden) $('status').hidden = true; }, 4000);
+    return;
+  }
+  it.marketplaceListedFacebook = true;
+  selected.delete(it.id);
+  render();
 }
 
 function sync(id, on) { on ? selected.add(id) : selected.delete(id); updateCount(); }

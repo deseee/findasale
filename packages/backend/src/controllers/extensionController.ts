@@ -901,6 +901,66 @@ export const markItemSoldOnFacebook = async (req: AuthRequest, res: Response): P
   res.json({ ok: true });
 };
 
+// POST /api/extension/items/:id/mark-posted -- manual counterpart to markItemListed above.
+// Covers the case where the organizer posted this item to Facebook Marketplace by hand
+// (outside the extension's automated flow -- e.g. the automation stalled, or they simply
+// did it themselves on facebook.com directly), so FindA.Sale has no MarketplaceListingJob
+// row for it at all. Without a real POST/POSTED row: (1) the extension popup keeps showing
+// the item as "available to push" forever even though it's genuinely already live, and
+// (2) getPendingSoldChecks above filters its candidate pool to
+// `postedByItem.has(i.id) && !removedByItem.has(i.id)` -- i.e. ONLY items with a real
+// POST/POSTED job row are ever checked by the reverse sold-detection scan -- so the item
+// would also never be picked up if it later sells on Facebook. A separate boolean flag on
+// Item would silently satisfy neither of those; this MUST write a real MarketplaceListingJob
+// row shaped exactly like a genuine automated post (same fields, same platform/action/status,
+// same renewDueAt convention) or the item drops out of sold-detection permanently.
+//
+// IDOR: ownership verified via assertItemOwned before any mutation, same pattern as
+// markItemListed/markItemRemoved/markItemSoldOnFacebook above.
+//
+// Facebook Commerce Policy gate (coins/currency) -- reuses isFacebookRestrictedCoinOrCurrencyItem,
+// the same authoritative reject markItemListed applies for platform === 'FACEBOOK'. A
+// coin/currency item can't be auto-posted to Facebook for policy reasons, so it must not be
+// manually markable as Facebook-posted either -- same restriction, same reasoning.
+//
+// Idempotent: mirrors the "most-recent-row-per-item+platform wins" idiom used by
+// getExtensionItems' latestByItemPlatform / getPendingRenewals' renewalInfoByItem (first-seen
+// under `orderBy: { createdAt: 'desc' }`) -- if the latest FACEBOOK job for this item is
+// already POST/POSTED, this is a no-op success rather than inserting a duplicate row.
+export const markItemAlreadyPostedManually = async (req: AuthRequest, res: Response): Promise<void> => {
+  const userId = req.user?.id;
+  const itemId = req.params.id;
+  if (!userId) { res.status(401).json({ message: 'Authentication required' }); return; }
+  if (!(await assertItemOwned(userId, itemId))) { res.status(404).json({ message: 'Item not found' }); return; }
+
+  const fbItem = await prisma.item.findUnique({
+    where: { id: itemId },
+    select: { category: true, ebayCategoryId: true },
+  });
+  if (fbItem && isFacebookRestrictedCoinOrCurrencyItem(fbItem.category, fbItem.ebayCategoryId)) {
+    res.status(400).json({ message: 'Coins and currency items cannot be listed on Facebook Marketplace (Facebook Commerce Policy).' });
+    return;
+  }
+
+  const latestJob = await prisma.marketplaceListingJob.findFirst({
+    where: { itemId, platform: 'FACEBOOK' },
+    orderBy: { createdAt: 'desc' },
+    select: { action: true, status: true },
+  });
+  if (latestJob && latestJob.action === 'POST' && latestJob.status === 'POSTED') {
+    // Already posted (this call, a prior manual mark, or the automated flow) -- idempotent
+    // success, never a duplicate row.
+    res.json({ ok: true, status: 'POSTED' });
+    return;
+  }
+
+  const renewDueAt = new Date(Date.now() + RENEWAL_LAPSE_WINDOW_DAYS.FACEBOOK * 24 * 60 * 60 * 1000);
+  await prisma.marketplaceListingJob.create({
+    data: { itemId, action: 'POST', status: 'POSTED', platform: 'FACEBOOK', renewDueAt },
+  });
+  res.json({ ok: true, status: 'POSTED' });
+};
+
 // GET /api/extension/sync-health -- organizer-facing summary of Marketplace Autofill
 // activity, powering the "Marketplace Sync Health" card on marketplace-extension.tsx
 // (the organizer's install page, NOT the extension itself -- this is a normal

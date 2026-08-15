@@ -30,6 +30,11 @@ const NEVER_SHIPPABLE_KEYWORDS = [
   'ro filtration system',
   'whole house water filtration',
   'water softener',
+  // Added 2026-08-15 (category-gap audit) -- both found as real unconfirmed-weight items
+  // with no sane parcel-shippable weight guess (a 7.5ft Christmas tree and a charcoal grill
+  // are not standard-parcel items regardless of what weight number is entered).
+  'christmas tree',
+  'charcoal grill',
 ];
 
 /**

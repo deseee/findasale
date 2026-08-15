@@ -909,6 +909,16 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         // extensionController.ts). Mirrors markItemRemovedByRemoval's passthrough shape exactly.
         sendResponse(await apiFetch('/extension/items/' + encodeURIComponent(msg.itemId) + '/sold-on-facebook',
           { method: 'POST', body: {} }));
+      } else if (msg.type === 'markAlreadyPosted') {
+        // Manual counterpart to markListed above -- the organizer is telling us they already
+        // posted this item to Facebook themselves (outside this extension's automated flow),
+        // so there is no MarketplaceListingJob row for it yet. Straight passthrough to the
+        // backend's authoritative endpoint (extensionController.ts
+        // markItemAlreadyPostedManually), same shape as markItemSoldFromFacebook above --
+        // ownership + Facebook Commerce Policy (coins/currency) gating both live server-side,
+        // this worker never re-derives either check.
+        sendResponse(await apiFetch('/extension/items/' + encodeURIComponent(msg.itemId) + '/mark-posted',
+          { method: 'POST', body: {} }));
       } else if (msg.type === 'removalQueueDone') {
         // fas-remove.js finished the queue -- restore the organizer's tab + close the auto-opened
         // silent-mode removal tab. No-op in notify mode (no fasRemovalTabId tracked there).
