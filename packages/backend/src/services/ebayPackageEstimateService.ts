@@ -155,13 +155,33 @@ export async function estimatePackageProfile(item: PackageEstimateItem): Promise
     // 2. Keyword match against the item title — a specific item type must beat a
     //    broad category (e.g. "figurine" wins over a generic "Collectibles" profile).
     //    Runs BEFORE the category-label match (was step 3; reordered).
+    //
+    // FIXED 2026-08-15 (category-gap audit, real-data misfire sweep): raw substring
+    // matching let a keyword fire inside an unrelated longer word -- e.g. keyword 'pot'
+    // matched "California Pottery B412 Candy Dish" (a 64oz cast-iron-pot estimate on a
+    // small ceramic dish), 'doll' matched "1971 Eisenhower Dollar" coins and "Dollar Size"
+    // display-slab inserts (a 20oz toy-doll estimate on a coin or a stack of thin cardstock),
+    // 'ring' matched "...Strings...Guitar" and "...Manufacturing..." (3oz ring-weight on a
+    // full guitar or an aquarium pump), 'fan' matched "Fanned Frets..." and "...Final
+    // Fantasy" (96oz), 'plate' matched "Silver-Plated"/"Nameplate", 'book' matched
+    // "Booklet", 'print' matched "Printing", 'racket' matched "Brackets" -- 20 real false
+    // matches found across the live catalog via a full audit of every keyword against
+    // every AVAILABLE item title. Now matches the keyword as a whole word (optionally with
+    // a trailing 's' for simple plurals, e.g. keyword 'record' still matches "Records" /
+    // 'comic' still matches "Comics" / 'card' still matches "Cards" -- verified this keeps
+    // every genuine plural match working, only removes the same-substring-different-word
+    // false positives) instead of a bare substring test.
     if (item.title) {
       const title = item.title.toLowerCase();
       const keywordProfiles = await prisma.packageProfile.findMany({
         where: { keyword: { not: null } },
         orderBy: { confidence: 'desc' },
       });
-      const hit = keywordProfiles.find((p) => p.keyword && title.includes(p.keyword.toLowerCase()));
+      const keywordWordMatch = (title: string, keyword: string): boolean => {
+        const escaped = keyword.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        return new RegExp(`\\b${escaped}s?\\b`, 'i').test(title);
+      };
+      const hit = keywordProfiles.find((p) => p.keyword && keywordWordMatch(title, p.keyword));
       if (hit) {
         // ADR-092 (2026-07-24): a generic keyword profile can't tell a single small
         // item from a bulk lot -- cross-check against any explicit weight the organizer

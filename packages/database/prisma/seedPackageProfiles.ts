@@ -87,6 +87,25 @@ const PROFILES: Profile[] = [
   { keyword: 'cigar mold', weightOz: 32, lengthIn: 14, widthIn: 8, heightIn: 6, packageType: 'MAILING_BOX', confidence: 0.55 },
   { keyword: 'spittoon', weightOz: 24, lengthIn: 10, widthIn: 10, heightIn: 8, packageType: 'MAILING_BOX', confidence: 0.55 },
   { category: 'Pottery & Glass', weightOz: 24, lengthIn: 11, widthIn: 11, heightIn: 6, packageType: 'MAILING_BOX', confidence: 0.45 },
+
+  // Orphaned by the keyword-collision word-boundary fix (below) -- these items previously
+  // got a WRONG estimate via a substring false-match ('doll' matching "Dollar Size", 'racket'
+  // matching "Brackets") and now correctly fall through to nothing without a real row.
+  { keyword: 'display slab', weightOz: 4, lengthIn: 6, widthIn: 4, heightIn: 1, packageType: 'PACKAGE_THICK_ENVELOPE', confidence: 0.6 },
+  { keyword: 'hanger bracket', weightOz: 16, lengthIn: 10, widthIn: 8, heightIn: 3, packageType: 'PACKAGE_THICK_ENVELOPE', confidence: 0.5 },
+
+  // Remaining smaller-category gap fill (2026-08-15, same session, second pass beyond the top 5)
+  { keyword: 'pocket pages', weightOz: 4, lengthIn: 9, widthIn: 6, heightIn: 1, packageType: 'PACKAGE_THICK_ENVELOPE', confidence: 0.6 },
+  { keyword: 'decorative mask', weightOz: 20, lengthIn: 10, widthIn: 8, heightIn: 4, packageType: 'MAILING_BOX', confidence: 0.5 },
+  { keyword: 'balance board', weightOz: 48, lengthIn: 20, widthIn: 12, heightIn: 4, packageType: 'LARGE_PACKAGE', confidence: 0.55 },
+  { keyword: 'steam link', weightOz: 8, lengthIn: 6, widthIn: 5, heightIn: 2, packageType: 'MAILING_BOX', confidence: 0.6 },
+  { keyword: 'cartridge', weightOz: 4, lengthIn: 6, widthIn: 4, heightIn: 1, packageType: 'PACKAGE_THICK_ENVELOPE', confidence: 0.55 },
+  { keyword: 'lighter', weightOz: 8, lengthIn: 5, widthIn: 4, heightIn: 2, packageType: 'PACKAGE_THICK_ENVELOPE', confidence: 0.55 },
+  { keyword: 'telescope', weightOz: 80, lengthIn: 24, widthIn: 10, heightIn: 10, packageType: 'LARGE_PACKAGE', confidence: 0.5 },
+  { keyword: 'cuff link', weightOz: 3, lengthIn: 5, widthIn: 4, heightIn: 2, packageType: 'PACKAGE_THICK_ENVELOPE', confidence: 0.65 },
+  { keyword: 'sign', weightOz: 40, lengthIn: 18, widthIn: 14, heightIn: 3, packageType: 'MAILING_BOX', confidence: 0.45 },
+  { keyword: 'tin', weightOz: 24, lengthIn: 8, widthIn: 8, heightIn: 4, packageType: 'MAILING_BOX', confidence: 0.45 },
+  { category: 'Video Games & Consoles:Video Games', weightOz: 3, lengthIn: 6, widthIn: 4, heightIn: 1, packageType: 'PACKAGE_THICK_ENVELOPE', confidence: 0.5 },
   { keyword: 'hardcover', weightOz: 32, lengthIn: 11, widthIn: 9, heightIn: 2, packageType: 'PACKAGE_THICK_ENVELOPE', confidence: 0.65 },
   { keyword: 'vinyl', weightOz: 12, lengthIn: 13, widthIn: 13, heightIn: 1, packageType: 'PACKAGE_THICK_ENVELOPE', confidence: 0.7 },
   { keyword: 'record', weightOz: 12, lengthIn: 13, widthIn: 13, heightIn: 1, packageType: 'PACKAGE_THICK_ENVELOPE', confidence: 0.65 },
