@@ -164,8 +164,18 @@ const CROSS_SOURCE_FUZZY_MODE = (process.env.CROSS_SOURCE_FUZZY_DEDUP_MODE || 's
 // 'live'   -- actually attaches the new source to the matched row instead of creating a new one.
 
 const FUZZY_NAME_FLOOR = 0.30;   // below this, names are unrelated -- never even considered
-const FUZZY_NAME_HIGH = 0.60;    // name+city alone is sufficient at this bar
-const FUZZY_NAME_MEDIUM = 0.40;  // requires a second signal (phone or non-franchise domain) too
+// FUZZY_NAME_HIGH (formerly 0.60, "name+city alone is sufficient") RETIRED 2026-08-15 -- a
+// shadow-mode review of real production traffic found this bar produced ~90% false positives
+// (9 of 10 sampled matches were genuinely unrelated businesses sharing a generic word/first name
+// + city, e.g. "Robert Furlow" ~ "Robert Fay", "Estate Sales By Cheryl" ~ "Simply Estate Sales").
+// The single correct match in that sample (score=0.77) was a genuine name-containment case, not
+// just a high score -- see isNameContainment() above. Replaced by FUZZY_NAME_VERY_HIGH (score
+// alone, no structural check needed) and a containment check at the old MEDIUM floor. See
+// STATE.md Blocked Queue, "Cross-scraper fuzzy dedup shadow-mode review" (2026-08-15) for the
+// full evidence.
+const FUZZY_NAME_VERY_HIGH = 0.85; // exceptionally strong lexical match -- name alone is sufficient at this bar, no structural check needed
+const FUZZY_NAME_MEDIUM = 0.40;  // requires a second signal (phone, non-franchise domain, or name-containment) too
+const FUZZY_CONTAINMENT_MIN_LEN = 15; // isNameContainment()'s minimum shorter-name length -- avoids generic fragments like "estate sales" (12 chars) qualifying alone
 const FRANCHISE_DOMAIN_SHARED_FLOOR = 3; // domain already on >=N distinct organizers => franchise/multi-tenant, ignore as a signal
 
 /**
@@ -197,6 +207,23 @@ function nameSimilarity(a: string, b: string): number {
     }
   }
   return (2 * overlap) / (ga.length + gb.length);
+}
+
+/**
+ * True when the SHORTER normalized business name is a genuine, verbatim PREFIX of the longer
+ * one (e.g. "Joan and Marty's Estate Sales" -> "...and Real Estate"), not just a shared generic
+ * fragment. FUZZY_CONTAINMENT_MIN_LEN guards against short/generic strings ("estate sales" is
+ * 12 chars) registering as containment on their own -- the shorter name has to be substantial
+ * enough to be a real business-name match, not a category word.
+ */
+function isNameContainment(a: string, b: string): boolean {
+  const na = normalizeName(a);
+  const nb = normalizeName(b);
+  if (!na || !nb) return false;
+  const shorter = na.length <= nb.length ? na : nb;
+  const longer = na.length <= nb.length ? nb : na;
+  if (shorter.length < FUZZY_CONTAINMENT_MIN_LEN) return false;
+  return longer.startsWith(shorter);
 }
 
 /** Last-10-digits phone normalization for loose cross-format comparison. Null if too short to trust. */
@@ -867,7 +894,14 @@ export async function getOrCreateScrapedOrganizer(
       let qualifies = false;
       const signals: string[] = ['city'];
 
-      if (score >= FUZZY_NAME_HIGH) {
+      // Name alone is sufficient ONLY at an exceptionally strong lexical bar, or when one full
+      // business name is a genuine verbatim prefix of the other (real corroboration, not just a
+      // coincidental score) -- see isNameContainment() doc comment and the retirement note above
+      // FUZZY_NAME_VERY_HIGH for the evidence behind this change.
+      if (score >= FUZZY_NAME_VERY_HIGH) {
+        qualifies = true;
+      } else if (score >= FUZZY_NAME_MEDIUM && isNameContainment(businessName, c.businessName)) {
+        signals.push('containment');
         qualifies = true;
       }
 

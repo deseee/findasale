@@ -36,8 +36,11 @@ const PINTEREST_OAUTH_AUTHORIZE = 'https://www.pinterest.com/oauth/';
 const PINTEREST_OAUTH_TOKEN = 'https://api.pinterest.com/v5/oauth/token';
 const PINTEREST_API_BASE = 'https://api.pinterest.com/v5';
 
-// Minimum viable scope set: read boards, write pins, read basic profile for display.
-const PINTEREST_SCOPES = ['boards:read', 'pins:write', 'user_accounts:read'];
+// Minimum viable scope set: read+write boards (resolvePrimaryBoardId() creates a default
+// board when the account has none -- confirmed 2026-08-15 via a real 401 from Pinterest's API,
+// "Missing: ['boards:write']", when this scope was omitted and the connected account had zero
+// existing boards), write pins, read basic profile for display.
+const PINTEREST_SCOPES = ['boards:read', 'boards:write', 'pins:write', 'user_accounts:read'];
 
 const PINTEREST_MAX_TITLE_CHARS = 100;
 const PINTEREST_MAX_DESCRIPTION_CHARS = 500;
