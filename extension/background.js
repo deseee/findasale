@@ -546,6 +546,13 @@ async function autoRenewDueItems(dueItems) {
       clQueue.push(buildRenewalQueueItem(full, organizerEmail));
     } else if (due.platform === 'GUMTREE_AU') {
       gtQueue.push(buildRenewalQueueItem(full, organizerEmail));
+    } else if (full.facebookRestricted === true) {
+      // Facebook Commerce Policy defense-in-depth: getPendingRenewals already excludes
+      // coin/currency items due on FACEBOOK (extensionController.ts), so `dueItems` should
+      // never contain one -- this is a belt-and-suspenders skip in case a due item was cached
+      // before that server-side filter existed. Never queue for a full repost OR a native
+      // "Renew listing" click.
+      continue;
     } else if (staleIds.has(due.id)) {
       fbQueue.push(buildRenewalQueueItem(full, organizerEmail));
     } else {

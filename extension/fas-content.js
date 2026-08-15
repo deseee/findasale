@@ -12,6 +12,23 @@
 
   function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
 
+  // Facebook Commerce Policy: coins/currency items cannot be listed on Facebook Marketplace.
+  // Mirrors isFacebookRestrictedCoinOrCurrencyItem() in extensionController.ts (kept in sync
+  // manually; same "trivial pure map -- not worth a shared import" pattern as
+  // toFacebookCondition's mirror comment in that file). Text-only here -- queue entries carry
+  // item.category but not ebayCategoryId, so this is the free-text fallback slice of the
+  // backend check, not the ID-based primary check. This is DEFENSE-IN-DEPTH ONLY: popup.js
+  // already disables selection and background.js already skips queueing these items for
+  // Facebook, and the backend's markItemListed call is the real authoritative reject. This
+  // guard exists purely in case an item was queued before this fix shipped (a stale cached
+  // fasQueue) or some other path slips one through.
+  const FB_COIN_CURRENCY_NAME_KEYWORDS = ['coin', 'currency', 'paper money'];
+  function isFacebookRestrictedCoinOrCurrencyItem(category) {
+    if (!category) return false;
+    const lower = String(category).toLowerCase();
+    return FB_COIN_CURRENCY_NAME_KEYWORDS.some((kw) => lower.indexOf(kw) !== -1);
+  }
+
   const realClick = SEL.realClick; // shared with fas-remove.js -- see fas-selectors.js
 
   function waitFor(getter, timeout = 12000) {
@@ -768,6 +785,17 @@
     let q;
     try { q = await chrome.runtime.sendMessage({ type: 'getQueueItem' }); } catch (e) { return; }
     if (!q || !q.ok || !q.item) return; // nothing queued -- stay silent
+    // Facebook Commerce Policy gate (coins/currency) -- see isFacebookRestrictedCoinOrCurrencyItem
+    // above. Defense-in-depth: skip straight to the next queued item rather than filling out
+    // Facebook's form for it. This item is NOT marked listed (mark() is never called), so it
+    // stays available to push on eBay/other channels.
+    if (isFacebookRestrictedCoinOrCurrencyItem(q.item.category)) {
+      console.warn('[FAS] skipping Facebook listing for coin/currency item (Commerce Policy):', q.item.id, q.item.title);
+      overlay('<b>FindA.Sale</b><div style="color:#ffcf7a;margin-top:6px;font-size:12px">Skipped <b>' + escapeHtml(q.item.title || 'this item') + '</b> -- Facebook Marketplace does not allow listing coins or currency (Commerce Policy).</div>');
+      await humanPause(1200, 1800);
+      await advanceAuto();
+      return;
+    }
     try {
       await waitFor(() => SEL.fieldByLabel(LABELS.title), 15000);
       await sleep(400);

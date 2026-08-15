@@ -7,6 +7,7 @@ import { applyNeverShippableOverride, computeEffectivePackageWeight, endEbayList
 import { markShopifyItemSold } from '../services/shopifyService';
 import { commitItemSale, ItemAlreadyCommittedError } from '../services/itemSaleGuard';
 import { decideMessageAutosend } from '../services/messageAutosendService';
+import { EBAY_STANDARD_ENVELOPE_CATEGORY_ID_DESCENDANTS } from '../services/ebayRateEstimateService';
 
 // Facebook Marketplace condition values. Mirrors mapConditionForFacebook() in
 // exportController.ts (kept in sync; trivial pure map — not worth a shared import).
@@ -25,6 +26,49 @@ function buildDescription(description: string | null | undefined, saleId: string
   if (!saleId) return base;
   const link = `View full listing: https://finda.sale/sales/${saleId}`;
   return base ? `${base}\n\n${link}` : link;
+}
+
+// Facebook Commerce Policy prohibits listing currency, cash, and coins (Marketplace Commerce
+// Policies -- "prohibited content" includes currency, cash, and cash-equivalent instruments).
+// This gate is FACEBOOK-SPECIFIC ONLY -- it must never affect eBay, native checkout, or any
+// other platform's pushability.
+//
+// ID source: reuses ONLY the "Coins & Paper Money" slice of ebayRateEstimateService.ts's
+// live-verified eBay Taxonomy API data (root L1 id '11116' + its confirmed descendant leaf
+// '11981', Eisenhower dollars) via EBAY_STANDARD_ENVELOPE_CATEGORY_ID_DESCENDANTS --
+// deliberately NOT the whole EBAY_STANDARD_ENVELOPE_ELIGIBLE_CATEGORY_IDS list, which also
+// covers Patches, Stickers & Decals, Greeting Cards, Seeds, Trading Cards, Postcards, and
+// Stamps (EBAY_STANDARD_ENVELOPE_ELIGIBLE_CATEGORIES, ebayRateEstimateService.ts:913-921).
+// None of those other 7 families are restricted by Facebook's policy -- only currency/coins
+// are -- so reusing the combined 8-category list here would incorrectly flag stamps,
+// postcards, trading cards, etc. as Facebook-ineligible. Checked live 2026-08-15.
+const FB_COIN_CURRENCY_CATEGORY_ID_ROOT = '11116'; // eBay L1 "Coins & Paper Money"
+const FB_COIN_CURRENCY_CATEGORY_IDS: readonly string[] = [
+  FB_COIN_CURRENCY_CATEGORY_ID_ROOT,
+  ...(EBAY_STANDARD_ENVELOPE_CATEGORY_ID_DESCENDANTS[FB_COIN_CURRENCY_CATEGORY_ID_ROOT] || []),
+];
+
+// Free-text fallback for items with no ebayCategoryId. Item.ebayCategoryId (schema.prisma)
+// is captured only on eBay import/push -- an item that has never gone through eBay (many
+// items pushed through this Facebook extension) will never have it set, regardless of
+// category. Item.category (schema.prisma:1114) is a free-text/AI-classified field populated
+// independent of any eBay activity, so it is checked here as a fallback. Case-insensitive
+// substring match; 'currency' also catches "Coins & Currency", eBay's older/deprecated name
+// for the same category (see EBAY_STANDARD_ENVELOPE_ELIGIBLE_CATEGORIES's own 2026-08-15 fix
+// comment) in case an older FindA.Sale item still carries that stale text.
+const FB_COIN_CURRENCY_NAME_KEYWORDS: readonly string[] = ['coin', 'currency', 'paper money'];
+
+/** True when an item is a coin/currency item and therefore cannot be listed on Facebook
+ *  Marketplace per Facebook's Commerce Policy. FACEBOOK-SPECIFIC -- callers must never use
+ *  this to gate eBay, native checkout, or any other platform's eligibility. */
+function isFacebookRestrictedCoinOrCurrencyItem(
+  category: string | null | undefined,
+  ebayCategoryId: string | null | undefined
+): boolean {
+  if (ebayCategoryId && FB_COIN_CURRENCY_CATEGORY_IDS.includes(ebayCategoryId)) return true;
+  if (!category) return false;
+  const lower = category.toLowerCase();
+  return FB_COIN_CURRENCY_NAME_KEYWORDS.some((kw) => lower.includes(kw));
 }
 
 // GET /api/extension/items — the organizer's listable items + Marketplace status.
@@ -273,6 +317,14 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
     condition: toFacebookCondition(it.condition),
     description: buildDescription(it.description, it.saleId),
     category: it.category || null,
+    // Facebook Commerce Policy gate (coins/currency) -- see isFacebookRestrictedCoinOrCurrencyItem
+    // above. FB-specific only; does not affect eBay/craigslist/gumtree/native-checkout fields
+    // elsewhere in this same payload. Surfaced so popup.js can disable/badge the item on the
+    // Facebook channel specifically while leaving it selectable for every other channel.
+    facebookRestricted: isFacebookRestrictedCoinOrCurrencyItem(it.category, it.ebayCategoryId),
+    facebookRestrictedReason: isFacebookRestrictedCoinOrCurrencyItem(it.category, it.ebayCategoryId)
+      ? 'Facebook Marketplace does not allow listing coins or currency (Commerce Policy).'
+      : null,
     photoUrls: applyWatermark ? (it.photoUrls || []).map((u) => getWatermarkedUrlWithQR(u, it.id, it.qrEmbedEnabled !== false)) : (it.photoUrls || []),
     packageWeightOz: it.packageWeightOz,
     aiPackageWeightOz: it.aiPackageWeightOz,
@@ -393,6 +445,22 @@ export const markItemListed = async (req: AuthRequest, res: Response): Promise<v
   const platform: MarketplaceRenewalPlatform = (VALID_RENEWAL_PLATFORMS as string[]).includes(platformRaw)
     ? (platformRaw as MarketplaceRenewalPlatform)
     : 'FACEBOOK';
+
+  // Facebook Commerce Policy gate (coins/currency) -- this is the AUTHORITATIVE reject, run
+  // regardless of whatever the extension's own client-side checks (popup.js/background.js/
+  // fas-content.js) already decided. Only blocks platform === 'FACEBOOK' -- eBay, native
+  // checkout, and every other platform's markItemListed call is unaffected.
+  if (platform === 'FACEBOOK') {
+    const fbItem = await prisma.item.findUnique({
+      where: { id: itemId },
+      select: { category: true, ebayCategoryId: true },
+    });
+    if (fbItem && isFacebookRestrictedCoinOrCurrencyItem(fbItem.category, fbItem.ebayCategoryId)) {
+      res.status(400).json({ message: 'Coins and currency items cannot be listed on Facebook Marketplace (Facebook Commerce Policy).' });
+      return;
+    }
+  }
+
   const lapseDays = RENEWAL_LAPSE_WINDOW_DAYS[platform];
   const renewDueAt = new Date(Date.now() + lapseDays * 24 * 60 * 60 * 1000);
 
@@ -697,11 +765,18 @@ export const getPendingRenewals = async (req: AuthRequest, res: Response): Promi
   const organizer = await prisma.organizer.findUnique({ where: { userId } });
   if (!organizer) { res.status(404).json({ message: 'Organizer profile not found' }); return; }
 
+  // category/ebayCategoryId added for the Facebook Commerce Policy gate below (coins/currency)
+  // -- defense against a LEGACY/grandfathered item that already has a FACEBOOK POST/POSTED
+  // MarketplaceListingJob row from before this gate existed (markItemListed now refuses to
+  // create new ones, but pre-existing rows are untouched data, not retroactively cleaned up
+  // here). Without this filter, auto-renew would keep refreshing/reposting an already-live
+  // Facebook coin listing forever.
   const availableItems = await prisma.item.findMany({
     where: { sale: { organizerId: organizer.id, deletedAt: null }, status: 'AVAILABLE' },
-    select: { id: true, title: true, saleId: true },
+    select: { id: true, title: true, saleId: true, category: true, ebayCategoryId: true },
   });
   if (!availableItems.length) { res.json({ items: [] }); return; }
+  const availableItemById = new Map(availableItems.map((i) => [i.id, i]));
 
   const itemIds = availableItems.map((i) => i.id);
   const jobs = await prisma.marketplaceListingJob.findMany({
@@ -732,6 +807,14 @@ export const getPendingRenewals = async (req: AuthRequest, res: Response): Promi
     // renewDueAt is null for every pre-ADR-100 row (no backfill, ADR-100 §7 Q4) -- such items
     // simply never surface a renewal nudge until a fresh POST row is written for them.
     .filter((i) => i.renewDueAt != null && i.renewDueAt.getTime() <= dueThreshold)
+    // Facebook Commerce Policy gate (coins/currency) -- see comment on availableItems' select
+    // above. Only excludes platform === 'FACEBOOK'; a coin/currency item due for renewal on
+    // Craigslist or Gumtree AU is unaffected.
+    .filter((i) => {
+      if (i.platform !== 'FACEBOOK') return true;
+      const full = availableItemById.get(i.id);
+      return !full || !isFacebookRestrictedCoinOrCurrencyItem(full.category, full.ebayCategoryId);
+    })
     .map((i) => ({ id: i.id, title: i.title, saleId: i.saleId, platform: i.platform, renewDueAt: (i.renewDueAt as Date).toISOString() }));
 
   res.json({ items });

@@ -118,7 +118,12 @@ const PROFILES: Profile[] = [
   { keyword: 'doll', weightOz: 20, lengthIn: 12, widthIn: 8, heightIn: 6, packageType: 'MAILING_BOX', confidence: 0.55 },
   { keyword: 'puzzle', weightOz: 24, lengthIn: 12, widthIn: 10, heightIn: 3, packageType: 'MAILING_BOX', confidence: 0.6 },
   { keyword: 'board game', weightOz: 32, lengthIn: 12, widthIn: 10, heightIn: 3, packageType: 'MAILING_BOX', confidence: 0.6 },
-  { category: 'Collectibles', keyword: 'coin', weightOz: 4, lengthIn: 6, widthIn: 5, heightIn: 2, packageType: 'PACKAGE_THICK_ENVELOPE', confidence: 0.65 },
+  // 2026-08-15: weightOz corrected 4->2 -- live eBay-recorded weight for 7/7 real already-listed
+  // Eisenhower dollar coins agreed exactly at 2oz (confirmed via GetItem ShippingPackageDetails,
+  // this session's PackageProfile weight audit). The old 4oz default was ~1oz+ over the real weight
+  // of a single coin in a thick envelope and was also pushing these items over the eBay Standard
+  // Envelope program's 3oz cap for no real physical reason.
+  { category: 'Collectibles', keyword: 'coin', weightOz: 2, lengthIn: 6, widthIn: 5, heightIn: 2, packageType: 'PACKAGE_THICK_ENVELOPE', confidence: 0.65 },
   { keyword: 'card', weightOz: 3, lengthIn: 6, widthIn: 4, heightIn: 1, packageType: 'PACKAGE_THICK_ENVELOPE', confidence: 0.7 },
 
   // Sports
@@ -148,7 +153,11 @@ const GAP_FILL_PROFILES: Profile[] = [
 
   // Comics -- zero prior coverage, high per-batch volume for this organizer.
   // 2026-08-13 (Patrick): corrected from 8x6x1 -- a comic's long edge (Modern ~10.25in, Golden/Silver ~10.5in) didn't fit an 8in box. Real packed size is ~11x8x1 (bag+board+rigid mailer).
-  { category: 'Comic Books & Memorabilia', keyword: 'comic', weightOz: 4, lengthIn: 11, widthIn: 8, heightIn: 1, packageType: 'PACKAGE_THICK_ENVELOPE', confidence: 0.7 },
+  // 2026-08-15: weightOz corrected 4->8 -- live eBay-recorded weight for ~20 real already-listed
+  // comics (bagged+boarded in a rigid mailer) agreed consistently at 8oz, not 4oz (confirmed via
+  // GetItem ShippingPackageDetails, this session's PackageProfile weight audit). The dims fix on
+  // 2026-08-13 addressed the box size but left this stale weight untouched.
+  { category: 'Comic Books & Memorabilia', keyword: 'comic', weightOz: 8, lengthIn: 11, widthIn: 8, heightIn: 1, packageType: 'PACKAGE_THICK_ENVELOPE', confidence: 0.7 },
 
   // Tobacciana -- zero prior coverage, recurring category for this organizer.
   { keyword: 'cigar box', weightOz: 24, lengthIn: 10, widthIn: 8, heightIn: 4, packageType: 'MAILING_BOX', confidence: 0.55 },

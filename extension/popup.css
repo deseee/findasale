@@ -25,6 +25,8 @@ header { padding: 12px 14px; border-bottom: 1px solid #26362d; display: flex; al
 .item .t { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .item .p { color: #9fb6a8; font-size: 12px; }
 .item .badge { font-size: 10px; color: #14201a; background: #6fd08c; border-radius: 4px; padding: 1px 5px; font-weight: 700; }
+.item .badge-blocked { color: #2a1414; background: #e08a7a; margin-left: 4px; }
+.item .cb:disabled { opacity: .35; cursor: not-allowed; }
 footer { padding: 10px 14px; border-top: 1px solid #26362d; }
 button.primary { width: 100%; padding: 10px; border: none; border-radius: 8px; background: #3c8c5a; color: #fff; font-weight: 700; cursor: pointer; }
 button.primary:disabled { background: #2a3a30; color: #6b7c72; cursor: default; }

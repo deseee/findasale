@@ -206,13 +206,24 @@ function render() {
 function row(it) {
   const d = document.createElement('div'); d.className = 'item';
   const img = it.photoUrls && it.photoUrls[0] ? '<img src="' + it.photoUrls[0] + '">' : '<img>';
+  // Facebook Commerce Policy: coins/currency items cannot be listed on Facebook Marketplace.
+  // Backend (extensionController.ts getExtensionItems) computes facebookRestricted per item --
+  // this only disables the checkbox / shows a badge on the FACEBOOK channel specifically; the
+  // same item stays fully selectable on Craigslist/Gumtree AU. The backend's markItemListed is
+  // still the authoritative reject -- this is UI guidance, not the real gate.
+  const fbBlocked = currentChannel() === 'facebook' && it.facebookRestricted === true;
   d.innerHTML = img +
     '<div class="meta"><div class="t">' + esc(it.title) + '</div><div class="p">$' + (it.price != null ? Number(it.price).toFixed(2) : '—') +
     ' · ' + esc(it.condition || '') + '</div></div>' +
     (currentListedFlag(it) ? '<span class="badge">LISTED</span>' : '') +
-    '<input type="checkbox" class="cb">';
+    (fbBlocked ? '<span class="badge badge-blocked" title="' + esc(it.facebookRestrictedReason || 'Not allowed on Facebook Marketplace') + '">NOT ALLOWED ON FB</span>' : '') +
+    '<input type="checkbox" class="cb"' + (fbBlocked ? ' disabled title="' + esc(it.facebookRestrictedReason || 'Not allowed on Facebook Marketplace') + '"' : '') + '>';
   const cb = d.querySelector('.cb');
-  if (cb) {
+  if (fbBlocked) {
+    // Make sure a coin/currency item can't sneak into the selected set (e.g. selected while on
+    // a different channel, then the organizer switches to Facebook without re-clicking it).
+    selected.delete(it.id);
+  } else if (cb) {
     cb.checked = selected.has(it.id);
     const toggle = () => { cb.checked = !cb.checked; sync(it.id, cb.checked); };
     d.onclick = (e) => { if (e.target !== cb) toggle(); };
@@ -236,7 +247,14 @@ function updateCount() {
 }
 
 async function startQueue() {
-  const queue = ITEMS.filter((it) => selected.has(it.id)).map((it) => ({
+  // Facebook Commerce Policy defense-in-depth: row() already disables the checkbox and
+  // prunes `selected`, but re-filter here too in case of a stale selection (e.g. selection
+  // made before an item's facebookRestricted flag was known). Backend markItemListed is the
+  // real gate -- this only avoids uselessly opening a Facebook tab for a blocked item.
+  const ch = currentChannel();
+  const queue = ITEMS.filter((it) => selected.has(it.id))
+    .filter((it) => !(ch === 'facebook' && it.facebookRestricted === true))
+    .map((it) => ({
     id: it.id, title: it.title, price: it.price, condition: it.condition,
     description: it.description, category: it.category, photoUrls: it.photoUrls || [],
     packageWeightOz: it.packageWeightOz, aiPackageWeightOz: it.aiPackageWeightOz,
