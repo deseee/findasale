@@ -195,6 +195,7 @@ import crawlerStatsRouter from './routes/crawlerStats';           // AI Crawler 
 import crawlerLogRouter from './routes/crawlerLog';               // AI Crawler Log — SSR bot tracking
 import demandSignalsRouter from './routes/demandSignals';          // #454 Organizer Demand Dashboard
 import aiScoreRouter from './routes/aiScore';                       // GEO Phase 3: Search Visibility Score
+import twilioVoiceRoutes from './routes/twilioVoice';               // Inbound voice + voicemail on existing Twilio toll-free number
 import { authenticate } from './middleware/auth';
 import { sentryUserContext } from './middleware/sentryUserContext'; // Feature #21: User Impact Scoring
 import { degradationMode } from './middleware/degradationMode'; // Feature #20: Proactive Degradation Mode
@@ -740,6 +741,7 @@ app.use('/api/upload', uploadRoutes);
 app.use('/api/organizers', organizerRoutes);
 app.use('/api/companies', companyRoutes); // #567: hire-intent company directory (SEO)
 app.use('/api/contact', contactLimiter, contactRoutes); // M3: dedicated contact spam limiter
+app.use('/api/twilio', twilioVoiceRoutes); // Inbound voice + voicemail on existing Twilio toll-free number (public, Twilio-signature-verified)
 app.use('/api/push', pushRoutes);
 app.use('/api/feed', feedRoutes); // Phase 28: personalized activity feed
 app.use('/api/google-merchant', googleMerchantRoutes); // Feature #463: Google Merchant Center product feed (TSV)
