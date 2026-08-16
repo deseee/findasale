@@ -126,9 +126,10 @@ interface PolicyMapping {
   merchantLocationSource: 'EXISTING' | 'SALE_ADDRESS' | 'ORGANIZER_ADDRESS';
   shippingMode?: 'CALCULATED' | 'FLAT_TIERS';
   freeShippingOptIn?: boolean;
-  // Assumed contract -- see the FALLBACK_MODE_FIELD comment block below.
-  shippingFallbackMode?: ShippingFallbackMode;
-  shippingFallbackPolicyId?: string | null;
+  // Routing fallback (2026-08-16). Real backend column: EbayPolicyMapping.fallbackStrategy.
+  // The POLICY option reuses defaultFulfillmentPolicyId above -- there is no separate
+  // fallback-policy column. See the FALLBACK_FIELD comment block below.
+  fallbackStrategy?: FallbackStrategy;
 }
 
 interface SetupData {
@@ -228,27 +229,61 @@ type PresetFormState = typeof EMPTY_PRESET_FORM;
 
 // ── Routing fallback picker ──────────────────────────────────────────────────
 //
-// !! ASSUMED API CONTRACT -- NOT CONFIRMED BY THE BACKEND AGENT AS OF 2026-08-16 !!
+// CONFIRMED API CONTRACT (2026-08-16). Backend authority:
+//   - column   EbayPolicyMapping.fallbackStrategy  String @default("CALCULATED")
+//   - read     GET  /api/ebay/setup-data      -> currentMapping.fallbackStrategy
+//   - write    POST /api/ebay/policy-mapping  -> body.fallbackStrategy (case-insensitive;
+//              unknown or absent falls back to CALCULATED)
+//   - values   FALLBACK_STRATEGIES in ebayController.ts
+//   - 400      fallbackStrategy === 'POLICY' with an empty defaultFulfillmentPolicyId
+// There is no separate fallback-policy column: POLICY reuses defaultFulfillmentPolicyId,
+// the same field Section B's "Default Fulfillment Policy" select edits.
 //
-// The parallel dispatch that owns ebayController.ts / ebayShippingResolver.ts is
-// turning today's silent last-resort (an item that matches nothing lands on the
-// organizer's connection-default fulfillment policy, which for at least one real
-// account is a $0 "Free Domestic Shipping" policy) into an explicit organizer
-// setting. They have not handed back their field name or shape yet, so this UI is
-// built against the two field names below and the three modes in
-// ShippingFallbackMode. If their contract differs, change these two constants and
-// the mode union -- nothing else in this file hard-codes the names.
-//
-// SAFETY GATE: EbayPolicyMapping has no such column today, and
-// saveEbayPolicyMapping (ebayController.ts ~L1249) builds its Prisma payload from an
-// explicit field whitelist, so an unknown field posted from here is silently dropped
-// rather than rejected. That would give the organizer a "settings saved" toast for a
-// choice that never persisted -- a fabricated success. So the picker only becomes
-// interactive once the API actually returns the field (fallbackSupported below);
-// until then it renders read-only with a plain note about what happens today.
-const FALLBACK_MODE_FIELD = 'shippingFallbackMode';
-const FALLBACK_POLICY_FIELD = 'shippingFallbackPolicyId';
-type ShippingFallbackMode = 'CALCULATED' | 'POLICY' | 'HOLD';
+// SAFETY GATE (kept): saveEbayPolicyMapping builds its Prisma payload from an explicit
+// field whitelist and silently DROPS anything not on it -- a name mismatch would give the
+// organizer a green "settings saved" toast for a choice that never persisted. Verified
+// 2026-08-16 that fallbackStrategy IS on that whitelist. The gate now guards the remaining
+// real risk: Vercel and Railway deploy independently, so this page can be live against a
+// backend that predates the column. If setup-data returns a mapping WITHOUT the field, the
+// picker stays read-only rather than fabricating a save. A brand-new organizer with no
+// mapping row yet is treated as supported -- there is nothing to sniff, and the first save
+// creates the row.
+const FALLBACK_FIELD = 'fallbackStrategy';
+type FallbackStrategy = 'CALCULATED' | 'FLAT_RATE' | 'POLICY' | 'LOCAL_PICKUP' | 'BLOCK';
+
+const FALLBACK_OPTIONS: Array<{
+  value: FallbackStrategy;
+  label: string;
+  help: string;
+  recommended?: boolean;
+}> = [
+  {
+    value: 'CALCULATED',
+    label: 'Let eBay work out the real rate at checkout',
+    help: "The buyer pays the real rate for their address. Nothing to maintain, and you're never shipping at a loss.",
+    recommended: true,
+  },
+  {
+    value: 'FLAT_RATE',
+    label: 'One flat price, worked out from real carrier rates',
+    help: 'Every buyer pays the same predictable amount, priced from live carrier rates so it still covers the label.',
+  },
+  {
+    value: 'POLICY',
+    label: 'Use one of my own eBay shipping policies',
+    help: 'Every unmatched item goes to the same policy, whatever it weighs.',
+  },
+  {
+    value: 'LOCAL_PICKUP',
+    label: 'Local pickup only',
+    help: 'No shipping at all. The buyer collects the item from you.',
+  },
+  {
+    value: 'BLOCK',
+    label: "Don't list it — flag it for me to review",
+    help: "The item isn't listed until you set its shipping yourself. Safest, but it needs you.",
+  },
+];
 
 
 const EbayPolicySetupPage = () => {
@@ -381,6 +416,9 @@ const EbayPolicySetupPage = () => {
           merchantLocationSource: 'SALE_ADDRESS',
           shippingMode: 'CALCULATED',
           freeShippingOptIn: false,
+          // Mirrors the column default so the picker shows the recommended option
+          // rather than an empty selection for an organizer with no mapping row yet.
+          fallbackStrategy: 'CALCULATED',
         };
 
         // Assign stable client-only ids to every loaded tier so React keys
@@ -480,6 +518,17 @@ const EbayPolicySetupPage = () => {
   const handleSaveMapping = async () => {
     if (!mapping) return;
 
+    // Mirrors saveEbayPolicyMapping's 400 (ebayController.ts): a POLICY fallback with no
+    // defaultFulfillmentPolicyId is rejected server-side. Stop here so the organizer gets
+    // the inline message under the picker instead of a failed round trip.
+    if (mapping.fallbackStrategy === 'POLICY' && !mapping.defaultFulfillmentPolicyId) {
+      showToast(
+        'Pick the shipping policy you want used as your fallback, or choose a different fallback option.',
+        'error'
+      );
+      return;
+    }
+
     try {
       setSaving(true);
       // Build the API payload: sort weight tiers by maxOz once (canonical order)
@@ -535,7 +584,10 @@ const EbayPolicySetupPage = () => {
       const res = await api.get('/ebay/setup-data');
       setSetupData(res.data);
     } catch (error: any) {
-      const msg = error.response?.data?.message || 'Failed to save eBay settings';
+      // saveEbayPolicyMapping returns { error }, other endpoints on this page return
+      // { message } -- read both so a real server message is never swallowed.
+      const msg =
+        error.response?.data?.message || error.response?.data?.error || 'Failed to save eBay settings';
       showToast(msg, 'error');
     } finally {
       setSaving(false);
@@ -876,21 +928,19 @@ const EbayPolicySetupPage = () => {
     setMapping({ ...mapping, categoryOverrides: newOverrides });
   };
 
-  // Does the API actually persist the routing fallback yet? See the
-  // FALLBACK_MODE_FIELD comment block for why this gate exists rather than a
-  // control that silently drops the organizer's choice.
-  const fallbackSupported = Boolean(
-    setupData?.currentMapping &&
-      Object.prototype.hasOwnProperty.call(setupData.currentMapping as object, FALLBACK_MODE_FIELD)
-  );
-  const fallbackMode: ShippingFallbackMode = (mapping?.shippingFallbackMode as ShippingFallbackMode) || 'CALCULATED';
-  const setFallback = (mode: ShippingFallbackMode, policyId?: string | null) => {
+  // Deploy-skew gate: does the backend this page is talking to actually persist the
+  // routing fallback? See the FALLBACK_FIELD comment block. No mapping row yet =>
+  // nothing to sniff => treat as supported.
+  const fallbackSupported =
+    !setupData?.currentMapping ||
+    Object.prototype.hasOwnProperty.call(setupData.currentMapping as object, FALLBACK_FIELD);
+  const fallbackStrategy: FallbackStrategy = (mapping?.fallbackStrategy as FallbackStrategy) || 'CALCULATED';
+  // POLICY without a policy to fall back to can only ever soft-block, so the backend
+  // rejects it with a 400. Mirror that here so the organizer sees it inline.
+  const fallbackNeedsPolicy = fallbackStrategy === 'POLICY' && !mapping?.defaultFulfillmentPolicyId;
+  const setFallback = (strategy: FallbackStrategy) => {
     if (!mapping || !fallbackSupported) return;
-    setMapping({
-      ...mapping,
-      [FALLBACK_MODE_FIELD]: mode,
-      [FALLBACK_POLICY_FIELD]: mode === 'POLICY' ? (policyId ?? mapping.shippingFallbackPolicyId ?? null) : null,
-    } as PolicyMapping);
+    setMapping({ ...mapping, [FALLBACK_FIELD]: strategy } as PolicyMapping);
   };
 
   // Issues that must block the Create button. Two exclusions:
@@ -1824,24 +1874,19 @@ const EbayPolicySetupPage = () => {
                 </div>
 
                 {/* ── Section C3: What happens when nothing matches ─────────────
-                    JOB 3 -- routing fallback picker.
+                    Routing fallback picker. Backed by EbayPolicyMapping.fallbackStrategy
+                    (see the FALLBACK_FIELD contract block near the top of this file).
 
-                    Today an item that matches no rule silently lands on the connection's
-                    default fulfillment policy, which on at least one real account is a $0
-                    "Free Domestic Shipping" policy (ebayController.ts resolvePoliciesForItem,
-                    `smartPicked?.policyId || conn.fulfillmentPolicyId`). This section makes
-                    that an explicit choice.
-
-                    Built against an ASSUMED API contract -- see FALLBACK_MODE_FIELD near the
-                    top of this file. Until the API returns the field, the section renders
-                    read-only rather than offering a control whose value would be silently
-                    dropped on save. */}
+                    Before this existed, an item that matched no rule silently landed on the
+                    connection's default fulfillment policy -- which on at least one real
+                    account is a $0 "Free Domestic Shipping" policy, i.e. the organizer
+                    quietly eats the label. This section makes it an explicit choice. */}
                 <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
                   <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-1">
                     When nothing else matches
                   </h2>
                   <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                    Some items won't match any of your rules — a missing weight, an unusual
+                    Some items won&apos;t match any of your rules — a missing weight, an unusual
                     category. Choose what should happen to those instead of leaving it to chance.
                   </p>
 
@@ -1851,86 +1896,82 @@ const EbayPolicySetupPage = () => {
                         Right now these items fall back to whichever shipping policy your eBay
                         account had set as its default when you connected — which can be a free
                         shipping policy. Choosing your own is coming with the next update; this
-                        panel is switched off until then so a choice can't quietly go missing.
+                        panel is switched off until then so a choice can&apos;t quietly go missing.
                       </p>
                     </div>
                   )}
 
                   <div className={`space-y-2 ${fallbackSupported ? '' : 'opacity-60 pointer-events-none select-none'}`}>
-                    <button
-                      type="button"
-                      aria-disabled={!fallbackSupported}
-                      onClick={() => setFallback('CALCULATED')}
-                      className={`w-full text-left rounded-lg border p-3 transition-colors ${
-                        fallbackMode === 'CALCULATED'
-                          ? 'border-sage-600 bg-sage-50 dark:!bg-sage-700/30 ring-1 ring-sage-600'
-                          : 'border-gray-200 dark:border-gray-700 hover:border-sage-400'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="font-medium text-gray-900 dark:text-white">
-                          Let eBay work out the rate
-                        </span>
-                        <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-sage-100 dark:!bg-sage-700 text-sage-700 dark:text-sage-200 whitespace-nowrap">
-                          Recommended
-                        </span>
+                    {FALLBACK_OPTIONS.map((option) => (
+                      <div key={option.value}>
+                        <button
+                          type="button"
+                          aria-disabled={!fallbackSupported}
+                          aria-pressed={fallbackStrategy === option.value}
+                          onClick={() => setFallback(option.value)}
+                          className={`w-full text-left rounded-lg border p-3 transition-colors ${
+                            fallbackStrategy === option.value
+                              ? 'border-sage-600 bg-sage-50 dark:!bg-sage-700/30 ring-1 ring-sage-600'
+                              : 'border-gray-200 dark:border-gray-700 hover:border-sage-400'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-medium text-gray-900 dark:text-white">
+                              {option.label}
+                            </span>
+                            {option.recommended && (
+                              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-sage-100 dark:!bg-sage-700 text-sage-700 dark:text-sage-200 whitespace-nowrap">
+                                Recommended
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">{option.help}</p>
+                        </button>
+
+                        {/* The POLICY option writes defaultFulfillmentPolicyId -- the same
+                            field Section B edits -- because that is what the backend reads
+                            for this fallback. Required when POLICY is selected. */}
+                        {option.value === 'POLICY' && fallbackStrategy === 'POLICY' && (
+                          <div className="mt-2 pl-3 border-l-2 border-sage-200 dark:border-sage-700">
+                            <select
+                              value={mapping?.defaultFulfillmentPolicyId || ''}
+                              onChange={(e) =>
+                                mapping &&
+                                setMapping({
+                                  ...mapping,
+                                  defaultFulfillmentPolicyId: e.target.value || null,
+                                })
+                              }
+                              className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 dark:bg-gray-700 dark:text-white ${
+                                fallbackNeedsPolicy
+                                  ? 'border-red-400 dark:border-red-500 focus:ring-red-500'
+                                  : 'border-gray-300 dark:border-gray-600 focus:ring-sage-600'
+                              }`}
+                            >
+                              <option value="">Pick a shipping policy</option>
+                              {setupData.fulfillmentPolicies.map((policy) => (
+                                <option key={policy.fulfillmentPolicyId} value={policy.fulfillmentPolicyId}>
+                                  {policy.name}{policySuffix(policy.classification)}
+                                </option>
+                              ))}
+                            </select>
+                            {fallbackNeedsPolicy ? (
+                              <p className="text-xs text-red-600 dark:text-red-400 mt-1">
+                                Pick the shipping policy you want used as your fallback, or choose a
+                                different option above. Your settings won&apos;t save until you do.
+                              </p>
+                            ) : (
+                              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                This is the same policy as your Default Fulfillment Policy above —
+                                changing it here changes it there too.
+                              </p>
+                            )}
+                          </div>
+                        )}
                       </div>
-                      <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                        The buyer pays the real rate at checkout. Nothing to maintain, and you're
-                        never shipping at a loss.
-                      </p>
-                    </button>
-
-                    <button
-                      type="button"
-                      aria-disabled={!fallbackSupported}
-                      onClick={() => setFallback('POLICY', mapping?.shippingFallbackPolicyId ?? null)}
-                      className={`w-full text-left rounded-lg border p-3 transition-colors ${
-                        fallbackMode === 'POLICY'
-                          ? 'border-sage-600 bg-sage-50 dark:!bg-sage-700/30 ring-1 ring-sage-600'
-                          : 'border-gray-200 dark:border-gray-700 hover:border-sage-400'
-                      }`}
-                    >
-                      <span className="font-medium text-gray-900 dark:text-white">Use one of my presets</span>
-                      <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                        Every unmatched item goes to the same preset, whatever it weighs.
-                      </p>
-                    </button>
-
-                    {fallbackMode === 'POLICY' && (
-                      <select
-                        value={mapping?.shippingFallbackPolicyId || ''}
-                        onChange={(e) => setFallback('POLICY', e.target.value || null)}
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-sage-600"
-                      >
-                        <option value="">Pick a preset</option>
-                        {setupData.fulfillmentPolicies.map((policy) => (
-                          <option key={policy.fulfillmentPolicyId} value={policy.fulfillmentPolicyId}>
-                            {policy.name}{policySuffix(policy.classification)}
-                          </option>
-                        ))}
-                      </select>
-                    )}
-
-                    <button
-                      type="button"
-                      aria-disabled={!fallbackSupported}
-                      onClick={() => setFallback('HOLD')}
-                      className={`w-full text-left rounded-lg border p-3 transition-colors ${
-                        fallbackMode === 'HOLD'
-                          ? 'border-sage-600 bg-sage-50 dark:!bg-sage-700/30 ring-1 ring-sage-600'
-                          : 'border-gray-200 dark:border-gray-700 hover:border-sage-400'
-                      }`}
-                    >
-                      <span className="font-medium text-gray-900 dark:text-white">Hold it for me to look at</span>
-                      <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                        The item isn't listed until you set its shipping yourself. Safest, but it
-                        needs you.
-                      </p>
-                    </button>
+                    ))}
                   </div>
                 </div>
-
 
                 {/* Section D: Shipping classification overrides.
                     Gated on shippingMode === 'FLAT_TIERS' (UX audit finding 2 /

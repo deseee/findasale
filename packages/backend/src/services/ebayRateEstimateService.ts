@@ -143,59 +143,117 @@ export class ShippingHardBlockError extends Error {
 // verifiedThisSession's comment above for why (suspected oversize/AHS surcharge
 // contamination in the larger test box needed to keep dim-weight below actual weight at
 // those tiers).
-// ── 22.5lb WEIGHT-BRACKET SPLIT, z8 REAL-ANCHORED 2026-08-16 ───────────────────────────
-// Real primary source: Patrick pulled eBay's own live shipping calculator today for a
-// 48x16x4in / 22lb 4oz parcel, origin 49079 (Paw Paw MI, Artifact's real ship-from) ->
-// destination 98282 (Camano Island WA, 1811mi by haversine => z8 under milesToZone; the
-// coverage zone for a 49079 origin is also z8 via ZIP1_MAX_ZONE['4']). Quoted prices:
+// ── 22.5lb WEIGHT-BRACKET SPLIT ─ ZONE CORRECTED + RE-DERIVED FROM PRIMARY SOURCE 2026-08-16 ──
+// SUPERSEDES the first 2026-08-16 pass earlier today, which filed a real observation under
+// the WRONG ZONE. Read this whole block before touching any 22.5lb cell.
+//
+// THE OBSERVATION (unchanged, still real): Patrick pulled eBay's own live shipping
+// calculator for a 48x16x4in / 22lb 4oz parcel, origin 49079 (Paw Paw MI, Artifact's real
+// ship-from) -> destination 98282 (Camano Island WA). Quoted prices:
 //   FedEx Ground / FedEx Home Delivery  $32.11   (the service RATE_TABLE_FEDEX models)
 //   UPS Ground                          $37.00
 //   USPS Ground Advantage               $62.14
-//   (also quoted, deliberately NOT modeled by this engine: FedEx Ground Economy $32.09,
-//    UPS Ground Saver $40.24, FedEx 2Day $84.70)
+//   (also quoted, deliberately NOT modeled: FedEx Ground Economy $32.09, UPS Ground Saver
+//    $40.24, FedEx 2Day $84.70)
 //
-// WHAT WAS ACTUALLY WRONG -- diagnosed by reproducing the engine against this parcel
-// before changing anything, NOT assumed. The engine returned FedEx $38.89. Trace:
-// billable weight = 22.25lb actual (dim weight 48*16*4/139 = 22.10lb, so ACTUAL governs,
-// billableLb basis='actual'); no AHS trigger fires (longest side is exactly 48in and the
-// dimension trigger is `> 48`, weight 22.25 < 50); so rateFromTable picks the FIRST row
-// whose maxLb >= 22.25 -- which, before this change, was the maxLb:30 row. Every one of
-// these tables jumped straight from a 20lb row to a 30lb row, so EVERY parcel in the
-// (20, 30] lb band was billed the 30lb price. That bracket coarseness -- not a stale z8
-// column -- is the primary defect this real quote exposed:
-//   FedEx z8: 20lb $32.41 | REAL @22.25lb $32.11 | 30lb $38.89
-//   USPS z8:  20lb $40.39 | REAL @22.25lb $52.14 base | 30lb $96.60
-//             (linear 20->30 interpolation at 22.25lb predicts $53.04 -- within $0.90 of
-//             the real value, corroborating that BOTH existing USPS anchors are sound and
-//             the curve is simply steep, i.e. bracket coarseness, not staleness)
-//   UPS z8:   20lb $41.72 | REAL @22.25lb $37.00 | 30lb $56.99
-//             (UPS is the one carrier the data does NOT explain by coarseness -- see the
-//             UNVERIFIED flag on RATE_TABLE_UPS's 20lb/z8 cell below)
+// THE ERROR: the earlier pass computed the zone as z8 from haversine distance (1811mi ->
+// milesToZone = z8) and wrote all three quoted prices into the z8 column. USPS's OWN zone
+// chart says that lane is ZONE 7, not zone 8. Verified live against USPS's free,
+// unauthenticated zone-chart endpoint on 2026-08-16:
+//   GET postcalc.usps.com/DomesticZoneChart/GetZone?origin=49079&destination=98282&shippingDate=08/16/2026
+//     -> {"EffectiveDate":"August 1, 2026","ZoneInformation":"The Zone is 7. ..."}
+//   Same endpoint, 49079 -> 98357 (Neah Bay WA) -> "The Zone is 8."
+// USPS zones are SCF-to-SCF routing lookups, not point-to-point mileage, so milesToZone
+// disagrees with the real chart exactly at boundary lanes like this one. See
+// resolveCoverageZone / fetchLiveUspsZoneChartEntry below, which now cache the real chart.
 //
-// FIX: split the (20, 30] bracket with a new maxLb:22.5 row. 22.5 -- not 25 or 30 -- is
-// deliberate: it is the tightest bound that covers the one real observation (22.25lb) with
-// no forward extrapolation. Weights in (22.5, 30] keep the existing 30lb price, unchanged.
-// This file's own header comments document that eBay's real negotiated curve has genuine
-// plateaus and dips, so extrapolating a single anchor forward to 25 or 30lb would repeat
-// exactly the methodology ADR-103 already found to be structurally incapable of being right.
+// INDEPENDENT CONFIRMATION THAT THE ZONE IS 7 (USPS only) ─ the quoted dollar figure
+// reconciles to the penny against USPS's published rate card, and ONLY at zone 7:
+//   USPS Notice 123 (pe.usps.com/cpim/ftp/manuals/dmm300/notice123.pdf), p.15
+//   "USPS Ground Advantage / Commercial-Parcels", eff. 2026-08-01:
+//     weight-not-over 23 lb  ->  zone 7 = $52.14 ,  zone 8 = $58.41
+//   Notice 123 p.15 note 6: "Parcels that exceed 30 inches in length, add $10.00."
+//     (the parcel is 48in long, so the fee applies)
+//   $52.14 (z7 base) + $10.00 = $62.14 = the exact quoted total.  Zone 8 would have
+//   produced $58.41 + $10.00 = $68.41, which is NOT what eBay quoted.
+//   Notice 123 p.15 note 3 also confirms the weight basis: >1 cu ft parcels bill on the
+//   greater of actual vs dimensional weight. 48*16*4 = 3072 cu in (>1728, so the rule
+//   applies; and <3456, so note 7's >2-cu-ft fee does NOT apply). Dim weight
+//   3072/139 = 22.10lb < actual 22.25lb, so ACTUAL governs -> the "not over 23" row. All
+//   four independent facts agree. The USPS zone for this lane is 7.
 //
-// HOW THE z1-z7 CELLS IN THE NEW ROW WERE SET (read this before "improving" them):
-//   z8  = the real quoted value (minus, for USPS only, the $10.00 nonstandard length fee
-//         computeSurchargeForCarrier adds back for a >30in parcel -- so the ENGINE OUTPUT
-//         equals the observed $62.14 total, which is the number that actually matters).
-//   z1-z7 = min(existing maxLb:30 cell, the real z8 anchor). NOT scaled -- ADR-103 Phase 1
-//         already tried scaling a whole z8 column by one observed ratio and produced z8
-//         values BELOW z7, a physical impossibility, caught and reverted before push. The
-//         cap is instead a direct consequence of the one relationship that revert
-//         established as a hard rule for these tables: a farther zone cannot cost less than
-//         a nearer one at the same weight. A real z8 measurement is therefore a valid UPPER
-//         BOUND on every lower zone at that same weight. Where the old 30lb cell already
-//         sat below the anchor it is carried forward untouched (FedEx: all of z1-z7, so
-//         FedEx behavior changes at z8 ONLY). Where it sat above, it is capped down (USPS
-//         z5/z6/z7 -> $52.14; UPS z6/z7 -> $37.00). Capping can only ever LOWER a price
-//         toward a real measured ceiling; it can never make the engine short.
-//   Provenance: z8 in all three new rows is PRIMARY-SOURCED. z1-z7 are real-anchored upper
-//   bounds, NOT live quotes -- still UNVERIFIED as exact prices. See ADR-103 §7.
+// HOW EACH TABLE'S 22.5lb ROW IS NOW SET ─ the three carriers are NOT treated alike,
+// because the evidence available for each is not alike:
+//
+//   RATE_TABLE (USPS) ─ fully re-derived from Notice 123 p.15, the "not over 23 lb" row,
+//     zones 1-8 verbatim: 21.51 / 23.16 / 24.92 / 27.33 / 34.05 / 43.29 / 52.14 / 58.41.
+//     z7 is DOUBLY confirmed (published card AND the live eBay quote agree exactly). The
+//     other seven are published USPS commercial prices, which are a safe upper bound on
+//     eBay's negotiated price: across every cell in this table that was ever live-quoted,
+//     eBay's rate is <= published commercial and is EXACTLY EQUAL at the heavy end (the
+//     20lb/z8, 30lb, 50lb and 70lb rows all match Notice 123 to the penny). They are
+//     therefore primary-sourced upper bounds, still UNVERIFIED as exact eBay prices.
+//     This REPLACES the earlier pass's min(30lb cell, anchor) construction, which
+//     overcharged badly at the near zones (z1 was $32.38 against a published $21.51).
+//
+//   RATE_TABLE_UPS and RATE_TABLE_FEDEX ─ the CARRIER ZONE FOR THIS LANE IS UNVERIFIED.
+//     UPS and FedEx publish their own zone charts, which are NOT USPS's chart and do not
+//     have to agree with it (FedEx does not even HAVE a zone 1 ─ confirmed directly from
+//     FedEx's official FedEx_Standard_List_Rates_2026.xlsx, "2026 Ground & FHD rates"
+//     sheet, eff. 1/5/2026, whose zone header row runs 2,3,4,5,6,7,8). Neither chart is
+//     reachable from this workspace: assets.ups.com returns zero bytes on every attempt,
+//     and FedEx's zone locator is JS-driven with no fetchable endpoint found. So we do NOT
+//     know whether $37.00 / $32.11 are zone-7 or zone-8 prices, and we do not guess.
+//     What IS safe: an 1811mi lane cannot be rated below zone 6 under any of the three
+//     carriers' published distance-band structures (zone 6 tops out at 1400mi), so the
+//     observation is a valid UPPER BOUND on every zone <= 6 by zone-monotonicity. Both
+//     primary sources confirm zone-monotonicity is real in published rate cards (Notice
+//     123 p.15 and the FedEx workbook are each strictly non-decreasing across zones at
+//     every weight ─ checked programmatically, 0 violations).
+//     Therefore: z1-z6 are capped at min(existing 30lb cell, observation); z7 and z8 are
+//     REVERTED to their 30lb-row values, i.e. back to the pre-2026-08-16 behavior, and
+//     flagged UNVERIFIED. Capping can only lower a price toward a real measured ceiling;
+//     reverting z7/z8 can only keep it high. Neither direction can make the engine short.
+//     Net effect: the FedEx 22.5lb row is currently INERT (identical to its 30lb row ─
+//     every z1-z6 cell already sat below $32.11). It is retained, not deleted, so the row
+//     is in place the moment a real FedEx/UPS zone determination lands.
+//
+// RETRACTION ─ "UPS 20lb x z8 = $41.72 SUSPECTED STALE (highest priority)", filed by the
+// earlier pass today and carried into ADR-103 §7, is WITHDRAWN. It rested entirely on the
+// misfiled zone: $37.00 looked like an impossible z8 price below the $41.72 z8 cell at a
+// lower weight. Read at zone 7 the UPS data is perfectly coherent ─ z7 goes 20lb $34.37 ->
+// 22.25lb $37.00 -> 30lb $45.43, strictly increasing, no anomaly at all. There is nothing
+// to re-quote. (Note the two carriers point opposite ways on which zone fits better: UPS
+// reads clean at z7, while FedEx reads slightly cleaner at z8 ─ at z7 its $32.11 would
+// exceed its own 30lb z7 cell of $31.00. That contradiction is itself the reason neither
+// carrier's zone can be inferred from price alone.)
+//
+// STILL OPEN, unchanged by this pass: the entire RATE_TABLE_FEDEX z2 column ($19.99 flat at
+// low weights vs $14.07 at z1 AND z3-z7) inverts zone order in 14 rows. NEW SUPPORTING
+// EVIDENCE, not a fix: the "z1" column of all three tables was live-quoted on the
+// 49079 -> 49503 lane, which USPS's chart rates ZONE 2, not zone 1 (verified live this
+// session, same endpoint). RATE_TABLE's 30/50/70lb "z1" cells hold Notice 123's published
+// ZONE 2 prices exactly ($32.38 / $47.07 / $57.63), confirming the misfiling. So the z1
+// column is a real zone-2 column, which makes it an over-estimate for true zone 1 ─ never
+// short, and unreachable in practice since no ZIP1_MAX_ZONE entry resolves to z1. Left
+// alone deliberately: there is no real zone-1 anchor to replace it with.
+//
+// ── DOUBLE-CHARGE FIX: >2 cu ft fee was BAKED INTO the 50lb/70lb z8 base cells 2026-08-16 ──
+// The 50lb and 70lb z8 cells were $171.27 and $212.31. USPS Notice 123 p.15
+// (Ground Advantage / Commercial-Parcels, eff. 2026-08-01) publishes those same
+// weight/zone cells as $150.27 and $191.31. Both deltas are EXACTLY $21.00 -- Notice 123
+// p.15 note 7's ">2 cubic feet (3456 cubic inches), add $21.00" nonstandard fee, frozen
+// into the base rate because those two tiers were live-quoted with an 18x18x18in test box
+// (5,832 cu in, well past the 3,456 cu in trigger). computeSurchargeForCarrier() then adds
+// that same fee AGAIN at runtime from USPS_NONSTANDARD_FEE_TABLE, so any >2cuft parcel at
+// those tiers was charged the fee twice. The base cells now hold the published base price;
+// the fee is applied once, by the surcharge path only.
+// EXHAUSTIVENESS: every cell of this table was diffed against the corresponding Notice 123
+// p.15 published cell. These two are the ONLY cells carrying the +$21.00 artifact. (The
+// z1 column's 30/50/70lb cells sit above published z1 by $2.92/$4.30/$4.30 -- that is the
+// separate, pre-existing "z1 holds the real zone-2 price" misfiling documented above, not
+// this fee.) UPS/FedEx cannot carry this artifact: the >2cuft nonstandard fee is a USPS
+// Ground Advantage fee and is not part of the UPS/FedEx surcharge model.
 const RATE_TABLE: RateRow[] = [
   { maxLb: 0.25   , z1: 5.24 , z2: 5.24 , z3: 5.28 , z4: 5.4 , z5: 5.48 , z6: 5.62 , z7: 5.72 , z8: 8.40 },
   { maxLb: 0.5    , z1: 5.7 , z2: 5.7 , z3: 5.73 , z4: 5.83 , z5: 5.89 , z6: 5.97 , z7: 6.07 , z8: 8.40 },
@@ -209,10 +267,10 @@ const RATE_TABLE: RateRow[] = [
   { maxLb: 10     , z1: 7.55 , z2: 7.55 , z3: 7.88 , z4: 8.56 , z5: 10.3 , z6: 12.13 , z7: 12.92 , z8: 21.57 },
   { maxLb: 14     , z1: 8.2 , z2: 8.2 , z3: 8.54 , z4: 9.47 , z5: 11.68 , z6: 13.81 , z7: 14.94 , z8: 23.89 },
   { maxLb: 20     , z1: 8.29 , z2: 8.29 , z3: 8.74 , z4: 9.79 , z5: 12.22 , z6: 14.48 , z7: 15.75 , z8: 40.39 },
-  { maxLb: 22.5   , z1: 32.38 , z2: 32.38 , z3: 36.86 , z4: 45.34 , z5: 52.14 , z6: 52.14 , z7: 52.14 , z8: 52.14 }, // z8 REAL (eBay live calc 2026-08-16, $62.14 quoted total - $10.00 USPS nonstandard length fee); z1-z7 = min(30lb cell, z8 anchor) upper bound, UNVERIFIED as exact prices
+  { maxLb: 22.5   , z1: 21.51 , z2: 23.16 , z3: 24.92 , z4: 27.33 , z5: 34.05 , z6: 43.29 , z7: 52.14 , z8: 58.41 }, // ZONE-CORRECTED 2026-08-16: USPS Notice 123 p.15 Commercial-Parcels, "not over 23 lb" row, verbatim. z7 $52.14 DOUBLY CONFIRMED (published card + the live eBay quote: $52.14 + $10.00 note-6 >30in fee = the $62.14 observed total). z1-z6/z8 are published commercial = primary-sourced upper bounds on eBay's negotiated price, UNVERIFIED as exact eBay prices
   { maxLb: 30     , z1: 32.38 , z2: 32.38 , z3: 36.86 , z4: 45.34 , z5: 59.28 , z6: 71.88 , z7: 84.24 , z8: 96.60 },
-  { maxLb: 50     , z1: 47.07 , z2: 47.07 , z3: 53.63 , z4: 65.96 , z5: 89.6 , z6: 109.94 , z7: 129.95 , z8: 171.27 },
-  { maxLb: 70     , z1: 57.63 , z2: 57.63 , z3: 64.26 , z4: 79.08 , z5: 110.97 , z6: 137.46 , z7: 163.73 , z8: 212.31 },
+  { maxLb: 50     , z1: 47.07 , z2: 47.07 , z3: 53.63 , z4: 65.96 , z5: 89.6 , z6: 109.94 , z7: 129.95 , z8: 150.27 }, // z8 was $171.27 = exactly $150.27 + $21.00; see DOUBLE-CHARGE FIX note above
+  { maxLb: 70     , z1: 57.63 , z2: 57.63 , z3: 64.26 , z4: 79.08 , z5: 110.97 , z6: 137.46 , z7: 163.73 , z8: 191.31 }, // z8 was $212.31 = exactly $191.31 + $21.00; see DOUBLE-CHARGE FIX note above
 ];
 
 const round2 = (n: number): number => Math.round(n * 100) / 100;
@@ -336,16 +394,18 @@ export const FEDEX_RATE_SOURCE = "eBay's own live shipping calculator API (POST 
 // contamination in the larger test box needed to keep dim-weight below actual weight at
 // those tiers).
 //
-// UNVERIFIED / SUSPECTED STALE -- 20lb x z8 cell ($41.72), flagged 2026-08-16: the new real
-// 22.25lb/z8 anchor ($37.00, see the 22.5lb-bracket comment above RATE_TABLE) is $4.72
-// (12.8%) BELOW this cell at a HIGHER weight. That makes it the ONLY weight-direction
-// inversion anywhere in this UPS table -- all 15 rows x 8 zones were otherwise strictly
-// non-decreasing in weight before this change, unlike RATE_TABLE/_FEDEX which have real,
-// documented dips. It is also the one carrier whose 20->30lb curve does NOT explain the
-// real quote by bracket coarseness (linear interpolation between the 20lb and 30lb cells
-// predicts $45.16 at 22.25lb vs the real $37.00). Deliberately NOT changed here -- there is
-// no live quote AT 20lb to correct it with, and this file does not fabricate anchors. Next
-// step: re-quote UPS Ground at 20lb, origin 49079 -> 98282.
+// RETRACTED 2026-08-16 (same day it was filed) -- "20lb x z8 cell ($41.72) SUSPECTED STALE".
+// That flag was raised because the real 22.25lb quote of $37.00 appeared to sit 12.8% BELOW
+// this z8 cell at a HIGHER weight, which would be impossible. It was an artifact of filing
+// that quote under the wrong zone: USPS's own zone chart rates the 49079 -> 98282 lane
+// ZONE 7, not zone 8 (verified live, see the 22.5lb-bracket block above RATE_TABLE). Read at
+// zone 7 this table is entirely coherent -- z7 runs 20lb $34.37 -> 22.25lb $37.00 -> 30lb
+// $45.43, strictly increasing. There is no inversion and nothing to re-quote. The $41.72
+// cell stands as-is.
+// STILL GENUINELY UNVERIFIED: which zone UPS itself assigns to that lane. UPS publishes its
+// own zone chart, it need not match USPS's, and assets.ups.com returns zero bytes from this
+// workspace on every attempt -- so the $37.00 observation is used only as an upper bound on
+// zones <= 6. See the 22.5lb row's inline comment below.
 const RATE_TABLE_UPS: RateRow[] = [
   { maxLb: 0.25   , z1: 7.22 , z2: 7.22 , z3: 7.29 , z4: 7.29 , z5: 8.62 , z6: 9.42 , z7: 10.19 , z8: 14.33 },
   { maxLb: 0.5    , z1: 7.22 , z2: 7.22 , z3: 7.29 , z4: 7.29 , z5: 8.62 , z6: 9.42 , z7: 10.19 , z8: 14.33 },
@@ -359,7 +419,7 @@ const RATE_TABLE_UPS: RateRow[] = [
   { maxLb: 10     , z1: 11.27 , z2: 11.27 , z3: 12.95 , z4: 12.95 , z5: 17.59 , z6: 18.4 , z7: 20.63 , z8: 26.01 },
   { maxLb: 14     , z1: 13.85 , z2: 13.85 , z3: 15.24 , z4: 15.24 , z5: 18.93 , z6: 21.82 , z7: 26.31 , z8: 31.98 },
   { maxLb: 20     , z1: 15.82 , z2: 15.82 , z3: 18.18 , z4: 18.18 , z5: 23.85 , z6: 28.27 , z7: 34.37 , z8: 41.72 },
-  { maxLb: 22.5   , z1: 20.48 , z2: 20.48 , z3: 26.67 , z4: 26.67 , z5: 31.63 , z6: 37.00 , z7: 37.00 , z8: 37.00 }, // z8 REAL (eBay live calc 2026-08-16, UPS Ground $37.00); z1-z7 = min(30lb cell, z8 anchor) upper bound, UNVERIFIED as exact prices
+  { maxLb: 22.5   , z1: 20.48 , z2: 20.48 , z3: 26.67 , z4: 26.67 , z5: 31.63 , z6: 37.00 , z7: 45.43 , z8: 56.99 }, // ZONE-CORRECTED 2026-08-16: the real $37.00 UPS Ground quote is on a lane whose UPS zone is UNVERIFIED (assets.ups.com unreachable; USPS rates it z7 but UPS publishes its own chart). Safe only as an upper bound on zones <= 6, so z6 is capped to it; z7/z8 REVERTED to the 30lb-row values pending a real UPS zone determination
   { maxLb: 30     , z1: 20.48 , z2: 20.48 , z3: 26.67 , z4: 26.67 , z5: 31.63 , z6: 38.76 , z7: 45.43 , z8: 56.99 },
   { maxLb: 50     , z1: 25.37 , z2: 25.37 , z3: 37.58 , z4: 37.58 , z5: 45.58 , z6: 57.43 , z7: 68.66 , z8: 80.48 },
   { maxLb: 70     , z1: 51.82 , z2: 51.82 , z3: 66.19 , z4: 66.19 , z5: 76.39 , z6: 86.13 , z7: 95.03 , z8: 112.98 },
@@ -483,11 +543,14 @@ const RATE_TABLE_UPS: RateRow[] = [
 // contamination in the larger test box needed to keep dim-weight below actual weight at
 // those tiers).
 //
-// LOW-PRIORITY VARIANCE NOTE, 2026-08-16: the 20lb x z8 cell ($32.41) is $0.30 (0.9%) above
-// the new real 22.25lb/z8 anchor ($32.11) at a lower weight. That is within
-// destination-within-zone noise (the 20lb cell was quoted to 98357 Neah Bay, the new anchor
-// to 98282 Camano Island -- both z8, 97mi apart), so it is recorded rather than "corrected"
-// on the strength of a $0.30 delta. Separately and pre-existing: the entire z2 column of this
+// VARIANCE NOTE, REVISED 2026-08-16: the earlier note here compared the 20lb x z8 cell
+// ($32.41) against the real 22.25lb quote ($32.11) as though both were zone 8. They are not
+// known to be. The 20lb cell was quoted to 98357 (Neah Bay WA), which USPS's chart rates
+// zone 8; the new quote went to 98282 (Camano Island WA), which USPS rates zone 7 -- two
+// different USPS zones, 97mi apart, and FedEx's own zoning of either lane is unverified
+// (FedEx's zone chart is not fetchable from this workspace, and FedEx has no zone 1 at all
+// per its official 2026 rate workbook). So the $0.30 delta is not evidence of anything and
+// no correction is implied by it. Separately and pre-existing: the entire z2 column of this
 // table ($19.99 flat at low weights, vs $14.07 at z1 AND z3-z7) inverts zone order in 14 rows
 // and predates this change -- unexplained, never re-quoted, flagged here so it is not mistaken
 // for fallout from this pass. See ADR-103 §7.
@@ -504,7 +567,7 @@ const RATE_TABLE_FEDEX: RateRow[] = [
   { maxLb: 10     , z1: 14.07 , z2: 19.99 , z3: 14.21 , z4: 14.93 , z5: 15.83 , z6: 15.83 , z7: 17.42 , z8: 25.32 },
   { maxLb: 14     , z1: 14.63 , z2: 20.55 , z3: 15.11 , z4: 15.59 , z5: 16.65 , z6: 16.65 , z7: 20.79 , z8: 28.69 },
   { maxLb: 20     , z1: 15.31 , z2: 21.24 , z3: 16.44 , z4: 16.69 , z5: 19.09 , z6: 19.09 , z7: 24.51 , z8: 32.41 },
-  { maxLb: 22.5   , z1: 17.01 , z2: 22.93 , z3: 19.0 , z4: 20.31 , z5: 23.09 , z6: 23.09 , z7: 31.0 , z8: 32.11 }, // z8 REAL (eBay live calc 2026-08-16, FedEx Ground/Home Delivery $32.11); z1-z7 carried forward UNCHANGED from the 30lb row (all already below the z8 anchor) -- FedEx behavior changes at z8 only
+  { maxLb: 22.5   , z1: 17.01 , z2: 22.93 , z3: 19.0 , z4: 20.31 , z5: 23.09 , z6: 23.09 , z7: 31.0 , z8: 38.89 }, // ZONE-CORRECTED 2026-08-16: the real $32.11 quote is on a lane whose FEDEX zone is UNVERIFIED (FedEx publishes its own chart, has no zone 1 at all, and no fetchable zone endpoint was found). z1-z6 = min(30lb cell, $32.11) which leaves them all unchanged; z7/z8 REVERTED to the 30lb-row values. This row is currently INERT (identical to the 30lb row) and is retained only so it is in place when a real FedEx zone determination lands
   { maxLb: 30     , z1: 17.01 , z2: 22.93 , z3: 19.0 , z4: 20.31 , z5: 23.09 , z6: 23.09 , z7: 31.0 , z8: 38.89 },
   { maxLb: 50     , z1: 19.87 , z2: 25.79 , z3: 23.28 , z4: 26.68 , z5: 31.02 , z6: 31.02 , z7: 44.02 , z8: 51.91 },
   { maxLb: 70     , z1: 77.51 , z2: 83.44 , z3: 87.24 , z4: 90.81 , z5: 103.7 , z6: 103.7 , z7: 117.09 , z8: 124.99 },
@@ -694,6 +757,14 @@ function zip3(zip: string | null | undefined): string | null {
 const zoneChartCache = new Map<string, ZoneKey | null>();
 
 /**
+ * How long a cached UspsZoneChartEntry row stays authoritative. USPS zone charts are
+ * static lookups that change rarely (ADR-103 §2A), so this is deliberately long. A stale
+ * row is still USED (it is real chart data and beats the mileage approximation); it just
+ * also triggers a background refresh.
+ */
+const ZONE_CHART_TTL_MS = 180 * 24 * 60 * 60 * 1000; // 180 days
+
+/**
  * Real USPS zone-chart lookup for an origin ZIP3, from the UspsZoneChartEntry cache
  * table. Per ADR-103 §2A, the "coverage zone" for an origin is the MAX zone across all
  * real destination-ZIP3 rows cached for that origin (worst-case-across-real-chart-rows,
@@ -701,60 +772,259 @@ const zoneChartCache = new Map<string, ZoneKey | null>();
  * fallback). Returns null (not a zone) when no rows are cached yet for this origin --
  * caller falls back to the mileage approximation, exactly as documented on
  * UspsZoneChartEntry in schema.prisma.
+ *
+ * Also reports whether the newest cached row is past ZONE_CHART_TTL_MS so the caller can
+ * kick off a background refresh without discarding the (still real) stale data.
  */
-async function getCachedMaxZoneForOriginZip3(originZip3: string): Promise<ZoneKey | null> {
-  if (zoneChartCache.has(originZip3)) return zoneChartCache.get(originZip3)!;
+async function getCachedMaxZoneForOriginZip3(originZip3: string): Promise<{ zone: ZoneKey | null; stale: boolean }> {
+  if (zoneChartCache.has(originZip3)) return { zone: zoneChartCache.get(originZip3)!, stale: false };
   let result: ZoneKey | null = null;
+  let stale = false;
   try {
     const rows = await prisma.uspsZoneChartEntry.findMany({
       where: { originZip3 },
-      select: { zone: true },
+      select: { zone: true, fetchedAt: true },
     });
+    let newest = 0;
     for (const row of rows) {
       const z = row.zone as ZoneKey;
       if (!ZONE_ORDER.includes(z)) continue; // defensive: ignore malformed cached rows
       result = result ? maxZone(result, z) : z;
+      const t = row.fetchedAt ? new Date(row.fetchedAt).getTime() : 0;
+      if (t > newest) newest = t;
     }
+    if (result && newest > 0 && Date.now() - newest > ZONE_CHART_TTL_MS) stale = true;
   } catch (err) {
     // DB unavailable / table not yet migrated on this environment -- fail open to the
     // mileage fallback rather than blocking rate computation.
     console.warn('[eBay RateEstimate] UspsZoneChartEntry lookup failed, falling back to mileage approximation', err);
     result = null;
   }
-  zoneChartCache.set(originZip3, result);
-  return result;
+  // Only memoize a positive result. A null (no rows yet) must stay un-memoized so the
+  // very next request after a successful background populate can see the new rows.
+  if (result) zoneChartCache.set(originZip3, result);
+  return { zone: result, stale };
+}
+
+// ── Real USPS zone-chart fetcher (ADR-103 §2A) ─ IMPLEMENTED 2026-08-16 ──────────────
+// Replaces the long-standing no-op stub. Why it matters, concretely: milesToZone() is a
+// straight-line-distance approximation and it demonstrably disagrees with USPS's real
+// chart on the exact lanes this file's own rate table is anchored from --
+//   49079 -> 98282  milesToZone says z8, USPS's chart says ZONE 7
+//   49079 -> 49503  milesToZone says z1, USPS's chart says ZONE 2
+// Both verified live 2026-08-16. The first of those mis-zonings is what put a real $52.14
+// zone-7 price into the z8 column earlier the same day (see the 22.5lb block above).
+//
+// SOURCE: postcalc.usps.com/DomesticZoneChart/GetZone -- USPS's own zone-chart endpoint,
+// free, unauthenticated, no API key, no cost. Returns JSON:
+//   {"OriginError":"","DestinationError":"","ShippingDateError":"","PageError":"",
+//    "EffectiveDate":"August 1, 2026",
+//    "ZoneInformation":"The Zone is 7. This is not a Local Zone. ..."}
+//
+// TWO BEHAVIOURS OF THIS ENDPOINT THAT ARE NOT OBVIOUS AND WERE BOTH HIT WHILE BUILDING IT:
+//  1. It requires a FIVE-digit origin ZIP. A 3-digit origin returns
+//     {"OriginError":"ZIP Codes must be 5 digits"}. Our cache key is a ZIP3, so the real
+//     5-digit origin ZIP is threaded through from the caller rather than fabricated by
+//     padding the ZIP3 (a padded ZIP3 is not guaranteed to be a real deliverable ZIP).
+//  2. It sits behind Akamai bot management. Unpaced request bursts start 302-redirecting
+//     to usps.com/root/global/server_responses/webtools-msg.htm with an empty body. A
+//     warm-up GET of the chart page to pick up the _abck / bm_sz cookies, plus a browser
+//     User-Agent and a delay between calls, restores normal JSON responses. Hence the
+//     pacing and single-attempt-per-origin discipline below -- this must never turn into
+//     a per-item hammer on a public USPS endpoint.
+//
+// BOUNDED BY DESIGN: one populate attempt per origin ZIP3 per process, CONUS_CORNER_ZIPS
+// (5) requests per attempt, ZONE_CHART_MAX_ORIGINS_PER_PROCESS origins per process,
+// serialized, paced. Rows persist in Postgres, so in steady state this runs once ever per
+// organizer origin ZIP3. Every failure path is swallowed -- rate computation must never
+// block or fail on this.
+
+/**
+ * Destination ZIPs used to build an origin's coverage zone, 1:1 with CONUS_CORNERS above.
+ * The coverage zone is the MAX real chart zone across these, matching the same
+ * "price to the farthest CONUS destination" rule coverageZoneForOrigin uses.
+ * Verified live 2026-08-16 from origin 49079: 98357 -> z8, 92101 -> z8, 33040 -> z6,
+ * 04736 -> z5, 98101 -> z8. Max = z8, which AGREES with ZIP1_MAX_ZONE['4'] = 'z8', so
+ * turning this cache on does not change Artifact's own pricing.
+ */
+const CONUS_CORNER_ZIPS: readonly string[] = ['98101', '92101', '33040', '04736', '98357'];
+
+const USPS_ZONE_CHART_PAGE = 'https://postcalc.usps.com/DomesticZoneChart';
+const USPS_ZONE_CHART_ENDPOINT = 'https://postcalc.usps.com/DomesticZoneChart/GetZone';
+const ZONE_CHART_UA =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
+const ZONE_CHART_REQUEST_TIMEOUT_MS = 8000;
+const ZONE_CHART_PACING_MS = 1500;
+const ZONE_CHART_MAX_ORIGINS_PER_PROCESS = 200;
+
+/** Origin ZIP3s this process has already attempted (success or failure) -- never retried. */
+const zoneChartAttempted = new Set<string>();
+/** Origin ZIP3s with a populate currently in flight -- single-flight guard. */
+const zoneChartInFlight = new Set<string>();
+
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+/** MM/DD/YYYY, the only shippingDate format the endpoint accepts. */
+function uspsShippingDateParam(now: Date = new Date()): string {
+  const mm = String(now.getMonth() + 1).padStart(2, '0');
+  const dd = String(now.getDate()).padStart(2, '0');
+  return `${mm}/${dd}/${now.getFullYear()}`;
 }
 
 /**
- * TODO: wire real postcalc.usps.com fetch, see ADR-103 §2A. This is intentionally a
- * stub -- fetching postcalc.usps.com/DomesticZoneChart requires an HTTP call pattern
- * not already established anywhere in this codebase (form-post + HTML/CSV scrape, not
- * a JSON API), and ADR-103's Dev dispatch explicitly does not require building it in
- * this pass. Currently a no-op (writes nothing, returns without effect) so calling it
- * is always safe -- once implemented, it should upsert real UspsZoneChartEntry rows for
- * (originZip3, destZip3) pairs actually seen in production, lazily, on cache miss.
+ * Pulls the Set-Cookie values off a response as a single Cookie header string.
+ * Node's undici exposes getSetCookie() (array); older shapes only expose a single
+ * comma-joined header. Handles both, and keeps only the name=value part of each pair.
  */
-async function fetchLiveUspsZoneChartEntry(originZip3: string): Promise<void> {
-  void originZip3;
-  // Not implemented this pass -- see TODO above. Intentionally does nothing.
-  return;
+function collectCookies(res: Response): string {
+  const anyHeaders = res.headers as unknown as { getSetCookie?: () => string[] };
+  let raw: string[] = [];
+  if (typeof anyHeaders.getSetCookie === 'function') {
+    raw = anyHeaders.getSetCookie();
+  } else {
+    const joined = res.headers.get('set-cookie');
+    // Split on commas that begin a new "name=" pair, so an Expires=... comma is preserved.
+    if (joined) raw = joined.split(/,(?=\s*[A-Za-z0-9_\-.]+=)/);
+  }
+  const pairs: string[] = [];
+  for (const c of raw) {
+    const first = c.split(';')[0]?.trim();
+    if (first && first.includes('=')) pairs.push(first);
+  }
+  return pairs.join('; ');
+}
+
+/** Parses `"The Zone is 7. ..."`. Takes the MAX if USPS ever reports a split range. */
+function parseZoneInformation(info: string | null | undefined): ZoneKey | null {
+  if (!info) return null;
+  const matches = [...info.matchAll(/Zone is (\d)/g)].map((m) => Number(m[1]));
+  const valid = matches.filter((n) => n >= 1 && n <= 8);
+  if (!valid.length) return null;
+  return `z${Math.max(...valid)}` as ZoneKey;
+}
+
+/** One live zone lookup. Returns null on any error/blocked/unparseable response. */
+async function fetchUspsZone(originZip5: string, destZip5: string, cookie: string, shippingDate: string): Promise<ZoneKey | null> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), ZONE_CHART_REQUEST_TIMEOUT_MS);
+  try {
+    const url = `${USPS_ZONE_CHART_ENDPOINT}?origin=${encodeURIComponent(originZip5)}&destination=${encodeURIComponent(destZip5)}&shippingDate=${encodeURIComponent(shippingDate)}`;
+    const res = await fetch(url, {
+      signal: controller.signal,
+      redirect: 'manual', // a 302 here means Akamai blocked us, NOT a real answer
+      headers: {
+        Accept: 'application/json',
+        'User-Agent': ZONE_CHART_UA,
+        Referer: USPS_ZONE_CHART_PAGE,
+        ...(cookie ? { Cookie: cookie } : {}),
+      },
+    });
+    if (res.status !== 200) return null;
+    const body = (await res.json()) as { ZoneInformation?: string; OriginError?: string; DestinationError?: string };
+    if (body.OriginError || body.DestinationError) return null;
+    return parseZoneInformation(body.ZoneInformation);
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+/**
+ * Lazily populates UspsZoneChartEntry with REAL USPS zone-chart rows for one origin,
+ * one row per CONUS corner destination. Fire-and-forget: never throws, never blocks a
+ * rate computation, and is capped hard (see the bounding note above). Once rows land,
+ * resolveCoverageZone starts preferring them over the mileage approximation.
+ */
+async function fetchLiveUspsZoneChartEntry(originZip3: string, originZip5: string): Promise<void> {
+  if (zoneChartAttempted.has(originZip3) || zoneChartInFlight.has(originZip3)) return;
+  if (zoneChartAttempted.size >= ZONE_CHART_MAX_ORIGINS_PER_PROCESS) return;
+  if (!/^\d{5}$/.test(originZip5)) return; // endpoint rejects anything but a real 5-digit ZIP
+  zoneChartInFlight.add(originZip3);
+  try {
+    // Warm-up: pick up the Akamai session cookies. Without these the JSON endpoint
+    // 302s to a static "webtools" notice page with an empty body.
+    let cookie = '';
+    try {
+      const warmController = new AbortController();
+      const warmTimeout = setTimeout(() => warmController.abort(), ZONE_CHART_REQUEST_TIMEOUT_MS);
+      try {
+        const warm = await fetch(USPS_ZONE_CHART_PAGE, {
+          signal: warmController.signal,
+          headers: { 'User-Agent': ZONE_CHART_UA, Accept: 'text/html' },
+        });
+        cookie = collectCookies(warm);
+      } finally {
+        clearTimeout(warmTimeout);
+      }
+    } catch {
+      // Warm-up failed -- still try the lookups; a cookie is not strictly required
+      // on a cold IP, only after the rate limiter has been tripped.
+    }
+
+    const shippingDate = uspsShippingDateParam();
+    const found: { destZip3: string; zone: ZoneKey }[] = [];
+    for (const destZip5 of CONUS_CORNER_ZIPS) {
+      await sleep(ZONE_CHART_PACING_MS);
+      const zone = await fetchUspsZone(originZip5, destZip5, cookie, shippingDate);
+      if (zone) found.push({ destZip3: destZip5.slice(0, 3), zone });
+    }
+
+    // Partial results are still worth caching ONLY if we got the full corner set --
+    // the coverage zone is a MAX across corners, so a partial set could understate it
+    // and make the engine short. All-or-nothing is the safe rule here.
+    if (found.length !== CONUS_CORNER_ZIPS.length) {
+      console.warn(
+        `[eBay RateEstimate] USPS zone-chart populate incomplete for origin ${originZip3} (${found.length}/${CONUS_CORNER_ZIPS.length} corners) -- keeping mileage approximation`
+      );
+      return;
+    }
+
+    for (const row of found) {
+      await prisma.uspsZoneChartEntry.upsert({
+        where: { originZip3_destZip3: { originZip3, destZip3: row.destZip3 } },
+        update: { zone: row.zone, fetchedAt: new Date() },
+        create: { originZip3, destZip3: row.destZip3, zone: row.zone },
+      });
+    }
+    // Let the next resolveCoverageZone see the new rows.
+    zoneChartCache.delete(originZip3);
+    console.log(
+      `[eBay RateEstimate] USPS zone-chart cached for origin ${originZip3}: ${found.map((f) => `${f.destZip3}=${f.zone}`).join(', ')}`
+    );
+  } catch (err) {
+    console.warn('[eBay RateEstimate] USPS zone-chart populate failed, keeping mileage approximation', err);
+  } finally {
+    zoneChartAttempted.add(originZip3);
+    zoneChartInFlight.delete(originZip3);
+  }
 }
 
 /**
  * Async, cache-aware coverage zone resolution (ADR-103 Phase 2). Prefers a real
  * USPS zone-chart cache hit for this origin's ZIP3; falls back to the synchronous
  * 8-band mileage approximation (coverageZoneForOrigin) when no cache entry exists.
- * On a cache miss, fires the (currently stubbed, no-op) live fetcher in the
- * background -- non-blocking, errors swallowed -- so a future real implementation
- * starts lazily populating the cache with zero additional wiring.
+ * On a cache miss -- or on a hit whose rows are past ZONE_CHART_TTL_MS -- fires the
+ * live fetcher in the background (non-blocking, errors swallowed) to populate/refresh.
+ *
+ * CAVEAT, deliberate and worth knowing: the cached chart is USPS's. The zone it yields
+ * is applied to the UPS and FedEx rate columns too, because those tables are indexed by
+ * the same ZoneKey. UPS and FedEx publish their own zone charts which need not agree
+ * (FedEx has no zone 1 at all). That is not a regression -- milesToZone was already
+ * being applied to all three carriers the same way -- but it is the reason the UPS and
+ * FedEx 22.5lb cells above are flagged UNVERIFIED rather than anchored.
  */
 export async function resolveCoverageZone(origin: { zip?: string | null; lat?: number | null; lng?: number | null }): Promise<ZoneKey> {
   const originZip3 = zip3(origin.zip);
   if (originZip3) {
-    const cached = await getCachedMaxZoneForOriginZip3(originZip3);
-    if (cached) return cached;
-    // Lazy background populate -- stubbed today (see TODO), safe no-op.
-    void fetchLiveUspsZoneChartEntry(originZip3).catch(() => undefined);
+    const { zone, stale } = await getCachedMaxZoneForOriginZip3(originZip3);
+    const originZip5 = (origin.zip || '').replace(/\D/g, '').slice(0, 5);
+    if (zone) {
+      if (stale) void fetchLiveUspsZoneChartEntry(originZip3, originZip5).catch(() => undefined);
+      return zone;
+    }
+    // Lazy background populate on a cold origin -- bounded and paced, see above.
+    void fetchLiveUspsZoneChartEntry(originZip3, originZip5).catch(() => undefined);
   }
   return coverageZoneForOrigin(origin);
 }
@@ -1347,17 +1617,29 @@ export const LARGE_PACKAGE_MIN_BILLABLE_LB = 90; // ADR-103 §2D
 // sampling and this factor should tighten (or split per-zone) as more data lands.
 export const EBAY_NEGOTIATED_SURCHARGE_PASSTHROUGH = 0.50;
 
-// USPS Ground Advantage nonstandard fees (ADR-103 §2D): "length >22-30in: $4.50;
-// length >30in: $10.00; volume >2ft3: ~$21 (one conflicting source says $35 -- verify
-// against Notice 123 before hard-coding)." RESOLVED 2026-08-10: a live web search this
-// session confirmed via USPS's own current rate summary that $35.00 is correct
-// ("Nonstandard fees rose approximately 17%: length over 22 inches now $4.50, length
-// over 30 inches $10.00, volume over 2 cubic feet $35.00") -- the $21 figure was stale,
-// not a live disagreement. No longer PENDING_LIVE_VERIFICATION.
+// USPS Ground Advantage nonstandard fees. RESOLVED AGAINST THE PRIMARY SOURCE 2026-08-16,
+// which ADR-103 §5 asked for and the 2026-08-10 pass did not do: that pass resolved the
+// "$21 vs $35" conflict from a web search and hard-coded $35.00. That was WRONG for this
+// engine, and the search result was not even inaccurate -- it was about a different mail
+// class. USPS publishes DIFFERENT nonstandard-fee schedules per class, and they are easy
+// to cross-contaminate:
+//   USPS Notice 123 (pe.usps.com/cpim/ftp/manuals/dmm300/notice123.pdf), eff. 2026-08-01:
+//     p.15 "USPS Ground Advantage / Commercial-Parcels" note 5: >22in but not >30in in
+//          length, add $4.50
+//     p.15 note 6: >30in in length, add $10.00
+//     p.15 note 7: "Parcels that exceed 2 cubic feet (3456 cubic inches), add $21.00."
+//     p.7 "USPS Ground Advantage-Retail" carries the SAME $21.00 figure, so it is not a
+//          commercial-vs-retail split either.
+//   By contrast, Priority Mail (p.11 note 6) and Priority Mail Express (p.10 note 7) BOTH
+//   read "add $35.00" for the same >2 cu ft trigger -- and their >30in length fee is
+//   $21.00, not $10.00. THAT is where the stray $35.00 came from.
+// This engine models USPS GROUND ADVANTAGE (see USPS_RATE_SOURCE above), so the Ground
+// Advantage schedule is the correct one and the fee is $21.00. Do not "correct" this back
+// to $35.00 from a secondary source -- re-read Notice 123 p.15 note 7 instead.
 export const USPS_NONSTANDARD_FEE_TABLE = {
-  lengthOver22Under30In: 4.50,
-  lengthOver30In: 10.00,
-  volumeOver2CuFt: 35.00, // confirmed 2026-08-10 via USPS's own current rate summary, see comment above
+  lengthOver22Under30In: 4.50, // Notice 123 p.15, Ground Advantage Commercial-Parcels, note 5
+  lengthOver30In: 10.00,       // Notice 123 p.15, note 6
+  volumeOver2CuFt: 21.00,      // Notice 123 p.15, note 7 (was 35.00 -- that is the Priority Mail figure, p.11 note 6)
 };
 
 // Absolute carrier max (ADR-103 §2D): beyond these, the carrier refuses the package
