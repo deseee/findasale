@@ -35,6 +35,14 @@ import {
   FeedPolicyMapping,
 } from './googleMerchantShipping';
 
+/**
+ * (2026-08-16) Row building is ASYNC now. Per-item shipping resolves through
+ * resolveItemShipping — the same computed carrier rate the eBay push path uses —
+ * instead of parsing a price out of the organizer's retired weight-tier ladder.
+ * See googleMerchantShipping.ts for the full rationale (the ladder's 111oz->720oz
+ * gap was advertising a 10 lb item at the 45 lb catch-all price).
+ */
+
 const SITE_BASE_URL = 'https://finda.sale';
 
 // Google Merchant TSV columns, in order.
@@ -87,15 +95,24 @@ export interface FeedItem {
   tags: string[];
   ebayShippingOverride: string | null;
   packageWeightOz: number | null;
-  // Package dimensions (inches) — drive the freight/oversize exclusion check.
+  // Package dimensions (inches) — drive the freight/oversize exclusion check AND the
+  // billable-weight input to the computed carrier rate.
   packageLengthIn: number | null;
   packageWidthIn: number | null;
   packageHeightIn: number | null;
+  // (2026-08-16) Resolver inputs: an item the organizer hand-routed to a specific policy
+  // is EXCLUDED from the feed rather than advertised at a guessed price.
+  ebayShippingClassification: string | null;
+  ebayCategoryId: string | null;
   sale: {
     status: string;
     deletedAt: Date | null;
+    // (2026-08-16) Origin the carrier rate is computed FROM.
+    zip: string | null;
     // Organizer's eBay shipping config — null when organizer has no EbayPolicyMapping.
     organizer: {
+      lat: number | null;
+      lng: number | null;
       ebayPolicyMapping: FeedPolicyMapping | null;
     } | null;
   } | null;
@@ -175,11 +192,11 @@ function pickGtin(item: FeedItem): string | null {
  * genuine freight/LTL by weight/dimensions, or no parseable rate). Null rows never
  * reach the TSV.
  */
-export function buildFeedRow(item: FeedItem): string[] | null {
+export async function buildFeedRow(item: FeedItem): Promise<string[] | null> {
   // Feature #463: per-item shipping from the organizer's eBay config.
   // null → exclude the item entirely (opt-in shippability; no flat default).
   const policyMapping = item.sale?.organizer?.ebayPolicyMapping ?? null;
-  const shipping = computeItemShipping(
+  const shipping = await computeItemShipping(
     {
       category: item.category,
       tags: item.tags || [],
@@ -188,8 +205,16 @@ export function buildFeedRow(item: FeedItem): string[] | null {
       packageLengthIn: item.packageLengthIn,
       packageWidthIn: item.packageWidthIn,
       packageHeightIn: item.packageHeightIn,
+      ebayShippingClassification: item.ebayShippingClassification,
+      ebayCategoryId: item.ebayCategoryId,
+      price: item.price,
     },
-    policyMapping
+    policyMapping,
+    {
+      lat: item.sale?.organizer?.lat ?? null,
+      lng: item.sale?.organizer?.lng ?? null,
+      zip: item.sale?.zip ?? null,
+    }
   );
   if (!shipping) return null;
 
@@ -264,13 +289,16 @@ export function buildFeedRow(item: FeedItem): string[] | null {
  * Build the full TSV feed string from a list of items. Filters to eligible items,
  * always emits the header row (never a 0-byte feed), and tab-joins cells.
  */
-export function buildGoogleMerchantTsv(items: FeedItem[]): string {
+export async function buildGoogleMerchantTsv(items: FeedItem[]): Promise<string> {
   const header = GOOGLE_MERCHANT_COLUMNS.join('\t');
   const rows: string[] = [header];
 
+  // Sequential on purpose: rate resolution is cheap (one cached coverage-zone lookup per
+  // distinct origin, then arithmetic) and the shared zone cache warms on the first row,
+  // so a serial pass avoids a burst of identical concurrent lookups on a cold cache.
   for (const item of items) {
     if (!isFeedEligible(item)) continue;
-    const row = buildFeedRow(item);
+    const row = await buildFeedRow(item);
     // Feature #463: null row → item excluded for shipping reasons. Skip it so
     // unshippable items never reach the TSV.
     if (!row) continue;

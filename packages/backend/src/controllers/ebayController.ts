@@ -1190,14 +1190,12 @@ export async function checkEbayPolicyLiveness(req: AuthRequest, res: Response): 
     const stored: Array<{ policyId: string; label: string }> = [];
     const mapping = organizer.ebayPolicyMapping;
     if (mapping) {
-      const weightTiers = (mapping.weightTierMappings as any[]) || [];
-      for (const t of weightTiers) {
-        if (t?.policyId) stored.push({ policyId: t.policyId, label: t.policyName || `Weight tier (<=${t.maxOz}oz)` });
-      }
-      const cubicTiers = (mapping.cubicTierMappings as any[]) || [];
-      for (const t of cubicTiers) {
-        if (t?.policyId) stored.push({ policyId: t.policyId, label: t.policyName || 'Box-size tier' });
-      }
+      // (2026-08-16) weightTierMappings / cubicTierMappings are NOT scanned here any
+      // more. ADR-102 retired ladder matching from routing and this session removed the
+      // last non-routing consumer (the Google Merchant feed), so those policy ids can no
+      // longer affect a single listing or feed row. Reporting them as "stale policies"
+      // sent organizers chasing repairs that changed nothing. The rows themselves are
+      // untouched in the database.
       const categoryOverrides = (mapping.categoryOverrides as any[]) || [];
       for (const c of categoryOverrides) {
         if (c?.policyId) stored.push({ policyId: c.policyId, label: c.policyName || `Category override (${c.categoryName || c.categoryId})` });
@@ -1236,6 +1234,15 @@ export async function checkEbayPolicyLiveness(req: AuthRequest, res: Response): 
 }
 
 /**
+ * (2026-08-16) Allowed values for EbayPolicyMapping.fallbackStrategy — the organizer's
+ * explicit choice for what resolvePoliciesForItem does when no routing rule matched.
+ * Kept as a plain const (not a Prisma enum) to match shippingMode's existing pattern in
+ * this model and to avoid an enum migration for a settings-page dropdown.
+ */
+export const FALLBACK_STRATEGIES = ['CALCULATED', 'FLAT_RATE', 'POLICY', 'LOCAL_PICKUP', 'BLOCK'] as const;
+export type FallbackStrategy = (typeof FALLBACK_STRATEGIES)[number];
+
+/**
  * Handler: POST /api/ebay/policy-mapping
  * Saves organizer's policy routing configuration (weight tiers, category overrides, defaults, etc).
  */
@@ -1265,7 +1272,22 @@ export async function saveEbayPolicyMapping(req: AuthRequest, res: Response): Pr
       merchantLocationSource: body.merchantLocationSource || 'SALE_ADDRESS',
       shippingMode: body.shippingMode === 'FLAT_TIERS' ? 'FLAT_TIERS' : 'CALCULATED',
       freeShippingOptIn: body.freeShippingOptIn === true,
+      // (2026-08-16) Organizer-chosen routing fallback. Whitelisted, never free text --
+      // an unrecognised value would land in the cascade's last resort and silently
+      // soft-block every unmatched item. Unknown/absent => CALCULATED (the recommended
+      // default), which is also the column default.
+      fallbackStrategy: FALLBACK_STRATEGIES.includes(String(body.fallbackStrategy || '').toUpperCase() as FallbackStrategy)
+        ? (String(body.fallbackStrategy).toUpperCase() as FallbackStrategy)
+        : 'CALCULATED',
     };
+
+    // POLICY fallback is meaningless without a policy to fall back TO -- reject rather
+    // than save a configuration that can only ever soft-block.
+    if (data.fallbackStrategy === 'POLICY' && !data.defaultFulfillmentPolicyId) {
+      return res.status(400).json({
+        error: 'Pick the shipping policy you want used as your fallback, or choose a different fallback option.',
+      });
+    }
 
     const mapping = await prisma.ebayPolicyMapping.upsert({
       where: { organizerId: organizer.id },
@@ -3993,11 +4015,17 @@ function buildAspects(tags: string[]): Record<string, string[]> | undefined {
  *   3. free shipping (FLAT_RATE with cost 0, or name contains "free") as last resort
  * Returns null if no policies are available.
  * Logs the choice + reason for diagnostics.
+ *
+ * (2026-08-16) `preferFreeShipping` INVERTS that order for the one caller that needs
+ * it -- the free-shipping opt-in path. Without it that caller went through the normal
+ * priority above, which prefers a NON-ZERO flat-rate policy, i.e. it charged the buyer
+ * for shipping on an organizer who had explicitly opted to absorb the cost.
  */
 async function pickFulfillmentPolicySmart(
   fetchPolicies?: () => Promise<any[]>,
-  itemHasWeight: boolean = false
-): Promise<{ policyId: string; reason: 'weight-based' | 'flat-rate' | 'free-fallback' } | null> {
+  itemHasWeight: boolean = false,
+  preferFreeShipping: boolean = false
+): Promise<{ policyId: string; reason: 'weight-based' | 'flat-rate' | 'free-fallback' | 'free-preferred' } | null> {
   if (!fetchPolicies) return null;
   const policies = await fetchPolicies();
   if (!policies || policies.length === 0) return null;
@@ -4005,6 +4033,22 @@ async function pickFulfillmentPolicySmart(
   const hasCostType = (p: any, type: 'CALCULATED' | 'FLAT_RATE'): boolean =>
     Array.isArray(p.shippingOptions) &&
     p.shippingOptions.some((opt: any) => opt && opt.costType === type);
+
+  // 0. Free-shipping opt-in: find a genuinely $0 policy first.
+  if (preferFreeShipping) {
+    const zeroCost = policies.find((p) => {
+      if (!hasCostType(p, 'FLAT_RATE')) return false;
+      const opt = (p.shippingOptions as any[]).find((o) => o.costType === 'FLAT_RATE');
+      const svc = opt?.shippingServices?.[0];
+      const cost = Number(svc?.shippingCost?.value ?? svc?.additionalShippingCost?.value ?? 0);
+      return cost === 0;
+    }) || policies.find((p) => /free/i.test(p.name || ''));
+    if (zeroCost) {
+      console.log(`[eBay ShippingPick] policy="${zeroCost.name}" reason="free-preferred"`);
+      return { policyId: zeroCost.fulfillmentPolicyId, reason: 'free-preferred' };
+    }
+    console.warn('[eBay ShippingPick] WARN free-shipping opt-in but no $0 policy found on the account — falling back to normal smart-pick priority.');
+  }
 
   // 1. Calculated (weight-based) — only if item has a valid weight, else eBay rejects publish with error 25020
   const calc = policies.find((p) => hasCostType(p, 'CALCULATED'));
@@ -4184,6 +4228,122 @@ export async function resolvePoliciesForItem(
     };
   }
 
+  // ── Shared resolution helpers (2026-08-16) ────────────────────────────────
+  // Return/payment policies, the result shape, the package dims and the organizer's
+  // chosen last-resort fallback are identical in every branch below, so they are
+  // derived ONCE here instead of being re-derived (and drifting) per branch.
+  const sharedReturnPolicyId = mapping?.defaultReturnPolicyId || conn.returnPolicyId;
+  const sharedPaymentPolicyId = mapping?.defaultPaymentPolicyId || conn.paymentPolicyId;
+  const policiesNotConfigured = {
+    error: 'POLICIES_NOT_CONFIGURED',
+    code: 'POLICIES_NOT_CONFIGURED',
+    message: 'Please set default return and payment policies in eBay Settings.',
+  };
+  const buildResult = (policyId: string, reason: string): PolicyRoutingResult => ({
+    fulfillmentPolicyId: policyId,
+    returnPolicyId: sharedReturnPolicyId || '',
+    paymentPolicyId: sharedPaymentPolicyId || '',
+    descriptionHtml: mapping?.defaultDescriptionHtml ?? null,
+    pushAsDraft: mapping?.pushAsDraft ?? false,
+    merchantLocationSource: mapping?.merchantLocationSource || conn.merchantLocationSource || 'SALE_ADDRESS',
+    routingReason: reason,
+  });
+  const packageDims =
+    item.packageLengthIn != null && item.packageWidthIn != null && item.packageHeightIn != null
+      ? { length: Number(item.packageLengthIn), width: Number(item.packageWidthIn), height: Number(item.packageHeightIn) }
+      : null;
+
+  // ── Organizer-chosen routing fallback (2026-08-16, Patrick decision) ──────
+  // What happens when NOTHING in the cascade matched. This used to end at
+  // EbayConnection.fulfillmentPolicyId -- which on a real connected account is
+  // whatever policy happened to be picked at setup time, frequently a $0 "Free
+  // Domestic Shipping" policy, so a full fall-through silently made the ORGANIZER
+  // eat the label. It is now an explicit organizer setting
+  // (EbayPolicyMapping.fallbackStrategy) that defaults to CALCULATED: eBay computes
+  // the real rate at checkout from the buyer's ZIP. When the chosen strategy cannot
+  // be satisfied we soft-block and say so rather than guessing a policy -- an
+  // actionable error beats an invisible loss.
+  const fallbackStrategy = (mapping?.fallbackStrategy || 'CALCULATED').toUpperCase();
+  const applyFallbackStrategy = async (
+    context: string
+  ): Promise<PolicyRoutingResult | { error: string; code: string; message: string }> => {
+    const hasWeightForCompute = item.packageWeightOz != null && item.packageWeightOz > 0;
+    const fromZipForFallback = smartPickContext?.fromZip ?? null;
+
+    if (sharedReturnPolicyId && sharedPaymentPolicyId) {
+      // (a) CALCULATED — the recommended default. Buyer pays eBay's real computed rate
+      //     plus handling sized to offset eBay's FVF on shipping.
+      if (fallbackStrategy === 'CALCULATED' && hasWeightForCompute) {
+        const calc = await ensureCalculatedPolicyWithHandling(
+          organizerId, item.packageWeightOz!, packageDims, fromZipForFallback,
+          item.packageType, item.ebayCategoryId ?? null, item.price ?? null
+        );
+        if (calc) {
+          console.log(`[eBay ShippingPick] item=${item.id} fallback=CALCULATED (from ${context}) policy=${calc.policyId}`);
+          return buildResult(calc.policyId, `fallback-calculated:${calc.handlingCost}`);
+        }
+      }
+
+      // (b) FLAT_RATE — one predictable buyer price, computed fresh from real carrier
+      //     rates. Also the degradation path for CALCULATED when eBay policy
+      //     provisioning fails, preserving the pre-existing calc→flat behaviour.
+      if ((fallbackStrategy === 'FLAT_RATE' || fallbackStrategy === 'CALCULATED') && hasWeightForCompute) {
+        const flat = await ensureFvfFlatRatePolicy(
+          organizerId, item.packageWeightOz!, packageDims, fromZipForFallback,
+          item.packageType, item.ebayCategoryId ?? null, item.price ?? null
+        );
+        if (flat) {
+          console.log(`[eBay ShippingPick] item=${item.id} fallback=FLAT_RATE (from ${context}) policy=${flat.policyId}`);
+          return buildResult(flat.policyId, `fallback-flat:${flat.flatRate}`);
+        }
+      }
+
+      // (c) POLICY — the organizer named one of their own eBay policies.
+      if (fallbackStrategy === 'POLICY' && mapping?.defaultFulfillmentPolicyId) {
+        console.log(`[eBay ShippingPick] item=${item.id} fallback=POLICY (from ${context}) policy=${mapping.defaultFulfillmentPolicyId}`);
+        return buildResult(mapping.defaultFulfillmentPolicyId, 'fallback-organizer-policy');
+      }
+
+      // (d) LOCAL_PICKUP — same finder the item-level LOCAL_PICKUP_ONLY override uses.
+      if (fallbackStrategy === 'LOCAL_PICKUP') {
+        const allPolicies: any[] = smartPickContext?.fetchFulfillmentPolicies
+          ? await smartPickContext.fetchFulfillmentPolicies()
+          : [];
+        const localPickupPolicy = allPolicies.find(
+          (pol: any) => pol.pickupDropOff === true || /local\s*pickup/i.test(pol.name || '')
+        );
+        if (localPickupPolicy) {
+          console.log(`[eBay ShippingPick] item=${item.id} fallback=LOCAL_PICKUP (from ${context}) policy=${localPickupPolicy.fulfillmentPolicyId}`);
+          return buildResult(localPickupPolicy.fulfillmentPolicyId, 'fallback-local-pickup');
+        }
+        console.warn(`[eBay ShippingPick] item=${item.id} fallback=LOCAL_PICKUP but no local-pickup policy exists on the account`);
+      }
+    }
+
+    // (e) BLOCK, or the chosen strategy could not be satisfied. Soft-block and flag
+    //     for review. Deliberately does NOT fall back to conn.fulfillmentPolicyId --
+    //     that silent path is exactly the loss-maker this setting replaces.
+    await prisma.item.update({
+      where: { id: item.id },
+      data: { ebayNeedsReview: true },
+    }).catch(() => undefined);
+    if (!sharedReturnPolicyId || !sharedPaymentPolicyId) return policiesNotConfigured;
+    if (!hasWeightForCompute && (fallbackStrategy === 'CALCULATED' || fallbackStrategy === 'FLAT_RATE')) {
+      console.warn(`[eBay ShippingPick] item=${item.id} fallback=${fallbackStrategy} needs a package weight — soft-blocked (from ${context})`);
+      return {
+        error: 'NEEDS_PACKAGE_DETAILS',
+        code: 'NEEDS_PACKAGE_DETAILS',
+        message: 'Add the package weight and box dimensions so eBay can work out the buyer\'s shipping, or choose a different shipping fallback in eBay Settings.',
+      };
+    }
+    console.warn(`[eBay ShippingPick] item=${item.id} fallback=${fallbackStrategy} could not be satisfied — soft-blocked (from ${context})`);
+    return {
+      error: 'SHIPPING_POLICY_UNAVAILABLE',
+      code: 'SHIPPING_POLICY_UNAVAILABLE',
+      message: 'We couldn\'t work out shipping for this item. Check your shipping fallback in eBay Settings, confirm your return and payment policies are set, then try again.',
+    };
+  };
+
   // ── Shipping-mode routing (calculated vs flat-tiers) ───────────────────────
   // Default mode = CALCULATED: the buyer pays the real rate eBay computes at
   // checkout from their ZIP. Requires the item to have a weight AND all 3 dims so
@@ -4251,153 +4411,155 @@ export async function resolvePoliciesForItem(
     return null;
   };
 
-  if (shippingMode === 'CALCULATED') {
-    const hasWeight = item.packageWeightOz != null && item.packageWeightOz > 0;
+  // ── MODE-AGNOSTIC ROUTING (2026-08-16) ────────────────────────────────────
+  // BUG FIXED HERE: every rule in this block used to live inside the FLAT_TIERS
+  // cascade further down. The CALCULATED branch below RETURNS on every path, so for
+  // a CALCULATED organizer -- which is the schema default for every new organizer --
+  // categoryOverrides, heavyOversizedPolicyId, fragilePolicyId and unknownPolicyId
+  // were dead configuration: the settings page let them be set and nothing ever read
+  // them. They are explicit, hand-made organizer routing decisions and now bind in
+  // BOTH modes, before any automatic rate computation. ebayShippingResolver.ts (the
+  // preview twin) carries the identical reorder.
+  {
+    let overridePolicyId: string | null = null;
+    let overrideReason = '';
 
-    const returnPolicyId = mapping?.defaultReturnPolicyId || conn.returnPolicyId;
-    const paymentPolicyId = mapping?.defaultPaymentPolicyId || conn.paymentPolicyId;
+    // 1. Shipping-classification override (oddball items).
+    if (item.ebayShippingClassification === 'HEAVY_OVERSIZED' && mapping?.heavyOversizedPolicyId) {
+      overridePolicyId = mapping.heavyOversizedPolicyId;
+      overrideReason = 'classification:HEAVY_OVERSIZED';
+    } else if (item.ebayShippingClassification === 'FRAGILE' && mapping?.fragilePolicyId) {
+      overridePolicyId = mapping.fragilePolicyId;
+      overrideReason = 'classification:FRAGILE';
+    }
 
-    if (hasWeight) {
-      if (!returnPolicyId || !paymentPolicyId) {
-        return {
-          error: 'POLICIES_NOT_CONFIGURED',
-          code: 'POLICIES_NOT_CONFIGURED',
-          message: 'Please set default return and payment policies in eBay Settings.',
-        };
+    // 2. Category override (exact ebayCategoryId match).
+    if (!overridePolicyId && item.ebayCategoryId) {
+      const categoryOverrides = (mapping?.categoryOverrides as any[]) || [];
+      const match = categoryOverrides.find((c: any) => c.categoryId === item.ebayCategoryId);
+      if (match?.policyId) {
+        overridePolicyId = match.policyId;
+        overrideReason = `category-override:${item.ebayCategoryId}`;
       }
+    }
+
+    // 3. UNKNOWN-classification safety policy -- ONLY when we genuinely have nothing to
+    // compute a rate from. classifyEbayShipping() reads item.category/item.tags against a
+    // small hardcoded keyword list -- categories like "Musical Instruments & Gear" or
+    // "Business & Industrial:...:Pipe Fittings" don't match ANY of it and fall through to
+    // UNKNOWN, but that says nothing about whether the item is actually shippable. An item
+    // with a real, organizer-entered weight + full dimensions isn't unknown -- it's just a
+    // category the classifier doesn't recognize. Confirmed 2026-08-14: a fully-measured
+    // ukulele (24oz, 19x8x3in, packageConfirmedByOrganizer=true) was silently landing on
+    // this organizer's unknownPolicyId, which turned out to be eBay's real "Local Pickup
+    // ONLY" policy (verified live via GET /sell/account/v1/fulfillment_policy) -- giving
+    // real buyers zero shipping option on an obviously shippable item. Gate this branch to
+    // only fire when weight or dims are actually missing; a measured item falls through to
+    // the computed rate instead, which itself hard-blocks anything too big/heavy for every
+    // modeled carrier (ensureFvfFlatRatePolicy -> ShippingHardBlockError) rather than
+    // silently defaulting a large/expensive item to local-pickup-only.
+    const hasMeasuredPackage =
+      item.packageWeightOz != null &&
+      item.packageWeightOz > 0 &&
+      packageDims != null &&
+      item.packageConfirmedByOrganizer !== false;
+    if (
+      !overridePolicyId &&
+      (item.ebayShippingClassification === 'UNKNOWN' || !item.ebayShippingClassification) &&
+      mapping?.unknownPolicyId &&
+      !hasMeasuredPackage
+    ) {
+      overridePolicyId = mapping.unknownPolicyId;
+      overrideReason = 'classification:UNKNOWN';
+    }
+
+    if (overridePolicyId) {
+      if (!sharedReturnPolicyId || !sharedPaymentPolicyId) return policiesNotConfigured;
+      console.log(`[eBay ShippingPick] cascade-step=override reason=${overrideReason} mode=${shippingMode} item=${item.id}`);
+      return buildResult(overridePolicyId, overrideReason);
+    }
+  }
+
+  // 4. Free-shipping opt-in — the organizer absorbs the label, buyer pays $0. Sits
+  // BELOW the override rules above (a blanket opt-in must not promise free shipping on
+  // an item explicitly routed to a heavy/oversized or local-pickup policy) and ABOVE
+  // both computed-rate paths. Previously this was checked only inside the CALCULATED
+  // branch, and only for items with NO weight -- so a FLAT_TIERS organizer's opt-in was
+  // ignored outright and a CALCULATED organizer's was ignored on every measured item,
+  // while the preview (ebayShippingResolver.ts) said "free" for both. They now agree.
+  if (mapping?.freeShippingOptIn) {
+    const freePick = await pickFulfillmentPolicySmart(
+      smartPickContext?.fetchFulfillmentPolicies,
+      false,
+      true
+    );
+    const chosenFree = freePick?.policyId || conn.fulfillmentPolicyId;
+    if (chosenFree && sharedReturnPolicyId && sharedPaymentPolicyId) {
+      console.log(`[eBay ShippingPick] cascade-step=free-shipping-opt-in mode=${shippingMode} item=${item.id} policy=${chosenFree}`);
+      return buildResult(chosenFree, 'free-shipping-opt-in');
+    }
+    console.warn(`[eBay ShippingPick] item=${item.id} free-shipping opt-in set but no usable policy — continuing down the cascade`);
+  }
+
+  // 5. eBay Standard Envelope — the organizer's OWN configured envelope policy, shared
+  // by both modes (roadmap #624). Hoisted here from the two per-branch call sites so
+  // there is exactly one, at one precedence.
+  {
+    const envelopePick = await pickStandardEnvelopePolicy();
+    if (envelopePick) {
+      if (!sharedReturnPolicyId || !sharedPaymentPolicyId) return policiesNotConfigured;
+      console.log(
+        `[eBay ShippingPick] cascade-step=standard-envelope mode=${shippingMode} item=${item.id} policy="${envelopePick.policyName}" id=${envelopePick.policyId} buyerAmount=$${(envelopePick.buyerAmountCents / 100).toFixed(2)}`
+      );
+      return buildResult(envelopePick.policyId, `standard-envelope:${(envelopePick.buyerAmountCents / 100).toFixed(2)}`);
+    }
+  }
+
+  if (shippingMode === 'CALCULATED') {
+    if (!sharedReturnPolicyId || !sharedPaymentPolicyId) return policiesNotConfigured;
+
+    const hasWeight = item.packageWeightOz != null && item.packageWeightOz > 0;
+    if (hasWeight) {
       // Real-calculated-shipping-plus-handling path (Patrick decision, replaces
       // FVF-flat as PRIMARY): buyer pays eBay's real CALCULATED rate at checkout,
       // plus a packageHandlingCost sized to offset eBay's 13.6% FVF on shipping, so
-      // the organizer still nets at least the estimated USPS label cost. Falls back
-      // to the FVF-flat policy (S968, unchanged) if provisioning fails, and only
-      // soft-blocks if BOTH fail.
-      const fromZip = smartPickContext?.fromZip ?? null;
-      const dims = (
-        item.packageLengthIn != null && item.packageWidthIn != null && item.packageHeightIn != null
-          ? { length: item.packageLengthIn, width: item.packageWidthIn, height: item.packageHeightIn }
-          : null
-      );
-      // Standard Envelope wins over calculated-with-handling when the item genuinely
-      // qualifies AND the organizer has a real matching envelope policy (roadmap #624
-      // parity fix, 2026-08-11) -- see pickStandardEnvelopePolicy above. Nothing is
-      // provisioned here; the policy already exists on the organizer's eBay account.
-      const envelopePick = await pickStandardEnvelopePolicy();
-      if (envelopePick) {
-        console.log(
-          `[eBay ShippingPick] item=${item.id} standard-envelope policy="${envelopePick.policyName}" id=${envelopePick.policyId} buyerAmount=$${(envelopePick.buyerAmountCents / 100).toFixed(2)} (CALCULATED mode)`
-        );
-        return {
-          fulfillmentPolicyId: envelopePick.policyId,
-          returnPolicyId,
-          paymentPolicyId,
-          descriptionHtml: mapping?.defaultDescriptionHtml ?? null,
-          pushAsDraft: mapping?.pushAsDraft ?? false,
-          merchantLocationSource: mapping?.merchantLocationSource || conn.merchantLocationSource || 'SALE_ADDRESS',
-          routingReason: `standard-envelope:${(envelopePick.buyerAmountCents / 100).toFixed(2)}`,
-        };
-      }
-
+      // the organizer still nets at least the estimated USPS label cost.
       const calcHandlingResult = await ensureCalculatedPolicyWithHandling(
         organizerId,
         item.packageWeightOz!,
-        dims,
-        fromZip,
+        packageDims,
+        smartPickContext?.fromZip ?? null,
         item.packageType, // ADR-103 Phase 4: AHS packaging-attribute trigger input
         item.ebayCategoryId ?? null,
         item.price ?? null
       );
       if (calcHandlingResult) {
         console.log(
-          `[eBay ShippingPick] item=${item.id} calculated-with-handling handlingCost=${calcHandlingResult.handlingCost} bucketedRate=${calcHandlingResult.bucketedRate} policy=${calcHandlingResult.policyId}`
+          `[eBay ShippingPick] cascade-step=calculated-with-handling item=${item.id} handlingCost=${calcHandlingResult.handlingCost} bucketedRate=${calcHandlingResult.bucketedRate} policy=${calcHandlingResult.policyId}`
         );
-        return {
-          fulfillmentPolicyId: calcHandlingResult.policyId,
-          returnPolicyId,
-          paymentPolicyId,
-          descriptionHtml: mapping?.defaultDescriptionHtml ?? null,
-          pushAsDraft: mapping?.pushAsDraft ?? false,
-          merchantLocationSource: mapping?.merchantLocationSource || conn.merchantLocationSource || 'SALE_ADDRESS',
-          routingReason: `calculated-with-handling:${calcHandlingResult.handlingCost}`,
-        };
+        return buildResult(calcHandlingResult.policyId, `calculated-with-handling:${calcHandlingResult.handlingCost}`);
       }
-      // Calculated-with-handling provisioning failed — fall back to the existing
-      // FVF-inclusive flat-rate path (S968): items with a known weight use a
-      // per-bucket flat-rate policy priced at ceil(estimatedRate / 0.864) so the
-      // organizer nets at least the USPS label cost after eBay's 13.6% FVF on
-      // shipping.
-      const fvfResult = await ensureFvfFlatRatePolicy(
-        organizerId,
-        item.packageWeightOz!,
-        dims,
-        fromZip,
-        item.packageType, // ADR-103 Phase 4: AHS packaging-attribute trigger input
-        item.ebayCategoryId ?? null,
-        item.price ?? null
-      );
-      if (fvfResult) {
-        console.log(
-          `[eBay ShippingPick] item=${item.id} fvf-flat flatRate=${fvfResult.flatRate} policy=${fvfResult.policyId}`
-        );
-        return {
-          fulfillmentPolicyId: fvfResult.policyId,
-          returnPolicyId,
-          paymentPolicyId,
-          descriptionHtml: mapping?.defaultDescriptionHtml ?? null,
-          pushAsDraft: mapping?.pushAsDraft ?? false,
-          merchantLocationSource: mapping?.merchantLocationSource || conn.merchantLocationSource || 'SALE_ADDRESS',
-          routingReason: `fvf-flat:${fvfResult.flatRate}`,
-        };
-      }
-      // Both calculated-with-handling AND FVF-flat provisioning failed. Soft-block,
-      // flag for review, and return an actionable error so the organizer can retry
-      // or adjust.
-      await prisma.item.update({
-        where: { id: item.id },
-        data: { ebayNeedsReview: true },
-      }).catch(() => undefined);
-      console.warn(
-        `[eBay ShippingPick] item=${item.id} calculated-with-handling AND FVF flat provisioning both failed — soft-blocked`
-      );
-      return {
-        error: 'SHIPPING_POLICY_UNAVAILABLE',
-        code: 'SHIPPING_POLICY_UNAVAILABLE',
-        message: 'We couldn\'t set up a shipping policy for this item right now. Confirm your eBay account is connected with return and payment policies set, then try pushing again. If it keeps failing, check the item\'s package weight and box dimensions.',
-      };
-    } else if (mapping?.freeShippingOptIn) {
-      // Organizer opted into free shipping — fall back to a free/flat policy via smart-pick.
-      const smartPicked = await pickFulfillmentPolicySmart(
-        smartPickContext?.fetchFulfillmentPolicies,
-        false
-      );
-      const chosen = smartPicked?.policyId || conn.fulfillmentPolicyId;
-      if (chosen && returnPolicyId && paymentPolicyId) {
-        console.log(`[eBay ShippingPick] item=${item.id} free-shipping-opt-in policy=${chosen}`);
-        return {
-          fulfillmentPolicyId: chosen,
-          returnPolicyId,
-          paymentPolicyId,
-          descriptionHtml: mapping?.defaultDescriptionHtml ?? null,
-          pushAsDraft: mapping?.pushAsDraft ?? false,
-          merchantLocationSource: mapping?.merchantLocationSource || conn.merchantLocationSource || 'SALE_ADDRESS',
-          routingReason: 'free-shipping-opt-in',
-        };
-      }
-    } else {
-      // No package details and no free-shipping opt-in — soft-block and flag for review.
-      await prisma.item.update({
-        where: { id: item.id },
-        data: { ebayNeedsReview: true },
-      }).catch(() => undefined);
-      return {
-        error: 'NEEDS_PACKAGE_DETAILS',
-        code: 'NEEDS_PACKAGE_DETAILS',
-        message: 'Add the package weight and box dimensions so eBay can calculate the buyer\'s shipping rate, or turn on free shipping in eBay Settings.',
-      };
+      console.warn(`[eBay ShippingPick] item=${item.id} calculated-with-handling provisioning failed — deferring to the organizer's chosen fallback`);
     }
-    // Fall through to the flat-tier / smart-pick cascade below as a safety net.
+
+    // No weight, or provisioning failed. Hand off to the organizer's chosen fallback
+    // (default CALCULATED, which degrades to a computed flat rate) rather than
+    // "falling through to the flat-tier cascade below as a safety net" -- the comment
+    // that used to sit here was wrong. The cascade below dereferences `mapping`
+    // non-optionally and was only ever reachable from the free-shipping-opt-in miss,
+    // which is now handled above the mode fork. This branch always terminates.
+    return applyFallbackStrategy(hasWeight ? 'calculated-provisioning-failed' : 'calculated-no-weight');
   }
 
-  // If mapping doesn't exist, fall back to EbayConnection default policies (or smart-pick)
+  // No mapping row at all. HONEST STATUS (2026-08-16): this block is currently
+  // UNREACHABLE and was already unreachable before this session. shippingMode falls back
+  // to 'CALCULATED' when mapping is null, and the CALCULATED branch above returns on
+  // every path, so control never arrives here with mapping === null. It is retained
+  // rather than deleted because it encodes a real product decision (an organizer who has
+  // never opened eBay Settings gets smart-pick against their own live eBay policies, not
+  // a FindA.Sale-provisioned policy) and deleting a reachable-looking fallback is a
+  // Removal-Gate decision, not a cleanup. If it is ever to be removed, that is Patrick's
+  // call, not an agent's.
   if (!mapping) {
     if (!conn.returnPolicyId || !conn.paymentPolicyId) {
       return {
@@ -4430,189 +4592,53 @@ export async function resolvePoliciesForItem(
     };
   }
 
-  // Policy resolution priority for FLAT_TIERS organizers (ADR-102, roadmap #622,
-  // 2026-08-10 — replaces the old manually-curated weightTierMappings ladder):
-  //   1. Shipping classification override (HEAVY_OVERSIZED, FRAGILE) — oddball items,
-  //      checked FIRST so a manual override always wins over automatic computation
-  //      (also fixes a pre-existing inconsistency: EbayPolicyMapping.categoryOverrides'
-  //      own schema comment always said "Checked BEFORE weight tiers", but the old
-  //      cascade checked weight tiers first — this reorder now matches that intent).
-  //   2. Category override (exact ebayCategoryId match) — also an oddball/manual override.
-  //   3. UNKNOWN classification fallback (organizer-configured policy for un-classified items).
-  //   3b. eBay Standard Envelope (roadmap #624) — item genuinely qualifies for eBay's
-  //      Standard Envelope program (<=3oz, <$20, eligible category, envelope dims) AND the
-  //      organizer already has a real envelope policy on their eBay account. That real
-  //      policy wins over the computed flat rate below: eBay prices this program through
-  //      the seller's own policy, so recomputing a "FindA.Sale Flat $X.XX" fee for it
-  //      overcharged the buyer and ignored configuration the organizer had already done.
-  //   4. Computed flat rate (ensureFvfFlatRatePolicy) — the real cheapest USPS/UPS/FedEx
+  // ── FLAT_TIERS cascade (ADR-102, roadmap #622) ────────────────────────────
+  // What used to be a 6-step cascade is now 2 steps. Steps 1-3b (classification
+  // override, category override, UNKNOWN safety policy, Standard Envelope) were lifted
+  // into the mode-agnostic block ABOVE the shipping-mode fork on 2026-08-16, because
+  // the CALCULATED branch returns on every path and so never reached them -- they were
+  // dead for every CALCULATED organizer, which is the default for every new organizer.
+  // Steps 5-6 (mapping.defaultFulfillmentPolicyId, then smart-pick, then
+  // conn.fulfillmentPolicyId) are replaced by the organizer's explicit
+  // fallbackStrategy: the old chain ended at a policy nobody chose for this purpose,
+  // frequently a $0 free-shipping policy, and quietly made the organizer eat the label.
+  //
+  // What remains here:
+  //   1. Computed flat rate (ensureFvfFlatRatePolicy) — the real cheapest USPS/UPS/FedEx
   //      rate for this item's weight+dims+origin, grossed up for eBay's FVF, bucketed.
-  //      This is the SAME provisioning path CALCULATED mode's flat-fallback already uses
-  //      above (~line 4225) and that the old ladder's own gap-overshoot guard already
-  //      fell back to. It replaces weight-tier-ladder matching as PRIMARY because the old
-  //      ladder went stale (0-1lb, 7-45lb coverage gaps) from being hand-maintained; this
-  //      path can't develop a gap because it's computed fresh on every push. The old
-  //      weightTierMappings/cubicTierMappings data is left in the schema (unused for
-  //      routing now) rather than migrated away — no data loss, trivial revert.
-  //   5. Default mapping fulfillment policy (no weight at all — can't compute a rate).
-  //   6. Smart-pick (calculated → flat-rate → free fallback).
-
-  let fulfillmentPolicyId: string | null = null;
-  let routingReason = '';
-  let cascadeStep = '';
-
-  // 1. Shipping classification override (oddball items)
-  if (item.ebayShippingClassification === 'HEAVY_OVERSIZED' && mapping.heavyOversizedPolicyId) {
-    fulfillmentPolicyId = mapping.heavyOversizedPolicyId;
-    routingReason = 'classification:HEAVY_OVERSIZED';
-    cascadeStep = 'classification';
-  } else if (item.ebayShippingClassification === 'FRAGILE' && mapping.fragilePolicyId) {
-    fulfillmentPolicyId = mapping.fragilePolicyId;
-    routingReason = 'classification:FRAGILE';
-    cascadeStep = 'classification';
-  }
-
-  // 2. Category override
-  if (!fulfillmentPolicyId) {
-    const categoryOverrides = (mapping.categoryOverrides as any[]) || [];
-    if (item.ebayCategoryId) {
-      const match = categoryOverrides.find((c: any) => c.categoryId === item.ebayCategoryId);
-      if (match) {
-        fulfillmentPolicyId = match.policyId;
-        routingReason = `category-override:${item.ebayCategoryId}`;
-        cascadeStep = 'category';
-      }
-    }
-  }
-
-  // 3. UNKNOWN classification fallback -- ONLY when we genuinely have nothing to
-  // compute a rate from. classifyEbayShipping() reads item.category/item.tags against a
-  // small hardcoded keyword list -- categories like "Musical Instruments & Gear" or
-  // "Business & Industrial:...:Pipe Fittings" don't match ANY of it and fall through to
-  // UNKNOWN, but that says nothing about whether the item is actually shippable. An item
-  // with a real, organizer-entered weight + full dimensions isn't unknown -- it's just a
-  // category the classifier doesn't recognize. Confirmed 2026-08-14: a fully-measured
-  // ukulele (24oz, 19x8x3in, packageConfirmedByOrganizer=true) was silently landing on
-  // this organizer's unknownPolicyId, which turned out to be eBay's real "Local Pickup
-  // ONLY" policy (verified live via GET /sell/account/v1/fulfillment_policy) -- giving
-  // real buyers zero shipping option on an obviously shippable item. Gate this branch to
-  // only fire when weight or dims are actually missing; a measured item falls through to
-  // step 4 (computed flat rate) below instead, which itself hard-blocks anything too big/
-  // heavy for every modeled carrier (via ensureFvfFlatRatePolicy -> ShippingHardBlockError)
-  // rather than silently defaulting a large/expensive item to local-pickup-only.
-  const hasMeasuredPackage =
-    item.packageWeightOz != null &&
-    item.packageWeightOz > 0 &&
-    item.packageLengthIn != null &&
-    item.packageWidthIn != null &&
-    item.packageHeightIn != null &&
-    item.packageConfirmedByOrganizer !== false;
-  if (
-    !fulfillmentPolicyId &&
-    (item.ebayShippingClassification === 'UNKNOWN' || !item.ebayShippingClassification) &&
-    mapping.unknownPolicyId &&
-    !hasMeasuredPackage
-  ) {
-    fulfillmentPolicyId = mapping.unknownPolicyId;
-    routingReason = 'classification:UNKNOWN';
-    cascadeStep = 'classification';
-  }
-
-  // 3b. eBay Standard Envelope (roadmap #624, 2026-08-11) — the organizer's OWN configured
-  // envelope policy beats the computed flat rate below. Logic lives in
-  // pickStandardEnvelopePolicy (defined above, shared with the CALCULATED branch) so the
-  // two shipping modes cannot drift apart.
-  if (!fulfillmentPolicyId) {
-    const envelopePick = await pickStandardEnvelopePolicy();
-    if (envelopePick) {
-      fulfillmentPolicyId = envelopePick.policyId;
-      routingReason = `standard-envelope:${(envelopePick.buyerAmountCents / 100).toFixed(2)}`;
-      cascadeStep = 'standard-envelope';
-      console.log(
-        `[eBay ShippingPick] item=${item.id} standard-envelope policy="${envelopePick.policyName}" id=${envelopePick.policyId} buyerAmount=$${(envelopePick.buyerAmountCents / 100).toFixed(2)}`
-      );
-    }
-  }
-
-  // 4. Computed flat rate (ADR-102) — always-fresh real carrier rate, replaces the
-  // manually-curated weight-tier ladder. Requires a real weight to compute against.
-  if (!fulfillmentPolicyId && item.packageWeightOz != null && item.packageWeightOz > 0) {
-    const computedDims = (
-      item.packageLengthIn != null && item.packageWidthIn != null && item.packageHeightIn != null
-        ? { length: Number(item.packageLengthIn), width: Number(item.packageWidthIn), height: Number(item.packageHeightIn) }
-        : null
+  //      This replaced weight-tier-ladder matching as PRIMARY in ADR-102 because the old
+  //      hand-maintained ladder went stale (0-1lb, 7-45lb coverage gaps); a computed rate
+  //      can't develop a gap. weightTierMappings/cubicTierMappings are no longer read by
+  //      ANY routing path in this file — the columns are retained (no data loss, trivial
+  //      revert) and the Google Merchant feed no longer prices from them either.
+  //   2. The organizer's chosen fallback (applyFallbackStrategy).
+  if (item.packageWeightOz != null && item.packageWeightOz > 0) {
+    const computedFvf = await ensureFvfFlatRatePolicy(
+      organizerId,
+      item.packageWeightOz,
+      packageDims,
+      smartPickContext?.fromZip ?? null,
+      item.packageType, // ADR-103 Phase 4
+      item.ebayCategoryId ?? null,
+      item.price ?? null
     );
-    const computedFromZip = smartPickContext?.fromZip ?? null;
-    const computedFvf = await ensureFvfFlatRatePolicy(organizerId, item.packageWeightOz, computedDims, computedFromZip, item.packageType, item.ebayCategoryId ?? null, item.price ?? null); // ADR-103 Phase 4
     if (computedFvf) {
-      fulfillmentPolicyId = computedFvf.policyId;
-      routingReason = `flat-tiers-computed:${computedFvf.flatRate}`;
-      cascadeStep = 'computed-flat';
-    } else {
-      console.warn(`[eBay ShippingPick] item=${item.id} FLAT_TIERS computed-rate provisioning failed — falling through to default/smart-pick`);
+      if (!sharedReturnPolicyId || !sharedPaymentPolicyId) return policiesNotConfigured;
+      console.log(
+        `[eBay ShippingPick] cascade-step=computed-flat item=${item.id} flatRate=${computedFvf.flatRate} policy=${computedFvf.policyId} weightOz=${item.packageWeightOz} packageType=${item.packageType ?? 'null'}`
+      );
+      return buildResult(computedFvf.policyId, `flat-tiers-computed:${computedFvf.flatRate}`);
     }
+    console.warn(`[eBay ShippingPick] item=${item.id} FLAT_TIERS computed-rate provisioning failed — deferring to the organizer's chosen fallback`);
   }
 
-  // 5. Default mapping fulfillment policy
-  if (!fulfillmentPolicyId && mapping.defaultFulfillmentPolicyId) {
-    fulfillmentPolicyId = mapping.defaultFulfillmentPolicyId;
-    routingReason = 'default-fulfillment';
-    cascadeStep = 'default';
-  }
-
-  // 6. Smart-pick from organizer's eBay policies (calculated > flat-rate > free fallback)
-  //    Replaces the prior "connection-default-fulfillment" fallback. Falls back to conn.fulfillmentPolicyId if smart-pick fetches nothing.
-  if (!fulfillmentPolicyId) {
-    const smartPicked = await pickFulfillmentPolicySmart(
-      smartPickContext?.fetchFulfillmentPolicies,
-      Boolean(item.packageWeightOz && item.packageWeightOz > 0)
-    );
-    if (smartPicked) {
-      fulfillmentPolicyId = smartPicked.policyId;
-      routingReason = `smart-pick:${smartPicked.reason}`;
-      cascadeStep = 'smart-pick';
-    } else if (conn.fulfillmentPolicyId) {
-      fulfillmentPolicyId = conn.fulfillmentPolicyId;
-      routingReason = 'connection-default-fulfillment';
-      cascadeStep = 'default';
-    }
-  }
-
-  // S725: structured cascade log so future shipping-pick bugs are diagnosable in one line.
-  if (fulfillmentPolicyId) {
-    console.log(`[eBay ShippingPick] cascade-step=${cascadeStep} reason=${routingReason} weightOz=${item.packageWeightOz ?? 'null'} packageType=${item.packageType ?? 'null'}`);
-  }
-
-
-  if (!fulfillmentPolicyId) {
-    return {
-      error: 'NO_FULFILLMENT_POLICY_MATCH',
-      code: 'NO_FULFILLMENT_POLICY_MATCH',
-      message: `No eBay fulfillment policy matched for this item (weight=${item.packageWeightOz}, classification=${item.ebayShippingClassification}, category=${item.ebayCategoryId}). Add a matching tier in Settings or set a default fulfillment policy.`,
-    };
-  }
-
-  const returnPolicyId = mapping.defaultReturnPolicyId || conn.returnPolicyId;
-  const paymentPolicyId = mapping.defaultPaymentPolicyId || conn.paymentPolicyId;
-
-  if (!returnPolicyId || !paymentPolicyId) {
-    return {
-      error: 'POLICIES_NOT_CONFIGURED',
-      code: 'POLICIES_NOT_CONFIGURED',
-      message: 'Please set default return and payment policies in eBay Settings.',
-    };
-  }
-
-  return {
-    fulfillmentPolicyId,
-    returnPolicyId,
-    paymentPolicyId,
-    descriptionHtml: mapping.defaultDescriptionHtml,
-    pushAsDraft: mapping.pushAsDraft,
-    merchantLocationSource: mapping.merchantLocationSource,
-    routingReason,
-  };
+  return applyFallbackStrategy(
+    item.packageWeightOz != null && item.packageWeightOz > 0
+      ? 'flat-tiers-computed-rate-failed'
+      : 'flat-tiers-no-weight'
+  );
 }
+
 
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -4743,15 +4769,17 @@ export async function resyncItemShippingPolicy(
                 lng: true,
                 ebayPolicyMapping: {
                   // ADR-102 (roadmap #622): categoryOverrides/heavyOversizedPolicyId/
-                  // fragilePolicyId/unknownPolicyId are required so resolveItemShipping's
-                  // FLAT_TIERS branch below can check oddball-item overrides before
-                  // falling through to the computed rate -- without these the recorded
-                  // ebayShippingAmountCents would silently use the computed rate even for
-                  // an item routed to a manual override policy.
+                  // fragilePolicyId/unknownPolicyId are required so resolveItemShipping
+                  // can check oddball-item overrides before falling through to the
+                  // computed rate -- without these the recorded ebayShippingAmountCents
+                  // would silently use the computed rate even for an item routed to a
+                  // manual override policy. (2026-08-16: those overrides now apply in
+                  // BOTH shipping modes, not just FLAT_TIERS.)
                   select: {
                     shippingMode: true,
                     freeShippingOptIn: true,
-                    weightTierMappings: true,
+                    // weightTierMappings deliberately NOT selected (2026-08-16):
+                    // resolveItemShipping ignores it since the ADR-102 ladder retirement.
                     categoryOverrides: true,
                     heavyOversizedPolicyId: true,
                     fragilePolicyId: true,
@@ -4965,7 +4993,8 @@ export async function reviseNativeListingShippingPolicy(
                   select: {
                     shippingMode: true,
                     freeShippingOptIn: true,
-                    weightTierMappings: true,
+                    // weightTierMappings deliberately NOT selected (2026-08-16):
+                    // resolveItemShipping ignores it since the ADR-102 ladder retirement.
                     categoryOverrides: true,
                     heavyOversizedPolicyId: true,
                     fragilePolicyId: true,

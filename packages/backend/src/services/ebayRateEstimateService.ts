@@ -143,6 +143,59 @@ export class ShippingHardBlockError extends Error {
 // verifiedThisSession's comment above for why (suspected oversize/AHS surcharge
 // contamination in the larger test box needed to keep dim-weight below actual weight at
 // those tiers).
+// ── 22.5lb WEIGHT-BRACKET SPLIT, z8 REAL-ANCHORED 2026-08-16 ───────────────────────────
+// Real primary source: Patrick pulled eBay's own live shipping calculator today for a
+// 48x16x4in / 22lb 4oz parcel, origin 49079 (Paw Paw MI, Artifact's real ship-from) ->
+// destination 98282 (Camano Island WA, 1811mi by haversine => z8 under milesToZone; the
+// coverage zone for a 49079 origin is also z8 via ZIP1_MAX_ZONE['4']). Quoted prices:
+//   FedEx Ground / FedEx Home Delivery  $32.11   (the service RATE_TABLE_FEDEX models)
+//   UPS Ground                          $37.00
+//   USPS Ground Advantage               $62.14
+//   (also quoted, deliberately NOT modeled by this engine: FedEx Ground Economy $32.09,
+//    UPS Ground Saver $40.24, FedEx 2Day $84.70)
+//
+// WHAT WAS ACTUALLY WRONG -- diagnosed by reproducing the engine against this parcel
+// before changing anything, NOT assumed. The engine returned FedEx $38.89. Trace:
+// billable weight = 22.25lb actual (dim weight 48*16*4/139 = 22.10lb, so ACTUAL governs,
+// billableLb basis='actual'); no AHS trigger fires (longest side is exactly 48in and the
+// dimension trigger is `> 48`, weight 22.25 < 50); so rateFromTable picks the FIRST row
+// whose maxLb >= 22.25 -- which, before this change, was the maxLb:30 row. Every one of
+// these tables jumped straight from a 20lb row to a 30lb row, so EVERY parcel in the
+// (20, 30] lb band was billed the 30lb price. That bracket coarseness -- not a stale z8
+// column -- is the primary defect this real quote exposed:
+//   FedEx z8: 20lb $32.41 | REAL @22.25lb $32.11 | 30lb $38.89
+//   USPS z8:  20lb $40.39 | REAL @22.25lb $52.14 base | 30lb $96.60
+//             (linear 20->30 interpolation at 22.25lb predicts $53.04 -- within $0.90 of
+//             the real value, corroborating that BOTH existing USPS anchors are sound and
+//             the curve is simply steep, i.e. bracket coarseness, not staleness)
+//   UPS z8:   20lb $41.72 | REAL @22.25lb $37.00 | 30lb $56.99
+//             (UPS is the one carrier the data does NOT explain by coarseness -- see the
+//             UNVERIFIED flag on RATE_TABLE_UPS's 20lb/z8 cell below)
+//
+// FIX: split the (20, 30] bracket with a new maxLb:22.5 row. 22.5 -- not 25 or 30 -- is
+// deliberate: it is the tightest bound that covers the one real observation (22.25lb) with
+// no forward extrapolation. Weights in (22.5, 30] keep the existing 30lb price, unchanged.
+// This file's own header comments document that eBay's real negotiated curve has genuine
+// plateaus and dips, so extrapolating a single anchor forward to 25 or 30lb would repeat
+// exactly the methodology ADR-103 already found to be structurally incapable of being right.
+//
+// HOW THE z1-z7 CELLS IN THE NEW ROW WERE SET (read this before "improving" them):
+//   z8  = the real quoted value (minus, for USPS only, the $10.00 nonstandard length fee
+//         computeSurchargeForCarrier adds back for a >30in parcel -- so the ENGINE OUTPUT
+//         equals the observed $62.14 total, which is the number that actually matters).
+//   z1-z7 = min(existing maxLb:30 cell, the real z8 anchor). NOT scaled -- ADR-103 Phase 1
+//         already tried scaling a whole z8 column by one observed ratio and produced z8
+//         values BELOW z7, a physical impossibility, caught and reverted before push. The
+//         cap is instead a direct consequence of the one relationship that revert
+//         established as a hard rule for these tables: a farther zone cannot cost less than
+//         a nearer one at the same weight. A real z8 measurement is therefore a valid UPPER
+//         BOUND on every lower zone at that same weight. Where the old 30lb cell already
+//         sat below the anchor it is carried forward untouched (FedEx: all of z1-z7, so
+//         FedEx behavior changes at z8 ONLY). Where it sat above, it is capped down (USPS
+//         z5/z6/z7 -> $52.14; UPS z6/z7 -> $37.00). Capping can only ever LOWER a price
+//         toward a real measured ceiling; it can never make the engine short.
+//   Provenance: z8 in all three new rows is PRIMARY-SOURCED. z1-z7 are real-anchored upper
+//   bounds, NOT live quotes -- still UNVERIFIED as exact prices. See ADR-103 §7.
 const RATE_TABLE: RateRow[] = [
   { maxLb: 0.25   , z1: 5.24 , z2: 5.24 , z3: 5.28 , z4: 5.4 , z5: 5.48 , z6: 5.62 , z7: 5.72 , z8: 8.40 },
   { maxLb: 0.5    , z1: 5.7 , z2: 5.7 , z3: 5.73 , z4: 5.83 , z5: 5.89 , z6: 5.97 , z7: 6.07 , z8: 8.40 },
@@ -156,6 +209,7 @@ const RATE_TABLE: RateRow[] = [
   { maxLb: 10     , z1: 7.55 , z2: 7.55 , z3: 7.88 , z4: 8.56 , z5: 10.3 , z6: 12.13 , z7: 12.92 , z8: 21.57 },
   { maxLb: 14     , z1: 8.2 , z2: 8.2 , z3: 8.54 , z4: 9.47 , z5: 11.68 , z6: 13.81 , z7: 14.94 , z8: 23.89 },
   { maxLb: 20     , z1: 8.29 , z2: 8.29 , z3: 8.74 , z4: 9.79 , z5: 12.22 , z6: 14.48 , z7: 15.75 , z8: 40.39 },
+  { maxLb: 22.5   , z1: 32.38 , z2: 32.38 , z3: 36.86 , z4: 45.34 , z5: 52.14 , z6: 52.14 , z7: 52.14 , z8: 52.14 }, // z8 REAL (eBay live calc 2026-08-16, $62.14 quoted total - $10.00 USPS nonstandard length fee); z1-z7 = min(30lb cell, z8 anchor) upper bound, UNVERIFIED as exact prices
   { maxLb: 30     , z1: 32.38 , z2: 32.38 , z3: 36.86 , z4: 45.34 , z5: 59.28 , z6: 71.88 , z7: 84.24 , z8: 96.60 },
   { maxLb: 50     , z1: 47.07 , z2: 47.07 , z3: 53.63 , z4: 65.96 , z5: 89.6 , z6: 109.94 , z7: 129.95 , z8: 171.27 },
   { maxLb: 70     , z1: 57.63 , z2: 57.63 , z3: 64.26 , z4: 79.08 , z5: 110.97 , z6: 137.46 , z7: 163.73 , z8: 212.31 },
@@ -281,6 +335,17 @@ export const FEDEX_RATE_SOURCE = "eBay's own live shipping calculator API (POST 
 // verifiedThisSession's comment above for why (suspected oversize/AHS surcharge
 // contamination in the larger test box needed to keep dim-weight below actual weight at
 // those tiers).
+//
+// UNVERIFIED / SUSPECTED STALE -- 20lb x z8 cell ($41.72), flagged 2026-08-16: the new real
+// 22.25lb/z8 anchor ($37.00, see the 22.5lb-bracket comment above RATE_TABLE) is $4.72
+// (12.8%) BELOW this cell at a HIGHER weight. That makes it the ONLY weight-direction
+// inversion anywhere in this UPS table -- all 15 rows x 8 zones were otherwise strictly
+// non-decreasing in weight before this change, unlike RATE_TABLE/_FEDEX which have real,
+// documented dips. It is also the one carrier whose 20->30lb curve does NOT explain the
+// real quote by bracket coarseness (linear interpolation between the 20lb and 30lb cells
+// predicts $45.16 at 22.25lb vs the real $37.00). Deliberately NOT changed here -- there is
+// no live quote AT 20lb to correct it with, and this file does not fabricate anchors. Next
+// step: re-quote UPS Ground at 20lb, origin 49079 -> 98282.
 const RATE_TABLE_UPS: RateRow[] = [
   { maxLb: 0.25   , z1: 7.22 , z2: 7.22 , z3: 7.29 , z4: 7.29 , z5: 8.62 , z6: 9.42 , z7: 10.19 , z8: 14.33 },
   { maxLb: 0.5    , z1: 7.22 , z2: 7.22 , z3: 7.29 , z4: 7.29 , z5: 8.62 , z6: 9.42 , z7: 10.19 , z8: 14.33 },
@@ -294,6 +359,7 @@ const RATE_TABLE_UPS: RateRow[] = [
   { maxLb: 10     , z1: 11.27 , z2: 11.27 , z3: 12.95 , z4: 12.95 , z5: 17.59 , z6: 18.4 , z7: 20.63 , z8: 26.01 },
   { maxLb: 14     , z1: 13.85 , z2: 13.85 , z3: 15.24 , z4: 15.24 , z5: 18.93 , z6: 21.82 , z7: 26.31 , z8: 31.98 },
   { maxLb: 20     , z1: 15.82 , z2: 15.82 , z3: 18.18 , z4: 18.18 , z5: 23.85 , z6: 28.27 , z7: 34.37 , z8: 41.72 },
+  { maxLb: 22.5   , z1: 20.48 , z2: 20.48 , z3: 26.67 , z4: 26.67 , z5: 31.63 , z6: 37.00 , z7: 37.00 , z8: 37.00 }, // z8 REAL (eBay live calc 2026-08-16, UPS Ground $37.00); z1-z7 = min(30lb cell, z8 anchor) upper bound, UNVERIFIED as exact prices
   { maxLb: 30     , z1: 20.48 , z2: 20.48 , z3: 26.67 , z4: 26.67 , z5: 31.63 , z6: 38.76 , z7: 45.43 , z8: 56.99 },
   { maxLb: 50     , z1: 25.37 , z2: 25.37 , z3: 37.58 , z4: 37.58 , z5: 45.58 , z6: 57.43 , z7: 68.66 , z8: 80.48 },
   { maxLb: 70     , z1: 51.82 , z2: 51.82 , z3: 66.19 , z4: 66.19 , z5: 76.39 , z6: 86.13 , z7: 95.03 , z8: 112.98 },
@@ -416,6 +482,15 @@ const RATE_TABLE_UPS: RateRow[] = [
 // verifiedThisSession's comment above for why (suspected oversize/AHS surcharge
 // contamination in the larger test box needed to keep dim-weight below actual weight at
 // those tiers).
+//
+// LOW-PRIORITY VARIANCE NOTE, 2026-08-16: the 20lb x z8 cell ($32.41) is $0.30 (0.9%) above
+// the new real 22.25lb/z8 anchor ($32.11) at a lower weight. That is within
+// destination-within-zone noise (the 20lb cell was quoted to 98357 Neah Bay, the new anchor
+// to 98282 Camano Island -- both z8, 97mi apart), so it is recorded rather than "corrected"
+// on the strength of a $0.30 delta. Separately and pre-existing: the entire z2 column of this
+// table ($19.99 flat at low weights, vs $14.07 at z1 AND z3-z7) inverts zone order in 14 rows
+// and predates this change -- unexplained, never re-quoted, flagged here so it is not mistaken
+// for fallout from this pass. See ADR-103 §7.
 const RATE_TABLE_FEDEX: RateRow[] = [
   { maxLb: 0.25   , z1: 14.07 , z2: 19.99 , z3: 14.07 , z4: 14.07 , z5: 14.07 , z6: 14.07 , z7: 14.07 , z8: 21.97 },
   { maxLb: 0.5    , z1: 14.07 , z2: 19.99 , z3: 14.07 , z4: 14.07 , z5: 14.07 , z6: 14.07 , z7: 14.07 , z8: 21.97 },
@@ -429,6 +504,7 @@ const RATE_TABLE_FEDEX: RateRow[] = [
   { maxLb: 10     , z1: 14.07 , z2: 19.99 , z3: 14.21 , z4: 14.93 , z5: 15.83 , z6: 15.83 , z7: 17.42 , z8: 25.32 },
   { maxLb: 14     , z1: 14.63 , z2: 20.55 , z3: 15.11 , z4: 15.59 , z5: 16.65 , z6: 16.65 , z7: 20.79 , z8: 28.69 },
   { maxLb: 20     , z1: 15.31 , z2: 21.24 , z3: 16.44 , z4: 16.69 , z5: 19.09 , z6: 19.09 , z7: 24.51 , z8: 32.41 },
+  { maxLb: 22.5   , z1: 17.01 , z2: 22.93 , z3: 19.0 , z4: 20.31 , z5: 23.09 , z6: 23.09 , z7: 31.0 , z8: 32.11 }, // z8 REAL (eBay live calc 2026-08-16, FedEx Ground/Home Delivery $32.11); z1-z7 carried forward UNCHANGED from the 30lb row (all already below the z8 anchor) -- FedEx behavior changes at z8 only
   { maxLb: 30     , z1: 17.01 , z2: 22.93 , z3: 19.0 , z4: 20.31 , z5: 23.09 , z6: 23.09 , z7: 31.0 , z8: 38.89 },
   { maxLb: 50     , z1: 19.87 , z2: 25.79 , z3: 23.28 , z4: 26.68 , z5: 31.02 , z6: 31.02 , z7: 44.02 , z8: 51.91 },
   { maxLb: 70     , z1: 77.51 , z2: 83.44 , z3: 87.24 , z4: 90.81 , z5: 103.7 , z6: 103.7 , z7: 117.09 , z8: 124.99 },

@@ -25,9 +25,21 @@ import {
   getSuggestedPriceForMargin,
   getUnknownShippingClassificationCount,
   checkEbayPolicyLiveness,
-  previewWeightTierGapFill,
-  fillWeightTierGaps,
 } from '../controllers/ebayController';
+// Shipping presets (2026-08-16): create a REAL eBay fulfillment policy from inside
+// FindA.Sale instead of only ever pointing at one the organizer hand-built on eBay.
+// Full security rationale (AUTHZ-ON-EVERY-ENDPOINT, OWNERSHIP/TENANT-ISOLATION,
+// NO-MASS-ASSIGNMENT, bounded external writes) is in the controller's file header.
+import {
+  listShippingPresets,
+  estimateShippingPresetRate,
+  validateShippingPreset,
+  createShippingPreset,
+  searchOwnItemsForPreset,
+  bindPresetToItem,
+  presetCreateLimiter,
+  presetReadLimiter,
+} from '../controllers/ebayShippingPresetController';
 import { syncSoldItemsForOrganizer } from '../jobs/ebaySoldSyncCron';
 
 const router = Router();
@@ -45,11 +57,25 @@ router.delete('/connection', authenticate, disconnectEbay);
 router.get('/setup-data', authenticate, getEbaySetupData);
 router.post('/policy-mapping', authenticate, saveEbayPolicyMapping);
 
-// (S-gap-fill, 2026-08-09) "Fill gaps automatically" — weight-tier ladder gap detection
-// + provisioning. Preview makes zero eBay/DB writes; fill provisions real eBay policies
-// via the organizer's own connected OAuth token after explicit UI confirmation.
-router.get('/weight-tier-gaps/preview', authenticate, requireOrganizer, previewWeightTierGapFill);
-router.post('/weight-tier-gaps/fill', authenticate, requireOrganizer, fillWeightTierGaps);
+// (2026-08-16, Patrick-authorised removal) The S-gap-fill "Fill gaps automatically"
+// routes (/weight-tier-gaps/preview and /weight-tier-gaps/fill) were removed together
+// with the settings-page panel that was their only caller. They provisioned real eBay
+// policies into the weight-tier ladder that ADR-102 retired for eBay routing, so every
+// policy they created was a permanent object on the organizer's eBay account serving a
+// ladder the router no longer consults. Replaced by the shipping-preset routes below,
+// which let the organizer create the policy they actually want.
+
+// Shipping presets: create a real eBay fulfillment policy in-app.
+// Every route is organizer-authenticated and resolves the organizer from the JWT
+// subject; none accepts an organizer or account identifier from the client.
+router.get('/shipping-presets', authenticate, requireOrganizer, presetReadLimiter, listShippingPresets);
+router.get('/shipping-presets/items', authenticate, requireOrganizer, presetReadLimiter, searchOwnItemsForPreset);
+router.post('/shipping-presets/estimate', authenticate, requireOrganizer, presetReadLimiter, estimateShippingPresetRate);
+router.post('/shipping-presets/validate', authenticate, requireOrganizer, presetReadLimiter, validateShippingPreset);
+// The only route here that writes to eBay. presetCreateLimiter caps it at 10/hour/user;
+// the service refuses past 80 live policies and rejects duplicate names before any POST.
+router.post('/shipping-presets', authenticate, requireOrganizer, presetCreateLimiter, createShippingPreset);
+router.post('/shipping-presets/bind-item', authenticate, requireOrganizer, presetReadLimiter, bindPresetToItem);
 
 // Calculated-shipping: estimated buyer rate + net proceeds preview
 router.post('/shipping-preview', authenticate, requireOrganizer, getShippingNetPreview);

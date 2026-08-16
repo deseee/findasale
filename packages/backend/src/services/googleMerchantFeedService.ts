@@ -91,16 +91,28 @@ async function fetchFeedItems(): Promise<FeedItem[]> {
       packageLengthIn: true,
       packageWidthIn: true,
       packageHeightIn: true,
+      // (2026-08-16) Resolver inputs — hand-routed items are excluded, not guessed at.
+      ebayShippingClassification: true,
+      ebayCategoryId: true,
       sale: {
         select: {
           status: true,
           deletedAt: true,
+          // (2026-08-16) Origin the computed carrier rate is priced FROM.
+          zip: true,
           // Organizer's existing eBay shipping config drives per-item shipping.
           organizer: {
             select: {
+              lat: true,
+              lng: true,
               ebayPolicyMapping: {
                 select: {
-                  weightTierMappings: true,
+                  // (2026-08-16) weightTierMappings is no longer selected: the feed
+                  // prices through resolveItemShipping's computed carrier rate, the
+                  // same path the eBay push uses. The retired ladder priced nothing
+                  // else and its coverage gaps were advertising the next rung up.
+                  shippingMode: true,
+                  freeShippingOptIn: true,
                   categoryOverrides: true,
                   heavyOversizedPolicyId: true,
                   fragilePolicyId: true,
@@ -123,7 +135,7 @@ async function fetchFeedItems(): Promise<FeedItem[]> {
  */
 export async function buildFeed(): Promise<FeedCache> {
   const items = await fetchFeedItems();
-  const tsv = buildGoogleMerchantTsv(items);
+  const tsv = await buildGoogleMerchantTsv(items);
   cache = {
     tsv,
     builtAt: Date.now(),

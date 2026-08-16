@@ -699,6 +699,19 @@ model EbayPolicyMapping {
   shippingMode      String  @default("CALCULATED") // CALCULATED | FLAT_TIERS
   freeShippingOptIn Boolean @default(false) // Organizer opt-in to free shipping (seller absorbs cost) — never default
 
+  // Routing fallback (2026-08-16) — the organizer's EXPLICIT choice for what happens when
+  // nothing in the routing cascade matched. Replaces the old implicit chain that ended at
+  // EbayConnection.fulfillmentPolicyId (in practice often a $0 free-shipping policy, which
+  // silently made the organizer eat the label).
+  //   CALCULATED   — recommended default: eBay computes the real rate at checkout from the
+  //                  buyer's ZIP, plus handling sized to offset eBay's FVF on shipping.
+  //                  Degrades to a computed flat rate if policy provisioning fails.
+  //   FLAT_RATE    — one predictable buyer price, computed fresh from real carrier rates.
+  //   POLICY       — use defaultFulfillmentPolicyId (the organizer names their own policy).
+  //   LOCAL_PICKUP — route to the account's local-pickup policy.
+  //   BLOCK        — don't guess: soft-block the item and flag it for review.
+  fallbackStrategy String @default("CALCULATED") // CALCULATED | FLAT_RATE | POLICY | LOCAL_PICKUP | BLOCK
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

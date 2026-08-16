@@ -19,7 +19,10 @@ import { useToast } from '../../../components/ToastContext';
 import EbayCategoryPicker from '../../../components/EbayCategoryPicker';
 
 // Type definitions
-type PolicyClassification = 'weight-tier' | 'local-pickup' | 'free-shipping' | 'calculated' | 'category-specific' | 'international' | 'unknown';
+// Mirrors PolicyClassification in packages/backend/src/utils/ebayPolicyParser.ts.
+// 'standard-envelope' was missing here even though classifyPolicy has returned it
+// since roadmap #624 -- any policy named "...Std Env..." arrives with that value.
+type PolicyClassification = 'weight-tier' | 'standard-envelope' | 'local-pickup' | 'free-shipping' | 'calculated' | 'category-specific' | 'international' | 'unknown';
 
 interface FulfillmentPolicy {
   fulfillmentPolicyId: string;
@@ -38,6 +41,7 @@ const READABLE_CLASSIFICATION_LABELS: Partial<Record<PolicyClassification, strin
   'free-shipping': 'free shipping',
   'calculated': 'calculated',
   'international': 'international',
+  'standard-envelope': 'eBay Standard Envelope',
 };
 const policySuffix = (classification: PolicyClassification): string => {
   const label = READABLE_CLASSIFICATION_LABELS[classification];
@@ -122,6 +126,9 @@ interface PolicyMapping {
   merchantLocationSource: 'EXISTING' | 'SALE_ADDRESS' | 'ORGANIZER_ADDRESS';
   shippingMode?: 'CALCULATED' | 'FLAT_TIERS';
   freeShippingOptIn?: boolean;
+  // Assumed contract -- see the FALLBACK_MODE_FIELD comment block below.
+  shippingFallbackMode?: ShippingFallbackMode;
+  shippingFallbackPolicyId?: string | null;
 }
 
 interface SetupData {
@@ -134,33 +141,115 @@ interface SetupData {
   handlingTimeDays?: number;
 }
 
-// (Track A1) Weight-tier gap fill -- response shapes for
-// GET /ebay/weight-tier-gaps/preview and POST /ebay/weight-tier-gaps/fill
-// (backend: ebayController.ts previewWeightTierGapFill / fillWeightTierGaps).
-// Declared locally on purpose: the frontend never imports from @findasale/shared,
-// which breaks the Vercel build.
-interface WeightTierGapRow {
-  fromOz: number;
-  toOz: number;
-  fromLb: number;
-  toLb: number;
+// ── Shipping presets (2026-08-16) ────────────────────────────────────────────
+// Response shapes for the /ebay/shipping-presets routes (backend:
+// controllers/ebayShippingPresetController.ts). Declared locally on purpose: the
+// frontend never imports from @findasale/shared, which breaks the Vercel build.
+
+interface PresetService {
+  key: string;
+  label: string;
+  helpText: string;
+  costType: 'FLAT_RATE' | 'CALCULATED';
 }
 
-interface GapFillTierRow {
-  bucketMaxLb: number;
-  maxOz: number;
-  policyName: string;
-  flatRate: number;
-  closesGapFromOz: number;
-  closesGapToOz: number;
+interface LivePreset {
+  fulfillmentPolicyId: string;
+  name: string;
+  description: string | null;
+  classification: PolicyClassification;
+  classificationLabel: string;
+  costType: string | null;
+  parsedPrice: number | null;
+  parsedMaxOz: number | null;
+  freeShipping: boolean;
+  localPickup: boolean;
+  handlingDays: number | null;
+  usedByItemCount: number;
+  pinnedByItemCount: number;
 }
 
-// Render an ounce boundary as the pound figure organizers actually think in:
-// 111oz -> "6.9 lb", 720oz -> "45 lb".
-const ozToLbLabel = (oz: number): string => {
-  const lb = oz / 16;
-  return Number.isInteger(lb) ? `${lb} lb` : `${lb.toFixed(1)} lb`;
+interface PresetIssue {
+  code: string;
+  field: string;
+  message: string;
+  /** 'notice' never blocks creation -- it is advice, not a fault. Absent means 'error'. */
+  severity?: 'error' | 'notice';
+}
+
+interface PresetEstimate {
+  available: boolean;
+  unavailableReason?: string;
+  weightOz: number | null;
+  carrier?: string;
+  zone?: string;
+  basis?: string;
+  labelCost?: number;
+  suggestedBuyerPrice?: number;
+  suggestedHandlingCharge?: number;
+  fvfRate: number;
+}
+
+interface PresetPriceCheck {
+  enteredPrice: number;
+  labelCost: number;
+  netToSeller: number;
+  shortfall: number;
+  belowCost: boolean;
+}
+
+interface PresetItemRow {
+  id: string;
+  title: string;
+  price: number | null;
+  packageWeightOz: number | null;
+  currentPolicyId: string | null;
+  isLiveOnEbay: boolean;
+  saleTitle: string | null;
+}
+
+const EMPTY_PRESET_FORM = {
+  name: '',
+  serviceKey: 'CALC_USPS_GROUND',
+  flatPrice: '',
+  additionalItemPrice: '0',
+  handlingDays: '3',
+  maxWeightOz: '',
+  maxLengthIn: '',
+  maxWidthIn: '',
+  maxHeightIn: '',
+  freeShipping: false,
+  localPickup: false,
+  handlingCharge: '',
+  acknowledgeBelowCost: false,
 };
+
+type PresetFormState = typeof EMPTY_PRESET_FORM;
+
+// ── Routing fallback picker ──────────────────────────────────────────────────
+//
+// !! ASSUMED API CONTRACT -- NOT CONFIRMED BY THE BACKEND AGENT AS OF 2026-08-16 !!
+//
+// The parallel dispatch that owns ebayController.ts / ebayShippingResolver.ts is
+// turning today's silent last-resort (an item that matches nothing lands on the
+// organizer's connection-default fulfillment policy, which for at least one real
+// account is a $0 "Free Domestic Shipping" policy) into an explicit organizer
+// setting. They have not handed back their field name or shape yet, so this UI is
+// built against the two field names below and the three modes in
+// ShippingFallbackMode. If their contract differs, change these two constants and
+// the mode union -- nothing else in this file hard-codes the names.
+//
+// SAFETY GATE: EbayPolicyMapping has no such column today, and
+// saveEbayPolicyMapping (ebayController.ts ~L1249) builds its Prisma payload from an
+// explicit field whitelist, so an unknown field posted from here is silently dropped
+// rather than rejected. That would give the organizer a "settings saved" toast for a
+// choice that never persisted -- a fabricated success. So the picker only becomes
+// interactive once the API actually returns the field (fallbackSupported below);
+// until then it renders read-only with a plain note about what happens today.
+const FALLBACK_MODE_FIELD = 'shippingFallbackMode';
+const FALLBACK_POLICY_FIELD = 'shippingFallbackPolicyId';
+type ShippingFallbackMode = 'CALCULATED' | 'POLICY' | 'HOLD';
+
 
 const EbayPolicySetupPage = () => {
   const router = useRouter();
@@ -208,44 +297,49 @@ const EbayPolicySetupPage = () => {
     error: string | null;
   }>({ loading: false, rows: [], error: null });
 
-  // (Track A1) Weight-tier gap fill.
-  //
-  // Why this panel exists even though ADR-102 retired ladder-based eBay routing:
-  // the ladder (EbayPolicyMapping.weightTierMappings) is no longer what picks a
-  // policy on an eBay push -- resolvePoliciesForItem computes a fresh rate per item
-  // now -- but it IS still load-bearing for the Google Shopping feed.
-  // computeItemShipping (backend utils/googleMerchantShipping.ts) runs every
-  // shippable item's billable weight through matchWeightTier and advertises the
-  // matched rung's parsed price. matchWeightTier returns the FIRST rung whose maxOz
-  // is >= the item's weight, so a hole in the ladder does not drop the item from the
-  // feed -- it quotes the next rung up. With the known 111oz -> 720oz hole, a 10 lb
-  // item is advertised at the 45 lb catch-all price. Closing the gaps fixes that
-  // overcharge on a live shopper-facing surface.
-  //
-  // computeItemShipping does NOT branch on shippingMode, so unlike Sections C/D/E
-  // this panel is deliberately NOT gated on FLAT_TIERS -- the gap hurts Calculated
-  // organizers exactly the same way.
-  const [gapFill, setGapFill] = useState<{
+  // ── Shipping presets ──────────────────────────────────────────────────────
+  // Create a REAL eBay fulfillment policy without leaving FindA.Sale. Before this,
+  // the page could only ever point at a policy the organizer had already hand-built
+  // on ebay.com. Backend: controllers/ebayShippingPresetController.ts.
+  const [presets, setPresets] = useState<{
     loading: boolean;
     loaded: boolean;
-    gaps: WeightTierGapRow[];
-    newTiers: GapFillTierRow[];
     error: string | null;
-    confirming: boolean;
-    filling: boolean;
-    created: WeightTierMapping[] | null;
-    partialFailure: boolean;
-  }>({
-    loading: false,
-    loaded: false,
-    gaps: [],
-    newTiers: [],
-    error: null,
-    confirming: false,
-    filling: false,
-    created: null,
-    partialFailure: false,
-  });
+    connected: boolean;
+    rows: LivePreset[];
+    services: PresetService[];
+  }>({ loading: false, loaded: false, error: null, connected: false, rows: [], services: [] });
+
+  const [presetFormOpen, setPresetFormOpen] = useState(false);
+  const [presetForm, setPresetForm] = useState<PresetFormState>(EMPTY_PRESET_FORM);
+  // Tracks whether the organizer has typed over the rate engine's suggested price.
+  // Until they do, the engine's number stays authoritative and re-prefills whenever
+  // the package changes -- so the engine's number is the default and any deviation is
+  // a deliberate, visible choice.
+  const [presetPriceTouched, setPresetPriceTouched] = useState(false);
+  const [presetCheck, setPresetCheck] = useState<{
+    checking: boolean;
+    issues: PresetIssue[];
+    suggestedName: string;
+    classificationMeaning: string;
+  }>({ checking: false, issues: [], suggestedName: '', classificationMeaning: '' });
+  const [presetEstimate, setPresetEstimate] = useState<{
+    loading: boolean;
+    data: PresetEstimate | null;
+    priceCheck: PresetPriceCheck | null;
+  }>({ loading: false, data: null, priceCheck: null });
+  const [presetSaving, setPresetSaving] = useState(false);
+  const [presetCreated, setPresetCreated] = useState<LivePreset | null>(null);
+
+  // "Use this preset for one item" picker.
+  const [itemPicker, setItemPicker] = useState<{
+    open: boolean;
+    query: string;
+    loading: boolean;
+    rows: PresetItemRow[];
+    bindingItemId: string | null;
+  }>({ open: false, query: '', loading: false, rows: [], bindingItemId: null });
+
 
   // Fetch setup data on mount
   useEffect(() => {
@@ -470,92 +564,297 @@ const EbayPolicySetupPage = () => {
     }
   };
 
-  // (Track A1) Read-only weight-coverage check. GET /ebay/weight-tier-gaps/preview
-  // makes zero eBay API calls and zero DB writes (see previewWeightTierGapFill's
-  // header in ebayController.ts), so it is safe to run unprompted on page load and
-  // again after a fill.
-  const runGapPreview = React.useCallback(async () => {
-    setGapFill((s) => ({ ...s, loading: true, error: null }));
+  // ── Shipping preset handlers ──────────────────────────────────────────────
+
+  const selectedPresetService = presets.services.find((s) => s.key === presetForm.serviceKey) || null;
+  const presetIsCalculated = selectedPresetService?.costType === 'CALCULATED';
+
+  // Read-only: one eBay GET, no writes. Safe to run on load and after a create.
+  const loadPresets = React.useCallback(async () => {
+    setPresets((s) => ({ ...s, loading: true, error: null }));
     try {
-      const res = await api.get('/ebay/weight-tier-gaps/preview');
-      setGapFill((s) => ({
-        ...s,
+      const res = await api.get('/ebay/shipping-presets');
+      setPresets({
         loading: false,
         loaded: true,
-        gaps: Array.isArray(res.data?.gaps) ? res.data.gaps : [],
-        newTiers: Array.isArray(res.data?.newTiers) ? res.data.newTiers : [],
         error: null,
-      }));
+        connected: res.data?.connected !== false,
+        rows: Array.isArray(res.data?.policies) ? res.data.policies : [],
+        services: Array.isArray(res.data?.services) ? res.data.services : [],
+      });
     } catch (error: any) {
-      setGapFill((s) => ({
+      setPresets((s) => ({
         ...s,
         loading: false,
         loaded: true,
-        gaps: [],
-        newTiers: [],
         error:
-          error.response?.data?.error ||
           error.response?.data?.message ||
-          'Could not check your weight coverage right now.',
+          'Could not load your shipping policies from eBay right now.',
       }));
     }
   }, []);
 
   useEffect(() => {
-    if (!ebayConnected || !mapping) return;
-    if (gapFill.loaded || gapFill.loading) return;
-    runGapPreview();
-  }, [ebayConnected, mapping, gapFill.loaded, gapFill.loading, runGapPreview]);
+    if (!ebayConnected) return;
+    if (presets.loaded || presets.loading) return;
+    loadPresets();
+  }, [ebayConnected, presets.loaded, presets.loading, loadPresets]);
 
-  // (Track A1) The confirm step. POST /ebay/weight-tier-gaps/fill provisions REAL
-  // eBay fulfillment policies on the organizer's account, which is why it only runs
-  // behind the explicit two-step confirmation in the panel below.
-  const handleFillGaps = async () => {
-    setGapFill((s) => ({ ...s, filling: true, error: null }));
-    try {
-      const res = await api.post('/ebay/weight-tier-gaps/fill', {});
-      const created: WeightTierMapping[] = Array.isArray(res.data?.created) ? res.data.created : [];
-      const partialFailure = res.data?.partialFailure === true;
-
-      // The backend already persisted the appended ladder, so mirror its response into
-      // BOTH mapping and originalMapping. Writing only `mapping` would make hasChanges
-      // fire and pop the unsaved-changes save bar for a change that is already saved --
-      // and a subsequent Save would re-POST the same ladder.
-      const returned = Array.isArray(res.data?.weightTierMappings) ? res.data.weightTierMappings : null;
-      if (returned && mapping) {
-        const withIds: WeightTierMapping[] = returned.map((t: any) => ({
-          maxOz: t.maxOz,
-          policyId: t.policyId,
-          policyName: t.policyName,
-          _clientId: newClientId(),
-        }));
-        const nextMapping = { ...mapping, weightTierMappings: withIds };
-        setMapping(nextMapping);
-        setOriginalMapping(JSON.parse(JSON.stringify(nextMapping)));
+  // Live name-safety + configuration check while the organizer types. Pure on the
+  // backend (no eBay call, no DB touch), debounced here so it is cheap.
+  useEffect(() => {
+    if (!presetFormOpen) return;
+    if (!presetForm.name.trim() && !presetForm.flatPrice) {
+      setPresetCheck({ checking: false, issues: [], suggestedName: '', classificationMeaning: '' });
+      return;
+    }
+    let cancelled = false;
+    setPresetCheck((s) => ({ ...s, checking: true }));
+    const t = setTimeout(async () => {
+      try {
+        const res = await api.post('/ebay/shipping-presets/validate', {
+          name: presetForm.name,
+          serviceKey: presetForm.serviceKey,
+          flatPrice: presetForm.flatPrice === '' ? null : Number(presetForm.flatPrice),
+          additionalItemPrice: presetForm.additionalItemPrice === '' ? 0 : Number(presetForm.additionalItemPrice),
+          handlingDays: presetForm.handlingDays === '' ? 3 : Number(presetForm.handlingDays),
+          maxWeightOz: presetForm.maxWeightOz === '' ? null : Number(presetForm.maxWeightOz),
+          maxLengthIn: presetForm.maxLengthIn === '' ? null : Number(presetForm.maxLengthIn),
+          maxWidthIn: presetForm.maxWidthIn === '' ? null : Number(presetForm.maxWidthIn),
+          maxHeightIn: presetForm.maxHeightIn === '' ? null : Number(presetForm.maxHeightIn),
+          freeShipping: presetForm.freeShipping,
+          localPickup: presetForm.localPickup,
+          handlingCharge: presetForm.handlingCharge === '' ? 0 : Number(presetForm.handlingCharge),
+        });
+        if (cancelled) return;
+        setPresetCheck({
+          checking: false,
+          issues: Array.isArray(res.data?.issues) ? res.data.issues : [],
+          suggestedName: res.data?.suggestedName || '',
+          classificationMeaning: res.data?.classificationMeaning || '',
+        });
+      } catch {
+        if (!cancelled) setPresetCheck((s) => ({ ...s, checking: false }));
       }
+    }, 450);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [
+    presetFormOpen,
+    presetForm.name,
+    presetForm.serviceKey,
+    presetForm.flatPrice,
+    presetForm.additionalItemPrice,
+    presetForm.handlingDays,
+    presetForm.maxWeightOz,
+    presetForm.maxLengthIn,
+    presetForm.maxWidthIn,
+    presetForm.maxHeightIn,
+    presetForm.freeShipping,
+    presetForm.localPickup,
+    presetForm.handlingCharge,
+  ]);
 
-      setGapFill((s) => ({ ...s, filling: false, confirming: false, created, partialFailure }));
+  // Rate-engine pre-fill. Same pipeline the automatic path uses, so the suggested
+  // price can never disagree with what FindA.Sale would have charged for the same
+  // package. Read-only on the backend.
+  useEffect(() => {
+    if (!presetFormOpen) return;
+    const weightOz = presetForm.maxWeightOz === '' ? 0 : Number(presetForm.maxWeightOz);
+    if (!weightOz || weightOz <= 0) {
+      setPresetEstimate({ loading: false, data: null, priceCheck: null });
+      return;
+    }
+    let cancelled = false;
+    setPresetEstimate((s) => ({ ...s, loading: true }));
+    const t = setTimeout(async () => {
+      try {
+        const res = await api.post('/ebay/shipping-presets/estimate', {
+          weightOz,
+          lengthIn: presetForm.maxLengthIn === '' ? null : Number(presetForm.maxLengthIn),
+          widthIn: presetForm.maxWidthIn === '' ? null : Number(presetForm.maxWidthIn),
+          heightIn: presetForm.maxHeightIn === '' ? null : Number(presetForm.maxHeightIn),
+          flatPrice: presetForm.flatPrice === '' ? null : Number(presetForm.flatPrice),
+        });
+        if (cancelled) return;
+        const data: PresetEstimate | null = res.data?.estimate ?? null;
+        setPresetEstimate({ loading: false, data, priceCheck: res.data?.priceCheck ?? null });
+        // Pre-fill from the engine until the organizer types their own number.
+        if (data?.available) {
+          setPresetForm((f) => {
+            const next = { ...f };
+            if (!presetPriceTouched && typeof data.suggestedBuyerPrice === 'number') {
+              next.flatPrice = data.suggestedBuyerPrice.toFixed(2);
+            }
+            if (f.handlingCharge === '' && typeof data.suggestedHandlingCharge === 'number') {
+              next.handlingCharge = data.suggestedHandlingCharge.toFixed(2);
+            }
+            return next;
+          });
+        }
+      } catch {
+        if (!cancelled) setPresetEstimate({ loading: false, data: null, priceCheck: null });
+      }
+    }, 450);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+    // presetForm.flatPrice is intentionally in the dependency list: the backend returns
+    // the below-cost check for the price currently entered, so the warning has to
+    // re-run when the organizer edits it.
+  }, [
+    presetFormOpen,
+    presetForm.maxWeightOz,
+    presetForm.maxLengthIn,
+    presetForm.maxWidthIn,
+    presetForm.maxHeightIn,
+    presetForm.flatPrice,
+    presetPriceTouched,
+  ]);
 
-      const noun = created.length === 1 ? 'policy' : 'policies';
-      showToast(
-        partialFailure
-          ? `Created ${created.length} shipping ${noun}. Some ranges could not be created -- try again in a moment.`
-          : `Created ${created.length} shipping ${noun} on eBay`,
-        partialFailure ? 'warning' : 'success'
+  const openPresetForm = () => {
+    setPresetForm({ ...EMPTY_PRESET_FORM, handlingDays: String(handlingTimeDays ?? 3) });
+    setPresetPriceTouched(false);
+    setPresetCheck({ checking: false, issues: [], suggestedName: '', classificationMeaning: '' });
+    setPresetEstimate({ loading: false, data: null, priceCheck: null });
+    setPresetCreated(null);
+    setItemPicker({ open: false, query: '', loading: false, rows: [], bindingItemId: null });
+    setPresetFormOpen(true);
+  };
+
+  const closePresetForm = () => {
+    setPresetFormOpen(false);
+    setPresetSaving(false);
+  };
+
+  // The one call in this page that creates a real, permanent object on the
+  // organizer's eBay account. Every local check has already run server-side before
+  // eBay is contacted, and the route is capped at 10 creates per hour.
+  const handleCreatePreset = async () => {
+    setPresetSaving(true);
+    try {
+      const res = await api.post('/ebay/shipping-presets', {
+        name: presetForm.name,
+        serviceKey: presetForm.serviceKey,
+        flatPrice: presetForm.flatPrice === '' ? null : Number(presetForm.flatPrice),
+        additionalItemPrice: presetForm.additionalItemPrice === '' ? 0 : Number(presetForm.additionalItemPrice),
+        handlingDays: presetForm.handlingDays === '' ? 3 : Number(presetForm.handlingDays),
+        maxWeightOz: presetForm.maxWeightOz === '' ? null : Number(presetForm.maxWeightOz),
+        maxLengthIn: presetForm.maxLengthIn === '' ? null : Number(presetForm.maxLengthIn),
+        maxWidthIn: presetForm.maxWidthIn === '' ? null : Number(presetForm.maxWidthIn),
+        maxHeightIn: presetForm.maxHeightIn === '' ? null : Number(presetForm.maxHeightIn),
+        freeShipping: presetForm.freeShipping,
+        localPickup: presetForm.localPickup,
+        handlingCharge: presetForm.handlingCharge === '' ? 0 : Number(presetForm.handlingCharge),
+        acknowledgeBelowCost: presetForm.acknowledgeBelowCost,
+      });
+      const policy: LivePreset | null = res.data?.policy ?? null;
+      setPresetSaving(false);
+      if (!policy) return;
+
+      setPresetFormOpen(false);
+      setPresetCreated(policy);
+      showToast(`"${policy.name}" is now on your eBay account`, 'success');
+
+      // Make the new policy selectable everywhere on this page immediately, without
+      // a full reload -- every dropdown here reads setupData.fulfillmentPolicies.
+      setSetupData((prev) =>
+        prev
+          ? {
+              ...prev,
+              fulfillmentPolicies: [
+                ...prev.fulfillmentPolicies,
+                {
+                  fulfillmentPolicyId: policy.fulfillmentPolicyId,
+                  name: policy.name,
+                  description: policy.description ?? undefined,
+                  classification: policy.classification,
+                },
+              ],
+            }
+          : prev
       );
-
-      // Re-check coverage against the ladder we just wrote, so the panel reflects
-      // reality rather than the pre-fill preview.
-      await runGapPreview();
+      loadPresets();
     } catch (error: any) {
-      const msg =
-        error.response?.data?.error ||
-        error.response?.data?.message ||
-        'Could not create the shipping policies right now.';
-      setGapFill((s) => ({ ...s, filling: false, confirming: false, error: msg }));
-      showToast(msg, 'error');
+      setPresetSaving(false);
+      const issues: PresetIssue[] = Array.isArray(error.response?.data?.issues)
+        ? error.response.data.issues
+        : [];
+      const priceCheck: PresetPriceCheck | null = error.response?.data?.priceCheck ?? null;
+      if (issues.length > 0) {
+        setPresetCheck((s) => ({ ...s, checking: false, issues }));
+        if (priceCheck) setPresetEstimate((s) => ({ ...s, priceCheck }));
+        return;
+      }
+      showToast(
+        error.response?.data?.message || 'Could not create that shipping preset right now.',
+        'error'
+      );
     }
   };
+
+  // Bind a freshly created preset. Default + category binds are local edits to the
+  // mapping the existing save bar already persists -- no second write path.
+  const bindPresetAsDefault = (policy: LivePreset) => {
+    if (!mapping) return;
+    setMapping({ ...mapping, defaultFulfillmentPolicyId: policy.fulfillmentPolicyId });
+    showToast('Set as your default shipping policy. Save your changes to keep it.', 'info');
+  };
+
+  const bindPresetToNewCategory = (policy: LivePreset) => {
+    if (!mapping) return;
+    setMapping({
+      ...mapping,
+      categoryOverrides: [
+        ...mapping.categoryOverrides,
+        { categoryId: '', policyId: policy.fulfillmentPolicyId, policyName: policy.name },
+      ],
+    });
+    showToast('Added below under Category-Specific Overrides — pick the category there.', 'info');
+  };
+
+  const searchItemsForPreset = React.useCallback(async (query: string) => {
+    setItemPicker((s) => ({ ...s, loading: true }));
+    try {
+      const res = await api.get('/ebay/shipping-presets/items', { params: { q: query } });
+      setItemPicker((s) => ({
+        ...s,
+        loading: false,
+        rows: Array.isArray(res.data?.items) ? res.data.items : [],
+      }));
+    } catch {
+      setItemPicker((s) => ({ ...s, loading: false, rows: [] }));
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!itemPicker.open) return;
+    const t = setTimeout(() => searchItemsForPreset(itemPicker.query), 350);
+    return () => clearTimeout(t);
+  }, [itemPicker.open, itemPicker.query, searchItemsForPreset]);
+
+  const bindPresetToOneItem = async (item: PresetItemRow, policy: LivePreset) => {
+    setItemPicker((s) => ({ ...s, bindingItemId: item.id }));
+    try {
+      await api.post('/ebay/shipping-presets/bind-item', {
+        itemId: item.id,
+        policyId: policy.fulfillmentPolicyId,
+      });
+      setItemPicker((s) => ({
+        ...s,
+        bindingItemId: null,
+        rows: s.rows.map((r) => (r.id === item.id ? { ...r, currentPolicyId: policy.fulfillmentPolicyId } : r)),
+      }));
+      showToast(`"${item.title}" now uses "${policy.name}"`, 'success');
+    } catch (error: any) {
+      setItemPicker((s) => ({ ...s, bindingItemId: null }));
+      showToast(error.response?.data?.message || 'Could not update that item right now.', 'error');
+    }
+  };
+
 
   // Category override handlers
   const addCategoryOverride = () => {
@@ -576,6 +875,33 @@ const EbayPolicySetupPage = () => {
     const newOverrides = mapping.categoryOverrides.filter((_, i) => i !== index);
     setMapping({ ...mapping, categoryOverrides: newOverrides });
   };
+
+  // Does the API actually persist the routing fallback yet? See the
+  // FALLBACK_MODE_FIELD comment block for why this gate exists rather than a
+  // control that silently drops the organizer's choice.
+  const fallbackSupported = Boolean(
+    setupData?.currentMapping &&
+      Object.prototype.hasOwnProperty.call(setupData.currentMapping as object, FALLBACK_MODE_FIELD)
+  );
+  const fallbackMode: ShippingFallbackMode = (mapping?.shippingFallbackMode as ShippingFallbackMode) || 'CALCULATED';
+  const setFallback = (mode: ShippingFallbackMode, policyId?: string | null) => {
+    if (!mapping || !fallbackSupported) return;
+    setMapping({
+      ...mapping,
+      [FALLBACK_MODE_FIELD]: mode,
+      [FALLBACK_POLICY_FIELD]: mode === 'POLICY' ? (policyId ?? mapping.shippingFallbackPolicyId ?? null) : null,
+    } as PolicyMapping);
+  };
+
+  // Issues that must block the Create button. Two exclusions:
+  //  - PRICE_BELOW_COST is a deliberate-override path, gated by its own
+  //    acknowledgement checkbox instead.
+  //  - severity 'notice' is advice about a valid configuration, not a fault.
+  const blockingPresetIssues = presetCheck.issues.filter(
+    (i) => i.code !== 'PRICE_BELOW_COST' && i.severity !== 'notice'
+  );
+  const presetNotices = presetCheck.issues.filter((i) => i.severity === 'notice');
+
 
   if (authLoading || loading) {
     return (
@@ -921,33 +1247,48 @@ const EbayPolicySetupPage = () => {
                 </div>
                 )}
 
-                {/* Section C2: Weight coverage / "Fill gaps automatically" (Track A1).
-                    Wires the pre-existing but previously unreachable backend endpoints
-                    GET /ebay/weight-tier-gaps/preview and POST /ebay/weight-tier-gaps/fill.
-                    Preview is read-only (no eBay calls, no DB writes) so it runs on load;
-                    the fill provisions real eBay policies, so it sits behind an explicit
-                    two-step confirmation. NOT gated on shippingMode -- see the gapFill
-                    state comment above for why (the Google Shopping feed reads this ladder
-                    for every organizer regardless of eBay shipping mode). */}
+                {/* ── Section C2: Shipping presets ──────────────────────────────
+                    Create a REAL eBay fulfillment policy from inside FindA.Sale.
+
+                    Replaces the "Weight coverage / Fill gaps automatically" panel that
+                    stood here (removed 2026-08-16 with Patrick's explicit go-ahead):
+                    that panel provisioned real eBay policies into the weight-tier
+                    ladder ADR-102 retired for eBay routing, so every policy it created
+                    was a permanent object on the organizer's eBay account serving a
+                    ladder the router no longer consults.
+
+                    Not gated on shippingMode -- an organizer needs to be able to build
+                    a policy whichever mode they are in. */}
                 <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
-                  <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-1">Weight coverage</h2>
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                    Each of your shipping policies covers a weight range. When a range is missing,
-                    items that fall in it get charged the price of your next-heaviest policy -- so a
-                    10 lb item can end up advertised at a 45 lb price. This checks for missing ranges
-                    and can create the policies to close them.
-                  </p>
-
-                  {gapFill.loading && (
-                    <p className="text-sm text-gray-500 dark:text-gray-400">Checking your weight coverage…</p>
-                  )}
-
-                  {!gapFill.loading && gapFill.error && (
-                    <div className="rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 p-3">
-                      <p className="text-sm text-red-700 dark:text-red-400 mb-2">{gapFill.error}</p>
+                  <div className="flex flex-wrap items-start justify-between gap-3 mb-1">
+                    <h2 className="text-xl font-bold text-gray-900 dark:text-white">Shipping presets</h2>
+                    {!presetFormOpen && (
                       <button
                         type="button"
-                        onClick={runGapPreview}
+                        onClick={openPresetForm}
+                        className="text-sm px-3 py-1.5 bg-sage-600 hover:bg-sage-700 text-white rounded-lg font-medium transition"
+                      >
+                        Create a preset
+                      </button>
+                    )}
+                  </div>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                    A preset is a shipping policy on your eBay account. Build one here and it
+                    shows up on eBay straight away, ready to point a category or a single item at.
+                  </p>
+
+                  {/* Loading */}
+                  {presets.loading && !presets.loaded && (
+                    <p className="text-sm text-gray-500 dark:text-gray-400">Loading your shipping policies…</p>
+                  )}
+
+                  {/* Error */}
+                  {presets.loaded && presets.error && (
+                    <div className="rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 p-3 mb-4">
+                      <p className="text-sm text-red-700 dark:text-red-400 mb-2">{presets.error}</p>
+                      <button
+                        type="button"
+                        onClick={loadPresets}
                         className="text-sm px-3 py-1.5 border border-red-300 dark:border-red-700 text-red-700 dark:text-red-400 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/40 font-medium transition"
                       >
                         Try again
@@ -955,130 +1296,641 @@ const EbayPolicySetupPage = () => {
                     </div>
                   )}
 
-                  {!gapFill.loading && !gapFill.error && gapFill.loaded && gapFill.gaps.length === 0 && (
-                    <div className="flex flex-wrap items-center gap-3">
-                      <span className="text-sm text-sage-700 dark:text-sage-400">
-                        Every weight range is covered. Nothing to fix here.
-                      </span>
-                      <button
-                        type="button"
-                        disabled
-                        className="text-sm px-3 py-1.5 border border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 rounded-lg opacity-50 cursor-not-allowed font-medium"
-                      >
-                        Fill gaps automatically
-                      </button>
+                  {/* Empty */}
+                  {presets.loaded && !presets.error && presets.rows.length === 0 && (
+                    <div className="rounded-lg border border-dashed border-gray-300 dark:border-gray-600 p-4 mb-4">
+                      <p className="text-sm text-gray-700 dark:text-gray-300 mb-1">
+                        You don't have any shipping policies on eBay yet.
+                      </p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        Create your first one and every item you push can use it.
+                      </p>
                     </div>
                   )}
 
-                  {!gapFill.loading && !gapFill.error && gapFill.gaps.length > 0 && (
-                    <>
-                      <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 p-3 mb-4">
-                        <p className="text-sm font-medium text-amber-800 dark:text-amber-300 mb-1">
-                          {gapFill.gaps.length === 1
-                            ? '1 weight range has no policy of its own'
-                            : `${gapFill.gaps.length} weight ranges have no policy of their own`}
-                        </p>
-                        <ul className="text-sm text-amber-800 dark:text-amber-300 list-disc list-inside space-y-0.5">
-                          {gapFill.gaps.map((gap) => (
-                            <li key={`${gap.fromOz}-${gap.toOz}`}>
-                              {ozToLbLabel(gap.fromOz)} to {ozToLbLabel(gap.toOz)}
-                            </li>
+                  {/* List */}
+                  {presets.loaded && !presets.error && presets.rows.length > 0 && (
+                    <div className="overflow-x-auto mb-4">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b border-gray-200 dark:border-gray-700">
+                            <th className="text-left py-2 px-3 font-semibold text-gray-700 dark:text-gray-300">Preset</th>
+                            <th className="text-left py-2 px-3 font-semibold text-gray-700 dark:text-gray-300 hidden sm:table-cell">How it's used</th>
+                            <th className="text-left py-2 px-3 font-semibold text-gray-700 dark:text-gray-300">Buyer pays</th>
+                            <th className="text-left py-2 px-3 font-semibold text-gray-700 dark:text-gray-300">On items</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {presets.rows.map((row) => (
+                            <tr key={row.fulfillmentPolicyId} className="border-b border-gray-200 dark:border-gray-700 align-top">
+                              <td className="py-3 px-3 text-gray-900 dark:text-white">
+                                {row.name}
+                                <span className="block sm:hidden text-xs text-gray-500 dark:text-gray-400">
+                                  {row.classificationLabel}
+                                </span>
+                              </td>
+                              <td className="py-3 px-3 text-gray-600 dark:text-gray-400 hidden sm:table-cell">
+                                {row.classificationLabel}
+                                {row.parsedMaxOz != null && (
+                                  <span className="block text-xs text-gray-500 dark:text-gray-400">
+                                    up to {row.parsedMaxOz} oz
+                                  </span>
+                                )}
+                              </td>
+                              <td className="py-3 px-3 text-gray-900 dark:text-white whitespace-nowrap">
+                                {row.freeShipping
+                                  ? 'Free'
+                                  : row.costType === 'CALCULATED'
+                                    ? 'eBay works it out'
+                                    : row.parsedPrice != null
+                                      ? `$${row.parsedPrice.toFixed(2)}`
+                                      : '—'}
+                              </td>
+                              <td className="py-3 px-3 text-gray-600 dark:text-gray-400 whitespace-nowrap">
+                                {row.usedByItemCount === 0 && row.pinnedByItemCount === 0
+                                  ? 'Not used yet'
+                                  : `${row.usedByItemCount} live`}
+                                {row.pinnedByItemCount > 0 && (
+                                  <span className="block text-xs text-gray-500 dark:text-gray-400">
+                                    {row.pinnedByItemCount} pinned
+                                  </span>
+                                )}
+                              </td>
+                            </tr>
                           ))}
-                        </ul>
-                      </div>
-
-                      {gapFill.newTiers.length > 0 && (
-                        <div className="mb-4">
-                          <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                            {gapFill.newTiers.length === 1
-                              ? 'This policy would be created on your eBay account:'
-                              : `These ${gapFill.newTiers.length} policies would be created on your eBay account:`}
-                          </p>
-                          <div className="overflow-x-auto">
-                            <table className="w-full text-sm">
-                              <thead>
-                                <tr className="border-b border-gray-200 dark:border-gray-700">
-                                  <th className="text-left py-2 px-3 font-semibold text-gray-700 dark:text-gray-300">Covers up to</th>
-                                  <th className="text-left py-2 px-3 font-semibold text-gray-700 dark:text-gray-300">Buyer pays</th>
-                                  <th className="text-left py-2 px-3 font-semibold text-gray-700 dark:text-gray-300 hidden sm:table-cell">Policy name</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {gapFill.newTiers.map((tier) => (
-                                  <tr key={tier.maxOz} className="border-b border-gray-200 dark:border-gray-700">
-                                    <td className="py-3 px-3 text-gray-900 dark:text-white whitespace-nowrap">{ozToLbLabel(tier.maxOz)}</td>
-                                    <td className="py-3 px-3 text-gray-900 dark:text-white whitespace-nowrap">${tier.flatRate.toFixed(2)}</td>
-                                    <td className="py-3 px-3 text-gray-600 dark:text-gray-400 hidden sm:table-cell">{tier.policyName}</td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
-                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-2 sm:hidden">
-                            Each new policy is named for the weight it covers and the price shown.
-                          </p>
-                        </div>
-                      )}
-
-                      {!gapFill.confirming ? (
-                        <button
-                          type="button"
-                          onClick={() => setGapFill((s) => ({ ...s, confirming: true }))}
-                          disabled={gapFill.newTiers.length === 0 || gapFill.filling}
-                          className="text-sm px-3 py-1.5 border border-sage-600 text-sage-600 dark:text-sage-400 dark:border-sage-500 rounded-lg hover:bg-sage-50 dark:hover:!bg-sage-700/20 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition"
-                        >
-                          Fill gaps automatically
-                        </button>
-                      ) : (
-                        <div className="rounded-lg border border-sage-600 bg-sage-50 dark:!bg-sage-700/20 p-3">
-                          <p className="text-sm text-gray-800 dark:text-gray-200 mb-3">
-                            This creates {gapFill.newTiers.length} real shipping{' '}
-                            {gapFill.newTiers.length === 1 ? 'policy' : 'policies'} on your eBay account and
-                            adds {gapFill.newTiers.length === 1 ? 'it' : 'them'} to your weight ranges. Your
-                            existing policies are not changed or removed.
-                          </p>
-                          <div className="flex flex-wrap gap-2">
-                            <button
-                              type="button"
-                              onClick={handleFillGaps}
-                              disabled={gapFill.filling}
-                              className="text-sm px-3 py-1.5 bg-sage-600 hover:bg-sage-700 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed font-medium transition"
-                            >
-                              {gapFill.filling ? 'Creating policies…' : 'Yes, create them'}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setGapFill((s) => ({ ...s, confirming: false }))}
-                              disabled={gapFill.filling}
-                              className="text-sm px-3 py-1.5 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition"
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        </div>
-                      )}
-                    </>
+                        </tbody>
+                      </table>
+                    </div>
                   )}
 
-                  {gapFill.created && gapFill.created.length > 0 && (
-                    <div className="mt-4 rounded-lg border border-sage-200 dark:border-sage-700 bg-sage-50 dark:!bg-sage-700/20 p-3">
-                      <p className="text-sm font-medium text-sage-700 dark:text-sage-300 mb-1">
-                        Created {gapFill.created.length} shipping{' '}
-                        {gapFill.created.length === 1 ? 'policy' : 'policies'} on eBay:
-                      </p>
-                      <ul className="text-sm text-sage-700 dark:text-sage-300 list-disc list-inside space-y-0.5">
-                        {gapFill.created.map((tier) => (
-                          <li key={tier.policyId}>{tier.policyName}</li>
-                        ))}
-                      </ul>
-                      {gapFill.partialFailure && (
-                        <p className="text-sm text-amber-700 dark:text-amber-400 mt-2">
-                          Some ranges could not be created. Try the check again in a moment to finish the rest.
+                  {/* Create form */}
+                  {presetFormOpen && (
+                    <div className="rounded-lg border border-sage-600 dark:border-sage-500 p-4 space-y-4">
+                      <h3 className="font-semibold text-gray-900 dark:text-white">New shipping preset</h3>
+
+                      {/* How buyers are charged */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                          How buyers are charged
+                        </label>
+                        <div className="space-y-2">
+                          {presets.services.map((svc) => (
+                            <button
+                              key={svc.key}
+                              type="button"
+                              onClick={() => {
+                                setPresetForm((f) => ({
+                                  ...f,
+                                  serviceKey: svc.key,
+                                  freeShipping: svc.costType === 'CALCULATED' ? false : f.freeShipping,
+                                }));
+                              }}
+                              className={`w-full text-left rounded-lg border p-3 transition-colors ${
+                                presetForm.serviceKey === svc.key
+                                  ? 'border-sage-600 bg-sage-50 dark:!bg-sage-700/30 ring-1 ring-sage-600'
+                                  : 'border-gray-200 dark:border-gray-700 hover:border-sage-400'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="font-medium text-gray-900 dark:text-white">{svc.label}</span>
+                                {svc.costType === 'CALCULATED' && (
+                                  <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-sage-100 dark:!bg-sage-700 text-sage-700 dark:text-sage-200 whitespace-nowrap">
+                                    Recommended
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">{svc.helpText}</p>
+                            </button>
+                          ))}
+                        </div>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                          Only services eBay has accepted from FindA.Sale before are listed, so a preset
+                          you build here can't be rejected for an unrecognised carrier.
                         </p>
+                      </div>
+
+                      {/* Package this preset is for */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                          What are you shipping?
+                        </label>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                          Used to work out a suggested price, and to set the weight this preset covers.
+                        </p>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                          <div>
+                            <label className="block text-xs text-gray-600 dark:text-gray-400 mb-1">Max weight (oz)</label>
+                            <input
+                              type="number"
+                              min={0}
+                              inputMode="numeric"
+                              value={presetForm.maxWeightOz}
+                              onChange={(e) => setPresetForm((f) => ({ ...f, maxWeightOz: e.target.value }))}
+                              className="w-full px-2 py-1.5 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded text-sm focus:outline-none focus:ring-2 focus:ring-sage-600"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs text-gray-600 dark:text-gray-400 mb-1">Length (in)</label>
+                            <input
+                              type="number"
+                              min={0}
+                              inputMode="decimal"
+                              value={presetForm.maxLengthIn}
+                              onChange={(e) => setPresetForm((f) => ({ ...f, maxLengthIn: e.target.value }))}
+                              className="w-full px-2 py-1.5 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded text-sm focus:outline-none focus:ring-2 focus:ring-sage-600"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs text-gray-600 dark:text-gray-400 mb-1">Width (in)</label>
+                            <input
+                              type="number"
+                              min={0}
+                              inputMode="decimal"
+                              value={presetForm.maxWidthIn}
+                              onChange={(e) => setPresetForm((f) => ({ ...f, maxWidthIn: e.target.value }))}
+                              className="w-full px-2 py-1.5 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded text-sm focus:outline-none focus:ring-2 focus:ring-sage-600"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs text-gray-600 dark:text-gray-400 mb-1">Height (in)</label>
+                            <input
+                              type="number"
+                              min={0}
+                              inputMode="decimal"
+                              value={presetForm.maxHeightIn}
+                              onChange={(e) => setPresetForm((f) => ({ ...f, maxHeightIn: e.target.value }))}
+                              className="w-full px-2 py-1.5 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded text-sm focus:outline-none focus:ring-2 focus:ring-sage-600"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Rate engine read-out */}
+                      {presetEstimate.loading && (
+                        <p className="text-sm text-gray-500 dark:text-gray-400">Working out what this costs to ship…</p>
+                      )}
+                      {!presetEstimate.loading && presetEstimate.data && !presetEstimate.data.available && presetEstimate.data.unavailableReason && (
+                        <p className="text-sm text-amber-700 dark:text-amber-400">{presetEstimate.data.unavailableReason}</p>
+                      )}
+                      {!presetEstimate.loading && presetEstimate.data?.available && (
+                        <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/40 p-3 text-sm">
+                          <p className="text-gray-800 dark:text-gray-200">
+                            A package this size costs about{' '}
+                            <strong>${(presetEstimate.data.labelCost ?? 0).toFixed(2)}</strong> to ship
+                            {presetEstimate.data.carrier ? ` (${presetEstimate.data.carrier})` : ''}.
+                          </p>
+                          <p className="text-gray-600 dark:text-gray-400 text-xs mt-1">
+                            Charging ${(presetEstimate.data.suggestedBuyerPrice ?? 0).toFixed(2)} covers the
+                            label and eBay's cut of the shipping, so it doesn't come out of your pocket.
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Price */}
+                      {!presetIsCalculated && !presetForm.freeShipping && (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                              Buyer pays for shipping ($)
+                            </label>
+                            <input
+                              type="number"
+                              min={0}
+                              step="0.01"
+                              inputMode="decimal"
+                              value={presetForm.flatPrice}
+                              onChange={(e) => {
+                                setPresetPriceTouched(true);
+                                setPresetForm((f) => ({ ...f, flatPrice: e.target.value, acknowledgeBelowCost: false }));
+                              }}
+                              className="w-full px-2 py-1.5 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded text-sm focus:outline-none focus:ring-2 focus:ring-sage-600"
+                            />
+                            {presetEstimate.data?.available && (
+                              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                Our suggestion: ${(presetEstimate.data.suggestedBuyerPrice ?? 0).toFixed(2)}
+                                {presetPriceTouched && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setPresetPriceTouched(false);
+                                      setPresetForm((f) => ({
+                                        ...f,
+                                        flatPrice: (presetEstimate.data?.suggestedBuyerPrice ?? 0).toFixed(2),
+                                        acknowledgeBelowCost: false,
+                                      }));
+                                    }}
+                                    className="ml-2 underline text-sage-600 dark:text-sage-400"
+                                  >
+                                    Use it
+                                  </button>
+                                )}
+                              </p>
+                            )}
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                              Each extra item ($)
+                            </label>
+                            <input
+                              type="number"
+                              min={0}
+                              step="0.01"
+                              inputMode="decimal"
+                              value={presetForm.additionalItemPrice}
+                              onChange={(e) => setPresetForm((f) => ({ ...f, additionalItemPrice: e.target.value }))}
+                              className="w-full px-2 py-1.5 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded text-sm focus:outline-none focus:ring-2 focus:ring-sage-600"
+                            />
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                              Added when a buyer takes more than one item in the same order.
+                            </p>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Below-cost warning */}
+                      {presetEstimate.priceCheck?.belowCost && !presetIsCalculated && !presetForm.freeShipping && (
+                        <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 p-3">
+                          <p className="text-sm font-medium text-amber-800 dark:text-amber-300 mb-1">
+                            This price is below what the label costs
+                          </p>
+                          <p className="text-sm text-amber-800 dark:text-amber-300">
+                            At ${presetEstimate.priceCheck.enteredPrice.toFixed(2)} you keep $
+                            {presetEstimate.priceCheck.netToSeller.toFixed(2)} after eBay's cut of the shipping,
+                            and the label costs about ${presetEstimate.priceCheck.labelCost.toFixed(2)}. That's $
+                            {presetEstimate.priceCheck.shortfall.toFixed(2)} out of your pocket on every sale.
+                          </p>
+                          <label className="flex items-start gap-2 cursor-pointer mt-2">
+                            <input
+                              type="checkbox"
+                              checked={presetForm.acknowledgeBelowCost}
+                              onChange={(e) => setPresetForm((f) => ({ ...f, acknowledgeBelowCost: e.target.checked }))}
+                              className="mt-0.5 w-4 h-4 rounded"
+                            />
+                            <span className="text-sm text-amber-800 dark:text-amber-300">
+                              I meant to do this — create it anyway
+                            </span>
+                          </label>
+                        </div>
+                      )}
+
+                      {/* Handling charge (calculated only) */}
+                      {presetIsCalculated && (
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Handling charge ($)
+                          </label>
+                          <input
+                            type="number"
+                            min={0}
+                            step="0.01"
+                            inputMode="decimal"
+                            value={presetForm.handlingCharge}
+                            onChange={(e) => setPresetForm((f) => ({ ...f, handlingCharge: e.target.value }))}
+                            className="w-full sm:w-40 px-2 py-1.5 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded text-sm focus:outline-none focus:ring-2 focus:ring-sage-600"
+                          />
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                            Added on top of the rate eBay works out, so eBay's cut of the shipping doesn't
+                            come out of your pocket. Leave it at our suggestion unless you have a reason.
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Handling time + options */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Handling time (days)
+                          </label>
+                          <input
+                            type="number"
+                            min={0}
+                            max={30}
+                            inputMode="numeric"
+                            value={presetForm.handlingDays}
+                            onChange={(e) => setPresetForm((f) => ({ ...f, handlingDays: e.target.value }))}
+                            className="w-full sm:w-32 px-2 py-1.5 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded text-sm focus:outline-none focus:ring-2 focus:ring-sage-600"
+                          />
+                        </div>
+                        <div className="space-y-2 sm:pt-6">
+                          {!presetIsCalculated && (
+                            <label className="flex items-start gap-2 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={presetForm.freeShipping}
+                                onChange={(e) =>
+                                  setPresetForm((f) => ({ ...f, freeShipping: e.target.checked, acknowledgeBelowCost: false }))
+                                }
+                                className="mt-0.5 w-4 h-4 rounded"
+                              />
+                              <span className="text-sm text-gray-700 dark:text-gray-300">
+                                Free shipping (you absorb the cost)
+                              </span>
+                            </label>
+                          )}
+                          <label className="flex items-start gap-2 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={presetForm.localPickup}
+                              onChange={(e) => setPresetForm((f) => ({ ...f, localPickup: e.target.checked }))}
+                              className="mt-0.5 w-4 h-4 rounded"
+                            />
+                            <span className="text-sm text-gray-700 dark:text-gray-300">
+                              Also let buyers pick up locally
+                            </span>
+                          </label>
+                        </div>
+                      </div>
+
+                      {/* Name */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                          Name this preset
+                        </label>
+                        <input
+                          type="text"
+                          maxLength={64}
+                          value={presetForm.name}
+                          onChange={(e) => setPresetForm((f) => ({ ...f, name: e.target.value }))}
+                          placeholder={presetCheck.suggestedName || 'Ground Advantage $9.99'}
+                          className="w-full px-2 py-1.5 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded text-sm focus:outline-none focus:ring-2 focus:ring-sage-600"
+                        />
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                          The name is not just a label — FindA.Sale reads it to decide which items go to this
+                          preset, and your Google Shopping listings quote the price in it. We check it as you type.
+                        </p>
+                        {presetCheck.suggestedName &&
+                          presetCheck.suggestedName !== presetForm.name.trim() &&
+                          (blockingPresetIssues.length > 0 || presetNotices.length > 0) && (
+                          <button
+                            type="button"
+                            onClick={() => setPresetForm((f) => ({ ...f, name: presetCheck.suggestedName }))}
+                            className="mt-2 text-sm px-3 py-1.5 border border-sage-600 text-sage-600 dark:text-sage-400 dark:border-sage-500 rounded-lg hover:bg-sage-50 dark:hover:!bg-sage-700/20 font-medium transition"
+                          >
+                            Use "{presetCheck.suggestedName}"
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Inline explanation of anything wrong */}
+                      {presetCheck.checking && (
+                        <p className="text-xs text-gray-500 dark:text-gray-400">Checking…</p>
+                      )}
+                      {!presetCheck.checking && blockingPresetIssues.length > 0 && (
+                        <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 p-3">
+                          <ul className="text-sm text-amber-800 dark:text-amber-300 space-y-1 list-disc list-inside">
+                            {blockingPresetIssues.map((issue) => (
+                              <li key={issue.code + issue.message}>{issue.message}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      {!presetCheck.checking && presetNotices.length > 0 && (
+                        <ul className="text-xs text-gray-600 dark:text-gray-400 space-y-1 list-disc list-inside">
+                          {presetNotices.map((issue) => (
+                            <li key={issue.code + issue.message}>{issue.message}</li>
+                          ))}
+                        </ul>
+                      )}
+                      {!presetCheck.checking &&
+                        blockingPresetIssues.length === 0 &&
+                        presetForm.name.trim().length > 0 &&
+                        presetCheck.classificationMeaning && (
+                          <p className="text-xs text-gray-600 dark:text-gray-400">
+                            {presetCheck.classificationMeaning}
+                          </p>
+                        )}
+
+                      {/* Actions */}
+                      <div className="flex flex-wrap gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={handleCreatePreset}
+                          disabled={
+                            presetSaving ||
+                            presetCheck.checking ||
+                            blockingPresetIssues.length > 0 ||
+                            presetForm.name.trim().length === 0
+                          }
+                          className="text-sm px-3 py-1.5 bg-sage-600 hover:bg-sage-700 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed font-medium transition"
+                        >
+                          {presetSaving ? 'Creating on eBay…' : 'Create on eBay'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={closePresetForm}
+                          disabled={presetSaving}
+                          className="text-sm px-3 py-1.5 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        This creates a real policy on your eBay account. You can delete it on eBay any time.
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Created: bind it to something */}
+                  {presetCreated && !presetFormOpen && (
+                    <div className="mt-4 rounded-lg border border-sage-200 dark:border-sage-700 bg-sage-50 dark:!bg-sage-700/20 p-4">
+                      <p className="text-sm font-medium text-sage-700 dark:text-sage-300 mb-1">
+                        "{presetCreated.name}" is on your eBay account.
+                      </p>
+                      <p className="text-xs text-gray-600 dark:text-gray-400 mb-3">
+                        Point something at it now, or leave it and pick it from any dropdown on this page.
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => bindPresetAsDefault(presetCreated)}
+                          className="text-sm px-3 py-1.5 border border-sage-600 text-sage-600 dark:text-sage-400 dark:border-sage-500 rounded-lg hover:bg-sage-100 dark:hover:!bg-sage-700/30 font-medium transition"
+                        >
+                          Use as my default
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => bindPresetToNewCategory(presetCreated)}
+                          className="text-sm px-3 py-1.5 border border-sage-600 text-sage-600 dark:text-sage-400 dark:border-sage-500 rounded-lg hover:bg-sage-100 dark:hover:!bg-sage-700/30 font-medium transition"
+                        >
+                          Use for a category
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setItemPicker((s) => ({ ...s, open: !s.open }))
+                          }
+                          className="text-sm px-3 py-1.5 border border-sage-600 text-sage-600 dark:text-sage-400 dark:border-sage-500 rounded-lg hover:bg-sage-100 dark:hover:!bg-sage-700/30 font-medium transition"
+                        >
+                          {itemPicker.open ? 'Close item list' : 'Use for one item'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPresetCreated(null)}
+                          className="text-sm px-3 py-1.5 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition"
+                        >
+                          Done
+                        </button>
+                      </div>
+
+                      {itemPicker.open && (
+                        <div className="mt-3">
+                          <input
+                            type="text"
+                            value={itemPicker.query}
+                            onChange={(e) => setItemPicker((s) => ({ ...s, query: e.target.value }))}
+                            placeholder="Search your items by name"
+                            className="w-full px-2 py-1.5 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded text-sm focus:outline-none focus:ring-2 focus:ring-sage-600"
+                          />
+                          {itemPicker.loading && (
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">Loading your items…</p>
+                          )}
+                          {!itemPicker.loading && itemPicker.rows.length === 0 && (
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                              No items matched. Try a different word.
+                            </p>
+                          )}
+                          {!itemPicker.loading && itemPicker.rows.length > 0 && (
+                            <ul className="mt-2 divide-y divide-gray-200 dark:divide-gray-700 max-h-64 overflow-y-auto">
+                              {itemPicker.rows.map((row) => (
+                                <li key={row.id} className="py-2 flex items-center justify-between gap-3">
+                                  <div className="min-w-0">
+                                    <p className="text-sm text-gray-900 dark:text-white truncate">{row.title}</p>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                                      {row.saleTitle || 'No sale'}
+                                      {row.currentPolicyId === presetCreated.fulfillmentPolicyId
+                                        ? ' · using this preset'
+                                        : ''}
+                                    </p>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => bindPresetToOneItem(row, presetCreated)}
+                                    disabled={
+                                      itemPicker.bindingItemId === row.id ||
+                                      row.currentPolicyId === presetCreated.fulfillmentPolicyId
+                                    }
+                                    className="text-xs px-2 py-1 border border-sage-600 text-sage-600 dark:text-sage-400 dark:border-sage-500 rounded hover:bg-sage-100 dark:hover:!bg-sage-700/30 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition whitespace-nowrap"
+                                  >
+                                    {itemPicker.bindingItemId === row.id ? 'Saving…' : 'Use it'}
+                                  </button>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </div>
                       )}
                     </div>
                   )}
                 </div>
+
+                {/* ── Section C3: What happens when nothing matches ─────────────
+                    JOB 3 -- routing fallback picker.
+
+                    Today an item that matches no rule silently lands on the connection's
+                    default fulfillment policy, which on at least one real account is a $0
+                    "Free Domestic Shipping" policy (ebayController.ts resolvePoliciesForItem,
+                    `smartPicked?.policyId || conn.fulfillmentPolicyId`). This section makes
+                    that an explicit choice.
+
+                    Built against an ASSUMED API contract -- see FALLBACK_MODE_FIELD near the
+                    top of this file. Until the API returns the field, the section renders
+                    read-only rather than offering a control whose value would be silently
+                    dropped on save. */}
+                <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+                  <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-1">
+                    When nothing else matches
+                  </h2>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                    Some items won't match any of your rules — a missing weight, an unusual
+                    category. Choose what should happen to those instead of leaving it to chance.
+                  </p>
+
+                  {!fallbackSupported && (
+                    <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 p-3 mb-4">
+                      <p className="text-sm text-amber-800 dark:text-amber-300">
+                        Right now these items fall back to whichever shipping policy your eBay
+                        account had set as its default when you connected — which can be a free
+                        shipping policy. Choosing your own is coming with the next update; this
+                        panel is switched off until then so a choice can't quietly go missing.
+                      </p>
+                    </div>
+                  )}
+
+                  <div className={`space-y-2 ${fallbackSupported ? '' : 'opacity-60 pointer-events-none select-none'}`}>
+                    <button
+                      type="button"
+                      aria-disabled={!fallbackSupported}
+                      onClick={() => setFallback('CALCULATED')}
+                      className={`w-full text-left rounded-lg border p-3 transition-colors ${
+                        fallbackMode === 'CALCULATED'
+                          ? 'border-sage-600 bg-sage-50 dark:!bg-sage-700/30 ring-1 ring-sage-600'
+                          : 'border-gray-200 dark:border-gray-700 hover:border-sage-400'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-medium text-gray-900 dark:text-white">
+                          Let eBay work out the rate
+                        </span>
+                        <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-sage-100 dark:!bg-sage-700 text-sage-700 dark:text-sage-200 whitespace-nowrap">
+                          Recommended
+                        </span>
+                      </div>
+                      <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                        The buyer pays the real rate at checkout. Nothing to maintain, and you're
+                        never shipping at a loss.
+                      </p>
+                    </button>
+
+                    <button
+                      type="button"
+                      aria-disabled={!fallbackSupported}
+                      onClick={() => setFallback('POLICY', mapping?.shippingFallbackPolicyId ?? null)}
+                      className={`w-full text-left rounded-lg border p-3 transition-colors ${
+                        fallbackMode === 'POLICY'
+                          ? 'border-sage-600 bg-sage-50 dark:!bg-sage-700/30 ring-1 ring-sage-600'
+                          : 'border-gray-200 dark:border-gray-700 hover:border-sage-400'
+                      }`}
+                    >
+                      <span className="font-medium text-gray-900 dark:text-white">Use one of my presets</span>
+                      <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                        Every unmatched item goes to the same preset, whatever it weighs.
+                      </p>
+                    </button>
+
+                    {fallbackMode === 'POLICY' && (
+                      <select
+                        value={mapping?.shippingFallbackPolicyId || ''}
+                        onChange={(e) => setFallback('POLICY', e.target.value || null)}
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-sage-600"
+                      >
+                        <option value="">Pick a preset</option>
+                        {setupData.fulfillmentPolicies.map((policy) => (
+                          <option key={policy.fulfillmentPolicyId} value={policy.fulfillmentPolicyId}>
+                            {policy.name}{policySuffix(policy.classification)}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+
+                    <button
+                      type="button"
+                      aria-disabled={!fallbackSupported}
+                      onClick={() => setFallback('HOLD')}
+                      className={`w-full text-left rounded-lg border p-3 transition-colors ${
+                        fallbackMode === 'HOLD'
+                          ? 'border-sage-600 bg-sage-50 dark:!bg-sage-700/30 ring-1 ring-sage-600'
+                          : 'border-gray-200 dark:border-gray-700 hover:border-sage-400'
+                      }`}
+                    >
+                      <span className="font-medium text-gray-900 dark:text-white">Hold it for me to look at</span>
+                      <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                        The item isn't listed until you set its shipping yourself. Safest, but it
+                        needs you.
+                      </p>
+                    </button>
+                  </div>
+                </div>
+
 
                 {/* Section D: Shipping classification overrides.
                     Gated on shippingMode === 'FLAT_TIERS' (UX audit finding 2 /

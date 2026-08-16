@@ -18,9 +18,17 @@
  * FLAT_TIERS and CALCULATED branches, so envelope-eligible items resolve identically
  * whichever shipping mode the organizer is on.
  *
- * Weight-tier amount is parsed from the `$X.XX` embedded in the tier's policyName
- * (all current tiers carry it). If a tier name has no parseable amount, we fall
- * back to the FVF-flat compute so the preview never shows a bare/zero number.
+ * (2026-08-16) The manual weight-tier ladder is GONE from this file. It is neither
+ * read nor parsed here any more: every non-override path resolves through the same
+ * freshly-computed carrier rate the push path uses. The 'weight-tier' member of
+ * ShippingResolutionSource is retained only because stored/persisted values may still
+ * carry it; nothing in this file produces it.
+ *
+ * (2026-08-16) Precedence is now MODE-AGNOSTIC up front: local-pickup -> item policy
+ * override -> classification override -> category override -> UNKNOWN safety policy ->
+ * free-shipping opt-in, and only THEN the FLAT_TIERS / CALCULATED fork. The override
+ * rules previously sat inside the FLAT_TIERS branch, so CALCULATED organizers (the
+ * schema default) never got them.
  */
 
 import { computeCheapestForOrigin, ShippingHardBlockError } from './ebayRateEstimateService';
@@ -75,6 +83,9 @@ export interface ResolveItemShippingResult {
 export interface ShippingResolverMapping {
   shippingMode?: string | null;
   freeShippingOptIn?: boolean | null;
+  /** @deprecated ADR-102 -- the weight-tier ladder is retired and this value is IGNORED
+   *  by every code path in this file. Kept on the interface only so callers that still
+   *  pass it (e.g. jobs/resyncShippingDrift.ts) keep compiling; remove once they stop. */
   weightTierMappings?: unknown;
   /** ADR-102 (roadmap #622): oddball-item manual overrides, checked before the computed rate. */
   categoryOverrides?: unknown;
@@ -160,12 +171,21 @@ export async function resolveItemShipping(input: {
 
   const origin = { zip: fromZip, lat: organizer.lat ?? null, lng: organizer.lng ?? null };
 
-  // Item-level local-pickup override — buyer pays nothing for shipping.
+  // ── MODE-AGNOSTIC ROUTING PREFIX (2026-08-16) ─────────────────────────────
+  // Every rule below applies to BOTH shipping modes. The classification /
+  // category / UNKNOWN rules used to live INSIDE the FLAT_TIERS branch only, so a
+  // CALCULATED-mode organizer's explicit routing choices were silently ignored --
+  // and CALCULATED is the schema default for every new organizer. Mirrors the
+  // identical reorder in resolvePoliciesForItem (ebayController.ts): these two
+  // files are the preview/push twins named in this file's header contract and must
+  // never disagree about precedence.
+
+  // 1. Item-level local-pickup override — buyer pays nothing for shipping.
   if (item.ebayShippingOverride === 'LOCAL_PICKUP_ONLY') {
     return { fulfillmentPolicyId: null, buyerAmountCents: 0, policyName: null, source: 'local-pickup' };
   }
 
-  // Item-level custom eBay fulfillment-policy override — the buyer's shipping is set
+  // 2. Item-level custom eBay fulfillment-policy override — the buyer's shipping is set
   // by the organizer's chosen eBay policy, not our calculated/flat model. We don't
   // know the buyer amount here, so surface 0 + the override source (the preview treats
   // this as "set by your eBay policy" rather than fabricating a number).
@@ -178,7 +198,42 @@ export async function resolveItemShipping(input: {
     };
   }
 
-  // Free-shipping opt-in — buyer pays $0, organizer absorbs the label.
+  // 3. Shipping-classification override (oddball items the organizer routed by hand).
+  if (item.ebayShippingClassification === 'HEAVY_OVERSIZED' && mapping?.heavyOversizedPolicyId) {
+    return { fulfillmentPolicyId: mapping.heavyOversizedPolicyId, buyerAmountCents: 0, policyName: null, source: 'custom-override' };
+  }
+  if (item.ebayShippingClassification === 'FRAGILE' && mapping?.fragilePolicyId) {
+    return { fulfillmentPolicyId: mapping.fragilePolicyId, buyerAmountCents: 0, policyName: null, source: 'custom-override' };
+  }
+
+  // 4. Category override (exact ebayCategoryId match).
+  const categoryOverrides = (mapping?.categoryOverrides as any[]) || [];
+  if (item.ebayCategoryId) {
+    const categoryMatch = categoryOverrides.find((c: any) => c.categoryId === item.ebayCategoryId);
+    if (categoryMatch) {
+      return { fulfillmentPolicyId: categoryMatch.policyId, buyerAmountCents: 0, policyName: null, source: 'custom-override' };
+    }
+  }
+
+  // 5. UNKNOWN-classification safety policy. (2026-08-14) Only fires when we genuinely
+  // have nothing to compute a rate from -- mirrors the same gate in ebayController.ts
+  // resolvePoliciesForItem (the live push/resync path) so preview and push can never
+  // disagree, per this file's own header contract. See that file's comment for the
+  // full root-cause writeup (classifyEbayShipping's narrow keyword list vs. a real
+  // organizer-measured weight+dims).
+  const hasMeasuredPackage = weightOz > 0 && dims != null && item.packageConfirmedByOrganizer !== false;
+  if (
+    (item.ebayShippingClassification === 'UNKNOWN' || !item.ebayShippingClassification) &&
+    mapping?.unknownPolicyId &&
+    !hasMeasuredPackage
+  ) {
+    return { fulfillmentPolicyId: mapping.unknownPolicyId, buyerAmountCents: 0, policyName: null, source: 'custom-override' };
+  }
+
+  // 6. Free-shipping opt-in — buyer pays $0, organizer absorbs the label.
+  // Deliberately BELOW the override rules above (it used to sit above them): a blanket
+  // "I'll absorb shipping" opt-in must not silently promise free shipping on an item the
+  // organizer explicitly routed to a heavy/oversized or local-pickup-only policy.
   if (mapping?.freeShippingOptIn) {
     return { fulfillmentPolicyId: null, buyerAmountCents: 0, policyName: null, source: 'free' };
   }
@@ -273,43 +328,13 @@ export async function resolveItemShipping(input: {
     }
   };
 
-  // ── FLAT_TIERS organizer (ADR-102, roadmap #622): oddball-item manual overrides
-  // (classification / category) win first, then the always-fresh computed rate.
-  // This mirrors resolvePoliciesForItem's new cascade (ebayController.ts) -- this
-  // file's own job is to never disagree with that path, so it has to apply the same
-  // precedence. The old weightTierMappings ladder match is retired (it went stale --
-  // 0-1lb, 7-45lb coverage gaps -- from being hand-maintained); computeCheapestForOrigin
-  // can't develop a gap because it's computed fresh every time.
+  // ── FLAT_TIERS organizer (ADR-102, roadmap #622): the always-fresh computed
+  // rate. The oddball-item manual overrides that used to live here were lifted into
+  // the mode-agnostic prefix above (2026-08-16) so CALCULATED organizers get them
+  // too. The old weightTierMappings ladder match is retired -- it went stale (0-1lb,
+  // 7-45lb coverage gaps) from being hand-maintained; computeCheapestForOrigin can't
+  // develop a gap because it's computed fresh every time.
   if (shippingMode === 'FLAT_TIERS') {
-    if (item.ebayShippingClassification === 'HEAVY_OVERSIZED' && mapping?.heavyOversizedPolicyId) {
-      return { fulfillmentPolicyId: mapping.heavyOversizedPolicyId, buyerAmountCents: 0, policyName: null, source: 'custom-override' };
-    }
-    if (item.ebayShippingClassification === 'FRAGILE' && mapping?.fragilePolicyId) {
-      return { fulfillmentPolicyId: mapping.fragilePolicyId, buyerAmountCents: 0, policyName: null, source: 'custom-override' };
-    }
-    const categoryOverrides = (mapping?.categoryOverrides as any[]) || [];
-    if (item.ebayCategoryId) {
-      const match = categoryOverrides.find((c: any) => c.categoryId === item.ebayCategoryId);
-      if (match) {
-        return { fulfillmentPolicyId: match.policyId, buyerAmountCents: 0, policyName: null, source: 'custom-override' };
-      }
-    }
-    // (2026-08-14) Only fall back to the organizer's UNKNOWN policy when we genuinely
-    // have nothing to compute a rate from -- mirrors the same gate in ebayController.ts
-    // resolvePoliciesForItem (the live push/resync path) so preview and push can never
-    // disagree, per this file's own header contract. See that file's comment for the
-    // full root-cause writeup (classifyEbayShipping's narrow keyword list vs. a real
-    // organizer-measured weight+dims).
-    const hasMeasuredPackage = weightOz > 0 && dims != null && item.packageConfirmedByOrganizer !== false;
-    if (
-      (item.ebayShippingClassification === 'UNKNOWN' || !item.ebayShippingClassification) &&
-      mapping?.unknownPolicyId &&
-      !hasMeasuredPackage
-    ) {
-      return { fulfillmentPolicyId: mapping.unknownPolicyId, buyerAmountCents: 0, policyName: null, source: 'custom-override' };
-    }
-    // No oddball override matched (or the item is measured enough to compute a real
-    // rate) — always use the computed rate (ADR-102 primary path).
     return fvfFlat();
   }
 

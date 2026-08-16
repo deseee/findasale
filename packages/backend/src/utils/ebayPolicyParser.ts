@@ -95,7 +95,7 @@ export function classifyPolicy(policyName: string): PolicyClassification {
  *   "1 lb"                → { maxOz: 16 }
  *   "6+ lb"               → { minOz: 96, maxOz: Infinity } (last tier unbounded)
  */
-function parseSinglePolicyWeight(name: string): { minOz?: number; maxOz: number; confidence: 'high' | 'medium' | 'low' } | null {
+export function parseSinglePolicyWeight(name: string): { minOz?: number; maxOz: number; confidence: 'high' | 'medium' | 'low' } | null {
   // Match "N+ lb" (plus-sign tier) — these are lower-bound tiers
   const plusLbMatch = name.match(/(\d+)\s*\+\s*lb/i);
   if (plusLbMatch) {
@@ -120,6 +120,21 @@ function parseSinglePolicyWeight(name: string): { minOz?: number; maxOz: number;
 
   return null;
 }
+
+/**
+ * Public alias for parseSinglePolicyWeight.
+ *
+ * Added (shipping presets, 2026-08-16) so the create-a-preset name validator in
+ * services/ebayShippingPresetService.ts can tell an organizer exactly what weight
+ * ceiling the router will read out of a name they typed. Deliberately an alias rather
+ * than a second implementation: the whole point of the validator is that it reports
+ * what the REAL parser does, so there is nothing to drift.
+ *
+ * Note the difference from parseWeightTiers: that function promotes the heaviest
+ * "N+ lb" rung in a LADDER to unbounded, which is a property of the ladder as a whole.
+ * This returns the un-promoted ceiling for a single name.
+ */
+export const parsePolicyWeightTier = parseSinglePolicyWeight;
 
 /**
  * Parse a list of eBay fulfillment policies into weight-tier rules.

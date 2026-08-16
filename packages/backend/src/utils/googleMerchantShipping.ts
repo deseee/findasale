@@ -1,32 +1,44 @@
 /**
  * googleMerchantShipping.ts — Feature #463: per-item shipping for the Google Merchant feed
  *
- * Sources shipping from the organizer's EXISTING eBay shipping config
- * (EbayPolicyMapping.weightTierMappings). Shippability is OPT-IN per organizer:
- * if there is no usable config, the item is DROPPED from the feed entirely —
- * we never promise shipping a seller can't honor and never emit a flat default.
+ * (2026-08-16) REPOINTED off the retired weight-tier ladder. This file used to price
+ * every feed row by running the item's billable ounces through
+ * EbayPolicyMapping.weightTierMappings and parsing the `$X.XX` out of the matched rung's
+ * NAME. ADR-102 had already retired that ladder from eBay routing, but the feed kept
+ * consulting it, so a hand-maintained table nothing else read was still setting the price
+ * advertised to real Google Shopping shoppers -- and matchWeightTier returns the FIRST
+ * rung with maxOz >= weight, so a ladder gap advertised the NEXT rung up. On the live
+ * Artifact ladder the 111oz -> 720oz gap meant a 10 lb item was advertised at the 45 lb
+ * FedEx catch-all price. A price you can't honor is worse than no listing.
  *
- * computeItemShipping(item, policyMapping) returns the shipping cells for the row,
+ * It now resolves through resolveItemShipping (ebayShippingResolver.ts) — the SAME single
+ * source of truth the eBay push path and the shipping preview use. One rate model, three
+ * surfaces, no third table to keep in sync and no gap to fall into: the rate is computed
+ * fresh from real carrier tables on every build.
+ *
+ * Shippability is still OPT-IN per organizer: no EbayPolicyMapping row => the item is
+ * DROPPED from the feed. We never promise shipping a seller can't honor and never emit a
+ * flat default.
+ *
+ * computeItemShipping(item, policyMapping, origin) returns the shipping cells for the row,
  * or null to signal the item must be EXCLUDED from the feed.
  *
  * Decision order (first match wins):
- *   a. ebayShippingOverride ∈ {LOCAL_PICKUP_ONLY, DONT_LIST} → null (exclude — organizer's explicit pickup-only call)
- *   b. FREIGHT check → null ONLY for genuine freight/LTL items, judged by REAL
- *      package data (weight > 150 lb, or oversized dimensions). Unknown weight/dims
- *      never excludes here — almost everything parcel-ships. (Replaces the old eBay
- *      HEAVY_OVERSIZED/FRAGILE classifier exclusion, which wrongly dropped shippable
- *      signs, lanterns, and fragile-but-paddable porcelain.)
- *   c. no usable shipping config (no mapping, or ladder yields no parseable price) → null (exclude)
- *   d. packageWeightOz set (≤ freight limit) → matchWeightTier → parsePriceFromPolicyName → US::Standard:<price> USD, label "flat"
- *   e. else category→estimated oz → SAME weight ladder → parse price → emit, label "estimated"
+ *   a. ebayShippingOverride in {LOCAL_PICKUP_ONLY, DONT_LIST} -> null (exclude — organizer's
+ *      explicit pickup-only call)
+ *   b. FREIGHT check -> null ONLY for genuine freight/LTL items, judged by REAL package
+ *      data (weight > 150 lb, or oversized dimensions). Unknown weight/dims never excludes
+ *      here — almost everything parcel-ships.
+ *   c. no EbayPolicyMapping at all -> null (exclude; shippability is opt-in)
+ *   d. packageWeightOz set -> resolveItemShipping -> real computed rate, label "flat"
+ *   e. else category->estimated oz -> SAME resolver -> real computed rate, label "estimated"
+ *
+ * Any resolver outcome whose buyer price we cannot state honestly — an organizer-routed
+ * custom policy, local pickup, or a carrier hard-block — EXCLUDES the item rather than
+ * guessing a number. Only 'free' may emit $0.00.
  */
 
-import {
-  matchWeightTier,
-  parsePriceFromPolicyName,
-  WeightTierMapping,
-} from './ebayPolicyParser';
-import { billableLb, DIM_DIVISOR_USPS } from '../services/ebayRateEstimateService';
+import { resolveItemShipping } from '../services/ebayShippingResolver';
 
 /**
  * Parcel-carrier ceiling: 150 lb = 2400 oz. Anything heavier genuinely requires
@@ -42,15 +54,25 @@ const MAX_SINGLE_DIMENSION_IN = 108;
 const MAX_LENGTH_PLUS_GIRTH_IN = 165;
 
 /**
- * Minimal organizer EbayPolicyMapping shape needed for feed shipping.
- * weightTierMappings is stored as Json — we accept the parsed array form.
+ * Minimal organizer EbayPolicyMapping shape needed for feed shipping. Structurally a
+ * subset of ShippingResolverMapping so it can be handed straight to resolveItemShipping.
+ * (2026-08-16) weightTierMappings is gone from this shape — the ladder is not read here
+ * any more. The column still exists in the database; nothing prices from it.
  */
 export interface FeedPolicyMapping {
-  weightTierMappings: WeightTierMapping[] | unknown;
+  shippingMode?: string | null;
+  freeShippingOptIn?: boolean | null;
   categoryOverrides?: unknown;
   heavyOversizedPolicyId?: string | null;
   fragilePolicyId?: string | null;
   unknownPolicyId?: string | null;
+}
+
+/** Origin the carrier rate is computed FROM (organizer geo + the sale's ZIP). */
+export interface ShippingFeedOrigin {
+  lat?: number | null;
+  lng?: number | null;
+  zip?: string | null;
 }
 
 /** Item fields needed to compute shipping. */
@@ -59,6 +81,12 @@ export interface ShippingFeedItem {
   tags: string[];
   ebayShippingOverride: string | null;
   packageWeightOz: number | null;
+  /** (2026-08-16) Feeds the resolver's oddball-item override rules — an item the
+   *  organizer routed to a hand-picked policy is EXCLUDED rather than guessed at. */
+  ebayShippingClassification?: string | null;
+  ebayCategoryId?: string | null;
+  /** Gates eBay Standard Envelope eligibility inside the resolver. */
+  price?: number | null;
   // Package dimensions (inches) — used for the freight/oversize check. Prisma
   // Decimal columns may arrive as Decimal objects, so we coerce defensively.
   packageLengthIn: number | null;
@@ -114,53 +142,6 @@ export function estimateWeightOzFromCategory(category: string | null | undefined
 }
 
 /**
- * Normalize the JSON weightTierMappings into a typed WeightTierMapping[].
- * Tolerates missing/garbage shapes (returns []).
- */
-function normalizeWeightTiers(raw: unknown): WeightTierMapping[] {
-  if (!Array.isArray(raw)) return [];
-  const tiers: WeightTierMapping[] = [];
-  for (const entry of raw) {
-    if (
-      entry &&
-      typeof entry === 'object' &&
-      typeof (entry as any).maxOz === 'number' &&
-      typeof (entry as any).policyId === 'string' &&
-      typeof (entry as any).policyName === 'string'
-    ) {
-      tiers.push({
-        maxOz: (entry as any).maxOz,
-        policyId: (entry as any).policyId,
-        policyName: (entry as any).policyName,
-      });
-    }
-  }
-  return tiers;
-}
-
-/**
- * Run a weight (oz) through the ladder and return the parsed dollar price,
- * or null if no tier matches or the matched tier name has no parseable price.
- *
- * (S1197) Optional `dims` lets real package dimensions raise the effective ounces
- * to the carrier's actual billable weight (max of actual vs. L*W*H/139 dimensional
- * weight) before matching a tier -- same fix applied to resolvePoliciesForItem
- * (ebayController.ts) and resolveItemShipping (ebayShippingResolver.ts), so a
- * light-but-bulky item doesn't get quoted a cheap flat rate in the Google feed
- * that real carriers would never actually honor at that price.
- */
-function priceForWeight(
-  weightOz: number,
-  tiers: WeightTierMapping[],
-  dims?: { length?: number | null; width?: number | null; height?: number | null } | null
-): number | null {
-  const billableOz = dims ? billableLb(weightOz, dims, DIM_DIVISOR_USPS).lb * 16 : weightOz;
-  const tier = matchWeightTier(billableOz, tiers);
-  if (!tier) return null;
-  return parsePriceFromPolicyName(tier.policyName);
-}
-
-/**
  * Coerce a possibly-Decimal/string value to a finite number, or null.
  */
 function toNum(value: unknown): number | null {
@@ -201,11 +182,16 @@ function isFreightItem(item: ShippingFeedItem): boolean {
 /**
  * Compute the per-item shipping for the Google Merchant feed.
  * Returns null when the item must be EXCLUDED from the feed.
+ *
+ * Async since 2026-08-16: pricing now resolves through resolveItemShipping, which
+ * computes a real carrier rate (one cached coverage-zone lookup per distinct origin,
+ * then pure arithmetic) instead of reading a hand-maintained table.
  */
-export function computeItemShipping(
+export async function computeItemShipping(
   item: ShippingFeedItem,
-  policyMapping: FeedPolicyMapping | null | undefined
-): ComputedShipping | null {
+  policyMapping: FeedPolicyMapping | null | undefined,
+  origin?: ShippingFeedOrigin | null
+): Promise<ComputedShipping | null> {
   // (a) explicit non-ship overrides → exclude (organizer's pickup-only call)
   const override = item.ebayShippingOverride;
   if (override === 'LOCAL_PICKUP_ONLY' || override === 'DONT_LIST') {
@@ -219,36 +205,64 @@ export function computeItemShipping(
     return null;
   }
 
-  // (c) no usable shipping config → exclude (opt-in; never default a flat rate)
+  // (c) organizer has not configured eBay shipping at all → exclude. Shippability
+  // stays opt-in; we just no longer require a weight-tier LADDER as the opt-in signal,
+  // which had the side effect of excluding every CALCULATED-mode organizer (the default
+  // mode) from the feed entirely, since those organizers legitimately have zero tiers.
   if (!policyMapping) return null;
-  const tiers = normalizeWeightTiers(policyMapping.weightTierMappings);
-  if (tiers.length === 0) return null;
 
-  // (d) explicit package weight → exact ladder price, label "flat"
-  if (typeof item.packageWeightOz === 'number' && item.packageWeightOz > 0) {
-    const dimsForBilling =
-      toNum(item.packageLengthIn) !== null && toNum(item.packageWidthIn) !== null && toNum(item.packageHeightIn) !== null
-        ? { length: toNum(item.packageLengthIn), width: toNum(item.packageWidthIn), height: toNum(item.packageHeightIn) }
-        : null;
-    const price = priceForWeight(item.packageWeightOz, tiers, dimsForBilling);
-    if (price === null) return null; // ladder yields no parseable price → exclude
-    return {
-      shipping: `${SHIPS_FROM_COUNTRY}::Standard:${price.toFixed(2)} USD`,
-      shippingLabel: 'flat',
-      shippingWeight: `${item.packageWeightOz} oz`,
-      shipsFromCountry: SHIPS_FROM_COUNTRY,
-      maxHandlingTime: MAX_HANDLING_TIME,
-    };
+  // (d)/(e) real weight when we have one, else a category estimate.
+  const hasRealWeight = typeof item.packageWeightOz === 'number' && item.packageWeightOz > 0;
+  const weightOz = hasRealWeight ? (item.packageWeightOz as number) : estimateWeightOzFromCategory(item.category);
+
+  let resolved;
+  try {
+    resolved = await resolveItemShipping({
+      organizer: { lat: origin?.lat ?? null, lng: origin?.lng ?? null },
+      mapping: policyMapping,
+      item: {
+        packageWeightOz: weightOz,
+        packageLengthIn: hasRealWeight ? toNum(item.packageLengthIn) : null,
+        packageWidthIn: hasRealWeight ? toNum(item.packageWidthIn) : null,
+        packageHeightIn: hasRealWeight ? toNum(item.packageHeightIn) : null,
+        ebayShippingOverride: item.ebayShippingOverride,
+        ebayFulfillmentPolicyOverrideId: null,
+        ebayShippingClassification: item.ebayShippingClassification ?? null,
+        ebayCategoryId: item.ebayCategoryId ?? null,
+        packageType: null,
+        price: item.price ?? null,
+      },
+      fromZip: origin?.zip ?? null,
+      // No fetcher: the feed must never make an eBay API call per row. An
+      // envelope-eligible item simply falls back to this mode's computed fee.
+    });
+  } catch (err) {
+    // A rate-model failure must never break the whole feed build — drop the one row.
+    console.warn(
+      `[google-merchant-feed] shipping resolution failed, excluding item: ${err instanceof Error ? err.message : String(err)}`
+    );
+    return null;
   }
 
-  // (e) category estimate → same ladder, label "estimated"
-  const estOz = estimateWeightOzFromCategory(item.category);
-  const estPrice = priceForWeight(estOz, tiers);
-  if (estPrice === null) return null; // exclude per rule (c)
+  // Only outcomes whose buyer price we can state honestly may be advertised.
+  //   free                                   -> $0.00
+  //   fvf-flat / calculated / standard-envelope -> the resolved amount
+  //   custom-override / local-pickup / hard-blocked / weight-tier -> EXCLUDE.
+  // custom-override in particular carries buyerAmountCents = 0 by contract (the amount
+  // lives on the organizer's own eBay policy, which we have not fetched); emitting that
+  // as free shipping would advertise a price the organizer never agreed to.
+  const PRICEABLE = new Set(['free', 'fvf-flat', 'calculated', 'standard-envelope']);
+  if (!PRICEABLE.has(resolved.source)) {
+    return null;
+  }
+  const priceUsd = resolved.buyerAmountCents / 100;
+  if (!Number.isFinite(priceUsd) || priceUsd < 0) return null;
+  if (priceUsd === 0 && resolved.source !== 'free') return null;
+
   return {
-    shipping: `${SHIPS_FROM_COUNTRY}::Standard:${estPrice.toFixed(2)} USD`,
-    shippingLabel: 'estimated',
-    shippingWeight: `${estOz} oz`,
+    shipping: `${SHIPS_FROM_COUNTRY}::Standard:${priceUsd.toFixed(2)} USD`,
+    shippingLabel: hasRealWeight ? 'flat' : 'estimated',
+    shippingWeight: `${weightOz} oz`,
     shipsFromCountry: SHIPS_FROM_COUNTRY,
     maxHandlingTime: MAX_HANDLING_TIME,
   };
