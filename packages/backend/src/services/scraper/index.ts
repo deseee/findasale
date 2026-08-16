@@ -21,6 +21,7 @@ import {
   isBlockedWebsiteDomain,
   isAggregatorDomain,
   classifySocialHost,
+  isNonIdentityHost,
 } from '../../config/domainBlocklist';
 import { triggerSaleAndCityRevalidation, citySlugFromCityState } from '../revalidationService';
 
@@ -142,6 +143,79 @@ export function generateDedupeKey(name: string, city: string): string {
       .trim()
       .replace(/\s+/g, '-');
   return `${normalize(name)}:${normalize(city)}`;
+}
+
+/**
+ * ORGANIZER IDENTITY KEY (2026-08-16) — replaces CITY with a real identity signal.
+ *
+ * THE BUG THIS FIXES. `generateDedupeKey` above keys on name+city, so the SAME real business
+ * listed under two different cities by two different directories never collides. Confirmed
+ * live: "Bond Street Auctions" exists twice — cmqbidpw800qvneng9o6v1772 (Fort Lauderdale FL,
+ * OvertureBrightQuery) and cmrwy6i64045o964q9tpxp15x (The Villages FL, EstateSalesNet) —
+ * same website `bondstreetauctions.com`, same phone `4047324183`, same email, neither claimed.
+ * Their dedupeKeys are `bond-street-auctions:fort-lauderdale` vs
+ * `bond-street-auctions:the-villages`, so no tier ever matched them. This is systemic, not a
+ * one-off: a read-only production census (2026-08-16) found 1,135 distinct contact emails held
+ * by more than one organizer, spanning 4,560 organizer rows.
+ *
+ * WHY NOT "same domain = same business" (the obvious fix, and the WRONG one). Measured against
+ * live data, registrable domain alone catastrophically over-merges, and merging is destructive
+ * and irreversible:
+ *   bluemoonestatesales.com  82 rows / 70 distinct names   (independently-owned franchisees)
+ *   grasons.com              35 rows / 35 names            (the known 15+-franchise precedent)
+ *   usamfm.com               32 / 32 · tranzon.com 17 / 17 · simon.com 13 / 13
+ *   wixsite.com 25 / 24 · hub.biz 25 / 22 · business.site 17 / 16  (builder platforms)
+ *   goodwill.org 15 / 7 · savers.com 13 / 6 · salvationarmyusa.org 12 / 7 (chain storefronts)
+ * Email is even worse and is therefore NOT an identity signal here at any tier: the same census
+ * found support@publicsurplus.com on 481 organizers, info@auctionninja.com on 476,
+ * `user@domain.com` boilerplate on 320, a Sentry DSN address on 205, and the Google Fonts /
+ * normalize.css AUTHOR addresses (impallari@gmail.com 39, micah@micahrich.com 27) scraped
+ * straight out of CSS license headers.
+ *
+ * THE RULE. Identity = normalized NAME + one non-shared identity signal (domain, else phone).
+ * Name stays in the key, which is what keeps the 35 differently-named Grasons franchises apart.
+ * On top of that the match site requires a POSITIVE corroborating signal and vetoes conflicts —
+ * see findIdentityMatch(). Empirically (full-table simulation, read-only, 2026-08-16) this
+ * merges 537 rows into 261 groups (276 rows eliminated, 0.26% of 106,157 organizers), touches
+ * ZERO claimed organizers, and correctly rejects every Goodwill / Buffalo Exchange /
+ * Plato's Closet / Salvation Army chain cluster.
+ */
+const IDENTITY_DOMAIN_SHARED_CAP = 25; // domain on >= N organizers => multi-tenant/franchise, never identity
+const IDENTITY_PHONE_SHARED_CAP = 10;  // phone on >= N organizers => call centre / franchise HQ line
+const IDENTITY_NARROW_DOMAIN = 3;      // domain on < N organizers is "narrow" — strong enough to stand alone
+                                       // (matches the existing FRANCHISE_DOMAIN_SHARED_FLOOR precedent)
+
+/**
+ * off    — tier disabled; behavior identical to before this change.
+ * shadow — computes + logs would-be matches, never links and never writes an identity dedupeKey
+ *          (SAFE DEFAULT — ships in this mode, same idiom as CROSS_SOURCE_FUZZY_DEDUP_MODE).
+ * live   — links to the matched row and writes identity-format dedupeKeys on new rows.
+ */
+const ORGANIZER_IDENTITY_DEDUP_MODE = (
+  process.env.ORGANIZER_IDENTITY_DEDUP_MODE || 'shadow'
+).toLowerCase();
+
+/**
+ * Build the identity-scoped dedupe key for a row: `name:d:<registrable-domain>` when the website
+ * is a real business domain, else `name:p:<last-10-phone-digits>`, else null (caller falls back
+ * to the legacy name:city key). Pure/string-only — the shared-count caps that decide whether a
+ * signal is trustworthy are applied at the match site, which has DB access.
+ */
+export function generateIdentityKey(
+  businessName: string,
+  website?: string | null,
+  phone?: string | null
+): string | null {
+  const name = generateDedupeKey(businessName, '').replace(/:$/, '');
+  if (!name) return null;
+
+  if (website && !isNonIdentityHost(website)) {
+    const dom = registrableDomain(website);
+    if (dom) return `${name}:d:${dom}`;
+  }
+  const p = normalizePhoneDigits(phone);
+  if (p) return `${name}:p:${p}`;
+  return null;
 }
 
 /**
@@ -467,6 +541,122 @@ function gateScrapedEmail(
  * ADR-075: Business category filter — only estate/antique/consignment/secondary sale categories allowed.
  * Off-target categories (tire shops, hotels, fast food, government, etc.) are rejected at ingest time.
  */
+/** Row shape returned by the identity-candidate lookup (matches the other tiers' select). */
+const IDENTITY_SELECT = {
+  id: true, businessName: true, googlePlaceId: true, foursquareVenueId: true,
+  hereBusinessId: true, osmNodeId: true, contactEmail: true, phone: true, website: true,
+  dedupeKey: true, sourceCount: true, sourcesJson: true, lat: true, lng: true,
+  isStateLicensed: true, licenseState: true, licenseNumber: true,
+};
+
+/**
+ * Resolve an identity-key match, applying every over-merge guard. Returns the single unambiguous
+ * existing organizer for this identity, or null (create a new row / fall through to legacy tiers).
+ *
+ * Guards, in order — each one exists because live data proved it necessary:
+ *  1. SHARED-SIGNAL CAP. A signal held by too many organizers is multi-tenant, not identity.
+ *     Rejects the builder platforms (wixsite.com 25 rows) and franchise webs (bluemoon 82,
+ *     grasons 35) before they can ever match.
+ *  2. NAME EQUALITY. Only rows whose normalized businessName is identical are considered — this
+ *     is what keeps the 35 distinctly-named Grasons franchises on grasons.com apart.
+ *  3. UNMANAGED ONLY. Never merges into a claimed/managed organizer. A scraper must not be able
+ *     to fold a real paying customer's account into a directory row.
+ *  4. PHONE-CONFLICT VETO. Two rows with different phone numbers are different locations, not
+ *     one business. This single guard removed every retail-chain false merge in the simulation
+ *     (Buffalo Exchange 7, Kwik Shop 6, Columbia Sportswear 6, Plato's Closet, Insurance Auto
+ *     Auctions, Thrifty Car Rental — all correctly rejected).
+ *  5. POSITIVE-SIGNAL REQUIREMENT. Absence of a conflict is not evidence of sameness. Require
+ *     EITHER an actual matching phone on both sides, OR a genuinely narrow domain
+ *     (< IDENTITY_NARROW_DOMAIN organizers). This is what rejects the phone-less chain
+ *     storefronts that guard 4 cannot see: Goodwill on gwct.org (15 rows, all phone-null),
+ *     thinkgood.org (6), sdgoodwill.org (4), ocgoodwill.org (3).
+ *  6. AMBIGUITY VETO. More than one qualifying candidate => do nothing and log. Same posture as
+ *     the cross-source fuzzy tier: risking a rare duplicate beats merging the wrong business.
+ */
+async function findIdentityMatch(
+  identityKey: string,
+  businessName: string,
+  phone?: string
+): Promise<{ row: any; signals: string[] } | null> {
+  const [, kind, value] = identityKey.split(/:(d|p):/);
+  if (!kind || !value) return null;
+
+  const cap = kind === 'd' ? IDENTITY_DOMAIN_SHARED_CAP : IDENTITY_PHONE_SHARED_CAP;
+
+  // One bounded query returns BOTH the candidate set and the shared-count signal. LIMIT is
+  // cap+1 so "did we hit the cap" is answerable without a second COUNT round-trip.
+  // Domain path uses idx_organizer_website_trgm (the ILIKE %domain% index added 2026-08-08).
+  // Phone path normalizes to last-10-digits in SQL because stored formats are inconsistent
+  // ("(404) 732-4183" vs "+14047324183" are the same number on the confirmed Bond Street pair).
+  let ids: Array<{ id: string }>;
+  try {
+    ids =
+      kind === 'd'
+        ? await prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+            SELECT id FROM "Organizer"
+            WHERE website ILIKE ${'%' + value + '%'}
+            LIMIT ${cap + 1}`)
+        : await prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+            SELECT id FROM "Organizer"
+            WHERE right(regexp_replace(COALESCE(phone, ''), '[^0-9]', '', 'g'), 10) = ${value}
+            LIMIT ${cap + 1}`);
+  } catch (err) {
+    console.warn(`[Ingest] Identity dedup -- candidate lookup failed for '${identityKey}':`, err);
+    return null;
+  }
+
+  // Guard 1 — shared-signal cap.
+  if (ids.length === 0) return null;
+  if (ids.length > cap) {
+    console.log(
+      `[Ingest] Identity dedup -- ignored ${kind === 'd' ? 'domain' : 'phone'} signal '${value}' ` +
+        `(held by >= ${cap} organizers, treated as multi-tenant/franchise)`
+    );
+    return null;
+  }
+  const sharedCount = ids.length;
+
+  const rows = await prisma.organizer.findMany({
+    where: { id: { in: ids.map((r) => r.id) }, isUnmanagedListing: true }, // Guard 3
+    select: IDENTITY_SELECT,
+  });
+
+  const wanted = normalizeName(businessName);
+  const incomingPhone = normalizePhoneDigits(phone);
+  const narrowDomain = kind === 'd' && sharedCount < IDENTITY_NARROW_DOMAIN;
+
+  const qualified: Array<{ row: any; signals: string[] }> = [];
+  for (const row of rows) {
+    if (normalizeName(row.businessName) !== wanted) continue; // Guard 2
+    const rowPhone = normalizePhoneDigits(row.phone);
+
+    if (incomingPhone && rowPhone && incomingPhone !== rowPhone) continue; // Guard 4
+
+    const signals: string[] = [kind === 'd' ? `domain:${value}` : `phone:${value}`];
+    let positive = false;
+    if (incomingPhone && rowPhone && incomingPhone === rowPhone) {
+      signals.push('phone-agreement');
+      positive = true;
+    } else if (narrowDomain) {
+      signals.push(`narrow-domain(${sharedCount})`);
+      positive = true;
+    }
+    if (!positive) continue; // Guard 5
+
+    qualified.push({ row, signals });
+  }
+
+  if (qualified.length === 1) return qualified[0];
+  if (qualified.length > 1) {
+    // Guard 6
+    console.log(
+      `[Ingest] Identity dedup -- ${qualified.length} ambiguous candidates for '${businessName}' ` +
+        `(${identityKey}); not auto-linking`
+    );
+  }
+  return null;
+}
+
 export async function getOrCreateScrapedOrganizer(
   businessName: string,
   sourceName: string,
@@ -753,6 +943,76 @@ export async function getOrCreateScrapedOrganizer(
         await prisma.organizer.update({ where: { id: byEsnOrgId.id }, data: updates });
       }
       return byEsnOrgId.id;
+    }
+  }
+
+  // ---------------------------------------------------------------------------------------
+  // IDENTITY-KEY TIER (2026-08-16) -- runs BEFORE the legacy name:city dedupeKey tier below.
+  // Catches the same real business listed under two different cities by two different
+  // directories (the confirmed Bond Street Auctions pair). Deliberately does NOT depend on the
+  // stored dedupeKey: it matches on the underlying website-domain / phone signal, so it works
+  // against all 106k existing legacy-keyed rows immediately, with no backfill. See
+  // generateIdentityKey() and findIdentityMatch() above for the rule and the evidence.
+  // ---------------------------------------------------------------------------------------
+  const identityKey = generateIdentityKey(businessName, website, phone);
+  if (ORGANIZER_IDENTITY_DEDUP_MODE !== 'off' && identityKey) {
+    const identityMatch = await findIdentityMatch(identityKey, businessName, phone);
+    if (identityMatch) {
+      console.log(
+        `[Ingest] Identity dedup ${ORGANIZER_IDENTITY_DEDUP_MODE.toUpperCase()} -- '${businessName}' (${city}) ` +
+          `~ existing organizer ${identityMatch.row.id} key=${identityKey} ` +
+          `signals=${identityMatch.signals.join('+')} newSource=${sourceName}`
+      );
+
+      if (ORGANIZER_IDENTITY_DEDUP_MODE === 'live') {
+        const row = identityMatch.row;
+        const updates: Record<string, unknown> = {};
+        if (googlePlaceId && !row.googlePlaceId) updates.googlePlaceId = googlePlaceId;
+        if (foursquareVenueId && !row.foursquareVenueId) updates.foursquareVenueId = foursquareVenueId;
+        if (hereBusinessId && !row.hereBusinessId) updates.hereBusinessId = hereBusinessId;
+        if (osmNodeId && !row.osmNodeId) updates.osmNodeId = osmNodeId;
+        if (esnOrgId) updates.esnOrgId = esnOrgId;
+        if (businessCategory) updates.businessCategory = businessCategory;
+        const validEmail = isValidExternalEmail(contactEmail);
+        const emailGate = gateScrapedEmail(validEmail, row.website ?? website, businessName);
+        if (emailGate && !row.contactEmail) {
+          updates.contactEmail = emailGate.contactEmail;
+          updates.emailDiscoveryMethod = emailGate.emailDiscoveryMethod;
+          updates.emailDiscoveryConfidence = emailGate.emailDiscoveryConfidence;
+          updates.emailDiscoveredAt = emailGate.emailDiscoveredAt;
+        }
+        if (phone && !row.phone) updates.phone = phone;
+        applyScrapedWebsite(updates, row.website, website, businessName, listingUrl);
+        if (lat !== undefined && lat !== null && !row.lat) updates.lat = lat;
+        if (lng !== undefined && lng !== null && !row.lng) updates.lng = lng;
+        if (isStateLicensed && !row.isStateLicensed) updates.isStateLicensed = isStateLicensed;
+        if (licenseState && !row.licenseState) updates.licenseState = licenseState;
+        if (licenseNumber && !row.licenseNumber) updates.licenseNumber = licenseNumber;
+        if (effectiveSourceLabel) {
+          updates.directoryMostRecentSource = effectiveSourceLabel;
+          updates.directoryMostRecentAt = new Date();
+        }
+
+        const currentSources = (row.sourcesJson as any[]) || [];
+        const sourceAlreadyPresent = currentSources.some((s: any) => s.sourceName === sourceName);
+        if (!sourceAlreadyPresent) {
+          const newSourceCount = (row.sourceCount || 1) + 1;
+          updates.sourceCount = newSourceCount;
+          updates.sourcesJson = [
+            ...currentSources,
+            { sourceName, sourceId: identityKey, lastSeen: new Date().toISOString() },
+          ];
+          updates.corroborationScore = recalculateCorroborationScore(newSourceCount);
+        }
+        // Upgrade this row's key to identity format so the cheap stored-key path works next
+        // time. Only ever touches a row this ingest already matched and is already updating --
+        // this is NOT the bulk backfill, which remains unrun and separately specced.
+        if (row.dedupeKey !== identityKey) updates.dedupeKey = identityKey;
+        updates.updatedAt = new Date();
+
+        await prisma.organizer.update({ where: { id: row.id }, data: updates });
+        return row.id;
+      }
     }
   }
 
@@ -1048,7 +1308,13 @@ export async function getOrCreateScrapedOrganizer(
             listingUrl: effectiveListingUrl ?? null,
             lat: lat ?? null,
             lng: lng ?? null,
-            dedupeKey: generateDedupeKey(businessName, city),
+            // In live mode a new row is born with an identity-format key so the cheap
+            // stored-key path matches it directly; in off/shadow it keeps the legacy name:city
+            // key so lookups and writes can never disagree about the format.
+            dedupeKey:
+              ORGANIZER_IDENTITY_DEDUP_MODE === 'live' && identityKey
+                ? identityKey
+                : generateDedupeKey(businessName, city),
             sourceCount: 1,
             sourcesJson: [{ sourceName, sourceId: googlePlaceId, lastSeen: new Date().toISOString() }],
             corroborationScore: 0.5,

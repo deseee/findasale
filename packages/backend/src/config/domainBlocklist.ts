@@ -90,6 +90,101 @@ export const AGGREGATOR_DOMAINS: ReadonlySet<string> = new Set([
   'yardsales.net', // YardSales.net — same Treasure Listings LLC network, same reasoning as above.
 ]);
 
+/**
+ * NON-IDENTITY HOSTS — website-builder, link-in-bio, CDN and boilerplate hosts.
+ *
+ * Distinct purpose from SOCIAL_DOMAINS / AGGREGATOR_DOMAINS: a domain in THIS set may be a
+ * perfectly legitimate thing to STORE as an organizer website (a real small business really
+ * does live at `myshop.wixsite.com`), but it must never be treated as *business identity* —
+ * i.e. it can never be used as a dedup/merge signal, because thousands of unrelated
+ * businesses share the host. Used by `isNonIdentityHost()` and the organizer identity-key
+ * dedup tier in services/scraper/index.ts.
+ *
+ * DERIVED FROM LIVE PRODUCTION DATA (read-only census, 2026-08-16), not guessed. Method:
+ * ranked all 24,967 distinct registrable domains across the 28,439 organizers with a website
+ * by (row count, distinct normalized business names). Every host below with an inline row/name
+ * count was OBSERVED in that census; the rest are defensive entries for the same host families
+ * (a builder platform we have not scraped yet is still not identity). Observed counts:
+ *   wixsite.com 25 rows/24 names · hub.biz 25/22 · business.site 17/16 · linktr.ee 11/11
+ *   wordpress.com 11/11 · square.site 10/10 · godaddysites.com 9/9 · weebly.com 9/9
+ *   myshopify.com 7/7 · blogspot.com 7/7 · tripod.com 6/3 · squarespace.com 5/5
+ *   example.com 4/4 · webs.com 4/3 · bigcartel.com 3/3 · wix.com 2/2 · webnode.com 2/2
+ *   yolasite.com 2/2 · vercel.app 2/2 · bit.ly 2/2 · mailchi.mp 2/2 · angelfire.com 1/1
+ *   carrd.co 1/1 · company.site 1/1 · netlify.app 1/1 · wa.me 1/1
+ *
+ * The CDN / boilerplate-author entries (googleapis.com, gstatic.com, sentry.io, wixpress.com,
+ * w3.org, schema.org, necolas.github.io) exist because the scrapers demonstrably mine contact
+ * details out of CSS/JS license headers and error-reporting config. The live census found the
+ * matching junk CONTACT EMAILS on thousands of rows — a Sentry DSN address on 205 organizers,
+ * the Google Fonts author `impallari@gmail.com` on 39, the normalize.css author
+ * `micah@micahrich.com` on 27, `user@domain.com` boilerplate on 320. Those addresses are the
+ * reason email is NOT an identity signal at all in the identity-key tier, and these hosts are
+ * blocked here so the same class of artifact can never become one via a website field either.
+ */
+export const NON_IDENTITY_HOSTS: ReadonlySet<string> = new Set([
+  // Site builders / hosted storefronts
+  'wixsite.com', 'wix.com', 'wixpress.com', 'squarespace.com', 'square.site',
+  'weebly.com', 'wordpress.com', 'wordpress.org', 'blogspot.com', 'godaddysites.com',
+  'myftpupload.com', 'business.site', 'sites.google.com', 'webs.com', 'tripod.com',
+  'angelfire.com', 'yolasite.com', 'strikingly.com', 'webnode.com', 'jimdosite.com',
+  'company.site', 'bigcartel.com', 'myshopify.com', 'shopify.com', 'ecwid.com',
+  'notion.site', 'softr.app', 'glideapp.io', 'carrd.co',
+  // Dev/deploy hosts
+  'netlify.app', 'vercel.app', 'github.io', 'pages.dev', 'herokuapp.com',
+  // Link-in-bio / shorteners / campaign hosts
+  'hub.biz', 'linktr.ee', 'bit.ly', 'wa.me', 'mailchi.mp', 'constantcontact.com',
+  'wildapricot.org', 'membershipworks.com',
+  // CDN / boilerplate / telemetry — scraped out of CSS+JS license headers, never a business
+  'googleapis.com', 'fonts.googleapis.com', 'gstatic.com', 'jsdelivr.net', 'unpkg.com',
+  'cloudflare.com', 'sentry.io', 'w3.org', 'schema.org', 'necolas.github.io',
+  // Placeholder / boilerplate
+  'example.com', 'example.org', 'domain.com', 'yourdomain.com',
+]);
+
+/**
+ * Return true when a URL's registrable domain must NOT be used as a business-identity signal
+ * for dedup/merge purposes — i.e. it is a social host, an aggregator/directory, or a
+ * builder/CDN/link-in-bio host shared by many unrelated businesses.
+ *
+ * NOTE this is deliberately BROADER than isBlockedWebsiteDomain(): a wixsite.com URL is a
+ * legitimate website to store but an illegitimate basis on which to merge two organizer rows.
+ * null / empty / unparseable input -> true (fail CLOSED: no domain, no identity). Never throws.
+ */
+export function isNonIdentityHost(url?: string | null): boolean {
+  if (!url || typeof url !== 'string') return true;
+  const trimmed = url.trim();
+  if (!trimmed) return true;
+
+  let reg: string | null = null;
+  try {
+    reg = ep().registrableDomain(trimmed);
+  } catch {
+    reg = null;
+  }
+  const host = extractHost(trimmed);
+  if (!reg && !host) return true;
+
+  let famous: ReadonlySet<string>;
+  try {
+    famous = ep().FAMOUS_UNRELATED_DOMAINS;
+  } catch {
+    famous = new Set<string>();
+  }
+
+  for (const candidate of [reg, host]) {
+    if (!candidate) continue;
+    if (
+      SOCIAL_DOMAINS.has(candidate) ||
+      AGGREGATOR_DOMAINS.has(candidate) ||
+      NON_IDENTITY_HOSTS.has(candidate) ||
+      famous.has(candidate)
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
 // ---------------------------------------------------------------------------
 // Lazy bridge to emailProvenance (breaks the circular-init hazard).
 // ---------------------------------------------------------------------------

@@ -22,6 +22,14 @@ import { prisma } from '../lib/prisma';
 import { computeCheapestForOrigin, EBAY_SHIPPING_FVF_RATE, ShippingHardBlockError } from './ebayRateEstimateService';
 import { refreshEbayAccessToken } from './ebayHttp';
 
+// roundUpToBucket + applyCharmPricing moved to utils/shippingPriceMath.ts (2026-08-16)
+// when charm pricing was extended to native-checkout shipping, so the native path no
+// longer has to import shared arithmetic out of an eBay-specific service. Bodies are
+// unchanged; re-exported here so every existing import of this module (and the jest mock
+// of it in __tests__/ebayShippingResolver.standardEnvelope.test.ts) is unaffected.
+import { roundUpToBucket, applyCharmPricing } from '../utils/shippingPriceMath';
+export { roundUpToBucket, applyCharmPricing };
+
 // In-process cache: `${organizerId}:${flatRateStr}` → eBay fulfillmentPolicyId
 const policyCache = new Map<string, string>();
 
@@ -48,39 +56,6 @@ const ebayUserHeaders = (accessToken: string): Record<string, string> => ({
  */
 export function computeFvfFlatRate(estimatedRate: number): number {
   return Math.ceil((estimatedRate / (1 - EBAY_SHIPPING_FVF_RATE)) * 100) / 100;
-}
-
-/**
- * Round a rate UP to the next bounded-ladder bucket so the policy set stays small and
- * reusable: $0.50 steps <=$15, $1 <=$40, $2.50 <=$100, $5 above. Round UP so the seller
- * is never short; overage <= one bucket width.
- */
-export function roundUpToBucket(rate: number): number {
-  let step: number;
-  if (rate <= 15) step = 0.5;
-  else if (rate <= 40) step = 1;
-  else if (rate <= 100) step = 2.5;
-  else step = 5;
-  const bucketed = Math.ceil((rate - 1e-9) / step) * step;
-  return Math.round(bucketed * 100) / 100;
-}
-
-/**
- * Charm-price a bucketed rate (Patrick, 2026-08-14): $10.00 -> $9.99, $14.00 -> $13.99.
- * Subtracts one cent from the already-bucketed rate. Applied ONLY at the buyer-facing
- * FLAT-RATE policy price call sites (ensureFvfFlatRatePolicy, computeNamedWeightTierRate
- * / ensureNamedWeightTierPolicy, and their preview twin in ebayShippingResolver.ts's
- * fvfFlat()) -- deliberately NOT baked into roundUpToBucket() itself, which is also
- * shared by ebayCalculatedPolicyService.ts's computeCalculatedWithHandling (an internal
- * bucketedRate used only to back out a handling-fee markup on a CALCULATED policy, never
- * shown to the buyer as a standalone charge) and nativeShippingSuggestionService.ts's
- * native-checkout price suggestion (a distinct, non-"flat rate policy" feature, out of
- * scope for this request). Note this trades away roundUpToBucket's "seller never short"
- * guarantee by exactly $0.01 -- an intentional, Patrick-approved tradeoff for charm
- * pricing, not an oversight.
- */
-export function applyCharmPricing(bucketedRate: number): number {
-  return Math.round((bucketedRate - 0.01) * 100) / 100;
 }
 
 /**

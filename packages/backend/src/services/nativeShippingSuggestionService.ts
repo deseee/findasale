@@ -5,11 +5,18 @@
  * of their real carrier cost with zero visibility.
  *
  * Reuses the SAME cheapest-carrier rate engine ADR-103 built for eBay
- * (estimateCheapestRate/computeCheapestForOrigin in ebayRateEstimateService.ts) and
- * the SAME bucket-rounding helper (roundUpToBucket in ebayFlatRatePolicyService.ts,
- * already exported -- no change needed there). The only thing genuinely different
- * from the eBay flat-rate pipeline is the gross-up rate: FindA.Sale's own platform
- * fee, NOT eBay's 13.6% FVF.
+ * (estimateCheapestRate/computeCheapestForOrigin in ebayRateEstimateService.ts) and the
+ * SAME price-shaping helpers (roundUpToBucket + applyCharmPricing, both in
+ * utils/shippingPriceMath.ts -- one implementation, imported by the eBay flat-rate path
+ * and this one alike). The only thing genuinely different from the eBay flat-rate
+ * pipeline is the gross-up rate: FindA.Sale's own platform fee, NOT eBay's 13.6% FVF.
+ *
+ * Charm pricing (Patrick, 2026-08-16): the final suggested price is charm-priced the same
+ * way eBay flat-rate policy prices already are ($10.00 -> $9.99), so a buyer never sees a
+ * FindA.Sale shipping charge shaped differently from the same organizer's eBay one. This
+ * closes the parity gap ADR-106 deliberately left open pending Patrick's call. It costs
+ * the organizer exactly $0.01 against the "never be short" gross-up -- the identical,
+ * already-accepted tradeoff documented on applyCharmPricing itself.
  *
  * Rate source (CLAUDE.md §0·EF -- confirmed in code, not assumed): getPlatformFeeRate
  * (packages/backend/src/utils/feeCalculator.ts:16-24) is NOT a flat 10% across all
@@ -30,7 +37,7 @@
 
 import { prisma } from '../lib/prisma';
 import { computeCheapestForOrigin, ShippingHardBlockError, ZoneKey } from './ebayRateEstimateService';
-import { roundUpToBucket } from './ebayFlatRatePolicyService';
+import { roundUpToBucket, applyCharmPricing } from '../utils/shippingPriceMath';
 import { getPlatformFeeRate, SubscriptionTier } from '../utils/feeCalculator';
 
 export { ShippingHardBlockError };
@@ -72,9 +79,16 @@ function grossUpForPlatformFee(estimatedRate: number, feeRate: number): number {
 /**
  * Compute a suggested native-checkout shipping price for an item: same real-carrier
  * cheapest-rate engine ADR-103 built for eBay, grossed up for FindA.Sale's OWN
- * platform fee (not eBay's FVF), then rounded UP into the same bounded bucket ladder
- * eBay flat-rate policies use, so the number a real organizer sees is priced the same
- * "never be short" way everywhere else in this codebase.
+ * platform fee (not eBay's FVF), rounded UP into the same bounded bucket ladder eBay
+ * flat-rate policies use, then charm-priced with the same shared helper, so the number a
+ * real organizer sees is shaped exactly like every other shipping price in this codebase.
+ *
+ * This is the ONE function behind both native-checkout shipping surfaces -- the
+ * organizer-facing suggestion (GET /api/items/:id/suggested-shipping-price ->
+ * getSuggestedShippingPriceHandler) and ADR-106's auto-set of Item.shippingPrice
+ * (computeAutoShippingPatch in itemController.ts). Preview and applied value therefore
+ * cannot disagree by a cent: there is no second pricing expression to drift. Keep it that
+ * way -- never inline this math at a call site.
  *
  * Throws ShippingHardBlockError (same contract as computeCheapestForOrigin/
  * estimateCheapestRate) when the item exceeds the absolute carrier max for every
@@ -105,7 +119,7 @@ export async function suggestNativeShippingPrice(input: {
     resolveEffectivePlatformFeeRate(input.subscriptionTier ?? null),
   ]);
 
-  const suggestedPrice = roundUpToBucket(grossUpForPlatformFee(cheapest.rate, feeRate));
+  const suggestedPrice = applyCharmPricing(roundUpToBucket(grossUpForPlatformFee(cheapest.rate, feeRate)));
 
   return {
     suggestedPrice,
