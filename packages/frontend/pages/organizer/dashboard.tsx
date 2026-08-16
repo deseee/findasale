@@ -114,6 +114,10 @@ const OrganizerDashboard = () => {
   const [cloningId, setCloningId] = useState<string | null>(null);
   const [isSimpleMode, setIsSimpleMode] = useState(false);
   const [showOnboardingModal, setShowOnboardingModal] = useState(false);
+  // weekly-audit-2026-08-15 LOW fix: was previously read inline in the render body
+  // (typeof window !== 'undefined' && localStorage.getItem(...)); moved to state so
+  // it's only ever read once, client-side, after mount.
+  const [onboardingDismissedInStorage, setOnboardingDismissedInStorage] = useState(false);
   const [showTeamsOnboardingWizard, setShowTeamsOnboardingWizard] = useState(false);
   const [isMobileView, setIsMobileView] = useState(false);
   const [showUpgradeCTA, setShowUpgradeCTA] = useState(true);
@@ -195,7 +199,7 @@ const OrganizerDashboard = () => {
   // /api/organizer/hubs is authenticate-only (packages/backend/src/routes/hubs.ts) --
   // hub *creation* is PRO-gated, hub *listing* is not gated by tier at all, so a
   // PRO-tier hub owner must still see their existing hub here.
-  const { data: hubsData } = useQuery<{
+  const { data: hubsData, isError: hubsDataError } = useQuery<{
     hubs: Array<{ id: string; name: string; boothCount: number; awaitingConfirmationCount?: number; isActive?: boolean }>;
   }>({
     queryKey: ['organizer-hubs', user?.id],
@@ -223,7 +227,7 @@ const OrganizerDashboard = () => {
   const awaitingHub = hubs.find((hub) => (hub.awaitingConfirmationCount ?? 0) > 0);
 
   // Fetch organizer analytics (total items, revenue)
-  const { data: analyticsData } = useQuery({
+  const { data: analyticsData, isError: analyticsDataError } = useQuery({
     queryKey: ['organizer-analytics', user?.id],
     queryFn: async () => {
       const response = await api.get('/organizers/me/analytics');
@@ -234,7 +238,7 @@ const OrganizerDashboard = () => {
 
 
   // Phase 22: Fetch organizer tier + progress data
-  const { data: orgProfile } = useQuery({
+  const { data: orgProfile, isError: orgProfileError } = useQuery({
     queryKey: ['organizer-me'],
     queryFn: async () => {
       const response = await api.get('/organizers/me');
@@ -256,7 +260,7 @@ const OrganizerDashboard = () => {
   });
 
   // Fetch organizer storefront slug for public storefront link
-  const { data: storefrontSlug } = useQuery({
+  const { data: storefrontSlug, isError: storefrontSlugError } = useQuery({
     queryKey: ['organizer-storefront-slug'],
     queryFn: async () => {
       const response = await api.get('/brand-kit/organizers/me');
@@ -267,7 +271,7 @@ const OrganizerDashboard = () => {
   });
 
   // Fetch earnings to check for cash fee balance
-  const { data: earnings } = useQuery({
+  const { data: earnings, isError: earningsError } = useQuery({
     queryKey: ['earnings-breakdown'],
     queryFn: async () => {
       const response = await api.get('/stripe/earnings');
@@ -281,7 +285,7 @@ const OrganizerDashboard = () => {
   });
 
   // #24: Fetch active hold count for dashboard badge
-  const { data: holdCountData } = useQuery({
+  const { data: holdCountData, isError: holdCountError } = useQuery({
     queryKey: ['organizer-hold-count', user?.id],
     queryFn: async () => {
       const response = await api.get('/reservations/organizer/count');
@@ -292,7 +296,7 @@ const OrganizerDashboard = () => {
   });
 
   // Fetch consolidated dashboard stats (revenue, items, active sale metrics)
-  const { data: statsData } = useQuery({
+  const { data: statsData, isError: statsDataError } = useQuery({
     queryKey: ['organizer-stats', user?.id],
     queryFn: async () => {
       const response = await api.get('/organizers/stats');
@@ -335,6 +339,12 @@ const OrganizerDashboard = () => {
     if (simpleModeSaved === 'true') {
       setIsSimpleMode(true);
     }
+  }, []);
+
+  // Read onboarding-modal-dismissed preference from localStorage (weekly-audit-2026-08-15 LOW fix)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    setOnboardingDismissedInStorage(!!localStorage.getItem('onboardingModalDismissed'));
   }, []);
 
   // Detect mobile view (md breakpoint is 768px)
@@ -431,7 +441,7 @@ const OrganizerDashboard = () => {
   };
 
   // Phase 31: Fetch organizer tier rewards (tier, benefits, progress)
-  const { data: tierData } = useQuery({
+  const { data: tierData, isError: tierDataError } = useQuery({
     queryKey: ['my-tier', user?.id],
     queryFn: async () => {
       const response = await api.get('/tiers/mine');
@@ -475,7 +485,7 @@ const OrganizerDashboard = () => {
   })() : null;
 
   // Feature #404: OG Buyer count for active sale -- organizer dashboard metric
-  const { data: ogBuyerData } = useQuery({
+  const { data: ogBuyerData, isError: ogBuyerDataError } = useQuery({
     queryKey: ['og-buyer-count', _activeSale?.id],
     queryFn: async () => {
       const response = await api.get(`/sales/${_activeSale!.id}/og-buyer-count`);
@@ -492,6 +502,15 @@ const OrganizerDashboard = () => {
   }
 
   const isLoading = !isClient || authLoading || salesLoading;
+
+  // weekly-audit-2026-08-15 MEDIUM fix: these 9 secondary stat queries had no error
+  // handling at all -- a real backend failure was indistinguishable from "still
+  // loading" (both just showed '--'/0 forever). Surface a single dismissible banner
+  // instead of threading per-widget error UI through every stat card.
+  const anyStatsError = !!(
+    hubsDataError || analyticsDataError || orgProfileError || storefrontSlugError ||
+    earningsError || holdCountError || statsDataError || tierDataError || ogBuyerDataError
+  );
 
   // Determine dashboard state based on sales
   const getDashboardState = (): DashboardState => {
@@ -589,7 +608,7 @@ const OrganizerDashboard = () => {
       </Head>
 
       {/* Onboarding Modal: 3-screen intro for new organizers */}
-      {showOnboardingModal && !isLoading && dashboardState === 'new' && !(typeof window !== 'undefined' && localStorage.getItem('onboardingModalDismissed')) && (
+      {showOnboardingModal && !isLoading && dashboardState === 'new' && !onboardingDismissedInStorage && (
         <OrganizerOnboardingModal onDismiss={() => setShowOnboardingModal(false)} />
       )}
 
@@ -663,6 +682,34 @@ const OrganizerDashboard = () => {
         )}
         {!salesError && (
         <div className="max-w-6xl mx-auto px-4 py-4">
+          {/* weekly-audit-2026-08-15 MEDIUM fix: secondary stat widgets (hubs, analytics,
+              profile, storefront, earnings, hold count, stats, tier, OG buyer count) had
+              no error surfacing at all -- a real backend failure looked identical to "still
+              loading" (both just showed '--'/0 forever). One dismissible banner instead of
+              threading per-widget error UI through every stat card (D-009 compliance). */}
+          {anyStatsError && (
+            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg p-3 mb-3 flex items-center justify-between gap-3">
+              <p className="text-sm text-amber-800 dark:text-amber-200">
+                Some dashboard stats couldn't load right now. The numbers below may be incomplete or missing.
+              </p>
+              <button
+                onClick={() => {
+                  queryClient.invalidateQueries({ queryKey: ['organizer-hubs', user?.id] });
+                  queryClient.invalidateQueries({ queryKey: ['organizer-analytics', user?.id] });
+                  queryClient.invalidateQueries({ queryKey: ['organizer-me'] });
+                  queryClient.invalidateQueries({ queryKey: ['organizer-storefront-slug'] });
+                  queryClient.invalidateQueries({ queryKey: ['earnings-breakdown'] });
+                  queryClient.invalidateQueries({ queryKey: ['organizer-hold-count', user?.id] });
+                  queryClient.invalidateQueries({ queryKey: ['organizer-stats', user?.id] });
+                  queryClient.invalidateQueries({ queryKey: ['my-tier', user?.id] });
+                  queryClient.invalidateQueries({ queryKey: ['og-buyer-count', _activeSale?.id] });
+                }}
+                className="text-sm font-semibold text-amber-800 dark:text-amber-200 underline whitespace-nowrap"
+              >
+                Try Again
+              </button>
+            </div>
+          )}
           {/* Header */}
           <div className="mb-2">
             <h1 className="text-lg font-bold text-warm-900 dark:text-warm-100">Welcome, {user?.name?.split(' ')[0] || user?.name || 'there'}</h1>

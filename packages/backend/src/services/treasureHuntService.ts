@@ -80,6 +80,7 @@ Guidelines:
 - Clue: 1-2 sentences, fun and mysterious, written for secondary-sale shoppers
 - Category: one of the categories listed above
 - Keywords: 3-5 matching terms/variations (e.g., for books: ["book", "novel", "paperback", "hardcover", "volume"])
+- Do NOT use em dashes (—) or en dashes (–) anywhere in the clue. Use a period, comma, or "and" instead.
 
 Example output:
 {
@@ -117,7 +118,13 @@ Example output:
   await recordAnthropicUsageOrEstimate('anthropic:treasure_hunt', ANTHROPIC_MODEL, response.data.usage, estimatedTokens + responseTokens);
   await trackAICall();
   const raw = content.replace(/```json\n?|\n?```/g, '').trim();
-    return JSON.parse(raw) as GeneratedClue;
+    const parsed = JSON.parse(raw) as GeneratedClue;
+    // D-011 safety net: strip em/en dashes even if the model ignores the prompt
+    // instruction above (weekly-audit-2026-08-15 found a live em dash in production).
+    if (parsed?.clue) {
+      parsed.clue = parsed.clue.replace(/[—–]/g, ', ').replace(/,\s*,/g, ',').replace(/\s{2,}/g, ' ').trim();
+    }
+    return parsed;
   } catch (err: any) {
     // Anthropic call (or JSON parse) failed — e.g. out of credit (HTTP 400).
     // Degrade to the shared fallback clue so shoppers never see a 500.
