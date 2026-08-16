@@ -218,6 +218,19 @@ export class ShippingHardBlockError extends Error {
 //     every z1-z6 cell already sat below $32.11). It is retained, not deleted, so the row
 //     is in place the moment a real FedEx/UPS zone determination lands.
 //
+//   UPS HALF OF THAT BULLET IS RESOLVED, same day, 2026-08-16 (later pass). Patrick
+//     downloaded UPS's own zone chart for origin ZIP3 490 from ups.com (490.xls) and it
+//     is parsed directly this session: dest ZIP3 982 -> UPS Ground zone **007**. The
+//     49079 -> 98282 lane is UPS zone 7. So $37.00 is a zone-7 price, not an
+//     upper-bound-only observation, and the min(30lb cell, $37.00) cap it forced on
+//     z1-z6 is gone -- RATE_TABLE_UPS is now rebuilt per-pound from UPS's published
+//     daily rate card with $37.00 pinned at z7 @ billable 23lb. See that table's header
+//     for the full method, the discount finding (12.2% off DAILY, not the 48%-off-RETAIL
+//     eBay advertises), and the monotonicity counts. UPS also publishes NO zone 1 from
+//     this origin (chart's Ground column is 002-008 only) -- same as FedEx.
+//     The FEDEX half of the bullet above is UNCHANGED and still fully unverified: no
+//     FedEx zone chart was obtained, only UPS's. Do not read the UPS resolution across.
+//
 // RETRACTION ─ "UPS 20lb x z8 = $41.72 SUSPECTED STALE (highest priority)", filed by the
 // earlier pass today and carried into ADR-103 §7, is WITHDRAWN. It rested entirely on the
 // misfiled zone: $37.00 looked like an impossible z8 price below the $41.72 z8 cell at a
@@ -290,139 +303,214 @@ const DIM_DIVISOR_FEDEX = 139;
 
 export const USPS_RATE_EFFECTIVE_DATE = '2026-08-11';
 export const USPS_RATE_SOURCE = "eBay's own live shipping calculator API (POST /shp/calc/api/shipping/services), Patrick's real seller account, USPS Ground Advantage service, origin ZIP 49079, every maxLb tier x every real zone (z1-z8) individually live-quoted, 2026-08-10";
-export const UPS_RATE_EFFECTIVE_DATE = '2026-08-11';
-export const UPS_RATE_SOURCE = "eBay's own live shipping calculator API (POST /shp/calc/api/shipping/services), Patrick's real seller account, UPS Ground service, every maxLb tier x every real zone (z1-z8) individually live-quoted, 2026-08-10";
+export const UPS_RATE_EFFECTIVE_DATE = '2026-08-16';
+export const UPS_RATE_SOURCE = "UPS 2026 Daily Rate and Service Guide (daily-rates-us-en.xlsx, sheet 'UPS Ground', 1-150lb x zones 2-8) + UPS Ground zone chart for origin ZIP3 490 (490.xls) -- both primary UPS documents, downloaded from ups.com 2026-08-16 -- multiplied by the per-zone eBay/published-daily discount ratio observed in the 2026-08-10/11 live eBay-calculator quotes (POST /shp/calc/api/shipping/services, Patrick's real seller account, origin 49079). Verified out-of-sample at ONE point: z7 @ 23lb, real $37.00 vs modelled $37.41. See RATE_TABLE_UPS header for what is and is not verified.";
 export const FEDEX_RATE_EFFECTIVE_DATE = '2026-08-11';
 export const FEDEX_RATE_SOURCE = "eBay's own live shipping calculator API (POST /shp/calc/api/shipping/services), Patrick's real seller account, FedEx Ground/Home Delivery service specifically (NOT the cheaper FedEx Ground Economy tier), every maxLb tier x every real zone (z1-z8) individually live-quoted, 2026-08-10";
 
-// UPS: real-anchored 2026-07-05, z8 CORRECTED 2026-08-10 (ADR-103 Phase 1) — pulled
-// directly from eBay's own public shipping calculator (ebay.com/shp/calc/rates) using
-// Patrick's real connected eBay seller account, so these are eBay's actual negotiated
-// UPS Ground rates, not a third-party reseller estimate. 1lb anchors per zone (origin
-// 49503): z12 $7.22, z34 $7.23, z5 $8.62, z6 $8.62 (eBay returned an identical real
-// quote for z5/z6 test routes — real carrier zone charts don't split evenly at our
-// z5/z6 mile boundary), z7 $10.19.
+// ── RATE_TABLE_UPS ─ FULLY REBUILT 2026-08-16 FROM UPS'S OWN PUBLISHED RATE CARD ─────
 //
-// ZONE MODEL CHANGED 2026-08-10 (ADR-103 Phase 1): z1/z2 currently share the old z12
-// value, z3/z4 currently share the old z34 value — not yet independently re-verified
-// at each real band (Phase 2 follow-up). Only z8 corrected this pass.
+// PRIMARY SOURCES (both downloaded from ups.com by Patrick on 2026-08-16, both parsed
+// directly this session -- these are the first UPS primary sources this file has ever
+// had; every prior UPS number came from eBay's calculator alone):
+//   1. UPS Ground zone chart for origin ZIP3 490 (490.xls -- xlsx despite the
+//      extension), "For shipments originating in ZIP Codes 490-01 to 490-99", 954
+//      destination-ZIP3 rows, one zone column per service. Artifact's origin 49079 is
+//      in that range.
+//   2. UPS 2026 Daily Rate and Service Guide (daily-rates-us-en.xlsx), sheet
+//      "UPS Ground": one row per pound, 1-150lb, columns Zones 2 3 4 5 6 7 8 (+44/45/46
+//      for HI/AK/PR). 150 weight rows x 7 zones, verified complete -- no gaps.
+// Both files now live in claude_docs/architecture/ alongside the ADR that cites them:
+//   ADR-103-source-ups-zone-chart-origin-490.xlsx  (was 490.xls)
+//   ADR-103-source-ups-2026-daily-rates.xlsx      (was daily-rates-us-en.xlsx)
+// claude_docs/ is gitignored and this repo is public, so they are LOCAL reference only --
+// free, public, re-downloadable UPS documents, deliberately not committed. See ADR-103 §9.
 //
-// z8 CORRECTED 2026-08-10 (ADR-103 Phase 1, Patrick-directed, "use zip 98357"): live
-// eBay-calculator quote, real seller account, origin 49079 -> destination 98357 (Neah
-// Bay WA, 1908mi). Real quote: 42lb/18x18x18in package = $72.20 UPS Ground (vs stale
-// table's $61.85 at the 50lb tier, a 1.1673x ratio). That single anchor was scaled
-// across the rest of the z8 column at the time -- an approximation.
+// FINDING 1 -- THE ZONE. 49079 -> 98282 (Camano Island WA) is UPS Ground **zone 7**.
+// Read straight off the chart: dest ZIP3 982 -> Ground "007". This CLOSES the
+// "which zone does UPS assign to that lane" flag that had been open since the 22.5lb
+// pass earlier the same day (assets.ups.com returned zero bytes from this workspace;
+// the file therefore refused to place the $37.00 quote in any zone column and instead
+// capped z1-z6 with it). It is no longer unverified: it is z7, from UPS's own chart.
+// Other lanes read off the same chart this session (all direct lookups, not inferred):
+//   98357 Neah Bay WA -> z8 · 49503 Grand Rapids MI -> z2 · 90210 -> z8 · 10001 -> z5
+//   33101 -> z7 · 30301 Atlanta -> z4 (NOT z5 -- ZIP3 300 and 302 are z5, 301 and 303
+//   are z4; the Atlanta metro straddles the band boundary).
+// **UPS publishes NO zone 1 from origin 490.** The chart's Ground column contains only
+// 002-008 (plus 045 / literal HI-AK ZIPs). Same as FedEx, which has no zone 1 at all.
+// Programmatic check of the whole chart: min Ground zone = 2, count of zone-1 rows = 0.
 //
-// z8 FULLY RE-ANCHORED 2026-08-11 (same-session continuation, Patrick-directed: "use
-// the api call like it was saying to run your tests"): all 15 maxLb rows at z8 are now
-// real, individually live-quoted (POST /shp/calc/api/shipping/services, direct call
-// from an authenticated session, same origin/destination anchor 49079->98357). z1/z5/z6/z7
-// separately cross-checked this session with zero discrepancies -- not touched here.
-// [ORIGINAL, NOW SUPERSEDED, SCALING NOTE:] Every z8 row scaled by that same
-// real/stale ratio (single-anchor + curve-shape scaling, this file's established
-// method) — not independently re-verified at every weight tier; fuller re-anchor is
-// Phase 2 (ADR-103) follow-up. See claude_docs/architecture/ADR-103-shipping-rate-full-reanchor.md.
+// FINDING 2 -- THE DISCOUNT, AND WHY "48% OFF" IS THE WRONG NUMBER TO REASON FROM.
+// Patrick's real eBay quote for the 48x16x4 / 22lb 4oz guitar box, 49079 -> 98282, was
+// UPS Ground **$37.00**. Billable weight 23lb (UPS rounds up to the whole pound), lane
+// zone 7. UPS published DAILY z7 @ 23lb = $42.14. So eBay pays **87.80% of published
+// daily -- a 12.2% discount**, NOT the ~48% eBay's UI advertises. That 48% is measured
+// off UPS *retail*, a third and much higher tariff. Any future anchor quoted through eBay
+// must be compared against DAILY, not retail, or it will look far better than it is.
+// (The retail figure for this package, $71.72, was reported to this session second-hand
+// and is NOT verified here -- the downloaded rate guide contains daily rate sheets only,
+// no retail sheet. The 12.2%-off-DAILY number IS verified: $37.00 / $42.14, both sides
+// primary-sourced.)
 //
-// Remaining (non-z8) weight tiers scaled from the prior curve shape by the real/prior
-// ratio observed at 1lb per zone.
+// FINDING 3 -- THE DISCOUNT IS NOT ONE NUMBER. It moves hard with weight, and it is not
+// the same across zones. Measured, not assumed: the engine's z1/z2 column is the ONE
+// column whose destination and UPS zone are both known end-to-end (origin 49079 ->
+// 49503, live-quoted at 11 weights 2026-08-10, and 49503 is UPS zone 2 per Finding 1).
+// Its eBay/published-daily ratio runs:
+//   1lb 0.602 · 2lb 0.567 · 3lb 0.646 · 5lb 0.641 · 7lb 0.656 · 10lb 0.708 · 14lb 0.772
+//   · 20lb 0.824 · 30lb 0.883 · 50lb 0.859
+// i.e. ~40% off at 1lb narrowing to ~12-14% off at 30-50lb. A single flat factor is
+// therefore wrong by construction: applying the one verified 0.878 z7/23lb factor to the
+// whole table would price 1lb/z2 at $10.53 against a real observed $7.22 (+46%), and
+// 1lb/z8 at $13.20 against a real observed $14.33 (-8%, i.e. SHORT). It was not used.
 //
-// PARTIAL RE-ANCHOR 2026-08-10, same session (Patrick: "pushed, all the gaps! stop
-// avoiding work") -- the maxLb:10 and maxLb:30 rows are now real-quoted at 4 of 8 zones
-// each (z1, z3, z5, z7 -- z2=z1 and z4=z3 per the CONFIRMED real UPS zone grouping this
-// session already established for the high-weight tables above; z6/z8 left unchanged,
-// not independently tested at these two weight tiers). Finding: the prior (scaled)
-// 10lb/30lb cells UNDERPRICED versus the real quote at every zone tested -- e.g. z3/30lb:
-// real $26.67 vs prior scaled $17.33 (a 54% underprice) -- the OPPOSITE direction from
-// FedEx's table (see RATE_TABLE_FEDEX's comment), and the more dangerous direction for
-// organizers (a label that costs more than what was quoted). Other weight tiers
-// (0.25-7lb, 14lb, 20lb, 50lb, 70lb) and zones z6/z8 remain UNVERIFIED at this pass --
-// see PENDING_LIVE_VERIFICATION_CELLS below. A full per-tier, per-zone re-anchor is a
-// distinct, much larger undertaking than this session's other gap-closures -- flagged
-// to Patrick as needing a dedicated future pass (ideally scripted Chrome automation)
-// rather than attempted piecemeal here.
-// 2026-08-10, later same session (Patrick: "use the ebay shipping calculator ...
-// that's what it's for" -- correcting two earlier missteps in this same pass: first
-// probing the calculator by trial and error to *find* weight breaks instead of
-// researching the real carrier weight-break structure first, then separately trying to
-// prioritize which tiers to re-test by real-inventory weight distribution instead of by
-// correctness). Research first established the real structural breakpoints (USPS
-// Ground Advantage: distinct real rate at each of the 4/8/12/15.999oz ounce tiers,
-// confirmed DIRECTLY on eBay's calculator -- not assumed from USPS's public July-12
-// commercial-file consolidation, which eBay's own negotiated rate does NOT appear to
-// follow, since a fresh 4oz vs 15.999oz test at z1 returned different prices, $5.24 vs
-// $6.52; UPS Ground and FedEx Ground/Home Delivery: FLAT price for the entire 0-1lb
-// range -- confirmed identical across 4oz/8oz/12oz/15.999oz/1lb at z1, cross-verified 3
-// separate ways (fast JS-driven form fill, slow native-click form fill, and two
-// different box shapes including one sized specifically to disqualify from USPS Cubic
-// eligibility) -- all returned the exact same $7.22 UPS / $14.07 FedEx. This means every
-// pre-existing sub-1lb UPS/FedEx cell in this table was FABRICATED interpolation between
-// a single 1lb anchor and nothing -- there is no real sub-1lb variation to interpolate.
+// HOW EACH CELL IS BUILT (state this plainly rather than implying more certainty than
+// exists):
+//   cell(zone, W) = publishedUpsGroundDaily(zone, W) x r(zone, W)
+//   - published... is the primary-source per-pound value, W = 1..70, read from source 2.
+//   - r(zone, W) is that column's OWN observed eBay/published ratio, piecewise-linear in
+//     weight between the real quoted anchor weights (1,2,3,5,7,10,14,20,30,50lb), held
+//     flat at the 50lb ratio above 50lb.
+//   Consequence, and the reason this shape was chosen: at every anchor weight the cell
+//   reproduces the existing live-quoted eBay value EXACTLY. This pass therefore does not
+//   re-price any cell that was already a real quote (one deliberate exception, the 70lb
+//   row -- see its inline comment). What it adds is the missing weights in between,
+//   using the real published per-pound curve as the interpolant instead of a straight
+//   line, because that curve is genuinely irregular: z7 per-pound increments in the
+//   20-30lb band alone run from $0.26 (29->30lb) to $2.40 (24->25lb).
 //
-// z1 (origin 49079 -> Grand Rapids 49503) is now live-quoted at every existing maxLb row
-// through 30lb for all 3 carriers -- see PENDING_LIVE_VERIFICATION_CELLS below for
-// exactly which (carrier, maxLb, zone) cells this closes. Box dims for each weight tier
-// were sized so length*width*height/139 (the dimensional-weight formula this file uses)
-// stays below the tier's actual weight -- verified by cross-checking that changing box
-// shape at a fixed weight (2lb/3lb, two very different box shapes) produced IDENTICAL
-// prices, confirming billable weight was actual weight, not dimensional weight, in
-// every quote used here.
+// THE ONE INDEPENDENT CHECK THIS METHOD GETS, AND IT PASSES. z7 @ 23lb is NOT an anchor
+// weight -- it is purely interpolated. The model puts it at $37.41. The real eBay quote
+// is $37.00. **1.1% high, on the safe side.** That is the only out-of-sample validation
+// available and it is a single point; it is not proof the surface is right everywhere.
+// The cell itself is pinned to the real $37.00, not the modelled $37.41.
 //
-// IMPORTANT, non-obvious finding: eBay's real negotiated z1 rate curve is NOT smooth or
-// monotonically increasing with weight -- USPS Ground Advantage at z1 actually DIPS from
-// 2lb ($6.68) to 3lb ($5.80), then stays FLAT 3lb-5lb ($5.80 both), and FedEx
-// Ground/Home Delivery is flat at $14.07 from 4oz all the way through 10lb before finally
-// increasing at 14lb ($14.63). This was cross-verified enough times (different box
-// shapes, different form-fill methods) to trust it as genuine eBay pricing rather than a
-// testing artifact -- it likely reflects real irregularities in eBay's own tiered
-// negotiated-discount schedule, not a smooth carrier rate card. This is exactly why this
-// file's prior "single real anchor + assumed curve-shape scaling" methodology could not
-// have produced a correct table even in principle -- the real curve has genuine
-// plateaus and dips that no smooth interpolation would reproduce. Every remaining
-// zone/tier this file scales rather than live-quotes should be read with that caveat.
+// BRACKET ERROR IS NOW ZERO BY CONSTRUCTION, which was the point. rateFromTable picks
+// the first row with lb <= maxLb, so a bracket charges its TOP weight's price to every
+// package inside it. With per-pound rows, bracket (W-1, W] contains exactly one billable
+// pound, W -- which is precisely how UPS bills (round up to the next whole pound). The
+// old bracket set admitted, worst case within each bracket: (3,5] +10.7% · (5,7] +8.7% ·
+// (7,10] +9.8% · (10,14] +17.7% · (14,20] +26.5% · (22.5,30] +31.3% · (30,50] +46.0% ·
+// (50,70] +96.7%. All of those are now 0.0%. (The "20->30 chasm" was in fact the
+// third-worst of the eight, not the worst -- (50,70] and (30,50] were worse.)
 //
-// The pre-existing FedEx z1 1lb anchor ($17.59, sourced 2026-07-05) was WRONG -- this
-// pass's real quote at the identical origin/destination/service is $14.07, a ~25%
-// difference. Superseded; the old figure was either stale (rate changed since
-// 2026-07-05) or was never actually tested at this origin (the RATE_TABLE_UPS header
-// comment two sections up notes its own 1lb anchors used origin 49503, not 49079 --
-// raising the possibility the original FedEx anchor did too, despite this file's
-// canonical origin being 49079 everywhere else). Not resolved which; the new number is
-// real-quoted at the canonical origin and supersedes the old one regardless of cause.
+// WHAT HAPPENED TO ZONE 1. There is no published UPS zone 1 from this origin, so there
+// is nothing to build a z1 column from. z1 is set identical to z2 and is a strict upper
+// bound on any conceivable zone-1 price. It is also unreachable in practice, confirmed
+// by trace rather than assumed: the only caller, computeCheapestForOrigin, gets its zone
+// from resolveCoverageZone, which returns the MAX zone over the CONUS corner set, and
+// ZIP1_MAX_ZONE contains no z1 entry. Separately, note the engine's "z1" column was
+// never a zone-1 column: it was live-quoted 49079 -> 49503, which the UPS chart rates
+// zone 2. It is now labelled honestly as a zone-2-sourced column.
 //
-// 50lb and 70lb z1 were deliberately left untouched this pass -- see
-// verifiedThisSession's comment above for why (suspected oversize/AHS surcharge
-// contamination in the larger test box needed to keep dim-weight below actual weight at
-// those tiers).
+// MONOTONICITY. Enforced in BOTH directions and checked programmatically. The published
+// source table itself has 0 violations over 1-70lb x z2-z8 (checked, not assumed). The
+// raw model produced 0 zone inversions but 34 weight inversions -- an artifact of a
+// falling ratio meeting a nearly-flat published step (e.g. published z2 31lb $24.66 ->
+// 32lb $24.67, +$0.01, against a ratio drifting down toward the 50lb value). Closed with
+// a monotone closure that can only ever RAISE a cell, never lower it (never-be-short),
+// iterated to a fixed point. Result: 0 zone violations, 0 weight violations. The closure
+// touched no anchor cell except five at 50lb, each raised by <= $0.08 (<=0.3%).
+// This is the failure the previous UPS attempt hit -- scaling a whole column produced z8
+// cheaper than z7 everywhere. It cannot recur silently now: the check is stated here with
+// its counts, and any future edit should re-run it.
 //
-// RETRACTED 2026-08-16 (same day it was filed) -- "20lb x z8 cell ($41.72) SUSPECTED STALE".
-// That flag was raised because the real 22.25lb quote of $37.00 appeared to sit 12.8% BELOW
-// this z8 cell at a HIGHER weight, which would be impossible. It was an artifact of filing
-// that quote under the wrong zone: USPS's own zone chart rates the 49079 -> 98282 lane
-// ZONE 7, not zone 8 (verified live, see the 22.5lb-bracket block above RATE_TABLE). Read at
-// zone 7 this table is entirely coherent -- z7 runs 20lb $34.37 -> 22.25lb $37.00 -> 30lb
-// $45.43, strictly increasing. There is no inversion and nothing to re-quote. The $41.72
-// cell stands as-is.
-// STILL GENUINELY UNVERIFIED: which zone UPS itself assigns to that lane. UPS publishes its
-// own zone chart, it need not match USPS's, and assets.ups.com returns zero bytes from this
-// workspace on every attempt -- so the $37.00 observation is used only as an upper bound on
-// zones <= 6. See the 22.5lb row's inline comment below.
+// WHAT IS STILL UNVERIFIED, EXPLICITLY:
+//   - The per-zone ratio curves for z3-z8 rest on eBay quotes whose DESTINATION ZIPs were
+//     never recorded in this file, so their true UPS zones are unknown. They are used
+//     as-labelled. Curve-fitting them against the published chart hints that the z3/z4
+//     column behaves like published zone 4 and that the z8 column carries a roughly $4
+//     fixed premium consistent with a delivery-area surcharge at Neah Bay -- both are
+//     HYPOTHESES from arithmetic, not lookups, and neither was acted on beyond driving
+//     z3/z4 from the published z4 column (the conservative, higher-priced of the two).
+//   - Validating the discount properly needs eBay quotes at KNOWN destination ZIPs across
+//     the weight range at 3-4 different UPS zones, with the destination ZIP recorded
+//     alongside each price. Roughly 30 quotes. Until then this is one verified lane (z2,
+//     11 weights), one verified point (z7 @ 23lb), and interpolation.
+//   - Rows above 70lb: none added. UPS's published table runs to 150lb, but
+//     estimateCheapestRate intercepts lb >= 70 with UPS_HIGH_WEIGHT_TOTAL_TABLE, so rows
+//     past 70 would be dead except inside one Math.max never-be-short comparison.
+//     Extending the table there is a separate, testable change and was not made blind.
+//
+// PRIOR HISTORY, CONDENSED (the long provenance narrative this block replaces): the UPS
+// table was originally 1lb-anchor-per-zone scaled by curve shape (2026-07-05, anchors
+// taken at origin 49503 rather than the canonical 49079); z8 re-anchored 2026-08-10 then
+// fully re-quoted 2026-08-11; 10lb/30lb rows re-quoted at 4 of 8 zones 2026-08-10; the
+// entire table declared live-quoted 2026-08-10 (PENDING_LIVE_VERIFICATION_CELLS closed).
+// The 2026-08-16 22.5lb pass added a row that capped z1-z6 at the $37.00 observation
+// because the lane's UPS zone was unknown -- that row is superseded here and the cap
+// removed; $37.00 is now filed where it belongs, at z7 @ 23lb.
 const RATE_TABLE_UPS: RateRow[] = [
-  { maxLb: 0.25   , z1: 7.22 , z2: 7.22 , z3: 7.29 , z4: 7.29 , z5: 8.62 , z6: 9.42 , z7: 10.19 , z8: 14.33 },
-  { maxLb: 0.5    , z1: 7.22 , z2: 7.22 , z3: 7.29 , z4: 7.29 , z5: 8.62 , z6: 9.42 , z7: 10.19 , z8: 14.33 },
-  { maxLb: 0.75   , z1: 7.22 , z2: 7.22 , z3: 7.29 , z4: 7.29 , z5: 8.62 , z6: 9.42 , z7: 10.19 , z8: 14.33 },
-  { maxLb: 0.9999 , z1: 7.22 , z2: 7.22 , z3: 7.29 , z4: 7.29 , z5: 8.62 , z6: 9.42 , z7: 10.19 , z8: 14.33 },
-  { maxLb: 1      , z1: 7.22 , z2: 7.22 , z3: 7.29 , z4: 7.29 , z5: 8.62 , z6: 9.42 , z7: 10.19 , z8: 14.33 },
-  { maxLb: 2      , z1: 7.29 , z2: 7.29 , z3: 7.88 , z4: 7.88 , z5: 9.42 , z6: 10.65 , z7: 12.17 , z8: 16.80 },
-  { maxLb: 3      , z1: 8.64 , z2: 8.64 , z3: 9.81 , z4: 9.81 , z5: 11.58 , z6: 13.7 , z7: 14.75 , z8: 19.26 },
-  { maxLb: 5      , z1: 9.1 , z2: 9.1 , z3: 11.04 , z4: 11.04 , z5: 14.4 , z6: 16.57 , z7: 17.68 , z8: 22.20 },
-  { maxLb: 7      , z1: 9.87 , z2: 9.87 , z3: 12.03 , z4: 12.03 , z5: 16.69 , z6: 17.15 , z7: 18.22 , z8: 22.93 },
-  { maxLb: 10     , z1: 11.27 , z2: 11.27 , z3: 12.95 , z4: 12.95 , z5: 17.59 , z6: 18.4 , z7: 20.63 , z8: 26.01 },
-  { maxLb: 14     , z1: 13.85 , z2: 13.85 , z3: 15.24 , z4: 15.24 , z5: 18.93 , z6: 21.82 , z7: 26.31 , z8: 31.98 },
-  { maxLb: 20     , z1: 15.82 , z2: 15.82 , z3: 18.18 , z4: 18.18 , z5: 23.85 , z6: 28.27 , z7: 34.37 , z8: 41.72 },
-  { maxLb: 22.5   , z1: 20.48 , z2: 20.48 , z3: 26.67 , z4: 26.67 , z5: 31.63 , z6: 37.00 , z7: 45.43 , z8: 56.99 }, // ZONE-CORRECTED 2026-08-16: the real $37.00 UPS Ground quote is on a lane whose UPS zone is UNVERIFIED (assets.ups.com unreachable; USPS rates it z7 but UPS publishes its own chart). Safe only as an upper bound on zones <= 6, so z6 is capped to it; z7/z8 REVERTED to the 30lb-row values pending a real UPS zone determination
-  { maxLb: 30     , z1: 20.48 , z2: 20.48 , z3: 26.67 , z4: 26.67 , z5: 31.63 , z6: 38.76 , z7: 45.43 , z8: 56.99 },
-  { maxLb: 50     , z1: 25.37 , z2: 25.37 , z3: 37.58 , z4: 37.58 , z5: 45.58 , z6: 57.43 , z7: 68.66 , z8: 80.48 },
-  { maxLb: 70     , z1: 51.82 , z2: 51.82 , z3: 66.19 , z4: 66.19 , z5: 76.39 , z6: 86.13 , z7: 95.03 , z8: 112.98 },
+  { maxLb: 1  , z1: 7.22 , z2: 7.22 , z3: 7.29 , z4: 7.29 , z5: 8.62 , z6: 9.42 , z7: 10.19 , z8: 14.33 }, // <=1lb: UPS Ground bills a 1lb minimum; eBay quotes confirmed FLAT across 4oz/8oz/12oz/15.999oz/1lb (2026-08-10), so one row covers the whole sub-1lb range
+  { maxLb: 2  , z1: 7.29 , z2: 7.29 , z3: 7.88 , z4: 7.88 , z5: 9.42 , z6: 10.65 , z7: 12.17 , z8: 16.80 },
+  { maxLb: 3  , z1: 8.64 , z2: 8.64 , z3: 9.81 , z4: 9.81 , z5: 11.58 , z6: 13.70 , z7: 14.75 , z8: 19.26 },
+  { maxLb: 4  , z1: 8.85 , z2: 8.85 , z3: 10.53 , z4: 10.53 , z5: 13.02 , z6: 14.97 , z7: 16.37 , z8: 20.80 },
+  { maxLb: 5  , z1: 9.10 , z2: 9.10 , z3: 11.04 , z4: 11.04 , z5: 14.40 , z6: 16.57 , z7: 17.68 , z8: 22.20 },
+  { maxLb: 6  , z1: 9.24 , z2: 9.24 , z3: 11.46 , z4: 11.46 , z5: 15.35 , z6: 16.75 , z7: 17.76 , z8: 22.21 },
+  { maxLb: 7  , z1: 9.87 , z2: 9.87 , z3: 12.03 , z4: 12.03 , z5: 16.69 , z6: 17.15 , z7: 18.22 , z8: 22.93 },
+  { maxLb: 8  , z1: 10.42 , z2: 10.42 , z3: 12.48 , z4: 12.48 , z5: 17.11 , z6: 17.83 , z7: 19.00 , z8: 23.68 },
+  { maxLb: 9  , z1: 10.84 , z2: 10.84 , z3: 12.60 , z4: 12.60 , z5: 17.22 , z6: 18.20 , z7: 19.71 , z8: 24.67 },
+  { maxLb: 10 , z1: 11.27 , z2: 11.27 , z3: 12.95 , z4: 12.95 , z5: 17.59 , z6: 18.40 , z7: 20.63 , z8: 26.01 },
+  { maxLb: 11 , z1: 12.27 , z2: 12.27 , z3: 13.62 , z4: 13.62 , z5: 18.00 , z6: 19.14 , z7: 22.35 , z8: 28.00 },
+  { maxLb: 12 , z1: 12.66 , z2: 12.66 , z3: 14.14 , z4: 14.14 , z5: 18.14 , z6: 19.87 , z7: 23.33 , z8: 28.79 },
+  { maxLb: 13 , z1: 12.98 , z2: 12.98 , z3: 14.59 , z4: 14.59 , z5: 18.35 , z6: 20.55 , z7: 24.56 , z8: 29.87 },
+  { maxLb: 14 , z1: 13.85 , z2: 13.85 , z3: 15.24 , z4: 15.24 , z5: 18.93 , z6: 21.82 , z7: 26.31 , z8: 31.98 },
+  { maxLb: 15 , z1: 14.01 , z2: 14.01 , z3: 15.66 , z4: 15.66 , z5: 19.55 , z6: 23.11 , z7: 27.16 , z8: 33.54 },
+  { maxLb: 16 , z1: 14.53 , z2: 14.53 , z3: 16.15 , z4: 16.15 , z5: 20.15 , z6: 24.13 , z7: 29.04 , z8: 35.11 },
+  { maxLb: 17 , z1: 14.80 , z2: 14.80 , z3: 16.54 , z4: 16.54 , z5: 20.82 , z6: 25.05 , z7: 30.56 , z8: 35.38 },
+  { maxLb: 18 , z1: 15.12 , z2: 15.12 , z3: 16.92 , z4: 16.92 , z5: 21.92 , z6: 26.45 , z7: 31.98 , z8: 38.23 },
+  { maxLb: 19 , z1: 15.64 , z2: 15.64 , z3: 17.95 , z4: 17.95 , z5: 23.00 , z6: 27.23 , z7: 32.87 , z8: 40.19 },
+  { maxLb: 20 , z1: 15.82 , z2: 15.82 , z3: 18.18 , z4: 18.18 , z5: 23.85 , z6: 28.27 , z7: 34.37 , z8: 41.72 },
+  { maxLb: 21 , z1: 16.61 , z2: 16.61 , z3: 19.29 , z4: 19.29 , z5: 24.30 , z6: 29.22 , z7: 35.46 , z8: 42.79 },
+  { maxLb: 22 , z1: 16.74 , z2: 16.74 , z3: 20.10 , z4: 20.10 , z5: 25.12 , z6: 30.29 , z7: 36.65 , z8: 44.46 },
+  { maxLb: 23 , z1: 16.87 , z2: 16.87 , z3: 20.66 , z4: 20.66 , z5: 25.38 , z6: 31.31 , z7: 37.00 , z8: 46.02 }, // BILLABLE 23lb x z7 = the REAL eBay quote, 49079 -> 98282 (UPS Ground zone 7, verified from UPS zone chart 490). Model said $37.41; the real $37.00 is used. This is the anchor the whole eBay-discount question turns on
+  { maxLb: 24 , z1: 17.59 , z2: 17.59 , z3: 21.92 , z4: 21.92 , z5: 26.91 , z6: 32.91 , z7: 38.55 , z8: 48.41 },
+  { maxLb: 25 , z1: 17.76 , z2: 17.76 , z3: 22.17 , z4: 22.17 , z5: 27.23 , z6: 33.48 , z7: 40.55 , z8: 49.66 },
+  { maxLb: 26 , z1: 18.75 , z2: 18.75 , z3: 23.26 , z4: 23.26 , z5: 28.34 , z6: 34.56 , z7: 42.07 , z8: 51.48 },
+  { maxLb: 27 , z1: 19.40 , z2: 19.40 , z3: 23.88 , z4: 23.88 , z5: 28.80 , z6: 35.81 , z7: 42.71 , z8: 52.09 },
+  { maxLb: 28 , z1: 19.99 , z2: 19.99 , z3: 24.98 , z4: 24.98 , z5: 30.40 , z6: 37.39 , z7: 44.49 , z8: 53.82 },
+  { maxLb: 29 , z1: 20.15 , z2: 20.15 , z3: 25.53 , z4: 25.53 , z5: 30.43 , z6: 38.30 , z7: 45.35 , z8: 54.99 },
+  { maxLb: 30 , z1: 20.48 , z2: 20.48 , z3: 26.67 , z4: 26.67 , z5: 31.63 , z6: 38.76 , z7: 45.43 , z8: 56.99 },
+  { maxLb: 31 , z1: 21.40 , z2: 21.40 , z3: 27.25 , z4: 27.25 , z5: 32.06 , z6: 39.68 , z7: 47.08 , z8: 58.73 },
+  { maxLb: 32 , z1: 21.40 , z2: 21.40 , z3: 27.25 , z4: 27.25 , z5: 32.06 , z6: 39.88 , z7: 47.08 , z8: 59.29 },
+  { maxLb: 33 , z1: 21.43 , z2: 21.43 , z3: 28.39 , z4: 28.39 , z5: 33.49 , z6: 42.17 , z7: 48.55 , z8: 60.81 },
+  { maxLb: 34 , z1: 21.43 , z2: 21.43 , z3: 29.25 , z4: 29.25 , z5: 34.63 , z6: 42.39 , z7: 49.94 , z8: 63.63 },
+  { maxLb: 35 , z1: 21.77 , z2: 21.77 , z3: 29.92 , z4: 29.92 , z5: 35.15 , z6: 43.11 , z7: 51.18 , z8: 63.99 },
+  { maxLb: 36 , z1: 22.08 , z2: 22.08 , z3: 30.35 , z4: 30.35 , z5: 36.45 , z6: 44.91 , z7: 52.87 , z8: 66.40 },
+  { maxLb: 37 , z1: 22.54 , z2: 22.54 , z3: 30.76 , z4: 30.76 , z5: 36.94 , z6: 45.12 , z7: 54.52 , z8: 66.95 },
+  { maxLb: 38 , z1: 22.68 , z2: 22.68 , z3: 31.53 , z4: 31.53 , z5: 37.78 , z6: 46.12 , z7: 54.69 , z8: 68.10 },
+  { maxLb: 39 , z1: 23.59 , z2: 23.59 , z3: 32.82 , z4: 32.82 , z5: 38.98 , z6: 47.96 , z7: 56.78 , z8: 69.40 },
+  { maxLb: 40 , z1: 23.59 , z2: 23.59 , z3: 32.82 , z4: 32.82 , z5: 39.02 , z6: 48.28 , z7: 56.78 , z8: 69.40 },
+  { maxLb: 41 , z1: 24.07 , z2: 24.07 , z3: 33.66 , z4: 33.66 , z5: 40.30 , z6: 50.24 , z7: 58.42 , z8: 72.19 },
+  { maxLb: 42 , z1: 24.07 , z2: 24.07 , z3: 34.92 , z4: 34.92 , z5: 40.30 , z6: 50.51 , z7: 59.37 , z8: 72.19 },
+  { maxLb: 43 , z1: 24.46 , z2: 24.46 , z3: 34.92 , z4: 34.92 , z5: 42.38 , z6: 53.24 , z7: 61.46 , z8: 73.94 },
+  { maxLb: 44 , z1: 24.79 , z2: 24.79 , z3: 35.74 , z4: 35.74 , z5: 43.09 , z6: 53.40 , z7: 62.97 , z8: 74.60 },
+  { maxLb: 45 , z1: 24.79 , z2: 24.79 , z3: 35.74 , z4: 35.74 , z5: 43.09 , z6: 53.56 , z7: 64.48 , z8: 75.01 },
+  { maxLb: 46 , z1: 25.45 , z2: 25.45 , z3: 36.78 , z4: 36.78 , z5: 44.04 , z6: 54.96 , z7: 65.10 , z8: 76.89 },
+  { maxLb: 47 , z1: 25.45 , z2: 25.45 , z3: 37.30 , z4: 37.30 , z5: 44.31 , z6: 55.74 , z7: 66.32 , z8: 78.02 },
+  { maxLb: 48 , z1: 25.45 , z2: 25.45 , z3: 37.61 , z4: 37.61 , z5: 45.61 , z6: 56.53 , z7: 67.35 , z8: 79.73 },
+  { maxLb: 49 , z1: 25.45 , z2: 25.45 , z3: 37.63 , z4: 37.63 , z5: 45.61 , z6: 57.38 , z7: 68.64 , z8: 80.09 },
+  { maxLb: 50 , z1: 25.45 , z2: 25.45 , z3: 37.63 , z4: 37.63 , z5: 45.61 , z6: 57.43 , z7: 68.66 , z8: 80.48 },
+  { maxLb: 51 , z1: 25.45 , z2: 25.45 , z3: 37.67 , z4: 37.67 , z5: 45.66 , z6: 57.73 , z7: 69.01 , z8: 82.51 },
+  { maxLb: 52 , z1: 25.45 , z2: 25.45 , z3: 37.71 , z4: 37.71 , z5: 45.69 , z6: 57.74 , z7: 69.02 , z8: 82.52 },
+  { maxLb: 53 , z1: 25.45 , z2: 25.45 , z3: 37.72 , z4: 37.72 , z5: 45.95 , z6: 57.75 , z7: 69.03 , z8: 83.34 },
+  { maxLb: 54 , z1: 25.46 , z2: 25.46 , z3: 37.79 , z4: 37.79 , z5: 46.04 , z6: 57.76 , z7: 69.03 , z8: 83.39 },
+  { maxLb: 55 , z1: 25.46 , z2: 25.46 , z3: 37.80 , z4: 37.80 , z5: 46.26 , z6: 57.83 , z7: 69.04 , z8: 83.46 },
+  { maxLb: 56 , z1: 25.47 , z2: 25.47 , z3: 37.84 , z4: 37.84 , z5: 46.27 , z6: 57.85 , z7: 69.12 , z8: 83.61 },
+  { maxLb: 57 , z1: 25.94 , z2: 25.94 , z3: 37.91 , z4: 37.91 , z5: 47.65 , z6: 57.89 , z7: 69.17 , z8: 85.19 },
+  { maxLb: 58 , z1: 25.95 , z2: 25.95 , z3: 37.92 , z4: 37.92 , z5: 47.71 , z6: 57.90 , z7: 69.23 , z8: 85.25 },
+  { maxLb: 59 , z1: 26.01 , z2: 26.01 , z3: 38.17 , z4: 38.17 , z5: 47.72 , z6: 58.22 , z7: 69.38 , z8: 86.61 },
+  { maxLb: 60 , z1: 26.68 , z2: 26.68 , z3: 38.82 , z4: 38.82 , z5: 49.39 , z6: 59.31 , z7: 69.39 , z8: 87.15 },
+  { maxLb: 61 , z1: 26.69 , z2: 26.69 , z3: 39.15 , z4: 39.15 , z5: 49.43 , z6: 59.32 , z7: 69.40 , z8: 88.18 },
+  { maxLb: 62 , z1: 27.80 , z2: 27.80 , z3: 39.85 , z4: 39.85 , z5: 50.57 , z6: 60.24 , z7: 70.41 , z8: 89.06 },
+  { maxLb: 63 , z1: 27.81 , z2: 27.81 , z3: 40.23 , z4: 40.23 , z5: 50.57 , z6: 60.65 , z7: 71.00 , z8: 89.07 },
+  { maxLb: 64 , z1: 28.55 , z2: 28.55 , z3: 40.58 , z4: 40.58 , z5: 50.60 , z6: 61.07 , z7: 71.01 , z8: 89.42 },
+  { maxLb: 65 , z1: 28.87 , z2: 28.87 , z3: 40.59 , z4: 40.59 , z5: 50.70 , z6: 61.60 , z7: 71.19 , z8: 89.44 },
+  { maxLb: 66 , z1: 28.99 , z2: 28.99 , z3: 40.91 , z4: 40.91 , z5: 51.10 , z6: 61.64 , z7: 71.40 , z8: 90.67 },
+  { maxLb: 67 , z1: 29.00 , z2: 29.00 , z3: 40.91 , z4: 40.91 , z5: 51.13 , z6: 62.12 , z7: 71.74 , z8: 90.72 },
+  { maxLb: 68 , z1: 29.32 , z2: 29.32 , z3: 43.40 , z4: 43.40 , z5: 52.22 , z6: 63.03 , z7: 72.84 , z8: 90.78 },
+  { maxLb: 69 , z1: 29.94 , z2: 29.94 , z3: 43.71 , z4: 43.71 , z5: 52.61 , z6: 63.96 , z7: 72.90 , z8: 91.93 },
+  { maxLb: 70 , z1: 29.96 , z2: 29.96 , z3: 44.33 , z4: 44.33 , z5: 54.44 , z6: 64.64 , z7: 72.95 , z8: 91.94 }, // 70lb row REBUILT: the prior real-quoted 70lb cells (z1/z2 51.82, z3/z4 66.19, z5 76.39, z6 86.13, z7 95.03, z8 112.98) sat ABOVE UPS published daily at every zone (ratio 1.10-1.49) because a >50lb quote carries the AHS-weight accessorial, which computeSurchargeForCarrier ADDS again on top -- a double charge. base(published x r50) + AHS(modeled) reproduces those real totals to +3%..+8%, over not short
 ];
 
 // FedEx: real-anchored 2026-07-05, z8 CORRECTED 2026-08-10 (ADR-103 Phase 1) — also
@@ -570,7 +658,7 @@ const RATE_TABLE_FEDEX: RateRow[] = [
   { maxLb: 22.5   , z1: 17.01 , z2: 22.93 , z3: 19.0 , z4: 20.31 , z5: 23.09 , z6: 23.09 , z7: 31.0 , z8: 38.89 }, // ZONE-CORRECTED 2026-08-16: the real $32.11 quote is on a lane whose FEDEX zone is UNVERIFIED (FedEx publishes its own chart, has no zone 1 at all, and no fetchable zone endpoint was found). z1-z6 = min(30lb cell, $32.11) which leaves them all unchanged; z7/z8 REVERTED to the 30lb-row values. This row is currently INERT (identical to the 30lb row) and is retained only so it is in place when a real FedEx zone determination lands
   { maxLb: 30     , z1: 17.01 , z2: 22.93 , z3: 19.0 , z4: 20.31 , z5: 23.09 , z6: 23.09 , z7: 31.0 , z8: 38.89 },
   { maxLb: 50     , z1: 19.87 , z2: 25.79 , z3: 23.28 , z4: 26.68 , z5: 31.02 , z6: 31.02 , z7: 44.02 , z8: 51.91 },
-  { maxLb: 70     , z1: 77.51 , z2: 83.44 , z3: 87.24 , z4: 90.81 , z5: 103.7 , z6: 103.7 , z7: 117.09 , z8: 124.99 },
+  { maxLb: 70     , z1: 23.67 , z2: 30.73 , z3: 30.73 , z4: 31.92 , z5: 37.77 , z6: 37.77 , z7: 47.28 , z8: 60.01 }, // 70lb row REBUILT 2026-08-16 (same double-charge artifact just fixed on RATE_TABLE_UPS's 70lb row). PRIOR CELLS, PRESERVED: z1 77.51, z2 83.44, z3 87.24, z4 90.81, z5 103.70, z6 103.70, z7 117.09, z8 124.99 -- every one of them sat ABOVE FedEx's own published 2026 list rate (ratio 1.20x at z8 up to 2.40x at z2) while the 50lb row directly above sits BELOW list at every zone (0.46x-0.89x). eBay's negotiated FedEx price cannot go from 42% under list to 20% over list in 20lb of base freight; the >50lb additional-handling accessorial was baked into those quoted totals, and computeSurchargeForCarrier ADDS it again at runtime -- a double charge. Rebuilt as published(zone) x r50(zone), r50 = this table's own 50lb cell / published 50lb, then a raise-only zone-monotone closure (z3 lifted 28.54->30.73, z6 lifted 35.34->37.77). Source: FedEx_Standard_List_Rates_2026.xlsx, sheet '2026 Ground & FHD rates', eff. 1/5/2026, zones 2-8 (FedEx has no zone 1, so the z1 column uses published z2 as its basis, same as everywhere else in this file)
 ];
 
 /** All curated carrier tables + metadata, for the rate-staleness audit task. */
@@ -610,6 +698,19 @@ export const CARRIER_TABLES = [
  * negotiated schedule as packages approach carrier weight ceilings, not confirmed
  * against any independent source. If a future audit finds these implausible, re-verify
  * directly rather than assuming they're wrong.
+ *
+ * AMENDED 2026-08-16 -- read the paragraph above with this correction. "Every cell is a
+ * live eBay quote" was true of RATE_TABLE_UPS as it stood on 2026-08-11. It is NOT true
+ * of the rebuilt RATE_TABLE_UPS: that table is now UPS's published 2026 daily rate card
+ * (primary source, per pound) multiplied by a per-zone eBay/published discount ratio
+ * interpolated between the live-quoted anchor weights. At the anchor weights (1, 2, 3, 5,
+ * 7, 10, 14, 20, 30, 50lb) each cell still equals its live quote exactly; at the ~60 new
+ * intermediate weights it is modelled, and the 70lb row was deliberately re-derived (see
+ * its inline comment -- the real 70lb quotes carry an AHS-weight accessorial that
+ * computeSurchargeForCarrier adds a second time). This array stays empty because the
+ * modelled cells are not "pending a live quote" in the old sense -- they are documented,
+ * bounded interpolations between real quotes, and the honest statement of what is and is
+ * not verified lives in the RATE_TABLE_UPS header, not here. USPS and FedEx are unchanged.
  *
  * Kept as an exported empty array (rather than deleted) so existing callers/QA tooling
  * that reference PENDING_LIVE_VERIFICATION_CELLS don't break -- an empty array is the
@@ -1013,6 +1114,13 @@ async function fetchLiveUspsZoneChartEntry(originZip3: string, originZip5: strin
  * (FedEx has no zone 1 at all). That is not a regression -- milesToZone was already
  * being applied to all three carriers the same way -- but it is the reason the UPS and
  * FedEx 22.5lb cells above are flagged UNVERIFIED rather than anchored.
+ * UPDATED 2026-08-16: the UPS side of that is now measured rather than assumed. UPS's own
+ * zone chart for origin ZIP3 490 was obtained and parsed this session, and on the three
+ * lanes where both charts are known it AGREES with USPS's: 49503 -> 2, 98282 -> 7,
+ * 98357 -> 8. Three lanes is not proof of general agreement -- Atlanta already shows the
+ * band boundaries fall in different places (ZIP3 303 is UPS z4 while 302 is UPS z5) --
+ * but it is why the UPS 22.5lb cell is no longer flagged UNVERIFIED. FedEx's own chart
+ * is still unobtained, so the FedEx cells stay flagged.
  */
 export async function resolveCoverageZone(origin: { zip?: string | null; lat?: number | null; lng?: number | null }): Promise<ZoneKey> {
   const originZip3 = zip3(origin.zip);
@@ -1533,6 +1641,30 @@ export const AHS_DIMENSION_SURCHARGE_TABLE: Record<ZoneKey, number> = {
 // using 1.40 (at/above the higher observed ratio, erring toward not underpricing) rather
 // than the table's face value or a lower average.
 export const AHS_DIMENSION_SURCHARGE_UPS_PASSTHROUGH = 0.75;
+// FEDEX AHS WEIGHT-TRIGGER MULTIPLIER -- ADDED 2026-08-16 alongside the RATE_TABLE_FEDEX
+// 70lb rebuild above, and REQUIRED BY IT: without this the rebuild would leave the engine
+// SHORT by 28-40% on every genuinely-heavy (actual >50lb) FedEx package in the 50-70lb
+// band. EBAY_NEGOTIATED_SURCHARGE_PASSTHROUGH (0.50) was measured on UPS Ground ONLY (see
+// that constant's own comment -- 'comparing UPS Ground quotes'); it was applied to FedEx
+// by cross-carrier assumption, never by measurement. FedEx's two triggers that WERE
+// measured on FedEx both came out ABOVE the table's face value, not below it: dimension
+// 1.29-1.41 and packaging 1.185-1.196. So does the weight trigger, now that there is data
+// for it. DERIVATION (8 independent points, one per zone): de-compose each of the prior
+// 70lb quoted totals against its rebuilt clean base --
+//   (oldTotal - newBase) / AHS_WEIGHT_SURCHARGE_TABLE[zone]
+//   z1 1.158 - z2 1.134 - z3 1.114 - z4 1.160 - z5 1.172 - z6 1.172 - z7 1.188 - z8 1.106
+// Range 1.106-1.188, i.e. tight, and it lands on top of the independently-measured 1.19
+// packaging multiplier below. 1.19 is used because it is at or above ALL EIGHT observed
+// ratios -- this file's standing convention of erring toward not underpricing. Check:
+// newBase + AHS_WEIGHT x 1.19 reproduces all eight original quoted totals at +0.1% to
+// +4.4%, OVER at every zone, short at none. UPS is unchanged and keeps the 0.50 factor.
+// SCOPE: this multiplier can only fire for FedEx at actual weight >50lb; at billable
+// weight >=70lb estimateCheapestRate switches to FEDEX_HIGH_WEIGHT_TOTAL_TABLE and zeroes
+// the surcharge entirely. So it affects exactly the 50-70lb band the evidence covers.
+// STILL UNVERIFIED: no direct FedEx 49lb-vs-51lb A/B was run (the UPS one was). These 8
+// points are a de-composition, and they rest on r50 being the right base ratio at 70lb --
+// a genuine assumption. A real FedEx A/B at the trigger boundary would settle it.
+export const AHS_WEIGHT_SURCHARGE_FEDEX_MULTIPLIER = 1.19;
 export const AHS_DIMENSION_SURCHARGE_FEDEX_MULTIPLIER = 1.40;
 // SUPERSEDED for the live pricing path 2026-08-10, same session (Patrick: "pushed, all
 // the gaps! stop avoiding work") -- this UPS-PDF list-price table is kept for reference
@@ -1804,7 +1936,7 @@ export const UPS_HIGH_WEIGHT_TOTAL_TABLE: HighWeightAnchorRow[] = [
 ];
 
 export const FEDEX_HIGH_WEIGHT_TOTAL_TABLE: HighWeightAnchorRow[] = [
-  { maxLb: 70,  z1: 93.61,  z2: 93.61,  z3: 110.42, z4: 110.42, z5: 135.90, z6: 150.17, z7: 171.01, z8: 184.48 },
+  { maxLb: 70,  z1: 77.51,  z2: 83.44,  z3: 87.24,  z4: 90.81,  z5: 103.70, z6: 103.70, z7: 117.09, z8: 124.99 }, // 70lb row CORRECTED 2026-08-16. PRIOR CELLS, PRESERVED: z1/z2 93.61, z3/z4 110.42, z5 135.90, z6 150.17, z7 171.01, z8 184.48 -- those exceeded this table's OWN real 90lb quotes at 7 of 8 zones (z8 184.48 at 70lb vs a real 129.52 at 90lb: 43% MORE money for 20 FEWER pounds), 7 weight-monotonicity violations, all now closed. The numbers below are not new: they are the eight values that until this pass sat in RATE_TABLE_FEDEX's 70lb row, i.e. the observed 70lb TOTALS (base freight + the >50lb accessorial already inside them) -- which is exactly what THIS table is defined to hold, and the reason they were wrong where they were. z8 124.99 is a real live eBay quote (2026-08-11 full-column re-anchor); z1-z7 are the pre-existing curve-shape-scaled values, unchanged in magnitude, only relocated. Cross-check: base+AHS reconstruction gives 79.01/86.07/91.12/92.31/104.71/104.71/117.19/129.92, within +0.1%..+4.4% of these
   { maxLb: 90,  z1: 90.96,  z2: 96.88,  z3: 97.32,  z4: 100.75, z5: 111.61, z6: 111.61, z7: 129.52, z8: 129.52 },
   { maxLb: 110, z1: 101.30, z2: 107.22, z3: 106.66, z4: 109.37, z5: 119.50, z6: 119.50, z7: 135.43, z8: 135.43 },
   { maxLb: 130, z1: 359.76, z2: 365.68, z3: 383.70, z4: 387.56, z5: 442.72, z6: 442.72, z7: 468.81, z8: 468.81 },
@@ -1917,7 +2049,13 @@ function computeSurchargeForCarrier(
     // EBAY_NEGOTIATED_SURCHARGE_PASSTHROUGH applied to weight-trigger only -- the
     // dimension-trigger table measured close to eBay's actual charge (see that
     // constant's comment), so it is used at face value here.
-    if (weightTriggered) candidateAmounts.push(round2(AHS_WEIGHT_SURCHARGE_TABLE[zone] * EBAY_NEGOTIATED_SURCHARGE_PASSTHROUGH));
+    if (weightTriggered) {
+      // UPS keeps the measured 0.50 pass-through; FedEx uses its own measured multiplier
+      // (see AHS_WEIGHT_SURCHARGE_FEDEX_MULTIPLIER) -- FedEx does NOT get UPS's accessorial
+      // discount, confirmed on all three of its triggers.
+      const weightFactor = carrier === 'FEDEX' ? AHS_WEIGHT_SURCHARGE_FEDEX_MULTIPLIER : EBAY_NEGOTIATED_SURCHARGE_PASSTHROUGH;
+      candidateAmounts.push(round2(AHS_WEIGHT_SURCHARGE_TABLE[zone] * weightFactor));
+    }
     // Carrier-specific real pass-through/multiplier, not the table's face value -- see
     // AHS_DIMENSION_SURCHARGE_UPS_PASSTHROUGH / AHS_DIMENSION_SURCHARGE_FEDEX_MULTIPLIER
     // comment for the live A/B data this is based on (z1/z5 sampled, both carriers).
