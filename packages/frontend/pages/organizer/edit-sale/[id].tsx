@@ -130,7 +130,12 @@ const EditSalePage = () => {
   // saving/deleting this sale, but the page itself rendered the full edit form for anyone
   // who could view another organizer's Edit Sale URL. Fetch this organizer's own profile id
   // so we can confirm the loaded sale actually belongs to them before rendering the form.
-  const { data: organizerProfile, isLoading: organizerProfileLoading } = useQuery<{ id: string }>({
+  const {
+    data: organizerProfile,
+    isLoading: organizerProfileLoading,
+    isError: organizerProfileError,
+    refetch: refetchOrganizerProfile,
+  } = useQuery<{ id: string }>({
     queryKey: ['edit-sale-organizer-profile'],
     queryFn: async () => {
       const response = await api.get('/organizers/me');
@@ -517,10 +522,38 @@ const EditSalePage = () => {
     );
   }
 
-  // Ownership guard (BQ P1 fix, 2026-08-02): don't render the edit form for a sale that
-  // belongs to a different organizer. Mirrors the pattern already used above for a failed
-  // sale load. If the profile fetch itself failed, organizerProfile is undefined and this
-  // check no-ops -- the backend's own ownership check on save/delete remains the real gate.
+  // Ownership-guard fail-open fix (2026-08-15, HIGH security finding, this session's
+  // Blocked Queue sweep): if the profile fetch itself errors, organizerProfile was
+  // undefined and the check below silently no-op'd, letting the edit form render (with
+  // real sale data -- address, financial figures, entrance pin) for anyone who could view
+  // the URL, even though the backend's own save/delete ownership check still blocked any
+  // actual write. Block rendering instead of failing open -- never trust an unconfirmed
+  // ownership state.
+  if (organizerProfileError) {
+    return (
+      <div className="min-h-screen bg-white dark:bg-gray-900 py-8">
+        <div className="max-w-2xl mx-auto px-4">
+          <div className="rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 p-6">
+            <h1 className="text-lg font-semibold text-red-800 dark:text-red-200 mb-2">Something went wrong</h1>
+            <p className="text-red-700 dark:text-red-300 mb-4">We couldn't verify your access to this sale. Please try again.</p>
+            <button
+              onClick={() => refetchOrganizerProfile()}
+              className="inline-block bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors mr-3"
+            >
+              Try Again
+            </button>
+            <Link href="/organizer/sales" className="inline-block bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 font-semibold py-2 px-4 rounded-lg transition-colors">
+              Back to Sales
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Ownership guard (BQ P1 fix, 2026-08-02; hardened 2026-08-15): don't render the edit form
+  // for a sale that belongs to a different organizer. The profile-fetch-error case is now
+  // handled above and blocks rendering, so this check no longer needs to no-op on it.
   if (organizerProfile && sale.organizerId !== organizerProfile.id) {
     return (
       <div className="min-h-screen bg-white dark:bg-gray-900 py-8">

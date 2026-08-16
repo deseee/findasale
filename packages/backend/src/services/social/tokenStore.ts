@@ -16,6 +16,13 @@ import type { SocialAccount, SocialPlatform } from '@prisma/client';
 // 5-minute refresh skew — identical to ebayHttp.ts (expiresIn - 300).
 const REFRESH_SKEW_MS = 5 * 60 * 1000;
 
+// Retry-not-immediate-deactivate grace window (2026-08-15, Patrick's decision on the
+// Blocked Queue "social-publish 401/403 doesn't deactivate the account" row: "retry", not
+// auto-deactivate on the first failure). The cron runs every 10min (socialPublisherCron.ts),
+// so 24h allows ~144 retry attempts -- enough to ride out a transient platform outage or a
+// brief token hiccup -- before treating it as a genuine dead connection needing reconnect.
+const REFRESH_FAILURE_GRACE_MS = 24 * 60 * 60 * 1000;
+
 /** Fields a platform refresh returns for tokenStore to persist. */
 export interface RefreshedTokens {
   accessToken: string; // plaintext — tokenStore encrypts before write
@@ -195,7 +202,20 @@ export async function getValidToken(
     const msg = err instanceof Error ? err.message : String(err);
     // Scrub anything token-shaped defensively before storing.
     const scrubbed = scrubTokens(msg);
-    await recordAccountError(account.id, `Token refresh failed: ${scrubbed}`, true);
+
+    // Retry-with-grace (2026-08-15): only deactivate once this account has been failing
+    // continuously (no successful refresh since the first failure) for longer than the
+    // grace window. A single transient failure just gets recorded and retried on the next
+    // cron pass -- it no longer forces an immediate reconnect for a one-off blip.
+    const hadPriorUnresolvedError =
+      account.lastErrorAt != null &&
+      (account.lastRefreshedAt == null || account.lastRefreshedAt < account.lastErrorAt);
+    const graceElapsed =
+      account.lastErrorAt != null &&
+      Date.now() - account.lastErrorAt.getTime() >= REFRESH_FAILURE_GRACE_MS;
+    const shouldDeactivate = hadPriorUnresolvedError && graceElapsed;
+
+    await recordAccountError(account.id, `Token refresh failed: ${scrubbed}`, shouldDeactivate);
     throw new Error(`[tokenStore] ${platform} token refresh failed: ${scrubbed}`);
   }
 }
