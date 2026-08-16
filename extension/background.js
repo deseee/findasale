@@ -433,11 +433,10 @@ async function checkSavedSearchAlerts() {
 // back to notify-only -- this off-switch is kept (not removed) because the Craigslist
 // logged-out safety fallback below still needs a notify-only path to hand off to when
 // unattended auto-post would strand at a verification wall.
-// TODO Patrick: confirm the alarm's polling interval per ADR-100 §7 Q3 -- renewal isn't
-// time-critical the way the 20-min removal alarm is, so once/day (1440 min) is proposed here
-// as a starting point, not a validated final value.
+// ADR-100 §7 Q3 CONFIRMED 2026-08-16 (Patrick): once/day polling is fine -- renewal isn't
+// time-critical the way the 20-min removal alarm is.
 const FAS_RENEW_ALARM = 'fasRenewNudge';
-const FAS_RENEW_PERIOD_MINUTES = 1440; // TODO Patrick: confirm per ADR-100 §7 Q3 (placeholder: once/day)
+const FAS_RENEW_PERIOD_MINUTES = 1440; // Confirmed 2026-08-16: once/day
 
 async function ensureRenewAlarm() {
   const existing = await chrome.alarms.get(FAS_RENEW_ALARM);
