@@ -152,7 +152,10 @@ export default function HoldToPayModal({
             <strong>Payment Link Expires:</strong> {new Date(expiresAt).toLocaleString()}
           </p>
           <p className="text-xs text-amber-700 dark:text-amber-400 mt-1">
-            Shopper can retry payment as many times as needed before expiry.
+            {shopperName} gets an email with a secure payment link for this amount. The
+            items stay held for them until they pay or the link expires, and they can
+            retry as many times as they need before then. Anything else they are holding
+            at this sale is bundled into the same payment.
           </p>
         </div>
 

@@ -872,6 +872,20 @@ const AddItemsDetailPage = () => {
       const photoUrls = formData.photoUrls;
       // Map form field names to API field names for auction items
       let submitData: any = { ...formData, saleId, photoUrls };
+      // ADR-106 charm-pricing parity (2026-08-16): `shippingAvailable`/`shippingPrice`
+      // exist on emptyForm above but this page renders NO control for either one -- they
+      // were being POSTed on every manual create as `false` / `''`. That trips createItem's
+      // "organizer explicitly set shipping" branch (itemController.ts, the
+      // `shippingAvailable !== undefined || shippingPrice !== undefined` test), which stamps
+      // shippingPriceConfirmedByOrganizer=true + shippingPriceSource='ORGANIZER' onto an item
+      // whose shippingPrice is NULL. updateItem's ADR-106 auto-suggest branch then skips the
+      // item forever (`priorShippingConfirmed` short-circuits shouldAttemptAutoSuggest), so it
+      // never receives the charm-priced ($9.99, not $10.00) native-checkout suggestion an
+      // otherwise-identical item gets. Same "only send these keys when the organizer actually
+      // touched the shipping controls" contract edit-item/[id].tsx enforces via shippingTouched
+      // -- this page has no shipping control to touch, so it must never send them.
+      delete submitData.shippingAvailable;
+      delete submitData.shippingPrice;
       if (submitData.listingType === 'AUCTION') {
         submitData = {
           ...submitData,

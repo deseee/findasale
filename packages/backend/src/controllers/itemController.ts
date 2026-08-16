@@ -736,8 +736,80 @@ const ITEM_DETAIL_SELECT = {
         },
         checkoutAttempts: {
           select: { id: true }
+        },
+        // Hold-to-Pay (#221): the item's single active hold (ItemReservation.itemId is
+        // @unique, so this is a to-one relation). Selected here so BOTH read paths can
+        // derive the buyer-identity fields the organizer's Hold-to-Pay modal needs.
+        // PRIVACY: the raw object is NEVER returned. getItemById strips it and replaces
+        // it with an ownership-gated, flattened subset (buildHoldFieldsForViewer below);
+        // getItemForEdit is organizer-only + ownership-checked and does the same for
+        // response-shape parity. Nothing here may be spread into a public response.
+        reservation: {
+          select: {
+            id: true,
+            status: true,
+            expiresAt: true,
+            userId: true,
+            user: { select: { name: true, email: true } },
+            invoice: { select: { expiresAt: true } }
+          }
         }
 } as const;
+
+// Hold-to-Pay (#221) — buyer-identity fields derived from an item's active hold.
+//
+// SECURITY: every field below identifies the shopper who is holding the item, so the
+// full set is returned ONLY to the organizer who owns the sale, or to an admin. The
+// single narrower exception is the holding shopper themselves: they get their own user
+// id back (so the item page can render their own "payment requested" card) plus the
+// payment deadline. They learn nothing they did not already know. Everyone else —
+// anonymous visitors and any other signed-in shopper — gets an empty object, i.e. the
+// response is byte-for-byte what it was before this feature existed.
+type HoldForViewer = {
+  id: string;
+  status: string;
+  expiresAt: Date;
+  userId: string;
+  user?: { name: string | null; email: string } | null;
+  invoice?: { expiresAt: Date } | null;
+} | null | undefined;
+
+// Statuses in which a hold is genuinely live. A settled ('COMPLETED'), cancelled or
+// expired hold exposes nothing about its former holder.
+const ACTIVE_HOLD_STATUSES = ['PENDING', 'CONFIRMED', 'HOLD_IN_CART', 'INVOICE_ISSUED'];
+
+function buildHoldFieldsForViewer(
+  reservation: HoldForViewer,
+  viewer: { isOwnerOrAdmin: boolean; viewerUserId?: string }
+): Record<string, unknown> {
+  if (!reservation || !ACTIVE_HOLD_STATUSES.includes(reservation.status)) return {};
+
+  // Payment deadline: the invoice's own expiry once one exists, otherwise the hold
+  // timer itself — markSoldAndCreateInvoice sets the invoice window equal to the hold
+  // remainder (LOCKED DECISION #7), so the hold expiry is the correct pre-invoice
+  // preview of the deadline the shopper will get.
+  const invoiceExpiresAt = reservation.invoice?.expiresAt ?? reservation.expiresAt;
+
+  if (viewer.isOwnerOrAdmin) {
+    return {
+      // reservationId is what POST /api/reservations/:id/mark-sold keys on. The item id
+      // is NOT interchangeable with it (the frontend used to pass the item id there,
+      // which could only ever 404).
+      reservationId: reservation.id,
+      reservationStatus: reservation.status,
+      reservedBy: reservation.userId,
+      reservedByName: reservation.user?.name ?? null,
+      reservedByEmail: reservation.user?.email ?? null,
+      invoiceExpiresAt,
+    };
+  }
+
+  if (viewer.viewerUserId && viewer.viewerUserId === reservation.userId) {
+    return { reservedBy: reservation.userId, invoiceExpiresAt };
+  }
+
+  return {};
+}
 
 export const getItemById = async (req: Request, res: Response) => {
   try {
@@ -791,7 +863,11 @@ export const getItemById = async (req: Request, res: Response) => {
       cartCount,
       views,
       auctionStatus, // ADR-013 Phase 2: auction status for UI badge
-      checkoutAttempts: undefined // exclude from response
+      checkoutAttempts: undefined, // exclude from response
+      // Hold-to-Pay (#221): NEVER return the raw hold row from this endpoint — it is a
+      // public, optionally-authenticated read. Buyer identity is flattened and
+      // ownership-gated below via buildHoldFieldsForViewer.
+      reservation: undefined
     };
 
     // Organizer who owns the sale can always access their items (e.g. to edit/un-hide them)
@@ -825,7 +901,15 @@ export const getItemById = async (req: Request, res: Response) => {
       return res.status(404).json({ message: 'Item not found' });
     }
 
-    res.json(itemWithCounts);
+    // Hold-to-Pay (#221): buyer-identity fields, gated on the SAME isOwner/isAdmin
+    // signals this endpoint already uses for its DRAFT-sale and inactive-item gates —
+    // deliberately not a second, parallel notion of ownership.
+    const holdFields = buildHoldFieldsForViewer(item.reservation, {
+      isOwnerOrAdmin: isOwner || isAdmin,
+      viewerUserId: authReq.user?.id,
+    });
+
+    res.json({ ...itemWithCounts, ...holdFields });
   } catch (error) {
     console.error('Error fetching item:', error);
     res.status(500).json({ message: 'Server error while fetching item' });
@@ -912,10 +996,20 @@ export const getItemForEdit = async (req: AuthRequest, res: Response) => {
       cartCount,
       views,
       auctionStatus,
-      checkoutAttempts: undefined
+      checkoutAttempts: undefined,
+      // Hold-to-Pay (#221): same strip-and-flatten as getItemById, so the two read
+      // paths keep the identical response shape this shared select exists to guarantee.
+      // This endpoint is organizer-only AND ownership-checked above, so the viewer is
+      // always the owner by the time we get here.
+      reservation: undefined
     };
 
-    res.json(itemWithCounts);
+    const holdFields = buildHoldFieldsForViewer(item.reservation, {
+      isOwnerOrAdmin: true,
+      viewerUserId: req.user.id,
+    });
+
+    res.json({ ...itemWithCounts, ...holdFields });
   } catch (error) {
     console.error('Error fetching item for edit:', error);
     res.status(500).json({ message: 'Server error while fetching item' });
@@ -4442,6 +4536,16 @@ export const getSuggestedShippingPriceHandler = async (req: AuthRequest, res: Re
     const widthInOverride = q.widthIn != null ? parseFloat(q.widthIn) : undefined;
     const heightInOverride = q.heightIn != null ? parseFloat(q.heightIn) : undefined;
     const packageTypeOverride = q.packageType != null && q.packageType !== '' ? q.packageType : undefined;
+    // Preview/applied lockstep (2026-08-16): priceUsd + categoryId are the two
+    // package-independent inputs to suggestNativeShippingPrice (both gate
+    // evaluateStandardEnvelope -- ebayRateEstimateService.ts:1091-1096). updateItem's
+    // ADR-106 auto-set branch prices off the PATCH body's effPrice/effEbayCategoryId,
+    // i.e. the organizer's CURRENT unsaved values; without these overrides this preview
+    // fell back to the LAST PERSISTED price/category and could disagree with what Save
+    // writes by DOLLARS (envelope $1.36 vs parcel $5.24 at the carrier level), not cents.
+    // Sent by edit-item/[id].tsx's suggestion effect alongside weightOz/dims/packageType.
+    const priceUsdOverride = q.priceUsd != null ? parseFloat(q.priceUsd) : undefined;
+    const categoryIdOverride = q.categoryId != null && q.categoryId !== '' ? q.categoryId : undefined;
 
     const weightOz =
       weightOzOverride != null && !isNaN(weightOzOverride) ? weightOzOverride : item.packageWeightOz;
@@ -4483,8 +4587,11 @@ export const getSuggestedShippingPriceHandler = async (req: AuthRequest, res: Re
           lng: item.sale.organizer.lng,
         },
         subscriptionTier: item.sale.organizer.subscriptionTier as any,
-        categoryId: item.ebayCategoryId ?? null,
-        priceUsd: item.price ?? null,
+        categoryId: categoryIdOverride ?? item.ebayCategoryId ?? null,
+        priceUsd:
+          priceUsdOverride != null && !isNaN(priceUsdOverride)
+            ? priceUsdOverride
+            : item.price ?? null,
       });
       return res.status(200).json(suggestion);
     } catch (err) {

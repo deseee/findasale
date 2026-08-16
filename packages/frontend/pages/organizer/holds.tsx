@@ -18,6 +18,7 @@ import FraudBadge from '../../components/FraudBadge';
 import EmptyState from '../../components/EmptyState';
 import { formatDistanceToNow, parseISO } from 'date-fns';
 import HoldToPayModal from '../../components/HoldToPayModal';
+import ConfirmDialog from '../../components/ConfirmDialog';
 
 // Helper: Map explorer rank to badge emoji and description
 function getRankBadge(rank?: string): { emoji: string; label: string; description: string } {
@@ -56,12 +57,37 @@ function getRankBadge(rank?: string): { emoji: string; label: string; descriptio
   }
 }
 
+// markSold settlement router (Decision A): how to settle when "Mark Sold" is clicked.
+// 'AUTO' lets the server pick the best mode for the sale type.
+// 'HOLD_INVOICE' (#221) is handled entirely on the client — it opens the Hold-to-Pay
+// modal instead of hitting /reservations/batch, because that path is a per-reservation
+// endpoint (POST /reservations/:id/mark-sold) that bundles every item the shopper is
+// holding at the sale into ONE Stripe invoice. It is never sent as a settlementMode.
+type SettlementChoice = 'AUTO' | 'RECORD' | 'POS_CART' | 'CHECKOUT_LINK' | 'HOLD_INVOICE';
+
+// Plain-language description of each option, shown under the picker so the organizer
+// knows what will actually happen before committing.
+const SETTLEMENT_HELP: Record<SettlementChoice, string> = {
+  AUTO: 'We pick the method that fits this sale.',
+  RECORD: 'Records a cash or in-person sale. No payment is collected online.',
+  POS_CART: 'Adds the items to your POS cart so you can finish at checkout.',
+  CHECKOUT_LINK: 'Creates a payment link you can show or send to the shopper.',
+  HOLD_INVOICE:
+    'Emails the shopper an itemized invoice with a secure payment link. Everything they are holding at this sale is bundled into one payment.',
+};
+
 interface HoldItem {
   id: string;
   status: string;
   expiresAt: string;
   createdAt: string;
   note: string | null;
+  // Set once a Hold-to-Pay invoice exists for this hold. GET /reservations/organizer
+  // returns the full reservation row, so this has always been on the wire — it just was
+  // not typed or displayed, which is why an organizer had no way to tell that a payment
+  // request was already out on a hold. A `CLAIMING:` value is an in-flight claim, not a
+  // finished invoice.
+  invoiceId?: string | null;
   user: { id: string; name: string; email: string; fraudConfidenceScore?: number; explorerRank?: string };
   item: {
     id: string;
@@ -82,14 +108,16 @@ const OrganizerHoldsPage = () => {
   const [sortBy, setSortBy] = useState<'expiry' | 'created'>('expiry');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
-  // markSold settlement router (Decision A): how to settle when "Mark Sold" is clicked.
-  // 'AUTO' lets the server pick the best mode for the sale type.
-  type SettlementChoice = 'AUTO' | 'RECORD' | 'POS_CART' | 'CHECKOUT_LINK';
   const [settlementMode, setSettlementMode] = useState<SettlementChoice>('AUTO');
 
   // Hold-to-Pay modal state (#221)
   const [showPayModal, setShowPayModal] = useState(false);
   const [payModalHold, setPayModalHold] = useState<HoldItem | null>(null);
+
+  // Confirmation gate for Mark Sold. Marking sold is a settlement action — on the RECORD
+  // path it writes a PAID Purchase row and decrements stock immediately — so it never
+  // fires straight off a single click.
+  const [pendingSettlement, setPendingSettlement] = useState<{ ids: string[]; mode: SettlementChoice } | null>(null);
 
   // Initialize saleFilter from query param on mount
   React.useEffect(() => {
@@ -138,8 +166,10 @@ const OrganizerHoldsPage = () => {
   const batchMutation = useMutation({
     mutationFn: ({ ids, action, settlementMode: mode }: { ids: string[]; action: string; settlementMode?: SettlementChoice }) => {
       const body: { ids: string[]; action: string; settlementMode?: string } = { ids, action };
-      // 'AUTO' = omit so the server resolves the default for the sale type
-      if (mode && mode !== 'AUTO') body.settlementMode = mode;
+      // 'AUTO' = omit so the server resolves the default for the sale type.
+      // 'HOLD_INVOICE' is a client-side route to the Hold-to-Pay modal and is not a
+      // value this endpoint accepts — guard it here too so it can never leak into a body.
+      if (mode && mode !== 'AUTO' && mode !== 'HOLD_INVOICE') body.settlementMode = mode;
       return api.post('/reservations/batch', body);
     },
     onSuccess: (res: any, variables) => {
@@ -154,13 +184,26 @@ const OrganizerHoldsPage = () => {
       } else if (data.settlementMode === 'POS_CART' || data.cartCount != null) {
         const cartCount = data.cartCount ?? count;
         showToast(`Added to POS cart (${cartCount} item${cartCount === 1 ? '' : 's'}). Finish at checkout.`, 'success');
+      } else if (data.updated === 0) {
+        // Server found nothing left to act on (already settled, released, or expired).
+        // Say so plainly rather than reporting a success that did not happen.
+        showToast('Nothing to update — those holds have already been handled.', 'error');
       } else if (data.settlementMode === 'RECORD') {
-        showToast(`${count} item${count === 1 ? '' : 's'} marked as sold.`, 'success');
+        showToast(
+          `${count} item${count === 1 ? '' : 's'} marked sold and cleared from your holds.`,
+          'success'
+        );
       } else {
         showToast(`${count} hold${count === 1 ? '' : 's'} updated.`, 'success');
       }
     },
     onError: (err: any) => {
+      // 409 = the server's idempotency guard rejected a repeat settlement. The list on
+      // screen is stale, so refresh it instead of leaving a row that no longer exists.
+      if (err.response?.status === 409) {
+        queryClient.invalidateQueries({ queryKey: ['organizer-holds'] });
+        setSelectedIds(new Set());
+      }
       showToast(err.response?.data?.message || 'Batch update failed', 'error');
     },
   });
@@ -203,15 +246,95 @@ const OrganizerHoldsPage = () => {
     }
   };
 
+  // True once a real (non-in-flight) invoice exists for this hold.
+  const hasInvoice = (h: HoldItem) => !!h.invoiceId && !h.invoiceId.startsWith('CLAIMING:');
+
+  // Hold-to-Pay (#221): open the payment-request modal for the selected holds. The
+  // server endpoint is per-reservation and bundles every item that shopper is holding at
+  // the sale, so one anchor hold is enough — but the selection has to describe a single
+  // shopper at a single sale or the organizer would not be seeing what they are sending.
+  const openPaymentRequest = (ids: string[]) => {
+    const chosen = holds.filter((h) => ids.includes(h.id));
+    if (chosen.length === 0) return;
+    if (new Set(chosen.map((h) => h.user.id)).size > 1) {
+      showToast('A payment request goes to one shopper at a time. Select holds for a single shopper.', 'error');
+      return;
+    }
+    if (new Set(chosen.map((h) => h.item.sale.id)).size > 1) {
+      showToast('A payment request covers one sale at a time. Select holds from a single sale.', 'error');
+      return;
+    }
+    if (chosen.some(hasInvoice)) {
+      showToast('You have already sent this shopper a payment request. Cancel it first if you need to change it.', 'error');
+      return;
+    }
+    setPayModalHold(chosen[0]);
+    setShowPayModal(true);
+  };
+
   const handleBatch = (action: 'release' | 'extend' | 'markSold') => {
     if (selectedIds.size === 0) return;
     if (action === 'markSold') {
-      // Settlement router (Decision A): route through the batch endpoint with the
-      // chosen settlement mode. The server resolves the default when mode is 'AUTO'.
-      batchMutation.mutate({ ids: Array.from(selectedIds), action, settlementMode });
+      const ids = Array.from(selectedIds);
+      // Hold-to-Pay is a different endpoint entirely — open the review modal, which is
+      // its own confirmation step, instead of the batch settlement path.
+      if (settlementMode === 'HOLD_INVOICE') {
+        openPaymentRequest(ids);
+        return;
+      }
+      // A hold with a payment request already out is settled by the shopper paying it,
+      // not by marking it sold again. The server rejects this with a 409 — say so before
+      // the round trip so the organizer gets an answer, not an error.
+      if (holds.filter((h) => ids.includes(h.id)).some(hasInvoice)) {
+        showToast('One of these holds already has a payment request out. Cancel it first, or wait for the shopper to pay.', 'error');
+        return;
+      }
+      // Every other settlement mode goes through a confirmation first. RECORD writes a
+      // PAID Purchase row and decrements stock the moment it runs, and AUTO can resolve
+      // to RECORD server-side, so neither may fire from a single unguarded click.
+      setPendingSettlement({ ids, mode: settlementMode });
       return;
     }
     batchMutation.mutate({ ids: Array.from(selectedIds), action });
+  };
+
+  // Copy for the confirmation dialog, per settlement mode.
+  const buildSettlementConfirm = (ids: string[], mode: SettlementChoice) => {
+    const chosen = holds.filter((h) => ids.includes(h.id));
+    const count = chosen.length || ids.length;
+    const plural = count === 1 ? '' : 's';
+    const total = chosen.reduce((sum, h) => sum + (h.item.price ?? 0), 0);
+    const money = `$${total.toFixed(2)}`;
+    switch (mode) {
+      case 'RECORD':
+        return {
+          title: 'Record a cash sale?',
+          message: `This marks ${count} item${plural} sold and records a cash sale of ${money}. Your stock goes down, the shopper is notified, and it cannot be undone from this page.`,
+          confirmLabel: 'Record cash sale',
+          variant: 'danger' as const,
+        };
+      case 'POS_CART':
+        return {
+          title: `Add ${count} item${plural} to your POS cart?`,
+          message: `Nothing is charged yet. The item${plural} move into your POS cart and you finish at checkout.`,
+          confirmLabel: 'Add to cart',
+          variant: 'default' as const,
+        };
+      case 'CHECKOUT_LINK':
+        return {
+          title: 'Send a checkout link?',
+          message: `This creates a ${money} payment link for ${count} item${plural} and sends it to the shopper. Nothing is charged until they pay.`,
+          confirmLabel: 'Create link',
+          variant: 'default' as const,
+        };
+      default:
+        return {
+          title: `Mark ${count} item${plural} sold?`,
+          message: `We settle ${count} item${plural} (${money}) the way that fits this sale. If that is a cash sale it is recorded right away, your stock goes down, and it cannot be undone from this page.`,
+          confirmLabel: 'Mark Sold',
+          variant: 'danger' as const,
+        };
+    }
   };
 
   const toggleBuyerExpand = (buyerId: string) => {
@@ -307,7 +430,7 @@ const OrganizerHoldsPage = () => {
 
           {/* Batch action bar */}
           {selectedIds.size > 0 && (
-            <div className="relative z-50 flex items-center gap-3 mb-6 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
+            <div className="relative z-50 flex flex-wrap items-center gap-3 mb-6 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
               <span className="text-sm font-medium text-amber-800 dark:text-amber-400">{selectedIds.size} selected</span>
               <div className="flex gap-2 ml-auto">
                 <button
@@ -336,6 +459,7 @@ const OrganizerHoldsPage = () => {
                   <option value="RECORD">Record cash sale</option>
                   <option value="POS_CART">Add to POS cart</option>
                   <option value="CHECKOUT_LINK">Send checkout link</option>
+                  <option value="HOLD_INVOICE">Email an invoice to the shopper</option>
                 </select>
                 <button
                   onClick={() => handleBatch('markSold')}
@@ -345,6 +469,9 @@ const OrganizerHoldsPage = () => {
                   Mark Sold
                 </button>
               </div>
+              <p className="basis-full text-xs text-amber-700 dark:text-amber-400 mt-1">
+                {SETTLEMENT_HELP[settlementMode]}
+              </p>
             </div>
           )}
 
@@ -489,6 +616,14 @@ const OrganizerHoldsPage = () => {
                                 >
                                   {hold.status}
                                 </span>
+                                {hasInvoice(hold) && (
+                                  <span
+                                    title="This shopper has been emailed a payment request for this item."
+                                    className="text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300"
+                                  >
+                                    Payment requested
+                                  </span>
+                                )}
                                 <HoldTimer expiresAt={hold.expiresAt} />
                                 <span className="text-xs text-warm-400 dark:text-warm-500">
                                   Placed {formatDistanceToNow(parseISO(hold.createdAt), { addSuffix: true })}
@@ -506,29 +641,76 @@ const OrganizerHoldsPage = () => {
           )}
         </div>
       </div>
+      {/* Mark Sold confirmation (all settlement modes except Hold-to-Pay, which has
+          its own review modal). */}
+      {pendingSettlement && (() => {
+        const copy = buildSettlementConfirm(pendingSettlement.ids, pendingSettlement.mode);
+        return (
+          <ConfirmDialog
+            isOpen
+            title={copy.title}
+            message={copy.message}
+            confirmLabel={copy.confirmLabel}
+            cancelLabel="Not yet"
+            variant={copy.variant}
+            onCancel={() => setPendingSettlement(null)}
+            onConfirm={() => {
+              const { ids, mode } = pendingSettlement;
+              setPendingSettlement(null);
+              batchMutation.mutate({ ids, action: 'markSold', settlementMode: mode });
+            }}
+          />
+        );
+      })()}
+
       {/* Hold-to-Pay Modal (#221) */}
-      {showPayModal && payModalHold && (
-        <HoldToPayModal
-          itemId={payModalHold.id}
-          itemTitle={payModalHold.item.title}
-          itemPrice={payModalHold.item.price ?? 0}
-          itemPhoto={payModalHold.item.photoUrls?.[0]}
-          shopperId={payModalHold.user.id}
-          shopperName={payModalHold.user.name}
-          shopperEmail={payModalHold.user.email}
-          organizerTier={(user?.organizerTier as 'SIMPLE' | 'PRO' | 'TEAMS') ?? 'SIMPLE'}
-          expiresAt={payModalHold.expiresAt}
-          isOpen={showPayModal}
-          onClose={() => {
-            setShowPayModal(false);
-            setPayModalHold(null);
-          }}
-          onSuccess={() => {
-            queryClient.invalidateQueries({ queryKey: ['organizer-holds'] });
-            setSelectedIds(new Set());
-          }}
-        />
-      )}
+      {showPayModal && payModalHold && (() => {
+        // The server bundles EVERY hold this shopper has at this sale into one invoice
+        // (markSoldAndCreateInvoice), so the modal has to show the bundle, not just the
+        // hold that was clicked — otherwise the organizer approves one price and the
+        // shopper is billed another. Mirror the server's bundling rule exactly:
+        // same shopper + same sale + still on the holds list (PENDING/CONFIRMED).
+        const anchor = payModalHold;
+        const bundle = holds.filter(
+          (h) => h.user.id === anchor.user.id && h.item.sale.id === anchor.item.sale.id
+        );
+        const isBundle = bundle.length > 1;
+        const bundleTotal = bundle.reduce((sum, h) => sum + (h.item.price ?? 0), 0);
+        // Payment window = the earliest hold expiry in the bundle (LOCKED DECISION #7).
+        const earliestExpiry = new Date(
+          Math.min(...bundle.map((h) => new Date(h.expiresAt).getTime()))
+        ).toISOString();
+
+        return (
+          <HoldToPayModal
+            // POST /reservations/:id/mark-sold keys on the RESERVATION id, not the item id.
+            itemId={anchor.id}
+            itemTitle={
+              isBundle
+                ? `${bundle.length} items from ${anchor.item.sale.title}`
+                : anchor.item.title
+            }
+            itemPrice={isBundle ? bundleTotal : (anchor.item.price ?? 0)}
+            itemPhoto={isBundle ? undefined : anchor.item.photoUrls?.[0]}
+            shopperId={anchor.user.id}
+            shopperName={anchor.user.name}
+            shopperEmail={anchor.user.email}
+            organizerTier={(user?.organizerTier as 'SIMPLE' | 'PRO' | 'TEAMS') ?? 'SIMPLE'}
+            expiresAt={earliestExpiry}
+            isOpen={showPayModal}
+            onClose={() => {
+              setShowPayModal(false);
+              setPayModalHold(null);
+            }}
+            onSuccess={() => {
+              queryClient.invalidateQueries({ queryKey: ['organizer-holds'] });
+              setSelectedIds(new Set());
+              setShowPayModal(false);
+              setPayModalHold(null);
+            }}
+          />
+        );
+      })()}
     </>
   );
 };

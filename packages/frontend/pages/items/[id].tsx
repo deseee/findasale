@@ -105,6 +105,11 @@ interface Item {
   };
   itemPosition?: number; // V3: Physical position in multi-item layout
   isReserved?: boolean;
+  // Hold-to-Pay (#221). The backend returns these ONLY to the organizer who owns the
+  // sale (or an admin); the holding shopper gets reservedBy + invoiceExpiresAt for their
+  // own hold, and everyone else gets nothing. Treat every one of them as absent.
+  reservationId?: string;      // ItemReservation.id — what /reservations/:id/mark-sold keys on
+  reservationStatus?: string;
   reservedBy?: string;
   reservedByName?: string;
   reservedByEmail?: string;
@@ -921,7 +926,7 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
                   </button>
                 )}
                 {/* Hold-to-Pay: Organizer "Mark Sold" button: only for the sale owner, not any organizer */}
-                {user?.roles?.includes('ORGANIZER') && user?.id === item.sale.organizer?.userId && item.status === 'RESERVED' && (
+                {user?.roles?.includes('ORGANIZER') && user?.id === item.sale.organizer?.userId && item.status === 'RESERVED' && item.reservationId && (
                   <button
                     onClick={() => setShowHoldToPayModal(true)}
                     title="Mark as sold and send payment request to shopper"
@@ -1205,10 +1210,14 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
         onClose={() => setShowQrModal(false)}
       />
 
-      {/* Hold-to-Pay Modal: Organizer sends invoice */}
-      {item.status === 'RESERVED' && item.reservedBy && (
+      {/* Hold-to-Pay Modal: Organizer sends invoice.
+          Gated on reservationId, which the API returns only to the sale's owner/admin —
+          so this modal cannot mount for a shopper or an anonymous visitor. */}
+      {item.status === 'RESERVED' && item.reservationId && item.reservedBy && (
         <HoldToPayModal
-          itemId={item.id}
+          // The endpoint behind this modal is POST /reservations/:id/mark-sold and keys
+          // on the RESERVATION id. This passed item.id before, which could only 404.
+          itemId={item.reservationId}
           itemTitle={item.title}
           itemPrice={item.price}
           itemPhoto={item.photoUrls[0]}

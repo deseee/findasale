@@ -39,6 +39,11 @@ function resolveDefaultSettlementMode(sale: { saleType?: string | null; isOnline
   return 'RECORD';
 }
 
+// Sentinel thrown from inside the markSold transaction when the idempotency claim below
+// matches fewer rows than expected (a concurrent or repeat settlement). Rolls the whole
+// transaction back and is translated to a 409 by the caller — never a silent no-op.
+const MARKSOLD_ALREADY_SETTLED = 'MARKSOLD_ALREADY_SETTLED';
+
 const DEFAULT_HOLD_MINUTES = 30; // Feature #121: fallback hold duration in minutes
 const EN_ROUTE_RADIUS_M = 16093; // 10 miles in meters — en route grace zone
 
@@ -270,9 +275,14 @@ export const placeHold = async (req: AuthRequest, res: Response) => {
     const expiresAt = new Date(Date.now() + holdMinutes * 60 * 1000);
 
     const reservation = await prisma.$transaction(async (tx) => {
-      // Clear any stale (CANCELLED/EXPIRED) reservation so @unique slot is free
+      // Clear any stale (CANCELLED/EXPIRED/COMPLETED) reservation so @unique slot is free.
+      // 'COMPLETED' added 2026-08-16 alongside the markSold idempotency guard below: a
+      // settled hold is terminal, and on a multi-unit item that still has stock left the
+      // item legitimately returns to AVAILABLE — without this the settled row would keep
+      // occupying the one-hold-per-item slot and every subsequent placeHold would fail
+      // with P2002 "Item already has an active hold".
       await tx.itemReservation.deleteMany({
-        where: { itemId, status: { in: ['CANCELLED', 'EXPIRED'] } },
+        where: { itemId, status: { in: ['CANCELLED', 'EXPIRED', 'COMPLETED'] } },
       });
       const r = await tx.itemReservation.create({
         data: {
@@ -468,9 +478,17 @@ export const getItemReservation = async (req: AuthRequest, res: Response) => {
   try {
     // Public endpoint — no auth required. Hold expiry is display-only info.
     const { itemId } = req.params;
+    // PRIVACY (2026-08-16): this used to return the ENTIRE ItemReservation row to any
+    // anonymous caller — holder user id and name, the shopper's private note, the GPS
+    // coordinates captured at hold time, and the internal fraudScore/fraudFlags. Its one
+    // and only consumer is HoldTimer.tsx, which reads `expiresAt` and nothing else
+    // (confirmed: `grep -rn "reservations/item" packages/frontend` → one hit). Narrowed
+    // to the countdown fields; status is included so a caller can tell a live hold from
+    // a settled/expired one. Do not widen this select — buyer identity on an item is
+    // owner-gated in itemController.getItemById (buildHoldFieldsForViewer).
     const reservation = await prisma.itemReservation.findUnique({
       where: { itemId },
-      include: { user: { select: { id: true, name: true } } },
+      select: { id: true, itemId: true, status: true, expiresAt: true },
     });
 
     res.json(reservation || null);
@@ -624,6 +642,19 @@ export const batchUpdateHolds = async (req: AuthRequest, res: Response) => {
         return res.status(404).json({ message: 'No valid holds found' });
       }
 
+      // A hold that already has an invoice (or an in-flight `CLAIMING:` claim from
+      // markSoldAndCreateInvoice) has a Stripe payment pending against it. Settling it
+      // again through ANY mode double-sells the item — RECORD would write a second,
+      // cash-flavoured PAID Purchase row for something the shopper is about to pay for
+      // online. POS_CART already refused this case; hoisted here 2026-08-16 so RECORD and
+      // CHECKOUT_LINK are covered by the same rule instead of only one of the three.
+      const alreadyInvoiced = validRouted.find((h) => h.invoiceId);
+      if (alreadyInvoiced) {
+        return res.status(409).json({
+          message: 'One or more of these holds already has a payment request out. Release that invoice first.',
+        });
+      }
+
       // Resolve mode: explicit request wins; otherwise default from the (first) sale.
       const settlementMode: SettlementMode =
         requestedMode ?? resolveDefaultSettlementMode(validRouted[0].item.sale);
@@ -639,7 +670,8 @@ export const batchUpdateHolds = async (req: AuthRequest, res: Response) => {
         if (mismatched) {
           return res.status(400).json({ message: 'POS cart requires all holds to be from the same sale' });
         }
-        // Cannot re-cart an already-invoiced hold.
+        // (Already-invoiced holds are rejected for every mode above — this local check
+        // is left in place as defence in depth for this path specifically.)
         const invoiced = validRouted.find((h) => h.invoiceId);
         if (invoiced) {
           return res.status(409).json({ message: 'One or more holds already have an invoice' });
@@ -868,13 +900,39 @@ export const batchUpdateHolds = async (req: AuthRequest, res: Response) => {
         // RECORD settlement mode (Decision A): the ONLY path that flips AVAILABLE→SOLD
         // directly (the other direct-SOLD writer is the Stripe webhook). Records the
         // sale as a cash/in-person Purchase for each item.
-        await tx.itemReservation.updateMany({
+        //
+        // IDEMPOTENCY GUARD (2026-08-16). This block used to write status:'CONFIRMED' —
+        // i.e. it left every settled hold in exactly the state that makes it eligible to
+        // be marked sold AGAIN. The row stayed on /organizer/holds still showing
+        // CONFIRMED and still offering "Mark Sold", so it read as a no-op button; each
+        // further click wrote another PAID Purchase row and decremented stock again.
+        // Confirmed in production: one organizer clicked three times and created three
+        // duplicate PAID Purchase rows with stock down by 3. The `item.status !== 'SOLD'`
+        // filter above only ever caught the single-unit case — a multi-unit item keeps
+        // its non-SOLD status after a partial sale and sailed straight through it.
+        //
+        // Fix: settle the hold into the terminal 'COMPLETED' state with a CONDITIONAL
+        // updateMany whose WHERE re-checks PENDING/CONFIRMED. Under Postgres READ
+        // COMMITTED the second of two concurrent transactions blocks on the row lock,
+        // re-evaluates that WHERE after the first commits, matches zero rows, and aborts
+        // the whole transaction — so a double-submit can never double-write. 'COMPLETED'
+        // is a new terminal value for this String column (no migration needed) and is
+        // excluded by every `status: { in: ['PENDING','CONFIRMED'] }` filter in the
+        // codebase, which is what makes the row disappear from the organizer's holds
+        // list once it is settled.
+        const claim = await tx.itemReservation.updateMany({
           where: {
             id: { in: validIds },
+            status: { in: ['PENDING', 'CONFIRMED'] }, // idempotency claim — re-checked at row-lock time
             item: { sale: { organizerId: organizer.id } } // re-verify ownership in where clause
           },
-          data: { status: 'CONFIRMED' },
+          data: { status: 'COMPLETED' },
         });
+        if (claim.count !== validIds.length) {
+          // Someone else settled at least one of these holds between our read and this
+          // write. Abort everything — no partial settlement, no duplicate Purchase rows.
+          throw new Error(MARKSOLD_ALREADY_SETTLED);
+        }
         // ADR-085 Track B Phase 1 Step 4: atomic, race-safe stock decrement replaces the
         // old unconditional status update. Capture which items became fully SOLD so the
         // post-transaction eBay/Shopify/FB removal hooks only fire for those (a multi-unit
@@ -893,6 +951,19 @@ export const batchUpdateHolds = async (req: AuthRequest, res: Response) => {
             }
             throw stockErr;
           }
+        }
+        // The hold that reserved these items is now terminal (COMPLETED, above). For a
+        // multi-unit item with stock remaining, sellItemUnits deliberately leaves
+        // Item.status untouched — which previously stranded the item at RESERVED with no
+        // live hold behind it: not buyable, not holdable, until the expiry cron happened
+        // to sweep it. Release the remaining stock back to AVAILABLE. Guarded on
+        // status:'RESERVED' so an INVOICE_ISSUED or already-SOLD item is never walked
+        // backwards.
+        if (partialSaleUpdates.length > 0) {
+          await tx.item.updateMany({
+            where: { id: { in: partialSaleUpdates.map((p) => p.itemId) }, status: 'RESERVED' },
+            data: { status: 'AVAILABLE' },
+          });
         }
         // Record the cash transaction for each sold item (RECORD mode).
         await tx.purchase.createMany({
@@ -925,8 +996,21 @@ export const batchUpdateHolds = async (req: AuthRequest, res: Response) => {
       if (err.message === 'No valid holds found') {
         return { updated: 0, failed: ids.length, holds: [], soldOutItemIds: [], partialSaleUpdates: [] };
       }
+      if (err.message === MARKSOLD_ALREADY_SETTLED) {
+        return { updated: 0, failed: ids.length, holds: [], soldOutItemIds: [], partialSaleUpdates: [], alreadySettled: true };
+      }
       throw err;
     });
+
+    // Idempotency guard tripped: nothing was written. 409 (not a 200 with updated:0) so
+    // the organizer gets a real "already handled" message instead of a silent no-op.
+    if ((result as any).alreadySettled) {
+      return res.status(409).json({
+        message: 'Those holds have already been settled. Refresh to see the latest.',
+        updated: 0,
+        failed: ids.length,
+      });
+    }
 
     // Fire-and-forget emails to shoppers for release/extend actions
     const batchHolds = (result as any).holds as Array<{
@@ -996,7 +1080,7 @@ export const batchUpdateHolds = async (req: AuthRequest, res: Response) => {
       }
     }
 
-    const { holds: _holds, soldOutItemIds: _soldOutItemIds, partialSaleUpdates: _partialSaleUpdates, ...responseResult } = result as any;
+    const { holds: _holds, soldOutItemIds: _soldOutItemIds, partialSaleUpdates: _partialSaleUpdates, alreadySettled: _alreadySettled, ...responseResult } = result as any;
     // Include settlementMode for RECORD so the frontend can show the correct toast copy
     res.json(action === 'markSold' ? { ...responseResult, settlementMode: 'RECORD' } : responseResult);
   } catch (error) {

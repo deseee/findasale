@@ -293,6 +293,22 @@ const EditItemPage = () => {
         if (formData.packageWidthIn) params.set('widthIn', formData.packageWidthIn);
         if (formData.packageHeightIn) params.set('heightIn', formData.packageHeightIn);
         if (formData.packageType) params.set('packageType', formData.packageType);
+        // Preview/applied lockstep (2026-08-16): the two package-independent inputs to
+        // suggestNativeShippingPrice are the item's SALE price (gates eBay Standard Envelope
+        // eligibility -- a ~$1.03-$1.65 envelope rate vs. a several-dollar parcel rate, so it
+        // moves the answer by DOLLARS, not cents) and its eBay category. updateItem's ADR-106
+        // auto-set branch prices off the values in the PATCH body (`effPrice` /
+        // `effEbayCategoryId`), i.e. the organizer's CURRENT unsaved form values -- but this
+        // preview call used to send neither, so getSuggestedShippingPriceHandler fell back to
+        // the item's LAST PERSISTED price/category. Change the price from $50 to $15 on a 3oz
+        // item and the hint showed a parcel rate while Save wrote an envelope rate. Same
+        // reason weightOz/dims/packageType are already sent as overrides above: the previewed
+        // number and the persisted number must come from identical inputs, not just the same
+        // function. NOTE: requires the matching priceUsd/categoryId override support in
+        // getSuggestedShippingPriceHandler (itemController.ts) -- until that ships these two
+        // params are simply ignored server-side, so this is safe to land first.
+        if (formData.price) params.set('priceUsd', formData.price);
+        if (formData.ebayCategoryId) params.set('categoryId', formData.ebayCategoryId);
         const res = await api.get(`/items/${id}/suggested-shipping-price?${params.toString()}`);
         setShippingSuggestion(res.data);
       } catch {
@@ -306,7 +322,7 @@ const EditItemPage = () => {
       if (shippingSuggestionDebounceRef.current) clearTimeout(shippingSuggestionDebounceRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, formData.shippingAvailable, formData.shippingPrice, formData.packageWeightOz, formData.packageLengthIn, formData.packageWidthIn, formData.packageHeightIn, formData.packageType]);
+  }, [id, formData.shippingAvailable, formData.shippingPrice, formData.packageWeightOz, formData.packageLengthIn, formData.packageWidthIn, formData.packageHeightIn, formData.packageType, formData.price, formData.ebayCategoryId]);
 
   // eBay push mutation: S725 always LIVE (DRAFT mode killed)
   const ebayPushMutation = useMutation({
