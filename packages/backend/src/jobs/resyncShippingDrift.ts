@@ -6,8 +6,10 @@
  * the OLD version in `Item.ebayRateVersion`. This sweep walks those drifted listings,
  * cheaply recomputes the buyer shipping amount locally (no eBay call), and only spends
  * an eBay re-pin call when the amount actually moved past the threshold (≥ $0.50 OR
- * ≥ 5%). Items that didn't drift are simply stamped with the current version + new
- * amount locally so they aren't re-examined next sweep. Once every live item carries
+ * ≥ 5%) -- or, for a name-priced source (NAME_PRICED_SOURCES below), by ANY amount at
+ * all, because for those the amount is literally the eBay policy's name. Items that
+ * didn't drift are simply stamped with the current version + new amount locally so they
+ * aren't re-examined next sweep. Once every live item carries
  * the current version, the sweep finds zero candidates and does nothing.
  *
  * Cost discipline:
@@ -32,6 +34,7 @@ import { isEbayRateLimited } from '../lib/ebayRateLimiter';
 import {
   resolveItemShipping,
   type ShippingResolverMapping,
+  type ShippingResolutionSource,
 } from '../services/ebayShippingResolver';
 
 export interface ResyncShippingDriftResult {
@@ -52,6 +55,45 @@ export interface ResyncShippingDriftResult {
 /** Re-pin threshold: amount must move ≥ $0.50 OR ≥ 5% to justify spending an eBay call. */
 const DRIFT_ABS_CENTS = 50;
 const DRIFT_PCT = 0.05;
+
+/**
+ * Resolution sources whose eBay POLICY IDENTITY is the buyer amount -- i.e. the policy
+ * this item sits on is looked up / provisioned BY A NAME THAT EMBEDS THAT EXACT AMOUNT.
+ * For `fvf-flat` that name is `FindA.Sale Flat $X.XX`
+ * (ebayShippingResolver.ts's fvfFlat(); ebayFlatRatePolicyService.ts's
+ * POLICY_NAME_PREFIX + findExistingFlatRatePolicy's exact-name match).
+ *
+ * Why this needs its own gate (bug found 2026-08-16): the ≥$0.50 / ≥5% thresholds above
+ * exist to avoid spending an eBay call on an economically meaningless price move. That
+ * reasoning does NOT hold for these sources, because for them even a ONE-CENT move is not
+ * a price move at all -- it is a DIFFERENT POLICY OBJECT. When charm pricing shipped
+ * (applyCharmPricing, utils/shippingPriceMath.ts, 2026-08-14) every generated name shifted
+ * by a cent: $10.00 -> $9.99, $14.00 -> $13.99. ensureFvfFlatRatePolicy then created brand
+ * new "$9.99"/"$13.99" policies while every already-live listing stayed pinned to the old
+ * "$10.00"/"$14.00" policy -- and this sweep would never re-pin them, because 1 cent
+ * clears neither threshold. Measured on the live Artifact account 2026-08-16 (direct read
+ * of GET /sell/account/v1/fulfillment_policy + the Item table): 15 live listings still on
+ * "FindA.Sale Flat $10.00", 6 on "$14.00", 2 on "$21.00", 2 on "$28.00", 1 each on
+ * "$22.00"/"$30.00"/"$62.50" -- alongside separately-created charm-correct
+ * "$13.99"/"$18.99"/"$19.99"/"$24.99" policies for newer pushes. Two distinct policy
+ * generations for the same price point, permanently.
+ *
+ * There is a second, latent hazard in the no-drift branch below: it stamps the RECOMPUTED
+ * amount into ebayShippingAmountCents without an eBay call, so a sub-threshold mismatch
+ * would make the row read "in sync at $9.99" while the live listing still charges $10.00.
+ * That has not fired on the current data (stored cents still match the live policy exactly)
+ * only because those items already carry the current rate version and are never re-examined.
+ * Treating a name-priced mismatch as drift closes both the stale-pin and the phantom-stamp.
+ *
+ * So: for these sources, ANY difference between the recomputed amount and the stored
+ * amount is drift by definition. The eBay call is still cheap-gated overall -- an item
+ * whose recomputed amount matches exactly is stamped locally with no eBay call, and
+ * resyncItemShippingPolicy itself no-ops (reason `already-current`) if the resolved policy
+ * id turns out to already match.
+ */
+const NAME_PRICED_SOURCES: ReadonlySet<ShippingResolutionSource> = new Set<ShippingResolutionSource>([
+  'fvf-flat',
+]);
 
 /** Cached organizer + policy mapping (keyed by organizerId) to avoid refetch per item. */
 interface OrgCacheEntry {
@@ -236,10 +278,23 @@ export async function resyncShippingDriftSweep(opts?: {
       const newCents = r.buyerAmountCents;
       const stored = item.ebayShippingAmountCents;
 
+      // A name-priced source (see NAME_PRICED_SOURCES) drifts on ANY cent difference:
+      // the amount IS the policy name, so a 1-cent move means the live listing is pinned
+      // to a different eBay policy object than the one we would resolve today.
+      const nameIdentityDrift =
+        stored != null && newCents !== stored && NAME_PRICED_SOURCES.has(r.source);
+
       const drift =
         stored == null ||
+        nameIdentityDrift ||
         Math.abs(newCents - stored) >= DRIFT_ABS_CENTS ||
         (stored > 0 && Math.abs(newCents - stored) / stored >= DRIFT_PCT);
+
+      if (nameIdentityDrift) {
+        console.log(
+          `[ResyncShippingDrift] item ${item.id} policy-name drift: stored=${stored} recomputed=${newCents} source=${r.source} name="${r.policyName ?? ''}" — re-pinning (sub-threshold amount, different policy)`
+        );
+      }
 
       if (drift) {
         if (dryRun) {
