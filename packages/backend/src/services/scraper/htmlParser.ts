@@ -3,6 +3,12 @@
  */
 
 import * as cheerio from 'cheerio';
+import {
+  padHtmlForTextExtraction,
+  sanitizeEmailCandidate,
+  isMalformedCandidate,
+  extractEmailCandidatesFromText,
+} from '../emailProvenance';
 
 export interface ParsedListing {
   title: string;
@@ -43,7 +49,13 @@ export function parseEstateSalesNetListing(html: string): Partial<ParsedListing>
     const title = $('h1.sale-title').text().trim();
     const addressText = $('[data-address]').text().trim();
     const dateText = $('[data-dates]').text().trim();
-    const contactEmail = $('a[href^="mailto:"]').attr('href')?.replace('mailto:', '');
+    // 2026-08-16: decode + structurally validate — an un-decoded `mailto:%20foo@bar.com`
+    // href was being stored verbatim as a live outreach address. Shared helper, same as
+    // every other extraction path.
+    const rawMailto = $('a[href^="mailto:"]').attr('href')?.replace(/^mailto:/i, '').split('?')[0];
+    const decodedMailto = rawMailto ? sanitizeEmailCandidate(rawMailto) : undefined;
+    const contactEmail =
+      decodedMailto && !isMalformedCandidate(decodedMailto) ? decodedMailto : undefined;
     const contactName = $('[data-contact-name]').text().trim();
 
     if (!title || !addressText) return null;
@@ -183,8 +195,12 @@ export function parseGarageSalesFinderGallery(html: string): string[] {
  * Extract email addresses from text (for organizer contact)
  */
 export function extractEmails(text: string): string[] {
-  const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
-  return text.match(emailRegex) || [];
+  // 2026-08-16: callers pass RAW HTML here (garageSaleFinder.ts, scripts/enrichContactEmails.ts
+  // — the latter writes Organizer.contactEmail directly). The old inline regex had neither a
+  // tag-padding step nor a boundary guard, so a phone number in the element next to an email
+  // glued straight onto the local part, and `%XX`-encoded addresses passed through undecoded.
+  // Delegates to the shared extractor used by every other scraped-email path.
+  return extractEmailCandidatesFromText(padHtmlForTextExtraction(text));
 }
 
 /**

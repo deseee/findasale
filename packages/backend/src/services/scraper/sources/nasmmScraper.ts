@@ -30,6 +30,7 @@ import { RateLimiter } from '../rateLimiter';
 import { getOrCreateScrapedOrganizer } from '../index';
 import { getRandomUserAgent } from '../userAgents';
 import { ScrapeStats } from '../sourceRegistry';
+import { sanitizeEmailCandidate, isMalformedCandidate } from '../../emailProvenance';
 
 const NASMM_BASE_URL = 'https://www.nasmm.org';
 const SOURCE_NAME = 'NASMM';
@@ -173,8 +174,10 @@ function parseStatePage(html: string, stateAbbr: string): NASMMEntry[] {
         case 'email': {
           const emailHref = $(row).find('a[href^="mailto:"]').attr('href');
           if (emailHref) {
-            const addr = emailHref.replace(/^mailto:/i, '').trim();
-            if (addr) email = addr;
+            // 2026-08-16: decode + structurally validate — same shared helper as every
+            // other scraped-email path; un-decoded `%XX` hrefs produced live bounces.
+            const addr = sanitizeEmailCandidate(emailHref.replace(/^mailto:/i, '').split('?')[0]);
+            if (addr && !isMalformedCandidate(addr)) email = addr;
           }
           break;
         }

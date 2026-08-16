@@ -7,9 +7,10 @@ import {
   calibrateConfidence as sharedCalibrateConfidence,
   isGenericEmail as sharedIsGenericEmail,
   registrableDomain,
-  decodeMailtoCandidate,
   padHtmlForTextExtraction,
-  stripLeadingPhoneNumberNoise,
+  sanitizeEmailCandidate,
+  isMalformedCandidate,
+  extractEmailCandidatesFromText,
   type DiscoverySource,
 } from './emailProvenance';
 import { isBlockedWebsiteDomain } from '../config/domainBlocklist';
@@ -44,70 +45,14 @@ interface DiscoveryResult {
 const EMAIL_FORMAT_REGEX = /^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$/;
 
 /**
- * Candidate extraction regex for scraping raw text.
- *
- * Local part rules (before @):
- *   - Only [a-zA-Z0-9_%+\-] and dots, but:
- *     - Must start and end with a non-dot character
- *     - No consecutive dots (handled by structure: atom(\.atom)*)
- *     - Minimum 2 characters enforced by {1,}(\.[atom]+)* requiring at least one leading atom
- *   - Apostrophes, brackets, backticks, and markdown syntax are excluded
- *
- * Domain rules (after @):
- *   - [a-zA-Z0-9\-]+ labels separated by dots
- *   - TLD minimum 2 chars
- *
- * Additional post-extraction checks (minimum lengths, etc.) are applied
- * by isMalformedCandidate() before any candidate is used.
+ * 2026-08-16: EMAIL_REGEX, preprocessTextForExtraction() and isMalformedCandidate()
+ * used to live here as module-private copies. They are now shared exports in
+ * emailProvenance.ts (createEmailCandidateRegex / preprocessTextForExtraction /
+ * isMalformedCandidate / sanitizeEmailCandidate / extractEmailCandidatesFromText) so
+ * scraper/enrichment.ts's website + sale-description paths run the exact same logic.
+ * Same rationale as the S1186 isGenericEmail consolidation — this file must not be
+ * able to drift out of sync with the other extraction callers again.
  */
-const EMAIL_REGEX =
-  /[a-zA-Z0-9_%+\-]+(?:\.[a-zA-Z0-9_%+\-]+)*@[a-zA-Z0-9\-]+(?:\.[a-zA-Z0-9\-]+)+\.[a-zA-Z]{2,}/g;
-
-/**
- * Pre-process raw HTML/text before regex extraction.
- * 1. Resolve markdown mailto links -> bare email address
- *    e.g.  [Email us](mailto:hello@example.com)  ->  hello@example.com
- * 2. Strip remaining markdown link wrappers that don't contain mailto
- *    e.g.  [some text](https://...)  ->  (removed so the label text doesn't
- *          accidentally produce a false candidate)
- * 3. Strip bracketed link labels  [label]  that have no parens following them
- */
-function preprocessTextForExtraction(text: string): string {
-  // Step 1: markdown mailto links -> bare address
-  let processed = text.replace(
-    /\[[^\]]*\]\(mailto:([^)\s?]+)(?:\?[^)]*)?\)/gi,
-    ' $1 '
-  );
-  // Step 2: remaining markdown links — keep the label text but drop the URL
-  processed = processed.replace(/\[[^\]]*\]\([^)]+\)/g, ' ');
-  // Step 3: lone bracketed tokens (e.g. [email] orphan labels -> remove)
-  processed = processed.replace(/\[[^\]@]+\]/g, ' ');
-  return processed;
-}
-
-/**
- * Reject a candidate string that passed the regex but violates structural rules
- * that are cheaper to enforce here than to encode in the regex.
- *
- *  - Local part < 2 chars
- *  - Domain (without TLD) < 4 chars total
- *  - Local part starts or ends with a dot (regex already prevents this, but guard anyway)
- *  - Local part contains two consecutive dots (regex prevents; secondary guard)
- */
-function isMalformedCandidate(email: string): boolean {
-  const atIdx = email.indexOf('@');
-  if (atIdx < 0) return true;
-
-  const local = email.substring(0, atIdx);
-  const domain = email.substring(atIdx + 1);
-
-  if (local.length < 2) return true;
-  if (domain.length < 4) return true;
-  if (local.startsWith('.') || local.endsWith('.')) return true;
-  if (local.includes('..')) return true;
-
-  return false;
-}
 
 // Minimum confidence required to write to the DB
 const MIN_CONFIDENCE_TO_STORE = 0.60;
@@ -324,7 +269,7 @@ async function scrapeWebsiteEmails(domain: string): Promise<{ emails: string[]; 
             // 2026-08-12 fix: decode URL-encoding BEFORE trimming/validating — see
             // decodeMailtoCandidate() doc for why (leading %20 / fully-encoded hrefs
             // were being stored verbatim otherwise).
-            const candidate = decodeMailtoCandidate(match[1]).trim();
+            const candidate = sanitizeEmailCandidate(match[1]);
             // Apply structural checks — malformed mailto hrefs are rare but do occur
             if (!isMalformedCandidate(candidate)) {
               emails.push(candidate);
@@ -341,11 +286,7 @@ async function scrapeWebsiteEmails(domain: string): Promise<{ emails: string[]; 
       // padHtmlForTextExtraction() doc.
       const spacedHtml = padHtmlForTextExtraction(html);
       const rawText = cheerio.load(spacedHtml)('body').text();
-      const cleanText = preprocessTextForExtraction(rawText);
-      const textEmails = (cleanText.match(EMAIL_REGEX) || [])
-        .map((e) => stripLeadingPhoneNumberNoise(e))
-        .filter((e) => !isMalformedCandidate(e));
-      emails.push(...textEmails);
+      emails.push(...extractEmailCandidatesFromText(rawText));
 
       // Parse schema.org Person markup
       $('script[type="application/ld+json"]').each((_, el) => {

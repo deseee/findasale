@@ -30,6 +30,7 @@ import { getOrCreateScrapedOrganizer, generateDedupeKey } from '../index';
 import { getRandomUserAgent, getRandomReferer } from '../userAgents';
 import { ScrapeStats } from '../sourceRegistry';
 import { prisma } from '../../../lib/prisma';
+import { sanitizeEmailCandidate, isMalformedCandidate } from '../../emailProvenance';
 
 const BASE_URL = 'https://www.estatesale.com';
 const SOURCE_NAME = 'EstateSaleCom';
@@ -210,10 +211,14 @@ function parseProfilePage(html: string): {
   const phone = phoneMatch?.[1]?.trim() || undefined;
 
   // Email — from mailto: href
+  // 2026-08-16: decode + structurally validate before this becomes a stored, mailed
+  // organizer address — un-decoded `%XX` hrefs produced live bounces. Shared helper.
   const emailHref = $('a[href^="mailto:"]').first().attr('href') ?? '';
-  const email = emailHref
-    ? emailHref.replace('mailto:', '').split('?')[0].trim() || undefined
-    : undefined;
+  const emailCandidate = emailHref
+    ? sanitizeEmailCandidate(emailHref.replace(/^mailto:/i, '').split('?')[0])
+    : '';
+  const email =
+    emailCandidate && !isMalformedCandidate(emailCandidate) ? emailCandidate : undefined;
 
   // Website — first external http link not on estatesale.com or social/tracking
   let website: string | undefined;

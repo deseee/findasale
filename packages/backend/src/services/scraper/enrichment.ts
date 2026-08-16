@@ -14,9 +14,10 @@ import {
   emailDomain,
   domainMatchesBusiness,
   FAMOUS_UNRELATED_DOMAINS,
-  decodeMailtoCandidate,
   padHtmlForTextExtraction,
-  stripLeadingPhoneNumberNoise,
+  sanitizeEmailCandidate,
+  isMalformedCandidate,
+  extractEmailCandidatesFromText,
   type DiscoverySource,
 } from '../emailProvenance';
 
@@ -354,7 +355,6 @@ async function scrapeWebsiteForEmail(website: string): Promise<string | null> {
   const pagesToTry = [`${base}/contact`, `${base}/contact-us`, `${base}/about`, base];
 
   const mailtoPattern = /href=["']mailto:([^"'?\s]+)/gi;
-  const bareEmailPattern = /\b([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})\b/g;
   // Bare technical-mailbox exclusions; generic-mailbox (info@/admin@/…) rejection is
   // handled by isGenericEmail below so it matches the good-path filter exactly.
   const excluded = /noreply|no-reply|donotreply|do-not-reply|bounce|mailer-daemon/i;
@@ -380,8 +380,9 @@ async function scrapeWebsiteForEmail(website: string): Promise<string | null> {
       mailtoPattern.lastIndex = 0;
       let match: RegExpExecArray | null;
       while ((match = mailtoPattern.exec(html)) !== null) {
-        const email = decodeMailtoCandidate(match[1]).trim().toLowerCase();
-        if (email && !excluded.test(email) && !isGenericEmail(email)) return email;
+        const email = sanitizeEmailCandidate(match[1]).toLowerCase();
+        if (!email || isMalformedCandidate(email)) continue;
+        if (!excluded.test(email) && !isGenericEmail(email)) return email;
       }
 
       // Priority 2: bare email addresses in page text
@@ -389,13 +390,16 @@ async function scrapeWebsiteForEmail(website: string): Promise<string | null> {
       // with no whitespace between their tags in the source markup (e.g. a phone
       // number directly next to an email) otherwise collapse into one glued string
       // that the local-part character class happily swallows whole. See
-      // padHtmlForTextExtraction() doc. stripLeadingPhoneNumberNoise() is a second,
-      // independent guard for the rarer case where the two sit in the exact same
-      // text node with zero separator, which tag-padding can't fix.
+      // padHtmlForTextExtraction() doc.
+      // 2026-08-16 fix: this path previously used its own /\b(...)\b/ regex. A `\b`
+      // boundary does NOT stop a digit-run bleeding into a letter-run local part
+      // ("209.232.2709hopechestthrift@…" matches it cleanly), so it was the weaker of
+      // the two in-repo variants. Now delegates to the shared extractor that
+      // emailDiscoveryService.scrapeWebsiteEmails() uses — decode + phone-noise strip +
+      // structural malformed-candidate rejection, one implementation for all callers.
       const spacedForBareMatch = padHtmlForTextExtraction(html);
-      bareEmailPattern.lastIndex = 0;
-      while ((match = bareEmailPattern.exec(spacedForBareMatch)) !== null) {
-        const email = stripLeadingPhoneNumberNoise(match[1].trim().toLowerCase());
+      for (const candidate of extractEmailCandidatesFromText(spacedForBareMatch)) {
+        const email = candidate.toLowerCase();
         // Skip asset paths that accidentally match the email pattern
         if (/\.(png|jpg|gif|js|css|svg|woff)/.test(email)) continue;
         if (!excluded.test(email) && !isGenericEmail(email)) return email;
@@ -425,15 +429,39 @@ async function extractEmailFromSaleDescriptions(organizerId: string): Promise<st
       take: 20,
     });
 
-    const emailPattern = /\b([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})\b/g;
+    // 2026-08-16 fix (Blocked Queue Track A): this was the THIRD extraction path and
+    // the one missed when the same bug was fixed in emailDiscoveryService.scrapeWebsiteEmails()
+    // and scrapeWebsiteForEmail() on 2026-08-12. It had BOTH live failure modes:
+    //   1. no URL-decode — a `mailto:%20kiro@barrettfinancial.com` in a scraped listing
+    //      description was stored verbatim (the `%` is inside the local-part character
+    //      class, so it matched and passed straight through);
+    //   2. a /\b(...)\b/ regex with no boundary guard — `\b` sits happily between a
+    //      digit-run and a letter-run, so an adjacent phone number glues onto the local
+    //      part ("209.232.2709hopechestthrift@hospiceheart.org"). Scraped descriptions are
+    //      concatenated-markup text, which is exactly where that happens.
+    // Now runs the identical decode + boundary + structural logic as the other two paths.
+    const mailtoPattern = /mailto:([^"'?#\s>)\]]+)/gi;
     const excluded = /noreply|no-reply|donotreply|bounce|example\.com/i;
 
     for (const sale of sales) {
       if (!sale.description) continue;
-      emailPattern.lastIndex = 0;
+
+      // Priority 1: explicit mailto: links embedded in the description markup
+      mailtoPattern.lastIndex = 0;
       let match: RegExpExecArray | null;
-      while ((match = emailPattern.exec(sale.description)) !== null) {
-        const email = match[1].toLowerCase();
+      while ((match = mailtoPattern.exec(sale.description)) !== null) {
+        const email = sanitizeEmailCandidate(match[1]).toLowerCase();
+        if (!email || isMalformedCandidate(email)) continue;
+        if (!excluded.test(email) && !isGenericEmail(email)) return email;
+      }
+
+      // Priority 2: bare addresses in the description text. Tag-pad first — descriptions
+      // are scraped verbatim and routinely carry inline markup, so two adjacent elements'
+      // text can otherwise collapse into one glued string before the regex runs.
+      const padded = padHtmlForTextExtraction(sale.description);
+      for (const candidate of extractEmailCandidatesFromText(padded)) {
+        const email = candidate.toLowerCase();
+        if (/\.(png|jpg|gif|js|css|svg|woff)/.test(email)) continue;
         if (!excluded.test(email) && !isGenericEmail(email)) return email;
       }
     }

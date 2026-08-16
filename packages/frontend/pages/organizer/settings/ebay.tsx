@@ -134,6 +134,34 @@ interface SetupData {
   handlingTimeDays?: number;
 }
 
+// (Track A1) Weight-tier gap fill -- response shapes for
+// GET /ebay/weight-tier-gaps/preview and POST /ebay/weight-tier-gaps/fill
+// (backend: ebayController.ts previewWeightTierGapFill / fillWeightTierGaps).
+// Declared locally on purpose: the frontend never imports from @findasale/shared,
+// which breaks the Vercel build.
+interface WeightTierGapRow {
+  fromOz: number;
+  toOz: number;
+  fromLb: number;
+  toLb: number;
+}
+
+interface GapFillTierRow {
+  bucketMaxLb: number;
+  maxOz: number;
+  policyName: string;
+  flatRate: number;
+  closesGapFromOz: number;
+  closesGapToOz: number;
+}
+
+// Render an ounce boundary as the pound figure organizers actually think in:
+// 111oz -> "6.9 lb", 720oz -> "45 lb".
+const ozToLbLabel = (oz: number): string => {
+  const lb = oz / 16;
+  return Number.isInteger(lb) ? `${lb} lb` : `${lb.toFixed(1)} lb`;
+};
+
 const EbayPolicySetupPage = () => {
   const router = useRouter();
   const { user, isLoading: authLoading } = useAuth();
@@ -179,6 +207,45 @@ const EbayPolicySetupPage = () => {
     rows: Array<{ lbs: number; dollars: number | null }>;
     error: string | null;
   }>({ loading: false, rows: [], error: null });
+
+  // (Track A1) Weight-tier gap fill.
+  //
+  // Why this panel exists even though ADR-102 retired ladder-based eBay routing:
+  // the ladder (EbayPolicyMapping.weightTierMappings) is no longer what picks a
+  // policy on an eBay push -- resolvePoliciesForItem computes a fresh rate per item
+  // now -- but it IS still load-bearing for the Google Shopping feed.
+  // computeItemShipping (backend utils/googleMerchantShipping.ts) runs every
+  // shippable item's billable weight through matchWeightTier and advertises the
+  // matched rung's parsed price. matchWeightTier returns the FIRST rung whose maxOz
+  // is >= the item's weight, so a hole in the ladder does not drop the item from the
+  // feed -- it quotes the next rung up. With the known 111oz -> 720oz hole, a 10 lb
+  // item is advertised at the 45 lb catch-all price. Closing the gaps fixes that
+  // overcharge on a live shopper-facing surface.
+  //
+  // computeItemShipping does NOT branch on shippingMode, so unlike Sections C/D/E
+  // this panel is deliberately NOT gated on FLAT_TIERS -- the gap hurts Calculated
+  // organizers exactly the same way.
+  const [gapFill, setGapFill] = useState<{
+    loading: boolean;
+    loaded: boolean;
+    gaps: WeightTierGapRow[];
+    newTiers: GapFillTierRow[];
+    error: string | null;
+    confirming: boolean;
+    filling: boolean;
+    created: WeightTierMapping[] | null;
+    partialFailure: boolean;
+  }>({
+    loading: false,
+    loaded: false,
+    gaps: [],
+    newTiers: [],
+    error: null,
+    confirming: false,
+    filling: false,
+    created: null,
+    partialFailure: false,
+  });
 
   // Fetch setup data on mount
   useEffect(() => {
@@ -400,6 +467,93 @@ const EbayPolicySetupPage = () => {
     } catch (error: any) {
       setPolicyCheck({ loading: false, result: null });
       showToast(error.response?.data?.message || 'Could not check your policies right now', 'error');
+    }
+  };
+
+  // (Track A1) Read-only weight-coverage check. GET /ebay/weight-tier-gaps/preview
+  // makes zero eBay API calls and zero DB writes (see previewWeightTierGapFill's
+  // header in ebayController.ts), so it is safe to run unprompted on page load and
+  // again after a fill.
+  const runGapPreview = React.useCallback(async () => {
+    setGapFill((s) => ({ ...s, loading: true, error: null }));
+    try {
+      const res = await api.get('/ebay/weight-tier-gaps/preview');
+      setGapFill((s) => ({
+        ...s,
+        loading: false,
+        loaded: true,
+        gaps: Array.isArray(res.data?.gaps) ? res.data.gaps : [],
+        newTiers: Array.isArray(res.data?.newTiers) ? res.data.newTiers : [],
+        error: null,
+      }));
+    } catch (error: any) {
+      setGapFill((s) => ({
+        ...s,
+        loading: false,
+        loaded: true,
+        gaps: [],
+        newTiers: [],
+        error:
+          error.response?.data?.error ||
+          error.response?.data?.message ||
+          'Could not check your weight coverage right now.',
+      }));
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!ebayConnected || !mapping) return;
+    if (gapFill.loaded || gapFill.loading) return;
+    runGapPreview();
+  }, [ebayConnected, mapping, gapFill.loaded, gapFill.loading, runGapPreview]);
+
+  // (Track A1) The confirm step. POST /ebay/weight-tier-gaps/fill provisions REAL
+  // eBay fulfillment policies on the organizer's account, which is why it only runs
+  // behind the explicit two-step confirmation in the panel below.
+  const handleFillGaps = async () => {
+    setGapFill((s) => ({ ...s, filling: true, error: null }));
+    try {
+      const res = await api.post('/ebay/weight-tier-gaps/fill', {});
+      const created: WeightTierMapping[] = Array.isArray(res.data?.created) ? res.data.created : [];
+      const partialFailure = res.data?.partialFailure === true;
+
+      // The backend already persisted the appended ladder, so mirror its response into
+      // BOTH mapping and originalMapping. Writing only `mapping` would make hasChanges
+      // fire and pop the unsaved-changes save bar for a change that is already saved --
+      // and a subsequent Save would re-POST the same ladder.
+      const returned = Array.isArray(res.data?.weightTierMappings) ? res.data.weightTierMappings : null;
+      if (returned && mapping) {
+        const withIds: WeightTierMapping[] = returned.map((t: any) => ({
+          maxOz: t.maxOz,
+          policyId: t.policyId,
+          policyName: t.policyName,
+          _clientId: newClientId(),
+        }));
+        const nextMapping = { ...mapping, weightTierMappings: withIds };
+        setMapping(nextMapping);
+        setOriginalMapping(JSON.parse(JSON.stringify(nextMapping)));
+      }
+
+      setGapFill((s) => ({ ...s, filling: false, confirming: false, created, partialFailure }));
+
+      const noun = created.length === 1 ? 'policy' : 'policies';
+      showToast(
+        partialFailure
+          ? `Created ${created.length} shipping ${noun}. Some ranges could not be created -- try again in a moment.`
+          : `Created ${created.length} shipping ${noun} on eBay`,
+        partialFailure ? 'warning' : 'success'
+      );
+
+      // Re-check coverage against the ladder we just wrote, so the panel reflects
+      // reality rather than the pre-fill preview.
+      await runGapPreview();
+    } catch (error: any) {
+      const msg =
+        error.response?.data?.error ||
+        error.response?.data?.message ||
+        'Could not create the shipping policies right now.';
+      setGapFill((s) => ({ ...s, filling: false, confirming: false, error: msg }));
+      showToast(msg, 'error');
     }
   };
 
@@ -766,6 +920,165 @@ const EbayPolicySetupPage = () => {
                   </p>
                 </div>
                 )}
+
+                {/* Section C2: Weight coverage / "Fill gaps automatically" (Track A1).
+                    Wires the pre-existing but previously unreachable backend endpoints
+                    GET /ebay/weight-tier-gaps/preview and POST /ebay/weight-tier-gaps/fill.
+                    Preview is read-only (no eBay calls, no DB writes) so it runs on load;
+                    the fill provisions real eBay policies, so it sits behind an explicit
+                    two-step confirmation. NOT gated on shippingMode -- see the gapFill
+                    state comment above for why (the Google Shopping feed reads this ladder
+                    for every organizer regardless of eBay shipping mode). */}
+                <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+                  <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-1">Weight coverage</h2>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                    Each of your shipping policies covers a weight range. When a range is missing,
+                    items that fall in it get charged the price of your next-heaviest policy -- so a
+                    10 lb item can end up advertised at a 45 lb price. This checks for missing ranges
+                    and can create the policies to close them.
+                  </p>
+
+                  {gapFill.loading && (
+                    <p className="text-sm text-gray-500 dark:text-gray-400">Checking your weight coverage…</p>
+                  )}
+
+                  {!gapFill.loading && gapFill.error && (
+                    <div className="rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 p-3">
+                      <p className="text-sm text-red-700 dark:text-red-400 mb-2">{gapFill.error}</p>
+                      <button
+                        type="button"
+                        onClick={runGapPreview}
+                        className="text-sm px-3 py-1.5 border border-red-300 dark:border-red-700 text-red-700 dark:text-red-400 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/40 font-medium transition"
+                      >
+                        Try again
+                      </button>
+                    </div>
+                  )}
+
+                  {!gapFill.loading && !gapFill.error && gapFill.loaded && gapFill.gaps.length === 0 && (
+                    <div className="flex flex-wrap items-center gap-3">
+                      <span className="text-sm text-sage-700 dark:text-sage-400">
+                        Every weight range is covered. Nothing to fix here.
+                      </span>
+                      <button
+                        type="button"
+                        disabled
+                        className="text-sm px-3 py-1.5 border border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 rounded-lg opacity-50 cursor-not-allowed font-medium"
+                      >
+                        Fill gaps automatically
+                      </button>
+                    </div>
+                  )}
+
+                  {!gapFill.loading && !gapFill.error && gapFill.gaps.length > 0 && (
+                    <>
+                      <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 p-3 mb-4">
+                        <p className="text-sm font-medium text-amber-800 dark:text-amber-300 mb-1">
+                          {gapFill.gaps.length === 1
+                            ? '1 weight range has no policy of its own'
+                            : `${gapFill.gaps.length} weight ranges have no policy of their own`}
+                        </p>
+                        <ul className="text-sm text-amber-800 dark:text-amber-300 list-disc list-inside space-y-0.5">
+                          {gapFill.gaps.map((gap) => (
+                            <li key={`${gap.fromOz}-${gap.toOz}`}>
+                              {ozToLbLabel(gap.fromOz)} to {ozToLbLabel(gap.toOz)}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+
+                      {gapFill.newTiers.length > 0 && (
+                        <div className="mb-4">
+                          <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            {gapFill.newTiers.length === 1
+                              ? 'This policy would be created on your eBay account:'
+                              : `These ${gapFill.newTiers.length} policies would be created on your eBay account:`}
+                          </p>
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-sm">
+                              <thead>
+                                <tr className="border-b border-gray-200 dark:border-gray-700">
+                                  <th className="text-left py-2 px-3 font-semibold text-gray-700 dark:text-gray-300">Covers up to</th>
+                                  <th className="text-left py-2 px-3 font-semibold text-gray-700 dark:text-gray-300">Buyer pays</th>
+                                  <th className="text-left py-2 px-3 font-semibold text-gray-700 dark:text-gray-300 hidden sm:table-cell">Policy name</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {gapFill.newTiers.map((tier) => (
+                                  <tr key={tier.maxOz} className="border-b border-gray-200 dark:border-gray-700">
+                                    <td className="py-3 px-3 text-gray-900 dark:text-white whitespace-nowrap">{ozToLbLabel(tier.maxOz)}</td>
+                                    <td className="py-3 px-3 text-gray-900 dark:text-white whitespace-nowrap">${tier.flatRate.toFixed(2)}</td>
+                                    <td className="py-3 px-3 text-gray-600 dark:text-gray-400 hidden sm:table-cell">{tier.policyName}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-2 sm:hidden">
+                            Each new policy is named for the weight it covers and the price shown.
+                          </p>
+                        </div>
+                      )}
+
+                      {!gapFill.confirming ? (
+                        <button
+                          type="button"
+                          onClick={() => setGapFill((s) => ({ ...s, confirming: true }))}
+                          disabled={gapFill.newTiers.length === 0 || gapFill.filling}
+                          className="text-sm px-3 py-1.5 border border-sage-600 text-sage-600 dark:text-sage-400 dark:border-sage-500 rounded-lg hover:bg-sage-50 dark:hover:!bg-sage-700/20 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition"
+                        >
+                          Fill gaps automatically
+                        </button>
+                      ) : (
+                        <div className="rounded-lg border border-sage-600 bg-sage-50 dark:!bg-sage-700/20 p-3">
+                          <p className="text-sm text-gray-800 dark:text-gray-200 mb-3">
+                            This creates {gapFill.newTiers.length} real shipping{' '}
+                            {gapFill.newTiers.length === 1 ? 'policy' : 'policies'} on your eBay account and
+                            adds {gapFill.newTiers.length === 1 ? 'it' : 'them'} to your weight ranges. Your
+                            existing policies are not changed or removed.
+                          </p>
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              onClick={handleFillGaps}
+                              disabled={gapFill.filling}
+                              className="text-sm px-3 py-1.5 bg-sage-600 hover:bg-sage-700 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed font-medium transition"
+                            >
+                              {gapFill.filling ? 'Creating policies…' : 'Yes, create them'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setGapFill((s) => ({ ...s, confirming: false }))}
+                              disabled={gapFill.filling}
+                              className="text-sm px-3 py-1.5 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+
+                  {gapFill.created && gapFill.created.length > 0 && (
+                    <div className="mt-4 rounded-lg border border-sage-200 dark:border-sage-700 bg-sage-50 dark:!bg-sage-700/20 p-3">
+                      <p className="text-sm font-medium text-sage-700 dark:text-sage-300 mb-1">
+                        Created {gapFill.created.length} shipping{' '}
+                        {gapFill.created.length === 1 ? 'policy' : 'policies'} on eBay:
+                      </p>
+                      <ul className="text-sm text-sage-700 dark:text-sage-300 list-disc list-inside space-y-0.5">
+                        {gapFill.created.map((tier) => (
+                          <li key={tier.policyId}>{tier.policyName}</li>
+                        ))}
+                      </ul>
+                      {gapFill.partialFailure && (
+                        <p className="text-sm text-amber-700 dark:text-amber-400 mt-2">
+                          Some ranges could not be created. Try the check again in a moment to finish the rest.
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
 
                 {/* Section D: Shipping classification overrides.
                     Gated on shippingMode === 'FLAT_TIERS' (UX audit finding 2 /

@@ -329,3 +329,120 @@ export function stripLeadingPhoneNumberNoise(candidate: string): string {
   }
   return candidate;
 }
+
+/**
+ * 2026-08-16 (Blocked Queue Track A — third unprotected caller found):
+ * The candidate-extraction primitives below were module-private inside
+ * emailDiscoveryService.ts. They are the STRONGER of the two variants that existed
+ * in the codebase (the other, in scraper/enrichment.ts, relied on `\b` word
+ * boundaries, which do NOT stop a digit-run bleeding into a letter-run local part —
+ * "209.232.2709hopechestthrift@..." matches `\b...\b` cleanly). Promoted here so
+ * every scraped-email extraction path shares ONE implementation and this class of bug
+ * cannot be fixed in two callers while a third silently keeps producing bad addresses.
+ * Same rationale/precedent as the S1186 isGenericEmail consolidation.
+ *
+ * Candidate extraction regex for scraping raw text.
+ *
+ * Local part rules (before @):
+ *   - Only [a-zA-Z0-9_%+\-] and dots, but:
+ *     - Must start and end with a non-dot character
+ *     - No consecutive dots (handled by structure: atom(\.atom)*)
+ *   - Apostrophes, brackets, backticks, and markdown syntax are excluded
+ *
+ * Domain rules (after @):
+ *   - [a-zA-Z0-9\-] labels separated by dots
+ *   - TLD minimum 2 chars
+ *
+ * 2026-08-16 BUG FIX found while promoting this out of emailDiscoveryService.ts: the
+ * inter-label group was `(?:\.[a-zA-Z0-9\-]+)+` — a `+`, not a `*`. That required a
+ * THREE-label domain, so every ordinary two-label address was silently unmatched by the
+ * bare-text path ("jane@example.org" -> no match; "jane@mail.example.org" -> match).
+ * Verified against the live literal with node before and after the change. The mailto:
+ * href path was unaffected (it never used this regex), which is why the gap went unnoticed.
+ *
+ * Returned as a factory rather than a shared module-level constant: the pattern is
+ * /g, so a single shared instance would carry `lastIndex` state across callers and
+ * silently skip matches for anyone using .exec() in a loop.
+ */
+export function createEmailCandidateRegex(): RegExp {
+  return /[a-zA-Z0-9_%+\-]+(?:\.[a-zA-Z0-9_%+\-]+)*@[a-zA-Z0-9\-]+(?:\.[a-zA-Z0-9\-]+)*\.[a-zA-Z]{2,}/g;
+}
+
+/**
+ * Pre-process raw HTML/text before regex extraction.
+ * 1. Resolve markdown mailto links -> bare email address
+ *    e.g.  [Email us](mailto:hello@example.com)  ->  hello@example.com
+ * 2. Strip remaining markdown link wrappers that don't contain mailto
+ *    e.g.  [some text](https://...)  ->  (removed so the label text doesn't
+ *          accidentally produce a false candidate)
+ * 3. Strip bracketed link labels  [label]  that have no parens following them
+ */
+export function preprocessTextForExtraction(text: string): string {
+  // Step 1: markdown mailto links -> bare address
+  let processed = text.replace(
+    /\[[^\]]*\]\(mailto:([^)\s?]+)(?:\?[^)]*)?\)/gi,
+    ' $1 '
+  );
+  // Step 2: remaining markdown links — keep the label text but drop the URL
+  processed = processed.replace(/\[[^\]]*\]\([^)]+\)/g, ' ');
+  // Step 3: lone bracketed tokens (e.g. [email] orphan labels -> remove)
+  processed = processed.replace(/\[[^\]@]+\]/g, ' ');
+  return processed;
+}
+
+/**
+ * Reject a candidate string that passed the regex but violates structural rules
+ * that are cheaper to enforce here than to encode in the regex.
+ *
+ *  - Contains whitespace (only reachable post-decode: "%20foo@bar" decodes to " foo@bar";
+ *    a real address can never contain whitespace, so this can't reject a valid one)
+ *  - Local part < 2 chars
+ *  - Domain (without TLD) < 4 chars total
+ *  - Local part starts or ends with a dot (regex already prevents this, but guard anyway)
+ *  - Local part contains two consecutive dots (regex prevents; secondary guard)
+ *  - A surviving percent-escape anywhere (an address that still looks URL-encoded after
+ *    decodeMailtoCandidate() failed to decode it is not safe to mail)
+ */
+export function isMalformedCandidate(email: string): boolean {
+  const atIdx = email.indexOf('@');
+  if (atIdx < 0) return true;
+  if (/\s/.test(email)) return true;
+  if (/%[0-9a-fA-F]{2}/.test(email)) return true;
+
+  const local = email.substring(0, atIdx);
+  const domain = email.substring(atIdx + 1);
+
+  if (local.length < 2) return true;
+  if (domain.length < 4) return true;
+  if (local.startsWith('.') || local.endsWith('.')) return true;
+  if (local.includes('..')) return true;
+
+  return false;
+}
+
+/**
+ * Single normalisation entry point for ANY raw email candidate pulled out of scraped
+ * markup or text — mailto: href, bare-text regex match, or directory table cell.
+ *
+ * Order matters: URL-decode FIRST (so "%20kiro@barrettfinancial.com" becomes
+ * " kiro@barrettfinancial.com"), then trim the whitespace that decode may have
+ * revealed, then strip a glued-on leading phone number. Callers still run
+ * isMalformedCandidate() on the result before using it.
+ */
+export function sanitizeEmailCandidate(raw: string): string {
+  return stripLeadingPhoneNumberNoise(decodeMailtoCandidate(raw).trim());
+}
+
+/**
+ * Extract every usable email candidate from a block of text.
+ *
+ * Callers are responsible for flattening HTML to text first — via
+ * padHtmlForTextExtraction() (and optionally cheerio .text()) — so that two adjacent
+ * elements' text nodes can never glue together before the regex runs.
+ */
+export function extractEmailCandidatesFromText(text: string): string[] {
+  const clean = preprocessTextForExtraction(text);
+  return (clean.match(createEmailCandidateRegex()) || [])
+    .map((candidate) => sanitizeEmailCandidate(candidate))
+    .filter((candidate) => !isMalformedCandidate(candidate));
+}
