@@ -43,6 +43,13 @@ export class ShippingHardBlockError extends Error {
 }
 
 /**
+ * ⚠️ SUPERSEDED 2026-08-16 FOR RATE_TABLE (USPS) ONLY -- see the authoritative
+ * "FULLY REBUILT" block immediately above `const RATE_TABLE` further down. Everything
+ * in this block about USPS dollar values, the z8 re-anchor, the 22.5lb row and the
+ * baked-in >2cuft fee is HISTORY, kept for provenance, and must not be acted on. The
+ * parts about RATE_TABLE_UPS / RATE_TABLE_FEDEX, the 49079->98282 zone-7 determination
+ * and the eBay-calculator methodology are still current.
+ *
  * USPS Ground Advantage rates, real-anchored 2026-07-21, z8 CORRECTED 2026-08-10 —
  * pulled directly from eBay's own live shipping calculator (ebay.com/shp/calc/rates)
  * using Patrick's real connected eBay seller account, so these are eBay's actual
@@ -267,23 +274,159 @@ export class ShippingHardBlockError extends Error {
 // separate, pre-existing "z1 holds the real zone-2 price" misfiling documented above, not
 // this fee.) UPS/FedEx cannot carry this artifact: the >2cuft nonstandard fee is a USPS
 // Ground Advantage fee and is not part of the UPS/FedEx surcharge model.
+/**
+ * ═══════════════════════════════════════════════════════════════════════════════════
+ * RATE_TABLE (USPS Ground Advantage) -- FULLY REBUILT 2026-08-16 (ADR-103 Phase 6).
+ * READ THIS BLOCK BEFORE THE (NOW SUPERSEDED) HISTORICAL BLOCK BELOW IT.
+ * ═══════════════════════════════════════════════════════════════════════════════════
+ *
+ * WHAT WAS WRONG: this table was weight x zone ONLY, and its light-weight cells were
+ * live eBay quotes that happened to be taken in SMALL boxes -- so they were CUBIC
+ * prices, not weight prices, filed against weight rows. USPS bills Ground Advantage on
+ * whichever is cheaper of two INDEPENDENT bases (weight and cubic); the old single-basis
+ * table could not tell them apart, so any organizer shipping a real-sized box was quoted
+ * a small-box cubic price. Measured under-quote against live eBay quotes taken the same
+ * day (origin 49079, real seller account, boxes recorded):
+ *     z2  7lb -14%   z2 14lb -21%   z2 20lb -31%
+ *     z7  7lb -25%   z7 14lb -33%   z7 20lb -45%  (table $15.75 vs real $28.70, 16x13x13)
+ * Direct proof of the cubic confusion, same harvest: a 12x9x8in box (864 cu in = exactly
+ * 0.500 cu ft) priced $8.00 flat to 49503 at 7lb, 14lb AND 20lb -- completely
+ * weight-independent -- and $13.98 flat to 98282 at both 14lb and 20lb. Weight pricing
+ * cannot be weight-independent; that is cubic pricing.
+ * Independent proof inside this file: the OLD z8 column's 1/2/3/5/7/10/14lb cells were
+ * 10.13 / 11.84 / 11.84 / 17.29 / 18.90 / 21.57 / 23.89 -- every one of them an EXACT
+ * match to a rung of the Notice 123 p.16 Commercial-Cubic ZONE 8 column
+ * (0.10/0.20/0.20/0.40/0.50/0.70/0.90), and none of them a match to the p.15 weight
+ * column at the same weight. Seven consecutive cubic prices misfiled as weight prices.
+ * Those same seven values were ALSO sitting in CUBIC_TIER_TABLE below, labelled a "flat
+ * national rate" -- they are not national, they are the zone-8 column.
+ *
+ * WHAT THIS TABLE IS NOW: USPS Notice 123 -- Price List, "USPS Ground Advantage /
+ * Commercial-Parcels", page 15, transcribed VERBATIM, zones 1-8, at every real published
+ * weight step (4oz / 8oz / 12oz / 15.999oz, then every whole pound 1-70). No scaling, no
+ * interpolation, no invented cell. Source fetched and text-extracted directly from
+ * pe.usps.com/cpim/ftp/manuals/dmm300/notice123.pdf (63pp) on 2026-08-16.
+ * NOTE ON EFFECTIVE DATE: the PDF's own cover reads "Notice 123 - Effective July 12,
+ * 2026". Earlier comments in this file cite "eff. 2026-08-01" for Notice 123 -- that is
+ * wrong; 2026-08-01 is the effective date USPS's ZONE CHART endpoint returns, a different
+ * document. The price figures those comments quote are correct and match this edition.
+ *
+ * WHY PUBLISHED COMMERCIAL AND NOT AN eBAY-DISCOUNTED NUMBER -- and what that costs:
+ * Published Commercial is a PROVEN UPPER BOUND on eBay's negotiated price. Across all 50
+ * live eBay Ground Advantage quotes harvested 2026-08-16 (origin 49079; destinations
+ * 49503/30301/10001/33101/98282/98357 = USPS zones 2/4/5/6/7/8; 8 weights; box dims
+ * recorded for every quote), eBay's price was NEVER above published, and was EXACTLY
+ * EQUAL in 22 of them:
+ *   - at ZONE 8, eBay == published to the penny at every weight tested (1/3/7/14/20/23/
+ *     30/50lb) -- ratio 1.000, 8/8;
+ *   - at ANY zone, for billable weight >= 23lb, eBay == published to the penny -- ratio
+ *     1.000, 14/14 observations (23lb at z2/z5/z7/z8; 30lb and 50lb at all six zones).
+ * This matters because the live flat-rate path prices at the organizer's COVERAGE zone,
+ * which is the MAX zone over CONUS (coverageZoneForOrigin) -- z8 for every Michigan
+ * origin (ZIP1_MAX_ZONE['4'] = 'z8'). So in production this table is EXACT, not an
+ * over-estimate. The over-estimate only appears at z1-z7 below 23lb, where eBay does have
+ * a real negotiated discount. Those measured discounts are recorded verbatim in
+ * EBAY_USPS_OBSERVED_DISCOUNT_RATIOS below -- recorded, deliberately NOT applied. Applying
+ * them would require inventing ratios for z1 and z3 (never measured) and for every
+ * light-weight LARGE-box cell (never measured, because every light-weight box in the
+ * harvest was cubic-eligible), and inventing rate cells is the exact failure this rebuild
+ * exists to undo.
+ *
+ * WHAT THIS FIXES BEYOND THE UNDER-QUOTE: the old table jumped 20 -> 22.5 -> 30 -> 50 ->
+ * 70lb, so every parcel in (20, 22.5] paid the 22.5lb price and every parcel in
+ * (30, 50] paid the 50lb price. ADR-103 sec.7 called that bracket coarseness "the primary
+ * defect". A complete per-pound ladder removes it entirely; the hand-built `maxLb: 22.5`
+ * row is no longer needed (23lb is now a real published row) and is gone with it.
+ *
+ * FEES ARE NOT IN THIS TABLE. Notice 123 p.15 notes 5/6/7 (>22in $4.50, >30in $10.00,
+ * >2 cu ft (3456 cu in) $21.00) are applied ONCE, by computeSurchargeForCarrier() only.
+ * The old 50lb/70lb z8 cells had the $21.00 fee baked in AND added again at runtime; that
+ * double charge cannot recur because every cell below is now a published BASE price
+ * (verified: this table's 50lb z8 = 150.27 and 70lb z8 = 191.31 = Notice 123 exactly).
+ *
+ * CROSS-CHECK THAT THE WHOLE MODEL RECONSTRUCTS REALITY: min(weight p.15, cubic p.16)
+ * + fee-once reproduces all 8 zone-8 live quotes to the penny, INCLUDING the two that
+ * carry the >2cuft fee (18x16x14 @ 30lb = 96.60 + 21.00 = 117.60 real; 20x18x18 @ 50lb =
+ * 150.27 + 21.00 = 171.27 real).
+ *
+ * Zone columns z1..z8 map to Notice 123's published zones 1..8. The card's zone-9 column
+ * is identical to zone 8 throughout and is not modelled.
+ */
 const RATE_TABLE: RateRow[] = [
-  { maxLb: 0.25   , z1: 5.24 , z2: 5.24 , z3: 5.28 , z4: 5.4 , z5: 5.48 , z6: 5.62 , z7: 5.72 , z8: 8.40 },
-  { maxLb: 0.5    , z1: 5.7 , z2: 5.7 , z3: 5.73 , z4: 5.83 , z5: 5.89 , z6: 5.97 , z7: 6.07 , z8: 8.40 },
-  { maxLb: 0.75   , z1: 6.1 , z2: 6.1 , z3: 6.17 , z4: 6.25 , z5: 6.37 , z6: 6.58 , z7: 6.72 , z8: 8.40 },
-  { maxLb: 0.9999 , z1: 6.52 , z2: 6.52 , z3: 6.65 , z4: 6.98 , z5: 7.42 , z6: 7.6 , z7: 7.8 , z8: 8.40 },
-  { maxLb: 1      , z1: 6.56 , z2: 6.56 , z3: 6.69 , z4: 7.02 , z5: 7.9 , z6: 8.75 , z7: 9.02 , z8: 10.13 },
-  { maxLb: 2      , z1: 6.68 , z2: 6.68 , z3: 6.8 , z4: 7.22 , z5: 8.13 , z6: 9.35 , z7: 9.69 , z8: 11.84 },
-  { maxLb: 3      , z1: 5.8 , z2: 5.8 , z3: 5.83 , z4: 5.93 , z5: 6.99 , z6: 8.07 , z7: 8.17 , z8: 11.84 },
-  { maxLb: 5      , z1: 5.8 , z2: 5.8 , z3: 5.83 , z4: 5.93 , z5: 7.05 , z6: 8.07 , z7: 9.69 , z8: 17.29 },
-  { maxLb: 7      , z1: 7.02 , z2: 7.02 , z3: 7.31 , z4: 7.77 , z5: 9.06 , z6: 10.6 , z7: 11.16 , z8: 18.90 },
-  { maxLb: 10     , z1: 7.55 , z2: 7.55 , z3: 7.88 , z4: 8.56 , z5: 10.3 , z6: 12.13 , z7: 12.92 , z8: 21.57 },
-  { maxLb: 14     , z1: 8.2 , z2: 8.2 , z3: 8.54 , z4: 9.47 , z5: 11.68 , z6: 13.81 , z7: 14.94 , z8: 23.89 },
-  { maxLb: 20     , z1: 8.29 , z2: 8.29 , z3: 8.74 , z4: 9.79 , z5: 12.22 , z6: 14.48 , z7: 15.75 , z8: 40.39 },
-  { maxLb: 22.5   , z1: 21.51 , z2: 23.16 , z3: 24.92 , z4: 27.33 , z5: 34.05 , z6: 43.29 , z7: 52.14 , z8: 58.41 }, // ZONE-CORRECTED 2026-08-16: USPS Notice 123 p.15 Commercial-Parcels, "not over 23 lb" row, verbatim. z7 $52.14 DOUBLY CONFIRMED (published card + the live eBay quote: $52.14 + $10.00 note-6 >30in fee = the $62.14 observed total). z1-z6/z8 are published commercial = primary-sourced upper bounds on eBay's negotiated price, UNVERIFIED as exact eBay prices
-  { maxLb: 30     , z1: 32.38 , z2: 32.38 , z3: 36.86 , z4: 45.34 , z5: 59.28 , z6: 71.88 , z7: 84.24 , z8: 96.60 },
-  { maxLb: 50     , z1: 47.07 , z2: 47.07 , z3: 53.63 , z4: 65.96 , z5: 89.6 , z6: 109.94 , z7: 129.95 , z8: 150.27 }, // z8 was $171.27 = exactly $150.27 + $21.00; see DOUBLE-CHARGE FIX note above
-  { maxLb: 70     , z1: 57.63 , z2: 57.63 , z3: 64.26 , z4: 79.08 , z5: 110.97 , z6: 137.46 , z7: 163.73 , z8: 191.31 }, // z8 was $212.31 = exactly $191.31 + $21.00; see DOUBLE-CHARGE FIX note above
+  { maxLb: 0.25  , z1: 6.93 , z2: 6.94 , z3: 7.30 , z4: 7.46 , z5: 7.69 , z6: 7.86 , z7: 8.07 , z8: 8.40 }, // 4 oz
+  { maxLb: 0.5   , z1: 6.93 , z2: 6.94 , z3: 7.30 , z4: 7.46 , z5: 7.69 , z6: 7.86 , z7: 8.07 , z8: 8.40 }, // 8 oz
+  { maxLb: 0.75  , z1: 6.93 , z2: 6.94 , z3: 7.30 , z4: 7.46 , z5: 7.69 , z6: 7.86 , z7: 8.07 , z8: 8.40 }, // 12 oz
+  { maxLb: 0.9999, z1: 6.93 , z2: 6.94 , z3: 7.30 , z4: 7.46 , z5: 7.69 , z6: 7.86 , z7: 8.07 , z8: 8.40 }, // 15.999 oz
+  { maxLb: 1     , z1: 7.61 , z2: 7.68 , z3: 8.00 , z4: 8.15 , z5: 8.74 , z6: 9.63 , z7: 9.98 , z8: 10.67 },
+  { maxLb: 2     , z1: 7.99 , z2: 8.08 , z3: 8.26 , z4: 8.51 , z5: 9.95 , z6: 11.58 , z7: 12.00 , z8: 12.87 },
+  { maxLb: 3     , z1: 8.64 , z2: 8.66 , z3: 9.14 , z4: 9.67 , z5: 11.57 , z6: 13.59 , z7: 14.36 , z8: 15.75 },
+  { maxLb: 4     , z1: 9.28 , z2: 9.34 , z3: 9.70 , z4: 10.65 , z5: 12.84 , z6: 15.16 , z7: 16.19 , z8: 18.01 },
+  { maxLb: 5     , z1: 9.70 , z2: 9.76 , z3: 10.14 , z4: 11.02 , z5: 13.48 , z6: 15.89 , z7: 17.12 , z8: 19.19 },
+  { maxLb: 6     , z1: 9.87 , z2: 9.94 , z3: 10.36 , z4: 11.55 , z5: 14.28 , z6: 16.89 , z7: 18.31 , z8: 20.68 },
+  { maxLb: 7     , z1: 9.96 , z2: 10.02 , z3: 10.62 , z4: 11.90 , z5: 14.90 , z6: 17.65 , z7: 19.23 , z8: 21.83 },
+  { maxLb: 8     , z1: 10.10 , z2: 10.27 , z3: 11.49 , z4: 12.43 , z5: 15.49 , z6: 18.34 , z7: 20.08 , z8: 22.90 },
+  { maxLb: 9     , z1: 11.01 , z2: 11.25 , z3: 12.39 , z4: 13.65 , z5: 16.11 , z6: 19.13 , z7: 21.01 , z8: 24.09 },
+  { maxLb: 10    , z1: 11.91 , z2: 12.26 , z3: 13.18 , z4: 14.44 , z5: 16.76 , z6: 19.94 , z7: 21.97 , z8: 25.34 },
+  { maxLb: 11    , z1: 12.75 , z2: 12.94 , z3: 14.00 , z4: 15.18 , z5: 18.12 , z6: 21.28 , z7: 23.68 , z8: 27.37 },
+  { maxLb: 12    , z1: 13.49 , z2: 13.85 , z3: 14.63 , z4: 15.89 , z5: 18.86 , z6: 22.20 , z7: 24.78 , z8: 28.73 },
+  { maxLb: 13    , z1: 14.15 , z2: 14.48 , z3: 15.25 , z4: 16.53 , z5: 19.62 , z6: 23.16 , z7: 25.87 , z8: 30.11 },
+  { maxLb: 14    , z1: 14.73 , z2: 15.07 , z3: 15.81 , z4: 17.13 , z5: 20.38 , z6: 24.14 , z7: 26.99 , z8: 31.53 },
+  { maxLb: 15    , z1: 15.23 , z2: 15.53 , z3: 16.31 , z4: 17.67 , z5: 21.15 , z6: 25.13 , z7: 28.11 , z8: 32.91 },
+  { maxLb: 16    , z1: 15.64 , z2: 15.91 , z3: 16.73 , z4: 17.94 , z5: 21.89 , z6: 26.09 , z7: 29.22 , z8: 34.29 },
+  { maxLb: 17    , z1: 15.97 , z2: 16.29 , z3: 17.15 , z4: 18.41 , z5: 22.51 , z6: 26.85 , z7: 30.11 , z8: 35.42 },
+  { maxLb: 18    , z1: 16.21 , z2: 16.46 , z3: 17.61 , z4: 18.94 , z5: 23.16 , z6: 27.70 , z7: 31.09 , z8: 36.64 },
+  { maxLb: 19    , z1: 16.38 , z2: 16.82 , z3: 17.81 , z4: 19.36 , z5: 23.79 , z6: 28.52 , z7: 32.07 , z8: 37.84 },
+  { maxLb: 20    , z1: 16.46 , z2: 17.06 , z3: 18.03 , z4: 19.66 , z5: 24.93 , z6: 30.32 , z7: 34.67 , z8: 40.39 },
+  { maxLb: 21    , z1: 18.48 , z2: 19.54 , z3: 20.66 , z4: 21.79 , z5: 26.13 , z6: 31.69 , z7: 37.96 , z8: 43.01 },
+  { maxLb: 22    , z1: 19.86 , z2: 21.22 , z3: 22.59 , z4: 24.07 , z5: 29.45 , z6: 36.73 , z7: 44.33 , z8: 49.74 },
+  { maxLb: 23    , z1: 21.51 , z2: 23.16 , z3: 24.92 , z4: 27.33 , z5: 34.05 , z6: 43.29 , z7: 52.14 , z8: 58.41 },
+  { maxLb: 24    , z1: 23.44 , z2: 25.27 , z3: 27.64 , z4: 31.62 , z5: 39.94 , z6: 51.28 , z7: 61.40 , z8: 68.97 },
+  { maxLb: 25    , z1: 25.32 , z2: 27.54 , z3: 30.72 , z4: 36.60 , z5: 46.94 , z6: 58.24 , z7: 68.86 , z8: 78.19 },
+  { maxLb: 26    , z1: 26.27 , z2: 28.68 , z3: 32.26 , z4: 39.07 , z5: 50.46 , z6: 61.73 , z7: 72.61 , z8: 82.80 },
+  { maxLb: 27    , z1: 27.21 , z2: 29.84 , z3: 33.81 , z4: 41.58 , z5: 53.96 , z6: 65.24 , z7: 76.35 , z8: 87.46 },
+  { maxLb: 28    , z1: 27.97 , z2: 30.70 , z3: 34.85 , z4: 42.85 , z5: 55.75 , z6: 67.49 , z7: 79.02 , z8: 90.53 },
+  { maxLb: 29    , z1: 28.72 , z2: 31.55 , z3: 35.87 , z4: 44.11 , z5: 57.53 , z6: 69.69 , z7: 81.65 , z8: 93.58 },
+  { maxLb: 30    , z1: 29.46 , z2: 32.38 , z3: 36.86 , z4: 45.34 , z5: 59.28 , z6: 71.88 , z7: 84.24 , z8: 96.60 },
+  { maxLb: 31    , z1: 30.18 , z2: 33.22 , z3: 37.84 , z4: 46.55 , z5: 61.00 , z6: 74.02 , z7: 86.80 , z8: 99.57 },
+  { maxLb: 32    , z1: 30.90 , z2: 34.04 , z3: 38.80 , z4: 47.73 , z5: 62.68 , z6: 76.13 , z7: 89.33 , z8: 102.51 },
+  { maxLb: 33    , z1: 31.62 , z2: 34.84 , z3: 39.75 , z4: 48.88 , z5: 64.39 , z6: 78.24 , z7: 91.83 , z8: 105.42 },
+  { maxLb: 34    , z1: 32.32 , z2: 35.65 , z3: 40.68 , z4: 50.04 , z5: 66.04 , z6: 80.30 , z7: 94.29 , z8: 108.29 },
+  { maxLb: 35    , z1: 33.04 , z2: 36.43 , z3: 41.61 , z4: 51.18 , z5: 67.69 , z6: 82.37 , z7: 96.77 , z8: 111.16 },
+  { maxLb: 36    , z1: 33.71 , z2: 37.21 , z3: 42.51 , z4: 52.25 , z5: 69.26 , z6: 84.33 , z7: 99.14 , z8: 113.94 },
+  { maxLb: 37    , z1: 34.41 , z2: 37.99 , z3: 43.41 , z4: 53.35 , z5: 70.86 , z6: 86.32 , z7: 101.54 , z8: 116.74 },
+  { maxLb: 38    , z1: 35.08 , z2: 38.75 , z3: 44.28 , z4: 54.44 , z5: 72.44 , z6: 88.31 , z7: 103.90 , z8: 119.51 },
+  { maxLb: 39    , z1: 35.77 , z2: 39.50 , z3: 45.13 , z4: 55.49 , z5: 74.00 , z6: 90.27 , z7: 106.22 , z8: 122.25 },
+  { maxLb: 40    , z1: 36.44 , z2: 40.24 , z3: 45.98 , z4: 56.54 , z5: 75.51 , z6: 92.17 , z7: 108.52 , z8: 124.96 },
+  { maxLb: 41    , z1: 37.09 , z2: 40.98 , z3: 46.81 , z4: 57.59 , z5: 77.04 , z6: 94.08 , z7: 110.80 , z8: 127.62 },
+  { maxLb: 42    , z1: 37.76 , z2: 41.68 , z3: 47.62 , z4: 58.59 , z5: 78.52 , z6: 95.94 , z7: 113.05 , z8: 130.28 },
+  { maxLb: 43    , z1: 38.40 , z2: 42.40 , z3: 48.44 , z4: 59.57 , z5: 79.98 , z6: 97.79 , z7: 115.27 , z8: 132.88 },
+  { maxLb: 44    , z1: 39.05 , z2: 43.09 , z3: 49.20 , z4: 60.54 , z5: 81.41 , z6: 99.60 , z7: 117.45 , z8: 135.45 },
+  { maxLb: 45    , z1: 39.68 , z2: 43.78 , z3: 49.99 , z4: 61.50 , z5: 82.85 , z6: 101.39 , z7: 119.61 , z8: 138.01 },
+  { maxLb: 46    , z1: 40.33 , z2: 44.45 , z3: 50.75 , z4: 62.42 , z5: 84.23 , z6: 103.17 , z7: 121.75 , z8: 140.52 },
+  { maxLb: 47    , z1: 40.94 , z2: 45.12 , z3: 51.49 , z4: 63.33 , z5: 85.60 , z6: 104.90 , z7: 123.82 , z8: 143.00 },
+  { maxLb: 48    , z1: 41.56 , z2: 45.78 , z3: 52.22 , z4: 64.22 , z5: 86.97 , z6: 106.61 , z7: 125.90 , z8: 145.45 },
+  { maxLb: 49    , z1: 42.17 , z2: 46.42 , z3: 52.92 , z4: 65.10 , z5: 88.30 , z6: 108.29 , z7: 127.94 , z8: 147.88 },
+  { maxLb: 50    , z1: 42.77 , z2: 47.07 , z3: 53.63 , z4: 65.96 , z5: 89.60 , z6: 109.94 , z7: 129.95 , z8: 150.27 },
+  { maxLb: 51    , z1: 43.35 , z2: 47.71 , z3: 54.29 , z4: 66.79 , z5: 90.88 , z6: 111.57 , z7: 131.92 , z8: 152.63 },
+  { maxLb: 52    , z1: 43.95 , z2: 48.31 , z3: 54.95 , z4: 67.61 , z5: 92.15 , z6: 113.18 , z7: 133.86 , z8: 154.95 },
+  { maxLb: 53    , z1: 44.53 , z2: 48.92 , z3: 55.61 , z4: 68.40 , z5: 93.38 , z6: 114.75 , z7: 135.79 , z8: 157.25 },
+  { maxLb: 54    , z1: 45.10 , z2: 49.51 , z3: 56.25 , z4: 69.18 , z5: 94.61 , z6: 116.31 , z7: 137.67 , z8: 159.49 },
+  { maxLb: 55    , z1: 45.67 , z2: 50.10 , z3: 56.85 , z4: 69.95 , z5: 95.80 , z6: 117.84 , z7: 139.53 , z8: 161.74 },
+  { maxLb: 56    , z1: 46.22 , z2: 50.67 , z3: 57.47 , z4: 70.70 , z5: 96.98 , z6: 119.32 , z7: 141.35 , z8: 163.93 },
+  { maxLb: 57    , z1: 46.79 , z2: 51.24 , z3: 58.05 , z4: 71.42 , z5: 98.11 , z6: 120.81 , z7: 143.15 , z8: 166.10 },
+  { maxLb: 58    , z1: 47.33 , z2: 51.78 , z3: 58.62 , z4: 72.11 , z5: 99.24 , z6: 122.23 , z7: 144.91 , z8: 168.23 },
+  { maxLb: 59    , z1: 47.88 , z2: 52.34 , z3: 59.18 , z4: 72.81 , z5: 100.35 , z6: 123.67 , z7: 146.64 , z8: 170.33 },
+  { maxLb: 60    , z1: 48.39 , z2: 52.87 , z3: 59.71 , z4: 73.46 , z5: 101.42 , z6: 125.04 , z7: 148.35 , z8: 172.39 },
+  { maxLb: 61    , z1: 48.92 , z2: 53.40 , z3: 60.24 , z4: 74.12 , z5: 102.48 , z6: 126.41 , z7: 150.02 , z8: 174.44 },
+  { maxLb: 62    , z1: 49.45 , z2: 53.89 , z3: 60.76 , z4: 74.74 , z5: 103.51 , z6: 127.76 , z7: 151.66 , z8: 176.44 },
+  { maxLb: 63    , z1: 49.95 , z2: 54.41 , z3: 61.25 , z4: 75.34 , z5: 104.53 , z6: 129.07 , z7: 153.28 , z8: 178.42 },
+  { maxLb: 64    , z1: 50.46 , z2: 54.90 , z3: 61.73 , z4: 75.93 , z5: 105.53 , z6: 130.35 , z7: 154.87 , z8: 180.36 },
+  { maxLb: 65    , z1: 50.94 , z2: 55.38 , z3: 62.19 , z4: 76.51 , z5: 106.49 , z6: 131.60 , z7: 156.42 , z8: 182.25 },
+  { maxLb: 66    , z1: 51.44 , z2: 55.85 , z3: 62.63 , z4: 77.06 , z5: 107.43 , z6: 132.83 , z7: 157.93 , z8: 184.13 },
+  { maxLb: 67    , z1: 51.93 , z2: 56.30 , z3: 63.06 , z4: 77.60 , z5: 108.35 , z6: 134.04 , z7: 159.44 , z8: 185.98 },
+  { maxLb: 68    , z1: 52.41 , z2: 56.76 , z3: 63.49 , z4: 78.11 , z5: 109.25 , z6: 135.22 , z7: 160.90 , z8: 187.79 },
+  { maxLb: 69    , z1: 52.88 , z2: 57.20 , z3: 63.87 , z4: 78.61 , z5: 110.13 , z6: 136.34 , z7: 162.33 , z8: 189.57 },
+  { maxLb: 70    , z1: 53.33 , z2: 57.63 , z3: 64.26 , z4: 79.08 , z5: 110.97 , z6: 137.46 , z7: 163.73 , z8: 191.31 },
 ];
 
 const round2 = (n: number): number => Math.round(n * 100) / 100;
@@ -301,8 +444,8 @@ export const DIM_DIVISOR_USPS = 139; // USPS switched from 166 to 139 for packag
 const DIM_DIVISOR_UPS = 139;
 const DIM_DIVISOR_FEDEX = 139;
 
-export const USPS_RATE_EFFECTIVE_DATE = '2026-08-11';
-export const USPS_RATE_SOURCE = "eBay's own live shipping calculator API (POST /shp/calc/api/shipping/services), Patrick's real seller account, USPS Ground Advantage service, origin ZIP 49079, every maxLb tier x every real zone (z1-z8) individually live-quoted, 2026-08-10";
+export const USPS_RATE_EFFECTIVE_DATE = '2026-08-16';
+export const USPS_RATE_SOURCE = "USPS Notice 123 - Price List (pe.usps.com/cpim/ftp/manuals/dmm300/notice123.pdf, cover date 'Effective July 12, 2026'), fetched and text-extracted directly 2026-08-16. Weight base = p.15 'USPS Ground Advantage / Commercial-Parcels', zones 1-8, every published weight step (4/8/12/15.999oz + every whole pound 1-70lb), transcribed verbatim. Cubic base = p.16 'Commercial Parcels - Cubic', 10 rungs x zones 1-8, verbatim (see USPS_CUBIC_RATE_SOURCE). Published Commercial is a PROVEN UPPER BOUND on eBay's negotiated price and is EXACT at zone 8 and at every weight >=23lb -- validated against 50 live eBay quotes (origin 49079, Patrick's real seller account, 2026-08-16, box dims recorded). eBay's measured discount at zones 1-7 below 23lb is recorded in EBAY_USPS_OBSERVED_DISCOUNT_RATIOS and deliberately NOT applied; see RATE_TABLE's header.";
 export const UPS_RATE_EFFECTIVE_DATE = '2026-08-16';
 export const UPS_RATE_SOURCE = "UPS 2026 Daily Rate and Service Guide (daily-rates-us-en.xlsx, sheet 'UPS Ground', 1-150lb x zones 2-8) + UPS Ground zone chart for origin ZIP3 490 (490.xls) -- both primary UPS documents, downloaded from ups.com 2026-08-16 -- multiplied by the per-zone eBay/published-daily discount ratio observed in the 2026-08-10/11 live eBay-calculator quotes (POST /shp/calc/api/shipping/services, Patrick's real seller account, origin 49079). Verified out-of-sample at ONE point: z7 @ 23lb, real $37.00 vs modelled $37.41. See RATE_TABLE_UPS header for what is and is not verified.";
 export const FEDEX_RATE_EFFECTIVE_DATE = '2026-08-11';
@@ -463,8 +606,8 @@ const RATE_TABLE_UPS: RateRow[] = [
   { maxLb: 20 , z1: 15.82 , z2: 15.82 , z3: 18.18 , z4: 18.18 , z5: 23.85 , z6: 28.27 , z7: 34.37 , z8: 41.72 },
   { maxLb: 21 , z1: 16.61 , z2: 16.61 , z3: 19.29 , z4: 19.29 , z5: 24.30 , z6: 29.22 , z7: 35.46 , z8: 42.79 },
   { maxLb: 22 , z1: 16.74 , z2: 16.74 , z3: 20.10 , z4: 20.10 , z5: 25.12 , z6: 30.29 , z7: 36.65 , z8: 44.46 },
-  { maxLb: 23 , z1: 16.87 , z2: 16.87 , z3: 20.66 , z4: 20.66 , z5: 25.38 , z6: 31.31 , z7: 37.00 , z8: 46.02 }, // BILLABLE 23lb x z7 = the REAL eBay quote, 49079 -> 98282 (UPS Ground zone 7, verified from UPS zone chart 490). Model said $37.41; the real $37.00 is used. This is the anchor the whole eBay-discount question turns on
-  { maxLb: 24 , z1: 17.59 , z2: 17.59 , z3: 21.92 , z4: 21.92 , z5: 26.91 , z6: 32.91 , z7: 38.55 , z8: 48.41 },
+  { maxLb: 23 , z1: 17.66 , z2: 17.66 , z3: 20.66 , z4: 20.66 , z5: 25.58 , z6: 31.31 , z7: 37.00 , z8: 45.71 }, // 23lb is the ONLY weight in this table that was interpolated rather than anchored, and it was the only weight the table missed. THREE MORE REAL eBay quotes pinned here 2026-08-16 (origin 49079, Patrick's real seller account, 16x14x14in box @ 23lb -- billable 23lb, dim weight 3136/139 = 22.56lb, longest side 16in so no AHS trigger, i.e. a clean base-rate observation): z2 $17.66 (dest 49503, was $17.66 vs modelled 16.87), z5 $25.58 (dest 10001, was 25.38), z8 $45.71 (dest 98357, was 46.02). Destination-to-UPS-zone from UPS's OWN Ground zone chart for origin ZIP3 490 (490.xls, parsed directly): 495->002, 100->005, 983->008, 982->007, 303->004, 331->007. z1 tracks z2 because UPS publishes no zone 1 from this origin and this file groups z1=z2 for UPS on real exact-penny evidence. z7 $37.00 was already pinned and re-confirmed by this harvest. z3/z4/z6 remain modelled (published daily x per-zone eBay ratio) -- UNVERIFIED at 23lb, no destination in the harvest resolves to UPS zone 3 or 6. Same harvest independently re-confirmed the ENTIRE 20lb row to the penny at all five measured zones (z2 15.82, z4 18.18, z5 23.85, z7 34.37, z8 41.72), so this row was the only miss
+  { maxLb: 24 , z1: 17.66 , z2: 17.66 , z3: 21.92 , z4: 21.92 , z5: 26.91 , z6: 32.91 , z7: 38.55 , z8: 48.41 }, // z1/z2 RAISE-ONLY monotone closure 2026-08-16: were 17.59, i.e. BELOW the newly-pinned real $17.66 at 23lb one row up. A modelled cell may not sit under a measured one at a higher weight. Raised to 17.66 (the measured floor), not lowered anywhere; 25lb z1/z2 = 17.76 already clears it, so the ripple stops here. The other six zones needed no adjustment
   { maxLb: 25 , z1: 17.76 , z2: 17.76 , z3: 22.17 , z4: 22.17 , z5: 27.23 , z6: 33.48 , z7: 40.55 , z8: 49.66 },
   { maxLb: 26 , z1: 18.75 , z2: 18.75 , z3: 23.26 , z4: 23.26 , z5: 28.34 , z6: 34.56 , z7: 42.07 , z8: 51.48 },
   { maxLb: 27 , z1: 19.40 , z2: 19.40 , z3: 23.88 , z4: 23.88 , z5: 28.80 , z6: 35.81 , z7: 42.71 , z8: 52.09 },
@@ -1142,13 +1285,35 @@ export async function resolveCoverageZone(origin: { zip?: string | null; lat?: n
 // matching flat weight-tier policies against raw actual weight alone -- a light-but-bulky
 // item (e.g. 2lb actual, 20x20x20in) was silently under-priced because weight-tier lookup
 // never looked at dims at all, unlike this calculated-shipping path which always has.
-export function billableLb(weightOz: number, dims: { length?: number | null; width?: number | null; height?: number | null } | null, divisor: number): { lb: number; basis: 'actual' | 'dimensional' } {
+export function billableLb(
+  weightOz: number,
+  dims: { length?: number | null; width?: number | null; height?: number | null } | null,
+  divisor: number,
+  /**
+   * ADDED 2026-08-16 (ADR-103 Phase 6). When set, dimensional weight is applied ONLY if
+   * the parcel's volume EXCEEDS this many cubic inches; at or below it, actual weight
+   * governs. Omit it and behavior is exactly as before (dim weight always considered) --
+   * every existing caller is unaffected.
+   *
+   * Why it exists: DMM 283.1.4.1 [7-12-26] -- "Postage for USPS Ground Advantage -
+   * Commercial parcels ... EXCEEDING 1 cubic foot (1,728 cubic inches) is based on the
+   * actual weight or the dimensional weight ..., whichever is greater." Below 1 cu ft
+   * USPS does not use dimensional weight at all. This engine was applying it at every
+   * size, so a 1lb item in an 11x11x11in box (1,331 cu in -> dim weight 9.6lb) priced at
+   * the 10lb tier -- $25.34 at z8 against a real $10.67. Confirmed against live quotes,
+   * not just the manual: a 12x10x8in (960 cu in, dim weight 6.9lb) box quoted $6.57 at
+   * 1lb and $5.80 at 3lb on 2026-08-16 -- both actual-weight prices, neither a 7lb price.
+   * UPS and FedEx DO bill dimensional weight at every size, so they must not pass this.
+   */
+  dimWeightMinVolumeCuIn?: number
+): { lb: number; basis: 'actual' | 'dimensional' } {
   const actualOz = Math.max(0, weightOz || 0);
   let dimOz = 0;
   const L = dims?.length ? Number(dims.length) : 0;
   const W = dims?.width ? Number(dims.width) : 0;
   const H = dims?.height ? Number(dims.height) : 0;
-  if (L > 0 && W > 0 && H > 0) dimOz = ((L * W * H) / divisor) * 16;
+  const dimWeightApplies = dimWeightMinVolumeCuIn == null || L * W * H > dimWeightMinVolumeCuIn;
+  if (L > 0 && W > 0 && H > 0 && dimWeightApplies) dimOz = ((L * W * H) / divisor) * 16;
   const basis: 'actual' | 'dimensional' = dimOz > actualOz ? 'dimensional' : 'actual';
   return { lb: Math.max(actualOz, dimOz, 1) / 16, basis };
 }
@@ -1228,21 +1393,133 @@ export interface CheapestRate {
   netToSeller: number;
 }
 
-// ── ADR-103 Phase 3: cubic-tier pricing (USPS Ground Advantage Cubic) ──────────────
-// USPS GA Cubic prices small, dense items by box-dimension tier instead of
-// weight/dim-weight -- often cheaper for small heavy items. Named tiers mirror
-// Patrick's own live eBay policy list ("GA Cubic 0.1 (to 5x5x6)" ... "GA Cubic 1.0
-// (to 14x12x10)", ~10 discrete tiers, ADR-103 §2C).
+// ── USPS Ground Advantage CUBIC pricing ─ REBUILT ZONE-AWARE 2026-08-16 (ADR-103 Phase 6) ──
 //
-// LIVE-VERIFIED (honesty gate, ADR-103 Phases 2-5): all 10 tiers below -- dims AND
-// flatRate -- are sourced directly from Patrick's own live eBay Business Policies >
-// Shipping page (ebay.com/bp/shippingpolicy), pasted verbatim and tested Jul 2026.
-// This is real, currently-configured pricing, not extrapolated or estimated data --
-// the PENDING_LIVE_VERIFICATION framing no longer applies to this table. Each tier's
-// flatRate is a ceiling price valid only up to 20lb actual weight -- see the 20lb gate
-// added to evaluateCubicTier() below this pass; Patrick's own data states e.g. "GA
-// Cubic 0.6 ... Actual USPS cost is $19.19 at 5lb, $20.36 at 6-20lb - priced to the
-// ceiling", confirming the flat rate is invalid above 20lb.
+// USPS Ground Advantage has TWO independent price bases and bills whichever is cheaper:
+//   (1) WEIGHT     -- Notice 123 p.15, RATE_TABLE above (billable = actual, or the greater
+//                     of actual vs dimensional ONLY above 1 cu ft -- DMM 283.1.4.1).
+//   (2) CUBIC      -- Notice 123 p.16, USPS_CUBIC_RATE_TABLE below. Priced by the parcel's
+//                     CUBIC-FOOT TIER and ZONE. Weight-independent within the tier.
+// The engine must evaluate both and take the minimum. That is what makes a 12x9x8in box
+// cost the same $8.00 to 49503 at 7lb, 14lb and 20lb (a real, measured 2026-08-16 quote):
+// it is cubic-priced, so weight is simply not an input.
+//
+// WHAT THIS REPLACES: CUBIC_TIER_TABLE (retained directly below, deprecated, NOT used).
+// That table claimed a "FLAT NATIONAL rate" per box-dimension tier. Its ten flatRate
+// values -- 10.13 / 11.84 / 14.67 / 17.29 / 18.90 / 20.36 / 21.57 / 22.71 / 23.89 / 25.60
+// -- are, in order, EXACTLY the ZONE 8 column of Notice 123 p.16. They are not national;
+// they are the single most expensive zone. Its stated provenance (Patrick's live "GA
+// Cubic" eBay policies) is also no longer verifiable: all ten of those policies were
+// deleted from the eBay account and their ids purged from the DB on 2026-08-16.
+// Consequence of the old model: correct-to-generous at z8, and a large over-quote at
+// every near zone (z2 rung 0.10 was priced $10.13 against a published $7.51).
+//
+// SOURCE (primary, fetched and text-extracted directly 2026-08-16):
+//   Prices  -- USPS Notice 123 -- Price List, "USPS Ground Advantage / Commercial Parcels
+//              - Cubic", p.16, zones 1-8 verbatim (the card's zone-9 column duplicates
+//              zone 8 and is not modelled).
+//              pe.usps.com/cpim/ftp/manuals/dmm300/notice123.pdf
+//   Rules   -- DMM 283.1.3 "USPS Ground Advantage - Commercial Cubic", pe.usps.com/text/
+//              dmm300/283.htm, revision tag [7-12-26]:
+//              283.1.3.1 Eligibility: "Each cubic mailpiece ... must measure 1 cubic foot
+//                or less, weigh 20 pounds or less, and the longest dimension must not
+//                exceed 22 inches. Cubic-priced mailpieces must not be rolls or tubes."
+//              283.1.3.2 Tiers: ten tiers, 0.10 through 1.00, each "measuring more than
+//                [prev] up to [this]" -- i.e. round the measured cubic feet UP to the
+//                next rung (USPS's own worked example: 0.125 cu ft prices at tier 0.20).
+//              283.1.3.3 Measurement: round each dimension DOWN to the nearest 1/4 inch,
+//                multiply, divide by 1,728.
+//
+// LIVE VALIDATION (real eBay quotes, origin 49079, Patrick's seller account, 2026-08-16):
+//   At ZONE 8 this table reproduces eBay's quoted cubic price to the penny at every rung
+//   tested: 6x5x4in/1lb -> $10.13 (rung 0.10), 9x7x6in/3lb -> $14.67 (rung 0.30),
+//   12x10x8in/7lb -> $20.36 (rung 0.60). Ratio 1.000, 3/3.
+//   At zones 2-7 eBay charges a real negotiated discount off these published figures --
+//   e.g. rung 0.50 measured at exactly 0.828x published in both zones tested
+//   (z2 $8.00 / $9.66, z7 $13.98 / $16.89). Recorded in
+//   EBAY_USPS_OBSERVED_DISCOUNT_RATIOS, deliberately NOT applied -- see RATE_TABLE's
+//   header for why (published is a proven upper bound and is EXACT at z8, which is the
+//   zone the live flat-rate path actually uses for every Michigan origin).
+//
+// NO FEE CAN EVER STACK ON A CUBIC PRICE, structurally: a cubic-eligible parcel is
+// <= 1 cu ft (so it can never trip Notice 123 p.15 note 7's >2 cu ft $21.00) and its
+// longest side is <= 22in (so it can never trip note 5's >22in $4.50 or note 6's >30in
+// $10.00). The cubic branch in estimateCheapestRate therefore reports surcharge 0, and
+// that is a fact about the rate class, not an omission.
+
+export type UspsCubicRateRow = {
+  /** Inclusive upper bound of the tier in cubic feet (DMM 283.1.3.2). */
+  maxCuFt: number;
+  tierLabel: string;
+  z1: number; z2: number; z3: number; z4: number; z5: number; z6: number; z7: number; z8: number;
+};
+
+/** Notice 123 p.16, "USPS Ground Advantage / Commercial Parcels - Cubic", verbatim. */
+export const USPS_CUBIC_RATE_TABLE: UspsCubicRateRow[] = [
+  { maxCuFt: 0.10, tierLabel: 'GA Cubic 0.1', z1: 7.45 , z2: 7.51 , z3: 7.83 , z4: 7.99 , z5: 8.49 , z6: 9.21 , z7: 9.53 , z8: 10.13 },
+  { maxCuFt: 0.20, tierLabel: 'GA Cubic 0.2', z1: 7.82 , z2: 7.89 , z3: 8.14 , z4: 8.34 , z5: 9.37 , z6: 10.66 , z7: 11.05 , z8: 11.84 },
+  { maxCuFt: 0.30, tierLabel: 'GA Cubic 0.3', z1: 8.39 , z2: 8.45 , z3: 8.81 , z4: 9.23 , z5: 10.96 , z6: 12.83 , z7: 13.48 , z8: 14.67 },
+  { maxCuFt: 0.40, tierLabel: 'GA Cubic 0.4', z1: 9.07 , z2: 9.13 , z3: 9.51 , z4: 10.34 , z5: 12.43 , z6: 14.66 , z7: 15.61 , z8: 17.29 },
+  { maxCuFt: 0.50, tierLabel: 'GA Cubic 0.5', z1: 9.59 , z2: 9.66 , z3: 10.03 , z4: 10.93 , z5: 13.32 , z6: 15.70 , z7: 16.89 , z8: 18.90 },
+  { maxCuFt: 0.60, tierLabel: 'GA Cubic 0.6', z1: 9.84 , z2: 9.90 , z3: 10.31 , z4: 11.43 , z5: 14.10 , z6: 16.68 , z7: 18.05 , z8: 20.36 },
+  { maxCuFt: 0.70, tierLabel: 'GA Cubic 0.7', z1: 9.94 , z2: 10.00 , z3: 10.56 , z4: 11.82 , z5: 14.76 , z6: 17.47 , z7: 19.02 , z8: 21.57 },
+  { maxCuFt: 0.80, tierLabel: 'GA Cubic 0.8', z1: 10.08 , z2: 10.23 , z3: 11.34 , z4: 12.34 , z5: 15.39 , z6: 18.22 , z7: 19.94 , z8: 22.71 },
+  { maxCuFt: 0.90, tierLabel: 'GA Cubic 0.9', z1: 10.84 , z2: 11.08 , z3: 12.24 , z4: 13.44 , z5: 16.01 , z6: 18.99 , z7: 20.84 , z8: 23.89 },
+  { maxCuFt: 1.00, tierLabel: 'GA Cubic 1.0', z1: 12.02 , z2: 12.34 , z3: 13.28 , z4: 14.54 , z5: 16.93 , z6: 20.11 , z7: 22.18 , z8: 25.60 },
+];
+
+export const USPS_CUBIC_RATE_SOURCE =
+  'USPS Notice 123 - Price List, p.16 "USPS Ground Advantage / Commercial Parcels - Cubic", zones 1-8 verbatim; eligibility + measurement rules from DMM 283.1.3 [7-12-26]. Both fetched directly from pe.usps.com 2026-08-16.';
+
+/** DMM 283.1.3.1 -- all four gates must pass or the parcel is not cubic-eligible. */
+export const USPS_CUBIC_MAX_CU_IN = 1728;        // "1 cubic foot or less"
+export const USPS_CUBIC_MAX_WEIGHT_LB = 20;      // "weigh 20 pounds or less"
+export const USPS_CUBIC_MAX_LONGEST_DIM_IN = 22; // "longest dimension must not exceed 22 inches"
+/** "Cubic-priced mailpieces must not be rolls or tubes" (DMM 283.1.3.1). `ROLL` is the
+ *  Item.packageType value the frontend's Package Type dropdown writes for that shape. */
+const CUBIC_INELIGIBLE_PACKAGE_TYPES = new Set(['ROLL']);
+
+/**
+ * Measured eBay/published ratios for USPS Ground Advantage, from the 2026-08-16 live
+ * harvest (origin ZIP 49079, Patrick's real connected seller account, eBay's own
+ * calculator; destinations 49503/30301/10001/33101/98282/98357, confirmed USPS zones
+ * 2/4/5/6/7/8 by reconciling every 23/30/50lb quote against Notice 123 p.15 to the penny).
+ *
+ * RECORDED, NOT APPLIED. The engine prices at published Commercial (ratio 1.000). This
+ * constant exists so a future pass can close the gap once the missing cells are actually
+ * measured, and so nobody re-derives it from scratch. `basis` says which price base the
+ * observation is a ratio OF -- mixing them is exactly how the old table broke.
+ *
+ * Unmeasured and therefore NOT inferable from this: zones 1 and 3 (no destination in the
+ * harvest resolves to either), and every weight below 14lb on a WEIGHT basis at zones
+ * 4-7 (every light box in the harvest was cubic-eligible, so those quotes are cubic
+ * observations, not weight observations).
+ */
+export const EBAY_USPS_OBSERVED_DISCOUNT_RATIOS: ReadonlyArray<{
+  basis: 'cubic' | 'weight';
+  /** cubic rung in cu ft, or billable weight in lb */
+  at: number;
+  ratios: Partial<Record<ZoneKey, number>>;
+}> = [
+  { basis: 'cubic',  at: 0.10, ratios: { z2: 0.8735, z4: 0.8786, z5: 0.9305, z6: 0.9501, z7: 0.9465, z8: 1.0 } },
+  { basis: 'cubic',  at: 0.30, ratios: { z2: 0.6864, z4: 0.6425, z5: 0.6378, z6: 0.6290, z7: 0.6061, z8: 1.0 } },
+  { basis: 'cubic',  at: 0.50, ratios: { z2: 0.8282, z7: 0.8277 } }, // 12x9x8in = 864 cu in = exactly 0.500 cu ft
+  { basis: 'cubic',  at: 0.60, ratios: { z2: 0.8283, z4: 0.8285, z5: 0.8284, z6: 0.8279, z7: 0.8277, z8: 1.0 } },
+  { basis: 'weight', at: 1,    ratios: { z2: 0.8555 } }, // 12x10x8in/1lb -- big enough that weight beat cubic
+  { basis: 'weight', at: 3,    ratios: { z2: 0.6697 } }, // 12x10x8in/3lb -- ditto
+  { basis: 'weight', at: 14,   ratios: { z2: 0.6914, z4: 0.7420, z5: 0.8278, z6: 0.8277, z7: 0.8281, z8: 1.0 } },
+  { basis: 'weight', at: 20,   ratios: { z2: 0.7069, z4: 0.7589, z5: 0.8279, z6: 0.8278, z7: 0.8278, z8: 1.0 } },
+  { basis: 'weight', at: 23,   ratios: { z2: 1.0, z5: 1.0, z7: 1.0, z8: 1.0 } },
+  { basis: 'weight', at: 30,   ratios: { z2: 1.0, z4: 1.0, z5: 1.0, z6: 1.0, z7: 1.0, z8: 1.0 } },
+  { basis: 'weight', at: 50,   ratios: { z2: 1.0, z4: 1.0, z5: 1.0, z6: 1.0, z7: 1.0, z8: 1.0 } },
+];
+
+/**
+ * @deprecated 2026-08-16 -- NOT read by any code path. Superseded by USPS_CUBIC_RATE_TABLE
+ * above. Retained only as the provenance record of a real defect: these ten "flat national"
+ * rates are the Notice 123 p.16 ZONE 8 column, and the same ten values were simultaneously
+ * misfiled into RATE_TABLE's z8 weight column (see that table's header). Do not reintroduce.
+ */
 export interface CubicTier {
   tierLabel: string;
   maxLengthIn: number;
@@ -1252,6 +1529,7 @@ export interface CubicTier {
   flatRate: number | null;
 }
 
+/** @deprecated see CubicTier above -- unused, kept for provenance. */
 export const CUBIC_TIER_TABLE: CubicTier[] = [
   { tierLabel: 'GA Cubic 0.1', maxLengthIn: 5, maxWidthIn: 5, maxHeightIn: 6, flatRate: 10.13 },
   { tierLabel: 'GA Cubic 0.2', maxLengthIn: 7, maxWidthIn: 7, maxHeightIn: 7, flatRate: 11.84 },
@@ -1263,40 +1541,48 @@ export const CUBIC_TIER_TABLE: CubicTier[] = [
   { tierLabel: 'GA Cubic 0.8', maxLengthIn: 11, maxWidthIn: 11, maxHeightIn: 11, flatRate: 22.71 },
   { tierLabel: 'GA Cubic 0.9', maxLengthIn: 11, maxWidthIn: 12, maxHeightIn: 11, flatRate: 23.89 },
   { tierLabel: 'GA Cubic 1.0', maxLengthIn: 14, maxWidthIn: 12, maxHeightIn: 10, flatRate: 25.60 },
-]; // LIVE-VERIFIED -- Patrick's live eBay Business Policies > Shipping page, tested Jul 2026 (ADR-103 Phases 2-5).
+];
 
-/** GA Cubic flat rates are priced to a 20lb ceiling -- Patrick's own live eBay policy
- *  data states the flat rate is the USPS cost "at 6-20lb" for each tier (e.g. GA Cubic
- *  0.6: "$19.19 at 5lb, $20.36 at 6-20lb - priced to the ceiling"), i.e. invalid above
- *  20lb. Added this pass -- found via code read that evaluateCubicTier() previously took
- *  no weight input at all, so a 25lb item that happened to fit a small box would have
- *  incorrectly matched the cubic flat rate and been silently underpriced. */
-const CUBIC_TIER_MAX_WEIGHT_LB = 20;
+/** DMM 283.1.3.3: round each dimension DOWN to the nearest 1/4 inch before computing the
+ *  cubic-tier measurement. (USPS's own example: 6-1/8 x 5-7/8 x 6-3/8 -> 6 x 5-3/4 x 6-1/4.) */
+function roundDownQuarterInch(n: number): number {
+  return Math.floor(n * 4) / 4;
+}
 
 /**
- * Smallest-volume CUBIC_TIER_TABLE entry (with a real, non-null flatRate) whose
- * bounding box contains the item, orientation-agnostic -- same matching algorithm as
- * matchCubicTier() in ebayPolicyParser.ts (ADR-099), kept independent here since this
- * table is a code-level engine input, not an organizer-uploaded policy mapping.
+ * USPS Ground Advantage Cubic price for this parcel at this zone, or null if the parcel
+ * is not cubic-eligible under DMM 283.1.3.1.
+ *
+ * Eligibility uses REAL dims/weight (not billable/dimensional weight) -- cubic is a
+ * parcel-shape rate class, and dimensional weight is a concept from the OTHER price base.
+ * The 22in longest-side gate is checked against the raw dimension rather than the
+ * quarter-inch-rounded-down one: rounding down could only let a 22.2in parcel slip
+ * through as eligible, and the cheaper-of-two selection means a wrongly-eligible parcel
+ * is a wrongly-CHEAP parcel. Erring toward ineligible errs toward the weight price.
  */
-function evaluateCubicTier(dims: PackageDims, weightOz: number): { tierLabel: string; rate: number } | null {
-  if (weightOz > CUBIC_TIER_MAX_WEIGHT_LB * 16) return null; // 20lb cubic-rate ceiling -- see comment above
-  const L = dims?.length ? Number(dims.length) : 0;
-  const W = dims?.width ? Number(dims.width) : 0;
-  const H = dims?.height ? Number(dims.height) : 0;
-  if (!(L > 0 && W > 0 && H > 0)) return null;
-  const itemDims = [L, W, H].sort((a, b) => b - a);
-  const priced = CUBIC_TIER_TABLE.filter((t) => t.flatRate != null);
-  const sorted = [...priced].sort(
-    (a, b) => a.maxLengthIn * a.maxWidthIn * a.maxHeightIn - b.maxLengthIn * b.maxWidthIn * b.maxHeightIn
-  );
-  for (const tier of sorted) {
-    const tierDims = [tier.maxLengthIn, tier.maxWidthIn, tier.maxHeightIn].sort((a, b) => b - a);
-    if (itemDims[0] <= tierDims[0] && itemDims[1] <= tierDims[1] && itemDims[2] <= tierDims[2]) {
-      return { tierLabel: tier.tierLabel, rate: tier.flatRate as number };
-    }
-  }
-  return null;
+function evaluateUspsCubic(
+  dims: PackageDims,
+  weightOz: number,
+  zone: ZoneKey,
+  packageType: string | null | undefined
+): { tierLabel: string; rate: number; cuFt: number } | null {
+  if (packageType && CUBIC_INELIGIBLE_PACKAGE_TYPES.has(packageType)) return null;
+  if (Math.max(0, weightOz || 0) > USPS_CUBIC_MAX_WEIGHT_LB * 16) return null;
+
+  const sorted = sortedRealDims(dims);
+  if (!sorted) return null;
+  if (sorted[0] > USPS_CUBIC_MAX_LONGEST_DIM_IN) return null;
+
+  const cuIn = roundDownQuarterInch(sorted[0]) * roundDownQuarterInch(sorted[1]) * roundDownQuarterInch(sorted[2]);
+  if (!(cuIn > 0) || cuIn > USPS_CUBIC_MAX_CU_IN) return null;
+
+  const cuFt = cuIn / 1728;
+  // DMM 283.1.3.2: tiers are "more than [prev] up to [this]" -- round the measurement UP
+  // to the next rung. The 1e-9 guard keeps an exact-boundary parcel (e.g. 12x9x8in =
+  // exactly 0.500 cu ft) in its own tier instead of pushing it up one on float error.
+  const row = USPS_CUBIC_RATE_TABLE.find((r) => cuFt <= r.maxCuFt + 1e-9);
+  if (!row) return null; // unreachable: cuIn <= 1728 means cuFt <= 1.00, the last rung
+  return { tierLabel: row.tierLabel, rate: round2(row[zone]), cuFt: Math.round(cuFt * 1000) / 1000 };
 }
 
 // ── eBay Standard Envelope (USPS-based flat national rate, zone-independent) ─────────
@@ -1304,9 +1590,10 @@ function evaluateCubicTier(dims: PackageDims, weightOz: number): { tierLabel: st
 // ebay-standard-envelope, fetched and verified directly 2026-08-10. Standard Envelope is a
 // FLAT NATIONAL price (no zone lookup, unlike RATE_TABLE/_UPS/_FEDEX above) for very light,
 // very flat, low-value items in a small fixed set of eBay categories. Distinct from GA Cubic
-// (evaluateCubicTier above) -- Cubic is also zone-independent but priced by box-dimension
-// tier for boxes; Standard Envelope is eBay's own envelope-specific service with its own
-// weight/size/category/price gates.
+// (evaluateUspsCubic / USPS_CUBIC_RATE_TABLE above). Standard Envelope really is flat and
+// national; GA Cubic is NOT -- it is priced by cubic-foot tier AND zone (Notice 123 p.16),
+// which is precisely the confusion the 2026-08-16 rebuild corrected. Standard Envelope is
+// eBay's own envelope-specific service with its own weight/size/category/price gates.
 //
 // 2026 pricing (verified 2026-08-10, same source as above): $0.78 (1oz), $1.07 (2oz), $1.36
 // (3oz). No rate exists above 3oz -- eBay does not offer Standard Envelope past that weight
@@ -1526,7 +1813,7 @@ function isStandardEnvelopeEligibleCategoryId(categoryId: string | null | undefi
  * (EBAY_STANDARD_ENVELOPE_MAX_THICKNESS_IN etc.) are left in place, unused by this function as
  * of this change, in case a future real per-item measurement input needs them again.
  *
- * Same shape/pattern as evaluateCubicTier() above: takes the raw inputs, returns either a
+ * Same shape/pattern as evaluateUspsCubic() above: takes the raw inputs, returns either a
  * matched rate or null, no side effects.
  *
  * Category check order: categoryId (EBAY_STANDARD_ENVELOPE_ELIGIBLE_CATEGORY_IDS, exact
@@ -1928,7 +2215,7 @@ type HighWeightAnchorRow = { maxLb: number; z1: number; z2: number; z3: number; 
 // starts at lb >= 70, matching RATE_TABLE_UPS/_FEDEX's own real-data ceiling exactly, so
 // there is no longer any gap of pure extrapolation between the base tables and this one.
 export const UPS_HIGH_WEIGHT_TOTAL_TABLE: HighWeightAnchorRow[] = [
-  { maxLb: 70,  z1: 52.50,  z2: 52.50,  z3: 59.44,  z4: 59.44,  z5: 75.64,  z6: 81.92,  z7: 99.50,  z8: 124.20 },
+  { maxLb: 70,  z1: 53.21,  z2: 53.21,  z3: 69.71,  z4: 69.71,  z5: 82.57,  z6: 92.77,  z7: 102.33, z8: 121.32 }, // RECOMPUTED 2026-08-16 -- closes the table's one weight inversion (z8 70lb $124.20 > 90lb $122.06). This row is NOT a live quote and never was; the comment directly above states its derivation: RATE_TABLE_UPS's own 70lb row + AHS_WEIGHT_SURCHARGE_TABLE[zone] x EBAY_NEGOTIATED_SURCHARGE_PASSTHROUGH. RATE_TABLE_UPS's 70lb row was itself rebuilt earlier on 2026-08-16 (to strip a baked-in >50lb accessorial that computeSurchargeForCarrier was adding a second time), and this row was never recomputed against it -- so it had gone stale against its own formula. The prior values reconcile to NEITHER the old nor the new base under that formula, so their true provenance is unknown; they are superseded, not corrected. PRIOR CELLS, PRESERVED: z1/z2 52.50, z3/z4 59.44, z5 75.64, z6 81.92, z7 99.50, z8 124.20. New values = round2(RATE_TABLE_UPS[70lb][z] + round2(AHS_WEIGHT_SURCHARGE_TABLE[z] * 0.50)), i.e. exactly what estimateCheapestRate computes at 69.9lb -- which also removes a real price DISCONTINUITY at the lb>=70 branch boundary (at z3 the engine previously dropped $10.26 as weight crossed 70lb, and at z8 it jumped $2.89). Every new cell stays at or below this table's real 90lb live quotes at every zone (z8 121.32 < 122.06), so the inversion is closed by lowering the DERIVED row, never by touching a measured one. The 90/110/130/150lb rows are real eBay quotes and are untouched
   { maxLb: 90,  z1: 76.44,  z2: 76.44,  z3: 84.64,  z4: 84.64,  z5: 91.46,  z6: 103.33, z7: 116.94, z8: 122.06 },
   { maxLb: 110, z1: 97.94,  z2: 97.94,  z3: 102.75, z4: 102.75, z5: 107.73, z6: 119.08, z7: 128.76, z8: 139.85 },
   { maxLb: 130, z1: 189.08, z2: 189.08, z3: 195.50, z4: 195.50, z5: 197.30, z6: 209.02, z7: 219.54, z8: 235.13 },
@@ -2113,7 +2400,14 @@ export function estimateCheapestRate(input: {
     const effectiveWeightOz =
       surcharge.minBillableLb != null ? Math.max(input.weightOz, surcharge.minBillableLb * 16) : input.weightOz;
 
-    const { lb, basis: weightBasis } = billableLb(effectiveWeightOz, dims, c.divisor);
+    // USPS only bills dimensional weight above 1 cu ft (DMM 283.1.4.1) -- see billableLb's
+    // 4th parameter. UPS/FedEx bill it at every size, so they pass undefined.
+    const { lb, basis: weightBasis } = billableLb(
+      effectiveWeightOz,
+      dims,
+      c.divisor,
+      c.carrier === 'USPS' ? USPS_CUBIC_MAX_CU_IN : undefined
+    );
     // USPS uses a DIFFERENT cap here than its real-weight physical ceiling
     // (USPS_ABSOLUTE_MAX.weightLb=70) -- see USPS_DIMENSIONAL_EXTRAPOLATION_CAP_LB's
     // comment for why reusing 70 here silently flattened any dimensional-weight
@@ -2182,12 +2476,15 @@ export function estimateCheapestRate(input: {
     );
   }
 
-  // ADR-103 Phase 3: evaluate cubic-tier pricing alongside weight/dim-weight pricing,
-  // pick whichever is cheaper (same pattern already used to pick cheapest carrier).
-  // Live as of this pass -- CUBIC_TIER_TABLE now has all 10 real tiers (Patrick's live
-  // eBay Business Policies > Shipping page). weightOz is passed through so the 20lb
-  // ceiling gate in evaluateCubicTier() can reject items too heavy for the flat rate.
-  const cubic = evaluateCubicTier(dims, input.weightOz);
+  // USPS Ground Advantage CUBIC -- the second, independent USPS price base (Notice 123
+  // p.16). USPS bills the CHEAPER of weight-based and cubic, so this competes in the same
+  // cheapest-wins comparison as the three carrier tables above. REBUILT ZONE-AWARE
+  // 2026-08-16: it now takes the zone (cubic is zone-priced, it was previously modelled as
+  // a flat national rate that was really the zone-8 column) and the packageType (DMM
+  // 283.1.3.1 bars rolls/tubes from cubic pricing). See USPS_CUBIC_RATE_TABLE's header.
+  // surcharge is 0 by construction, not by omission -- a cubic-eligible parcel is <=1 cu ft
+  // and <=22in on its longest side, so no Notice 123 p.15 nonstandard fee can trigger.
+  const cubic = evaluateUspsCubic(dims, input.weightOz, input.zone, input.packageType);
   if (cubic && cubic.rate < best!.rate) {
     best = {
       carrier: 'USPS',

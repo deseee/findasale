@@ -189,6 +189,12 @@ interface PresetEstimate {
   suggestedBuyerPrice?: number;
   suggestedHandlingCharge?: number;
   fvfRate: number;
+  /** Where the ship-from location behind `zone` came from. */
+  originBasis?: 'sale-zip' | 'organizer-address-zip' | 'organizer-latlng' | 'worst-case-fallback';
+  originZip?: string | null;
+  /** Set whenever the origin was not an exact sale ZIP — always shown to the organizer
+   *  so a high or approximate number never reads as unexplained. */
+  originNote?: string;
 }
 
 interface PresetPriceCheck {
@@ -1533,6 +1539,11 @@ const EbayPolicySetupPage = () => {
                             Charging ${(presetEstimate.data.suggestedBuyerPrice ?? 0).toFixed(2)} covers the
                             label and eBay's cut of the shipping, so it doesn't come out of your pocket.
                           </p>
+                          {presetEstimate.data.originNote && (
+                            <p className="text-amber-700 dark:text-amber-400 text-xs mt-2">
+                              {presetEstimate.data.originNote}
+                            </p>
+                          )}
                         </div>
                       )}
 

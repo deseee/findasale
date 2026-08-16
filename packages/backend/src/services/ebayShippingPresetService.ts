@@ -42,9 +42,11 @@
 
 import { prisma } from '../lib/prisma';
 import {
-  computeCheapestForOrigin,
+  estimateCheapestRate,
+  resolveCoverageZone,
   EBAY_SHIPPING_FVF_RATE,
   ShippingHardBlockError,
+  ZoneKey,
 } from './ebayRateEstimateService';
 import { computeFvfFlatRate } from './ebayFlatRatePolicyService';
 import { roundUpToBucket, applyCharmPricing } from '../utils/shippingPriceMath';
@@ -213,6 +215,16 @@ export interface PresetRateEstimate {
   /** CALCULATED presets: handling charge that offsets eBay's fee on shipping. */
   suggestedHandlingCharge?: number;
   fvfRate: number;
+  /** Where the ship-from location behind `zone` came from. Never omitted when
+   *  available === true, so no surface can present a priced estimate without also
+   *  being able to say what it was priced FROM. */
+  originBasis?: PresetOriginBasis;
+  /** The 5-digit origin ZIP the zone was resolved from, when there was one. */
+  originZip?: string | null;
+  /** Plain-language provenance note. Set whenever originBasis is anything other than
+   *  'sale-zip' -- i.e. whenever the organizer should know the number is approximate
+   *  and how to make it exact. */
+  originNote?: string;
 }
 
 export interface PresetPriceCheck {
@@ -599,16 +611,179 @@ export function validatePresetConfig(input: PresetInput): PresetNameIssue[] {
   return issues;
 }
 
-// ── Rate engine pre-fill ─────────────────────────────────────────────────────
+// ── Rate engine pre-fill ─────────────────────────────────────────────
+
+/**
+ * Where a preset estimate's ship-from location came from, best to worst.
+ *
+ *   'sale-zip'               the ZIP of one of the organizer's real sales -- the SAME
+ *                            signal every live listing-pricing path uses. Exact.
+ *   'organizer-address-zip'  a 5-digit ZIP parsed off Organizer.address. Right region,
+ *                            but it is the business address, not necessarily where a
+ *                            given sale ships from.
+ *   'organizer-latlng'       geocoded profile coordinates. Same caveat, coarser.
+ *   'worst-case-fallback'    nothing at all was on file. See WORST_CASE_ZONE.
+ */
+export type PresetOriginBasis =
+  | 'sale-zip'
+  | 'organizer-address-zip'
+  | 'organizer-latlng'
+  | 'worst-case-fallback';
+
+/**
+ * Local copy of the rate service's zone ordering, used ONLY to pick the max of several
+ * candidate zones. The rate service owns the zone->price mapping; this array encodes
+ * nothing but "z8 is farther than z7". Kept local rather than imported because
+ * ebayRateEstimateService does not export its ZONE_ORDER.
+ */
+const ZONE_ORDER_LOCAL: ZoneKey[] = ['z1', 'z2', 'z3', 'z4', 'z5', 'z6', 'z7', 'z8'];
+function worseZone(a: ZoneKey, b: ZoneKey): ZoneKey {
+  return ZONE_ORDER_LOCAL.indexOf(a) >= ZONE_ORDER_LOCAL.indexOf(b) ? a : b;
+}
+
+/**
+ * The zone used when we genuinely cannot determine the organizer's ship-from location.
+ *
+ * WHY THE MOST EXPENSIVE ZONE, AND NOT A MIDDLE ONE. The old behaviour here passed
+ * `zip: null` with a null lat/lng, which bottomed out in coverageZoneForOrigin's final
+ * `else` branch at a "conservative" z6. z6 is not conservative -- it is conservative
+ * only in the sense of being mid-table, and for a flat-rate preset that is precisely
+ * backwards. A zone guess that is too LOW under-states the label cost, which
+ *   (a) pre-fills the organizer's price below what the label will actually cost, and
+ *   (b) feeds checkPriceAgainstEngine() in createPreset(), so the below-cost guard
+ *       compares the organizer's price against a fake-cheap label and cheerfully
+ *       PASSES a price that loses money on every sale.
+ * A guard that under-states cost is worse than no guard, because it launders a bad
+ * price as an approved one. Erring high costs the organizer nothing (they can lower
+ * it, and the form tells them why it is high); erring low costs them real money
+ * silently, on every single order, until they notice.
+ *
+ * z8 is the worst real CONUS zone, and it is what ZIP1_MAX_ZONE already assigns to 6 of
+ * the 10 leading ZIP digits -- so this is not a pathological number, it is the normal
+ * answer for most of the country.
+ */
+const WORST_CASE_ZONE: ZoneKey = 'z8';
+
+const ORIGIN_NOTE: Record<PresetOriginBasis, string | undefined> = {
+  'sale-zip': undefined,
+  'organizer-address-zip':
+    "Priced from the ZIP in your business address. If you ship from somewhere else, the real cost can differ \u2014 add the sale's address and this will use it.",
+  'organizer-latlng':
+    'Priced from your profile location rather than a sale address, so treat this as a close estimate.',
+  'worst-case-fallback':
+    "We don't know where you ship from yet, so this is priced to the most expensive part of the country \u2014 your real cost is likely lower. Add a sale with an address to get an exact number.",
+};
+
+interface ResolvedPresetOrigin {
+  basis: PresetOriginBasis;
+  zip: string | null;
+  zone: ZoneKey;
+}
+
+/** First 5-digit ZIP-looking token at the end of a free-text US address, if any. */
+function zipFromAddress(address: string | null | undefined): string | null {
+  if (!address) return null;
+  const m = address.match(/\b(\d{5})(?:-\d{4})?\s*$/);
+  return m ? m[1] : null;
+}
+
+function normalizeZip(zip: string | null | undefined): string | null {
+  if (!zip) return null;
+  const digits = String(zip).replace(/\D/g, '');
+  return digits.length >= 5 ? digits.slice(0, 5) : null;
+}
+
+/**
+ * Resolve the ship-from origin for an ACCOUNT-WIDE preset.
+ *
+ * An eBay fulfillment policy is not scoped to one sale -- it applies to every item the
+ * organizer lists. So when an organizer ships from several ZIPs, the honest price for a
+ * single flat-rate preset is the one that covers the WORST of them, for exactly the
+ * reason coverageZoneForOrigin already prices to the farthest CONUS destination: a flat
+ * rate is one price for all buyers, so it must never be short.
+ *
+ * Precedence deliberately mirrors coverageZoneForOrigin's own documented order (ZIP
+ * first, lat/lng only as a fallback). Before this, estimatePresetRate hardcoded
+ * `zip: null` and passed only the organizer's lat/lng -- which meant the ONE surface
+ * whose entire job is guarding the price was also the ONE surface not using the sale
+ * ZIP that every live pricing path uses.
+ */
+async function resolvePresetOrigin(organizerId: string): Promise<ResolvedPresetOrigin> {
+  const organizer = await prisma.organizer.findUnique({
+    where: { id: organizerId },
+    // Organizer has NO ZIP column (verified against schema.prisma) -- the ZIP lives on
+    // Sale.zip (required, non-null there). `address` is a required free-text field and
+    // usually ends in a ZIP, which makes it a usable second-choice signal.
+    select: {
+      lat: true,
+      lng: true,
+      address: true,
+      sales: {
+        where: { deletedAt: null },
+        select: { zip: true },
+      },
+    },
+  });
+
+  // 1. Real sale ZIPs -- the same signal the live listing paths price from.
+  const saleZips = Array.from(
+    new Set(
+      (organizer?.sales ?? [])
+        .map((sale) => normalizeZip(sale.zip))
+        .filter((zip): zip is string => zip !== null)
+    )
+  );
+  if (saleZips.length > 0) {
+    const zones = await Promise.all(saleZips.map((zip) => resolveCoverageZone({ zip })));
+    let zone = zones[0];
+    let zip = saleZips[0];
+    zones.forEach((candidate, i) => {
+      if (worseZone(zone, candidate) === candidate && candidate !== zone) {
+        zone = candidate;
+        zip = saleZips[i];
+      }
+    });
+    return { basis: 'sale-zip', zip, zone };
+  }
+
+  // 2. ZIP parsed off the organizer's business address.
+  const addressZip = normalizeZip(zipFromAddress(organizer?.address));
+  if (addressZip) {
+    return {
+      basis: 'organizer-address-zip',
+      zip: addressZip,
+      zone: await resolveCoverageZone({ zip: addressZip }),
+    };
+  }
+
+  // 3. Geocoded profile coordinates.
+  if (organizer?.lat != null && organizer?.lng != null && !isNaN(organizer.lat) && !isNaN(organizer.lng)) {
+    return {
+      basis: 'organizer-latlng',
+      zip: null,
+      zone: await resolveCoverageZone({ lat: organizer.lat, lng: organizer.lng }),
+    };
+  }
+
+  // 4. Nothing on file. Price high and SAY SO -- never silently price low.
+  return { basis: 'worst-case-fallback', zip: null, zone: WORST_CASE_ZONE };
+}
 
 /**
  * Price a hypothetical package through FindA.Sale's own rate engine and return the
  * number the automatic path would use, so the create form can pre-fill it.
  *
- * Read-only: no eBay call, no DB write. Same pipeline as ensureFvfFlatRatePolicy
- * (computeCheapestForOrigin -> computeFvfFlatRate -> roundUpToBucket ->
- * applyCharmPricing) so the suggested price can never disagree with what the
- * automatic path would have charged for the same package.
+ * Read-only: no eBay call, no DB write. Same pricing pipeline as ensureFvfFlatRatePolicy
+ * (resolve coverage zone -> estimateCheapestRate -> computeFvfFlatRate ->
+ * roundUpToBucket -> applyCharmPricing) so the suggested price can never disagree with
+ * what the automatic path would have charged for the same package.
+ *
+ * Zone resolution is done here rather than by handing an origin to
+ * computeCheapestForOrigin, because a preset is account-wide and may have several
+ * candidate origins (see resolvePresetOrigin). computeCheapestForOrigin is exactly
+ * `resolveCoverageZone` + `estimateCheapestRate`; this calls the same two exported
+ * functions in the same order, so no pricing math is duplicated -- only the choice of
+ * WHICH zone differs.
  */
 export async function estimatePresetRate(
   organizerId: string,
@@ -630,13 +805,7 @@ export async function estimatePresetRate(
     return { ...base, unavailableReason: 'Enter the package weight to see a suggested price.' };
   }
 
-  const organizer = await prisma.organizer.findUnique({
-    where: { id: organizerId },
-    // Organizer has no ZIP column (confirmed against schema.prisma) — the rate
-    // engine resolves the coverage zone from lat/lng, exactly as
-    // computeNamedWeightTierRate does when no item fromZip is in scope.
-    select: { lat: true, lng: true },
-  });
+  const origin = await resolvePresetOrigin(organizerId);
 
   const dims =
     input.lengthIn && input.widthIn && input.heightIn
@@ -644,10 +813,10 @@ export async function estimatePresetRate(
       : null;
 
   try {
-    const cheapest = await computeCheapestForOrigin({
+    const cheapest = estimateCheapestRate({
       weightOz: input.weightOz,
       dims,
-      origin: { zip: null, lat: organizer?.lat ?? null, lng: organizer?.lng ?? null },
+      zone: origin.zone,
       packageType: input.packageType ?? null,
       categoryId: null,
       priceUsd: null,
@@ -667,6 +836,9 @@ export async function estimatePresetRate(
       suggestedBuyerPrice,
       suggestedHandlingCharge,
       fvfRate: EBAY_SHIPPING_FVF_RATE,
+      originBasis: origin.basis,
+      originZip: origin.zip,
+      originNote: ORIGIN_NOTE[origin.basis],
     };
   } catch (err) {
     if (err instanceof ShippingHardBlockError) {
@@ -876,7 +1048,13 @@ export async function createPreset(organizerId: string, input: PresetInput): Pro
             {
               code: 'PRICE_BELOW_COST',
               field: 'flatPrice',
-              message: `At $${priceCheck.enteredPrice.toFixed(2)} you keep $${priceCheck.netToSeller.toFixed(2)} after eBay's fee on shipping, but the label for this package costs about $${priceCheck.labelCost.toFixed(2)} — you would pay $${priceCheck.shortfall.toFixed(2)} out of pocket on every sale. Raise the price, or confirm you meant to.`,
+              // The origin note matters here specifically: when the label cost was
+              // priced from the worst-case fallback (no ZIP on file anywhere), the
+              // organizer needs to know THAT is why the number looks high, or the
+              // guard reads as broken and gets acknowledged away reflexively.
+              message:
+                `At $${priceCheck.enteredPrice.toFixed(2)} you keep $${priceCheck.netToSeller.toFixed(2)} after eBay's fee on shipping, but the label for this package costs about $${priceCheck.labelCost.toFixed(2)} — you would pay $${priceCheck.shortfall.toFixed(2)} out of pocket on every sale. Raise the price, or confirm you meant to.` +
+                (estimate.originNote ? ` ${estimate.originNote}` : ''),
             },
           ],
         };
