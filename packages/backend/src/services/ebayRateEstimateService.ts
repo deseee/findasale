@@ -235,8 +235,13 @@ export class ShippingHardBlockError extends Error {
 //     for the full method, the discount finding (12.2% off DAILY, not the 48%-off-RETAIL
 //     eBay advertises), and the monotonicity counts. UPS also publishes NO zone 1 from
 //     this origin (chart's Ground column is 002-008 only) -- same as FedEx.
-//     The FEDEX half of the bullet above is UNCHANGED and still fully unverified: no
-//     FedEx zone chart was obtained, only UPS's. Do not read the UPS resolution across.
+//     THE FEDEX HALF IS ALSO RESOLVED NOW, 2026-08-16 (later pass): FedEx's own Find Zones
+//     tool (fedex.com/ratetools) was driven live from origin 49079 and 26 destination ZIPs
+//     were read off directly. 49079 -> 98282 is FedEx **zone 7**, and 49079 -> 98357 (Neah
+//     Bay) is ALSO zone 7 -- while Los Angeles, San Francisco and Portland OR are zone 8.
+//     So the $32.11 observation is a zone-7 price, the FedEx-reads-cleaner-at-z8 speculation
+//     in the retraction above is wrong, and the engine's old FedEx "z8" column was a zone-7
+//     destination all along. RATE_TABLE_FEDEX is rebuilt accordingly -- see its header.
 //
 // RETRACTION ─ "UPS 20lb x z8 = $41.72 SUSPECTED STALE (highest priority)", filed by the
 // earlier pass today and carried into ADR-103 §7, is WITHDRAWN. It rested entirely on the
@@ -248,8 +253,14 @@ export class ShippingHardBlockError extends Error {
 // exceed its own 30lb z7 cell of $31.00. That contradiction is itself the reason neither
 // carrier's zone can be inferred from price alone.)
 //
-// STILL OPEN, unchanged by this pass: the entire RATE_TABLE_FEDEX z2 column ($19.99 flat at
-// low weights vs $14.07 at z1 AND z3-z7) inverts zone order in 14 rows. NEW SUPPORTING
+// CLOSED 2026-08-16 (later pass): "the entire RATE_TABLE_FEDEX z2 column ($19.99 flat at
+// low weights vs $14.07 at z1 AND z3-z7) inverts zone order in 14 rows" is RESOLVED and the
+// table rebuilt. It was never a zone: 30301 and 10001 are BOTH FedEx zone 4 (FedEx's own
+// Find Zones tool, origin 49079) with identical struck-through retail, yet 10001 costs
+// exactly $5.92 more at every shared weight -- a per-package DESTINATION SURCHARGE, and
+// $14.07 + $5.92 = $19.99. Full derivation, the matching $5.92 found on 98282, and the
+// consequence for the old z8 column (Neah Bay is FedEx zone SEVEN, not eight) are in the
+// RATE_TABLE_FEDEX header below. The paragraph that used to continue here read: NEW SUPPORTING
 // EVIDENCE, not a fix: the "z1" column of all three tables was live-quoted on the
 // 49079 -> 49503 lane, which USPS's chart rates ZONE 2, not zone 1 (verified live this
 // session, same endpoint). RATE_TABLE's 30/50/70lb "z1" cells hold Notice 123's published
@@ -448,8 +459,8 @@ export const USPS_RATE_EFFECTIVE_DATE = '2026-08-16';
 export const USPS_RATE_SOURCE = "USPS Notice 123 - Price List (pe.usps.com/cpim/ftp/manuals/dmm300/notice123.pdf, cover date 'Effective July 12, 2026'), fetched and text-extracted directly 2026-08-16. Weight base = p.15 'USPS Ground Advantage / Commercial-Parcels', zones 1-8, every published weight step (4/8/12/15.999oz + every whole pound 1-70lb), transcribed verbatim. Cubic base = p.16 'Commercial Parcels - Cubic', 10 rungs x zones 1-8, verbatim (see USPS_CUBIC_RATE_SOURCE). Published Commercial is a PROVEN UPPER BOUND on eBay's negotiated price and is EXACT at zone 8 and at every weight >=23lb -- validated against 50 live eBay quotes (origin 49079, Patrick's real seller account, 2026-08-16, box dims recorded). eBay's measured discount at zones 1-7 below 23lb is recorded in EBAY_USPS_OBSERVED_DISCOUNT_RATIOS and deliberately NOT applied; see RATE_TABLE's header.";
 export const UPS_RATE_EFFECTIVE_DATE = '2026-08-16';
 export const UPS_RATE_SOURCE = "UPS 2026 Daily Rate and Service Guide (daily-rates-us-en.xlsx, sheet 'UPS Ground', 1-150lb x zones 2-8) + UPS Ground zone chart for origin ZIP3 490 (490.xls) -- both primary UPS documents, downloaded from ups.com 2026-08-16 -- multiplied by the per-zone eBay/published-daily discount ratio observed in the 2026-08-10/11 live eBay-calculator quotes (POST /shp/calc/api/shipping/services, Patrick's real seller account, origin 49079). Verified out-of-sample at ONE point: z7 @ 23lb, real $37.00 vs modelled $37.41. See RATE_TABLE_UPS header for what is and is not verified.";
-export const FEDEX_RATE_EFFECTIVE_DATE = '2026-08-11';
-export const FEDEX_RATE_SOURCE = "eBay's own live shipping calculator API (POST /shp/calc/api/shipping/services), Patrick's real seller account, FedEx Ground/Home Delivery service specifically (NOT the cheaper FedEx Ground Economy tier), every maxLb tier x every real zone (z1-z8) individually live-quoted, 2026-08-10";
+export const FEDEX_RATE_EFFECTIVE_DATE = '2026-08-16';
+export const FEDEX_RATE_SOURCE = "FedEx 2026 Standard List Rates (FedEx_Standard_List_Rates_2026.xlsx, sheet '2026 Ground & FHD rates', eff. 1/5/2026, one row per pound 1-150lb x zones 2-8) + FedEx's own Find Zones tool (fedex.com/ratetools) driven live from origin 49079 for 26 destination ZIPs -- both primary FedEx documents, obtained 2026-08-16 -- multiplied by the per-zone eBay/published-list discount ratio observed in 60 live eBay-calculator FedEx Ground/Home Delivery quotes (Patrick's real seller account, origin 49079, 2026-08-16), with a $14.07 floor and a per-package destination surcharge modelled separately (see FEDEX_DESTINATION_SURCHARGE_OBSERVED). Zones 2/4/6/7 are real-anchored; zones 3, 5 and 8 have NO observation and are modelled. See RATE_TABLE_FEDEX header for what is and is not verified.";
 
 // ── RATE_TABLE_UPS ─ FULLY REBUILT 2026-08-16 FROM UPS'S OWN PUBLISHED RATE CARD ─────
 //
@@ -774,34 +785,262 @@ const RATE_TABLE_UPS: RateRow[] = [
 // contamination in the larger test box needed to keep dim-weight below actual weight at
 // those tiers).
 //
-// VARIANCE NOTE, REVISED 2026-08-16: the earlier note here compared the 20lb x z8 cell
-// ($32.41) against the real 22.25lb quote ($32.11) as though both were zone 8. They are not
-// known to be. The 20lb cell was quoted to 98357 (Neah Bay WA), which USPS's chart rates
-// zone 8; the new quote went to 98282 (Camano Island WA), which USPS rates zone 7 -- two
-// different USPS zones, 97mi apart, and FedEx's own zoning of either lane is unverified
-// (FedEx's zone chart is not fetchable from this workspace, and FedEx has no zone 1 at all
-// per its official 2026 rate workbook). So the $0.30 delta is not evidence of anything and
-// no correction is implied by it. Separately and pre-existing: the entire z2 column of this
-// table ($19.99 flat at low weights, vs $14.07 at z1 AND z3-z7) inverts zone order in 14 rows
-// and predates this change -- unexplained, never re-quoted, flagged here so it is not mistaken
-// for fallout from this pass. See ADR-103 §7.
+
+/**
+ * PER-PACKAGE FEDEX DESTINATION SURCHARGE -- MEASURED, AND APPLIED TO EVERY FEDEX QUOTE.
+ *
+ * THE MEASUREMENT. Two independent same-zone destination pairs, both zoned from FedEx's own
+ * Find Zones tool at origin 49079:
+ *   10001 New York (z4) costs exactly $5.92 more than 30301 Atlanta (z4) at all 7 shared
+ *     weights, while their struck-through FedEx retail figures are IDENTICAL.
+ *   98357 Neah Bay (z7) costs exactly $1.98 more than 98282 Camano Island (z7) at all 8
+ *     shared weights.
+ *   98282 itself carries the same $5.92: removing it is the only way the eBay/published
+ *     ratio stays zone-monotone (raw, z7 ranks ABOVE z4 at every weight -- impossible), and
+ *     98357 minus $7.90 then reproduces 98282 minus $5.92 to within $0.01 at all 8 weights.
+ * So: a flat, weight-independent, per-package amount attached to certain destination ZIPs.
+ *
+ * THE MECHANISM IS UNKNOWN AND IS NOT ASSUMED. It is ZIP-level and constant, which is the
+ * shape of a Delivery Area Surcharge, but it does NOT match FedEx's published surcharge
+ * structure: the 2026 workbook's only per-package note is a $6.45 residential surcharge, and
+ * the struck-through retail column shows a $9.74 Neah Bay premium and NO New York premium at
+ * all -- the opposite pattern from eBay's negotiated price. Naming it "DAS" would be a guess.
+ * It is named for what was observed, not for a mechanism nobody here has verified.
+ *
+ * WHY IT IS APPLIED UNCONDITIONALLY, AND THE ONE OBSERVATION THAT SETTLED IT. The first draft
+ * of this rebuild modelled the surcharge and deliberately did NOT apply it, on the grounds
+ * that its ZIP coverage is unmeasured (3 of 6 sampled destinations carry it, and those 6 were
+ * chosen for zone spread, not for surcharge representativeness). Executing the module then
+ * disproved that position outright: with base-only pricing the engine's WORST-CASE CONUS
+ * price -- z8, 22lb 4oz -- came out $29.89, while two REAL measured CONUS destinations cost
+ * $32.11 (98282) and $34.09 (98357). A worst-case flat rate that lands below a measured real
+ * destination is broken on its own terms, however clean the base-freight decomposition is.
+ * With the surcharge applied the same package prices at $35.81 and covers both.
+ *
+ * This is the same trade coverageZoneForOrigin already makes and states: a flat rate is one
+ * price for all buyers, so it is priced to the worst case the seller could ship to. The known
+ * cost of that choice, stated rather than hidden: every FedEx quote to a NON-surcharged
+ * destination is $5.92 high. It is the never-be-short direction, and it is the direction this
+ * file has chosen everywhere else.
+ *
+ * NOT APPLIED AT lb >= 70, deliberately and not as an oversight. That path uses
+ * FEDEX_HIGH_WEIGHT_TOTAL_TABLE, which holds real eBay TOTALS (base + whatever accessorials
+ * and destination surcharge their lane carried) rather than base freight. Its destinations
+ * were never recorded -- its z7 and z8 columns are byte-identical at 90/110/130/150lb, the
+ * signature of one destination quoted into two columns -- so adding $5.92 on top would risk
+ * double-charging it. estimateCheapestRate already zeroes all surcharges on that branch for
+ * exactly this reason.
+ *
+ * WHAT WOULD IMPROVE THIS: roughly 10 more eBay-calculator quotes at KNOWN FedEx DAS and
+ * non-DAS ZIPs across 3-4 zones, destination ZIP recorded with each price -- free, same method
+ * as the 60-quote harvest that produced this table. That would turn "apply the worst case
+ * everywhere" into a measured population rate, and would let the >= 70lb table be re-anchored
+ * with recorded destinations at the same time. Until then this is one measured constant,
+ * applied conservatively.
+ */
+export const FEDEX_DESTINATION_SURCHARGE_OBSERVED = 5.92;
+/** The remote-tier increment seen at 98357 Neah Bay on top of the $5.92 above ($7.90 total).
+ *  NOT applied -- $5.92 is the amount common to both surcharged lanes; this extra $1.98 was
+ *  seen at one remote ZIP only, and is the residual known short exposure at such addresses. */
+export const FEDEX_DESTINATION_SURCHARGE_REMOTE_INCREMENT_OBSERVED = 1.98;
+
+// ── RATE_TABLE_FEDEX ─ FULLY REBUILT 2026-08-16 FROM FEDEX'S OWN PUBLISHED RATE CARD ──
+//
+// This replaces the 16-bracket table that stood here, whose z2 column had been flagged
+// "pre-existing and unexplained" for two sessions. It is explained below, and it was not
+// a zone at all.
+//
+// PRIMARY SOURCES (both obtained this session, both used directly -- these are the first
+// FedEx zone facts this file has ever had; every prior FedEx number came from eBay's
+// calculator with the lane's FedEx zone unknown):
+//   1. FedEx's own Find Zones tool (fedex.com/ratetools), driven live from origin 49079,
+//      FedEx Ground. 26 destination ZIPs read off directly. The ones that matter here:
+//        49079 (self) z2 · 49503 Grand Rapids z2 · 60601 Chicago z2 · 46201 z3 · 44101 z3
+//        · 15201 z3 · 37201 z4 · 30301 Atlanta z4 · 10001 New York z4 · 70112 z5 · 80202 z5
+//        · 75201 z5 · 04101 z5 · 87101 z6 · 33101 Miami z6 · 33040 z6 · 59101 z6
+//        · 89101 z7 · 98282 Camano Island WA z7 · 98357 Neah Bay WA z7
+//        · 97201 Portland OR z8 · 94102 San Francisco z8 · 90210 Los Angeles z8
+//      **FedEx publishes no zone 1 from this origin** -- 49079 is zone 2 to ITSELF.
+//   2. FedEx Standard List Rates 2026 (FedEx_Standard_List_Rates_2026.xlsx, sheet
+//      "2026 Ground & FHD rates", eff. 1/5/2026): one row per pound, 1-150lb, zones 2-8.
+//      Parsed in full this session -- 150 weight rows x 7 zones, no gaps, and strictly
+//      non-decreasing in BOTH weight and zone (0 violations, checked programmatically).
+//
+// FINDING 1 -- THE $19.99 z2 COLUMN WAS A DESTINATION SURCHARGE FILED AS A ZONE.
+// 30301 (Atlanta) and 10001 (New York) are BOTH FedEx zone 4 -- primary source above --
+// and eBay's struck-through FedEx retail figure is IDENTICAL for the two at all six shared
+// weights, independently confirming one zone. Yet eBay's actual FedEx price at 10001 is
+// higher by **exactly $5.92 at every one of seven shared weights** (1/3/7/14/20/30/50lb;
+// $5.92, $5.92, $5.93, $5.92, $5.92, $5.93, $5.92). A constant, not a slope: that is a
+// per-package destination surcharge, not a zone difference. $14.07 + $5.92 = $19.99, which
+// is precisely the mystery column. Someone quoted a surcharged destination and filed it as
+// a zone; the old table's z2 column was literally its own z1 column plus $5.92 at every row.
+// The same shape appears in the west: 98282 (Camano Island) and 98357 (Neah Bay) are BOTH
+// zone 7, and Neah Bay is dearer by exactly $1.98 at all eight shared weights.
+//
+// FINDING 2 -- 98282 CARRIES THE SAME $5.92, AND THAT IS WHY THE OLD z7/z8 LOOKED WRONG.
+// Not asserted from the coincidence, tested: eBay/published ratio must fall as zone rises
+// (both published cards are zone-monotone). Taken RAW, 98282's zone-7 ratio comes out ABOVE
+// the zone-4 ratio at all 7 shared weights -- impossible. Subtract $5.92 and the ratios are
+// zone-monotone at all 7 weights (z2 > z4 > z6 > z7, every weight). Independent
+// confirmation: 98357 minus $7.90 (= 5.92 + 1.98) reproduces 98282 minus $5.92 to within
+// $0.01 at ALL EIGHT weights. So the two western lanes are one zone-7 base curve plus two
+// different constants. The engine's old "z8" column was Neah Bay -- i.e. a **zone-7**
+// destination with a surcharge on top -- which is why it never behaved like a zone 8.
+//
+// FINDING 3 -- THERE IS A HARD $14.07 FLOOR. At 1lb and 3lb, the de-surcharged base is
+// EXACTLY $14.07 at z2, z4, z6 AND z7 -- eight independent observations, four zones, one
+// number, while published list runs $11.99-$19.11 underneath it. eBay's FedEx Ground price
+// cannot go below $14.07 at this account. Modelled explicitly as max(FLOOR, published x r),
+// which reproduces all eight floor observations exactly rather than smearing them into the
+// ratio curve.
+//
+// HOW EACH CELL IS BUILT:
+//   cell(zone, W) = round2( max( 14.07, publishedFedExGroundList(zone, W) x r(zone, W) ) )
+//   r(zone, W) is that zone's OWN observed eBay/published ratio, piecewise-linear in weight
+//   between the real anchor weights, held flat outside them. Only observations where the
+//   floor is NOT binding can carry ratio information, so the 1lb and 3lb points (and z2's
+//   7lb point, which is also exactly $14.07) are used as floor evidence, not ratio evidence.
+//
+// WHICH CELLS ARE REAL AND WHICH ARE MODELLED -- stated per zone, no blurring:
+//   z2  REAL-ANCHORED, dest 49503, at 14/20/23/30/50lb.
+//   z4  REAL-ANCHORED, dest 30301, at 7/14/20/30/50lb.
+//   z6  REAL-ANCHORED, dest 33101, at 7/14/20/30/50lb.
+//   z7  REAL-ANCHORED, dest 98282, at 7/14/20/23/30/50lb -- but ONLY after subtracting the
+//       modelled $5.92. There is NO surcharge-free FedEx zone-7 observation. This is the one
+//       place the surcharge model feeds the base table, and it is load-bearing. (98357 minus
+//       $7.90 agrees to <= $0.01 at all 8 weights, which is a real cross-check but not an
+//       independent one -- it shares the same surcharge assumption.)
+//   z3  MODELLED. r3 = mean(r2, r4) at every pound. NO FedEx zone-3 observation exists.
+//   z5  MODELLED. r5 = mean(r4, r6) at every pound. NO FedEx zone-5 observation exists.
+//   z8  MODELLED. r8 = r7, held flat. NO FedEx zone-8 observation exists -- and z8 is the
+//       column the engine actually uses for most origins (ZIP1_MAX_ZONE sends digits
+//       0,1,2,3,4,8,9 to z8), so this is the single largest modelled exposure in the file.
+//       Flat-at-r7 is the CONSERVATIVE choice: the ratio's per-zone decline is decelerating
+//       (-0.0357, -0.0249, -0.0162 per zone step at 50lb), so slope-extrapolating it would
+//       price z8 about $1.00-1.50 LOWER. Never-be-short wins; the higher one is used.
+//   z1  FedEx has no zone 1 (primary source: the workbook's zone header, and Find Zones
+//       rating the origin ZIP to itself as zone 2). z1 mirrors z2 and is unreachable in
+//       practice -- no ZIP1_MAX_ZONE entry resolves to z1.
+//
+// THE OUT-OF-SAMPLE TEST THE INTERPOLATION STEP GETS, AND IT PASSES. z3 and z5 rest on
+// interpolating r between neighbouring zones. That exact step was validated by holding out
+// z6 entirely and re-deriving it from z4 and z7: predicted vs the real 33101 quotes came to
+// -0.26% / -1.44% / +0.71% / +1.67% / +1.04% at 7/14/20/30/50lb -- 1.03% mean absolute
+// error, 1.67% worst. That is evidence for z3 and z5. It is NOT evidence for z8, which is an
+// EXTRAPOLATION and gets no test at all.
+//
+// RECONSTRUCTION ACCURACY, counted not estimated, over all 46 live FedEx observations. Model =
+// this table's base + that destination's OWN measured surcharge ($0 / $5.92 / $7.90):
+// **32 of 46 exact to the penny, only 2 short (both by $0.01), worst absolute error 1.51%**
+// (z2 @ 50lb, where the monotone closure raised a measured cell $0.30). What the SHIPPED engine
+// does is different, because it applies $5.92 to every destination rather than the destination's
+// own amount -- on the two surcharged lanes it is exact at 10 of 16 points, worst $0.26 (0.80%);
+// on the three clean lanes it is $5.92-$6.22 high by design; at 98357 it is $1.91-$1.98 short,
+// the unapplied remote increment. See FEDEX_DESTINATION_SURCHARGE_OBSERVED.
+//
+// BRACKET ERROR IS NOW ZERO BY CONSTRUCTION, same as RATE_TABLE_UPS. rateFromTable charges a
+// bracket's TOP weight to every package inside it; with per-pound rows, bracket (W-1, W]
+// holds exactly one billable pound, which is how FedEx bills. The old 16-bracket set
+// admitted, worst case inside each bracket (measured on the new curve, so this isolates
+// bracket width from the column errors fixed above): (3,5] +5.9% · (5,7] +3.7% ·
+// (7,10] +8.1% · (10,14] +12.1% · (14,20] +16.6% · (20,22.5] +6.9% · (22.5,30] +21.0% ·
+// (30,50] +38.7% · (50,70] +21.0%. All of those are now 0.0%.
+//
+// MONOTONICITY, both directions, counted before and after. Raw model: 3 zone violations, 51
+// weight violations (the same artifact seen on UPS -- a falling ratio meeting a nearly-flat
+// published step). Closed with a raise-only closure iterated to a fixed point, so a cell can
+// only ever go UP: 0 zone violations, 0 weight violations, 66 cells raised, largest single
+// raise $0.31. It touched 5 real anchor cells, each raised by $0.04-$0.30 (<=1.5%): z4@20lb
+// 16.69->16.75, z2@30lb 17.01->17.05, z7@30lb 31.00->31.06, z2@50lb 19.87->20.17, z4@50lb
+// 26.68->26.94. Those five are the only measured cells in the table that no longer sit
+// exactly on their quote, and all five moved in the never-be-short direction.
+// For contrast, the table this replaces had 15 zone violations and 5 weight violations.
+//
+// WHAT IS STILL UNVERIFIED, EXPLICITLY:
+//   - Zones 3, 5 and 8 have NO price observation. See the per-zone list above.
+//   - The destination surcharge's MECHANISM and ZIP COVERAGE are unknown. It IS applied to
+//     every FedEx quote below 70lb (never-be-short); see FEDEX_DESTINATION_SURCHARGE_OBSERVED
+//     for the measurement, the reasoning, and the $5.92 over-charge that choice accepts at
+//     non-surcharged destinations. The cells in THIS table are surcharge-free base freight.
+//   - Rows above 70lb: none. estimateCheapestRate intercepts lb >= 70 with
+//     FEDEX_HIGH_WEIGHT_TOTAL_TABLE, whose own anchors are real eBay totals with UNRECORDED
+//     destinations -- note its z7 and z8 columns are byte-identical at 90/110/130/150lb,
+//     the signature of one destination quoted into two columns. Their surcharge content is
+//     therefore unknown and could not be de-duplicated here. Untouched this pass.
+//   - Nothing here is browser-verified. The engine numbers below are reproduced by executing
+//     the module; they are not a claim about what eBay's UI shows today.
 const RATE_TABLE_FEDEX: RateRow[] = [
-  { maxLb: 0.25   , z1: 14.07 , z2: 19.99 , z3: 14.07 , z4: 14.07 , z5: 14.07 , z6: 14.07 , z7: 14.07 , z8: 21.97 },
-  { maxLb: 0.5    , z1: 14.07 , z2: 19.99 , z3: 14.07 , z4: 14.07 , z5: 14.07 , z6: 14.07 , z7: 14.07 , z8: 21.97 },
-  { maxLb: 0.75   , z1: 14.07 , z2: 19.99 , z3: 14.07 , z4: 14.07 , z5: 14.07 , z6: 14.07 , z7: 14.07 , z8: 21.97 },
-  { maxLb: 0.9999 , z1: 14.07 , z2: 19.99 , z3: 14.07 , z4: 14.07 , z5: 14.07 , z6: 14.07 , z7: 14.07 , z8: 21.97 },
-  { maxLb: 1      , z1: 14.07 , z2: 19.99 , z3: 14.07 , z4: 14.07 , z5: 14.07 , z6: 14.07 , z7: 14.07 , z8: 21.97 },
-  { maxLb: 2      , z1: 14.07 , z2: 19.99 , z3: 14.07 , z4: 14.07 , z5: 14.07 , z6: 14.07 , z7: 14.07 , z8: 21.97 },
-  { maxLb: 3      , z1: 14.07 , z2: 19.99 , z3: 14.07 , z4: 14.07 , z5: 14.07 , z6: 14.07 , z7: 14.07 , z8: 21.97 },
-  { maxLb: 5      , z1: 14.07 , z2: 19.99 , z3: 14.07 , z4: 14.55 , z5: 15.27 , z6: 15.27 , z7: 16.2 , z8: 24.10 },
-  { maxLb: 7      , z1: 14.07 , z2: 19.99 , z3: 14.07 , z4: 14.52 , z5: 15.23 , z6: 15.23 , z7: 16.09 , z8: 23.99 },
-  { maxLb: 10     , z1: 14.07 , z2: 19.99 , z3: 14.21 , z4: 14.93 , z5: 15.83 , z6: 15.83 , z7: 17.42 , z8: 25.32 },
-  { maxLb: 14     , z1: 14.63 , z2: 20.55 , z3: 15.11 , z4: 15.59 , z5: 16.65 , z6: 16.65 , z7: 20.79 , z8: 28.69 },
-  { maxLb: 20     , z1: 15.31 , z2: 21.24 , z3: 16.44 , z4: 16.69 , z5: 19.09 , z6: 19.09 , z7: 24.51 , z8: 32.41 },
-  { maxLb: 22.5   , z1: 17.01 , z2: 22.93 , z3: 19.0 , z4: 20.31 , z5: 23.09 , z6: 23.09 , z7: 31.0 , z8: 38.89 }, // ZONE-CORRECTED 2026-08-16: the real $32.11 quote is on a lane whose FEDEX zone is UNVERIFIED (FedEx publishes its own chart, has no zone 1 at all, and no fetchable zone endpoint was found). z1-z6 = min(30lb cell, $32.11) which leaves them all unchanged; z7/z8 REVERTED to the 30lb-row values. This row is currently INERT (identical to the 30lb row) and is retained only so it is in place when a real FedEx zone determination lands
-  { maxLb: 30     , z1: 17.01 , z2: 22.93 , z3: 19.0 , z4: 20.31 , z5: 23.09 , z6: 23.09 , z7: 31.0 , z8: 38.89 },
-  { maxLb: 50     , z1: 19.87 , z2: 25.79 , z3: 23.28 , z4: 26.68 , z5: 31.02 , z6: 31.02 , z7: 44.02 , z8: 51.91 },
-  { maxLb: 70     , z1: 23.67 , z2: 30.73 , z3: 30.73 , z4: 31.92 , z5: 37.77 , z6: 37.77 , z7: 47.28 , z8: 60.01 }, // 70lb row REBUILT 2026-08-16 (same double-charge artifact just fixed on RATE_TABLE_UPS's 70lb row). PRIOR CELLS, PRESERVED: z1 77.51, z2 83.44, z3 87.24, z4 90.81, z5 103.70, z6 103.70, z7 117.09, z8 124.99 -- every one of them sat ABOVE FedEx's own published 2026 list rate (ratio 1.20x at z8 up to 2.40x at z2) while the 50lb row directly above sits BELOW list at every zone (0.46x-0.89x). eBay's negotiated FedEx price cannot go from 42% under list to 20% over list in 20lb of base freight; the >50lb additional-handling accessorial was baked into those quoted totals, and computeSurchargeForCarrier ADDS it again at runtime -- a double charge. Rebuilt as published(zone) x r50(zone), r50 = this table's own 50lb cell / published 50lb, then a raise-only zone-monotone closure (z3 lifted 28.54->30.73, z6 lifted 35.34->37.77). Source: FedEx_Standard_List_Rates_2026.xlsx, sheet '2026 Ground & FHD rates', eff. 1/5/2026, zones 2-8 (FedEx has no zone 1, so the z1 column uses published z2 as its basis, same as everywhere else in this file)
+  { maxLb: 1  , z1:  14.07, z2:  14.07, z3:  14.07, z4:  14.07, z5:  14.07, z6:  14.07, z7:  14.07, z8:  14.07 }, // <=1lb: FedEx Ground bills a 1lb minimum, and eBay's $14.07 FedEx floor binds at every zone here -- one row covers the whole sub-1lb range (real quotes at 4oz/8oz/12oz/15.999oz/1lb were all $14.07 at z2/z4/z6, and $19.99 = 14.07 + the destination surcharge at 98282)
+  { maxLb: 2  , z1:  14.07, z2:  14.07, z3:  14.07, z4:  14.07, z5:  14.07, z6:  14.07, z7:  14.07, z8:  14.07 },
+  { maxLb: 3  , z1:  14.07, z2:  14.07, z3:  14.07, z4:  14.07, z5:  14.07, z6:  14.07, z7:  14.07, z8:  14.62 },
+  { maxLb: 4  , z1:  14.07, z2:  14.07, z3:  14.07, z4:  14.07, z5:  14.25, z6:  14.32, z7:  14.97, z8:  15.67 },
+  { maxLb: 5  , z1:  14.07, z2:  14.07, z3:  14.07, z4:  14.07, z5:  14.89, z6:  15.14, z7:  15.66, z8:  16.59 },
+  { maxLb: 6  , z1:  14.07, z2:  14.07, z3:  14.07, z4:  14.15, z5:  14.95, z6:  15.16, z7:  15.67, z8:  16.60 },
+  { maxLb: 7  , z1:  14.07, z2:  14.07, z3:  14.07, z4:  14.52, z5:  15.42, z6:  15.43, z7:  16.09, z8:  17.22 }, // REAL-ANCHORED: z4, z6, z7 live-quoted at this weight
+  { maxLb: 8  , z1:  14.07, z2:  14.07, z3:  14.07, z4:  14.91, z5:  15.71, z6:  15.85, z7:  16.44, z8:  17.66 },
+  { maxLb: 9  , z1:  14.07, z2:  14.07, z3:  14.07, z4:  14.91, z5:  15.71, z6:  15.98, z7:  16.81, z8:  18.25 },
+  { maxLb: 10 , z1:  14.07, z2:  14.07, z3:  14.07, z4:  14.92, z5:  15.96, z6:  15.98, z7:  17.28, z8:  19.09 },
+  { maxLb: 11 , z1:  14.07, z2:  14.07, z3:  14.21, z4:  15.44, z5:  16.21, z6:  16.62, z7:  18.68, z8:  20.29 },
+  { maxLb: 12 , z1:  14.07, z2:  14.07, z3:  14.76, z4:  15.48, z5:  16.27, z6:  16.97, z7:  19.05, z8:  20.83 },
+  { maxLb: 13 , z1:  14.07, z2:  14.07, z3:  14.77, z4:  15.55, z5:  16.40, z6:  17.25, z7:  19.82, z8:  21.34 },
+  { maxLb: 14 , z1:  14.63, z2:  14.63, z3:  15.12, z4:  15.59, z5:  16.64, z6:  18.02, z7:  20.80, z8:  22.74 }, // REAL-ANCHORED: z2, z4, z6, z7 live-quoted at this weight
+  { maxLb: 15 , z1:  14.63, z2:  14.63, z3:  15.36, z4:  15.70, z5:  17.06, z6:  18.77, z7:  21.23, z8:  23.43 },
+  { maxLb: 16 , z1:  14.86, z2:  14.86, z3:  15.70, z4:  15.87, z5:  17.19, z6:  19.13, z7:  22.12, z8:  24.34 },
+  { maxLb: 17 , z1:  14.88, z2:  14.88, z3:  15.93, z4:  15.93, z5:  17.50, z6:  19.70, z7:  23.01, z8:  24.34 },
+  { maxLb: 18 , z1:  14.96, z2:  14.96, z3:  16.04, z4:  16.04, z5:  18.16, z6:  20.46, z7:  23.45, z8:  25.70 },
+  { maxLb: 19 , z1:  15.28, z2:  15.28, z3:  16.71, z4:  16.73, z5:  18.83, z6:  20.79, z7:  23.91, z8:  26.65 },
+  { maxLb: 20 , z1:  15.31, z2:  15.31, z3:  16.75, z4:  16.75, z5:  19.38, z6:  21.21, z7:  24.52, z8:  27.31 }, // REAL-ANCHORED: z2, z4, z6, z7 live-quoted at this weight
+  { maxLb: 21 , z1:  15.63, z2:  15.63, z3:  17.11, z4:  17.25, z5:  19.38, z6:  21.68, z7:  25.02, z8:  27.95 },
+  { maxLb: 22 , z1:  15.63, z2:  15.63, z3:  17.14, z4:  17.54, z5:  19.58, z6:  22.37, z7:  25.52, z8:  28.70 },
+  { maxLb: 23 , z1:  15.70, z2:  15.70, z3:  17.34, z4:  17.92, z5:  19.95, z6:  23.00, z7:  26.19, z8:  29.89 }, // REAL-ANCHORED: z2, z7 live-quoted at this weight
+  { maxLb: 24 , z1:  16.01, z2:  16.01, z3:  17.89, z4:  18.48, z5:  20.81, z6:  23.89, z7:  26.89, z8:  31.39 },
+  { maxLb: 25 , z1:  16.01, z2:  16.01, z3:  17.89, z4:  18.48, z5:  21.01, z6:  24.35, z7:  28.18, z8:  32.14 },
+  { maxLb: 26 , z1:  16.45, z2:  16.45, z3:  18.25, z4:  18.95, z5:  21.65, z6:  25.01, z7:  29.13, z8:  33.25 },
+  { maxLb: 27 , z1:  16.78, z2:  16.78, z3:  18.52, z4:  19.13, z5:  21.65, z6:  25.78, z7:  29.47, z8:  33.26 },
+  { maxLb: 28 , z1:  17.05, z2:  17.05, z3:  18.80, z4:  19.81, z5:  22.63, z6:  26.79, z7:  30.57, z8:  34.62 },
+  { maxLb: 29 , z1:  17.05, z2:  17.05, z3:  18.99, z4:  19.81, z5:  22.63, z6:  27.29, z7:  31.06, z8:  35.30 },
+  { maxLb: 30 , z1:  17.05, z2:  17.05, z3:  19.27, z4:  20.31, z5:  23.06, z6:  27.47, z7:  31.06, z8:  36.16 }, // REAL-ANCHORED: z2, z4, z6, z7 live-quoted at this weight
+  { maxLb: 31 , z1:  17.67, z2:  17.67, z3:  19.61, z4:  20.62, z5:  23.26, z6:  27.90, z7:  31.73, z8:  37.19 },
+  { maxLb: 32 , z1:  17.67, z2:  17.67, z3:  19.61, z4:  20.62, z5:  23.26, z6:  27.90, z7:  31.73, z8:  37.47 },
+  { maxLb: 33 , z1:  17.67, z2:  17.67, z3:  19.74, z4:  21.35, z5:  24.15, z6:  29.45, z7:  32.56, z8:  38.35 },
+  { maxLb: 34 , z1:  17.68, z2:  17.68, z3:  20.10, z4:  21.92, z5:  24.89, z6:  29.45, z7:  33.41, z8:  40.04 },
+  { maxLb: 35 , z1:  17.94, z2:  17.94, z3:  21.07, z4:  22.53, z5:  25.37, z6:  29.74, z7:  34.15, z8:  40.19 },
+  { maxLb: 36 , z1:  18.13, z2:  18.13, z3:  21.07, z4:  22.60, z5:  25.89, z6:  30.87, z7:  35.19, z8:  41.61 },
+  { maxLb: 37 , z1:  18.33, z2:  18.33, z3:  21.17, z4:  22.72, z5:  26.35, z6:  30.89, z7:  36.20, z8:  41.87 },
+  { maxLb: 38 , z1:  18.55, z2:  18.55, z3:  21.40, z4:  23.33, z5:  26.86, z6:  31.46, z7:  36.21, z8:  42.50 },
+  { maxLb: 39 , z1:  19.09, z2:  19.09, z3:  22.13, z4:  24.21, z5:  27.57, z6:  32.77, z7:  37.50, z8:  43.22 },
+  { maxLb: 40 , z1:  19.09, z2:  19.09, z3:  22.13, z4:  24.21, z5:  27.57, z6:  32.77, z7:  37.50, z8:  43.22 },
+  { maxLb: 41 , z1:  19.38, z2:  19.38, z3:  22.97, z4:  24.67, z5:  28.31, z6:  33.93, z7:  38.39, z8:  44.54 },
+  { maxLb: 42 , z1:  19.38, z2:  19.38, z3:  22.97, z4:  25.50, z5:  28.31, z6:  33.95, z7:  38.90, z8:  44.60 },
+  { maxLb: 43 , z1:  19.60, z2:  19.60, z3:  23.17, z4:  25.50, z5:  29.58, z6:  35.66, z7:  40.17, z8:  45.65 },
+  { maxLb: 44 , z1:  19.78, z2:  19.78, z3:  23.41, z4:  25.93, z5:  29.97, z6:  35.72, z7:  41.26, z8:  45.95 },
+  { maxLb: 45 , z1:  19.78, z2:  19.78, z3:  23.41, z4:  25.93, z5:  29.97, z6:  35.72, z7:  41.91, z8:  46.11 },
+  { maxLb: 46 , z1:  20.17, z2:  20.17, z3:  23.44, z4:  26.48, z5:  30.28, z6:  36.39, z7:  42.21, z8:  47.16 },
+  { maxLb: 47 , z1:  20.17, z2:  20.17, z3:  23.86, z4:  26.78, z5:  30.34, z6:  36.75, z7:  42.87, z8:  47.75 },
+  { maxLb: 48 , z1:  20.17, z2:  20.17, z3:  23.86, z4:  26.94, z5:  31.30, z6:  37.15, z7:  43.10, z8:  48.32 },
+  { maxLb: 49 , z1:  20.17, z2:  20.17, z3:  23.86, z4:  26.94, z5:  31.30, z6:  37.28, z7:  43.80, z8:  48.43 },
+  { maxLb: 50 , z1:  20.17, z2:  20.17, z3:  23.86, z4:  26.94, z5:  31.30, z6:  37.45, z7:  44.02, z8:  48.92 }, // REAL-ANCHORED: z2, z4, z6, z7 live-quoted at this weight
+  { maxLb: 51 , z1:  20.17, z2:  20.17, z3:  23.86, z4:  26.94, z5:  31.34, z6:  38.10, z7:  44.78, z8:  50.29 },
+  { maxLb: 52 , z1:  20.17, z2:  20.17, z3:  23.86, z4:  26.95, z5:  31.36, z6:  38.11, z7:  44.79, z8:  50.29 },
+  { maxLb: 53 , z1:  20.17, z2:  20.17, z3:  23.86, z4:  26.96, z5:  31.67, z6:  38.11, z7:  44.79, z8:  50.78 },
+  { maxLb: 54 , z1:  20.17, z2:  20.17, z3:  23.86, z4:  27.00, z5:  31.73, z6:  38.12, z7:  44.80, z8:  50.79 },
+  { maxLb: 55 , z1:  20.17, z2:  20.17, z3:  23.86, z4:  27.00, z5:  31.73, z6:  38.13, z7:  44.80, z8:  50.80 },
+  { maxLb: 56 , z1:  20.17, z2:  20.17, z3:  23.86, z4:  27.01, z5:  31.74, z6:  38.14, z7:  44.82, z8:  51.43 },
+  { maxLb: 57 , z1:  20.41, z2:  20.41, z3:  23.88, z4:  27.02, z5:  32.69, z6:  38.15, z7:  44.83, z8:  51.95 },
+  { maxLb: 58 , z1:  20.42, z2:  20.42, z3:  23.88, z4:  27.03, z5:  32.70, z6:  38.16, z7:  44.84, z8:  52.41 },
+  { maxLb: 59 , z1:  20.44, z2:  20.44, z3:  23.90, z4:  27.22, z5:  32.72, z6:  38.43, z7:  44.84, z8:  53.28 },
+  { maxLb: 60 , z1:  21.00, z2:  21.00, z3:  24.83, z4:  27.69, z5:  33.87, z6:  39.14, z7:  45.00, z8:  53.61 },
+  { maxLb: 61 , z1:  21.00, z2:  21.00, z3:  24.90, z4:  27.96, z5:  33.95, z6:  39.14, z7:  45.01, z8:  53.62 },
+  { maxLb: 62 , z1:  21.87, z2:  21.87, z3:  26.68, z4:  28.41, z5:  34.91, z6:  39.74, z7:  45.70, z8:  54.27 },
+  { maxLb: 63 , z1:  21.87, z2:  21.87, z3:  26.68, z4:  28.68, z5:  34.93, z6:  40.02, z7:  46.07, z8:  54.60 },
+  { maxLb: 64 , z1:  22.45, z2:  22.45, z3:  26.69, z4:  29.15, z5:  34.93, z6:  40.30, z7:  46.08, z8:  54.93 },
+  { maxLb: 65 , z1:  22.70, z2:  22.70, z3:  27.41, z4:  29.16, z5:  34.94, z6:  40.65, z7:  46.19, z8:  55.02 },
+  { maxLb: 66 , z1:  22.82, z2:  22.82, z3:  27.67, z4:  29.16, z5:  34.95, z6:  40.69, z7:  46.33, z8:  55.26 },
+  { maxLb: 67 , z1:  22.82, z2:  22.82, z3:  27.69, z4:  29.17, z5:  35.01, z6:  41.00, z7:  46.56, z8:  55.78 },
+  { maxLb: 68 , z1:  23.09, z2:  23.09, z3:  28.19, z4:  30.94, z5:  35.81, z6:  41.61, z7:  47.27, z8:  55.78 },
+  { maxLb: 69 , z1:  23.57, z2:  23.57, z3:  28.47, z4:  31.25, z5:  36.07, z6:  41.82, z7:  47.27, z8:  56.08 },
+  { maxLb: 70 , z1:  23.67, z2:  23.67, z3:  28.87, z4:  31.92, z5:  37.80, z6:  42.66, z7:  47.28, z8:  56.56 },
 ];
 
 /** All curated carrier tables + metadata, for the rate-staleness audit task. */
@@ -876,6 +1115,23 @@ const CONUS_CORNERS: Array<{ name: string; lat: number; lng: number }> = [
   // derivation is sourced from -- so this corner and the rate table it feeds are now
   // consistent with the same real destination.
   { name: 'Neah Bay WA', lat: 48.328, lng: -124.6151 },
+  // Added 2026-08-16 (ADR-103 §8 FedEx zone re-anchor). San Francisco is 1943mi from
+  // Paw Paw MI (49079) -- FARTHER than every corner above, including Neah Bay (1908mi),
+  // San Diego (1823mi) and Seattle (1804mi) -- so the set above did not actually contain
+  // this origin's farthest CONUS point. It is also a CONFIRMED FedEx zone 8 from 49079
+  // (FedEx Find Zones, primary source, this session), alongside Los Angeles 90210 (z8) and
+  // Portland OR 97201 (z8). Adding a corner can only ever RAISE the max distance and so can
+  // only ever raise the resolved zone -- the never-be-short direction, never the reverse.
+  //
+  // WHY THIS MATTERS BEYOND THE MILEAGE: the same lookup falsified this set's core
+  // assumption that farthest-by-miles == highest carrier zone. Neah Bay is the farthest
+  // CONUS *point* from 49079 but FedEx rates it **zone 7**, while the three West Coast
+  // metros are zone 8 -- FedEx zones follow ZIP3 routing, not great-circle distance, and
+  // Neah Bay routes through Seattle. That mismatch did no harm HERE (San Diego and Seattle
+  // both already cross the 1800mi z8 cutoff, so this origin resolved z8 either way), but it
+  // is the reason RATE_TABLE_FEDEX's old z8 column was wrong: it was built from Neah Bay
+  // quotes, i.e. a zone-SEVEN destination. See that table's header.
+  { name: 'San Francisco CA', lat: 37.7749, lng: -122.4194 },
 ];
 
 function haversineMiles(lat1: number, lng1: number, lat2: number, lng2: number): number {
@@ -1090,8 +1346,12 @@ async function getCachedMaxZoneForOriginZip3(originZip3: string): Promise<{ zone
  * Verified live 2026-08-16 from origin 49079: 98357 -> z8, 92101 -> z8, 33040 -> z6,
  * 04736 -> z5, 98101 -> z8. Max = z8, which AGREES with ZIP1_MAX_ZONE['4'] = 'z8', so
  * turning this cache on does not change Artifact's own pricing.
+ * 94102 (San Francisco) added 2026-08-16 to stay 1:1 with CONUS_CORNERS -- see the comment
+ * on that corner for why (it is farther from 49079 than any prior corner, 1943mi, and is a
+ * confirmed FedEx zone 8). Its USPS chart zone from 49079 was NOT looked up; it can only
+ * raise the max, so it cannot make this origin's zone lower than the verified z8 above.
  */
-const CONUS_CORNER_ZIPS: readonly string[] = ['98101', '92101', '33040', '04736', '98357'];
+const CONUS_CORNER_ZIPS: readonly string[] = ['98101', '92101', '33040', '04736', '98357', '94102'];
 
 const USPS_ZONE_CHART_PAGE = 'https://postcalc.usps.com/DomesticZoneChart';
 const USPS_ZONE_CHART_ENDPOINT = 'https://postcalc.usps.com/DomesticZoneChart/GetZone';
@@ -1384,7 +1644,7 @@ export interface CheapestRate {
   baseRate?: number;
   /** Total additive surcharge folded into `rate` (0 if none triggered). */
   surcharge?: number;
-  surchargeType?: 'AHS' | 'LARGE_PACKAGE' | 'USPS_NONSTANDARD' | null;
+  surchargeType?: 'AHS' | 'LARGE_PACKAGE' | 'USPS_NONSTANDARD' | 'DESTINATION' | null;
   basis: 'actual' | 'dimensional' | 'cubic' | 'oversized' | 'standard_envelope';
   /** Set when basis === 'cubic' -- which named GA Cubic tier was selected. */
   cubicTierLabel?: string | null;
@@ -2290,8 +2550,23 @@ function computeSurchargeForCarrier(
   dims: PackageDims,
   weightOz: number,
   packageType: string | null | undefined
-): { amount: number; type: 'AHS' | 'LARGE_PACKAGE' | 'USPS_NONSTANDARD' | null; minBillableLb: number | null } {
+): { amount: number; type: 'AHS' | 'LARGE_PACKAGE' | 'USPS_NONSTANDARD' | 'DESTINATION' | null; minBillableLb: number | null } {
   const weightLb = Math.max(0, weightOz || 0) / 16;
+  // FedEx-only additive destination surcharge (see FEDEX_DESTINATION_SURCHARGE_OBSERVED for
+  // the measurement and the never-be-short reasoning). It stacks ON TOP of AHS/Large Package
+  // rather than competing with them in the max() below -- real carriers bill an accessorial
+  // and a destination surcharge together, and the two were measured independently. Applied at
+  // every UPS/FedEx return path below; USPS returns before this and is unaffected.
+  const finish = <T extends { amount: number; type: 'AHS' | 'LARGE_PACKAGE' | 'USPS_NONSTANDARD' | 'DESTINATION' | null; minBillableLb: number | null }>(
+    r: T
+  ) =>
+    carrier === 'FEDEX'
+      ? {
+          amount: round2(r.amount + FEDEX_DESTINATION_SURCHARGE_OBSERVED),
+          type: r.type ?? ('DESTINATION' as const),
+          minBillableLb: r.minBillableLb,
+        }
+      : r;
   const sorted = sortedRealDims(dims);
   const lengthPlusGirth = sorted ? sorted[0] + 2 * (sorted[1] + sorted[2]) : 0;
   const volumeCuIn = sorted ? sorted[0] * sorted[1] * sorted[2] : 0;
@@ -2314,11 +2589,11 @@ function computeSurchargeForCarrier(
   if (largePackageTriggered) {
     // EBAY_NEGOTIATED_SURCHARGE_PASSTHROUGH applied -- see that constant's comment for
     // the live measurement this is based on (raw table value overcharges ~2x).
-    return {
+    return finish({
       amount: round2(LARGE_PACKAGE_SURCHARGE_TABLE[zone] * EBAY_NEGOTIATED_SURCHARGE_PASSTHROUGH),
-      type: 'LARGE_PACKAGE',
+      type: 'LARGE_PACKAGE' as const,
       minBillableLb: LARGE_PACKAGE_MIN_BILLABLE_LB,
-    };
+    });
   }
 
   const dimensionTriggered = !!sorted && (sorted[0] > 48 || sorted[1] > 30);
@@ -2358,9 +2633,9 @@ function computeSurchargeForCarrier(
       if (carrier === 'UPS') candidateAmounts.push(AHS_PACKAGING_SURCHARGE_UPS_FLAT);
       else if (carrier === 'FEDEX') candidateAmounts.push(round2(AHS_PACKAGING_SURCHARGE_TABLE[zone] * AHS_PACKAGING_SURCHARGE_FEDEX_MULTIPLIER));
     }
-    return { amount: Math.max(...candidateAmounts), type: 'AHS', minBillableLb: null };
+    return finish({ amount: Math.max(...candidateAmounts), type: 'AHS' as const, minBillableLb: null });
   }
-  return { amount: 0, type: null, minBillableLb: null };
+  return finish({ amount: 0, type: null as null, minBillableLb: null });
 }
 
 /** Cheapest carrier rate for an item at a given coverage zone, including any additive
