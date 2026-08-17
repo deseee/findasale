@@ -162,6 +162,23 @@ const shopperFAQs: FAQItem[] = [
         In an auction, items go to the highest bidder. Place a bid, and if someone outbids you,
         you'll receive a notification. Bidding continues until the auction end time. The highest bid
         at closing wins. Auction end times are clearly marked so you always know the deadline.
+        <br /><br />
+        Winning bids carry a <strong>5% buyer&apos;s premium</strong> added at checkout, so plan your
+        maximum bid around it. Win at $200 and you pay $210.
+      </>
+    ),
+  },
+  {
+    question: 'What is the buyer\'s premium?',
+    answer: (
+      <>
+        On auction items only, the winning bidder pays a <strong>5% buyer&apos;s premium</strong> on top
+        of the winning bid. It is shown on the item page before you bid, itemized at checkout, and you
+        confirm it before paying. A $200 winning bid comes to <strong>$210.00</strong>: $200 to the
+        organizer&apos;s sale total, $10 buyer&apos;s premium.
+        <br /><br />
+        Fixed-price items have no buyer&apos;s premium. You pay the listed price plus shipping if you
+        choose it.
       </>
     ),
   },
@@ -351,6 +368,11 @@ const organizerFAQs: FAQItem[] = [
         FindA.Sale charges a platform fee on each completed purchase, regardless of sale type (fixed-price or auction).
         The fee depends on your plan: <strong>SIMPLE organizers pay 10%</strong>; <strong>PRO and TEAMS organizers pay 8%</strong>.
         Upgrading to PRO or TEAMS saves 2 percentage points on every transaction.
+        <br /><br />
+        Auctions add a second, separate fee that the <em>winning bidder</em> pays, not you: a{' '}
+        <strong>5% buyer&apos;s premium</strong> on top of the winning bid. It does not change your
+        platform fee. On a $200 winning bid at the 10% rate, the buyer pays $210.00, your platform fee
+        is $20.00, and you receive $180.00 before Stripe processing.
       </>
     ),
   },
@@ -441,7 +463,9 @@ const organizerFAQs: FAQItem[] = [
         When creating your sale, enable the <strong>Auction</strong> option. Then, for each item you
         want to auction, mark it as an auction item and set a starting bid. Bidding is live. Shoppers
         see real-time bids. At the end time you set, the highest bidder wins and payment is processed
-        automatically. The standard 10% platform fee applies.
+        automatically. Your standard platform fee applies (10% on SIMPLE, 8% on PRO and TEAMS). The
+        winning bidder separately pays a 5% buyer&apos;s premium on top of their bid, disclosed to them
+        before they bid and again at checkout.
       </>
     ),
   },

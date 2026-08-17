@@ -1013,6 +1013,14 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
                             className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 dark:bg-gray-700 dark:text-gray-100 disabled:bg-gray-100 dark:disabled:bg-gray-800 disabled:text-gray-500 dark:disabled:text-gray-500"
                           />
                           {bidError && <p className="text-red-600 text-sm">{bidError}</p>}
+                          {/* Buyer's premium disclosed in the bid flow itself, before the bid is placed.
+                              5% mirrors BUYER_PREMIUM_RATE in backend stripeController.ts. */}
+                          <p className="text-xs text-gray-600 dark:text-gray-400">
+                            Winning bids carry a 5% buyer&apos;s premium.
+                            {bidAmount && bidAmount > 0
+                              ? ` Win at $${bidAmount.toFixed(2)} and you'll pay $${(bidAmount * 0.05).toFixed(2)} premium, $${(bidAmount * 1.05).toFixed(2)} total.`
+                              : ' It is added to your bid at checkout.'}
+                          </p>
                           <button
                             onClick={handlePlaceBid}
                             disabled={isSubmittingBid || placeBidMutation.isPending}

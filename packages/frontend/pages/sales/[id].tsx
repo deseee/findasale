@@ -1828,6 +1828,19 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
               </section>
             )}
 
+            {/* Platform buyer's premium disclosure (5%, mirrors BUYER_PREMIUM_RATE in backend
+                stripeController.ts). Rendered for every auction sale so bidders always get the
+                financial disclosure before bidding. Suppressed when the organizer set their own
+                buyersPremiumPct, which renders its own banner immediately below, so a shopper never
+                sees two different premium numbers. */}
+            {sale.saleType === 'AUCTION' && !(sale.buyersPremiumPct && sale.buyersPremiumPct > 0) && (
+              <div className="rounded-xl p-4 border border-amber-200 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/30">
+                <p className="text-sm font-medium text-amber-900 dark:text-amber-200">
+                  Buyer&apos;s premium: 5% is added to the winning bid at checkout. Win at $200 and you pay $210.
+                </p>
+              </div>
+            )}
+
             {/* Buyer's premium disclosure: placed directly above items so bidders see the financial disclosure before bidding */}
             {sale.buyersPremiumPct && sale.buyersPremiumPct > 0 && (
               <div className="rounded-xl p-4 border border-amber-200 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/30">

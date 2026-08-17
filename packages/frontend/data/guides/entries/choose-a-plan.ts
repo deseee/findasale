@@ -67,6 +67,8 @@ All three plans charge **10% on every sale**. This is the same rate regardless o
 
 The fee is deducted before your payout is calculated. If your auction brings in $2,500, your payout is $2,250 (before Stripe's processing fee, which is typically 2.9% + $0.30 per transaction).
 
+Auction sales carry one additional fee, paid by the winning bidder rather than by you: a 5% buyer's premium added to the winning bid at checkout. It does not change your 10%. On a $200 winning bid the buyer pays $210, your fee is $20, and you receive $180.
+
 There is no annual contract. All plans are month-to-month.
 
 ---

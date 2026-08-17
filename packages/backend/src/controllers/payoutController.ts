@@ -4,7 +4,7 @@ import { Response } from 'express';
 import { getStripe } from '../utils/stripe';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
-import { getPlatformFeeRate, resolveReportedPlatformFee } from '../utils/feeCalculator';
+import { getPlatformFeeRate, resolveOrganizerFeeReport } from '../utils/feeCalculator';
 
 /** Retrieve the organizer's Stripe Connect account ID, or null if not yet linked */
 const getOrganizerStripeId = async (userId: string): Promise<string | null> => {
@@ -295,25 +295,29 @@ export const getEarningsBreakdown = async (req: AuthRequest, res: Response) => {
     const purchases = await prisma.purchase.findMany({
       where: whereClause,
       include: {
-        // listingType + auctionStartPrice are required by resolveReportedPlatformFee's auction
-        // carve-out (Patrick ruling 2026-08-17) — without them every auction sale is reported
-        // to the organizer as a 10%/8% commission it never actually paid.
+        // listingType + auctionStartPrice let resolveOrganizerFeeReport recognise an auction
+        // and strip the buyer's 5% premium back out of Purchase.amount; sale.coversFee tells it
+        // whether the organizer absorbed that premium instead of the buyer.
         item: { select: { id: true, title: true, category: true, listingType: true, auctionStartPrice: true } },
-        sale: { select: { id: true, title: true, startDate: true } },
+        sale: { select: { id: true, title: true, startDate: true, coversFee: true } },
       },
       orderBy: { createdAt: 'desc' },
       take: 100,
     });
 
     const items: EarningsBreakdownItem[] = purchases.map((p) => {
-      const salePrice = p.amount;
       const tierRate = getPlatformFeeRate(organizer.subscriptionTier as any);
-      // AUCTION CARVE-OUT (Patrick ruling, 2026-08-17): the tier commission applies to
-      // non-auction sales only. On an auction the whole platform take is the 5% buyer premium
-      // the WINNER paid (the real Stripe application_fee_amount, stored on the Purchase row);
-      // the organizer pays no separate commission. Non-auction path is unchanged.
-      const platformFee = resolveReportedPlatformFee(p, tierRate);
-      const stripeFee = parseFloat((salePrice * STRIPE_RATE + STRIPE_FIXED).toFixed(2));
+      // TWO SEPARATE FEES (Patrick ruling, 2026-08-17 — see utils/feeCalculator.ts header).
+      // The organizer's fee line is their COMMISSION ONLY: 10%/8% of the hammer or list price,
+      // on auctions exactly as on any other sale. The auction buyer's 5% premium came out of
+      // the WINNER's pocket, so it is stripped out of both the reported sale price and the fee.
+      // A $200 win at SIMPLE reports $200.00 gross / $20.00 fee, and gross − fee − Stripe is
+      // exactly what lands. (Reversal: an earlier pass the same day reported the stored
+      // Purchase.platformFeeAmount here, which now holds the COMBINED premium + commission.)
+      const { grossSalePrice: salePrice, platformFee } = resolveOrganizerFeeReport(p, tierRate);
+      // Stripe's cut is charged on what the card was actually run for — the premium-inclusive
+      // total — not on the reported hammer price.
+      const stripeFee = parseFloat((p.amount * STRIPE_RATE + STRIPE_FIXED).toFixed(2));
       const netPayout = parseFloat((salePrice - platformFee - stripeFee).toFixed(2));
 
       return {
@@ -352,7 +356,7 @@ export const getEarningsBreakdown = async (req: AuthRequest, res: Response) => {
         totalNetPayout: parseFloat(totals.totalNetPayout.toFixed(2)),
       },
       count: items.length,
-      note: 'Stripe fee estimated at 2.9% + $0.30. Platform fee is 10% for SIMPLE, 8% for PRO/TEAMS. Auction sales are different: the buyer pays a 5% premium and you pay no separate commission.',
+      note: 'Stripe fee estimated at 2.9% + $0.30. Platform fee is 10% for SIMPLE, 8% for PRO/TEAMS, on every sale including auctions. On an auction the winning bidder also pays a separate 5% buyer premium on top of their bid — that comes out of their pocket, not yours, so it is not included in the sale price or fees shown here.',
       // Cash POS: accumulated fees awaiting payout deduction
       cashFeeBalance: organizer.cashFeeBalance,
       cashFeeBalanceUpdatedAt: organizer.cashFeeBalanceUpdatedAt,

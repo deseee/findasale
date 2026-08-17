@@ -1,21 +1,28 @@
 import React, { useState, useEffect } from 'react';
+import { getPlatformFeeRate, OrganizerTier } from '../lib/platformFees';
 
 interface SplitPaymentInputProps {
   totalAmountCents: number;
   cashAmountCents: number;
   onCashChange: (cents: number) => void;
+  /** Organizer's subscription tier — drives the commission rate. Defaults to SIMPLE (10%). */
+  organizerTier?: OrganizerTier;
 }
 
 export default function SplitPaymentInput({
   totalAmountCents,
   cashAmountCents,
   onCashChange,
+  organizerTier,
 }: SplitPaymentInputProps) {
   const [cashInputValue, setCashInputValue] = useState('');
 
   const cardAmountCents = Math.max(0, totalAmountCents - cashAmountCents);
-  // Platform fee is 10% flat on the total transaction: card portion must cover it
-  const platformFeeCents = Math.round(totalAmountCents * 0.1);
+  // The organizer's commission on the total transaction: the card portion must cover it,
+  // because Stripe rejects an application_fee_amount larger than the PaymentIntent amount.
+  // Rate comes from lib/platformFees.ts — this was hardcoded 0.1, which billed PRO and TEAMS
+  // organizers the 10% SIMPLE rate instead of their 8%.
+  const platformFeeCents = Math.round(totalAmountCents * getPlatformFeeRate(organizerTier));
   const totalAmount = totalAmountCents / 100;
   const cardAmount = cardAmountCents / 100;
   const platformFee = platformFeeCents / 100;

@@ -52,10 +52,16 @@ const PaymentForm = ({ itemTitle, itemPrice, originalAmount, platformFee, discou
   const [buyerPremiumAgreed, setBuyerPremiumAgreed] = useState(!isAuction); // auto-agree if not auction
   const [paymentSucceeded, setPaymentSucceeded] = useState(false);
 
-  // itemPrice is already post-discount (server returns finalPriceCents/100)
-  // For non-auction items: total = discounted item price only (no platform fee charged to buyer)
-  // For auction items: total = item price + buyer premium
-  const total = itemPrice + (isAuction ? buyerPremium : 0);
+  // TOTAL-DISPLAY FIX (2026-08-17). `itemPrice` is the server's total MINUS any buyer premium
+  // (see loadIntent below), so re-adding the premium here reproduces the server's charge
+  // exactly. It used to read `itemPrice + (isAuction ? buyerPremium : 0)` against an itemPrice
+  // that was already the premium-inclusive total, so a $200 auction win displayed $220.00
+  // ("Item price $210.00 / Buyer Premium $10.00") while Stripe was correctly charging $210.00.
+  // Gated on the premium itself rather than on `isAuction` (a client-side listingType check)
+  // so the two can never disagree: the server decides whether a premium applies, and it sends
+  // 0 when it doesn't — including on a Sale.coversFee auction, where the organizer absorbs it.
+  // itemPrice remains post-discount, so the coupon display path is unchanged.
+  const total = itemPrice + buyerPremium;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -215,7 +221,9 @@ const PaymentForm = ({ itemTitle, itemPrice, originalAmount, platformFee, discou
             )}
           </span>
         </div>
-        {/* Platform fee is never shown to buyers: organizer absorbs it for regular items, and for auctions it's already in the buyer premium */}
+        {/* The organizer's platform fee is never shown to buyers on any sale type: it comes out of the
+            organizer's payout, not the buyer's charge. The buyer premium line below is a separate,
+            buyer-paid fee that applies to auction items only. */}
         {discountApplied > 0 && (
           <div className="flex justify-between text-green-600 font-medium">
             <span>🎟️ Coupon discount</span>
@@ -463,7 +471,11 @@ const CheckoutModal = ({ itemId, purchaseId: initialPurchaseId, itemTitle, listi
           return;
         }
         setClientSecret(data.clientSecret);
-        setItemPrice(data.totalAmount);
+        // Strip the buyer premium back out so the "Item price" row shows the hammer/list price
+        // and the "Buyer Premium" row adds it back once — see the total-display fix in
+        // PaymentForm. data.totalAmount stays authoritative for what Stripe charges.
+        const premiumDue = data.buyerPremium ?? 0;
+        setItemPrice(parseFloat(((data.totalAmount ?? 0) - premiumDue).toFixed(2)));
         setPlatformFee(data.platformFee);
         if (data.buyerPremium) setBuyerPremium(data.buyerPremium);
         if (data.buyerPremiumRate) setBuyerPremiumRate(data.buyerPremiumRate);

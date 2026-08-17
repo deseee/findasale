@@ -3,6 +3,8 @@ import { getStripe } from '../utils/stripe';
 import { createNotification } from './notificationService';
 import { sellItemUnits, InsufficientStockError } from './itemStockService';
 import { syncMarketplaceStock } from './marketplaceStockSyncService'; // ADR-087 Phase 4: revise-on-partial eBay quantity sync
+import { shouldUseDirectCharge } from './stripeConnectService'; // Direct-charges migration (2026-08-08): staged-rollout routing decision
+import { calculateApplicationFee, getPlatformFeeRate, SubscriptionTier } from '../utils/feeCalculator';
 
 /**
  * Close an auction and handle winner checkout flow.
@@ -20,7 +22,9 @@ export async function closeAuction(itemId: string): Promise<void> {
     const item = await prisma.item.findUnique({
       where: { id: itemId },
       include: {
-        sale: { include: { organizer: { select: { userId: true, stripeCustomerId: true } } } },
+        // stripeConnectId + subscriptionTier added 2026-08-17: this session was created with
+        // NO Connect routing and NO application fee — see the block below.
+        sale: { include: { organizer: { select: { id: true, userId: true, stripeCustomerId: true, stripeConnectId: true, subscriptionTier: true } } } },
         bids: { orderBy: { amount: 'desc' }, take: 1, include: { user: { select: { id: true, email: true, name: true } } } }
       }
     });
@@ -85,10 +89,30 @@ export async function closeAuction(itemId: string): Promise<void> {
     const winnerName = highestBid.user.name;
     const bidAmount = highestBid.amount;
 
-    // 5% buyer premium
-    const buyerPremium = bidAmount * 0.05;
-    const totalAmount = bidAmount + buyerPremium;
-    const amountInCents = Math.round(totalAmount * 100);
+    // TWO SEPARATE FEES (Patrick ruling, 2026-08-17 — see utils/feeCalculator.ts header).
+    // The winner pays the hammer price plus a 5% buyer premium; the ORGANIZER separately pays
+    // their tier commission on the hammer price. Stripe's application_fee_amount is the sum.
+    // WHAT WAS BROKEN HERE (fixed 2026-08-17): this Checkout Session was created with NO
+    // application_fee_amount and NO Connect routing at all — the whole charge landed in the
+    // PLATFORM account, the organizer received nothing automatically, and FindA.Sale booked $0
+    // in fees. Both are now set, matching jobs/auctionJob.ts and
+    // controllers/stripeController.ts exactly.
+    // Sale.coversFee: the organizer absorbs the premium, so the winner is charged the bid only
+    // while the platform still collects premium + commission.
+    const hammerPriceCents = Math.round(bidAmount * 100);
+    const commissionRate = getPlatformFeeRate(
+      item.sale!.organizer.subscriptionTier as SubscriptionTier
+    );
+    const auctionFees = calculateApplicationFee(hammerPriceCents, commissionRate, true);
+    const organizerCoversPremium = item.sale!.coversFee === true;
+    const buyerPremium = organizerCoversPremium ? 0 : auctionFees.buyerPremiumCents / 100;
+    const amountInCents = hammerPriceCents + (organizerCoversPremium ? 0 : auctionFees.buyerPremiumCents);
+
+    const stripeConnectId = item.sale!.organizer.stripeConnectId;
+    const shouldUseConnect = !!stripeConnectId && !stripeConnectId.startsWith('acct_test_');
+    const useDirect = shouldUseConnect
+      ? await shouldUseDirectCharge(item.sale!.organizerId, stripeConnectId!)
+      : false;
 
     // Create Stripe checkout session
     let checkoutUrl: string | null = null;
@@ -107,7 +131,9 @@ export async function closeAuction(itemId: string): Promise<void> {
                 currency: 'usd',
                 product_data: {
                   name: `Auction Winner Payment - ${item.title}`,
-                  description: `Winning bid: $${bidAmount.toFixed(2)} + 5% buyer premium`
+                  description: organizerCoversPremium
+                    ? `Winning bid: $${bidAmount.toFixed(2)}`
+                    : `Winning bid: $${bidAmount.toFixed(2)} + 5% buyer premium ($${buyerPremium.toFixed(2)})`
                 },
                 unit_amount: amountInCents
               },
@@ -117,14 +143,38 @@ export async function closeAuction(itemId: string): Promise<void> {
           success_url: `${process.env.FRONTEND_URL || 'https://finda.sale'}/purchase/success?sessionId={CHECKOUT_SESSION_ID}`,
           // item.saleId! — auction items always have saleId by domain invariant
           cancel_url: `${process.env.FRONTEND_URL || 'https://finda.sale'}/sales/${item.saleId!}`,
+          // payment_intent_data carries the platform's cut. Destination-charge shape mirrors
+          // stripeController.createPaymentIntent; a Direct charge lives on the connected
+          // account, so it drops on_behalf_of/transfer_data and is routed by the
+          // { stripeAccount } request option below.
+          ...(shouldUseConnect
+            ? {
+                payment_intent_data: useDirect
+                  ? { application_fee_amount: auctionFees.applicationFeeCents }
+                  : {
+                      application_fee_amount: auctionFees.applicationFeeCents,
+                      on_behalf_of: stripeConnectId!,
+                      transfer_data: { destination: stripeConnectId! },
+                    },
+              }
+            : {}),
           metadata: {
             itemId: item.id,
             winnerId: winnerId,
             saleId: item.saleId!,
-            type: 'AUCTION_WINNER'
+            type: 'AUCTION_WINNER',
+            // Read back by the checkout.session.completed AUCTION_WINNER branch in
+            // controllers/stripeController.ts, which creates the PAID Purchase row. Without
+            // these the webhook cannot record the sale and it is stranded.
+            platformFeeAmount: String(auctionFees.applicationFeeCents / 100),
+            chargeType: useDirect ? 'DIRECT' : 'DESTINATION',
+            ...(useDirect ? { stripeAccountId: stripeConnectId! } : {}),
           }
         },
-        { idempotencyKey: `auction-close-${item.id}` }
+        {
+          idempotencyKey: `auction-close-${item.id}`,
+          ...(useDirect ? { stripeAccount: stripeConnectId! } : {}),
+        }
       );
 
       checkoutUrl = session.url;

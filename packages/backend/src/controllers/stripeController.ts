@@ -25,7 +25,13 @@ import { processTierLapse, recordTierResumption } from '../services/tierLapseSer
 import { evaluateReferralFraud, getAccountAgeDays, MIN_ACCOUNT_AGE_DAYS } from '../services/referralFraudService'; // D-XP-004: Referral Fraud Gate
 import { getClientIp } from '../utils/getClientIp'; // Platform Safety #94, #98: Client IP tracking
 import { checkPaymentDuplicate, storePaymentFingerprint, logPaymentDuplicateWarning } from '../services/paymentDeduplicationService'; // Platform Safety #102
-import { getPlatformFeeRate, SubscriptionTier } from '../utils/feeCalculator'; // S388: Tier-aware fee calculation
+import {
+  AUCTION_BUYER_PREMIUM_RATE,
+  calculateApplicationFee,
+  getPlatformFeeRate,
+  isAuctionListing,
+  SubscriptionTier,
+} from '../utils/feeCalculator'; // S388: Tier-aware fee calculation
 import { endEbayListingIfExists } from './ebayController'; // Feature #244 Phase 2: eBay direct push — withdraw on sale
 import { notifyFacebookExportedItemSold } from '../services/facebookNudgeService';
 import { markShopifyItemSold } from '../services/shopifyService'; // Feature: Shopify Cross-Listing
@@ -636,12 +642,9 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: 'Item price must be at least $0.50 to process payment' });
     }
 
-    // Buyer premium (5%) applies ONLY to auction items
-    const BUYER_PREMIUM_RATE = 0.05; // Platform Safety #96: 5% buyer premium
-    let buyerPremiumAmount = 0;
-    if (isAuctionItem) {
-      buyerPremiumAmount = Math.round(price * 100 * BUYER_PREMIUM_RATE);
-    }
+    // Buyer premium (5%) applies ONLY to auction items. Platform Safety #96.
+    // Shared rate — utils/feeCalculator.ts is the single source of truth for both fees.
+    const BUYER_PREMIUM_RATE = AUCTION_BUYER_PREMIUM_RATE;
 
     let shippingCost = 0;
     if (shippingRequested && !isAuctionItem && item.shippingAvailable && item.shippingPrice != null) {
@@ -656,12 +659,22 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
     const feePercent = hasReferralDiscount ? 0 : baseFeePercent;
 
     const priceCents = Math.round((price + shippingCost) * 100);
-    // For regular items: fee is taken from organizer payout (application_fee_amount only), buyer sees item price + shipping only
-    // For auction items: buyer pays winning bid + 5% premium; 5% is taken as application_fee_amount
+    // TWO SEPARATE FEES (Patrick ruling, 2026-08-17 — see utils/feeCalculator.ts header):
+    //   · Regular sale: application_fee_amount = the organizer's tier commission on
+    //     item + shipping. The buyer pays the item price only; the commission comes out of
+    //     the organizer's Connect payout.
+    //   · Auction: the buyer pays the hammer price PLUS a 5% premium, and the organizer STILL
+    //     pays their tier commission on the hammer price. application_fee_amount is the SUM.
+    //     $200 win / SIMPLE => buyer charged $210.00, application fee $30.00 ($10 premium +
+    //     $20 commission), organizer nets $180.00 — identical to what they'd net on a $200
+    //     fixed-price sale, which is the point: an auction is not commission-exempt.
+    // REVERSAL NOTICE: an earlier pass the same day set this to `buyerPremiumAmount` alone on
+    // the auction branch, so the platform collected the $10 premium and NO commission. That
+    // was wrong and is reversed here. Do not reintroduce it.
+    const feeBreakdown = calculateApplicationFee(priceCents, feePercent, isAuctionItem);
+    const buyerPremiumAmount = feeBreakdown.buyerPremiumCents;
     const totalWithBuyerPremium = priceCents + buyerPremiumAmount;
-    const platformFeeAmount = isAuctionItem
-      ? buyerPremiumAmount  // Auction: 5% buyer premium = application_fee
-      : Math.round(priceCents * feePercent);  // Regular: 10% platform fee on item + shipping
+    const platformFeeAmount = feeBreakdown.applicationFeeCents;
 
     // D-XP-003: Organizer discount takes priority (no stacking with shopper XP coupon)
     let organizerDiscountActive = false;
@@ -696,29 +709,28 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
     }
     // #402: Cover the Fee — when organizer absorbs fee, buyer pays item price only
     const saleCoversFee = !isAuctionItem ? false : (item.sale as any)?.coversFee === true;
-    // BUYER-PREMIUM DOUBLE-COUNT FIX (2026-08-17). The auction branch used to read
-    //     totalWithBuyerPremium + platformFeeAmount - discountAmount
-    // and on the auction path platformFeeAmount IS buyerPremiumAmount (line ~637), while
-    // totalWithBuyerPremium ALREADY includes that same premium (line ~636). The 5% was
-    // therefore added to the buyer's charge twice: a $200 winning bid was charged $220 —
-    // a 10% premium — and a $50 bid was charged $55. Every authority says the buyer pays
-    // the hammer price plus the 5% premium exactly once:
-    //   · claude_docs/decisions-log.md 2026-03-30 (S341) [LOCKED] — "Shoppers only pay 5%
-    //     auction fee (auction sales only)."
+    // BUYER-PREMIUM DOUBLE-COUNT FIX (2026-08-17) — STILL IN FORCE, DO NOT REVERT. The auction
+    // branch used to read `totalWithBuyerPremium + platformFeeAmount - discountAmount`, and at
+    // the time platformFeeAmount WAS buyerPremiumAmount while totalWithBuyerPremium already
+    // included that same premium. The 5% was therefore added to the buyer's charge twice: a
+    // $200 winning bid was charged $220 against a $210 displayed total. The buyer pays the
+    // hammer price plus the 5% premium exactly ONCE:
     //   · claude_docs/architecture/AUCTION_WIN_SPEC.md L245-249 — "$50.00 bid / Buyer
     //     Premium (5%) $2.50 / Total Paid $52.50".
-    //   · services/auctionService.ts:88-90 — totalAmount = bidAmount + bidAmount * 0.05.
-    //   · The total the buyer is actually SHOWN before paying: frontend
-    //     CheckoutModal.tsx:58 — itemPrice + buyerPremium (one premium). The old code
-    //     charged $220 against a displayed $210.
-    //   · The consent string persisted to CheckoutEvidence for chargeback defense
-    //     (~line 828) — "buyer premium of 5% will be added to my total purchase price."
-    // application_fee_amount is correct as written and must NOT be changed: on an auction the
-    // 5% buyer premium IS the entire platform take, and the organizer pays no separate
-    // commission (Patrick ruling, 2026-08-17 — settles the STACK.md "all item types" wording
-    // against decisions-log.md 2026-03-30 (S341); STACK.md §Fee Structure now records the
-    // carve-out explicitly). The old "premium + tier commission = 3000 cents on a $200 win"
-    // reading is retired.
+    //   · The total the buyer is actually SHOWN before paying: frontend CheckoutModal.tsx:58 —
+    //     itemPrice + buyerPremium (one premium).
+    //   · The consent string persisted to CheckoutEvidence for chargeback defense (~line 828) —
+    //     "buyer premium of 5% will be added to my total purchase price."
+    // The BUYER-CHARGE arithmetic below is correct as written. What changed 2026-08-17 (second
+    // pass) is application_fee_amount ONLY — see the feeBreakdown block above: the platform
+    // collects the premium AND the organizer's tier commission, not the premium alone.
+    //
+    // Sale.coversFee on an auction (#402): the buyer is charged the bid only and the ORGANIZER
+    // absorbs the 5% premium on top of their own commission. The platform's take is unchanged
+    // at premium + commission — $30.00 on a $200 win at SIMPLE — so the organizer nets $170.00
+    // instead of $180.00. That is the intended meaning of "organizer covers the fee", and it is
+    // why organizer-facing reporting puts the absorbed premium on their fee line in this case
+    // and only in this case (utils/feeCalculator.resolveOrganizerFeeReport).
     const finalPriceCents = isAuctionItem && saleCoversFee
       ? priceCents - discountAmount             // Auction + coversFee: buyer pays the bid only; organizer absorbs the premium
       : totalWithBuyerPremium - discountAmount; // Auction: bid + one 5% premium. Regular: item + shipping (platform fee comes out of the organizer payout, buyer never pays it).
@@ -865,7 +877,12 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
 
       // Platform Safety #98: Save CheckoutEvidence for chargeback defense
       const clientIp = getClientIp(req);
-      const acknowledgmentText = `I acknowledge the buyer premium of ${(BUYER_PREMIUM_RATE * 100).toFixed(0)}% will be added to my total purchase price.`;
+      // Under Sale.coversFee the ORGANIZER absorbs the premium and the buyer is charged the
+      // bid only — persisting a premium acknowledgment they were never shown, and never paid,
+      // would be false chargeback evidence.
+      const acknowledgmentText = isAuctionItem && !saleCoversFee
+        ? `I acknowledge the buyer premium of ${(BUYER_PREMIUM_RATE * 100).toFixed(0)}% will be added to my total purchase price.`
+        : 'I acknowledge the total purchase price shown at checkout.';
       prisma.checkoutEvidence.create({
         data: {
           purchaseId: purchase.id,
@@ -886,14 +903,16 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
       purchaseId: purchase.id,
       // Platform Safety #96: Buyer Premium Disclosure (4-Point Visibility)
       subtotal: price,
-      buyerPremiumRate: isAuctionItem ? BUYER_PREMIUM_RATE : 0,
-      buyerPremiumAmount: buyerPremiumAmount / 100,
+      // Report the premium the BUYER actually pays: zero under Sale.coversFee, where the
+      // organizer absorbs it (the platform still collects it — see the feeBreakdown block).
+      buyerPremiumRate: isAuctionItem && !saleCoversFee ? BUYER_PREMIUM_RATE : 0,
+      buyerPremiumAmount: (saleCoversFee ? 0 : buyerPremiumAmount) / 100,
       platformFee: platformFeeAmount / 100,
       discountApplied: discountAmount / 100,
       totalAmount: finalPriceCents / 100,
       // Legacy fields for backwards compatibility
       originalAmount: price,
-      buyerPremium: buyerPremiumAmount / 100,
+      buyerPremium: (saleCoversFee ? 0 : buyerPremiumAmount) / 100,
       saleName: item.sale!.title,
       saleAddress: `${item.sale!.address}, ${item.sale!.city}, ${item.sale!.state}`,
       saleDates: saleDates,
@@ -2760,6 +2779,56 @@ export const webhookHandler = async (req: Request, res: Response) => {
           console.error('[ala-carte] Failed to create Purchase record:', purchaseErr);
         }
       }
+
+      // AUCTION WINNER (manual organizer close — services/auctionService.ts closeAuction,
+      // reached via POST /api/items/:itemId/close-auction). Added 2026-08-17: that path minted
+      // a Checkout Session tagged type='AUCTION_WINNER' and NOTHING consumed it, so a winner
+      // could pay and no Purchase row was ever written — the sale was invisible to earnings,
+      // payouts, receipts and refunds. The cron path (jobs/auctionJob.ts) writes its own
+      // Purchase row at close time and never reaches here.
+      if (session.metadata?.type === 'AUCTION_WINNER' && session.metadata?.itemId) {
+        try {
+          const paymentIntentId = typeof session.payment_intent === 'string'
+            ? session.payment_intent
+            : (session.payment_intent as any)?.id ?? null;
+
+          // Idempotency: Stripe retries webhooks, and the partial unique index on
+          // stripePaymentIntentId backs this at the DB level.
+          const existing = paymentIntentId
+            ? await prisma.purchase.findFirst({ where: { stripePaymentIntentId: paymentIntentId } })
+            : null;
+
+          if (existing) {
+            console.log(`[auction-winner] Purchase already recorded for session ${session.id}`);
+          } else {
+            await prisma.purchase.create({
+              data: {
+                userId: session.metadata.winnerId || null,
+                itemId: session.metadata.itemId,
+                saleId: session.metadata.saleId || null,
+                // What the winner was actually charged, in dollars.
+                amount: (session.amount_total ?? 0) / 100,
+                // The real Stripe application_fee_amount (buyer premium + organizer
+                // commission), stamped into metadata at session-creation time. Organizer-facing
+                // surfaces strip the premium back out via
+                // utils/feeCalculator.resolveOrganizerFeeReport — never read this directly.
+                platformFeeAmount: session.metadata.platformFeeAmount
+                  ? parseFloat(session.metadata.platformFeeAmount)
+                  : null,
+                stripePaymentIntentId: paymentIntentId,
+                status: 'PAID',
+                chargeType: session.metadata.chargeType === 'DIRECT' ? 'DIRECT' : 'DESTINATION',
+                ...(session.metadata.stripeAccountId
+                  ? { stripeAccountId: session.metadata.stripeAccountId }
+                  : {}),
+              },
+            });
+            console.log(`[auction-winner] Purchase recorded for item ${session.metadata.itemId} (session ${session.id})`);
+          }
+        } catch (auctionPurchaseErr: any) {
+          console.error('[auction-winner] Failed to create Purchase record:', auctionPurchaseErr);
+        }
+      }
       // Hold-to-Pay Phase 2: Handle checkout session completion for invoices.
       // Guarded (ADR pos-webhook-idempotency-reconciliation 2026-07-23): a transient failure
       // retrieving the PaymentIntent here only feeds a hold-to-pay log line and must NEVER
@@ -3457,7 +3526,10 @@ export const getPendingPayment = async (req: AuthRequest, res: Response) => {
     const purchase = await prisma.purchase.findUnique({
       where: { id: purchaseId },
       include: {
-        item: { select: { title: true } },
+        // listingType / auctionStartPrice drive the buyer-premium breakdown below;
+        // sale.coversFee tells us whether the buyer was charged the premium at all.
+        item: { select: { title: true, listingType: true, auctionStartPrice: true } },
+        sale: { select: { coversFee: true } },
       },
     });
 
@@ -3480,12 +3552,25 @@ export const getPendingPayment = async (req: AuthRequest, res: Response) => {
     const paymentIntent = await stripe().paymentIntents.retrieve(purchase.stripePaymentIntentId);
 
     const amount = purchase.amount;
-    const platformFee = purchase.platformFeeAmount ?? 0;
+
+    // BUYER-FACING BREAKDOWN (2026-08-17). This endpoint feeds CheckoutModal for an auction
+    // winner resuming a PENDING purchase. It used to return `platformFee:
+    // purchase.platformFeeAmount` — which is the ORGANIZER's charge (and, post-ruling, the
+    // combined premium + commission), i.e. money the buyer never pays. Disclosing it here made
+    // the modal's order summary not add up. The buyer sees exactly one fee, the 5% premium, so
+    // that is what we send: subtotal (hammer price) + buyerPremium = totalAmount.
+    const buyerPaidPremium =
+      isAuctionListing(purchase.item) && purchase.sale?.coversFee !== true;
+    const buyerPremium = buyerPaidPremium
+      ? parseFloat((amount - amount / (1 + AUCTION_BUYER_PREMIUM_RATE)).toFixed(2))
+      : 0;
 
     res.json({
       clientSecret: paymentIntent.client_secret,
       totalAmount: amount,
-      platformFee,
+      subtotal: parseFloat((amount - buyerPremium).toFixed(2)),
+      buyerPremium,
+      buyerPremiumRate: buyerPaidPremium ? AUCTION_BUYER_PREMIUM_RATE : 0,
       itemTitle: purchase.item?.title ?? 'Item',
     });
   } catch (error) {

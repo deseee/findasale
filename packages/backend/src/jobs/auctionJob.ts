@@ -7,6 +7,7 @@ import { emailService } from '../lib/emailService';
 import { suppressionService } from '../services/suppressionService';
 import { createNotification } from '../services/notificationService';
 import { shouldUseDirectCharge } from '../services/stripeConnectService'; // Direct-charges migration (2026-08-08): staged-rollout routing decision
+import { calculateApplicationFee, getPlatformFeeRate, SubscriptionTier } from '../utils/feeCalculator';
 const stripe = () => getStripe();
 
 
@@ -80,9 +81,18 @@ export const endAuctions = async () => {
           include: { user: { select: { email: true } } },
         });
 
+        // subscriptionTier + coversFee added 2026-08-17: the fee model needs the organizer's
+        // tier (PRO/TEAMS pay 8%, not the flat 10% this job used to assume) and whether the
+        // sale absorbs the buyer's premium.
         const currentItem = await tx.item.findUnique({
           where: { id: item.id },
-          include: { sale: { include: { organizer: { select: { stripeConnectId: true, userId: true } } } } }
+          include: {
+            sale: {
+              include: {
+                organizer: { select: { stripeConnectId: true, userId: true, subscriptionTier: true } },
+              },
+            },
+          },
         });
 
         if (!currentItem) return null;
@@ -109,9 +119,31 @@ export const endAuctions = async () => {
           data: { currentBid: price, auctionClosed: true },
         });
 
-        // QA: Fee rate now read from FeeStructure table at transaction time
+        // QA: Fee rate now read from FeeStructure table at transaction time.
+        // Fallback corrected 2026-08-17: was a flat 0.10, which billed PRO and TEAMS organizers
+        // the SIMPLE rate. Now matches stripeController.createPaymentIntent exactly.
         const feeStructure = await tx.feeStructure.findFirst({ where: { listingType: '*' } });
-        const feePercent = feeStructure?.feeRate ?? 0.10; // Default to 10% if no FeeStructure row found
+        const feePercent =
+          feeStructure?.feeRate ??
+          getPlatformFeeRate(currentItem.sale!.organizer.subscriptionTier as SubscriptionTier);
+
+        // TWO SEPARATE FEES (Patrick ruling, 2026-08-17 — see utils/feeCalculator.ts header).
+        // This job is the LIVE auction-winner charge path: the cron closes the auction, creates
+        // the winner's PaymentIntent and a PENDING Purchase, and the winner pays it via
+        // GET /api/stripe/pending-payment/:purchaseId. It was charging the hammer price with NO
+        // buyer premium and taking only the commission as application_fee_amount — so on a $200
+        // win the winner paid $200 (against the $210 that AUCTION_WIN_SPEC.md, CheckoutModal and
+        // the checkout consent text all promise) and the platform collected $20 instead of $30.
+        // Both are corrected here, and the arithmetic now matches
+        // stripeController.createPaymentIntent's auction branch exactly.
+        // Sale.coversFee: the organizer absorbs the premium, so the winner is charged the bid
+        // only while the platform still collects premium + commission.
+        const hammerPriceCents = Math.round(price * 100);
+        const organizerCoversPremium = currentItem.sale!.coversFee === true;
+        const auctionFees = calculateApplicationFee(hammerPriceCents, feePercent, true);
+        const buyerChargeCents = organizerCoversPremium
+          ? hammerPriceCents
+          : hammerPriceCents + auctionFees.buyerPremiumCents;
 
         let stripePaymentIntentId: string | null = null;
         // Direct-charges migration (2026-08-08): persisted, authoritative charge shape --
@@ -122,19 +154,19 @@ export const endAuctions = async () => {
 
         if (currentItem.sale!.organizer.stripeConnectId && highestBid) {
           try {
-            const feeAmount = Math.round(price * 100 * feePercent);
+            const feeAmount = auctionFees.applicationFeeCents;
             const stripeConnectId = currentItem.sale!.organizer.stripeConnectId;
             const useDirect = await shouldUseDirectCharge(currentItem.sale!.organizerId, stripeConnectId);
             const paymentIntent = await stripe().paymentIntents.create(
               useDirect
                 ? {
-                    amount: Math.round(price * 100),
+                    amount: buyerChargeCents,
                     currency: 'usd',
                     metadata: { itemId: currentItem.id, saleId: currentItem.sale!.id, userId: highestBid.userId },
                     application_fee_amount: feeAmount,
                   }
                 : {
-                    amount: Math.round(price * 100),
+                    amount: buyerChargeCents,
                     currency: 'usd',
                     metadata: { itemId: currentItem.id, saleId: currentItem.sale!.id, userId: highestBid.userId },
                     application_fee_amount: feeAmount,
@@ -153,14 +185,19 @@ export const endAuctions = async () => {
           console.warn(`Organizer for item ${currentItem.id} has no Stripe account — skipping payment intent`);
         }
 
-        const platformFeeAmount = Math.round(price * 100 * feePercent) / 100;
+        // Purchase.amount is what the buyer was CHARGED (premium included, matching
+        // stripeController's auction branch); platformFeeAmount is the real Stripe
+        // application_fee_amount (premium + commission). Organizer-facing surfaces strip the
+        // premium back out via utils/feeCalculator.resolveOrganizerFeeReport — they must never
+        // read platformFeeAmount directly.
+        const platformFeeAmount = auctionFees.applicationFeeCents / 100;
         if (highestBid) {
           await tx.purchase.create({
             data: {
               userId: highestBid.userId,
               itemId: currentItem.id,
               saleId: currentItem.sale!.id,
-              amount: price,
+              amount: buyerChargeCents / 100,
               platformFeeAmount,
               stripePaymentIntentId,
               // Only mark PAID when there's no Stripe (organizer not onboarded)

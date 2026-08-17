@@ -14,7 +14,7 @@ import { getCheatsheet, getItemsForLabels, createLabelBatch, printLabelBatch } f
 import {
   getPlatformFeeRate,
   isAuctionListing,
-  resolveReportedPlatformFee,
+  resolveOrganizerFeeReport,
   SubscriptionTier,
 } from '../utils/feeCalculator';
 import { awardOrganizerClaimedXp, getOrgReferralStats, generateReferralCode } from '../services/referralService';
@@ -146,11 +146,10 @@ router.get('/me/analytics', authenticate, async (req: AuthRequest, res: Response
         },
         purchases: {
           where: { status: 'PAID' },
-          // platformFeeAmount + item.listingType/auctionStartPrice power the auction carve-out
-          // below (Patrick ruling, 2026-08-17).
+          // item.listingType/auctionStartPrice let the reporting helper below recognise an
+          // auction and strip the buyer's 5% premium back out of `amount`.
           select: {
             amount: true,
-            platformFeeAmount: true,
             item: { select: { listingType: true, auctionStartPrice: true } },
           },
         },
@@ -166,24 +165,31 @@ router.get('/me/analytics', authenticate, async (req: AuthRequest, res: Response
     let totalGMV = 0;
 
     const saleBreakdown = sales.map((sale: any) => {
-      const saleRevenue = sale.purchases.reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0);
-      // AUCTION CARVE-OUT (Patrick ruling, 2026-08-17): the tier commission (10%/8%) applies to
-      // NON-auction sales only. On an auction the whole platform take is the 5% buyer premium
-      // the WINNER paid (stored on the Purchase row as the real Stripe application_fee_amount);
-      // the organizer pays no separate commission. The non-auction subtotal is still multiplied
-      // and rounded ONCE, so a sale with no auction purchases produces a byte-identical number.
+      // TWO SEPARATE FEES (Patrick ruling, 2026-08-17 — see utils/feeCalculator.ts header).
+      // The organizer's commission (10%/8%) applies to EVERY sale, auctions included. The
+      // auction buyer's 5% premium came out of the WINNER's pocket, so it belongs in neither
+      // the organizer's revenue nor their fee — it is stripped out of `amount` for both.
+      // A $200 win at SIMPLE reports $200.00 revenue / $20.00 fees. (Reversal: an earlier pass
+      // the same day reported the stored Purchase.platformFeeAmount here, which now holds the
+      // COMBINED premium + commission.) The non-auction subtotal is still multiplied and
+      // rounded ONCE, so a sale with no auction purchases produces a byte-identical number.
+      const coversFee = (sale as any).coversFee === true;
       let nonAuctionRevenue = 0;
+      let auctionRevenue = 0;
       let auctionFees = 0;
       for (const p of sale.purchases as any[]) {
         if (isAuctionListing(p.item)) {
-          auctionFees += resolveReportedPlatformFee(
-            { amount: Number(p.amount) || 0, platformFeeAmount: p.platformFeeAmount, item: p.item },
+          const report = resolveOrganizerFeeReport(
+            { amount: Number(p.amount) || 0, item: p.item, sale: { coversFee } },
             tierRate
           );
+          auctionRevenue += report.grossSalePrice;
+          auctionFees += report.platformFee;
         } else {
           nonAuctionRevenue += Number(p.amount) || 0;
         }
       }
+      const saleRevenue = parseFloat((nonAuctionRevenue + auctionRevenue).toFixed(2));
       const saleFees = parseFloat((nonAuctionRevenue * tierRate + auctionFees).toFixed(2));
       const saleSold = sale.items.filter((i: any) => i.status === 'SOLD').length;
       const saleUnsold = sale.items.filter((i: any) => i.status !== 'SOLD').length;

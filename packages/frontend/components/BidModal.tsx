@@ -30,6 +30,13 @@ const BidModal = ({ item, onClose, onBidPlaced }: Props) => {
   const [amount, setAmount] = useState(minBid.toFixed(2));
   const [submitting, setSubmitting] = useState(false);
 
+  // Buyer's premium disclosure. Mirrors BUYER_PREMIUM_RATE in
+  // backend/src/controllers/stripeController.ts, which is what is actually charged.
+  const BUYER_PREMIUM_RATE = 0.05;
+  const parsedAmount = parseFloat(amount);
+  const previewBid = !isNaN(parsedAmount) && parsedAmount > 0 ? parsedAmount : minBid;
+  const previewPremium = previewBid * BUYER_PREMIUM_RATE;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const bid = parseFloat(amount);
@@ -97,6 +104,10 @@ const BidModal = ({ item, onClose, onBidPlaced }: Props) => {
                 required
                 aria-label="Your bid amount in dollars"
               />
+              <p className="mt-2 text-xs text-warm-600 dark:text-gray-400">
+                Winning bids carry a 5% buyer&apos;s premium. Win at ${previewBid.toFixed(2)} and
+                you&apos;ll pay ${previewPremium.toFixed(2)} premium, ${(previewBid + previewPremium).toFixed(2)} total.
+              </p>
             </div>
             <div className="flex gap-3">
               <button

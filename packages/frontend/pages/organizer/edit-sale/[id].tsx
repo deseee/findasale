@@ -1218,10 +1218,10 @@ const EditSalePage = () => {
                     />
                     <label htmlFor="coversFee" className="cursor-pointer flex flex-col">
                       <span className="text-sm font-medium text-warm-700 dark:text-gray-300">
-                        Cover the Platform Fee
+                        Cover the buyer&apos;s premium
                       </span>
                       <span className="text-xs text-warm-500 dark:text-gray-400 mt-1">
-                        You absorb the 10% platform fee so buyers pay no extra charges. Useful for charity auctions and premium buyer experiences.
+                        Winning bidders normally pay a 5% buyer&apos;s premium on top of their bid. Turn this on and you absorb it instead, so the winner pays exactly what they bid. On a $200 winning bid the buyer is charged $200 rather than $210, and the $10 premium comes out of your payout. Your platform fee is separate and does not change. Useful for charity auctions.
                       </span>
                     </label>
                   </div>

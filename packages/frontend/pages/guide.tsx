@@ -67,7 +67,8 @@ const sections: Section[] = [
           </li>
           <li>
             <strong>Sale Type</strong>. Choose Regular (fixed price) or Auction (competitive bidding).
-            All items carry a 10% flat platform fee regardless of sale type.
+            All items carry a 10% flat platform fee regardless of sale type. On auctions, the winning
+            bidder also pays a separate 5% buyer&apos;s premium on top of their bid.
           </li>
         </ul>
         <p className="text-warm-700 dark:text-warm-300 leading-relaxed">
@@ -99,7 +100,7 @@ const sections: Section[] = [
 
         <h3 className="text-xl font-semibold text-warm-800 dark:text-warm-200 mt-6">Setting Price</h3>
         <p className="text-warm-700 dark:text-warm-300 leading-relaxed">
-          Pricing varies by event type. Estate sale items typically go for 20–50% of retail. Auction items may exceed retail with competitive bidding; garage sale and flea market items often go lower. Research comparable items online if you're unsure. You can adjust prices any time before or during the sale. For auction items, set a starting bid price; the 10% platform fee applies to the final bid.
+          Pricing varies by event type. Estate sale items typically go for 20–50% of retail. Auction items may exceed retail with competitive bidding; garage sale and flea market items often go lower. Research comparable items online if you're unsure. You can adjust prices any time before or during the sale. For auction items, set a starting bid price; the 10% platform fee applies to the final bid, and the winning bidder pays a separate 5% buyer&apos;s premium on top of that bid.
         </p>
 
         <h3 className="text-xl font-semibold text-warm-800 dark:text-warm-200 mt-6">Tags and Categories</h3>
@@ -202,7 +203,14 @@ const sections: Section[] = [
         </p>
         <p className="text-warm-700 dark:text-warm-300 leading-relaxed">
           All items carry a <strong>10% flat platform fee</strong> on the final sale price, deducted from
-          your payout. The fee is shown transparently to buyers at checkout.
+          your payout.
+        </p>
+        <p className="text-warm-700 dark:text-warm-300 leading-relaxed">
+          Auctions carry one more fee, and the <strong>winning bidder</strong> pays it: a{' '}
+          <strong>5% buyer&apos;s premium</strong> added to their bid at checkout. Bidders see it on the
+          item page before they bid and confirm it before paying. Worked example on a $200 winning bid
+          at the 10% rate: the buyer is charged <strong>$210.00</strong>, your platform fee is{' '}
+          <strong>$20.00</strong>, and you receive <strong>$180.00</strong> before Stripe processing.
         </p>
         <p className="text-warm-700 dark:text-warm-300 leading-relaxed">
           After the auction ends, we notify winners and process payments. Payouts arrive within 2–3

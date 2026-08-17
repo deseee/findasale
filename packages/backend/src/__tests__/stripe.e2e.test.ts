@@ -105,9 +105,10 @@ import {
 import { getEarningsBreakdown } from '../controllers/payoutController';
 import {
   AUCTION_BUYER_PREMIUM_RATE,
+  calculateApplicationFee,
   getPlatformFeeRate,
   isAuctionListing,
-  resolveReportedPlatformFee,
+  resolveOrganizerFeeReport,
 } from '../utils/feeCalculator';
 
 // ── Test helpers ──────────────────────────────────────────────────────────────
@@ -242,6 +243,11 @@ describe('Stripe Connect + Fee Capture E2E', () => {
         saleId:            testAuctionSale.id,
       },
     });
+
+    // The controller prefers a FeeStructure row over the organizer's tier
+    // (stripeController.createPaymentIntent: `feeStructure?.feeRate ?? getPlatformFeeRate(...)`).
+    // Clear it so the SIMPLE/PRO assertions below actually exercise the tier rates.
+    await prisma.feeStructure.deleteMany({ where: { listingType: '*' } }).catch(() => {});
 
     console.log('✓ Stripe E2E test data created');
   });
@@ -457,51 +463,47 @@ describe('Stripe Connect + Fee Capture E2E', () => {
     });
   });
 
-  // ── createPaymentIntent — auction sale (5% buyer premium) ───────────────
+  // ── createPaymentIntent — auction sale (buyer premium + organizer commission) ───────────
   //
-  // THE EXPECTED NUMBERS BELOW ARE DERIVED FROM THE DOCUMENTED FEE MODEL, not from what the
-  // controller happens to return. Sources, all read 2026-08-17:
-  //   · claude_docs/decisions-log.md, 2026-03-30 (S341) "Platform Fee Model" [LOCKED] —
-  //     "Platform fee (10% or 8%) is paid by the ORGANIZER, deducted from their Stripe Connect
-  //     payout. Shoppers only pay 5% auction fee (auction sales only)."
-  //   · claude_docs/architecture/AUCTION_WIN_SPEC.md L245-249 — a $50.00 winning bid renders
-  //     "Winning Bid $50.00 / Buyer Premium (5%) $2.50 / Total Paid $52.50".
-  //   · controllers/stripeController.ts — BUYER_PREMIUM_RATE = 0.05.
-  // So the buyer's CHARGE is the hammer price plus ONE 5% premium:
-  //     $200.00 currentBid   → 20000 + 1000 = 21000 cents
-  //     $50.00  startPrice   →  5000 +  250 =  5250 cents
+  // THE FEE MODEL (Patrick ruling, 2026-08-17 — AUTHORITATIVE). TWO SEPARATE FEES, and on an
+  // auction BOTH apply:
+  //   1. Buyer premium — 5% of the hammer price, charged ON TOP of the bid to the WINNER.
+  //   2. Organizer commission — 10% SIMPLE / 8% PRO+TEAMS of the hammer price, charged to the
+  //      ORGANIZER out of their payout. Applies to EVERY sale, auctions included.
+  // Stripe's application_fee_amount is the SUM:
   //
-  // WHAT WAS HERE BEFORE, and why it went: the previous assertions expected
-  // `amount === bid` (no premium at all) and `application_fee_amount === 7% of the bid`.
-  // That is the retired 5%/7% pricing scheme — decisions-log records pricing-strategy.md as
-  // "archived (stale, showed 5%/7%)". It matched neither the shipped code nor the current
-  // documented model, so it could not have caught the double-count it was sitting next to.
+  //   | Scenario                  | Buyer charged | application_fee_amount | Organizer nets |
+  //   |---------------------------|---------------|------------------------|----------------|
+  //   | $200 regular, SIMPLE      | $200.00       | $20.00                 | $180.00        |
+  //   | $200 regular, PRO         | $200.00       | $16.00                 | $184.00        |
+  //   | $200 auction win, SIMPLE  | $210.00       | $30.00 ($10 + $20)     | $180.00        |
+  //   | $200 auction win, PRO     | $210.00       | $26.00 ($10 + $16)     | $184.00        |
   //
-  // application_fee_amount is asserted at the 5% buyer premium ONLY, and that is now SETTLED,
-  // not an open question. RESOLVED 2026-08-17 by Patrick's ruling: the 5% buyer premium is the
-  // ENTIRE platform take on an auction sale, and the organizer pays NO separate commission on
-  // it. A $200 winning bid => buyer pays $210.00, application_fee_amount $10.00, organizer nets
-  // $200.00 (pre-Stripe-processing). The charge path here was already correct and must not be
-  // changed.
+  // WHAT WAS ASSERTED HERE BEFORE, and why it went: an earlier pass the SAME DAY encoded an
+  // "auction carve-out" — application_fee_amount === the 5% premium alone, organizer pays no
+  // commission on an auction. Patrick ruled that wrong and it is reversed. If these numbers
+  // ever drop back to the bare premium (1000 on a $200 win), the carve-out has been
+  // reintroduced — do not "fix" the test to match.
   //
-  // The previous note here read STACK.md "Fee Structure" (10%/8% on "all item types: FIXED,
-  // AUCTION, REVERSE_AUCTION, LIVE_DROP, POS") as implying a $30.00 application fee on a $200
-  // win (premium + commission). That reading is retired: STACK.md's wording was wrong for
-  // AUCTION and has been corrected to state the carve-out explicitly. What the wording DID
-  // cause is a real bug on the reporting side — payoutController.ts, earningsPdfController.ts
-  // and routes/organizers.ts all applied the tier commission to every PAID purchase with no
-  // auction carve-out, over-reporting the platform's take to the organizer. Fixed 2026-08-17
-  // via utils/feeCalculator.resolveReportedPlatformFee; guarded by the
-  // "organizer-facing fee reporting" describe block near the end of this file.
+  // The BUYER-CHARGE side is separately settled and must NOT change: the buyer pays the hammer
+  // price plus ONE 5% premium ($210.00 on a $200 win), per
+  // claude_docs/architecture/AUCTION_WIN_SPEC.md L245-249, frontend CheckoutModal.tsx, and the
+  // CheckoutEvidence consent string persisted for chargeback defense.
   describe('createPaymentIntent — auction sale (5% buyer premium)', () => {
-    const BUYER_PREMIUM_RATE      = 0.05;
+    const BUYER_PREMIUM_RATE      = AUCTION_BUYER_PREMIUM_RATE;                           // 0.05
+    const SIMPLE_RATE             = getPlatformFeeRate('SIMPLE');                          // 0.10
+    const PRO_RATE                = getPlatformFeeRate('PRO');                             // 0.08
     const CURRENT_BID             = 200.00;
     const BID_PREMIUM             = Math.round(CURRENT_BID * 100 * BUYER_PREMIUM_RATE);   // 1000
+    const BID_COMMISSION          = Math.round(CURRENT_BID * 100 * SIMPLE_RATE);          // 2000
     const BID_TOTAL               = Math.round(CURRENT_BID * 100) + BID_PREMIUM;          // 21000
-    const AUCTION_APPLICATION_FEE = BID_PREMIUM;                                          // 1000 — see note above
+    const AUCTION_APPLICATION_FEE = BID_PREMIUM + BID_COMMISSION;                          // 3000
+    const PRO_APPLICATION_FEE     = BID_PREMIUM + Math.round(CURRENT_BID * 100 * PRO_RATE); // 2600
     const START_PRICE             = 50.00;
     const START_PREMIUM           = Math.round(START_PRICE * 100 * BUYER_PREMIUM_RATE);   // 250
+    const START_COMMISSION        = Math.round(START_PRICE * 100 * SIMPLE_RATE);          // 500
     const START_TOTAL             = Math.round(START_PRICE * 100) + START_PREMIUM;        // 5250
+    const START_APPLICATION_FEE   = START_PREMIUM + START_COMMISSION;                      // 750
 
     afterAll(async () => {
       await prisma.purchase.deleteMany({
@@ -533,8 +535,15 @@ describe('Stripe Connect + Fee Capture E2E', () => {
       // being added twice — do not "fix" it by changing this number.
       expect(args.amount).toBe(BID_TOTAL);
       expect(args.amount).not.toBe(Math.round(CURRENT_BID * 100) + BID_PREMIUM * 2);
+      // $30.00 = $10.00 buyer premium + $20.00 organizer commission. NOT the premium alone.
       expect(args.application_fee_amount).toBe(AUCTION_APPLICATION_FEE);
-      console.log(`✓ Auction PI: $${CURRENT_BID} bid → $${BID_TOTAL / 100} charged (one 5% premium), $${AUCTION_APPLICATION_FEE / 100} application fee`);
+      expect(args.application_fee_amount).not.toBe(BID_PREMIUM); // carve-out regression guard
+      // The organizer nets the same $180.00 they'd net on a $200 fixed-price sale — the point
+      // of the ruling: an auction is not commission-exempt.
+      expect(args.amount - args.application_fee_amount).toBe(
+        Math.round(CURRENT_BID * 100) - BID_COMMISSION
+      );
+      console.log(`✓ Auction PI: $${CURRENT_BID} bid → $${BID_TOTAL / 100} charged (one 5% premium), $${AUCTION_APPLICATION_FEE / 100} application fee ($${BID_PREMIUM / 100} premium + $${BID_COMMISSION / 100} commission), organizer nets $${(args.amount - args.application_fee_amount) / 100}`);
 
       // The total the buyer is SHOWN must equal the total Stripe is asked to charge.
       // CheckoutModal.tsx:58 renders itemPrice + buyerPremium; the double-count bug
@@ -570,8 +579,8 @@ describe('Stripe Connect + Fee Capture E2E', () => {
 
       const args = mockPaymentIntentsCreate.mock.calls.at(-1)[0];
       expect(args.amount).toBe(START_TOTAL);
-      expect(args.application_fee_amount).toBe(START_PREMIUM);
-      console.log(`✓ Fallback to auctionStartPrice: $${START_PRICE} → $${START_TOTAL / 100} charged, $${START_PREMIUM / 100} application fee`);
+      expect(args.application_fee_amount).toBe(START_APPLICATION_FEE);
+      console.log(`✓ Fallback to auctionStartPrice: $${START_PRICE} → $${START_TOTAL / 100} charged, $${START_APPLICATION_FEE / 100} application fee ($${START_PREMIUM / 100} premium + $${START_COMMISSION / 100} commission)`);
 
       // Restore
       await prisma.item.update({
@@ -656,6 +665,108 @@ describe('Stripe Connect + Fee Capture E2E', () => {
 
       await prisma.purchase.deleteMany({ where: { itemId: endedNotClosed.id } }).catch(() => {});
       await prisma.item.delete({ where: { id: endedNotClosed.id } }).catch(() => {});
+    });
+
+    it('should charge a PRO organizer the same premium but only an 8% commission', async () => {
+      await prisma.organizer.update({
+        where: { id: testOrganizer.id },
+        data:  { subscriptionTier: 'PRO' },
+      });
+
+      mockPaymentIntentsCreate.mockResolvedValueOnce({
+        id:            'pi_test_auction_pro_e2e',
+        client_secret: 'pi_test_auction_pro_e2e_secret',
+      });
+
+      const req: any = {
+        user: { id: testShopper.id, role: 'USER' },
+        body: { itemId: testAuctionItem.id },
+      };
+      const res = makeMockRes();
+
+      await createPaymentIntent(req, res);
+
+      const args = mockPaymentIntentsCreate.mock.calls.at(-1)[0];
+      // The BUYER pays the same $210.00 regardless of the organizer's tier — the tier only
+      // moves the organizer's commission, and with it the platform's total take.
+      expect(args.amount).toBe(BID_TOTAL);
+      expect(args.application_fee_amount).toBe(PRO_APPLICATION_FEE);            // 2600
+      expect(args.amount - args.application_fee_amount).toBe(
+        Math.round(CURRENT_BID * 100) - Math.round(CURRENT_BID * 100 * PRO_RATE)
+      );                                                                        // 18400 = $184.00
+      console.log(`✓ PRO auction: $${BID_TOTAL / 100} charged, $${PRO_APPLICATION_FEE / 100} application fee ($${BID_PREMIUM / 100} premium + $${Math.round(CURRENT_BID * 100 * PRO_RATE) / 100} commission), organizer nets $${(args.amount - args.application_fee_amount) / 100}`);
+
+      await prisma.organizer.update({
+        where: { id: testOrganizer.id },
+        data:  { subscriptionTier: 'SIMPLE' },
+      });
+      await prisma.purchase.deleteMany({
+        where: { stripePaymentIntentId: 'pi_test_auction_pro_e2e' },
+      }).catch(() => {});
+    });
+
+    it('should charge the bid only under Sale.coversFee while the platform still collects both fees', async () => {
+      // #402 "Cover the Fee" on an auction: the ORGANIZER absorbs the 5% premium instead of
+      // the winner. The buyer's charge drops to the bid; the platform's take does NOT change.
+      // $200 win / SIMPLE => buyer charged $200.00, application fee still $30.00, organizer
+      // nets $170.00 (their $20.00 commission PLUS the $10.00 premium they absorbed).
+      const coversFeeSale = await prisma.sale.create({
+        data: {
+          title:        'Stripe E2E Auction Sale — organizer covers the fee',
+          description:  'Created by stripe.e2e.ts — safe to delete',
+          address:      '100 Test Ave',
+          city:         'Springfield',
+          state:        'MI',
+          zip:          '49503',
+          lat:          42.9629,
+          lng:          -85.6789,
+          startDate:    new Date(Date.now() + 24 * 60 * 60 * 1000),
+          endDate:      new Date(Date.now() + 48 * 60 * 60 * 1000),
+          status:       'PUBLISHED',
+          isAuctionSale: true,
+          coversFee:    true,
+          organizerId:  testOrganizer.id,
+        },
+      });
+      const coversFeeLot = await prisma.item.create({
+        data: {
+          embedding:         [],
+          title:             'Covered-premium lot',
+          auctionStartPrice: 50.00,
+          currentBid:        CURRENT_BID,
+          status:            'AVAILABLE',
+          saleId:            coversFeeSale.id,
+        },
+      });
+
+      mockPaymentIntentsCreate.mockResolvedValueOnce({
+        id:            'pi_test_auction_covers_fee_e2e',
+        client_secret: 'pi_test_auction_covers_fee_e2e_secret',
+      });
+
+      const req: any = {
+        user: { id: testShopper.id, role: 'USER' },
+        body: { itemId: coversFeeLot.id },
+      };
+      const res = makeMockRes();
+
+      await createPaymentIntent(req, res);
+
+      const args = mockPaymentIntentsCreate.mock.calls.at(-1)[0];
+      expect(args.amount).toBe(Math.round(CURRENT_BID * 100));                  // 20000, no premium
+      expect(args.application_fee_amount).toBe(AUCTION_APPLICATION_FEE);        // 3000, unchanged
+      expect(args.amount - args.application_fee_amount).toBe(17000);            // $170.00
+
+      // The buyer must not be SHOWN a premium they are not being charged.
+      const payload = res.json.mock.calls.at(-1)[0];
+      expect(payload.buyerPremiumAmount).toBe(0);
+      expect(payload.buyerPremiumRate).toBe(0);
+      expect(payload.totalAmount).toBe(CURRENT_BID);
+      console.log(`✓ coversFee auction: buyer charged $${payload.totalAmount} (no premium shown), application fee still $${AUCTION_APPLICATION_FEE / 100}, organizer nets $170.00`);
+
+      await prisma.purchase.deleteMany({ where: { itemId: coversFeeLot.id } }).catch(() => {});
+      await prisma.item.delete({ where: { id: coversFeeLot.id } }).catch(() => {});
+      await prisma.sale.delete({ where: { id: coversFeeSale.id } }).catch(() => {});
     });
   });
 
@@ -851,30 +962,38 @@ describe('Stripe Connect + Fee Capture E2E', () => {
     });
   });
 
-  // ── organizer-facing fee reporting — auction carve-out ───────────────────────
+  // ── organizer-facing fee reporting — commission only, premium stripped ───────────────────
   //
-  // THE BUG THIS GUARDS (fixed 2026-08-17). controllers/payoutController.ts:307,
-  // controllers/earningsPdfController.ts:45 and routes/organizers.ts:133 each applied
-  // getPlatformFeeRate(subscriptionTier) — 10% SIMPLE / 8% PRO+TEAMS — to EVERY PAID purchase
-  // with no auction carve-out. On an auction sale the real Stripe application_fee_amount is the
-  // 5% buyer premium (see the auction describe block above), so the organizer's payouts page,
-  // earnings PDF and dashboard analytics all told them the platform took 10%/8% of the hammer
-  // price when it had actually taken 5% from the WINNER and nothing from them.
+  // WHAT THE ORGANIZER IS TOLD THEY PAID is their COMMISSION ONLY — 10% SIMPLE / 8% PRO+TEAMS
+  // of the hammer or list price, on an auction exactly as on any other sale. The auction
+  // buyer's 5% premium came out of the WINNER's pocket, so it appears in neither the reported
+  // revenue nor the reported fee. A $200 winning bid reports $200.00 gross / $20.00 fee /
+  // $180.00 net at SIMPLE — identical to a $200 fixed-price sale.
   //
-  // Patrick's ruling, 2026-08-17: the 5% buyer premium IS the entire platform take on an
-  // auction; the organizer pays no separate commission. $200 winning bid => buyer pays $210.00,
-  // application_fee_amount $10.00, organizer nets $200.00 (pre-Stripe-processing).
+  // WHY NOT JUST READ Purchase.platformFeeAmount: that column stores the real Stripe
+  // application_fee_amount, which is the COMBINED premium + commission ($30.00 on a $200 win).
+  // Reporting it verbatim would tell the organizer they paid a $10 premium they never paid.
+  // An earlier pass the SAME DAY did exactly that, on the (wrong) theory that the premium was
+  // the entire platform take and the organizer owed no commission. Reversed by Patrick's
+  // ruling; utils/feeCalculator.resolveOrganizerFeeReport recomputes from the hammer price.
+  //
+  // THE ONE EXCEPTION — Sale.coversFee on an auction: the buyer was charged the bid only and
+  // the ORGANIZER absorbed the premium, so there it DOES belong on their fee line ($30.00 on a
+  // $200 win, net $170.00).
   //
   // Production impact at the time of the fix: ZERO. A direct query against the Railway
-  // production DB found 0 PAID purchases joined to an AUCTION item (1 FAILED), all 4 AUCTION
-  // items named "ZZTEST ... delete after 2026-08-08", and only 3 Bid rows platform-wide. No
-  // organizer was ever shown a wrong number; this is a forward-looking correctness fix.
-  describe('organizer-facing fee reporting — auction carve-out', () => {
+  // production DB (2026-08-17) found 0 PAID purchases joined to an auction item (1 FAILED), all
+  // 4 AUCTION items named "ZZTEST ... delete after 2026-08-08", and 3 Bid rows platform-wide.
+  // No organizer was ever shown a wrong number and no one was under-charged; this is a
+  // forward-looking correctness fix.
+  describe('organizer-facing fee reporting — commission only, premium stripped', () => {
     const REGULAR_PRICE   = 100.00;                                          // testItem
     const AUCTION_BID     = 200.00;                                          // testAuctionItem.currentBid
     const AUCTION_PREMIUM = parseFloat((AUCTION_BID * AUCTION_BUYER_PREMIUM_RATE).toFixed(2)); // 10.00
     const AUCTION_CHARGED = AUCTION_BID + AUCTION_PREMIUM;                   // 210.00
     const SIMPLE_RATE     = getPlatformFeeRate('SIMPLE');                    // 0.10
+    const PRO_RATE        = getPlatformFeeRate('PRO');                       // 0.08
+    const AUCTION_COMMISSION = parseFloat((AUCTION_BID * SIMPLE_RATE).toFixed(2));            // 20.00
 
     beforeAll(async () => {
       // Two PAID purchases in the same organizer's book: one regular, one auction.
@@ -895,10 +1014,11 @@ describe('Stripe Connect + Fee Capture E2E', () => {
             userId:                testShopper.id,
             itemId:                testAuctionItem.id,
             saleId:                testAuctionSale.id,
-            // What the buyer was actually charged, and the real application_fee_amount —
-            // exactly what stripeController.createPaymentIntent persists on the auction path.
-            amount:                AUCTION_CHARGED,
-            platformFeeAmount:     AUCTION_PREMIUM,
+            // Exactly what stripeController.createPaymentIntent persists on the auction path:
+            // `amount` is the buyer's premium-inclusive charge, `platformFeeAmount` is the real
+            // application_fee_amount (premium + commission).
+            amount:                AUCTION_CHARGED,                                        // 210.00
+            platformFeeAmount:     parseFloat((AUCTION_PREMIUM + AUCTION_COMMISSION).toFixed(2)), // 30.00
             stripePaymentIntentId: 'pi_test_fee_report_auction',
             status:                'PAID',
           },
@@ -920,53 +1040,80 @@ describe('Stripe Connect + Fee Capture E2E', () => {
       console.log('✓ isAuctionListing matches stripeController.createPaymentIntent detection');
     });
 
-    it('should report the 5% premium — NOT the tier commission — as the fee on an auction sale', () => {
-      const reported = resolveReportedPlatformFee(
+    it('should compose application_fee_amount as premium + commission', () => {
+      const simple = calculateApplicationFee(20000, SIMPLE_RATE, true);
+      expect(simple.buyerPremiumCents).toBe(1000);
+      expect(simple.organizerCommissionCents).toBe(2000);
+      expect(simple.applicationFeeCents).toBe(3000);
+
+      const pro = calculateApplicationFee(20000, PRO_RATE, true);
+      expect(pro.applicationFeeCents).toBe(2600);
+
+      // Regular sale: commission only, no premium.
+      const regular = calculateApplicationFee(20000, SIMPLE_RATE, false);
+      expect(regular.buyerPremiumCents).toBe(0);
+      expect(regular.applicationFeeCents).toBe(2000);
+      console.log('✓ application_fee_amount = premium + commission (auction) / commission only (regular)');
+    });
+
+    it('should report the tier COMMISSION on the hammer price for an auction — not the stored combined fee', () => {
+      const report = resolveOrganizerFeeReport(
+        { amount: AUCTION_CHARGED, item: { listingType: 'AUCTION', auctionStartPrice: 50.0 } },
+        SIMPLE_RATE
+      );
+      // Gross is the hammer price, premium stripped out of the $210.00 charge.
+      expect(report.grossSalePrice).toBe(AUCTION_BID);        // 200.00, not 210.00
+      expect(report.platformFee).toBe(AUCTION_COMMISSION);    // 20.00
+      // CARVE-OUT REGRESSION GUARD: not the bare premium, and not 10% of the charged total.
+      expect(report.platformFee).not.toBe(AUCTION_PREMIUM);   // not 10.00
+      expect(report.platformFee).not.toBe(parseFloat((AUCTION_CHARGED * SIMPLE_RATE).toFixed(2))); // not 21.00
+      // Gross − fee is exactly what lands in the organizer's account.
+      expect(report.grossSalePrice - report.platformFee).toBe(180.0);
+      console.log(`✓ Auction reported as $${report.grossSalePrice} gross / $${report.platformFee} fee / $${report.grossSalePrice - report.platformFee} net`);
+    });
+
+    it('should report 8% on an auction for a PRO organizer', () => {
+      const report = resolveOrganizerFeeReport(
+        { amount: AUCTION_CHARGED, item: { listingType: 'AUCTION' } },
+        PRO_RATE
+      );
+      expect(report.grossSalePrice).toBe(AUCTION_BID);   // 200.00
+      expect(report.platformFee).toBe(16.0);
+      expect(report.grossSalePrice - report.platformFee).toBe(184.0);
+      console.log('✓ PRO auction reported as $200.00 gross / $16.00 fee / $184.00 net');
+    });
+
+    it('should put the absorbed premium on the organizer fee line under Sale.coversFee', () => {
+      const report = resolveOrganizerFeeReport(
         {
-          amount:            AUCTION_CHARGED,
-          platformFeeAmount: AUCTION_PREMIUM,
-          item:              { listingType: 'AUCTION', auctionStartPrice: 50.0 },
+          amount: AUCTION_BID,                              // buyer charged the bid only
+          item:   { listingType: 'AUCTION' },
+          sale:   { coversFee: true },
         },
         SIMPLE_RATE
       );
-      expect(reported).toBe(AUCTION_PREMIUM);                       // 10.00
-      expect(reported).not.toBe(parseFloat((AUCTION_CHARGED * SIMPLE_RATE).toFixed(2))); // not 21.00
-      expect(reported).not.toBe(parseFloat((AUCTION_BID * SIMPLE_RATE).toFixed(2)));     // not 20.00
-      console.log(`✓ Auction fee reported as $${reported} (5% premium), not $${(AUCTION_BID * SIMPLE_RATE).toFixed(2)} (10% commission)`);
+      expect(report.grossSalePrice).toBe(AUCTION_BID);                          // 200.00
+      expect(report.platformFee).toBe(AUCTION_COMMISSION + AUCTION_PREMIUM);    // 30.00
+      expect(report.grossSalePrice - report.platformFee).toBe(170.0);
+      console.log('✓ coversFee auction reported as $200.00 gross / $30.00 fee / $170.00 net');
     });
 
     it('should leave the tier commission untouched on a regular sale', () => {
-      const reported = resolveReportedPlatformFee(
-        {
-          amount:            REGULAR_PRICE,
-          platformFeeAmount: 10.0,
-          item:              { listingType: 'FIXED', auctionStartPrice: null },
-        },
+      const report = resolveOrganizerFeeReport(
+        { amount: REGULAR_PRICE, item: { listingType: 'FIXED', auctionStartPrice: null } },
         SIMPLE_RATE
       );
-      expect(reported).toBe(parseFloat((REGULAR_PRICE * SIMPLE_RATE).toFixed(2))); // 10.00
+      expect(report.grossSalePrice).toBe(REGULAR_PRICE);
+      expect(report.platformFee).toBe(parseFloat((REGULAR_PRICE * SIMPLE_RATE).toFixed(2))); // 10.00
       // PRO/TEAMS still gets 8%, unchanged.
       expect(
-        resolveReportedPlatformFee(
-          { amount: REGULAR_PRICE, platformFeeAmount: 8.0, item: { listingType: 'FIXED' } },
-          getPlatformFeeRate('PRO')
-        )
+        resolveOrganizerFeeReport({ amount: REGULAR_PRICE, item: { listingType: 'FIXED' } }, PRO_RATE)
+          .platformFee
       ).toBe(8.0);
       console.log('✓ Regular-sale fee unchanged: 10% SIMPLE / 8% PRO');
     });
 
-    it('should extract the premium already inside `amount` when the stored fee is NULL', () => {
-      // Legacy/degraded row: no stored application_fee_amount. The auction charge total is
-      // bid * 1.05, so the premium is amount * (0.05 / 1.05).
-      const reported = resolveReportedPlatformFee(
-        { amount: AUCTION_CHARGED, platformFeeAmount: null, item: { listingType: 'AUCTION' } },
-        SIMPLE_RATE
-      );
-      expect(reported).toBeCloseTo(AUCTION_PREMIUM, 2);
-      console.log(`✓ NULL stored fee falls back to $${reported} (premium extracted from the $${AUCTION_CHARGED} charge)`);
-    });
-
-    it('getEarningsBreakdown should show $10.00 on the $200 auction win and $10.00 on the $100 regular sale', async () => {
+    it('getEarningsBreakdown should show $20.00 on the $200 auction win and $10.00 on the $100 regular sale', async () => {
       const req: any = { user: { id: testOrganizerUser.id, roles: ['ORGANIZER'] }, query: {} };
       const res = makeMockRes();
 
@@ -979,13 +1126,14 @@ describe('Stripe Connect + Fee Capture E2E', () => {
       expect(auctionRow).toBeDefined();
       expect(regularRow).toBeDefined();
 
-      // Auction: the platform took the 5% premium from the WINNER, nothing from the organizer.
-      expect(auctionRow.platformFee).toBe(AUCTION_PREMIUM);            // 10.00, not 21.00
-      // Regular: byte-identical to the pre-fix behaviour.
+      // Auction: hammer price as gross, commission as fee. The winner's premium is invisible.
+      expect(auctionRow.salePrice).toBe(AUCTION_BID);          // 200.00, not 210.00
+      expect(auctionRow.platformFee).toBe(AUCTION_COMMISSION); // 20.00, not 10.00 and not 21.00
+      // Regular: byte-identical to the long-standing behaviour.
+      expect(regularRow.salePrice).toBe(REGULAR_PRICE);
       expect(regularRow.platformFee).toBe(parseFloat((REGULAR_PRICE * SIMPLE_RATE).toFixed(2))); // 10.00
 
-      // Totals must roll up the same way — the auction must not contribute a 10% commission.
-      expect(payload.totals.totalPlatformFees).toBeCloseTo(AUCTION_PREMIUM + REGULAR_PRICE * SIMPLE_RATE, 2);
+      expect(payload.totals.totalPlatformFees).toBeCloseTo(AUCTION_COMMISSION + REGULAR_PRICE * SIMPLE_RATE, 2);
       console.log(
         `✓ getEarningsBreakdown: auction $${auctionRow.platformFee} + regular $${regularRow.platformFee} = $${payload.totals.totalPlatformFees} total platform fees`
       );

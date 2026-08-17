@@ -4,7 +4,7 @@ import { prisma } from '../lib/prisma';
 import {
   getPlatformFeeRate,
   isAuctionListing,
-  resolveReportedPlatformFee,
+  resolveOrganizerFeeReport,
   SubscriptionTier,
 } from '../utils/feeCalculator';
 import { canRemoveWatermark } from '../utils/watermarkPolicy';
@@ -37,7 +37,8 @@ export const getEarningsPdf = async (req: AuthRequest, res: Response) => {
             status: 'PAID',
             createdAt: { gte: startDate, lt: endDate },
           },
-          // listingType + auctionStartPrice power the auction carve-out below.
+          // listingType + auctionStartPrice let the reporting helper below recognise an
+          // auction and strip the buyer's 5% premium out of Purchase.amount.
           include: { item: { select: { title: true, listingType: true, auctionStartPrice: true } } },
         },
       },
@@ -45,43 +46,60 @@ export const getEarningsPdf = async (req: AuthRequest, res: Response) => {
     });
 
     /**
-     * AUCTION CARVE-OUT (Patrick ruling, 2026-08-17). The tier commission (10%/8%) applies to
-     * NON-auction sales only. On an auction sale the entire platform take is the 5% buyer
-     * premium the WINNING BIDDER paid — the organizer pays no separate commission — so the fee
-     * to report is the real Stripe application_fee_amount stored on the Purchase row, not
-     * `revenue * tierRate`.
+     * TWO SEPARATE FEES (Patrick ruling, 2026-08-17 — see utils/feeCalculator.ts header).
+     * The organizer's commission (10% SIMPLE / 8% PRO+TEAMS) applies to EVERY sale, auctions
+     * included. What does NOT belong on their statement is the auction buyer's 5% premium —
+     * that came out of the WINNER's pocket — so both the revenue and the fee for an auction are
+     * computed on the hammer price, with the premium stripped back out of Purchase.amount.
+     *
+     * REVERSAL NOTICE: an earlier pass the same day reported the stored
+     * Purchase.platformFeeAmount for auctions and treated the premium as the entire platform
+     * take with no organizer commission. That was wrong; this is the corrected model.
      *
      * Shape note: the non-auction subtotal is multiplied by the rate and rounded ONCE, exactly
-     * as this file did before, rather than rounding per purchase and summing. With zero auction
-     * purchases in the set this returns a byte-identical number to the previous code.
+     * as this file did originally, rather than rounding per purchase and summing. With zero
+     * auction purchases in the set this returns a byte-identical number to the pre-2026-08-17
+     * behaviour, for both revenue and fees.
      */
-    const feesForPurchases = (
-      purchases: Array<{ amount: number; platformFeeAmount: number | null; item: { listingType: string | null; auctionStartPrice: number | null } | null }>
-    ): number => {
+    type ReportablePurchaseRow = {
+      amount: number;
+      item: { listingType: string | null; auctionStartPrice: number | null } | null;
+    };
+
+    const revenueAndFees = (
+      purchases: ReportablePurchaseRow[],
+      coversFee: boolean
+    ): { revenue: number; fees: number } => {
       let nonAuctionRevenue = 0;
+      let auctionRevenue = 0;
       let auctionFees = 0;
       for (const p of purchases) {
         if (isAuctionListing(p.item)) {
-          auctionFees += resolveReportedPlatformFee(p, tierRate);
+          const report = resolveOrganizerFeeReport({ ...p, sale: { coversFee } }, tierRate);
+          auctionRevenue += report.grossSalePrice;
+          auctionFees += report.platformFee;
         } else {
           nonAuctionRevenue += p.amount;
         }
       }
-      return parseFloat((nonAuctionRevenue * tierRate + auctionFees).toFixed(2));
+      return {
+        revenue: parseFloat((nonAuctionRevenue + auctionRevenue).toFixed(2)),
+        fees: parseFloat((nonAuctionRevenue * tierRate + auctionFees).toFixed(2)),
+      };
     };
 
-    const totalRevenue = sales.reduce(
-      (sum, s) => sum + s.purchases.reduce((ps, p) => ps + p.amount, 0),
-      0
-    );
-    const totalFees = feesForPurchases(sales.flatMap((s) => s.purchases as any));
-    const netEarnings = totalRevenue - totalFees;
+    const perSale = sales.map((s) => ({
+      sale: s,
+      ...revenueAndFees(s.purchases as any, (s as any).coversFee === true),
+    }));
 
-    const saleRows = sales
-      .filter((s) => s.purchases.length > 0)
-      .map((s) => {
-        const revenue = s.purchases.reduce((sum, p) => sum + p.amount, 0);
-        const fees = feesForPurchases(s.purchases as any);
+    const totalRevenue = parseFloat(perSale.reduce((sum, r) => sum + r.revenue, 0).toFixed(2));
+    const totalFees = parseFloat(perSale.reduce((sum, r) => sum + r.fees, 0).toFixed(2));
+    const netEarnings = parseFloat((totalRevenue - totalFees).toFixed(2));
+
+    const saleRows = perSale
+      .filter((r) => r.sale.purchases.length > 0)
+      .map(({ sale: s, revenue, fees }) => {
         return `
 <tr style="border-bottom:1px solid #e5e7eb;">
   <td style="padding:10px 12px;color:#111827;">${s.title}</td>

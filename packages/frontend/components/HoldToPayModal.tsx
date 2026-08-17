@@ -9,6 +9,7 @@ import api from '../lib/api';
 import { useToast } from './ToastContext';
 import { useFeedbackSurvey } from '../hooks/useFeedbackSurvey';
 import AccessibleModal from './AccessibleModal';
+import { calculateOrganizerCommission, formatFeeRate } from '../lib/platformFees';
 
 interface HoldToPayModalProps {
   itemId: string;
@@ -70,7 +71,10 @@ export default function HoldToPayModal({
   const [error, setError] = useState<string | null>(null);
 
   const isBundle = (bundleItems?.length ?? 0) > 1;
-  const platformFee = itemPrice * (organizerTier === 'PRO' ? 0.08 : 0.10);
+  // Shared source of truth (lib/platformFees.ts) — this used to be an inline
+  // `organizerTier === 'PRO' ? 0.08 : 0.10`, which silently billed TEAMS organizers the
+  // 10% SIMPLE rate instead of their 8%.
+  const platformFee = calculateOrganizerCommission(itemPrice, organizerTier);
   const estimatedPayout = itemPrice - platformFee;
 
   const handleSendInvoice = async () => {
@@ -177,7 +181,7 @@ export default function HoldToPayModal({
           {isAuction && (
             <div className="flex justify-between text-sm">
               <span className="text-gray-600 dark:text-gray-400">
-                Platform Fee ({organizerTier === 'PRO' ? '8%' : '10%'})
+                Platform Fee ({formatFeeRate(organizerTier)})
               </span>
               <span className="font-semibold text-gray-900 dark:text-gray-100">
                 -${platformFee.toFixed(2)}

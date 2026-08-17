@@ -152,7 +152,16 @@ const TermsPage = () => {
             <h2 className="text-2xl font-semibold text-warm-800 dark:text-warm-200 mb-4">6. Platform Fees</h2>
             <p className="text-warm-700 dark:text-warm-300 leading-relaxed mb-3">
               FindA.Sale charges a <strong>10% flat platform fee</strong> on each completed transaction, regardless of
-              sale type (fixed-price or auction). The fee is deducted automatically from the Organizer payout.
+              sale type (fixed-price or auction). PRO and TEAMS plans reduce that fee to 8%. The fee is deducted
+              automatically from the Organizer payout.
+            </p>
+            <p className="text-warm-700 dark:text-warm-300 leading-relaxed mb-3">
+              <strong>Auction buyer&apos;s premium.</strong> On auction items, the winning bidder pays a{' '}
+              <strong>buyer&apos;s premium of 5% of the winning bid</strong>, charged at checkout in addition to the
+              bid amount. The buyer&apos;s premium is separate from and additional to the Organizer platform fee
+              described above. It is disclosed on the item page before a bid is placed, itemized at checkout, and
+              acknowledged by the buyer before payment. An Organizer may elect to absorb the buyer&apos;s premium for
+              a given auction sale, in which case the winning bidder is charged the bid amount only.
             </p>
             <p className="text-warm-700 dark:text-warm-300 leading-relaxed">
               Fees are exclusive of any Stripe payment processing fees, which are charged separately per Stripe's
