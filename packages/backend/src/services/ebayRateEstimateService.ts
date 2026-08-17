@@ -460,7 +460,7 @@ export const USPS_RATE_SOURCE = "USPS Notice 123 - Price List (pe.usps.com/cpim/
 export const UPS_RATE_EFFECTIVE_DATE = '2026-08-16';
 export const UPS_RATE_SOURCE = "UPS 2026 Daily Rate and Service Guide (daily-rates-us-en.xlsx, sheet 'UPS Ground', 1-150lb x zones 2-8) + UPS Ground zone chart for origin ZIP3 490 (490.xls) -- both primary UPS documents, downloaded from ups.com 2026-08-16 -- multiplied by the per-zone eBay/published-daily discount ratio observed in the 2026-08-10/11 live eBay-calculator quotes (POST /shp/calc/api/shipping/services, Patrick's real seller account, origin 49079). Verified out-of-sample at ONE point: z7 @ 23lb, real $37.00 vs modelled $37.41. See RATE_TABLE_UPS header for what is and is not verified.";
 export const FEDEX_RATE_EFFECTIVE_DATE = '2026-08-16';
-export const FEDEX_RATE_SOURCE = "FedEx 2026 Standard List Rates (FedEx_Standard_List_Rates_2026.xlsx, sheet '2026 Ground & FHD rates', eff. 1/5/2026, one row per pound 1-150lb x zones 2-8) + FedEx's own Find Zones tool (fedex.com/ratetools) driven live from origin 49079 for 26 destination ZIPs -- both primary FedEx documents, obtained 2026-08-16 -- multiplied by the per-zone eBay/published-list discount ratio observed in 60 live eBay-calculator FedEx Ground/Home Delivery quotes (Patrick's real seller account, origin 49079, 2026-08-16), with a $14.07 floor and a per-package destination surcharge modelled separately (see FEDEX_DESTINATION_SURCHARGE_OBSERVED). Zones 2/4/6/7 are real-anchored; zones 3, 5 and 8 have NO observation and are modelled. See RATE_TABLE_FEDEX header for what is and is not verified.";
+export const FEDEX_RATE_SOURCE = "FedEx 2026 Standard List Rates (FedEx_Standard_List_Rates_2026.xlsx, sheet '2026 Ground & FHD rates', eff. 1/5/2026, one row per pound 1-150lb x zones 2-8) + FedEx's own Find Zones tool (fedex.com/ratetools) driven live from origin 49079 for 26 destination ZIPs -- both primary FedEx documents, obtained 2026-08-16 -- multiplied by the per-zone eBay/published-list discount ratio observed in 60 live eBay-calculator FedEx Ground/Home Delivery quotes (Patrick's real seller account, origin 49079, 2026-08-16), with a $14.07 floor and a per-package destination surcharge modelled separately (see FEDEX_DESTINATION_SURCHARGE_TIERS -- three measured tiers, 51 destination ZIPs, 2026-08-16). Zones 2/4/6/7 were real-anchored at build time; zones 3, 5 and 8 were modelled and have since been VALIDATED against clean-destination live quotes at 1/7/20/30/50lb (z8 also 3/5lb) -- see RATE_TABLE_FEDEX's 'VALIDATION' block. See RATE_TABLE_FEDEX header for what is and is not verified.";
 
 // ── RATE_TABLE_UPS ─ FULLY REBUILT 2026-08-16 FROM UPS'S OWN PUBLISHED RATE CARD ─────
 //
@@ -787,62 +787,164 @@ const RATE_TABLE_UPS: RateRow[] = [
 //
 
 /**
- * PER-PACKAGE FEDEX DESTINATION SURCHARGE -- MEASURED, AND APPLIED TO EVERY FEDEX QUOTE.
+ * PER-PACKAGE FEDEX DESTINATION SURCHARGE -- MEASURED THREE-TIER MODEL (2026-08-16 harvest).
  *
- * THE MEASUREMENT. Two independent same-zone destination pairs, both zoned from FedEx's own
- * Find Zones tool at origin 49079:
- *   10001 New York (z4) costs exactly $5.92 more than 30301 Atlanta (z4) at all 7 shared
- *     weights, while their struck-through FedEx retail figures are IDENTICAL.
- *   98357 Neah Bay (z7) costs exactly $1.98 more than 98282 Camano Island (z7) at all 8
- *     shared weights.
- *   98282 itself carries the same $5.92: removing it is the only way the eBay/published
- *     ratio stays zone-monotone (raw, z7 ranks ABOVE z4 at every weight -- impossible), and
- *     98357 minus $7.90 then reproduces 98282 minus $5.92 to within $0.01 at all 8 weights.
- * So: a flat, weight-independent, per-package amount attached to certain destination ZIPs.
+ * SUPERSEDES the single flat `FEDEX_DESTINATION_SURCHARGE_OBSERVED = 5.92` that stood here.
+ * A 133-quote live harvest (eBay's own calculator, Patrick's real seller account, origin
+ * 49079, destination ZIP recorded with every price) measured what the flat constant was
+ * guessing, and it was wrong in BOTH directions.
  *
- * THE MECHANISM IS UNKNOWN AND IS NOT ASSUMED. It is ZIP-level and constant, which is the
- * shape of a Delivery Area Surcharge, but it does NOT match FedEx's published surcharge
- * structure: the 2026 workbook's only per-package note is a $6.45 residential surcharge, and
- * the struck-through retail column shows a $9.74 Neah Bay premium and NO New York premium at
- * all -- the opposite pattern from eBay's negotiated price. Naming it "DAS" would be a guess.
- * It is named for what was observed, not for a mechanism nobody here has verified.
+ * WHAT WAS MEASURED. The surcharge is a flat per-package amount, invariant in weight and in
+ * box, attached to the destination ZIP, and it is FedEx Ground / Home Delivery ONLY -- at the
+ * same destination, UPS Ground, UPS Ground Saver, USPS Ground Advantage and FedEx Ground
+ * ECONOMY all price identically to a clean destination; only Ground/Home Delivery moves.
+ * It comes in exactly three tiers, and every surcharged observation reconciles to
+ * base + one of these three constants to within $0.01:
  *
- * WHY IT IS APPLIED UNCONDITIONALLY, AND THE ONE OBSERVATION THAT SETTLED IT. The first draft
- * of this rebuild modelled the surcharge and deliberately did NOT apply it, on the grounds
- * that its ZIP coverage is unmeasured (3 of 6 sampled destinations carry it, and those 6 were
- * chosen for zone spread, not for surcharge representativeness). Executing the module then
- * disproved that position outright: with base-only pricing the engine's WORST-CASE CONUS
- * price -- z8, 22lb 4oz -- came out $29.89, while two REAL measured CONUS destinations cost
- * $32.11 (98282) and $34.09 (98357). A worst-case flat rate that lands below a measured real
- * destination is broken on its own terms, however clean the base-freight decomposition is.
- * With the surcharge applied the same package prices at $35.81 and covers both.
+ *     tier        price add     retail add     example destinations
+ *     clean       $0.00         $0.00          46201, 49503, 90210, 98101, 11201, 19104 ...
+ *     A           $5.92         $0.00          10001 Manhattan, 94102 SF, 02108 Boston ...
+ *     B           $7.90         $9.75          98357 Neah Bay, 93526 Big Pine, 83252 ...
+ *     C           $15.03        $21.06         02554 Nantucket, 82190 Yellowstone, 49782 ...
  *
- * This is the same trade coverageZoneForOrigin already makes and states: a flat rate is one
- * price for all buyers, so it is priced to the worst case the seller could ship to. The known
- * cost of that choice, stated rather than hidden: every FedEx quote to a NON-surcharged
- * destination is $5.92 high. It is the never-be-short direction, and it is the direction this
- * file has chosen everywhere else.
+ * TIER AND ZONE ARE INDEPENDENT: 49782 Beaver Island is z3 base $16.44 + $15.03; 82190
+ * Yellowstone is z6 base $21.21 + the same $15.03. The tier is not a function of distance.
  *
- * NOT APPLIED AT lb >= 70, deliberately and not as an oversight. That path uses
+ * THERE IS NO RULE THAT PREDICTS TIER FROM THE ZIP, and none is invented here. Manhattan,
+ * Boston and San Francisco are tier A while Brooklyn, Jersey City, Washington DC,
+ * Philadelphia, Oakland, San Jose, Los Angeles and Seattle are clean. Dense-vs-rural,
+ * coastal-vs-inland and ZIP3 prefix all fail as predictors on the measured set. The map
+ * below is therefore a record of MEASUREMENT ONLY -- 51 destinations out of ~41,000 US ZIPs.
+ *
+ * ── THE DECISION, AND WHAT IT COSTS ──────────────────────────────────────────────────────
+ *
+ * THE ENGINE HAS NO DESTINATION ZIP. estimateCheapestRate() takes a COVERAGE zone derived
+ * from the ORIGIN (coverageZoneForOrigin / resolveCoverageZone) and returns ONE flat price
+ * the organizer charges every buyer in CONUS. Grepped project-wide: no caller anywhere
+ * (ebayShippingResolver, ebayFlatRatePolicyService, ebayCalculatedPolicyService,
+ * ebayShippingPresetService, nativeShippingSuggestionService, ebayController) has or passes
+ * a buyer ZIP. So a ZIP -> tier lookup has nothing to look up on the live path, and the
+ * question is only "which single constant does the flat rate carry".
+ *
+ * A flat rate must cover the worst destination the seller could be sent, exactly as
+ * coverageZoneForOrigin already prices every Michigan origin at z8. The worst MEASURED
+ * destination tier is C. So the unmapped/no-destination default is C, and the residual
+ * short exposure on the FedEx dimension is zero across all 51 measured destinations.
+ *
+ * THE COST OF THAT, MEASURED BY EXECUTING THE MODULE (144-case sweep, 8 zones x 18
+ * weight/box combinations, comparing the final CHEAPEST-WINS quote at $5.92 vs $15.03):
+ *   - 107 of 144 cases (74%) DO NOT CHANGE AT ALL. USPS or UPS was already cheaper, and
+ *     neither carrier carries this surcharge, so the quote is unaffected.
+ *   - 37 of 144 rise; mean rise across ALL cases +$1.48, worst case +$9.11.
+ *   - In every one of those 37, the new price is min(FedEx+$15.03, UPS, USPS) -- i.e. it is
+ *     the cheapest label that is guaranteed to EXIST at every CONUS destination. Where the
+ *     full +$9.11 flows through (z6-z8, >=25lb) UPS and USPS were MORE expensive still, so
+ *     under $5.92 the organizer was genuinely short by that amount at a tier-C address.
+ *   The feared "overcharge everyone by $15" does not happen, because the cheapest-wins
+ *   comparison caps it: when FedEx+$15.03 stops being cheapest, the engine simply quotes the
+ *   destination-invariant UPS/USPS price instead. That fallback is the safety valve.
+ *
+ * WHAT IT STILL COSTS, STATED NOT HIDDEN: on those 37 heavy/far cases a buyer to a CLEAN
+ * destination is charged up to $15.03 more than the label costs. That is the same
+ * worst-case trade coverageZoneForOrigin makes (z8-for-all-Michigan is worth ~$25 at 50lb),
+ * applied on the destination axis instead of the distance axis.
+ *
+ * KNOWN CONSEQUENCE TO SURFACE, NOT A BUG: at tier C the engine's suggested flat price for
+ * a 48x16x4in / 22lb 4oz guitar at z8 goes $41.45 -> $52.00 (executed, not estimated). Patrick's locked GUITAR GIG BAG
+ * preset is $47.49 (nets $41.03 after the 13.6% FVF), which covers tier B ($36.90) but is
+ * $3.00 short of tier C ($44.03). That preset is user data and is NOT touched by this file.
+ * If the product's accepted posture is "cover through tier B, accept the tier-C tail",
+ * FLIP THE ONE TOKEN BELOW: FEDEX_DESTINATION_SURCHARGE_UNMAPPED_TIER = 'B'. Measured
+ * consequence of doing so: max quote rise vs today +$1.98 (mean +$0.47) instead of +$9.11,
+ * and a residual $7.13 short exposure at the 10 measured tier-C ZIPs. Both options are one
+ * token apart deliberately -- this is a policy dial, not an algorithm.
+ *
+ * NOT APPLIED AT lb >= 70, unchanged and deliberate. That path uses
  * FEDEX_HIGH_WEIGHT_TOTAL_TABLE, which holds real eBay TOTALS (base + whatever accessorials
- * and destination surcharge their lane carried) rather than base freight. Its destinations
- * were never recorded -- its z7 and z8 columns are byte-identical at 90/110/130/150lb, the
- * signature of one destination quoted into two columns -- so adding $5.92 on top would risk
- * double-charging it. estimateCheapestRate already zeroes all surcharges on that branch for
- * exactly this reason.
+ * and destination surcharge their lane carried) with destinations never recorded -- its z7
+ * and z8 columns are byte-identical at 90/110/130/150lb, the signature of one destination
+ * quoted into two columns -- so adding a surcharge on top would risk double-charging.
+ * estimateCheapestRate already zeroes all surcharges on that branch.
  *
- * WHAT WOULD IMPROVE THIS: roughly 10 more eBay-calculator quotes at KNOWN FedEx DAS and
- * non-DAS ZIPs across 3-4 zones, destination ZIP recorded with each price -- free, same method
- * as the 60-quote harvest that produced this table. That would turn "apply the worst case
- * everywhere" into a measured population rate, and would let the >= 70lb table be re-anchored
- * with recorded destinations at the same time. Until then this is one measured constant,
- * applied conservatively.
+ * MECHANISM STILL UNKNOWN AND STILL NOT ASSERTED. Three flat ZIP-attached tiers with their
+ * own retail counterparts ($0 / $9.75 / $21.06) is the shape of a Delivery Area Surcharge
+ * ladder, but it does not match FedEx's published 2026 structure (whose only per-package
+ * note is a $6.45 residential surcharge), and the retail add and the negotiated add do not
+ * track each other -- tier A adds $5.92 negotiated against $0.00 retail. Naming it "DAS"
+ * would still be a guess. It is named for what was observed.
+ *
+ * WHAT WOULD IMPROVE THIS: more measured ZIPs. Adding them is DATA, not code -- append to
+ * FEDEX_DESTINATION_SURCHARGE_ZIP_TIER and nothing else changes. The map only becomes
+ * load-bearing on the live path once a destination-aware quote path exists (eBay CALCULATED
+ * shipping, or a buyer-ZIP preview); fedexDestinationSurchargeForZip() and
+ * estimateCheapestRate's optional `destinationZip` are already wired for that day.
  */
-export const FEDEX_DESTINATION_SURCHARGE_OBSERVED = 5.92;
-/** The remote-tier increment seen at 98357 Neah Bay on top of the $5.92 above ($7.90 total).
- *  NOT applied -- $5.92 is the amount common to both surcharged lanes; this extra $1.98 was
- *  seen at one remote ZIP only, and is the residual known short exposure at such addresses. */
-export const FEDEX_DESTINATION_SURCHARGE_REMOTE_INCREMENT_OBSERVED = 1.98;
+export const FEDEX_DESTINATION_SURCHARGE_TIERS = {
+  clean: 0,
+  A: 5.92,
+  B: 7.9,
+  C: 15.03,
+} as const;
+
+export type FedexDestinationSurchargeTier = keyof typeof FEDEX_DESTINATION_SURCHARGE_TIERS;
+
+/** Retail (struck-through) counterpart of each tier, from the same harvest. RECORDED, NOT
+ *  APPLIED -- the engine prices off eBay's negotiated column. Kept because the retail ladder
+ *  is the strongest evidence the three tiers are a real carrier structure and not noise. */
+export const FEDEX_DESTINATION_SURCHARGE_TIERS_RETAIL: Readonly<Record<FedexDestinationSurchargeTier, number>> = {
+  clean: 0,
+  A: 0,
+  B: 9.75,
+  C: 21.06,
+};
+
+/**
+ * MEASURED destinations only -- 51 ZIPs, origin 49079, 2026-08-16. Clean ZIPs are listed
+ * explicitly rather than omitted: "measured clean" and "never measured" are different facts,
+ * and only the first justifies charging $0. Append measured ZIPs here; no code change needed.
+ */
+export const FEDEX_DESTINATION_SURCHARGE_ZIP_TIER: Readonly<Record<string, FedexDestinationSurchargeTier>> = {
+  // clean -- $0.00 (24 measured)
+  '46201': 'clean', '44101': 'clean', '15201': 'clean', '80202': 'clean', '75201': 'clean',
+  '70112': 'clean', '04101': 'clean', '30301': 'clean', '33101': 'clean', '87101': 'clean',
+  '49503': 'clean', '90210': 'clean', '90001': 'clean', '92101': 'clean', '94612': 'clean',
+  '95101': 'clean', '97201': 'clean', '98101': 'clean', '89101': 'clean', '89701': 'clean',
+  '11201': 'clean', '07302': 'clean', '20001': 'clean', '19104': 'clean',
+  // tier A -- +$5.92 (9 measured)
+  '10001': 'A', '94102': 'A', '94105': 'A', '02108': 'A', '97401': 'A',
+  '98282': 'A', '33040': 'A', '59101': 'A', '59718': 'A',
+  // tier B -- +$7.90 (8 measured)
+  '98357': 'B', '97635': 'B', '97620': 'B', '93526': 'B',
+  '89832': 'B', '89045': 'B', '83252': 'B', '88267': 'B',
+  // tier C -- +$15.03 (10 measured)
+  '95568': 'C', '02554': 'C', '04645': 'C', '82190': 'C', '84034': 'C',
+  '59087': 'C', '89049': 'C', '89310': 'C', '97910': 'C', '49782': 'C',
+};
+
+/**
+ * The tier assumed for any destination NOT in the map above -- which, on today's flat-rate
+ * path, is EVERY quote (the engine has no destination ZIP at all). This single token is the
+ * whole policy. 'C' = never short at any measured destination; 'B' = cover through tier B
+ * and accept a $7.13 tail at the 10 measured tier-C ZIPs. See the header block for the
+ * measured cost of each.
+ */
+export const FEDEX_DESTINATION_SURCHARGE_UNMAPPED_TIER: FedexDestinationSurchargeTier = 'C';
+
+/** The amount the destination-blind flat-rate path actually adds to every FedEx quote. */
+export const FEDEX_DESTINATION_SURCHARGE_FLAT_RATE_DEFAULT =
+  FEDEX_DESTINATION_SURCHARGE_TIERS[FEDEX_DESTINATION_SURCHARGE_UNMAPPED_TIER];
+
+/**
+ * FedEx Ground/Home Delivery per-package destination surcharge for a destination ZIP.
+ * Pass null/undefined (or a ZIP we have never measured) and you get the conservative
+ * unmapped default -- never a $0 guess. ZIP+4 and whitespace are tolerated; only the
+ * leading 5 digits are used.
+ */
+export function fedexDestinationSurchargeForZip(destZip?: string | null): number {
+  const five = String(destZip ?? '').trim().slice(0, 5);
+  const tier = /^\d{5}$/.test(five) ? FEDEX_DESTINATION_SURCHARGE_ZIP_TIER[five] : undefined;
+  return tier ? FEDEX_DESTINATION_SURCHARGE_TIERS[tier] : FEDEX_DESTINATION_SURCHARGE_FLAT_RATE_DEFAULT;
+}
 
 // ── RATE_TABLE_FEDEX ─ FULLY REBUILT 2026-08-16 FROM FEDEX'S OWN PUBLISHED RATE CARD ──
 //
@@ -934,10 +1036,13 @@ export const FEDEX_DESTINATION_SURCHARGE_REMOTE_INCREMENT_OBSERVED = 1.98;
 // this table's base + that destination's OWN measured surcharge ($0 / $5.92 / $7.90):
 // **32 of 46 exact to the penny, only 2 short (both by $0.01), worst absolute error 1.51%**
 // (z2 @ 50lb, where the monotone closure raised a measured cell $0.30). What the SHIPPED engine
-// does is different, because it applies $5.92 to every destination rather than the destination's
-// own amount -- on the two surcharged lanes it is exact at 10 of 16 points, worst $0.26 (0.80%);
-// on the three clean lanes it is $5.92-$6.22 high by design; at 98357 it is $1.91-$1.98 short,
-// the unapplied remote increment. See FEDEX_DESTINATION_SURCHARGE_OBSERVED.
+// does is different, because it applies ONE destination-blind constant rather than the
+// destination's own amount -- see FEDEX_DESTINATION_SURCHARGE_TIERS for the three-tier
+// measurement that replaced the old flat $5.92 and for the cost of the constant now used.
+// (Historical, as of the flat-$5.92 engine: exact at 10 of 16 points on the two surcharged
+// lanes, worst $0.26 / 0.80%; $5.92-$6.22 high on the three clean lanes; $1.91-$1.98 short at
+// 98357. The 98357 shortfall is CLOSED by the tier model -- 98357 is tier B, and the
+// unmapped default now covers tier C.)
 //
 // BRACKET ERROR IS NOW ZERO BY CONSTRUCTION, same as RATE_TABLE_UPS. rateFromTable charges a
 // bracket's TOP weight to every package inside it; with per-pound rows, bracket (W-1, W]
@@ -958,11 +1063,14 @@ export const FEDEX_DESTINATION_SURCHARGE_REMOTE_INCREMENT_OBSERVED = 1.98;
 // For contrast, the table this replaces had 15 zone violations and 5 weight violations.
 //
 // WHAT IS STILL UNVERIFIED, EXPLICITLY:
-//   - Zones 3, 5 and 8 have NO price observation. See the per-zone list above.
-//   - The destination surcharge's MECHANISM and ZIP COVERAGE are unknown. It IS applied to
-//     every FedEx quote below 70lb (never-be-short); see FEDEX_DESTINATION_SURCHARGE_OBSERVED
-//     for the measurement, the reasoning, and the $5.92 over-charge that choice accepts at
-//     non-surcharged destinations. The cells in THIS table are surcharge-free base freight.
+//   - Zones 3, 5 and 8 had NO price observation when this table was built. That is no longer
+//     true: see the VALIDATION block below, which measures all three against clean-destination
+//     live quotes. They remain MODELLED cells -- validated, not re-anchored.
+//   - The destination surcharge's MECHANISM is still unknown, and its ZIP coverage is now
+//     partially measured (51 ZIPs, three tiers). It IS applied to every FedEx quote below 70lb
+//     (never-be-short); see FEDEX_DESTINATION_SURCHARGE_TIERS for the measurement, the
+//     tier-C-default decision and the over-charge that choice accepts at clean destinations.
+//     The cells in THIS table are surcharge-free base freight.
 //   - Rows above 70lb: none. estimateCheapestRate intercepts lb >= 70 with
 //     FEDEX_HIGH_WEIGHT_TOTAL_TABLE, whose own anchors are real eBay totals with UNRECORDED
 //     destinations -- note its z7 and z8 columns are byte-identical at 90/110/130/150lb,
@@ -970,13 +1078,40 @@ export const FEDEX_DESTINATION_SURCHARGE_REMOTE_INCREMENT_OBSERVED = 1.98;
 //     therefore unknown and could not be de-duplicated here. Untouched this pass.
 //   - Nothing here is browser-verified. The engine numbers below are reproduced by executing
 //     the module; they are not a claim about what eBay's UI shows today.
+//
+// ── VALIDATION 2026-08-16 (133-quote harvest, destination ZIP recorded per quote) ────────
+// The three MODELLED columns (z3, z5, z8) were tested against live CLEAN-destination FedEx
+// Ground quotes at 1/7/20/30/50lb, plus 3lb and 5lb at z8, plus one real oversize shape.
+// Boxes: 1lb & 3lb & 5lb 6x5x4 · 7lb 12x10x8 · 20lb 16x13x13 · 30lb 18x16x14 · 50lb 20x18x18.
+// Result, engine base freight minus real, signed (executed via the module, not hand-computed):
+//   z3: +0.00 +0.00 +0.31 +0.27 +0.58
+//   z5: +0.00 +0.19 +0.29 +0.00 +0.28
+//   z8: +0.00(1lb) +0.00(3lb) +0.00(5lb) +0.43(7lb) +0.71(20lb) +1.05(30lb) +0.71(50lb)
+//   oversize cross-check, 48x16x4in / 22lb 4oz at z8: engine 29.89 vs real 29.00, +0.89.
+// ZERO cells short after the two corrections below; every remaining error is in the
+// never-be-short direction, worst +$1.05 (2.9%), mean +$0.29 over 18 points.
+// THE FLAT-r z8 EXTRAPOLATION IS VALIDATED AS CONSERVATIVE. z8 was built by holding the
+// eBay/published ratio flat past z7 rather than slope-extrapolating it, on the explicit
+// grounds that slope-extrapolating would price z8 ~$1.00-1.50 LOWER. It now measures +0.43
+// to +1.05 over real at 7-50lb -- so the choice was right, and by roughly the predicted
+// margin. It is still an extrapolation with no zone above it to bracket it.
+// TWO CELLS WERE MEASURED WRONG AND ARE CORRECTED IN PLACE (see their row comments):
+//   z8 @ 3lb 14.62 -> 14.07 (the $14.07 floor still binds at z8/3lb; a modelled cell had
+//     drifted above it) and z8 @ 5lb 16.59 -> 16.80 (a real $0.21 SHORTFALL).
+//   z5 @ 30lb 23.06 -> 23.09 -- a $0.03 shortfall found by the same harvest, outside z8.
+//   z8 @ 6lb 16.60 -> 16.80 is a raise-only monotone closure behind the 5lb pin, not a
+//   measurement. Monotonicity re-counted by execution after every change: 0 zone violations
+//   and 0 weight violations before AND after, across all 70 rows.
+// FLOOR SWEEP, all 8 zones: no cell anywhere in this table sits below $14.07, and no cell
+// sits ABOVE $14.07 at 1-3lb, the only weights where the floor is measured to bind (z8's
+// floor first breaks at 5lb / $16.80; z3's still binds at 7lb / $14.07). Checked by execution.
 const RATE_TABLE_FEDEX: RateRow[] = [
   { maxLb: 1  , z1:  14.07, z2:  14.07, z3:  14.07, z4:  14.07, z5:  14.07, z6:  14.07, z7:  14.07, z8:  14.07 }, // <=1lb: FedEx Ground bills a 1lb minimum, and eBay's $14.07 FedEx floor binds at every zone here -- one row covers the whole sub-1lb range (real quotes at 4oz/8oz/12oz/15.999oz/1lb were all $14.07 at z2/z4/z6, and $19.99 = 14.07 + the destination surcharge at 98282)
   { maxLb: 2  , z1:  14.07, z2:  14.07, z3:  14.07, z4:  14.07, z5:  14.07, z6:  14.07, z7:  14.07, z8:  14.07 },
-  { maxLb: 3  , z1:  14.07, z2:  14.07, z3:  14.07, z4:  14.07, z5:  14.07, z6:  14.07, z7:  14.07, z8:  14.62 },
+  { maxLb: 3  , z1:  14.07, z2:  14.07, z3:  14.07, z4:  14.07, z5:  14.07, z6:  14.07, z7:  14.07, z8:  14.07 }, // z8 CORRECTED 2026-08-16 (was 14.62). Real clean-z8 quote at 3lb is exactly $14.07 -- the hard floor still binds here, and a MODELLED cell was sitting $0.55 above it. The floor is measured at z8 at 8oz, 1lb AND 3lb; it first breaks at 5lb ($16.80). No other cell in this table sits above the floor at a weight where the floor is known to bind (checked all 8 zones x rows 1-3 by execution)
   { maxLb: 4  , z1:  14.07, z2:  14.07, z3:  14.07, z4:  14.07, z5:  14.25, z6:  14.32, z7:  14.97, z8:  15.67 },
-  { maxLb: 5  , z1:  14.07, z2:  14.07, z3:  14.07, z4:  14.07, z5:  14.89, z6:  15.14, z7:  15.66, z8:  16.59 },
-  { maxLb: 6  , z1:  14.07, z2:  14.07, z3:  14.07, z4:  14.15, z5:  14.95, z6:  15.16, z7:  15.67, z8:  16.60 },
+  { maxLb: 5  , z1:  14.07, z2:  14.07, z3:  14.07, z4:  14.07, z5:  14.89, z6:  15.14, z7:  15.66, z8:  16.80 }, // z8 CORRECTED 2026-08-16 (was 16.59, $0.21 SHORT of the real clean-z8 $16.80 -- a shortfall the organizer eats). Now pinned to the measured value
+  { maxLb: 6  , z1:  14.07, z2:  14.07, z3:  14.07, z4:  14.15, z5:  14.95, z6:  15.16, z7:  15.67, z8:  16.80 }, // z8 RAISE-ONLY monotone closure 2026-08-16: was 16.60, i.e. BELOW the newly-pinned measured $16.80 one row down. Raised to the measured floor, never lowered. 7lb z8 17.22 already clears it, so the ripple stops here
   { maxLb: 7  , z1:  14.07, z2:  14.07, z3:  14.07, z4:  14.52, z5:  15.42, z6:  15.43, z7:  16.09, z8:  17.22 }, // REAL-ANCHORED: z4, z6, z7 live-quoted at this weight
   { maxLb: 8  , z1:  14.07, z2:  14.07, z3:  14.07, z4:  14.91, z5:  15.71, z6:  15.85, z7:  16.44, z8:  17.66 },
   { maxLb: 9  , z1:  14.07, z2:  14.07, z3:  14.07, z4:  14.91, z5:  15.71, z6:  15.98, z7:  16.81, z8:  18.25 },
@@ -1000,7 +1135,7 @@ const RATE_TABLE_FEDEX: RateRow[] = [
   { maxLb: 27 , z1:  16.78, z2:  16.78, z3:  18.52, z4:  19.13, z5:  21.65, z6:  25.78, z7:  29.47, z8:  33.26 },
   { maxLb: 28 , z1:  17.05, z2:  17.05, z3:  18.80, z4:  19.81, z5:  22.63, z6:  26.79, z7:  30.57, z8:  34.62 },
   { maxLb: 29 , z1:  17.05, z2:  17.05, z3:  18.99, z4:  19.81, z5:  22.63, z6:  27.29, z7:  31.06, z8:  35.30 },
-  { maxLb: 30 , z1:  17.05, z2:  17.05, z3:  19.27, z4:  20.31, z5:  23.06, z6:  27.47, z7:  31.06, z8:  36.16 }, // REAL-ANCHORED: z2, z4, z6, z7 live-quoted at this weight
+  { maxLb: 30 , z1:  17.05, z2:  17.05, z3:  19.27, z4:  20.31, z5:  23.09, z6:  27.47, z7:  31.06, z8:  36.16 }, // REAL-ANCHORED: z2, z4, z6, z7 live-quoted at this weight. z5 CORRECTED 2026-08-16 (was 23.06, $0.03 SHORT of the real clean-z5 $23.09 found by the 133-quote harvest -- the only shortfall outside z8). Neighbours 29lb 22.63 / 31lb 23.26 both still bracket it, no ripple
   { maxLb: 31 , z1:  17.67, z2:  17.67, z3:  19.61, z4:  20.62, z5:  23.26, z6:  27.90, z7:  31.73, z8:  37.19 },
   { maxLb: 32 , z1:  17.67, z2:  17.67, z3:  19.61, z4:  20.62, z5:  23.26, z6:  27.90, z7:  31.73, z8:  37.47 },
   { maxLb: 33 , z1:  17.67, z2:  17.67, z3:  19.74, z4:  21.35, z5:  24.15, z6:  29.45, z7:  32.56, z8:  38.35 },
@@ -1745,15 +1880,33 @@ const CUBIC_INELIGIBLE_PACKAGE_TYPES = new Set(['ROLL']);
  * calculator; destinations 49503/30301/10001/33101/98282/98357, confirmed USPS zones
  * 2/4/5/6/7/8 by reconciling every 23/30/50lb quote against Notice 123 p.15 to the penny).
  *
+ * EXTENDED 2026-08-16 (second harvest, 46201 Indianapolis). ZONE 3 IS NO LONGER UNMEASURED.
+ * The destination's USPS zone was resolved DIRECTLY, not inferred: postcalc.usps.com's
+ * GetZone endpoint, driven live from origin 49079 this session, returns zone 3 for 46201 and
+ * for 44101, and zone 5 for 75201 -- so on these lanes the USPS zone and the FedEx zone label
+ * coincide, and the z3 column can be graded against 46201 without mixing carrier zone systems.
+ * The lane reconciles EXACTLY at 30lb (36.86 + the $21.00 >2cuft fee = $57.86 real) and at
+ * 50lb (53.63 + 21.00 = $74.63 real), and shows eBay's real light-weight discount below that
+ * -- i.e. it reproduces this table's central documented finding (published Commercial is an
+ * upper bound, EXACT at >=23lb) on a zone that had never been tested. The 20lb point is the
+ * FIRST large-box light-weight WEIGHT-basis observation ever taken: 16x13x13in = 2704 cu in is
+ * not cubic-eligible, so 13.07/18.03 = 0.7249 is a weight ratio, not a cubic one. It slots
+ * neatly between the measured z2 0.7069 and z4 0.7589 at the same weight, which is corroboration.
+ * STILL NOT APPLIED, and the reason has narrowed but not gone: zone 1 remains unmeasured, and
+ * one lane per zone is not enough to regrade a column -- scaling a whole column off a single
+ * ratio is the exact failure mode this table exists to prevent. What would close it: the same
+ * large-box light-weight sweep at z1 and at two more zones.
+ *
  * RECORDED, NOT APPLIED. The engine prices at published Commercial (ratio 1.000). This
  * constant exists so a future pass can close the gap once the missing cells are actually
  * measured, and so nobody re-derives it from scratch. `basis` says which price base the
  * observation is a ratio OF -- mixing them is exactly how the old table broke.
  *
- * Unmeasured and therefore NOT inferable from this: zones 1 and 3 (no destination in the
- * harvest resolves to either), and every weight below 14lb on a WEIGHT basis at zones
- * 4-7 (every light box in the harvest was cubic-eligible, so those quotes are cubic
- * observations, not weight observations).
+ * Unmeasured and therefore NOT inferable from this: zone 1 (no destination in either harvest
+ * resolves to it), and every weight below 14lb on a WEIGHT basis at zones 4-7 (every light box
+ * in the FIRST harvest was cubic-eligible, so those quotes are cubic observations, not weight
+ * observations -- the 2026-08-16 z3 20lb point above is the only large-box light-weight weight-
+ * basis observation that exists, and one point is not a column).
  */
 export const EBAY_USPS_OBSERVED_DISCOUNT_RATIOS: ReadonlyArray<{
   basis: 'cubic' | 'weight';
@@ -1761,17 +1914,17 @@ export const EBAY_USPS_OBSERVED_DISCOUNT_RATIOS: ReadonlyArray<{
   at: number;
   ratios: Partial<Record<ZoneKey, number>>;
 }> = [
-  { basis: 'cubic',  at: 0.10, ratios: { z2: 0.8735, z4: 0.8786, z5: 0.9305, z6: 0.9501, z7: 0.9465, z8: 1.0 } },
+  { basis: 'cubic',  at: 0.10, ratios: { z2: 0.8735, z3: 0.8544, z4: 0.8786, z5: 0.9305, z6: 0.9501, z7: 0.9465, z8: 1.0 } }, // z3 added 2026-08-16: 46201, 6x5x4in/1lb, real $6.69 / published cubic $7.83 (cubic 7.83 beats weight 8.00, so this is a cubic observation)
   { basis: 'cubic',  at: 0.30, ratios: { z2: 0.6864, z4: 0.6425, z5: 0.6378, z6: 0.6290, z7: 0.6061, z8: 1.0 } },
   { basis: 'cubic',  at: 0.50, ratios: { z2: 0.8282, z7: 0.8277 } }, // 12x9x8in = 864 cu in = exactly 0.500 cu ft
-  { basis: 'cubic',  at: 0.60, ratios: { z2: 0.8283, z4: 0.8285, z5: 0.8284, z6: 0.8279, z7: 0.8277, z8: 1.0 } },
+  { basis: 'cubic',  at: 0.60, ratios: { z2: 0.8283, z3: 0.8283, z4: 0.8285, z5: 0.8284, z6: 0.8279, z7: 0.8277, z8: 1.0 } }, // z3 added 2026-08-16: 46201, 12x10x8in/7lb, real $8.54 / published cubic $10.31 = 0.8283 -- lands on the SAME 0.828 every other zone shows at this rung
   { basis: 'weight', at: 1,    ratios: { z2: 0.8555 } }, // 12x10x8in/1lb -- big enough that weight beat cubic
   { basis: 'weight', at: 3,    ratios: { z2: 0.6697 } }, // 12x10x8in/3lb -- ditto
   { basis: 'weight', at: 14,   ratios: { z2: 0.6914, z4: 0.7420, z5: 0.8278, z6: 0.8277, z7: 0.8281, z8: 1.0 } },
-  { basis: 'weight', at: 20,   ratios: { z2: 0.7069, z4: 0.7589, z5: 0.8279, z6: 0.8278, z7: 0.8278, z8: 1.0 } },
+  { basis: 'weight', at: 20,   ratios: { z2: 0.7069, z3: 0.7249, z4: 0.7589, z5: 0.8279, z6: 0.8278, z7: 0.8278, z8: 1.0 } }, // z3 added 2026-08-16: 46201, 16x13x13in/20lb (2704 cu in -- NOT cubic-eligible, so a true weight-basis ratio), real $13.07 / published $18.03
   { basis: 'weight', at: 23,   ratios: { z2: 1.0, z5: 1.0, z7: 1.0, z8: 1.0 } },
-  { basis: 'weight', at: 30,   ratios: { z2: 1.0, z4: 1.0, z5: 1.0, z6: 1.0, z7: 1.0, z8: 1.0 } },
-  { basis: 'weight', at: 50,   ratios: { z2: 1.0, z4: 1.0, z5: 1.0, z6: 1.0, z7: 1.0, z8: 1.0 } },
+  { basis: 'weight', at: 30,   ratios: { z2: 1.0, z3: 1.0, z4: 1.0, z5: 1.0, z6: 1.0, z7: 1.0, z8: 1.0 } }, // z3 added 2026-08-16: 46201 18x16x14in/30lb real $57.86 = published $36.86 + the $21.00 >2cuft fee, to the penny
+  { basis: 'weight', at: 50,   ratios: { z2: 1.0, z3: 1.0, z4: 1.0, z5: 1.0, z6: 1.0, z7: 1.0, z8: 1.0 } }, // z3 added 2026-08-16: 46201 20x18x18in/50lb real $74.63 = published $53.63 + $21.00, to the penny
 ];
 
 /**
@@ -2549,24 +2702,27 @@ function computeSurchargeForCarrier(
   zone: ZoneKey,
   dims: PackageDims,
   weightOz: number,
-  packageType: string | null | undefined
+  packageType: string | null | undefined,
+  destinationZip?: string | null
 ): { amount: number; type: 'AHS' | 'LARGE_PACKAGE' | 'USPS_NONSTANDARD' | 'DESTINATION' | null; minBillableLb: number | null } {
   const weightLb = Math.max(0, weightOz || 0) / 16;
-  // FedEx-only additive destination surcharge (see FEDEX_DESTINATION_SURCHARGE_OBSERVED for
-  // the measurement and the never-be-short reasoning). It stacks ON TOP of AHS/Large Package
-  // rather than competing with them in the max() below -- real carriers bill an accessorial
-  // and a destination surcharge together, and the two were measured independently. Applied at
-  // every UPS/FedEx return path below; USPS returns before this and is unaffected.
+  // FedEx-only additive destination surcharge (see FEDEX_DESTINATION_SURCHARGE_TIERS for the
+  // three-tier measurement, the tier-C unmapped default and what that default costs). It
+  // stacks ON TOP of AHS/Large Package rather than competing with them in the max() below --
+  // real carriers bill an accessorial and a destination surcharge together, and the two were
+  // measured independently. Applied at every UPS/FedEx return path below; USPS returns before
+  // this and is unaffected. destinationZip is undefined on today's flat-rate path (the engine
+  // is destination-blind), which resolves to the conservative unmapped default -- never $0.
   const finish = <T extends { amount: number; type: 'AHS' | 'LARGE_PACKAGE' | 'USPS_NONSTANDARD' | 'DESTINATION' | null; minBillableLb: number | null }>(
     r: T
-  ) =>
-    carrier === 'FEDEX'
-      ? {
-          amount: round2(r.amount + FEDEX_DESTINATION_SURCHARGE_OBSERVED),
-          type: r.type ?? ('DESTINATION' as const),
-          minBillableLb: r.minBillableLb,
-        }
-      : r;
+  ) => {
+    if (carrier !== 'FEDEX') return r;
+    const dest = fedexDestinationSurchargeForZip(destinationZip);
+    const amount = round2(r.amount + dest);
+    // Only label it DESTINATION when a destination amount actually applied. A measured-clean
+    // ZIP adds $0, and reporting a $0 'DESTINATION' surcharge would be a misleading receipt.
+    return { amount, type: r.type ?? (dest > 0 ? ('DESTINATION' as const) : null), minBillableLb: r.minBillableLb };
+  };
   const sorted = sortedRealDims(dims);
   const lengthPlusGirth = sorted ? sorted[0] + 2 * (sorted[1] + sorted[2]) : 0;
   const volumeCuIn = sorted ? sorted[0] * sorted[1] * sorted[2] : 0;
@@ -2659,6 +2815,11 @@ export function estimateCheapestRate(input: {
    *  the Standard Envelope <$20 gate. Omitting it simply means Standard Envelope is never
    *  selected -- no other behavior changes. */
   priceUsd?: number | null;
+  /** Buyer/destination ZIP -- optional, and NOT supplied by any current caller (the live
+   *  path is a destination-blind flat rate). When present it selects the MEASURED FedEx
+   *  destination-surcharge tier for that ZIP instead of the conservative unmapped default;
+   *  see FEDEX_DESTINATION_SURCHARGE_TIERS. Omitting it changes nothing. */
+  destinationZip?: string | null;
 }): CheapestRate {
   const dims = input.dims ?? null;
   let best: CheapestRate | null = null;
@@ -2668,7 +2829,7 @@ export function estimateCheapestRate(input: {
     if (!withinAbsoluteMax(c.carrier, dims, input.weightOz)) continue; // this carrier can't ship it
     anyCarrierViable = true;
 
-    const surcharge = computeSurchargeForCarrier(c.carrier, input.zone, dims, input.weightOz, input.packageType);
+    const surcharge = computeSurchargeForCarrier(c.carrier, input.zone, dims, input.weightOz, input.packageType, input.destinationZip);
     // Large Package's 90lb minimum billable weight applies to the BASE rate lookup
     // itself (ADR-103 §2D), not just the surcharge -- floor the weight used for
     // billableLb's actual-weight input before computing dim-weight-vs-actual.
