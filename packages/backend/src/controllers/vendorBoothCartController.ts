@@ -1418,6 +1418,9 @@ async function finalizeCapturedLegs(
         // dispute-closed handler's chargeType/inference mismatch Sentry alert from firing on
         // every real booth-cart dispute) rather than a liability-routing fix.
         const legIsRealDirectCharge = leg.rail !== 'CASH' && !!leg.stripeAccountId;
+        // NO FEE SNAPSHOT, DELIBERATELY (2026-08-17): this row carries no platformFeeAmount at
+        // all — booth-cart economics are settled per booth leg (ADR-020/ADR-090), not through
+        // Purchase. There is no fee here to decompose, so the snapshot stays NULL.
         const purchase = await prisma.purchase.create({
           data: {
             userId: null, // walk-in POS: no server-derived shopper identity exists (P0 fix, 2026-07-28)

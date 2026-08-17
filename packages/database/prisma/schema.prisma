@@ -966,7 +966,17 @@ model Sale {
   isPinned                    Boolean                    @default(false)
   // Feature #362: Sale Attendance Count — track shoppers who attended
   attendanceCount             Int?
-  // Feature #363: Auction Buyer's Premium — percentage added to hammer price
+  // RETIRED 2026-08-17 — DEAD COLUMN, READ BY NOTHING.
+  // Feature #363 briefly made this an organizer-settable auction buyer's premium (0-50%).
+  // Reversed the same day (Patrick ruling): the buyer's premium flows into Stripe's
+  // application_fee_amount, i.e. it is FindA.Sale's own revenue. An organizer-settable rate let
+  // an organizer set the platform's revenue — 0% earned FindA.Sale nothing on that auction, 50%
+  // gouged shoppers in FindA.Sale's name. The premium is now locked at the platform rate
+  // (utils/feeCalculator.AUCTION_BUYER_PREMIUM_RATE) and the organizer-facing controls and the
+  // saleController zod schemas are gone. The column is deliberately LEFT IN PLACE rather than
+  // dropped: dropping a column is destructive and belongs with the other pending
+  // destructive-drift decisions. Every row is NULL in production (21,840/21,840 verified
+  // 2026-08-17). Do not read this field. Do not write it. Do not resurrect the control.
   buyersPremiumPct            Decimal?                   @db.Decimal(5, 2)
   // eBay inventory import: hidden DRAFT container sale for organizer's inventory items
   isInventoryContainer        Boolean                    @default(false)
@@ -1551,6 +1561,36 @@ model Purchase {
   refundedAmount         Float? // Actual amount refunded — may be less than `amount` for partial refunds
   refundedAt             DateTime? // When Stripe confirmed the refund
   refundInitiatedBy      String? // 'organizer' | 'admin' | 'dispute' — who/what triggered the refund
+
+  // ── FEE SNAPSHOT (2026-08-17) — what was ACTUALLY charged, pinned at charge time ────────
+  // `platformFeeAmount` above stores the COMBINED Stripe application_fee_amount (auction buyer
+  // premium + organizer commission). Nothing recorded how it split, so every organizer-facing
+  // earnings surface RECOMPUTED the split from live config: the premium from today's platform
+  // constant and the commission from `Organizer.subscriptionTier` AS IT STANDS NOW. A rate
+  // change, or an organizer upgrading SIMPLE -> PRO, silently restated the reported fee on
+  // every sale they had ever made. That is an accounting-integrity bug, and these columns close
+  // it. Written by every charge path that computes a fee; read (in preference to the recompute)
+  // by utils/feeCalculator.resolveOrganizerFeeReport.
+  //
+  // ALL NULLABLE, NO BACKFILL, DELIBERATELY. We do not know what rates historical rows were
+  // charged at, and inventing one would be worse than admitting we don't: NULL means "unknown,
+  // fall back to the recompute", which is byte-for-byte the behaviour every existing row has
+  // today. New rows get the truth; old rows keep the status quo.
+  //
+  // INVARIANT on a fully-populated row: platformFeeAmount == buyerPremiumAmount + commissionAmount.
+  /// Dollars of the application fee that were the auction buyer's premium. 0 on a non-auction.
+  buyerPremiumAmount     Float?
+  /// The premium rate applied, as a decimal (0.05 = 5%). 0 on a non-auction.
+  buyerPremiumRate       Float?
+  /// Dollars of the application fee that were the organizer's commission.
+  commissionAmount       Float?
+  /// The commission rate applied, as a decimal (0.10 / 0.08 / 0 under a referral discount, or a
+  /// FeeStructure override). NULL where a path charges a cart-level fee with no per-row rate.
+  commissionRate         Float?
+  /// Whether `Sale.coversFee` was ON at charge time — i.e. the organizer absorbed the premium
+  /// out of their payout and the buyer was charged the hammer price only. Decides both whether
+  /// `amount` includes the premium and whether the premium belongs on the organizer's fee line.
+  organizerAbsorbedPremium Boolean?
 
   // Direct-charges migration (2026-08-08): persisted, authoritative charge shape — set once at
   // charge-creation time, never inferred after the fact. 'DESTINATION' | 'DIRECT'. All existing

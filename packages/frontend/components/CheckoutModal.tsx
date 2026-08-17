@@ -8,7 +8,7 @@ import {
   useElements,
 } from '@stripe/react-stripe-js';
 import api from '../lib/api';
-import { formatBuyerPremiumPct } from '../lib/platformFees'; // #363
+import { formatBuyerPremiumPct, AUCTION_BUYER_PREMIUM_LABEL } from '../lib/platformFees';
 import AccessibleModal from './AccessibleModal';
 import { useAuth } from './AuthContext';
 
@@ -233,10 +233,18 @@ const PaymentForm = ({ itemTitle, itemPrice, originalAmount, platformFee, discou
         )}
         {buyerPremium > 0 && (
           <div className="flex justify-between text-warm-600">
-            {/* #363: `.toFixed(0)` rounded a 12.5% sale to "13%" while the amount beside it
-                was the real 12.5% figure — the row did not add up against its own label.
-                formatBuyerPremiumPct drops trailing zeros without inventing precision. */}
-            <span>Buyer Premium ({formatBuyerPremiumPct(buyerPremiumRate * 100)})</span>
+            {/* The premium is the platform rate (5%). The label still renders the rate the
+                SERVER reported charging, when it reported one, rather than assuming — the
+                number beside it is that same charge, and a label that could disagree with the
+                money next to it is the whole class of bug this row has had twice. Falls back to
+                the platform constant if the server sent an amount but no rate. */}
+            <span>
+              Buyer Premium (
+              {buyerPremiumRate > 0
+                ? formatBuyerPremiumPct(buyerPremiumRate * 100)
+                : AUCTION_BUYER_PREMIUM_LABEL}
+              )
+            </span>
             <span>${buyerPremium.toFixed(2)}</span>
           </div>
         )}
@@ -278,7 +286,11 @@ const PaymentForm = ({ itemTitle, itemPrice, originalAmount, platformFee, discou
             aria-required="true"
           />
           <span className="text-xs text-warm-600 leading-relaxed">
-            I understand a buyer premium of {formatBuyerPremiumPct(buyerPremiumRate * 100)} (${buyerPremium.toFixed(2)}) will be added to my total.
+            I understand a buyer premium of{' '}
+            {buyerPremiumRate > 0
+              ? formatBuyerPremiumPct(buyerPremiumRate * 100)
+              : AUCTION_BUYER_PREMIUM_LABEL}{' '}
+            (${buyerPremium.toFixed(2)}) will be added to my total.
           </span>
         </label>
       )}

@@ -355,7 +355,7 @@ const OrganizerEarningsPage = () => {
                   <strong>Platform Fee:</strong> {organizerProfile?.subscriptionTier === 'PRO' || organizerProfile?.subscriptionTier === 'TEAMS' ? '8%' : '10%'} of each completed sale, whatever the sale type. Fees are deducted from your gross revenue to calculate net earnings.
                 </p>
                 <p className="text-sm text-amber-800 dark:text-amber-200 mt-2">
-                  <strong>Auctions:</strong> your platform fee works exactly the same on an auction as on any other sale. The winning bidder separately pays a buyer&apos;s premium on top of their bid — 5% by default, or whatever rate you set on the sale — which does not come out of your share unless you turned on &quot;Cover the buyer&apos;s premium&quot; for that sale.
+                  <strong>Auctions:</strong> your platform fee works exactly the same on an auction as on any other sale. The winning bidder separately pays a flat 5% buyer&apos;s premium on top of their bid, set by FindA.Sale, which does not come out of your share unless you turned on &quot;Cover the buyer&apos;s premium&quot; for that sale.
                 </p>
               </div>
             </>

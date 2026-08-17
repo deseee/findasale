@@ -685,7 +685,7 @@ const PricingPage = () => {
                 <p className="text-warm-700 dark:text-warm-300">
                   When you sell an item for $100, we receive $10 (10%) as a platform fee. PRO and TEAMS drop that to $8 (8%). If the shopper pays with credit card, Stripe fees average $3.20 (2.9% + $0.30).
                   <br /><br />
-                  Auctions add a second fee that the winning bidder pays, not you: a buyer&apos;s premium on top of the winning bid. It is 5% by default and you can set your own rate from 0% to 50% on each sale. Your platform fee is unchanged either way. At the standard 5%, a $200 winning bid charges the buyer $210, your fee is $20, and you receive $180 before Stripe processing. Set it to 15% and the buyer is charged $230 — your fee and your $180 payout do not move.
+                  Auctions add a second fee that the winning bidder pays, not you: a flat 5% buyer&apos;s premium on top of the winning bid, set by FindA.Sale. It is not something you configure, and your platform fee is unchanged either way. A $200 winning bid charges the buyer $210, your fee is $20, and you receive $180 before Stripe processing. If you would rather your winner paid exactly their bid, turn on &ldquo;Cover the buyer&apos;s premium&rdquo; on the sale: the buyer is charged $200 and the 5% comes out of your payout, so you receive $170.
                 </p>
               </div>
 

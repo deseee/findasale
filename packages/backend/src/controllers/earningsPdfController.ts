@@ -64,25 +64,31 @@ export const getEarningsPdf = async (req: AuthRequest, res: Response) => {
     type ReportablePurchaseRow = {
       amount: number;
       item: { listingType: string | null; auctionStartPrice: number | null } | null;
+      // Fee snapshot (2026-08-17) — present on rows charged after the snapshot shipped, and
+      // preferred by resolveOrganizerFeeReport over recomputing from today's tier rate.
+      buyerPremiumAmount?: number | null;
+      commissionAmount?: number | null;
+      organizerAbsorbedPremium?: boolean | null;
     };
 
     const revenueAndFees = (
       purchases: ReportablePurchaseRow[],
-      coversFee: boolean,
-      // #363: the sale's configured buyer premium. resolveOrganizerFeeReport strips the premium
-      // back out of Purchase.amount at THIS rate; defaulting to 5% misstates both the revenue
-      // and the fee on any sale configured at another percentage.
-      buyersPremiumPct: unknown
+      coversFee: boolean
     ): { revenue: number; fees: number } => {
       let nonAuctionRevenue = 0;
       let auctionRevenue = 0;
       let auctionFees = 0;
+      // ROUTING (2026-08-17): a purchase goes through resolveOrganizerFeeReport when it is an
+      // auction lot (the premium has to come back out of `amount`) OR when it carries a fee
+      // SNAPSHOT (what the platform actually took, which beats any recomputation). Everything
+      // else — every pre-snapshot regular sale — stays on the batched multiply below, which is
+      // multiplied and rounded ONCE for the whole set. That is deliberate: rounding per purchase
+      // instead would shift historical totals by cents, so existing rows keep byte-identical
+      // numbers and only newly-snapshotted rows change how they are computed.
       for (const p of purchases) {
-        if (isAuctionListing(p.item)) {
-          const report = resolveOrganizerFeeReport(
-            { ...p, sale: { coversFee, buyersPremiumPct: buyersPremiumPct as any } },
-            tierRate
-          );
+        const hasFeeSnapshot = p.commissionAmount !== null && p.commissionAmount !== undefined;
+        if (isAuctionListing(p.item) || hasFeeSnapshot) {
+          const report = resolveOrganizerFeeReport({ ...p, sale: { coversFee } }, tierRate);
           auctionRevenue += report.grossSalePrice;
           auctionFees += report.platformFee;
         } else {
@@ -97,11 +103,7 @@ export const getEarningsPdf = async (req: AuthRequest, res: Response) => {
 
     const perSale = sales.map((s) => ({
       sale: s,
-      ...revenueAndFees(
-        s.purchases as any,
-        (s as any).coversFee === true,
-        (s as any).buyersPremiumPct ?? null
-      ),
+      ...revenueAndFees(s.purchases as any, (s as any).coversFee === true),
     }));
 
     const totalRevenue = parseFloat(perSale.reduce((sum, r) => sum + r.revenue, 0).toFixed(2));

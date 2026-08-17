@@ -68,8 +68,7 @@ const sections: Section[] = [
           <li>
             <strong>Sale Type</strong>. Choose Regular (fixed price) or Auction (competitive bidding).
             All items carry a 10% flat platform fee regardless of sale type. On auctions, the winning
-            bidder also pays a separate buyer&apos;s premium on top of their bid — 5% by default, and you
-            can set your own rate (including zero) on the sale.
+            bidder also pays a separate 5% buyer&apos;s premium on top of their bid, set by FindA.Sale.
           </li>
         </ul>
         <p className="text-warm-700 dark:text-warm-300 leading-relaxed">
@@ -101,7 +100,7 @@ const sections: Section[] = [
 
         <h3 className="text-xl font-semibold text-warm-800 dark:text-warm-200 mt-6">Setting Price</h3>
         <p className="text-warm-700 dark:text-warm-300 leading-relaxed">
-          Pricing varies by event type. Estate sale items typically go for 20–50% of retail. Auction items may exceed retail with competitive bidding; garage sale and flea market items often go lower. Research comparable items online if you're unsure. You can adjust prices any time before or during the sale. For auction items, set a starting bid price; the 10% platform fee applies to the final bid, and the winning bidder pays a separate buyer&apos;s premium on top of that bid — 5% by default, or whatever rate you set on the sale.
+          Pricing varies by event type. Estate sale items typically go for 20–50% of retail. Auction items may exceed retail with competitive bidding; garage sale and flea market items often go lower. Research comparable items online if you're unsure. You can adjust prices any time before or during the sale. For auction items, set a starting bid price; the 10% platform fee applies to the final bid, and the winning bidder pays a separate 5% buyer&apos;s premium on top of that bid.
         </p>
 
         <h3 className="text-xl font-semibold text-warm-800 dark:text-warm-200 mt-6">Tags and Categories</h3>
@@ -209,13 +208,13 @@ const sections: Section[] = [
         <p className="text-warm-700 dark:text-warm-300 leading-relaxed">
           Auctions carry one more fee, and the <strong>winning bidder</strong> pays it: a{' '}
           <strong>buyer&apos;s premium</strong> added to their bid at checkout. It is{' '}
-          <strong>5% by default</strong>, and you can set your own rate from 0% to 50% when you create or
-          edit the sale. Bidders see the rate on the sale page and on the bid form before they bid, and
-          confirm it before paying. Worked example on a $200 winning bid at the 10% platform rate and the
-          standard 5% premium: the buyer is charged <strong>$210.00</strong>, your platform fee is{' '}
-          <strong>$20.00</strong>, and you receive <strong>$180.00</strong> before Stripe processing. Set
-          the premium to 15% instead and the buyer is charged <strong>$230.00</strong>; your platform fee
-          and your $180.00 payout do not change.
+          a flat <strong>5%</strong>, set by FindA.Sale on every auction. Bidders see it on the sale page
+          and on the bid form before they bid, and confirm it before paying. Worked example on a $200
+          winning bid at the 10% platform rate: the buyer is charged <strong>$210.00</strong>, your
+          platform fee is <strong>$20.00</strong>, and you receive <strong>$180.00</strong> before Stripe
+          processing. If you would rather your winner paid exactly their bid, turn on &ldquo;Cover the
+          buyer&apos;s premium&rdquo; on the sale — the 5% then comes out of your payout, so you receive{' '}
+          <strong>$170.00</strong> and the buyer is charged <strong>$200.00</strong>.
         </p>
         <p className="text-warm-700 dark:text-warm-300 leading-relaxed">
           After the auction ends, we notify winners and process payments. Payouts arrive within 2–3

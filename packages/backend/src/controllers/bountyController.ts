@@ -919,6 +919,15 @@ export const completeBountyPurchase = async (req: AuthRequest, res: Response) =>
         saleId: submission.item.sale!.id,
         amount: itemPrice,
         platformFeeAmount: platformFeeAmount / 100,
+        // FEE SNAPSHOT (2026-08-17): commission-only — a bounty fulfilment is a fixed-price
+        // purchase, never an auction lot, so the premium fields record a hard 0. The rate is
+        // the one this charge actually used (local getPlatformFeeRate helper above), pinned so
+        // a later tier change cannot restate this purchase's fee in earnings reporting.
+        buyerPremiumAmount: 0,
+        buyerPremiumRate: 0,
+        commissionAmount: platformFeeAmount / 100,
+        commissionRate: getPlatformFeeRate(subscriptionTier || 'SIMPLE'),
+        organizerAbsorbedPremium: false,
         stripePaymentIntentId: paymentIntent.id,
         status: 'PENDING',
         // Direct-charges migration (2026-08-08): persisted, authoritative charge shape, set

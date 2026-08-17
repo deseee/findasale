@@ -147,9 +147,14 @@ router.get('/me/analytics', authenticate, async (req: AuthRequest, res: Response
         purchases: {
           where: { status: 'PAID' },
           // item.listingType/auctionStartPrice let the reporting helper below recognise an
-          // auction and strip the buyer's 5% premium back out of `amount`.
+          // auction and strip the buyer's 5% premium back out of `amount`. The fee-snapshot
+          // columns are what the platform ACTUALLY took at charge time — preferred over any
+          // recomputation from this organizer's current tier.
           select: {
             amount: true,
+            buyerPremiumAmount: true,
+            commissionAmount: true,
+            organizerAbsorbedPremium: true,
             item: { select: { listingType: true, auctionStartPrice: true } },
           },
         },
@@ -174,17 +179,28 @@ router.get('/me/analytics', authenticate, async (req: AuthRequest, res: Response
       // COMBINED premium + commission.) The non-auction subtotal is still multiplied and
       // rounded ONCE, so a sale with no auction purchases produces a byte-identical number.
       const coversFee = (sale as any).coversFee === true;
-      // #363: the sale's CONFIGURED buyer premium, passed through to resolveOrganizerFeeReport
-      // so the premium is stripped back out at the rate that was actually charged. This is a
-      // full `prisma.sale.findMany` row, so the scalar is present without a select change.
-      const buyersPremiumPct = (sale as any).buyersPremiumPct ?? null;
       let nonAuctionRevenue = 0;
       let auctionRevenue = 0;
       let auctionFees = 0;
+      // ROUTING (2026-08-17): a purchase goes through resolveOrganizerFeeReport when it is an
+      // auction lot (the premium has to come back out of `amount`) OR when it carries a fee
+      // SNAPSHOT (what the platform actually took, which beats any recomputation). Everything
+      // else — every pre-snapshot regular sale — stays on the batched multiply below, which is
+      // multiplied and rounded ONCE for the whole set. That is deliberate: rounding per purchase
+      // instead would shift historical totals by cents, so existing rows keep byte-identical
+      // numbers and only newly-snapshotted rows change how they are computed.
       for (const p of sale.purchases as any[]) {
-        if (isAuctionListing(p.item)) {
+        const hasFeeSnapshot = p.commissionAmount !== null && p.commissionAmount !== undefined;
+        if (isAuctionListing(p.item) || hasFeeSnapshot) {
           const report = resolveOrganizerFeeReport(
-            { amount: Number(p.amount) || 0, item: p.item, sale: { coversFee, buyersPremiumPct } },
+            {
+              amount: Number(p.amount) || 0,
+              item: p.item,
+              sale: { coversFee },
+              buyerPremiumAmount: p.buyerPremiumAmount,
+              commissionAmount: p.commissionAmount,
+              organizerAbsorbedPremium: p.organizerAbsorbedPremium,
+            },
             tierRate
           );
           auctionRevenue += report.grossSalePrice;
@@ -1058,7 +1074,6 @@ router.get('/:id', publicDirectoryRateLimiter, async (req: Request, res: Respons
             saleType: true,
             isPinned: true,
             attendanceCount: true,
-            buyersPremiumPct: true,
             scrapedMetadata: true,
             sourceName: true, // FIX (public storefront scraper-sale disclosure): needed so the
             // frontend can render the same "Sourced from public records" badge SaleCard.tsx
@@ -1129,7 +1144,6 @@ router.get('/:id', publicDirectoryRateLimiter, async (req: Request, res: Respons
               saleType: true,
               isPinned: true,
               attendanceCount: true,
-              buyersPremiumPct: true,
               scrapedMetadata: true,
               sourceName: true, // FIX (public storefront scraper-sale disclosure): needed so the
               // frontend can render the same "Sourced from public records" badge SaleCard.tsx
@@ -1240,7 +1254,7 @@ router.get('/:id', publicDirectoryRateLimiter, async (req: Request, res: Respons
       timezone: organizer.timezone,
       byAppointment: organizer.byAppointment,
       hours: (organizer as any).hours || [],
-      // Sales (includes isPinned for #359, attendanceCount for #362, buyersPremiumPct for #363)
+      // Sales (includes isPinned for #359, attendanceCount for #362)
       sales: organizer.sales,
       // Feature #356: Latest Broadcast
       latestBroadcast: (organizer as any).broadcasts?.[0] || null,

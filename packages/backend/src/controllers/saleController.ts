@@ -90,7 +90,11 @@ const saleQuerySchema = z.object({
   saleSubtype: z.string().optional()
 });
 
-const saleCreateSchema = z.object({
+// Exported (2026-08-17) so __tests__/stripe.e2e.test.ts can assert the buyersPremiumPct
+// rejection at the schema itself. A zod object strips unknown keys, so "the API refuses this
+// field" is only true because of an explicit rule in here — that deserves a direct test rather
+// than an inference from an HTTP round-trip.
+export const saleCreateSchema = z.object({
   title: z.string().min(1),
   description: z.string().optional(),
   startDate: iso8601StartDateSchema.optional(),
@@ -126,31 +130,25 @@ const saleCreateSchema = z.object({
   holdsEnabled: z.boolean().optional(),  // Feature #121: allow organizer to disable holds per-sale
   // Feature: Retail Mode — auto-renewal for retail stores (saleType='RETAIL')
   retailAutoRenewDays: z.number().int().min(1).max(365).optional().default(30),
-  // Feature #363: Auction Buyer's Premium — the percentage added to the winning bid and
-  // charged to the buyer at checkout (utils/feeCalculator.resolveBuyerPremiumRate).
+  // RETIRED — the auction buyer's premium is NOT organizer-settable (Patrick ruling,
+  // 2026-08-17, reversing the #363 pass earlier the same day). The premium goes into Stripe's
+  // application_fee_amount, i.e. it is FindA.Sale's revenue, so an organizer-settable 0-50%
+  // control let an organizer set the platform's own income. It is locked at the platform rate
+  // (utils/feeCalculator.AUCTION_BUYER_PREMIUM_RATE) and there is no UI for it.
   //
-  // VALIDATION DECISION (#363, 2026-08-17): REJECT out-of-range here rather than clamp. This
-  // value is the organizer's stated intent and it multiplies a real charge against a real
-  // shopper's card; silently rewriting 500 to 50 would publish a sale advertising a premium the
-  // organizer never chose. A 400 with a validation error is the honest outcome. The money path
-  // separately CLAMPS to the same [0, 50] bounds as defense in depth against anything that
-  // reaches the column without passing through here — see resolveBuyerPremiumRate's header.
-  //
-  // Rounded to 2dp because the column is Decimal(5,2): Postgres would round on write anyway, so
-  // rounding here makes the stored value and the validated value the same number rather than
-  // leaving the difference to the driver.
-  //
-  // `.nullable()` (added 2026-08-17): null is the "no configured premium, use the 5% default"
-  // state, and until now there was no way for a client to get BACK to it — the field could only
-  // ever be set, never cleared. Note that null and 0 are different: null means the default
-  // applies, 0 means this sale charges no premium at all.
+  // KEPT IN THE SCHEMA AS AN EXPLICIT REJECTION rather than simply deleted. A zod object
+  // silently STRIPS unknown keys, so deleting the line would make the API accept
+  // `{ buyersPremiumPct: 50 }` with a 200 and quietly ignore it — an integration (or an old
+  // cached client bundle) would believe it had set a premium that does nothing. A 400 says so.
+  // This is also the mass-assignment guard: there is no request shape that can reach the
+  // column. `.optional()` keeps every request that omits the key working unchanged.
   buyersPremiumPct: z
-    .number()
-    .min(0)
-    .max(50)
-    .transform((v) => Math.round(v * 100) / 100)
-    .nullable()
-    .optional(),
+    .any()
+    .optional()
+    .refine((v) => v === undefined, {
+      message:
+        "The auction buyer's premium is set by FindA.Sale and cannot be configured per sale.",
+    }),
   // S696 Wave 2: Safety Notes — parking/entry info shown on sale detail
   safetyNotes: z.string().max(1000).optional().nullable(),
   // S696 Wave 2: Cover the Fee — organizer absorbs platform fee (AUCTION sales only)
@@ -162,7 +160,7 @@ const saleCreateSchema = z.object({
   moveOutDate: z.string().datetime({ offset: true }).optional().nullable(),
 });
 
-const saleUpdateSchema = saleCreateSchema.partial();
+export const saleUpdateSchema = saleCreateSchema.partial();
 
 // ADR 2026-08-10 (Vercel Hobby-cap cost pass, see revalidationService.ts /
 // updateSale below): fields on Sale that are actually rendered on the public
@@ -175,7 +173,7 @@ const saleUpdateSchema = saleCreateSchema.partial();
 const PUBLICLY_RENDERED_SALE_FIELDS = [
   'title', 'description', 'startDate', 'endDate', 'address', 'city', 'state', 'zip',
   'lat', 'lng', 'photoUrls', 'tags', 'isAuctionSale', 'saleType', 'saleSubtype',
-  'isCharitySale', 'neighborhood', 'buyersPremiumPct', 'safetyNotes', 'coversFee',
+  'isCharitySale', 'neighborhood', 'safetyNotes', 'coversFee',
   'isOnlineOnly', 'dormBuilding', 'moveOutDate', 'treasureHuntEnabled',
   'treasureHuntCompletionBadge', 'holdsEnabled',
 ] as const;
@@ -849,9 +847,9 @@ export const updateSale = async (req: AuthRequest, res: Response) => {
     // several fields on saleCreateSchema carry a zod .default() (isAuctionSale,
     // isCharitySale, retailAutoRenewDays) that injects a value into the parsed
     // body even when the client never submitted that field — key-presence alone
-    // would have made this gate a no-op for those. buyersPremiumPct is a Prisma
-    // Decimal on read; normalized to a number before comparing so a resubmit of
-    // the same value doesn't false-trigger.
+    // would have made this gate a no-op for those. The Decimal normalization below
+    // is retained for any future Decimal field in the list (buyersPremiumPct, the
+    // field it was written for, is retired and no longer in the list).
     if (sale.status === 'PUBLISHED') {
       const normalizeForCompare = (value: unknown): unknown => {
         if (value && typeof value === 'object' && 'toNumber' in (value as any)) {

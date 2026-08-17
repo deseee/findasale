@@ -26,13 +26,15 @@ import { evaluateReferralFraud, getAccountAgeDays, MIN_ACCOUNT_AGE_DAYS } from '
 import { getClientIp } from '../utils/getClientIp'; // Platform Safety #94, #98: Client IP tracking
 import { checkPaymentDuplicate, storePaymentFingerprint, logPaymentDuplicateWarning } from '../services/paymentDeduplicationService'; // Platform Safety #102
 import {
+  AUCTION_BUYER_PREMIUM_RATE,
   calculateApplicationFee,
   formatBuyerPremiumRate,
   getPlatformFeeRate,
   isAuctionListing,
-  resolveBuyerPremiumRate,
+  snapshotForCommissionOnly,
+  snapshotFromBreakdown,
   SubscriptionTier,
-} from '../utils/feeCalculator'; // S388: Tier-aware fee calculation; #363: per-sale buyer premium
+} from '../utils/feeCalculator'; // S388: tier-aware commission; platform-locked auction buyer premium
 import { endEbayListingIfExists } from './ebayController'; // Feature #244 Phase 2: eBay direct push — withdraw on sale
 import { notifyFacebookExportedItemSold } from '../services/facebookNudgeService';
 import { markShopifyItemSold } from '../services/shopifyService'; // Feature: Shopify Cross-Listing
@@ -194,9 +196,9 @@ const sendReceiptEmail = async (purchase: {
       // fee reporting (payoutController / earningsPdfController / organizers analytics / CSV
       // export) is unaffected and still shows the fee in full.
       const disc = purchase.discountAmount ?? 0;
-      // #363: the premium row must state the rate that was actually charged, not a literal 5%.
-      // `buyerPremiumRate` is already a parameter of this helper; it falls back to deriving the
-      // rate from the amounts when a caller passes the money but not the rate. (Today the
+      // The premium row states the rate that was actually charged — read from the Purchase fee
+      // snapshot by the caller, not hardcoded. It falls back to deriving the rate from the
+      // amounts when a caller passes the money but not the rate. (Today the
       // payment_intent.succeeded caller passes neither itemPrice nor a premium, so this whole
       // breakdown block is skipped — the hardcoded "5%" was latent rather than live. Fixed
       // anyway so it cannot surface wrong the moment itemization is wired up.)
@@ -421,6 +423,28 @@ export const recoverPaymentIntent = async (req: AuthRequest, res: Response) => {
         });
       }
 
+      // FEE SNAPSHOT (2026-08-17): read back from the PaymentIntent metadata that
+      // createPaymentIntent stamped at charge-creation time. This recovery path has no access
+      // to that request's fee locals, and re-deriving the split here would reintroduce exactly
+      // the drift the snapshot exists to prevent. Absent metadata (a PaymentIntent created
+      // before this change) leaves the snapshot NULL, which the reporting fallback handles.
+      const md = paymentIntent.metadata || {};
+      const parseMeta = (v: string | undefined): number | null => {
+        if (v === undefined || v === null || v === '') return null;
+        const n = parseFloat(v);
+        return Number.isFinite(n) ? n : null;
+      };
+      const recoveredCommissionAmount = parseMeta(md.feeCommissionAmount);
+      const recoveredSnapshot = recoveredCommissionAmount !== null
+        ? {
+            buyerPremiumAmount: parseMeta(md.feeBuyerPremiumAmount) ?? 0,
+            buyerPremiumRate: parseMeta(md.feeBuyerPremiumRate) ?? 0,
+            commissionAmount: recoveredCommissionAmount,
+            commissionRate: parseMeta(md.feeCommissionRate),
+            organizerAbsorbedPremium: md.feeOrganizerAbsorbedPremium === 'true',
+          }
+        : {};
+
       const purchase = await prisma.purchase.create({
         data: {
           userId,
@@ -428,6 +452,7 @@ export const recoverPaymentIntent = async (req: AuthRequest, res: Response) => {
           saleId,
           amount: paymentIntent.amount_received / 100,
           platformFeeAmount: (paymentIntent.application_fee_amount || 0) / 100,
+          ...recoveredSnapshot,
           stripePaymentIntentId: paymentIntent.id,
           status: 'PAID',
         },
@@ -548,11 +573,6 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
             // #402: organizer absorbs the auction BUYER'S PREMIUM (not the platform fee — see
             // utils/feeCalculator.ts: the organizer's own commission is unchanged by this flag).
             coversFee: true,
-            // #363: the organizer's configured buyer premium percentage. Selected because the
-            // charge below must honour it — before 2026-08-17 this endpoint hardcoded 5% while
-            // the sale page and storefront badge displayed whatever the organizer had set, so a
-            // sale advertising 15% ran the buyer's card for 5%.
-            buyersPremiumPct: true,
             organizer: {
               select: { stripeConnectId: true, userId: true, referralDiscountExpiry: true, subscriptionTier: true }
             }
@@ -660,13 +680,11 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
     }
 
     // Buyer premium applies ONLY to auction items. Platform Safety #96.
-    // #363 fix (2026-08-17): this was `AUCTION_BUYER_PREMIUM_RATE` — a hardcoded 5% — while
-    // organizers could set `Sale.buyersPremiumPct` on create-sale.tsx and shoppers were shown
-    // that configured number on the sale page and the storefront badge. A sale advertising 15%
-    // charged 5%. resolveBuyerPremiumRate is now the ONE place the rule lives: a configured
-    // value wins, 0 means zero premium (not "unset"), null/undefined means the 5% default, and
-    // the value is clamped to [0, 50] on the money path regardless of what is in the column.
-    const BUYER_PREMIUM_RATE = resolveBuyerPremiumRate(item.sale);
+    // PREMIUM LOCKED TO THE PLATFORM RATE (2026-08-17, Patrick ruling — reverses the #363 pass
+    // earlier the same day). The premium is part of application_fee_amount, i.e. FindA.Sale's
+    // revenue, so an organizer-settable `Sale.buyersPremiumPct` let an organizer set the
+    // platform's own income. `calculateApplicationFee` reads AUCTION_BUYER_PREMIUM_RATE itself
+    // and takes no rate parameter, so this call site cannot supply a different number.
 
     let shippingCost = 0;
     if (shippingRequested && !isAuctionItem && item.shippingAvailable && item.shippingPrice != null) {
@@ -693,12 +711,7 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
     // REVERSAL NOTICE: an earlier pass the same day set this to `buyerPremiumAmount` alone on
     // the auction branch, so the platform collected the $10 premium and NO commission. That
     // was wrong and is reversed here. Do not reintroduce it.
-    const feeBreakdown = calculateApplicationFee(
-      priceCents,
-      feePercent,
-      isAuctionItem,
-      BUYER_PREMIUM_RATE
-    );
+    const feeBreakdown = calculateApplicationFee(priceCents, feePercent, isAuctionItem);
     const buyerPremiumAmount = feeBreakdown.buyerPremiumCents;
     const totalWithBuyerPremium = priceCents + buyerPremiumAmount;
     const platformFeeAmount = feeBreakdown.applicationFeeCents;
@@ -747,8 +760,8 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
     //   · The total the buyer is actually SHOWN before paying: frontend CheckoutModal.tsx:58 —
     //     itemPrice + buyerPremium (one premium).
     //   · The consent string persisted to CheckoutEvidence for chargeback defense (~line 828) —
-    //     "buyer premium of N% will be added to my total purchase price." (N is the sale's
-    //     configured rate since #363; it was a hardcoded 5% before.)
+    //     "buyer premium of 5% will be added to my total purchase price." (The platform rate —
+    //     the organizer-settable rate briefly introduced by #363 was reversed the same day.)
     // The BUYER-CHARGE arithmetic below is correct as written. What changed 2026-08-17 (second
     // pass) is application_fee_amount ONLY — see the feeBreakdown block above: the platform
     // collects the premium AND the organizer's tier commission, not the premium alone.
@@ -801,6 +814,16 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
         ...(shippingCost > 0 ? { shippingCost: String(shippingCost) } : {}),
         ...(couponId ? { couponId } : {}),
         ...(organizerDiscountActive ? { isOrganizerDiscountActive: 'true' } : {}),
+        // FEE SNAPSHOT (2026-08-17): the premium/commission split of application_fee_amount,
+        // stamped here so `confirmPayment`'s recovery path below (which only ever sees the
+        // PaymentIntent, never this request's locals) can write the SAME snapshot onto the
+        // Purchase row it creates instead of re-deriving it from whatever the rates happen to
+        // be at recovery time. Stripe metadata values must be strings.
+        feeBuyerPremiumAmount: String(feeBreakdown.buyerPremiumCents / 100),
+        feeBuyerPremiumRate: String(feeBreakdown.buyerPremiumRate),
+        feeCommissionAmount: String(feeBreakdown.organizerCommissionCents / 100),
+        feeCommissionRate: String(feePercent),
+        feeOrganizerAbsorbedPremium: saleCoversFee ? 'true' : 'false',
       },
     };
 
@@ -877,6 +900,10 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
           saleId: item.sale!.id,
           amount: finalPriceCents / 100,
           platformFeeAmount: platformFeeAmount / 100,
+          // FEE SNAPSHOT (2026-08-17): what was ACTUALLY charged, pinned now. Organizer
+          // earnings reporting reads this in preference to recomputing the split from today's
+          // platform rate and today's subscriptionTier — see utils/feeCalculator.
+          ...snapshotFromBreakdown(feeBreakdown, feePercent, saleCoversFee),
           stripePaymentIntentId: paymentIntent.id,
           status: 'PENDING',
           // Direct-charges migration (2026-08-08): persisted, authoritative charge shape,
@@ -908,15 +935,15 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
       // Under Sale.coversFee the ORGANIZER absorbs the premium and the buyer is charged the
       // bid only — persisting a premium acknowledgment they were never shown, and never paid,
       // would be false chargeback evidence.
-      // CHARGEBACK-DEFENCE ACCURACY (#363): this string is the buyer's consent record. It used
-      // to be built from a hardcoded 5% (`.toFixed(0)` also silently rounded a 12.5% sale to
-      // "13%"), so on a sale configured at any other rate the stored evidence stated a number
-      // the buyer was never charged — worthless in a dispute, and arguably worse than no
-      // record at all. It now states the rate that was actually charged, formatted without
-      // fake precision ("15%", "12.5%").
-      // `buyerPremiumCents > 0` in the condition, not just `isAuctionItem`: a sale configured at
-      // 0% is an auction with no premium, and recording "I acknowledge the buyer premium of 0%
-      // will be added to my total" would be gibberish attached to a real payment record.
+      // CHARGEBACK-DEFENCE ACCURACY: this string is the buyer's consent record, so it states
+      // the rate the charge ACTUALLY used (`feeBreakdown.buyerPremiumRate`, now always the
+      // platform 5% on an auction) rather than a literal that could drift away from the money.
+      // `buyerPremiumCents > 0` in the condition, not just `isAuctionItem`: with the premium
+      // locked at the platform rate the only way an auction charge carries no premium is
+      // `Sale.coversFee` (already excluded above) or a sub-cent hammer price, and recording "I
+      // acknowledge the buyer premium of 0% will be added to my total" would be gibberish
+      // attached to a real payment record. Kept as an amount check, not a rate check, so it
+      // stays correct whatever the rounding does.
       const buyerActuallyPaysPremium =
         isAuctionItem && !saleCoversFee && feeBreakdown.buyerPremiumCents > 0;
       const acknowledgmentText = buyerActuallyPaysPremium
@@ -1125,6 +1152,12 @@ export const webhookHandler = async (req: Request, res: Response) => {
                       saleId: posRequest.saleId,
                       amount: item.price || 0,
                       platformFeeAmount: posRequest.platformFeeCents / 100,
+                      // FEE SNAPSHOT (2026-08-17): commission-only, and commissionRate is null
+                      // by design — this flow charges ONE cart-level fee and stamps the whole
+                      // figure onto every row (a pre-existing shape, not changed here), so
+                      // there is no honest per-row rate to record. The amount is what the
+                      // report needs; inventing a rate to fill the column would be a guess.
+                      ...snapshotForCommissionOnly(posRequest.platformFeeCents / 100, null),
                       // PI ID is @unique — use per-item suffix to allow multiple items per PI
                       stripePaymentIntentId: `${paymentIntent.id}_${item.id}`,
                       source: 'POS',
@@ -1202,6 +1235,8 @@ export const webhookHandler = async (req: Request, res: Response) => {
                       saleId: posRequest.saleId,
                       amount: miscAmount,
                       platformFeeAmount: posRequest.platformFeeCents / 100,
+                      // FEE SNAPSHOT (2026-08-17): see the item loop above for why the rate is null.
+                      ...snapshotForCommissionOnly(posRequest.platformFeeCents / 100, null),
                       stripePaymentIntentId: items.length === 0 ? paymentIntent.id : `${paymentIntent.id}_misc`,
                       source: 'POS',
                       status: 'PAID',
@@ -2179,6 +2214,11 @@ export const webhookHandler = async (req: Request, res: Response) => {
           where: { saleId: paymentIntent.metadata.saleId, source: 'ALA_CARTE', status: 'PAID' },
         });
         if (!existingPurchase) {
+          // NO FEE SNAPSHOT, DELIBERATELY: an ALA_CARTE row is a $9.99 platform listing fee, not
+          // an organizer sale — there is no buyer premium and no tier commission to decompose.
+          // Writing commissionAmount here would flip these rows onto the snapshot branch of
+          // resolveOrganizerFeeReport and silently change what they report. Left NULL so they
+          // keep behaving exactly as they do today.
           await prisma.purchase.create({
             data: {
               amount: 9.99,
@@ -2803,6 +2843,7 @@ export const webhookHandler = async (req: Request, res: Response) => {
         }).catch(err => console.error('[ala-carte] Failed to update sale after checkout:', err));
         // Create Purchase record for revenue tracking
         try {
+          // NO FEE SNAPSHOT, DELIBERATELY — see the PI-webhook ALA_CARTE branch above.
           await prisma.purchase.create({
             data: {
               amount: 9.99,
@@ -2857,6 +2898,22 @@ export const webhookHandler = async (req: Request, res: Response) => {
                 platformFeeAmount: session.metadata.platformFeeAmount
                   ? parseFloat(session.metadata.platformFeeAmount)
                   : null,
+                // FEE SNAPSHOT (2026-08-17): the premium/commission split, stamped into the
+                // Checkout Session metadata by auctionService.closeAuction at session-creation
+                // time. Written here rather than recomputed so an organizer tier change after
+                // the fact cannot restate this sale's fee. A session created before this change
+                // has no split keys, leaving the snapshot NULL for the reporting fallback.
+                ...(session.metadata.feeCommissionAmount
+                  ? {
+                      buyerPremiumAmount: parseFloat(session.metadata.feeBuyerPremiumAmount ?? '0'),
+                      buyerPremiumRate: parseFloat(session.metadata.feeBuyerPremiumRate ?? '0'),
+                      commissionAmount: parseFloat(session.metadata.feeCommissionAmount),
+                      commissionRate: session.metadata.feeCommissionRate
+                        ? parseFloat(session.metadata.feeCommissionRate)
+                        : null,
+                      organizerAbsorbedPremium: session.metadata.feeOrganizerAbsorbedPremium === 'true',
+                    }
+                  : {}),
                 stripePaymentIntentId: paymentIntentId,
                 status: 'PAID',
                 chargeType: session.metadata.chargeType === 'DIRECT' ? 'DIRECT' : 'DESTINATION',
@@ -2994,6 +3051,10 @@ export const webhookHandler = async (req: Request, res: Response) => {
                     platformFeeAmount: parseFloat(
                       (((cartItem.price ?? 0) * cartFeeRate)).toFixed(2)
                     ),
+                    // FEE SNAPSHOT (2026-08-17): commission-only — a cart line is never an
+                    // auction lot, so there is no buyer premium to record (0, not null: "no
+                    // premium was charged" is a fact, not an unknown).
+                    ...snapshotForCommissionOnly((cartItem.price ?? 0) * cartFeeRate, cartFeeRate),
                     status: 'PAID',
                     source: 'ONLINE',
                     stripePaymentIntentId:
@@ -3571,10 +3632,7 @@ export const getPendingPayment = async (req: AuthRequest, res: Response) => {
         // listingType / auctionStartPrice drive the buyer-premium breakdown below;
         // sale.coversFee tells us whether the buyer was charged the premium at all.
         item: { select: { title: true, listingType: true, auctionStartPrice: true } },
-        // buyersPremiumPct added (#363): the premium is stripped back out of Purchase.amount
-        // below, and stripping at a hardcoded 5% on a sale configured at 15% produced a
-        // subtotal/premium split that did not match what was charged.
-        sale: { select: { coversFee: true, buyersPremiumPct: true } },
+        sale: { select: { coversFee: true } },
       },
     });
 
@@ -3606,13 +3664,18 @@ export const getPendingPayment = async (req: AuthRequest, res: Response) => {
     // that is what we send: subtotal (hammer price) + buyerPremium = totalAmount.
     const buyerPaidPremium =
       isAuctionListing(purchase.item) && purchase.sale?.coversFee !== true;
-    // #363: the sale's CONFIGURED rate, not a hardcoded 5%. This is the auction winner's
-    // resume-payment screen — the split it shows has to reconcile with the PaymentIntent
-    // jobs/auctionJob.ts already created at that same configured rate.
-    const pendingPremiumRate = resolveBuyerPremiumRate(purchase.sale);
-    const buyerPremium = buyerPaidPremium
-      ? parseFloat((amount - amount / (1 + pendingPremiumRate)).toFixed(2))
-      : 0;
+    // Prefer the fee SNAPSHOT written when the PaymentIntent was created (jobs/auctionJob.ts):
+    // it is the exact premium this winner's card is being run for, so the split shown here
+    // reconciles with the charge by construction rather than by re-deriving it. Rows created
+    // before the snapshot existed fall back to stripping the platform rate back out of the
+    // amount, which is what this endpoint has always done.
+    const snapshotPremium = purchase.buyerPremiumAmount;
+    const pendingPremiumRate = purchase.buyerPremiumRate ?? AUCTION_BUYER_PREMIUM_RATE;
+    const buyerPremium = !buyerPaidPremium
+      ? 0
+      : snapshotPremium !== null && snapshotPremium !== undefined
+        ? parseFloat(Number(snapshotPremium).toFixed(2))
+        : parseFloat((amount - amount / (1 + AUCTION_BUYER_PREMIUM_RATE)).toFixed(2));
 
     res.json({
       clientSecret: paymentIntent.client_secret,
@@ -4019,6 +4082,9 @@ export const testTransaction = async (req: AuthRequest, res: Response) => {
         saleId,
         amount,
         platformFeeAmount: platformFeeAmount / 100,
+        // FEE SNAPSHOT (2026-08-17): commission-only. Test rows are excluded from earnings, but
+        // they are written by the same reporting-visible shape and are kept consistent.
+        ...snapshotForCommissionOnly(platformFeeAmount / 100, feeRate),
         stripePaymentIntentId: paymentIntent.id,
         status: 'PAID',
         source: 'POS',

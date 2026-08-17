@@ -213,6 +213,16 @@ export async function markHoldInvoicePaid(
             saleId: holdInvoice.saleId,
             amount: itemAmount,
             platformFeeAmount: itemPlatformFeeAmount,
+            // FEE SNAPSHOT (2026-08-17): commission-only — a hold invoice is never an auction
+            // lot. commissionRate is null by design: the invoice's fee is prorated across its
+            // bundled items by price share, so a per-row rate would be a back-derived guess
+            // rather than a rate anything was actually charged at. The AMOUNT is what earnings
+            // reporting needs, and it is exact.
+            buyerPremiumAmount: 0,
+            buyerPremiumRate: 0,
+            commissionAmount: itemPlatformFeeAmount,
+            commissionRate: null,
+            organizerAbsorbedPremium: false,
             status: 'PAID',
             source: 'ONLINE',
             stripePaymentIntentId: paymentIntentId,
@@ -253,6 +263,14 @@ export async function markHoldInvoicePaid(
             saleId: holdInvoice.saleId,
             amount: holdInvoice.totalAmount / 100,
             platformFeeAmount: invoicePlatformFeeDollars,
+            // FEE SNAPSHOT (2026-08-17): commission-only. This is the whole-invoice aggregate
+            // row, so the fee is the invoice's own figure with no proration — but still no
+            // single rate behind it (miscItems are priced ad hoc), hence null.
+            buyerPremiumAmount: 0,
+            buyerPremiumRate: 0,
+            commissionAmount: invoicePlatformFeeDollars,
+            commissionRate: null,
+            organizerAbsorbedPremium: false,
             status: 'PAID',
             source: 'ONLINE',
             stripePaymentIntentId: paymentIntentId,

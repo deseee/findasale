@@ -52,11 +52,9 @@ router.get('/purchases/:purchaseId', authenticate, async (req: AuthRequest, res:
             city: true,
             state: true,
             zip: true,
-            // #363/#402: the buyer's own receipt page splits the amount they paid into
-            // "winning bid" + "buyer premium". That split is only correct at the sale's
-            // CONFIGURED premium rate, and there is no premium at all when the organizer
-            // covered it. Without these two fields the page assumed a flat 5%.
-            buyersPremiumPct: true,
+            // #402: the buyer's own receipt page splits the amount they paid into
+            // "winning bid" + "buyer premium". There is no premium at all when the organizer
+            // covered it, so the page needs to know.
             coversFee: true,
             organizer: {
               select: {

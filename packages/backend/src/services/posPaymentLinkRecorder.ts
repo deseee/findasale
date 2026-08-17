@@ -1,6 +1,6 @@
 import { POSPaymentLink } from '@prisma/client';
 import { prisma } from '../lib/prisma';
-import { getPlatformFeeRate, SubscriptionTier } from '../utils/feeCalculator';
+import { getPlatformFeeRate, snapshotForCommissionOnly, SubscriptionTier } from '../utils/feeCalculator';
 import { sellItemUnits, InsufficientStockError } from '../services/itemStockService';
 import { endEbayListingIfExists } from '../controllers/ebayController';
 import { markShopifyItemSold } from '../services/shopifyService';
@@ -162,6 +162,10 @@ export async function recordPosPaymentLinkSale(
               saleId: fresh.saleId,
               amount: item.price || 0,
               platformFeeAmount: parseFloat(((item.price || 0) * posFeeRate).toFixed(2)),
+              // FEE SNAPSHOT (2026-08-17): commission-only — a POS payment link never sells an
+              // auction lot. Pinning posFeeRate here also pins WHICH tier decision was live at
+              // completion time, which this recorder otherwise recomputes (see the note above).
+              ...snapshotForCommissionOnly((item.price || 0) * posFeeRate, posFeeRate),
               status: 'PAID',
               source: 'POS',
               stripePaymentIntentId: `pos_${fresh.id}`,

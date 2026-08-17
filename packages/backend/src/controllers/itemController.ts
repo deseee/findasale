@@ -723,14 +723,9 @@ const ITEM_DETAIL_SELECT = {
             city: true,
             organizerId: true,
             status: true,
-            // #363: the shopper-facing item page discloses the buyer's premium in the bid
-            // entry form and the price panel, and BOTH must show the rate the charge will
-            // actually use. Without this the page fell back to a hardcoded 5% while the
-            // organizer may have configured something else. Public-safe: this is the same
-            // number already printed on the sale page and the storefront badge.
-            buyersPremiumPct: true,
             // #402: whether the ORGANIZER absorbs the premium instead of the winner — the bid
-            // preview must not quote a premium the buyer will never be charged.
+            // preview must not quote a premium the buyer will never be charged. The premium
+            // RATE itself is the platform constant and is not read from the sale at all.
             coversFee: true,
             organizer: {
               select: {

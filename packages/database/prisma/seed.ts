@@ -563,19 +563,15 @@ async function main() {
   }
   console.log(`✅ Created ${sales.length} sales`);
 
-  // ── Auction Details — buyer's premium for Martin Family Auctions ──────────
+  // ── Auction Details ───────────────────────────────────────────────────────
   // Martin Family Auctions is organizer index 3
   const martinFamilyOrganizer = organizers[3];
-  const martinAuctionSales = sales.filter((s: any) => s.organizerId === martinFamilyOrganizer.id && s.saleType === 'AUCTION');
-
-  for (const auctionSale of martinAuctionSales) {
-    // Update sale with buyer's premium percentage (15%)
-    await prisma.sale.update({
-      where: { id: auctionSale.id },
-      data: { buyersPremiumPct: new Decimal('15.00') },
-    });
-  }
-  console.log(`✅ Set buyer's premium (15%) for ${martinAuctionSales.length} Martin Family Auctions sales`);
+  // BUYER'S PREMIUM SEED REMOVED (2026-08-17). This block used to write
+  // `buyersPremiumPct: 15.00` onto every Martin Family auction sale. The premium is now locked
+  // at the platform rate (backend utils/feeCalculator.AUCTION_BUYER_PREMIUM_RATE) and the
+  // column is retired and read by nothing — seeding it produced a dev database where a sale
+  // LOOKED configured at 15% while every charge, disclosure and report used 5%, which is the
+  // exact confusion the retirement exists to remove. Do not reinstate.
 
   // ── Organizer Broadcasts — message from Martin Family Auctions to followers ────
   await prisma.organizerBroadcast.create({

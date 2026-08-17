@@ -10,7 +10,7 @@ import React, { useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useQuery } from '@tanstack/react-query';
-import { resolveBuyerPremiumPct, formatBuyerPremiumPct } from '../../lib/platformFees'; // #363
+import { AUCTION_BUYER_PREMIUM_RATE, AUCTION_BUYER_PREMIUM_LABEL } from '../../lib/platformFees';
 import api from '../../lib/api';
 import { useAuth } from '../../components/AuthContext';
 import Head from 'next/head';
@@ -90,20 +90,24 @@ const PurchaseConfirmationPage = () => {
   const organizer = sale?.organizer;
   const isAuction = item?.listingType === 'AUCTION';
 
-  // #363: the winning-bid breakdown below used `item.auctionStartPrice` as the winning bid and
-  // a hardcoded 5%. Both were wrong. auctionStartPrice is the STARTING price — the number the
-  // lot opened at, not what this buyer won it for — so a lot opened at $50 and won at $200
-  // showed "$50.00 winning bid, $2.50 premium, $52.50 total" against a $210.00 charge. The real
-  // figures are derived from `purchase.amount`, which IS what the card was run for, split back
-  // out at the sale's configured premium rate (or none at all when the organizer covered it,
-  // #402). subtotal + premium therefore always equals the amount paid, by construction.
+  // The winning-bid breakdown below used to use `item.auctionStartPrice` as the winning bid —
+  // that is the STARTING price, the number the lot opened at, not what this buyer won it for,
+  // so a lot opened at $50 and won at $200 showed "$50.00 winning bid, $2.50 premium, $52.50
+  // total" against a $210.00 charge. The real figures are derived from `purchase.amount`, which
+  // IS what the card was run for, with the platform premium split back out (or none at all when
+  // the organizer covered it, #402). subtotal + premium always equals the amount paid, by
+  // construction. Prefers the fee SNAPSHOT the backend now records on the Purchase — that is
+  // the exact premium this card was charged — and falls back to the arithmetic for rows created
+  // before the snapshot existed.
   const purchaseAmount = Number(purchase.amount) || 0;
   const buyerPaidPremium = isAuction && sale?.coversFee !== true;
-  const purchasePremiumPct = buyerPaidPremium ? resolveBuyerPremiumPct(sale?.buyersPremiumPct) : 0;
-  const winningBid = purchasePremiumPct > 0
-    ? purchaseAmount / (1 + purchasePremiumPct / 100)
-    : purchaseAmount;
-  const buyerPremiumPaid = purchaseAmount - winningBid;
+  const snapshotPremium = purchase.buyerPremiumAmount;
+  const buyerPremiumPaid = !buyerPaidPremium
+    ? 0
+    : snapshotPremium !== null && snapshotPremium !== undefined
+      ? Number(snapshotPremium)
+      : purchaseAmount - purchaseAmount / (1 + AUCTION_BUYER_PREMIUM_RATE);
+  const winningBid = purchaseAmount - buyerPremiumPaid;
 
   // Determine status badge color
   const getStatusBadge = () => {
@@ -222,7 +226,7 @@ const PurchaseConfirmationPage = () => {
 
           {/* Auction Buyer Premium Breakdown (auction items only, and only when a premium was
               actually charged — see the derivation above the return). */}
-          {isAuction && purchasePremiumPct > 0 && (
+          {isAuction && buyerPremiumPaid > 0 && (
             <div className="mb-8 p-6 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
               <h3 className="text-sm font-semibold text-blue-700 dark:text-blue-300 mb-4 uppercase tracking-wide">
                 🏆 Winning Bid Breakdown
@@ -236,7 +240,7 @@ const PurchaseConfirmationPage = () => {
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-blue-600 dark:text-blue-400">
-                    Buyer Premium ({formatBuyerPremiumPct(purchasePremiumPct)})
+                    Buyer Premium ({AUCTION_BUYER_PREMIUM_LABEL})
                   </span>
                   <span className="font-medium text-blue-900 dark:text-blue-100">
                     ${buyerPremiumPaid.toFixed(2)}

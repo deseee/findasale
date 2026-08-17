@@ -187,12 +187,17 @@ const IDENTITY_NARROW_DOMAIN = 3;      // domain on < N organizers is "narrow" �
 
 /**
  * off    — tier disabled; behavior identical to before this change.
- * shadow — computes + logs would-be matches, never links and never writes an identity dedupeKey
- *          (SAFE DEFAULT — ships in this mode, same idiom as CROSS_SOURCE_FUZZY_DEDUP_MODE).
+ * shadow — computes + logs would-be matches, never links and never writes an identity dedupeKey.
+ *          Was the shipping default until 2026-08-17; now the rollback setting.
  * live   — links to the matched row and writes identity-format dedupeKeys on new rows.
  */
 const ORGANIZER_IDENTITY_DEDUP_MODE = (
-  process.env.ORGANIZER_IDENTITY_DEDUP_MODE || 'shadow'
+  // Default flipped shadow -> live 2026-08-17, Patrick-authorized, once Guard 0
+  // (domain-business agreement) and Guard 7 (narrow-domain city scope) shipped. Full-table
+  // simulation against all 106,272 organizers: 616 auto-merge pairs, 0 touching a claimed
+  // organizer, 40/40 sampled correct. The env var still overrides for an emergency rollback
+  // to 'shadow' or 'off' without a deploy.
+  process.env.ORGANIZER_IDENTITY_DEDUP_MODE || 'live'
 ).toLowerCase();
 
 /**

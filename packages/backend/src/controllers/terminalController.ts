@@ -13,7 +13,7 @@ import * as Sentry from '@sentry/node';
 import { getStripe } from '../utils/stripe';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
-import { getPlatformFeeRate } from '../utils/feeCalculator'; // S388: Tier-aware fee calculation
+import { getPlatformFeeRate, snapshotForCommissionOnly } from '../utils/feeCalculator'; // S388: Tier-aware fee calculation
 import { endEbayListingIfExists } from './ebayController'; // Feature #244 Phase 2: eBay direct push — withdraw on sale
 import { markShopifyItemSold } from '../services/shopifyService';
 import { notifyFacebookExportedItemSold } from '../services/facebookNudgeService';
@@ -418,6 +418,11 @@ export const createTerminalPaymentIntent = async (req: AuthRequest, res: Respons
           saleId,
           amount: itemAmount,
           platformFeeAmount: itemPlatformFeeAmount / 100,
+          // FEE SNAPSHOT (2026-08-17): commission-only — Terminal is card-present POS, never an
+          // auction lot, so the premium fields record a hard 0 ("no premium was charged" is a
+          // fact worth recording, not an unknown). Pinning the rate here stops an organizer's
+          // later tier change from restating this transaction's fee in their earnings report.
+          ...snapshotForCommissionOnly(itemPlatformFeeAmount / 100, feeRate),
           stripePaymentIntentId: paymentIntent.id,
           status: 'PENDING',
           source: 'POS',
@@ -892,6 +897,8 @@ export async function processCashSaleCore(params: {
         saleId,
         amount: item.amount,
         platformFeeAmount: itemPlatformFeeAmount,
+        // FEE SNAPSHOT (2026-08-17): commission-only, same reasoning as the card flow above.
+        ...snapshotForCommissionOnly(itemPlatformFeeAmount, feeRate),
         stripePaymentIntentId: cashPIId,
         status: 'PAID',
         source: 'POS',

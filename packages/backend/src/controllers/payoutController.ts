@@ -299,11 +299,7 @@ export const getEarningsBreakdown = async (req: AuthRequest, res: Response) => {
         // and strip the buyer's 5% premium back out of Purchase.amount; sale.coversFee tells it
         // whether the organizer absorbed that premium instead of the buyer.
         item: { select: { id: true, title: true, category: true, listingType: true, auctionStartPrice: true } },
-        // buyersPremiumPct (#363): resolveOrganizerFeeReport strips the premium back out of
-        // Purchase.amount at the sale's CONFIGURED rate. Omitting it makes the helper fall back
-        // to 5%, which understates the hammer price on any sale set above 5% and overstates it
-        // below — the organizer's reported gross and fee would both be wrong.
-        sale: { select: { id: true, title: true, startDate: true, coversFee: true, buyersPremiumPct: true } },
+        sale: { select: { id: true, title: true, startDate: true, coversFee: true } },
       },
       orderBy: { createdAt: 'desc' },
       take: 100,
@@ -318,6 +314,11 @@ export const getEarningsBreakdown = async (req: AuthRequest, res: Response) => {
       // A $200 win at SIMPLE reports $200.00 gross / $20.00 fee, and gross − fee − Stripe is
       // exactly what lands. (Reversal: an earlier pass the same day reported the stored
       // Purchase.platformFeeAmount here, which now holds the COMBINED premium + commission.)
+      // `p` is a full Purchase row, so the fee-snapshot columns (buyerPremiumAmount /
+      // commissionAmount / organizerAbsorbedPremium) come along without a select change.
+      // resolveOrganizerFeeReport prefers them when present: a row charged while this organizer
+      // was on SIMPLE keeps reporting its 10% fee after they upgrade to PRO, instead of being
+      // silently restated at 8%. Pre-snapshot rows fall back to the recompute below.
       const { grossSalePrice: salePrice, platformFee } = resolveOrganizerFeeReport(p, tierRate);
       // Stripe's cut is charged on what the card was actually run for — the premium-inclusive
       // total — not on the reported hammer price.

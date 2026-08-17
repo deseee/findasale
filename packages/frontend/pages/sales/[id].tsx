@@ -8,7 +8,7 @@ import { GetStaticPaths, GetStaticProps } from 'next';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import api from '../../lib/api';
 import { formatCategoryLabel } from '../../lib/itemConstants';
-import { resolveBuyerPremiumPct, formatBuyerPremiumPct, buyerTotalWithPremium } from '../../lib/platformFees'; // #363: one source of truth for the premium a shopper is shown
+import { AUCTION_BUYER_PREMIUM_LABEL, buyerTotalWithPremium } from '../../lib/platformFees'; // one source of truth for the premium a shopper is shown
 import { useAuth } from '../../components/AuthContext';
 import CheckoutModal from '../../components/CheckoutModal';
 import ConfirmDialog from '../../components/ConfirmDialog';
@@ -131,7 +131,6 @@ interface Sale {
   photoUrls: string[];
   saleType?: string;
   isOngoing?: boolean; // permanent storefront (RETAIL). Never expires
-  buyersPremiumPct?: number | null;
   organizer: {
     id: string;
     userId: string;
@@ -1832,33 +1831,18 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
             {/* Buyer's premium disclosure — ONE banner, placed directly above the items so
                 bidders get the financial disclosure before bidding.
 
-                #363 (2026-08-17): there were TWO banners here. A flat "5%" one, plus a second
-                one showing the organizer's configured buyersPremiumPct, with the flat banner
-                suppressed whenever a percentage was configured. The suppression existed only
-                because the charge path hardcoded 5% regardless of what the organizer had set —
-                showing both would have put two contradicting numbers on the page. The charge
-                now honours the configured percentage (backend utils/feeCalculator
-                .resolveBuyerPremiumRate), so the suppression is gone and this single banner
-                renders the sale's real rate: the configured value, or 5% when none is set, or
-                0% when the organizer deliberately charges none. The worked dollar example is
-                computed from the same number, so it can never drift from the charge. */}
-            {sale.saleType === 'AUCTION' && (() => {
-              const premiumPct = resolveBuyerPremiumPct(sale.buyersPremiumPct);
-              return (
-                <div className="rounded-xl p-4 border border-amber-200 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/30">
-                  <p className="text-sm font-medium text-amber-900 dark:text-amber-200">
-                    {premiumPct === 0 ? (
-                      <>Buyer&apos;s premium: none. Win at $200 and you pay $200.</>
-                    ) : (
-                      <>
-                        Buyer&apos;s premium: {formatBuyerPremiumPct(premiumPct)} is added to the winning bid at
-                        checkout. Win at $200 and you pay ${buyerTotalWithPremium(200, premiumPct).toFixed(2)}.
-                      </>
-                    )}
-                  </p>
-                </div>
-              );
-            })()}
+                The premium is a PLATFORM rate (2026-08-17): it is FindA.Sale's revenue, not the
+                organizer's, so it is not per-sale configurable and this banner states one flat
+                number. The worked dollar example is computed from the same constant the charge
+                path uses (lib/platformFees), so the two can never drift. */}
+            {sale.saleType === 'AUCTION' && (
+              <div className="rounded-xl p-4 border border-amber-200 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/30">
+                <p className="text-sm font-medium text-amber-900 dark:text-amber-200">
+                  Buyer&apos;s premium: {AUCTION_BUYER_PREMIUM_LABEL} is added to the winning bid at
+                  checkout. Win at $200 and you pay ${buyerTotalWithPremium(200).toFixed(2)}.
+                </p>
+              </div>
+            )}
 
             {/* ── ITEMS GRID ── */}
             <section id="items" className="rounded-xl border border-black/10 dark:border-white/8 bg-[#FBF8F2] dark:bg-[#121826] p-5">

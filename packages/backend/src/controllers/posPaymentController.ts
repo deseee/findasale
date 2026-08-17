@@ -16,6 +16,7 @@ import { syncMarketplaceStock } from '../services/marketplaceStockSyncService'; 
 import { resolveOrganizerOrTeamMember } from '../utils/posAuth'; // S1183 Fix 1: TEAM_MEMBER fallback for non-venue POS
 import { assertCheckoutAllowed, CheckoutGuardError } from '../services/checkoutGuard'; // S1072 Finding #4 gap fix: POS payment-request self-dealing guard
 import { getAccountStatus } from '../services/stripeConnectService'; // Direct-charges migration (2026-08-08): live capability preflight
+import { snapshotForCommissionOnly } from '../utils/feeCalculator'; // Purchase fee snapshot (2026-08-17)
 
 const stripe = () => getStripe();
 
@@ -996,6 +997,12 @@ export const confirmPaymentRequest = async (req: AuthRequest, res: Response) => 
             saleId: posRequest.saleId,
             amount: item.price || 0,
             platformFeeAmount: posRequest.platformFeeCents / 100,
+            // FEE SNAPSHOT (2026-08-17): commission-only, and commissionRate is null by design —
+            // this flow charges ONE cart-level fee and stamps the whole figure onto every row (a
+            // pre-existing shape, not changed here), so there is no honest per-row rate to
+            // record. Inventing one to fill the column would be a guess. Must match the
+            // idempotent webhook backstop in stripeController.ts exactly.
+            ...snapshotForCommissionOnly(posRequest.platformFeeCents / 100, null),
             // PI ID is @unique — use per-item suffix to allow multiple items per PI
             stripePaymentIntentId: `${paymentIntent.id}_${item.id}`,
             source: 'POS',
@@ -1096,6 +1103,8 @@ export const confirmPaymentRequest = async (req: AuthRequest, res: Response) => 
             saleId: posRequest.saleId,
             amount: miscAmount,
             platformFeeAmount: posRequest.platformFeeCents / 100,
+            // FEE SNAPSHOT (2026-08-17): see the item loop above for why the rate is null.
+            ...snapshotForCommissionOnly(posRequest.platformFeeCents / 100, null),
             stripePaymentIntentId: items.length === 0 ? paymentIntent.id : `${paymentIntent.id}_misc`,
             source: 'POS',
             status: 'PAID',

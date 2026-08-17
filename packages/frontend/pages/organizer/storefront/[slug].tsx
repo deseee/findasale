@@ -13,7 +13,7 @@ import { useRouter } from 'next/router';
 import Head from 'next/head';
 import Link from 'next/link';
 import api from '../../../lib/api';
-import { resolveBuyerPremiumPct, formatBuyerPremiumPct } from '../../../lib/platformFees'; // #363
+import { AUCTION_BUYER_PREMIUM_LABEL } from '../../../lib/platformFees';
 import ClaimListingModal from '../../../components/ClaimListingModal';
 
 interface Shopper {
@@ -71,7 +71,6 @@ interface Sale {
   photoUrls: string[];
   isPinned?: boolean;
   attendanceCount?: number | null;
-  buyersPremiumPct?: number | null;
   sourceName?: string | null; // P2: disclosure label for scraper-synced sales (see components/SaleCard.tsx)
 }
 
@@ -738,12 +737,10 @@ const OrganizerStorefront = () => {
                             </p>
                           )}
 
-          {/* Buyer's Premium badge (#363). Rendered for EVERY auction sale, not just ones with
-              a configured percentage — a shopper browsing the storefront needs the number
-              before they click through, and "no badge" used to mean "5% applies but nobody
-              said so". resolveBuyerPremiumPct returns the configured value, or the 5% default
-              when the column is null, or 0 when the organizer charges none — and it is the same
-              helper the sale page, the bid form and (mirrored) the backend charge path use. */}
+          {/* Buyer's Premium badge. Rendered for EVERY auction sale — a shopper browsing the
+              storefront needs the number before they click through, and "no badge" used to mean
+              "5% applies but nobody said so". The rate is the platform constant from
+              lib/platformFees, the same one the backend charge path uses. */}
                           {sale.saleType === 'AUCTION' && (
                             <div
                               className="inline-block text-xs font-medium px-2 py-0.5 rounded mb-2"
@@ -754,9 +751,7 @@ const OrganizerStorefront = () => {
                                 fontSize: 11,
                               }}
                             >
-                              {resolveBuyerPremiumPct(sale.buyersPremiumPct) === 0
-                                ? "No buyer's premium"
-                                : `Buyer's Premium: ${formatBuyerPremiumPct(resolveBuyerPremiumPct(sale.buyersPremiumPct))}`}
+                              {`Buyer's Premium: ${AUCTION_BUYER_PREMIUM_LABEL}`}
                             </div>
                           )}
 

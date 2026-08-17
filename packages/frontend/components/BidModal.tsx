@@ -3,7 +3,7 @@ import api from '../lib/api';
 import { useAuth } from './AuthContext';
 import { useToast } from './ToastContext';
 import AccessibleModal from './AccessibleModal';
-import { resolveBuyerPremiumPct, formatBuyerPremiumPct } from '../lib/platformFees'; // #363
+import { AUCTION_BUYER_PREMIUM_PCT, AUCTION_BUYER_PREMIUM_LABEL } from '../lib/platformFees';
 
 interface Item {
   id: string;
@@ -12,10 +12,6 @@ interface Item {
   auctionStartPrice: number | null;
   bidIncrement: number | null;
   auctionClosed?: boolean;
-  /** #363: the sale's configured buyer premium (percent). Undefined/null = the 5% default;
-   *  0 = no premium. Passed down from the item page so the preview quotes the real number.
-   *  `string` is included because the item endpoint serializes the Prisma Decimal as a string. */
-  buyersPremiumPct?: number | string | null;
   /** #402: when the organizer covers the premium the bidder pays their bid and nothing more. */
   saleCoversFee?: boolean;
 }
@@ -37,11 +33,10 @@ const BidModal = ({ item, onClose, onBidPlaced }: Props) => {
   const [amount, setAmount] = useState(minBid.toFixed(2));
   const [submitting, setSubmitting] = useState(false);
 
-  // Buyer's premium disclosure. #363 (2026-08-17): this was a hardcoded 0.05 while organizers
-  // could configure `Sale.buyersPremiumPct` — a bidder on a 15% sale was quoted 5% here and
-  // then charged 15%. resolveBuyerPremiumPct mirrors the backend's resolveBuyerPremiumRate
-  // exactly: configured value wins, 0 means zero, blank means the 5% default.
-  const premiumPct = item.saleCoversFee ? 0 : resolveBuyerPremiumPct(item.buyersPremiumPct);
+  // Buyer's premium disclosure at the platform rate (lib/platformFees — the same constant the
+  // backend charge path uses, so the preview can never quote a number the card is not run for).
+  // Zero when the organizer covers it (#402): the bidder then pays their bid and nothing more.
+  const premiumPct = item.saleCoversFee ? 0 : AUCTION_BUYER_PREMIUM_PCT;
   const parsedAmount = parseFloat(amount);
   const previewBid = !isNaN(parsedAmount) && parsedAmount > 0 ? parsedAmount : minBid;
   const previewPremium = previewBid * (premiumPct / 100);
@@ -118,7 +113,7 @@ const BidModal = ({ item, onClose, onBidPlaced }: Props) => {
                   <>No buyer&apos;s premium on this sale. Win at ${previewBid.toFixed(2)} and you pay ${previewBid.toFixed(2)}.</>
                 ) : (
                   <>
-                    Winning bids carry a {formatBuyerPremiumPct(premiumPct)} buyer&apos;s premium. Win at $
+                    Winning bids carry a {AUCTION_BUYER_PREMIUM_LABEL} buyer&apos;s premium. Win at $
                     {previewBid.toFixed(2)} and you&apos;ll pay ${previewPremium.toFixed(2)} premium, $
                     {(previewBid + previewPremium).toFixed(2)} total.
                   </>

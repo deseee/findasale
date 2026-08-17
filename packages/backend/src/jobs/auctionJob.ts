@@ -7,7 +7,7 @@ import { emailService } from '../lib/emailService';
 import { suppressionService } from '../services/suppressionService';
 import { createNotification } from '../services/notificationService';
 import { shouldUseDirectCharge } from '../services/stripeConnectService'; // Direct-charges migration (2026-08-08): staged-rollout routing decision
-import { calculateApplicationFee, getPlatformFeeRate, resolveBuyerPremiumRate, SubscriptionTier } from '../utils/feeCalculator';
+import { calculateApplicationFee, getPlatformFeeRate, snapshotFromBreakdown, SubscriptionTier } from '../utils/feeCalculator';
 import { evaluateAuctionReserve } from '../utils/auctionRules'; // Shared with services/auctionService.closeAuction — see that file's header
 const stripe = () => getStripe();
 
@@ -142,20 +142,13 @@ export const endAuctions = async () => {
         // stripeController.createPaymentIntent's auction branch exactly.
         // Sale.coversFee: the organizer absorbs the premium, so the winner is charged the bid
         // only while the platform still collects premium + commission.
-        // #363 (2026-08-17): the premium rate is the organizer's configured
-        // `Sale.buyersPremiumPct`, not a hardcoded 5%. `currentItem.sale` is fetched with a
-        // full `include` above, so every Sale scalar — buyersPremiumPct included — is present.
-        // resolveBuyerPremiumRate handles the Decimal, treats 0 as zero premium rather than
-        // "unset", and falls back to 5% only when the column is null.
+        // PREMIUM LOCKED TO THE PLATFORM RATE (2026-08-17, Patrick ruling — reverses the #363
+        // pass earlier the same day). The premium is FindA.Sale's revenue, so it is not an
+        // organizer setting; `calculateApplicationFee` reads the platform constant itself and
+        // takes no rate parameter. `Sale.coversFee` still works and is honoured below.
         const hammerPriceCents = Math.round(price * 100);
         const organizerCoversPremium = currentItem.sale!.coversFee === true;
-        const buyerPremiumRate = resolveBuyerPremiumRate(currentItem.sale);
-        const auctionFees = calculateApplicationFee(
-          hammerPriceCents,
-          feePercent,
-          true,
-          buyerPremiumRate
-        );
+        const auctionFees = calculateApplicationFee(hammerPriceCents, feePercent, true);
         const buyerChargeCents = organizerCoversPremium
           ? hammerPriceCents
           : hammerPriceCents + auctionFees.buyerPremiumCents;
@@ -214,6 +207,11 @@ export const endAuctions = async () => {
               saleId: currentItem.sale!.id,
               amount: buyerChargeCents / 100,
               platformFeeAmount,
+              // FEE SNAPSHOT (2026-08-17): the premium/commission split of that
+              // application_fee_amount, pinned at charge time so organizer earnings reporting
+              // never has to re-derive this lot's fee from whatever the rates and the
+              // organizer's subscription tier happen to be when the report is run.
+              ...snapshotFromBreakdown(auctionFees, feePercent, organizerCoversPremium),
               stripePaymentIntentId,
               // Only mark PAID when there's no Stripe (organizer not onboarded)
               status: stripePaymentIntentId ? 'PENDING' : 'PAID',

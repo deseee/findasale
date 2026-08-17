@@ -995,6 +995,13 @@ export const batchUpdateHolds = async (req: AuthRequest, res: Response) => {
           });
         }
         // Record the cash transaction for each sold item (RECORD mode).
+        // NO FEE SNAPSHOT, DELIBERATELY (2026-08-17). RECORD mode is a cash/in-person sale the
+        // platform takes nothing on, and it never goes near the fee engine — `platformFeeAmount`
+        // is a literal 0. Writing commissionAmount: 0 here would flip these rows onto the
+        // snapshot branch of resolveOrganizerFeeReport and change the fee their organizer sees
+        // reported (today the earnings surfaces recompute amount * tierRate on them). Whether
+        // that recompute is right is a separate question about cash-sale reporting; it is NOT
+        // something this change should decide silently. Left NULL so behaviour is unchanged.
         await tx.purchase.createMany({
           data: validHolds.map((h) => ({
             itemId: h.item.id,

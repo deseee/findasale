@@ -5,11 +5,9 @@
  *
  * There are TWO SEPARATE fees, and on an auction BOTH apply. Both are platform revenue.
  *
- *   1. Buyer premium — a percentage of the hammer price, charged ON TOP of the winning bid to
- *      the WINNING BIDDER. Auctions only. Comes out of the BUYER's pocket. The rate is 5% BY
- *      DEFAULT and per-sale configurable via `Sale.buyersPremiumPct` (0–50). Every worked
- *      example below uses the 5% default; substitute the sale's own rate when one is set, and
- *      always resolve it with `resolveBuyerPremiumRate(sale)` rather than assuming 5%.
+ *   1. Buyer premium — 5% of the hammer price, charged ON TOP of the winning bid to the
+ *      WINNING BIDDER. Auctions only. Comes out of the BUYER's pocket. The rate is a PLATFORM
+ *      constant (`AUCTION_BUYER_PREMIUM_RATE` below) and is not configurable per sale.
  *   2. Organizer commission — the tier rate (10% SIMPLE / 8% PRO + TEAMS) of the hammer or
  *      list price, charged to the ORGANIZER out of their payout. Charged on EVERY sale,
  *      including auctions. An auction is NOT exempt from commission.
@@ -27,13 +25,24 @@
  * buyer's pocket, not the organizer's, so it must never appear in what the organizer is told
  * they paid — which also means reading the stored `Purchase.platformFeeAmount` is WRONG for
  * organizer reporting on auctions (that column holds the combined $30). Use
- * `resolveOrganizerFeeReport` below, which recomputes the commission from the hammer price.
+ * `resolveOrganizerFeeReport` below.
  *
  * THE ONE EXCEPTION — `Sale.coversFee` on an auction: the buyer is charged the bid only and
  * the ORGANIZER absorbs the 5% premium on top of their own commission. A $200 win then
  * charges the buyer $200, the platform still collects $30, and the organizer nets $170. There
  * the premium genuinely did come out of the organizer's pocket, so it DOES belong on their fee
- * line. `resolveOrganizerFeeReport` handles this via the `sale.coversFee` flag.
+ * line. `resolveOrganizerFeeReport` handles this.
+ *
+ * ── WHY THE PREMIUM IS NOT ORGANIZER-CONFIGURABLE (locked 2026-08-17) ─────────────────────
+ * `Sale.buyersPremiumPct` was briefly an organizer-settable 0–50% control (#363, same day).
+ * It is RETIRED. The premium flows into `application_fee_amount` — it is FindA.Sale's revenue,
+ * not the organizer's — so letting an organizer set it let them set the platform's own income:
+ * 0% earned FindA.Sale nothing on that auction, 50% gouged shoppers in FindA.Sale's name.
+ * The column still exists in the database (dropping a column is destructive and is queued with
+ * the other destructive-drift decisions) but it is DEAD: nothing reads it, the API rejects it,
+ * and there is no UI for it. Do not reintroduce `resolveBuyerPremiumRate` or any per-sale rate
+ * lookup. `Sale.coversFee` is unaffected and still works — an organizer absorbing the platform
+ * rate costs the platform nothing.
  *
  * ── CORRECTION NOTICE ────────────────────────────────────────────────────────────────────
  * An earlier pass on 2026-08-17 recorded an "AUCTION CARVE-OUT" in this file claiming the 5%
@@ -71,102 +80,23 @@ export const formatFeeRate = (tier: SubscriptionTier): string => {
 };
 
 /**
- * DEFAULT auction buyer premium rate — 5% of the hammer price, paid by the WINNING BIDDER on
- * top of their bid. This is IN ADDITION TO the organizer's commission, not instead of it.
+ * THE auction buyer premium rate — 5% of the hammer price, paid by the WINNING BIDDER on top
+ * of their bid, IN ADDITION TO the organizer's commission.
  *
- * This is the rate that applies when the organizer has NOT configured one on the sale. An
- * organizer may set `Sale.buyersPremiumPct` (0–50) and that configured value wins — resolve it
- * with `resolveBuyerPremiumRate(sale)` below, never by reading this constant directly on a
- * charge path.
+ * This is a PLATFORM rate. It is the single source of truth for every charge path
+ * (`stripeController.createPaymentIntent`, `jobs/auctionJob.ts`, `auctionService.closeAuction`),
+ * every buyer disclosure and every consent record. There is no per-sale override and no
+ * resolver — `calculateApplicationFee` reads this constant itself so a caller cannot pass a
+ * different number. Do not hardcode `0.05` anywhere else.
  */
-export const DEFAULT_AUCTION_BUYER_PREMIUM_RATE = 0.05;
+export const AUCTION_BUYER_PREMIUM_RATE = 0.05;
 
 /**
- * Legacy alias kept so nothing that imported the old name breaks. It is the DEFAULT rate, not
- * "the" rate — a sale with `buyersPremiumPct` set does not use this value. Prefer
- * `DEFAULT_AUCTION_BUYER_PREMIUM_RATE` in new code and `resolveBuyerPremiumRate` on any path
- * that charges, discloses or records a premium.
- */
-export const AUCTION_BUYER_PREMIUM_RATE = DEFAULT_AUCTION_BUYER_PREMIUM_RATE;
-
-/** Inclusive bounds on `Sale.buyersPremiumPct`, in PERCENT (not a decimal rate). */
-export const MIN_BUYER_PREMIUM_PCT = 0;
-export const MAX_BUYER_PREMIUM_PCT = 50;
-
-/**
- * `Sale.buyersPremiumPct` is `Decimal? @db.Decimal(5, 2)` (schema.prisma:970). Prisma hands it
- * back as a Decimal instance on a normal read, as a plain `number` once it has been through
- * `convertDecimalsToNumbers` (saleController) or a JSON round-trip, and as a `string` from a
- * raw query. All four shapes — plus null and undefined — are accepted here.
- */
-export interface BuyerPremiumConfigurableSale {
-  buyersPremiumPct?: number | string | { toNumber(): number } | null;
-}
-
-/**
- * THE single source of truth for "what buyer premium applies to this sale".
- *
- * Every charge path (controllers/stripeController.createPaymentIntent, jobs/auctionJob.ts,
- * services/auctionService.closeAuction), every disclosure and every consent record must call
- * this. Do not re-derive the rule anywhere else.
- *
- *   · `buyersPremiumPct` null / undefined  -> DEFAULT_AUCTION_BUYER_PREMIUM_RATE (5%).
- *     Sales created before the field existed, and every sale where the organizer never touched
- *     the input, keep behaving exactly as they do today.
- *   · `buyersPremiumPct` 0                 -> 0. ZERO PREMIUM, NOT the default.
- *   · anything else                        -> that percentage, clamped to [0, 50].
- *
- * THE ZERO TRAP — do not "simplify" this to `pct || DEFAULT`. `0` is falsy, so that form
- * silently charges 5% on a sale the organizer deliberately set to 0%, and the shopper is shown
- * "0%" while their card is run for 5% more. The null/undefined check is explicit and separate
- * from the numeric path for exactly that reason. There is a test for it
- * (`__tests__/stripe.e2e.test.ts`, "0 means zero premium, not the 5% default").
- *
- * CLAMPING vs REJECTING — both, at different layers, deliberately:
- *   · The API boundary REJECTS out-of-range input. `saleCreateSchema.buyersPremiumPct` is
- *     `z.number().min(0).max(50)`, so an organizer sending 500 gets a 400 with a validation
- *     error rather than a silently different sale. Rejecting is right there because the value
- *     is the organizer's stated intent and quietly rewriting intent is worse than refusing it.
- *   · This resolver CLAMPS. It is read on the money path, where there is no user to show an
- *     error to and refusing would mean either charging the 5% default (wrong — it ignores a
- *     configured value) or throwing mid-checkout (worse — it strands a paying buyer). Clamping
- *     guarantees that whatever ends up in the column — a direct DB write, a seed script, an
- *     admin tool, a future endpoint that forgets the zod schema — can never multiply a real
- *     charge beyond 50%. Defense in depth, not a substitute for the boundary check.
- *
- * A non-finite value (NaN, a malformed string) falls back to the default rather than to 0, so a
- * corrupt row cannot silently zero out the platform's premium revenue.
- */
-export const resolveBuyerPremiumRate = (
-  sale: BuyerPremiumConfigurableSale | null | undefined
-): number => {
-  const raw = sale?.buyersPremiumPct;
-
-  // Explicit null/undefined check — NOT a truthiness check. See THE ZERO TRAP above.
-  if (raw === null || raw === undefined) return DEFAULT_AUCTION_BUYER_PREMIUM_RATE;
-
-  let pct: number;
-  if (typeof raw === 'number') {
-    pct = raw;
-  } else if (typeof raw === 'string') {
-    pct = parseFloat(raw);
-  } else if (typeof (raw as { toNumber?: unknown }).toNumber === 'function') {
-    pct = (raw as { toNumber(): number }).toNumber();
-  } else {
-    pct = Number(raw);
-  }
-
-  if (!Number.isFinite(pct)) return DEFAULT_AUCTION_BUYER_PREMIUM_RATE;
-
-  const clamped = Math.min(MAX_BUYER_PREMIUM_PCT, Math.max(MIN_BUYER_PREMIUM_PCT, pct));
-  return clamped / 100;
-};
-
-/**
- * Render a resolved rate for display/consent copy: "5%", "12.5%", "0%". Trailing zeros are
- * dropped so a whole-number percentage never reads "15.00%". Used by the CheckoutEvidence
- * acknowledgment string and the buyer-facing API responses so the number a buyer consents to is
- * always the number their card is run for.
+ * Render a rate for display/consent copy: "5%". Trailing zeros are dropped so a whole-number
+ * percentage never reads "5.00%". Used by the CheckoutEvidence acknowledgment string and the
+ * buyer-facing API responses so the number a buyer consents to is the number their card is run
+ * for. Kept as a function (rather than a frozen "5%" string) because the premium the BUYER pays
+ * is 0 under `Sale.coversFee`, and that case needs rendering too.
  */
 export const formatBuyerPremiumRate = (rate: number): string => {
   const pct = parseFloat((rate * 100).toFixed(2));
@@ -198,37 +128,36 @@ export interface ApplicationFeeBreakdown {
   organizerCommissionCents: number;
   /** What to hand Stripe as application_fee_amount — the sum of the two above. */
   applicationFeeCents: number;
-  /** The premium rate actually applied, as a decimal (0.05 = 5%). Echoed back so callers
-   *  disclose and record the SAME number they charged, without re-deriving it. */
+  /** The premium rate actually applied, as a decimal (0.05 = 5%, or 0 on a non-auction).
+   *  Echoed back so callers disclose and record the SAME number they charged. */
   buyerPremiumRate: number;
 }
 
 /**
  * Compose the two fees into the single number Stripe wants.
  *
- * @param basePriceCents    Hammer price (auction) or list price + shipping (regular), in cents.
- *                          NOT the buyer-facing total — the premium is added on top of this.
- * @param commissionRate    The organizer commission rate actually in force for this charge
- *                          (tier rate, or a FeeStructure override, or 0 under a referral
- *                          discount). Callers pass the rate they already resolved.
- * @param isAuction         Whether the buyer premium applies.
- * @param buyerPremiumRate  The premium rate for THIS sale, from `resolveBuyerPremiumRate(sale)`.
- *                          Defaults to 5% so the two non-auction callers and any legacy call
- *                          keep their existing behaviour, but every auction charge path passes
- *                          the resolved value — a sale configured at 15% must be charged 15%,
- *                          and a sale configured at 0% must be charged nothing.
+ * @param basePriceCents  Hammer price (auction) or list price + shipping (regular), in cents.
+ *                        NOT the buyer-facing total — the premium is added on top of this.
+ * @param commissionRate  The organizer commission rate actually in force for this charge
+ *                        (tier rate, or a FeeStructure override, or 0 under a referral
+ *                        discount). Callers pass the rate they already resolved.
+ * @param isAuction       Whether the buyer premium applies.
+ *
+ * The premium rate is NOT a parameter — it is the platform constant, read here. That is
+ * deliberate: it was briefly caller-supplied (from an organizer-settable column) and there is
+ * now no legitimate way for a caller to want a different number, so the parameter is removed
+ * rather than defaulted, and no call site can get it wrong.
  *
  * Cents are rounded ONCE, here, off the exact product — never off an already-rounded
- * intermediate — so a fractional percentage (e.g. 12.5% of $199.99) lands on a single
- * deterministic cent value that the disclosure, the charge and the consent record all share.
+ * intermediate — so the disclosure, the charge and the consent record all share a single
+ * deterministic cent value.
  */
 export const calculateApplicationFee = (
   basePriceCents: number,
   commissionRate: number,
-  isAuction: boolean,
-  buyerPremiumRate: number = DEFAULT_AUCTION_BUYER_PREMIUM_RATE
+  isAuction: boolean
 ): ApplicationFeeBreakdown => {
-  const effectivePremiumRate = isAuction ? buyerPremiumRate : 0;
+  const effectivePremiumRate = isAuction ? AUCTION_BUYER_PREMIUM_RATE : 0;
   const buyerPremiumCents = Math.round(basePriceCents * effectivePremiumRate);
   const organizerCommissionCents = Math.round(basePriceCents * commissionRate);
   return {
@@ -239,16 +168,77 @@ export const calculateApplicationFee = (
   };
 };
 
+/**
+ * ── PURCHASE FEE SNAPSHOT ────────────────────────────────────────────────────────────────
+ * The columns written on `Purchase` at charge time so a report never has to recompute a
+ * historical fee from today's config. See schema.prisma's Purchase model for the full why.
+ *
+ * INVARIANT on a populated snapshot: `buyerPremiumAmount + commissionAmount` equals the
+ * `platformFeeAmount` written alongside it.
+ */
+export interface PurchaseFeeSnapshot {
+  /** Dollars of the application fee that were the buyer premium. 0 on a non-auction. */
+  buyerPremiumAmount: number;
+  /** The premium rate applied, as a decimal. 0 on a non-auction. */
+  buyerPremiumRate: number;
+  /** Dollars of the application fee that were the organizer's commission. */
+  commissionAmount: number;
+  /** The commission rate applied, as a decimal. NULL where a path charges a cart-level fee
+   *  with no meaningful per-row rate (POS payment requests, prorated hold invoices). */
+  commissionRate: number | null;
+  /** Whether Sale.coversFee was ON at charge time — the organizer absorbed the premium and the
+   *  buyer was charged the hammer price only. */
+  organizerAbsorbedPremium: boolean;
+}
+
+/**
+ * Snapshot for a charge that went through `calculateApplicationFee` — the three auction/online
+ * checkout paths. Converts the breakdown's cents to the dollars the Purchase columns store.
+ */
+export const snapshotFromBreakdown = (
+  breakdown: ApplicationFeeBreakdown,
+  commissionRate: number,
+  organizerAbsorbedPremium: boolean
+): PurchaseFeeSnapshot => ({
+  buyerPremiumAmount: round2(breakdown.buyerPremiumCents / 100),
+  buyerPremiumRate: breakdown.buyerPremiumRate,
+  commissionAmount: round2(breakdown.organizerCommissionCents / 100),
+  commissionRate,
+  organizerAbsorbedPremium,
+});
+
+/**
+ * Snapshot for a commission-only charge — every non-auction path (POS, Terminal, cash, cart
+ * checkout, hold invoices, bounties). No buyer premium exists on any of these, so the premium
+ * fields are a hard 0 rather than null: "this charge carried no premium" is a fact worth
+ * recording, not an unknown.
+ *
+ * @param commissionAmount Dollars of commission actually charged.
+ * @param commissionRate   The rate it was computed at, or null where the path applies a
+ *                         cart-level fee with no per-row rate.
+ */
+export const snapshotForCommissionOnly = (
+  commissionAmount: number,
+  commissionRate: number | null
+): PurchaseFeeSnapshot => ({
+  buyerPremiumAmount: 0,
+  buyerPremiumRate: 0,
+  commissionAmount: round2(commissionAmount),
+  commissionRate,
+  organizerAbsorbedPremium: false,
+});
+
 /** Minimal shape needed to report one PAID purchase back to the organizer. */
 export interface ReportablePurchase {
   /** What the buyer was actually charged (Purchase.amount) — on an auction this INCLUDES
    *  the 5% premium, unless the sale has coversFee on. */
   amount: number;
   item?: AuctionListingShape | null;
-  /** `buyersPremiumPct` is required to strip the premium back out at the rate that was
-   *  actually charged — see the drift note on `resolveOrganizerFeeReport`. Callers that do not
-   *  select it get the 5% default, which is wrong for a sale configured at any other rate. */
-  sale?: ({ coversFee?: boolean | null } & BuyerPremiumConfigurableSale) | null;
+  sale?: { coversFee?: boolean | null } | null;
+  // ── Fee snapshot columns (see PurchaseFeeSnapshot). Present => authoritative. ──
+  buyerPremiumAmount?: number | null;
+  commissionAmount?: number | null;
+  organizerAbsorbedPremium?: boolean | null;
 }
 
 export interface OrganizerFeeReport {
@@ -262,33 +252,28 @@ export interface OrganizerFeeReport {
 /**
  * Organizer-facing fee reporting for ONE paid purchase.
  *
- * Regular sale: unchanged from the long-standing behaviour — gross is `amount`, fee is
- * `amount * tierRate`.
+ * ── PREFERRED PATH: the snapshot ─────────────────────────────────────────────────────────
+ * When `commissionAmount` is present on the row, the numbers below are what the platform
+ * ACTUALLY took at charge time and nothing is recomputed. This is the whole point of the
+ * snapshot columns: an organizer upgrading SIMPLE -> PRO must not retroactively change the fee
+ * reported on sales they already made, and it did exactly that for as long as this function
+ * multiplied `amount` by their CURRENT tier rate.
  *
- * Auction: the buyer's charge contains the 5% premium the organizer never paid, so it is
- * stripped back out to recover the hammer price, and the fee is the tier commission on that
- * hammer price. $200 win / SIMPLE => gross $200.00, fee $20.00, and gross − fee − Stripe
- * processing is exactly what lands in the organizer's account. Deliberately NOT read from
- * `Purchase.platformFeeAmount`, which stores the COMBINED premium + commission.
+ * ── FALLBACK: recompute from current config ──────────────────────────────────────────────
+ * Every row written before 2026-08-17, plus the handful of paths that record no fee engine
+ * output at all, has a NULL snapshot. Those fall through to the original behaviour, unchanged:
  *
- * Auction + `Sale.coversFee`: the buyer was charged the bid only, so `amount` IS the hammer
- * price, and the organizer absorbed the premium — it belongs on their fee line.
+ *   Regular sale: gross is `amount`, fee is `amount * tierRate`.
+ *   Auction: the buyer's charge contains the 5% premium the organizer never paid, so it is
+ *     stripped back out to recover the hammer price, and the fee is the tier commission on that
+ *     hammer price. $200 win / SIMPLE => gross $200.00, fee $20.00.
+ *   Auction + `Sale.coversFee`: the buyer was charged the bid only, so `amount` IS the hammer
+ *     price, and the organizer absorbed the premium — it belongs on their fee line.
  *
- * Known imprecision (pre-existing, unchanged in kind): coupon and organizer discounts reduce
- * `Purchase.amount` after the fact, so on a discounted sale the recomputed fee is the fee on
- * the discounted total rather than on the original price. Every earnings surface has always
- * behaved this way for regular sales; the auction path inherits it rather than adding it.
- *
- * CONFIGURED-RATE DRIFT (documented, not fixed here): the premium is stripped back out at the
- * sale's CURRENT `buyersPremiumPct`, because no per-purchase premium rate is stored. If an
- * organizer changes the percentage after a lot has already been paid for, this recomputes the
- * historical hammer price at the new rate. That is the same class of drift this function
- * already has on the commission side — `tierRate` is the organizer's CURRENT tier, so an
- * upgrade from SIMPLE to PRO likewise restates past fees — and it is inherent to recomputing
- * reports from live config rather than from a stored snapshot. Closing it properly means a
- * `Purchase.buyerPremiumRate` column written at charge time (schema change + migration);
- * flagged, deliberately not done in this pass. Every caller must select `buyersPremiumPct`
- * alongside `coversFee` so the recomputation at least matches current config.
+ * Known imprecision on the fallback path (pre-existing, unchanged in kind): coupon and organizer
+ * discounts reduce `Purchase.amount` after the fact, so on a discounted sale the recomputed fee
+ * is the fee on the discounted total rather than on the original price. The snapshot path does
+ * not have this problem — it stores what was charged.
  */
 export const resolveOrganizerFeeReport = (
   purchase: ReportablePurchase,
@@ -296,17 +281,33 @@ export const resolveOrganizerFeeReport = (
 ): OrganizerFeeReport => {
   const amount = Number(purchase.amount) || 0;
 
+  // ── Snapshot path. `commissionAmount` is the sentinel: it is written by every path that
+  // writes any of the snapshot columns, and a legitimate zero-commission charge (referral
+  // discount) stores 0, not null. Explicit null/undefined check, never truthiness. ──
+  if (purchase.commissionAmount !== null && purchase.commissionAmount !== undefined) {
+    const commission = Number(purchase.commissionAmount) || 0;
+    const premium = Number(purchase.buyerPremiumAmount) || 0;
+    const absorbed = purchase.organizerAbsorbedPremium === true;
+    // When the organizer absorbed the premium the buyer was charged the hammer price only, so
+    // `amount` already IS the gross. Otherwise the premium rode on top and comes back out.
+    const grossSalePrice = absorbed ? amount : amount - premium;
+    return {
+      grossSalePrice: round2(grossSalePrice),
+      platformFee: round2(commission + (absorbed ? premium : 0)),
+    };
+  }
+
+  // ── Fallback: recompute from current config (pre-snapshot rows). ──
   if (!isAuctionListing(purchase.item)) {
     return { grossSalePrice: round2(amount), platformFee: round2(amount * tierRate) };
   }
 
   const organizerAbsorbsPremium = purchase.sale?.coversFee === true;
-  const premiumRate = resolveBuyerPremiumRate(purchase.sale);
   const hammerPrice = organizerAbsorbsPremium
     ? amount
-    : amount / (1 + premiumRate);
+    : amount / (1 + AUCTION_BUYER_PREMIUM_RATE);
   const commission = hammerPrice * tierRate;
-  const absorbedPremium = organizerAbsorbsPremium ? hammerPrice * premiumRate : 0;
+  const absorbedPremium = organizerAbsorbsPremium ? hammerPrice * AUCTION_BUYER_PREMIUM_RATE : 0;
 
   return {
     grossSalePrice: round2(hammerPrice),

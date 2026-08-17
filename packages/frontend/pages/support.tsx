@@ -20,7 +20,7 @@ const FAQ_DATA = [
     category: 'Getting Started',
     question: 'What is the platform fee and how is it calculated?',
     answer:
-      'FindA.Sale charges a flat 10% platform fee on each completed purchase. If an item sells for $100, we keep $10 and you receive $90 (minus any Stripe payment processing fee, typically 2.9% + $0.30). There are no listing fees, no monthly fees on SIMPLE, and no per-photo charges. PRO and TEAMS plans reduce the fee to 8%. Auctions add one more fee, paid by the winning bidder rather than by you: a buyer premium on top of the winning bid, 5% by default and adjustable from 0% to 50% on each sale. It does not change your platform fee. On a $200 winning bid at the 10% platform rate and the standard 5% premium, the buyer pays $210, your fee is $20, and you receive $180 before Stripe processing.',
+      'FindA.Sale charges a flat 10% platform fee on each completed purchase. If an item sells for $100, we keep $10 and you receive $90 (minus any Stripe payment processing fee, typically 2.9% + $0.30). There are no listing fees, no monthly fees on SIMPLE, and no per-photo charges. PRO and TEAMS plans reduce the fee to 8%. Auctions add one more fee, paid by the winning bidder rather than by you: a flat 5% buyer premium on top of the winning bid, set by FindA.Sale. It is not something you configure and it does not change your platform fee. On a $200 winning bid at the 10% platform rate, the buyer pays $210, your fee is $20, and you receive $180 before Stripe processing. If you would rather your winner paid exactly their bid, turn on "Cover the buyer's premium" on the sale and the 5% comes out of your payout instead.',
   },
   {
     id: 'getting-started-3',

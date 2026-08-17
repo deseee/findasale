@@ -4,7 +4,8 @@ import { createNotification } from './notificationService';
 import { sellItemUnits, InsufficientStockError } from './itemStockService';
 import { syncMarketplaceStock } from './marketplaceStockSyncService'; // ADR-087 Phase 4: revise-on-partial eBay quantity sync
 import { shouldUseDirectCharge } from './stripeConnectService'; // Direct-charges migration (2026-08-08): staged-rollout routing decision
-import { calculateApplicationFee, formatBuyerPremiumRate, getPlatformFeeRate, resolveBuyerPremiumRate, SubscriptionTier } from '../utils/feeCalculator';
+import { calculateApplicationFee, formatBuyerPremiumRate, getPlatformFeeRate, SubscriptionTier } from '../utils/feeCalculator';
+import { awardXp, applyHuntPassMultiplier, XP_AWARDS, checkMonthlyXpCap } from './xpService'; // XP parity with jobs/auctionJob.ts — see awardAuctionWinXp below
 import { evaluateAuctionReserve } from '../utils/auctionRules'; // Shared reserve rule — identical to jobs/auctionJob.ts
 
 /** What actually happened, so POST /api/items/:itemId/close-auction can tell the organizer. */
@@ -66,9 +67,10 @@ export interface CloseAuctionResult {
  *     branch (stripeController), written inline by the cron.
  *   · Stock: this path calls `sellItemUnits` (pool decrement, eBay revise-qty sync, SOLD on
  *     exhaustion); the cron leaves the item at AUCTION_ENDED and updates `currentBid`.
- *   · XP: the cron awards AUCTION_WIN XP; this path does not. **Known gap, flagged not fixed** —
- *     a winner of a manually-closed auction gets no XP. Fixing it belongs with a decision about
- *     whether early closes should earn the same reward, not inside a reserve-price fix.
+ *   · XP: PARITY, as of 2026-08-17. Both paths award AUCTION_WIN XP with the same amount, the
+ *     same Hunt Pass multiplier and the same monthly 'AUCTION' cap — the cron did and this path
+ *     did not, so the identical outcome (same winner, same lot) paid a different reward purely
+ *     because of which mechanism closed the auction. See `awardAuctionWinXp` below.
  *   · End time: the cron only ever closes lots past `auctionEndTime`; this path closes on
  *     demand, which is the whole point of the button.
  *   · Tie-breaking is `ORDER BY amount DESC` in both, with no secondary key — equal top bids
@@ -175,9 +177,8 @@ export async function closeAuction(itemId: string): Promise<CloseAuctionResult> 
     const bidAmount = highestBid.amount;
 
     // TWO SEPARATE FEES (Patrick ruling, 2026-08-17 — see utils/feeCalculator.ts header).
-    // The winner pays the hammer price plus the sale's buyer premium (5% by default, or the
-    // organizer's configured Sale.buyersPremiumPct); the ORGANIZER separately pays
-    // their tier commission on the hammer price. Stripe's application_fee_amount is the sum.
+    // The winner pays the hammer price plus the platform's 5% buyer premium; the ORGANIZER
+    // separately pays their tier commission on the hammer price. application_fee_amount is the sum.
     // WHAT WAS BROKEN HERE (fixed 2026-08-17): this Checkout Session was created with NO
     // application_fee_amount and NO Connect routing at all — the whole charge landed in the
     // PLATFORM account, the organizer received nothing automatically, and FindA.Sale booked $0
@@ -185,21 +186,14 @@ export async function closeAuction(itemId: string): Promise<CloseAuctionResult> 
     // controllers/stripeController.ts exactly.
     // Sale.coversFee: the organizer absorbs the premium, so the winner is charged the bid only
     // while the platform still collects premium + commission.
-    // #363 (2026-08-17): the premium rate is the organizer's configured `Sale.buyersPremiumPct`,
-    // not a hardcoded 5%. `item.sale` is fetched with a full `include` above so every Sale scalar
-    // is present. resolveBuyerPremiumRate treats 0 as zero premium (not "unset") and falls back
-    // to the 5% default only when the column is null.
+    // PREMIUM LOCKED TO THE PLATFORM RATE (2026-08-17, Patrick ruling — reverses the #363 pass
+    // earlier the same day). The premium is FindA.Sale's revenue, not an organizer setting, so
+    // calculateApplicationFee reads the platform constant itself and takes no rate parameter.
     const hammerPriceCents = Math.round(bidAmount * 100);
     const commissionRate = getPlatformFeeRate(
       item.sale!.organizer.subscriptionTier as SubscriptionTier
     );
-    const buyerPremiumRate = resolveBuyerPremiumRate(item.sale);
-    const auctionFees = calculateApplicationFee(
-      hammerPriceCents,
-      commissionRate,
-      true,
-      buyerPremiumRate
-    );
+    const auctionFees = calculateApplicationFee(hammerPriceCents, commissionRate, true);
     const organizerCoversPremium = item.sale!.coversFee === true;
     const buyerPremium = organizerCoversPremium ? 0 : auctionFees.buyerPremiumCents / 100;
     const amountInCents = hammerPriceCents + (organizerCoversPremium ? 0 : auctionFees.buyerPremiumCents);
@@ -227,9 +221,8 @@ export async function closeAuction(itemId: string): Promise<CloseAuctionResult> 
                 currency: 'usd',
                 product_data: {
                   name: `Auction Winner Payment - ${item.title}`,
-                  // The rate here is what the buyer's card is actually run for. It used to be
-                  // the literal string "5%" while the charge honoured nothing but 5% — now both
-                  // come from the same resolved rate, so a 15% sale reads "15%".
+                  // The rate here comes from the same breakdown the charge uses, so the line
+                  // item can never quote a number the card was not run for.
                   description: organizerCoversPremium
                     ? `Winning bid: $${bidAmount.toFixed(2)}`
                     : `Winning bid: $${bidAmount.toFixed(2)} + ${formatBuyerPremiumRate(auctionFees.buyerPremiumRate)} buyer premium ($${buyerPremium.toFixed(2)})`
@@ -266,6 +259,15 @@ export async function closeAuction(itemId: string): Promise<CloseAuctionResult> 
             // controllers/stripeController.ts, which creates the PAID Purchase row. Without
             // these the webhook cannot record the sale and it is stranded.
             platformFeeAmount: String(auctionFees.applicationFeeCents / 100),
+            // FEE SNAPSHOT (2026-08-17): the premium/commission split of that combined figure.
+            // The webhook branch is the only thing that ever writes this Purchase row and it
+            // runs whenever the winner gets round to paying — possibly after an organizer tier
+            // change — so the split is pinned HERE, at close time, not re-derived there.
+            feeBuyerPremiumAmount: String(auctionFees.buyerPremiumCents / 100),
+            feeBuyerPremiumRate: String(auctionFees.buyerPremiumRate),
+            feeCommissionAmount: String(auctionFees.organizerCommissionCents / 100),
+            feeCommissionRate: String(commissionRate),
+            feeOrganizerAbsorbedPremium: organizerCoversPremium ? 'true' : 'false',
             chargeType: useDirect ? 'DIRECT' : 'DESTINATION',
             ...(useDirect ? { stripeAccountId: stripeConnectId! } : {}),
           }
@@ -320,6 +322,12 @@ export async function closeAuction(itemId: string): Promise<CloseAuctionResult> 
 
     // auctionClosed already set true by the atomic claim above -- no further write needed.
 
+    // XP PARITY WITH THE CRON (2026-08-17). See `awardAuctionWinXp` below for why this is a
+    // call and not an inline copy. Placed after the atomic `auctionClosed: false -> true` claim
+    // that gates this whole branch, so a double-tapped Close Auction button cannot double-award:
+    // the loser of that claim returns ALREADY_CLOSED long before reaching this line.
+    await awardAuctionWinXp(winnerId, item.id, item.saleId!);
+
     // Notify winner
     const checkoutCta = checkoutUrl ? `Complete your purchase: ${checkoutUrl}` : 'Contact the organizer to complete payment.';
     await createNotification(
@@ -358,5 +366,47 @@ export async function closeAuction(itemId: string): Promise<CloseAuctionResult> 
     // an ERROR outcome instead of an exception, so a partially-completed close (e.g. Stripe up,
     // notification down) never 500s an organizer who has in fact closed their auction.
     return { outcome: 'ERROR' };
+  }
+}
+
+/**
+ * Award AUCTION_WIN XP to an auction winner.
+ *
+ * PARITY REQUIREMENT (2026-08-17): this must stay byte-for-byte equivalent in behaviour to the
+ * cron's award block in `jobs/auctionJob.ts` (the `if (result.highestBid)` XP block). The two
+ * paths close the SAME lots for the SAME winners and differ only in what triggered the close —
+ * time expiry versus the organizer pressing "Close Auction" — so paying different XP was a bug,
+ * not a policy. Every element is mirrored deliberately, none of it invented here:
+ *
+ *   · Amount:     `XP_AWARDS.AUCTION_WIN` (flat, no value multiplier — D-XP-009).
+ *   · Multiplier: `applyHuntPassMultiplier` applied to the base BEFORE the cap check.
+ *   · Cap:        `checkMonthlyXpCap(userId, 'AUCTION')`; nothing is awarded when the monthly
+ *                 allowance is exhausted, and a partial award is clamped to what remains.
+ *   · Flag:       `preMultipliedHuntPassXp: true`, so `awardXp` does not multiply a second time.
+ *   · Timing:     after the winner and reserve are settled, before the winner is notified.
+ *   · Failure:    swallowed and logged. XP is a reward, not part of the transaction — a broken
+ *                 XP service must never fail an auction close that has already taken money.
+ *
+ * DOUBLE-AWARD SAFETY: the sole caller sits downstream of `closeAuction`'s atomic
+ * `updateMany({ where: { auctionClosed: false }, data: { auctionClosed: true } })` claim, which
+ * exactly one caller can win per item. A concurrent close (or the cron racing the button) loses
+ * that claim and returns ALREADY_CLOSED without reaching here, so the award fires at most once
+ * per lot across both paths.
+ */
+async function awardAuctionWinXp(winnerId: string, itemId: string, saleId: string): Promise<void> {
+  try {
+    const baseXp = XP_AWARDS.AUCTION_WIN;
+    const totalXp = await applyHuntPassMultiplier(winnerId, baseXp);
+    const monthlyRemaining = await checkMonthlyXpCap(winnerId, 'AUCTION');
+    if (monthlyRemaining > 0) {
+      const xpToAward = Math.min(totalXp, monthlyRemaining);
+      await awardXp(winnerId, 'AUCTION_WIN', xpToAward, {
+        itemId,
+        saleId,
+        preMultipliedHuntPassXp: true,
+      });
+    }
+  } catch (err) {
+    console.error('[XP] Failed to award XP for auction win (manual close):', err);
   }
 }

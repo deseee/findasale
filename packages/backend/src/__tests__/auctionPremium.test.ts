@@ -1,18 +1,30 @@
 /**
- * Auction close paths — configured buyer premium (#363) + reserve-price parity (P1, money).
+ * Auction close paths — platform-locked buyer premium, reserve parity, fee snapshot, XP parity.
  *
- * TWO BUGS THIS SUITE EXISTS FOR, both confirmed live on 2026-08-17:
+ * WHAT THIS SUITE EXISTS FOR (all confirmed live on 2026-08-17):
  *
- *   1. `Sale.buyersPremiumPct` was displayed to shoppers but never charged. Every charge path
- *      hardcoded 5%, including this one — jobs/auctionJob.ts is the LIVE auction-winner path
- *      (the cron closes the auction and creates the winner's PaymentIntent), so a sale
- *      advertising 15% ran the winner's card for 5%.
+ *   1. THE PREMIUM IS A PLATFORM RATE. `Sale.buyersPremiumPct` was briefly an
+ *      organizer-settable 0-50% control; it is RETIRED (Patrick ruling, same day) because the
+ *      premium goes into Stripe's application_fee_amount — it is FindA.Sale's own revenue, so
+ *      an organizer setting it was an organizer setting the platform's income. These tests
+ *      deliberately WRITE a value into the retired column and assert the charge IGNORES it.
+ *      That direction matters: the column still exists in the database (dropping it is
+ *      destructive and queued separately), so "nothing reads it" needs a test, not a comment.
  *
  *   2. `services/auctionService.closeAuction` — reachable from the organizer's manual
  *      "Close Auction" button (POST /api/items/:itemId/close-auction) — had NO reserve-price
  *      check, while the cron has always had one. An organizer could click their own button and
  *      sell a lot below their own reserve, charging the bidder. The rule now lives once, in
  *      utils/auctionRules.evaluateAuctionReserve, and both paths call it.
+ *
+ *   3. FEE SNAPSHOT. `Purchase.platformFeeAmount` holds the COMBINED premium + commission with
+ *      no record of the split, so organizer earnings recomputed it from live config — an
+ *      organizer upgrading SIMPLE -> PRO silently restated the fee on every past sale. The
+ *      charge paths now pin the split at charge time; these tests assert they do.
+ *
+ *   4. XP PARITY. The cron awarded AUCTION_WIN XP and the manual button did not, so an
+ *      identical outcome paid a different reward purely because of which mechanism closed the
+ *      lot. Both now award, once, with the same amount, multiplier and monthly cap.
  *
  * MOCKING NOTES (read before editing):
  *   - `services/auctionService.ts` imports `prisma` from `../index`, which is the Express entry
@@ -71,10 +83,15 @@ jest.mock('../services/stripeConnectService', () => ({
   shouldUseDirectCharge: jest.fn().mockResolvedValue(false),
 }));
 
+// XP: the cap is PERMISSIVE by default (it used to be mocked at 0, which silently suppressed
+// every award and would have hidden an XP-parity regression entirely). Individual tests
+// override it to assert the exhausted-cap branch.
+var mockAwardXp = jest.fn();
+var mockCheckMonthlyXpCap = jest.fn();
 jest.mock('../services/xpService', () => ({
-  awardXp: jest.fn().mockResolvedValue(undefined),
+  awardXp: mockAwardXp,
   applyHuntPassMultiplier: jest.fn(async (_u: string, xp: number) => xp),
-  checkMonthlyXpCap: jest.fn().mockResolvedValue(0),
+  checkMonthlyXpCap: mockCheckMonthlyXpCap,
   XP_AWARDS: { AUCTION_WIN: 20 },
 }));
 
@@ -86,6 +103,7 @@ jest.mock('../services/marketplaceStockSyncService', () => ({
 import { endAuctions } from '../jobs/auctionJob';
 import { closeAuction } from '../services/auctionService';
 import { evaluateAuctionReserve } from '../utils/auctionRules';
+import { AUCTION_BUYER_PREMIUM_RATE, resolveOrganizerFeeReport } from '../utils/feeCalculator';
 
 const STRIPE_CONNECT_ID = 'acct_auctionpremiume2e';
 
@@ -146,6 +164,10 @@ describe('Auction close — configured premium & reserve parity', () => {
   beforeEach(() => {
     mockPaymentIntentsCreate.mockReset();
     mockCheckoutSessionsCreate.mockReset();
+    mockAwardXp.mockReset();
+    mockAwardXp.mockResolvedValue(undefined);
+    mockCheckMonthlyXpCap.mockReset();
+    mockCheckMonthlyXpCap.mockResolvedValue(1000); // permissive unless a test says otherwise
     mockPaymentIntentsCreate.mockResolvedValue({ id: 'pi_auction_mock', client_secret: 'sec' });
     mockCheckoutSessionsCreate.mockResolvedValue({ id: 'cs_auction_mock', url: 'https://stripe.test/cs' });
   });
@@ -159,6 +181,9 @@ describe('Auction close — configured premium & reserve parity', () => {
     bidAmount: number;
     endedAlready?: boolean;
   }) => {
+    // `buyersPremiumPct` writes the RETIRED column directly. Nothing in the app can set it any
+    // more (no UI, and saleController's zod schema 400s on it), so this fixture is the only way
+    // to prove the charge paths ignore what is already sitting in production rows.
     const sale = await prisma.sale.create({
       data: {
         title: `Auction premium — ${opts.title}`,
@@ -207,10 +232,14 @@ describe('Auction close — configured premium & reserve parity', () => {
   };
 
   // ── jobs/auctionJob.ts — the LIVE winner charge path ────────────────────────────────────
-  describe('jobs/auctionJob.endAuctions — configured premium on the winner charge', () => {
-    it('should charge the winner the CONFIGURED 15% premium, not a hardcoded 5%', async () => {
+  describe('jobs/auctionJob.endAuctions — platform-locked premium on the winner charge', () => {
+    it('should charge the PLATFORM 5%, IGNORING a 15% left in the retired column', async () => {
+      // THE POINT OF THIS TEST: `Sale.buyersPremiumPct` still exists as a column and can still
+      // hold a value (a legacy row, a direct DB write). A prior pass made that value
+      // authoritative on the charge path — an organizer could set FindA.Sale's own revenue.
+      // Reversed. A stored 15% must have no effect whatsoever on what the card is run for.
       const { item } = await makeEndedLot({
-        title: 'cron 15pct',
+        title: 'cron ignores stored 15pct',
         buyersPremiumPct: 15,
         bidAmount: 200,
       });
@@ -221,25 +250,27 @@ describe('Auction close — configured premium & reserve parity', () => {
         (c) => c[0]?.metadata?.itemId === item.id
       );
       expect(call).toBeDefined();
-      // $200 hammer + 15% => $230.00 charged. The hardcoded-5% bug produced 21000.
-      expect(call![0].amount).toBe(23000);
-      expect(call![0].amount).not.toBe(21000);
-      // application_fee = $30.00 premium + $20.00 SIMPLE commission.
-      expect(call![0].application_fee_amount).toBe(3000 + 2000);
+      // $200 hammer + the platform 5% => $210.00. NOT the $230.00 the stored 15% would give.
+      expect(call![0].amount).toBe(21000);
+      expect(call![0].amount).not.toBe(23000);
+      // application_fee = $10.00 premium + $20.00 SIMPLE commission.
+      expect(call![0].application_fee_amount).toBe(1000 + 2000);
       // Organizer still nets $180.00.
       expect(call![0].amount - call![0].application_fee_amount).toBe(18000);
 
       // The PENDING Purchase must record what the buyer was actually charged.
       const purchase = await prisma.purchase.findFirst({ where: { itemId: item.id } });
-      expect(purchase?.amount).toBe(230);
-      expect(purchase?.platformFeeAmount).toBe(50);
+      expect(purchase?.amount).toBe(210);
+      expect(purchase?.platformFeeAmount).toBe(30);
       expect(purchase?.status).toBe('PENDING');
-      console.log('✓ auctionJob 15%: winner charged $230.00, application fee $50.00, organizer nets $180.00');
+      console.log('✓ auctionJob: stored 15% ignored, winner charged $210.00 at the platform 5%');
     });
 
-    it('should charge no premium at all when the sale is configured at 0', async () => {
+    it('should charge the platform 5% even when the retired column says 0', async () => {
+      // The mirror of the test above, and the more dangerous direction: a stored 0 used to mean
+      // "this auction earns FindA.Sale no premium at all". It must now be inert too.
       const { item } = await makeEndedLot({
-        title: 'cron 0pct',
+        title: 'cron ignores stored 0pct',
         buyersPremiumPct: 0,
         bidAmount: 200,
       });
@@ -250,15 +281,15 @@ describe('Auction close — configured premium & reserve parity', () => {
         (c) => c[0]?.metadata?.itemId === item.id
       );
       expect(call).toBeDefined();
-      expect(call![0].amount).toBe(20000);      // bid only
-      expect(call![0].amount).not.toBe(21000);  // the falsy-trap regression
-      expect(call![0].application_fee_amount).toBe(2000); // commission only
-      console.log('✓ auctionJob 0%: winner charged $200.00 flat');
+      expect(call![0].amount).toBe(21000);                 // premium still charged
+      expect(call![0].amount).not.toBe(20000);             // the "organizer zeroed us out" bug
+      expect(call![0].application_fee_amount).toBe(3000);  // $10 premium + $20 commission
+      console.log('✓ auctionJob: stored 0% ignored, platform still collects its 5%');
     });
 
-    it('should keep the 5% default when the sale has no configured premium', async () => {
+    it('should charge the platform 5% on a sale with nothing in the column', async () => {
       const { item } = await makeEndedLot({
-        title: 'cron default',
+        title: 'cron unset',
         buyersPremiumPct: null,
         bidAmount: 200,
       });
@@ -270,7 +301,75 @@ describe('Auction close — configured premium & reserve parity', () => {
       );
       expect(call![0].amount).toBe(21000);
       expect(call![0].application_fee_amount).toBe(1000 + 2000);
-      console.log('✓ auctionJob default: unchanged 5% behaviour');
+      console.log('✓ auctionJob: unset column, 5% charged');
+    });
+
+    it('should write the fee SNAPSHOT so the split never has to be recomputed', async () => {
+      const { item } = await makeEndedLot({
+        title: 'cron snapshot',
+        bidAmount: 200,
+      });
+
+      await endAuctions();
+
+      const purchase = await prisma.purchase.findFirst({ where: { itemId: item.id } });
+      expect(purchase).toBeTruthy();
+      expect(purchase!.buyerPremiumAmount).toBe(10);
+      expect(purchase!.buyerPremiumRate).toBe(AUCTION_BUYER_PREMIUM_RATE);
+      expect(purchase!.commissionAmount).toBe(20);
+      expect(purchase!.commissionRate).toBe(0.1);
+      expect(purchase!.organizerAbsorbedPremium).toBe(false);
+      // THE INVARIANT: the two components reconstruct the combined application_fee_amount.
+      expect(purchase!.buyerPremiumAmount! + purchase!.commissionAmount!).toBe(
+        purchase!.platformFeeAmount
+      );
+
+      // And reporting PREFERS it: the organizer sees $200 gross / $20 fee even if we hand the
+      // helper a PRO tier rate, because the row records that it was charged at SIMPLE.
+      const report = resolveOrganizerFeeReport(purchase as any, 0.08);
+      expect(report.grossSalePrice).toBe(200);
+      expect(report.platformFee).toBe(20);
+      console.log('✓ auctionJob snapshot: $10 premium + $20 commission pinned; report ignores the PRO rate');
+    });
+
+    it('should snapshot the coversFee case as organizer-absorbed', async () => {
+      const { item } = await makeEndedLot({
+        title: 'cron coversFee',
+        coversFee: true,
+        bidAmount: 200,
+      });
+
+      await endAuctions();
+
+      const call = mockPaymentIntentsCreate.mock.calls.find(
+        (c) => c[0]?.metadata?.itemId === item.id
+      );
+      // Buyer pays the bid only; the platform still collects premium + commission.
+      expect(call![0].amount).toBe(20000);
+      expect(call![0].application_fee_amount).toBe(3000);
+
+      const purchase = await prisma.purchase.findFirst({ where: { itemId: item.id } });
+      expect(purchase!.organizerAbsorbedPremium).toBe(true);
+      expect(purchase!.buyerPremiumAmount).toBe(10);
+      expect(purchase!.commissionAmount).toBe(20);
+      // The organizer absorbed the premium, so it belongs on THEIR fee line: $200 gross, $30 fee.
+      const report = resolveOrganizerFeeReport(purchase as any, 0.1);
+      expect(report.grossSalePrice).toBe(200);
+      expect(report.platformFee).toBe(30);
+      console.log('✓ auctionJob coversFee: buyer charged $200.00, organizer fee line $30.00');
+    });
+
+    it('should award AUCTION_WIN XP to the winner (the behaviour the manual path had to match)', async () => {
+      const { item, sale } = await makeEndedLot({ title: 'cron xp', bidAmount: 40 });
+
+      await endAuctions();
+
+      expect(mockAwardXp).toHaveBeenCalledWith(bidder.id, 'AUCTION_WIN', 20, {
+        itemId: item.id,
+        saleId: sale.id,
+        preMultipliedHuntPassXp: true,
+      });
+      console.log('✓ auctionJob: AUCTION_WIN XP awarded — the baseline the manual close now mirrors');
     });
 
     it('should NOT charge below reserve, and must create no Purchase and no Stripe object', async () => {
@@ -329,7 +428,7 @@ describe('Auction close — configured premium & reserve parity', () => {
       console.log('✓ manual close below reserve: refused, nothing charged, lot AUCTION_ENDED');
     });
 
-    it('should award normally when the reserve IS met, at the configured premium', async () => {
+    it('should award at the PLATFORM 5%, ignoring a 15% left in the retired column', async () => {
       const { item } = await makeEndedLot({
         title: 'manual reserve met',
         buyersPremiumPct: 15,
@@ -343,16 +442,21 @@ describe('Auction close — configured premium & reserve parity', () => {
       expect(result.outcome).toBe('SOLD');
       expect(mockCheckoutSessionsCreate).toHaveBeenCalled();
       const args = mockCheckoutSessionsCreate.mock.calls.at(-1)![0];
-      // Buyer pays $200 + 15% = $230.00 — same arithmetic as the cron and createPaymentIntent.
-      expect(args.line_items[0].price_data.unit_amount).toBe(23000);
-      expect(args.payment_intent_data.application_fee_amount).toBe(3000 + 2000);
-      // The Stripe line description must state the rate actually charged, not "5%". Anchored on
-      // the leading "+ " because the string "15%" trivially contains "5%".
-      expect(args.line_items[0].price_data.product_data.description).toContain('+ 15% buyer premium');
-      expect(args.line_items[0].price_data.product_data.description).not.toContain('+ 5% buyer premium');
-      // The webhook needs the fee stamped in metadata to write the Purchase row later.
-      expect(args.metadata.platformFeeAmount).toBe('50');
-      console.log('✓ manual close above reserve: $230.00 session, $50.00 application fee, description says 15%');
+      // Buyer pays $200 + 5% = $210.00 — same arithmetic as the cron and createPaymentIntent.
+      expect(args.line_items[0].price_data.unit_amount).toBe(21000);
+      expect(args.line_items[0].price_data.unit_amount).not.toBe(23000);
+      expect(args.payment_intent_data.application_fee_amount).toBe(1000 + 2000);
+      // The Stripe line description states the rate actually charged.
+      expect(args.line_items[0].price_data.product_data.description).toContain('+ 5% buyer premium');
+      expect(args.line_items[0].price_data.product_data.description).not.toContain('15%');
+      // The webhook needs the fee stamped in metadata to write the Purchase row later — both
+      // the combined figure and the premium/commission split for the snapshot.
+      expect(args.metadata.platformFeeAmount).toBe('30');
+      expect(args.metadata.feeBuyerPremiumAmount).toBe('10');
+      expect(args.metadata.feeCommissionAmount).toBe('20');
+      expect(args.metadata.feeCommissionRate).toBe('0.1');
+      expect(args.metadata.feeOrganizerAbsorbedPremium).toBe('false');
+      console.log('✓ manual close above reserve: $210.00 session, $30.00 fee, split stamped for the webhook');
     });
 
     it('should award a lot with NO reserve set, exactly as before', async () => {
@@ -369,7 +473,93 @@ describe('Auction close — configured premium & reserve parity', () => {
       expect(result.outcome).toBe('SOLD');
       const args = mockCheckoutSessionsCreate.mock.calls.at(-1)![0];
       expect(args.line_items[0].price_data.unit_amount).toBe(7875); // $75 + 5%
-      console.log('✓ manual close, no reserve: unchanged award at the 5% default');
+      console.log('✓ manual close, no reserve: unchanged award at the platform 5%');
+    });
+
+    // ── XP PARITY (2026-08-17) ────────────────────────────────────────────────────────────
+    it('should award AUCTION_WIN XP — the same amount and shape as the cron', async () => {
+      // THE BUG: this path awarded nothing. Same winner, same lot, same outcome — a different
+      // reward purely because an organizer pressed a button instead of the clock running out.
+      const { item, sale } = await makeEndedLot({
+        title: 'manual xp parity',
+        bidAmount: 90,
+        endedAlready: false,
+      });
+
+      const result = await closeAuction(item.id);
+
+      expect(result.outcome).toBe('SOLD');
+      expect(mockAwardXp).toHaveBeenCalledTimes(1);
+      expect(mockAwardXp).toHaveBeenCalledWith(bidder.id, 'AUCTION_WIN', 20, {
+        itemId: item.id,
+        saleId: sale.id,
+        preMultipliedHuntPassXp: true,
+      });
+      console.log('✓ manual close: AUCTION_WIN XP awarded, identical call shape to the cron');
+    });
+
+    it('should award XP exactly ONCE when the close is double-fired', async () => {
+      // The atomic auctionClosed claim is what makes this safe: the second caller returns
+      // ALREADY_CLOSED long before reaching the award.
+      const { item } = await makeEndedLot({
+        title: 'manual xp double fire',
+        bidAmount: 55,
+        endedAlready: false,
+      });
+
+      const [first, second] = [await closeAuction(item.id), await closeAuction(item.id)];
+
+      expect(first.outcome).toBe('SOLD');
+      expect(second.outcome).toBe('ALREADY_CLOSED');
+      expect(mockAwardXp).toHaveBeenCalledTimes(1);
+      console.log('✓ manual close double-fire: one XP award, not two');
+    });
+
+    it('should award NO XP when the monthly AUCTION cap is exhausted', async () => {
+      mockCheckMonthlyXpCap.mockResolvedValue(0);
+      const { item } = await makeEndedLot({
+        title: 'manual xp capped',
+        bidAmount: 45,
+        endedAlready: false,
+      });
+
+      const result = await closeAuction(item.id);
+
+      expect(result.outcome).toBe('SOLD');
+      expect(mockAwardXp).not.toHaveBeenCalled();
+      console.log('✓ manual close: monthly cap respected, no XP awarded');
+    });
+
+    it('should still close the auction when the XP service throws', async () => {
+      // XP is a reward, not part of the transaction. A broken xpService must never fail a close
+      // that has already created a Checkout Session for a real buyer.
+      mockAwardXp.mockRejectedValue(new Error('xp service down'));
+      const { item } = await makeEndedLot({
+        title: 'manual xp throws',
+        bidAmount: 65,
+        endedAlready: false,
+      });
+
+      const result = await closeAuction(item.id);
+
+      expect(result.outcome).toBe('SOLD');
+      expect(mockCheckoutSessionsCreate).toHaveBeenCalled();
+      console.log('✓ manual close: XP failure swallowed, auction still closed');
+    });
+
+    it('should award NO XP when the reserve is not met', async () => {
+      const { item } = await makeEndedLot({
+        title: 'manual xp reserve unmet',
+        reservePrice: 500,
+        bidAmount: 100,
+        endedAlready: false,
+      });
+
+      const result = await closeAuction(item.id);
+
+      expect(result.outcome).toBe('RESERVE_NOT_MET');
+      expect(mockAwardXp).not.toHaveBeenCalled();
+      console.log('✓ manual close below reserve: no winner, no XP');
     });
 
     it('should report NO_BIDS without charging anything', async () => {

@@ -15,55 +15,44 @@
  * $210.00, application fee $30.00, organizer nets $180.00 and their fee line reads $20.00 —
  * the commission only, because the premium came out of the buyer's pocket.
  *
+ * ── THE PREMIUM IS A PLATFORM RATE, NOT AN ORGANIZER SETTING (locked 2026-08-17) ──────────
+ * `Sale.buyersPremiumPct` was briefly an organizer-settable 0–50% control (#363, same day) and
+ * this file briefly carried a `resolveBuyerPremiumPct` resolver to display it. Both are RETIRED.
+ * The premium is FindA.Sale's own revenue, so an organizer-settable rate let an organizer set
+ * the platform's income. Every shopper-facing surface now states 5% flat, from the constant
+ * below. Do not reintroduce a per-sale premium lookup, and do not hardcode "5%" as a literal in
+ * a component — import from here so there is exactly one number to change.
+ *
+ * `Sale.coversFee` is UNAFFECTED and still works: an organizer may absorb the 5% so their
+ * winner pays exactly the bid. In that case the buyer's premium is genuinely 0 and the surfaces
+ * that show a buyer-facing figure say so.
+ *
  * ANY new fee display must import from here. Do not re-hardcode 0.10 / 0.08 / 0.05.
  */
 
 export type OrganizerTier = 'SIMPLE' | 'PRO' | 'TEAMS' | null | undefined;
 
-/**
- * DEFAULT auction buyer premium — buyer-paid, auctions only, expressed as a decimal rate.
- * The organizer may override it per sale via `Sale.buyersPremiumPct`; resolve the number to
- * DISPLAY with `resolveBuyerPremiumPct` below rather than assuming 5% anywhere.
- */
-export const DEFAULT_AUCTION_BUYER_PREMIUM_RATE = 0.05;
+/** THE auction buyer premium — buyer-paid, auctions only, as a decimal rate. Platform-set. */
+export const AUCTION_BUYER_PREMIUM_RATE = 0.05;
 
-/** Legacy alias. It is the DEFAULT rate, not "the" rate. */
-export const AUCTION_BUYER_PREMIUM_RATE = DEFAULT_AUCTION_BUYER_PREMIUM_RATE;
+/** The same rate in PERCENT, for arithmetic against a price. */
+export const AUCTION_BUYER_PREMIUM_PCT = 5;
 
-/** The same default, in PERCENT — the unit `Sale.buyersPremiumPct` is expressed in. */
-export const DEFAULT_BUYER_PREMIUM_PCT = 5;
+/** The rate as display copy: "5%". Use this rather than typing the literal into JSX. */
+export const AUCTION_BUYER_PREMIUM_LABEL = '5%';
 
-/**
- * Resolve the buyer premium PERCENTAGE to show a shopper for a given sale.
- *
- * Mirrors `resolveBuyerPremiumRate` in packages/backend/src/utils/feeCalculator.ts, which is
- * what the charge actually uses. The two must agree — the whole #363 bug was a sale page
- * advertising one number while the card was run for another.
- *
- *   · null / undefined -> 5 (the default). Sales that predate the field, and every sale where
- *     the organizer left the box blank, keep showing 5%.
- *   · 0                -> 0. No premium at all.
- *   · anything else     -> that percentage, clamped to [0, 50].
- *
- * DO NOT write `pct || 5`. `0` is falsy, so that form displays 5% on a sale the organizer set
- * to zero — a shopper would be quoted a premium that is never charged. The null/undefined check
- * here is deliberately explicit and separate from the numeric path.
- */
-export const resolveBuyerPremiumPct = (
-  buyersPremiumPct?: number | string | null
-): number => {
-  if (buyersPremiumPct === null || buyersPremiumPct === undefined) return DEFAULT_BUYER_PREMIUM_PCT;
-  const pct = typeof buyersPremiumPct === 'number' ? buyersPremiumPct : parseFloat(buyersPremiumPct);
-  if (!Number.isFinite(pct)) return DEFAULT_BUYER_PREMIUM_PCT;
-  return Math.min(50, Math.max(0, pct));
-};
-
-/** "5%", "12.5%", "0%" — no fake precision, no trailing zeros. */
+/** "5%", "12.5%", "0%" — no fake precision, no trailing zeros. Kept because a buyer-facing
+ *  figure is legitimately 0% under Sale.coversFee, and because CheckoutModal renders whatever
+ *  premium rate the SERVER says was charged rather than assuming. */
 export const formatBuyerPremiumPct = (pct: number): string => `${parseFloat(pct.toFixed(2))}%`;
 
-/** What a winning bid of `bid` actually costs the buyer at the given premium percentage. */
-export const buyerTotalWithPremium = (bid: number, pct: number): number =>
-  parseFloat((bid + bid * (pct / 100)).toFixed(2));
+/** What a winning bid actually costs the buyer, at the platform premium rate. */
+export const buyerTotalWithPremium = (bid: number): number =>
+  parseFloat((bid + bid * AUCTION_BUYER_PREMIUM_RATE).toFixed(2));
+
+/** The premium in dollars on a given bid, at the platform rate. */
+export const buyerPremiumOn = (bid: number): number =>
+  parseFloat((bid * AUCTION_BUYER_PREMIUM_RATE).toFixed(2));
 
 /**
  * Organizer commission rate by tier. PRO and TEAMS are both 8% — a `tier === 'PRO' ? 0.08 :
