@@ -29,6 +29,14 @@ import { prisma } from '../lib/prisma';
 
 export type ResolvedPosActor = {
   id: string; // Organizer.id — the RESOLVED organizer, not the caller
+  // Organizer.userId — the User.id that OWNS the resolved Organizer. P0 fix (2026-08-16):
+  // this used to be absent, and three separate HoldInvoice.create call sites papered over
+  // the gap by writing `organizer.id` (an Organizer.id) into `HoldInvoice.organizerUserId`,
+  // a column with a live FK to User(id) -- Postgres rejected every one with P2003 and the
+  // HoldInvoice table stayed empty platform-wide. NEVER interchangeable with `id` above,
+  // and NOT the same as `actingUserId` below: under the TEAM_MEMBER branch the caller
+  // standing at the register is a different User from the organizer who owns the workspace.
+  ownerUserId: string;
   stripeConnectId: string | null;
   subscriptionTier: string | null;
   referralDiscountExpiry: Date | null;
@@ -59,7 +67,7 @@ export async function resolveOrganizerOrTeamMember(
   if (hasOrganizerRole) {
     const organizer = await prisma.organizer.findUnique({
       where: { userId: actingUserId },
-      select: { id: true, stripeConnectId: true, referralDiscountExpiry: true, subscriptionTier: true },
+      select: { id: true, userId: true, stripeConnectId: true, referralDiscountExpiry: true, subscriptionTier: true },
     });
 
     if (!organizer) {
@@ -74,6 +82,7 @@ export async function resolveOrganizerOrTeamMember(
 
     return {
       id: organizer.id,
+      ownerUserId: organizer.userId,
       stripeConnectId: organizer.stripeConnectId,
       subscriptionTier: organizer.subscriptionTier,
       referralDiscountExpiry: organizer.referralDiscountExpiry,
@@ -103,6 +112,7 @@ export async function resolveOrganizerOrTeamMember(
           owner: {
             select: {
               id: true,
+              userId: true,
               stripeConnectId: true,
               referralDiscountExpiry: true,
               subscriptionTier: true,
@@ -128,6 +138,7 @@ export async function resolveOrganizerOrTeamMember(
 
   return {
     id: organizer.id,
+    ownerUserId: organizer.userId,
     stripeConnectId: organizer.stripeConnectId,
     subscriptionTier: organizer.subscriptionTier,
     referralDiscountExpiry: organizer.referralDiscountExpiry,

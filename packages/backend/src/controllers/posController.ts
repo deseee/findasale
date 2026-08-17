@@ -24,6 +24,7 @@ import { getPlatformFeeRate, SubscriptionTier } from '../utils/feeCalculator';
 import { transactionalEmailService } from '../lib/transactionalEmailService';
 import { commitItemSale, ItemAlreadyCommittedError } from '../services/itemSaleGuard'; // ADR-098: atomic double-sell guard
 import { resolveOrganizerOrTeamMember } from '../utils/posAuth'; // S1183 Fix 1: TEAM_MEMBER fallback for non-venue POS
+import { stripeCheckoutExpiry } from '../utils/stripeCheckoutExpiry'; // Hold-to-Pay P0 (2026-08-16): Stripe expires_at floor/ceiling clamp
 import { shouldUseDirectCharge } from '../services/stripeConnectService'; // Direct-charges migration (2026-08-08): staged-rollout routing decision
 import { invoiceableWhere, isInvoicedOrClaimed } from '../services/holdInvoiceClaim'; // Hold-to-Pay P0 (2026-08-16): non-FK invoice claim must be visible to every hold read site
 
@@ -637,7 +638,14 @@ export const sendHoldInvoice = async (req: AuthRequest, res: Response) => {
       data: {
         reservationId,
         shopperUserId: reservation.userId,
-        organizerUserId: organizer.id,
+        // P0-A fix (2026-08-16): this wrote `organizer.id` -- an Organizer.id -- into a
+        // column FK'd to User(id) (HoldInvoice_organizerUserId_fkey). Postgres rejected
+        // every insert with P2003; the HoldInvoice table was empty platform-wide across ALL
+        // THREE creation paths for this same reason. `organizer` here is posAuth's
+        // ResolvedPosActor, whose `.id` is the Organizer.id -- `.ownerUserId` is the User.id
+        // that owns it (and is NOT `.actingUserId`, who under the TEAM_MEMBER branch is a
+        // different person standing at the register).
+        organizerUserId: organizer.ownerUserId,
         saleId: reservation.item.sale!.id,
         itemIds: [reservation.itemId],
         totalAmount: grandTotal,
@@ -1259,6 +1267,22 @@ export const createCombinedInvoice = async (req: AuthRequest, res: Response) => 
         }
 
         const baseUrl = process.env.FRONTEND_URL || 'https://finda.sale';
+
+        // P0-B fix (2026-08-16): Stripe rejects a Checkout Session whose expires_at is under
+        // 30 minutes (or over 24 hours) from Session creation. QUICK mode is a flat 15-minute
+        // window -- permanently under the floor, a guaranteed 400 -- and TRUST mode takes an
+        // organizer-supplied expiresAt that can just as easily exceed the ceiling. Clamp ONLY
+        // the value handed to Stripe; HoldInvoice.expiresAt below keeps the real business
+        // deadline (invoiceExpiryJob still governs it). See utils/stripeCheckoutExpiry.ts.
+        const checkoutExpiry = stripeCheckoutExpiry(expiresAt);
+        if (checkoutExpiry.clampedTo) {
+          console.warn(
+            `[pos] Stripe expires_at clamped to ${checkoutExpiry.clampedTo} for session ${sessionId} (${invoiceMode}): ` +
+            `invoice deadline ${expiresAt.toISOString()} -> Stripe session expiry ${checkoutExpiry.effectiveExpiresAt.toISOString()}. ` +
+            `The Checkout Session and HoldInvoice.expiresAt intentionally disagree.`
+          );
+        }
+
         // P2 idempotency fix: stable key derived from the cart/session + the exact set of
         // held items + misc items + cash split -- NOT from expiresAt (which is
         // time-derived and would defeat the key on every retry). A retry of the identical
@@ -1289,7 +1313,7 @@ export const createCombinedInvoice = async (req: AuthRequest, res: Response) => 
             line_items,
             success_url: `${baseUrl}/items?paymentStatus=success`,
             cancel_url: `${baseUrl}/items?paymentStatus=cancelled`,
-            expires_at: Math.floor(expiresAt.getTime() / 1000),
+            expires_at: checkoutExpiry.expiresAtUnix, // clamped into Stripe's 30min..24h window (P0-B)
             payment_intent_data: {
               metadata: {
                 itemIds: bundledItemIds.join(','),
@@ -1331,7 +1355,9 @@ export const createCombinedInvoice = async (req: AuthRequest, res: Response) => 
         data: {
           ...(heldReservations.length > 0 ? { reservationId: heldReservations[0].id } : {}),
           shopperUserId: shopper.id,
-          organizerUserId: organizer.id,
+          // P0-A fix (2026-08-16) -- see the identical note on sendHoldInvoice above.
+          // HoldInvoice.organizerUserId FKs to User(id), not Organizer(id).
+          organizerUserId: organizer.ownerUserId,
           saleId: session.sale!.id,
           stripeSessionId,
           totalAmount: grandTotalCents,

@@ -199,7 +199,7 @@ export const ShippingNetPreview: React.FC<ShippingNetPreviewProps> = ({
           <div className="flex items-center gap-1">
             <span className="text-xs font-medium text-warm-600 dark:text-warm-400">Buyer pays for shipping</span>
             <span
-              className="text-warm-400 dark:text-warm-500 cursor-help text-xs"
+              className="text-warm-600 dark:text-warm-400 cursor-help text-xs"
               title="Priced as one flat rate from this item's weight and box size, set high enough to safely cover shipping to any US buyer. Not a live eBay-calculated per-buyer rate."
             >
               ⓘ
@@ -212,7 +212,7 @@ export const ShippingNetPreview: React.FC<ShippingNetPreviewProps> = ({
               <div className="mt-0.5 text-lg font-bold text-warm-900 dark:text-warm-100">
                 {data.flatPolicy ? fmt(data.buyerShipping) : `~${fmt(data.buyerShipping)}`}
               </div>
-              <div className="text-[11px] text-warm-500 dark:text-warm-400">
+              <div className="text-[11px] text-warm-600 dark:text-warm-400">
                 {data.flatPolicy
                   ? `Flat rate · ${data.flatPolicy.name}`
                   : `${carrierLabel(data.shippingEstimate.carrier)} · calculated at checkout`}
@@ -221,7 +221,7 @@ export const ShippingNetPreview: React.FC<ShippingNetPreviewProps> = ({
           ) : data && data.shippingEstimate.freeShippingOptIn ? (
             <>
               <div className="mt-0.5 text-lg font-bold text-green-700 dark:text-green-300">Free</div>
-              <div className="text-[11px] text-warm-500 dark:text-warm-400">You cover ~{fmt(data.shippingEstimate.rate)}</div>
+              <div className="text-[11px] text-warm-600 dark:text-warm-400">You cover ~{fmt(data.shippingEstimate.rate)}</div>
             </>
           ) : (
             <div className="mt-1 text-sm text-warm-500 dark:text-warm-400">, </div>
@@ -279,13 +279,13 @@ export const ShippingNetPreview: React.FC<ShippingNetPreviewProps> = ({
             <Row label="= Your net" value={fmt(data.breakdown.net)} bold />
           </div>
           {data.flatPolicy && (
-            <p className="text-[11px] text-warm-500 dark:text-warm-400 pt-1">
+            <p className="text-[11px] text-warm-600 dark:text-warm-400 pt-1">
               Your buyer pays the {data.flatPolicy.name} flat rate ({fmt(data.breakdown.buyerShipping)}). Your
               label costs about {fmt(data.breakdown.labelCost)}. The difference, minus eBay's fee on the full
               shipping amount, is yours.
             </p>
           )}
-          <p className="text-[11px] text-warm-500 dark:text-warm-400 pt-1">
+          <p className="text-[11px] text-warm-600 dark:text-warm-400 pt-1">
             Fees include a small safety buffer, so your real net is usually a little higher.
           </p>
         </div>

@@ -314,13 +314,20 @@ export async function checkWinningBidVelocity(
       if (!item.saleId) return { isSuspicious: false, holdDuration: 0 }; // skip if item has no saleId
       const sale = await prisma.sale.findUnique({
         where: { id: item.saleId },
-        select: { organizerId: true },
+        // P0-A sweep find (2026-08-16, same bug class as HoldInvoice.organizerUserId): the
+        // create below wrote `sale.organizerId` -- an Organizer.id -- into FraudSignal.userId,
+        // which FKs to User(id) (`FraudSignal.user @relation("UserFraudSignals")`). Postgres
+        // rejects that with P2003 on EVERY suspicious-low-bid detection, and this function's
+        // outer catch swallows the throw and returns { isSuspicious: false, holdDuration: 0 }
+        // -- so the signal was never recorded AND the 24-hour payment hold never applied,
+        // silently. Select the organizer's owning User id and write that instead.
+        select: { organizerId: true, organizer: { select: { userId: true } } },
       });
 
       if (sale) {
         await prisma.fraudSignal.create({
           data: {
-            userId: sale.organizerId, // Link to organizer, not bidder
+            userId: sale.organizer.userId, // Link to the organizer's User, not the bidder
             itemId,
             saleId: item.saleId,
             signalType: 'SUSPICIOUSLY_LOW_BID',

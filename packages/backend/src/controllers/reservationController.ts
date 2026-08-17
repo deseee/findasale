@@ -23,6 +23,7 @@ import { shouldUseDirectCharge } from '../services/stripeConnectService'; // Dir
 import { assertCheckoutAllowed, CheckoutGuardError } from '../services/checkoutGuard'; // S1072 Finding #4: collusion/wash-trade guard
 import { createPaymentLinkInternal } from './posController'; // markSold settlement router: reuse Stripe Payment Link + QR
 import { invoiceableWhere, isInvoicedOrClaimed, InvoiceClaimLostError } from '../services/holdInvoiceClaim'; // Hold-to-Pay P0 (2026-08-16): non-FK invoice claim
+import { stripeCheckoutExpiry } from '../utils/stripeCheckoutExpiry'; // Hold-to-Pay P0 (2026-08-16): Stripe expires_at floor/ceiling clamp
 
 // markSold settlement router (Decision A): settlement modes
 type SettlementMode = 'RECORD' | 'POS_CART' | 'CHECKOUT_LINK';
@@ -1463,11 +1464,43 @@ export const markSoldAndCreateInvoice = async (req: AuthRequest, res: Response) 
         quantity: 1,
       }));
 
-      // P2 idempotency fix: stable per-attempt key. The atomic claim above already
-      // prevents a genuinely concurrent second request from reaching this call, so this
-      // is defense-in-depth against the SDK/network layer retrying the same logical
-      // request (e.g. a transient timeout) creating a second Checkout Session.
-      const idempotencyKey = `mark-sold-invoice-${reservationId}`;
+      // P0-C fix (2026-08-16): this key used to be `mark-sold-invoice-${reservationId}` --
+      // pinned to the reservation FOREVER (Stripe keys live 24h). Stripe saves the result of
+      // the FIRST request under a key, error responses included, and returns
+      // "Keys for idempotent requests can only be used with the same parameters" as soon as
+      // any parameter changes. So the instant one attempt failed (e.g. the expires_at 400
+      // fixed above), EVERY subsequent attempt on that hold was poisoned for 24 hours --
+      // and the remedy the UI offers, "Extend (+30min)", is precisely what changes
+      // expires_at and guarantees the parameter mismatch. A hold that failed to invoice
+      // could never be invoiced again.
+      //
+      // WHAT THE KEY STILL GUARDS after this change: the double-submit / concurrent-request
+      // race is NOT its job any more -- the atomic invoiceClaimToken compare-and-swap above
+      // (shipped and confirmed working) is the real guard, and a genuinely concurrent second
+      // request is rejected with a 409 before it ever reaches this call. What remains, and
+      // what this key still covers, is a retry of THIS SAME attempt below the application
+      // layer: the Stripe SDK's own automatic retry of a transient timeout/5xx, or a
+      // connection reset where the Session may or may not have been created server-side.
+      // Scoping the key to claimToken (a fresh randomUUID per attempt, generated before the
+      // Stripe call) is exactly right for that: constant within one attempt, different on
+      // every new attempt.
+      const idempotencyKey = `mark-sold-invoice-${reservationId}-${claimToken}`;
+
+      // P0-B fix (2026-08-16): Stripe rejects expires_at under 30 minutes from Session
+      // creation. LOCKED DECISION #7 makes the invoice window the hold-timer REMAINDER, and
+      // the default shopper rank (INITIATE) holds for 30 minutes total -- so the remainder
+      // was ALWAYS below Stripe's floor and every call 400'd. Clamp ONLY the value handed to
+      // Stripe; HoldInvoice.expiresAt below stays the true business deadline (#7 intact).
+      // See utils/stripeCheckoutExpiry.ts for the accepted-divergence note when the floor
+      // bites (Stripe session outlives the hold by up to ~31 min).
+      const checkoutExpiry = stripeCheckoutExpiry(expiresAt);
+      if (checkoutExpiry.clampedTo) {
+        console.warn(
+          `[hold-invoice] Stripe expires_at clamped to ${checkoutExpiry.clampedTo} for reservation ${reservationId}: ` +
+          `hold/invoice deadline ${expiresAt.toISOString()} -> Stripe session expiry ${checkoutExpiry.effectiveExpiresAt.toISOString()}. ` +
+          `The Checkout Session and HoldInvoice.expiresAt intentionally disagree; invoiceExpiryJob still governs the real deadline.`
+        );
+      }
 
       // Direct-charges migration (2026-08-08): staged-rollout routing decision. NOTE: this
       // call site's existing shape (below) already omits on_behalf_of -- a pre-existing,
@@ -1485,7 +1518,7 @@ export const markSoldAndCreateInvoice = async (req: AuthRequest, res: Response) 
           line_items,
           success_url: `${baseUrl}/items?paymentStatus=success`,
           cancel_url: `${baseUrl}/items?paymentStatus=cancelled`,
-          expires_at: Math.floor(expiresAt.getTime() / 1000), // Unix timestamp
+          expires_at: checkoutExpiry.expiresAtUnix, // clamped into Stripe's 30min..24h window (P0-B)
           // LOCKED DECISION #1: Organizer absorbs Stripe fee via application_fee_amount
           // (+ transfer_data on the non-Direct path only -- see useDirect above).
           payment_intent_data: {
@@ -1524,7 +1557,14 @@ export const markSoldAndCreateInvoice = async (req: AuthRequest, res: Response) 
         data: {
           reservationId: reservationId, // Store first reservation for backward compatibility
           shopperUserId: reservation.user.id,
-          organizerUserId: organizer.id,
+          // P0-A fix (2026-08-16): this wrote `organizer.id` -- an Organizer.id -- into a
+          // column whose FK is HoldInvoice_organizerUserId_fkey -> User(id) (schema.prisma
+          // HoldInvoice.organizer @relation("OrganizerInvoices")). Postgres rejected every
+          // insert with P2003 and Hold-to-Pay was 100% broken with an empty HoldInvoice
+          // table platform-wide. `organizer` here is the Organizer row off
+          // reservation.item.sale.organizer (see the ownership check above, which compares
+          // organizer.userId to req.user.id), so its OWNING user is organizer.userId.
+          organizerUserId: organizer.userId,
           // reservation.item.saleId! — HoldInvoice path only runs for items in active sales
           saleId: reservation.item.saleId!,
           stripeSessionId: stripeSession.id,
@@ -1708,11 +1748,14 @@ export const getInvoiceDetails = async (req: AuthRequest, res: Response) => {
     // Authorization: shopper or organizer
     const isShopper = invoice.shopperUserId === req.user.id;
 
-    // Get organizer's ID from request user
-    const userOrganizer = await prisma.organizer.findUnique({
-      where: { userId: req.user.id },
-    });
-    const isOrganizer = invoice.organizerUserId === userOrganizer?.id;
+    // P0-A fix (2026-08-16): this used to look up the caller's Organizer row and compare
+    // `invoice.organizerUserId === userOrganizer.id` -- i.e. it read the column as an
+    // Organizer.id, while services/holdInvoicePaymentRecorder.ts reads the SAME column as a
+    // User.id (notification userId + the `organizer` User relation's email/name). The two
+    // consumers disagreed; the schema settles it -- HoldInvoice.organizerUserId FKs to
+    // User(id). Compare against req.user.id directly; the Organizer lookup is no longer
+    // needed for this check.
+    const isOrganizer = invoice.organizerUserId === req.user.id;
 
     if (!isShopper && !isOrganizer) {
       return res.status(403).json({ message: 'Access denied' });
@@ -1852,26 +1895,55 @@ export const releaseInvoice = async (req: AuthRequest, res: Response) => {
     }
 
     const stripe = require('../utils/stripe').getStripe();
+    const invoice = reservation.invoice!; // non-null: 404'd above if absent
 
-    // Cancel the Stripe Checkout session
-    try {
-      await stripe.checkout.sessions.expire(reservation.invoice.stripeSessionId);
-    } catch (stripeError: any) {
-      console.warn('[hold-invoice] Failed to expire Stripe session:', stripeError);
-      // Non-fatal: continue with local state update
+    // Cancel the Stripe Checkout session. Null-guarded: posController.sendHoldInvoice
+    // creates HoldInvoice rows with NO Stripe session at all ("simplified MVP" path), and
+    // posController.createCombinedInvoice omits one for a 100%-cash split.
+    if (invoice.stripeSessionId) {
+      try {
+        await stripe.checkout.sessions.expire(invoice.stripeSessionId);
+      } catch (stripeError: any) {
+        console.warn('[hold-invoice] Failed to expire Stripe session:', stripeError);
+        // Non-fatal: continue with local state update
+      }
     }
 
-    // Update invoice status to CANCELLED
+    // P1 fix (2026-08-16): this used to reset ONLY `reservation.item` and never cleared
+    // ItemReservation.invoiceId. Two consequences, both confirmed by code read:
+    //   1. BUNDLED invoices (markSoldAndCreateInvoice bundles every hold this shopper has
+    //      at this sale into ONE invoice) left every item except the one whose reservation
+    //      id was passed stranded at INVOICE_ISSUED forever.
+    //   2. invoiceableWhere() requires `invoiceId: null`, so a hold whose invoice was
+    //      released kept a dangling invoiceId pointing at a CANCELLED invoice and became
+    //      PERMANENTLY un-invoiceable -- and nothing else clears it: invoiceExpiryJob only
+    //      scans status PENDING, and stripeController's charge.failed handler only fires on
+    //      an actual failed charge.
+    // Now mirrors the two paths that already got this right (invoiceExpiryJob.ts and
+    // stripeController.ts charge.failed): scope by invoice.itemIds / invoiceId, and clear
+    // the claim columns too so a fresh invoice attempt isn't blocked by a stale claim.
+    const releasedItemIds = invoice.itemIds.length > 0 ? invoice.itemIds : [reservation.item.id];
     await prisma.$transaction(async (tx) => {
       await tx.holdInvoice.update({
-        where: { id: reservation.invoice!.id },
-        data: { status: 'CANCELLED' },
+        where: { id: invoice.id },
+        data: { status: 'CANCELLED', releasedAt: new Date() },
       });
 
-      // Return item to RESERVED status
-      await tx.item.update({
-        where: { id: reservation.item.id },
+      // Return EVERY item on this invoice to RESERVED. Guarded on INVOICE_ISSUED, same as
+      // invoiceExpiryJob's revert, so an item already moved on by another path (SOLD via a
+      // different channel) is never dragged backwards.
+      await tx.item.updateMany({
+        where: { id: { in: releasedItemIds }, status: 'INVOICE_ISSUED' },
         data: { status: 'RESERVED' },
+      });
+
+      // Clear the invoice link + any in-flight claim on EVERY reservation on this invoice.
+      // ItemReservation.status is deliberately left alone: markSoldAndCreateInvoice never
+      // changed it when the invoice was created, and POS-sourced holds sit in HOLD_IN_CART
+      // which must not be clobbered back to CONFIRMED here.
+      await tx.itemReservation.updateMany({
+        where: { invoiceId: invoice.id },
+        data: { invoiceId: null, invoiceClaimToken: null, invoiceClaimedAt: null },
       });
 
       // Notify shopper
@@ -1880,14 +1952,16 @@ export const releaseInvoice = async (req: AuthRequest, res: Response) => {
           userId: reservation.user.id,
           type: 'invoice_cancelled',
           title: 'Invoice cancelled',
-          body: `The invoice for "${reservation.item.title}" has been cancelled. Your hold remains active.`,
+          body: releasedItemIds.length > 1
+            ? `The invoice for ${releasedItemIds.length} items has been cancelled. Your holds remain active.`
+            : `The invoice for "${reservation.item.title}" has been cancelled. Your hold remains active.`,
           link: `/items/${reservation.item.id}`,
           channel: 'OPERATIONAL',
         },
       });
     });
 
-    res.json({ message: 'Invoice released and hold reactivated' });
+    res.json({ message: 'Invoice released and hold reactivated', itemsReleased: releasedItemIds.length });
   } catch (error: any) {
     console.error('[hold-invoice] releaseInvoice error:', error);
     res.status(500).json({ message: 'Server error' });

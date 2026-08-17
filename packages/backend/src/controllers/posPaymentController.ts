@@ -45,12 +45,15 @@ export const createPaymentRequest = async (req: AuthRequest, res: Response) => {
 
     const organizer = await resolveOrganizerOrTeamMember(req, res);
     if (!organizer) return;
-    // See file header note on posAuth's ResolvedPosActor: it intentionally omits the
-    // resolved organizer's own userId (distinct from organizer.actingUserId, who's
-    // actually standing at the register under the TEAM_MEMBER branch) -- resolved here
-    // for the POSPaymentRequest.organizerUserId / Stripe metadata / socket payload below.
-    const organizerUserRow = await prisma.organizer.findUnique({ where: { id: organizer.id }, select: { userId: true } });
-    const organizerUserId = organizerUserRow?.userId ?? organizer.actingUserId;
+    // posAuth's ResolvedPosActor now carries the resolved organizer's OWN userId as
+    // `ownerUserId` (added 2026-08-16 with the HoldInvoice P0-A fix -- three
+    // HoldInvoice.create sites had independently papered over its absence by writing an
+    // Organizer.id into a User-FK column). It is distinct from organizer.actingUserId, who
+    // is whoever is actually standing at the register under the TEAM_MEMBER branch. Used
+    // below for POSPaymentRequest.organizerUserId / Stripe metadata / socket payload.
+    // This replaces a second round-trip that re-read Organizer.userId by id -- same value,
+    // one query fewer, and one fewer place for the two id spaces to drift apart again.
+    const organizerUserId = organizer.ownerUserId;
 
     const {
       shopperUserId,
