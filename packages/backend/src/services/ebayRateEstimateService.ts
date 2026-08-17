@@ -928,7 +928,12 @@ export const FEDEX_DESTINATION_SURCHARGE_ZIP_TIER: Readonly<Record<string, Fedex
  * and accept a $7.13 tail at the 10 measured tier-C ZIPs. See the header block for the
  * measured cost of each.
  */
-export const FEDEX_DESTINATION_SURCHARGE_UNMAPPED_TIER: FedexDestinationSurchargeTier = 'C';
+// SET TO 'B' 2026-08-16 by Patrick's explicit decision. Cover through tier B (+$7.90);
+// accept the residual ~$7.13 exposure at the 10 measured tier-C ZIPs (Nantucket, Yellowstone,
+// Somes Bar, Beaver Island and similar). Measured effect vs the prior flat $5.92: worst rise
+// +$1.98, mean +$0.47. Chosen over 'C' because 'C' would have made the live GUITAR GIG BAG
+// preset ($47.49) read as under-covered by the below-cost guard. See ADR-103 SS14.
+export const FEDEX_DESTINATION_SURCHARGE_UNMAPPED_TIER: FedexDestinationSurchargeTier = 'B';
 
 /** The amount the destination-blind flat-rate path actually adds to every FedEx quote. */
 export const FEDEX_DESTINATION_SURCHARGE_FLAT_RATE_DEFAULT =
