@@ -39,11 +39,11 @@ name: CI Typecheck & Tests
 #       `vitest` while the runner is ts-jest. Not one had ever executed. Renamed to `*.test.ts`
 #       and converted to Jest.
 #       [UPDATED 2026-08-17] Those suites have now actually been RUN (real Postgres 16.13, all
-#       373 migrations applied) and fixed: 145/147 tests green. Six of the seven are BLOCKING in
-#       the "Backend tests" step below alongside the unit tests and holdInvoiceClaim. The seventh
-#       (stripe.e2e) is isolated in its own NON-BLOCKING step because two of its assertions are
-#       failing on a real auction buyer-premium double-count in stripeController, not on a test
-#       defect -- see that step's comment.
+#       373 migrations applied) and fixed. All seven -- including stripe.e2e -- are BLOCKING in the
+#       single "Backend tests" step below alongside the unit tests and holdInvoiceClaim: 11 suites /
+#       149 tests, 149 passed. stripe.e2e was briefly isolated in a non-blocking step because two of
+#       its assertions were failing on a real auction buyer-premium double-count in
+#       stripeController (a $200 winning bid charged $220); that bug is fixed and the step is gone.
 #     - Frontend lint: the repo has NO eslint config, so `next lint` prompts/aborts.
 #       Needs an eslint config + violation cleanup before gating. Left non-blocking.
 #   Every step still RUNS and PRINTS; tests + lint just don't fail the suite yet.
@@ -170,37 +170,22 @@ jobs:
       # isWinning -> amount/status, SaleSubscriber userId_saleId -> saleId_userId, Purchase
       # findUnique on a non-unique column, Item.embedding NOT NULL with no DB default, and two
       # stale email-rail mocks). Local result: 145 of 147 tests green, 10 of 11 suites green.
-      # Only stripe.e2e is still excluded -- see the NON-BLOCKING step below for exactly why.
+      # (stripe.e2e was the one exclusion at that point; it is no longer excluded -- see below.)
       #
       # SOCIAL_TOKEN_ENC_KEY is a throwaway all-zeroes 32-byte hex value, NOT a secret: it exists
       # only because utils/tokenCrypto.ts throws at module load when the var is unset, which takes
       # down any suite whose import graph reaches it. It never decrypts real data in CI.
+      # SCOPE WIDENED AGAIN 2026-08-17 (same day, later): stripe.e2e.test.ts is no longer excluded.
+      # It was carved out into a separate non-blocking step ONLY because two of its assertions were
+      # failing on the auction buyer-premium double-count in stripeController.createPaymentIntent.
+      # That bug is fixed (buyer is charged bid + ONE 5% premium; $200 bid -> 21000 cents, was
+      # 22000) and the two assertions were rederived from the documented fee model rather than from
+      # the controller's output. Full backend suite now: 11 suites / 147 tests, 147 passed, verified
+      # locally against real Postgres 16.13 with all 373 migrations applied (149 after the two
+      # auction buy-it-now security regression tests added in the same pass). The non-blocking step
+      # is deleted, not merely flipped -- there is nothing left for it to isolate.
       - name: Backend tests
-        run: pnpm --filter ./packages/backend test -- --ci --runInBand --forceExit --testPathIgnorePatterns=/node_modules/ --testPathIgnorePatterns=stripe.e2e.test.ts
-        env:
-          DATABASE_URL: postgresql://findasale:findasale@localhost:5432/findasale_test
-          SOCIAL_TOKEN_ENC_KEY: '0000000000000000000000000000000000000000000000000000000000000000'
-
-      # NON-BLOCKING, and for ONE specific reason -- not because the suite is unproven. 92 of its
-      # 94 tests pass. The two that fail are the auction-fee tests, and they fail because
-      # stripeController.createPaymentIntent charges the auction buyer's premium TWICE:
-      #   line 635  totalWithBuyerPremium = priceCents + buyerPremiumAmount        (bid + 5%)
-      #   line 636  platformFeeAmount     = buyerPremiumAmount                     (the same 5%)
-      #   line 676  finalPriceCents       = totalWithBuyerPremium + platformFeeAmount
-      # so a $200 winning bid is charged 22000 cents (10% premium), not the 21000 cents that
-      # line 634's own comment -- "buyer pays winning bid + 5% premium; 5% is taken as
-      # application_fee_amount" -- describes. This is a live money bug awaiting Patrick's decision;
-      # it is NOT a test defect, so the assertions were deliberately NOT rewritten to match the
-      # buggy output. Making this step blocking today would block every backend deploy on a
-      # pre-existing product bug (Railway `backend` has source.checkSuites: true).
-      #
-      # Remove `continue-on-error` and fold this back into the step above the moment the buyer-
-      # premium double-count is resolved. Do NOT leave this permanently non-blocking, and do NOT
-      # "fix" it by changing the expected numbers.
-      - name: Backend stripe e2e (NON-BLOCKING - blocked on auction buyer-premium double-count)
-        continue-on-error: true
-        timeout-minutes: 12
-        run: pnpm --filter ./packages/backend test -- --ci --runInBand --forceExit --testPathPattern="stripe.e2e.test.ts"
+        run: pnpm --filter ./packages/backend test -- --ci --runInBand --forceExit --testPathIgnorePatterns=/node_modules/
         env:
           DATABASE_URL: postgresql://findasale:findasale@localhost:5432/findasale_test
           SOCIAL_TOKEN_ENC_KEY: '0000000000000000000000000000000000000000000000000000000000000000'

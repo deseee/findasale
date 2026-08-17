@@ -552,6 +552,29 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ message: 'This sale is not currently available for purchase.' });
     }
 
+    // VALID-STATE-ONLY-EXPOSURE (Security-QA Gate, added 2026-08-17 alongside the buyer-premium
+    // fix below). An AUCTION lot must not be buyable outright through this Buy-It-Now endpoint
+    // while its auction is still open. The UI never offers it — pages/items/[id].tsx:975 renders
+    // the "Buy It Now" button only in the NON-auction branch of `isAuction ? ... : ...`, auction
+    // items get the bid panel instead — but the endpoint itself accepted it, and that is the whole
+    // hole: during a live auction the lot's status is still 'AVAILABLE', so the `!== 'AVAILABLE'`
+    // check above does not fire. Any logged-in user, or any guest supplying an email, could POST
+    // /api/stripe/create-payment-intent with a live auction's itemId and take the lot outright at
+    // `currentBid` (+ the 5% premium) — out-bidding nobody, stranding the real high bidder, and
+    // buying at the current bid rather than whatever the auction would have closed at.
+    //
+    // The legitimate winner is unaffected: they never reach this endpoint. jobs/auctionJob.ts
+    // creates the winner's PaymentIntent itself at close (auctionJob.ts:128) and flips the item
+    // AVAILABLE -> AUCTION_ENDED in the same transaction, after which the status check above
+    // blocks this route anyway. So this gate and that status check cover the window from both
+    // sides, and the gate is keyed on `auctionClosed` rather than on auctionEndTime so that the
+    // interval between an auction's end time and the closing cron actually running is covered too.
+    if (item.listingType === 'AUCTION' && !item.auctionClosed) {
+      return res.status(403).json({
+        message: 'This is an auction lot. Place a bid to compete for it — it cannot be bought outright while bidding is open.',
+      });
+    }
+
     // S1072 Finding #4: collusion/wash-trade guard — identity-grade device/card fingerprint match.
     // Guests have no User row (no stored fingerprints for assertCheckoutAllowed to read) — run
     // the guest-specific pre-payment guard instead (device fingerprint only; card fingerprint
@@ -670,11 +693,28 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
     }
     // #402: Cover the Fee — when organizer absorbs fee, buyer pays item price only
     const saleCoversFee = !isAuctionItem ? false : (item.sale as any)?.coversFee === true;
-    const finalPriceCents = isAuctionItem
-      ? saleCoversFee
-        ? priceCents - discountAmount                                // Auction + coversFee: buyer pays bid only; organizer absorbs buyer premium
-        : totalWithBuyerPremium + platformFeeAmount - discountAmount // Auction normal: item + premium - discount
-      : totalWithBuyerPremium - discountAmount;                      // Regular: item + shipping - discount only (platform fee from organizer payout)
+    // BUYER-PREMIUM DOUBLE-COUNT FIX (2026-08-17). The auction branch used to read
+    //     totalWithBuyerPremium + platformFeeAmount - discountAmount
+    // and on the auction path platformFeeAmount IS buyerPremiumAmount (line ~637), while
+    // totalWithBuyerPremium ALREADY includes that same premium (line ~636). The 5% was
+    // therefore added to the buyer's charge twice: a $200 winning bid was charged $220 —
+    // a 10% premium — and a $50 bid was charged $55. Every authority says the buyer pays
+    // the hammer price plus the 5% premium exactly once:
+    //   · claude_docs/decisions-log.md 2026-03-30 (S341) [LOCKED] — "Shoppers only pay 5%
+    //     auction fee (auction sales only)."
+    //   · claude_docs/architecture/AUCTION_WIN_SPEC.md L245-249 — "$50.00 bid / Buyer
+    //     Premium (5%) $2.50 / Total Paid $52.50".
+    //   · services/auctionService.ts:88-90 — totalAmount = bidAmount + bidAmount * 0.05.
+    //   · The total the buyer is actually SHOWN before paying: frontend
+    //     CheckoutModal.tsx:58 — itemPrice + buyerPremium (one premium). The old code
+    //     charged $220 against a displayed $210.
+    //   · The consent string persisted to CheckoutEvidence for chargeback defense
+    //     (~line 828) — "buyer premium of 5% will be added to my total purchase price."
+    // application_fee_amount is deliberately NOT changed by this fix — see the note in
+    // src/__tests__/stripe.e2e.test.ts about the organizer commission on auctions.
+    const finalPriceCents = isAuctionItem && saleCoversFee
+      ? priceCents - discountAmount             // Auction + coversFee: buyer pays the bid only; organizer absorbs the premium
+      : totalWithBuyerPremium - discountAmount; // Auction: bid + one 5% premium. Regular: item + shipping (platform fee comes out of the organizer payout, buyer never pays it).
 
     const couponSuffix = couponId ? `-c${couponId.slice(-6)}` : '';
     // Guest idempotency fix (2026-08-04): the frontend (CheckoutModal.tsx) now generates a

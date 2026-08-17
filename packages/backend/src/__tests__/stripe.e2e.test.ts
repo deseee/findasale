@@ -20,14 +20,15 @@
  *     object without the server boot.
  *
  * STATUS UPDATE 2026-08-17: the conversion above is no longer unverified. This suite has been
- * executed against a real Postgres 16.13 with all 373 migrations applied. 15 of its 17 tests
- * pass. The two auction-fee tests FAIL, and they fail on a real bug rather than a test defect:
- * stripeController.createPaymentIntent adds the 5% auction buyer premium into the charge total
- * (line 635) and then adds it AGAIN as application_fee_amount (line 676), so an auction buyer is
- * charged a 10% premium instead of the 5% line 634's own comment describes. Those assertions
- * were deliberately NOT rewritten to match the buggy output. Because of that, this ONE suite
- * stays in a separate NON-BLOCKING CI step -- see .github/workflows/ci-typecheck.yml. Fold it
- * back into the blocking step once the double-count is resolved.
+ * executed against a real Postgres 16.13 with all 373 migrations applied. The two auction-fee
+ * tests were failing on a real product bug rather than a test defect: createPaymentIntent added
+ * the 5% auction buyer premium into the charge total and then added it AGAIN, so an auction
+ * buyer was charged a 10% premium. That bug is now FIXED in
+ * controllers/stripeController.ts (see the BUYER-PREMIUM DOUBLE-COUNT FIX comment there), and
+ * the two assertions have been rewritten -- NOT to match the controller's new output, but from
+ * the documented fee model; the derivation is spelled out above the auction describe block
+ * below. With the fix in, this suite is folded back into the BLOCKING "Backend tests" step in
+ * .github/workflows/ci-typecheck.yml.
  */
 /**
  * E2E Tests — Stripe Connect Express Onboarding + Fee Capture
@@ -35,7 +36,7 @@
  * Covers issue #3 (beta-blocker):
  *   - createConnectAccount: new account creation, incomplete-onboarding retry,
  *     login link for fully-onboarded account, 403 for non-organizer
- *   - createPaymentIntent: 5% fee on regular items, 7% fee on auction items,
+ *   - createPaymentIntent: 10% platform fee on regular items, 5% buyer premium on auction items,
  *     PENDING Purchase DB record, correct response shape, 400 guard rails
  *   - webhookHandler: payment_intent.succeeded → Purchase PAID + Item SOLD + receipt email
  *   - webhookHandler: payment_intent.payment_failed → Purchase FAILED
@@ -174,7 +175,7 @@ describe('Stripe Connect + Fee Capture E2E', () => {
     const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
     const dayAfter = new Date(now.getTime() + 48 * 60 * 60 * 1000);
 
-    // Regular sale (isAuctionSale = false → 5% fee)
+    // Regular sale (isAuctionSale = false → 10% platform fee, buyer pays item price only)
     testSale = await prisma.sale.create({
       data: {
         title:        'Stripe E2E Regular Sale',
@@ -193,7 +194,7 @@ describe('Stripe Connect + Fee Capture E2E', () => {
       },
     });
 
-    // Auction sale (isAuctionSale = true → 7% fee)
+    // Auction sale (isAuctionSale = true → buyer pays winning bid + one 5% buyer premium)
     testAuctionSale = await prisma.sale.create({
       data: {
         title:        'Stripe E2E Auction Sale',
@@ -356,7 +357,7 @@ describe('Stripe Connect + Fee Capture E2E', () => {
     });
   });
 
-  // ── createPaymentIntent — regular sale (5% fee) ───────────────────────────
+  // ── createPaymentIntent — regular sale (10% platform fee) ───────────────────────────
 
   describe('createPaymentIntent — regular sale (5% fee)', () => {
     const PRICE          = 100.00;
@@ -449,13 +450,45 @@ describe('Stripe Connect + Fee Capture E2E', () => {
     });
   });
 
-  // ── createPaymentIntent — auction sale (7% fee) ───────────────────────────
-
-  describe('createPaymentIntent — auction sale (7% fee)', () => {
-    const CURRENT_BID      = 200.00;
-    const AUCTION_FEE      = Math.round(CURRENT_BID * 100 * 0.07); // 1400
-    const START_PRICE      = 50.00;
-    const START_PRICE_FEE  = Math.round(START_PRICE * 100 * 0.07);  // 350
+  // ── createPaymentIntent — auction sale (5% buyer premium) ───────────────
+  //
+  // THE EXPECTED NUMBERS BELOW ARE DERIVED FROM THE DOCUMENTED FEE MODEL, not from what the
+  // controller happens to return. Sources, all read 2026-08-17:
+  //   · claude_docs/decisions-log.md, 2026-03-30 (S341) "Platform Fee Model" [LOCKED] —
+  //     "Platform fee (10% or 8%) is paid by the ORGANIZER, deducted from their Stripe Connect
+  //     payout. Shoppers only pay 5% auction fee (auction sales only)."
+  //   · claude_docs/architecture/AUCTION_WIN_SPEC.md L245-249 — a $50.00 winning bid renders
+  //     "Winning Bid $50.00 / Buyer Premium (5%) $2.50 / Total Paid $52.50".
+  //   · controllers/stripeController.ts — BUYER_PREMIUM_RATE = 0.05.
+  // So the buyer's CHARGE is the hammer price plus ONE 5% premium:
+  //     $200.00 currentBid   → 20000 + 1000 = 21000 cents
+  //     $50.00  startPrice   →  5000 +  250 =  5250 cents
+  //
+  // WHAT WAS HERE BEFORE, and why it went: the previous assertions expected
+  // `amount === bid` (no premium at all) and `application_fee_amount === 7% of the bid`.
+  // That is the retired 5%/7% pricing scheme — decisions-log records pricing-strategy.md as
+  // "archived (stale, showed 5%/7%)". It matched neither the shipped code nor the current
+  // documented model, so it could not have caught the double-count it was sitting next to.
+  //
+  // application_fee_amount is asserted at the 5% buyer premium ONLY — what the controller
+  // sends today. OPEN QUESTION, deliberately NOT resolved by changing this number:
+  // claude_docs/STACK.md "Fee Structure" applies the 10%/8% organizer commission to "all item
+  // types: FIXED, AUCTION, REVERSE_AUCTION, LIVE_DROP, POS", and controllers/payoutController.ts
+  // :307 + controllers/earningsPdfController.ts:45 already REPORT that commission to the
+  // organizer on every PAID purchase with no auction carve-out. Read strictly, the documented
+  // application fee on a $200 auction win is premium + commission = 1000 + 2000 = 3000 cents
+  // (SIMPLE tier), not 1000. Charging that is a live change to what organizers pay and has
+  // never once been applied in production, so it is awaiting Patrick's sign-off. When it
+  // lands, AUCTION_APPLICATION_FEE below is the single place to change.
+  describe('createPaymentIntent — auction sale (5% buyer premium)', () => {
+    const BUYER_PREMIUM_RATE      = 0.05;
+    const CURRENT_BID             = 200.00;
+    const BID_PREMIUM             = Math.round(CURRENT_BID * 100 * BUYER_PREMIUM_RATE);   // 1000
+    const BID_TOTAL               = Math.round(CURRENT_BID * 100) + BID_PREMIUM;          // 21000
+    const AUCTION_APPLICATION_FEE = BID_PREMIUM;                                          // 1000 — see note above
+    const START_PRICE             = 50.00;
+    const START_PREMIUM           = Math.round(START_PRICE * 100 * BUYER_PREMIUM_RATE);   // 250
+    const START_TOTAL             = Math.round(START_PRICE * 100) + START_PREMIUM;        // 5250
 
     afterAll(async () => {
       await prisma.purchase.deleteMany({
@@ -467,7 +500,7 @@ describe('Stripe Connect + Fee Capture E2E', () => {
       }).catch(() => {});
     });
 
-    it('should apply 7% platform fee using currentBid for auction items', async () => {
+    it('should charge the winning bid plus exactly ONE 5% buyer premium', async () => {
       mockPaymentIntentsCreate.mockResolvedValueOnce({
         id:            'pi_test_auction_e2e',
         client_secret: 'pi_test_auction_e2e_secret',
@@ -482,9 +515,24 @@ describe('Stripe Connect + Fee Capture E2E', () => {
       await createPaymentIntent(req, res);
 
       const args = mockPaymentIntentsCreate.mock.calls.at(-1)[0];
-      expect(args.amount).toBe(Math.round(CURRENT_BID * 100));
-      expect(args.application_fee_amount).toBe(AUCTION_FEE);
-      console.log(`✓ Auction PI: $${CURRENT_BID} currentBid → $${AUCTION_FEE / 100} fee (7%)`);
+      // REGRESSION GUARD: the double-count bug produced 22000 here, against a $210.00 total
+      // shown to the buyer in CheckoutModal. If this ever reads 22000 again, the premium is
+      // being added twice — do not "fix" it by changing this number.
+      expect(args.amount).toBe(BID_TOTAL);
+      expect(args.amount).not.toBe(Math.round(CURRENT_BID * 100) + BID_PREMIUM * 2);
+      expect(args.application_fee_amount).toBe(AUCTION_APPLICATION_FEE);
+      console.log(`✓ Auction PI: $${CURRENT_BID} bid → $${BID_TOTAL / 100} charged (one 5% premium), $${AUCTION_APPLICATION_FEE / 100} application fee`);
+
+      // The total the buyer is SHOWN must equal the total Stripe is asked to charge.
+      // CheckoutModal.tsx:58 renders itemPrice + buyerPremium; the double-count bug
+      // displayed $210.00 and charged $220.00.
+      const payload = res.json.mock.calls[0][0];
+      expect(payload.subtotal).toBe(CURRENT_BID);
+      expect(payload.buyerPremiumRate).toBe(BUYER_PREMIUM_RATE);
+      expect(payload.buyerPremiumAmount).toBe(BID_PREMIUM / 100);
+      expect(payload.totalAmount).toBe(BID_TOTAL / 100);
+      expect(payload.subtotal + payload.buyerPremiumAmount).toBe(payload.totalAmount);
+      console.log(`✓ Displayed total matches charge: $${payload.subtotal} + $${payload.buyerPremiumAmount} = $${payload.totalAmount}`);
     });
 
     it('should fall back to auctionStartPrice when no currentBid exists', async () => {
@@ -508,15 +556,93 @@ describe('Stripe Connect + Fee Capture E2E', () => {
       await createPaymentIntent(req, res);
 
       const args = mockPaymentIntentsCreate.mock.calls.at(-1)[0];
-      expect(args.amount).toBe(Math.round(START_PRICE * 100));
-      expect(args.application_fee_amount).toBe(START_PRICE_FEE);
-      console.log(`✓ Fallback to auctionStartPrice: $${START_PRICE} → $${START_PRICE_FEE / 100} fee`);
+      expect(args.amount).toBe(START_TOTAL);
+      expect(args.application_fee_amount).toBe(START_PREMIUM);
+      console.log(`✓ Fallback to auctionStartPrice: $${START_PRICE} → $${START_TOTAL / 100} charged, $${START_PREMIUM / 100} application fee`);
 
       // Restore
       await prisma.item.update({
         where: { id: testAuctionItem.id },
         data:  { currentBid: CURRENT_BID },
       });
+    });
+
+    // SECURITY REGRESSION GUARD (VALID-STATE-ONLY-EXPOSURE), added 2026-08-17.
+    // A live AUCTION lot must not be purchasable outright through this Buy-It-Now endpoint.
+    // Before the gate in stripeController.ts, a live auction's item is still status
+    // 'AVAILABLE', so nothing stopped any user -- or any guest with an email -- from POSTing
+    // this route with the auction's itemId and taking the lot at `currentBid` + 5%, stranding
+    // the real high bidder. The UI never offered this (pages/items/[id].tsx:975 puts "Buy It
+    // Now" only in the non-auction branch); the endpoint did.
+    //
+    // NOTE ON THE FIXTURE: testAuctionItem above deliberately does NOT set listingType, so it
+    // defaults to 'FIXED' and is treated as an auction only via `auctionStartPrice != null`
+    // (stripeController's isAuctionItem). This test therefore needs its own item with an
+    // explicit listingType 'AUCTION' -- which is what the gate keys on.
+    it('should refuse an outright purchase of a live AUCTION lot (no Stripe call)', async () => {
+      const liveLot = await prisma.item.create({
+        data: {
+          embedding:         [],
+          title:             'Live Auction Lot — buy-it-now must be refused',
+          listingType:       'AUCTION',
+          auctionStartPrice: 10.00,
+          currentBid:        25.00,
+          auctionEndTime:    new Date(Date.now() + 60 * 60 * 1000), // still open
+          auctionClosed:     false,
+          status:            'AVAILABLE',
+          saleId:            testAuctionSale.id,
+        },
+      });
+
+      const callsBefore = mockPaymentIntentsCreate.mock.calls.length;
+
+      const req: any = {
+        user: { id: testShopper.id, role: 'USER' },
+        body: { itemId: liveLot.id },
+      };
+      const res = makeMockRes();
+
+      await createPaymentIntent(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(403);
+      // No Stripe object may be created for a refused purchase, and no Purchase row.
+      expect(mockPaymentIntentsCreate.mock.calls.length).toBe(callsBefore);
+      const stranded = await prisma.purchase.findFirst({ where: { itemId: liveLot.id } });
+      expect(stranded).toBeNull();
+      console.log('✓ 403 on outright purchase of a live auction lot; no PaymentIntent, no Purchase row');
+
+      await prisma.purchase.deleteMany({ where: { itemId: liveLot.id } }).catch(() => {});
+      await prisma.item.delete({ where: { id: liveLot.id } }).catch(() => {});
+    });
+
+    it('should still refuse after the end time passes while auctionClosed is false (cron gap)', async () => {
+      const endedNotClosed = await prisma.item.create({
+        data: {
+          embedding:         [],
+          title:             'Ended-but-not-closed lot — cron gap',
+          listingType:       'AUCTION',
+          auctionStartPrice: 10.00,
+          currentBid:        25.00,
+          auctionEndTime:    new Date(Date.now() - 60 * 1000), // ended a minute ago
+          auctionClosed:     false,                            // closing cron has not run yet
+          status:            'AVAILABLE',
+          saleId:            testAuctionSale.id,
+        },
+      });
+
+      const req: any = {
+        user: { id: testShopper.id, role: 'USER' },
+        body: { itemId: endedNotClosed.id },
+      };
+      const res = makeMockRes();
+
+      await createPaymentIntent(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(403);
+      console.log('✓ 403 in the end-time-to-cron gap — the lot cannot be sniped before it closes');
+
+      await prisma.purchase.deleteMany({ where: { itemId: endedNotClosed.id } }).catch(() => {});
+      await prisma.item.delete({ where: { id: endedNotClosed.id } }).catch(() => {});
     });
   });
 
