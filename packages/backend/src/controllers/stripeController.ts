@@ -162,7 +162,6 @@ const sendReceiptEmail = async (purchase: {
   itemPrice?: number;
   buyerPremiumAmount?: number;
   buyerPremiumRate?: number;
-  platformFeeAmount?: number;
   discountAmount?: number;
 }) => {
   
@@ -178,7 +177,15 @@ const sendReceiptEmail = async (purchase: {
     let breakdownHtml = '';
     if (purchase.itemPrice !== undefined) {
       const bp = purchase.buyerPremiumAmount ?? 0;
-      const pf = purchase.platformFeeAmount ?? 0;
+      // BUYER-RECEIPT PLATFORM-FEE ROW REMOVED (2026-08-17). This Order Summary used to render
+      // a "Platform Fee" line fed by application_fee_amount. It is a charge against the
+      // ORGANIZER's payout, not something the buyer pays, so on a $200 regular sale the table
+      // printed "Item Price $200.00 / Platform Fee $20.00 / Total Paid $200.00" — arithmetic
+      // that does not add up, disclosing a fee the buyer never paid. decisions-log.md
+      // 2026-03-30 (S341) [LOCKED]: "Shoppers only pay 5% auction fee (auction sales only)" —
+      // the Buyer Premium row above is the one and only fee a shopper ever sees. Organizer-side
+      // fee reporting (payoutController / earningsPdfController / organizers analytics / CSV
+      // export) is unaffected and still shows the fee in full.
       const disc = purchase.discountAmount ?? 0;
       breakdownHtml = `
         <h3 style="margin-top: 24px; margin-bottom: 12px;">Order Summary</h3>
@@ -190,10 +197,6 @@ const sendReceiptEmail = async (purchase: {
           ${bp > 0 ? `<tr style="background-color: #f3f4f6;">
             <td style="padding: 8px; text-align: left;">Buyer Premium (5%)</td>
             <td style="padding: 8px; text-align: right;"><strong>$${bp.toFixed(2)}</strong></td>
-          </tr>` : ''}
-          ${pf > 0 ? `<tr>
-            <td style="padding: 8px; text-align: left;">Platform Fee</td>
-            <td style="padding: 8px; text-align: right;">$${pf.toFixed(2)}</td>
           </tr>` : ''}
           ${disc > 0 ? `<tr style="background-color: #d1fae5;">
             <td style="padding: 8px; text-align: left;">Discount</td>
@@ -710,8 +713,12 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
     //     charged $220 against a displayed $210.
     //   · The consent string persisted to CheckoutEvidence for chargeback defense
     //     (~line 828) — "buyer premium of 5% will be added to my total purchase price."
-    // application_fee_amount is deliberately NOT changed by this fix — see the note in
-    // src/__tests__/stripe.e2e.test.ts about the organizer commission on auctions.
+    // application_fee_amount is correct as written and must NOT be changed: on an auction the
+    // 5% buyer premium IS the entire platform take, and the organizer pays no separate
+    // commission (Patrick ruling, 2026-08-17 — settles the STACK.md "all item types" wording
+    // against decisions-log.md 2026-03-30 (S341); STACK.md §Fee Structure now records the
+    // carve-out explicitly). The old "premium + tier commission = 3000 cents on a $200 win"
+    // reading is retired.
     const finalPriceCents = isAuctionItem && saleCoversFee
       ? priceCents - discountAmount             // Auction + coversFee: buyer pays the bid only; organizer absorbs the premium
       : totalWithBuyerPremium - discountAmount; // Auction: bid + one 5% premium. Regular: item + shipping (platform fee comes out of the organizer payout, buyer never pays it).

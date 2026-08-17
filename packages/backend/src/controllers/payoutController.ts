@@ -4,7 +4,7 @@ import { Response } from 'express';
 import { getStripe } from '../utils/stripe';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
-import { getPlatformFeeRate } from '../utils/feeCalculator';
+import { getPlatformFeeRate, resolveReportedPlatformFee } from '../utils/feeCalculator';
 
 /** Retrieve the organizer's Stripe Connect account ID, or null if not yet linked */
 const getOrganizerStripeId = async (userId: string): Promise<string | null> => {
@@ -295,7 +295,10 @@ export const getEarningsBreakdown = async (req: AuthRequest, res: Response) => {
     const purchases = await prisma.purchase.findMany({
       where: whereClause,
       include: {
-        item: { select: { id: true, title: true, category: true } },
+        // listingType + auctionStartPrice are required by resolveReportedPlatformFee's auction
+        // carve-out (Patrick ruling 2026-08-17) — without them every auction sale is reported
+        // to the organizer as a 10%/8% commission it never actually paid.
+        item: { select: { id: true, title: true, category: true, listingType: true, auctionStartPrice: true } },
         sale: { select: { id: true, title: true, startDate: true } },
       },
       orderBy: { createdAt: 'desc' },
@@ -305,7 +308,11 @@ export const getEarningsBreakdown = async (req: AuthRequest, res: Response) => {
     const items: EarningsBreakdownItem[] = purchases.map((p) => {
       const salePrice = p.amount;
       const tierRate = getPlatformFeeRate(organizer.subscriptionTier as any);
-      const platformFee = parseFloat((salePrice * tierRate).toFixed(2));
+      // AUCTION CARVE-OUT (Patrick ruling, 2026-08-17): the tier commission applies to
+      // non-auction sales only. On an auction the whole platform take is the 5% buyer premium
+      // the WINNER paid (the real Stripe application_fee_amount, stored on the Purchase row);
+      // the organizer pays no separate commission. Non-auction path is unchanged.
+      const platformFee = resolveReportedPlatformFee(p, tierRate);
       const stripeFee = parseFloat((salePrice * STRIPE_RATE + STRIPE_FIXED).toFixed(2));
       const netPayout = parseFloat((salePrice - platformFee - stripeFee).toFixed(2));
 
@@ -345,7 +352,7 @@ export const getEarningsBreakdown = async (req: AuthRequest, res: Response) => {
         totalNetPayout: parseFloat(totals.totalNetPayout.toFixed(2)),
       },
       count: items.length,
-      note: 'Stripe fee estimated at 2.9% + $0.30. Platform fee is 10% for SIMPLE, 8% for PRO/TEAMS.',
+      note: 'Stripe fee estimated at 2.9% + $0.30. Platform fee is 10% for SIMPLE, 8% for PRO/TEAMS. Auction sales are different: the buyer pays a 5% premium and you pay no separate commission.',
       // Cash POS: accumulated fees awaiting payout deduction
       cashFeeBalance: organizer.cashFeeBalance,
       cashFeeBalanceUpdatedAt: organizer.cashFeeBalanceUpdatedAt,

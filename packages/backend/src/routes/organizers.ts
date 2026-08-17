@@ -11,7 +11,12 @@ import { getPosTierStatus } from '../controllers/posTiersController';
 import { getPrintKit, getYardSignKit, getDirectionalSignKit, getTableTentKit, getTearOffFlyer, getHangTagKit, getFullSignKitPDF, getPriceSheet } from '../controllers/printKitController';
 import { createDonation, getDonations, generateReceipt } from '../controllers/donationController';
 import { getCheatsheet, getItemsForLabels, createLabelBatch, printLabelBatch } from '../controllers/labelComposerController';
-import { getPlatformFeeRate, SubscriptionTier } from '../utils/feeCalculator';
+import {
+  getPlatformFeeRate,
+  isAuctionListing,
+  resolveReportedPlatformFee,
+  SubscriptionTier,
+} from '../utils/feeCalculator';
 import { awardOrganizerClaimedXp, getOrgReferralStats, generateReferralCode } from '../services/referralService';
 import { getWatermarkSetting, updateWatermarkSetting } from '../controllers/watermarkController';
 import { emailService } from '../lib/emailService';
@@ -141,7 +146,13 @@ router.get('/me/analytics', authenticate, async (req: AuthRequest, res: Response
         },
         purchases: {
           where: { status: 'PAID' },
-          select: { amount: true },
+          // platformFeeAmount + item.listingType/auctionStartPrice power the auction carve-out
+          // below (Patrick ruling, 2026-08-17).
+          select: {
+            amount: true,
+            platformFeeAmount: true,
+            item: { select: { listingType: true, auctionStartPrice: true } },
+          },
         },
       },
       orderBy: { startDate: 'asc' },
@@ -156,7 +167,24 @@ router.get('/me/analytics', authenticate, async (req: AuthRequest, res: Response
 
     const saleBreakdown = sales.map((sale: any) => {
       const saleRevenue = sale.purchases.reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0);
-      const saleFees = parseFloat((saleRevenue * tierRate).toFixed(2));
+      // AUCTION CARVE-OUT (Patrick ruling, 2026-08-17): the tier commission (10%/8%) applies to
+      // NON-auction sales only. On an auction the whole platform take is the 5% buyer premium
+      // the WINNER paid (stored on the Purchase row as the real Stripe application_fee_amount);
+      // the organizer pays no separate commission. The non-auction subtotal is still multiplied
+      // and rounded ONCE, so a sale with no auction purchases produces a byte-identical number.
+      let nonAuctionRevenue = 0;
+      let auctionFees = 0;
+      for (const p of sale.purchases as any[]) {
+        if (isAuctionListing(p.item)) {
+          auctionFees += resolveReportedPlatformFee(
+            { amount: Number(p.amount) || 0, platformFeeAmount: p.platformFeeAmount, item: p.item },
+            tierRate
+          );
+        } else {
+          nonAuctionRevenue += Number(p.amount) || 0;
+        }
+      }
+      const saleFees = parseFloat((nonAuctionRevenue * tierRate + auctionFees).toFixed(2));
       const saleSold = sale.items.filter((i: any) => i.status === 'SOLD').length;
       const saleUnsold = sale.items.filter((i: any) => i.status !== 'SOLD').length;
 

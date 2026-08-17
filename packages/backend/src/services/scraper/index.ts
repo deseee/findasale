@@ -211,7 +211,12 @@ export function generateIdentityKey(
 
   if (website && !isNonIdentityHost(website)) {
     const dom = registrableDomain(website);
-    if (dom) return `${name}:d:${dom}`;
+    // Guard 0 — DOMAIN-BUSINESS AGREEMENT. A domain is only an identity signal when it
+    // actually belongs to this business. Without this, a mis-scraped URL becomes the
+    // identity key: the live shadow run keyed two "Space City Vintage" rows on citi.com
+    // (a stray Citibank link), and any 2-row junk-domain pair sits under the shared-signal
+    // cap, so Guard 1 cannot see it. Fall through to phone, which is self-validating.
+    if (dom && domainMatchesBusiness(dom, businessName)) return `${name}:d:${dom}`;
   }
   const p = normalizePhoneDigits(phone);
   if (p) return `${name}:p:${p}`;
@@ -550,6 +555,20 @@ const IDENTITY_SELECT = {
 };
 
 /**
+ * City comparison for Guard 7. The incoming side has a raw city string; the stored side only
+ * carries it inside dedupeKey ("name:city") — Organizer has no city column. An empty city on
+ * either side is unknown, not a match, so it fails closed.
+ */
+function sameCity(incomingCity: string | undefined, rowDedupeKey: string | null | undefined): boolean {
+  const norm = (v: string) => v.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  const a = incomingCity ? norm(incomingCity) : '';
+  const rawB = rowDedupeKey ? rowDedupeKey.slice(rowDedupeKey.lastIndexOf(':') + 1) : '';
+  const b = rawB ? norm(rawB) : '';
+  if (!a || !b) return false;
+  return a === b;
+}
+
+/**
  * Resolve an identity-key match, applying every over-merge guard. Returns the single unambiguous
  * existing organizer for this identity, or null (create a new row / fall through to legacy tiers).
  *
@@ -572,11 +591,15 @@ const IDENTITY_SELECT = {
  *     thinkgood.org (6), sdgoodwill.org (4), ocgoodwill.org (3).
  *  6. AMBIGUITY VETO. More than one qualifying candidate => do nothing and log. Same posture as
  *     the cross-source fuzzy tier: risking a rare duplicate beats merging the wrong business.
+ *  7. NARROW-DOMAIN CITY SCOPE. A narrow domain standing alone only merges within one city —
+ *     a regional chain domain otherwise fuses distinct storefronts (7 Goodwill locations in the
+ *     2026-08-17 shadow run). Phone agreement is unaffected and still crosses cities.
  */
 async function findIdentityMatch(
   identityKey: string,
   businessName: string,
-  phone?: string
+  phone?: string,
+  city?: string
 ): Promise<{ row: any; signals: string[] } | null> {
   const [, kind, value] = identityKey.split(/:(d|p):/);
   if (!kind || !value) return null;
@@ -637,7 +660,13 @@ async function findIdentityMatch(
     if (incomingPhone && rowPhone && incomingPhone === rowPhone) {
       signals.push('phone-agreement');
       positive = true;
-    } else if (narrowDomain) {
+    } else if (narrowDomain && sameCity(city, row.dedupeKey)) {
+      // Guard 7 — narrow domain alone only counts WITHIN one city. A regional chain's
+      // single domain covers many distinct storefronts, and when both rows are phone-less
+      // there is nothing else to separate them: the shadow run merged 7 different Goodwill
+      // locations this way (waycross/saint-marys, fairhope/foley, moscow/post-falls, ...)
+      // plus Wizard Bins lakeport/santa-rosa. Same-city + same-name + same-narrow-domain is
+      // a duplicate; different-city is a second branch.
       signals.push(`narrow-domain(${sharedCount})`);
       positive = true;
     }
@@ -956,7 +985,7 @@ export async function getOrCreateScrapedOrganizer(
   // ---------------------------------------------------------------------------------------
   const identityKey = generateIdentityKey(businessName, website, phone);
   if (ORGANIZER_IDENTITY_DEDUP_MODE !== 'off' && identityKey) {
-    const identityMatch = await findIdentityMatch(identityKey, businessName, phone);
+    const identityMatch = await findIdentityMatch(identityKey, businessName, phone, city);
     if (identityMatch) {
       console.log(
         `[Ingest] Identity dedup ${ORGANIZER_IDENTITY_DEDUP_MODE.toUpperCase()} -- '${businessName}' (${city}) ` +

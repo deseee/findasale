@@ -352,7 +352,10 @@ const OrganizerEarningsPage = () => {
               {/* Info footer */}
               <div className="mt-8 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4">
                 <p className="text-sm text-amber-800 dark:text-amber-200">
-                  <strong>Platform Fee:</strong> {organizerProfile?.subscriptionTier === 'PRO' || organizerProfile?.subscriptionTier === 'TEAMS' ? '8%' : '10%'} of each completed sale. Fees are deducted from your gross revenue to calculate net earnings.
+                  <strong>Platform Fee:</strong> {organizerProfile?.subscriptionTier === 'PRO' || organizerProfile?.subscriptionTier === 'TEAMS' ? '8%' : '10%'} of each completed fixed-price sale. Fees are deducted from your gross revenue to calculate net earnings.
+                </p>
+                <p className="text-sm text-amber-800 dark:text-amber-200 mt-2">
+                  <strong>Auction sales work differently:</strong> the winning bidder pays a 5% buyer premium, and that is the entire platform fee. You pay no separate commission on an auction sale.
                 </p>
               </div>
             </>
