@@ -37,6 +37,40 @@ import { prisma } from '../lib/prisma';
  * Scheduled: daily at 06:00 UTC via GitHub Actions
  * (.github/workflows/pipeline-bounce-suppress.yml → POST /api/internal/jobs/run
  * with job 'process-bounces'). No longer an in-process node-cron job.
+ *
+ * CORRECTION 2026-08-17 (live evidence, third time this has been "fixed" wrong --
+ * read this before touching mailbox routing again). Everything in the paragraph
+ * above (2026-07-15 update) is STALE. Confirmed live today: real NDR bounces
+ * (Microsoft postmaster, 2026-06-11 and 2026-08-16) are addressed to
+ * outreach@finda.sale and land in deseee@gmail.com (personal Gmail, via ImprovMX
+ * root-domain forwarding) -- NOT outreach@outreach.finda.sale, NOT
+ * find@outreach.finda.sale. EmailSuppression has recorded ZERO new BOUNCED rows
+ * since 2026-06-20 (direct prod query) -- the "0 bounce messages, consistent
+ * with clean sends" conclusion in the paragraph above was the same false-negative
+ * every prior attempt made: 0 results looks identical whether sends are clean OR
+ * the mailbox is simply wrong. It was wrong.
+ *
+ * Root cause, confirmed via code read (outreachEmailsCron.ts) + this project's own
+ * 2026-06-13 ADR: OUTREACH_FROM_EMAIL correctly sets the raw MIME From: header to
+ * find@outreach.finda.sale, but Gmail API's users.messages.send sets the SMTP
+ * envelope sender / Return-Path to the OAuth-AUTHENTICATED account's own primary
+ * address (outreach@finda.sale) regardless of the From: header. This is a real
+ * Gmail API constraint, not a config bug -- setting OUTREACH_FROM_EMAIL alone can
+ * never fix bounce routing. Because outreach@finda.sale's own mailbox can never
+ * receive inbound mail either (root finda.sale MX = ImprovMX, must stay that way
+ * for support@/info@/legal@ forwarding), NO mailbox this app's Gmail OAuth client
+ * can poll will ever actually receive these bounces -- except deseee@gmail.com,
+ * which is where they empirically land.
+ *
+ * Attempted fix: point GMAIL_MAILBOX_REFRESH_TOKEN at deseee@gmail.com. Blocked
+ * (2026-08-17): the GMAIL_CLIENT_ID/SECRET OAuth app is configured "Internal" in
+ * Google Cloud (org-only) -- deseee@gmail.com is outside the finda.sale Workspace
+ * org, so Google refuses the consent screen outright (error 403 org_internal)
+ * before any token exchange. Needs the OAuth consent screen flipped to External +
+ * deseee@gmail.com added as a test user (console.cloud.google.com/auth/audience,
+ * project number 955070470579) before a working GMAIL_MAILBOX_REFRESH_TOKEN for
+ * deseee@gmail.com can be minted. This is a Patrick action (security-setting
+ * change) -- see STATE.md Blocked Queue for current status.
  */
 
 // Optional self-documenting expected mailbox (does NOT select the credential —
