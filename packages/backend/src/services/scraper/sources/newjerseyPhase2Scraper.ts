@@ -15,7 +15,7 @@
  *   2. POST with each target profession selected to trigger CSV download
  *   3. Parse downloaded CSV, filter for active licenses
  *   4. If primary fails, fall back to DOBI pawnbroker HTML search
- *   5. MUST throw if zero results from all sources
+ *   5. Zero results from all sources warns (never throws) -- see roadmap #558
  */
 
 import { defaultRateLimiter } from '../rateLimiter';
@@ -647,7 +647,14 @@ export async function runNewJerseyPhase2Scraper(): Promise<void> {
   console.log(`[NewJerseyPhase2] Total upserted: ${totalUpserted}`);
 
   if (totalUpserted === 0) {
-    throw new Error(
+    // 2026-08-16 (roadmap #558): was `throw new Error(...)`. A zero-results
+    // scrape is NOT a batch-level failure -- throwing here reds the entire
+    // 51-state consolidated scrape-licenses-phase2-batch.yml run (0 green
+    // runs in 8 attempts). Matches the georgiaPhase2Scraper.ts precedent
+    // (2026-08-08): warn loudly, never throw. The batch runner reports a
+    // per-scraper item count, which is where a silent-zero scraper now
+    // surfaces instead.
+    console.warn(
       '[NewJerseyPhase2] Zero results from all sources. ' +
       'NJ MyLicense Bulk Verification and DOBI may require JS rendering, ' +
       'are bot-protected, or form field names have changed. ' +

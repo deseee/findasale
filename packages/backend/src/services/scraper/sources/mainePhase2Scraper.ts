@@ -444,7 +444,8 @@ async function upsertLicenseRecords(records: LicenseRecord[]): Promise<number> {
  *   3. GET ExportToCSV.aspx using the established session cookie
  *
  * Confirmed to return ~1,118 records as of 2026-06.
- * Throws on zero results to prevent silent failure.
+ * Zero parsed records warns (never throws) -- see roadmap #558. Transport-level
+ * failures (search page unreachable, POST rejected, empty CSV export) still throw.
  */
 export async function runMainePhase2Scraper(): Promise<void> {
   console.log(`[${SOURCE_NAME}] Starting — Maine PFR ALMSOnline auctioneer license export`);
@@ -483,7 +484,17 @@ export async function runMainePhase2Scraper(): Promise<void> {
   console.log(`[${SOURCE_NAME}] Parsed ${records.length} license records from CSV`);
 
   if (records.length === 0) {
-    throw new Error(
+    // 2026-08-16 (roadmap #558): was `throw new Error(...)`. A zero-results
+    // scrape is NOT a batch-level failure -- throwing here reds the entire
+    // 51-state consolidated scrape-licenses-phase2-batch.yml run (0 green
+    // runs in 8 attempts). Matches the georgiaPhase2Scraper.ts precedent
+    // (2026-08-08): warn loudly, never throw. The batch runner reports a
+    // per-scraper item count, which is where a silent-zero scraper now
+    // surfaces instead.
+    // NOTE: the three transport-level throws above (search page unreachable,
+    // search POST rejected, CSV export returned nothing) are REAL failures and
+    // deliberately still throw -- only the zero-parsed-records case warns.
+    console.warn(
       `[${SOURCE_NAME}] CSV parsed successfully but returned 0 records. ` +
       `Verify CSV column headers and regulator=${REGULATOR_ID} parameter. ` +
       `Export URL: ${ALMS_EXPORT_URL}`

@@ -350,11 +350,17 @@ export async function runMassachusettsPhase2Scraper(): Promise<void> {
     totalUpserted = ids.filter((id) => id !== null).length;
 
     if (totalFetched === 0) {
-      const msg =
-        '[MA Phase2] FATAL — zero records fetched from all sources (primary API + legacy fallback). ' +
-        'The MA Division of Professional Licensure API may have changed or be temporarily unavailable.';
-      console.error(msg);
-      throw new Error(msg);
+      // 2026-08-16 (roadmap #558): was `throw new Error(...)`. A zero-results
+      // scrape is NOT a batch-level failure -- throwing here reds the entire
+      // 51-state consolidated scrape-licenses-phase2-batch.yml run (0 green
+      // runs in 8 attempts). Matches the georgiaPhase2Scraper.ts precedent
+      // (2026-08-08): warn loudly, never throw. The batch runner reports a
+      // per-scraper item count, which is where a silent-zero scraper now
+      // surfaces instead.
+      console.warn(
+        '[MA Phase2] Zero records fetched from all sources (primary API + legacy fallback). ' +
+        'The MA Division of Professional Licensure API may have changed or be temporarily unavailable.'
+      );
     }
 
     console.log(

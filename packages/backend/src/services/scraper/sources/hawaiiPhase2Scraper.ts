@@ -8,7 +8,7 @@
  * Fetches business records from Hawaii open data portals and filters by
  * keyword for secondhand sale types. Paginates via Socrata $limit/$offset.
  *
- * MUST throw if zero results across all sources.
+ * Zero results across all sources warns (never throws) -- see roadmap #558.
  */
 
 import { defaultRateLimiter } from '../rateLimiter';

@@ -10,18 +10,38 @@
  * Behavior:
  *  - Runs each scraper sequentially, each wrapped in its own try/catch so a single
  *    failure cannot abort the rest of the batch.
- *  - Collects per-scraper { name, status, error, ms }.
- *  - Prints a readable pass/fail table to stdout.
+ *  - Collects per-scraper { name, status, items, error, ms }.
+ *  - Prints a readable pass/fail/items table to stdout.
  *  - If GITHUB_STEP_SUMMARY is set, appends the same table as markdown to that file.
+ *  - Emits a GitHub Actions ::warning:: annotation per failed scraper and per
+ *    silent-zero scraper, so partial failures stay visible even on a green run.
  *  - Prints a one-line machine-readable summary.
- *  - Exits 1 if ANY scraper failed (keeps the run red so the daily health monitor
- *    catches it); exits 0 only when every scraper succeeded.
+ *  - Exits non-zero only when the FAILURE RATE crosses MAX_FAILURE_RATE.
+ *
+ * EXIT-CODE CONTRACT (changed 2026-08-16, roadmap #558 -- read before "fixing" this):
+ *   This runner used to `process.exit(failed > 0 ? 1 : 0)`. Across 51 independent
+ *   third-party government/open-data sites, at least one site being down, rate-
+ *   limited or reshaped on any given Monday is the NORMAL case, not an incident --
+ *   so all-or-nothing made a green run structurally unachievable. Evidence: 8
+ *   attempted runs, 0 green, while run #7 (2026-08-02) passed 48/51 and run #8
+ *   (2026-08-10) passed 49/51. A red X that is red every single week carries no
+ *   information and trained everyone to ignore it (the 2026-07-06..2026-08-03
+ *   failures went un-triaged for a month for exactly this reason).
+ *
+ *   The signal is now: per-scraper attribution ALWAYS reported, and a non-zero exit
+ *   ONLY for a systemic break. Individual failures do not red the run -- they are
+ *   annotated, tabulated, and named.
  *
  * This file is generated/maintained to mirror the function set of the per-state
  * Phase 2 workflows. Do NOT remove a scraper here without removing its source.
  */
 
 import fs from "fs";
+
+import {
+  resetScrapedOrganizerWriteCount,
+  getScrapedOrganizerWriteCount
+} from "../services/scraper/index";
 
 import { runAlabamaPhase2Scraper } from "../services/scraper/sources/alabamaPhase2Scraper";
 import { runAlaskaPhase2Scraper } from "../services/scraper/sources/alaskaPhase2Scraper";
@@ -87,9 +107,38 @@ interface ScraperEntry {
 interface ScraperResult {
   name: string;
   status: "ok" | "fail";
+  /** Organizer records written by this scraper (see scraper/index.ts write counter). */
+  items: number;
   error?: string;
   ms: number;
 }
+
+/**
+ * Failure-rate ceiling. The batch exits non-zero only when the share of failed
+ * scrapers EXCEEDS this fraction.
+ *
+ * Why 20%:
+ *   - Observed steady-state failure across the two runs with real per-scraper
+ *     data is 2-3 of 51 (3.9% on run #8, 5.9% on run #7) -- independent,
+ *     transient, third-party-site outages that we cannot fix and should not be
+ *     paged for every week.
+ *   - 20% of 51 is >10 scrapers failing at once. That is ~3-5x the observed
+ *     baseline, which no plausible combination of unrelated site outages
+ *     reaches, but which EVERY systemic break trips instantly: a bad/expired
+ *     DATABASE_URL, a Prisma client/schema mismatch, a regression in the shared
+ *     upsert helper, or blocked network egress all fail most or all 51 at once.
+ *   - So: independent breakage stays green-with-annotations; correlated
+ *     breakage goes red. That is the distinction the exit code should encode.
+ * Tune this if the observed baseline moves; do not replace it with `failed > 0`.
+ */
+const MAX_FAILURE_RATE = 0.20;
+
+// NOTE (roadmap #558): a scraper that succeeds but writes zero organizer records
+// is deliberately NOT counted as a failure -- many registry entries are known
+// stubs with no accessible data source, and zero-results scrapes now warn rather
+// than throw. It IS reported separately below, because after the throw-to-warn
+// sweep the item count is the only place a newly-and-permanently-broken scraper
+// can surface.
 
 // Registry - one entry per state license/registry Phase 2 scraper.
 const SCRAPERS: ScraperEntry[] = [
@@ -158,44 +207,86 @@ async function main(): Promise<void> {
 
   for (const entry of SCRAPERS) {
     const start = Date.now();
+    // Scrapers run strictly sequentially in this process, so a shared counter
+    // reset here is a safe per-scraper measurement.
+    resetScrapedOrganizerWriteCount();
     try {
       console.log(`[batch] > ${entry.name} - starting`);
       await entry.fn();
       const ms = Date.now() - start;
-      results.push({ name: entry.name, status: "ok", ms });
-      console.log(`[batch] OK ${entry.name} - ok (${ms}ms)`);
+      const items = getScrapedOrganizerWriteCount();
+      results.push({ name: entry.name, status: "ok", items, ms });
+      console.log(`[batch] OK ${entry.name} - ok (${items} items, ${ms}ms)`);
     } catch (err) {
       const ms = Date.now() - start;
+      const items = getScrapedOrganizerWriteCount();
       const message = err instanceof Error ? (err.stack || err.message) : String(err);
-      results.push({ name: entry.name, status: "fail", error: message, ms });
-      console.error(`[batch] X ${entry.name} - FAILED (${ms}ms):`, message);
+      results.push({ name: entry.name, status: "fail", items, error: message, ms });
+      console.error(`[batch] X ${entry.name} - FAILED after ${items} items (${ms}ms):`, message);
     }
   }
 
   const totalMs = Date.now() - batchStart;
   const passed = results.filter((r) => r.status === "ok").length;
   const failed = results.filter((r) => r.status === "fail").length;
+  const totalItems = results.reduce((sum, r) => sum + r.items, 0);
+  const failureRate = results.length > 0 ? failed / results.length : 0;
+  const failureRatePct = (failureRate * 100).toFixed(1);
+  const thresholdPct = (MAX_FAILURE_RATE * 100).toFixed(0);
+  const silentZero = results.filter((r) => r.status === "ok" && r.items === 0);
+  const overThreshold = failureRate > MAX_FAILURE_RATE;
 
   // --- Readable stdout table ---
   const nameWidth = Math.max(8, ...results.map((r) => r.name.length));
-  const sep = "-".repeat(nameWidth + 24);
+  const sep = "-".repeat(nameWidth + 36);
   console.log("");
   console.log("Per-scraper results:");
   console.log(sep);
-  console.log(`${pad("Scraper", nameWidth)}  ${pad("Status", 8)}  ${pad("Time", 10)}`);
+  console.log(
+    `${pad("Scraper", nameWidth)}  ${pad("Status", 8)}  ${pad("Items", 8)}  ${pad("Time", 10)}`
+  );
   console.log(sep);
   for (const r of results) {
-        const status = r.status === "ok" ? "PASS" : "FAIL";
-    console.log(`${pad(r.name, nameWidth)}  ${pad(status, 8)}  ${pad(r.ms + "ms", 10)}`);
+    const status = r.status === "ok" ? "PASS" : "FAIL";
+    console.log(
+      `${pad(r.name, nameWidth)}  ${pad(status, 8)}  ${pad(String(r.items), 8)}  ${pad(r.ms + "ms", 10)}`
+    );
   }
   console.log(sep);
-  console.log(`Totals: ${passed} passed, ${failed} failed, ${results.length} total in ${totalMs}ms`);
+  console.log(
+    `Totals: ${passed} passed, ${failed} failed, ${results.length} total, ` +
+    `${totalItems} items in ${totalMs}ms`
+  );
+  console.log(
+    `Failure rate: ${failureRatePct}% (threshold ${thresholdPct}%) - ` +
+    `${overThreshold ? "OVER threshold, exiting non-zero" : "within threshold, exiting 0"}`
+  );
 
   if (failed > 0) {
     console.log("");
     console.log("Failures:");
     for (const r of results.filter((x) => x.status === "fail")) {
-      console.log(`  - ${r.name}: ${(r.error || "unknown error").split("\n")[0]}`);
+      const firstLine = (r.error || "unknown error").split("\n")[0];
+      console.log(`  - ${r.name}: ${firstLine}`);
+      // Keep every individual failure visible in the GitHub UI even when the
+      // overall run exits 0.
+      console.log(`::warning title=Phase2 scraper failed: ${r.name}::${firstLine}`);
+    }
+  }
+
+  if (silentZero.length > 0) {
+    console.log("");
+    console.log(
+      `Passed but wrote 0 records (${silentZero.length}) - expected for known stubs, ` +
+      "investigate any state that previously produced records:"
+    );
+    for (const r of silentZero) {
+      console.log(`  - ${r.name}`);
+      console.log(
+        `::warning title=Phase2 scraper wrote 0 records: ${r.name}::` +
+        "Scraper completed without error but produced no organizer records. " +
+        "Expected for a known stub; a regression otherwise."
+      );
     }
   }
 
@@ -206,13 +297,21 @@ async function main(): Promise<void> {
       const lines: string[] = [];
       lines.push(`## License / Registry Phase 2 Batch`);
       lines.push("");
-      lines.push(`**${passed} passed, ${failed} failed** of ${results.length} scrapers - ${totalMs}ms total`);
+      lines.push(
+        `**${passed} passed, ${failed} failed** of ${results.length} scrapers - ` +
+        `${totalItems} records written - ${totalMs}ms total`
+      );
       lines.push("");
-      lines.push("| Scraper | Status | Time (ms) |");
-      lines.push("| --- | --- | --- |");
+      lines.push(
+        `Failure rate **${failureRatePct}%** (threshold ${thresholdPct}%) - ` +
+        `run exits **${overThreshold ? "1 (systemic failure)" : "0"}**.`
+      );
+      lines.push("");
+      lines.push("| Scraper | Status | Items | Time (ms) |");
+      lines.push("| --- | --- | --- | --- |");
       for (const r of results) {
         const status = r.status === "ok" ? "PASS" : "FAIL";
-        lines.push(`| ${r.name} | ${status} | ${r.ms} |`);
+        lines.push(`| ${r.name} | ${status} | ${r.items} | ${r.ms} |`);
       }
       if (failed > 0) {
         lines.push("");
@@ -220,6 +319,17 @@ async function main(): Promise<void> {
         for (const r of results.filter((x) => x.status === "fail")) {
           const firstLine = (r.error || "unknown error").split("\n")[0];
           lines.push(`- **${r.name}**: ${firstLine}`);
+        }
+      }
+      if (silentZero.length > 0) {
+        lines.push("");
+        lines.push("### Passed but wrote 0 records");
+        lines.push(
+          "Expected for known stubs with no accessible data source. " +
+          "Investigate any state that previously produced records."
+        );
+        for (const r of silentZero) {
+          lines.push(`- ${r.name}`);
         }
       }
       lines.push("");
@@ -231,10 +341,24 @@ async function main(): Promise<void> {
 
   // --- One-line machine-readable summary ---
   console.log(
-    `BATCH_SUMMARY total=${results.length} passed=${passed} failed=${failed} ms=${totalMs}`
+    `BATCH_SUMMARY total=${results.length} passed=${passed} failed=${failed} ` +
+    `items=${totalItems} silentZero=${silentZero.length} ` +
+    `failRate=${failureRatePct}% threshold=${thresholdPct}% ` +
+    `exit=${overThreshold ? 1 : 0} ms=${totalMs}`
   );
 
-  process.exit(failed > 0 ? 1 : 0);
+  if (overThreshold) {
+    console.log(
+      `::error title=Phase2 batch failure rate ${failureRatePct}%::` +
+      `${failed} of ${results.length} scrapers failed, above the ${thresholdPct}% ceiling. ` +
+      "This pattern indicates a systemic problem (credentials, Prisma client, network egress, " +
+      "or a shared-helper regression) rather than independent third-party site outages."
+    );
+  }
+
+  // Silent-zero scrapers are reported, not failed -- see the note above the
+  // MAX_FAILURE_RATE block. Only a systemic failure rate reds the run.
+  process.exit(overThreshold ? 1 : 0);
 }
 
 main().catch((err) => {

@@ -1448,6 +1448,47 @@ export interface ScrapedOrganizerRow {
  * callers that need enrichment should use getOrCreateScrapedOrganizer instead,
  * or fire enrichment separately after the batch returns.
  */
+/**
+ * Scraped-organizer write counter (roadmap #558).
+ *
+ * Purpose: give the consolidated Phase 2 batch runner
+ * (`src/scripts/runLicenseScrapersBatch.ts`) a real per-scraper item count.
+ * This matters now that a zero-results scrape WARNS instead of throwing --
+ * without an item count, a permanently-broken scraper would silently report
+ * PASS forever. The counter is the signal that surfaces it.
+ *
+ * In-memory only, no I/O, no behavior change. The batch runner resets it
+ * before each scraper and reads it after, which is safe because that runner
+ * executes scrapers strictly sequentially in a single process.
+ *
+ * Coverage: `batchUpsertScrapedOrganizers` (used by 37 of the 51 Phase 2
+ * scrapers) increments automatically. The 7 scrapers that write via
+ * `getOrCreateScrapedOrganizer` or raw `prisma.organizer` calls report their
+ * own totals via `recordScrapedOrganizerWrites()`. The remaining 7 are stubs
+ * with no data source and correctly report 0.
+ */
+let _scrapedOrganizerWriteCount = 0;
+
+/** Reset the write counter. Called by the batch runner before each scraper. */
+export function resetScrapedOrganizerWriteCount(): void {
+  _scrapedOrganizerWriteCount = 0;
+}
+
+/** Read the write counter. Called by the batch runner after each scraper. */
+export function getScrapedOrganizerWriteCount(): number {
+  return _scrapedOrganizerWriteCount;
+}
+
+/**
+ * Manually record organizer writes made outside `batchUpsertScrapedOrganizers`
+ * (direct `getOrCreateScrapedOrganizer` or raw `prisma.organizer` callers).
+ */
+export function recordScrapedOrganizerWrites(count: number): void {
+  if (Number.isFinite(count) && count > 0) {
+    _scrapedOrganizerWriteCount += count;
+  }
+}
+
 export async function batchUpsertScrapedOrganizers(
   rows: ScrapedOrganizerRow[],
   batchSize: number = 100
@@ -1622,6 +1663,9 @@ export async function batchUpsertScrapedOrganizers(
     const batchNum = Math.floor(offset / batchSize) + 1;
     console.log(`[batchUpsert] Batch ${batchNum}: ${toCreate.length} created, ${toUpdate.length} updated, ${chunk.length - accepted.length} rejected`);
   }
+
+  // Roadmap #558: feed the Phase 2 batch runner's per-scraper item count.
+  recordScrapedOrganizerWrites(results.filter((id) => id !== null).length);
 
   return results;
 }

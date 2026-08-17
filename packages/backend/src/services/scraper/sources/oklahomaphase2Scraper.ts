@@ -18,7 +18,7 @@
 import axios from 'axios';
 import pdfParse from 'pdf-parse';
 import { defaultRateLimiter } from '../rateLimiter';
-import { getOrCreateScrapedOrganizer } from '../index';
+import { getOrCreateScrapedOrganizer, recordScrapedOrganizerWrites } from '../index';
 import { getRandomUserAgent } from '../userAgents';
 
 const ODCC_PAGE_URL = 'https://oklahoma.gov/okdocc/licenses-we-regulate.html';
@@ -218,6 +218,9 @@ export async function runOklahomaphase2Scraper(): Promise<void> {
         console.log(`[OklahomaPhase2] Progress: ${totalRecords} records processed, ${upsertedCount} upserted`);
       }
     }
+
+    // Roadmap #558: report this scraper's item count to the Phase 2 batch runner.
+    recordScrapedOrganizerWrites(upsertedCount);
 
     console.log(
       `[OklahomaPhase2] Scraper completed: ${totalRecords} records processed, ${upsertedCount} upserted`

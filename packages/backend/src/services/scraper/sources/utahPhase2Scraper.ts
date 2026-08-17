@@ -8,6 +8,7 @@
 
 import { defaultRateLimiter } from '../rateLimiter';
 import { prisma } from '../../../lib/prisma';
+import { recordScrapedOrganizerWrites } from '../index';
 import { getRandomUserAgent } from '../userAgents';
 
 const UT_DFI_BASE_URL = 'https://dfi.utah.gov';
@@ -102,6 +103,8 @@ export async function runUtahPhase2Scraper(): Promise<void> {
       console.warn('[UtahPhase2] DFI unavailable. Attempting Utah BES fallback.');
       await sleep(RATE_DELAY_MS);
       const besResult = await runUtahBESFallback(rateLimiter);
+      // Roadmap #558: report this scraper's item count to the Phase 2 batch runner.
+      recordScrapedOrganizerWrites(besResult.created);
       console.log('[UtahPhase2] BES fallback: ' + besResult.totalRecords + ' records, ' + besResult.created + ' created');
       if (besResult.totalRecords === 0) {
         console.warn(
@@ -230,6 +233,9 @@ export async function runUtahPhase2Scraper(): Promise<void> {
         console.error('[UtahPhase2] Error processing ' + businessName + ':', err);
       }
     }
+
+    // Roadmap #558: report this scraper's item count to the Phase 2 batch runner.
+    recordScrapedOrganizerWrites(createdOrganizers);
 
     console.log('[UtahPhase2] Scraper completed: ' + totalRecords + ' records processed, ' + createdOrganizers + ' created');
   } catch (error) {

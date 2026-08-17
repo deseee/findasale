@@ -12,6 +12,7 @@
 
 import { defaultRateLimiter } from '../rateLimiter';
 import { prisma } from '../../../lib/prisma';
+import { recordScrapedOrganizerWrites } from '../index';
 import { getRandomUserAgent } from '../userAgents';
 
 // NDBF restructured its site (verified 2026-06-24):
@@ -266,6 +267,9 @@ export async function runNebraskaPhase2Scraper(): Promise<void> {
         'decommissioned. A new NE pawnbroker source is required — surface as DECISION NEEDED.'
       );
     }
+
+    // Roadmap #558: report this scraper's item count to the Phase 2 batch runner.
+    recordScrapedOrganizerWrites(createdOrganizers);
 
     console.log(
       `[NebraskaPhase2] Scraper completed: processed ${totalRecords} records, upserted ${createdOrganizers} organizers`

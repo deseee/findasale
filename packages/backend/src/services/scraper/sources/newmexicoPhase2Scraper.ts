@@ -26,6 +26,7 @@
 
 import { defaultRateLimiter } from '../rateLimiter';
 import { prisma } from '../../../lib/prisma';
+import { recordScrapedOrganizerWrites } from '../index';
 import { getRandomUserAgent } from '../userAgents';
 
 const LIVE_ENDPOINT_AVAILABLE = false;
@@ -187,6 +188,9 @@ export async function runNewMexicoPhase2Scraper(): Promise<void> {
         console.error(`[NewMexicoPhase2] Error processing ${record.businessName}:`, err);
       }
     }
+
+    // Roadmap #558: report this scraper's item count to the Phase 2 batch runner.
+    recordScrapedOrganizerWrites(createdOrganizers);
 
     console.log(
       `[NewMexicoPhase2] Scraper completed: ${totalRecords} records processed, ${createdOrganizers} organizers created`

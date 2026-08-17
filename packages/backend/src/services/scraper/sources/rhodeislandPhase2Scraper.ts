@@ -113,7 +113,7 @@ async function discoverFields(): Promise<{
   phoneField?: string;
   typeField?: string;
   zipField?: string;
-}> {
+} | null> {
   const url = `${SOCRATA_ENDPOINT}?$limit=1`;
   const resp = await fetch(url, {
     headers: { Accept: 'application/json' },
@@ -126,7 +126,19 @@ async function discoverFields(): Promise<{
 
   const records: SocrataRecord[] = await resp.json();
   if (!records.length) {
-    throw new Error(`[${SOURCE_NAME}] Field discovery returned empty dataset`);
+    // 2026-08-16 (roadmap #558): was `throw new Error(...)`. A zero-results
+    // scrape is NOT a batch-level failure -- throwing here reds the entire
+    // 51-state consolidated scrape-licenses-phase2-batch.yml run (0 green
+    // runs in 8 attempts). Matches the georgiaPhase2Scraper.ts precedent
+    // (2026-08-08): warn loudly, never throw. The batch runner reports a
+    // per-scraper item count, which is where a silent-zero scraper now
+    // surfaces instead.
+    // Returns null (rather than throwing) so the caller can warn-and-return.
+    console.warn(
+      `[${SOURCE_NAME}] Field discovery returned an empty dataset from ${SOCRATA_ENDPOINT} — ` +
+      'the Providence Socrata resource may have been emptied, retired, or renamed.'
+    );
+    return null;
   }
 
   const fields = Object.keys(records[0]);
@@ -195,13 +207,18 @@ async function discoverFields(): Promise<{
 /**
  * Scrape Providence RI Open Data (Socrata) business licenses for secondhand sale businesses.
  * Uses $where filter to find relevant license types, then upserts via getOrCreateScrapedOrganizer.
- * Throws if zero results are returned.
+ * Warns and returns early (never throws) if zero results are returned.
  */
 export async function runRhodeIslandPhase2Scraper(): Promise<void> {
   console.log(`[${SOURCE_NAME}] Starting Providence Open Data business license scraper`);
 
   // Step 1: Discover field names
-  const { nameField, addressField, cityField, phoneField, typeField, zipField } = await discoverFields();
+  const discovered = await discoverFields();
+  if (!discovered) {
+    // Empty source dataset — already warned inside discoverFields(). Nothing to scrape.
+    return;
+  }
+  const { nameField, addressField, cityField, phoneField, typeField, zipField } = discovered;
 
   // Pause between field-discovery request and main query request
   await new Promise((resolve) => setTimeout(resolve, 500));

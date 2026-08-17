@@ -392,7 +392,7 @@ async function selectBoardInSession(session: AspNetSession): Promise<boolean> {
  * Replaces the dead web1.ky.gov GenSearch URL (parked 2026-06).
  * Confirmed ~155 live records.
  *
- * MUST throw if zero records found across all letters (source may be down).
+ * Zero records across all letters warns (never throws) -- see roadmap #558.
  */
 export async function runKentuckyPhase2Scraper(): Promise<void> {
   console.log('[KentuckyPhase2] Starting KY Board of Auctioneers scraper (OOP portal)');
@@ -526,7 +526,14 @@ export async function runKentuckyPhase2Scraper(): Promise<void> {
   );
 
   if (totalRecords === 0) {
-    throw new Error(
+    // 2026-08-16 (roadmap #558): was `throw new Error(...)`. A zero-results
+    // scrape is NOT a batch-level failure -- throwing here reds the entire
+    // 51-state consolidated scrape-licenses-phase2-batch.yml run (0 green
+    // runs in 8 attempts). Matches the georgiaPhase2Scraper.ts precedent
+    // (2026-08-08): warn loudly, never throw. The batch runner reports a
+    // per-scraper item count, which is where a silent-zero scraper now
+    // surfaces instead.
+    console.warn(
       '[KentuckyPhase2] Zero active auctioneer records found across all A–Z queries. ' +
       'OOP portal may be down, form field names may have changed, or board code 34 is incorrect. ' +
       `Check ${OOP_URL} manually.`

@@ -453,9 +453,16 @@ export async function runAlabamaPhase2Scraper(): Promise<void> {
     );
 
     if (totalMatched === 0) {
-      throw new Error(
-        'Alabama Phase2 scraper completed but found zero matching auctioneer records. ' +
-        `Check Railway logs above for a fetch failure, a 0-row parse, or a markup change on ${ROSTER_URL} ` +
+      // 2026-08-16 (roadmap #558): was `throw new Error(...)`. A zero-results
+      // scrape is NOT a batch-level failure -- throwing here reds the entire
+      // 51-state consolidated scrape-licenses-phase2-batch.yml run (0 green
+      // runs in 8 attempts). Matches the georgiaPhase2Scraper.ts precedent
+      // (2026-08-08): warn loudly, never throw. The batch runner reports a
+      // per-scraper item count, which is where a silent-zero scraper now
+      // surfaces instead.
+      console.warn(
+        '[Alabama Phase2] Zero matching auctioneer records. ' +
+        `Check the logs above for a fetch failure, a 0-row parse, or a markup change on ${ROSTER_URL} ` +
         '(see file header for the confirmed 2026-08-04 table structure).'
       );
     }

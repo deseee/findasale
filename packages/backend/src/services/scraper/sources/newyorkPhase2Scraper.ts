@@ -196,7 +196,7 @@ interface NormalizedRecord {
 /**
  * New York Phase 2 scraper — ingests both NYC Open Data license datasets.
  * Deduplicates across datasets by name+address, then upserts via getOrCreateScrapedOrganizer.
- * Throws if both datasets return zero total results.
+ * Warns and returns early (never throws) if both datasets return zero total results.
  */
 export async function runNewYorkPhase2Scraper(): Promise<void> {
   console.log('[NewYork Phase2] === Starting New York Phase 2 Scraper ===');
@@ -207,10 +207,20 @@ export async function runNewYorkPhase2Scraper(): Promise<void> {
 
   const totalFetched = secondhandRaw.length + pawnbrokerRaw.length;
   if (totalFetched === 0) {
-    throw new Error(
-      '[NewYork Phase2] FATAL: Both datasets returned zero results. ' +
+    // 2026-08-16 (roadmap #558): was `throw new Error(...)`. A zero-results
+    // scrape is NOT a batch-level failure -- throwing here reds the entire
+    // 51-state consolidated scrape-licenses-phase2-batch.yml run (0 green
+    // runs in 8 attempts). Matches the georgiaPhase2Scraper.ts precedent
+    // (2026-08-08): warn loudly, never throw. The batch runner reports a
+    // per-scraper item count, which is where a silent-zero scraper now
+    // surfaces instead.
+    // (The per-page HTTP-error throw in fetchAllPages is a real transport
+    // failure and deliberately still throws.)
+    console.warn(
+      '[NewYork Phase2] Both datasets returned zero results. ' +
       'API may be down or endpoints changed.'
     );
+    return;
   }
 
   // Normalize and deduplicate across both datasets

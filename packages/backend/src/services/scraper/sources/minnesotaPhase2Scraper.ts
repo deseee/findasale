@@ -392,7 +392,7 @@ async function tryMnSosSearch(): Promise<{ matched: number; upserted: number }> 
  * Covers pawnbrokers, consignment shops, thrift stores, flea markets, etc.
  * MN auctioneers are handled by minnesotaLicensingScraper.ts (Phase 1).
  *
- * MUST throw if zero results across all sources.
+ * Zero results across all sources warns (never throws) -- see roadmap #558.
  */
 export async function runMinnesotaPhase2Scraper(): Promise<void> {
   // data.minnesota.gov DNS is non-resolving as of 2026-05 (ENOTFOUND).

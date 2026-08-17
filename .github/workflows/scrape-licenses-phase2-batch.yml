@@ -23,6 +23,19 @@ name: Scrape Licenses & Registries (Phase 2 Batch)
 # the comment itself was simply never updated afterward to say so. Left here
 # as the historical record of that process; it is DONE, not pending.
 
+# RED/GREEN SEMANTICS (changed 2026-08-16, roadmap #558):
+# This job no longer fails when a single state scraper fails. Across 51
+# independent third-party government/open-data sites, at least one being down on
+# any given Monday is normal -- the old all-or-nothing exit made a green run
+# structurally unachievable (8 runs, 0 green, while 48-49 of 51 scrapers passed).
+# Now: runLicenseScrapersBatch.ts reports every scraper's status, item count and
+# duration in the job summary, emits a ::warning:: annotation per failed or
+# zero-record scraper, and exits non-zero ONLY when the failure RATE exceeds
+# MAX_FAILURE_RATE (20%) -- the signature of a systemic break (bad DATABASE_URL,
+# Prisma client mismatch, blocked egress, shared-helper regression) rather than
+# unrelated site outages. A RED run here therefore means "something is broken on
+# our side"; individual state failures are read from the job summary table.
+
 on:
   schedule:
     - cron: '0 5 * * 1'   # weekly Monday — replaces the 51 individual phase2 scrapers
