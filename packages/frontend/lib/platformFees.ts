@@ -20,8 +20,50 @@
 
 export type OrganizerTier = 'SIMPLE' | 'PRO' | 'TEAMS' | null | undefined;
 
-/** 5% auction buyer premium — buyer-paid, auctions only. */
-export const AUCTION_BUYER_PREMIUM_RATE = 0.05;
+/**
+ * DEFAULT auction buyer premium — buyer-paid, auctions only, expressed as a decimal rate.
+ * The organizer may override it per sale via `Sale.buyersPremiumPct`; resolve the number to
+ * DISPLAY with `resolveBuyerPremiumPct` below rather than assuming 5% anywhere.
+ */
+export const DEFAULT_AUCTION_BUYER_PREMIUM_RATE = 0.05;
+
+/** Legacy alias. It is the DEFAULT rate, not "the" rate. */
+export const AUCTION_BUYER_PREMIUM_RATE = DEFAULT_AUCTION_BUYER_PREMIUM_RATE;
+
+/** The same default, in PERCENT — the unit `Sale.buyersPremiumPct` is expressed in. */
+export const DEFAULT_BUYER_PREMIUM_PCT = 5;
+
+/**
+ * Resolve the buyer premium PERCENTAGE to show a shopper for a given sale.
+ *
+ * Mirrors `resolveBuyerPremiumRate` in packages/backend/src/utils/feeCalculator.ts, which is
+ * what the charge actually uses. The two must agree — the whole #363 bug was a sale page
+ * advertising one number while the card was run for another.
+ *
+ *   · null / undefined -> 5 (the default). Sales that predate the field, and every sale where
+ *     the organizer left the box blank, keep showing 5%.
+ *   · 0                -> 0. No premium at all.
+ *   · anything else     -> that percentage, clamped to [0, 50].
+ *
+ * DO NOT write `pct || 5`. `0` is falsy, so that form displays 5% on a sale the organizer set
+ * to zero — a shopper would be quoted a premium that is never charged. The null/undefined check
+ * here is deliberately explicit and separate from the numeric path.
+ */
+export const resolveBuyerPremiumPct = (
+  buyersPremiumPct?: number | string | null
+): number => {
+  if (buyersPremiumPct === null || buyersPremiumPct === undefined) return DEFAULT_BUYER_PREMIUM_PCT;
+  const pct = typeof buyersPremiumPct === 'number' ? buyersPremiumPct : parseFloat(buyersPremiumPct);
+  if (!Number.isFinite(pct)) return DEFAULT_BUYER_PREMIUM_PCT;
+  return Math.min(50, Math.max(0, pct));
+};
+
+/** "5%", "12.5%", "0%" — no fake precision, no trailing zeros. */
+export const formatBuyerPremiumPct = (pct: number): string => `${parseFloat(pct.toFixed(2))}%`;
+
+/** What a winning bid of `bid` actually costs the buyer at the given premium percentage. */
+export const buyerTotalWithPremium = (bid: number, pct: number): number =>
+  parseFloat((bid + bid * (pct / 100)).toFixed(2));
 
 /**
  * Organizer commission rate by tier. PRO and TEAMS are both 8% — a `tier === 'PRO' ? 0.08 :

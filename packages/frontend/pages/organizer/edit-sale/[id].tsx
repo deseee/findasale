@@ -92,6 +92,11 @@ const EditSalePage = () => {
     // S696 Wave 2 features
     safetyNotes: '' as string,
     coversFee: false,
+    // #363: the auction buyer's premium percentage. Present on create-sale but MISSING from
+    // this edit form until 2026-08-17 — an organizer could set a premium when creating the sale
+    // and then had no way to change or clear it for the rest of the sale's life. null = use the
+    // 5% default; 0 = charge no premium at all.
+    buyersPremiumPct: null as number | null,
     // Feature #411: Dorm Dash Phase 2
     dormBuilding: '' as string,
     moveOutDate: '' as string, // YYYY-MM-DD for date input
@@ -231,6 +236,10 @@ const EditSalePage = () => {
       // S696 Wave 2 features
       safetyNotes: sale.safetyNotes ?? '',
       coversFee: sale.coversFee ?? false,
+      // ?? null, NOT || null — a stored 0 is a real "no premium" setting and must survive the
+      // round-trip into the form rather than being read back as "unset" and silently reverting
+      // the sale to the 5% default on the next save.
+      buyersPremiumPct: sale.buyersPremiumPct ?? null,
       // Feature #411: Dorm Dash Phase 2
       dormBuilding: sale.dormBuilding ?? '',
       moveOutDate: sale.moveOutDate ? new Date(sale.moveOutDate).toISOString().slice(0, 10) : '',
@@ -1205,6 +1214,34 @@ const EditSalePage = () => {
                   </label>
                 </div>
 
+                {/* #363: Buyer's premium %: AUCTION only */}
+                {formData.saleType === 'AUCTION' && (
+                  <div className="pt-4">
+                    <label htmlFor="buyersPremiumPct" className="block text-sm font-medium text-warm-700 dark:text-gray-300 mb-1">
+                      Buyer&apos;s premium %
+                    </label>
+                    <input
+                      type="number"
+                      id="buyersPremiumPct"
+                      name="buyersPremiumPct"
+                      min={0}
+                      max={50}
+                      step={0.5}
+                      value={formData.buyersPremiumPct ?? ''}
+                      onChange={(e) => setFormData({
+                        ...formData,
+                        // '' means blank -> null (use the default). An explicit 0 must stay 0.
+                        buyersPremiumPct: e.target.value === '' ? null : parseFloat(e.target.value),
+                      })}
+                      placeholder="5"
+                      className="w-32 px-3 py-2 border border-warm-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-warm-900 dark:text-gray-100 focus:ring-amber-500 focus:border-amber-500"
+                    />
+                    <p className="text-xs text-warm-500 dark:text-gray-400 mt-1">
+                      Added to the winning bid at checkout and paid by the winning bidder. Leave blank for the standard 5%. Enter 0 to charge no premium. On a $200 winning bid at 10%, the winner is charged $220. Shoppers see this number on your sale page and agree to it before paying.
+                    </p>
+                  </div>
+                )}
+
                 {/* S696 Wave 2: Cover the Fee: AUCTION only */}
                 {formData.saleType === 'AUCTION' && (
                   <div className="flex items-start space-x-3 pt-4">
@@ -1221,7 +1258,7 @@ const EditSalePage = () => {
                         Cover the buyer&apos;s premium
                       </span>
                       <span className="text-xs text-warm-500 dark:text-gray-400 mt-1">
-                        Winning bidders normally pay a 5% buyer&apos;s premium on top of their bid. Turn this on and you absorb it instead, so the winner pays exactly what they bid. On a $200 winning bid the buyer is charged $200 rather than $210, and the $10 premium comes out of your payout. Your platform fee is separate and does not change. Useful for charity auctions.
+                        Winning bidders normally pay the buyer&apos;s premium set above on top of their bid. Turn this on and you absorb it instead, so the winner pays exactly what they bid. At the standard 5%, a $200 winning bid charges the buyer $200 rather than $210, and the $10 premium comes out of your payout. Your platform fee is separate and does not change. Useful for charity auctions.
                       </span>
                     </label>
                   </div>

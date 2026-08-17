@@ -299,7 +299,11 @@ export const getEarningsBreakdown = async (req: AuthRequest, res: Response) => {
         // and strip the buyer's 5% premium back out of Purchase.amount; sale.coversFee tells it
         // whether the organizer absorbed that premium instead of the buyer.
         item: { select: { id: true, title: true, category: true, listingType: true, auctionStartPrice: true } },
-        sale: { select: { id: true, title: true, startDate: true, coversFee: true } },
+        // buyersPremiumPct (#363): resolveOrganizerFeeReport strips the premium back out of
+        // Purchase.amount at the sale's CONFIGURED rate. Omitting it makes the helper fall back
+        // to 5%, which understates the hammer price on any sale set above 5% and overstates it
+        // below — the organizer's reported gross and fee would both be wrong.
+        sale: { select: { id: true, title: true, startDate: true, coversFee: true, buyersPremiumPct: true } },
       },
       orderBy: { createdAt: 'desc' },
       take: 100,
@@ -356,7 +360,7 @@ export const getEarningsBreakdown = async (req: AuthRequest, res: Response) => {
         totalNetPayout: parseFloat(totals.totalNetPayout.toFixed(2)),
       },
       count: items.length,
-      note: 'Stripe fee estimated at 2.9% + $0.30. Platform fee is 10% for SIMPLE, 8% for PRO/TEAMS, on every sale including auctions. On an auction the winning bidder also pays a separate 5% buyer premium on top of their bid — that comes out of their pocket, not yours, so it is not included in the sale price or fees shown here.',
+      note: 'Stripe fee estimated at 2.9% + $0.30. Platform fee is 10% for SIMPLE, 8% for PRO/TEAMS, on every sale including auctions. On an auction the winning bidder also pays a separate buyer premium on top of their bid — 5% by default, or whatever rate you set on that sale. It comes out of their pocket, not yours, so it is not included in the sale price or fees shown here.',
       // Cash POS: accumulated fees awaiting payout deduction
       cashFeeBalance: organizer.cashFeeBalance,
       cashFeeBalanceUpdatedAt: organizer.cashFeeBalanceUpdatedAt,

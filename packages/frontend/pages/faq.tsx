@@ -163,8 +163,10 @@ const shopperFAQs: FAQItem[] = [
         you'll receive a notification. Bidding continues until the auction end time. The highest bid
         at closing wins. Auction end times are clearly marked so you always know the deadline.
         <br /><br />
-        Winning bids carry a <strong>5% buyer&apos;s premium</strong> added at checkout, so plan your
-        maximum bid around it. Win at $200 and you pay $210.
+        Winning bids carry a <strong>buyer&apos;s premium</strong> added at checkout, so plan your
+        maximum bid around it. It is <strong>5% unless the organizer sets a different rate</strong>, and
+        the exact percentage for a sale is shown on the sale page and on every bid form before you bid.
+        At 5%, win at $200 and you pay $210.
       </>
     ),
   },
@@ -172,10 +174,12 @@ const shopperFAQs: FAQItem[] = [
     question: 'What is the buyer\'s premium?',
     answer: (
       <>
-        On auction items only, the winning bidder pays a <strong>5% buyer&apos;s premium</strong> on top
-        of the winning bid. It is shown on the item page before you bid, itemized at checkout, and you
-        confirm it before paying. A $200 winning bid comes to <strong>$210.00</strong>: $200 to the
-        organizer&apos;s sale total, $10 buyer&apos;s premium.
+        On auction items only, the winning bidder pays a <strong>buyer&apos;s premium</strong> on top of
+        the winning bid. It is <strong>5% by default</strong>; an organizer can set a different rate for
+        their sale, and some set it to zero. Whatever the rate, it is shown on the sale page and on the
+        bid form before you bid, itemized at checkout, and you confirm it before paying — you will never
+        be charged a percentage you were not shown. At the standard 5%, a $200 winning bid comes to{' '}
+        <strong>$210.00</strong>: $200 to the organizer&apos;s sale total, $10 buyer&apos;s premium.
         <br /><br />
         Fixed-price items have no buyer&apos;s premium. You pay the listed price plus shipping if you
         choose it.
@@ -370,9 +374,10 @@ const organizerFAQs: FAQItem[] = [
         Upgrading to PRO or TEAMS saves 2 percentage points on every transaction.
         <br /><br />
         Auctions add a second, separate fee that the <em>winning bidder</em> pays, not you: a{' '}
-        <strong>5% buyer&apos;s premium</strong> on top of the winning bid. It does not change your
-        platform fee. On a $200 winning bid at the 10% rate, the buyer pays $210.00, your platform fee
-        is $20.00, and you receive $180.00 before Stripe processing.
+        <strong>buyer&apos;s premium</strong> on top of the winning bid, <strong>5% by default</strong> and
+        adjustable per sale in your sale settings. It does not change your platform fee. On a $200
+        winning bid at the 10% platform rate and the standard 5% premium, the buyer pays $210.00, your
+        platform fee is $20.00, and you receive $180.00 before Stripe processing.
       </>
     ),
   },
@@ -464,8 +469,9 @@ const organizerFAQs: FAQItem[] = [
         want to auction, mark it as an auction item and set a starting bid. Bidding is live. Shoppers
         see real-time bids. At the end time you set, the highest bidder wins and payment is processed
         automatically. Your standard platform fee applies (10% on SIMPLE, 8% on PRO and TEAMS). The
-        winning bidder separately pays a 5% buyer&apos;s premium on top of their bid, disclosed to them
-        before they bid and again at checkout.
+        winning bidder separately pays a buyer&apos;s premium on top of their bid — 5% by default, and
+        you can set your own rate (including zero) when you create or edit the sale. It is disclosed to
+        them before they bid and again at checkout.
       </>
     ),
   },

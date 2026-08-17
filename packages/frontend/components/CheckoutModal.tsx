@@ -8,6 +8,7 @@ import {
   useElements,
 } from '@stripe/react-stripe-js';
 import api from '../lib/api';
+import { formatBuyerPremiumPct } from '../lib/platformFees'; // #363
 import AccessibleModal from './AccessibleModal';
 import { useAuth } from './AuthContext';
 
@@ -232,7 +233,10 @@ const PaymentForm = ({ itemTitle, itemPrice, originalAmount, platformFee, discou
         )}
         {buyerPremium > 0 && (
           <div className="flex justify-between text-warm-600">
-            <span>Buyer Premium ({(buyerPremiumRate * 100).toFixed(0)}%)</span>
+            {/* #363: `.toFixed(0)` rounded a 12.5% sale to "13%" while the amount beside it
+                was the real 12.5% figure — the row did not add up against its own label.
+                formatBuyerPremiumPct drops trailing zeros without inventing precision. */}
+            <span>Buyer Premium ({formatBuyerPremiumPct(buyerPremiumRate * 100)})</span>
             <span>${buyerPremium.toFixed(2)}</span>
           </div>
         )}
@@ -274,7 +278,7 @@ const PaymentForm = ({ itemTitle, itemPrice, originalAmount, platformFee, discou
             aria-required="true"
           />
           <span className="text-xs text-warm-600 leading-relaxed">
-            I understand a buyer premium of {(buyerPremiumRate * 100).toFixed(0)}% (${buyerPremium.toFixed(2)}) will be added to my total.
+            I understand a buyer premium of {formatBuyerPremiumPct(buyerPremiumRate * 100)} (${buyerPremium.toFixed(2)}) will be added to my total.
           </span>
         </label>
       )}

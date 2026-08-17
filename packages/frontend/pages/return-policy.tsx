@@ -95,11 +95,16 @@ const ReturnPolicyPage = () => {
 
           {/* 5 */}
           <section className="mb-8">
-            <h2 className="text-2xl font-semibold text-warm-800 dark:text-warm-200 mb-4">5. Digital Purchases &amp; Platform Fees</h2>
+            <h2 className="text-2xl font-semibold text-warm-800 dark:text-warm-200 mb-4">5. Fees &amp; Refunds</h2>
+            <p className="text-warm-700 dark:text-warm-300 leading-relaxed mb-4">
+              <strong>The auction buyer&apos;s premium is refunded with the item.</strong> When an auction purchase is
+              refunded, you are refunded the full amount you were charged — the winning bid and the buyer&apos;s
+              premium together. The premium is not held back. If you won at $200 with a 5% premium and paid $210.00,
+              a refund returns $210.00.
+            </p>
             <p className="text-warm-700 dark:text-warm-300 leading-relaxed">
-              Platform service fees charged by FindA.Sale are non-refundable. This includes buyer convenience fees,
-              subscription fees, and any other charges collected directly by FindA.Sale rather than by the
-              individual seller. If you believe a fee was charged in error, contact{' '}
+              Organizer subscription fees are separate and are not refunded through this process. If you believe a
+              fee was charged in error, contact{' '}
               <a href="mailto:support@finda.sale" className="text-amber-600 hover:underline">
                 support@finda.sale
               </a>{' '}

@@ -13,6 +13,7 @@ import { useRouter } from 'next/router';
 import Head from 'next/head';
 import Link from 'next/link';
 import api from '../../../lib/api';
+import { resolveBuyerPremiumPct, formatBuyerPremiumPct } from '../../../lib/platformFees'; // #363
 import ClaimListingModal from '../../../components/ClaimListingModal';
 
 interface Shopper {
@@ -737,8 +738,13 @@ const OrganizerStorefront = () => {
                             </p>
                           )}
 
-                          {/* Buyer's Premium badge (#363) */}
-                          {sale.saleType === 'AUCTION' && sale.buyersPremiumPct != null && (
+          {/* Buyer's Premium badge (#363). Rendered for EVERY auction sale, not just ones with
+              a configured percentage — a shopper browsing the storefront needs the number
+              before they click through, and "no badge" used to mean "5% applies but nobody
+              said so". resolveBuyerPremiumPct returns the configured value, or the 5% default
+              when the column is null, or 0 when the organizer charges none — and it is the same
+              helper the sale page, the bid form and (mirrored) the backend charge path use. */}
+                          {sale.saleType === 'AUCTION' && (
                             <div
                               className="inline-block text-xs font-medium px-2 py-0.5 rounded mb-2"
                               style={{
@@ -748,7 +754,9 @@ const OrganizerStorefront = () => {
                                 fontSize: 11,
                               }}
                             >
-                              Buyer&apos;s Premium: {sale.buyersPremiumPct}%
+                              {resolveBuyerPremiumPct(sale.buyersPremiumPct) === 0
+                                ? "No buyer's premium"
+                                : `Buyer's Premium: ${formatBuyerPremiumPct(resolveBuyerPremiumPct(sale.buyersPremiumPct))}`}
                             </div>
                           )}
 

@@ -157,11 +157,14 @@ const TermsPage = () => {
             </p>
             <p className="text-warm-700 dark:text-warm-300 leading-relaxed mb-3">
               <strong>Auction buyer&apos;s premium.</strong> On auction items, the winning bidder pays a{' '}
-              <strong>buyer&apos;s premium of 5% of the winning bid</strong>, charged at checkout in addition to the
-              bid amount. The buyer&apos;s premium is separate from and additional to the Organizer platform fee
-              described above. It is disclosed on the item page before a bid is placed, itemized at checkout, and
-              acknowledged by the buyer before payment. An Organizer may elect to absorb the buyer&apos;s premium for
-              a given auction sale, in which case the winning bidder is charged the bid amount only.
+              <strong>buyer&apos;s premium</strong> calculated as a percentage of the winning bid and charged at
+              checkout in addition to the bid amount. The rate is <strong>5% unless the Organizer sets a different
+              rate for that sale</strong>, which they may do within a range of 0% to 50%. The rate in force for a
+              given sale is disclosed on the sale page and on the bid form before a bid is placed, itemized at
+              checkout, and acknowledged by the buyer before payment; the rate charged is always the rate disclosed.
+              The buyer&apos;s premium is separate from and additional to the Organizer platform fee described above.
+              An Organizer may elect to absorb the buyer&apos;s premium for a given auction sale, in which case the
+              winning bidder is charged the bid amount only.
             </p>
             <p className="text-warm-700 dark:text-warm-300 leading-relaxed">
               Fees are exclusive of any Stripe payment processing fees, which are charged separately per Stripe's

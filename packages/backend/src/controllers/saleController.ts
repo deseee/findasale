@@ -126,8 +126,31 @@ const saleCreateSchema = z.object({
   holdsEnabled: z.boolean().optional(),  // Feature #121: allow organizer to disable holds per-sale
   // Feature: Retail Mode — auto-renewal for retail stores (saleType='RETAIL')
   retailAutoRenewDays: z.number().int().min(1).max(365).optional().default(30),
-  // Feature #363: Auction Buyer's Premium
-  buyersPremiumPct: z.number().min(0).max(50).optional(),
+  // Feature #363: Auction Buyer's Premium — the percentage added to the winning bid and
+  // charged to the buyer at checkout (utils/feeCalculator.resolveBuyerPremiumRate).
+  //
+  // VALIDATION DECISION (#363, 2026-08-17): REJECT out-of-range here rather than clamp. This
+  // value is the organizer's stated intent and it multiplies a real charge against a real
+  // shopper's card; silently rewriting 500 to 50 would publish a sale advertising a premium the
+  // organizer never chose. A 400 with a validation error is the honest outcome. The money path
+  // separately CLAMPS to the same [0, 50] bounds as defense in depth against anything that
+  // reaches the column without passing through here — see resolveBuyerPremiumRate's header.
+  //
+  // Rounded to 2dp because the column is Decimal(5,2): Postgres would round on write anyway, so
+  // rounding here makes the stored value and the validated value the same number rather than
+  // leaving the difference to the driver.
+  //
+  // `.nullable()` (added 2026-08-17): null is the "no configured premium, use the 5% default"
+  // state, and until now there was no way for a client to get BACK to it — the field could only
+  // ever be set, never cleared. Note that null and 0 are different: null means the default
+  // applies, 0 means this sale charges no premium at all.
+  buyersPremiumPct: z
+    .number()
+    .min(0)
+    .max(50)
+    .transform((v) => Math.round(v * 100) / 100)
+    .nullable()
+    .optional(),
   // S696 Wave 2: Safety Notes — parking/entry info shown on sale detail
   safetyNotes: z.string().max(1000).optional().nullable(),
   // S696 Wave 2: Cover the Fee — organizer absorbs platform fee (AUCTION sales only)

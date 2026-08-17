@@ -8,6 +8,7 @@ import { GetStaticPaths, GetStaticProps } from 'next';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import api from '../../lib/api';
 import { formatCategoryLabel } from '../../lib/itemConstants';
+import { resolveBuyerPremiumPct, formatBuyerPremiumPct, buyerTotalWithPremium } from '../../lib/platformFees'; // #363: one source of truth for the premium a shopper is shown
 import { useAuth } from '../../components/AuthContext';
 import CheckoutModal from '../../components/CheckoutModal';
 import ConfirmDialog from '../../components/ConfirmDialog';
@@ -1828,27 +1829,36 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
               </section>
             )}
 
-            {/* Platform buyer's premium disclosure (5%, mirrors BUYER_PREMIUM_RATE in backend
-                stripeController.ts). Rendered for every auction sale so bidders always get the
-                financial disclosure before bidding. Suppressed when the organizer set their own
-                buyersPremiumPct, which renders its own banner immediately below, so a shopper never
-                sees two different premium numbers. */}
-            {sale.saleType === 'AUCTION' && !(sale.buyersPremiumPct && sale.buyersPremiumPct > 0) && (
-              <div className="rounded-xl p-4 border border-amber-200 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/30">
-                <p className="text-sm font-medium text-amber-900 dark:text-amber-200">
-                  Buyer&apos;s premium: 5% is added to the winning bid at checkout. Win at $200 and you pay $210.
-                </p>
-              </div>
-            )}
+            {/* Buyer's premium disclosure — ONE banner, placed directly above the items so
+                bidders get the financial disclosure before bidding.
 
-            {/* Buyer's premium disclosure: placed directly above items so bidders see the financial disclosure before bidding */}
-            {sale.buyersPremiumPct && sale.buyersPremiumPct > 0 && (
-              <div className="rounded-xl p-4 border border-amber-200 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/30">
-                <p className="text-sm font-medium text-amber-900 dark:text-amber-200">
-                  Buyer's Premium: {sale.buyersPremiumPct}% added to final bid price at checkout.
-                </p>
-              </div>
-            )}
+                #363 (2026-08-17): there were TWO banners here. A flat "5%" one, plus a second
+                one showing the organizer's configured buyersPremiumPct, with the flat banner
+                suppressed whenever a percentage was configured. The suppression existed only
+                because the charge path hardcoded 5% regardless of what the organizer had set —
+                showing both would have put two contradicting numbers on the page. The charge
+                now honours the configured percentage (backend utils/feeCalculator
+                .resolveBuyerPremiumRate), so the suppression is gone and this single banner
+                renders the sale's real rate: the configured value, or 5% when none is set, or
+                0% when the organizer deliberately charges none. The worked dollar example is
+                computed from the same number, so it can never drift from the charge. */}
+            {sale.saleType === 'AUCTION' && (() => {
+              const premiumPct = resolveBuyerPremiumPct(sale.buyersPremiumPct);
+              return (
+                <div className="rounded-xl p-4 border border-amber-200 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/30">
+                  <p className="text-sm font-medium text-amber-900 dark:text-amber-200">
+                    {premiumPct === 0 ? (
+                      <>Buyer&apos;s premium: none. Win at $200 and you pay $200.</>
+                    ) : (
+                      <>
+                        Buyer&apos;s premium: {formatBuyerPremiumPct(premiumPct)} is added to the winning bid at
+                        checkout. Win at $200 and you pay ${buyerTotalWithPremium(200, premiumPct).toFixed(2)}.
+                      </>
+                    )}
+                  </p>
+                </div>
+              );
+            })()}
 
             {/* ── ITEMS GRID ── */}
             <section id="items" className="rounded-xl border border-black/10 dark:border-white/8 bg-[#FBF8F2] dark:bg-[#121826] p-5">
@@ -2171,7 +2181,7 @@ const SaleDetailPage: React.FC<SaleDetailPageProps> = ({ ogData, initialData, ev
                               <div className="flex gap-2 mt-auto pt-1">
                                 <Link href={`/organizer/edit-item/${item.id}`} className="text-amber-600 hover:text-amber-800 text-xs">Edit</Link>
                                 {!!item.auctionEndTime && !item.auctionClosed && (
-                                  <button onClick={() => setConfirmState({ open: true, title: 'End Auction', message: `End auction for "${item.title}"?`, onConfirm: () => { api.post(`/items/${item.id}/close-auction`).then(() => { showToast('Auction closed', 'success'); queryClient.invalidateQueries({ queryKey: ['sale', id] }); }).catch((err: any) => showToast(err.response?.data?.message || 'Failed', 'error')).finally(() => setConfirmState(s => ({ ...s, open: false }))); } })} className="text-red-600 hover:text-red-800 text-xs">End Auction</button>
+                                  <button onClick={() => setConfirmState({ open: true, title: 'End Auction', message: `End auction for "${item.title}"?`, onConfirm: () => { api.post(`/items/${item.id}/close-auction`).then((res: any) => { const d = res?.data || {}; showToast(d.message || 'Auction closed', d.sold ? 'success' : 'info'); queryClient.invalidateQueries({ queryKey: ['sale', id] }); }).catch((err: any) => showToast(err.response?.data?.message || 'Failed', 'error')).finally(() => setConfirmState(s => ({ ...s, open: false }))); } })} className="text-red-600 hover:text-red-800 text-xs">End Auction</button>
                                 )}
                               </div>
                             )}

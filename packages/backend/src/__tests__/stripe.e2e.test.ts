@@ -105,9 +105,12 @@ import {
 import { getEarningsBreakdown } from '../controllers/payoutController';
 import {
   AUCTION_BUYER_PREMIUM_RATE,
+  DEFAULT_AUCTION_BUYER_PREMIUM_RATE,
   calculateApplicationFee,
+  formatBuyerPremiumRate,
   getPlatformFeeRate,
   isAuctionListing,
+  resolveBuyerPremiumRate,
   resolveOrganizerFeeReport,
 } from '../utils/feeCalculator';
 
@@ -986,6 +989,365 @@ describe('Stripe Connect + Fee Capture E2E', () => {
   // 4 AUCTION items named "ZZTEST ... delete after 2026-08-08", and 3 Bid rows platform-wide.
   // No organizer was ever shown a wrong number and no one was under-charged; this is a
   // forward-looking correctness fix.
+  // ── #363: the organizer's CONFIGURED buyer premium must be what is charged ────────────
+  //
+  // THE BUG THESE COVER: `Sale.buyersPremiumPct` (schema.prisma:970) is set by the organizer on
+  // create-sale.tsx, stored, and displayed to shoppers on the sale page, the storefront badge
+  // and the bid form — but every charge path hardcoded 5%. A sale advertising 15% ran the
+  // buyer's card for 5%, and the CheckoutEvidence consent record (chargeback defence) stated
+  // 5% too. Fixed by utils/feeCalculator.resolveBuyerPremiumRate, called by
+  // createPaymentIntent, jobs/auctionJob.ts and services/auctionService.closeAuction.
+  describe('configured buyer premium (Sale.buyersPremiumPct) — #363', () => {
+    const CONFIGURED_BID = 200.00;
+
+    /** Build a throwaway auction sale + lot at a given configured premium. */
+    const makeConfiguredLot = async (opts: {
+      buyersPremiumPct: number | null;
+      coversFee?: boolean;
+      currentBid?: number;
+      titleSuffix: string;
+    }) => {
+      const sale = await prisma.sale.create({
+        data: {
+          title: `Stripe E2E premium ${opts.titleSuffix}`,
+          description: 'Created by stripe.e2e.test.ts — safe to delete',
+          address: '100 Test Ave',
+          city: 'Springfield',
+          state: 'MI',
+          zip: '49503',
+          lat: 42.9629,
+          lng: -85.6789,
+          startDate: new Date(Date.now() + 24 * 60 * 60 * 1000),
+          endDate: new Date(Date.now() + 48 * 60 * 60 * 1000),
+          status: 'PUBLISHED',
+          isAuctionSale: true,
+          ...(opts.coversFee ? { coversFee: true } : {}),
+          ...(opts.buyersPremiumPct === null ? {} : { buyersPremiumPct: opts.buyersPremiumPct }),
+          organizerId: testOrganizer.id,
+        },
+      });
+      const lot = await prisma.item.create({
+        data: {
+          embedding: [],
+          title: `Configured-premium lot ${opts.titleSuffix}`,
+          auctionStartPrice: 50.00,
+          currentBid: opts.currentBid ?? CONFIGURED_BID,
+          status: 'AVAILABLE',
+          saleId: sale.id,
+        },
+      });
+      return { sale, lot };
+    };
+
+    const cleanupLot = async (saleId: string, lotId: string) => {
+      await prisma.checkoutEvidence.deleteMany({
+        where: { purchase: { itemId: lotId } },
+      }).catch(() => {});
+      await prisma.purchase.deleteMany({ where: { itemId: lotId } }).catch(() => {});
+      await prisma.item.delete({ where: { id: lotId } }).catch(() => {});
+      await prisma.sale.delete({ where: { id: saleId } }).catch(() => {});
+    };
+
+    /**
+     * createPaymentIntent writes CheckoutEvidence FIRE-AND-FORGET (`prisma.checkoutEvidence
+     * .create(...).catch(...)` — deliberately not awaited, so a logging failure can never
+     * block a checkout). The row therefore may not exist the instant the controller returns.
+     * Poll for it rather than asserting immediately; a bare read is a flaky race, and a
+     * `setTimeout` guess is the same race with extra steps.
+     */
+    const waitForCheckoutEvidence = async (purchaseId: string, attempts = 40) => {
+      for (let i = 0; i < attempts; i++) {
+        const found = await prisma.checkoutEvidence.findFirst({ where: { purchaseId } });
+        if (found) return found;
+        await new Promise((r) => setTimeout(r, 25));
+      }
+      return null;
+    };
+
+    // Fixtures created here are PUBLISHED sales dated inside the next 48 hours, which puts them
+    // squarely inside weeklyDigest.e2e's "sales happening this weekend" window. Every test below
+    // therefore cleans up in a `finally`, and this sweep catches anything a mid-test failure
+    // stranded — without it, one failing assertion here leaks a sale and fails an unrelated
+    // suite, which is exactly what happened on the first run of this block.
+    afterAll(async () => {
+      const strays = await prisma.sale.findMany({
+        where: { title: { startsWith: 'Stripe E2E premium ' } },
+        select: { id: true, items: { select: { id: true } } },
+      });
+      for (const stray of strays) {
+        for (const it of stray.items) {
+          await prisma.checkoutEvidence.deleteMany({ where: { purchase: { itemId: it.id } } }).catch(() => {});
+          await prisma.purchase.deleteMany({ where: { itemId: it.id } }).catch(() => {});
+          await prisma.item.delete({ where: { id: it.id } }).catch(() => {});
+        }
+        await prisma.sale.delete({ where: { id: stray.id } }).catch(() => {});
+      }
+    });
+
+    it('should charge the organizer’s CONFIGURED 15% premium, not the hardcoded 5%', async () => {
+      const { sale, lot } = await makeConfiguredLot({ buyersPremiumPct: 15, titleSuffix: '15pct' });
+      try {
+
+        mockPaymentIntentsCreate.mockResolvedValueOnce({
+          id: 'pi_test_premium_15pct',
+          client_secret: 'pi_test_premium_15pct_secret',
+        });
+
+        const req: any = { user: { id: testShopper.id, role: 'USER' }, body: { itemId: lot.id } };
+        const res = makeMockRes();
+        await createPaymentIntent(req, res);
+
+        const args = mockPaymentIntentsCreate.mock.calls.at(-1)[0];
+        // $200 bid at a configured 15% => buyer charged $230.00, NOT $210.00.
+        expect(args.amount).toBe(23000);
+        expect(args.amount).not.toBe(21000); // the hardcoded-5% regression
+        // application_fee = $30.00 premium + $20.00 SIMPLE commission.
+        expect(args.application_fee_amount).toBe(3000 + 2000);
+        // The organizer still nets exactly $180.00 — a bigger premium moves the BUYER's charge
+        // and the platform's take, never the organizer's payout.
+        expect(args.amount - args.application_fee_amount).toBe(18000);
+
+        const payload = res.json.mock.calls.at(-1)[0];
+        expect(payload.buyerPremiumRate).toBe(0.15);
+        expect(payload.buyerPremiumAmount).toBe(30);
+        expect(payload.totalAmount).toBe(230);
+        expect(payload.subtotal + payload.buyerPremiumAmount).toBe(payload.totalAmount);
+
+        // CHARGEBACK DEFENCE: the stored consent must state 15%, not 5%. A consent record that
+        // names a rate the buyer was never charged is worthless in a dispute.
+        const purchase = await prisma.purchase.findFirst({
+          where: { stripePaymentIntentId: 'pi_test_premium_15pct' },
+        });
+        expect(purchase).not.toBeNull();
+        const evidence = await waitForCheckoutEvidence(purchase!.id);
+        // Anchored on the surrounding words: "15%" trivially CONTAINS "5%", so a bare
+        // not.toContain('5%') is a false failure — assert the whole phrase.
+        expect(evidence?.acknowledgmentText).toContain('buyer premium of 15%');
+        expect(evidence?.acknowledgmentText).not.toContain('buyer premium of 5%');
+        console.log(`✓ Configured 15%: buyer charged $230.00, fee $50.00, organizer nets $180.00, consent says "${evidence?.acknowledgmentText}"`);
+
+      } finally {
+        await cleanupLot(sale.id, lot.id);
+      }
+    });
+
+    it('should treat a configured 0 as ZERO premium, not as "unset" (the falsy trap)', async () => {
+      // THE BUG THIS EXISTS FOR: `pct || 5` is the obvious implementation and it is wrong.
+      // 0 is falsy, so that form charges 5% on a sale the organizer deliberately set to 0% —
+      // the shopper is shown "no premium" and their card is run for 5% more.
+      const { sale, lot } = await makeConfiguredLot({ buyersPremiumPct: 0, titleSuffix: '0pct' });
+      try {
+
+        mockPaymentIntentsCreate.mockResolvedValueOnce({
+          id: 'pi_test_premium_0pct',
+          client_secret: 'pi_test_premium_0pct_secret',
+        });
+
+        const req: any = { user: { id: testShopper.id, role: 'USER' }, body: { itemId: lot.id } };
+        const res = makeMockRes();
+        await createPaymentIntent(req, res);
+
+        const args = mockPaymentIntentsCreate.mock.calls.at(-1)[0];
+        expect(args.amount).toBe(20000);            // the bid, and nothing more
+        expect(args.amount).not.toBe(21000);        // the falsy-trap regression
+        expect(args.application_fee_amount).toBe(2000); // commission only — no premium
+        expect(args.amount - args.application_fee_amount).toBe(18000);
+
+        const payload = res.json.mock.calls.at(-1)[0];
+        expect(payload.buyerPremiumRate).toBe(0);
+        expect(payload.buyerPremiumAmount).toBe(0);
+        expect(payload.totalAmount).toBe(200);
+
+        // No premium was charged, so no premium may be acknowledged.
+        const purchase = await prisma.purchase.findFirst({
+          where: { stripePaymentIntentId: 'pi_test_premium_0pct' },
+        });
+        const evidence = await waitForCheckoutEvidence(purchase!.id);
+        expect(evidence?.acknowledgmentText).not.toContain('buyer premium');
+        console.log('✓ Configured 0%: buyer charged $200.00 flat, no premium in the charge or the consent record');
+
+      } finally {
+        await cleanupLot(sale.id, lot.id);
+      }
+    });
+
+    it('should fall back to the 5% default when buyersPremiumPct is null', async () => {
+      // Every sale that predates the field, and every sale where the organizer left the box
+      // blank, must behave EXACTLY as before this change.
+      const { sale, lot } = await makeConfiguredLot({ buyersPremiumPct: null, titleSuffix: 'null' });
+      try {
+        const stored = await prisma.sale.findUnique({ where: { id: sale.id } });
+        expect(stored?.buyersPremiumPct).toBeNull(); // fixture sanity: genuinely unset
+
+        mockPaymentIntentsCreate.mockResolvedValueOnce({
+          id: 'pi_test_premium_null',
+          client_secret: 'pi_test_premium_null_secret',
+        });
+
+        const req: any = { user: { id: testShopper.id, role: 'USER' }, body: { itemId: lot.id } };
+        const res = makeMockRes();
+        await createPaymentIntent(req, res);
+
+        const args = mockPaymentIntentsCreate.mock.calls.at(-1)[0];
+        expect(args.amount).toBe(21000);                      // $200 + 5%
+        expect(args.application_fee_amount).toBe(1000 + 2000); // $10 premium + $20 commission
+        const payload = res.json.mock.calls.at(-1)[0];
+        expect(payload.buyerPremiumRate).toBe(DEFAULT_AUCTION_BUYER_PREMIUM_RATE);
+        console.log('✓ Unset premium: unchanged 5% default behaviour');
+
+      } finally {
+        await cleanupLot(sale.id, lot.id);
+      }
+    });
+
+    it('should honour a FRACTIONAL configured premium and round the cents once', async () => {
+      // 12.5% of a $199.99 bid is 2499.875 cents. It must land on ONE deterministic value that
+      // the charge, the disclosure and the consent record all share.
+      const { sale, lot } = await makeConfiguredLot({
+        buyersPremiumPct: 12.5,
+        currentBid: 199.99,
+        titleSuffix: '12p5pct',
+      });
+      try {
+
+        mockPaymentIntentsCreate.mockResolvedValueOnce({
+          id: 'pi_test_premium_fractional',
+          client_secret: 'pi_test_premium_fractional_secret',
+        });
+
+        const req: any = { user: { id: testShopper.id, role: 'USER' }, body: { itemId: lot.id } };
+        const res = makeMockRes();
+        await createPaymentIntent(req, res);
+
+        const args = mockPaymentIntentsCreate.mock.calls.at(-1)[0];
+        const expectedPremiumCents = Math.round(19999 * 0.125); // 2500
+        expect(args.amount).toBe(19999 + expectedPremiumCents);
+        expect(args.application_fee_amount).toBe(expectedPremiumCents + Math.round(19999 * 0.10));
+
+        const payload = res.json.mock.calls.at(-1)[0];
+        // Displayed total must reconcile to the cent with what Stripe is asked to charge.
+        expect(Math.round(payload.totalAmount * 100)).toBe(args.amount);
+        // And the consent text must not invent precision or round 12.5 to "13".
+        const purchase = await prisma.purchase.findFirst({
+          where: { stripePaymentIntentId: 'pi_test_premium_fractional' },
+        });
+        const evidence = await waitForCheckoutEvidence(purchase!.id);
+        expect(evidence?.acknowledgmentText).toContain('12.5%');
+        console.log(`✓ Fractional 12.5%: $${args.amount / 100} charged, consent "${evidence?.acknowledgmentText}"`);
+
+      } finally {
+        await cleanupLot(sale.id, lot.id);
+      }
+    });
+
+    it('should compose coversFee with a configured premium — buyer pays the bid, organizer absorbs 15%', async () => {
+      // #402 + #363 together. The buyer is charged the bid only; the platform still collects
+      // premium + commission; the organizer absorbs the CONFIGURED premium, not 5%.
+      const { sale, lot } = await makeConfiguredLot({
+        buyersPremiumPct: 15,
+        coversFee: true,
+        titleSuffix: '15pct-coversfee',
+      });
+      try {
+
+        mockPaymentIntentsCreate.mockResolvedValueOnce({
+          id: 'pi_test_premium_15pct_covers',
+          client_secret: 'pi_test_premium_15pct_covers_secret',
+        });
+
+        const req: any = { user: { id: testShopper.id, role: 'USER' }, body: { itemId: lot.id } };
+        const res = makeMockRes();
+        await createPaymentIntent(req, res);
+
+        const args = mockPaymentIntentsCreate.mock.calls.at(-1)[0];
+        expect(args.amount).toBe(20000);                     // bid only
+        expect(args.application_fee_amount).toBe(3000 + 2000); // $30 premium + $20 commission
+        expect(args.amount - args.application_fee_amount).toBe(15000); // organizer nets $150.00
+
+        const payload = res.json.mock.calls.at(-1)[0];
+        expect(payload.buyerPremiumAmount).toBe(0);
+        expect(payload.buyerPremiumRate).toBe(0);
+        expect(payload.totalAmount).toBe(200);
+        console.log('✓ coversFee + 15%: buyer charged $200.00, platform takes $50.00, organizer nets $150.00');
+
+        // Organizer-facing reporting must put the ABSORBED 15% on their fee line, not 5%.
+        const report = resolveOrganizerFeeReport(
+          { amount: 200, item: { auctionStartPrice: 50 }, sale: { coversFee: true, buyersPremiumPct: 15 } },
+          getPlatformFeeRate('SIMPLE')
+        );
+        expect(report.grossSalePrice).toBe(200);
+        expect(report.platformFee).toBe(50); // $20 commission + $30 absorbed premium
+
+      } finally {
+        await cleanupLot(sale.id, lot.id);
+      }
+    });
+
+    it('should CLAMP an out-of-range stored premium on the money path (defense in depth)', () => {
+      // The API boundary REJECTS >50 (saleController: z.number().min(0).max(50)). This asserts
+      // the second layer: whatever reaches the column — direct DB write, seed, admin tool — can
+      // never multiply a real charge beyond 50%, and can never go negative.
+      expect(resolveBuyerPremiumRate({ buyersPremiumPct: 500 })).toBe(0.5);
+      expect(resolveBuyerPremiumRate({ buyersPremiumPct: -10 })).toBe(0);
+      expect(resolveBuyerPremiumRate({ buyersPremiumPct: 50 })).toBe(0.5);
+    });
+
+    it('resolveBuyerPremiumRate should handle every shape Prisma can hand back', () => {
+      // null / undefined -> the 5% default. NOT zero: a corrupt or absent value must not
+      // silently zero out the platform's premium revenue.
+      expect(resolveBuyerPremiumRate({ buyersPremiumPct: null })).toBe(0.05);
+      expect(resolveBuyerPremiumRate({ buyersPremiumPct: undefined })).toBe(0.05);
+      expect(resolveBuyerPremiumRate(null)).toBe(0.05);
+      expect(resolveBuyerPremiumRate(undefined)).toBe(0.05);
+      // A genuine 0 is ZERO — the whole point of the explicit null check.
+      expect(resolveBuyerPremiumRate({ buyersPremiumPct: 0 })).toBe(0);
+      // Prisma Decimal (has .toNumber()), and the string form from a raw query.
+      expect(resolveBuyerPremiumRate({ buyersPremiumPct: { toNumber: () => 15 } })).toBe(0.15);
+      expect(resolveBuyerPremiumRate({ buyersPremiumPct: '15.00' })).toBe(0.15);
+      expect(resolveBuyerPremiumRate({ buyersPremiumPct: '0' })).toBe(0);
+      // Garbage falls back to the default rather than to 0.
+      expect(resolveBuyerPremiumRate({ buyersPremiumPct: NaN })).toBe(0.05);
+      expect(resolveBuyerPremiumRate({ buyersPremiumPct: 'not a number' })).toBe(0.05);
+      // Legacy alias still points at the default.
+      expect(AUCTION_BUYER_PREMIUM_RATE).toBe(DEFAULT_AUCTION_BUYER_PREMIUM_RATE);
+    });
+
+    it('formatBuyerPremiumRate should render without fake precision', () => {
+      expect(formatBuyerPremiumRate(0.05)).toBe('5%');
+      expect(formatBuyerPremiumRate(0.15)).toBe('15%');
+      expect(formatBuyerPremiumRate(0.125)).toBe('12.5%');
+      expect(formatBuyerPremiumRate(0)).toBe('0%');
+    });
+
+    it('calculateApplicationFee should apply the passed premium rate, and none on a regular sale', () => {
+      const auction = calculateApplicationFee(20000, 0.10, true, 0.15);
+      expect(auction.buyerPremiumCents).toBe(3000);
+      expect(auction.organizerCommissionCents).toBe(2000);
+      expect(auction.applicationFeeCents).toBe(5000);
+      expect(auction.buyerPremiumRate).toBe(0.15);
+
+      // A premium rate passed on a NON-auction must be ignored outright.
+      const regular = calculateApplicationFee(20000, 0.10, false, 0.15);
+      expect(regular.buyerPremiumCents).toBe(0);
+      expect(regular.applicationFeeCents).toBe(2000);
+      expect(regular.buyerPremiumRate).toBe(0);
+
+      // Omitting the rate keeps the historical 5% behaviour for legacy callers.
+      expect(calculateApplicationFee(20000, 0.10, true).buyerPremiumCents).toBe(1000);
+    });
+
+    it('resolveOrganizerFeeReport should strip the CONFIGURED premium back out, not 5%', () => {
+      // A $200 win on a 15% sale charges the buyer $230. Reporting must recover $200.00 gross
+      // and a $20.00 commission — stripping at 5% would report $219.05 gross and $21.90 fee.
+      const report = resolveOrganizerFeeReport(
+        { amount: 230, item: { listingType: 'AUCTION' }, sale: { coversFee: false, buyersPremiumPct: 15 } },
+        getPlatformFeeRate('SIMPLE')
+      );
+      expect(report.grossSalePrice).toBe(200);
+      expect(report.platformFee).toBe(20);
+    });
+  });
+
   describe('organizer-facing fee reporting — commission only, premium stripped', () => {
     const REGULAR_PRICE   = 100.00;                                          // testItem
     const AUCTION_BID     = 200.00;                                          // testAuctionItem.currentBid

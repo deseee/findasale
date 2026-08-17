@@ -3,6 +3,7 @@ import api from '../lib/api';
 import { useAuth } from './AuthContext';
 import { useToast } from './ToastContext';
 import AccessibleModal from './AccessibleModal';
+import { resolveBuyerPremiumPct, formatBuyerPremiumPct } from '../lib/platformFees'; // #363
 
 interface Item {
   id: string;
@@ -11,6 +12,12 @@ interface Item {
   auctionStartPrice: number | null;
   bidIncrement: number | null;
   auctionClosed?: boolean;
+  /** #363: the sale's configured buyer premium (percent). Undefined/null = the 5% default;
+   *  0 = no premium. Passed down from the item page so the preview quotes the real number.
+   *  `string` is included because the item endpoint serializes the Prisma Decimal as a string. */
+  buyersPremiumPct?: number | string | null;
+  /** #402: when the organizer covers the premium the bidder pays their bid and nothing more. */
+  saleCoversFee?: boolean;
 }
 
 interface Props {
@@ -30,12 +37,14 @@ const BidModal = ({ item, onClose, onBidPlaced }: Props) => {
   const [amount, setAmount] = useState(minBid.toFixed(2));
   const [submitting, setSubmitting] = useState(false);
 
-  // Buyer's premium disclosure. Mirrors BUYER_PREMIUM_RATE in
-  // backend/src/controllers/stripeController.ts, which is what is actually charged.
-  const BUYER_PREMIUM_RATE = 0.05;
+  // Buyer's premium disclosure. #363 (2026-08-17): this was a hardcoded 0.05 while organizers
+  // could configure `Sale.buyersPremiumPct` — a bidder on a 15% sale was quoted 5% here and
+  // then charged 15%. resolveBuyerPremiumPct mirrors the backend's resolveBuyerPremiumRate
+  // exactly: configured value wins, 0 means zero, blank means the 5% default.
+  const premiumPct = item.saleCoversFee ? 0 : resolveBuyerPremiumPct(item.buyersPremiumPct);
   const parsedAmount = parseFloat(amount);
   const previewBid = !isNaN(parsedAmount) && parsedAmount > 0 ? parsedAmount : minBid;
-  const previewPremium = previewBid * BUYER_PREMIUM_RATE;
+  const previewPremium = previewBid * (premiumPct / 100);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -105,8 +114,15 @@ const BidModal = ({ item, onClose, onBidPlaced }: Props) => {
                 aria-label="Your bid amount in dollars"
               />
               <p className="mt-2 text-xs text-warm-600 dark:text-gray-400">
-                Winning bids carry a 5% buyer&apos;s premium. Win at ${previewBid.toFixed(2)} and
-                you&apos;ll pay ${previewPremium.toFixed(2)} premium, ${(previewBid + previewPremium).toFixed(2)} total.
+                {premiumPct === 0 ? (
+                  <>No buyer&apos;s premium on this sale. Win at ${previewBid.toFixed(2)} and you pay ${previewBid.toFixed(2)}.</>
+                ) : (
+                  <>
+                    Winning bids carry a {formatBuyerPremiumPct(premiumPct)} buyer&apos;s premium. Win at $
+                    {previewBid.toFixed(2)} and you&apos;ll pay ${previewPremium.toFixed(2)} premium, $
+                    {(previewBid + previewPremium).toFixed(2)} total.
+                  </>
+                )}
               </p>
             </div>
             <div className="flex gap-3">

@@ -33,6 +33,7 @@ import { useShopperCart } from '../../hooks/useShopperCart'; // Phase 1: Smart C
 import ShopperCartFAB from '../../components/ShopperCartFAB'; // Phase 1: Smart Cart
 import { useCart } from '../../context/CartContext';
 import BidModal from '../../components/BidModal';
+import { resolveBuyerPremiumPct, formatBuyerPremiumPct, buyerTotalWithPremium } from '../../lib/platformFees'; // #363: one source of truth for the premium a shopper is shown
 import BidHistory from '../../components/BidHistory'; // ADR-013 Phase 2: Bid history with anonymization
 import SoldItemBanner from '../../components/SoldItemBanner';
 import SimilarItemsGrid from '../../components/SimilarItemsGrid';
@@ -72,6 +73,14 @@ interface Item {
     endDate: string;
     zipCode: string;
     city?: string | null;
+    // #363: the sale's configured auction buyer premium, in percent. null/undefined = the 5%
+    // default; 0 = no premium at all. Returned by ITEM_DETAIL_SELECT. Typed `number | string`
+    // because getItemById does NOT run convertDecimalsToNumbers — a Prisma Decimal serializes
+    // to a JSON string on this endpoint, unlike /sales/:id where it arrives as a number.
+    // resolveBuyerPremiumPct accepts both shapes.
+    buyersPremiumPct?: number | string | null;
+    // #402: organizer absorbs the premium — the bidder pays their bid and nothing more.
+    coversFee?: boolean | null;
     organizer?: {
       name?: string;
       businessName?: string;
@@ -584,6 +593,17 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
     : isReverseAuction
     ? reverseDecayedPrice ?? item.price ?? 0
     : (item.price ?? 0);
+
+  // #363: the buyer premium percentage for THIS sale — the single value every premium
+  // disclosure on this page renders (price panel, inline bid form, BidModal). Resolved with the
+  // same rule the backend charge path uses (lib/platformFees.resolveBuyerPremiumPct mirrors
+  // utils/feeCalculator.resolveBuyerPremiumRate): a configured value wins, 0 means no premium,
+  // blank means the 5% default. Zero when the organizer covers the premium (#402), because then
+  // the bidder genuinely pays their bid and nothing more.
+  const itemPremiumPct = item.sale?.coversFee === true
+    ? 0
+    : resolveBuyerPremiumPct(item.sale?.buyersPremiumPct);
+
   const isUserLiked = user && favoriteStatus?.isFavorited === true;
 
   return (
@@ -780,11 +800,17 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
                     {unitsRemaining === 1 ? 'Only 1 left' : `${unitsRemaining} available`}
                   </div>
                 )}
-                {isAuction && (
+                {/* #363: was a hardcoded 0.05 / "(5%)". Now the sale's configured rate, so the
+                    total quoted here is the total the buyer's card is run for. Hidden entirely
+                    when the premium is zero — quoting "+ $0.00 buyer premium" is noise. */}
+                {isAuction && itemPremiumPct > 0 && (
                   <div className="text-xs text-gray-500 dark:text-gray-400 mb-2">
-                    <div>+ ${(currentPrice * 0.05).toFixed(2)} buyer premium (5%)</div>
+                    <div>
+                      + ${(currentPrice * (itemPremiumPct / 100)).toFixed(2)} buyer premium (
+                      {formatBuyerPremiumPct(itemPremiumPct)})
+                    </div>
                     <div className="text-sm font-semibold text-gray-900 dark:text-gray-100 mt-1">
-                      ${(currentPrice + currentPrice * 0.05).toFixed(2)} total
+                      ${buyerTotalWithPremium(currentPrice, itemPremiumPct).toFixed(2)} total
                     </div>
                   </div>
                 )}
@@ -1013,13 +1039,27 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
                             className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 dark:bg-gray-700 dark:text-gray-100 disabled:bg-gray-100 dark:disabled:bg-gray-800 disabled:text-gray-500 dark:disabled:text-gray-500"
                           />
                           {bidError && <p className="text-red-600 text-sm">{bidError}</p>}
-                          {/* Buyer's premium disclosed in the bid flow itself, before the bid is placed.
-                              5% mirrors BUYER_PREMIUM_RATE in backend stripeController.ts. */}
+                          {/* Buyer's premium disclosed in the bid flow itself, before the bid is
+                              placed. #363: the rate is the sale's configured one (or the 5%
+                              default, or 0), resolved by lib/platformFees.resolveBuyerPremiumPct
+                              — the same rule the backend charge path uses. It was hardcoded 5%,
+                              so a bidder on a 15% sale agreed to one number and paid another. */}
                           <p className="text-xs text-gray-600 dark:text-gray-400">
-                            Winning bids carry a 5% buyer&apos;s premium.
-                            {bidAmount && bidAmount > 0
-                              ? ` Win at $${bidAmount.toFixed(2)} and you'll pay $${(bidAmount * 0.05).toFixed(2)} premium, $${(bidAmount * 1.05).toFixed(2)} total.`
-                              : ' It is added to your bid at checkout.'}
+                            {itemPremiumPct === 0 ? (
+                              <>
+                                No buyer&apos;s premium on this sale.
+                                {bidAmount && bidAmount > 0
+                                  ? ` Win at $${bidAmount.toFixed(2)} and that is exactly what you pay.`
+                                  : ' You pay exactly what you bid.'}
+                              </>
+                            ) : (
+                              <>
+                                Winning bids carry a {formatBuyerPremiumPct(itemPremiumPct)} buyer&apos;s premium.
+                                {bidAmount && bidAmount > 0
+                                  ? ` Win at $${bidAmount.toFixed(2)} and you'll pay $${(bidAmount * (itemPremiumPct / 100)).toFixed(2)} premium, $${buyerTotalWithPremium(bidAmount, itemPremiumPct).toFixed(2)} total.`
+                                  : ' It is added to your bid at checkout.'}
+                              </>
+                            )}
                           </p>
                           <button
                             onClick={handlePlaceBid}
@@ -1279,6 +1319,10 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
             auctionStartPrice: item.auctionStartPrice || null,
             bidIncrement: item.bidIncrement || null,
             auctionClosed: item.auctionClosed,
+            // #363: pass the sale's configured premium through so the modal's preview quotes
+            // the rate that will actually be charged instead of a hardcoded 5%.
+            buyersPremiumPct: item.sale?.buyersPremiumPct ?? null,
+            saleCoversFee: item.sale?.coversFee === true,
           }}
           onClose={() => setBidModalOpen(false)}
           onBidPlaced={() => {

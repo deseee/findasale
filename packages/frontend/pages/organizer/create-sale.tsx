@@ -1596,21 +1596,29 @@ function Step4({ c, form, setForm }: Step4Props) {
           <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontFamily: 'Inter, sans-serif', maxWidth: 200 }}>
             <span style={{ fontSize: 13, fontWeight: 500, color: c.text }}>
               Buyer&apos;s premium %{' '}
-              <Tooltip content="Percentage added to the hammer price at checkout. Required disclosure for auction buyers." />
+              <Tooltip content="Percentage added to the winning bid at checkout and paid by the winning bidder. Leave blank for the standard 5%. Enter 0 to charge no premium at all. Shoppers see this number on your sale page and agree to it before paying." />
             </span>
             <input
               type="number"
               min={0}
               max={50}
               step={0.5}
+              // #363: `e.target.value === ''` — NOT a truthiness check. `e.target.value ? ... : null`
+              // turned a typed "0" into null (the string "0" is truthy but parseFloat's guard was
+              // on the raw value, and clearing vs zero were indistinguishable downstream), so an
+              // organizer who wanted no premium got the 5% default instead. Blank means "use the
+              // default"; 0 means "charge nothing".
               value={form.buyersPremiumPct ?? ''}
               onChange={e => setForm(f => ({
                 ...f,
-                buyersPremiumPct: e.target.value ? parseFloat(e.target.value) : null,
+                buyersPremiumPct: e.target.value === '' ? null : parseFloat(e.target.value),
               }))}
-              placeholder="0"
+              placeholder="5"
               style={{ ...inputStyle }}
             />
+            <span style={{ fontSize: 12, color: c.textDim }}>
+              Blank uses the standard 5%. Enter 0 for no premium.
+            </span>
           </label>
         </div>
       )}
@@ -2314,7 +2322,12 @@ const CreateSalePage: React.FC = () => {
       photoUrls,
       tags: f.tags,
       notes: f.notes || undefined,
-      ...(buyersPremiumPct !== null ? { buyersPremiumPct } : {}),
+      // #363: send `null` when the field is blank rather than omitting the key. Omitting it
+      // meant a premium could be set but never cleared — an organizer who typed 15, saved, then
+      // emptied the box kept charging 15%. `null` is the explicit "no configured premium, use
+      // the 5% default" state and the API accepts it (saleController buyersPremiumPct is
+      // .nullable()). Note 0 is NOT the same as null: 0 charges no premium at all.
+      buyersPremiumPct,
       ...(f.locationId ? { locationId: f.locationId } : {}),
       ...(f.entranceNote ? { entranceNote: f.entranceNote } : {}),
       ...(entranceLat !== null ? { entranceLat } : {}),

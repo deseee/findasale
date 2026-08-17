@@ -26,12 +26,13 @@ import { evaluateReferralFraud, getAccountAgeDays, MIN_ACCOUNT_AGE_DAYS } from '
 import { getClientIp } from '../utils/getClientIp'; // Platform Safety #94, #98: Client IP tracking
 import { checkPaymentDuplicate, storePaymentFingerprint, logPaymentDuplicateWarning } from '../services/paymentDeduplicationService'; // Platform Safety #102
 import {
-  AUCTION_BUYER_PREMIUM_RATE,
   calculateApplicationFee,
+  formatBuyerPremiumRate,
   getPlatformFeeRate,
   isAuctionListing,
+  resolveBuyerPremiumRate,
   SubscriptionTier,
-} from '../utils/feeCalculator'; // S388: Tier-aware fee calculation
+} from '../utils/feeCalculator'; // S388: Tier-aware fee calculation; #363: per-sale buyer premium
 import { endEbayListingIfExists } from './ebayController'; // Feature #244 Phase 2: eBay direct push — withdraw on sale
 import { notifyFacebookExportedItemSold } from '../services/facebookNudgeService';
 import { markShopifyItemSold } from '../services/shopifyService'; // Feature: Shopify Cross-Listing
@@ -193,6 +194,15 @@ const sendReceiptEmail = async (purchase: {
       // fee reporting (payoutController / earningsPdfController / organizers analytics / CSV
       // export) is unaffected and still shows the fee in full.
       const disc = purchase.discountAmount ?? 0;
+      // #363: the premium row must state the rate that was actually charged, not a literal 5%.
+      // `buyerPremiumRate` is already a parameter of this helper; it falls back to deriving the
+      // rate from the amounts when a caller passes the money but not the rate. (Today the
+      // payment_intent.succeeded caller passes neither itemPrice nor a premium, so this whole
+      // breakdown block is skipped — the hardcoded "5%" was latent rather than live. Fixed
+      // anyway so it cannot surface wrong the moment itemization is wired up.)
+      const bpRateLabel = formatBuyerPremiumRate(
+        purchase.buyerPremiumRate ?? (purchase.itemPrice ? bp / purchase.itemPrice : 0)
+      );
       breakdownHtml = `
         <h3 style="margin-top: 24px; margin-bottom: 12px;">Order Summary</h3>
         <table style="width: 100%; border-collapse: collapse; margin-bottom: 16px;">
@@ -201,7 +211,7 @@ const sendReceiptEmail = async (purchase: {
             <td style="padding: 8px; text-align: right;"><strong>$${purchase.itemPrice.toFixed(2)}</strong></td>
           </tr>
           ${bp > 0 ? `<tr style="background-color: #f3f4f6;">
-            <td style="padding: 8px; text-align: left;">Buyer Premium (5%)</td>
+            <td style="padding: 8px; text-align: left;">Buyer Premium (${bpRateLabel})</td>
             <td style="padding: 8px; text-align: right;"><strong>$${bp.toFixed(2)}</strong></td>
           </tr>` : ''}
           ${disc > 0 ? `<tr style="background-color: #d1fae5;">
@@ -535,7 +545,14 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
             startDate: true,
             endDate: true,
             organizerId: true,
-            coversFee: true, // #402: organizer absorbs platform fee
+            // #402: organizer absorbs the auction BUYER'S PREMIUM (not the platform fee — see
+            // utils/feeCalculator.ts: the organizer's own commission is unchanged by this flag).
+            coversFee: true,
+            // #363: the organizer's configured buyer premium percentage. Selected because the
+            // charge below must honour it — before 2026-08-17 this endpoint hardcoded 5% while
+            // the sale page and storefront badge displayed whatever the organizer had set, so a
+            // sale advertising 15% ran the buyer's card for 5%.
+            buyersPremiumPct: true,
             organizer: {
               select: { stripeConnectId: true, userId: true, referralDiscountExpiry: true, subscriptionTier: true }
             }
@@ -642,9 +659,14 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: 'Item price must be at least $0.50 to process payment' });
     }
 
-    // Buyer premium (5%) applies ONLY to auction items. Platform Safety #96.
-    // Shared rate — utils/feeCalculator.ts is the single source of truth for both fees.
-    const BUYER_PREMIUM_RATE = AUCTION_BUYER_PREMIUM_RATE;
+    // Buyer premium applies ONLY to auction items. Platform Safety #96.
+    // #363 fix (2026-08-17): this was `AUCTION_BUYER_PREMIUM_RATE` — a hardcoded 5% — while
+    // organizers could set `Sale.buyersPremiumPct` on create-sale.tsx and shoppers were shown
+    // that configured number on the sale page and the storefront badge. A sale advertising 15%
+    // charged 5%. resolveBuyerPremiumRate is now the ONE place the rule lives: a configured
+    // value wins, 0 means zero premium (not "unset"), null/undefined means the 5% default, and
+    // the value is clamped to [0, 50] on the money path regardless of what is in the column.
+    const BUYER_PREMIUM_RATE = resolveBuyerPremiumRate(item.sale);
 
     let shippingCost = 0;
     if (shippingRequested && !isAuctionItem && item.shippingAvailable && item.shippingPrice != null) {
@@ -671,7 +693,12 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
     // REVERSAL NOTICE: an earlier pass the same day set this to `buyerPremiumAmount` alone on
     // the auction branch, so the platform collected the $10 premium and NO commission. That
     // was wrong and is reversed here. Do not reintroduce it.
-    const feeBreakdown = calculateApplicationFee(priceCents, feePercent, isAuctionItem);
+    const feeBreakdown = calculateApplicationFee(
+      priceCents,
+      feePercent,
+      isAuctionItem,
+      BUYER_PREMIUM_RATE
+    );
     const buyerPremiumAmount = feeBreakdown.buyerPremiumCents;
     const totalWithBuyerPremium = priceCents + buyerPremiumAmount;
     const platformFeeAmount = feeBreakdown.applicationFeeCents;
@@ -720,7 +747,8 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
     //   · The total the buyer is actually SHOWN before paying: frontend CheckoutModal.tsx:58 —
     //     itemPrice + buyerPremium (one premium).
     //   · The consent string persisted to CheckoutEvidence for chargeback defense (~line 828) —
-    //     "buyer premium of 5% will be added to my total purchase price."
+    //     "buyer premium of N% will be added to my total purchase price." (N is the sale's
+    //     configured rate since #363; it was a hardcoded 5% before.)
     // The BUYER-CHARGE arithmetic below is correct as written. What changed 2026-08-17 (second
     // pass) is application_fee_amount ONLY — see the feeBreakdown block above: the platform
     // collects the premium AND the organizer's tier commission, not the premium alone.
@@ -880,8 +908,19 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
       // Under Sale.coversFee the ORGANIZER absorbs the premium and the buyer is charged the
       // bid only — persisting a premium acknowledgment they were never shown, and never paid,
       // would be false chargeback evidence.
-      const acknowledgmentText = isAuctionItem && !saleCoversFee
-        ? `I acknowledge the buyer premium of ${(BUYER_PREMIUM_RATE * 100).toFixed(0)}% will be added to my total purchase price.`
+      // CHARGEBACK-DEFENCE ACCURACY (#363): this string is the buyer's consent record. It used
+      // to be built from a hardcoded 5% (`.toFixed(0)` also silently rounded a 12.5% sale to
+      // "13%"), so on a sale configured at any other rate the stored evidence stated a number
+      // the buyer was never charged — worthless in a dispute, and arguably worse than no
+      // record at all. It now states the rate that was actually charged, formatted without
+      // fake precision ("15%", "12.5%").
+      // `buyerPremiumCents > 0` in the condition, not just `isAuctionItem`: a sale configured at
+      // 0% is an auction with no premium, and recording "I acknowledge the buyer premium of 0%
+      // will be added to my total" would be gibberish attached to a real payment record.
+      const buyerActuallyPaysPremium =
+        isAuctionItem && !saleCoversFee && feeBreakdown.buyerPremiumCents > 0;
+      const acknowledgmentText = buyerActuallyPaysPremium
+        ? `I acknowledge the buyer premium of ${formatBuyerPremiumRate(feeBreakdown.buyerPremiumRate)} will be added to my total purchase price.`
         : 'I acknowledge the total purchase price shown at checkout.';
       prisma.checkoutEvidence.create({
         data: {
@@ -905,7 +944,10 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
       subtotal: price,
       // Report the premium the BUYER actually pays: zero under Sale.coversFee, where the
       // organizer absorbs it (the platform still collects it — see the feeBreakdown block).
-      buyerPremiumRate: isAuctionItem && !saleCoversFee ? BUYER_PREMIUM_RATE : 0,
+      // The rate the CHARGE actually used (feeBreakdown.buyerPremiumRate), not a constant —
+      // CheckoutModal renders this as the "Buyer Premium (N%)" line and the consent checkbox
+      // text, so it must be the same number the card is run for.
+      buyerPremiumRate: isAuctionItem && !saleCoversFee ? feeBreakdown.buyerPremiumRate : 0,
       buyerPremiumAmount: (saleCoversFee ? 0 : buyerPremiumAmount) / 100,
       platformFee: platformFeeAmount / 100,
       discountApplied: discountAmount / 100,
@@ -3529,7 +3571,10 @@ export const getPendingPayment = async (req: AuthRequest, res: Response) => {
         // listingType / auctionStartPrice drive the buyer-premium breakdown below;
         // sale.coversFee tells us whether the buyer was charged the premium at all.
         item: { select: { title: true, listingType: true, auctionStartPrice: true } },
-        sale: { select: { coversFee: true } },
+        // buyersPremiumPct added (#363): the premium is stripped back out of Purchase.amount
+        // below, and stripping at a hardcoded 5% on a sale configured at 15% produced a
+        // subtotal/premium split that did not match what was charged.
+        sale: { select: { coversFee: true, buyersPremiumPct: true } },
       },
     });
 
@@ -3561,8 +3606,12 @@ export const getPendingPayment = async (req: AuthRequest, res: Response) => {
     // that is what we send: subtotal (hammer price) + buyerPremium = totalAmount.
     const buyerPaidPremium =
       isAuctionListing(purchase.item) && purchase.sale?.coversFee !== true;
+    // #363: the sale's CONFIGURED rate, not a hardcoded 5%. This is the auction winner's
+    // resume-payment screen — the split it shows has to reconcile with the PaymentIntent
+    // jobs/auctionJob.ts already created at that same configured rate.
+    const pendingPremiumRate = resolveBuyerPremiumRate(purchase.sale);
     const buyerPremium = buyerPaidPremium
-      ? parseFloat((amount - amount / (1 + AUCTION_BUYER_PREMIUM_RATE)).toFixed(2))
+      ? parseFloat((amount - amount / (1 + pendingPremiumRate)).toFixed(2))
       : 0;
 
     res.json({
@@ -3570,7 +3619,7 @@ export const getPendingPayment = async (req: AuthRequest, res: Response) => {
       totalAmount: amount,
       subtotal: parseFloat((amount - buyerPremium).toFixed(2)),
       buyerPremium,
-      buyerPremiumRate: buyerPaidPremium ? AUCTION_BUYER_PREMIUM_RATE : 0,
+      buyerPremiumRate: buyerPaidPremium ? pendingPremiumRate : 0,
       itemTitle: purchase.item?.title ?? 'Item',
     });
   } catch (error) {

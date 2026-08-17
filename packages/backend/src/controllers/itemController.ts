@@ -723,6 +723,15 @@ const ITEM_DETAIL_SELECT = {
             city: true,
             organizerId: true,
             status: true,
+            // #363: the shopper-facing item page discloses the buyer's premium in the bid
+            // entry form and the price panel, and BOTH must show the rate the charge will
+            // actually use. Without this the page fell back to a hardcoded 5% while the
+            // organizer may have configured something else. Public-safe: this is the same
+            // number already printed on the sale page and the storefront badge.
+            buyersPremiumPct: true,
+            // #402: whether the ORGANIZER absorbs the premium instead of the winner — the bid
+            // preview must not quote a premium the buyer will never be charged.
+            coversFee: true,
             organizer: {
               select: {
                 userId: true,
@@ -3897,10 +3906,51 @@ export const closeAuctionEndpoint = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: 'Auction already closed' });
     }
 
-    // Call the shared close logic
-    await closeAuction(itemId);
+    // Call the shared close logic. It now enforces the SAME reserve-price rule as the
+    // auction-closing cron (utils/auctionRules.evaluateAuctionReserve) — before 2026-08-17 this
+    // manual path had no reserve check at all, so this button could award and charge a lot
+    // below the organizer's own reserve. The result is reported back rather than swallowed: an
+    // organizer who just protected their reserve needs to be told the lot did NOT sell, not
+    // handed a generic "closed successfully".
+    const result = await closeAuction(itemId);
 
-    res.json({ message: 'Auction closed successfully' });
+    if (result.outcome === 'RESERVE_NOT_MET') {
+      const bid = result.highestBidAmount ?? 0;
+      const reserve = result.reservePrice ?? 0;
+      return res.json({
+        outcome: 'RESERVE_NOT_MET',
+        sold: false,
+        highestBid: bid,
+        reservePrice: reserve,
+        message: `Auction closed without a sale. The highest bid was $${bid.toFixed(2)}, below your reserve price of $${reserve.toFixed(2)}. Nobody was charged.`,
+      });
+    }
+
+    if (result.outcome === 'NO_BIDS') {
+      return res.json({
+        outcome: 'NO_BIDS',
+        sold: false,
+        message: 'Auction closed with no bids.',
+      });
+    }
+
+    if (result.outcome === 'ALREADY_CLOSED') {
+      return res.status(400).json({ outcome: 'ALREADY_CLOSED', sold: false, message: 'Auction already closed' });
+    }
+
+    if (result.outcome === 'SOLD') {
+      const bid = result.highestBidAmount ?? 0;
+      return res.json({
+        outcome: 'SOLD',
+        sold: true,
+        highestBid: bid,
+        message: `Auction closed. Winning bid $${bid.toFixed(2)} — a payment link has been sent to the winner.`,
+      });
+    }
+
+    // NOT_FOUND / NOT_AN_AUCTION are already screened above; anything left is ERROR, which
+    // closeAuction logs and swallows by design.
+    return res.status(500).json({ outcome: result.outcome, sold: false, message: 'Failed to close auction' });
   } catch (error) {
     console.error('Close auction error:', error);
     res.status(500).json({ message: 'Failed to close auction' });

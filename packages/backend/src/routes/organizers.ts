@@ -174,13 +174,17 @@ router.get('/me/analytics', authenticate, async (req: AuthRequest, res: Response
       // COMBINED premium + commission.) The non-auction subtotal is still multiplied and
       // rounded ONCE, so a sale with no auction purchases produces a byte-identical number.
       const coversFee = (sale as any).coversFee === true;
+      // #363: the sale's CONFIGURED buyer premium, passed through to resolveOrganizerFeeReport
+      // so the premium is stripped back out at the rate that was actually charged. This is a
+      // full `prisma.sale.findMany` row, so the scalar is present without a select change.
+      const buyersPremiumPct = (sale as any).buyersPremiumPct ?? null;
       let nonAuctionRevenue = 0;
       let auctionRevenue = 0;
       let auctionFees = 0;
       for (const p of sale.purchases as any[]) {
         if (isAuctionListing(p.item)) {
           const report = resolveOrganizerFeeReport(
-            { amount: Number(p.amount) || 0, item: p.item, sale: { coversFee } },
+            { amount: Number(p.amount) || 0, item: p.item, sale: { coversFee, buyersPremiumPct } },
             tierRate
           );
           auctionRevenue += report.grossSalePrice;

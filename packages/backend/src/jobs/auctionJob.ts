@@ -7,7 +7,8 @@ import { emailService } from '../lib/emailService';
 import { suppressionService } from '../services/suppressionService';
 import { createNotification } from '../services/notificationService';
 import { shouldUseDirectCharge } from '../services/stripeConnectService'; // Direct-charges migration (2026-08-08): staged-rollout routing decision
-import { calculateApplicationFee, getPlatformFeeRate, SubscriptionTier } from '../utils/feeCalculator';
+import { calculateApplicationFee, getPlatformFeeRate, resolveBuyerPremiumRate, SubscriptionTier } from '../utils/feeCalculator';
+import { evaluateAuctionReserve } from '../utils/auctionRules'; // Shared with services/auctionService.closeAuction — see that file's header
 const stripe = () => getStripe();
 
 
@@ -99,17 +100,20 @@ export const endAuctions = async () => {
 
         const price = highestBid?.amount ?? 0;
 
-        // Pass 1: Reserve price check
-        const reserveMet = !currentItem.auctionReservePrice || price >= currentItem.auctionReservePrice;
-        if (!reserveMet) {
+        // Pass 1: Reserve price check.
+        // The rule moved to utils/auctionRules.evaluateAuctionReserve (2026-08-17) so the
+        // organizer's manual "Close Auction" button (services/auctionService.closeAuction)
+        // enforces the IDENTICAL rule — it previously enforced none at all and could award a
+        // lot below its own reserve. Behaviour here is unchanged: a null or 0 reserve means no
+        // reserve, and no bids evaluates as a $0 bid.
+        const reserve = evaluateAuctionReserve(currentItem, price);
+        if (!reserve.reserveMet) {
           // Update to AUCTION_ENDED without payment (reserve not met)
           await tx.item.update({
             where: { id: currentItem.id },
             data: { auctionClosed: true },
           });
-          console.log(
-            `Auction ended for item ${currentItem.id} (reserve not met). Highest bid: $${price.toFixed(2)}, Reserve: $${currentItem.auctionReservePrice?.toFixed(2) || 'N/A'}`
-          );
+          console.log(`Auction ended for item ${currentItem.id}. ${reserve.reason}`);
           return { status: 'RESERVE_NOT_MET', item: currentItem };
         }
 
@@ -138,9 +142,20 @@ export const endAuctions = async () => {
         // stripeController.createPaymentIntent's auction branch exactly.
         // Sale.coversFee: the organizer absorbs the premium, so the winner is charged the bid
         // only while the platform still collects premium + commission.
+        // #363 (2026-08-17): the premium rate is the organizer's configured
+        // `Sale.buyersPremiumPct`, not a hardcoded 5%. `currentItem.sale` is fetched with a
+        // full `include` above, so every Sale scalar — buyersPremiumPct included — is present.
+        // resolveBuyerPremiumRate handles the Decimal, treats 0 as zero premium rather than
+        // "unset", and falls back to 5% only when the column is null.
         const hammerPriceCents = Math.round(price * 100);
         const organizerCoversPremium = currentItem.sale!.coversFee === true;
-        const auctionFees = calculateApplicationFee(hammerPriceCents, feePercent, true);
+        const buyerPremiumRate = resolveBuyerPremiumRate(currentItem.sale);
+        const auctionFees = calculateApplicationFee(
+          hammerPriceCents,
+          feePercent,
+          true,
+          buyerPremiumRate
+        );
         const buyerChargeCents = organizerCoversPremium
           ? hammerPriceCents
           : hammerPriceCents + auctionFees.buyerPremiumCents;

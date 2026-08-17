@@ -10,6 +10,7 @@ import React, { useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useQuery } from '@tanstack/react-query';
+import { resolveBuyerPremiumPct, formatBuyerPremiumPct } from '../../lib/platformFees'; // #363
 import api from '../../lib/api';
 import { useAuth } from '../../components/AuthContext';
 import Head from 'next/head';
@@ -88,6 +89,21 @@ const PurchaseConfirmationPage = () => {
   const pickupAddress = sale?.address && sale?.city ? `${sale.address}, ${sale.city}, ${sale.state} ${sale.zip}` : null;
   const organizer = sale?.organizer;
   const isAuction = item?.listingType === 'AUCTION';
+
+  // #363: the winning-bid breakdown below used `item.auctionStartPrice` as the winning bid and
+  // a hardcoded 5%. Both were wrong. auctionStartPrice is the STARTING price — the number the
+  // lot opened at, not what this buyer won it for — so a lot opened at $50 and won at $200
+  // showed "$50.00 winning bid, $2.50 premium, $52.50 total" against a $210.00 charge. The real
+  // figures are derived from `purchase.amount`, which IS what the card was run for, split back
+  // out at the sale's configured premium rate (or none at all when the organizer covered it,
+  // #402). subtotal + premium therefore always equals the amount paid, by construction.
+  const purchaseAmount = Number(purchase.amount) || 0;
+  const buyerPaidPremium = isAuction && sale?.coversFee !== true;
+  const purchasePremiumPct = buyerPaidPremium ? resolveBuyerPremiumPct(sale?.buyersPremiumPct) : 0;
+  const winningBid = purchasePremiumPct > 0
+    ? purchaseAmount / (1 + purchasePremiumPct / 100)
+    : purchaseAmount;
+  const buyerPremiumPaid = purchaseAmount - winningBid;
 
   // Determine status badge color
   const getStatusBadge = () => {
@@ -204,8 +220,9 @@ const PurchaseConfirmationPage = () => {
             </div>
           )}
 
-          {/* Auction Buyer Premium Breakdown (auction items only) */}
-          {isAuction && item?.auctionStartPrice && (
+          {/* Auction Buyer Premium Breakdown (auction items only, and only when a premium was
+              actually charged — see the derivation above the return). */}
+          {isAuction && purchasePremiumPct > 0 && (
             <div className="mb-8 p-6 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
               <h3 className="text-sm font-semibold text-blue-700 dark:text-blue-300 mb-4 uppercase tracking-wide">
                 🏆 Winning Bid Breakdown
@@ -214,19 +231,21 @@ const PurchaseConfirmationPage = () => {
                 <div className="flex justify-between items-center">
                   <span className="text-blue-600 dark:text-blue-400">Winning Bid</span>
                   <span className="font-medium text-blue-900 dark:text-blue-100">
-                    ${item.auctionStartPrice.toFixed(2)}
+                    ${winningBid.toFixed(2)}
                   </span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-blue-600 dark:text-blue-400">Buyer Premium (5%)</span>
+                  <span className="text-blue-600 dark:text-blue-400">
+                    Buyer Premium ({formatBuyerPremiumPct(purchasePremiumPct)})
+                  </span>
                   <span className="font-medium text-blue-900 dark:text-blue-100">
-                    ${(item.auctionStartPrice * 0.05).toFixed(2)}
+                    ${buyerPremiumPaid.toFixed(2)}
                   </span>
                 </div>
                 <div className="flex justify-between items-center pt-3 border-t border-blue-200 dark:border-blue-700 font-bold">
                   <span className="text-blue-900 dark:text-blue-100">Total</span>
                   <span className="text-blue-900 dark:text-blue-100">
-                    ${(item.auctionStartPrice * 1.05).toFixed(2)}
+                    ${purchaseAmount.toFixed(2)}
                   </span>
                 </div>
               </div>
@@ -242,7 +261,10 @@ const PurchaseConfirmationPage = () => {
               <div className="flex justify-between items-center">
                 <span className="text-gray-600 dark:text-gray-400">Amount Paid</span>
                 <span className="text-lg font-bold text-gray-900 dark:text-white">
-                  ${(isAuction && item?.auctionStartPrice ? item.auctionStartPrice * 1.05 : purchase.amount).toFixed(2)}
+                  {/* Always the real charge. The old expression recomputed a fake total from
+                      auctionStartPrice * 1.05, so this row disagreed with the buyer's card
+                      statement on every auction purchase. */}
+                  ${purchaseAmount.toFixed(2)}
                 </span>
               </div>
               {purchase.stripePaymentIntentId && (
