@@ -37,8 +37,13 @@ name: CI Typecheck & Tests
 #       the bug: seven integration/e2e suites sat in src/__tests__/ named `*.integration.ts` /
 #       `*.e2e.ts`, which testMatch (`**/__tests__/**/*.test.ts`) never matched, importing from
 #       `vitest` while the runner is ts-jest. Not one had ever executed. Renamed to `*.test.ts`
-#       and converted to Jest; they now run in the NON-BLOCKING legacy step below. The BLOCKING
-#       "Backend tests" step gates on the unit tests plus the DB-backed holdInvoiceClaim suite.
+#       and converted to Jest.
+#       [UPDATED 2026-08-17] Those suites have now actually been RUN (real Postgres 16.13, all
+#       373 migrations applied) and fixed: 145/147 tests green. Six of the seven are BLOCKING in
+#       the "Backend tests" step below alongside the unit tests and holdInvoiceClaim. The seventh
+#       (stripe.e2e) is isolated in its own NON-BLOCKING step because two of its assertions are
+#       failing on a real auction buyer-premium double-count in stripeController, not on a test
+#       defect -- see that step's comment.
 #     - Frontend lint: the repo has NO eslint config, so `next lint` prompts/aborts.
 #       Needs an eslint config + violation cleanup before gating. Left non-blocking.
 #   Every step still RUNS and PRINTS; tests + lint just don't fail the suite yet.
@@ -152,33 +157,53 @@ jobs:
       # OOM (ts-jest was type-checking the whole import graph). Recon run #28 then surfaced 2 stale
       # test expectations (dedupe normalizeAddress preserves commas as field separators by design) —
       # fixed to match the implementation. --forceExit closes the PrismaClient handle dedupe.ts opens.
-      # Suite now green -> gates deploys.
-      # Scope (2026-08-16): unit tests + the DB-backed holdInvoiceClaim regression suite.
-      # The seven legacy *.integration.test.ts / *.e2e.test.ts files are excluded here and run
-      # in the NON-BLOCKING step below -- see that step's comment for why.
+      #
+      # SCOPE WIDENED 2026-08-17: this step now runs the ENTIRE backend suite -- the 3 unit tests,
+      # the DB-backed holdInvoiceClaim regression suite, AND six of the seven formerly-dead
+      # integration/e2e suites (auth, reservation, payment, auctionClosing, emailReminders,
+      # weeklyDigest). Those six were staged non-blocking on 2026-08-16 because they had never
+      # executed even once. They have now been executed -- against a real Postgres 16.13 with all
+      # 373 migrations applied -- and every failure was diagnosed and fixed at the source
+      # (missing required Organizer.address, Organizer has no city/state/zip, Organizer created
+      # before the User its FK points at, prisma.holdSettings -> prisma.organizerHoldSettings,
+      # Sale.latitude/longitude -> lat/lng, ItemReservation.expiresAt required, Bid.bidAmount/
+      # isWinning -> amount/status, SaleSubscriber userId_saleId -> saleId_userId, Purchase
+      # findUnique on a non-unique column, Item.embedding NOT NULL with no DB default, and two
+      # stale email-rail mocks). Local result: 145 of 147 tests green, 10 of 11 suites green.
+      # Only stripe.e2e is still excluded -- see the NON-BLOCKING step below for exactly why.
+      #
+      # SOCIAL_TOKEN_ENC_KEY is a throwaway all-zeroes 32-byte hex value, NOT a secret: it exists
+      # only because utils/tokenCrypto.ts throws at module load when the var is unset, which takes
+      # down any suite whose import graph reaches it. It never decrypts real data in CI.
       - name: Backend tests
-        run: pnpm --filter ./packages/backend test -- --ci --runInBand --forceExit --testPathIgnorePatterns=/node_modules/ --testPathIgnorePatterns=integration.test.ts --testPathIgnorePatterns=e2e.test.ts
+        run: pnpm --filter ./packages/backend test -- --ci --runInBand --forceExit --testPathIgnorePatterns=/node_modules/ --testPathIgnorePatterns=stripe.e2e.test.ts
         env:
           DATABASE_URL: postgresql://findasale:findasale@localhost:5432/findasale_test
+          SOCIAL_TOKEN_ENC_KEY: '0000000000000000000000000000000000000000000000000000000000000000'
 
-      # NON-BLOCKING, deliberately. These seven suites were structurally dead: jest testMatch is
-      # `**/__tests__/**/*.test.ts` and they were named `*.integration.ts` / `*.e2e.ts`, so not one
-      # of them had ever executed -- they also imported `describe/it/expect/vi` from `vitest` while
-      # the runner is ts-jest. Renaming + converting them to Jest (2026-08-16) makes them run for
-      # the first time ever. Because they have literally never passed even once, they are NOT
-      # allowed to gate deploys on their first landing: `continue-on-error: true` means a red
-      # result here is reported and visible but does not fail the check suite (Railway `backend`
-      # has source.checkSuites: true, so a failing blocking step blocks production deploys).
+      # NON-BLOCKING, and for ONE specific reason -- not because the suite is unproven. 92 of its
+      # 94 tests pass. The two that fail are the auction-fee tests, and they fail because
+      # stripeController.createPaymentIntent charges the auction buyer's premium TWICE:
+      #   line 635  totalWithBuyerPremium = priceCents + buyerPremiumAmount        (bid + 5%)
+      #   line 636  platformFeeAmount     = buyerPremiumAmount                     (the same 5%)
+      #   line 676  finalPriceCents       = totalWithBuyerPremium + platformFeeAmount
+      # so a $200 winning bid is charged 22000 cents (10% premium), not the 21000 cents that
+      # line 634's own comment -- "buyer pays winning bid + 5% premium; 5% is taken as
+      # application_fee_amount" -- describes. This is a live money bug awaiting Patrick's decision;
+      # it is NOT a test defect, so the assertions were deliberately NOT rewritten to match the
+      # buggy output. Making this step blocking today would block every backend deploy on a
+      # pre-existing product bug (Railway `backend` has source.checkSuites: true).
       #
-      # This is a staging state, not the destination. Once a run shows which of the seven actually
-      # pass, fix or explicitly quarantine the failures and delete `continue-on-error` so they gate
-      # like everything else. Do NOT leave this permanently non-blocking.
-      - name: Backend legacy integration/e2e tests (NON-BLOCKING - first-ever execution)
+      # Remove `continue-on-error` and fold this back into the step above the moment the buyer-
+      # premium double-count is resolved. Do NOT leave this permanently non-blocking, and do NOT
+      # "fix" it by changing the expected numbers.
+      - name: Backend stripe e2e (NON-BLOCKING - blocked on auction buyer-premium double-count)
         continue-on-error: true
         timeout-minutes: 12
-        run: pnpm --filter ./packages/backend test -- --ci --runInBand --forceExit --testPathPattern="(integration|e2e).test.ts"
+        run: pnpm --filter ./packages/backend test -- --ci --runInBand --forceExit --testPathPattern="stripe.e2e.test.ts"
         env:
           DATABASE_URL: postgresql://findasale:findasale@localhost:5432/findasale_test
+          SOCIAL_TOKEN_ENC_KEY: '0000000000000000000000000000000000000000000000000000000000000000'
 
       # BLOCKING (S1028): packages/frontend/.eslintrc.json (extends next/core-web-vitals; pre-existing
       # noise downgraded to warn/off: no-unescaped-entities off, rules-of-hooks + no-html-link-for-pages warn).
