@@ -3096,10 +3096,17 @@ export const webhookHandler = async (req: Request, res: Response) => {
               },
             });
 
-            // Reactivate holds: return ALL ItemReservations to CONFIRMED and items to RESERVED
+            // Reactivate holds: return ALL ItemReservations to CONFIRMED and items to RESERVED.
+            // P1 fix (2026-08-16): `invoiceId: null` was missing here. The HoldInvoice is
+            // flipped to EXPIRED just above, and invoiceExpiryJob.ts — the only other thing
+            // that clears invoiceId — scans `status: 'PENDING'` invoices only, so it never
+            // picks these up. Without this, every hold whose charge failed kept a dangling
+            // invoiceId pointing at an EXPIRED invoice and was refused PERMANENTLY by all
+            // four POS/batch settlement paths. Mirrors invoiceExpiryJob.ts, which already
+            // does exactly this and documents why.
             await tx.itemReservation.updateMany({
               where: { itemId: { in: holdInvoice.itemIds } },
-              data: { status: 'CONFIRMED' },
+              data: { status: 'CONFIRMED', invoiceId: null },
             });
 
             await tx.item.updateMany({

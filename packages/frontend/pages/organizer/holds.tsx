@@ -85,8 +85,7 @@ interface HoldItem {
   // Set once a Hold-to-Pay invoice exists for this hold. GET /reservations/organizer
   // returns the full reservation row, so this has always been on the wire — it just was
   // not typed or displayed, which is why an organizer had no way to tell that a payment
-  // request was already out on a hold. A `CLAIMING:` value is an in-flight claim, not a
-  // finished invoice.
+  // request was already out on a hold.
   invoiceId?: string | null;
   user: { id: string; name: string; email: string; fraudConfidenceScore?: number; explorerRank?: string };
   item: {
@@ -246,8 +245,10 @@ const OrganizerHoldsPage = () => {
     }
   };
 
-  // True once a real (non-in-flight) invoice exists for this hold.
-  const hasInvoice = (h: HoldItem) => !!h.invoiceId && !h.invoiceId.startsWith('CLAIMING:');
+  // True once a real invoice exists for this hold. As of the 2026-08-16 P0 fix,
+  // invoiceId is only ever a real HoldInvoice.id or null — in-flight claims live in
+  // ItemReservation.invoiceClaimToken/invoiceClaimedAt and never touch this field.
+  const hasInvoice = (h: HoldItem) => !!h.invoiceId;
 
   // Hold-to-Pay (#221): open the payment-request modal for the selected holds. The
   // server endpoint is per-reservation and bundles every item that shopper is holding at

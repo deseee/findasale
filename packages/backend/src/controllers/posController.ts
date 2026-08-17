@@ -25,6 +25,7 @@ import { transactionalEmailService } from '../lib/transactionalEmailService';
 import { commitItemSale, ItemAlreadyCommittedError } from '../services/itemSaleGuard'; // ADR-098: atomic double-sell guard
 import { resolveOrganizerOrTeamMember } from '../utils/posAuth'; // S1183 Fix 1: TEAM_MEMBER fallback for non-venue POS
 import { shouldUseDirectCharge } from '../services/stripeConnectService'; // Direct-charges migration (2026-08-08): staged-rollout routing decision
+import { invoiceableWhere, isInvoicedOrClaimed } from '../services/holdInvoiceClaim'; // Hold-to-Pay P0 (2026-08-16): non-FK invoice claim must be visible to every hold read site
 
 const stripe = () => getStripe();
 
@@ -519,13 +520,17 @@ export const getActiveHolds = async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ message: 'Sale does not belong to your account' });
     }
 
-    // Get active holds: PENDING or CONFIRMED, not expired, no invoice yet
+    // Get active holds: PENDING or CONFIRMED, not expired, and free to invoice.
+    // invoiceableWhere() covers both `invoiceId: null` AND "no live in-flight claim"
+    // (P0 fix 2026-08-16 — the claim moved out of invoiceId into the dedicated non-FK
+    // invoiceClaimToken/invoiceClaimedAt columns, so a bare `invoiceId: null` here would
+    // surface holds another request is mid-way through invoicing).
     const holds = await prisma.itemReservation.findMany({
       where: {
         item: { saleId },
         status: { in: ['PENDING', 'CONFIRMED'] },
         expiresAt: { gt: new Date() },
-        invoiceId: null,
+        ...invoiceableWhere(),
       },
       include: {
         user: { select: { id: true, name: true, email: true } },
@@ -594,8 +599,9 @@ export const sendHoldInvoice = async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ message: 'Reservation does not belong to your sale' });
     }
 
-    // Check if invoice already exists
-    if (reservation.invoiceId) {
+    // Check if a real invoice already exists, or another request holds a live claim
+    // (P0 fix 2026-08-16 — see services/holdInvoiceClaim.ts).
+    if (isInvoicedOrClaimed(reservation)) {
       return res.status(400).json({ message: 'Invoice already exists for this reservation' });
     }
 
@@ -913,7 +919,8 @@ export const searchShopperHolds = async (req: AuthRequest, res: Response) => {
         user: { email: { contains: email, mode: 'insensitive' } },
         status: { in: ['PENDING', 'CONFIRMED'] },
         expiresAt: { gt: new Date() },
-        invoiceId: null,
+        // See the getActiveHolds note above — must also exclude live in-flight claims.
+        ...invoiceableWhere(),
       },
       include: {
         user: { select: { id: true, name: true, email: true } },
@@ -985,7 +992,9 @@ export const pullHoldsToCart = async (req: AuthRequest, res: Response) => {
       if (!['PENDING', 'CONFIRMED'].includes(hold.status)) {
         return res.status(409).json({ message: `Reservation ${hold.id} is not in PENDING or CONFIRMED state` });
       }
-      if (hold.invoiceId) {
+      // Live in-flight claims count too (P0 fix 2026-08-16 — the claim no longer lives
+      // in invoiceId, so a bare `hold.invoiceId` check here would be blind to it).
+      if (isInvoicedOrClaimed(hold)) {
         return res.status(409).json({ message: `Reservation ${hold.id} already has an invoice` });
       }
     }
@@ -1090,7 +1099,8 @@ export const createCombinedInvoice = async (req: AuthRequest, res: Response) => 
       if (heldItem.status !== 'HOLD_IN_CART') {
         return res.status(409).json({ message: `Hold ${heldItem.id} is not in HOLD_IN_CART state` });
       }
-      if (heldItem.invoiceId) {
+      // Live in-flight claims count too (P0 fix 2026-08-16 — see holdInvoiceClaim.ts).
+      if (isInvoicedOrClaimed(heldItem)) {
         return res.status(409).json({ message: `Hold ${heldItem.id} already has an invoice` });
       }
     }

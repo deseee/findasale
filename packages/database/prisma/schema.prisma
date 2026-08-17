@@ -1828,24 +1828,50 @@ model ItemReservation {
   fraudScore          Float        @default(0.0) // Fraud detection score (0.0-1.0)
   fraudFlags          String[]     @default([]) // Fraud red flags: HIGH_VELOCITY, SUSPICIOUS_PATTERN, etc.
   enRoute             Boolean      @default(false) // Feature #121: shopper was outside geofence but within 10mi (en route grace)
-  invoiceId           String?      // FK to HoldInvoice (optional, set when invoice created). NOT unique as of 2026-08-05 --
-                                    // a bundled invoice (markSoldAndCreateInvoice covering 2+ held items in one
-                                    // HoldInvoice) sets this to the SAME invoiceId across multiple rows by design.
-                                    // See migration 20260805_drop_item_reservation_invoiceid_unique. The FK
-                                    // constraint (ItemReservation_invoiceId_fkey) is unchanged and still enforced.
-  invoice             HoldInvoice? // relation
+  invoiceId           String?      // FK to HoldInvoice. Set ONLY when a real HoldInvoice row exists; otherwise null.
+                                    // NOT unique as of 2026-08-05 -- a bundled invoice (markSoldAndCreateInvoice
+                                    // covering 2+ held items in one HoldInvoice) sets this to the SAME invoiceId
+                                    // across multiple rows by design. See migration
+                                    // 20260805_drop_item_reservation_invoiceid_unique.
+                                    //
+                                    // The FK constraint ItemReservation_invoiceId_fkey (created by migration
+                                    // 20260330_add_hold_invoice, ON DELETE SET NULL) is live in Postgres. It was
+                                    // never declared in schema.prisma, which is exactly how the 2026-08-16 P0
+                                    // happened: markSoldAndCreateInvoice wrote a `CLAIMING:<holdId>` sentinel here
+                                    // as an in-flight claim, tsc accepted it because Prisma had no idea a FK
+                                    // existed, and Postgres rejected every single write with P2003 -- Hold-to-Pay
+                                    // invoice creation was 100% broken platform-wide. The FK is now modelled below
+                                    // (invoiceRel) so the schema tells the truth, and the claim moved to the
+                                    // dedicated non-FK columns invoiceClaimToken / invoiceClaimedAt.
+                                    // NEVER write anything but a real HoldInvoice.id or null into this column.
+  invoiceRel          HoldInvoice? @relation("ReservationInvoiceFk", fields: [invoiceId], references: [id], onDelete: SetNull)
+  // Back-relation for HoldInvoice.reservationId (the invoice's single "anchor" reservation).
+  // Distinct from invoiceRel above -- two separate FKs exist between these two models, so
+  // both relations must be explicitly named on both sides.
+  invoice             HoldInvoice? @relation("InvoiceAnchorReservation")
+  // Hold-to-Pay invoice claim (P0 fix 2026-08-16) -- see services/holdInvoiceClaim.ts.
+  // Deliberately NOT foreign keys: this is a compare-and-swap in-flight claim taken before
+  // the Stripe Checkout Session call, and it must be writable when no HoldInvoice exists yet.
+  invoiceClaimToken   String?      // per-attempt fencing token (randomUUID); finalize only stamps rows still carrying it
+  invoiceClaimedAt    DateTime?    // claim timestamp; basis for the bounded stale-claim steal (INVOICE_CLAIM_TTL_MS)
   createdAt           DateTime     @default(now())
   updatedAt           DateTime     @updatedAt
 
   @@index([userId]) // Sentry: slow ItemReservation SELECT by user
   @@index([status, expiresAt]) // Sentry: hold expiry cron + status filter
+  @@index([invoiceId]) // ItemReservation_invoiceId_fkey had no supporting index -- Postgres does not auto-index the
+                       // referencing side, so every HoldInvoice delete/update and invoiceExpiryJob's reclaim query
+                       // seq-scanned this table. Created by migration 20260816150000_add_item_reservation_invoice_claim.
 }
 
 // Hold-to-Pay feature: Payment invoice for held items
 model HoldInvoice {
   id                    String           @id @default(cuid())
   reservationId         String?          @unique
-  reservation           ItemReservation? @relation(fields: [reservationId], references: [id], onDelete: SetNull)
+  reservation           ItemReservation? @relation("InvoiceAnchorReservation", fields: [reservationId], references: [id], onDelete: SetNull)
+  // Back-relation for ItemReservation.invoiceId (ItemReservation_invoiceId_fkey). A bundled
+  // invoice covers 2+ reservations, hence a list -- the column stopped being unique 2026-08-05.
+  reservations          ItemReservation[] @relation("ReservationInvoiceFk")
   shopperUserId         String
   shopper               User             @relation("ShopperInvoices", fields: [shopperUserId], references: [id], onDelete: Cascade)
   organizerUserId       String

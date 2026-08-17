@@ -1,4 +1,5 @@
 import { Response, Request } from 'express';
+import { randomUUID } from 'crypto';
 import * as Sentry from '@sentry/node';
 import { prisma } from '../lib/prisma';
 import { AuthRequest } from '../middleware/auth';
@@ -21,6 +22,7 @@ import { getPlatformFeeRate, SubscriptionTier } from '../utils/feeCalculator';
 import { shouldUseDirectCharge } from '../services/stripeConnectService'; // Direct-charges migration (2026-08-08): staged-rollout routing decision
 import { assertCheckoutAllowed, CheckoutGuardError } from '../services/checkoutGuard'; // S1072 Finding #4: collusion/wash-trade guard
 import { createPaymentLinkInternal } from './posController'; // markSold settlement router: reuse Stripe Payment Link + QR
+import { invoiceableWhere, isInvoicedOrClaimed, InvoiceClaimLostError } from '../services/holdInvoiceClaim'; // Hold-to-Pay P0 (2026-08-16): non-FK invoice claim
 
 // markSold settlement router (Decision A): settlement modes
 type SettlementMode = 'RECORD' | 'POS_CART' | 'CHECKOUT_LINK';
@@ -642,13 +644,16 @@ export const batchUpdateHolds = async (req: AuthRequest, res: Response) => {
         return res.status(404).json({ message: 'No valid holds found' });
       }
 
-      // A hold that already has an invoice (or an in-flight `CLAIMING:` claim from
+      // A hold that already has an invoice (or a live in-flight claim from
       // markSoldAndCreateInvoice) has a Stripe payment pending against it. Settling it
       // again through ANY mode double-sells the item — RECORD would write a second,
       // cash-flavoured PAID Purchase row for something the shopper is about to pay for
       // online. POS_CART already refused this case; hoisted here 2026-08-16 so RECORD and
       // CHECKOUT_LINK are covered by the same rule instead of only one of the three.
-      const alreadyInvoiced = validRouted.find((h) => h.invoiceId);
+      // The in-flight claim now lives in invoiceClaimToken/invoiceClaimedAt rather than
+      // in invoiceId, so this MUST use isInvoicedOrClaimed — a bare `h.invoiceId` check
+      // here would be blind to it and re-open the cross-path double-sell window.
+      const alreadyInvoiced = validRouted.find(isInvoicedOrClaimed);
       if (alreadyInvoiced) {
         return res.status(409).json({
           message: 'One or more of these holds already has a payment request out. Release that invoice first.',
@@ -672,7 +677,7 @@ export const batchUpdateHolds = async (req: AuthRequest, res: Response) => {
         }
         // (Already-invoiced holds are rejected for every mode above — this local check
         // is left in place as defence in depth for this path specifically.)
-        const invoiced = validRouted.find((h) => h.invoiceId);
+        const invoiced = validRouted.find(isInvoicedOrClaimed);
         if (invoiced) {
           return res.status(409).json({ message: 'One or more holds already have an invoice' });
         }
@@ -1290,14 +1295,39 @@ function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: numbe
 // POST /api/reservations/:id/mark-sold — organizer marks held item sold and creates invoice
 // Hold-to-Pay Phase 2: Create Stripe Checkout session for payment collection
 export const markSoldAndCreateInvoice = async (req: AuthRequest, res: Response) => {
-  // P2 idempotency fix: holds claimed via the CLAIMING:<holdId> sentinel below --
-  // declared here, BEFORE the try block, so it is true function-level scope and both
-  // the Stripe-error catch and the outer function catch can see it to release any
-  // claim left in flight on any failure path. (Fix 2026-08-04: originally declared
-  // just inside the try block, which is its own block scope in JS/TS -- the outer
-  // catch could not see it there, causing a real `Cannot find name 'claimedHoldIds'`
-  // compile error caught by CI/local tsc after the initial push.)
+  // Hold-to-Pay P0 fix (2026-08-16): the in-flight claim below now lives in the
+  // dedicated NON-FK columns invoiceClaimToken / invoiceClaimedAt (see
+  // services/holdInvoiceClaim.ts). It previously wrote a `CLAIMING:<holdId>` sentinel
+  // into ItemReservation.invoiceId, which carries a live Postgres FK to HoldInvoice.id
+  // (ItemReservation_invoiceId_fkey, created by migration 20260330_add_hold_invoice but
+  // never declared in schema.prisma) -- tsc accepted it, Postgres rejected it with P2003
+  // on every request, and Hold-to-Pay invoice creation was 100% broken in production.
+  // invoiceId once again means exactly one thing: a real HoldInvoice row exists.
+  //
+  // All three declared here, BEFORE the try block, so they are true function-level scope
+  // and both the Stripe-error catch and the outer function catch can see them to release
+  // any claim left in flight on any failure path. (Fix 2026-08-04: claimedHoldIds was
+  // originally declared just inside the try block, which is its own block scope in
+  // JS/TS -- the outer catch could not see it there, causing a real
+  // `Cannot find name 'claimedHoldIds'` compile error caught by CI after the first push.)
+  let claimToken: string | null = null;
+  let holdIds: string[] = [];
   const claimedHoldIds: string[] = [];
+
+  // Token-scoped claim release. NEVER release by id alone: another request may have
+  // legitimately stolen a stale claim on the same rows, and an id-only release would
+  // clobber that live claim. Matching on invoiceClaimToken makes the release a no-op
+  // unless the claim still belongs to THIS attempt.
+  const releaseClaim = async () => {
+    if (!claimToken) return;
+    await prisma.itemReservation
+      .updateMany({
+        where: { id: { in: claimedHoldIds.length ? claimedHoldIds : holdIds }, invoiceClaimToken: claimToken },
+        data: { invoiceClaimToken: null, invoiceClaimedAt: null },
+      })
+      .catch(e => console.error('[hold-invoice] Failed to release invoice claim:', e));
+  };
+
   try {
     if (!req.user) return res.status(401).json({ message: 'Authentication required' });
     const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
@@ -1364,30 +1394,34 @@ export const markSoldAndCreateInvoice = async (req: AuthRequest, res: Response) 
     // tx.holdInvoice.create below spans a Stripe network round-trip, so two
     // near-simultaneous mark-sold clicks (double-tap, or a client retry) could both pass
     // the check and each create their own Stripe Checkout Session + HoldInvoice for the
-    // same holds. Closed with an atomic per-row claim on each hold BEFORE the Stripe call,
-    // mirroring the 'CLAIMING' sentinel + updateMany-WHERE-null idiom already used
-    // elsewhere in this codebase (vendorBoothCartController.ts transferHubOwnerShareForLeg,
-    // BoothCartLeg.stripeTransferId). ItemReservation.invoiceId is @unique per row, so the
-    // sentinel must be distinct PER ROW (`CLAIMING:<holdId>`), not one shared literal --
-    // a shared literal would collide with itself across a multi-item bundle. Released on
-    // any failure path below (Stripe error catch + the function's outer catch).
-    for (const hold of allShopperHolds) {
-      const claim = await prisma.itemReservation.updateMany({
-        where: { id: hold.id, invoiceId: null, status: { in: ['PENDING', 'CONFIRMED'] } },
-        data: { invoiceId: `CLAIMING:${hold.id}` },
-      });
-      if (claim.count === 1) claimedHoldIds.push(hold.id);
-    }
-    if (claimedHoldIds.length !== allShopperHolds.length) {
+    // same holds. Closed with an atomic compare-and-swap claim across all the holds
+    // BEFORE the Stripe call.
+    //
+    // P0 fix (2026-08-16): the claim is written to the dedicated non-FK columns
+    // invoiceClaimToken / invoiceClaimedAt instead of the FK-bearing invoiceId column
+    // (see services/holdInvoiceClaim.ts for the full incident note). claimToken is a
+    // per-attempt fencing token: the finalize step inside the transaction below only
+    // writes the real invoiceId onto rows still carrying THIS token, which is what makes
+    // the bounded claim TTL safe -- a request whose stale claim was stolen can never
+    // finalize over the top of the request that stole it. Released on any failure path
+    // below (Stripe error catch + the function's outer catch) via releaseClaim().
+    holdIds = allShopperHolds.map(h => h.id);
+    claimToken = randomUUID();
+    const claimed = await prisma.itemReservation.updateMany({
+      where: {
+        id: { in: holdIds },
+        status: { in: ['PENDING', 'CONFIRMED'] },
+        ...invoiceableWhere(),
+      },
+      data: { invoiceClaimToken: claimToken, invoiceClaimedAt: new Date() },
+    });
+    if (claimed.count !== holdIds.length) {
       // Lost the race (or a hold changed state) -- release whatever we did manage to
       // claim and reject. A concurrent call is (or just did) create the real invoice.
-      if (claimedHoldIds.length > 0) {
-        await prisma.itemReservation
-          .updateMany({ where: { id: { in: claimedHoldIds } }, data: { invoiceId: null } })
-          .catch((releaseErr) => console.error('[hold-invoice] Failed to release claim after partial-claim conflict:', releaseErr));
-      }
+      await releaseClaim();
       return res.status(409).json({ message: 'One or more holds are already being invoiced.' });
     }
+    claimedHoldIds.push(...holdIds);
 
     // LOCKED DECISION #1: Fee calculation based on organizer tier
     // Calculate total from all bundled items
@@ -1480,9 +1514,7 @@ export const markSoldAndCreateInvoice = async (req: AuthRequest, res: Response) 
       console.error('[hold-invoice] Stripe session creation failed:', stripeError);
       // P2 idempotency fix: release the claim taken above so these holds aren't
       // permanently stuck unable to be invoiced.
-      await prisma.itemReservation
-        .updateMany({ where: { id: { in: claimedHoldIds } }, data: { invoiceId: null } })
-        .catch((releaseErr) => console.error('[hold-invoice] Failed to release claim after Stripe error:', releaseErr));
+      await releaseClaim();
       return res.status(400).json({ message: 'Failed to create Stripe checkout session', error: stripeError.message });
     }
 
@@ -1504,13 +1536,17 @@ export const markSoldAndCreateInvoice = async (req: AuthRequest, res: Response) 
         },
       });
 
-      // Update ALL bundled ItemReservations with invoiceId
-      await tx.itemReservation.updateMany({
-        where: { id: { in: allShopperHolds.map(h => h.id) } },
-        data: {
-          invoiceId: holdInvoice.id,
-        },
+      // Update ALL bundled ItemReservations with the real invoiceId and clear the claim.
+      // Fencing check (P0 fix, 2026-08-16): scoping this to rows still carrying THIS
+      // attempt's claimToken is what makes the bounded claim TTL safe. If another request
+      // stole a stale claim on these holds while this one was inside the Stripe call, the
+      // token no longer matches, count falls short, and the whole transaction rolls back
+      // rather than stamping a second invoice over the winner's rows.
+      const finalize = await tx.itemReservation.updateMany({
+        where: { id: { in: holdIds }, invoiceClaimToken: claimToken },
+        data: { invoiceId: holdInvoice.id, invoiceClaimToken: null, invoiceClaimedAt: null },
       });
+      if (finalize.count !== holdIds.length) throw new InvoiceClaimLostError();
 
       // Update ALL bundled items to INVOICE_ISSUED (LOCKED DECISION #6)
       await tx.item.updateMany({
@@ -1628,12 +1664,19 @@ export const markSoldAndCreateInvoice = async (req: AuthRequest, res: Response) 
     console.error('[hold-invoice] markSoldAndCreateInvoice error:', error);
     // P2 idempotency fix: release any claim still held (e.g. the final invoice
     // transaction itself threw) so these holds aren't permanently stuck.
-    if (typeof claimedHoldIds !== 'undefined' && claimedHoldIds.length > 0) {
-      await prisma.itemReservation
-        .updateMany({ where: { id: { in: claimedHoldIds } }, data: { invoiceId: null } })
-        .catch((releaseErr) => console.error('[hold-invoice] Failed to release claim after error:', releaseErr));
+    await releaseClaim();
+
+    if (error instanceof InvoiceClaimLostError) {
+      return res.status(409).json({ message: 'Another payment request for these holds completed first.' });
     }
-    res.status(500).json({ message: 'Server error', error: error.message });
+
+    // Information-disclosure fix (P2, 2026-08-16): this used to return `error.message`
+    // straight to the client, which handed any authenticated organizer the raw Prisma
+    // error string -- internal model, field and constraint names included (e.g.
+    // "Invalid `prisma.itemReservation.updateMany()` invocation: Foreign key constraint
+    // violated: ItemReservation_invoiceId_fkey"). The detail is logged above; the client
+    // gets a generic message.
+    res.status(500).json({ message: 'Could not create the payment request. Please try again.' });
   }
 };
 
