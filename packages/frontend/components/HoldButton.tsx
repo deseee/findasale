@@ -19,6 +19,48 @@ interface Item {
   };
 }
 
+/**
+ * Pull the most useful human-readable message out of ANY rejection from
+ * POST /reservations. That endpoint refuses holds for a dozen different reasons --
+ * rank hold limit, sale not published, holds disabled, item already reserved,
+ * unmanaged listing, self-dealing guard, GPS geofence, en-route limit -- and every
+ * one of them is a sentence the shopper needs to read. Before this, the only
+ * surface was a toast; when the toast was missed the modal just sat there and the
+ * app looked broken (live QA 2026-08-16, rank hold-limit 403).
+ *
+ * Order matters: server-authored copy first, then the axios interceptor's Zod
+ * summary, then a status-based fallback, then a true-network-error fallback.
+ */
+function extractHoldErrorMessage(err: any): string {
+  const data = err?.response?.data;
+  if (typeof data?.message === 'string' && data.message.trim()) return data.message;
+  if (typeof data?.error === 'string' && data.error.trim()) return data.error;
+  if (typeof err?.validationMessage === 'string' && err.validationMessage.trim()) {
+    return err.validationMessage;
+  }
+
+  const status = err?.response?.status;
+  if (!status) {
+    return 'We could not reach FindA.Sale just now. Check your connection and try again.';
+  }
+  switch (status) {
+    case 401:
+      return 'Please log in again to place this hold.';
+    case 403:
+      return 'This hold was not allowed. Please check with the organizer.';
+    case 404:
+      return 'This item is no longer listed.';
+    case 409:
+      return 'Someone else got there first — this item is no longer available to hold.';
+    case 429:
+      return 'That was a lot of requests at once. Wait a moment and try again.';
+    default:
+      return status >= 500
+        ? 'Something went wrong on our end. Please try again in a moment.'
+        : 'We could not place this hold. Please try again.';
+  }
+}
+
 interface HoldButtonProps {
   item: Item;
   onHoldPlaced?: () => void;
@@ -41,9 +83,12 @@ const HoldButton: React.FC<HoldButtonProps> = ({
   const [gpsError, setGpsError] = useState<string | null>(null);
   const [holdSettings, setHoldSettings] = useState<any>(null);
   const [note, setNote] = useState('');
+  // Inline rejection copy. The toast alone was not enough -- see extractHoldErrorMessage.
+  const [error, setError] = useState<string | null>(null);
 
   // Fetch organizer hold settings to understand requirements
   useEffect(() => {
+    if (isOpen) setError(null);
     if (isOpen && item.sale?.id) {
       fetchHoldSettings();
     }
@@ -89,16 +134,21 @@ const HoldButton: React.FC<HoldButtonProps> = ({
 
   const handlePlaceHold = async () => {
     if (!user) {
-      showToast('Please log in to place a hold', 'info');
+      const msg = 'Please log in to place a hold.';
+      setError(msg);
+      showToast(msg, 'info');
       return;
     }
 
     // Validate GPS if required
     if (holdSettings?.enableGpsValidation && !gpsCoords) {
-      showToast('GPS location required. Please enable location services.', 'error');
+      const msg = 'We need your location to place this hold. Turn on location services and try again.';
+      setError(msg);
+      showToast(msg, 'error');
       return;
     }
 
+    setError(null);
     setIsLoading(true);
     try {
       const payload: any = {
@@ -121,7 +171,10 @@ const HoldButton: React.FC<HoldButtonProps> = ({
       // Close modal after brief delay so user sees success state
       setTimeout(() => setIsOpen(false), 1500);
     } catch (err: any) {
-      const msg = err.response?.data?.message || 'Failed to place hold';
+      // Show it in BOTH places. The modal stays open on failure, so the inline
+      // banner is what the shopper actually reads; the toast is the backstop.
+      const msg = extractHoldErrorMessage(err);
+      setError(msg);
       showToast(msg, 'error');
     } finally {
       setIsLoading(false);
@@ -161,7 +214,7 @@ const HoldButton: React.FC<HoldButtonProps> = ({
 
       {isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-md w-full p-6">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-md w-full p-6 max-h-[90vh] overflow-y-auto">
             <h2 className="text-xl font-bold text-warm-900 dark:text-gray-100 mb-4">Place Hold</h2>
 
             {/* Item info */}
@@ -208,7 +261,7 @@ const HoldButton: React.FC<HoldButtonProps> = ({
               </label>
               <textarea
                 value={note}
-                onChange={(e) => setNote(e.target.value)}
+                onChange={(e) => { setNote(e.target.value); if (error) setError(null); }}
                 maxLength={200}
                 className="w-full p-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="e.g., Hold for pickup tomorrow"
@@ -220,6 +273,18 @@ const HoldButton: React.FC<HoldButtonProps> = ({
             {holdSettings?.enableQrValidation && (
               <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-700">
                 Organizer requires QR scan to confirm this hold.
+              </div>
+            )}
+
+            {/* Rejection message -- the server tells the shopper exactly why a hold was
+                refused (rank limit, geofence, sale closed). Never swallow it. */}
+            {error && (
+              <div
+                role="alert"
+                aria-live="assertive"
+                className="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700"
+              >
+                <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
               </div>
             )}
 

@@ -24,6 +24,13 @@ interface HoldToPayModalProps {
   onClose: () => void;
   onSuccess?: () => void;
   isAuction?: boolean;
+  /**
+   * Every hold that will land on this ONE invoice. The server bundles by shopper + sale
+   * (markSoldAndCreateInvoice), so a click on a single hold can bill several items. When
+   * more than one is passed, the modal itemises them -- the organizer should never send a
+   * 2-item invoice believing it was a 1-item invoice.
+   */
+  bundleItems?: { id: string; title: string; price: number; photoUrl?: string }[];
 }
 
 interface InvoiceResponse {
@@ -50,12 +57,14 @@ export default function HoldToPayModal({
   onClose,
   onSuccess,
   isAuction = false,
+  bundleItems,
 }: HoldToPayModalProps) {
   const { showToast } = useToast();
   const { showSurvey } = useFeedbackSurvey();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const isBundle = (bundleItems?.length ?? 0) > 1;
   const platformFee = itemPrice * (organizerTier === 'PRO' ? 0.08 : 0.10);
   const estimatedPayout = itemPrice - platformFee;
 
@@ -92,7 +101,7 @@ export default function HoldToPayModal({
       isOpen={isOpen}
       onClose={onClose}
       ariaLabelledBy="hold-to-pay-modal-title"
-      contentClassName="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-md w-full p-6 max-h-96 overflow-y-auto"
+      contentClassName="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-md w-full p-6 max-h-[85vh] overflow-y-auto"
     >
       <h2 id="hold-to-pay-modal-title" className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-4">
         Send Payment Request
@@ -120,10 +129,33 @@ export default function HoldToPayModal({
           </div>
         </div>
 
+        {/* What is actually on this invoice. Only shown when the server will bundle more
+            than one hold -- a single-item request needs no list. */}
+        {isBundle && (
+          <div className="mb-6 rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 p-3">
+            <p className="text-sm font-semibold text-blue-900 dark:text-blue-200">
+              {bundleItems!.length} items on this one payment request
+            </p>
+            <p className="text-xs text-blue-700 dark:text-blue-300 mt-0.5">
+              Everything {shopperName} is holding at this sale is billed together.
+            </p>
+            <ul className="mt-2 divide-y divide-blue-200/70 dark:divide-blue-800">
+              {bundleItems!.map((b) => (
+                <li key={b.id} className="flex items-center justify-between gap-3 py-1.5">
+                  <span className="text-sm text-blue-900 dark:text-blue-100 truncate">{b.title}</span>
+                  <span className="text-sm font-medium text-blue-900 dark:text-blue-100 flex-shrink-0">
+                    ${b.price.toFixed(2)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
         {/* Price Breakdown */}
         <div className="mb-6 space-y-2 border-t border-b border-gray-200 dark:border-gray-700 py-4">
           <div className="flex justify-between text-sm">
-            <span className="text-gray-600 dark:text-gray-400">Item Price</span>
+            <span className="text-gray-600 dark:text-gray-400">{isBundle ? 'Invoice total' : 'Item Price'}</span>
             <span className="font-semibold text-gray-900 dark:text-gray-100">
               ${itemPrice.toFixed(2)}
             </span>

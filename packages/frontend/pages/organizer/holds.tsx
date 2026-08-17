@@ -220,6 +220,20 @@ const OrganizerHoldsPage = () => {
     return Object.values(groups).sort((a, b) => b.holds.length - a.holds.length);
   }, [holds]);
 
+  // Which holds get invoiced TOGETHER. POST /reservations/:id/mark-sold bundles every
+  // hold the same shopper has at the same sale into ONE invoice, so "Send Invoice" on a
+  // single card can produce a multi-item bill. Mirror that rule here (shopper + sale) so
+  // the organizer can see the bundle on the card, before they commit to sending it.
+  const bundleKey = (h: HoldItem) => `${h.user.id}::${h.item.sale.id}`;
+  const bundlesByKey = useMemo(() => {
+    const map: Record<string, HoldItem[]> = {};
+    for (const hold of holds) {
+      const key = `${hold.user.id}::${hold.item.sale.id}`;
+      (map[key] ||= []).push(hold);
+    }
+    return map;
+  }, [holds]);
+
   // Accordion state for buyer groups
   const [expandedBuyers, setExpandedBuyers] = useState<Set<string>>(new Set());
 
@@ -604,9 +618,30 @@ const OrganizerHoldsPage = () => {
                                 </div>
                               </div>
                               <p className="text-xs text-warm-500 dark:text-warm-400 mt-0.5">{hold.item.sale.title}</p>
+                              {/* Whose hold this is. The buyer accordion header carries the
+                                  name too, but it scrolls away and can be collapsed -- and the
+                                  invoice bundles by shopper, so the card has to say it. */}
+                              <p className="text-xs text-warm-600 dark:text-warm-300 mt-0.5">
+                                Held by <span className="font-medium text-warm-800 dark:text-warm-100">{hold.user.name}</span>
+                                <span className="text-warm-400 dark:text-warm-500"> · {hold.user.email}</span>
+                              </p>
                               {hold.note && (
                                 <p className="text-xs text-warm-600 dark:text-warm-400 mt-1 italic">"{hold.note}"</p>
                               )}
+                              {/* Bundling warning: sending an invoice for this hold also bills
+                                  everything else this shopper is holding at this sale. */}
+                              {(() => {
+                                const bundle = bundlesByKey[bundleKey(hold)] ?? [hold];
+                                if (bundle.length < 2) return null;
+                                const others = bundle.length - 1;
+                                const bundleTotal = bundle.reduce((sum, h) => sum + (h.item.price ?? 0), 0);
+                                return (
+                                  <p className="text-xs text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md px-2 py-1 mt-1.5">
+                                    Invoices together with {others} other item{others === 1 ? '' : 's'} {hold.user.name} is
+                                    holding at this sale — {bundle.length} items, ${bundleTotal.toFixed(2)} on one payment request.
+                                  </p>
+                                );
+                              })()}
                               <div className="flex items-center gap-3 mt-2">
                                 <span
                                   className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
@@ -625,7 +660,11 @@ const OrganizerHoldsPage = () => {
                                     Payment requested
                                   </span>
                                 )}
-                                <HoldTimer expiresAt={hold.expiresAt} />
+                                <HoldTimer
+                                  expiresAt={hold.expiresAt}
+                                  audience="organizer"
+                                  holderName={hold.user.name}
+                                />
                                 <span className="text-xs text-warm-400 dark:text-warm-500">
                                   Placed {formatDistanceToNow(parseISO(hold.createdAt), { addSuffix: true })}
                                 </span>
@@ -693,6 +732,13 @@ const OrganizerHoldsPage = () => {
             }
             itemPrice={isBundle ? bundleTotal : (anchor.item.price ?? 0)}
             itemPhoto={isBundle ? undefined : anchor.item.photoUrls?.[0]}
+            // Itemised so the organizer sees exactly which items are on the one invoice.
+            bundleItems={bundle.map((h) => ({
+              id: h.id,
+              title: h.item.title,
+              price: h.item.price ?? 0,
+              photoUrl: h.item.photoUrls?.[0],
+            }))}
             shopperId={anchor.user.id}
             shopperName={anchor.user.name}
             shopperEmail={anchor.user.email}

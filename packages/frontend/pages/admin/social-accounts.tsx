@@ -629,7 +629,7 @@ const AdminSocialAccounts = () => {
                           </button>
                         ) : (
                           !(p.status === 'DRAFT') && (
-                            <span className="text-warm-400 dark:text-gray-600">, </span>
+                            <span className="text-warm-400 dark:text-gray-600">—</span>
                           )
                         )}
                       </div>

@@ -426,7 +426,7 @@ export default function AdminFeatureFlagsPage() {
                             Paid Only
                           </span>
                         ) : (
-                          <span className="text-xs text-warm-500 dark:text-warm-400">, </span>
+                          <span className="text-xs text-warm-500 dark:text-warm-400">—</span>
                         )}
                       </td>
                       <td className="px-6 py-4 text-sm text-warm-600 dark:text-warm-400">

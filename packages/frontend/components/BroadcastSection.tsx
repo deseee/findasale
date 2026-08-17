@@ -127,7 +127,7 @@ const HistoryRow = ({ broadcast, last }: { broadcast: Broadcast; last: boolean }
     <span className="font-mono text-xs text-warm-700 dark:text-gray-300 tabular-nums">
       {broadcast.recipientCount.toLocaleString()} sent
     </span>
-    <span className="font-mono text-xs text-warm-400 dark:text-gray-500">, </span>
+    <span className="font-mono text-xs text-warm-400 dark:text-gray-500">—</span>
   </div>
 );
 

@@ -205,7 +205,7 @@ const AdminFeedback = () => {
                         {fb.rating}★
                       </span>
                     ) : (
-                      <span className="text-warm-500 dark:text-warm-400">, </span>
+                      <span className="text-warm-500 dark:text-warm-400">—</span>
                     )}
                   </td>
                   <td className="px-6 py-4 text-sm text-warm-900 dark:text-warm-100 max-w-xs truncate">

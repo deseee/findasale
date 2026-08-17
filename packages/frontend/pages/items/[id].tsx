@@ -1039,12 +1039,32 @@ const ItemDetail: React.FC<ItemDetailProps> = ({ ogData, initialData }) => {
                       );
                     })()
                   ) : item.status === 'RESERVED' ? (
-                    <div className="p-3 bg-amber-50 dark:bg-gray-800 border border-amber-200 dark:border-amber-700 rounded-lg text-center">
-                      <p className="text-amber-800 dark:text-amber-300 font-semibold text-sm">🔒 This item is currently on hold</p>
-                      <div className="mt-2">
-                        <HoldTimer itemId={item.id} />
-                      </div>
-                    </div>
+                    // reservationId is returned ONLY to the sale's owner (or an admin), so it
+                    // is the reliable signal that the person reading this is the organizer and
+                    // not the shopper. The hold belongs to the shopper either way -- organizers
+                    // were being shown "Your hold expires in..." about someone else's hold.
+                    (() => {
+                      const viewingAsOrganizer = !!item.reservationId;
+                      const holderName = item.reservedByName || null;
+                      return (
+                        <div className="p-3 bg-amber-50 dark:bg-gray-800 border border-amber-200 dark:border-amber-700 rounded-lg text-center">
+                          <p className="text-amber-800 dark:text-amber-300 font-semibold text-sm">
+                            {viewingAsOrganizer
+                              ? holderName
+                                ? `🔒 On hold for ${holderName}`
+                                : '🔒 On hold for a shopper'
+                              : '🔒 This item is currently on hold'}
+                          </p>
+                          <div className="mt-2 flex justify-center">
+                            <HoldTimer
+                              itemId={item.id}
+                              audience={viewingAsOrganizer ? 'organizer' : 'shopper'}
+                              holderName={viewingAsOrganizer ? holderName : undefined}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })()
                   ) : (
                     <div className="space-y-2">
                       <button

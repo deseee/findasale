@@ -217,7 +217,7 @@ const AdminEncyclopedia = () => {
                         Item #{entry.triggerItemId.substring(0, 8)}
                       </a>
                     ) : (
-                      <span className="text-gray-400">, </span>
+                      <span className="text-gray-400">—</span>
                     )}
                   </td>
                   <td className="px-6 py-4 text-sm text-warm-600 dark:text-warm-400">

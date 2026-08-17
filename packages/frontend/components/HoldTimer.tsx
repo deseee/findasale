@@ -3,6 +3,11 @@
  * Displays a countdown timer for item holds with visual urgency warnings.
  * Shows time remaining, changes color as expiry approaches.
  * Fetches hold expiry from the API using itemId.
+ *
+ * Audience matters: the same countdown is shown to the shopper who placed the hold
+ * AND to the organizer whose item is being held. Second-person copy ("Your hold
+ * expires in...") is wrong for the organizer -- it is the shopper's hold, not theirs.
+ * Pass audience="organizer" (plus holderName when known) on organizer surfaces.
  */
 
 import { useState, useEffect } from 'react';
@@ -12,6 +17,10 @@ interface HoldTimerProps {
   itemId?: string;      // fetch expiresAt from API. Use when expiresAt isn't available
   expiresAt?: string;   // use directly when already known (e.g. CartDrawer)
   onExpiry?: () => void;
+  /** Whose screen this is on. Drives the wording, not the maths. Defaults to the shopper. */
+  audience?: 'shopper' | 'organizer';
+  /** Shopper who placed the hold. Only used when audience="organizer". */
+  holderName?: string | null;
 }
 
 interface TimeRemaining {
@@ -21,7 +30,13 @@ interface TimeRemaining {
   totalMs: number;
 }
 
-export default function HoldTimer({ itemId, expiresAt: expiresAtProp, onExpiry }: HoldTimerProps) {
+export default function HoldTimer({
+  itemId,
+  expiresAt: expiresAtProp,
+  onExpiry,
+  audience = 'shopper',
+  holderName,
+}: HoldTimerProps) {
   const [expiresAt, setExpiresAt] = useState<string | null>(expiresAtProp ?? null);
   const [timeRemaining, setTimeRemaining] = useState<TimeRemaining | null>(null);
 
@@ -74,6 +89,10 @@ export default function HoldTimer({ itemId, expiresAt: expiresAtProp, onExpiry }
 
   if (!timeRemaining) return null;
 
+  // Organizer-side subject for the sentence: "Marcy's hold ..." or "This hold ..."
+  const isOrganizer = audience === 'organizer';
+  const holderPrefix = holderName ? `${holderName}'s` : 'This';
+
   const { hours, minutes, seconds, totalMs } = timeRemaining;
   const isExpired = totalMs <= 0;
   const isUrgent = totalMs <= 5 * 60 * 1000; // 5 minutes
@@ -89,7 +108,9 @@ export default function HoldTimer({ itemId, expiresAt: expiresAtProp, onExpiry }
             clipRule="evenodd"
           />
         </svg>
-        <span className="text-sm font-semibold">Hold expired</span>
+        <span className="text-sm font-semibold">
+          {isOrganizer ? `${holderPrefix} hold has expired` : 'Hold expired'}
+        </span>
       </div>
     );
   }
@@ -143,11 +164,21 @@ export default function HoldTimer({ itemId, expiresAt: expiresAtProp, onExpiry }
     );
   }
 
-  const displayText = isCritical
-    ? `Hold expiring NOW! ${formatTime(hours, minutes, seconds)}`
+  const clock = formatTime(hours, minutes, seconds);
+
+  // Organizer wording is descriptive -- it reports someone else's hold. Shopper wording
+  // is second-person and urgent, because it is their hold and their clock.
+  const displayText = isOrganizer
+    ? isCritical
+      ? `${holderPrefix} hold ends in ${clock} — ending now`
+      : isUrgent
+      ? `${holderPrefix} hold ends in ${clock} — ending soon`
+      : `${holderPrefix} hold ends in ${clock}`
+    : isCritical
+    ? `Hold expiring NOW! ${clock}`
     : isUrgent
-    ? `Hurry! Hold expires in ${formatTime(hours, minutes, seconds)}`
-    : `Your hold expires in ${formatTime(hours, minutes, seconds)}`;
+    ? `Hurry! Hold expires in ${clock}`
+    : `Your hold expires in ${clock}`;
 
   return (
     <div className={containerClass}>

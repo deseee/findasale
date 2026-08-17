@@ -224,7 +224,7 @@ export const ShippingNetPreview: React.FC<ShippingNetPreviewProps> = ({
               <div className="text-[11px] text-warm-600 dark:text-warm-400">You cover ~{fmt(data.shippingEstimate.rate)}</div>
             </>
           ) : (
-            <div className="mt-1 text-sm text-warm-500 dark:text-warm-400">, </div>
+            <div className="mt-1 text-sm text-warm-600 dark:text-warm-400">—</div>
           )}
         </div>
 
@@ -245,7 +245,7 @@ export const ShippingNetPreview: React.FC<ShippingNetPreviewProps> = ({
               </button>
             </>
           ) : (
-            <div className="mt-1 text-sm text-warm-500 dark:text-warm-400">, </div>
+            <div className="mt-1 text-sm text-warm-600 dark:text-warm-400">—</div>
           )}
         </div>
       </div>
