@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-# cache-bust: 2026-08-06T02-25-15Z -- unblock Railway (watch-path stranding, CLAUDE.md §10c: the
+# cache-bust: 2026-08-17T23-43-50Z -- unblock Railway (stranded again, S-BOUNCE-SUPPRESS-FIX-2026-08-17: backend service
 # real backend changes for #602/#603 landed in commit 98fc4a57a, but the next two pushes
 # (a6d56f9f9, a15ac32e) were frontend-only fixes -- Railway evaluated watchPatterns against
 # those push tips and SKIPPED the backend deploy both times (confirmed via Railway MCP
