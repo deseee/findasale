@@ -23,6 +23,7 @@ import { transactionalEmailService } from '../lib/transactionalEmailService';
 import { recordSuspectedSignal } from '../services/checkoutGuard'; // S1072 Finding #4: cash path is offsite — log-only, never blocked
 import { resolveOrganizerOrTeamMember } from '../utils/posAuth'; // S1183 Fix 1: TEAM_MEMBER fallback for non-venue POS
 import { getAccountStatus } from '../services/stripeConnectService'; // Direct-charges migration (2026-08-08): live capability preflight
+import { resolveCashCommissionRate, cashCommissionOn, accrueCashFeeBalance } from '../services/cashFeeService'; // Shared cash-commission accrual (2026-08-17) — same mechanism reservationController's RECORD mode uses
 
 const stripe = () => getStripe();
 
@@ -793,7 +794,11 @@ export interface CashSaleResult {
  * return the existing rows instead of creating new ones or re-touching item status.
  */
 export async function processCashSaleCore(params: {
-  organizer: { id: string; subscriptionTier: string | null };
+  // referralDiscountExpiry is optional: `resolveOrganizerOrTeamMember` (the live route's
+  // resolver) already selects it, so the live cash path now honours an active referral
+  // discount exactly as the card path above does. A caller that does not select it (the
+  // offline-sync replay) simply gets no discount applied — the pre-existing behaviour.
+  organizer: { id: string; subscriptionTier: string | null; referralDiscountExpiry?: Date | null };
   saleId: string;
   items: Array<{ itemId?: string; amount: number; label?: string }>;
   cashReceived: number;
@@ -879,17 +884,23 @@ export async function processCashSaleCore(params: {
     }
   }
 
-  // Fee: read from FeeStructure (same rate as card flow). Cash organizer collects full amount in person —
-  // platformFeeAmount is tracked for accounting; billing/collection is handled outside Stripe.
-  const feeStructure = await prisma.feeStructure.findFirst({ where: { listingType: '*' } });
-  const feeRate = feeStructure?.feeRate ?? getPlatformFeeRate(organizer.subscriptionTier as any);
+  // Fee: same rate as the card flow. The cash organizer collects the full amount in person, so
+  // platformFeeAmount is recorded for accounting and the commission is accrued to
+  // Organizer.cashFeeBalance below for collection out of their next payout.
+  //
+  // Resolution moved into services/cashFeeService.ts (2026-08-17) so this path and
+  // reservationController's RECORD settlement mode — the other cash path, which until today
+  // accrued nothing at all — read the rate the same way and cannot drift. Behaviour here is
+  // unchanged apart from now honouring an active referral discount, which the card path in
+  // this same controller already did.
+  const feeRate = await resolveCashCommissionRate(organizer);
 
   // Create Purchase records immediately with status PAID
   const purchaseIds: string[] = [];
   for (const item of items) {
     // Use a UUID placeholder for cash sales (stripePaymentIntentId is @unique — cannot be null)
     const cashPIId = `cash_${randomUUID()}`;
-    const itemPlatformFeeAmount = Math.round(item.amount * feeRate * 100) / 100;
+    const itemPlatformFeeAmount = cashCommissionOn(item.amount, feeRate);
 
     const purchase = await prisma.purchase.create({
       data: {
@@ -972,20 +983,14 @@ export async function processCashSaleCore(params: {
     }
   }
 
-  // Accumulate platform fee to organizer's cash fee balance
-  const totalPlatformFees = items.reduce((sum, item) => {
-    const itemFee = Math.round(item.amount * feeRate * 100) / 100;
-    return sum + itemFee;
-  }, 0);
-  if (totalPlatformFees > 0) {
-    await prisma.organizer.update({
-      where: { id: organizer.id },
-      data: {
-        cashFeeBalance: { increment: totalPlatformFees },
-        cashFeeBalanceUpdatedAt: new Date(),
-      },
-    });
-  }
+  // Accumulate the commission on this cash sale to the organizer's cash-fee balance, which
+  // payoutController nets out of their next Stripe payout. Shared with RECORD-mode settlement
+  // via services/cashFeeService.ts — one implementation, two callers.
+  const totalPlatformFees = items.reduce(
+    (sum, item) => sum + cashCommissionOn(item.amount, feeRate),
+    0
+  );
+  await accrueCashFeeBalance({ organizerId: organizer.id, commission: totalPlatformFees });
 
   // Optionally send receipt email
   let receiptSent = false;

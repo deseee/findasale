@@ -1386,15 +1386,22 @@ const OrganizerDashboard = () => {
                 </div>
               )}
 
-              {/* Earnings/Payout Alert: conditional banner */}
+              {/* Cash fee balance banner.
+                  CORRECTED 2026-08-17: this read "You have $X ready to withdraw — Platform fee
+                  credits available for payout" in green, which is the exact opposite of what
+                  cashFeeBalance is. It is commission the organizer OWES on sales they collected
+                  in cash, and payoutController subtracts it from their next payout (and refuses
+                  the payout outright when it exceeds the amount). Showing a debt as withdrawable
+                  credit made a smaller-than-expected payout unexplainable. Same data, same
+                  banner, honest copy. */}
               {cashFeeBalance > 0 && (
-                <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg p-4 flex items-center justify-between">
+                <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg p-4 flex items-center justify-between">
                   <div>
-                    <p className="font-semibold text-green-900 dark:text-green-100">You have ${cashFeeBalance.toFixed(2)} ready to withdraw</p>
-                    <p className="text-sm text-green-700 dark:text-green-300">Platform fee credits available for payout.</p>
+                    <p className="font-semibold text-amber-900 dark:text-amber-100">${cashFeeBalance.toFixed(2)} in commission due on your cash sales</p>
+                    <p className="text-sm text-amber-700 dark:text-amber-300">You already collected that money in person, so we take it out of your next payout instead.</p>
                   </div>
-                  <Link href="/organizer/earnings" className="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors text-sm flex-shrink-0">
-                    Withdraw Now
+                  <Link href="/organizer/earnings" className="bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors text-sm flex-shrink-0">
+                    See details
                   </Link>
                 </div>
               )}

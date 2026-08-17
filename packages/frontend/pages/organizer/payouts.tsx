@@ -311,6 +311,15 @@ const OrganizerPayoutsPage = () => {
                   <p className="text-3xl font-bold text-amber-600">
                     ${cashFeeBalance.toFixed(2)}
                   </p>
+                  {/* Explainer added 2026-08-17: the number alone does not say what it is or
+                      why it exists. Cash and in-person sales are money FindA.Sale never
+                      handles, so the commission on them cannot come out of a card charge —
+                      it collects here and is netted out of the next payout instead. */}
+                  <p className="text-sm text-gray-600 dark:text-gray-300 mt-2">
+                    Commission on sales you collected in cash or in person. We never touched that
+                    money, so we take our share out of your next payout instead. A $100 cash sale
+                    at 10% adds $10.00 here.
+                  </p>
                   {earnings?.cashFeeBalanceUpdatedAt && (
                     <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                       Last updated: {new Date(earnings.cashFeeBalanceUpdatedAt).toLocaleDateString()}

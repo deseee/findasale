@@ -19,6 +19,8 @@ import { checkCrewInvasion } from '../services/crewInvasionService'; // Feature 
 import { emailService } from '../lib/emailService';
 import { suppressionService } from '../services/suppressionService';
 import { getPlatformFeeRate, SubscriptionTier } from '../utils/feeCalculator';
+import { snapshotForCommissionOnly } from '../utils/feeCalculator'; // RECORD-mode cash fee (2026-08-17): Purchase fee snapshot
+import { resolveCashCommissionRate, cashCommissionOn, accrueCashFeeBalance, roundMoney } from '../services/cashFeeService'; // RECORD-mode cash commission accrual (2026-08-17)
 import { shouldUseDirectCharge } from '../services/stripeConnectService'; // Direct-charges migration (2026-08-08): staged-rollout routing decision
 import { assertCheckoutAllowed, CheckoutGuardError } from '../services/checkoutGuard'; // S1072 Finding #4: collusion/wash-trade guard
 import { createPaymentLinkInternal } from './posController'; // markSold settlement router: reuse Stripe Payment Link + QR
@@ -845,6 +847,21 @@ export const batchUpdateHolds = async (req: AuthRequest, res: Response) => {
       // settlementMode === 'RECORD' falls through to the transaction below.
     }
 
+    // RECORD-mode commission rate (2026-08-17). RECORD is a CASH / in-person settlement: the
+    // organizer collects the money themselves and FindA.Sale's Stripe account never sees it,
+    // so there is no application_fee_amount to take the commission out of. The commission is
+    // still owed on every sale type (see utils/feeCalculator.ts) and is accrued to
+    // Organizer.cashFeeBalance inside the transaction below, exactly as
+    // terminalController's cash sale does -- both now go through services/cashFeeService.ts so
+    // they cannot drift. Resolved OUT here (one FeeStructure read) rather than per item inside
+    // the transaction, so the transaction stays short.
+    //
+    // The rate is resolved SERVER-SIDE from the organizer's own record. It is never read from
+    // the request: the body of this endpoint is destructured to { ids, action, settlementMode }
+    // above and carries no fee, rate or balance field a client could supply.
+    const recordCommissionRate =
+      action === 'markSold' ? await resolveCashCommissionRate(organizer) : 0;
+
     // P1 Bug 2: Wrap verification + update in transaction with re-verification on each hold
     const result = await prisma.$transaction(async (tx) => {
       // Fetch holds within transaction (re-verification point)
@@ -874,6 +891,9 @@ export const batchUpdateHolds = async (req: AuthRequest, res: Response) => {
       // ADR-087 Phase 4: items that sold PARTIALLY (stock remains) on this markSold
       // path — these need their live eBay listing quantity revised, not withdrawn.
       const partialSaleUpdates: { itemId: string; remainingStock: number }[] = [];
+      // RECORD mode only: the total commission accrued to the organizer's cash-fee balance
+      // by this settlement, reported back to the organizer in the response.
+      let recordCommissionAccrued = 0;
 
       if (action === 'release') {
         await tx.itemReservation.updateMany({
@@ -995,23 +1015,54 @@ export const batchUpdateHolds = async (req: AuthRequest, res: Response) => {
           });
         }
         // Record the cash transaction for each sold item (RECORD mode).
-        // NO FEE SNAPSHOT, DELIBERATELY (2026-08-17). RECORD mode is a cash/in-person sale the
-        // platform takes nothing on, and it never goes near the fee engine — `platformFeeAmount`
-        // is a literal 0. Writing commissionAmount: 0 here would flip these rows onto the
-        // snapshot branch of resolveOrganizerFeeReport and change the fee their organizer sees
-        // reported (today the earnings surfaces recompute amount * tierRate on them). Whether
-        // that recompute is right is a separate question about cash-sale reporting; it is NOT
-        // something this change should decide silently. Left NULL so behaviour is unchanged.
-        await tx.purchase.createMany({
-          data: validHolds.map((h) => ({
+        //
+        // REVENUE-LEAK FIX (2026-08-17). This block used to write `platformFeeAmount: 0` and
+        // touch nothing else, on the reasoning that a cash sale is money the platform never
+        // handles. That is true of the MONEY and false of the FEE: the organizer commission
+        // (10% SIMPLE / 8% PRO+TEAMS, utils/feeCalculator.ts) is owed on every sale type, cash
+        // included, and the mechanism for collecting it on money we never touch already
+        // existed and already worked -- terminalController's cash sale accrues it to
+        // Organizer.cashFeeBalance, and payoutController nets that balance out of the
+        // organizer's next Stripe payout. RECORD mode simply never called it, so FindA.Sale
+        // earned $0.00 on every cash sale settled from the holds screen. On a $100 cash sale a
+        // SIMPLE organizer now owes $10.00 against their next payout, where they previously
+        // owed nothing.
+        //
+        // FEE SNAPSHOT: written now, deliberately, reversing the "leave it NULL" note that
+        // stood here while the fee question was open. A populated snapshot puts these rows on
+        // the authoritative branch of resolveOrganizerFeeReport, which is the point -- the fee
+        // an organizer is shown for this sale is then the exact number that was added to their
+        // cash-fee balance, pinned at settlement time, instead of `amount * theirCurrentTierRate`
+        // recomputed on every page load. Commission-only: RECORD is never an auction lot (an
+        // auction settles through the bid/checkout path), so the buyer-premium fields record a
+        // hard 0 rather than null. INVARIANT held here:
+        // platformFeeAmount == buyerPremiumAmount + commissionAmount.
+        const recordPurchaseRows = validHolds.map((h) => {
+          const amount = h.item.price || 0;
+          const commission = cashCommissionOn(amount, recordCommissionRate);
+          return {
             itemId: h.item.id,
             saleId: h.item.saleId,
             userId: h.userId,
-            amount: h.item.price || 0,
-            platformFeeAmount: 0, // RECORD = cash/in-person; platform takes no fee
+            amount,
+            platformFeeAmount: commission,
+            ...snapshotForCommissionOnly(commission, recordCommissionRate),
             status: 'PAID',
             source: 'POS',
-          })),
+          };
+        });
+        await tx.purchase.createMany({ data: recordPurchaseRows });
+
+        // Accrue the commission against the organizer's next payout. Inside the SAME
+        // transaction as the idempotency claim and the Purchase rows above, so the debt can
+        // never outlive a settlement that rolled back -- and, because the claim already
+        // guarantees each hold is settled at most once, it can never be accrued twice for the
+        // same sale. (terminalController's equivalent runs outside its transaction; this one
+        // is strictly safer, and both now share services/cashFeeService.ts.)
+        recordCommissionAccrued = await accrueCashFeeBalance({
+          organizerId: organizer.id,
+          commission: recordPurchaseRows.reduce((sum, r) => sum + r.platformFeeAmount, 0),
+          tx,
         });
         // Notify each shopper their reserved item was marked sold
         await tx.notification.createMany({
@@ -1027,13 +1078,13 @@ export const batchUpdateHolds = async (req: AuthRequest, res: Response) => {
         });
       }
 
-      return { updated: validHolds.length, failed: ids.length - validHolds.length, holds: validHolds, soldOutItemIds, partialSaleUpdates };
+      return { updated: validHolds.length, failed: ids.length - validHolds.length, holds: validHolds, soldOutItemIds, partialSaleUpdates, recordCommissionAccrued };
     }).catch((err) => {
       if (err.message === 'No valid holds found') {
-        return { updated: 0, failed: ids.length, holds: [], soldOutItemIds: [], partialSaleUpdates: [] };
+        return { updated: 0, failed: ids.length, holds: [], soldOutItemIds: [], partialSaleUpdates: [], recordCommissionAccrued: 0 };
       }
       if (err.message === MARKSOLD_ALREADY_SETTLED) {
-        return { updated: 0, failed: ids.length, holds: [], soldOutItemIds: [], partialSaleUpdates: [], alreadySettled: true };
+        return { updated: 0, failed: ids.length, holds: [], soldOutItemIds: [], partialSaleUpdates: [], recordCommissionAccrued: 0, alreadySettled: true };
       }
       throw err;
     });
@@ -1116,9 +1167,39 @@ export const batchUpdateHolds = async (req: AuthRequest, res: Response) => {
       }
     }
 
-    const { holds: _holds, soldOutItemIds: _soldOutItemIds, partialSaleUpdates: _partialSaleUpdates, alreadySettled: _alreadySettled, ...responseResult } = result as any;
+    const { holds: _holds, soldOutItemIds: _soldOutItemIds, partialSaleUpdates: _partialSaleUpdates, recordCommissionAccrued: _recordCommissionAccrued, alreadySettled: _alreadySettled, ...responseResult } = result as any;
+
+    if (action !== 'markSold') {
+      return res.json(responseResult);
+    }
+
+    // RECORD mode: tell the organizer what this cash sale just cost them. A cash sale creates a
+    // real debt against their next payout (payoutController nets cashFeeBalance out of it), and
+    // an organizer who is never shown that number has no way to reconcile a payout that arrives
+    // smaller than they expected. `platformFee` is what THIS settlement added; `cashFeeBalance`
+    // is their running total after it. Read AFTER the transaction committed so the balance
+    // returned is the real post-accrual figure, not a client-side sum.
+    const platformFee = roundMoney((result as any).recordCommissionAccrued ?? 0);
+    let cashFeeBalance: number | null = null;
+    try {
+      const updatedOrganizer = await prisma.organizer.findUnique({
+        where: { id: organizer.id },
+        select: { cashFeeBalance: true },
+      });
+      cashFeeBalance = updatedOrganizer?.cashFeeBalance ?? null;
+    } catch (balanceErr) {
+      // Never fail an already-committed settlement over a display read.
+      console.warn('[reservations] Failed to read cashFeeBalance after RECORD settlement:', balanceErr);
+    }
+
     // Include settlementMode for RECORD so the frontend can show the correct toast copy
-    res.json(action === 'markSold' ? { ...responseResult, settlementMode: 'RECORD' } : responseResult);
+    res.json({
+      ...responseResult,
+      settlementMode: 'RECORD',
+      platformFee,
+      platformFeeRate: recordCommissionRate,
+      cashFeeBalance,
+    });
   } catch (error) {
     console.error('[reservations] batchUpdateHolds error:', error);
     res.status(500).json({ message: 'Server error' });
