@@ -186,6 +186,7 @@ import barcodeRoutes from './routes/barcode';                  // Barcode scan -
 import shopifyRoutes from './routes/shopify';              // Feature: Shopify Cross-Listing
 import crewsRoutes from './routes/crews';                       // Phase 2a: Explorer's Guild — Crew Creation
 import discountRuleRoutes from './routes/discountRules';        // Feature #310: Color-tagged Discount Rules
+import commissionTierRoutes from './routes/commissionTiers';    // ADR-096 follow-up: consignor commission ladder CRUD
 import markdownCycleRoutes from './routes/markdownCycles';       // Feature: Automatic Markdown Cycles (PRO Tier)
 import locationRoutes from './routes/locations';                 // #311: Multi-Location Inventory View
 import qrScannerRoutes from './routes/qrScanner';                // QR Scanner Phase 2: scan analytics
@@ -863,6 +864,7 @@ app.use('/api/barcode', barcodeRoutes);                                    // Ba
 app.use('/api/shopify', shopifyRoutes);                              // Feature: Shopify Cross-Listing
 app.use('/api/crews', crewsRoutes);                                        // Phase 2a: Explorer's Guild — Crew Creation
 app.use('/api/discount-rules', discountRuleRoutes);                         // Feature #310: Color-tagged Discount Rules
+app.use('/api/commission-tiers', commissionTierRoutes);                     // ADR-096 follow-up: consignor commission ladder CRUD
 app.use('/api/markdown-cycles', markdownCycleRoutes);                       // Feature: Automatic Markdown Cycles (PRO Tier)
 app.use('/api/locations', locationRoutes);                                   // #311: Multi-Location Inventory View
 app.use('/api/qr-scanner', qrScannerRoutes);                                 // QR Scanner Phase 2: scan analytics

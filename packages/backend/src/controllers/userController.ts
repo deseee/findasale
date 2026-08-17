@@ -886,6 +886,8 @@ export const deleteAccount = async (req: AuthRequest, res: Response) => {
       affiliateLinkCount,
       disputeCount,
       appraisalAIRequestCount,
+      affiliateReferralCount,
+      referralRewardCount,
     ] = await Promise.all([
       req.user.organizer
         ? prisma.sale.count({ where: { organizerId: req.user.organizer.id } })
@@ -899,6 +901,17 @@ export const deleteAccount = async (req: AuthRequest, res: Response) => {
       prisma.affiliateLink.count({ where: { userId: req.user.id } }),
       prisma.dispute.count({ where: { OR: [{ buyerId: req.user.id }, { sellerId: req.user.id }] } }),
       prisma.appraisalAIRequest.count({ where: { userId: req.user.id } }),
+      // ADR-107/108: AffiliateReferral and ReferralReward are ON DELETE RESTRICT in Postgres
+      // with NOT NULL referrerId/referredUserId, so SetNull is not even available. Without
+      // these two pre-checks, deleting a user with any referral history throws a raw FK
+      // violation that surfaces as an unhelpful 500. Restrict is correct here — the
+      // referral/affiliate financial trail must be preserved, not cascaded away.
+      prisma.affiliateReferral.count({
+        where: { OR: [{ referrerId: req.user.id }, { referredUserId: req.user.id }] },
+      }),
+      prisma.referralReward.count({
+        where: { OR: [{ referrerId: req.user.id }, { referredUserId: req.user.id }] },
+      }),
     ]);
 
     const blockers: string[] = [];
@@ -908,6 +921,8 @@ export const deleteAccount = async (req: AuthRequest, res: Response) => {
     if (affiliateLinkCount > 0) blockers.push(`${affiliateLinkCount} affiliate link${affiliateLinkCount === 1 ? '' : 's'}`);
     if (disputeCount > 0) blockers.push(`${disputeCount} dispute${disputeCount === 1 ? '' : 's'}`);
     if (appraisalAIRequestCount > 0) blockers.push(`${appraisalAIRequestCount} appraisal request${appraisalAIRequestCount === 1 ? '' : 's'}`);
+    if (affiliateReferralCount > 0) blockers.push(`${affiliateReferralCount} affiliate referral${affiliateReferralCount === 1 ? '' : 's'}`);
+    if (referralRewardCount > 0) blockers.push(`${referralRewardCount} referral reward${referralRewardCount === 1 ? '' : 's'}`);
 
     if (blockers.length > 0) {
       const blockerList =

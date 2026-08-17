@@ -17,7 +17,7 @@ import TierGate from '../../components/TierGate';
 import { useOrganizerTier } from '../../hooks/useOrganizerTier';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import Link from 'next/link';
-import { Trash2, Edit2, DollarSign, Copy, Check } from 'lucide-react';
+import { Trash2, Edit2, DollarSign, Copy, Check, Percent } from 'lucide-react';
 
 interface Consignor {
   id: string;
@@ -231,12 +231,21 @@ const ConsignorsPage: React.FC = () => {
                 Manage third-party consignors and track payouts
               </p>
             </div>
-            <button
-              onClick={handleOpenCreateModal}
-              className="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded-lg transition-colors"
-            >
-              + Add Consignor
-            </button>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <Link
+                href="/organizer/commission-tiers"
+                className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-bold text-sm bg-warm-100 dark:bg-gray-700 hover:bg-warm-200 dark:hover:bg-gray-600 text-warm-900 dark:text-warm-100 transition-colors"
+              >
+                <Percent className="w-4 h-4" />
+                Commission Rates
+              </Link>
+              <button
+                onClick={handleOpenCreateModal}
+                className="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded-lg transition-colors"
+              >
+                + Add Consignor
+              </button>
+            </div>
           </div>
 
           {/* Consignors List */}

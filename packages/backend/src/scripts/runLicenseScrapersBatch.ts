@@ -133,6 +133,32 @@ interface ScraperResult {
  */
 const MAX_FAILURE_RATE = 0.20;
 
+/**
+ * GitHub Actions renders at most 10 annotations PER LEVEL PER STEP. Anything the job
+ * emits beyond that is accepted by the runner and then silently dropped from the run's
+ * Annotations panel and the check-runs API.
+ *
+ * VERIFIED 2026-08-17 against the real run (roadmap #558 post-ship verification): run #9
+ * (id 31998258067, commit 73233bbd3) exited 0 and the check-run annotations API returned
+ * exactly 11 entries -- 1 actions/setup-node deprecation notice, 1 "Phase2 scraper failed:
+ * Texas", and 9 "wrote 0 records" warnings running alphabetically Alaska -> Illinois and
+ * then stopping mid-alphabet. Cross-checked against the production DB for that run's window
+ * (2026-08-17 05:32-05:45Z): only 14 distinct directoryMostRecentSource labels wrote at all,
+ * so roughly 36 of the 51 scrapers produced zero records -- i.e. ~27 zero-record warnings
+ * were emitted and thrown away. Among the ones the cap hid were Iowa, New York, Illinois,
+ * Texas and Hawaii, every one of which HAS produced records historically (IowaPhase2 2,715
+ * rows, NewYorkPhase2 29,727, IllinoisPhase2 3,154, TexasPhase2 1,971, HawaiiPhase2 47 --
+ * none touched since 2026-05). Those are exactly the regressions the zero-record annotation
+ * was added to surface, and the cap was eating them.
+ *
+ * Fix: emit ONE consolidated zero-record annotation naming every affected scraper, and cap
+ * individual failure annotations so a bad week cannot push the consolidated one out either.
+ * The full per-scraper table is unaffected -- it still goes to stdout and to the job summary.
+ */
+const GITHUB_MAX_ANNOTATIONS_PER_STEP = 10;
+/** Individual failure annotations to emit before collapsing the rest into one overflow line. */
+const MAX_INDIVIDUAL_FAILURE_ANNOTATIONS = GITHUB_MAX_ANNOTATIONS_PER_STEP - 2;
+
 // NOTE (roadmap #558): a scraper that succeeds but writes zero organizer records
 // is deliberately NOT counted as a failure -- many registry entries are known
 // stubs with no accessible data source, and zero-results scrapes now warn rather
@@ -265,12 +291,25 @@ async function main(): Promise<void> {
   if (failed > 0) {
     console.log("");
     console.log("Failures:");
-    for (const r of results.filter((x) => x.status === "fail")) {
+    const failures = results.filter((x) => x.status === "fail");
+    failures.forEach((r, idx) => {
       const firstLine = (r.error || "unknown error").split("\n")[0];
       console.log(`  - ${r.name}: ${firstLine}`);
-      // Keep every individual failure visible in the GitHub UI even when the
-      // overall run exits 0.
-      console.log(`::warning title=Phase2 scraper failed: ${r.name}::${firstLine}`);
+      // Keep individual failures visible in the GitHub UI even when the overall run
+      // exits 0 -- but only up to the annotation budget (see
+      // GITHUB_MAX_ANNOTATIONS_PER_STEP). Everything past that is collapsed into one
+      // annotation below so the consolidated zero-record annotation still has a slot.
+      if (idx < MAX_INDIVIDUAL_FAILURE_ANNOTATIONS) {
+        console.log(`::warning title=Phase2 scraper failed: ${r.name}::${firstLine}`);
+      }
+    });
+    const hiddenFailures = failures.slice(MAX_INDIVIDUAL_FAILURE_ANNOTATIONS);
+    if (hiddenFailures.length > 0) {
+      console.log(
+        `::warning title=Phase2: ${hiddenFailures.length} more scrapers failed::` +
+        `${hiddenFailures.map((r) => r.name).join(", ")}. ` +
+        "See the job summary table for the full per-scraper status."
+      );
     }
   }
 
@@ -282,12 +321,18 @@ async function main(): Promise<void> {
     );
     for (const r of silentZero) {
       console.log(`  - ${r.name}`);
-      console.log(
-        `::warning title=Phase2 scraper wrote 0 records: ${r.name}::` +
-        "Scraper completed without error but produced no organizer records. " +
-        "Expected for a known stub; a regression otherwise."
-      );
     }
+    // ONE annotation for the whole set, not one per scraper. See
+    // GITHUB_MAX_ANNOTATIONS_PER_STEP: the per-scraper form silently lost ~27 of these
+    // on run #9 because GitHub caps annotations at 10 per level per step, and the ones
+    // it dropped included states that have produced records before.
+    console.log(
+      `::warning title=Phase2: ${silentZero.length} of ${results.length} scrapers wrote 0 records::` +
+      `${silentZero.map((r) => r.name).join(", ")}. ` +
+      "These completed without error but produced no organizer records. Expected for a " +
+      "known stub; a regression for any state that has produced records before. " +
+      "Full per-scraper counts are in the job summary table."
+    );
   }
 
   // --- GitHub Step Summary (markdown) ---

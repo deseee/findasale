@@ -145,6 +145,12 @@ export async function resyncShippingDriftSweep(opts?: {
       packageWidthIn: true,
       packageHeightIn: true,
       ebayShippingOverride: true,
+      // (2026-08-17) Needed so this cheap local recompute applies the SAME item-level
+      // fulfillment-policy override that resyncItemShippingPolicy (ebayController.ts:4709)
+      // already passes. Omitting it made the two disagree on every override item and
+      // produced a PERMANENT daily eBay call that could never converge -- see the note
+      // above the resolveItemShipping call below.
+      ebayFulfillmentPolicyOverrideId: true,
       ebayFulfillmentPolicyId: true,
       ebayShippingAmountCents: true,
       ebayShippingRatedAt: true,
@@ -240,6 +246,18 @@ export async function resyncShippingDriftSweep(opts?: {
           packageWidthIn: item.packageWidthIn != null ? Number(item.packageWidthIn) : null,
           packageHeightIn: item.packageHeightIn != null ? Number(item.packageHeightIn) : null,
           ebayShippingOverride: item.ebayShippingOverride,
+          // (2026-08-17) resolveItemShipping rule 2 (ebayShippingResolver.ts:192)
+          // short-circuits on this field. resyncItemShippingPolicy passes it and this cron
+          // did not, so for an override item the cron computed a real carrier rate while the
+          // resync it triggered resolved to the override and wrote back buyerAmountCents = 0.
+          // stored(0) vs recomputed(non-zero) re-tripped the drift test on the NEXT sweep,
+          // forever: one wasted eBay call per override item per day, no convergence possible.
+          // Confirmed on live data 2026-08-17 -- item cmo3eu1fs0071jqsuty6i4ylj had
+          // ebayShippingAmountCents = 0 with ebayShippingRatedAt stamped by that morning's
+          // 04:09 UTC sweep, while its stored policy never changed. With the field passed,
+          // an override item resolves to source 'custom-override' (buyerAmountCents 0) on
+          // BOTH sides, drift is false, and it is stamped locally with no eBay call.
+          ebayFulfillmentPolicyOverrideId: item.ebayFulfillmentPolicyOverrideId,
           ebayShippingClassification: item.ebayShippingClassification,
           ebayCategoryId: item.ebayCategoryId,
           packageType: item.packageType,
@@ -248,6 +266,58 @@ export async function resyncShippingDriftSweep(opts?: {
         },
         fromZip: item.sale?.zip ?? null,
       });
+
+      // ── OVERRIDE ADEQUACY WARNING (2026-08-17) ──────────────────────────────────────
+      // An item-level policy override is honored verbatim and forever: nothing in the
+      // engine has ever checked whether the policy it points at still covers the label.
+      // That is how a retired preset kept under-recovering on a live listing with no
+      // signal anywhere (BQ row "FEDEX GUITAR $34.99", eBay policy 308295966011).
+      //
+      // Now that override items converge (see above) they would otherwise become
+      // permanently INVISIBLE to this sweep, so the visibility is restored here rather
+      // than lost: re-resolve the SAME item with the override removed to obtain what the
+      // engine would charge on its own. Pure local recompute -- no eBay call, no policy
+      // fetch, no budget -- and it runs only for the handful of items carrying an override
+      // (2 of 153 items in production on 2026-08-17). It NEVER changes what is stored or
+      // pinned; it only logs, so an under-covered or retired override surfaces in the daily
+      // sweep instead of silently costing the organizer money on every sale.
+      if (r.source === 'custom-override' && item.ebayFulfillmentPolicyOverrideId) {
+        try {
+          const unOverridden = await resolveItemShipping({
+            organizer: { lat: org.lat, lng: org.lng },
+            mapping: org.mapping,
+            item: {
+              packageWeightOz: item.packageWeightOz,
+              packageLengthIn: item.packageLengthIn != null ? Number(item.packageLengthIn) : null,
+              packageWidthIn: item.packageWidthIn != null ? Number(item.packageWidthIn) : null,
+              packageHeightIn: item.packageHeightIn != null ? Number(item.packageHeightIn) : null,
+              ebayShippingOverride: item.ebayShippingOverride,
+              ebayFulfillmentPolicyOverrideId: null, // the whole point of this second pass
+              ebayShippingClassification: item.ebayShippingClassification,
+              ebayCategoryId: item.ebayCategoryId,
+              packageType: item.packageType,
+              price: item.price ?? null,
+              packageConfirmedByOrganizer: item.packageConfirmedByOrganizer,
+            },
+            fromZip: item.sale?.zip ?? null,
+          });
+          if (unOverridden.source !== 'hard-blocked' && unOverridden.buyerAmountCents > 0) {
+            console.warn(
+              `[ResyncShippingDrift] item ${item.id} sits on OVERRIDE policy ` +
+                `${item.ebayFulfillmentPolicyOverrideId} -- the engine would charge ` +
+                `$${(unOverridden.buyerAmountCents / 100).toFixed(2)} (source=${unOverridden.source}) ` +
+                `for this package. Not changed (an override is the organizer's explicit choice); ` +
+                `logged so an under-covered or retired override is visible.`
+            );
+          }
+        } catch (adequacyErr) {
+          // Diagnostics must never affect the sweep.
+          console.warn(
+            `[ResyncShippingDrift] item ${item.id} override-adequacy check failed (non-fatal):`,
+            (adequacyErr as Error).message
+          );
+        }
+      }
 
       // ADR-103 Phase 4: an item that exceeds every carrier's absolute max resolves to
       // source 'hard-blocked' with buyerAmountCents=0 -- that 0 is NOT a real computed
@@ -284,11 +354,41 @@ export async function resyncShippingDriftSweep(opts?: {
       const nameIdentityDrift =
         stored != null && newCents !== stored && NAME_PRICED_SOURCES.has(r.source);
 
+      // ── RESOLVED-POLICY IDENTITY DRIFT (2026-08-17) ──────────────────────────────
+      // This sweep has only ever compared AMOUNTS. That is the right test for the
+      // computed sources, which do not know their policy id here (fvf-flat and
+      // calculated both return fulfillmentPolicyId: null -- provisioning needs an eBay
+      // call this cron deliberately does not make), and it MUST stay the only test for
+      // them: comparing a null id against a stored id would mark every ordinary item as
+      // drifted and spend an eBay call on all of them, every sweep.
+      //
+      // But the override sources (item-level policy override, HEAVY_OVERSIZED / FRAGILE,
+      // category override, UNKNOWN safety policy) DO return a real resolved policy id,
+      // and they all return buyerAmountCents = 0. For those, the amount test can never
+      // fire -- stored 0 vs recomputed 0 -- so an item pinned on eBay to a DIFFERENT
+      // policy than the one we would resolve today was invisible and stayed wrong
+      // forever. This is also what makes the override convergence added above safe:
+      // without this check, an organizer re-binding an item to a corrected preset would
+      // update the database and the live eBay listing would never be re-pinned, because
+      // the item is no longer an amount-drift candidate.
+      // Guarded on `!= null` so the computed paths are completely unaffected.
+      const resolvedPolicyIdentityDrift =
+        r.fulfillmentPolicyId != null && r.fulfillmentPolicyId !== item.ebayFulfillmentPolicyId;
+
       const drift =
         stored == null ||
         nameIdentityDrift ||
+        resolvedPolicyIdentityDrift ||
         Math.abs(newCents - stored) >= DRIFT_ABS_CENTS ||
         (stored > 0 && Math.abs(newCents - stored) / stored >= DRIFT_PCT);
+
+      if (resolvedPolicyIdentityDrift) {
+        console.log(
+          `[ResyncShippingDrift] item ${item.id} resolved-policy drift: stored policy ` +
+            `${item.ebayFulfillmentPolicyId ?? '(none)'} vs resolved ${r.fulfillmentPolicyId} ` +
+            `(source=${r.source}) -- re-pinning`
+        );
+      }
 
       if (nameIdentityDrift) {
         console.log(

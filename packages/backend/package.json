@@ -21,7 +21,10 @@
       "<rootDir>/src"
     ],
     "testMatch": [
-      "**/__tests__/**/*.test.ts"
+      "**/__tests__/**/*.test.ts",
+      "**/__tests__/**/*.integration.ts",
+      "**/__tests__/**/*.e2e.ts",
+      "**/__tests__/**/*.spec.ts"
     ],
     "transform": {
       "^.+\\.tsx?$": [

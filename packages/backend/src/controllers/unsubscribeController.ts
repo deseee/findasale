@@ -1,5 +1,9 @@
 import { Request, Response } from 'express';
-import { prisma } from '../index';
+// Same singleton as '../index' (index.ts:291 re-exports './lib/prisma'), but importing it
+// from '../index' drags in the Express entry point -- which process.exit(1)s at
+// index.ts:47 when JWT_SECRET is unset. notificationController.sendWeeklyDigest
+// dynamic-imports this file, so that killed the weeklyDigest e2e jest worker.
+import { prisma } from '../lib/prisma';
 import { AuthRequest } from '../middleware/auth';
 
 /**

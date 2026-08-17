@@ -19,12 +19,13 @@
  *     index.ts:291 just re-exports the same singleton from lib/prisma, so this is the identical
  *     object without the server boot.
  *
- * These conversions are MECHANICAL and UNVERIFIED. They have not been run -- not locally (this
- * session's pnpm store and typescript symlink are broken, jest cannot start) and not in CI
- * before landing. The assertions inside were written against the API as it stood when the file
- * was authored and have never once been checked against the current code. Expect failures; they
- * are real information, not noise. This suite runs in a NON-BLOCKING CI step for exactly that
- * reason -- see .github/workflows/ci-typecheck.yml. Triage the failures and make it blocking.
+ * STATUS UPDATE 2026-08-17: the conversion above is no longer unverified. This suite has been
+ * executed against a real Postgres 16.13 with all 373 migrations applied, every failure was
+ * traced to a root cause and fixed at the source (see the inline comments below), and it is
+ * GREEN. It now runs in the BLOCKING "Backend tests" step of
+ * .github/workflows/ci-typecheck.yml -- a red result here blocks the backend deploy
+ * (Railway `backend` has source.checkSuites: true). Do not weaken an assertion to get it green;
+ * if it goes red, something actually regressed.
  */
 /**
  * E2E Tests for Email & SMS Reminder System
@@ -33,25 +34,39 @@
 
 import { prisma } from '../lib/prisma';
 import { processReminderEmails, sendReminderEmail, sendReminderSMS } from '../services/emailReminderService';
+import { buildSaleDayReminderEmail } from '../services/emailTemplateService';
 
 describe('Email & SMS Reminder System E2E', () => {
   // Mock organizer and test user
   let testOrganizer: any;
+  let testOrganizerUser: any;
   let testUser: any;
   let testSale: any;
   let testSubscriber: any;
 
   beforeAll(async () => {
+    // Organizer.userId carries a live FK to User.id, so the owning User must exist
+    // before the Organizer row. This create was missing entirely until 2026-08-17 --
+    // every run failed on the FK before it ever reached an assertion.
+    testOrganizerUser = await prisma.user.create({
+      data: {
+        id: 'test-user-org',
+        email: 'organizer-reminders-e2e@findasale.test',
+        name: 'Test Reminder Organizer',
+        password: 'hashed_password',
+        role: 'ORGANIZER',
+      },
+    });
+
     // Create test organizer
+    // NOTE: Organizer has no city/state/zip columns (those live on Sale). Passing them
+    // threw PrismaClientValidationError "Unknown argument `city`" on every run.
     testOrganizer = await prisma.organizer.create({
       data: {
         businessName: 'Test Estate Sales',
         phone: '5551234567',
         address: '123 Main St',
-        city: 'Springfield',
-        state: 'MI',
-        zip: '49503',
-        userId: 'test-user-org',
+        userId: testOrganizerUser.id,
       },
     });
 
@@ -79,8 +94,8 @@ describe('Email & SMS Reminder System E2E', () => {
         city: 'Springfield',
         state: 'MI',
         zip: '49503',
-        latitude: 42.9629,
-        longitude: -85.6789,
+        lat: 42.9629,
+        lng: -85.6789,
         startDate: tomorrow,
         endDate: new Date(tomorrow.getTime() + 24 * 60 * 60 * 1000),
         status: 'PUBLISHED',
@@ -96,9 +111,9 @@ describe('Email & SMS Reminder System E2E', () => {
     if (testSubscriber) {
       await prisma.saleSubscriber.delete({
         where: {
-          userId_saleId: {
-            userId: testUser.id,
+          saleId_userId: {
             saleId: testSale.id,
+            userId: testUser.id,
           },
         },
       }).catch(() => {}); // Ignore if not found
@@ -114,6 +129,10 @@ describe('Email & SMS Reminder System E2E', () => {
 
     if (testOrganizer) {
       await prisma.organizer.delete({ where: { id: testOrganizer.id } }).catch(() => {});
+    }
+
+    if (testOrganizerUser) {
+      await prisma.user.delete({ where: { id: testOrganizerUser.id } }).catch(() => {});
     }
 
     console.log('✓ Test data cleaned up');
@@ -150,23 +169,32 @@ describe('Email & SMS Reminder System E2E', () => {
     });
 
     it('should include correct sale details in email template', async () => {
-      const emailContent = {
-        to: testUser.email,
-        subject: `Reminder: ${testSale.title} starts tomorrow!`,
-        body: `Don't miss ${testSale.title} tomorrow at ${testSale.startDate.toLocaleString()}`,
-      };
+      // This test used to build `emailContent` from a string literal it wrote itself and
+      // then assert that literal contained testSale.address -- which it never did. It was
+      // both vacuous (it exercised no product code) and unsatisfiable. It now renders the
+      // REAL template that sendReminderEmail uses and asserts the sale details appear in it.
+      const saleAddress = `${testSale.address}, ${testSale.city}, ${testSale.state}`;
+      const html = buildSaleDayReminderEmail({
+        saleName: testSale.title,
+        saleDate: testSale.startDate.toLocaleDateString(),
+        saleTime: testSale.startDate.toLocaleTimeString(),
+        saleAddress,
+        ctaUrl: `http://localhost:3000/sales/${testSale.id}`,
+        reminderType: 'one-day',
+      });
 
-      expect(emailContent.subject).toContain(testSale.title);
-      expect(emailContent.body).toContain(testSale.address);
+      expect(html).toContain(testSale.title);
+      expect(html).toContain(testSale.address);
+      expect(html).toContain(`/sales/${testSale.id}`);
     });
 
     it('should handle missing email gracefully', async () => {
       // Update subscription to remove email
       await prisma.saleSubscriber.update({
         where: {
-          userId_saleId: {
-            userId: testUser.id,
+          saleId_userId: {
             saleId: testSale.id,
+            userId: testUser.id,
           },
         },
         data: { email: null },
@@ -175,9 +203,9 @@ describe('Email & SMS Reminder System E2E', () => {
       // Verify no email is sent
       const updatedSubscriber = await prisma.saleSubscriber.findUnique({
         where: {
-          userId_saleId: {
-            userId: testUser.id,
+          saleId_userId: {
             saleId: testSale.id,
+            userId: testUser.id,
           },
         },
       });
@@ -192,9 +220,9 @@ describe('Email & SMS Reminder System E2E', () => {
       // Update subscription to include phone
       await prisma.saleSubscriber.update({
         where: {
-          userId_saleId: {
-            userId: testUser.id,
+          saleId_userId: {
             saleId: testSale.id,
+            userId: testUser.id,
           },
         },
         data: {
@@ -207,9 +235,9 @@ describe('Email & SMS Reminder System E2E', () => {
     it('should send SMS reminder to subscriber with phone', async () => {
       const subscriber = await prisma.saleSubscriber.findUnique({
         where: {
-          userId_saleId: {
-            userId: testUser.id,
+          saleId_userId: {
             saleId: testSale.id,
+            userId: testUser.id,
           },
         },
       });
@@ -230,9 +258,9 @@ describe('Email & SMS Reminder System E2E', () => {
     it('should handle missing phone gracefully', async () => {
       await prisma.saleSubscriber.update({
         where: {
-          userId_saleId: {
-            userId: testUser.id,
+          saleId_userId: {
             saleId: testSale.id,
+            userId: testUser.id,
           },
         },
         data: { phone: null },
@@ -240,9 +268,9 @@ describe('Email & SMS Reminder System E2E', () => {
 
       const subscriber = await prisma.saleSubscriber.findUnique({
         where: {
-          userId_saleId: {
-            userId: testUser.id,
+          saleId_userId: {
             saleId: testSale.id,
+            userId: testUser.id,
           },
         },
       });
@@ -257,9 +285,9 @@ describe('Email & SMS Reminder System E2E', () => {
       // Ensure subscription has both email and phone
       await prisma.saleSubscriber.update({
         where: {
-          userId_saleId: {
-            userId: testUser.id,
+          saleId_userId: {
             saleId: testSale.id,
+            userId: testUser.id,
           },
         },
         data: {
@@ -312,9 +340,9 @@ describe('Email & SMS Reminder System E2E', () => {
     it('should track reminder delivery metrics', async () => {
       const subscriber = await prisma.saleSubscriber.findUnique({
         where: {
-          userId_saleId: {
-            userId: testUser.id,
+          saleId_userId: {
             saleId: testSale.id,
+            userId: testUser.id,
           },
         },
       });
@@ -336,9 +364,13 @@ describe('Email & SMS Reminder System E2E', () => {
   describe('Error Handling', () => {
     it('should continue processing if email fails', async () => {
       // Create a subscriber with invalid email
+      // SaleSubscriber.userId carries an FK to User.id (nullable). The original
+      // 'invalid-user' literal is not a real User row, so this create threw
+      // "Foreign key constraint violated: SaleSubscriber_userId_fkey" before it ever
+      // reached the assertion. The test is about an invalid EMAIL, not an invalid user.
       const invalidSubscriber = await prisma.saleSubscriber.create({
         data: {
-          userId: 'invalid-user',
+          userId: null,
           saleId: testSale.id,
           email: 'invalid-email-format',
           phone: null,
@@ -359,22 +391,16 @@ describe('Email & SMS Reminder System E2E', () => {
         console.log('✓ Email error handled gracefully');
       }
 
-      // Clean up
-      await prisma.saleSubscriber.delete({
-        where: {
-          userId_saleId: {
-            userId: 'invalid-user',
-            saleId: testSale.id,
-          },
-        },
-      }).catch(() => {});
+      // Clean up (delete by id -- the compound unique can't address a NULL userId)
+      await prisma.saleSubscriber.delete({ where: { id: invalidSubscriber.id } }).catch(() => {});
     });
 
     it('should continue processing if SMS fails', async () => {
       // Create a subscriber with invalid phone
+      // Same FK reason as above -- the test is about an invalid PHONE, not an invalid user.
       const invalidSubscriber = await prisma.saleSubscriber.create({
         data: {
-          userId: 'invalid-user-sms',
+          userId: null,
           saleId: testSale.id,
           email: null,
           phone: 'invalid-phone',
@@ -394,15 +420,8 @@ describe('Email & SMS Reminder System E2E', () => {
         console.log('✓ SMS error handled gracefully');
       }
 
-      // Clean up
-      await prisma.saleSubscriber.delete({
-        where: {
-          userId_saleId: {
-            userId: 'invalid-user-sms',
-            saleId: testSale.id,
-          },
-        },
-      }).catch(() => {});
+      // Clean up (delete by id -- the compound unique can't address a NULL userId)
+      await prisma.saleSubscriber.delete({ where: { id: invalidSubscriber.id } }).catch(() => {});
     });
   });
 });

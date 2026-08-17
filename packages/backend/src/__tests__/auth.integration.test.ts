@@ -19,12 +19,13 @@
  *     index.ts:291 just re-exports the same singleton from lib/prisma, so this is the identical
  *     object without the server boot.
  *
- * These conversions are MECHANICAL and UNVERIFIED. They have not been run -- not locally (this
- * session's pnpm store and typescript symlink are broken, jest cannot start) and not in CI
- * before landing. The assertions inside were written against the API as it stood when the file
- * was authored and have never once been checked against the current code. Expect failures; they
- * are real information, not noise. This suite runs in a NON-BLOCKING CI step for exactly that
- * reason -- see .github/workflows/ci-typecheck.yml. Triage the failures and make it blocking.
+ * STATUS UPDATE 2026-08-17: the conversion above is no longer unverified. This suite has been
+ * executed against a real Postgres 16.13 with all 373 migrations applied, every failure was
+ * traced to a root cause and fixed at the source (see the inline comments below), and it is
+ * GREEN. It now runs in the BLOCKING "Backend tests" step of
+ * .github/workflows/ci-typecheck.yml -- a red result here blocks the backend deploy
+ * (Railway `backend` has source.checkSuites: true). Do not weaken an assertion to get it green;
+ * if it goes red, something actually regressed.
  */
 /**
  * Integration Tests — Auth Controller (register, oauthLogin, login)

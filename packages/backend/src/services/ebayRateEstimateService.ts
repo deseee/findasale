@@ -861,10 +861,21 @@ const RATE_TABLE_UPS: RateRow[] = [
  *
  * NOT APPLIED AT lb >= 70, unchanged and deliberate. That path uses
  * FEDEX_HIGH_WEIGHT_TOTAL_TABLE, which holds real eBay TOTALS (base + whatever accessorials
- * and destination surcharge their lane carried) with destinations never recorded -- its z7
- * and z8 columns are byte-identical at 90/110/130/150lb, the signature of one destination
- * quoted into two columns -- so adding a surcharge on top would risk double-charging.
+ * their lane carried), so adding a surcharge on top would risk double-charging.
  * estimateCheapestRate already zeroes all surcharges on that branch.
+ *
+ * CORRECTED 2026-08-17 -- this paragraph used to add "with destinations never recorded --
+ * its z7 and z8 columns are byte-identical at 90/110/130/150lb, the signature of one
+ * destination quoted into two columns". BOTH halves of that are contradicted by
+ * FEDEX_HIGH_WEIGHT_TOTAL_TABLE's OWN provenance comment, which is the better-sourced
+ * claim and was written by the session that gathered the quotes:
+ *   (1) The destinations ARE recorded, per zone: z1 49503, z2 60601, z3 46201, z4 63101,
+ *       z5 67202, z6 80202, z7 89101, z8 98101 (origin 49079, 10x8x6in).
+ *   (2) The z7/z8 identity is a REAL FedEx zone grouping, not a copied column -- 89101 and
+ *       98101 are two genuinely different destinations that returned exact-penny-identical
+ *       live quotes at all four weights, which is evidence OF grouping, not of duplication.
+ *       (The same comment records UPS grouping z1=z2 and z3=z4 the same way.)
+ * See that table for what this means for the destination-surcharge content specifically.
  *
  * MECHANISM STILL UNKNOWN AND STILL NOT ASSERTED. Three flat ZIP-attached tiers with their
  * own retail counterparts ($0 / $9.75 / $21.06) is the shape of a Delivery Area Surcharge
@@ -876,8 +887,57 @@ const RATE_TABLE_UPS: RateRow[] = [
  * WHAT WOULD IMPROVE THIS: more measured ZIPs. Adding them is DATA, not code -- append to
  * FEDEX_DESTINATION_SURCHARGE_ZIP_TIER and nothing else changes. The map only becomes
  * load-bearing on the live path once a destination-aware quote path exists (eBay CALCULATED
- * shipping, or a buyer-ZIP preview); fedexDestinationSurchargeForZip() and
- * estimateCheapestRate's optional `destinationZip` are already wired for that day.
+ * shipping, or a buyer-ZIP preview); fedexDestinationSurchargeForZip(),
+ * estimateCheapestRate's optional `destinationZip` and (since 2026-08-17)
+ * computeCheapestForOrigin's are wired end-to-end for that day.
+ *
+ * ── DESTINATION ZIP IS NOT AVAILABLE AT PRICING TIME (investigated 2026-08-17) ───────────
+ *
+ * A prior note framed this as "data shipped but not wired", with the fix being to "thread a
+ * destination ZIP through the rate engine's callers". THAT FIX IS NOT AVAILABLE, and the
+ * reason is worth stating plainly so it is not re-attempted a third time.
+ *
+ * It is not that callers forget to pass a buyer ZIP. It is that NO CALLER HAS ONE, and the
+ * system does not store one anywhere. Verified against the live production database
+ * 2026-08-17, not assumed: the ONLY ZIP/postal columns that exist in the entire schema are
+ * `Sale.zip` (the ORIGIN) and `UspsZoneChartEntry.originZip3`/`destZip3` (this engine's own
+ * zone-chart cache). `Purchase` has no shipping address at all, and no table in the schema
+ * has an address column belonging to a buyer.
+ *
+ * The deeper reason is architectural, not an oversight. EVERY surface that consumes this
+ * engine prices at LISTING time, when no buyer exists yet:
+ *   - eBay flat-rate policies (ebayFlatRatePolicyService) -- one price, every buyer.
+ *   - eBay shipping presets (ebayShippingPresetService) -- account-wide, many origins.
+ *   - Native FindA.Sale checkout: suggestNativeShippingPrice writes Item.shippingPrice at
+ *     listing time, and stripeController.ts:621-622 later charges that stored value verbatim
+ *     (`shippingCost = item.shippingPrice`). The PaymentIntent amount is fixed before any
+ *     address is collected, so even the native path -- the one place a buyer ZIP could in
+ *     principle be known -- never learns it before the price is set.
+ * This is the SAME design decision resolveCoverageZone already makes on the distance axis:
+ * price the farthest CONUS zone so one number covers every buyer. Destination-blindness on
+ * the surcharge axis is the same posture, not a gap in it.
+ *
+ * THEREFORE the tier-B default is not a placeholder awaiting plumbing -- it IS the answer:
+ * a deliberate blended rate, and the only kind of answer a listing-time price can give.
+ * Both directions of that blend, measured by executing this module on a real live package
+ * (the 36x16x5in / 173oz guitar, item cmo3eu1fs0071jqsuty6i4ylj, at z8):
+ *   - UNDER-recovery at a tier-C destination: $6.94 (engine $35.85 blind vs $42.79 to
+ *     Nantucket 02554 -- and note the winning carrier FLIPS to UPS there, which caps the
+ *     gap below the raw $15.03 - $7.90 = $7.13 tier delta).
+ *   - OVER-charge at a measured-clean destination: $7.90 (engine $35.85 blind vs $27.95 to
+ *     90210). This side had never been quantified, and it is the MORE COMMON one: 24 of the
+ *     51 measured ZIPs (47%) are clean, versus 10 (20%) at tier C. The measured set is a
+ *     deliberate surcharge hunt, so neither share is a population frequency -- but the
+ *     blend demonstrably costs buyers at clean destinations more often than it costs the
+ *     organizer at remote ones.
+ * A destination-aware path would fix BOTH. Until one exists, the residual is bounded by the
+ * tier delta ($7.13 max per FedEx-winning package) and applies only when FedEx wins.
+ *
+ * IF A DESTINATION-AWARE PATH IS EVER WANTED, the cheapest real version is eBay CALCULATED
+ * shipping (ebayCalculatedPolicyService), where eBay itself rates against the buyer's ZIP
+ * at checkout and this engine's flat number stops being the price at all. Threading a ZIP
+ * into this engine would additionally require capturing and storing a buyer address that the
+ * schema does not currently have -- a product decision, not a plumbing task.
  */
 export const FEDEX_DESTINATION_SURCHARGE_TIERS = {
   clean: 0,
@@ -1077,10 +1137,16 @@ export function fedexDestinationSurchargeForZip(destZip?: string | null): number
 //     tier-C-default decision and the over-charge that choice accepts at clean destinations.
 //     The cells in THIS table are surcharge-free base freight.
 //   - Rows above 70lb: none. estimateCheapestRate intercepts lb >= 70 with
-//     FEDEX_HIGH_WEIGHT_TOTAL_TABLE, whose own anchors are real eBay totals with UNRECORDED
-//     destinations -- note its z7 and z8 columns are byte-identical at 90/110/130/150lb,
-//     the signature of one destination quoted into two columns. Their surcharge content is
-//     therefore unknown and could not be de-duplicated here. Untouched this pass.
+//     FEDEX_HIGH_WEIGHT_TOTAL_TABLE, whose own anchors are real eBay TOTALS -- base freight
+//     plus whatever accessorial their lane carried, not separable from each other. Their
+//     ACCESSORIAL content is therefore unknown and could not be de-duplicated here.
+//     Untouched this pass. CORRECTED 2026-08-17: this bullet used to say those anchors had
+//     "UNRECORDED destinations" and that the identical z7/z8 columns were "the signature of
+//     one destination quoted into two columns". Both are wrong -- the destinations are
+//     recorded per zone in that table's provenance comment, and the z7/z8 identity is a real
+//     measured FedEx zone grouping. The DESTINATION-surcharge component of those totals is
+//     in fact largely KNOWN (5 of the 8 probe ZIPs are measured-clean, i.e. contribute $0);
+//     it is the AHS/accessorial component that remains un-decomposed. See that table.
 //   - Nothing here is browser-verified. The engine numbers below are reproduced by executing
 //     the module; they are not a claim about what eBay's UI shows today.
 //
@@ -2640,6 +2706,69 @@ export const UPS_HIGH_WEIGHT_TOTAL_TABLE: HighWeightAnchorRow[] = [
   { maxLb: 150, z1: 204.92, z2: 204.92, z3: 216.12, z4: 216.12, z5: 218.17, z6: 226.83, z7: 237.16, z8: 255.18 },
 ];
 
+/**
+ * ── ANCHOR STATUS OF THIS TABLE (audited 2026-08-17) -- READ BEFORE "FIXING" IT ──────────
+ *
+ * The standing complaint about this table is that it is "unanchored -- real eBay TOTALS with
+ * UNRECORDED accessorials baked in, so surcharges cannot be reasoned about separately". That
+ * is HALF right, and the half that is wrong has caused two rounds of wasted effort. Audited
+ * against this file's own recorded provenance; every statement below is checkable from the
+ * comment above and from FEDEX_DESTINATION_SURCHARGE_ZIP_TIER, no new data required.
+ *
+ * WHAT IS ACTUALLY KNOWN
+ *   - The destinations are RECORDED, per zone, in the provenance comment above: z1 49503
+ *     (Grand Rapids), z2 60601 (Chicago), z3 46201 (Indianapolis), z4 63101 (St. Louis),
+ *     z5 67202 (Wichita), z6 80202 (Denver), z7 89101 (Las Vegas), z8 98101 (Seattle);
+ *     origin 49079, box 10x8x6in, weights 90/110/130/150lb. "Never recorded" is false.
+ *   - The DESTINATION-surcharge component of these totals is therefore largely KNOWN, and it
+ *     is mostly ZERO. Cross-referencing those 8 probe ZIPs against
+ *     FEDEX_DESTINATION_SURCHARGE_ZIP_TIER (executed, not eyeballed): FIVE are measured
+ *     'clean' = $0.00 (z1 49503, z3 46201, z6 80202, z7 89101, z8 98101), THREE were never
+ *     measured (z2 60601, z4 63101, z5 67202), and ZERO fall in tiers A/B/C. So no measured
+ *     destination surcharge is baked into any cell of this table, and at five of eight zones
+ *     that is a positive measurement rather than an absence of one.
+ *   - Consequence: estimateCheapestRate zeroing the destination surcharge on this branch is
+ *     CORRECT for those five zones by measurement, not merely cautious. The three unmeasured
+ *     zones are the only place a hidden destination component could be lurking, and closing
+ *     them is DATA not code -- quote 60601/63101/67202 and append to the ZIP tier map.
+ *   - The 70lb row is DERIVED, not measured (see its own inline comment), and its
+ *     decomposition IS already written down there: base + AHS_WEIGHT x 1.19 reconstructs all
+ *     eight cells to +0.1%..+4.4%. That row is not part of the problem.
+ *
+ * WHAT IS GENUINELY NOT KNOWN, AND WHY IT CANNOT BE DERIVED HERE
+ *   The ACCESSORIAL (AHS weight-trigger / Large-Package) component of the 90/110/130/150lb
+ *   rows. Decomposing it requires a clean base freight rate at those weights to subtract, and
+ *   RATE_TABLE_FEDEX HAS NO ROWS ABOVE 70lb -- there is nothing to subtract. The obvious
+ *   shortcut (reuse the 49-51lb eBay-vs-retail discount ratio) was already tried and rejected
+ *   by the session that built this table: that ratio is NOT constant across this weight
+ *   range, which is exactly why real totals were stored instead of a decomposition. Deriving
+ *   numbers anyway would mean inventing a rate table, which is strictly worse than leaving it
+ *   composed -- a fabricated split would look authoritative and silently mis-scale on the
+ *   next surcharge change.
+ *
+ * WHAT DATA WOULD CLOSE IT, AND THE CHEAPEST WAY TO GET IT (no paid API, browser only)
+ *   The same free ebay.com/shp/calc/rates harvest that produced every other cell in this
+ *   file, using the A/B isolation methodology already proven here (see
+ *   AHS_WEIGHT_SURCHARGE_FEDEX_MULTIPLIER's derivation):
+ *     (a) For each of 90/110/130/150lb, one quote at a SMALL, non-dimension-triggering box
+ *         (10x8x6in, as used here) and one at a shape that trips ONLY the dimension trigger,
+ *         same weight and same destination -- the delta isolates the dimension accessorial.
+ *     (b) A weight-trigger A/B is NOT obtainable at these weights: the >50lb AHS trigger is
+ *         already active at 90lb and cannot be turned off, so the only way to separate base
+ *         from AHS is a published FedEx Ground base rate card at 90-150lb (list rates, then
+ *         solve for the eBay negotiated ratio at each weight) -- the same primary source
+ *         already used to rebuild RATE_TABLE_FEDEX, just extended past its 70lb ceiling.
+ *     (c) 3 quotes to close the unmeasured destination ZIPs above (60601, 63101, 67202),
+ *         which is independent of (a)/(b) and much cheaper.
+ *   Until (b) exists, this table stays composed and estimateCheapestRate keeps zeroing
+ *   surcharges on this branch. That is the correct posture, not a deferral.
+ *
+ * PRIORITY, WITH REAL NUMBERS (production DB, 2026-08-17): this branch is reached by ONE of
+ * 153 items that have a package -- a 15lb folding-chair set whose 136.75lb DIMENSIONAL weight
+ * trips the >=70lb billable threshold, and which is not listed on eBay. ZERO items have an
+ * actual weight >= 70lb. So the un-decomposed accessorial has no measured live exposure at
+ * all today; this is a correctness/maintainability debt, not a money leak.
+ */
 export const FEDEX_HIGH_WEIGHT_TOTAL_TABLE: HighWeightAnchorRow[] = [
   { maxLb: 70,  z1: 77.51,  z2: 83.44,  z3: 87.24,  z4: 90.81,  z5: 103.70, z6: 103.70, z7: 117.09, z8: 124.99 }, // 70lb row CORRECTED 2026-08-16. PRIOR CELLS, PRESERVED: z1/z2 93.61, z3/z4 110.42, z5 135.90, z6 150.17, z7 171.01, z8 184.48 -- those exceeded this table's OWN real 90lb quotes at 7 of 8 zones (z8 184.48 at 70lb vs a real 129.52 at 90lb: 43% MORE money for 20 FEWER pounds), 7 weight-monotonicity violations, all now closed. The numbers below are not new: they are the eight values that until this pass sat in RATE_TABLE_FEDEX's 70lb row, i.e. the observed 70lb TOTALS (base freight + the >50lb accessorial already inside them) -- which is exactly what THIS table is defined to hold, and the reason they were wrong where they were. z8 124.99 is a real live eBay quote (2026-08-11 full-column re-anchor); z1-z7 are the pre-existing curve-shape-scaled values, unchanged in magnitude, only relocated. Cross-check: base+AHS reconstruction gives 79.01/86.07/91.12/92.31/104.71/104.71/117.19/129.92, within +0.1%..+4.4% of these
   { maxLb: 90,  z1: 90.96,  z2: 96.88,  z3: 97.32,  z4: 100.75, z5: 111.61, z6: 111.61, z7: 129.52, z8: 129.52 },
@@ -2984,6 +3113,17 @@ export async function computeCheapestForOrigin(input: {
   categoryId?: string | null;
   /** See estimateCheapestRate's `priceUsd` -- passed through unchanged, optional. */
   priceUsd?: number | null;
+  /** See estimateCheapestRate's `destinationZip` -- passed through unchanged, optional.
+   *  ADDED 2026-08-17 to close the one broken link in an otherwise complete chain: the
+   *  parameter existed on estimateCheapestRate (and on computeSurchargeForCarrier, and
+   *  fedexDestinationSurchargeForZip existed to serve it) but THIS wrapper -- which is what
+   *  every live caller actually calls -- neither accepted nor forwarded it, so no caller
+   *  COULD have supplied one even if it had a ZIP to supply. Omitting it changes nothing:
+   *  undefined resolves to FEDEX_DESTINATION_SURCHARGE_UNMAPPED_TIER exactly as before.
+   *  Read the "DESTINATION ZIP IS NOT AVAILABLE AT PRICING TIME" block above
+   *  FEDEX_DESTINATION_SURCHARGE_TIERS before assuming this is now usable on the live
+   *  path -- it is plumbing for a destination-aware surface that does not exist yet. */
+  destinationZip?: string | null;
 }): Promise<CheapestRate> {
   const zone = await resolveCoverageZone(input.origin);
   return estimateCheapestRate({
@@ -2994,5 +3134,6 @@ export async function computeCheapestForOrigin(input: {
     category: input.category ?? null,
     categoryId: input.categoryId ?? null,
     priceUsd: input.priceUsd ?? null,
+    destinationZip: input.destinationZip ?? null,
   });
 }

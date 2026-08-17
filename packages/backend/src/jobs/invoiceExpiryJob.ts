@@ -5,6 +5,7 @@ import { cronGuard } from '../utils/cronGuard';
 import { getStripe } from '../utils/stripe';
 import { markHoldInvoicePaid } from '../services/holdInvoicePaymentRecorder'; // payments fix (2026-08-03): STRANDED-PAID reconcile backstop
 import { createNotification } from '../lib/notificationService'; // S1195 sweep continuation (2026-08-08): invoice_expired notification-gap fix
+import { expireCheckoutSessionSafely } from '../utils/expireCheckoutSession'; // P1 (2026-08-17): expired invoices must not leave a PAYABLE Stripe session behind
 
 /**
  * invoiceExpiryJob.ts
@@ -104,6 +105,50 @@ import { createNotification } from '../lib/notificationService'; // S1195 sweep 
 
 const stripe = () => getStripe();
 
+/**
+ * One-shot organizer nudge for a POS cash invoice that expired with no Stripe ground
+ * truth (P1 reclaim-path fix, 2026-08-17).
+ *
+ * Idempotency: this cron runs every 10 minutes and the invoice it is reporting on stays
+ * PENDING indefinitely (nothing auto-reverts it, by design), so an unguarded notify
+ * would spam the organizer every 10 minutes forever. Notification has no unique key to
+ * upsert against, so the guard is an explicit lookup on (userId, type, link) -- the link
+ * carries the invoice id, making it unique per invoice.
+ */
+async function notifyOrganizerNoSessionOnce(
+  invoiceId: string,
+  organizerUserId: string,
+  saleId: string,
+  itemIds: string[]
+): Promise<void> {
+  try {
+    // saleId filters the Holds page (it already reads ?saleId); the invoice id is what
+    // makes this link — and therefore the dedupe lookup below — unique per invoice.
+    const link = `/organizer/holds?saleId=${saleId}&invoice=${invoiceId}`;
+    const existing = await prisma.notification.findFirst({
+      where: { userId: organizerUserId, type: 'invoice_needs_review', link },
+      select: { id: true },
+    });
+    if (existing) return;
+
+    const itemCount = itemIds.length;
+    await createNotification({
+      userId: organizerUserId,
+      type: 'invoice_needs_review',
+      title: 'A cash payment request needs your review',
+      body:
+        itemCount > 1
+          ? `A cash payment request for ${itemCount} items has passed its deadline. If the shopper already paid you, nothing to do. If not, cancel the request from your Holds page so the items go back on sale.`
+          : 'A cash payment request has passed its deadline. If the shopper already paid you, nothing to do. If not, cancel the request from your Holds page so the item goes back on sale.',
+      link,
+      channel: 'OPERATIONAL',
+      sendEmail: true,
+    });
+  } catch (err) {
+    console.error(`[invoiceExpiryJob] Failed to notify organizer ${organizerUserId} about no-session invoice ${invoiceId}:`, err);
+  }
+}
+
 export const reclaimExpiredInvoices = async (): Promise<void> => {
   if (process.env.INVOICE_EXPIRY_RECLAIM_DISABLED === '1') {
     console.log('[invoiceExpiryJob] Disabled via INVOICE_EXPIRY_RECLAIM_DISABLED=1 -- skipping run.');
@@ -122,6 +167,17 @@ export const reclaimExpiredInvoices = async (): Promise<void> => {
         shopperUserId: true,
         invoiceMode: true,
         expiresAt: true,
+        // Discriminates the two NO-SESSION classes (P1 reclaim-path fix, 2026-08-17):
+        // cartSessionId is set ONLY by posController.createCombinedInvoice (POS cart),
+        // never by sendHoldInvoice. See the NO-SESSION branch below.
+        cartSessionId: true,
+        cashAmountCents: true,
+        organizerUserId: true,
+        saleId: true,
+        // Needed to close a Direct-charge Checkout Session: it lives on the connected
+        // account, and a platform-scoped expire() returns "No such checkout session"
+        // (P1, 2026-08-17). HoldInvoice has no persisted stripeAccountId column.
+        sale: { select: { organizer: { select: { stripeConnectId: true } } } },
       },
     });
 
@@ -178,19 +234,42 @@ export const reclaimExpiredInvoices = async (): Promise<void> => {
 
             continue;
           }
-        } else {
-          // No Stripe Checkout Session on this invoice -- sendHoldInvoice
-          // ("no actual Stripe Checkout") or a cash-only Open Cart invoice.
-          // No ground truth exists to verify a completed cash sale against.
-          const noSessionMsg = `[invoiceExpiryJob] NO-SESSION-SKIPPED invoice=${invoice.id} mode=${invoice.invoiceMode} itemIds=${invoice.itemIds.join(',') || '(none)'} -- expired with no stripeSessionId (cash-only or no-checkout invoice). NOT auto-reverting; needs manual/organizer review.`;
+        } else if (invoice.cartSessionId) {
+          // POS cart invoice with NO Stripe session -- a cash-only split
+          // (createCombinedInvoice, cardAmountCents = 0, "Full payment collected at
+          // POS"). The organizer may genuinely have taken the cash and handed the item
+          // over, and HoldInvoice carries no cash-confirmation flag to check that
+          // against, so auto-reverting could re-list a sold item. Still skipped
+          // deliberately -- but no longer a dead end (see below).
+          const noSessionMsg = `[invoiceExpiryJob] NO-SESSION-SKIPPED invoice=${invoice.id} mode=${invoice.invoiceMode} cart=${invoice.cartSessionId} cash=${invoice.cashAmountCents ?? 0} itemIds=${invoice.itemIds.join(',') || '(none)'} -- expired POS cash invoice, no Stripe ground truth. NOT auto-reverting; organizer can cancel the request from Holds to reclaim the item.`;
           console.warn(noSessionMsg);
           try {
             Sentry.captureMessage(noSessionMsg, 'warning');
           } catch {
             // Sentry may not be initialized -- silently continue
           }
+
+          // P1 fix (2026-08-17): items on these invoices used to sit at INVOICE_ISSUED
+          // FOREVER with no reclaim path at all -- this branch logged and moved on, and
+          // nothing else in the codebase touched them. The organizer is the only party
+          // who knows whether the cash was collected, so tell them, once, and point them
+          // at the control that reclaims it (POST /reservations/:id/release-invoice, now
+          // wired to the "Cancel payment request" button on /organizer/holds). Guarded so
+          // this 10-minute cron does not re-notify on every pass for the life of the row.
+          await notifyOrganizerNoSessionOnce(invoice.id, invoice.organizerUserId, invoice.saleId, invoice.itemIds);
+
           skippedNoSession++;
           continue;
+        } else {
+          // sendHoldInvoice's "simplified for MVP -- no actual Stripe Checkout" invoice:
+          // there is NO payment mechanism attached to it at all, on any account. It can
+          // never have been paid, so unlike the cash case above there is no ambiguity
+          // and nothing to guess at -- reverting is unambiguously correct, and NOT
+          // reverting is what leaves the item unsellable forever. Falls through to the
+          // normal revert transaction below (which is already guarded on
+          // Item.status = INVOICE_ISSUED, so an item settled through another channel in
+          // the meantime is never dragged backwards).
+          console.log(`[invoiceExpiryJob] NO-SESSION-RECLAIM invoice=${invoice.id} mode=${invoice.invoiceMode} itemIds=${invoice.itemIds.join(',') || '(none)'} -- no Stripe Checkout was ever created for this invoice (sendHoldInvoice MVP path), so it cannot have been paid. Reverting.`);
         }
 
         const result = await prisma.$transaction(async (tx) => {
@@ -199,7 +278,13 @@ export const reclaimExpiredInvoices = async (): Promise<void> => {
           // and the whole revert below is skipped.
           const invoiceFlip = await tx.holdInvoice.updateMany({
             where: { id: invoice.id, status: 'PENDING' },
-            data: { status: 'EXPIRED' },
+            // P0 fix (2026-08-17): null the @unique `reservationId` anchor in the same
+            // flip. HoldInvoice_reservationId_key is live in Postgres and nothing ever
+            // cleared it, so one expired invoice permanently bricked that hold -- every
+            // later invoice attempt died with P2002 on reservationId. Clearing
+            // ItemReservation.invoiceId below was only half the link; this is the other
+            // half. `itemIds` still records everything this invoice billed.
+            data: { status: 'EXPIRED', reservationId: null },
           });
           if (invoiceFlip.count === 0) {
             return { reverted: false };
@@ -220,7 +305,10 @@ export const reclaimExpiredInvoices = async (): Promise<void> => {
           // both refuse to act on a reservation with invoiceId still set).
           await tx.itemReservation.updateMany({
             where: { invoiceId: invoice.id },
-            data: { status: 'CONFIRMED', invoiceId: null },
+            // invoiceClaimToken/invoiceClaimedAt cleared too (2026-08-17), matching
+            // releaseInvoice: a stale in-flight claim left on a reverted hold fails
+            // invoiceableWhere() and blocks the retry this revert exists to enable.
+            data: { status: 'CONFIRMED', invoiceId: null, invoiceClaimToken: null, invoiceClaimedAt: null },
           });
 
           return { reverted: true };
@@ -251,13 +339,27 @@ export const reclaimExpiredInvoices = async (): Promise<void> => {
           sendEmail: true,
         }).catch((err: unknown) => console.error(`[invoiceExpiryJob] Failed to create invoice_expired notification for invoice ${invoice.id}:`, err));
 
-        // Best-effort Stripe-side cancellation -- non-fatal, mirrors
-        // reservationController.ts's releaseInvoice exactly (Stripe likely
-        // already auto-expired the session at the same expires_at anyway).
-        try {
-          await stripe().checkout.sessions.expire(invoice.stripeSessionId!);
-        } catch (stripeErr: any) {
-          console.warn(`[invoiceExpiryJob] Failed to expire Stripe session ${invoice.stripeSessionId} for invoice ${invoice.id} (non-fatal):`, stripeErr?.message ?? stripeErr);
+        // Stripe-side cancellation. Non-fatal to this job, but NOT best-effort-and-
+        // forget any more (P1, 2026-08-17): the items were just handed back to RESERVED,
+        // so a Checkout Session left OPEN is a live payment link against stock that is
+        // on sale again. expireCheckoutSessionSafely retrieves first (finding
+        // connected-account sessions, and treating an already-terminal session as the
+        // success it is rather than an error) and reports any session that survives
+        // still-payable to Sentry. Mirrors releaseInvoice, which uses the same helper.
+        // NOTE: the Stripe expires_at handed to Checkout is CLAMPED up to Stripe's
+        // 30-minute floor (utils/stripeCheckoutExpiry.ts), so a session can and does
+        // outlive its HoldInvoice.expiresAt by up to ~31 minutes -- "Stripe already
+        // auto-expired it" is not a safe assumption on this path.
+        // Null-guarded: the NO-SESSION-RECLAIM branch above now reaches this point too,
+        // and it has no session to close by definition.
+        if (invoice.stripeSessionId) {
+          const closure = await expireCheckoutSessionSafely(invoice.stripeSessionId, {
+            stripeAccount: invoice.sale?.organizer?.stripeConnectId ?? null,
+            context: `invoiceExpiryJob invoice=${invoice.id}`,
+          });
+          if (closure.stillPayable) {
+            console.error(`[invoiceExpiryJob] Invoice ${invoice.id} reverted but its Checkout Session ${invoice.stripeSessionId} is STILL PAYABLE (${closure.state}). Reported to Sentry.`);
+          }
         }
 
         reclaimed++;

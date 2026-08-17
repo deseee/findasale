@@ -217,6 +217,13 @@ async function handleCreateItem(operation: SyncOperation, organizerId: string) {
         ebayShippingClassification: classifyEbayShipping(payload.category ?? null, payload.tags || []),
         saleId: operation.saleId,
         organizerId,
+        // Item.embedding is NOT NULL with NO database default -- migration
+        // 20260307153530_add_coupon_model:74 runs ALTER COLUMN "embedding" DROP DEFAULT.
+        // Prisma omits unspecified scalar-list fields, so this create() threw
+        // "Null constraint violation on the fields: (`embedding`)" on EVERY offline-sync
+        // CREATE_ITEM, and the catch below returns retryable:true -- an infinite retry
+        // loop for offline item creation. itemController.ts:406/600 already pass this.
+        embedding: [],
       },
     });
 

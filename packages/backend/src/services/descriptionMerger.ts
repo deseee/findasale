@@ -8,12 +8,76 @@
  * - Voice content always appears BEFORE auto-generated content
  * - Voice writes always append (organizer may intentionally re-record)
  * - Auto writes use novelty check to prevent duplication on re-analyze
- * - Sentinel string separates the two blocks and is visible to shoppers
+ * - A boundary separates the two blocks. The boundary has TWO layers that are
+ *   deliberately independent (see BOUNDARY_MARK below): an invisible structural
+ *   marker that the parser keys off, and a visible heading that is pure copy.
  * - Source enum is "VOICE" | "AUTO" (D-006: never "AI" in API surfaces)
  */
 
-export const SENTINEL = '\n\n— Item details —\n\n'; // em-dash U+2014
+/**
+ * STRUCTURAL LAYER — the parse boundary. Never rendered, never reworded.
+ *
+ * U+2063 INVISIBLE SEPARATOR: zero-width, produces no glyph in any renderer,
+ * and cannot be produced by a keyboard, a voice transcript or an AI caption.
+ * The parser looks for a PAIR of these and splits on what sits between them.
+ *
+ * Why this exists (BQ row, found 2026-08-12): the old boundary was the literal
+ * string '\n\n— Item details —\n\n', which was simultaneously (a) copy shown to
+ * shoppers and (b) the parse delimiter. That coupling caused two real defects:
+ *   1. Rewording the heading — including the D-011 em-dash cleanup — silently
+ *      broke splitting on every description already stored with the old wording.
+ *   2. Any description that happened to contain that exact heading text split in
+ *      the wrong place, corrupting the voice/auto merge.
+ * Separating the layers fixes both: the heading below can now be reworded freely
+ * without touching parsing, and shopper-authored text can never collide with the
+ * boundary because it cannot contain U+2063.
+ */
+const BOUNDARY_MARK = '\u2063';
+
+/**
+ * COPY LAYER — the shopper-facing heading. Safe to reword or restyle at any
+ * time: parsing does not depend on a single character of it.
+ */
+export const DETAILS_HEADING = '— Item details —';
+
+/** The boundary written by every compose from now on. */
+export const SENTINEL = `\n\n${BOUNDARY_MARK}${DETAILS_HEADING}${BOUNDARY_MARK}\n\n`;
+
+/**
+ * Exact boundary written before the copy/parse split. READ-ONLY — never written
+ * again, but must keep parsing forever because production descriptions contain
+ * it (6 Item rows at the time of the change, confirmed by direct query).
+ */
+export const LEGACY_SENTINEL = '\n\n— Item details —\n\n';
+
+/**
+ * Structural boundary: any heading wrapped in a pair of invisible markers.
+ * Non-greedy so the FIRST boundary wins if a description somehow has two.
+ */
+const BOUNDARY_RE = new RegExp(`\\s*${BOUNDARY_MARK}[^${BOUNDARY_MARK}]*${BOUNDARY_MARK}\\s*`);
+
+/**
+ * Legacy boundary, matched by shape rather than by one exact string so that
+ * rows written with an em dash, en dash or hyphen all still split. Only
+ * consulted when no structural marker is present, so it can never override the
+ * real boundary on a modern row.
+ */
+const LEGACY_BOUNDARY_RE = /\n[ \t]*\n[ \t]*[—–-]\s*Item details\s*[—–-][ \t]*\n[ \t]*\n/;
+
 export const MAX_DESCRIPTION_LENGTH = 5000;
+
+/**
+ * Remove structural markers from a string.
+ *
+ * Two uses:
+ *  - sanitising text coming IN, so a pasted or scraped value can never inject a
+ *    boundary into someone's description;
+ *  - scrubbing text going OUT to a surface where stray control characters are
+ *    unwelcome (feeds, exports, meta tags).
+ */
+export function stripStructuralMarkers(text: string): string {
+  return text.split(BOUNDARY_MARK).join('');
+}
 
 export type DescriptionSource = 'VOICE' | 'AUTO';
 
@@ -24,23 +88,42 @@ export interface ComposeResult {
 }
 
 /**
- * Split a stored description into [voiceBlock, autoBlock] using the SENTINEL.
- * Legacy items written before this endpoint existed have no sentinel —
- * treat their entire contents as autoBlock so the next voice append produces
- * the correct organizer-first ordering.
+ * Split a stored description into [voiceBlock, autoBlock].
+ *
+ * Three cases, tried in order — this is what makes the change safe against
+ * data already in the database:
+ *  1. Structural marker present  → split there. Current format.
+ *  2. No marker, legacy heading  → split there. Rows written before the
+ *     copy/parse split; they are rewritten in the modern format on the next
+ *     compose, so the old format drains itself rather than needing a backfill.
+ *  3. Neither → the whole thing is autoBlock, so the next voice append still
+ *     produces the correct organizer-first ordering. Unchanged behaviour for
+ *     items that predate this endpoint entirely.
+ *
+ * Markers are stripped from both blocks, so a stray unpaired marker can never
+ * survive into a composed description.
  */
 export function splitOnSentinel(current: string | null | undefined): { voiceBlock: string; autoBlock: string } {
   const text = (current ?? '').trim();
   if (!text) return { voiceBlock: '', autoBlock: '' };
 
-  const idx = text.indexOf(SENTINEL);
-  if (idx === -1) {
-    return { voiceBlock: '', autoBlock: text };
+  const structural = BOUNDARY_RE.exec(text);
+  if (structural) {
+    return {
+      voiceBlock: stripStructuralMarkers(text.slice(0, structural.index)).trim(),
+      autoBlock: stripStructuralMarkers(text.slice(structural.index + structural[0].length)).trim(),
+    };
   }
-  return {
-    voiceBlock: text.slice(0, idx).trim(),
-    autoBlock: text.slice(idx + SENTINEL.length).trim(),
-  };
+
+  const legacy = LEGACY_BOUNDARY_RE.exec(text);
+  if (legacy) {
+    return {
+      voiceBlock: text.slice(0, legacy.index).trim(),
+      autoBlock: text.slice(legacy.index + legacy[0].length).trim(),
+    };
+  }
+
+  return { voiceBlock: '', autoBlock: stripStructuralMarkers(text) };
 }
 
 /**
@@ -188,7 +271,9 @@ export function composeDescription(
   incoming: string,
   source: DescriptionSource
 ): ComposeResult {
-  const trimmed = (incoming ?? '').trim();
+  // Sanitise first: incoming text must never be able to carry a structural
+  // marker into storage, or it could forge a boundary in someone's description.
+  const trimmed = stripStructuralMarkers(incoming ?? '').trim();
 
   if (!trimmed) {
     return { description: current ?? '', appended: false, reason: 'empty' };

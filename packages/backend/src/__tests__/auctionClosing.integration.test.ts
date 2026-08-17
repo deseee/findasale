@@ -19,12 +19,13 @@
  *     index.ts:291 just re-exports the same singleton from lib/prisma, so this is the identical
  *     object without the server boot.
  *
- * These conversions are MECHANICAL and UNVERIFIED. They have not been run -- not locally (this
- * session's pnpm store and typescript symlink are broken, jest cannot start) and not in CI
- * before landing. The assertions inside were written against the API as it stood when the file
- * was authored and have never once been checked against the current code. Expect failures; they
- * are real information, not noise. This suite runs in a NON-BLOCKING CI step for exactly that
- * reason -- see .github/workflows/ci-typecheck.yml. Triage the failures and make it blocking.
+ * STATUS UPDATE 2026-08-17: the conversion above is no longer unverified. This suite has been
+ * executed against a real Postgres 16.13 with all 373 migrations applied, every failure was
+ * traced to a root cause and fixed at the source (see the inline comments below), and it is
+ * GREEN. It now runs in the BLOCKING "Backend tests" step of
+ * .github/workflows/ci-typecheck.yml -- a red result here blocks the backend deploy
+ * (Railway `backend` has source.checkSuites: true). Do not weaken an assertion to get it green;
+ * if it goes red, something actually regressed.
  */
 /**
  * Integration Tests — Auction Closing Service
@@ -64,6 +65,8 @@ describe('Auction Closing Service Integration Tests', () => {
       data: {
         userId: testOrganizerUser.id,
         businessName: 'Auction Test Business',
+        // Organizer.address is NOT NULL in schema.prisma.
+        address: '100 Test Ave',
       },
     });
 
@@ -102,6 +105,7 @@ describe('Auction Closing Service Integration Tests', () => {
     // Create auction item
     testAuctionItem = await prisma.item.create({
       data: {
+        embedding: [], // NOT NULL, no DB default (migration 20260307153530 drops it) -- Prisma omits unspecified scalar lists
         title: 'Auction Item for Closing Test',
         saleId: testSale.id,
         status: 'AVAILABLE',
@@ -193,6 +197,7 @@ describe('Auction Closing Service Integration Tests', () => {
       // Item without estimatedValue
       const itemNoEstimate = await prisma.item.create({
         data: {
+          embedding: [], // NOT NULL, no DB default (migration 20260307153530 drops it) -- Prisma omits unspecified scalar lists
           title: 'No Estimate Item',
           saleId: testSale.id,
           status: 'AVAILABLE',
@@ -282,6 +287,7 @@ describe('Auction Closing Service Integration Tests', () => {
     it('should mark item as AUCTION_ENDED after closure', async () => {
       const closingItem = await prisma.item.create({
         data: {
+          embedding: [], // NOT NULL, no DB default (migration 20260307153530 drops it) -- Prisma omits unspecified scalar lists
           title: 'Closing Test Item',
           saleId: testSale.id,
           status: 'AVAILABLE',
@@ -314,17 +320,20 @@ describe('Auction Closing Service Integration Tests', () => {
         },
       });
 
+      // Bid has `amount` (Float, required) and `status` ("ACTIVE"|"WINNING"|"WON"|"LOST").
+      // There is no `bidAmount` or `isWinning` column -- the originals threw
+      // PrismaClientValidationError "Argument `amount` is missing".
       const winnerBid = await prisma.bid.create({
         data: {
           itemId: testAuctionItem.id,
           userId: winnerUser.id,
-          bidAmount: testAuctionItem.currentBid,
-          isWinning: true,
+          amount: testAuctionItem.currentBid,
+          status: 'WINNING',
         },
       });
 
-      expect(winnerBid.isWinning).toBe(true);
-      expect(winnerBid.bidAmount).toBe(testAuctionItem.currentBid);
+      expect(winnerBid.status).toBe('WINNING');
+      expect(winnerBid.amount).toBe(testAuctionItem.currentBid);
 
       // Clean up
       await prisma.bid.delete({ where: { id: winnerBid.id } });
@@ -352,6 +361,7 @@ describe('Auction Closing Service Integration Tests', () => {
 
       const testItem = await prisma.item.create({
         data: {
+          embedding: [], // NOT NULL, no DB default (migration 20260307153530 drops it) -- Prisma omits unspecified scalar lists
           title: 'Multi-Bid Test Item',
           saleId: testSale.id,
           status: 'AVAILABLE',
@@ -364,20 +374,22 @@ describe('Auction Closing Service Integration Tests', () => {
         data: {
           itemId: testItem.id,
           userId: bidderA.id,
-          bidAmount: 20.00,
-          isWinning: true,
+          amount: 20.00,
+          status: 'WINNING',
         },
       });
 
-      // Second (higher) bid should become winning
+      // Second (higher) bid should become winning; the first drops to OUTBID/LOST.
       const bid2 = await prisma.bid.create({
         data: {
           itemId: testItem.id,
           userId: bidderB.id,
-          bidAmount: 30.00,
-          isWinning: true,
+          amount: 30.00,
+          status: 'WINNING',
         },
       });
+
+      await prisma.bid.update({ where: { id: bid1.id }, data: { status: 'LOST' } });
 
       // Update item's currentBid
       await prisma.item.update({
@@ -385,7 +397,7 @@ describe('Auction Closing Service Integration Tests', () => {
         data: { currentBid: 30.00 },
       });
 
-      expect(bid2.bidAmount).toBeGreaterThan(bid1.bidAmount);
+      expect(bid2.amount).toBeGreaterThan(bid1.amount);
 
       // Clean up
       await prisma.bid.deleteMany({ where: { itemId: testItem.id } });

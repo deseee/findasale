@@ -19,12 +19,15 @@
  *     index.ts:291 just re-exports the same singleton from lib/prisma, so this is the identical
  *     object without the server boot.
  *
- * These conversions are MECHANICAL and UNVERIFIED. They have not been run -- not locally (this
- * session's pnpm store and typescript symlink are broken, jest cannot start) and not in CI
- * before landing. The assertions inside were written against the API as it stood when the file
- * was authored and have never once been checked against the current code. Expect failures; they
- * are real information, not noise. This suite runs in a NON-BLOCKING CI step for exactly that
- * reason -- see .github/workflows/ci-typecheck.yml. Triage the failures and make it blocking.
+ * STATUS UPDATE 2026-08-17: the conversion above is no longer unverified. This suite has been
+ * executed against a real Postgres 16.13 with all 373 migrations applied. 15 of its 17 tests
+ * pass. The two auction-fee tests FAIL, and they fail on a real bug rather than a test defect:
+ * stripeController.createPaymentIntent adds the 5% auction buyer premium into the charge total
+ * (line 635) and then adds it AGAIN as application_fee_amount (line 676), so an auction buyer is
+ * charged a 10% premium instead of the 5% line 634's own comment describes. Those assertions
+ * were deliberately NOT rewritten to match the buggy output. Because of that, this ONE suite
+ * stays in a separate NON-BLOCKING CI step -- see .github/workflows/ci-typecheck.yml. Fold it
+ * back into the blocking step once the double-count is resolved.
  */
 /**
  * E2E Tests — Stripe Connect Express Onboarding + Fee Capture
@@ -78,13 +81,18 @@ jest.mock('../utils/stripe', () => ({
   default: jest.fn(),
 }));
 
-// ── Resend mock (receipt emails) ──────────────────────────────────────────────
+// ── Receipt-email mock ────────────────────────────────────────────────────────
+// RAIL CORRECTION (2026-08-17): this mocked `resend` directly, but stripeController's
+// sendReceiptEmail (line 225) calls `transactionalEmailService.emails.send(...)`. Mocking
+// `resend` intercepted nothing the code under test calls, so mockResendSend was never
+// invoked. Mock the service the controller actually uses -- same { from, to, subject, html }
+// payload shape, so the assertions below are unchanged.
 var mockResendSend = jest.fn().mockResolvedValue({ id: 'mock-receipt-id', error: null });
 
-jest.mock('resend', () => ({
-  Resend: jest.fn().mockImplementation(() => ({
+jest.mock('../lib/transactionalEmailService', () => ({
+  transactionalEmailService: {
     emails: { send: mockResendSend },
-  })),
+  },
 }));
 
 // ── Import controllers AFTER mocks are hoisted ────────────────────────────────
@@ -105,7 +113,13 @@ const makeMockRes = () => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-const STRIPE_CONNECT_ID = 'acct_test_stripe_e2e';
+// NOT an 'acct_test_' prefix. stripeController.ts:696 gates Connect routing on
+// `stripeConnectId && !stripeConnectId.startsWith('acct_test_')` -- a deliberate guard so
+// obviously-fake ids never route a live charge. The original 'acct_test_stripe_e2e' tripped
+// that guard, so createPaymentIntent took the NON-Connect branch and emitted a PaymentIntent
+// with no application_fee_amount and no transfer_data at all. Every fee assertion in this
+// file was checking a code path the fixture had switched off.
+const STRIPE_CONNECT_ID = 'acct_e2estripeconnect';
 
 describe('Stripe Connect + Fee Capture E2E', () => {
   let testOrganizerUser: any;
@@ -201,6 +215,7 @@ describe('Stripe Connect + Fee Capture E2E', () => {
     // Regular item ($100.00)
     testItem = await prisma.item.create({
       data: {
+        embedding: [], // NOT NULL, no DB default (migration 20260307153530 drops it) -- Prisma omits unspecified scalar lists
         title:  'Vintage Lamp',
         price:  100.00,
         status: 'AVAILABLE',
@@ -211,6 +226,7 @@ describe('Stripe Connect + Fee Capture E2E', () => {
     // Auction item (currentBid $200.00, auctionStartPrice $50.00)
     testAuctionItem = await prisma.item.create({
       data: {
+        embedding: [], // NOT NULL, no DB default (migration 20260307153530 drops it) -- Prisma omits unspecified scalar lists
         title:             'Antique Clock',
         auctionStartPrice: 50.00,
         currentBid:        200.00,
@@ -345,7 +361,11 @@ describe('Stripe Connect + Fee Capture E2E', () => {
   describe('createPaymentIntent — regular sale (5% fee)', () => {
     const PRICE          = 100.00;
     const EXPECTED_CENTS = Math.round(PRICE * 100);          // 10000
-    const EXPECTED_FEE   = Math.round(PRICE * 100 * 0.05);   // 500 (5%)
+    // 10%, not 5%. STACK.md 'Fee Structure' locks the SIMPLE-tier default platform fee at
+    // 10% (8% for PRO/TEAMS), and utils/feeCalculator.getPlatformFeeRate returns 0.10 for
+    // the SIMPLE tier this fixture's organizer is on. The 0.05 here was a stale figure that
+    // never matched shipped behaviour -- this file had never run.
+    const EXPECTED_FEE   = Math.round(PRICE * 100 * 0.10);   // 1000 (10%)
 
     let capturedPiArgs: any;
     let capturedRes: any;
@@ -376,7 +396,7 @@ describe('Stripe Connect + Fee Capture E2E', () => {
       expect(capturedPiArgs.currency).toBe('usd');
       expect(capturedPiArgs.application_fee_amount).toBe(EXPECTED_FEE);
       expect(capturedPiArgs.transfer_data).toEqual({ destination: STRIPE_CONNECT_ID });
-      console.log(`✓ PI created: $${PRICE} item → $${EXPECTED_FEE / 100} fee (5%)`);
+      console.log(`✓ PI created: $${PRICE} item → $${EXPECTED_FEE / 100} fee (10%)`);
     });
 
     it('should create a PENDING Purchase record in the DB', async () => {
@@ -555,7 +575,7 @@ describe('Stripe Connect + Fee Capture E2E', () => {
     });
 
     it('should update Purchase status to PAID', async () => {
-      const purchase = await prisma.purchase.findUnique({
+      const purchase = await prisma.purchase.findFirst({
         where: { stripePaymentIntentId: WEBHOOK_PI_ID },
       });
       expect(purchase?.status).toBe('PAID');
@@ -632,7 +652,7 @@ describe('Stripe Connect + Fee Capture E2E', () => {
 
       await webhookHandler(req, res);
 
-      const purchase = await prisma.purchase.findUnique({
+      const purchase = await prisma.purchase.findFirst({
         where: { stripePaymentIntentId: WEBHOOK_PI_ID },
       });
       expect(purchase?.status).toBe('FAILED');

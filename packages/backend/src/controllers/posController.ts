@@ -26,7 +26,7 @@ import { commitItemSale, ItemAlreadyCommittedError } from '../services/itemSaleG
 import { resolveOrganizerOrTeamMember } from '../utils/posAuth'; // S1183 Fix 1: TEAM_MEMBER fallback for non-venue POS
 import { stripeCheckoutExpiry } from '../utils/stripeCheckoutExpiry'; // Hold-to-Pay P0 (2026-08-16): Stripe expires_at floor/ceiling clamp
 import { shouldUseDirectCharge } from '../services/stripeConnectService'; // Direct-charges migration (2026-08-08): staged-rollout routing decision
-import { invoiceableWhere, isInvoicedOrClaimed } from '../services/holdInvoiceClaim'; // Hold-to-Pay P0 (2026-08-16): non-FK invoice claim must be visible to every hold read site
+import { invoiceableWhere, isInvoicedOrClaimed, releaseDeadInvoiceAnchors } from '../services/holdInvoiceClaim'; // Hold-to-Pay P0 (2026-08-16): non-FK invoice claim must be visible to every hold read site; P0 (2026-08-17): dead-anchor release
 
 const stripe = () => getStripe();
 
@@ -632,6 +632,14 @@ export const sendHoldInvoice = async (req: AuthRequest, res: Response) => {
     const grandTotal = heldItemTotal + miscTotal;
     const holdFeeRate = getPlatformFeeRate(organizer.subscriptionTier as SubscriptionTier);
     const platformFeeAmount = Math.round(grandTotal * holdFeeRate);
+
+    // P0 fix (2026-08-17): HoldInvoice.reservationId is @unique
+    // (HoldInvoice_reservationId_key, confirmed live in Postgres) and, before this,
+    // nothing ever nulled it -- one released or expired invoice bricked that hold
+    // forever with P2002 on the next attempt, on ALL THREE creation paths including
+    // this one. Terminal transitions now null the anchor; this clears any dead anchor
+    // left behind before that shipped. See services/holdInvoiceClaim.ts.
+    await releaseDeadInvoiceAnchors(prisma, [reservationId]);
 
     // Create HoldInvoice record (simplified for MVP — no actual Stripe Checkout)
     const holdInvoice = await prisma.holdInvoice.create({
@@ -1351,6 +1359,12 @@ export const createCombinedInvoice = async (req: AuthRequest, res: Response) => 
 
     // Create HoldInvoice in transaction
     const holdInvoice = await prisma.$transaction(async (tx) => {
+      // P0 fix (2026-08-17): clear any dead (CANCELLED/EXPIRED) HoldInvoice still
+      // anchored to these reservations before inserting -- HoldInvoice.reservationId is
+      // @unique and the anchor was never released. Scoped to the reservations this
+      // invoice will cover. See services/holdInvoiceClaim.ts.
+      await releaseDeadInvoiceAnchors(tx, heldReservations.map(r => r.id));
+
       const inv = await tx.holdInvoice.create({
         data: {
           ...(heldReservations.length > 0 ? { reservationId: heldReservations[0].id } : {}),

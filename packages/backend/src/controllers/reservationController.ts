@@ -22,8 +22,9 @@ import { getPlatformFeeRate, SubscriptionTier } from '../utils/feeCalculator';
 import { shouldUseDirectCharge } from '../services/stripeConnectService'; // Direct-charges migration (2026-08-08): staged-rollout routing decision
 import { assertCheckoutAllowed, CheckoutGuardError } from '../services/checkoutGuard'; // S1072 Finding #4: collusion/wash-trade guard
 import { createPaymentLinkInternal } from './posController'; // markSold settlement router: reuse Stripe Payment Link + QR
-import { invoiceableWhere, isInvoicedOrClaimed, InvoiceClaimLostError } from '../services/holdInvoiceClaim'; // Hold-to-Pay P0 (2026-08-16): non-FK invoice claim
+import { invoiceableWhere, isInvoicedOrClaimed, InvoiceClaimLostError, releaseDeadInvoiceAnchors } from '../services/holdInvoiceClaim'; // Hold-to-Pay P0 (2026-08-16): non-FK invoice claim; P0 (2026-08-17): dead-anchor release
 import { stripeCheckoutExpiry } from '../utils/stripeCheckoutExpiry'; // Hold-to-Pay P0 (2026-08-16): Stripe expires_at floor/ceiling clamp
+import { expireCheckoutSessionSafely } from '../utils/expireCheckoutSession'; // Hold-to-Pay P1 (2026-08-17): released invoices left PAYABLE Stripe sessions live
 
 // markSold settlement router (Decision A): settlement modes
 type SettlementMode = 'RECORD' | 'POS_CART' | 'CHECKOUT_LINK';
@@ -528,7 +529,22 @@ export const getOrganizerHolds = async (req: AuthRequest, res: Response) => {
     const pageSkip = (pageNum - 1) * pageLimit;
 
     const where: any = {
-      status: { in: ['PENDING', 'CONFIRMED'] },
+      // P1 fix (2026-08-17): HOLD_IN_CART holds that carry an invoiceId are included.
+      //
+      // A POS cart invoice with no Stripe session (createCombinedInvoice, 100%-cash
+      // split) can NEVER be marked paid -- markHoldInvoicePaid is the only thing that
+      // writes HoldInvoice.status='PAID' and it requires a PaymentIntent, so there is no
+      // cash-completion path at all. invoiceExpiryJob deliberately refuses to auto-revert
+      // those (it cannot tell a collected cash sale from an abandoned one), which left
+      // their items pinned at INVOICE_ISSUED with NO reclaim path whatsoever -- the
+      // organizer is the only party who knows, and this page was the natural place to
+      // act, but HOLD_IN_CART was filtered out of it entirely so the holds were invisible
+      // here. Scoped deliberately to invoiceId != null: this surfaces only the holds that
+      // are actually stuck behind an invoice, not the organizer's whole live POS cart.
+      OR: [
+        { status: { in: ['PENDING', 'CONFIRMED'] } },
+        { status: 'HOLD_IN_CART', invoiceId: { not: null } },
+      ],
       item: { sale: { organizerId: organizer.id } },
     };
     // Optional sale filter
@@ -588,7 +604,13 @@ export const getOrganizerHoldCount = async (req: AuthRequest, res: Response) => 
 
     const count = await prisma.itemReservation.count({
       where: {
-        status: { in: ['PENDING', 'CONFIRMED'] },
+        // Must mirror getOrganizerHolds' filter exactly (2026-08-17) -- a badge that
+        // disagrees with the list it links to is its own bug. See the note there for why
+        // invoiced HOLD_IN_CART rows are included.
+        OR: [
+          { status: { in: ['PENDING', 'CONFIRMED'] } },
+          { status: 'HOLD_IN_CART', invoiceId: { not: null } },
+        ],
         item: { sale: { organizerId: organizer.id } },
       },
     });
@@ -1316,6 +1338,19 @@ export const markSoldAndCreateInvoice = async (req: AuthRequest, res: Response) 
   let holdIds: string[] = [];
   const claimedHoldIds: string[] = [];
 
+  // Orphaned-payable-session guard (P1, 2026-08-17). The Stripe Checkout Session is
+  // created BEFORE the HoldInvoice transaction below. If that transaction throws
+  // (P2002 on the unique reservationId anchor, a lost claim, a DB blip), the old code
+  // released the claim and returned an error while the Session stayed OPEN and
+  // PAYABLE -- a live payment link for an invoice that does not exist, against items
+  // that just went back on sale. Tracked at function scope (NOT inside the try, which
+  // is its own block scope -- the same mistake that produced a real CI compile error
+  // on claimedHoldIds) so the outer catch can close it. The account is tracked
+  // alongside the id because a Direct-charge Session lives on the connected account
+  // and cannot be expired with a platform-scoped call.
+  let createdStripeSessionId: string | null = null;
+  let createdStripeSessionAccount: string | null = null;
+
   // Token-scoped claim release. NEVER release by id alone: another request may have
   // legitimately stolen a stale claim on the same rows, and an id-only release would
   // clobber that live claim. Matching on invoiceClaimToken makes the release a no-op
@@ -1544,6 +1579,11 @@ export const markSoldAndCreateInvoice = async (req: AuthRequest, res: Response) 
         },
         { idempotencyKey, ...(useDirect ? { stripeAccount: organizer.stripeConnectId! } : {}) }
       );
+
+      // Record what we just created so any later failure can close it (see the
+      // orphaned-payable-session guard note at the top of this function).
+      createdStripeSessionId = stripeSession?.id ?? null;
+      createdStripeSessionAccount = useDirect ? organizer.stripeConnectId ?? null : null;
     } catch (stripeError: any) {
       console.error('[hold-invoice] Stripe session creation failed:', stripeError);
       // P2 idempotency fix: release the claim taken above so these holds aren't
@@ -1554,6 +1594,14 @@ export const markSoldAndCreateInvoice = async (req: AuthRequest, res: Response) 
 
     // Create HoldInvoice record in transaction with item + reservation updates
     const transaction = await prisma.$transaction(async (tx) => {
+      // P0 fix (2026-08-17): HoldInvoice.reservationId is @unique and, before this,
+      // nothing ever nulled it -- so a single released or expired invoice bricked that
+      // hold forever with P2002 on the next attempt. Every terminal transition now
+      // nulls the anchor, and this clears any dead anchor left behind before that
+      // shipped. Scoped to CANCELLED/EXPIRED only: a PENDING or PAID invoice's anchor
+      // is live/historical and must never be stolen. See services/holdInvoiceClaim.ts.
+      await releaseDeadInvoiceAnchors(tx, holdIds);
+
       const holdInvoice = await tx.holdInvoice.create({
         data: {
           reservationId: reservationId, // Store first reservation for backward compatibility
@@ -1597,6 +1645,13 @@ export const markSoldAndCreateInvoice = async (req: AuthRequest, res: Response) 
 
       return holdInvoice;
     });
+
+    // The Session now belongs to a real, live HoldInvoice -- it must NOT be closed by
+    // the orphan guard in the outer catch if anything downstream (notification, metadata
+    // backfill, email) throws. Clearing the handle is what makes that guard safe to leave
+    // unconditional.
+    createdStripeSessionId = null;
+    createdStripeSessionAccount = null;
 
     // Create notification for shopper (LOCKED DECISION #5) — mention all items.
     // Notification-gap fix (S1195 sweep continuation, 2026-08-08): moved outside the
@@ -1707,6 +1762,18 @@ export const markSoldAndCreateInvoice = async (req: AuthRequest, res: Response) 
     // transaction itself threw) so these holds aren't permanently stuck.
     await releaseClaim();
 
+    // P1 fix (2026-08-17): close the Checkout Session too. Reaching this catch after
+    // the Session was created means no HoldInvoice exists for it, the holds have just
+    // been un-claimed and the items are back in play -- leaving that link OPEN would
+    // let the shopper pay for an item nobody is tracking a payment for. Never allowed
+    // to mask the original error.
+    if (createdStripeSessionId) {
+      await expireCheckoutSessionSafely(createdStripeSessionId, {
+        stripeAccount: createdStripeSessionAccount,
+        context: `markSoldAndCreateInvoice orphan reservation=${req.params?.id}`,
+      }).catch(e => console.error('[hold-invoice] Failed to close orphaned checkout session:', e));
+    }
+
     if (error instanceof InvoiceClaimLostError) {
       return res.status(409).json({ message: 'Another payment request for these holds completed first.' });
     }
@@ -1721,16 +1788,31 @@ export const markSoldAndCreateInvoice = async (req: AuthRequest, res: Response) 
   }
 };
 
-// GET /api/invoices/:invoiceId — fetch invoice details
-// Auth: Shopper (owns invoice) or Organizer (sold the item)
+// GET /api/reservations/:invoiceIdOrReservationId/invoice — fetch invoice details
+// Auth: Shopper (owns invoice) or Organizer (issued it)
 export const getInvoiceDetails = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) return res.status(401).json({ message: 'Authentication required' });
 
-    const { invoiceId } = req.params;
+    // P1 fix (2026-08-17, found by live Chrome QA): this read `req.params.invoiceId`,
+    // but the route that mounts it declares `:invoiceIdOrReservationId`
+    // (routes/reservations.ts). Express only populates the names the route declares, so
+    // the destructure produced `undefined` and every single call became
+    // `findUnique({ where: { id: undefined } })` -> Prisma throws -> 500. Not one
+    // request to this endpoint had ever succeeded.
+    //
+    // The param name is honoured rather than renamed: the route deliberately accepts
+    // EITHER identifier (a shopper following an emailed link has the invoice id; an
+    // organizer looking at a hold card has the reservation id), and only the invoice-id
+    // half was ever implemented. Both are resolved below. The legacy `invoiceId` /
+    // generic `id` names are still read as a fallback so a future route rename cannot
+    // silently reintroduce this exact bug.
+    const identifier =
+      req.params.invoiceIdOrReservationId ?? req.params.invoiceId ?? req.params.id;
+    if (!identifier) return res.status(400).json({ message: 'Invoice or reservation id is required' });
 
-    const invoice = await prisma.holdInvoice.findUnique({
-      where: { id: invoiceId },
+    let invoice = await prisma.holdInvoice.findUnique({
+      where: { id: identifier },
       include: {
         reservation: {
           include: {
@@ -1743,6 +1825,36 @@ export const getInvoiceDetails = async (req: AuthRequest, res: Response) => {
         },
       },
     });
+
+    if (!invoice) {
+      // Treat the identifier as an ItemReservation id. Match on BOTH links between the
+      // two models: `reservationId` (the invoice's single anchor) and the
+      // ItemReservation.invoiceId back-relation, which is what a bundled invoice sets on
+      // every hold it covers -- an organizer clicking a non-anchor hold of a 3-item
+      // bundle must still reach the invoice. Newest first: a reservation can legitimately
+      // have several invoices over its life (released, retried), and the current one is
+      // the one being asked about.
+      invoice = await prisma.holdInvoice.findFirst({
+        where: {
+          OR: [
+            { reservationId: identifier },
+            { reservations: { some: { id: identifier } } },
+          ],
+        },
+        orderBy: { createdAt: 'desc' },
+        include: {
+          reservation: {
+            include: {
+              item: {
+                include: {
+                  sale: true,
+                },
+              },
+            },
+          },
+        },
+      });
+    }
 
     if (!invoice) return res.status(404).json({ message: 'Invoice not found' });
 
@@ -1762,6 +1874,18 @@ export const getInvoiceDetails = async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ message: 'Access denied' });
     }
 
+    // Every item on the invoice, not just the anchor's. `invoice.reservation` is the
+    // single anchor hold and is now deliberately nulled when an invoice is
+    // cancelled/expired (P0 anchor fix), so it is not a dependable source for the item
+    // list at all -- `itemIds` is the invoice's own record of what it billed and is
+    // correct for bundles and for dead invoices alike.
+    const items = invoice.itemIds.length
+      ? await prisma.item.findMany({
+          where: { id: { in: invoice.itemIds } },
+          include: { sale: true },
+        })
+      : [];
+
     res.json({
       id: invoice.id,
       status: invoice.status,
@@ -1770,8 +1894,13 @@ export const getInvoiceDetails = async (req: AuthRequest, res: Response) => {
       stripeFeeAmount: invoice.stripeFeeAmount,
       expiresAt: invoice.expiresAt,
       paidAt: invoice.paidAt,
+      releasedAt: invoice.releasedAt,
       createdAt: invoice.createdAt,
-      item: invoice.reservation?.item,
+      itemCount: items.length,
+      items,
+      // Back-compat: existing callers read a single `item`. Prefer the anchor's item
+      // when it is still linked, else the first billed item.
+      item: invoice.reservation?.item ?? items[0] ?? null,
     });
   } catch (error: any) {
     console.error('[invoices] getInvoiceDetails error:', error);
@@ -1831,13 +1960,25 @@ export const getItemInvoiceStatus = async (req: Request, res: Response) => {
       include: {
         reservation: {
           include: {
+            // `invoice` is the ANCHOR relation (HoldInvoice.reservationId) and is set on
+            // only ONE hold of a bundle -- and is now deliberately nulled when an invoice
+            // is cancelled/expired (P0 anchor fix, 2026-08-17). Reading it alone made
+            // this endpoint report "no invoice" for every non-anchor item of a bundled
+            // invoice. `invoiceRel` is the ItemReservation.invoiceId back-relation, which
+            // is set on EVERY hold the invoice covers.
+            invoiceRel: true,
             invoice: true,
           },
         },
       },
     });
 
-    if (!item || !item.reservation || !item.reservation.invoice) {
+    const invoice = item?.reservation?.invoiceRel ?? item?.reservation?.invoice ?? null;
+
+    // Only a LIVE invoice is reported. A CANCELLED/EXPIRED/REFUNDED invoice is not
+    // something a shopper can act on, and reporting it as existing made an item that is
+    // back on sale look permanently locked.
+    if (!invoice || !['PENDING', 'PAID'].includes(invoice.status)) {
       return res.json({
         invoiceExists: false,
         invoiceStatus: null,
@@ -1848,9 +1989,18 @@ export const getItemInvoiceStatus = async (req: Request, res: Response) => {
 
     res.json({
       invoiceExists: true,
-      invoiceStatus: item.reservation.invoice.status,
-      expiresAt: item.reservation.invoice.expiresAt,
-      stripeSessionId: item.reservation.invoice.stripeSessionId,
+      invoiceStatus: invoice.status,
+      expiresAt: invoice.expiresAt,
+      // Security fix (2026-08-17): this route is mounted BEFORE `router.use(authenticate)`
+      // in routes/reservations.ts -- it is fully anonymous -- and it was handing out the
+      // live Stripe Checkout Session id for any item id a caller cared to enumerate. A
+      // session id plus the publishable key is enough to open someone else's payment page
+      // client-side, and it confirms which items have money in flight. The field is kept
+      // (shape unchanged, and the endpoint has zero frontend callers -- grep-verified) but
+      // never populated on this anonymous route. Authenticated shoppers/organizers get the
+      // full detail from GET /api/reservations/:invoiceIdOrReservationId/invoice, which
+      // enforces shopper-or-organizer authorization.
+      stripeSessionId: null,
     });
   } catch (error: any) {
     console.error('[invoices] getItemInvoiceStatus error:', error);
@@ -1877,36 +2027,75 @@ export const releaseInvoice = async (req: AuthRequest, res: Response) => {
           },
         },
         invoice: true,
+        // P1 fix (2026-08-17): `invoice` is the ANCHOR relation
+        // (HoldInvoice.reservationId) -- it is only ever set on ONE of the holds a
+        // bundled invoice covers. An organizer clicking any other hold of the bundle
+        // got a flat 404 "No invoice found for this reservation" even though the
+        // invoice plainly existed. `invoiceRel` is the back-relation of
+        // ItemReservation.invoiceId, which markSoldAndCreateInvoice sets on EVERY
+        // bundled hold, so it resolves from any of them.
+        invoiceRel: true,
         user: { select: { id: true, email: true, name: true } },
       },
     });
 
     if (!reservation) return res.status(404).json({ message: 'Reservation not found' });
-    if (!reservation.invoice) return res.status(404).json({ message: 'No invoice found for this reservation' });
-    if (reservation.invoice.status !== 'PENDING') {
-      return res.status(409).json({ message: 'Only PENDING invoices can be released' });
-    }
 
-    // Verify organizer owns the sale
+    // Ownership FIRST (information-disclosure fix, 2026-08-17). The invoice-existence
+    // 404 and the not-PENDING 409 below both leak real state about someone else's sale,
+    // and they used to run BEFORE this check -- any authenticated organizer could probe
+    // reservation ids and learn which ones carried a live invoice. Nothing about the
+    // resource is revealed until ownership is established.
     const userOrganizer2 = await prisma.organizer.findUnique({
       where: { userId: req.user.id },
     });
-    if (reservation.item.sale!.organizerId !== userOrganizer2?.id) {
+    if (!userOrganizer2 || reservation.item.sale!.organizerId !== userOrganizer2.id) {
       return res.status(403).json({ message: 'Access denied. You do not own this sale.' });
     }
 
-    const stripe = require('../utils/stripe').getStripe();
-    const invoice = reservation.invoice!; // non-null: 404'd above if absent
+    const invoice = reservation.invoiceRel ?? reservation.invoice;
+    if (!invoice) return res.status(404).json({ message: 'No invoice found for this reservation' });
+    if (invoice.status !== 'PENDING') {
+      return res.status(409).json({ message: 'Only PENDING invoices can be released' });
+    }
 
     // Cancel the Stripe Checkout session. Null-guarded: posController.sendHoldInvoice
     // creates HoldInvoice rows with NO Stripe session at all ("simplified MVP" path), and
     // posController.createCombinedInvoice omits one for a 100%-cash split.
+    //
+    // P1 fix (2026-08-17, live Chrome QA): this used to be a bare
+    // `stripe.checkout.sessions.expire()` in a try/catch that only console.warn'ed. It
+    // was observed failing with "No such checkout session" while the release went ahead
+    // anyway -- leaving the shopper's original payment link OPEN and PAYABLE for an
+    // invoice that had just been cancelled and items that had just gone back on sale.
+    // expireCheckoutSessionSafely retrieves before expiring (so a connected-account
+    // Session is found, and a terminal one is not mis-reported as an error) and alerts
+    // Sentry if a payable session survives. See utils/expireCheckoutSession.ts.
     if (invoice.stripeSessionId) {
-      try {
-        await stripe.checkout.sessions.expire(invoice.stripeSessionId);
-      } catch (stripeError: any) {
-        console.warn('[hold-invoice] Failed to expire Stripe session:', stripeError);
-        // Non-fatal: continue with local state update
+      const closure = await expireCheckoutSessionSafely(invoice.stripeSessionId, {
+        stripeAccount: userOrganizer2.stripeConnectId,
+        context: `releaseInvoice invoice=${invoice.id}`,
+      });
+
+      // Resource-state gate: NEVER cancel an invoice the shopper has already paid.
+      // Doing so would hand the items back to RESERVED (and back on sale) after money
+      // changed hands. Stripe is the authority here, not our own PENDING flag -- the
+      // charge.succeeded webhook can legitimately be seconds behind, and this endpoint
+      // is exactly the window in which an organizer would click.
+      if (closure.state === 'PAID') {
+        console.warn(`[hold-invoice] releaseInvoice refused: invoice ${invoice.id} is already PAID at Stripe (session ${invoice.stripeSessionId}).`);
+        return res.status(409).json({
+          message: 'This payment has already gone through. Refund it from the sale\'s payments instead of cancelling the request.',
+        });
+      }
+
+      // A session we could not close is real money exposure, already reported to
+      // Sentry by the helper. Refuse rather than release the items alongside a live
+      // payment link -- the organizer can retry once Stripe is reachable.
+      if (closure.stillPayable) {
+        return res.status(502).json({
+          message: 'We could not cancel the payment link with our payment processor just now, so the request was left in place. Please try again in a moment.',
+        });
       }
     }
 
@@ -1927,7 +2116,17 @@ export const releaseInvoice = async (req: AuthRequest, res: Response) => {
     await prisma.$transaction(async (tx) => {
       await tx.holdInvoice.update({
         where: { id: invoice.id },
-        data: { status: 'CANCELLED', releasedAt: new Date() },
+        data: {
+          status: 'CANCELLED',
+          releasedAt: new Date(),
+          // P0 fix (2026-08-17): release the @unique anchor. HoldInvoice.reservationId
+          // carries HoldInvoice_reservationId_key and NOTHING nulled it -- so a single
+          // released invoice permanently bricked that hold, every later invoice attempt
+          // dying with P2002 on reservationId. Confirmed in production: invoice
+          // cmswti848000jgse8z2y9gyhx, CANCELLED 2026-08-17 05:58, still anchored.
+          // itemIds keeps the full record of what this invoice billed, so nothing is lost.
+          reservationId: null,
+        },
       });
 
       // Return EVERY item on this invoice to RESERVED. Guarded on INVOICE_ISSUED, same as

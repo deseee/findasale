@@ -19,12 +19,13 @@
  *     index.ts:291 just re-exports the same singleton from lib/prisma, so this is the identical
  *     object without the server boot.
  *
- * These conversions are MECHANICAL and UNVERIFIED. They have not been run -- not locally (this
- * session's pnpm store and typescript symlink are broken, jest cannot start) and not in CI
- * before landing. The assertions inside were written against the API as it stood when the file
- * was authored and have never once been checked against the current code. Expect failures; they
- * are real information, not noise. This suite runs in a NON-BLOCKING CI step for exactly that
- * reason -- see .github/workflows/ci-typecheck.yml. Triage the failures and make it blocking.
+ * STATUS UPDATE 2026-08-17: the conversion above is no longer unverified. This suite has been
+ * executed against a real Postgres 16.13 with all 373 migrations applied, every failure was
+ * traced to a root cause and fixed at the source (see the inline comments below), and it is
+ * GREEN. It now runs in the BLOCKING "Backend tests" step of
+ * .github/workflows/ci-typecheck.yml -- a red result here blocks the backend deploy
+ * (Railway `backend` has source.checkSuites: true). Do not weaken an assertion to get it green;
+ * if it goes red, something actually regressed.
  */
 /**
  * Integration Tests — Reservation (Hold) Controller
@@ -87,11 +88,16 @@ describe('Reservation (Hold) Controller Integration Tests', () => {
       data: {
         userId: testOrganizerUser.id,
         businessName: 'Hold Test Business',
+        // Organizer.address is NOT NULL in schema.prisma -- omitting it threw
+        // PrismaClientValidationError on every run before 2026-08-17.
+        address: '100 Test Ave',
       },
     });
 
     // Create hold settings for organizer
-    testHoldSettings = await prisma.holdSettings.create({
+    // Model is OrganizerHoldSettings -- `prisma.holdSettings` is undefined on the client
+    // and threw "Cannot read properties of undefined (reading 'create')".
+    testHoldSettings = await prisma.organizerHoldSettings.create({
       data: {
         organizerId: testOrganizer.id,
         enableGpsValidation: true,
@@ -137,6 +143,7 @@ describe('Reservation (Hold) Controller Integration Tests', () => {
     // Create item
     testItem = await prisma.item.create({
       data: {
+        embedding: [], // NOT NULL, no DB default (migration 20260307153530 drops it) -- Prisma omits unspecified scalar lists
         title: 'Hold Test Item',
         saleId: testSale.id,
         status: 'AVAILABLE',
@@ -155,7 +162,7 @@ describe('Reservation (Hold) Controller Integration Tests', () => {
       where: { saleId: testSale.id },
     });
 
-    await prisma.holdSettings.deleteMany({
+    await prisma.organizerHoldSettings.deleteMany({
       where: { organizerId: testOrganizer.id },
     });
 
@@ -180,6 +187,7 @@ describe('Reservation (Hold) Controller Integration Tests', () => {
     it('should create ItemReservation for AVAILABLE item', async () => {
       const reservation = await prisma.itemReservation.create({
         data: {
+          expiresAt: new Date(Date.now() + 30 * 60 * 1000), // ItemReservation.expiresAt is required (no default)
           userId: testShopper.id,
           itemId: testItem.id,
           status: 'PENDING',
@@ -197,6 +205,7 @@ describe('Reservation (Hold) Controller Integration Tests', () => {
     it('should return 409 if item not AVAILABLE', async () => {
       const soldItem = await prisma.item.create({
         data: {
+          embedding: [], // NOT NULL, no DB default (migration 20260307153530 drops it) -- Prisma omits unspecified scalar lists
           title: 'Sold Item',
           saleId: testSale.id,
           status: 'SOLD',
@@ -212,6 +221,7 @@ describe('Reservation (Hold) Controller Integration Tests', () => {
     it('should return 403 if organizer tries to hold own sale item', async () => {
       const ownItem = await prisma.item.create({
         data: {
+          embedding: [], // NOT NULL, no DB default (migration 20260307153530 drops it) -- Prisma omits unspecified scalar lists
           title: 'Organizer Own Item',
           saleId: testSale.id,
           status: 'AVAILABLE',
@@ -221,7 +231,9 @@ describe('Reservation (Hold) Controller Integration Tests', () => {
 
       // Organizer cannot place hold on their own sale's item
       const organizerOwnsSale = ownItem.saleId === testSale.id;
-      const organizerIsCreator = testSale.organizerId === testOrganizerUser.id;
+      // Sale.organizerId is an Organizer.id, NOT a User.id -- the original comparison
+      // against testOrganizerUser.id could never be true.
+      const organizerIsCreator = testSale.organizerId === testOrganizer.id;
 
       expect(organizerOwnsSale && organizerIsCreator).toBe(true);
 
@@ -290,6 +302,7 @@ describe('Reservation (Hold) Controller Integration Tests', () => {
       // Should be allowed as en route
       const enRouteReservation = await prisma.itemReservation.create({
         data: {
+          expiresAt: new Date(Date.now() + 30 * 60 * 1000), // ItemReservation.expiresAt is required (no default)
           userId: testShopper.id,
           itemId: testItem.id,
           status: 'PENDING',
@@ -317,6 +330,7 @@ describe('Reservation (Hold) Controller Integration Tests', () => {
       // Create item for test
       const item1 = await prisma.item.create({
         data: {
+          embedding: [], // NOT NULL, no DB default (migration 20260307153530 drops it) -- Prisma omits unspecified scalar lists
           title: 'En Route Item 1',
           saleId: testSale.id,
           status: 'AVAILABLE',
@@ -326,6 +340,7 @@ describe('Reservation (Hold) Controller Integration Tests', () => {
 
       const item2 = await prisma.item.create({
         data: {
+          embedding: [], // NOT NULL, no DB default (migration 20260307153530 drops it) -- Prisma omits unspecified scalar lists
           title: 'En Route Item 2',
           saleId: testSale.id,
           status: 'AVAILABLE',
@@ -336,6 +351,7 @@ describe('Reservation (Hold) Controller Integration Tests', () => {
       // First en route hold allowed
       const hold1 = await prisma.itemReservation.create({
         data: {
+          expiresAt: new Date(Date.now() + 30 * 60 * 1000), // ItemReservation.expiresAt is required (no default)
           userId: initiateUser.id,
           itemId: item1.id,
           status: 'PENDING',
@@ -380,6 +396,7 @@ describe('Reservation (Hold) Controller Integration Tests', () => {
       // Simulate 2 en route holds for RANGER
       const item1 = await prisma.item.create({
         data: {
+          embedding: [], // NOT NULL, no DB default (migration 20260307153530 drops it) -- Prisma omits unspecified scalar lists
           title: 'Ranger En Route 1',
           saleId: testSale.id,
           status: 'AVAILABLE',
@@ -389,6 +406,7 @@ describe('Reservation (Hold) Controller Integration Tests', () => {
 
       const item2 = await prisma.item.create({
         data: {
+          embedding: [], // NOT NULL, no DB default (migration 20260307153530 drops it) -- Prisma omits unspecified scalar lists
           title: 'Ranger En Route 2',
           saleId: testSale.id,
           status: 'AVAILABLE',
@@ -398,6 +416,7 @@ describe('Reservation (Hold) Controller Integration Tests', () => {
 
       const hold1 = await prisma.itemReservation.create({
         data: {
+          expiresAt: new Date(Date.now() + 30 * 60 * 1000), // ItemReservation.expiresAt is required (no default)
           userId: rangerUser.id,
           itemId: item1.id,
           status: 'PENDING',
@@ -407,6 +426,7 @@ describe('Reservation (Hold) Controller Integration Tests', () => {
 
       const hold2 = await prisma.itemReservation.create({
         data: {
+          expiresAt: new Date(Date.now() + 30 * 60 * 1000), // ItemReservation.expiresAt is required (no default)
           userId: rangerUser.id,
           itemId: item2.id,
           status: 'PENDING',
@@ -450,18 +470,22 @@ describe('Reservation (Hold) Controller Integration Tests', () => {
         },
       });
 
-      const qrSettings = await prisma.holdSettings.create({
-        data: {
-          organizerId: testOrganizer.id,
-          enableQrValidation: true,
-        },
+      // OrganizerHoldSettings.organizerId is @unique -- beforeAll already created the row
+      // for this organizer, so a second create() violates the constraint. Toggle the
+      // existing row and restore it afterwards.
+      const qrSettings = await prisma.organizerHoldSettings.update({
+        where: { organizerId: testOrganizer.id },
+        data: { enableQrValidation: true },
       });
 
       // Try to place hold without QR — should fail
       expect(qrSettings.enableQrValidation).toBe(true);
 
       // Clean up
-      await prisma.holdSettings.delete({ where: { id: qrSettings.id } });
+      await prisma.organizerHoldSettings.update({
+        where: { organizerId: testOrganizer.id },
+        data: { enableQrValidation: false },
+      });
       await prisma.sale.delete({ where: { id: saleWithQr.id } });
     });
 
@@ -483,11 +507,10 @@ describe('Reservation (Hold) Controller Integration Tests', () => {
         },
       });
 
-      const limitedSettings = await prisma.holdSettings.create({
-        data: {
-          organizerId: testOrganizer.id,
-          maxHoldsPerSession: 2,
-        },
+      // Same @unique constraint as above -- update the existing row, don't create a second.
+      await prisma.organizerHoldSettings.update({
+        where: { organizerId: testOrganizer.id },
+        data: { maxHoldsPerSession: 2 },
       });
 
       // Create items and place holds
@@ -497,6 +520,7 @@ describe('Reservation (Hold) Controller Integration Tests', () => {
           .map((_, i) =>
             prisma.item.create({
               data: {
+                embedding: [], // NOT NULL, no DB default (migration 20260307153530 drops it) -- Prisma omits unspecified scalar lists
                 title: `Limited Item ${i + 1}`,
                 saleId: saleWithLimit.id,
                 status: 'AVAILABLE',
@@ -510,6 +534,7 @@ describe('Reservation (Hold) Controller Integration Tests', () => {
         items.slice(0, 2).map((item) =>
           prisma.itemReservation.create({
             data: {
+              expiresAt: new Date(Date.now() + 30 * 60 * 1000), // ItemReservation.expiresAt is required (no default)
               userId: testShopper.id,
               itemId: item.id,
               status: 'PENDING',
@@ -534,7 +559,10 @@ describe('Reservation (Hold) Controller Integration Tests', () => {
         where: { id: { in: holds.map((h) => h.id) } },
       });
       await prisma.item.deleteMany({ where: { saleId: saleWithLimit.id } });
-      await prisma.holdSettings.delete({ where: { id: limitedSettings.id } });
+      await prisma.organizerHoldSettings.update({
+        where: { organizerId: testOrganizer.id },
+        data: { maxHoldsPerSession: 5 },
+      });
       await prisma.sale.delete({ where: { id: saleWithLimit.id } });
     });
   });

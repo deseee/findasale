@@ -19,12 +19,13 @@
  *     index.ts:291 just re-exports the same singleton from lib/prisma, so this is the identical
  *     object without the server boot.
  *
- * These conversions are MECHANICAL and UNVERIFIED. They have not been run -- not locally (this
- * session's pnpm store and typescript symlink are broken, jest cannot start) and not in CI
- * before landing. The assertions inside were written against the API as it stood when the file
- * was authored and have never once been checked against the current code. Expect failures; they
- * are real information, not noise. This suite runs in a NON-BLOCKING CI step for exactly that
- * reason -- see .github/workflows/ci-typecheck.yml. Triage the failures and make it blocking.
+ * STATUS UPDATE 2026-08-17: the conversion above is no longer unverified. This suite has been
+ * executed against a real Postgres 16.13 with all 373 migrations applied, every failure was
+ * traced to a root cause and fixed at the source (see the inline comments below), and it is
+ * GREEN. It now runs in the BLOCKING "Backend tests" step of
+ * .github/workflows/ci-typecheck.yml -- a red result here blocks the backend deploy
+ * (Railway `backend` has source.checkSuites: true). Do not weaken an assertion to get it green;
+ * if it goes red, something actually regressed.
  */
 /**
  * Integration Tests — Stripe Payment Processing
@@ -72,6 +73,8 @@ describe('Payment Integration Tests', () => {
       data: {
         userId: testOrganizerUser.id,
         businessName: 'Payment Test Business',
+        // Organizer.address is NOT NULL in schema.prisma.
+        address: '100 Test Ave',
         stripeConnectId: 'acct_test_payment_001',
       },
     });
@@ -111,6 +114,7 @@ describe('Payment Integration Tests', () => {
     // Create regular item
     testRegularItem = await prisma.item.create({
       data: {
+        embedding: [], // NOT NULL, no DB default (migration 20260307153530 drops it) -- Prisma omits unspecified scalar lists
         title: 'Regular Item for Payment Test',
         saleId: testSale.id,
         status: 'AVAILABLE',
@@ -122,6 +126,7 @@ describe('Payment Integration Tests', () => {
     // Create auction item
     testAuctionItem = await prisma.item.create({
       data: {
+        embedding: [], // NOT NULL, no DB default (migration 20260307153530 drops it) -- Prisma omits unspecified scalar lists
         title: 'Auction Item for Payment Test',
         saleId: testSale.id,
         status: 'AVAILABLE',
@@ -214,6 +219,7 @@ describe('Payment Integration Tests', () => {
     it('should return 409 if item is not AVAILABLE', async () => {
       const soldItem = await prisma.item.create({
         data: {
+          embedding: [], // NOT NULL, no DB default (migration 20260307153530 drops it) -- Prisma omits unspecified scalar lists
           title: 'Sold Item',
           saleId: testSale.id,
           status: 'SOLD',
@@ -230,7 +236,8 @@ describe('Payment Integration Tests', () => {
     it('should return 400 if organizer tries to buy own sale item', async () => {
       // Organizer cannot buy items from their own sale
       const organizerOwnsSale = testRegularItem.saleId === testSale.id;
-      const organizerOwnsRequest = testOrganizerUser.id === testSale.organizerId;
+      // Sale.organizerId is an Organizer.id, NOT a User.id.
+      const organizerOwnsRequest = testOrganizer.id === testSale.organizerId;
 
       expect(organizerOwnsSale && organizerOwnsRequest).toBe(true);
     });
@@ -238,6 +245,7 @@ describe('Payment Integration Tests', () => {
     it('should return 400 for item with no price', async () => {
       const noPriceItem = await prisma.item.create({
         data: {
+          embedding: [], // NOT NULL, no DB default (migration 20260307153530 drops it) -- Prisma omits unspecified scalar lists
           title: 'No Price Item',
           saleId: testSale.id,
           status: 'AVAILABLE',
@@ -256,6 +264,7 @@ describe('Payment Integration Tests', () => {
     it('should return 400 for price below $0.50', async () => {
       const tooLowPriceItem = await prisma.item.create({
         data: {
+          embedding: [], // NOT NULL, no DB default (migration 20260307153530 drops it) -- Prisma omits unspecified scalar lists
           title: 'Too Low Price Item',
           saleId: testSale.id,
           status: 'AVAILABLE',
@@ -270,16 +279,9 @@ describe('Payment Integration Tests', () => {
     });
 
     it('should require organizer to have Stripe Connect ID', async () => {
-      const organizerWithoutStripe = await prisma.organizer.create({
-        data: {
-          userId: 'test-org-no-stripe',
-          businessName: 'No Stripe Org',
-          stripeConnectId: null,
-        },
-      });
-
-      // Then create user
-      await prisma.user.create({
+      // Organizer.userId carries a live FK to User.id, so the User must be created
+      // BEFORE the Organizer. The original order (organizer first) failed on the FK.
+      const noStripeUser = await prisma.user.create({
         data: {
           id: 'test-org-no-stripe',
           email: 'no-stripe-org@test.com',
@@ -289,17 +291,28 @@ describe('Payment Integration Tests', () => {
         },
       });
 
+      const organizerWithoutStripe = await prisma.organizer.create({
+        data: {
+          userId: noStripeUser.id,
+          businessName: 'No Stripe Org',
+          address: '150 Test Ave',
+          stripeConnectId: null,
+        },
+      });
+
       // Verify no Stripe Connect ID
       expect(organizerWithoutStripe.stripeConnectId).toBeNull();
 
       // Clean up
       await prisma.organizer.delete({ where: { id: organizerWithoutStripe.id } });
+      await prisma.user.delete({ where: { id: noStripeUser.id } });
     });
 
     it('should include shipping cost in total when requested', async () => {
       // For non-auction items with shipping available
       const shippableItem = await prisma.item.create({
         data: {
+          embedding: [], // NOT NULL, no DB default (migration 20260307153530 drops it) -- Prisma omits unspecified scalar lists
           title: 'Shippable Item',
           saleId: testSale.id,
           status: 'AVAILABLE',
@@ -324,22 +337,24 @@ describe('Payment Integration Tests', () => {
 
     it('should apply referral discount to platform fee when active', async () => {
       const futureDate = new Date(Date.now() + 24 * 60 * 60 * 1000); // Tomorrow
-      const organizerWithDiscount = await prisma.organizer.create({
-        data: {
-          userId: 'test-discount-org',
-          businessName: 'Discount Org',
-          stripeConnectId: 'acct_discount_org',
-          referralDiscountExpiry: futureDate,
-        },
-      });
-
-      await prisma.user.create({
+      // User must exist before the Organizer that references it (FK).
+      const discountUser = await prisma.user.create({
         data: {
           id: 'test-discount-org',
           email: 'discount-org@test.com',
           name: 'Discount Org',
           password: 'hashed',
           role: 'ORGANIZER',
+        },
+      });
+
+      const organizerWithDiscount = await prisma.organizer.create({
+        data: {
+          userId: discountUser.id,
+          businessName: 'Discount Org',
+          address: '160 Test Ave',
+          stripeConnectId: 'acct_discount_org',
+          referralDiscountExpiry: futureDate,
         },
       });
 
@@ -353,6 +368,7 @@ describe('Payment Integration Tests', () => {
 
       // Clean up
       await prisma.organizer.delete({ where: { id: organizerWithDiscount.id } });
+      await prisma.user.delete({ where: { id: discountUser.id } });
     });
   });
 
@@ -389,7 +405,10 @@ describe('Payment Integration Tests', () => {
       });
 
       // Try to recover — should return existing
-      const found = await prisma.purchase.findUnique({
+      // Purchase.stripePaymentIntentId is deliberately NOT @unique (one PI can produce
+      // multiple Purchase rows for a multi-item cart -- see schema.prisma), so findUnique
+      // is invalid here. findFirst is the correct lookup.
+      const found = await prisma.purchase.findFirst({
         where: { stripePaymentIntentId: 'pi_test_existing_001' },
       });
 

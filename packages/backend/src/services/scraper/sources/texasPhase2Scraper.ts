@@ -178,13 +178,45 @@ export async function runTexasPhase2Scraper(): Promise<void> {
 
       await defaultRateLimiter.waitBeforeRequest(TX_SOCRATA_DOMAIN);
 
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          Accept: 'application/json',
-        },
-        signal: AbortSignal.timeout(60000),
-      });
+      // ROOT-CAUSE FIX 2026-08-17 (roadmap #558 post-ship verification, tool-cited).
+      // GitHub Actions run #9 (id 31998258067, 2026-08-17) annotated
+      // "Phase2 scraper failed: Texas || TimeoutError: The operation was aborted due to
+      // timeout" -- the ONLY hard failure in an otherwise-green 51-scraper batch. Two
+      // separate defects combined here:
+      //   1. 60s was too short for the TDLR Socrata endpoint. Illinois hit the identical
+      //      TimeoutError and was raised 120s -> 240s on 2026-08-10; Texas was never given
+      //      the same treatment. Matched to Illinois's value.
+      //   2. Far worse: a page-level fetch rejection propagated straight to the function's
+      //      outer catch, which RETHROWS -- so `batchRows` (every record already collected
+      //      from every successful page) was discarded and
+      //      batchUpsertScrapedOrganizers() below never ran at all. One slow page threw
+      //      away the entire Texas scrape. That is consistent with the production data:
+      //      TexasPhase2 has 1,971 organizer rows but max(directoryMostRecentAt) is
+      //      2026-05-11 -- nothing written in 3+ months despite weekly runs.
+      // Now a page-level fetch failure WARNS and breaks pagination, so whatever was already
+      // fetched is still upserted. Same throw-to-warn discipline as the 2026-08-08
+      // georgiaPhase2Scraper.ts fix. A genuinely broken source still surfaces: it produces
+      // 0 records, which the batch runner reports and annotates.
+      // Typed off `fetch` itself rather than the global `Response`: backend tsconfig sets
+      // lib: ["ES2020"] with no DOM lib, so the bare `Response` type name is not
+      // guaranteed to resolve here.
+      let response: Awaited<ReturnType<typeof fetch>>;
+      try {
+        response = await fetch(url, {
+          method: 'GET',
+          headers: {
+            Accept: 'application/json',
+          },
+          signal: AbortSignal.timeout(240000),
+        });
+      } catch (fetchErr) {
+        console.warn(
+          `[Texas Phase2] Page ${pageNum} fetch failed (${
+            fetchErr instanceof Error ? fetchErr.message : String(fetchErr)
+          }) — stopping pagination and upserting the ${batchRows.length} rows collected so far`
+        );
+        break;
+      }
 
       if (!response.ok) {
         console.error(

@@ -1,5 +1,6 @@
 import { Decimal } from '@prisma/client/runtime/library';
 import { prisma } from '../lib/prisma';
+import { DEFAULT_LADDER } from './commissionTierService';
 
 /**
  * ADR-096: single shared source of truth for consignor commission math.
@@ -134,17 +135,24 @@ export async function calculateConsignorPayout(
   return { gross, net, tierBreakdown };
 }
 
-/** Seed the industry-benchmark default ladder for a workspace's first opt-in. Idempotent: no-op if tiers already exist. */
+/**
+ * Seed the industry-benchmark default ladder for a workspace's first opt-in.
+ * Idempotent: no-op if tiers already exist.
+ *
+ * The band values live in commissionTierService.DEFAULT_LADDER, shared with the
+ * organizer-facing "restore starting rates" action. Two hardcoded copies of a
+ * payout ladder is exactly the drift ADR-090 and ADR-096 were written to stop.
+ */
 export async function seedDefaultCommissionTiers(workspaceId: string): Promise<void> {
   const existing = await prisma.commissionTier.count({ where: { workspaceId } });
   if (existing > 0) return;
 
   await prisma.commissionTier.createMany({
-    data: [
-      { workspaceId, minPrice: new Decimal(0), maxPrice: new Decimal(100), consignorRate: new Decimal(50) },
-      { workspaceId, minPrice: new Decimal(100), maxPrice: new Decimal(500), consignorRate: new Decimal(60) },
-      { workspaceId, minPrice: new Decimal(500), maxPrice: new Decimal(2000), consignorRate: new Decimal(65) },
-      { workspaceId, minPrice: new Decimal(2000), maxPrice: null, consignorRate: new Decimal(75) },
-    ],
+    data: DEFAULT_LADDER.map((tier) => ({
+      workspaceId,
+      minPrice: new Decimal(tier.minPrice),
+      maxPrice: tier.maxPrice === null ? null : new Decimal(tier.maxPrice),
+      consignorRate: new Decimal(tier.consignorRate),
+    })),
   });
 }

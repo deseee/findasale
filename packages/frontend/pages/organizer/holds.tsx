@@ -117,6 +117,10 @@ const OrganizerHoldsPage = () => {
   // path it writes a PAID Purchase row and decrements stock immediately — so it never
   // fires straight off a single click.
   const [pendingSettlement, setPendingSettlement] = useState<{ ids: string[]; mode: SettlementChoice } | null>(null);
+  // Hold-to-Pay (#221) reclaim path: the hold whose outstanding payment request is about
+  // to be cancelled. Confirmed before it fires — cancelling voids the shopper's live
+  // payment link.
+  const [pendingRelease, setPendingRelease] = useState<HoldItem | null>(null);
 
   // Initialize saleFilter from query param on mount
   React.useEffect(() => {
@@ -158,6 +162,41 @@ const OrganizerHoldsPage = () => {
     },
     onError: (err: any) => {
       showToast(err.response?.data?.message || 'Failed to update hold', 'error');
+    },
+  });
+
+  // Cancel an outstanding payment request (Hold-to-Pay #221).
+  //
+  // Why this exists (P2/P1, 2026-08-17): POST /reservations/:id/release-invoice has been
+  // live on the server the whole time and had ZERO frontend callers — grep-confirmed.
+  // Two real consequences: this page's own copy told the organizer to "Cancel it first"
+  // with no control to do it, and an item on an unpaid invoice with no Stripe session
+  // (POS cash) had no reclaim path at all and sat at INVOICE_ISSUED forever. The server
+  // cancels the invoice, closes the Stripe payment link, returns every bundled item to
+  // RESERVED and clears the invoice link so a fresh request can be sent.
+  const releaseInvoiceMutation = useMutation({
+    mutationFn: (id: string) => api.post(`/reservations/${id}/release-invoice`),
+    onSuccess: (res: any) => {
+      queryClient.invalidateQueries({ queryKey: ['organizer-holds'] });
+      const count = res?.data?.itemsReleased ?? 1;
+      showToast(
+        count > 1
+          ? `Payment request cancelled. ${count} items are back on hold for the shopper.`
+          : 'Payment request cancelled. The item is back on hold for the shopper.',
+        'success'
+      );
+    },
+    onError: (err: any) => {
+      // 409 = already paid, or already cancelled/expired. 502 = the payment link could
+      // not be closed, so the server deliberately left the request in place rather than
+      // free the item alongside a live link. The server's copy says which; surface it.
+      if (err.response?.status === 409) {
+        queryClient.invalidateQueries({ queryKey: ['organizer-holds'] });
+      }
+      showToast(
+        err.response?.data?.message || 'Could not cancel that payment request. Please try again.',
+        'error'
+      );
     },
   });
 
@@ -607,6 +646,16 @@ const OrganizerHoldsPage = () => {
                                   >
                                     Extend (+30min)
                                   </button>
+                                  {hasInvoice(hold) && (
+                                    <button
+                                      onClick={() => setPendingRelease(hold)}
+                                      disabled={releaseInvoiceMutation.isPending}
+                                      title="Cancel the payment request you sent this shopper. Their payment link stops working and the item goes back on hold for them."
+                                      className="text-xs border border-blue-400 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 px-3 py-1 rounded disabled:opacity-50"
+                                    >
+                                      {releaseInvoiceMutation.isPending ? 'Cancelling...' : 'Cancel payment request'}
+                                    </button>
+                                  )}
                                   <button
                                     onClick={() => updateMutation.mutate({ id: hold.id, status: 'CANCELLED' })}
                                     disabled={updateMutation.isPending}
@@ -647,10 +696,16 @@ const OrganizerHoldsPage = () => {
                                   className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
                                     hold.status === 'CONFIRMED'
                                       ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
-                                      : 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400'
+                                      : hold.status === 'HOLD_IN_CART'
+                                        ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300'
+                                        : 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400'
                                   }`}
                                 >
-                                  {hold.status}
+                                  {/* HOLD_IN_CART is a POS-cart hold. It now reaches this
+                                      page (only when it carries an invoice) so the organizer
+                                      has somewhere to cancel a stuck cash request — the raw
+                                      enum name is not something to show a human. */}
+                                  {hold.status === 'HOLD_IN_CART' ? 'In POS cart' : hold.status}
                                 </span>
                                 {hasInvoice(hold) && (
                                   <span
@@ -698,6 +753,34 @@ const OrganizerHoldsPage = () => {
               const { ids, mode } = pendingSettlement;
               setPendingSettlement(null);
               batchMutation.mutate({ ids, action: 'markSold', settlementMode: mode });
+            }}
+          />
+        );
+      })()}
+
+      {/* Cancel-payment-request confirmation (#221 reclaim path). Voiding a live payment
+          link the shopper may be looking at right now is not a one-click action. */}
+      {pendingRelease && (() => {
+        const bundle = bundlesByKey[bundleKey(pendingRelease)] ?? [pendingRelease];
+        const invoiced = bundle.filter(hasInvoice);
+        const count = invoiced.length || 1;
+        return (
+          <ConfirmDialog
+            isOpen
+            title="Cancel this payment request?"
+            message={
+              count > 1
+                ? `${pendingRelease.user.name}'s payment link for ${count} items will stop working. The items stay on hold for them, and you can send a new request afterwards.`
+                : `${pendingRelease.user.name}'s payment link for "${pendingRelease.item.title}" will stop working. The item stays on hold for them, and you can send a new request afterwards.`
+            }
+            confirmLabel="Cancel the request"
+            cancelLabel="Leave it active"
+            variant="danger"
+            onCancel={() => setPendingRelease(null)}
+            onConfirm={() => {
+              const target = pendingRelease;
+              setPendingRelease(null);
+              releaseInvoiceMutation.mutate(target.id);
             }}
           />
         );

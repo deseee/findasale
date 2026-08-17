@@ -3093,6 +3093,14 @@ export const webhookHandler = async (req: Request, res: Response) => {
               where: { id: invoiceId },
               data: {
                 status: 'EXPIRED',
+                // P0 fix (2026-08-17): null the @unique `reservationId` anchor in the
+                // same flip. HoldInvoice_reservationId_key is live in Postgres and
+                // nothing ever cleared it, so a single failed charge permanently
+                // bricked that hold -- the retry the shopper is being told to make
+                // died with P2002 on reservationId before it could reach Stripe.
+                // Clearing ItemReservation.invoiceId below was only half the link.
+                // Mirrors invoiceExpiryJob.ts and releaseInvoice, which now do the same.
+                reservationId: null,
               },
             });
 
@@ -3105,12 +3113,22 @@ export const webhookHandler = async (req: Request, res: Response) => {
             // four POS/batch settlement paths. Mirrors invoiceExpiryJob.ts, which already
             // does exactly this and documents why.
             await tx.itemReservation.updateMany({
-              where: { itemId: { in: holdInvoice.itemIds } },
-              data: { status: 'CONFIRMED', invoiceId: null },
+              // Scoped to THIS invoice (2026-08-17). Matching on itemId alone reverted
+              // whatever reservation currently sits on those items -- which after a
+              // release/re-hold cycle can belong to a different shopper entirely, whose
+              // live hold would be clobbered by a stale webhook. invoiceId is the
+              // precise link and is set on every bundled hold. Claim columns cleared too
+              // so the retry this revert exists to enable isn't blocked by a stale claim.
+              where: { invoiceId: invoiceId },
+              data: { status: 'CONFIRMED', invoiceId: null, invoiceClaimToken: null, invoiceClaimedAt: null },
             });
 
             await tx.item.updateMany({
-              where: { id: { in: holdInvoice.itemIds } },
+              // Guarded on INVOICE_ISSUED (2026-08-17), matching invoiceExpiryJob and
+              // releaseInvoice. Unguarded, a late charge.failed on an item since sold
+              // through another channel dragged it back out of SOLD to RESERVED and put
+              // someone else's paid item back on sale.
+              where: { id: { in: holdInvoice.itemIds }, status: 'INVOICE_ISSUED' },
               data: { status: 'RESERVED' },
             });
           });

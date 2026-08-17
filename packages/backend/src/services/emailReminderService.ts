@@ -1,4 +1,9 @@
-import { prisma } from '../index';
+// prisma is the SAME singleton either way -- index.ts:291 just re-exports './lib/prisma'.
+// Importing it from '../index' pulls in the Express entry point, which calls
+// process.exit(1) at index.ts:47 when JWT_SECRET is unset and boots the HTTP server,
+// Socket.io, Redis, Sentry and ~80 cron jobs as a side effect. That killed the jest
+// worker outright in emailReminders.e2e.test.ts. Import the singleton directly.
+import { prisma } from '../lib/prisma';
 import twilio from 'twilio';
 import { sendPushNotification } from '../utils/webpush';
 import { buildSaleDayReminderEmail } from './emailTemplateService';

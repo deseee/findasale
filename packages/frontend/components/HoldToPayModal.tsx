@@ -33,14 +33,19 @@ interface HoldToPayModalProps {
   bundleItems?: { id: string; title: string; price: number; photoUrl?: string }[];
 }
 
+// Mirrors the 201 body of POST /reservations/:id/mark-sold
+// (reservationController.markSoldAndCreateInvoice) exactly. The previous shape declared
+// `stripeSessionId`, `itemPrice` and `platformFeeAmount`, none of which that endpoint
+// returns, and omitted the fields it does — so the success toast below was written
+// against fields that were always undefined.
 interface InvoiceResponse {
   invoiceId: string;
-  stripeSessionId: string;
   checkoutUrl: string;
   expiresAt: string;
-  itemPrice: number;
-  platformFeeAmount: number;
+  totalAmount: number;
+  totalPlatformFeeAmount: number;
   estimatedOrganizerPayout: number;
+  itemCount: number;
 }
 
 export default function HoldToPayModal({
@@ -78,8 +83,17 @@ export default function HoldToPayModal({
         { action: 'markSold' }
       );
 
+      // The payment window is the hold-timer REMAINDER (LOCKED DECISION #7), which for a
+      // default INITIATE-rank hold is 30 minutes, not 2 hours — the old copy stated a flat
+      // "expires in 2 hours" that was never true on any rank. Report the deadline the
+      // server actually set.
+      const deadline = response.data?.expiresAt ? new Date(response.data.expiresAt) : null;
+      const deadlineText =
+        deadline && !Number.isNaN(deadline.getTime())
+          ? ` The link expires at ${deadline.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}.`
+          : '';
       showToast(
-        `Invoice sent to ${shopperName} at ${shopperEmail}. Link expires in 2 hours.`,
+        `Payment request sent to ${shopperName} at ${shopperEmail}.${deadlineText}`,
         'success'
       );
 

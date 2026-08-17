@@ -722,10 +722,10 @@ model EbayPolicyMapping {
 model UserShowcase {
   id         String    @id @default(cuid())
   userId     String
-  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   slotIndex  Int // 0, 1, or 2
   ugcPhotoId Int? // nullable — slot can be empty
-  ugcPhoto   UGCPhoto? @relation(fields: [ugcPhotoId], references: [id], onDelete: SetNull)
+  ugcPhoto UGCPhoto? @relation(fields: [ugcPhotoId], references: [id], onDelete: SetNull, onUpdate: NoAction)
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
 
@@ -788,7 +788,7 @@ model CrewInvasionCode {
 model UserRoleSubscription {
   id     String @id @default(cuid())
   userId String
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade, name: "roleSubscriptions")
+  user User @relation(fields: [userId], references: [id], name: "roleSubscriptions", onDelete: Cascade, onUpdate: NoAction)
 
   role String // "ORGANIZER" | "SHOPPER" (always paired with a User.roles entry)
 
@@ -830,7 +830,7 @@ model UserRoleSubscription {
 model RoleConsent {
   id               String               @id @default(cuid())
   subscriptionId   String               @unique
-  roleSubscription UserRoleSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  roleSubscription UserRoleSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   role String // "ORGANIZER" | "SHOPPER"
 
@@ -1379,6 +1379,11 @@ model Item {
   updatedAt                       DateTime                @updatedAt
 
   // @@unique([saleId, sku]) -- Feature #300: removed — NULLs defeat compound unique in Postgres
+  // Full-text search column maintained by a Postgres trigger, not by Prisma. Queried via raw
+  // SQL in itemSearchService.ts:139/150/314. Created by migration 20260310000001.
+  // Unsupported() so Prisma stops treating it as drift; it is NEVER written by the client.
+  searchVector                    Unsupported("tsvector")?
+
   @@index([draftStatus])
   @@index([saleId, draftStatus])
   @@index([libraryId])
@@ -1726,7 +1731,7 @@ model PointsTransaction {
   itemId      String?
   purchaseId  String? // P0 Exploit Fix: Link to purchase for chargeback XP claw-back
   couponId    String? // Phase 2a: For COUPON_GENERATE sink type
-  coupon      Coupon?   @relation(fields: [couponId], references: [id], onDelete: SetNull)
+  coupon Coupon? @relation(fields: [couponId], references: [id], onDelete: SetNull, onUpdate: NoAction)
   boostType   String? // Phase 2a: For RARITY_BOOST type (e.g., "SALE_SPECIFIC")
   boostPct    Int? // Phase 2a: Boost percentage (e.g., +2)
   expiresAt   DateTime? // Phase 2a: For boost window expiration
@@ -1796,9 +1801,9 @@ model Follow {
 model ShopifyListing {
   id               String    @id @default(cuid())
   itemId           String    @unique
-  item             Item      @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  item Item @relation(fields: [itemId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   organizerId      String
-  organizer        Organizer @relation(fields: [organizerId], references: [id], onDelete: Cascade)
+  organizer Organizer @relation(fields: [organizerId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   shopifyProductId String
   shopifyVariantId String?
   syncedAt         DateTime  @default(now())
@@ -1844,7 +1849,7 @@ model ItemReservation {
                                     // (invoiceRel) so the schema tells the truth, and the claim moved to the
                                     // dedicated non-FK columns invoiceClaimToken / invoiceClaimedAt.
                                     // NEVER write anything but a real HoldInvoice.id or null into this column.
-  invoiceRel          HoldInvoice? @relation("ReservationInvoiceFk", fields: [invoiceId], references: [id], onDelete: SetNull)
+  invoiceRel HoldInvoice? @relation("ReservationInvoiceFk", fields: [invoiceId], references: [id], onDelete: SetNull, onUpdate: NoAction)
   // Back-relation for HoldInvoice.reservationId (the invoice's single "anchor" reservation).
   // Distinct from invoiceRel above -- two separate FKs exist between these two models, so
   // both relations must be explicitly named on both sides.
@@ -1873,11 +1878,11 @@ model HoldInvoice {
   // invoice covers 2+ reservations, hence a list -- the column stopped being unique 2026-08-05.
   reservations          ItemReservation[] @relation("ReservationInvoiceFk")
   shopperUserId         String
-  shopper               User             @relation("ShopperInvoices", fields: [shopperUserId], references: [id], onDelete: Cascade)
+  shopper User @relation("ShopperInvoices", fields: [shopperUserId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   organizerUserId       String
-  organizer             User             @relation("OrganizerInvoices", fields: [organizerUserId], references: [id], onDelete: Cascade)
+  organizer User @relation("OrganizerInvoices", fields: [organizerUserId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   saleId                String
-  sale                  Sale             @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  sale Sale @relation(fields: [saleId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   stripeSessionId       String?          @unique // Stripe Checkout session ID
   stripePaymentIntentId String?          @unique // Stripe payment intent ID
   status                InvoiceStatus    @default(PENDING)
@@ -1893,6 +1898,10 @@ model HoldInvoice {
   cashAmountCents       Int? // Optional: cash collected by organizer at POS
   cardAmountCents       Int? // Optional: remainder charged via Stripe (total - cash)
   cartSessionId         String? // Optional: FK to POSSession for audit trail
+  // ADR-107/108: this FK (HoldInvoice_cartSessionId_fkey) has existed in Postgres since
+  // migration 20260409120230_pos_cart_invoice_fields but was never declared here. Actions
+  // mirror the live constraint exactly (ON DELETE SET NULL / ON UPDATE NO ACTION).
+  cartSession           POSSession?      @relation(fields: [cartSessionId], references: [id], onDelete: SetNull, onUpdate: NoAction)
   createdAt             DateTime         @default(now())
   updatedAt             DateTime         @updatedAt
 
@@ -2263,7 +2272,7 @@ model Feedback {
 model FeedbackSuppression {
   id           String   @id @default(cuid())
   userId       String
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   surveyType   String
   suppressedAt DateTime @default(now())
 
@@ -2469,9 +2478,9 @@ model ItemPriceHistory {
 model PriceOverrideLog {
   id               String    @id @default(cuid())
   itemId           String
-  item             Item      @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  item Item @relation(fields: [itemId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   organizerId      String
-  organizer        Organizer @relation(fields: [organizerId], references: [id], onDelete: Cascade)
+  organizer Organizer @relation(fields: [organizerId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   aiSuggestedPrice Float? // AI's recommended price (may be null if no AI suggestion)
   organizerPrice   Float // Organizer's set price
   delta            Float? // organizerPrice - aiSuggestedPrice; null if no AI price
@@ -2514,9 +2523,9 @@ model Coupon {
 model RarityBoost {
   id        String    @id @default(cuid())
   userId    String
-  user      User      @relation("RarityBoosts", fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation("RarityBoosts", fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   saleId    String
-  sale      Sale      @relation("RarityBoosts", fields: [saleId], references: [id], onDelete: Cascade)
+  sale Sale @relation("RarityBoosts", fields: [saleId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   boostPct  Int       @default(2) // Phase 2a: +2% rarity boost for this sale
   expiresAt DateTime // Phase 2a: Sale end time (boost expires when sale closes)
   usedAt    DateTime? // Phase 2a: When claimed (null = not yet claimed)
@@ -2581,9 +2590,9 @@ model ProcessedWebhookEvent {
 model ReferralReward {
   id                String                @id @default(cuid())
   referrerId        String
-  referrer          User                  @relation("ReferralRewardsGiven", fields: [referrerId], references: [id], onDelete: Cascade)
+  referrer User @relation("ReferralRewardsGiven", fields: [referrerId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   referredUserId    String
-  referredUser      User                  @relation("ReferralRewardsReceived", fields: [referredUserId], references: [id], onDelete: Cascade)
+  referredUser User @relation("ReferralRewardsReceived", fields: [referredUserId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   rewardType        String // "POINTS" | "CREDIT"
   rewardValue       Float
   awardedAt         DateTime              @default(now())
@@ -2632,9 +2641,9 @@ model ReferralFraudSignal {
 model ReferralTranche {
   id             String @id @default(cuid())
   referrerId     String
-  referrer       User   @relation("TranchesGiven", fields: [referrerId], references: [id], onDelete: Cascade)
+  referrer User @relation("TranchesGiven", fields: [referrerId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   referredUserId String
-  referredUser   User   @relation("TranchesReceived", fields: [referredUserId], references: [id], onDelete: Cascade)
+  referredUser User @relation("TranchesReceived", fields: [referredUserId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   // Tranche release timestamps
   trancheAReleasedAt DateTime?
@@ -2660,7 +2669,7 @@ model ReferralTranche {
 model ReferrerReputationScore {
   id         String @id @default(cuid())
   referrerId String @unique
-  referrer   User   @relation(fields: [referrerId], references: [id], onDelete: Cascade)
+  referrer User @relation(fields: [referrerId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   // Scoring metrics
   totalReferrals   Int      @default(0) // Total referral pairs created in 90-day window
@@ -2722,7 +2731,7 @@ enum ExplorerRank {
 model DigitalReceipt {
   id         Int      @id @default(autoincrement())
   purchaseId String   @unique
-  purchase   Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  purchase Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   items      Json // Array of { itemTitle: string; photoUrl?: string; price: float }
   total      Float
   issuedAt   DateTime @default(now())
@@ -2732,7 +2741,7 @@ model DigitalReceipt {
 model ReturnRequest {
   id          Int          @id @default(autoincrement())
   purchaseId  String
-  purchase    Purchase     @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  purchase Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   reason      String // User-provided reason for return
   status      ReturnStatus @default(PENDING)
   requestedAt DateTime     @default(now())
@@ -2746,7 +2755,7 @@ model ReturnRequest {
 model WishlistAlert {
   id             String    @id @default(cuid())
   userId         String
-  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   name           String // User-friendly name: "Mid-Century Furniture Under $200"
   query          Json // { q: string; category: string; minPrice: int; maxPrice: int; tags: string[]; radius: int; lat: float; lng: float }
   notifyEmail    Boolean   @default(true)
@@ -2764,9 +2773,9 @@ model WishlistAlert {
 model SmartFollow {
   id          String    @id @default(cuid())
   userId      String
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   organizerId String
-  organizer   Organizer @relation(fields: [organizerId], references: [id], onDelete: Cascade)
+  organizer Organizer @relation(fields: [organizerId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   notifyEmail Boolean   @default(true)
   notifyPush  Boolean   @default(true)
   createdAt   DateTime  @default(now())
@@ -2779,7 +2788,7 @@ model SmartFollow {
 model ShopperStamp {
   id        String   @id @default(cuid())
   userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   type      String // ATTEND_SALE | MAKE_PURCHASE | WRITE_REVIEW | REFER_FRIEND
   count     Int      @default(1)
   awardedAt DateTime @default(now())
@@ -2792,7 +2801,7 @@ model ShopperStamp {
 model StampMilestone {
   id        String   @id @default(cuid())
   userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   milestone Int // 5, 20, 50
   badgeType String // BRONZE | SILVER | GOLD
   earnedAt  DateTime @default(now())
@@ -2817,7 +2826,7 @@ model OrganizerWorkspace {
   ownerId           String                      @unique
   createdAt         DateTime                    @default(now())
   updatedAt         DateTime                    @updatedAt
-  owner             Organizer                   @relation("WorkspaceOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  owner Organizer @relation("WorkspaceOwner", fields: [ownerId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   members           WorkspaceMember[]
   invites           WorkspaceInvite[]           @relation("WorkspaceInvites")
   settings          WorkspaceSettings?
@@ -2849,8 +2858,8 @@ model WorkspaceMember {
   graceRemovedAt   DateTime? // When member access was revoked due to tier downgrade
   memberGraceEndAt DateTime? // When grace period expires for this member
   accessRestored   Boolean            @default(false) // Whether member access was restored after grace period
-  workspace        OrganizerWorkspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  organizer        Organizer?         @relation("OrganizerWorkspaces", fields: [organizerId], references: [id], onDelete: Cascade)
+  workspace OrganizerWorkspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  organizer Organizer? @relation("OrganizerWorkspaces", fields: [organizerId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   user             User?              @relation("UserWorkspaceMemberships", fields: [userId], references: [id], onDelete: Cascade)
   teamMember       TeamMember?
 
@@ -2948,11 +2957,11 @@ model CollectorPassport {
 model UGCPhoto {
   id                        Int                @id @default(autoincrement())
   userId                    String
-  user                      User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   itemId                    String?
-  item                      Item?              @relation(fields: [itemId], references: [id], onDelete: SetNull)
+  item Item? @relation(fields: [itemId], references: [id], onDelete: SetNull, onUpdate: NoAction)
   saleId                    String?
-  sale                      Sale?              @relation(fields: [saleId], references: [id], onDelete: SetNull)
+  sale Sale? @relation(fields: [saleId], references: [id], onDelete: SetNull, onUpdate: NoAction)
   photoUrl                  String
   caption                   String?
   tags                      String[]           @default([])
@@ -2980,9 +2989,9 @@ model UGCPhoto {
 model UGCPhotoLike {
   id        Int      @id @default(autoincrement())
   userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   photoId   Int
-  photo     UGCPhoto @relation(fields: [photoId], references: [id], onDelete: Cascade)
+  photo UGCPhoto @relation(fields: [photoId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   createdAt DateTime @default(now())
 
   @@unique([userId, photoId])
@@ -3009,7 +3018,7 @@ model UGCPhotoReaction {
 model PhotoOpStation {
   id            String         @id @default(cuid())
   saleId        String
-  sale          Sale           @relation("SalePhotoOps", fields: [saleId], references: [id], onDelete: Cascade)
+  sale Sale @relation("SalePhotoOps", fields: [saleId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   name          String
   description   String?
   lat           Float
@@ -3026,7 +3035,7 @@ model PhotoOpStation {
 model PhotoOpShare {
   id         String         @id @default(cuid())
   stationId  String
-  station    PhotoOpStation @relation(fields: [stationId], references: [id], onDelete: Cascade)
+  station PhotoOpStation @relation(fields: [stationId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   userId     String?
   photoUrl   String
   caption    String?
@@ -3078,7 +3087,7 @@ model UserAchievement {
   achievementId String
   unlockedAt    DateTime?
   progress      Int         @default(0)
-  user          User        @relation("UserAchievements", fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation("UserAchievements", fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   achievement   Achievement @relation(fields: [achievementId], references: [id], onDelete: Restrict)
 
   @@unique([userId, achievementId])
@@ -3093,7 +3102,7 @@ model VisitStreak {
   lastVisitWeek       String?
   earlyAccessUnlocked Boolean  @default(false)
   updatedAt           DateTime @updatedAt
-  user                User     @relation("UserStreak", fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation("UserStreak", fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@index([userId])
 }
@@ -3108,7 +3117,7 @@ model PasskeyCredential {
   createdAt    DateTime  @default(now())
   lastUsedAt   DateTime?
   updatedAt    DateTime  @updatedAt
-  user         User      @relation("UserPasskeys", fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation("UserPasskeys", fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@index([userId])
 }
@@ -3119,7 +3128,7 @@ model FraudSignal {
   userId String
   user   User    @relation("UserFraudSignals", fields: [userId], references: [id], onDelete: Cascade)
   itemId String?
-  item   Item?   @relation(fields: [itemId], references: [id])
+  item Item? @relation(fields: [itemId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   saleId String
   sale   Sale    @relation(fields: [saleId], references: [id], onDelete: Cascade)
 
@@ -3185,9 +3194,9 @@ model TreasureTrail {
   user        User       @relation("UserTrails", fields: [userId], references: [id], onDelete: Cascade)
   // New discovery-based trail (V2) — organizer-anchored
   organizerId String? // Organizer who created the trail (V2 only; null for legacy V1)
-  organizer   Organizer? @relation("OrganizerTrails", fields: [organizerId], references: [id], onDelete: Restrict)
+  organizer Organizer? @relation("OrganizerTrails", fields: [organizerId], references: [id], onDelete: Restrict, onUpdate: NoAction)
   saleId      String? // Anchored sale (V2 only; null for legacy V1)
-  sale        Sale?      @relation("SaleTrails", fields: [saleId], references: [id], onDelete: Cascade)
+  sale Sale? @relation("SaleTrails", fields: [saleId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   // Trail metadata
   name         String
@@ -3242,7 +3251,7 @@ model TreasureTrail {
 model TrailStop {
   id      String        @id @default(cuid())
   trailId String
-  trail   TreasureTrail @relation(fields: [trailId], references: [id], onDelete: Cascade)
+  trail TreasureTrail @relation(fields: [trailId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   // Stop identification
   stopType        String // "SALE" | "RESALE_SHOP" | "LANDMARK" | "CAFE" | "PARTNER"
@@ -3256,7 +3265,7 @@ model TrailStop {
 
   // External reference (if applicable)
   saleId        String? // For SALE type only
-  sale          Sale?    @relation("SaleTrailStops", fields: [saleId], references: [id], onDelete: SetNull)
+  sale Sale? @relation("SaleTrailStops", fields: [saleId], references: [id], onDelete: SetNull, onUpdate: NoAction)
   googlePlaceId String? // For non-sale stops (RESALE_SHOP, LANDMARK, CAFE)
   googleRating  Decimal? // Cached from Places API
   googlePhone   String? // Cached from Places API
@@ -3287,12 +3296,12 @@ model TrailStop {
 model TrailCheckIn {
   id      String        @id @default(cuid())
   trailId String
-  trail   TreasureTrail @relation(fields: [trailId], references: [id], onDelete: Cascade)
+  trail TreasureTrail @relation(fields: [trailId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   stopId  String
-  stop    TrailStop     @relation(fields: [stopId], references: [id], onDelete: Cascade)
+  stop TrailStop @relation(fields: [stopId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   userId String
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   // GPS data
   latitude  Float
@@ -3323,12 +3332,12 @@ model TrailCheckIn {
 model TrailPhoto {
   id        String       @id @default(cuid())
   checkInId String
-  checkIn   TrailCheckIn @relation(fields: [checkInId], references: [id], onDelete: Cascade)
+  checkIn TrailCheckIn @relation(fields: [checkInId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   stopId    String
-  stop      TrailStop    @relation(fields: [stopId], references: [id], onDelete: Cascade)
+  stop TrailStop @relation(fields: [stopId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   userId String
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   // Photo storage
   cloudinaryUrl String // Cloudinary CDN URL
@@ -3350,10 +3359,10 @@ model TrailPhoto {
 model TrailCompletion {
   id      String        @id @default(cuid())
   trailId String
-  trail   TreasureTrail @relation(fields: [trailId], references: [id], onDelete: Cascade)
+  trail TreasureTrail @relation(fields: [trailId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   userId String
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   // Completion metadata
   completionBonusXp  Int // 40–80 XP based on stop count
@@ -3381,10 +3390,10 @@ model TrailCompletion {
 model TrailRating {
   id      String        @id @default(cuid())
   trailId String
-  trail   TreasureTrail @relation(fields: [trailId], references: [id], onDelete: Cascade)
+  trail TreasureTrail @relation(fields: [trailId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   userId String
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   rating Int // 1–5
   review String? @db.VarChar(500)
@@ -3433,7 +3442,7 @@ model ItemValuation {
 model ItemTypology {
   id     String @id @default(cuid())
   itemId String @unique
-  item   Item   @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  item Item @relation(fields: [itemId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   // Primary classification result
   primaryCategory     TypologyCategory
@@ -3501,7 +3510,7 @@ model EncyclopediaEntry {
 model EncyclopediaRevision {
   id      String            @id @default(cuid())
   entryId String
-  entry   EncyclopediaEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  entry EncyclopediaEntry @relation(fields: [entryId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   title    String
   content  String
@@ -3522,7 +3531,7 @@ model EncyclopediaRevision {
 model PriceBenchmark {
   id      String            @id @default(cuid())
   entryId String
-  entry   EncyclopediaEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  entry EncyclopediaEntry @relation(fields: [entryId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   condition String // NEW | USED | REFURBISHED | PARTS_OR_REPAIR
   region    String // Northeast, Midwest, South, West, National
@@ -3542,7 +3551,7 @@ model PriceBenchmark {
 model ItemCompLookup {
   id     String @id @default(cuid())
   itemId String @unique
-  item   Item   @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  item Item @relation(fields: [itemId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   // eBay comp data
   ebayListingId String?
@@ -3714,7 +3723,7 @@ model CategoryDepreciation {
 model EncyclopediaReference {
   id      String            @id @default(cuid())
   entryId String
-  entry   EncyclopediaEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  entry EncyclopediaEntry @relation(fields: [entryId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   title  String
   url    String
@@ -3728,7 +3737,7 @@ model EncyclopediaReference {
 model EncyclopediaVote {
   id      String            @id @default(cuid())
   entryId String
-  entry   EncyclopediaEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  entry EncyclopediaEntry @relation(fields: [entryId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   userId String
   user   User   @relation("EncyclopediaVote", fields: [userId], references: [id], onDelete: Cascade)
@@ -3747,7 +3756,7 @@ model EncyclopediaVote {
 model OrganizerReputation {
   id              String   @id @default(cuid())
   organizerId     String   @unique
-  organizer       User     @relation(fields: [organizerId], references: [id], onDelete: Cascade)
+  organizer User @relation(fields: [organizerId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   score           Float    @default(0) // 0–5 star rating
   responseTimeAvg Float    @default(0) // average hours from inquiry to first reply (stub)
   saleCount       Int      @default(0) // total published sales count
@@ -3787,7 +3796,7 @@ model AppraisalRequest {
 model AppraisalPhoto {
   id            String           @id @default(cuid())
   requestId     String
-  request       AppraisalRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  request AppraisalRequest @relation(fields: [requestId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   cloudinaryUrl String
   uploadedAt    DateTime         @default(now())
 
@@ -3797,7 +3806,7 @@ model AppraisalPhoto {
 model AppraisalResponse {
   id              String           @id @default(cuid())
   requestId       String
-  request         AppraisalRequest @relation("CommunityAppraisals", fields: [requestId], references: [id], onDelete: Cascade)
+  request AppraisalRequest @relation("CommunityAppraisals", fields: [requestId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   responderId     String
   responder       User             @relation("AppraisalResponses", fields: [responderId], references: [id], onDelete: Cascade)
   estimatedLow    Int
@@ -3818,7 +3827,7 @@ model AppraisalResponse {
 model AppraisalConsensus {
   id              String           @id @default(cuid())
   requestId       String           @unique
-  request         AppraisalRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  request AppraisalRequest @relation(fields: [requestId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   finalLow        Int
   finalHigh       Int
   confidenceScore Int
@@ -3834,7 +3843,7 @@ model AppraisalConsensus {
 model AppraisalAIRequest {
   id                    String           @id @default(cuid())
   requestId             String           @unique
-  request               AppraisalRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  request AppraisalRequest @relation(fields: [requestId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   userId                String
   user                  User             @relation("AppraisalAIRequests", fields: [userId], references: [id], onDelete: Restrict)
   pricePaidCents        Int
@@ -3850,7 +3859,7 @@ model AppraisalAIRequest {
 model AppraisalDispute {
   id             String           @id @default(cuid())
   requestId      String
-  request        AppraisalRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  request AppraisalRequest @relation(fields: [requestId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   raisedByUserId String
   raisedBy       User             @relation("AppraisalDisputes", fields: [raisedByUserId], references: [id], onDelete: Cascade)
   reason         String
@@ -3867,7 +3876,7 @@ model AppraisalDispute {
 model SaleRipple {
   id        String   @id @default(cuid())
   saleId    String
-  sale      Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  sale Sale @relation(fields: [saleId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   type      String   @default("VIEW") // VIEW | SHARE | SAVE | BID — activity type
   userId    String? // Optional: anonymous views won't have userId
   user      User?    @relation("SaleRipples", fields: [userId], references: [id], onDelete: SetNull)
@@ -3888,9 +3897,9 @@ model AffiliateReferral {
 
   // Referral relationship
   referrerId     String // Organizer who referred
-  referrer       User   @relation("AffiliateReferrals_Referrer", fields: [referrerId], references: [id], onDelete: Cascade)
+  referrer User @relation("AffiliateReferrals_Referrer", fields: [referrerId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   referredUserId String // Organizer who was referred
-  referredUser   User   @relation("AffiliateReferrals_Referred", fields: [referredUserId], references: [id], onDelete: Cascade)
+  referredUser User @relation("AffiliateReferrals_Referred", fields: [referredUserId], references: [id], onDelete: Restrict, onUpdate: Cascade)
 
   // Code tracking
   referralCode String @unique // Generated code (e.g., "ORG_K9X2L4")
@@ -3941,9 +3950,9 @@ model BrandFollow {
 model BidIpRecord {
   id        String   @id @default(cuid())
   bidId     String
-  bid       Bid      @relation(fields: [bidId], references: [id], onDelete: Cascade)
+  bid Bid @relation(fields: [bidId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   userId    String
-  user      User     @relation("BidIpRecords", fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation("BidIpRecords", fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   ipAddress String
   createdAt DateTime @default(now())
 
@@ -3957,7 +3966,7 @@ model BidIpRecord {
 model CheckoutEvidence {
   id                 String    @id @default(cuid())
   purchaseId         String    @unique
-  purchase           Purchase  @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  purchase Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   checkoutTimestamp  DateTime // When checkout was initiated
   emailSentAt        DateTime? // When confirmation email was sent
   checkoutIp         String? // Buyer's IP at checkout time
@@ -4097,9 +4106,9 @@ model SaleTransaction {
 model SaleDonation {
   id                  String        @id @default(cuid())
   saleId              String
-  sale                Sale          @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  sale Sale @relation(fields: [saleId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   organizerId         String
-  organizer           Organizer     @relation(fields: [organizerId], references: [id], onDelete: Cascade)
+  organizer Organizer @relation(fields: [organizerId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   charityName         String // Name of the charity receiving donation
   charityEin          String? // Tax ID / EIN for the charity
   charityAddress      String? // Charity address for receipt
@@ -4119,9 +4128,9 @@ model SaleDonation {
 model DonatedItem {
   id             String       @id @default(cuid())
   donationId     String
-  donation       SaleDonation @relation(fields: [donationId], references: [id], onDelete: Cascade)
+  donation SaleDonation @relation(fields: [donationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   itemId         String
-  item           Item         @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  item Item @relation(fields: [itemId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   estimatedValue Decimal      @db.Decimal(10, 2) // Estimated value for this item at time of donation
   createdAt      DateTime     @default(now())
 
@@ -4144,6 +4153,8 @@ model POSSession {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   expiresAt   DateTime // 2 hours from creation
+
+  holdInvoices HoldInvoice[] // ADR-107: back-relation for HoldInvoice_cartSessionId_fkey
 
   @@index([organizerId, saleId, status])
   @@index([shopperId])
@@ -4268,7 +4279,7 @@ enum BoostStatus {
 model WorkspacePermission {
   id          String             @id @default(cuid())
   workspaceId String
-  workspace   OrganizerWorkspace @relation("WorkspacePermissions", fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspace OrganizerWorkspace @relation("WorkspacePermissions", fields: [workspaceId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   role        WorkspaceRole
   action      String // e.g. "create_sale", "edit_sale", "manage_staff", "view_analytics"
   allowed     Boolean            @default(true)
@@ -4295,7 +4306,7 @@ model WorkspaceRoleTemplate {
 model TeamMember {
   id                  String                      @id @default(cuid())
   workspaceMemberId   String                      @unique
-  workspaceMember     WorkspaceMember             @relation(fields: [workspaceMemberId], references: [id], onDelete: Cascade)
+  workspaceMember WorkspaceMember @relation(fields: [workspaceMemberId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   role                String                      @default("MEMBER") // "MANAGER", "MEMBER", "VIEWER"
   department          String? // "Sales", "Operations", "Photography", etc.
   primaryPhone        String?
@@ -4315,7 +4326,7 @@ model TeamMember {
 model TeamMemberAvailability {
   id           String     @id @default(cuid())
   teamMemberId String     @unique
-  teamMember   TeamMember @relation(fields: [teamMemberId], references: [id], onDelete: Cascade)
+  teamMember TeamMember @relation(fields: [teamMemberId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   monStartTime String? // "08:00"
   monEndTime   String? // "17:00"
   tueStartTime String?
@@ -4341,7 +4352,7 @@ model TeamMemberAvailability {
 model TeamMemberPerformance {
   id             String     @id @default(cuid())
   teamMemberId   String
-  teamMember     TeamMember @relation(fields: [teamMemberId], references: [id], onDelete: Cascade)
+  teamMember TeamMember @relation(fields: [teamMemberId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   period         String // "WEEKLY" | "MONTHLY"
   itemsSold      Int        @default(0)
   revenue        Decimal    @default(0)
@@ -4358,7 +4369,7 @@ model TeamMemberPerformance {
 model WorkspaceSettings {
   id                 String             @id @default(cuid())
   workspaceId        String             @unique
-  workspace          OrganizerWorkspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspace OrganizerWorkspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   name               String?
   description        String?
   brandRules         String?            @db.Text
@@ -4378,9 +4389,9 @@ model WorkspaceSettings {
 model WorkspaceSalesActivity {
   id            String             @id @default(cuid())
   workspaceId   String
-  workspace     OrganizerWorkspace @relation("WorkspaceSalesActivity", fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspace OrganizerWorkspace @relation("WorkspaceSalesActivity", fields: [workspaceId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   saleId        String
-  sale          Sale               @relation("WorkspaceSalesActivity", fields: [saleId], references: [id], onDelete: Cascade)
+  sale Sale @relation("WorkspaceSalesActivity", fields: [saleId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   activityType  String // "CREATED", "PUBLISHED", "ENDED", "ITEM_ADDED", etc.
   staffMemberId String?
   description   String?
@@ -4396,9 +4407,9 @@ model WorkspaceSalesActivity {
 model WorkspaceSaleChat {
   id          String                 @id @default(cuid())
   workspaceId String
-  workspace   OrganizerWorkspace     @relation("WorkspaceSaleChats", fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspace OrganizerWorkspace @relation("WorkspaceSaleChats", fields: [workspaceId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   saleId      String
-  sale        Sale                   @relation("WorkspaceSaleChats", fields: [saleId], references: [id], onDelete: Cascade)
+  sale Sale @relation("WorkspaceSaleChats", fields: [saleId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   messages    WorkspaceChatMessage[]
   createdAt   DateTime               @default(now())
   updatedAt   DateTime               @updatedAt
@@ -4411,9 +4422,9 @@ model WorkspaceSaleChat {
 model WorkspaceChatMessage {
   id          String            @id @default(cuid())
   chatId      String
-  chat        WorkspaceSaleChat @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  chat WorkspaceSaleChat @relation(fields: [chatId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   organizerId String
-  organizer   Organizer         @relation("WorkspaceChatMessages", fields: [organizerId], references: [id], onDelete: Cascade)
+  organizer Organizer @relation("WorkspaceChatMessages", fields: [organizerId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   content     String
   createdAt   DateTime          @default(now())
   updatedAt   DateTime          @updatedAt
@@ -4427,9 +4438,9 @@ model WorkspaceChatMessage {
 model WorkspaceTask {
   id          String             @id @default(cuid())
   workspaceId String
-  workspace   OrganizerWorkspace @relation("WorkspaceTasks", fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspace OrganizerWorkspace @relation("WorkspaceTasks", fields: [workspaceId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   saleId      String
-  sale        Sale               @relation("WorkspaceTasks", fields: [saleId], references: [id], onDelete: Cascade)
+  sale Sale @relation("WorkspaceTasks", fields: [saleId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   title       String
   description String?
   assignedTo  String? // staff member ID (flexible, not a FK)
@@ -4448,9 +4459,9 @@ model WorkspaceTask {
 model WorkspaceLeaderboardEntry {
   id           String             @id @default(cuid())
   workspaceId  String
-  workspace    OrganizerWorkspace @relation("WorkspaceLeaderboard", fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspace OrganizerWorkspace @relation("WorkspaceLeaderboard", fields: [workspaceId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   teamMemberId String
-  teamMember   TeamMember         @relation(fields: [teamMemberId], references: [id], onDelete: Cascade)
+  teamMember TeamMember @relation(fields: [teamMemberId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   week         String // "2026-W15" ISO week format
   itemsSold    Int                @default(0)
   revenue      Decimal            @default(0)
@@ -4467,7 +4478,7 @@ model WorkspaceLeaderboardEntry {
 model WorkspaceRevenueSnapshot {
   id             String             @id @default(cuid())
   workspaceId    String
-  workspace      OrganizerWorkspace @relation("WorkspaceRevenueSnapshots", fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspace OrganizerWorkspace @relation("WorkspaceRevenueSnapshots", fields: [workspaceId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   date           DateTime // date this snapshot is for
   totalRevenue   Decimal            @default(0)
   itemsSold      Int                @default(0)
@@ -4483,9 +4494,9 @@ model WorkspaceRevenueSnapshot {
 model WorkspaceAlert {
   id          String             @id @default(cuid())
   workspaceId String
-  workspace   OrganizerWorkspace @relation("WorkspaceAlerts", fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspace OrganizerWorkspace @relation("WorkspaceAlerts", fields: [workspaceId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   saleId      String?
-  sale        Sale?              @relation("WorkspaceAlerts", fields: [saleId], references: [id], onDelete: SetNull)
+  sale Sale? @relation("WorkspaceAlerts", fields: [saleId], references: [id], onDelete: SetNull, onUpdate: NoAction)
   alertType   String // "LOW_INVENTORY", "HIGH_REVENUE", "TASK_OVERDUE", etc.
   message     String
   severity    String             @default("INFO") // "INFO", "WARNING", "CRITICAL"
@@ -4502,7 +4513,7 @@ model WorkspaceAlert {
 model EarlyAccessCache {
   id          String   @id @default(cuid())
   userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   category    String
   activatedAt DateTime @default(now())
   expiresAt   DateTime
@@ -4783,7 +4794,7 @@ model MarkdownCycle {
 model QRScannerEvent {
   id         String   @id @default(cuid())
   saleId     String?
-  sale       Sale?    @relation(fields: [saleId], references: [id], onDelete: SetNull)
+  sale Sale? @relation(fields: [saleId], references: [id], onDelete: Cascade, onUpdate: Cascade)
   shopperId  String?
   shopper    User?    @relation("QRScannerEventShopper", fields: [shopperId], references: [id], onDelete: SetNull)
   eventType  String // SCAN_INITIATED | SCAN_DECODED_ON_DOMAIN | SCAN_DECODED_OFF_DOMAIN | SCAN_CAMERA_DENIED
@@ -4840,7 +4851,7 @@ model DirectoryCrawlQueue {
 model DirectoryCrawlLog {
   id                   String              @id @default(cuid())
   queueId              String
-  queue                DirectoryCrawlQueue @relation(fields: [queueId], references: [id], onDelete: Cascade)
+  queue DirectoryCrawlQueue @relation(fields: [queueId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   runAt                DateTime            @default(now())
   sourceName           String
   metro                String
@@ -4863,7 +4874,7 @@ model DirectoryCrawlLog {
 model DirectoryClaimEmail {
   id            String    @id @default(cuid())
   organizerId   String
-  organizer     Organizer @relation(fields: [organizerId], references: [id], onDelete: Cascade)
+  organizer Organizer @relation(fields: [organizerId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   emailAddress  String
   sentAt        DateTime?
   status        String    @default("PENDING") // "PENDING" | "SENT" | "BOUNCED" | "OPTED_OUT" | "CLAIMED"
@@ -4970,7 +4981,7 @@ model ScrapedSalesJob {
 model ClaimEmail {
   id             String    @id @default(cuid())
   saleId         String
-  sale           Sale      @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  sale Sale @relation(fields: [saleId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   organizerEmail String
   sentAt         DateTime  @default(now())
   opens          Int       @default(0)
@@ -5102,7 +5113,7 @@ model OutreachAuditLog {
   metadata    Json?              @default("{}")
   createdAt   DateTime           @default(now())
 
-  organizer Organizer @relation("OutreachAuditLogs", fields: [organizerId], references: [id], onDelete: Cascade)
+  organizer Organizer @relation("OutreachAuditLogs", fields: [organizerId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@index([organizerId])
   @@index([createdAt])
