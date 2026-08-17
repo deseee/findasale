@@ -11,9 +11,28 @@
 import { buildEmail } from './emailTemplateService';
 import { emailService } from '../lib/emailService';
 import { suppressionService } from './suppressionService';
+import { redis } from '../lib/redis';
 
 const FROM_EMAIL = process.env.GMAIL_FROM_EMAIL || process.env.SES_FROM_EMAIL || 'find@outreach.finda.sale';
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://finda.sale';
+
+// Duplicate-notification guard (2026-08-17): repeat hold-place/cancel test cycles
+// on the same item by the same user were firing a fresh pair of near-identical
+// templated emails every time (no dedup existed), from find@outreach.finda.sale --
+// the same identity used for the cold-outreach rail. A burst of these got
+// spam-classified by Gmail. This short cooldown suppresses re-sends of the same
+// notification to the same recipient within the window, without affecting
+// distinct events (different shopper, different item, different action). Uses
+// the existing Redis client with graceful in-memory fallback -- see lib/redis.ts.
+const DEDUP_COOLDOWN_SECONDS = 15 * 60; // 15 minutes
+
+async function isDuplicateNotification(key: string): Promise<boolean> {
+  const redisKey = `email-dedup:${key}`;
+  const existing = await redis.get(redisKey);
+  if (existing) return true;
+  await redis.setex(redisKey, DEDUP_COOLDOWN_SECONDS, '1');
+  return false;
+}
 
 interface HoldPlacedAlertData {
   organizerEmail: string;
@@ -21,6 +40,7 @@ interface HoldPlacedAlertData {
   itemTitle: string;
   saleTitle: string;
   saleId: string;
+  shopperUserId: string; // dedup key component -- same shopper re-holding same item shouldn't re-notify within the cooldown
 }
 
 interface HoldPlacedShopperData {
@@ -60,6 +80,11 @@ export const sendHoldPlacedAlert = async (data: HoldPlacedAlertData): Promise<vo
     console.log('[saleAlert] Skipped suppressed recipient:', data.organizerEmail);
     return;
   }
+  const dedupKey = `hold-organizer:${data.organizerEmail}:${data.saleId}:${data.itemTitle}:${data.shopperUserId}`;
+  if (await isDuplicateNotification(dedupKey)) {
+    console.log('[saleAlert] Skipped duplicate hold-placed organizer alert (cooldown active):', data.organizerEmail, data.itemTitle);
+    return;
+  }
   try {
     const saleLink = `${FRONTEND_URL}/organizer/holds`;
     const html = buildEmail({
@@ -93,6 +118,11 @@ export const sendHoldPlacedAlert = async (data: HoldPlacedAlertData): Promise<vo
 export const sendHoldPlacedToShopper = async (data: HoldPlacedShopperData): Promise<void> => {
   if (await suppressionService.isHardSuppressed(data.shopperEmail)) {
     console.log('[saleAlert] Skipped suppressed recipient:', data.shopperEmail);
+    return;
+  }
+  const dedupKey = `hold-shopper:${data.shopperEmail}:${data.itemId}`;
+  if (await isDuplicateNotification(dedupKey)) {
+    console.log('[saleAlert] Skipped duplicate hold-placed shopper confirmation (cooldown active):', data.shopperEmail, data.itemTitle);
     return;
   }
   try {
@@ -136,6 +166,11 @@ export const sendItemSoldAlert = async (data: ItemSoldAlertData): Promise<void> 
     console.log('[saleAlert] Skipped suppressed recipient:', data.organizerEmail);
     return;
   }
+  const dedupKey = `item-sold:${data.organizerEmail}:${data.saleId}:${data.itemTitle}`;
+  if (await isDuplicateNotification(dedupKey)) {
+    console.log('[saleAlert] Skipped duplicate item-sold alert (cooldown active):', data.organizerEmail, data.itemTitle);
+    return;
+  }
   try {
     const saleLink = `${FRONTEND_URL}/organizer/insights`;
     const html = buildEmail({
@@ -168,6 +203,11 @@ export const sendItemSoldAlert = async (data: ItemSoldAlertData): Promise<void> 
 export const sendHoldStatusToShopper = async (data: HoldStatusShopperData): Promise<void> => {
   if (await suppressionService.isHardSuppressed(data.shopperEmail)) {
     console.log('[saleAlert] Skipped suppressed recipient:', data.shopperEmail);
+    return;
+  }
+  const dedupKey = `hold-status:${data.shopperEmail}:${data.itemId}:${data.action}`;
+  if (await isDuplicateNotification(dedupKey)) {
+    console.log('[saleAlert] Skipped duplicate hold-status shopper email (cooldown active):', data.shopperEmail, data.itemTitle, data.action);
     return;
   }
   try {

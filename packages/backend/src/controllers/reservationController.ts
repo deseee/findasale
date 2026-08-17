@@ -373,6 +373,7 @@ export const placeHold = async (req: AuthRequest, res: Response) => {
               itemTitle: item.title,
               saleTitle: sale?.title || 'Sale',
               saleId: item.saleId!,
+              shopperUserId: req.user!.id, // dedup key -- same shopper re-holding same item within cooldown won't re-notify
             }).catch(err => console.warn('[alert] Failed to send hold placed email:', err));
           });
         }
