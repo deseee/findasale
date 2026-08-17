@@ -1,4 +1,32 @@
 /**
+ * RUNNER CONVERSION NOTE (2026-08-16) -- read before editing.
+ *
+ * This file was STRUCTURALLY DEAD from the day it was written until 2026-08-16. It had never
+ * executed even once. Two independent reasons:
+ *   1. packages/backend/package.json sets jest.testMatch = ["**\/__tests__/**\/*.test.ts"].
+ *      This file was named `weeklyDigest.e2e.ts` -- no `.test.ts` suffix -- so jest never collected it.
+ *   2. It imported `describe/it/expect/vi` from `vitest`, which is not a dependency of this
+ *      repo at all. The runner is ts-jest. That import would have thrown on first execution.
+ *
+ * Fixed by renaming to `weeklyDigest.e2e.test.ts` and converting the vitest API to Jest:
+ *   - the `from 'vitest'` import removed (jest globals are ambient, typed by @types/jest)
+ *   - `vi.` -> `jest.`
+ *   - `vi.hoisted(() => X)` -> plain `var` declaration. Jest has no `hoisted`; `var` (not `const`)
+ *     is deliberate -- ts-jest hoists `jest.mock()` above these declarations, and `var` yields
+ *     `undefined` rather than a TDZ ReferenceError if a mock factory is evaluated early.
+ *   - `import { prisma } from '../index'` -> `'../lib/prisma'`. `../index` is the Express entry
+ *     point: importing it boots the HTTP server, Socket.io, Redis, Sentry and ~80 cron jobs.
+ *     index.ts:291 just re-exports the same singleton from lib/prisma, so this is the identical
+ *     object without the server boot.
+ *
+ * These conversions are MECHANICAL and UNVERIFIED. They have not been run -- not locally (this
+ * session's pnpm store and typescript symlink are broken, jest cannot start) and not in CI
+ * before landing. The assertions inside were written against the API as it stood when the file
+ * was authored and have never once been checked against the current code. Expect failures; they
+ * are real information, not noise. This suite runs in a NON-BLOCKING CI step for exactly that
+ * reason -- see .github/workflows/ci-typecheck.yml. Triage the failures and make it blocking.
+ */
+/**
  * E2E Tests for Weekly Digest Email
  *
  * Verifies that sendWeeklyDigest:
@@ -11,17 +39,13 @@
  * - Deploy to staging, run `sendWeeklyDigest()` once, and confirm delivery in Resend dashboard.
  */
 
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { vi } from 'vitest';
-import { prisma } from '../index';
+import { prisma } from '../lib/prisma';
 
-// vi.hoisted ensures the mock function is available before vi.mock hoisting
-const mockEmailsSend = vi.hoisted(() =>
-  vi.fn().mockResolvedValue({ id: 'mock-email-id-digest', error: null })
-);
+// jest.hoisted ensures the mock function is available before jest.mock hoisting
+var mockEmailsSend = jest.fn().mockResolvedValue({ id: 'mock-email-id-digest', error: null });
 
-vi.mock('resend', () => ({
-  Resend: vi.fn().mockImplementation(() => ({
+jest.mock('resend', () => ({
+  Resend: jest.fn().mockImplementation(() => ({
     emails: { send: mockEmailsSend },
   })),
 }));

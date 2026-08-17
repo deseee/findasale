@@ -3,14 +3,17 @@ name: CI Typecheck & Tests
 # Pre-deploy quality gate. Runs the same checks locally documented in CLAUDE.md so a
 # red X appears on GitHub before Vercel/Railway pick up a bad commit.
 #
-# IMPORTANT: A green/red status here does NOT block deploys by itself. Vercel and
-# Railway auto-deploy on push to main regardless of Actions status. To make this gate
-# actually block, wire it up per the instructions in the PR/README:
-#   - Vercel:  Project -> Settings -> Git -> enable "Wait for CI before deploying"
-#              (or an Ignored Build Step that checks the commit status).
-#   - Railway: Service -> Settings -> enable "Wait for CI" / check-gating, or remove
-#              auto-deploy and trigger deploys from a successful run of this workflow.
-# Until that is configured, this workflow only reports status; it does not gate.
+# CORRECTED 2026-08-16 -- the paragraph that used to sit here claimed "a green/red status here
+# does NOT block deploys by itself" and told the reader to go wire up gating. That is stale and
+# it is half wrong, so treat this workflow as load-bearing:
+#   - Railway `backend`: DOES gate. `source.checkSuites: true` is set (confirmed via Railway MCP
+#     get-service-config, 2026-08-09). A failed check suite blocks the backend deploy outright --
+#     it shows as SKIPPED in Railway's deployment list. Breaking this workflow blocks production.
+#   - Vercel (frontend): does NOT gate. The Hobby plan has no "Wait for CI" option, so frontend
+#     deploys proceed independently. Bad TypeScript still cannot reach prod: `next build` runs
+#     Next's own TS check with no ignoreBuildErrors override, and Railway's Dockerfile.production
+#     runs `npx tsc` as a hard build-abort step.
+# See CLAUDE.md 10c (CI / Deploy Verification Gate) for the authoritative version.
 #
 # GATING STATUS (S1028): FRONTEND + BACKEND typecheck BLOCKING (S1027: all 142 backend type errors
 #   cleared to 0, run #25 green); FRONTEND LINT now BLOCKING (S1028: eslint config added, 6 stale
@@ -30,6 +33,12 @@ name: CI Typecheck & Tests
 #       0 errors after the fix. NOW BLOCKING.
 #     - Backend tests: only 1 test file; `jest` cold-compiles a large import graph via
 #       ts-jest and needs --forceExit + test infra before it can gate. Left non-blocking.
+#       [SUPERSEDED 2026-08-16] "only 1 test file" was true of what jest COLLECTED, and that was
+#       the bug: seven integration/e2e suites sat in src/__tests__/ named `*.integration.ts` /
+#       `*.e2e.ts`, which testMatch (`**/__tests__/**/*.test.ts`) never matched, importing from
+#       `vitest` while the runner is ts-jest. Not one had ever executed. Renamed to `*.test.ts`
+#       and converted to Jest; they now run in the NON-BLOCKING legacy step below. The BLOCKING
+#       "Backend tests" step gates on the unit tests plus the DB-backed holdInvoiceClaim suite.
 #     - Frontend lint: the repo has NO eslint config, so `next lint` prompts/aborts.
 #       Needs an eslint config + violation cleanup before gating. Left non-blocking.
 #   Every step still RUNS and PRINTS; tests + lint just don't fail the suite yet.
@@ -61,11 +70,38 @@ jobs:
   typecheck:
     name: Typecheck, tests & lint
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     env:
       # Prevents OOM kill (exit 134/SIGABRT) on GitHub Actions ubuntu-latest runners.
       # Full-monorepo tsc exceeds the default 2GB V8 heap — 4GB cap fixes it.
       NODE_OPTIONS: --max-old-space-size=4096
+
+    # Real Postgres for the backend DB tests. Added 2026-08-16 after the Hold-to-Pay P0:
+    # markSoldAndCreateInvoice wrote a non-HoldInvoice sentinel into a column carrying a live
+    # FK (ItemReservation_invoiceId_fkey) that schema.prisma never declared. tsc accepted it,
+    # every mocked-Prisma unit test accepted it, and Postgres rejected it with P2003 on every
+    # request for ~12 days. Only a test executing against a real Postgres with the real
+    # migrations applied can catch that class of bug -- CI had no database at all until now.
+    #
+    # IMAGE: pgvector/pgvector:pg16, NOT stock postgres:16. Migration
+    # 20260707100000_add_pgvector_product_reference runs `CREATE EXTENSION IF NOT EXISTS vector`
+    # and then builds an HNSW index (pgvector >= 0.5.0). Stock postgres:16 does not ship
+    # pgvector, so `prisma migrate deploy` would fail outright on a stock image. pg_trgm
+    # (20260310000001, 20260808180000) is contrib and present in both.
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: findasale
+          POSTGRES_PASSWORD: findasale
+          POSTGRES_DB: findasale_test
+        ports:
+          - '5432:5432'
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
 
     steps:
       - name: Checkout code
@@ -89,6 +125,16 @@ jobs:
       - name: Generate Prisma client
         run: pnpm --filter ./packages/database exec prisma generate
 
+      # Applies the real migration history (369 migrations) to the CI Postgres above, so the
+      # DB the tests run against has the real constraints -- including the FKs that exist in
+      # Postgres but are (or were) absent from schema.prisma. This is the step that gives the
+      # holdInvoiceClaim tests their teeth: without the real FK present, the P0 regression
+      # test cannot fail even when the bug is reintroduced.
+      - name: Apply migrations to CI Postgres
+        run: pnpm --filter ./packages/database exec prisma migrate deploy
+        env:
+          DATABASE_URL: postgresql://findasale:findasale@localhost:5432/findasale_test
+
       # BLOCKING (S1027 FINAL): all ~142 pre-existing backend type errors fixed (verified to 0 via the
       # uncapped CI raw log across runs #17-#23) — null/never annotations, missing Prisma includes,
       # wrong field names, scraper string|undefined guards, + several latent runtime-bug fixes
@@ -107,8 +153,32 @@ jobs:
       # test expectations (dedupe normalizeAddress preserves commas as field separators by design) —
       # fixed to match the implementation. --forceExit closes the PrismaClient handle dedupe.ts opens.
       # Suite now green -> gates deploys.
+      # Scope (2026-08-16): unit tests + the DB-backed holdInvoiceClaim regression suite.
+      # The seven legacy *.integration.test.ts / *.e2e.test.ts files are excluded here and run
+      # in the NON-BLOCKING step below -- see that step's comment for why.
       - name: Backend tests
-        run: pnpm --filter ./packages/backend test -- --ci --runInBand --forceExit
+        run: pnpm --filter ./packages/backend test -- --ci --runInBand --forceExit --testPathIgnorePatterns=/node_modules/ --testPathIgnorePatterns=integration.test.ts --testPathIgnorePatterns=e2e.test.ts
+        env:
+          DATABASE_URL: postgresql://findasale:findasale@localhost:5432/findasale_test
+
+      # NON-BLOCKING, deliberately. These seven suites were structurally dead: jest testMatch is
+      # `**/__tests__/**/*.test.ts` and they were named `*.integration.ts` / `*.e2e.ts`, so not one
+      # of them had ever executed -- they also imported `describe/it/expect/vi` from `vitest` while
+      # the runner is ts-jest. Renaming + converting them to Jest (2026-08-16) makes them run for
+      # the first time ever. Because they have literally never passed even once, they are NOT
+      # allowed to gate deploys on their first landing: `continue-on-error: true` means a red
+      # result here is reported and visible but does not fail the check suite (Railway `backend`
+      # has source.checkSuites: true, so a failing blocking step blocks production deploys).
+      #
+      # This is a staging state, not the destination. Once a run shows which of the seven actually
+      # pass, fix or explicitly quarantine the failures and delete `continue-on-error` so they gate
+      # like everything else. Do NOT leave this permanently non-blocking.
+      - name: Backend legacy integration/e2e tests (NON-BLOCKING - first-ever execution)
+        continue-on-error: true
+        timeout-minutes: 12
+        run: pnpm --filter ./packages/backend test -- --ci --runInBand --forceExit --testPathPattern="(integration|e2e).test.ts"
+        env:
+          DATABASE_URL: postgresql://findasale:findasale@localhost:5432/findasale_test
 
       # BLOCKING (S1028): packages/frontend/.eslintrc.json (extends next/core-web-vitals; pre-existing
       # noise downgraded to warn/off: no-unescaped-entities off, rules-of-hooks + no-html-link-for-pages warn).

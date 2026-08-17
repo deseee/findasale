@@ -1,4 +1,32 @@
 /**
+ * RUNNER CONVERSION NOTE (2026-08-16) -- read before editing.
+ *
+ * This file was STRUCTURALLY DEAD from the day it was written until 2026-08-16. It had never
+ * executed even once. Two independent reasons:
+ *   1. packages/backend/package.json sets jest.testMatch = ["**\/__tests__/**\/*.test.ts"].
+ *      This file was named `stripe.e2e.ts` -- no `.test.ts` suffix -- so jest never collected it.
+ *   2. It imported `describe/it/expect/vi` from `vitest`, which is not a dependency of this
+ *      repo at all. The runner is ts-jest. That import would have thrown on first execution.
+ *
+ * Fixed by renaming to `stripe.e2e.test.ts` and converting the vitest API to Jest:
+ *   - the `from 'vitest'` import removed (jest globals are ambient, typed by @types/jest)
+ *   - `vi.` -> `jest.`
+ *   - `vi.hoisted(() => X)` -> plain `var` declaration. Jest has no `hoisted`; `var` (not `const`)
+ *     is deliberate -- ts-jest hoists `jest.mock()` above these declarations, and `var` yields
+ *     `undefined` rather than a TDZ ReferenceError if a mock factory is evaluated early.
+ *   - `import { prisma } from '../index'` -> `'../lib/prisma'`. `../index` is the Express entry
+ *     point: importing it boots the HTTP server, Socket.io, Redis, Sentry and ~80 cron jobs.
+ *     index.ts:291 just re-exports the same singleton from lib/prisma, so this is the identical
+ *     object without the server boot.
+ *
+ * These conversions are MECHANICAL and UNVERIFIED. They have not been run -- not locally (this
+ * session's pnpm store and typescript symlink are broken, jest cannot start) and not in CI
+ * before landing. The assertions inside were written against the API as it stood when the file
+ * was authored and have never once been checked against the current code. Expect failures; they
+ * are real information, not noise. This suite runs in a NON-BLOCKING CI step for exactly that
+ * reason -- see .github/workflows/ci-typecheck.yml. Triage the failures and make it blocking.
+ */
+/**
  * E2E Tests — Stripe Connect Express Onboarding + Fee Capture
  *
  * Covers issue #3 (beta-blocker):
@@ -21,21 +49,20 @@
  *   that (a) the platform fee is captured and (b) the organizer receives the net payout.
  */
 
-import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
-import { prisma } from '../index';
+import { prisma } from '../lib/prisma';
 
 // ── Stripe mock ───────────────────────────────────────────────────────────────
-// vi.hoisted ensures mock fn references are available when vi.mock factory runs
-const mockAccountsCreate         = vi.hoisted(() => vi.fn());
-const mockAccountLinksCreate     = vi.hoisted(() => vi.fn());
-const mockLoginLinkCreate        = vi.hoisted(() => vi.fn());
-const mockPaymentIntentsCreate   = vi.hoisted(() => vi.fn());
-const mockPaymentIntentsRetrieve = vi.hoisted(() => vi.fn());
-const mockWebhooksConstruct      = vi.hoisted(() => vi.fn());
-const mockRefundsCreate          = vi.hoisted(() => vi.fn());
+// jest.hoisted ensures mock fn references are available when jest.mock factory runs
+var mockAccountsCreate         = jest.fn();
+var mockAccountLinksCreate     = jest.fn();
+var mockLoginLinkCreate        = jest.fn();
+var mockPaymentIntentsCreate   = jest.fn();
+var mockPaymentIntentsRetrieve = jest.fn();
+var mockWebhooksConstruct      = jest.fn();
+var mockRefundsCreate          = jest.fn();
 
-vi.mock('../utils/stripe', () => ({
-  getStripe: vi.fn(() => ({
+jest.mock('../utils/stripe', () => ({
+  getStripe: jest.fn(() => ({
     accounts: {
       create: mockAccountsCreate,
       createLoginLink: mockLoginLinkCreate,
@@ -48,16 +75,14 @@ vi.mock('../utils/stripe', () => ({
     webhooks: { constructEvent: mockWebhooksConstruct },
     refunds: { create: mockRefundsCreate },
   })),
-  default: vi.fn(),
+  default: jest.fn(),
 }));
 
 // ── Resend mock (receipt emails) ──────────────────────────────────────────────
-const mockResendSend = vi.hoisted(() =>
-  vi.fn().mockResolvedValue({ id: 'mock-receipt-id', error: null })
-);
+var mockResendSend = jest.fn().mockResolvedValue({ id: 'mock-receipt-id', error: null });
 
-vi.mock('resend', () => ({
-  Resend: vi.fn().mockImplementation(() => ({
+jest.mock('resend', () => ({
+  Resend: jest.fn().mockImplementation(() => ({
     emails: { send: mockResendSend },
   })),
 }));
@@ -72,9 +97,9 @@ import {
 // ── Test helpers ──────────────────────────────────────────────────────────────
 const makeMockRes = () => {
   const res: any = {};
-  res.status = vi.fn().mockReturnValue(res);
-  res.json   = vi.fn().mockReturnValue(res);
-  res.send   = vi.fn().mockReturnValue(res);
+  res.status = jest.fn().mockReturnValue(res);
+  res.json   = jest.fn().mockReturnValue(res);
+  res.send   = jest.fn().mockReturnValue(res);
   return res;
 };
 
