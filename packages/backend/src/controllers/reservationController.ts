@@ -1733,6 +1733,7 @@ export const markSoldAndCreateInvoice = async (req: AuthRequest, res: Response) 
     const baseUrl = process.env.FRONTEND_URL || 'https://finda.sale';
 
     let stripeSession;
+    let useDirect = false; // hoisted: needs to survive past the try block into the $transaction below and the metadata backfill after it
     try {
       // Build line_items from all bundled items
       const line_items = allShopperHolds.map(hold => ({
@@ -1790,7 +1791,7 @@ export const markSoldAndCreateInvoice = async (req: AuthRequest, res: Response) 
       // call site's existing shape (below) already omits on_behalf_of -- a pre-existing,
       // partial destination-charge shape confirmed this session -- left as-is on the non-
       // Direct path; out of scope to "fix" beyond what this migration specs.
-      const useDirect = organizer.stripeConnectId
+      useDirect = organizer.stripeConnectId
         ? await shouldUseDirectCharge(organizer.id, organizer.stripeConnectId)
         : false;
 
