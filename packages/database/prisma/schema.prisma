@@ -393,6 +393,9 @@ model Organizer {
   // Feature #244 Phase 2: eBay OAuth connection
   ebayStoreUrl                    String? // eBay store URL e.g. https://www.ebay.com/str/your-store-name
   ebayConnection                  EbayConnection?                @relation("OrganizerEbayConnection")
+  // Universal Crosslister -- Official-API Tier (2026-08-18): per-organizer marketplace
+  // OAuth connections (Reverb first). See MarketplaceAccount model below.
+  marketplaceAccounts              MarketplaceAccount[]
   // Feature #244 Phase 2c: eBay Policy Routing — per-organizer weight-tier policy mappings
   ebayPolicyMapping               EbayPolicyMapping?             @relation("OrganizerEbayPolicyMapping")
   ebaySubscriptionId              String? // ORDER_CONFIRMATION subscription ID from eBay Notification API
@@ -6176,4 +6179,64 @@ model UspsZoneChartEntry {
 
   @@id([originZip3, destZip3])
   @@index([originZip3])
+}
+// ============================================================================
+// Universal Crosslister -- Official-API Tier (2026-08-18)
+// Generalized per-organizer marketplace OAuth/token connection table for official-API
+// integrations (Reverb first; more platforms added later via
+// `ALTER TYPE ... ADD VALUE IF NOT EXISTS`, same pattern as MarketplaceJobPlatform's
+// GUMTREE_AU addition above). Distinct from MarketplaceListingJob/MarketplacePosterAccount
+// above, which is the CONTENT-SCRIPT tier (Facebook/Craigslist/Gumtree AU Playwright
+// posting) -- this is the real official-API OAuth tier, same shape family as
+// EbayConnection/SocialAccount. See
+// claude_docs/architecture/ADR-DRAFT-universal-crosslister-buildout-2026-08-12.md
+// (ADDENDUM 2026-08-18) and packages/backend/src/services/marketplace/reverbConnector.ts.
+//
+// accessToken/refreshToken ARE encrypted via tokenCrypto.ts encryptToken/decryptToken
+// (enc:v1: envelope) -- unlike EbayConnection's known plaintext gap (see that model's own
+// comment above), this table closes that gap from day one, matching the
+// SocialAccount/ADR-077a precedent.
+// ============================================================================
+enum MarketplaceConnectionPlatform {
+  REVERB
+}
+
+enum MarketplaceConnectionStatus {
+  ACTIVE
+  NEEDS_REAUTH
+  REVOKED
+}
+
+model MarketplaceAccount {
+  id String @id @default(cuid())
+
+  organizerId String
+  organizer   Organizer                      @relation(fields: [organizerId], references: [id], onDelete: Cascade)
+  platform    MarketplaceConnectionPlatform
+  status      MarketplaceConnectionStatus    @default(ACTIVE)
+
+  // OAuth tokens -- ENCRYPTED at rest via tokenCrypto.ts (enc:v1:<iv>:<tag>:<ciphertext>).
+  accessToken String
+  // Reverb's documented OAuth2 Access Code Flow response does not show a refresh token
+  // field -- nullable, and callers must handle its absence gracefully (fall back to
+  // re-auth on a live 401 rather than assuming a refresh path exists).
+  refreshToken   String?
+  // Also undocumented for Reverb -- nullable. Null = unknown/assume long-lived until a live
+  // 401 proves otherwise (never synthesize a fake expiry).
+  tokenExpiresAt DateTime?
+
+  // Platform identity -- e.g. Reverb shop/user id when available (not encrypted, not secret).
+  externalUserId String?
+
+  connectedAt      DateTime  @default(now())
+  lastRefreshedAt  DateTime  @default(now())
+  lastErrorAt      DateTime?
+  lastErrorMessage String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizerId, platform])
+  @@index([organizerId])
+  @@index([platform, status])
 }

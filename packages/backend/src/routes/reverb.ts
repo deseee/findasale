@@ -1,0 +1,31 @@
+import { Router } from 'express';
+import { authenticate, requireOrganizer } from '../middleware/auth';
+import {
+  connectReverbEndpoint,
+  reverbOAuthCallback,
+  getReverbConnectionStatus,
+  disconnectReverb,
+  pushItemToReverb,
+  removeItemFromReverb,
+} from '../controllers/reverbMarketplaceController';
+
+// Universal Crosslister — Official-API Tier: Reverb OAuth connection + listing push/remove.
+// See claude_docs/architecture/ADR-DRAFT-universal-crosslister-buildout-2026-08-12.md
+// (ADDENDUM 2026-08-18) and reverbConnector.ts's file header for build context + open items.
+const router = Router();
+
+// OAuth flow
+router.get('/connect', authenticate, requireOrganizer, connectReverbEndpoint);
+router.get('/callback', reverbOAuthCallback); // Public — Reverb redirects here without a JWT
+
+// Connection management
+router.get('/connection', authenticate, requireOrganizer, getReverbConnectionStatus);
+router.delete('/connection', authenticate, requireOrganizer, disconnectReverb);
+
+// Listing push/remove — every route resolves the organizer from the JWT subject; none
+// accepts an organizer id from the client (AUTHZ-ON-EVERY-ENDPOINT / OWNERSHIP invariant,
+// CLAUDE.md §9 Security-QA Gate — full adversarial pass happens at QA time, not here).
+router.post('/items/:id/listing', authenticate, requireOrganizer, pushItemToReverb);
+router.delete('/items/:id/listing', authenticate, requireOrganizer, removeItemFromReverb);
+
+export default router;
