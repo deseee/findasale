@@ -430,7 +430,15 @@ export const bounceSuppressService = {
     try {
       messageIds = await listAllMessageIds(
         gmail,
-        '(from:mailer-daemon OR from:postmaster OR subject:(delivery status OR undeliverable OR "mail delivery" OR "failure notice" OR "returned mail" OR "delivery has failed")) -in:trash'
+        // in:anywhere (not -in:trash) -- CORRECTION 2026-08-17: without in:anywhere, Gmail's
+        // default q search scope silently excludes Spam (and Trash). Confirmed live this
+        // session: real bounce/DSN traffic (hold notifications, an NDR, a postmaster notice)
+        // was landing in Spam and this query was structurally blind to it -- 58+ days with
+        // zero new BOUNCED suppressions despite confirmed real bounces. reclassifyBounces()
+        // below already used in:anywhere and found 168 backlogged messages the instant a
+        // working mailbox token was wired up; this live/ongoing poller must match or it goes
+        // blind to spam-folder bounces again the moment the one-time backfill is done.
+        '(from:mailer-daemon OR from:postmaster OR subject:(delivery status OR undeliverable OR "mail delivery" OR "failure notice" OR "returned mail" OR "delivery has failed")) in:anywhere'
       );
     } catch (err: any) {
       result.errors.push(`Gmail list failed: ${err.message}`);
