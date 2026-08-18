@@ -4,44 +4,49 @@
  * (see claude_docs/architecture/ADR-DRAFT-universal-crosslister-buildout-2026-08-12.md,
  * "ADDENDUM 2026-08-18" section) — distinct from `MarketplaceListingJob` /
  * `MarketplacePosterAccount`, which is the CONTENT-SCRIPT tier (Facebook/Craigslist/
- * Gumtree AU Playwright posting). This file owns the real official-API OAuth tier, same
- * shape family as `EbayConnection` / `SocialAccount`.
+ * Gumtree AU Playwright posting).
  *
  * Security note: unlike `EbayConnection` (plaintext tokens, a known gap called out in its
- * own schema comment), `MarketplaceAccount.accessToken`/`refreshToken` ARE run through
- * tokenCrypto.ts's `encryptToken`/`decryptToken` envelope (enc:v1:<iv>:<tag>:<ciphertext>),
- * matching the `SocialAccount`/ADR-077a precedent. This file is the sole reader/writer of
- * those two columns for the REVERB platform — mirrors tokenStore.ts's chokepoint pattern.
+ * own schema comment), `MarketplaceAccount.accessToken` IS run through tokenCrypto.ts's
+ * `encryptToken`/`decryptToken` envelope (enc:v1:<iv>:<tag>:<ciphertext>), matching the
+ * `SocialAccount`/ADR-077a precedent. This file is the sole reader/writer of that column
+ * for the REVERB platform — mirrors tokenStore.ts's chokepoint pattern. `refreshToken` and
+ * `tokenExpiresAt` are always null for Reverb (see correction below — not applicable to
+ * this auth model).
  *
  * ============================================================================
- * UNTESTED — read this before trusting anything below at face value.
+ * CORRECTED 2026-08-18 (same session, later pass) — auth model was wrong, now fixed.
  * ============================================================================
- * No live Reverb OAuth Client ID/Secret exists yet (an account was created and
- * integrations@reverb.com was emailed asking about partner/self-serve access; no reply as
- * of 2026-08-18). Every network call in this file is written against Reverb's own published
- * docs at reverb-api.com/docs, fetched LIVE on 2026-08-18 (not from memory or a third-party
- * summary), but NONE of it has ever actually been executed against api.reverb.com or
- * sandbox.reverb.com. Treat every exported function here as CODE-ONLY (see CLAUDE.md §9)
- * until a real organizer connects and a real listing is created/verified end-to-end.
+ * The original build assumed a multi-user OAuth2 Authorization Code flow (client_id/
+ * client_secret app registration, /oauth/authorize + /oauth/token). Verified LIVE via
+ * browser this session, now that a real Reverb account (artifactmi@gmail.com) exists:
+ * reverb.com/my/api_settings has NO OAuth app registration UI at all — only a
+ * "Personal Access Tokens" section with a single "Generate New Token" button. The
+ * "Register for API Access" CTA on reverb.com/page/api just links to Reverb's public doc
+ * hub (reverb-api.com), not an application form. That hub's own Authentication doc states
+ * plainly: "To develop an app that is used only by you or to access your own data, you can
+ * generate a Personal Access Token... Reverb Personal Access Tokens do not expire."
+ * (reverb-api.com/docs/authentication, fetched live 2026-08-18). There is no self-serve
+ * multi-tenant OAuth path for a third party like FindA.Sale — every organizer who wants to
+ * connect Reverb generates their OWN non-expiring Personal Access Token from their OWN
+ * Reverb account (My Profile -> API & Integrations -> Generate New Token, scopes: public,
+ * read_listings, write_listings) and pastes it into FindA.Sale, same shape as Etsy's
+ * Personal Access tier already documented in this ADR. `connectReverbAccount` below now
+ * takes that pasted token directly instead of an OAuth `code` — no REVERB_CLIENT_ID /
+ * REVERB_CLIENT_SECRET / REVERB_OAUTH_REDIRECT_URI env vars exist or are needed.
  *
- * Specific open items, called out inline below where relevant:
- *   1. The exact OAuth2 authorize/token endpoint URLs (reverb.com/oauth/authorize,
- *      reverb.com/oauth/token) and scope names could not be re-verified by a fresh fetch
- *      this session — the specific doc page describing Reverb's multi-user OAuth2 flow
- *      ("Apps for multiple users (OAuth2 Access Code Flow)") was already cached from an
- *      earlier research pass this session and the cache could not be bypassed to re-read
- *      it. The URLs used here match the standard Rails "Doorkeeper" OAuth provider gem
- *      convention (reverb.com being a Rails app) and the endpoint named explicitly in this
- *      feature's own build spec — confirm both against reverb.com/my/api_settings the
- *      moment a real OAuth app is created there.
- *   2. Reverb's own current docs self-contradict on the listing category field name
+ * Everything else in this file (listing create/end, condition mapping, error parsing) is
+ * unaffected by this correction and remains CODE-ONLY (see CLAUDE.md §9) until a real
+ * listing is created/verified end-to-end with a real token. Two items still open, called
+ * out inline below where relevant:
+ *   1. Reverb's own current docs self-contradict on the listing category field name
  *      (`categories:[{uuid}]` in the create-listings curl example vs `category_uuids` in
  *      that same page's prose) — confirmed still contradictory via a live fetch 2026-08-18.
  *      See the `categories`/`category_uuids` handling in `createReverbListing` below.
- *   3. The documented 412 structured-error response shape (`{ message, errors: { field:
+ *   2. The documented 412 structured-error response shape (`{ message, errors: { field:
  *      [...] } }`) is handled in both `createReverbListing` and `endOrDeleteReverbListing`,
  *      per this feature's build spec — not independently re-verified by a fresh fetch of
- *      Reverb's Error Handling doc this session (also cache-blocked).
+ *      Reverb's Error Handling doc this session.
  */
 
 import { prisma } from '../../lib/prisma';
@@ -49,11 +54,6 @@ import { encryptToken, decryptToken } from '../../utils/tokenCrypto';
 import type { Item, MarketplaceAccount } from '@prisma/client';
 
 // ── Endpoints ────────────────────────────────────────────────────────────────
-// See "UNTESTED" header note #1 — authorize/token URLs follow the standard Rails
-// Doorkeeper convention and this feature's build spec; not independently re-verified
-// this session due to a tool-cache limitation, not a doc-reading shortcut.
-const REVERB_OAUTH_AUTHORIZE_URL = 'https://reverb.com/oauth/authorize';
-const REVERB_OAUTH_TOKEN_URL = 'https://reverb.com/oauth/token';
 // sandbox.reverb.com/api for testing (full-parity sandbox, confirmed live via
 // reverb-api.com/docs/testing-on-sandbox in the research pass that produced the ADR
 // addendum). Override via env for sandbox testing without a code change.
@@ -95,85 +95,36 @@ function parseReverbError(status: number, rawBody: string): { message: string; f
 }
 
 // ============================================================================
-// OAuth2 Authorization Code flow
+// Personal Access Token connect (see file header "CORRECTED 2026-08-18")
 // ============================================================================
 
-/** Build the Reverb OAuth2 authorize URL. `state` must already be HMAC-signed by the caller (see reverbMarketplaceController.ts, mirrors ebayController's connectEbayAccount pattern). */
-export function buildReverbAuthorizeUrl(state: string): string {
-  const clientId = process.env.REVERB_CLIENT_ID;
-  const redirectUri = process.env.REVERB_OAUTH_REDIRECT_URI;
-  if (!clientId || !redirectUri) {
-    throw new Error('[Reverb] REVERB_CLIENT_ID / REVERB_OAUTH_REDIRECT_URI not configured');
+/**
+ * Connect an organizer's Reverb account using a Personal Access Token they generated
+ * themselves (Reverb My Profile -> API & Integrations -> Generate New Token, scopes:
+ * public, read_listings, write_listings). Validates the token against GET /shop before
+ * persisting — an invalid/revoked token 401s there rather than being silently stored.
+ * Tokens do not expire per Reverb's own docs, so tokenExpiresAt/refreshToken stay null.
+ */
+export async function connectReverbAccount(organizerId: string, personalAccessToken: string): Promise<MarketplaceAccount> {
+  const trimmedToken = personalAccessToken.trim();
+  if (!trimmedToken) {
+    throw new Error('[Reverb] Personal Access Token is required');
   }
-  const url = new URL(REVERB_OAUTH_AUTHORIZE_URL);
-  url.searchParams.set('client_id', clientId);
-  url.searchParams.set('redirect_uri', redirectUri);
-  url.searchParams.set('response_type', 'code');
-  // Scope names UNVERIFIED — Reverb's multi-user OAuth doc (which would name the exact
-  // scope strings) is cache-blocked this session (see file header note #1). These are a
-  // best-effort guess at the minimum needed for listing read/write; confirm against
-  // reverb.com/my/api_settings when the OAuth app is created and correct if wrong.
-  url.searchParams.set('scope', 'public read_listings write_listings');
-  url.searchParams.set('state', state);
-  return url.toString();
-}
-
-/** Exchange an authorization code for tokens. Returns plaintext tokens — caller (connectReverbAccount) encrypts before persisting. */
-export async function exchangeReverbCodeForTokens(
-  code: string
-): Promise<{ accessToken: string; refreshToken: string | null; expiresInSeconds: number | null }> {
-  const clientId = process.env.REVERB_CLIENT_ID;
-  const clientSecret = process.env.REVERB_CLIENT_SECRET;
-  const redirectUri = process.env.REVERB_OAUTH_REDIRECT_URI;
-  if (!clientId || !clientSecret || !redirectUri) {
-    throw new Error('[Reverb] OAuth not configured (missing REVERB_CLIENT_ID/REVERB_CLIENT_SECRET/REVERB_OAUTH_REDIRECT_URI)');
-  }
-
-  const body = new URLSearchParams({
-    grant_type: 'authorization_code',
-    code,
-    client_id: clientId,
-    client_secret: clientSecret,
-    redirect_uri: redirectUri,
-  });
-
-  const resp = await fetch(REVERB_OAUTH_TOKEN_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
-    body: body.toString(),
-  });
-  const text = await resp.text();
-  if (!resp.ok) {
-    const { message } = parseReverbError(resp.status, text);
-    console.error(`[Reverb] Token exchange failed: ${resp.status} ${text}`);
-    throw new ReverbApiError(resp.status, message || 'Reverb token exchange failed');
-  }
-  const data = JSON.parse(text) as any;
-  return {
-    accessToken: data.access_token,
-    refreshToken: data.refresh_token ?? null,
-    // Reverb's OAuth2 Access Code response does not document a token lifetime for
-    // access_token (per this feature's build spec) — null unless the live response
-    // actually includes expires_in, in which case we use it.
-    expiresInSeconds: typeof data.expires_in === 'number' ? data.expires_in : null,
-  };
-}
-
-/** Complete the OAuth flow for an organizer: exchange the code, resolve shop identity, and upsert MarketplaceAccount (tokens encrypted at rest). */
-export async function connectReverbAccount(organizerId: string, code: string): Promise<MarketplaceAccount> {
-  const { accessToken, refreshToken, expiresInSeconds } = await exchangeReverbCodeForTokens(code);
-  const tokenExpiresAt = expiresInSeconds ? new Date(Date.now() + expiresInSeconds * 1000) : null;
 
   let externalUserId: string | null = null;
-  try {
-    const shopResp = await fetch(`${REVERB_API_BASE}/shop`, { headers: reverbHeaders(accessToken) });
-    if (shopResp.ok) {
-      const shop = (await shopResp.json()) as any;
-      externalUserId = shop?.id != null ? String(shop.id) : shop?.name ?? null;
-    }
-  } catch (e) {
-    console.warn('[Reverb] Could not resolve shop identity after OAuth', e);
+  const shopResp = await fetch(`${REVERB_API_BASE}/shop`, { headers: reverbHeaders(trimmedToken) });
+  if (!shopResp.ok) {
+    const text = await shopResp.text().catch(() => '');
+    const { message } = parseReverbError(shopResp.status, text);
+    throw new ReverbApiError(
+      shopResp.status,
+      shopResp.status === 401
+        ? 'Invalid or revoked Reverb Personal Access Token'
+        : message || 'Could not verify Reverb Personal Access Token'
+    );
   }
+  const shop = (await shopResp.json()) as any;
+  externalUserId = shop?.id != null ? String(shop.id) : shop?.name ?? null;
 
   return prisma.marketplaceAccount.upsert({
     where: { organizerId_platform: { organizerId, platform: 'REVERB' } },
@@ -181,18 +132,18 @@ export async function connectReverbAccount(organizerId: string, code: string): P
       organizerId,
       platform: 'REVERB',
       status: 'ACTIVE',
-      accessToken: encryptToken(accessToken),
-      refreshToken: refreshToken ? encryptToken(refreshToken) : null,
-      tokenExpiresAt,
+      accessToken: encryptToken(trimmedToken),
+      refreshToken: null,
+      tokenExpiresAt: null,
       externalUserId,
       connectedAt: new Date(),
       lastRefreshedAt: new Date(),
     },
     update: {
       status: 'ACTIVE',
-      accessToken: encryptToken(accessToken),
-      refreshToken: refreshToken ? encryptToken(refreshToken) : null,
-      tokenExpiresAt,
+      accessToken: encryptToken(trimmedToken),
+      refreshToken: null,
+      tokenExpiresAt: null,
       externalUserId,
       lastRefreshedAt: new Date(),
       lastErrorAt: null,

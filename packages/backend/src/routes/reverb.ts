@@ -2,21 +2,21 @@ import { Router } from 'express';
 import { authenticate, requireOrganizer } from '../middleware/auth';
 import {
   connectReverbEndpoint,
-  reverbOAuthCallback,
   getReverbConnectionStatus,
   disconnectReverb,
   pushItemToReverb,
   removeItemFromReverb,
 } from '../controllers/reverbMarketplaceController';
 
-// Universal Crosslister — Official-API Tier: Reverb OAuth connection + listing push/remove.
-// See claude_docs/architecture/ADR-DRAFT-universal-crosslister-buildout-2026-08-12.md
-// (ADDENDUM 2026-08-18) and reverbConnector.ts's file header for build context + open items.
+// Universal Crosslister — Official-API Tier: Reverb Personal Access Token connection +
+// listing push/remove. See claude_docs/architecture/ADR-DRAFT-universal-crosslister-buildout-2026-08-12.md
+// (ADDENDUM 2026-08-18) and reverbConnector.ts's file header for build context + open items
+// (including the 2026-08-18 auth-model correction — no OAuth callback route exists).
 const router = Router();
 
-// OAuth flow
-router.get('/connect', authenticate, requireOrganizer, connectReverbEndpoint);
-router.get('/callback', reverbOAuthCallback); // Public — Reverb redirects here without a JWT
+// Connect (organizer pastes their own Reverb Personal Access Token; authenticated, no
+// public callback route needed for this auth model)
+router.post('/connect', authenticate, requireOrganizer, connectReverbEndpoint);
 
 // Connection management
 router.get('/connection', authenticate, requireOrganizer, getReverbConnectionStatus);

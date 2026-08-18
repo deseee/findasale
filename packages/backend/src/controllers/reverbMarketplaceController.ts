@@ -1,31 +1,32 @@
 /**
  * reverbMarketplaceController.ts — HTTP layer for the Reverb connector
- * (services/marketplace/reverbConnector.ts). Mirrors ebayController.ts's OAuth
- * connect/callback pattern (signed-state CSRF protection) and extensionController.ts's
+ * (services/marketplace/reverbConnector.ts). Extends extensionController.ts's
  * assertItemOwned ownership-check pattern.
  *
- * Security posture (CLAUDE.md §9 Security-QA Gate — this is an "applicable feature": it
- * touches a real OAuth connection + writes to a third-party marketplace on an organizer's
- * behalf). Every route below either (a) is `authenticate` + `requireOrganizer` gated and
- * resolves the organizer strictly from the JWT subject (never a client-supplied id), or (b)
- * is the OAuth callback, which is necessarily public (Reverb's browser redirect carries no
- * FindA.Sale session) but is HMAC-signed + timing-safe-verified exactly like eBay's callback.
- * `resolveOwnedOrganizerAndItem` below re-derives ownership from `userId` on every item
- * route, and `createReverbListing`/`endOrDeleteReverbListing` in the connector re-check
- * `item.organizerId` again as defense in depth. The full adversarial pass (anonymous access,
- * wrong-role/cross-tenant, resource-state gating, actor≠target) happens at QA time per the
- * Security-QA Gate — this dev pass only lays the ownership-check groundwork QA will verify.
+ * CORRECTED 2026-08-18 (same session, later pass) — see reverbConnector.ts's file header.
+ * Reverb has no self-serve multi-tenant OAuth path; every route below is `authenticate` +
+ * `requireOrganizer` gated (there is no public OAuth-callback route anymore — the organizer
+ * pastes their own Reverb Personal Access Token directly into POST /connect, over their own
+ * authenticated FindA.Sale session, so the HMAC-signed-state CSRF pattern eBay's callback
+ * needs doesn't apply here at all).
  *
- * UNTESTED end to end — see reverbConnector.ts's file header. No live Reverb OAuth
- * credentials exist yet.
+ * Security posture (CLAUDE.md §9 Security-QA Gate — this is an "applicable feature": it
+ * touches a real connected marketplace credential + writes to a third-party marketplace on
+ * an organizer's behalf). `resolveOwnedOrganizerAndItem` below re-derives ownership from
+ * `userId` on every item route, and `createReverbListing`/`endOrDeleteReverbListing` in the
+ * connector re-check `item.organizerId` again as defense in depth. The full adversarial pass
+ * (anonymous access, wrong-role/cross-tenant, resource-state gating, actor≠target) happens
+ * at QA time per the Security-QA Gate — this dev pass only lays the ownership-check
+ * groundwork QA will verify.
+ *
+ * UNTESTED end to end — see reverbConnector.ts's file header. No real Reverb listing has
+ * been created/verified yet.
  */
 
-import crypto from 'crypto';
-import { Request, Response } from 'express';
+import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import {
-  buildReverbAuthorizeUrl,
   connectReverbAccount,
   disconnectReverbAccount,
   checkReverbConnection,
@@ -60,11 +61,12 @@ function respondReverbError(res: Response, error: any, fallbackMessage: string) 
 }
 
 /**
- * GET /api/reverb/connect
- * Build the Reverb OAuth2 authorize URL for the calling organizer. Signed-state pattern
- * copied verbatim from ebayController.connectEbayAccount (same forgery rationale — the
- * callback is a public route with no session cookie, so an unsigned state would let an
- * attacker bind an arbitrary Reverb account to any victim organizerId).
+ * POST /api/reverb/connect
+ * Body: { personalAccessToken: string }
+ * Connect the calling organizer's Reverb account using a Personal Access Token they
+ * generated themselves on reverb.com (My Profile -> API & Integrations -> Generate New
+ * Token). Authenticated + organizer-scoped — no public callback route exists for Reverb
+ * (see file header "CORRECTED 2026-08-18").
  */
 export const connectReverbEndpoint = async (req: AuthRequest, res: Response) => {
   try {
@@ -80,97 +82,20 @@ export const connectReverbEndpoint = async (req: AuthRequest, res: Response) => 
       return;
     }
 
-    const jwtSecret = process.env.JWT_SECRET;
-    if (!jwtSecret) {
-      console.error('[Reverb] JWT_SECRET missing — cannot sign OAuth state');
-      res.status(500).json({ message: 'Server misconfigured (missing JWT_SECRET)' });
-      return;
-    }
-    const nonce = crypto.randomBytes(16).toString('hex');
-    const statePayload = { organizerId: organizer.id, nonce, iat: Date.now() };
-    const payloadStr = JSON.stringify(statePayload);
-    const stateSig = crypto.createHmac('sha256', jwtSecret).update(payloadStr).digest('base64url');
-    const stateToken = `${Buffer.from(payloadStr).toString('base64url')}.${stateSig}`;
-
-    const redirectUrl = buildReverbAuthorizeUrl(stateToken);
-    res.json({ redirectUrl });
-  } catch (error) {
-    console.error('[Reverb] Connect error:', error);
-    res.status(500).json({ message: 'Failed to initiate Reverb OAuth' });
-  }
-};
-
-/**
- * GET /api/reverb/callback — PUBLIC endpoint, Reverb redirects here without a FindA.Sale
- * JWT. Organizer id is encoded + HMAC-signed in `state` (set in connectReverbEndpoint
- * above). Signature verification copied verbatim from ebayController.ebayOAuthCallback.
- */
-export const reverbOAuthCallback = async (req: Request, res: Response) => {
-  try {
-    const { code, state } = req.query as { code?: string; state?: string };
-    if (!code) {
-      res.status(400).json({ message: 'Authorization code missing' });
-      return;
-    }
-    if (!state) {
-      res.status(400).json({ message: 'State parameter missing' });
+    const personalAccessToken = typeof req.body?.personalAccessToken === 'string' ? req.body.personalAccessToken : '';
+    if (!personalAccessToken.trim()) {
+      res.status(400).json({ message: 'personalAccessToken is required' });
       return;
     }
 
-    const jwtSecret = process.env.JWT_SECRET;
-    if (!jwtSecret) {
-      console.error('[Reverb] JWT_SECRET missing — cannot verify OAuth state');
-      res.status(500).json({ message: 'Server misconfigured (missing JWT_SECRET)' });
-      return;
-    }
-    const dotIdx = state.lastIndexOf('.');
-    if (dotIdx <= 0 || dotIdx === state.length - 1) {
-      res.status(400).json({ message: 'Invalid state parameter' });
-      return;
-    }
-    const encodedPayload = state.slice(0, dotIdx);
-    const providedSig = state.slice(dotIdx + 1);
-
-    let statePayload: { organizerId: string; nonce: string; iat: number };
-    let payloadStr: string;
-    try {
-      payloadStr = Buffer.from(encodedPayload, 'base64url').toString('utf-8');
-      statePayload = JSON.parse(payloadStr);
-    } catch (e) {
-      console.error('[Reverb] Failed to decode state parameter:', e);
-      res.status(400).json({ message: 'Invalid state parameter' });
-      return;
-    }
-
-    const expectedSig = crypto.createHmac('sha256', jwtSecret).update(payloadStr).digest('base64url');
-    const providedSigBuf = Buffer.from(providedSig);
-    const expectedSigBuf = Buffer.from(expectedSig);
-    if (providedSigBuf.length !== expectedSigBuf.length || !crypto.timingSafeEqual(providedSigBuf, expectedSigBuf)) {
-      console.warn('[Reverb] OAuth state signature mismatch — possible forgery attempt');
-      res.status(400).json({ message: 'Invalid state signature' });
-      return;
-    }
-
-    const stateAge = Date.now() - statePayload.iat;
-    if (stateAge > 10 * 60 * 1000) {
-      res.status(400).json({ message: 'State parameter expired' });
-      return;
-    }
-
-    const organizer = await prisma.organizer.findUnique({ where: { id: statePayload.organizerId } });
-    if (!organizer) {
-      res.status(404).json({ message: 'Organizer not found' });
-      return;
-    }
-
-    await connectReverbAccount(organizer.id, code);
-
-    const frontendUrl = process.env.FRONTEND_URL ?? 'https://finda.sale';
-    res.redirect(`${frontendUrl}/organizer/settings?reverb_connected=true`);
-  } catch (error) {
-    console.error('[Reverb] OAuth callback error:', error);
-    const frontendUrl = process.env.FRONTEND_URL ?? 'https://finda.sale';
-    res.redirect(`${frontendUrl}/organizer/settings?reverb_connected=false`);
+    const account = await connectReverbAccount(organizer.id, personalAccessToken);
+    res.json({
+      success: true,
+      connected: account.status === 'ACTIVE',
+      externalUserId: account.externalUserId,
+    });
+  } catch (error: any) {
+    respondReverbError(res, error, 'Failed to connect Reverb account');
   }
 };
 
