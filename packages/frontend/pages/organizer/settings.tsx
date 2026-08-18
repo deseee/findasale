@@ -38,8 +38,13 @@ const OrganizerSettingsPage = () => {
   const { showSurvey } = useFeedbackSurvey();
   const { tier, isPro } = useOrganizerTier();
   const { isLowBandwidth, networkType, toggleLowBandwidth } = useNetworkQuality();
-  const [activeTab, setActiveTab] = useState<'payments' | 'notifications' | 'profile' | 'subscription' | 'appearance' | 'verification' | 'security' | 'help' | 'ebay' | 'website'>('payments');
+  const [activeTab, setActiveTab] = useState<'payments' | 'notifications' | 'profile' | 'subscription' | 'appearance' | 'verification' | 'security' | 'help' | 'ebay' | 'reverb' | 'website'>('payments');
   const [businessName, setBusinessName] = useState(user?.businessName || '');
+  // Universal Crosslister -- Reverb (Official-API Tier, Personal Access Token model, see
+  // reverbConnector.ts's 2026-08-18 auth-model correction). Local-only, never logged/persisted
+  // client-side beyond this input -- POSTed directly to /reverb/connect on submit.
+  const [reverbTokenInput, setReverbTokenInput] = useState('');
+  const [isConnectingReverb, setIsConnectingReverb] = useState(false);
   const [phone, setPhone] = useState('');
   const [bio, setBio] = useState('');
   const [tagline, setTagline] = useState('');
@@ -219,6 +224,42 @@ const OrganizerSettingsPage = () => {
     },
     onError: (error: any) => {
       const msg = error.response?.data?.message || 'Failed to disconnect eBay account';
+      showToast(msg, 'error');
+    }
+  });
+
+  // Reverb connection status query (Universal Crosslister, Official-API Tier)
+  const { data: reverbStatus, isLoading: reverbStatusLoading, refetch: refetchReverbStatus } = useQuery({
+    queryKey: ['reverb-connection-status'],
+    queryFn: () => api.get('/reverb/connection').then(r => r.data),
+    enabled: !!user
+  });
+
+  // Connect Reverb mutation -- organizer pastes their own Personal Access Token
+  const connectReverbMutation = useMutation({
+    mutationFn: (personalAccessToken: string) => api.post('/reverb/connect', { personalAccessToken }),
+    onSuccess: () => {
+      setReverbTokenInput('');
+      setIsConnectingReverb(false);
+      refetchReverbStatus();
+      showToast('Reverb account connected', 'success');
+    },
+    onError: (error: any) => {
+      setIsConnectingReverb(false);
+      const msg = error.response?.data?.message || 'Failed to connect Reverb account';
+      showToast(msg, 'error');
+    }
+  });
+
+  // Disconnect Reverb mutation
+  const disconnectReverbMutation = useMutation({
+    mutationFn: () => api.delete('/reverb/connection'),
+    onSuccess: () => {
+      refetchReverbStatus();
+      showToast('Reverb account disconnected', 'success');
+    },
+    onError: (error: any) => {
+      const msg = error.response?.data?.message || 'Failed to disconnect Reverb account';
       showToast(msg, 'error');
     }
   });
@@ -738,7 +779,7 @@ const OrganizerSettingsPage = () => {
 
           {/* Tabs */}
           <div className="flex gap-4 mb-8 border-b border-warm-200 dark:border-gray-700 overflow-x-auto flex-nowrap">
-            {(['payments', 'subscription', 'verification', 'notifications', 'profile', 'security', 'appearance', 'ebay', ...(tier !== 'SIMPLE' && tier !== null ? ['website'] : []), 'help'] as const).map((tab) => {
+            {(['payments', 'subscription', 'verification', 'notifications', 'profile', 'security', 'appearance', 'ebay', 'reverb', ...(tier !== 'SIMPLE' && tier !== null ? ['website'] : []), 'help'] as const).map((tab) => {
               const tabLabel = tab === 'verification' ? 'Get Verified' : tab === 'website' ? 'Website' : tab.charAt(0).toUpperCase() + tab.slice(1);
               return (
                 <button
@@ -2283,6 +2324,93 @@ const OrganizerSettingsPage = () => {
                 </label>
               </div>
 
+            </div>
+          )}
+
+          {/* Reverb Tab */}
+          {activeTab === 'reverb' && (
+            <div className="space-y-6">
+              <div className="card p-6">
+                <div className="flex items-center gap-2 mb-4">
+                  <h2 className="text-xl font-semibold text-warm-900 dark:text-gray-100">Reverb Account</h2>
+                  <Tooltip content="Connect your Reverb account to push music gear listings from FindA.Sale directly to Reverb." position="right" />
+                </div>
+                <p className="text-warm-600 dark:text-gray-400 mb-2">
+                  Reverb connects with a Personal Access Token instead of a login popup. Generate one from your own Reverb account, then paste it below.
+                </p>
+                <ol className="text-sm text-warm-600 dark:text-gray-400 mb-6 list-decimal list-inside space-y-1">
+                  <li>On Reverb, go to <span className="font-medium">My Profile → API & Integrations</span></li>
+                  <li>Click <span className="font-medium">Generate New Token</span></li>
+                  <li>Select the <span className="font-medium">public</span>, <span className="font-medium">read_listings</span>, and <span className="font-medium">write_listings</span> scopes</li>
+                  <li>Copy the token and paste it here — Reverb only shows it once</li>
+                </ol>
+
+                {reverbStatusLoading ? (
+                  <div className="flex items-center gap-2 text-warm-600 dark:text-gray-400">
+                    <div className="w-4 h-4 border-2 border-amber-600 border-t-transparent rounded-full animate-spin" />
+                    Checking connection status...
+                  </div>
+                ) : reverbStatus?.connected ? (
+                  <div className="space-y-4">
+                    <div className="p-4 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
+                      <div className="flex items-center gap-2 mb-2">
+                        <svg className="w-5 h-5 text-green-600 dark:text-green-400" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                        </svg>
+                        <p className="font-semibold text-green-800 dark:text-green-200">Reverb Connected</p>
+                      </div>
+                      {reverbStatus?.externalUserId && (
+                        <p className="text-sm text-green-700 dark:text-green-300">
+                          Shop: <span className="font-medium">{reverbStatus.externalUserId}</span>
+                        </p>
+                      )}
+                      {reverbStatus?.connectedAt && (
+                        <p className="text-sm text-green-700 dark:text-green-300">
+                          Connected on {new Date(reverbStatus.connectedAt).toLocaleDateString()}
+                        </p>
+                      )}
+                      {reverbStatus?.error && (
+                        <div className="mt-3 p-2 rounded bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+                          <p className="text-xs text-red-700 dark:text-red-300">
+                            <strong>Token issue:</strong> {reverbStatus.error}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => disconnectReverbMutation.mutate()}
+                      disabled={disconnectReverbMutation.isPending}
+                      className="bg-warm-100 dark:bg-gray-700 hover:bg-warm-200 dark:hover:bg-gray-600 text-warm-900 dark:text-gray-100 font-semibold py-2 px-4 rounded-lg disabled:opacity-50 text-sm"
+                    >
+                      {disconnectReverbMutation.isPending ? 'Disconnecting...' : 'Disconnect Reverb'}
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    <input
+                      type="password"
+                      value={reverbTokenInput}
+                      onChange={(e) => setReverbTokenInput(e.target.value)}
+                      placeholder="Paste your Reverb Personal Access Token"
+                      className="flex-1 px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
+                    />
+                    <button
+                      onClick={() => {
+                        if (!reverbTokenInput.trim()) {
+                          showToast('Paste your Reverb Personal Access Token first', 'error');
+                          return;
+                        }
+                        setIsConnectingReverb(true);
+                        connectReverbMutation.mutate(reverbTokenInput.trim());
+                      }}
+                      disabled={isConnectingReverb}
+                      className="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-6 rounded-lg disabled:opacity-50 whitespace-nowrap"
+                    >
+                      {isConnectingReverb ? 'Connecting...' : 'Connect Reverb'}
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
