@@ -149,6 +149,12 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
     select: {
       id: true, saleId: true, title: true, description: true, price: true,
       category: true, condition: true, photoUrls: true, qrEmbedEnabled: true, createdAt: true,
+      // 2026-08-18 (S-CROSSLISTER-ESTATE-VERTICAL-RESEARCH batch 5): brand/size/color/material --
+      // fas-poshmark.js/fas-mercari.js/fas-vinted.js/fas-grailed.js already reference
+      // item.brand/item.size/item.color/item.material(s), but NONE of the four were ever in
+      // this select, so those autofill lines were silent no-ops even for brand (which the
+      // organizer-facing edit-item page has captured all along via a separate, unrelated select).
+      brand: true, size: true, color: true, material: true,
       packageWeightOz: true, aiPackageWeightOz: true, ebayShippingOverride: true, shippingAvailable: true,
       allowBestOffer: true, bestOfferMinimumAmt: true,
       // ADR fb-package-weight-estimator (2026-07-22): needed to call

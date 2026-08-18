@@ -695,6 +695,9 @@ const ITEM_DETAIL_SELECT = {
         packageConfirmedByOrganizer: true,
         packageEstimateSource: true,
         brand: true,
+        size: true,
+        color: true,
+        material: true,
         mpn: true,
         upc: true,
         catalogSuggestions: true,
@@ -1442,7 +1445,7 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     }
 
     const { id } = req.params;
-    const { title, description, price, auctionStartPrice, auctionReservePrice, bidIncrement, auctionEndTime, status, category, condition, conditionGrade, shippingAvailable, shippingPrice, reverseAuction, reverseDailyDrop, reverseFloorPrice, reverseStartDate, listingType, isAiTagged, rarity, qrEmbedEnabled, tags, backgroundRemoved, draftStatus, isHighValue, estimatedValue, aiSuggestedPrice, aiConfidence, quantity, stockTotal, ebayShippingOverride, ebayFulfillmentPolicyOverrideId, packageWeightOz, packageLengthIn, packageWidthIn, packageHeightIn, packageType, packageConfirmedByOrganizer, packageEstimateSource, upc, ean, isbn, mpn, brand, ebayEpid, conditionNotes, allowBestOffer, bestOfferAutoAcceptAmt, bestOfferMinimumAmt, ebaySecondaryCategoryId, ebaySubtitle, ebayCategoryId, ebayCategoryName, isLegendary, lotNumber, costBasis, roomTag } = req.body;
+    const { title, description, price, auctionStartPrice, auctionReservePrice, bidIncrement, auctionEndTime, status, category, condition, conditionGrade, shippingAvailable, shippingPrice, reverseAuction, reverseDailyDrop, reverseFloorPrice, reverseStartDate, listingType, isAiTagged, rarity, qrEmbedEnabled, tags, backgroundRemoved, draftStatus, isHighValue, estimatedValue, aiSuggestedPrice, aiConfidence, quantity, stockTotal, ebayShippingOverride, ebayFulfillmentPolicyOverrideId, packageWeightOz, packageLengthIn, packageWidthIn, packageHeightIn, packageType, packageConfirmedByOrganizer, packageEstimateSource, upc, ean, isbn, mpn, brand, size, color, material, ebayEpid, conditionNotes, allowBestOffer, bestOfferAutoAcceptAmt, bestOfferMinimumAmt, ebaySecondaryCategoryId, ebaySubtitle, ebayCategoryId, ebayCategoryName, isLegendary, lotNumber, costBasis, roomTag } = req.body;
 
     // #102: Validate price >= 0
     if (price !== undefined && price !== null) {
@@ -1577,6 +1580,9 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
       // brand is also set later in the eBay parity block — skip here to avoid conflict
       fieldsBeingEdited.push('brand');
     }
+    if (size !== undefined) fieldsBeingEdited.push('size');
+    if (color !== undefined) fieldsBeingEdited.push('color');
+    if (material !== undefined) fieldsBeingEdited.push('material');
 
     // Feature #57: Rarity is always auto-assigned from price — organizers cannot override it
     if (price !== undefined) {
@@ -1726,6 +1732,9 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     if (isbn !== undefined) updateData.isbn = isbn || null;
     if (mpn !== undefined) updateData.mpn = mpn || null;
     if (brand !== undefined) updateData.brand = brand || null;
+    if (size !== undefined) updateData.size = size || null;
+    if (color !== undefined) updateData.color = color || null;
+    if (material !== undefined) updateData.material = material || null;
     if (ebayEpid !== undefined) updateData.ebayEpid = ebayEpid || null;
     if (conditionNotes !== undefined) updateData.conditionNotes = conditionNotes || null;
     if (allowBestOffer !== undefined) updateData.allowBestOffer = allowBestOffer === true || allowBestOffer === 'true';

@@ -288,8 +288,8 @@
     await tryFill('Description', item.description, (v) => fillText('Description', v));
     await pickMarketTier();
     await tryFill('Category', item.category, (v) => pickCategory(v));
-    // Color/Size: FindA.Sale's Item model has no color/size fields today (confirmed against
-    // schema.prisma) -- undefined on every real queue item, tryFill's own guard skips silently.
+    // 2026-08-18: color/size now exist on Item and flow through getExtensionItems ->
+    // popup.js's queue map. tryFill's own guard still skips silently on unset items.
     await tryFill('Color', item.color, (v) => fillText('Color', v));
     await tryFill('Size', item.size, (v) => fillSize(v));
     // Measurements deliberately NEVER filled -- see file header. No call to any measurements
@@ -324,10 +324,10 @@
       if (designerResult === 'no_match') { showDesignerNotFoundOverlay(item, index, total, item.brand); return; }
       if (designerResult === 'field_missing') console.warn('[FAS Grailed] Designer field not found (UNVERIFIED selector) -- continuing to fill the rest of the form, but Grailed will likely block submission without a Designer set.');
     } else {
-      // FindA.Sale's Item model has no brand field today (confirmed against schema.prisma) --
-      // this will be the case for every real queue item until that data exists. Not a hard stop
-      // by itself (a genuinely brand-less vintage/unbranded item is a real Grailed use case),
-      // but flagged loudly since Designer is normally required there.
+      // brand now exists on Item (2026-08-18) but is still commonly unset -- this branch
+      // fires for any genuinely brand-less item, not just a structural gap. Not a hard stop by
+      // itself (a genuinely brand-less vintage/unbranded item is a real Grailed use case), but
+      // flagged loudly since Designer is normally required there.
       console.warn('[FAS Grailed] No brand/designer data on this item -- Grailed generally requires a Designer to be set; the organizer will need to pick one manually.');
     }
     const photosOk = await fillListing(item);

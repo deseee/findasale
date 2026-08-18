@@ -99,6 +99,14 @@ const EditItemPage = () => {
     shippingPrice: '',
     // Product identifiers (populated by barcode scan)
     brand: '',
+    // 2026-08-18: size/color/material -- feed the Poshmark/Mercari/Vinted/Grailed content
+    // scripts, which already read item.size/item.color/item.material (previously always
+    // undefined since these fields didn't exist on Item at all). Same plain-text, organizer-
+    // entered pattern as Brand -- no dropdown/enum, connectors map free text to each
+    // platform's own picker.
+    size: '',
+    color: '',
+    material: '',
     upc: '',
     mpn: '',
     // eBay Best Offers
@@ -627,6 +635,9 @@ const EditItemPage = () => {
         shippingPrice: item.shippingPrice !== undefined && item.shippingPrice !== null ? String(item.shippingPrice) : '',
         // Product identifiers (populated by barcode scan or pre-existing data)
         brand: item.brand || '',
+        size: item.size || '',
+        color: item.color || '',
+        material: item.material || '',
         upc: item.upc || '',
         mpn: item.mpn || '',
         // eBay Best Offers: reverse-compute percentages from stored dollar amounts
@@ -1135,6 +1146,48 @@ const EditItemPage = () => {
               <div className="text-xs text-gray-400 mt-0.5">
                 Required by eBay for many categories. Your value is always used exactly as entered.
               </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">
+                  Size <span className="text-warm-400 font-normal">(optional)</span>
+                </label>
+                <input
+                  type="text"
+                  value={formData.size}
+                  onChange={(e) => setFormData({ ...formData, size: e.target.value })}
+                  placeholder="e.g. Medium, 10, 32x34"
+                  className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">
+                  Color <span className="text-warm-400 font-normal">(optional)</span>
+                </label>
+                <input
+                  type="text"
+                  value={formData.color}
+                  onChange={(e) => setFormData({ ...formData, color: e.target.value })}
+                  placeholder="e.g. Navy Blue"
+                  className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-warm-700 dark:text-warm-300 mb-2">
+                  Material <span className="text-warm-400 font-normal">(optional)</span>
+                </label>
+                <input
+                  type="text"
+                  value={formData.material}
+                  onChange={(e) => setFormData({ ...formData, material: e.target.value })}
+                  placeholder="e.g. Cotton, Leather"
+                  className="w-full px-4 py-2 border border-warm-300 dark:border-gray-600 dark:bg-gray-800 dark:text-warm-100 rounded-lg focus:ring-2 focus:ring-amber-500"
+                />
+              </div>
+            </div>
+            <div className="text-xs text-gray-400 -mt-1">
+              Used by clothing/apparel-style marketplace listings (Poshmark, Mercari, Vinted, Grailed) and eBay item specifics. Leave blank if not applicable.
             </div>
 
             <div className="grid grid-cols-2 gap-3">

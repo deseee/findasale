@@ -1316,6 +1316,17 @@ model Item {
   isbn                            String?
   mpn                             String?
   brand                           String?
+  // 2026-08-18 (S-CROSSLISTER-ESTATE-VERTICAL-RESEARCH batch 5): Poshmark/Mercari/Vinted/
+  // Grailed content scripts (fas-poshmark.js/fas-mercari.js/fas-vinted.js/fas-grailed.js)
+  // already reference item.size/item.color/item.material(s) -- these fields did not exist on
+  // Item, so those autofill lines were silent no-ops. Mirrors brand's plain-string pattern
+  // (not the `tags` array -- tags is AI-generated free-text search matching, a different
+  // purpose from a structured, organizer-set apparel/goods attribute). Single string, not an
+  // array, even for material -- fas-vinted.js's item.materials array usage is corrected to
+  // wrap this single value instead.
+  size                             String?
+  color                            String?
+  material                         String?
   ebayEpid                        String?
   // ADR grounded-identification-production-2026-07-02: winning grounded product identity
   groundedIdentity                String? // e.g. "Tupperware CoolSpot Trivet — trivet"

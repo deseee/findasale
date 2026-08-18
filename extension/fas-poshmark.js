@@ -315,10 +315,9 @@
     }
     // Original/MSRP price deliberately skipped -- FindA.Sale carries no such data (never invent).
     await tryFill('Category', item.category, (v) => pickCategory(v));
-    // Brand/Size/Color: FindA.Sale's Item model has no brand/size/color fields today (confirmed
-    // against schema.prisma this dispatch) -- these will be undefined on every real queue item
-    // and tryFill's own undefined/null/'' guard skips them silently (no warning spam for a field
-    // that structurally can never be present yet). Left wired for when that data exists.
+    // 2026-08-18: brand/size/color now exist on Item and flow through getExtensionItems ->
+    // popup.js's queue map. tryFill's own undefined/null/'' guard still skips silently on
+    // items where the organizer hasn't set a value.
     await tryFill('Brand', item.brand, (v) => fillAutocomplete('Brand', v));
     await tryFill('Size', item.size, (v) => fillSelectLike('Size', v));
     await tryFill('Color', item.color, (v) => fillSelectLike('Color', v));

@@ -320,6 +320,11 @@ async function startQueue() {
     packageWeightOz: it.packageWeightOz, aiPackageWeightOz: it.aiPackageWeightOz,
     shippingOverride: it.shippingOverride,
     allowBestOffer: it.allowBestOffer, bestOfferMinimumAmt: it.bestOfferMinimumAmt,
+    // 2026-08-18: brand/size/color/material passthrough -- fas-poshmark.js/fas-mercari.js/
+    // fas-vinted.js/fas-grailed.js all reference these; previously always undefined since this
+    // map never included them even though getExtensionItems now returns them. Same
+    // never-invent rule as the location fields below: absent stays undefined, human fills it.
+    brand: it.brand, size: it.size, color: it.color, material: it.material,
     // Location passthrough (Craigslist geographic_area + postal). Whatever the backend supplies
     // flows through; absent fields stay undefined and fas-craigslist.js simply leaves the
     // corresponding field for the human to complete -- it never invents a city or ZIP.

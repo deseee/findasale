@@ -295,15 +295,13 @@
     await tryFill('Title', item.title, (v) => fillText('Title', v));
     await tryFill('Description', item.description, (v) => fillText('Description', v));
     await tryFill('Category', item.category, (v) => pickCategory(v));
-    // Brand/Size/Color/Material: FindA.Sale's Item model has no brand/size/color/material fields
-    // today (confirmed against schema.prisma) -- undefined on every real queue item, tryFill's
-    // own guard skips them silently. Wired for when that data exists.
+    // 2026-08-18: brand/size/color/material now exist on Item (single string each, not an
+    // array -- see schema.prisma comment) and flow through getExtensionItems -> popup.js's
+    // queue map. tryFill's own undefined/null/'' guard still skips silently on unset items.
     await tryFill('Brand', item.brand, (v) => fillBrand('Brand', v));
     await tryFill('Size', item.size, (v) => fillSelectLike('Size', v));
     await tryFill('Color', item.color, (v) => fillSelectLike('Color', v));
-    if (Array.isArray(item.materials)) {
-      for (const m of item.materials.slice(0, 3)) { await tryFill('Material', m, (v) => fillSelectLike('Material', v)); }
-    }
+    await tryFill('Material', item.material, (v) => fillSelectLike('Material', v));
     const conditionLabel = mapVintedCondition(item.condition);
     await tryFill('Condition', conditionLabel, (v) => fillSelectLike('Condition', v));
     if (item.price != null && isFinite(Number(item.price))) {

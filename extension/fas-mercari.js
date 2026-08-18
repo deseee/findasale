@@ -296,10 +296,10 @@
     await tryFill('Description', item.description, (v) => fillText('Description', v));
     // Category BEFORE brand -- Mercari's brand list is category-aware (see fillBrand comment).
     await tryFill('Category', item.category, (v) => pickCategory(v));
-    // Size/Color/Brand: FindA.Sale's Item model has no brand/size/color fields today (confirmed
-    // against schema.prisma) -- undefined on every real queue item, tryFill's own guard skips
-    // them silently. Wired for when that data exists; category-type gating (apparel-only for
-    // size/color) is left to Mercari's own form, never assumed here.
+    // 2026-08-18: brand/size/color now exist on Item and flow through getExtensionItems ->
+    // popup.js's queue map. tryFill's own guard still skips silently on unset items;
+    // category-type gating (apparel-only for size/color) is left to Mercari's own form,
+    // never assumed here.
     await tryFill('Brand', item.brand, (v) => fillBrand('Brand', v));
     await tryFill('Size', item.size, (v) => fillSelectLike('Size', v));
     await tryFill('Color', item.color, (v) => fillSelectLike('Color', v));
