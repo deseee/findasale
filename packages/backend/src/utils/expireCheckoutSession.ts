@@ -1,4 +1,5 @@
 import * as Sentry from '@sentry/node';
+import type Stripe from 'stripe';
 import { getStripe } from './stripe';
 
 /**
@@ -82,6 +83,34 @@ async function retrieveSession(
     });
     return { session, usedAccount: stripeAccount };
   }
+}
+
+/**
+ * Public form of the retrieve-with-connected-account-fallback above, for callers that
+ * need the Session OBJECT (not a closure decision).
+ *
+ * Added 2026-08-17 (P0): invoiceExpiryJob's evidence-first "is this actually paid?" check
+ * called `checkout.sessions.retrieve(id)` platform-scoped with no fallback, so for an
+ * organizer on the Direct-charges allowlist -- where the Session lives on the CONNECTED
+ * account -- it threw resource_missing on every single pass. Exporting this keeps the
+ * platform-first / connected-fallback rule in exactly one place instead of copy-pasting
+ * the try/catch into the job.
+ *
+ * Throws (does not swallow) when the session exists on neither account: every caller
+ * already treats that as a hard error worth retrying, and silently returning null here
+ * would read as "not paid" -- the single most dangerous wrong answer on this path.
+ */
+export async function retrieveCheckoutSessionAcrossAccounts(
+  sessionId: string,
+  stripeAccount?: string | null
+): Promise<Stripe.Checkout.Session> {
+  const found = await retrieveSession(sessionId, stripeAccount);
+  if (!found) {
+    const err: any = new Error(`No such checkout session: ${sessionId}`);
+    err.code = 'resource_missing';
+    throw err;
+  }
+  return found.session as Stripe.Checkout.Session;
 }
 
 /**

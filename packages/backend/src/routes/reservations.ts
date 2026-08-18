@@ -22,11 +22,27 @@ import {
 const router = express.Router();
 
 // Public routes (no auth required)
+// Deliberately anonymous: a logged-out shopper viewing a sale page must see the hold
+// countdown on a RESERVED item. The handler's select is narrowed to { itemId, status,
+// expiresAt } — no holder identity, no reservation id. Do not add routes here casually.
 router.get('/item/:itemId', getItemReservation);               // unauthenticated: hold expiry for HoldTimer
-router.get('/invoice-status/item/:itemId', getItemInvoiceStatus); // unauthenticated: check if item has invoice
 
 // All other reservation routes require auth
 router.use(authenticate);
+
+// Moved behind `authenticate` 2026-08-17 (was mounted above this line, fully anonymous).
+// It answers "does item X have a live invoice, and when does that payment window close?"
+// for any item id, and item ids are public on every sale page — so anonymously it let a
+// caller map exactly which items on a sale have money in flight and when each payment
+// window lapses. That is reconnaissance, not shopper-facing information: it has ZERO
+// frontend callers (re-verified 2026-08-17 — `grep -rn "invoice-status|invoiceExists|
+// invoiceStatus"` across packages/frontend and packages/mcp-server returns no hits
+// outside the backend itself), and the availability a logged-out shopper actually needs
+// comes from Item.status === 'RESERVED' via getItemById, not from here. Kept rather than
+// deleted so no unknown consumer breaks; it is now simply authenticated.
+// NOTE ON ORDERING: this is a 3-segment path, so it cannot be shadowed by the 1-segment
+// (/my-invoices) or 2-segment (/:id/invoice) routes registered below.
+router.get('/invoice-status/item/:itemId', getItemInvoiceStatus); // auth required: check if item has invoice
 
 // Shopper holds and invoice routes
 router.get('/my-holds-full', getMyHoldsFull);                  // Shopper: full holds detail for CartDrawer

@@ -49,6 +49,7 @@ import { markHoldInvoicePaid } from '../services/holdInvoicePaymentRecorder'; //
 import { settleHubOwnerReversalForLeg } from './vendorBoothCartController'; // P1 (2026-07-28): durable hub-owner Transfer reversal settlement
 import { shouldUseDirectCharge } from '../services/stripeConnectService'; // Direct-charges migration (2026-08-08): staged-rollout routing decision
 import { notifyVendorBoothSaleRefunded } from '../services/vendorBoothSaleNotificationService'; // tell the vendor their booth sale was refunded
+import { expireCheckoutSessionSafely } from '../utils/expireCheckoutSession'; // P1 (2026-08-17): charge.failed left the shopper's Checkout Session OPEN and payable
 
 // Lazy — avoids crash when module loads before dotenv runs
 const stripe = () => getStripe();
@@ -3168,7 +3169,22 @@ export const webhookHandler = async (req: Request, res: Response) => {
       // callers can never diverge. See that file's header comment for full context.
       const charge = event.data.object;
       if (charge.payment_intent) {
-        const paymentIntent = await stripe().paymentIntents.retrieve(charge.payment_intent as string);
+        // Direct-charge routing fix (P0, 2026-08-17). For an organizer routed by
+        // shouldUseDirectCharge (services/stripeConnectService.ts -- gated on
+        // STRIPE_DIRECT_CHARGES_ORGANIZER_ALLOWLIST, confirmed NON-EMPTY in Railway
+        // production this session, so this path is ACTIVE, not theoretical) the Charge and
+        // its PaymentIntent live on the CONNECTED account. This retrieve was
+        // platform-scoped with no options, so it threw resource_missing -- and a throw here
+        // escapes into the switch-wide try above, which marks the idempotency row FAILED
+        // and returns 500, so Stripe retried the same event forever and the payment was
+        // NEVER recorded (no PAID flip, no Purchase rows, items stuck at INVOICE_ISSUED).
+        // `event.account` is populated on exactly those connected-account deliveries and
+        // absent for platform/destination charges. Same fix already applied to
+        // charge.dispute.created and resolveDisputeContext in this file.
+        const paymentIntent = await stripe().paymentIntents.retrieve(
+          charge.payment_intent as string,
+          (event as any).account ? { stripeAccount: (event as any).account as string } : undefined
+        );
         if (paymentIntent.metadata?.invoiceId) {
           const invoiceId = paymentIntent.metadata.invoiceId;
           // LOCKED DECISION #1: Calculate organizer payout (total amount - platform fee - Stripe fee)
@@ -3280,12 +3296,26 @@ export const webhookHandler = async (req: Request, res: Response) => {
       // Hold-to-Pay Phase 2: Handle failed charge for hold invoices
       const charge = event.data.object;
       if (charge.payment_intent) {
-        const paymentIntent = await stripe().paymentIntents.retrieve(charge.payment_intent as string);
+        // Direct-charge routing fix (P0, 2026-08-17) -- identical gap to the
+        // charge.succeeded case above; see the full note there. Platform-scoped, this
+        // threw resource_missing for every allowlisted organizer and the hold was never
+        // reverted at all.
+        const paymentIntent = await stripe().paymentIntents.retrieve(
+          charge.payment_intent as string,
+          (event as any).account ? { stripeAccount: (event as any).account as string } : undefined
+        );
         if (paymentIntent.metadata?.invoiceId) {
           const invoiceId = paymentIntent.metadata.invoiceId;
 
           const holdInvoice = await prisma.holdInvoice.findUnique({
             where: { id: invoiceId },
+            // sale -> organizer.stripeConnectId is the fallback account used to close the
+            // Checkout Session at the end of this handler. HoldInvoice has no persisted
+            // stripeAccountId column (documented gap: utils/expireCheckoutSession.ts and
+            // services/holdInvoicePaymentRecorder.ts), so the connected-account id has to
+            // be reached through the sale. Mirrors invoiceExpiryJob.ts, which selects the
+            // same relation for the same reason.
+            include: { sale: { select: { organizer: { select: { stripeConnectId: true } } } } },
           });
 
           if (!holdInvoice) {
@@ -3306,10 +3336,25 @@ export const webhookHandler = async (req: Request, res: Response) => {
             ? `${bundledItems.length} items`
             : `"${bundledItems[0]?.title}"`;
 
-          // Update invoice status to EXPIRED
-          await prisma.$transaction(async (tx) => {
-            await tx.holdInvoice.update({
-              where: { id: invoiceId },
+          // Update invoice status to EXPIRED -- guarded, never unconditional.
+          const revert = await prisma.$transaction(async (tx) => {
+            // P1 fix (2026-08-17): this was `tx.holdInvoice.update({ where: { id } })` with
+            // no state guard, the ONLY unguarded writer of HoldInvoice.status left in the
+            // codebase -- invoiceExpiryJob.ts (PENDING -> EXPIRED),
+            // holdInvoicePaymentRecorder.ts (PENDING -> PAID) and holdInvoiceClaim.ts all
+            // use a guarded updateMany. Stripe does not guarantee webhook ordering, and a
+            // shopper retrying a declined card on the SAME PaymentIntent produces
+            // charge.failed followed by charge.succeeded. A redelivery of that earlier
+            // charge.failed after the success rewrote a genuinely PAID invoice back to
+            // EXPIRED, dragged the paid items back out of SOLD onto the shelf, and emailed
+            // the shopper that their successful payment had failed.
+            // PENDING is the only state a charge can legitimately fail from: all three
+            // creation paths write PENDING, and PAID / CANCELLED / EXPIRED / REFUNDED are
+            // terminal (InvoiceStatus, packages/database/prisma/schema.prisma:2748). A
+            // single conditional UPDATE also takes the row lock, so this is race-safe
+            // against a concurrent charge.succeeded, not merely redelivery-safe.
+            const invoiceFlip = await tx.holdInvoice.updateMany({
+              where: { id: invoiceId, status: 'PENDING' },
               data: {
                 status: 'EXPIRED',
                 // P0 fix (2026-08-17): null the @unique `reservationId` anchor in the
@@ -3322,6 +3367,12 @@ export const webhookHandler = async (req: Request, res: Response) => {
                 reservationId: null,
               },
             });
+            if (invoiceFlip.count === 0) {
+              // Not PENDING any more: already PAID by a later charge.succeeded, already
+              // CANCELLED by releaseInvoice, or already EXPIRED by invoiceExpiryJob or an
+              // earlier delivery of this same event. Reverting now would undo a real sale.
+              return { reverted: false };
+            }
 
             // Reactivate holds: return ALL ItemReservations to CONFIRMED and items to RESERVED.
             // P1 fix (2026-08-16): `invoiceId: null` was missing here. The HoldInvoice is
@@ -3350,7 +3401,14 @@ export const webhookHandler = async (req: Request, res: Response) => {
               where: { id: { in: holdInvoice.itemIds }, status: 'INVOICE_ISSUED' },
               data: { status: 'RESERVED' },
             });
+
+            return { reverted: true };
           });
+
+          if (!revert.reverted) {
+            console.warn(`[hold-invoice] charge.failed for invoice ${invoiceId} ignored -- the invoice is no longer PENDING (already paid, cancelled or expired). Nothing reverted, no notification sent, session left alone.`);
+            break;
+          }
 
           // Notification-gap fix (S1195 sweep continuation, 2026-08-08): this previously
           // wrote a raw tx.notification.create() inside the transaction above, which made
@@ -3370,6 +3428,30 @@ export const webhookHandler = async (req: Request, res: Response) => {
             channel: 'OPERATIONAL',
             sendEmail: true,
           }).catch((err: unknown) => console.error(`[hold-invoice] Failed to create payment_failed notification for invoice ${invoiceId}:`, err));
+
+          // P1 fix (2026-08-17): close the Stripe Checkout Session. Stripe deliberately
+          // leaves a Checkout Session OPEN after a decline so the buyer can retry -- and on
+          // this path NOTHING ever revisited it: the invoice is now EXPIRED and
+          // invoiceExpiryJob.ts scans `status: 'PENDING'` only. The items were just handed
+          // back to RESERVED and are on sale again, so that surviving link is a live,
+          // payable checkout for stock somebody else can now buy: money captured for an
+          // item already back on the shelf. Mirrors releaseInvoice
+          // (reservationController.ts) and invoiceExpiryJob.ts, which both close the
+          // session through this same helper on their own terminal transitions.
+          // Account: `event.account` is set on connected-account (Direct-charge)
+          // deliveries; the sale's organizer connectId is the fallback for a session
+          // created while the allowlist said something different. The helper retrieves
+          // platform-first and falls back on resource_missing, treats an already-terminal
+          // session as the success it is, and reports any still-payable survivor to Sentry.
+          // It is documented never to throw; the .catch is belt-and-braces so a Stripe
+          // outage can never turn an already-committed revert into a 500 that Stripe then
+          // retries forever against an invoice that is no longer PENDING.
+          if (holdInvoice.stripeSessionId) {
+            await expireCheckoutSessionSafely(holdInvoice.stripeSessionId, {
+              stripeAccount: (event as any).account ?? holdInvoice.sale?.organizer?.stripeConnectId ?? null,
+              context: `charge.failed invoice=${invoiceId}`,
+            }).catch((err: unknown) => console.error(`[hold-invoice] Failed to close checkout session ${holdInvoice.stripeSessionId} for failed-charge invoice ${invoiceId}:`, err));
+          }
 
           console.log(`[hold-invoice] Payment failed for invoice ${invoiceId} (${bundledItems.length} items): ${charge.failure_message}`);
         }

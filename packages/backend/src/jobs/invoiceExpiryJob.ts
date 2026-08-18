@@ -2,10 +2,9 @@ import cron from 'node-cron';
 import * as Sentry from '@sentry/node';
 import { prisma } from '../lib/prisma';
 import { cronGuard } from '../utils/cronGuard';
-import { getStripe } from '../utils/stripe';
 import { markHoldInvoicePaid } from '../services/holdInvoicePaymentRecorder'; // payments fix (2026-08-03): STRANDED-PAID reconcile backstop
 import { createNotification } from '../lib/notificationService'; // S1195 sweep continuation (2026-08-08): invoice_expired notification-gap fix
-import { expireCheckoutSessionSafely } from '../utils/expireCheckoutSession'; // P1 (2026-08-17): expired invoices must not leave a PAYABLE Stripe session behind
+import { expireCheckoutSessionSafely, retrieveCheckoutSessionAcrossAccounts } from '../utils/expireCheckoutSession'; // P1 (2026-08-17): expired invoices must not leave a PAYABLE Stripe session behind; P0 (2026-08-17): Direct-charge sessions live on the connected account
 
 /**
  * invoiceExpiryJob.ts
@@ -103,8 +102,6 @@ import { expireCheckoutSessionSafely } from '../utils/expireCheckoutSession'; //
  * Sentry-alert-worthy regardless of whether the reconcile call succeeds.
  */
 
-const stripe = () => getStripe();
-
 /**
  * One-shot organizer nudge for a POS cash invoice that expired with no Stripe ground
  * truth (P1 reclaim-path fix, 2026-08-17).
@@ -194,7 +191,22 @@ export const reclaimExpiredInvoices = async (): Promise<void> => {
         if (invoice.stripeSessionId) {
           // Evidence-first: ask Stripe directly rather than trusting our own
           // PENDING status (see the two confirmed gaps in the header comment).
-          const session = await stripe().checkout.sessions.retrieve(invoice.stripeSessionId);
+          // P0 fix (2026-08-17): account-aware retrieve. This was
+          // `stripe().checkout.sessions.retrieve(id)` -- platform-scoped, no fallback -- so
+          // for an organizer routed by shouldUseDirectCharge (allowlist confirmed NON-EMPTY
+          // in Railway production this session) the Session lives on the CONNECTED account
+          // and this threw resource_missing on EVERY pass. The per-invoice catch below
+          // swallowed it as "will retry next run", forever: Direct-charge invoices were
+          // never reclaimed, and a Direct-charge invoice that WAS paid never reached the
+          // STRANDED-PAID reconcile branch below, so its items sat at INVOICE_ISSUED
+          // permanently with the payment unrecorded. The organizer's connectId was already
+          // being selected above and already used correctly by the expire call at the end
+          // of this loop -- it simply was never passed here. Shared helper so the
+          // platform-first / connected-fallback rule lives in exactly one place.
+          const session = await retrieveCheckoutSessionAcrossAccounts(
+            invoice.stripeSessionId,
+            invoice.sale?.organizer?.stripeConnectId ?? null
+          );
           if (session.status === 'complete' && session.payment_status === 'paid') {
             strandedPaidCount++;
 

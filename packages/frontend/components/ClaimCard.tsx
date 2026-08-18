@@ -11,20 +11,28 @@ import { useToast } from './ToastContext';
 
 interface ClaimCardProps {
   invoiceId: string;
-  itemId: string;
-  itemTitle: string;
-  itemPrice: number;
-  itemPhoto?: string;
-  checkoutUrl: string;
+  /**
+   * The ItemReservation id this invoice was issued against (HoldInvoice.reservationId).
+   * POST /reservations/:id/release-invoice is keyed on the RESERVATION id -- not the
+   * invoice id and not the item id. Optional because GET /reservations/my-invoices does
+   * not return it yet (see the pending backend change); the action below refuses to fire
+   * without it rather than sending a request with `undefined` in the path.
+   */
+  reservationId?: string | null;
+  itemTitle?: string | null;
+  /** Item.price is `Float?` in schema.prisma -- genuinely nullable, so never assume a number. */
+  itemPrice?: number | null;
+  itemPhoto?: string | null;
+  checkoutUrl?: string | null;
   expiresAt: string;
-  organizerName: string;
+  organizerName?: string | null;
   onPaymentSuccess?: () => void;
   onReleaseHold?: () => void;
 }
 
 export default function ClaimCard({
   invoiceId,
-  itemId,
+  reservationId,
   itemTitle,
   itemPrice,
   itemPhoto,
@@ -37,21 +45,66 @@ export default function ClaimCard({
   const { showToast } = useToast();
   const [isReleasing, setIsReleasing] = useState(false);
 
+  const displayTitle = itemTitle || 'Your item';
+  const displayOrganizer = organizerName || 'the organizer';
+
   const handlePayment = () => {
-    if (checkoutUrl) {
-      window.open(checkoutUrl, '_blank');
+    // Silent no-op removed: `checkoutUrl` is not persisted anywhere (HoldInvoice stores
+    // only stripeSessionId), so this button did nothing at all and said nothing about it.
+    if (!checkoutUrl) {
+      showToast(
+        `That payment link isn't available right now. Ask ${displayOrganizer} to resend the invoice.`,
+        'error'
+      );
+      return;
     }
+    window.open(checkoutUrl, '_blank', 'noopener,noreferrer');
   };
 
-  const handleReleaseHold = async () => {
+  // Cancel the outstanding payment request.
+  //
+  // This used to call `DELETE /reservations/${itemId}` -- wrong on three counts, and it
+  // had never once worked:
+  //   1. DELETE /reservations/:id (cancelHold) takes a RESERVATION id, not an item id.
+  //   2. The caller passed `invoice.itemId`, a key GET /reservations/my-invoices does not
+  //      return, so every click sent a literal `DELETE /reservations/undefined` -> 404.
+  //   3. Even with a correct reservation id, cancelHold now returns 409 for an item at
+  //      INVOICE_ISSUED (reservationController.ts:518) -- which is every card this
+  //      component renders. It points the caller at release-invoice, which is the path
+  //      that actually closes the live Stripe Checkout Session before freeing the item.
+  //      Cancelling the hold without closing that session would leave the shopper's
+  //      payment link open and payable on an item that just went back on sale.
+  //
+  // Mirrors the organizer-side caller of the same endpoint
+  // (pages/organizer/holds.tsx releaseInvoiceMutation) for status handling and copy.
+  const handleCancelRequest = async () => {
+    if (!reservationId) {
+      showToast(
+        `We can't cancel this payment request from here yet. Ask ${displayOrganizer} to cancel it.`,
+        'error'
+      );
+      return;
+    }
     setIsReleasing(true);
     try {
-      await api.delete(`/reservations/${itemId}`);
-      showToast('Hold released', 'success');
+      const res = await api.post(`/reservations/${reservationId}/release-invoice`);
+      const count = res?.data?.itemsReleased ?? 1;
+      showToast(
+        count > 1
+          ? `Payment request cancelled. ${count} items are back on hold for you.`
+          : 'Payment request cancelled. The item is back on hold for you.',
+        'success'
+      );
       onReleaseHold?.();
     } catch (err: any) {
-      const message = err.response?.data?.message || 'Failed to release hold';
-      showToast(message, 'error');
+      // Surface the server's own copy, never a hardcoded string. 409 = already paid or no
+      // longer PENDING; 502 = the payment link could not be closed so the request was
+      // deliberately left in place. On 409 the card is stale either way, so refresh it.
+      if (err.response?.status === 409) onReleaseHold?.();
+      showToast(
+        err.response?.data?.message || 'Could not cancel that payment request. Please try again.',
+        'error'
+      );
     } finally {
       setIsReleasing(false);
     }
@@ -64,7 +117,7 @@ export default function ClaimCard({
         <div>
           <h3 className="font-bold text-amber-900 dark:text-amber-100">Payment Requested</h3>
           <p className="text-xs text-amber-700 dark:text-amber-400">
-            From {organizerName}
+            From {displayOrganizer}
           </p>
         </div>
         <div className="px-2 py-1 bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300 text-xs font-semibold rounded">
@@ -77,17 +130,23 @@ export default function ClaimCard({
         {itemPhoto && (
           <img
             src={itemPhoto}
-            alt={itemTitle}
+            alt={displayTitle}
             className="w-16 h-16 object-cover rounded-lg flex-shrink-0"
           />
         )}
         <div className="flex-1 min-w-0">
           <p className="font-semibold text-gray-900 dark:text-gray-100 truncate">
-            {itemTitle}
+            {displayTitle}
           </p>
-          <p className="text-lg font-bold text-amber-600 dark:text-amber-400 mt-1">
-            ${itemPrice.toFixed(2)}
-          </p>
+          {/* Guarded, not assumed: this was `itemPrice.toFixed(2)` on a prop the caller
+              never actually populated, so rendering the card threw a TypeError and took
+              the whole Pending Payments section down with it. Item.price is nullable in
+              the schema besides. */}
+          {typeof itemPrice === 'number' && (
+            <p className="text-lg font-bold text-amber-600 dark:text-amber-400 mt-1">
+              ${itemPrice.toFixed(2)}
+            </p>
+          )}
         </div>
       </div>
 
@@ -106,13 +165,19 @@ export default function ClaimCard({
         </button>
       </div>
 
-      {/* Secondary Action */}
+      {/* Secondary Action.
+          Relabelled from "Release Hold": release-invoice cancels the payment request and
+          returns the item to RESERVED -- the hold SURVIVES (the server's own shopper
+          notification says "Your hold remains active"). Releasing the hold itself is then
+          possible from the holds list, where the item is no longer at INVOICE_ISSUED and
+          cancelHold's 409 gate no longer applies. */}
       <button
-        onClick={handleReleaseHold}
+        type="button"
+        onClick={handleCancelRequest}
         disabled={isReleasing}
         className="w-full mt-2 py-1 text-xs text-amber-700 dark:text-amber-400 hover:text-amber-900 dark:hover:text-amber-300 font-medium disabled:opacity-50 transition-colors"
       >
-        {isReleasing ? 'Releasing...' : 'Release Hold'}
+        {isReleasing ? 'Cancelling...' : 'Cancel payment request'}
       </button>
     </div>
   );

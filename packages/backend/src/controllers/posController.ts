@@ -27,6 +27,7 @@ import { resolveOrganizerOrTeamMember } from '../utils/posAuth'; // S1183 Fix 1:
 import { stripeCheckoutExpiry } from '../utils/stripeCheckoutExpiry'; // Hold-to-Pay P0 (2026-08-16): Stripe expires_at floor/ceiling clamp
 import { shouldUseDirectCharge } from '../services/stripeConnectService'; // Direct-charges migration (2026-08-08): staged-rollout routing decision
 import { invoiceableWhere, isInvoicedOrClaimed, releaseDeadInvoiceAnchors } from '../services/holdInvoiceClaim'; // Hold-to-Pay P0 (2026-08-16): non-FK invoice claim must be visible to every hold read site; P0 (2026-08-17): dead-anchor release
+import { expireCheckoutSessionSafely } from '../utils/expireCheckoutSession'; // P1 (2026-08-17): a Checkout Session orphaned by a failed HoldInvoice transaction stays OPEN and payable
 
 const stripe = () => getStripe();
 
@@ -1047,6 +1048,19 @@ export const pullHoldsToCart = async (req: AuthRequest, res: Response) => {
  * Response: { invoiceId, stripeSessionId, invoiceMode, totalAmountCents, cashAmountCents, cardAmountCents, platformFeeAmount, status, expiresAt, createdAt }
  */
 export const createCombinedInvoice = async (req: AuthRequest, res: Response) => {
+  // Orphaned-payable-session guard (P1, 2026-08-17). The Stripe Checkout Session is
+  // created BEFORE the HoldInvoice transaction below. If that transaction throws -- P2002
+  // on the @unique stripeSessionId or reservationId anchor, a releaseDeadInvoiceAnchors
+  // failure, any DB blip -- the old code fell straight through to the outer catch and
+  // returned a 500 while the Session stayed OPEN and PAYABLE: a live payment link for an
+  // invoice that does not exist, against items the cart just let go of. Declared at
+  // FUNCTION scope, not inside the try (which is its own block scope), so the outer catch
+  // can actually see them. The account is tracked alongside the id because a Direct-charge
+  // Session lives on the connected account and cannot be expired with a platform-scoped
+  // call. Identical pattern to reservationController.markSoldAndCreateInvoice.
+  let createdStripeSessionId: string | null = null;
+  let createdStripeSessionAccount: string | null = null;
+
   try {
     const organizer = await resolveOrganizerOrTeamMember(req, res, { requireStripe: true });
     if (!organizer) return;
@@ -1345,6 +1359,11 @@ export const createCombinedInvoice = async (req: AuthRequest, res: Response) => 
         );
 
         stripeSessionId = stripeSession.id;
+        // Record what we just created so the outer catch can close it if the HoldInvoice
+        // transaction below never commits (see the orphan guard at the top of this
+        // function). `useDirect` is the same routing decision used for the create call.
+        createdStripeSessionId = stripeSession.id;
+        createdStripeSessionAccount = useDirect ? organizer.stripeConnectId ?? null : null;
         stripePaymentIntentId = typeof stripeSession.payment_intent === 'string'
           ? stripeSession.payment_intent
           : (stripeSession.payment_intent as any)?.id ?? null;
@@ -1396,6 +1415,13 @@ export const createCombinedInvoice = async (req: AuthRequest, res: Response) => 
 
       return inv;
     });
+
+    // The Session now belongs to a real, live HoldInvoice -- it must NOT be closed by the
+    // orphan guard in the outer catch if anything downstream (metadata backfill, email,
+    // response serialization) throws. Clearing the handles is what makes that guard safe to
+    // leave unconditional. Mirrors markSoldAndCreateInvoice.
+    createdStripeSessionId = null;
+    createdStripeSessionAccount = null;
 
     // Payments fix (2026-08-03): backfill invoiceId onto the PaymentIntent's metadata
     // now that the HoldInvoice row (and its ID) exists -- it didn't exist yet when the
@@ -1503,6 +1529,21 @@ export const createCombinedInvoice = async (req: AuthRequest, res: Response) => 
     });
   } catch (error) {
     console.error('[pos] createCombinedInvoice error:', error);
+
+    // P1 fix (2026-08-17): close an orphaned Checkout Session. A handle still set here
+    // means the HoldInvoice transaction never committed, so NO invoice exists for that
+    // session -- and unlike a hold invoice there is no expiry job that will ever find it
+    // (invoiceExpiryJob scans HoldInvoice rows, and there is no row). Leaving it OPEN lets
+    // the shopper pay a live link for a cart nobody is tracking a payment for. The helper
+    // never throws and is awaited before the response so the closure attempt actually
+    // happens; the .catch guarantees it can never mask the original error.
+    if (createdStripeSessionId) {
+      await expireCheckoutSessionSafely(createdStripeSessionId, {
+        stripeAccount: createdStripeSessionAccount,
+        context: `createCombinedInvoice orphan session=${req.params?.sessionId}`,
+      }).catch((e: unknown) => console.error('[pos] Failed to close orphaned checkout session:', e));
+    }
+
     res.status(500).json({ message: 'Failed to create invoice' });
   }
 };

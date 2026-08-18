@@ -566,17 +566,28 @@ const ShopperDashboard = () => {
                     💳 Pending Payments ({pendingInvoices.length})
                   </h2>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Wired against the shape GET /reservations/my-invoices actually
+                        returns (reservationController.ts getMyInvoices): id, status,
+                        totalAmount, platformFeeAmount, stripeSessionId, expiresAt,
+                        createdAt, item. Every flat `invoice.itemX` key read here before
+                        was undefined -- itemPrice undefined made `itemPrice.toFixed(2)`
+                        throw during render, and itemId undefined made the release button
+                        send `DELETE /reservations/undefined`.
+                        `reservationId`, `checkoutUrl` and `organizerName` are still
+                        absent from that response and are spec'd as a backend change; the
+                        component degrades safely on each rather than firing a bad
+                        request. */}
                     {pendingInvoices.map((invoice: any) => (
                       <ClaimCard
                         key={invoice.id}
                         invoiceId={invoice.id}
-                        itemId={invoice.itemId}
-                        itemTitle={invoice.itemTitle}
-                        itemPrice={invoice.itemPrice}
-                        itemPhoto={invoice.itemPhoto}
+                        reservationId={invoice.reservationId}
+                        itemTitle={invoice.item?.title}
+                        itemPrice={invoice.item?.price}
+                        itemPhoto={invoice.item?.photoUrls?.[0]}
                         checkoutUrl={invoice.checkoutUrl}
                         expiresAt={invoice.expiresAt}
-                        organizerName={invoice.organizerName}
+                        organizerName={invoice.organizerName ?? invoice.item?.sale?.title}
                         onPaymentSuccess={() => {
                           queryClient.invalidateQueries({ queryKey: ['pending-invoices'] });
                           queryClient.invalidateQueries({ queryKey: ['shopper-holds'] });

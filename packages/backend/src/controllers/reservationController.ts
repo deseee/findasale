@@ -586,9 +586,22 @@ export const getItemReservation = async (req: AuthRequest, res: Response) => {
     // to the countdown fields; status is included so a caller can tell a live hold from
     // a settled/expired one. Do not widen this select — buyer identity on an item is
     // owner-gated in itemController.getItemById (buildHoldFieldsForViewer).
+    //
+    // PRIVACY follow-up (2026-08-17): `id` is no longer returned either. That field is
+    // the ItemReservation id — the exact `:id` path parameter that DELETE /reservations/:id
+    // and PATCH /reservations/:id consume. Item ids are public on every sale page, so
+    // returning the reservation id here let an unauthenticated crawler build a complete
+    // item-id → reservation-id map for any live sale and hand it to those mutating routes.
+    // Those two routes are ownership-checked as of today, so this is defence in depth, not
+    // the only control — but an anonymous endpoint has no business minting the ids for
+    // authenticated mutations. Re-verified 2026-08-17 that the sole consumer,
+    // packages/frontend/components/HoldTimer.tsx:52, reads `response.data?.expiresAt` and
+    // nothing else. If a future caller genuinely needs the reservation id, it must get it
+    // from an authenticated, ownership-gated route (itemController.getItemById exposes it
+    // as `reservationId` to the sale owner/admin only) — do not re-add it here.
     const reservation = await prisma.itemReservation.findUnique({
       where: { itemId },
-      select: { id: true, itemId: true, status: true, expiresAt: true },
+      select: { itemId: true, status: true, expiresAt: true },
     });
 
     res.json(reservation || null);
@@ -2184,8 +2197,14 @@ export const getMyInvoices = async (req: AuthRequest, res: Response) => {
   }
 };
 
-// GET /api/items/:itemId/invoice-status — public query for item invoice status
-// Auth: None (public)
+// GET /api/reservations/invoice-status/item/:itemId — invoice status for an item
+// Auth: authenticated (any logged-in user). Moved behind `authenticate` 2026-08-17 —
+// see routes/reservations.ts for why. It is NOT ownership-gated: any authenticated
+// caller can query any item id, so this must stay a minimal existence/deadline probe.
+// Anything richer (line items, amounts, Stripe session) belongs on
+// GET /api/reservations/:invoiceIdOrReservationId/invoice, which is shopper-or-organizer
+// authorized. Shopper-facing availability does NOT come from here: a logged-out shopper
+// sees a held item via Item.status === 'RESERVED' from itemController.getItemById.
 export const getItemInvoiceStatus = async (req: Request, res: Response) => {
   try {
     const { itemId } = req.params;
@@ -2226,15 +2245,18 @@ export const getItemInvoiceStatus = async (req: Request, res: Response) => {
       invoiceExists: true,
       invoiceStatus: invoice.status,
       expiresAt: invoice.expiresAt,
-      // Security fix (2026-08-17): this route is mounted BEFORE `router.use(authenticate)`
-      // in routes/reservations.ts -- it is fully anonymous -- and it was handing out the
-      // live Stripe Checkout Session id for any item id a caller cared to enumerate. A
-      // session id plus the publishable key is enough to open someone else's payment page
-      // client-side, and it confirms which items have money in flight. The field is kept
-      // (shape unchanged, and the endpoint has zero frontend callers -- grep-verified) but
-      // never populated on this anonymous route. Authenticated shoppers/organizers get the
-      // full detail from GET /api/reservations/:invoiceIdOrReservationId/invoice, which
-      // enforces shopper-or-organizer authorization.
+      // Security fix (2026-08-17): this route was mounted BEFORE `router.use(authenticate)`
+      // in routes/reservations.ts -- fully anonymous -- and it was handing out the live
+      // Stripe Checkout Session id for any item id a caller cared to enumerate. A session
+      // id plus the publishable key is enough to open someone else's payment page
+      // client-side, and it confirms which items have money in flight. The route has since
+      // been moved behind `authenticate` (same day), but this field stays permanently null
+      // regardless: the route is authenticated, NOT ownership-gated, so any logged-in user
+      // can still query any item id. The response shape is kept unchanged (the endpoint has
+      // zero frontend callers -- grep-verified across packages/frontend and
+      // packages/mcp-server, re-verified 2026-08-17). Shoppers/organizers get the full
+      // detail from GET /api/reservations/:invoiceIdOrReservationId/invoice, which enforces
+      // shopper-or-organizer authorization.
       stripeSessionId: null,
     });
   } catch (error: any) {

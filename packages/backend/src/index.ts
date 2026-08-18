@@ -216,6 +216,7 @@ import './jobs/reservationExpiryJob'; // Phase 21: Expire stale holds every 30 m
 import './jobs/invoiceExpiryJob'; // S1179 fix: reclaim abandoned HoldInvoice rows (ADR-098 INVOICE_ISSUED stuck-item gap) every 10 min
 import './jobs/purchaseExpiryJob'; // S1187 fix: Stripe-verified reclaim of stuck PENDING Purchase rows (missed/never-fired webhook) every 10 min
 import './jobs/posPaymentRequestExpiryJob'; // S1187 fix: Stripe-verified sweep of expired PENDING POSPaymentRequest rows every 10 min
+import './jobs/deadInvoicePaidSweepJob'; // P0 (2026-08-17): hourly sweep for money captured against a CANCELLED/EXPIRED HoldInvoice -- nothing else ever revisits a dead invoice
 import './jobs/curatorEmailJob'; // Phase 30: Weekly curator email digest — Mondays 8 AM
 import './jobs/reverseAuctionJob'; // CD2 Phase 4: Daily price drop processing
 import './jobs/organizerWeeklyDigestJob'; // Organizer weekly performance digest — Mondays 8 AM
