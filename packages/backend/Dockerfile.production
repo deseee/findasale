@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-# cache-bust: 2026-08-17T23-43-50Z -- unblock Railway (stranded again, S-BOUNCE-SUPPRESS-FIX-2026-08-17: backend service
+# cache-bust: 2026-08-18T16-00-15Z -- unblock Railway (CI green at 436e3ffa5, backend never picked it up, S-BQ-WORK-2026-08-18)
 # real backend changes for #602/#603 landed in commit 98fc4a57a, but the next two pushes
 # (a6d56f9f9, a15ac32e) were frontend-only fixes -- Railway evaluated watchPatterns against
 # those push tips and SKIPPED the backend deploy both times (confirmed via Railway MCP
