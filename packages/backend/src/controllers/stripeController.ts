@@ -3309,12 +3309,13 @@ export const webhookHandler = async (req: Request, res: Response) => {
 
           const holdInvoice = await prisma.holdInvoice.findUnique({
             where: { id: invoiceId },
-            // sale -> organizer.stripeConnectId is the fallback account used to close the
-            // Checkout Session at the end of this handler. HoldInvoice has no persisted
-            // stripeAccountId column (documented gap: utils/expireCheckoutSession.ts and
-            // services/holdInvoicePaymentRecorder.ts), so the connected-account id has to
-            // be reached through the sale. Mirrors invoiceExpiryJob.ts, which selects the
-            // same relation for the same reason.
+            // sale -> organizer.stripeConnectId is the FALLBACK account used to close the
+            // Checkout Session at the end of this handler, for pre-migration rows only.
+            // HoldInvoice.stripeAccountId (2026-08-18 migration) is preferred when present --
+            // it is pinned at checkout-session-creation time and cannot drift, unlike the
+            // sale's organizer's CURRENT stripeConnectId. No `select` here, so the new
+            // column comes back automatically. Mirrors invoiceExpiryJob.ts, which selects
+            // the same relation for the same fallback reason.
             include: { sale: { select: { organizer: { select: { stripeConnectId: true } } } } },
           });
 
@@ -3448,7 +3449,12 @@ export const webhookHandler = async (req: Request, res: Response) => {
           // retries forever against an invoice that is no longer PENDING.
           if (holdInvoice.stripeSessionId) {
             await expireCheckoutSessionSafely(holdInvoice.stripeSessionId, {
-              stripeAccount: (event as any).account ?? holdInvoice.sale?.organizer?.stripeConnectId ?? null,
+              // Stripe account + charge-shape snapshot (2026-08-18 migration): the invoice's
+              // own pinned account is preferred over both the webhook's `event.account`
+              // (absent on non-Connect deliveries) and the sale organizer's CURRENT
+              // stripeConnectId (wrong if the organizer re-onboarded or the allowlist
+              // changed since the session was created).
+              stripeAccount: holdInvoice.stripeAccountId ?? (event as any).account ?? holdInvoice.sale?.organizer?.stripeConnectId ?? null,
               context: `charge.failed invoice=${invoiceId}`,
             }).catch((err: unknown) => console.error(`[hold-invoice] Failed to close checkout session ${holdInvoice.stripeSessionId} for failed-charge invoice ${invoiceId}:`, err));
           }

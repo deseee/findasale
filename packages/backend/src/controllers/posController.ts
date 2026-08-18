@@ -1060,6 +1060,11 @@ export const createCombinedInvoice = async (req: AuthRequest, res: Response) => 
   // call. Identical pattern to reservationController.markSoldAndCreateInvoice.
   let createdStripeSessionId: string | null = null;
   let createdStripeSessionAccount: string | null = null;
+  // Stripe account + charge-shape snapshot (2026-08-18 migration): mirrors
+  // createdStripeSessionAccount's function-scope pattern above so the value survives from
+  // the Session-create call (inside the `if (cardAmountCents > 0)` block below) to the
+  // tx.holdInvoice.create() call further down.
+  let createdChargeType: string | null = null;
 
   try {
     const organizer = await resolveOrganizerOrTeamMember(req, res, { requireStripe: true });
@@ -1364,6 +1369,7 @@ export const createCombinedInvoice = async (req: AuthRequest, res: Response) => 
         // function). `useDirect` is the same routing decision used for the create call.
         createdStripeSessionId = stripeSession.id;
         createdStripeSessionAccount = useDirect ? organizer.stripeConnectId ?? null : null;
+        createdChargeType = useDirect ? 'DIRECT' : 'DESTINATION';
         stripePaymentIntentId = typeof stripeSession.payment_intent === 'string'
           ? stripeSession.payment_intent
           : (stripeSession.payment_intent as any)?.id ?? null;
@@ -1402,6 +1408,13 @@ export const createCombinedInvoice = async (req: AuthRequest, res: Response) => 
           cashAmountCents: finalCashAmountCents > 0 ? finalCashAmountCents : null,
           cardAmountCents: cardAmountCents > 0 ? cardAmountCents : null,
           cartSessionId: sessionId,
+          // Stripe account + charge-shape snapshot (2026-08-18 migration). NULL/NULL on the
+          // 100%-cash path (cardAmountCents === 0), which never creates a Stripe session --
+          // createdStripeSessionAccount / createdChargeType are still null at their
+          // declaration in that case. Closes the same documented gap as
+          // markSoldAndCreateInvoice (reservationController.ts).
+          chargeType: createdChargeType,
+          stripeAccountId: createdStripeSessionAccount,
         },
       });
 

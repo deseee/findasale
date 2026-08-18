@@ -171,9 +171,12 @@ export const reclaimExpiredInvoices = async (): Promise<void> => {
         cashAmountCents: true,
         organizerUserId: true,
         saleId: true,
-        // Needed to close a Direct-charge Checkout Session: it lives on the connected
-        // account, and a platform-scoped expire() returns "No such checkout session"
-        // (P1, 2026-08-17). HoldInvoice has no persisted stripeAccountId column.
+        // Stripe account + charge-shape snapshot (2026-08-18 migration): the invoice's own
+        // pinned account, preferred over the sale's organizer's CURRENT stripeConnectId
+        // (below), which is only the fallback now for pre-migration rows. Needed to close a
+        // Direct-charge Checkout Session: it lives on the connected account, and a
+        // platform-scoped expire() returns "No such checkout session" (P1, 2026-08-17).
+        stripeAccountId: true,
         sale: { select: { organizer: { select: { stripeConnectId: true } } } },
       },
     });
@@ -205,7 +208,7 @@ export const reclaimExpiredInvoices = async (): Promise<void> => {
           // platform-first / connected-fallback rule lives in exactly one place.
           const session = await retrieveCheckoutSessionAcrossAccounts(
             invoice.stripeSessionId,
-            invoice.sale?.organizer?.stripeConnectId ?? null
+            invoice.stripeAccountId ?? invoice.sale?.organizer?.stripeConnectId ?? null
           );
           if (session.status === 'complete' && session.payment_status === 'paid') {
             strandedPaidCount++;
@@ -366,7 +369,7 @@ export const reclaimExpiredInvoices = async (): Promise<void> => {
         // and it has no session to close by definition.
         if (invoice.stripeSessionId) {
           const closure = await expireCheckoutSessionSafely(invoice.stripeSessionId, {
-            stripeAccount: invoice.sale?.organizer?.stripeConnectId ?? null,
+            stripeAccount: invoice.stripeAccountId ?? invoice.sale?.organizer?.stripeConnectId ?? null,
             context: `invoiceExpiryJob invoice=${invoice.id}`,
           });
           if (closure.stillPayable) {

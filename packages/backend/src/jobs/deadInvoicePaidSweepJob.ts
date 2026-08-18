@@ -53,12 +53,15 @@ import {
  * production). A platform-scoped `checkout.sessions.retrieve` for such a session
  * returns "No such checkout session" -- Stripe is telling the truth, the object
  * does not exist on the platform account (utils/expireCheckoutSession.ts:19-27).
- * HoldInvoice has no persisted stripeAccountId/chargeType column (documented gap,
- * see SCHEMA NEEDED in the handoff), so this job resolves the account exactly the
- * way expireCheckoutSessionSafely does (utils/expireCheckoutSession.ts:69-85):
- * try the platform first, and on a resource_missing retry against
- * `sale.organizer.stripeConnectId` -- the same field invoiceExpiryJob.ts loads at
- * :180 and uses at :357.
+ * UPDATED 2026-08-18: HoldInvoice.stripeAccountId/chargeType now exist (the schema
+ * gap this comment used to flag is closed). resolveDeadInvoiceStripeContext's first
+ * retrieve attempt below is passed the invoice's own pinned stripeAccountId when
+ * present -- it cannot drift, unlike `sale.organizer.stripeConnectId`, which is
+ * still the fallback for a pre-migration (NULL) row and used exactly the way
+ * expireCheckoutSessionSafely does (utils/expireCheckoutSession.ts:69-85): try the
+ * platform/pinned account first, and on a resource_missing retry against the sale
+ * organizer's CURRENT stripeConnectId -- the same field invoiceExpiryJob.ts loads
+ * and uses.
  *
  * Getting this wrong would make the sweep silently miss exactly the direct-charge
  * cases it exists to catch, which is why the retry is not optional and why the
@@ -98,8 +101,9 @@ const LOOKBACK_DAYS = parseFloat(process.env.DEAD_INVOICE_SWEEP_LOOKBACK_DAYS ??
  * HONEST LIMITATION: this map is PROCESS-LOCAL and resets on every Railway deploy or
  * restart. Sentry's own fingerprint grouping folds repeats into one issue, so the
  * failure mode is event-count noise on a single issue, never a missed alert. The
- * durable fix is a persisted column -- spec'd under SCHEMA NEEDED, deliberately not
- * implemented (no schema changes in this dispatch).
+ * durable fix was a persisted column -- shipped 2026-08-18 (HoldInvoice.stripeAccountId /
+ * chargeType). This in-memory cooldown map stays regardless: it also governs Sentry
+ * re-alert frequency, which the new column does not change.
  */
 const REALERT_HOURS = parseFloat(process.env.DEAD_INVOICE_SWEEP_REALERT_HOURS ?? '24');
 const lastAlertedAt = new Map<string, number>();
@@ -278,8 +282,12 @@ export const sweepDeadInvoicesForPayment = async (): Promise<void> => {
         shopperUserId: true,
         totalAmount: true,
         updatedAt: true,
-        // Same join invoiceExpiryJob.ts:180 uses, for the same reason: a Direct-charge
-        // session is not retrievable with a platform-scoped call.
+        // Stripe account + charge-shape snapshot (2026-08-18 migration): the invoice's own
+        // pinned account, preferred below. `sale.organizer.stripeConnectId` remains the
+        // fallback for pre-migration (NULL) rows -- same join invoiceExpiryJob.ts uses, for
+        // the same reason: a Direct-charge session is not retrievable with a platform-scoped
+        // call.
+        stripeAccountId: true,
         sale: { select: { organizer: { select: { stripeConnectId: true } } } },
       },
       orderBy: { updatedAt: 'desc' },
@@ -308,7 +316,7 @@ export const sweepDeadInvoicesForPayment = async (): Promise<void> => {
       try {
         const ctx = await resolveDeadInvoiceStripeContext(
           invoice.stripeSessionId!,
-          invoice.sale?.organizer?.stripeConnectId
+          invoice.stripeAccountId ?? invoice.sale?.organizer?.stripeConnectId
         );
 
         if (!ctx) {

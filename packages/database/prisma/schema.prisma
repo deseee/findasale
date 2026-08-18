@@ -1942,6 +1942,21 @@ model HoldInvoice {
   // migration 20260409120230_pos_cart_invoice_fields but was never declared here. Actions
   // mirror the live constraint exactly (ON DELETE SET NULL / ON UPDATE NO ACTION).
   cartSession           POSSession?      @relation(fields: [cartSessionId], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  // Stripe account + charge-shape snapshot (2026-08-18 migration): pinned at
+  // invoice-creation time, mirroring Purchase.chargeType / Purchase.stripeAccountId's
+  // existing DIRECT/DESTINATION vocabulary. Every maintenance path (expireCheckoutSession.ts,
+  // holdInvoicePaymentRecorder.ts, stripeController.ts, invoiceExpiryJob.ts,
+  // deadInvoicePaidSweepJob.ts) used to re-derive the account from event.account (absent on
+  // non-Connect deliveries) or the organizer's CURRENT stripeConnectId -- wrong if the
+  // organizer re-onboarded or the Direct-charges allowlist changed after the session was
+  // created. NULL on rows created before this migration; those readers fall back to the old
+  // (lossy) re-derivation.
+  /// Connected account the Checkout Session was created against. NULL = platform-only /
+  /// pre-migration row.
+  stripeAccountId        String?
+  /// 'DIRECT' | 'DESTINATION' -- same vocabulary as Purchase.chargeType. NULL = pre-migration
+  /// row (account/shape unknown, callers recompute).
+  chargeType             String?
   createdAt             DateTime         @default(now())
   updatedAt             DateTime         @updatedAt
 
@@ -1950,6 +1965,7 @@ model HoldInvoice {
   @@index([organizerUserId])
   @@index([expiresAt])
   @@index([cartSessionId])
+  @@index([stripeAccountId])
 }
 
 // Feature #121: Sale Check-in — per-shopper GPS-based validation for hold rank enforcement

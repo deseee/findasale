@@ -71,11 +71,13 @@ import { shouldUseDirectCharge } from './stripeConnectService'; // Purchase-row 
  * loop below (oversold race) is excluded from Purchase creation, matching
  * posPaymentLinkRecorder.ts's oversoldItemIds handling (a real captured payment with no
  * deliverable item is a manual-refund-review case, not a fabricated fulfillment record).
- * HoldInvoice has no persisted chargeType/stripeAccountId column (same gap documented in
- * posPaymentLinkRecorder.ts for POSPaymentLink), so DIRECT-vs-DESTINATION is recomputed
- * here via shouldUseDirectCharge against the sale's organizer -- same known edge case
- * (can only disagree with the original checkout-time decision if Stripe eligibility or
- * the allowlist changed in between) already accepted for the POS Payment Link path.
+ * HoldInvoice.chargeType/stripeAccountId (2026-08-18 migration) are preferred when present --
+ * pinned at checkout-session-creation time, they cannot drift. Only pre-migration rows (both
+ * columns NULL) fall back to recomputing DIRECT-vs-DESTINATION via shouldUseDirectCharge
+ * against the sale's organizer -- same known edge case (can only disagree with the original
+ * checkout-time decision if Stripe eligibility or the allowlist changed in between) still
+ * accepted for the POS Payment Link path (posPaymentLinkRecorder.ts), which has no invoice-like
+ * row to pin a snapshot onto.
  */
 
 export interface MarkHoldInvoicePaidOpts {
@@ -369,20 +371,32 @@ export async function markHoldInvoicePaid(
     // Hold-to-Pay sale. Every field below is sourced from data already fetched/verified
     // in this function (holdInvoice, bundledItems, the paymentIntentId parameter) -- no
     // re-derivation through a different path that could drift from what actually
-    // happened. HoldInvoice has no persisted chargeType/stripeAccountId (see header
-    // comment), so DIRECT-vs-DESTINATION is recomputed via the sale's organizer, mirroring
-    // posPaymentLinkRecorder.ts's identical gap for POSPaymentLink.
+    // happened. HoldInvoice.chargeType/stripeAccountId (2026-08-18 migration, see header
+    // comment) are preferred when set; only a pre-migration NULL row recomputes
+    // DIRECT-vs-DESTINATION via the sale's organizer, mirroring posPaymentLinkRecorder.ts's
+    // still-live gap for POSPaymentLink.
     const sellableItemIdSet = new Set(sellableItemIds);
     const bundledItemPriceSum = bundledItems.reduce((sum, it) => sum + (it.price || 0), 0);
     const invoicePlatformFeeDollars = holdInvoice.platformFeeAmount / 100;
 
+    // Stripe account + charge-shape snapshot (2026-08-18 migration): prefer the value
+    // pinned on the invoice itself at checkout-session-creation time. Only a pre-migration
+    // row (chargeType NULL) falls back to recomputing it live against the sale's organizer.
     const saleOrganizerId = holdInvoice.sale?.organizerId ?? null;
-    const saleOrganizer = saleOrganizerId
-      ? await tx.organizer.findUnique({ where: { id: saleOrganizerId }, select: { stripeConnectId: true } })
-      : null;
-    const useDirect = saleOrganizerId && saleOrganizer?.stripeConnectId
-      ? await shouldUseDirectCharge(saleOrganizerId, saleOrganizer.stripeConnectId)
-      : false;
+    let useDirect: boolean;
+    let chargeAccountId: string | null;
+    if (holdInvoice.chargeType) {
+      useDirect = holdInvoice.chargeType === 'DIRECT';
+      chargeAccountId = holdInvoice.stripeAccountId ?? null;
+    } else {
+      const saleOrganizer = saleOrganizerId
+        ? await tx.organizer.findUnique({ where: { id: saleOrganizerId }, select: { stripeConnectId: true } })
+        : null;
+      useDirect = !!(saleOrganizerId && saleOrganizer?.stripeConnectId
+        ? await shouldUseDirectCharge(saleOrganizerId, saleOrganizer.stripeConnectId)
+        : false);
+      chargeAccountId = useDirect ? saleOrganizer?.stripeConnectId ?? null : null;
+    }
 
     for (const bundledItem of bundledItems) {
       if (!sellableItemIdSet.has(bundledItem.id)) continue; // oversold race -- no Purchase row, matches posPaymentLinkRecorder.ts
@@ -412,7 +426,7 @@ export async function markHoldInvoicePaid(
             source: 'ONLINE',
             stripePaymentIntentId: paymentIntentId,
             chargeType: useDirect ? 'DIRECT' : 'DESTINATION',
-            ...(useDirect && saleOrganizer?.stripeConnectId ? { stripeAccountId: saleOrganizer.stripeConnectId } : {}),
+            ...(useDirect && chargeAccountId ? { stripeAccountId: chargeAccountId } : {}),
           },
         });
       } catch (purchaseErr: any) {
@@ -460,7 +474,7 @@ export async function markHoldInvoicePaid(
             source: 'ONLINE',
             stripePaymentIntentId: paymentIntentId,
             chargeType: useDirect ? 'DIRECT' : 'DESTINATION',
-            ...(useDirect && saleOrganizer?.stripeConnectId ? { stripeAccountId: saleOrganizer.stripeConnectId } : {}),
+            ...(useDirect && chargeAccountId ? { stripeAccountId: chargeAccountId } : {}),
           },
         });
       } catch (purchaseErr: any) {

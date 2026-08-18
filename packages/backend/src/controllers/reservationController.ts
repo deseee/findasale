@@ -1870,6 +1870,15 @@ export const markSoldAndCreateInvoice = async (req: AuthRequest, res: Response) 
           itemIds: bundledItemIds,
           status: 'PENDING',
           expiresAt,
+          // Stripe account + charge-shape snapshot (2026-08-18 migration): same `useDirect` /
+          // `organizer.stripeConnectId` values already used for the Session create call's
+          // `{ stripeAccount }` option above -- reused verbatim, not re-derived. Closes the
+          // gap documented in utils/expireCheckoutSession.ts and
+          // services/holdInvoicePaymentRecorder.ts (HoldInvoice previously had no persisted
+          // account, so every maintenance path fell back to the organizer's CURRENT
+          // stripeConnectId, which can drift from what was actually used at checkout time).
+          chargeType: useDirect ? 'DIRECT' : 'DESTINATION',
+          stripeAccountId: useDirect ? organizer.stripeConnectId ?? null : null,
         },
       });
 
@@ -1947,7 +1956,7 @@ export const markSoldAndCreateInvoice = async (req: AuthRequest, res: Response) 
             saleId: reservation.item.saleId!,
             invoiceId: transaction.id,
           },
-        });
+        }, useDirect ? { stripeAccount: organizer.stripeConnectId! } : undefined);
       } catch (metaErr: any) {
         const metaErrMsg = `[hold-invoice] Non-fatal: failed to backfill invoiceId metadata onto PaymentIntent ${stripePaymentIntentId} for invoice ${transaction.id}: ${metaErr?.message ?? metaErr}`;
         console.error(metaErrMsg);
@@ -2486,11 +2495,15 @@ export const releaseInvoice = async (req: AuthRequest, res: Response) => {
     // Sentry if a payable session survives. See utils/expireCheckoutSession.ts.
     if (invoice.stripeSessionId) {
       const closure = await expireCheckoutSessionSafely(invoice.stripeSessionId, {
-        // The SALE's organizer, not the caller's Organizer row. Identical value on the
-        // organizer arm (they own the sale); on the shopper arm the caller has no
-        // Organizer row at all, so reading it from the caller would send `undefined`
-        // here -- see the include above for why that is money exposure, not a nit.
-        stripeAccount: saleOrganizer?.stripeConnectId ?? null,
+        // Stripe account + charge-shape snapshot (2026-08-18 migration): prefer the account
+        // pinned on the invoice at checkout-session-creation time -- it cannot drift, unlike
+        // the SALE's organizer's CURRENT stripeConnectId (below), which is wrong if the
+        // organizer re-onboarded or the Direct-charges allowlist changed since the session
+        // was created. NULL on pre-migration rows, where the old fallback still applies:
+        // the SALE's organizer, not the caller's Organizer row (identical value on the
+        // organizer arm; on the shopper arm the caller has no Organizer row at all, so
+        // reading it from the caller would send `undefined` -- see the include above).
+        stripeAccount: invoice.stripeAccountId ?? saleOrganizer?.stripeConnectId ?? null,
         context: `releaseInvoice invoice=${invoice.id} actor=${isInvoiceShopper ? 'shopper' : 'organizer'}`,
       });
 
