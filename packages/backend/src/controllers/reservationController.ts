@@ -424,18 +424,101 @@ export const placeHold = async (req: AuthRequest, res: Response) => {
   }
 };
 
-// DELETE /api/reservations/:id — shopper cancels their own hold (organizer can cancel any)
+// DELETE /api/reservations/:id — the hold's own shopper, or the organizer who owns the
+// sale the item belongs to (or their accepted TEAMS staff), cancels a hold.
+// Holding the ORGANIZER role is NOT sufficient — see the ownership check below.
 export const cancelHold = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) return res.status(401).json({ message: 'Authentication required' });
 
     const { id } = req.params;
-    const reservation = await prisma.itemReservation.findUnique({ where: { id } });
+    const reservation = await prisma.itemReservation.findUnique({
+      where: { id },
+      include: {
+        // sale.organizerId is what ownership is decided on; item.status gates the revert
+        // below. Both come from this one query -- no second round-trip.
+        item: {
+          select: {
+            id: true,
+            title: true,
+            saleId: true,
+            status: true,
+            sale: { select: { organizerId: true } },
+          },
+        },
+      },
+    });
     if (!reservation) return res.status(404).json({ message: 'Reservation not found' });
 
-    const isOrganizer = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
-    if (!isOrganizer && reservation.userId !== req.user.id) {
+    // P0 fix (2026-08-17): ownership, not role.
+    //
+    // This used to read:
+    //   const isOrganizer = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
+    //   if (!isOrganizer && reservation.userId !== req.user.id) return 403;
+    // The `isOrganizer` term SHORT-CIRCUITED the ownership test entirely. ORGANIZER is a
+    // self-serve signup role, so any organizer account on the platform could cancel any
+    // hold on ANY other organizer's sale and flip that item back to AVAILABLE -- a
+    // cross-tenant write with a one-line curl. Merely holding the role is never sufficient.
+    //
+    // Mirrors releaseInvoice's ownership resolution in this same file: resolve the caller's
+    // Organizer row from req.user.id and compare it against the sale's organizerId, and do
+    // it BEFORE anything that reveals or mutates resource state. It is also exactly the
+    // scope getOrganizerHolds uses to build the list this action is invoked from
+    // (`item: { sale: { organizerId: organizer.id } }`), so every hold an organizer can
+    // see on /organizer/holds or in POS is a hold they still pass this check for.
+    const isHoldOwner = reservation.userId === req.user.id;
+    let ownsSale = false;
+    if (!isHoldOwner) {
+      const saleOrganizerId = reservation.item.sale?.organizerId ?? null;
+      if (saleOrganizerId) {
+        const callerOrganizer = await prisma.organizer.findUnique({
+          where: { userId: req.user.id },
+          select: { id: true },
+        });
+        ownsSale = !!callerOrganizer && callerOrganizer.id === saleOrganizerId;
+
+        // TEAM_MEMBER arm. This endpoint had NO role gate before this fix, so a TEAMS
+        // staff member standing at the register could cancel a hold from /organizer/pos
+        // (pos.tsx handleCancelHold -> DELETE /reservations/:id). That staff user has no
+        // Organizer row of their own, so the owner check above alone would newly 403 them
+        // -- a real regression for a legitimate caller, not a hole being closed. Resolved
+        // the same way POS itself resolves them (utils/posAuth.ts resolveOrganizerOrTeamMember
+        // branch 2, which is what GET /pos/holds already uses to build that very list):
+        // an ACCEPTED WorkspaceMember with a linked TeamMember row resolves to the
+        // workspace-owning Organizer. Kept as a boolean here rather than calling that
+        // helper, because the helper writes its own 403/404 responses and would change
+        // this endpoint's existing message shapes for shoppers.
+        if (!ownsSale) {
+          const member = await prisma.workspaceMember.findFirst({
+            where: {
+              userId: req.user.id,
+              acceptedAt: { not: null },
+              teamMember: { isNot: null },
+              workspace: { ownerId: saleOrganizerId },
+            },
+            select: { id: true },
+          });
+          ownsSale = !!member;
+        }
+      }
+    }
+    if (!isHoldOwner && !ownsSale) {
       return res.status(403).json({ message: 'Access denied' });
+    }
+
+    // Resource-state gate (2026-08-17): an item at INVOICE_ISSUED has a live payment
+    // request against it -- a Stripe Checkout Session in flight, or a POS cash invoice
+    // awaiting collection. Cancelling the hold here used to drag it straight back to
+    // AVAILABLE unconditionally, putting an item with money in flight back on sale while
+    // the shopper's payment link stayed open and payable. The reclaim path for that state
+    // is POST /reservations/:id/release-invoice, which cancels the invoice, closes the
+    // Stripe session and returns the item properly -- and is wired to the "Cancel payment
+    // request" button on /organizer/holds. Same reasoning as releaseInvoice's own 409
+    // resource-state gate.
+    if (reservation.item.status === 'INVOICE_ISSUED') {
+      return res.status(409).json({
+        message: 'There is a payment request out on this item. It has to be cancelled before the hold can be released.',
+      });
     }
 
     // Fetch item details for live feed event
@@ -446,7 +529,17 @@ export const cancelHold = async (req: AuthRequest, res: Response) => {
 
     await prisma.$transaction(async (tx) => {
       await tx.itemReservation.update({ where: { id }, data: { status: 'CANCELLED' } });
-      await tx.item.update({ where: { id: reservation.itemId }, data: { status: 'AVAILABLE' } });
+      // Conditional revert, not a blind update. Same race-safe shape as
+      // invoiceExpiryJob.ts and releaseInvoice's item reverts (and commitItemSale's
+      // fromStatuses guard): the WHERE and the SET are one Postgres statement, so an item
+      // that moved on between the gate above and this write -- to INVOICE_ISSUED, SOLD,
+      // DONATED or AUCTION_ENDED -- matches zero rows and is never dragged backwards onto
+      // the sale floor. RESERVED is the only status a live hold puts an item in
+      // (placeHold, above), and an item already AVAILABLE needs no change.
+      await tx.item.updateMany({
+        where: { id: reservation.itemId, status: 'RESERVED' },
+        data: { status: 'AVAILABLE' },
+      });
     });
 
     // Feature #70: Emit live feed event
@@ -903,8 +996,15 @@ export const batchUpdateHolds = async (req: AuthRequest, res: Response) => {
           },
           data: { status: 'CANCELLED' },
         });
+        // Guarded on RESERVED (2026-08-17), same as cancelHold/updateHold above and the
+        // reverts in invoiceExpiryJob.ts and releaseInvoice. `validHolds` above only
+        // excludes item.status === 'SOLD', and markSoldAndCreateInvoice deliberately
+        // leaves ItemReservation.status alone when it issues an invoice -- so a CONFIRMED
+        // hold whose item is sitting at INVOICE_ISSUED with a live Stripe session reaches
+        // this line, and the unguarded update put it straight back on sale with money in
+        // flight. Same bug class as the two P0s fixed in this file today, third site.
         await tx.item.updateMany({
-          where: { id: { in: validItemIds } },
+          where: { id: { in: validItemIds }, status: 'RESERVED' },
           data: { status: 'AVAILABLE' },
         });
         // Notify each shopper their hold was released
@@ -1206,7 +1306,8 @@ export const batchUpdateHolds = async (req: AuthRequest, res: Response) => {
   }
 };
 
-// PATCH /api/reservations/:id — organizer confirms or cancels a hold
+// PATCH /api/reservations/:id — the organizer who OWNS the sale confirms or cancels a hold.
+// Holding the ORGANIZER role is NOT sufficient — see the ownership check below.
 export const updateHold = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) return res.status(401).json({ message: 'Authentication required' });
@@ -1224,15 +1325,61 @@ export const updateHold = async (req: AuthRequest, res: Response) => {
       where: { id },
       include: {
         user: { select: { id: true, name: true, email: true } },
-        item: { select: { id: true, title: true, saleId: true } },
+        item: {
+          select: {
+            id: true,
+            title: true,
+            saleId: true,
+            status: true,
+            // Ownership is decided on this; see the check below.
+            sale: { select: { organizerId: true } },
+          },
+        },
       },
     });
     if (!reservation) return res.status(404).json({ message: 'Reservation not found' });
 
+    // P0 fix (2026-08-17): this handler checked `hasOrganizerRole` above and then had NO
+    // ownership check ANYWHERE -- it went straight to updating the reservation by id. Any
+    // organizer account could confirm or cancel any hold on any other organizer's sale,
+    // and because the handler also writes a Notification and fires
+    // sendHoldStatusToShopper, the victim's shopper received an in-app notice and an email
+    // that read as though their real organizer had done it.
+    //
+    // Same resolution as releaseInvoice in this file: resolve the caller's Organizer row
+    // from req.user.id and compare against the sale's organizerId, before any state is
+    // revealed or mutated. Unlike cancelHold there is no shopper branch here -- this
+    // endpoint is the organizer's confirm/cancel control (the shopper's own release is
+    // DELETE /reservations/:id), so sale ownership is the only way through.
+    const userOrganizer = await prisma.organizer.findUnique({
+      where: { userId: req.user.id },
+      select: { id: true },
+    });
+    if (!userOrganizer || reservation.item.sale?.organizerId !== userOrganizer.id) {
+      return res.status(403).json({ message: 'Access denied. You do not own this sale.' });
+    }
+
+    // Resource-state gate (2026-08-17): same as cancelHold. An item at INVOICE_ISSUED has
+    // a live payment request against it; cancelling the hold used to put it back on sale
+    // unconditionally while the shopper's payment link stayed open and payable. The
+    // correct control for that state is POST /reservations/:id/release-invoice.
+    if (status === 'CANCELLED' && reservation.item.status === 'INVOICE_ISSUED') {
+      return res.status(409).json({
+        message: 'There is a payment request out on this item. Cancel the payment request first, then cancel the hold.',
+      });
+    }
+
     const updated = await prisma.$transaction(async (tx) => {
       const r = await tx.itemReservation.update({ where: { id }, data: { status } });
       if (status === 'CANCELLED') {
-        await tx.item.update({ where: { id: reservation.itemId }, data: { status: 'AVAILABLE' } });
+        // Conditional revert -- same guarded-updateMany shape as invoiceExpiryJob.ts and
+        // releaseInvoice. An item that moved to INVOICE_ISSUED / SOLD / DONATED between
+        // the gate above and this write matches zero rows instead of being dragged back
+        // onto the sale floor.
+        await tx.item.updateMany({
+          where: { id: reservation.itemId, status: 'RESERVED' },
+          data: { status: 'AVAILABLE' },
+        });
       }
       // In-app notification for shopper
       await tx.notification.create({

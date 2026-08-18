@@ -1,3 +1,4 @@
+import * as Sentry from '@sentry/node';
 import { prisma } from '../lib/prisma';
 import { getIO } from '../lib/socket';
 import { pushEvent } from '../services/liveFeedService';
@@ -35,9 +36,24 @@ import { shouldUseDirectCharge } from './stripeConnectService'; // Purchase-row 
  * Idempotency (two layers, mirrors posPaymentLinkRecorder.ts):
  *   1. Fast-path check outside any transaction: if HoldInvoice.status is already
  *      'PAID', return immediately with no work done.
- *   2. Inside the $transaction, the row is re-read and the flip to PAID only
- *      proceeds if status !== 'PAID' -- flip-first, so a concurrent webhook/
+ *   2. Inside the $transaction, the flip to PAID is a single guarded conditional
+ *      UPDATE (WHERE status = 'PENDING') -- flip-first, so a concurrent webhook/
  *      reconcile race that both reach this point can't double-record.
+ *
+ * Dead-invoice guard (P0, 2026-08-17): the layer-2 guard above used to be
+ * `status != 'PAID'`, which let a CANCELLED (releaseInvoice) or EXPIRED
+ * (invoiceExpiryJob / charge.failed) invoice flip FORWARD to PAID when a late
+ * charge.succeeded arrived -- Stripe captured real money against an invoice whose
+ * items were already back on sale, and if any item had been re-sold in the interim
+ * the oversold branch below excluded it from Purchase creation, leaving a captured
+ * charge with NO Purchase row for refundService.executeVerifiedRefund to key off.
+ * PENDING is now the only state that can flip (it is the only legitimately payable
+ * state -- all three creation paths write PENDING, CANCELLED/EXPIRED are terminal,
+ * REFUNDED only follows PAID), and any payment arriving on a non-PENDING,
+ * non-PAID invoice records NOTHING and raises a Sentry alert
+ * (reportDeadInvoicePayment) carrying the invoice id, PaymentIntent id, amount and
+ * actual status so the charge can be found and refunded by hand. No automatic
+ * refund is issued -- that decision is Patrick's, and is not implemented here.
  *
  * Purchase-row backfill (2026-08-09): this function previously flipped HoldInvoice/Item/
  * ItemReservation state but never created a Purchase row, so refundService.ts's
@@ -74,6 +90,71 @@ export interface MarkHoldInvoicePaidResult {
   recorded: boolean;
   /** true if the invoice was already PAID (by this call or a concurrent one). */
   alreadyPaid: boolean;
+  /**
+   * P0 (2026-08-17): true if a real Stripe payment arrived for an invoice that was NOT
+   * payable (CANCELLED / EXPIRED / any non-PENDING, non-PAID state). Nothing was recorded
+   * and NO refund was issued -- a Sentry alert was raised for manual review instead.
+   * Optional so existing callers (stripeController charge.succeeded, invoiceExpiryJob's
+   * reconcile branch) keep compiling unchanged.
+   */
+  deadInvoice?: boolean;
+}
+
+/**
+ * P0 (2026-08-17): loud, actionable alert for "Stripe captured money against an invoice
+ * that was not payable". Deliberately a captureException (not captureMessage) so it lands
+ * as a real issue with a stack, matching stripeController.ts's cart-checkout failure
+ * handler. Carries everything needed to FIND the charge in Stripe and refund it by hand:
+ * invoice id, PaymentIntent id, amount, and the invoice's actual status.
+ *
+ * NO automatic refund is issued from here -- moving money autonomously is out of scope and
+ * requires Patrick's explicit sign-off (open decision, flagged in the handoff).
+ */
+function reportDeadInvoicePayment(params: {
+  invoiceId: string;
+  paymentIntentId: string;
+  invoiceStatus: string;
+  amountCents: number;
+  source: string;
+  chargeId?: string;
+  saleId?: string | null;
+  shopperUserId?: string | null;
+  /** 'pre-transaction' = dead on first read; 'flip-race' = went dead between read and flip. */
+  detectedAt: 'pre-transaction' | 'flip-race';
+}): void {
+  const amountDollars = (params.amountCents / 100).toFixed(2);
+  const msg =
+    `[hold-invoice/${params.source}] DEAD-INVOICE-PAYMENT invoice=${params.invoiceId} ` +
+    `status=${params.invoiceStatus} pi=${params.paymentIntentId} amount=$${amountDollars} ` +
+    `detectedAt=${params.detectedAt} -- Stripe captured a payment for an invoice that is not ` +
+    `PENDING. NO sale was recorded (no items marked SOLD, no Purchase rows) and NO refund was ` +
+    `issued automatically. This charge must be reviewed and refunded manually in Stripe.`;
+  console.error(msg);
+  try {
+    Sentry.captureException(new Error(msg), {
+      tags: {
+        area: 'hold-invoice-dead-payment',
+        invoiceStatus: params.invoiceStatus,
+        source: params.source,
+        detectedAt: params.detectedAt,
+      },
+      extra: {
+        invoiceId: params.invoiceId,
+        stripePaymentIntentId: params.paymentIntentId,
+        chargeId: params.chargeId ?? null,
+        invoiceStatus: params.invoiceStatus,
+        amountCents: params.amountCents,
+        amountDollars,
+        saleId: params.saleId ?? null,
+        shopperUserId: params.shopperUserId ?? null,
+        detectedAt: params.detectedAt,
+      },
+    });
+  } catch {
+    // Sentry may not be initialized -- never let the alert path throw into the webhook
+    // handler (a throw there marks the idempotency row FAILED and returns 500, which makes
+    // Stripe retry forever). The console.error above is the fallback record.
+  }
 }
 
 export async function markHoldInvoicePaid(
@@ -106,9 +187,51 @@ export async function markHoldInvoicePaid(
   const sellableItemIds: string[] = [];
 
   // Idempotency check (fast path, outside the tx): if already paid, skip.
+  // NOTE this stays FIRST and returns before the dead-invoice guard below, so a legitimate
+  // duplicate webhook delivery of the same charge.succeeded is still a silent no-op and
+  // never raises a Sentry alert.
   if (holdInvoice.status === 'PAID') {
     console.warn(`[hold-invoice/${source}] Invoice ${invoiceId} already paid, skipping duplicate.`);
     return { recorded: false, alreadyPaid: true };
+  }
+
+  // P0 DEAD-INVOICE GUARD (2026-08-17) -- money could be captured with no recoverable record.
+  // Before this branch, the ONLY state excluded from the flip below was 'PAID', so a
+  // CANCELLED invoice (releaseInvoice, reservationController.ts:2205-2208) or an EXPIRED one
+  // (invoiceExpiryJob.ts:279, stripeController.ts charge.failed :3311) satisfied
+  // `status != 'PAID'` and was flipped FORWARD to PAID by a late charge.succeeded, with the
+  // caller in stripeController.ts (:3176) performing no lifecycle check either.
+  // Real failure mode: the organizer releases an invoice, its items return to inventory and
+  // go back on sale, but the shopper's Stripe Checkout link is still payable -- they pay.
+  // The dead invoice flips to PAID, items are marked SOLD and Purchase rows are written. If
+  // an item was re-sold in the interim, sellItemUnits throws InsufficientStockError, that
+  // item is excluded from Purchase creation (see the sellableItemIdSet filter below), and
+  // Stripe has captured money with NO Purchase row at all -- refundService.ts's
+  // executeVerifiedRefund keys off purchaseId, so there is nothing to refund against.
+  //
+  // PENDING is the ONLY legitimately payable state. Verified against every site that writes
+  // HoldInvoice.status: all three creation paths write PENDING (posController.ts:664 and
+  // :1379, reservationController.ts:1711); PAID is written only here and is handled above;
+  // CANCELLED and EXPIRED are terminal (they are exactly holdInvoiceClaim.ts's
+  // DEAD_INVOICE_STATUSES); REFUNDED (InvoiceStatus enum, schema.prisma:2753) can only ever
+  // follow PAID and is never written to HoldInvoice anywhere in the backend today. The check
+  // is written as `!== 'PENDING'` rather than an explicit dead-list so any future enum value
+  // fails CLOSED (alert, record nothing) instead of silently becoming payable.
+  //
+  // NO automatic refund is issued -- see reportDeadInvoicePayment's note.
+  if (holdInvoice.status !== 'PENDING') {
+    reportDeadInvoicePayment({
+      invoiceId,
+      paymentIntentId,
+      invoiceStatus: holdInvoice.status,
+      amountCents: holdInvoice.totalAmount,
+      source,
+      chargeId,
+      saleId: holdInvoice.saleId,
+      shopperUserId: holdInvoice.shopperUserId,
+      detectedAt: 'pre-transaction',
+    });
+    return { recorded: false, alreadyPaid: false, deadInvoice: true };
   }
 
   // Fetch all items and reservations bundled in this invoice
@@ -126,6 +249,11 @@ export async function markHoldInvoicePaid(
   const organizerPayout = (holdInvoice.totalAmount / 100) - (holdInvoice.platformFeeAmount / 100) - stripeFeeAmount;
 
   let didRecord = false;
+  // P0 (2026-08-17): when the guarded flip below matches zero rows, that no longer means
+  // only "a concurrent call already recorded it" -- it can also mean the invoice went
+  // CANCELLED/EXPIRED between the read above and the flip. The two outcomes need opposite
+  // handling (silent no-op vs. loud alert), so the actual post-flip status is captured here.
+  let postFlipStatus: string | null = null;
 
   // Update invoice status to PAID
   await prisma.$transaction(async (tx) => {
@@ -140,8 +268,15 @@ export async function markHoldInvoicePaid(
     // BOTH proceed to double-decrement stock / double-send notifications and emails.
     // Mirrors the guarded-updateMany pattern already used by itemStockService.sellItemUnits
     // and invoiceExpiryJob's own PENDING -> EXPIRED flip.
+    //
+    // P0 (2026-08-17): the WHERE is `status: 'PENDING'`, not the old `status: { not: 'PAID' }`.
+    // The old form let a CANCELLED or EXPIRED invoice flip FORWARD to PAID on a late
+    // charge.succeeded -- see the DEAD-INVOICE GUARD above for the full failure mode. This
+    // is also the race-safe half of that guard: the pre-transaction check can be stale, but
+    // this single conditional UPDATE takes the row lock, so an invoice released a
+    // millisecond ago still matches zero rows here.
     const flip = await tx.holdInvoice.updateMany({
-      where: { id: invoiceId, status: { not: 'PAID' } },
+      where: { id: invoiceId, status: 'PENDING' },
       data: {
         status: 'PAID',
         paidAt: new Date(),
@@ -150,6 +285,16 @@ export async function markHoldInvoicePaid(
       },
     });
     if (flip.count === 0) {
+      // Re-read to find out WHY it matched nothing: 'PAID' = benign concurrent recorder
+      // (silent no-op, as before); anything else = the invoice died under us and a real
+      // payment just landed on it (alert, record nothing). Safe to read here -- the flip's
+      // failed WHERE already waited on any competing write's row lock, so this sees the
+      // committed winner's value.
+      const current = await tx.holdInvoice.findUnique({
+        where: { id: invoiceId },
+        select: { status: true },
+      });
+      postFlipStatus = current?.status ?? null;
       return;
     }
     didRecord = true;
@@ -171,7 +316,47 @@ export async function markHoldInvoicePaid(
         sellableItemIds.push(bundledItemId);
       } catch (stockErr: any) {
         if (stockErr instanceof InsufficientStockError) {
-          console.error(`[hold-invoice/${source}] Oversold race on item ${bundledItemId}:`, stockErr.message);
+          // P0 (2026-08-17): this was console.error ONLY -- one line in Railway, no alert.
+          // The consequence is money-shaped: this item is excluded from Purchase creation
+          // below (sellableItemIdSet), so Stripe has captured payment for an item with no
+          // Purchase row, and refundService.ts's executeVerifiedRefund keys off purchaseId
+          // -- there is nothing to refund against without manual intervention. That must
+          // page, not whisper.
+          //
+          // Deliberately NOT converted to a throw. The whole webhook switch in
+          // stripeController.ts is wrapped in a try/catch (:1094-1097) that marks the
+          // idempotency row FAILED and returns 500, which makes Stripe retry with backoff.
+          // A throw here would roll back this ENTIRE transaction -- including the PAID flip
+          // and the Purchase rows for every OTHER item in the bundle that sold fine -- and
+          // every retry would deterministically hit the same oversold item and roll back
+          // again, so the invoice would never record at all and Stripe would retry for days.
+          // Swallowing preserves the partial record (which is the recoverable state) and the
+          // Sentry alert is what makes the shortfall actionable.
+          const oversoldMsg =
+            `[hold-invoice/${source}] OVERSOLD-RACE invoice=${invoiceId} item=${bundledItemId} ` +
+            `pi=${paymentIntentId} -- payment captured but this item could not be sold ` +
+            `(${stockErr.message}). No Purchase row will be created for it, so there is no ` +
+            `record for executeVerifiedRefund to key off: this charge needs manual review ` +
+            `and likely a partial refund in Stripe.`;
+          console.error(oversoldMsg);
+          try {
+            Sentry.captureException(stockErr, {
+              tags: { area: 'hold-invoice-oversold-race', source },
+              extra: {
+                message: oversoldMsg,
+                invoiceId,
+                itemId: bundledItemId,
+                stripePaymentIntentId: paymentIntentId,
+                chargeId: chargeId ?? null,
+                saleId: holdInvoice.saleId,
+                shopperUserId: holdInvoice.shopperUserId,
+                invoiceTotalAmountCents: holdInvoice.totalAmount,
+              },
+            });
+          } catch {
+            // Sentry may not be initialized -- never let the alert path throw, that would
+            // defeat the whole point of not rethrowing above.
+          }
         } else {
           throw stockErr;
         }
@@ -315,6 +500,23 @@ export async function markHoldInvoicePaid(
   });
 
   if (!didRecord) {
+    // P0 (2026-08-17): a zero-count flip is only benign if the invoice is now PAID. If it
+    // went CANCELLED/EXPIRED between the read and the flip, a real payment just landed on a
+    // dead invoice and nothing was recorded -- same alert as the pre-transaction guard.
+    if (postFlipStatus && postFlipStatus !== 'PAID') {
+      reportDeadInvoicePayment({
+        invoiceId,
+        paymentIntentId,
+        invoiceStatus: postFlipStatus,
+        amountCents: holdInvoice.totalAmount,
+        source,
+        chargeId,
+        saleId: holdInvoice.saleId,
+        shopperUserId: holdInvoice.shopperUserId,
+        detectedAt: 'flip-race',
+      });
+      return { recorded: false, alreadyPaid: false, deadInvoice: true };
+    }
     // Another path (concurrent webhook/reconcile) already recorded this payment.
     console.warn(`[hold-invoice/${source}] Invoice ${invoiceId} was recorded by a concurrent call, skipping duplicate.`);
     return { recorded: false, alreadyPaid: true };
