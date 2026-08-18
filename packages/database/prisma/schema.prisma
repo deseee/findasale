@@ -5378,6 +5378,14 @@ enum MarketplaceJobPlatform {
   // per dev-environment skill Option B) -- this schema.prisma edit brings the source of
   // truth in sync with the value that already exists in production.
   GUMTREE_AU
+  // 2026-08-18 (S-CROSSLISTER-ESTATE-VERTICAL-RESEARCH batch 4): Poshmark/Mercari/Vinted/Grailed
+  // content-script crosslisting. NOT yet applied to Railway -- Patrick must run the
+  // `ALTER TYPE ... ADD VALUE IF NOT EXISTS` DDL below (same pattern as Gumtree AU) before any
+  // markListed call for these platforms will persist server-side.
+  POSHMARK
+  MERCARI
+  VINTED
+  GRAILED
 }
 
 /// One row per (Item, action). Polled by marketplacePosterCron.ts (node-cron,

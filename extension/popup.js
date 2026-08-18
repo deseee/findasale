@@ -124,6 +124,15 @@ function currentListedFlag(it) {
   const ch = currentChannel();
   if (ch === 'craigslist') return it.marketplaceListedCraigslist === true;
   if (ch === 'gumtree_au') return it.marketplaceListedGumtreeAu === true;
+  // 2026-08-18 dispatch: Poshmark/Mercari/Vinted/Grailed. Backend (extensionController.ts) does
+  // NOT yet return marketplaceListedPoshmark/Mercari/Vinted/Grailed on /extension/items -- this
+  // dispatch is client-side only (see this dispatch's handoff, schema/backend flagged as a
+  // follow-up, not built here). These simply read as undefined -> false on every real item today,
+  // which safely means "never show as already-listed" rather than crashing or guessing.
+  if (ch === 'poshmark') return it.marketplaceListedPoshmark === true;
+  if (ch === 'mercari') return it.marketplaceListedMercari === true;
+  if (ch === 'vinted') return it.marketplaceListedVinted === true;
+  if (ch === 'grailed') return it.marketplaceListedGrailed === true;
   return it.marketplaceListedFacebook === true;
 }
 
@@ -135,6 +144,13 @@ function onChannelChange() {
   const fb = ch === 'facebook';
   const cl = ch === 'craigslist';
   const gt = ch === 'gumtree_au';
+  // 2026-08-18 dispatch: Poshmark/Mercari/Vinted/Grailed. None of these four auto-publish (see
+  // each content script's file header -- fills and stops, always, no toggle), so autoPublishRow
+  // stays hidden for all of them, same as Gumtree Australia.
+  const posh = ch === 'poshmark';
+  const merc = ch === 'mercari';
+  const vinted = ch === 'vinted';
+  const grailed = ch === 'grailed';
   // autoPublishRow (2026-08-06): Publish automatically now applies to Craigslist too --
   // shown for both channels, no longer FB-only. fas-craigslist.js's doPreviewStep clicks
   // Craigslist's own publish button when checked, same as fas-content.js already does for FB.
@@ -143,7 +159,11 @@ function onChannelChange() {
   const fbNote = $('fbPublishNote'); if (fbNote) fbNote.hidden = !fb;
   const clNote = $('clPostNote'); if (clNote) clNote.hidden = !cl;
   const gtNote = $('gtPostNote'); if (gtNote) gtNote.hidden = !gt;
-  const autoPublishRow = $('autoPublishRow'); if (autoPublishRow) autoPublishRow.hidden = gt;
+  const poshNote = $('poshPostNote'); if (poshNote) poshNote.hidden = !posh;
+  const mercNote = $('mercPostNote'); if (mercNote) mercNote.hidden = !merc;
+  const vintedNote = $('vintedPostNote'); if (vintedNote) vintedNote.hidden = !vinted;
+  const grailedNote = $('grailedPostNote'); if (grailedNote) grailedNote.hidden = !grailed;
+  const autoPublishRow = $('autoPublishRow'); if (autoPublishRow) autoPublishRow.hidden = gt || posh || merc || vinted || grailed;
   const removeSetting = document.querySelector('.removeSetting'); if (removeSetting) removeSetting.hidden = !fb;
   // (2026-08-08 fix) The item list's LISTED badges/hide-filter are channel-specific (see
   // currentListedFlag above) but this handler never used to re-render on channel switch, so
@@ -276,7 +296,11 @@ function updateCount() {
   const ch = currentChannel();
   // ADR-102 (2026-08-09): generalized from a single craigslist-vs-not check to a small map so
   // Gumtree Australia gets its own label without re-deriving this logic a third time.
-  const POST_LABELS = { craigslist: 'on Craigslist', gumtree_au: 'on Gumtree Australia' };
+  const POST_LABELS = {
+    craigslist: 'on Craigslist', gumtree_au: 'on Gumtree Australia',
+    // 2026-08-18 dispatch: Poshmark/Mercari/Vinted/Grailed.
+    poshmark: 'on Poshmark', mercari: 'on Mercari', vinted: 'on Vinted', grailed: 'on Grailed'
+  };
   const where = POST_LABELS[ch] || 'on Marketplace';
   const verb = POST_LABELS[ch] ? 'Post' : 'List';
   btn.textContent = selected.size ? verb + ' ' + selected.size + ' ' + where : (POST_LABELS[ch] ? ('Post selected ' + where) : 'List selected on Marketplace');
@@ -323,6 +347,16 @@ async function startQueue() {
     // fas-gumtree-au.js picks the item up on load. No autoPublish param -- that flow is
     // manual-assist only, there's nothing to auto-publish yet.
     await send({ type: 'setGumtreeAuQueue', queue });
+    window.close();
+    return;
+  }
+  // 2026-08-18 dispatch: Poshmark/Mercari/Vinted/Grailed. Same shape as the Gumtree AU branch
+  // above -- no autoPublish param for any of these four, since none of their content scripts
+  // ever auto-clicks the final publish/list action (fills and stops, always -- see each script's
+  // file header). CODE-ONLY: none of these four channels has been tested against a live account.
+  const SIMPLE_CHANNEL_MSG = { poshmark: 'setPoshmarkQueue', mercari: 'setMercariQueue', vinted: 'setVintedQueue', grailed: 'setGrailedQueue' };
+  if (SIMPLE_CHANNEL_MSG[currentChannel()]) {
+    await send({ type: SIMPLE_CHANNEL_MSG[currentChannel()], queue });
     window.close();
     return;
   }

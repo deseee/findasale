@@ -1,10 +1,17 @@
 {
   "manifest_version": 3,
-  "name": "FindA.Sale — Marketplace Autofill",
+  "name": "FindA.Sale \u2014 Marketplace Autofill",
   "short_name": "FindA.Sale",
   "version": "1.0.0",
-  "description": "Fill your Facebook Marketplace listings from your FindA.Sale inventory — title, price, condition, description, and photos. You review and publish.",
-  "permissions": ["storage", "tabs", "cookies", "scripting", "alarms", "notifications"],
+  "description": "Fill your Facebook Marketplace listings from your FindA.Sale inventory \u2014 title, price, condition, description, and photos. You review and publish.",
+  "permissions": [
+    "storage",
+    "tabs",
+    "cookies",
+    "scripting",
+    "alarms",
+    "notifications"
+  ],
   "host_permissions": [
     "https://www.facebook.com/*",
     "https://finda.sale/*",
@@ -13,36 +20,80 @@
     "https://i.ebayimg.com/*",
     "https://post.craigslist.org/*",
     "https://*.craigslist.org/*",
-    "https://www.gumtree.com.au/*"
+    "https://www.gumtree.com.au/*",
+    "https://poshmark.com/*",
+    "https://www.poshmark.com/*",
+    "https://www.mercari.com/*",
+    "https://www.vinted.com/*",
+    "https://www.grailed.com/*"
   ],
-  "icons": { "16": "icon16.png", "48": "icon48.png", "128": "icon128.png" },
-  "action": { "default_popup": "popup.html", "default_title": "FindA.Sale Marketplace Autofill", "default_icon": { "16": "icon16.png", "48": "icon48.png", "128": "icon128.png" } },
-  "background": { "service_worker": "background.js" },
+  "icons": {
+    "16": "icon16.png",
+    "48": "icon48.png",
+    "128": "icon128.png"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "FindA.Sale Marketplace Autofill",
+    "default_icon": {
+      "16": "icon16.png",
+      "48": "icon48.png",
+      "128": "icon128.png"
+    }
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
   "web_accessible_resources": [
     {
-      "resources": ["popup.html", "popup.css", "popup.js", "config.js"],
-      "matches": ["<all_urls>"]
+      "resources": [
+        "popup.html",
+        "popup.css",
+        "popup.js",
+        "config.js"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
     }
   ],
   "content_scripts": [
     {
-      "matches": ["https://www.facebook.com/marketplace/create/*"],
-      "js": ["fas-selectors.js", "fas-content.js"],
+      "matches": [
+        "https://www.facebook.com/marketplace/create/*"
+      ],
+      "js": [
+        "fas-selectors.js",
+        "fas-content.js"
+      ],
       "run_at": "document_idle"
     },
     {
-      "matches": ["https://www.facebook.com/marketplace/you/selling*"],
-      "js": ["fas-selectors.js", "fas-remove.js"],
+      "matches": [
+        "https://www.facebook.com/marketplace/you/selling*"
+      ],
+      "js": [
+        "fas-selectors.js",
+        "fas-remove.js"
+      ],
       "run_at": "document_idle"
     },
     {
-      "matches": ["https://post.craigslist.org/*"],
-      "js": ["fas-craigslist.js"],
+      "matches": [
+        "https://post.craigslist.org/*"
+      ],
+      "js": [
+        "fas-craigslist.js"
+      ],
       "run_at": "document_idle"
     },
     {
-      "matches": ["https://www.gumtree.com.au/*"],
-      "js": ["fas-gumtree-au.js"],
+      "matches": [
+        "https://www.gumtree.com.au/*"
+      ],
+      "js": [
+        "fas-gumtree-au.js"
+      ],
       "run_at": "document_idle"
     },
     {
@@ -50,7 +101,48 @@
         "https://www.facebook.com/marketplace/you/*",
         "https://www.facebook.com/marketplace/inbox/*"
       ],
-      "js": ["fas-selectors.js", "fas-tracking.js", "fas-messages.js"],
+      "js": [
+        "fas-selectors.js",
+        "fas-tracking.js",
+        "fas-messages.js"
+      ],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://poshmark.com/*",
+        "https://www.poshmark.com/*"
+      ],
+      "js": [
+        "fas-poshmark.js"
+      ],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://www.mercari.com/*"
+      ],
+      "js": [
+        "fas-mercari.js"
+      ],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://www.vinted.com/*"
+      ],
+      "js": [
+        "fas-vinted.js"
+      ],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://www.grailed.com/*"
+      ],
+      "js": [
+        "fas-grailed.js"
+      ],
       "run_at": "document_idle"
     }
   ]

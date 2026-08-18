@@ -855,6 +855,85 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         const { fasGumtreeAuLoginState = null, fasGumtreeAuLoginObservedAt = null } =
           await chrome.storage.local.get(['fasGumtreeAuLoginState', 'fasGumtreeAuLoginObservedAt']);
         sendResponse({ ok: true, loggedIn: fasGumtreeAuLoginState, observedAt: fasGumtreeAuLoginObservedAt });
+      } else if (msg.type === 'setPoshmarkQueue') {
+        // 2026-08-18 dispatch (fas-poshmark.js): same queue-storage shape as
+        // setGumtreeAuQueue above -- no autoPublish flag, since fas-poshmark.js never
+        // auto-clicks the final publish/list action (fills and stops, always -- see
+        // that content script's file header). Not wired into autoRenewDueItems()/
+        // checkRenewals() above -- posting only, no renewal automation for this dispatch.
+        await chrome.storage.local.set({ fasPoshmarkQueue: msg.queue || [], fasPoshmarkIndex: 0 });
+        chrome.tabs.create({ url: CFG.POSH_POST_URL });
+        sendResponse({ ok: true });
+      } else if (msg.type === 'getPoshmarkQueueItem') {
+        const { fasPoshmarkQueue = [], fasPoshmarkIndex = 0 } =
+          await chrome.storage.local.get(['fasPoshmarkQueue', 'fasPoshmarkIndex']);
+        sendResponse({ ok: true, item: fasPoshmarkQueue[fasPoshmarkIndex] || null, index: fasPoshmarkIndex, total: fasPoshmarkQueue.length });
+      } else if (msg.type === 'advancePoshmarkQueue') {
+        const st = await chrome.storage.local.get(['fasPoshmarkQueue', 'fasPoshmarkIndex']);
+        const next = (st.fasPoshmarkIndex || 0) + 1;
+        await chrome.storage.local.set({ fasPoshmarkIndex: next });
+        const item = (st.fasPoshmarkQueue || [])[next] || null;
+        sendResponse({ ok: true, item, index: next, total: (st.fasPoshmarkQueue || []).length });
+      } else if (msg.type === 'setMercariQueue') {
+        // 2026-08-18 dispatch (fas-mercari.js): same queue-storage shape as
+        // setGumtreeAuQueue above -- no autoPublish flag, since fas-mercari.js never
+        // auto-clicks the final publish/list action (fills and stops, always -- see
+        // that content script's file header). Not wired into autoRenewDueItems()/
+        // checkRenewals() above -- posting only, no renewal automation for this dispatch.
+        await chrome.storage.local.set({ fasMercariQueue: msg.queue || [], fasMercariIndex: 0 });
+        chrome.tabs.create({ url: CFG.MERC_POST_URL });
+        sendResponse({ ok: true });
+      } else if (msg.type === 'getMercariQueueItem') {
+        const { fasMercariQueue = [], fasMercariIndex = 0 } =
+          await chrome.storage.local.get(['fasMercariQueue', 'fasMercariIndex']);
+        sendResponse({ ok: true, item: fasMercariQueue[fasMercariIndex] || null, index: fasMercariIndex, total: fasMercariQueue.length });
+      } else if (msg.type === 'advanceMercariQueue') {
+        const st = await chrome.storage.local.get(['fasMercariQueue', 'fasMercariIndex']);
+        const next = (st.fasMercariIndex || 0) + 1;
+        await chrome.storage.local.set({ fasMercariIndex: next });
+        const item = (st.fasMercariQueue || [])[next] || null;
+        sendResponse({ ok: true, item, index: next, total: (st.fasMercariQueue || []).length });
+      } else if (msg.type === 'setVintedQueue') {
+        // 2026-08-18 dispatch (fas-vinted.js): same queue-storage shape as
+        // setGumtreeAuQueue above -- no autoPublish flag, since fas-vinted.js never
+        // auto-clicks the final publish/list action (fills and stops, always -- see
+        // that content script's file header). CRITICAL, non-negotiable (see fas-vinted.js's
+        // file-header legal constraint): this queue is a one-shot NEW-listing post only --
+        // NEVER wire Vinted into autoRenewDueItems()/checkRenewals() above, no timers, no
+        // retry-by-resubmitting. Vinted has an active enforcement wave against automated
+        // relist/bump behavior.
+        await chrome.storage.local.set({ fasVintedQueue: msg.queue || [], fasVintedIndex: 0 });
+        chrome.tabs.create({ url: CFG.VINTED_POST_URL });
+        sendResponse({ ok: true });
+      } else if (msg.type === 'getVintedQueueItem') {
+        const { fasVintedQueue = [], fasVintedIndex = 0 } =
+          await chrome.storage.local.get(['fasVintedQueue', 'fasVintedIndex']);
+        sendResponse({ ok: true, item: fasVintedQueue[fasVintedIndex] || null, index: fasVintedIndex, total: fasVintedQueue.length });
+      } else if (msg.type === 'advanceVintedQueue') {
+        const st = await chrome.storage.local.get(['fasVintedQueue', 'fasVintedIndex']);
+        const next = (st.fasVintedIndex || 0) + 1;
+        await chrome.storage.local.set({ fasVintedIndex: next });
+        const item = (st.fasVintedQueue || [])[next] || null;
+        sendResponse({ ok: true, item, index: next, total: (st.fasVintedQueue || []).length });
+      } else if (msg.type === 'setGrailedQueue') {
+        // 2026-08-18 dispatch (fas-grailed.js): same queue-storage shape as
+        // setGumtreeAuQueue above -- no autoPublish flag, since fas-grailed.js never
+        // auto-clicks the final publish/list action (fills and stops, always -- see
+        // that content script's file header). Not wired into autoRenewDueItems()/
+        // checkRenewals() above -- posting only, no renewal automation for this dispatch.
+        await chrome.storage.local.set({ fasGrailedQueue: msg.queue || [], fasGrailedIndex: 0 });
+        chrome.tabs.create({ url: CFG.GRAILED_POST_URL });
+        sendResponse({ ok: true });
+      } else if (msg.type === 'getGrailedQueueItem') {
+        const { fasGrailedQueue = [], fasGrailedIndex = 0 } =
+          await chrome.storage.local.get(['fasGrailedQueue', 'fasGrailedIndex']);
+        sendResponse({ ok: true, item: fasGrailedQueue[fasGrailedIndex] || null, index: fasGrailedIndex, total: fasGrailedQueue.length });
+      } else if (msg.type === 'advanceGrailedQueue') {
+        const st = await chrome.storage.local.get(['fasGrailedQueue', 'fasGrailedIndex']);
+        const next = (st.fasGrailedIndex || 0) + 1;
+        await chrome.storage.local.set({ fasGrailedIndex: next });
+        const item = (st.fasGrailedQueue || [])[next] || null;
+        sendResponse({ ok: true, item, index: next, total: (st.fasGrailedQueue || []).length });
       } else if (msg.type === 'getRemovalQueueItem') {
         const { fasRemovalQueue = [], fasRemovalIndex = 0 } = await chrome.storage.local.get(['fasRemovalQueue', 'fasRemovalIndex']);
         sendResponse({ ok: true, item: fasRemovalQueue[fasRemovalIndex] || null, index: fasRemovalIndex, total: fasRemovalQueue.length });

@@ -24,6 +24,10 @@
         <option value="facebook">Facebook Marketplace</option>
         <option value="craigslist">Craigslist</option>
         <option value="gumtree_au">Gumtree Australia</option>
+        <option value="poshmark">Poshmark</option>
+        <option value="mercari">Mercari</option>
+        <option value="vinted">Vinted</option>
+        <option value="grailed">Grailed</option>
         <option value="nextdoor" disabled>Nextdoor (coming soon)</option>
       </select>
     </div>
@@ -33,6 +37,10 @@
         <p class="note dim" id="clLoginNote" hidden></p>
     <p class="note" id="gtPostNote" hidden>Gumtree Australia requires signing in before any part of the posting form can be seen, so this can&rsquo;t be autofilled yet. Opens the posting page, waits for you to sign in, then shows the item&rsquo;s title, price, description, and photo links so you can paste them into Gumtree&rsquo;s form yourself &mdash; click &ldquo;I posted&rdquo; when you&rsquo;re done so FindA.Sale can track it.</p>
         <p class="note dim" id="gtLoginNote" hidden></p>
+    <p class="note" id="poshPostNote" hidden>Fills the Poshmark listing form as best it can &mdash; category, brand, size, and condition are best-effort guesses (CODE-ONLY, not yet verified against a real Poshmark account), so review everything carefully. Click Poshmark&rsquo;s own <b>List This Listing</b> button yourself &mdash; this channel never publishes automatically. If the form looks empty, Poshmark may need a recent sign-in through its mobile app first.</p>
+    <p class="note" id="mercPostNote" hidden>Uploads photos first (Mercari fills some fields itself right after), then fills the rest &mdash; category, brand, and shipping weight are best-effort guesses (CODE-ONLY, not yet verified). Add a shipping weight yourself if this item doesn&rsquo;t have one; Smart Pricing is left off. Click Mercari&rsquo;s own <b>List this item</b> button yourself &mdash; this channel never publishes automatically.</p>
+    <p class="note" id="vintedPostNote" hidden>Fills one new Vinted listing at a time &mdash; category, brand, material, and package size are best-effort guesses (CODE-ONLY, not yet verified). Click Vinted&rsquo;s own <b>Upload</b> button yourself &mdash; this channel never publishes automatically, and never reposts a listing on its own.</p>
+    <p class="note" id="grailedPostNote" hidden>Fills the Grailed listing form as best it can, but leaves measurements blank for you to add (Grailed listings perform better with them) and skips an item entirely if its brand isn&rsquo;t a match on Grailed&rsquo;s designer list (CODE-ONLY, not yet verified). Click Grailed&rsquo;s own <b>List item</b> button yourself &mdash; this channel never publishes automatically.</p>
     <p class="note" id="fbPublishNote">Fills and publishes each listing automatically, pausing if anything looks off. Uncheck to fill but stop before Publish so you can review first. <span class="dim">(Chrome's &ldquo;debugging this tab&rdquo; banner is normal.)</span></p>
     <div class="removeSetting">
       <label class="chk" for="autoRemoveMode">Keep Facebook listings in sync</label>
