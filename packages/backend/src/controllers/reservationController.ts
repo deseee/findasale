@@ -2162,17 +2162,60 @@ export const getMyInvoices = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) return res.status(401).json({ message: 'Authentication required' });
 
+    // Explicit `select`, never `include` (data-exposure fix, 2026-08-17). This response
+    // goes to the BUYER. The previous
+    // `include: { reservation: { include: { item: { include: { sale: true } } } } }`
+    // returned whole Prisma rows -- every column of Sale and Item -- which handed the
+    // organizer's private economics to the person on the other side of the transaction:
+    // Sale.commissionRate, Sale.settlementNotes, Sale.cashFloat, Sale.markdownFloor,
+    // Item.auctionReservePrice (the reserve a bidder must never see),
+    // Item.reverseFloorPrice, Item.consignmentSplitPct, plus the Item.embedding Float[]
+    // vector for sheer weight. Every field below is one the Pending Payments card
+    // actually renders (components/ClaimCard.tsx via pages/shopper/dashboard.tsx) --
+    // nothing is here by habit.
     const invoices = await prisma.holdInvoice.findMany({
       where: {
         shopperUserId: req.user.id,
         status: 'PENDING', // Only show unpaid invoices
       },
-      include: {
+      select: {
+        id: true,
+        status: true,
+        totalAmount: true,
+        platformFeeAmount: true,
+        stripeSessionId: true,
+        expiresAt: true,
+        createdAt: true,
+        itemIds: true,
+        // The @unique anchor hold. Nullable by design -- see the resolution below.
+        reservationId: true,
+        // Back-relation of ItemReservation.invoiceId ("ReservationInvoiceFk"): every hold
+        // a bundled invoice covers. Used only as the anchor fallback.
+        reservations: { select: { id: true }, orderBy: { createdAt: 'asc' } },
+        // Organizer display name. The card wants one and was faking it from the sale
+        // title (dashboard.tsx: `invoice.organizerName ?? invoice.item?.sale?.title`),
+        // so a shopper read "From Estate Sale on Oak St" where a person's name belongs.
+        // HoldInvoice.organizer is the organizer's User row; User.organizer is their
+        // Organizer profile, which carries the business name.
+        organizer: {
+          select: {
+            name: true,
+            organizer: { select: { businessName: true } },
+          },
+        },
+        sale: { select: { id: true, title: true } },
         reservation: {
-          include: {
+          select: {
+            id: true,
             item: {
-              include: {
-                sale: true,
+              select: {
+                id: true,
+                title: true,
+                price: true,
+                photoUrls: true,
+                status: true,
+                saleId: true,
+                sale: { select: { id: true, title: true } },
               },
             },
           },
@@ -2181,16 +2224,78 @@ export const getMyInvoices = async (req: AuthRequest, res: Response) => {
       orderBy: { createdAt: 'desc' },
     });
 
-    res.json(invoices.map(inv => ({
-      id: inv.id,
-      status: inv.status,
-      totalAmount: inv.totalAmount,
-      platformFeeAmount: inv.platformFeeAmount,
-      stripeSessionId: inv.stripeSessionId,
-      expiresAt: inv.expiresAt,
-      createdAt: inv.createdAt,
-      item: inv.reservation?.item,
-    })));
+    // Resolve EVERY billed item, not just the anchor's -- mirroring getInvoiceDetails
+    // above, which already does exactly this from `invoice.itemIds`. `reservation.item`
+    // is the single anchor hold's item, so a bundled invoice rendered ONE item on a card
+    // that charges for N. HoldInvoice.itemIds is the invoice's own record of what it
+    // billed and is correct for bundles. Batched into a single query across all invoices
+    // (rather than per-invoice as the detail endpoint does) to keep this list endpoint at
+    // two queries no matter how many invoices are pending.
+    const allItemIds = Array.from(new Set(invoices.flatMap(inv => inv.itemIds)));
+    const billedItems = allItemIds.length
+      ? await prisma.item.findMany({
+          where: { id: { in: allItemIds } },
+          // Identical narrow projection to the anchor item above -- the two must not
+          // drift, or the card's `item` and `items[]` would expose different columns.
+          select: {
+            id: true,
+            title: true,
+            price: true,
+            photoUrls: true,
+            status: true,
+            saleId: true,
+            sale: { select: { id: true, title: true } },
+          },
+        })
+      : [];
+    const itemsById = new Map(billedItems.map(it => [it.id, it]));
+
+    res.json(invoices.map(inv => {
+      // itemIds carries the order the invoice was built in; findMany does not guarantee
+      // it. Re-order so the card's headline item does not wander between refreshes.
+      // Filtered, not asserted: an item hard-deleted since invoicing simply drops out.
+      const items = inv.itemIds
+        .map(id => itemsById.get(id))
+        .filter((it): it is NonNullable<typeof it> => Boolean(it));
+
+      // The id POST /reservations/:id/release-invoice is keyed on -- a RESERVATION id,
+      // not the invoice id. Two honest sources, in order:
+      //   1. HoldInvoice.reservationId, the @unique anchor.
+      //   2. any hold carrying ItemReservation.invoiceId = this invoice. releaseInvoice
+      //      resolves the invoice from EITHER link (`reservation.invoiceRel ??
+      //      reservation.invoice`), so a non-anchor hold of a bundle addresses the
+      //      endpoint just as well as the anchor does.
+      // Genuinely null in exactly one case: a POS-cart invoice built with no held
+      // reservations at all. posController.createCombinedInvoice omits `reservationId`
+      // when `heldReservations.length === 0` and also skips the ItemReservation.invoiceId
+      // update in that branch, so there is no reservation to name -- and no caller,
+      // shopper or organizer, can reach release-invoice for it. That is stated outright
+      // below rather than emitted as a bare null for the UI to interpret.
+      const reservationId = inv.reservationId ?? inv.reservations[0]?.id ?? null;
+
+      return {
+        id: inv.id,
+        status: inv.status,
+        totalAmount: inv.totalAmount,
+        platformFeeAmount: inv.platformFeeAmount,
+        stripeSessionId: inv.stripeSessionId,
+        expiresAt: inv.expiresAt,
+        createdAt: inv.createdAt,
+        reservationId,
+        canCancel: reservationId !== null,
+        cancelUnavailableReason: reservationId === null
+          ? "This payment request came from the register, so it can't be cancelled here. Ask the organizer at checkout."
+          : null,
+        organizerName: inv.organizer?.organizer?.businessName || inv.organizer?.name || null,
+        sale: inv.sale,
+        itemCount: items.length,
+        items,
+        // Back-compat: dashboard.tsx reads invoice.item.{title,price,photoUrls} and
+        // falls back to invoice.item.sale.title. Anchor first, else the first billed
+        // item -- the same precedence getInvoiceDetails uses.
+        item: inv.reservation?.item ?? items[0] ?? null,
+      };
+    }));
   } catch (error: any) {
     console.error('[invoices] getMyInvoices error:', error);
     res.status(500).json({ message: 'Server error' });
@@ -2265,13 +2370,21 @@ export const getItemInvoiceStatus = async (req: Request, res: Response) => {
   }
 };
 
-// POST /api/reservations/:id/release-invoice — organizer cancels a PENDING invoice
-// Auth: ORGANIZER only
+// POST /api/reservations/:id/release-invoice — cancel a PENDING invoice
+// Auth (2026-08-17): the invoice's own SHOPPER, or the ORGANIZER who owns the sale.
+// The `:id` is an ItemReservation id (the anchor hold, or any hold of a bundle).
+//
+// This is the only path that closes the Stripe Checkout Session BEFORE handing items
+// back to inventory, so the shopper-facing "Cancel payment request" button
+// (components/ClaimCard.tsx) has to come through here rather than DELETE /reservations/:id
+// (cancelHold refuses at INVOICE_ISSUED precisely because it would leave a live payment
+// link on an item going back on sale). The handler previously opened with a blanket
+// `Organizers only` role check, so the one user that button renders for was guaranteed a
+// 403 -- the button could never have worked. The role check is gone; authorization is
+// now the two explicit ownership arms below.
 export const releaseInvoice = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) return res.status(401).json({ message: 'Authentication required' });
-    const hasOrganizerRole = req.user?.roles?.includes('ORGANIZER') || req.user?.role === 'ORGANIZER';
-    if (!hasOrganizerRole) return res.status(403).json({ message: 'Organizers only' });
 
     const { id: reservationId } = req.params;
 
@@ -2280,7 +2393,19 @@ export const releaseInvoice = async (req: AuthRequest, res: Response) => {
       include: {
         item: {
           include: {
-            sale: true,
+            // The sale's own organizer is pulled in for the Stripe account routing
+            // below. That account used to come from the CALLER's Organizer row, which
+            // was only ever the same value because the caller was required to BE the
+            // sale's organizer. With a shopper arm that assumption breaks -- a shopper
+            // has no Organizer row at all, so the connected-account fallback inside
+            // expireCheckoutSessionSafely would go out undefined and a Direct-charges
+            // Session would come back NOT_FOUND, leaving a payable link alive on an
+            // invoice we just cancelled. The account must come from the SALE.
+            sale: {
+              include: {
+                organizer: { select: { id: true, stripeConnectId: true } },
+              },
+            },
           },
         },
         invoice: true,
@@ -2298,22 +2423,53 @@ export const releaseInvoice = async (req: AuthRequest, res: Response) => {
 
     if (!reservation) return res.status(404).json({ message: 'Reservation not found' });
 
+    // Resolved before authorization because the shopper arm is keyed on the INVOICE's
+    // owner. Resolving it reveals nothing: both relations are already in memory from the
+    // single findUnique above, and no response branches on either value until
+    // authorization has passed.
+    const invoice = reservation.invoiceRel ?? reservation.invoice;
+    const saleOrganizer = reservation.item.sale?.organizer ?? null;
+
     // Ownership FIRST (information-disclosure fix, 2026-08-17). The invoice-existence
     // 404 and the not-PENDING 409 below both leak real state about someone else's sale,
     // and they used to run BEFORE this check -- any authenticated organizer could probe
     // reservation ids and learn which ones carried a live invoice. Nothing about the
     // resource is revealed until ownership is established.
+    //
+    // TWO arms as of 2026-08-17:
+    //   Arm 1 (shopper): the invoice's own shopperUserId is the caller. Cancelling your
+    //     own outstanding payment request is yours to do. Mirrors
+    //     posPaymentController.declinePaymentRequest, which authorizes the shopper-side
+    //     decline on exactly `request.shopperUserId !== req.user.id` and nothing else.
+    //     Note it is the INVOICE's shopper, not the reservation's holder -- the invoice
+    //     is the object being cancelled, and every state change below is scoped to that
+    //     invoice's own id and itemIds.
+    //   Arm 2 (organizer): unchanged -- the caller's Organizer row owns the sale.
+    // A caller who is neither still gets 403.
+    const isInvoiceShopper = !!invoice && invoice.shopperUserId === req.user.id;
+
     const userOrganizer2 = await prisma.organizer.findUnique({
       where: { userId: req.user.id },
     });
-    if (!userOrganizer2 || reservation.item.sale!.organizerId !== userOrganizer2.id) {
-      return res.status(403).json({ message: 'Access denied. You do not own this sale.' });
+    const isSaleOrganizer =
+      !!userOrganizer2 && !!saleOrganizer && saleOrganizer.id === userOrganizer2.id;
+
+    if (!isInvoiceShopper && !isSaleOrganizer) {
+      // ONE message for every failure mode -- wrong shopper, wrong organizer, no invoice
+      // at all. A caller probing reservation ids must not be able to tell "that sale
+      // isn't yours" from "that invoice isn't yours" from "there is no invoice", which
+      // is the same disclosure the ownership-first ordering above exists to prevent.
+      return res.status(403).json({ message: 'Access denied. This payment request is not yours.' });
     }
 
-    const invoice = reservation.invoiceRel ?? reservation.invoice;
+    // Reachable only on the organizer arm: a shopper with no invoice fails the arm-1
+    // test and has already been refused above.
     if (!invoice) return res.status(404).json({ message: 'No invoice found for this reservation' });
     if (invoice.status !== 'PENDING') {
-      return res.status(409).json({ message: 'Only PENDING invoices can be released' });
+      // Reworded 2026-08-17: this string is now shown to shoppers (ClaimCard surfaces the
+      // server's own copy on a 409), and "Only PENDING invoices can be released" is
+      // internal vocabulary, not something a person at a sale should have to parse.
+      return res.status(409).json({ message: 'This payment request is no longer open, so there is nothing to cancel.' });
     }
 
     // Cancel the Stripe Checkout session. Null-guarded: posController.sendHoldInvoice
@@ -2330,8 +2486,12 @@ export const releaseInvoice = async (req: AuthRequest, res: Response) => {
     // Sentry if a payable session survives. See utils/expireCheckoutSession.ts.
     if (invoice.stripeSessionId) {
       const closure = await expireCheckoutSessionSafely(invoice.stripeSessionId, {
-        stripeAccount: userOrganizer2.stripeConnectId,
-        context: `releaseInvoice invoice=${invoice.id}`,
+        // The SALE's organizer, not the caller's Organizer row. Identical value on the
+        // organizer arm (they own the sale); on the shopper arm the caller has no
+        // Organizer row at all, so reading it from the caller would send `undefined`
+        // here -- see the include above for why that is money exposure, not a nit.
+        stripeAccount: saleOrganizer?.stripeConnectId ?? null,
+        context: `releaseInvoice invoice=${invoice.id} actor=${isInvoiceShopper ? 'shopper' : 'organizer'}`,
       });
 
       // Resource-state gate: NEVER cancel an invoice the shopper has already paid.
@@ -2403,19 +2563,49 @@ export const releaseInvoice = async (req: AuthRequest, res: Response) => {
         data: { invoiceId: null, invoiceClaimToken: null, invoiceClaimedAt: null },
       });
 
-      // Notify shopper
+      // Actor-branched copy (2026-08-17). The shopper is notified either way -- it is
+      // their payment request -- but telling them "the invoice has been cancelled"
+      // seconds after THEY pressed Cancel reads as though something went wrong on the
+      // organizer's side. Second person when the shopper did it, third when the
+      // organizer did.
+      const multi = releasedItemIds.length > 1;
+      const itemLabel = multi ? `${releasedItemIds.length} items` : `"${reservation.item.title}"`;
+
       await tx.notification.create({
         data: {
-          userId: reservation.user.id,
+          // The INVOICE's shopper, not the passed reservation's holder. Identical in
+          // every path that creates an invoice (a bundle only ever bundles one shopper's
+          // own holds), but the invoice is the object being cancelled, so its owner is
+          // the correct recipient -- and on the shopper arm it is the same id the
+          // authorization above was granted on, so "You cancelled..." can never be sent
+          // to someone who did not.
+          userId: invoice.shopperUserId,
           type: 'invoice_cancelled',
-          title: 'Invoice cancelled',
-          body: releasedItemIds.length > 1
-            ? `The invoice for ${releasedItemIds.length} items has been cancelled. Your holds remain active.`
-            : `The invoice for "${reservation.item.title}" has been cancelled. Your hold remains active.`,
+          title: isInvoiceShopper ? 'Payment request cancelled' : 'Invoice cancelled',
+          body: isInvoiceShopper
+            ? `You cancelled the payment request for ${itemLabel}. ${multi ? 'Your holds are' : 'Your hold is'} still active, so nothing has gone back on sale.`
+            : `The invoice for ${itemLabel} has been cancelled. ${multi ? 'Your holds remain' : 'Your hold remains'} active.`,
           link: `/items/${reservation.item.id}`,
           channel: 'OPERATIONAL',
         },
       });
+
+      // On the shopper arm the organizer is the one left waiting on a payment that is
+      // not coming, and nothing else tells them. Not sent on the organizer arm -- they
+      // would be notifying themselves. HoldInvoice.organizerUserId is a User id
+      // (schema.prisma:1922-1923), which is what Notification.userId expects.
+      if (isInvoiceShopper) {
+        await tx.notification.create({
+          data: {
+            userId: invoice.organizerUserId,
+            type: 'invoice_cancelled',
+            title: 'Payment request cancelled by the shopper',
+            body: `${reservation.user.name || 'A shopper'} cancelled the payment request for ${itemLabel}. ${multi ? 'The holds are' : 'The hold is'} still in place, so you can send a new request whenever they are ready.`,
+            link: '/organizer/holds',
+            channel: 'OPERATIONAL',
+          },
+        });
+      }
     });
 
     res.json({ message: 'Invoice released and hold reactivated', itemsReleased: releasedItemIds.length });
