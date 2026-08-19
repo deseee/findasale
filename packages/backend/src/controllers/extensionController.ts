@@ -7,7 +7,7 @@ import { applyNeverShippableOverride, computeEffectivePackageWeight, endEbayList
 import { markShopifyItemSold } from '../services/shopifyService';
 import { commitItemSale, ItemAlreadyCommittedError } from '../services/itemSaleGuard';
 import { decideMessageAutosend } from '../services/messageAutosendService';
-import { EBAY_STANDARD_ENVELOPE_CATEGORY_ID_DESCENDANTS } from '../services/ebayRateEstimateService';
+import { checkEligibility } from '../services/marketplaceEligibilityRules';
 
 // Facebook Marketplace condition values. Mirrors mapConditionForFacebook() in
 // exportController.ts (kept in sync; trivial pure map — not worth a shared import).
@@ -28,63 +28,17 @@ function buildDescription(description: string | null | undefined, saleId: string
   return base ? `${base}\n\n${link}` : link;
 }
 
-// Facebook Commerce Policy prohibits listing currency, cash, and coins (Marketplace Commerce
-// Policies -- "prohibited content" includes currency, cash, and cash-equivalent instruments).
-// This gate is FACEBOOK-SPECIFIC ONLY -- it must never affect eBay, native checkout, or any
-// other platform's pushability.
-//
-// ID source: reuses ONLY the "Coins & Paper Money" slice of ebayRateEstimateService.ts's
-// live-verified eBay Taxonomy API data (root L1 id '11116' + its confirmed descendant leaf
-// '11981', Eisenhower dollars) via EBAY_STANDARD_ENVELOPE_CATEGORY_ID_DESCENDANTS --
-// deliberately NOT the whole EBAY_STANDARD_ENVELOPE_ELIGIBLE_CATEGORY_IDS list, which also
-// covers Patches, Stickers & Decals, Greeting Cards, Seeds, Trading Cards, Postcards, and
-// Stamps (EBAY_STANDARD_ENVELOPE_ELIGIBLE_CATEGORIES, ebayRateEstimateService.ts:913-921).
-// None of those other 7 families are restricted by Facebook's policy -- only currency/coins
-// are -- so reusing the combined 8-category list here would incorrectly flag stamps,
-// postcards, trading cards, etc. as Facebook-ineligible. Checked live 2026-08-15.
-const FB_COIN_CURRENCY_CATEGORY_ID_ROOT = '11116'; // eBay L1 "Coins & Paper Money"
-const FB_COIN_CURRENCY_CATEGORY_IDS: readonly string[] = [
-  FB_COIN_CURRENCY_CATEGORY_ID_ROOT,
-  ...(EBAY_STANDARD_ENVELOPE_CATEGORY_ID_DESCENDANTS[FB_COIN_CURRENCY_CATEGORY_ID_ROOT] || []),
-];
-
-// Free-text fallback for items with no ebayCategoryId. Item.ebayCategoryId (schema.prisma)
-// is captured only on eBay import/push -- an item that has never gone through eBay (many
-// items pushed through this Facebook extension) will never have it set, regardless of
-// category. Item.category (schema.prisma:1114) is a free-text/AI-classified field populated
-// independent of any eBay activity, so it is checked here as a fallback. Case-insensitive
-// substring match; 'currency' also catches "Coins & Currency", eBay's older/deprecated name
-// for the same category (see EBAY_STANDARD_ENVELOPE_ELIGIBLE_CATEGORIES's own 2026-08-15 fix
-// comment) in case an older FindA.Sale item still carries that stale text.
-const FB_COIN_CURRENCY_NAME_KEYWORDS: readonly string[] = ['coin', 'currency', 'paper money'];
-
-// NARROWED 2026-08-15 (Patrick correction, same day this gate first shipped): Facebook's
-// Commerce Policy prohibits actual currency/coins/paper money -- it does NOT prohibit
-// numismatic ACCESSORIES (tubes, holders, capsules, flips, albums, slabs, display cases,
-// storage pages). A bare substring match on "coin" also matches free-text categories like
-// "Coin Tubes & Holders" or "Coin Display Slabs", wrongly blocking sellable supply items
-// that are not restricted at all. If the category text also contains one of these accessory
-// terms, it is NOT treated as restricted -- "it's only currency itself, not accessories."
-const FB_COIN_ACCESSORY_EXCLUDE_KEYWORDS: readonly string[] = [
-  'tube', 'holder', 'capsule', 'flip', 'album', 'slab', 'sleeve', 'case', 'display',
-  'book', 'page', 'mount', 'folder', 'box', 'organizer', 'storage',
-];
-
-/** True when an item is a coin/currency item and therefore cannot be listed on Facebook
- *  Marketplace per Facebook's Commerce Policy. FACEBOOK-SPECIFIC -- callers must never use
- *  this to gate eBay, native checkout, or any other platform's eligibility. Accessories
- *  (tubes/holders/slabs/etc.) are explicitly excluded -- see FB_COIN_ACCESSORY_EXCLUDE_KEYWORDS. */
+// Facebook Commerce Policy (coins/currency) + the other 4 platforms' category eligibility now
+// live in a single shared registry (marketplaceEligibilityRules.ts, S-EXT-BATCH-2026-08-19) --
+// this function is kept as a thin wrapper so none of its existing call sites below need to
+// change. FACEBOOK-SPECIFIC ONLY -- must never affect eBay, native checkout, Craigslist, or
+// Gumtree AU's pushability (those platforms have no rule in the registry -- checkEligibility
+// returns eligible:true for any platform with no rule defined).
 function isFacebookRestrictedCoinOrCurrencyItem(
   category: string | null | undefined,
   ebayCategoryId: string | null | undefined
 ): boolean {
-  if (ebayCategoryId && FB_COIN_CURRENCY_CATEGORY_IDS.includes(ebayCategoryId)) return true;
-  if (!category) return false;
-  const lower = category.toLowerCase();
-  const isCoinOrCurrencyText = FB_COIN_CURRENCY_NAME_KEYWORDS.some((kw) => lower.includes(kw));
-  if (!isCoinOrCurrencyText) return false;
-  const isAccessory = FB_COIN_ACCESSORY_EXCLUDE_KEYWORDS.some((kw) => lower.includes(kw));
-  return !isAccessory;
+  return !checkEligibility('FACEBOOK', { category, ebayCategoryId }).eligible;
 }
 
 // GET /api/extension/items — the organizer's listable items + Marketplace status.
@@ -347,6 +301,19 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
     facebookRestrictedReason: isFacebookRestrictedCoinOrCurrencyItem(it.category, it.ebayCategoryId)
       ? 'Facebook Marketplace does not allow listing coins or currency (Commerce Policy).'
       : null,
+    // Per-marketplace category eligibility (S-EXT-BATCH-2026-08-19, marketplaceEligibilityRules.ts)
+    // -- Grailed/Poshmark/Mercari/Vinted only; Craigslist/Gumtree AU/Facebook have no entry here
+    // (Facebook keeps its own dedicated facebookRestricted/-Reason fields above for backward
+    // compatibility with existing popup.js code). popup.js hides an ineligible item on that
+    // platform's tab BY DEFAULT, with a "Show all items" override toggle -- this is UI guidance,
+    // same defense-in-depth posture as facebookRestricted: markItemListed below is the real,
+    // authoritative reject.
+    eligibility: {
+      GRAILED: checkEligibility('GRAILED', { category: it.category, ebayCategoryId: it.ebayCategoryId }),
+      POSHMARK: checkEligibility('POSHMARK', { category: it.category, ebayCategoryId: it.ebayCategoryId }),
+      MERCARI: checkEligibility('MERCARI', { category: it.category, ebayCategoryId: it.ebayCategoryId }),
+      VINTED: checkEligibility('VINTED', { category: it.category, ebayCategoryId: it.ebayCategoryId }),
+    },
     photoUrls: applyWatermark ? (it.photoUrls || []).map((u) => getWatermarkedUrlWithQR(u, it.id, it.qrEmbedEnabled !== false)) : (it.photoUrls || []),
     packageWeightOz: it.packageWeightOz,
     aiPackageWeightOz: it.aiPackageWeightOz,
@@ -452,6 +419,34 @@ const RENEWAL_LAPSE_WINDOW_DAYS: Record<MarketplaceRenewalPlatform, number> = {
 // the nudge/auto-renewal should fire. Placeholder: same-day (0) until Patrick decides.
 const RENEWAL_NOTIFY_LEAD_TIME_DAYS = 0;
 
+// Listing platforms accepted by markItemListed below -- a SUPERSET of the 3 renewal-eligible
+// platforms above (Grailed/Poshmark/Mercari/Vinted are content-script crosslisting targets that
+// are NOT wired into renewal at all -- Grailed/Poshmark/Mercari simply have no renewal automation
+// built yet, and Vinted is deliberately, permanently excluded per its file header's anti-bump
+// legal constraint). Kept as a separate type/list from MarketplaceRenewalPlatform rather than
+// widening that one, so RENEWAL_LAPSE_WINDOW_DAYS's Record type still only needs to cover
+// platforms that actually have a lapse window.
+//
+// BUG FOUND + FIXED 2026-08-19 (S-EXT-BATCH): markItemListed used to validate `platform` against
+// VALID_RENEWAL_PLATFORMS ONLY (FACEBOOK/CRAIGSLIST/GUMTREE_AU) and silently coerced anything
+// else -- including every real 'GRAILED'/'POSHMARK'/'MERCARI'/'VINTED' markListed call sent by
+// those 4 content scripts (see fas-grailed.js/fas-poshmark.js/fas-mercari.js/fas-vinted.js's own
+// showReviewOverlay handlers) -- down to 'FACEBOOK'. Every organizer confirmation ("I posted") on
+// any of these 4 platforms was being written to the database as a FACEBOOK MarketplaceListingJob
+// row instead of its real platform. Found by code inspection while wiring this same platform
+// value through checkEligibility below -- the coercion would have silently defeated the new
+// per-platform eligibility gate too (a Grailed post would have been checked against Facebook's
+// coin/currency rule instead of Grailed's fashion-only rule). Never caught live because nothing
+// previously read marketplaceListedGrailed/-Poshmark/-Mercari/-Vinted server-side (popup.js's
+// own 2026-08-18 comment already flags those fields as not yet returned by this endpoint).
+type MarketplaceListingPlatform = MarketplaceRenewalPlatform | 'GRAILED' | 'POSHMARK' | 'MERCARI' | 'VINTED';
+const VALID_LISTING_PLATFORMS: MarketplaceListingPlatform[] = [
+  ...VALID_RENEWAL_PLATFORMS, 'GRAILED', 'POSHMARK', 'MERCARI', 'VINTED',
+];
+function isRenewalEligiblePlatform(p: MarketplaceListingPlatform): p is MarketplaceRenewalPlatform {
+  return (VALID_RENEWAL_PLATFORMS as string[]).includes(p);
+}
+
 // POST /api/extension/items/:id/listed — record that the organizer listed this item to Marketplace.
 // ADR-100: now accepts an optional `platform` (defaults 'FACEBOOK' -- the only caller that
 // omitted it before this change was the existing FB flow, so default preserves today's
@@ -464,14 +459,33 @@ export const markItemListed = async (req: AuthRequest, res: Response): Promise<v
 
   const remoteListingId = typeof req.body?.remoteListingId === 'string' ? req.body.remoteListingId : null;
   const platformRaw = typeof req.body?.platform === 'string' ? req.body.platform.toUpperCase() : 'FACEBOOK';
-  const platform: MarketplaceRenewalPlatform = (VALID_RENEWAL_PLATFORMS as string[]).includes(platformRaw)
-    ? (platformRaw as MarketplaceRenewalPlatform)
+  // BUG FIX 2026-08-19 (see MarketplaceListingPlatform comment above): validate against the full
+  // VALID_LISTING_PLATFORMS superset, not just the 3 renewal-eligible platforms -- a real
+  // GRAILED/POSHMARK/MERCARI/VINTED value must no longer be silently coerced to FACEBOOK.
+  const platform: MarketplaceListingPlatform = (VALID_LISTING_PLATFORMS as string[]).includes(platformRaw)
+    ? (platformRaw as MarketplaceListingPlatform)
     : 'FACEBOOK';
 
   // Facebook Commerce Policy gate (coins/currency) -- this is the AUTHORITATIVE reject, run
   // regardless of whatever the extension's own client-side checks (popup.js/background.js/
   // fas-content.js) already decided. Only blocks platform === 'FACEBOOK' -- eBay, native
   // checkout, and every other platform's markItemListed call is unaffected.
+  //
+  // DELIBERATELY NOT extended to GRAILED/POSHMARK/MERCARI/VINTED (considered, then reverted, this
+  // same session): those 4 content scripts never auto-publish -- the organizer always reviews the
+  // filled form and clicks that platform's own final publish/list button THEMSELVES first, and
+  // markItemListed only fires afterward as their "I posted" confirmation (see each fas-*.js's
+  // showReviewOverlay). By the time this endpoint is called, the human has already made the real
+  // decision. A backend reject here would not prevent a bad listing (it already happened, on the
+  // real platform) -- it would only corrupt FindA.Sale's own record of what the organizer just
+  // told us they did, and would directly defeat popup.js's new "Show all items" override (the
+  // whole point of that toggle is letting the organizer list an item the category filter got
+  // wrong -- see PLATFORM_ELIGIBILITY_KEY/checkResumeableQueue in popup.js). The category registry
+  // (checkEligibility, marketplaceEligibilityRules.ts) stays a client-side UX filter (hide by
+  // default + override) for these 4 platforms, not a server-side hard gate. Facebook is different
+  // in kind, not just degree -- its flow is fully automated (fas-content.js fills AND submits),
+  // so its policy check genuinely prevents an attempted auto-publish, which is why it keeps its
+  // authoritative reject unchanged below.
   if (platform === 'FACEBOOK') {
     const fbItem = await prisma.item.findUnique({
       where: { id: itemId },
@@ -483,8 +497,13 @@ export const markItemListed = async (req: AuthRequest, res: Response): Promise<v
     }
   }
 
-  const lapseDays = RENEWAL_LAPSE_WINDOW_DAYS[platform];
-  const renewDueAt = new Date(Date.now() + lapseDays * 24 * 60 * 60 * 1000);
+  // renewDueAt only applies to the 3 renewal-eligible platforms (RENEWAL_LAPSE_WINDOW_DAYS has no
+  // entries for Grailed/Poshmark/Mercari/Vinted -- none of the 4 are wired into auto-renewal, see
+  // MarketplaceListingPlatform's comment above). getPendingRenewals already treats a null
+  // renewDueAt as "never surfaces a renewal nudge" (same as any pre-ADR-100 row), so this is safe.
+  const renewDueAt = isRenewalEligiblePlatform(platform)
+    ? new Date(Date.now() + RENEWAL_LAPSE_WINDOW_DAYS[platform] * 24 * 60 * 60 * 1000)
+    : null;
 
   await prisma.marketplaceListingJob.create({
     data: { itemId, action: 'POST', status: 'POSTED', remoteListingId, platform, renewDueAt },

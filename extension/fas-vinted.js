@@ -115,14 +115,27 @@
     el.dispatchEvent(new Event('change', { bubbles: true }));
   }
 
-  async function tryFill(fieldLabel, value, fillFn) {
+  // BUG FIX 2026-08-19 (S-EXT-BATCH, P1): tryFill used to ONLY console.warn on a skipped field --
+  // invisible to the organizer unless they had DevTools open. Vinted's own review overlay
+  // (showReviewOverlay) is shown once, at the END of fillListing, so an earlier overlayWarn() call
+  // mid-fill would just get overwritten by it a moment later -- not a real fix. Instead, tryFill now
+  // takes an optional `warnings` array (shared across the whole fillListing() call) and pushes a
+  // plain-language message onto it for every field that silently failed; fillListing collects that
+  // array and showReviewOverlay renders it PERSISTENTLY on the final screen, so the organizer
+  // actually sees every field that needs a manual check -- most importantly Category, which used to
+  // fail completely silently (console.warn only) when the picker had no confident text match.
+  async function tryFill(fieldLabel, value, fillFn, warnings) {
     if (value === undefined || value === null || value === '') return false;
     try {
       const ok = await fillFn(value);
-      if (!ok) console.warn('[FAS Vinted] Field "' + fieldLabel + '" -- selector not found, skipped (UNVERIFIED -- confirm against live DOM).');
+      if (!ok) {
+        console.warn('[FAS Vinted] Field "' + fieldLabel + '" -- selector not found, skipped (UNVERIFIED -- confirm against live DOM).');
+        if (warnings) warnings.push(fieldLabel + ' could not be filled automatically -- please set it yourself.');
+      }
       return ok;
     } catch (e) {
       console.warn('[FAS Vinted] Field "' + fieldLabel + '" -- error while filling, skipped:', e && e.message);
+      if (warnings) warnings.push(fieldLabel + ' hit an error while filling -- please check it.');
       return false;
     }
   }
@@ -271,10 +284,19 @@
     return !!(fieldByLabel('Title') || fieldByLabel('Description') || photoInput());
   }
 
-  function showReviewOverlay(item, index, total, photosOk) {
+  function showReviewOverlay(item, index, total, photosOk, warnings) {
     const more = (index + 1) < total;
+    // BUG FIX 2026-08-19 (S-EXT-BATCH, P1): render every collected fillListing() warning
+    // (Category miss chief among them) persistently on this screen -- see tryFill's comment above
+    // for why a mid-flow overlayWarn() call alone doesn't work (this function replaces it).
+    const warningsHtml = (warnings && warnings.length)
+      ? '<div style="margin-top:8px;padding:8px 10px;background:#3a2a1a;border:1px solid #a06b2a;border-radius:8px;font-size:12px;color:#ffcf7a">' +
+        '<b>Needs a manual check:</b><ul style="margin:4px 0 0;padding-left:18px">' +
+        warnings.map((w) => '<li>' + escapeHtml(w) + '</li>').join('') + '</ul></div>'
+      : '';
     overlay('<b>FindA.Sale</b><div style="margin-top:6px">Filled <b>' + escapeHtml(item.title) + '</b> as best we could.</div>' +
       '<div style="margin-top:4px;font-size:12px;color:#cfe3d6">Review every field (category/brand/material/package size are UNVERIFIED guesses), then click Vinted\'s own <b>Upload</b> yourself -- this extension never publishes for you and never reposts a listing automatically.</div>' +
+      warningsHtml +
       (!photosOk ? '<div style="color:#ffcf7a;margin-top:6px;font-size:12px">Photos may not have attached -- add them on this screen.</div>' : '') +
       button('fas-vin-next', more ? 'I posted — next item &#9654;' : 'I posted — done', true) +
       button('fas-vin-close', 'Close', false) +
@@ -292,30 +314,36 @@
 
   async function fillListing(item) {
     overlay('<b>FindA.Sale</b> - filling the Vinted listing form...');
-    await tryFill('Title', item.title, (v) => fillText('Title', v));
-    await tryFill('Description', item.description, (v) => fillText('Description', v));
-    await tryFill('Category', item.category, (v) => pickCategory(v));
+    const warnings = [];
+    await tryFill('Title', item.title, (v) => fillText('Title', v), warnings);
+    await tryFill('Description', item.description, (v) => fillText('Description', v), warnings);
+    // BUG FIX 2026-08-19 (S-EXT-BATCH, P1): this was the core of the silent-category-miss bug --
+    // pickCategory's own console.warn on a no-match was the ONLY signal anywhere, invisible to the
+    // organizer. Routing it through tryFill's `warnings` param means a category miss now shows up
+    // persistently on the review screen below instead of vanishing.
+    await tryFill('Category', item.category, (v) => pickCategory(v), warnings);
     // 2026-08-18: brand/size/color/material now exist on Item (single string each, not an
     // array -- see schema.prisma comment) and flow through getExtensionItems -> popup.js's
     // queue map. tryFill's own undefined/null/'' guard still skips silently on unset items.
-    await tryFill('Brand', item.brand, (v) => fillBrand('Brand', v));
-    await tryFill('Size', item.size, (v) => fillSelectLike('Size', v));
-    await tryFill('Color', item.color, (v) => fillSelectLike('Color', v));
-    await tryFill('Material', item.material, (v) => fillSelectLike('Material', v));
+    await tryFill('Brand', item.brand, (v) => fillBrand('Brand', v), warnings);
+    await tryFill('Size', item.size, (v) => fillSelectLike('Size', v), warnings);
+    await tryFill('Color', item.color, (v) => fillSelectLike('Color', v), warnings);
+    await tryFill('Material', item.material, (v) => fillSelectLike('Material', v), warnings);
     const conditionLabel = mapVintedCondition(item.condition);
-    await tryFill('Condition', conditionLabel, (v) => fillSelectLike('Condition', v));
+    await tryFill('Condition', conditionLabel, (v) => fillSelectLike('Condition', v), warnings);
     if (item.price != null && isFinite(Number(item.price))) {
       let priceVal = Math.round(Number(item.price));
       if (priceVal < VINTED_MIN_PRICE || priceVal > VINTED_MAX_PRICE) {
         console.warn('[FAS Vinted] Price $' + priceVal + ' falls outside Vinted\'s platform-enforced $' + VINTED_MIN_PRICE + '-$' + VINTED_MAX_PRICE + ' range -- clamping rather than submitting an invalid value.');
         priceVal = Math.max(VINTED_MIN_PRICE, Math.min(VINTED_MAX_PRICE, priceVal));
       }
-      await tryFill('Price', priceVal, (v) => fillText('Price', String(v)));
+      await tryFill('Price', priceVal, (v) => fillText('Price', String(v)), warnings);
     }
-    await fillPackageSize();
+    const packageSizeOk = await fillPackageSize();
+    if (!packageSizeOk) warnings.push('Package size could not be set automatically -- Vinted requires it before publishing.');
     await humanPause(400, 800);
     const photosOk = await injectPhotos(item.photoUrls);
-    return photosOk;
+    return { photosOk, warnings };
   }
 
   async function run(item, index, total) {
@@ -329,13 +357,13 @@
       closeBtnHandler();
       return;
     }
-    const photosOk = await fillListing(item);
+    const fillResult = await fillListing(item);
     if (looksLikeInterstitial()) {
       overlayWarn('Vinted is showing a verification/security screen partway through filling this listing. Please complete it yourself, then finish this listing manually -- nothing further was auto-filled.' + button('fas-vin-close', 'Close', false));
       closeBtnHandler();
       return;
     }
-    showReviewOverlay(item, index, total, photosOk);
+    showReviewOverlay(item, index, total, fillResult.photosOk, fillResult.warnings);
   }
 
   async function start() {

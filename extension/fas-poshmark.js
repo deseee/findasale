@@ -334,7 +334,21 @@
       closeBtnHandler();
       return;
     }
-    if (maybeShowAppLoginHint()) return;
+    // BUG FIX 2026-08-19 (S-EXT-BATCH, P0): this used to gate on maybeShowAppLoginHint() ALONE,
+    // which only checks fieldByLabel('Title') -- the STRONGER looksLikeSellForm() check (Title
+    // AND Price) already existed in this file but was never actually called from run(), so
+    // Poshmark was completely non-functional whenever Title alone false-matched something that
+    // wasn't really the sell form. looksLikeSellForm() is now the real gate; maybeShowAppLoginHint
+    // still runs first for its more specific "try the mobile app" messaging when Title truly isn't
+    // found, falling back to a generic UNVERIFIED-selector warning otherwise. Selector accuracy
+    // itself is still CODE-ONLY/UNTESTED (file header) -- this fixes the logic bug, not the DOM
+    // selectors; live Chrome QA is still needed to confirm they match Poshmark's real DOM.
+    if (!looksLikeSellForm()) {
+      if (maybeShowAppLoginHint()) return;
+      overlayWarn('This doesn\'t look like a fillable Poshmark listing form yet. If you\'re on the right page, this is an UNVERIFIED-selector miss -- please fill it in yourself.' + button('fas-posh-close', 'Close', false));
+      closeBtnHandler();
+      return;
+    }
     const photosOk = await fillListing(item);
     // Re-check for an interstitial that may have appeared mid-fill (e.g. triggered by the photo
     // upload) before showing the "you're ready to review" state.

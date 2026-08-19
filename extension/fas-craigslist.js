@@ -109,6 +109,25 @@
     });
   }
 
+  // Generic "did we leave this step" poller (BUG FIX 2026-08-19, S-EXT-BATCH, P1) -- same
+  // poll-then-resolve shape as waitForCraigslistPublish above, but checks detectStep() instead of
+  // the preview-specific draft signal, so it can be reused by any step whose "did it actually
+  // advance" needs a real check instead of an assumed fixed pause. If the click DID cause a full
+  // page navigation, this promise's own execution context is destroyed along with the old page --
+  // that's fine, a fresh script instance runs start() again on the new page and this dead promise
+  // is simply never resolved or awaited by anyone.
+  function waitForStepChange(fromStep, timeoutMs) {
+    return new Promise((resolve) => {
+      const startedAt = Date.now();
+      const check = () => {
+        if (detectStep() !== fromStep) { resolve(true); return; }
+        if (Date.now() - startedAt >= timeoutMs) { resolve(false); return; }
+        setTimeout(check, 400);
+      };
+      check();
+    });
+  }
+
   function button(id, label, primary) {
     return '<button id="' + id + '" style="margin-top:10px;margin-right:8px;padding:7px 12px;border-radius:8px;border:none;cursor:pointer;' +
       'font-weight:600;font-size:13px;background:' + (primary ? '#3c8c5a' : '#3a4842') + ';color:#fff">' + label + '</button>';
@@ -354,15 +373,40 @@
     const photosOk = await injectPhotos(item.photoUrls);
     sessionStorage.setItem('fasCLPhotosOk', photosOk ? '1' : '0');
     await humanPause(700, 1200);
-    const doneBtn = document.getElementById('doneWithImages');
-    if (doneBtn) {
-      overlay('<b>FindA.Sale</b> - moving to the review screen...');
-      doneBtn.click(); // -> ?s=preview (unpublished draft, NOT live). doPreviewStep takes over there.
+    let doneBtn = document.getElementById('doneWithImages');
+    if (!doneBtn) {
+      // Couldn't find Craigslist's own advance button -- fall back to showing the review overlay
+      // right here instead of stranding the human with no guidance.
+      showReviewOverlay(item, index, total, photosOk);
       return;
     }
-    // Couldn't find Craigslist's own advance button -- fall back to showing the review overlay
-    // right here instead of stranding the human with no guidance.
-    showReviewOverlay(item, index, total, photosOk);
+    // BUG FIX 2026-08-19 (S-EXT-BATCH, P1): this used to click doneBtn and return immediately with
+    // NO verification the click actually did anything -- unlike doPreviewStep's own
+    // waitForCraigslistPublish, which DOES poll. Reported symptom: stuck on the photo-upload page,
+    // "moving to review screen" toast never resolves -- most likely the async photo upload hadn't
+    // finished settling when the button was clicked, so the click no-op'd (Craigslist's own JS
+    // silently ignored it) and nothing here ever noticed. Now polls for a real step change via
+    // waitForStepChange, and retries the click once (Craigslist may just need a moment longer)
+    // before giving up and handing off to the human with a clear, specific message instead of a
+    // toast that just hangs forever.
+    overlay('<b>FindA.Sale</b> - moving to the review screen...');
+    doneBtn.click(); // -> ?s=preview (unpublished draft, NOT live) if it actually took.
+    let advanced = await waitForStepChange('images', 6000);
+    if (!advanced) {
+      doneBtn = document.getElementById('doneWithImages');
+      if (doneBtn) {
+        await humanPause(800, 1400);
+        doneBtn.click();
+        advanced = await waitForStepChange('images', 6000);
+      }
+    }
+    if (!advanced) {
+      overlayError('Images', 'Clicked "Done with images" but Craigslist didn\'t move to the review screen -- the photo upload may still be processing. Please check this screen and continue yourself.');
+      return;
+    }
+    // If we get here, a real page navigation happened -- this script instance's job is done; the
+    // fresh instance injected on the new page (?s=preview) picks up from run()/detectStep() on its
+    // own. No further action needed.
   }
 
   async function doPreviewStep(item, index, total, autoPublish) {

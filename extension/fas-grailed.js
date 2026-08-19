@@ -247,11 +247,23 @@
     return !!(fieldByLabel('Title') || fieldByLabel('Designer') || fieldByLabel('Brand') || photoInput());
   }
 
-  function showReviewOverlay(item, index, total, photosOk) {
+  function showReviewOverlay(item, index, total, photosOk, intlShipping) {
     const more = (index + 1) < total;
+    // International shipping status line (BUG FIX 2026-08-19, S-EXT-BATCH, P1) -- see
+    // disableInternationalShipping()'s comment. Three cases: regions found and turned off (safe,
+    // still worth a one-line confirmation), regions found but none were on to begin with (safe,
+    // no action needed), or the section wasn't found at all (loud warning -- Grailed's $50/region
+    // placeholder may still be live).
+    let intlLine = '';
+    if (intlShipping && intlShipping.anyFound && intlShipping.anyDisabled) {
+      intlLine = '<div style="margin-top:4px;font-size:12px;color:#cfe3d6">Turned off Grailed\'s international shipping regions (was defaulting to a $50/region placeholder) -- enable manually with your own rate if you want to ship internationally.</div>';
+    } else if (intlShipping && !intlShipping.anyFound) {
+      intlLine = '<div style="color:#ffcf7a;margin-top:6px;font-size:12px">Couldn\'t find Grailed\'s international shipping section (UNVERIFIED selector) -- check it before publishing; it may default to a $50/region charge.</div>';
+    }
     overlay('<b>FindA.Sale</b><div style="margin-top:6px">Filled <b>' + escapeHtml(item.title) + '</b> as best we could.</div>' +
       '<div style="margin-top:4px;font-size:12px;color:#cfe3d6">Review every field &mdash; category/Market tier/size/condition are all UNVERIFIED guesses (condition especially, see the code comment). ' +
       '<b>Measurements were left blank</b> &mdash; Grailed listings perform much better with them, add them yourself before publishing. Then click Grailed\'s own <b>List item</b> yourself &mdash; this extension never publishes for you.</div>' +
+      intlLine +
       (!photosOk ? '<div style="color:#ffcf7a;margin-top:6px;font-size:12px">Photos may not have attached -- add them on this screen.</div>' : '') +
       button('fas-gr-next', more ? 'I posted — next item &#9654;' : 'I posted — done', true) +
       button('fas-gr-close', 'Close', false) +
@@ -260,7 +272,13 @@
     if (next) next.onclick = async () => {
       try { await chrome.runtime.sendMessage({ type: 'markListed', itemId: item.id, remoteListingId: null, platform: 'GRAILED' }); } catch (e) {}
       try { await chrome.runtime.sendMessage({ type: 'advanceGrailedQueue' }); } catch (e) {}
-      if (more) { location.href = LISTING_URL_HINT; } else { bar && bar.remove(); }
+      if (more) {
+      // BUG FIX 2026-08-19 (S-EXT-BATCH, P0): ask background.js for a genuinely fresh tab
+      // instead of an in-page location.href reassignment -- see background.js's
+      // 'reopenGrailedTab' handler comment for why. Closes this tab; the fresh one picks up
+      // the (already-advanced) queue on its own start().
+      try { await chrome.runtime.sendMessage({ type: 'reopenGrailedTab' }); } catch (e) {}
+    } else { bar && bar.remove(); }
     };
     closeBtnHandler();
   }
@@ -277,9 +295,52 @@
       // Never marks the item listed -- it genuinely was not posted. Just advances the local
       // queue so the organizer can move on to the next item.
       try { await chrome.runtime.sendMessage({ type: 'advanceGrailedQueue' }); } catch (e) {}
-      if (more) { location.href = LISTING_URL_HINT; } else { bar && bar.remove(); }
+      if (more) {
+      // BUG FIX 2026-08-19 (S-EXT-BATCH, P0): ask background.js for a genuinely fresh tab
+      // instead of an in-page location.href reassignment -- see background.js's
+      // 'reopenGrailedTab' handler comment for why. Closes this tab; the fresh one picks up
+      // the (already-advanced) queue on its own start().
+      try { await chrome.runtime.sendMessage({ type: 'reopenGrailedTab' }); } catch (e) {}
+    } else { bar && bar.remove(); }
     };
     closeBtnHandler();
+  }
+
+  // International shipping-regions step (BUG FIX 2026-08-19, S-EXT-BATCH, P1). Grailed defaults
+  // ALL regions (Canada/UK/Europe/Asia/Australia-NZ/Other) to ENABLED with a $50/region placeholder
+  // price -- every listing pushed here was silently offering international shipping at an
+  // arbitrary made-up rate unless the organizer caught and fixed it manually. This step was
+  // entirely missing before (the script stopped after Price/photos). No incumbent crosslister
+  // fills Grailed's per-region grid either -- Crosslist (the most mature Grailed-specific tool)
+  // collapses it to ONE flat worldwide price field instead (docs.crosslist.com/getting-started/
+  // shipping-profiles/grailed, confirmed 2026-08-19). FindA.Sale carries no per-item
+  // international/worldwide shipping rate today, so the safe default is DISABLE every
+  // international region rather than leave Grailed's $50 placeholder live -- never silently
+  // charge a buyer a rate nobody configured. Best-effort selectors (UNVERIFIED, like the rest of
+  // this file) -- finds each region's toggle by its visible label text and clicks it off if found
+  // still on; a genuinely missing selector is loudly flagged rather than assumed handled.
+  const INTERNATIONAL_REGION_LABELS = [
+    'Canada', 'United Kingdom', 'UK', 'Europe', 'Asia', 'Australia', 'Australia/NZ',
+    'Australia & New Zealand', 'Other', 'Rest of World', 'Worldwide',
+  ];
+  async function disableInternationalShipping() {
+    let anyFound = false;
+    let anyDisabled = false;
+    for (const label of INTERNATIONAL_REGION_LABELS) {
+      const toggle = fieldByLabel(label) || openerByLabel(label);
+      if (!toggle) continue;
+      anyFound = true;
+      const isCheckboxLike = toggle.tagName === 'INPUT' && (toggle.type === 'checkbox' || toggle.type === 'radio');
+      const isOn = isCheckboxLike ? toggle.checked : toggle.getAttribute('aria-checked') === 'true';
+      if (!isOn) continue; // already off -- nothing to do
+      toggle.click(); // real click, so it fires whatever change handler Grailed's own form expects
+      anyDisabled = true;
+      await sleep(200);
+    }
+    if (!anyFound) {
+      console.warn('[FAS Grailed] International shipping-regions section not found (UNVERIFIED selector) -- if this listing defaults to international shipping at Grailed\'s own placeholder rate, disable it manually before publishing.');
+    }
+    return { anyFound, anyDisabled };
   }
 
   async function fillListing(item) {
@@ -300,9 +361,10 @@
       await tryFill('Price', item.price, (v) => fillText('Price', String(Math.max(1, Math.round(Number(v))))));
     }
     // Offers (negotiation) toggle deliberately left at Grailed's own default -- never touched.
+    const intlShipping = await disableInternationalShipping();
     await humanPause(400, 800);
     const photosOk = await injectPhotos(item.photoUrls);
-    return photosOk;
+    return { photosOk, intlShipping };
   }
 
   async function run(item, index, total) {
@@ -330,13 +392,13 @@
       // flagged loudly since Designer is normally required there.
       console.warn('[FAS Grailed] No brand/designer data on this item -- Grailed generally requires a Designer to be set; the organizer will need to pick one manually.');
     }
-    const photosOk = await fillListing(item);
+    const fillResult = await fillListing(item);
     if (looksLikeInterstitial()) {
       overlayWarn('Grailed is showing a verification/security screen partway through filling this listing. Please complete it yourself, then finish this listing manually -- nothing further was auto-filled.' + button('fas-gr-close', 'Close', false));
       closeBtnHandler();
       return;
     }
-    showReviewOverlay(item, index, total, photosOk);
+    showReviewOverlay(item, index, total, fillResult.photosOk, fillResult.intlShipping);
   }
 
   async function start() {

@@ -139,6 +139,39 @@
   // pickCategory -- FindA.Sale's item.category is a single flat string, not Mercari's real
   // taxonomy, so this clicks the closest text match at each level and stops rather than guessing
   // further once a level has no confident match.
+  // BUG FIX 2026-08-19 (S-EXT-BATCH, P1): optionElByText's first-partial-match (used by every
+  // OTHER field in this file) picked the first option whose text merely CONTAINS the search
+  // string -- confirmed real mismatch: a tracksuit item text-matched to "T-Shirts" among several
+  // genuinely different plausible options open at once at a category-picker level. bestScoringOption
+  // scores every visible option instead: an exact match always wins; otherwise the option sharing
+  // the most whole words with the target wins, with a shorter/tighter label breaking ties (prefers
+  // "Sweatshirts & Hoodies" over "Men's Clothing > Sweatshirts & Hoodies > All" when both share the
+  // same word count). An option sharing ZERO whole words is not a candidate at all -- no more
+  // "prefix substring happened to match" false positives. Used ONLY here, not by
+  // fillSelectLike/fillBrand elsewhere in this file (those single-option-family pickers don't have
+  // this problem the same way).
+  function bestScoringOption(options, wantText) {
+    const want = norm(wantText);
+    const wantWords = want.split(' ').filter(Boolean);
+    let best = null;
+    let bestScore = -1;
+    for (const opt of options) {
+      const text = norm(opt.textContent);
+      if (!text) continue;
+      let score;
+      if (text === want) {
+        score = 1000;
+      } else {
+        const textWords = text.split(' ').filter(Boolean);
+        const overlap = wantWords.filter((w) => textWords.indexOf(w) !== -1).length;
+        if (overlap === 0) continue; // no shared whole word -- not a real candidate
+        score = overlap * 100 - text.length; // more shared words wins; shorter label breaks ties
+      }
+      if (score > bestScore) { bestScore = score; best = opt; }
+    }
+    return best;
+  }
+
   async function pickCategory(categoryText) {
     if (!categoryText) return false;
     const opener = openerByLabel('Category');
@@ -148,7 +181,8 @@
     let pickedAny = false;
     for (let level = 0; level < 3; level++) {
       await sleep(250);
-      const opt = optionElByText(categoryText);
+      const options = qa('[role="option"], li[role="option"], [role="menuitem"], [role="menuitemradio"], li');
+      const opt = bestScoringOption(options, categoryText);
       if (!opt) break;
       opt.click();
       pickedAny = true;
@@ -259,6 +293,26 @@
     return true;
   }
 
+  // First-load "sell something" welcome/onboarding popup dismiss (BUG FIX 2026-08-19, S-EXT-BATCH,
+  // P1). Confirmed by investigation: nothing anywhere in this extension looked for a
+  // sell-something/welcome/onboarding/dismiss control on Mercari's Sell page, so a first-time (or
+  // cache-cleared) session's welcome modal could sit on top of the form and block every fill
+  // attempt, including the photo dropzone. Best-effort, UNVERIFIED selector, called before photo
+  // upload in fillListing() below -- looks inside any visible dialog/modal for a dismiss-shaped
+  // control and clicks it. A no-op (nothing found) is silent, matching this file's existing
+  // null-check discipline -- never throws, never blocks the rest of the fill.
+  async function dismissWelcomePopup() {
+    const dialog = q('[role="dialog"]') || q('[role="alertdialog"]');
+    if (!dialog) return false;
+    const candidates = qa('button, [role="button"], a').filter((el) => dialog.contains(el));
+    const dismiss = candidates.find((el) => /got it|dismiss|close|skip|no thanks|start selling|continue/i.test(norm(el.textContent)))
+      || dialog.querySelector('[aria-label="Close" i], [aria-label="Dismiss" i]');
+    if (!dismiss) return false;
+    dismiss.click();
+    await sleep(300);
+    return true;
+  }
+
   function looksLikeSellForm() {
     return !!(fieldByLabel('Title') || photoInput());
   }
@@ -283,6 +337,21 @@
   // Photo-first: upload photos, wait for Mercari's own recognition step to settle (or a fixed
   // timeout), THEN overwrite every field with FindA.Sale's own values. Never fills fields before
   // photos -- that races Mercari's own auto-fill JS (see file header).
+  // Mercari requires a 5-word-minimum description (BUG FIX 2026-08-19, S-EXT-BATCH, P1) -- pads a
+  // too-short description using the item's own title/category rather than generic filler, so a
+  // short-but-real description ("Vintage lamp" = 2 words) doesn't silently fail Mercari's own
+  // minimum. Only pads when genuinely short (or empty); never truncates or otherwise alters an
+  // already-sufficient description.
+  function padDescriptionForMercariMinimum(description, item) {
+    const base = String(description || '').trim();
+    const wordCount = base ? base.split(/\s+/).filter(Boolean).length : 0;
+    if (wordCount >= 5) return base;
+    const fillerParts = [item && item.title, item && item.category, 'in great condition, see photos for details']
+      .filter(Boolean);
+    const filler = fillerParts.join(' -- ');
+    return base ? (base + ' -- ' + filler) : filler;
+  }
+
   async function fillListing(item) {
     overlay('<b>FindA.Sale</b> - uploading photos first (Mercari auto-fills after photos, so we wait before touching the rest)...');
     const photosOk = await injectPhotos(item.photoUrls);
@@ -293,7 +362,7 @@
 
     overlay('<b>FindA.Sale</b> - filling the rest of the listing (overwriting anything Mercari auto-filled)...');
     await tryFill('Title', item.title, (v) => fillText('Title', v));
-    await tryFill('Description', item.description, (v) => fillText('Description', v));
+    await tryFill('Description', padDescriptionForMercariMinimum(item.description, item), (v) => fillText('Description', v));
     // Category BEFORE brand -- Mercari's brand list is category-aware (see fillBrand comment).
     await tryFill('Category', item.category, (v) => pickCategory(v));
     // 2026-08-18: brand/size/color now exist on Item and flow through getExtensionItems ->
@@ -321,6 +390,9 @@
       closeBtnHandler();
       return;
     }
+    // BUG FIX 2026-08-19 (S-EXT-BATCH, P1): dismiss a first-load welcome/onboarding popup before
+    // checking whether this looks like a sell form -- see dismissWelcomePopup()'s comment.
+    await dismissWelcomePopup();
     if (!looksLikeSellForm() && !looksLikeInterstitial()) {
       overlayWarn('This doesn\'t look like a fillable Mercari Sell form yet (no Title field or photo dropzone found). If you\'re on the right page, this is an UNVERIFIED-selector miss -- please fill it in yourself.' + button('fas-merc-close', 'Close', false));
       closeBtnHandler();

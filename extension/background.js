@@ -928,6 +928,22 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         const { fasGrailedQueue = [], fasGrailedIndex = 0 } =
           await chrome.storage.local.get(['fasGrailedQueue', 'fasGrailedIndex']);
         sendResponse({ ok: true, item: fasGrailedQueue[fasGrailedIndex] || null, index: fasGrailedIndex, total: fasGrailedQueue.length });
+      } else if (msg.type === 'reopenGrailedTab') {
+        // BUG FIX 2026-08-19 (S-EXT-BATCH, P0): fas-grailed.js used to advance to the next queue
+        // item via `location.href = LISTING_URL_HINT` -- a same-URL in-page reassignment (the
+        // page is already grailed.com/sell) that doesn't reliably reset Grailed's React SPA state,
+        // leaving stale form state behind for every item after the first (only the photo dropzone,
+        // likely a persistent/global element, survived -- every other field silently stayed
+        // unfilled). background.js only ever opened a genuinely fresh tab for the FIRST item
+        // (setGrailedQueue below). This handler gives every SUBSEQUENT item that same real fresh
+        // tab/page-load treatment: open a brand-new tab at the post URL, then close the tab the
+        // request came from. sender.tab is only present for a content-script message (never a
+        // popup message), which this always is -- guarded anyway for safety.
+        chrome.tabs.create({ url: CFG.GRAILED_POST_URL });
+        if (sender && sender.tab && sender.tab.id != null) {
+          chrome.tabs.remove(sender.tab.id, () => { void chrome.runtime.lastError; });
+        }
+        sendResponse({ ok: true });
       } else if (msg.type === 'advanceGrailedQueue') {
         const st = await chrome.storage.local.get(['fasGrailedQueue', 'fasGrailedIndex']);
         const next = (st.fasGrailedIndex || 0) + 1;

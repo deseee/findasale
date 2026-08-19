@@ -19,6 +19,24 @@ const GUILD_RANK_META = {
   GRANDMASTER: { emoji: '\ud83d\udc51', label: 'Grandmaster', floor: 12000 },
 };
 
+// Per-marketplace category eligibility (S-EXT-BATCH-2026-08-19) -- maps popup.js's lowercase
+// channel value to the uppercase key used in getExtensionItems' `eligibility` object
+// (extensionController.ts, marketplaceEligibilityRules.ts). Only channels with a real rule in
+// that registry appear here; facebook/craigslist/gumtree_au are intentionally absent (Facebook
+// keeps its own dedicated facebookRestricted/-Reason handling in row() below; Craigslist/Gumtree
+// AU have no eligibility rule at all).
+const PLATFORM_ELIGIBILITY_KEY = { poshmark: 'POSHMARK', mercari: 'MERCARI', vinted: 'VINTED', grailed: 'GRAILED' };
+
+// Background.js's per-platform queue storage keys (setXQueue/getXQueueItem/advanceXQueue), used
+// by checkResumeableQueue() below to detect an in-progress run and offer to resume it instead of
+// silently showing the full, un-filtered item picker again -- see that function's own comment.
+const QUEUE_STORAGE_KEYS = {
+  poshmark: { queue: 'fasPoshmarkQueue', index: 'fasPoshmarkIndex', postUrlKey: 'POSH_POST_URL', label: 'Poshmark' },
+  mercari: { queue: 'fasMercariQueue', index: 'fasMercariIndex', postUrlKey: 'MERC_POST_URL', label: 'Mercari' },
+  vinted: { queue: 'fasVintedQueue', index: 'fasVintedIndex', postUrlKey: 'VINTED_POST_URL', label: 'Vinted' },
+  grailed: { queue: 'fasGrailedQueue', index: 'fasGrailedIndex', postUrlKey: 'GRAILED_POST_URL', label: 'Grailed' },
+};
+
 function send(msg) { return new Promise((res) => chrome.runtime.sendMessage(msg, res)); }
 
 function setStatus(html) { const s = $('status'); s.hidden = false; s.innerHTML = html; }
@@ -41,6 +59,7 @@ async function load() {
   $('controls').hidden = false;
   $('footer').hidden = false;
   $('hideListed').onchange = render;
+  $('showAllItems').onchange = render;
   $('listBtn').onclick = startQueue;
   $('channel').onchange = onChannelChange;
   onChannelChange();
@@ -170,8 +189,39 @@ function onChannelChange() {
   // switching "Post to" showed stale badges from whichever channel was selected on load.
   if (cl) renderCraigslistLoginNote(); else { const n = $('clLoginNote'); if (n) n.hidden = true; }
   if (gt) renderGumtreeAuLoginNote(); else { const n = $('gtLoginNote'); if (n) n.hidden = true; }
+  // Per-marketplace category eligibility (S-EXT-BATCH-2026-08-19) -- "Show all items" only makes
+  // sense (and only shows) on a channel that actually has an eligibility rule.
+  const showAllRow = $('showAllItemsRow');
+  if (showAllRow) showAllRow.hidden = !PLATFORM_ELIGIBILITY_KEY[ch];
+  const eligNote = $('eligibilityNote');
+  if (eligNote && !PLATFORM_ELIGIBILITY_KEY[ch]) eligNote.hidden = true;
+  checkResumeableQueue(ch);
   if (ITEMS.length) render();
   updateCount();
+}
+
+// (S-EXT-BATCH-2026-08-19) Background.js durably persists each of the 4 new platforms' posting
+// queues (fasPoshmarkQueue/fasMercariQueue/fasVintedQueue/fasGrailedQueue + matching *Index) so
+// the content script can resume correctly across full-page navigations -- but popup.js itself
+// never checked for one on load/channel-switch, so an organizer who closed the popup mid-run
+// (e.g. after being kicked to a captcha screen on the marketplace tab) and reopened it just saw
+// the full, un-filtered item picker again, with no indication a run was already in progress and a
+// real risk of re-selecting and starting a second, conflicting queue. Shows a small banner
+// instead, offering to reopen the marketplace tab directly rather than re-picking items.
+async function checkResumeableQueue(channel) {
+  const banner = $('resumeQueueBanner');
+  if (!banner) return;
+  const cfg = QUEUE_STORAGE_KEYS[channel];
+  if (!cfg) { banner.hidden = true; return; }
+  const st = await chrome.storage.local.get([cfg.queue, cfg.index]);
+  const queue = st[cfg.queue] || [];
+  const index = st[cfg.index] || 0;
+  if (!queue.length || index >= queue.length) { banner.hidden = true; return; }
+  banner.hidden = false;
+  banner.innerHTML = 'A ' + esc(cfg.label) + ' posting run is already in progress (item ' + (index + 1) + ' of ' + queue.length + ') &mdash; ' +
+    '<button type="button" class="link" id="resumeQueueBtn">reopen that tab</button> instead of picking items again.';
+  const btn = document.getElementById('resumeQueueBtn');
+  if (btn) btn.onclick = () => { chrome.tabs.create({ url: CFG[cfg.postUrlKey] }); window.close(); };
 }
 
 // (2026-08-08) Best-effort informational note -- last DOM-observed Craigslist login state from
@@ -206,16 +256,51 @@ async function renderGumtreeAuLoginNote() {
     : 'Gumtree Australia: not logged in as of the last check \u2014 sign in before posting, and unattended auto-renew will notify you instead of trying until you\'re logged in.';
 }
 
+// Per-marketplace category eligibility (S-EXT-BATCH-2026-08-19): true when `it` is INELIGIBLE
+// for the current channel per getExtensionItems' `eligibility` object -- false for channels with
+// no rule (facebook/craigslist/gumtree_au) or when the item has no eligibility data at all
+// (fails open, same posture as fbBlocked below never crashing on missing data).
+function isIneligibleOnCurrentChannel(it) {
+  const key = PLATFORM_ELIGIBILITY_KEY[currentChannel()];
+  if (!key || !it.eligibility || !it.eligibility[key]) return false;
+  return it.eligibility[key].eligible === false;
+}
+function ineligibleReason(it) {
+  const key = PLATFORM_ELIGIBILITY_KEY[currentChannel()];
+  return (key && it.eligibility && it.eligibility[key] && it.eligibility[key].reason) || 'Not eligible for this marketplace.';
+}
+
 function render() {
   const hideListed = $('hideListed').checked;
+  const showAllEl = $('showAllItems');
+  const showAll = !!(showAllEl && showAllEl.checked);
   const list = $('list'); list.innerHTML = '';
   const groups = {};
+  let hiddenIneligibleCount = 0;
   ITEMS.forEach((it) => {
     if (hideListed && currentListedFlag(it)) return;
+    if (!showAll && isIneligibleOnCurrentChannel(it)) { hiddenIneligibleCount++; return; }
     (groups[it.saleTitle] = groups[it.saleTitle] || []).push(it);
   });
+  const eligNote = $('eligibilityNote');
+  if (eligNote) {
+    const eligKey = PLATFORM_ELIGIBILITY_KEY[currentChannel()];
+    if (eligKey && hiddenIneligibleCount > 0 && !showAll) {
+      eligNote.hidden = false;
+      eligNote.textContent = hiddenIneligibleCount + ' item' + (hiddenIneligibleCount === 1 ? '' : 's') +
+        ' hidden — not eligible for this marketplace. Check "Show all items" above to see them.';
+    } else {
+      eligNote.hidden = true;
+    }
+  }
   const keys = Object.keys(groups);
-  if (!keys.length) { list.innerHTML = '<div class="status">All items are already listed. Uncheck "Hide items already listed" to see them.</div>'; }
+  if (!keys.length) {
+    if (hiddenIneligibleCount > 0 && !showAll) {
+      list.innerHTML = '<div class="status">All items on this sale are hidden as not eligible for this marketplace. Check "Show all items" above to see them.</div>';
+    } else {
+      list.innerHTML = '<div class="status">All items are already listed. Uncheck "Hide items already listed" to see them.</div>';
+    }
+  }
   keys.forEach((saleTitle) => {
     const h = document.createElement('div'); h.className = 'sale-group'; h.textContent = saleTitle; list.appendChild(h);
     groups[saleTitle].forEach((it) => list.appendChild(row(it)));
@@ -238,11 +323,19 @@ function row(it) {
   // extension doesn't already think is posted there, and never for a coin/currency item (same
   // Facebook Commerce Policy restriction that blocks the normal push -- see fbBlocked above).
   const showMarkPosted = currentChannel() === 'facebook' && !fbBlocked && !currentListedFlag(it);
+  // Per-marketplace category eligibility (S-EXT-BATCH-2026-08-19) -- render() already hides an
+  // ineligible item entirely unless "Show all items" is checked, so by the time row() sees one,
+  // the organizer has explicitly opted in to seeing it. UNLIKE fbBlocked above, the checkbox
+  // stays ENABLED here -- this is a soft category-text heuristic, not an absolute platform policy,
+  // and there is deliberately no server-side reject for these 4 platforms (see extensionController.ts
+  // markItemListed's comment) specifically so this override can actually be used, not just viewed.
+  const ineligible = isIneligibleOnCurrentChannel(it);
   d.innerHTML = img +
     '<div class="meta"><div class="t">' + esc(it.title) + '</div><div class="p">$' + (it.price != null ? Number(it.price).toFixed(2) : '—') +
     ' · ' + esc(it.condition || '') + '</div></div>' +
     (currentListedFlag(it) ? '<span class="badge">LISTED</span>' : '') +
     (fbBlocked ? '<span class="badge badge-blocked" title="' + esc(it.facebookRestrictedReason || 'Not allowed on Facebook Marketplace') + '">NOT ALLOWED ON FB</span>' : '') +
+    (ineligible ? '<span class="badge badge-blocked" title="' + esc(ineligibleReason(it)) + '">MAY NOT FIT THIS MARKETPLACE</span>' : '') +
     (showMarkPosted ? '<button type="button" class="markPostedBtn" title="I already posted this item to Facebook myself, outside the extension">Already posted?</button>' : '') +
     '<input type="checkbox" class="cb"' + (fbBlocked ? ' disabled title="' + esc(it.facebookRestrictedReason || 'Not allowed on Facebook Marketplace') + '"' : '') + '>';
   const cb = d.querySelector('.cb');
