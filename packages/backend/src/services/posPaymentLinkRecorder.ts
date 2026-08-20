@@ -139,19 +139,24 @@ export async function recordPosPaymentLinkSale(
       const posOrganizerTier = posOrganizerLookup?.organizer?.subscriptionTier ?? null;
       const posFeeRate = getPlatformFeeRate(posOrganizerTier as SubscriptionTier);
 
-      // Direct-charges migration (2026-08-08): POSPaymentLink has no chargeType/
-      // stripeAccountId column of its own to pin the routing decision at link-creation
-      // time (out of scope for this migration's schema change, which is Purchase-only) --
-      // so this recomputes the SAME live-Stripe-eligibility + allowlist check
-      // (posController.createPaymentLinkInternal already ran it once when the Payment
-      // Link itself was created). In practice this can only disagree with the original
-      // decision if the connected account's Stripe eligibility or the allowlist env var
-      // changed in the window between link creation and completion -- flagged in the dev
-      // handoff as a known edge case, not treated as silently safe.
-      const posStripeConnectId = posOrganizerLookup?.organizer?.stripeConnectId ?? null;
-      const posUseDirect = posOrganizerLookup?.organizerId && posStripeConnectId
-        ? await shouldUseDirectCharge(posOrganizerLookup.organizerId, posStripeConnectId)
-        : false;
+      // Stripe account snapshot (2026-08-20 migration: 20260820190000_add_pos_payment_
+      // link_stripe_account_snapshot): prefer the value pinned on the link itself at
+      // creation time. Only a pre-migration row (chargeType NULL) recomputes the SAME
+      // live-Stripe-eligibility + allowlist check (posController.createPaymentLinkInternal
+      // already ran it once when the Payment Link itself was created) -- mirrors
+      // holdInvoicePaymentRecorder.ts's identical chargeType-NULL fallback shape. The
+      // recompute path can still disagree with the original decision if eligibility or the
+      // allowlist changed in the window between link creation and completion; the pinned
+      // path (the common case going forward) cannot.
+      const posStripeConnectId = fresh.stripeAccountId ?? posOrganizerLookup?.organizer?.stripeConnectId ?? null;
+      let posUseDirect: boolean;
+      if (fresh.chargeType) {
+        posUseDirect = fresh.chargeType === 'DIRECT';
+      } else {
+        posUseDirect = !!(posOrganizerLookup?.organizerId && posStripeConnectId
+          ? await shouldUseDirectCharge(posOrganizerLookup.organizerId, posStripeConnectId)
+          : false);
+      }
 
       const createdPurchaseIds: string[] = [];
       for (const item of items) {

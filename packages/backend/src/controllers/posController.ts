@@ -162,6 +162,12 @@ export async function createPaymentLinkInternal(opts: {
       // (CHECKOUT_LINK settlement router) so posStrandedSaleReconcileCron.ts's expiry-based
       // reclaim branch has a real deadline to act on; ad-hoc/no-hold callers keep the flat 24h.
       expiresAt: expiresAt ?? new Date(Date.now() + 24 * 60 * 60 * 1000),
+      // Stripe account snapshot (2026-08-20 migration): pin the routing decision actually
+      // used above so posStrandedSaleReconcileCron.ts / posPaymentLinkRecorder.ts never have
+      // to recompute it live -- see schema.prisma's POSPaymentLink comment for why that
+      // recompute was a real bug.
+      chargeType: useDirect ? 'DIRECT' : 'DESTINATION',
+      ...(useDirect ? { stripeAccountId: stripeConnectId! } : {}),
     },
   });
 

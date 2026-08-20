@@ -193,29 +193,34 @@ export const reconcileStrandedPosSales = async (): Promise<void> => {
   console.log(`[pos-reconcile] Checking ${candidates.length} ACTIVE POS payment link(s) older than 10 min for stranded sales.`);
 
   for (const link of candidates) {
-    // Direct-charge account-context fix (2026-08-20): resolve which Stripe account this
-    // link's Payment Link actually lives on BEFORE any Stripe call below. Recomputes the
-    // same live-eligibility + allowlist check createPaymentLinkInternal ran at
-    // link-creation time -- POSPaymentLink has no persisted chargeType/stripeAccountId
-    // column of its own yet (see posPaymentLinkRecorder.ts's matching note; HoldInvoice
-    // got that treatment in the 2026-08-18 migration, POSPaymentLink did not -- flagged
-    // separately as a schema follow-up, not done here). Fails closed to undefined
-    // (platform account) on any lookup error, mirroring shouldUseDirectCharge's own
-    // fail-closed contract.
+    // Direct-charge account-context fix (2026-08-20, updated same day once the
+    // stripeAccountId/chargeType columns landed -- 20260820190000_add_pos_payment_link_
+    // stripe_account_snapshot): prefer the value PINNED on the link at creation time.
+    // Only a pre-migration row (chargeType NULL) falls back to recomputing the same
+    // live-eligibility + allowlist check createPaymentLinkInternal ran originally --
+    // mirrors holdInvoicePaymentRecorder.ts's identical chargeType-NULL fallback shape.
+    // Fails closed to undefined (platform account) on any lookup error, mirroring
+    // shouldUseDirectCharge's own fail-closed contract.
     let linkStripeRequestOptions: { stripeAccount: string } | undefined;
-    try {
-      const linkOrganizer = await prisma.organizer.findUnique({
-        where: { id: link.organizerId },
-        select: { stripeConnectId: true },
-      });
-      if (linkOrganizer?.stripeConnectId) {
-        const linkUseDirect = await shouldUseDirectCharge(link.organizerId, linkOrganizer.stripeConnectId);
-        if (linkUseDirect) {
-          linkStripeRequestOptions = { stripeAccount: linkOrganizer.stripeConnectId };
-        }
+    if (link.chargeType) {
+      if (link.chargeType === 'DIRECT' && link.stripeAccountId) {
+        linkStripeRequestOptions = { stripeAccount: link.stripeAccountId };
       }
-    } catch (routingErr: any) {
-      console.warn(`[pos-reconcile] Failed to resolve Stripe account context for link=${link.id} (falling back to platform account):`, routingErr?.message ?? routingErr);
+    } else {
+      try {
+        const linkOrganizer = await prisma.organizer.findUnique({
+          where: { id: link.organizerId },
+          select: { stripeConnectId: true },
+        });
+        if (linkOrganizer?.stripeConnectId) {
+          const linkUseDirect = await shouldUseDirectCharge(link.organizerId, linkOrganizer.stripeConnectId);
+          if (linkUseDirect) {
+            linkStripeRequestOptions = { stripeAccount: linkOrganizer.stripeConnectId };
+          }
+        }
+      } catch (routingErr: any) {
+        console.warn(`[pos-reconcile] Failed to resolve Stripe account context for link=${link.id} (falling back to platform account):`, routingErr?.message ?? routingErr);
+      }
     }
 
     if (link.createdAt < staleRowCutoff) {

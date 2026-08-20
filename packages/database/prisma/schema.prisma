@@ -4249,9 +4249,23 @@ model POSPaymentLink {
   completedAt          DateTime?
   createdAt            DateTime  @default(now())
   expiresAt            DateTime? // 24h
+  // Stripe account + charge-shape snapshot (2026-08-20 migration, mirrors
+  // HoldInvoice.stripeAccountId/chargeType added 2026-08-18): pinned at
+  // createPaymentLinkInternal's link-creation time so posStrandedSaleReconcileCron.ts and
+  // posPaymentLinkRecorder.ts stop re-deriving the routing decision live (wrong if the
+  // organizer re-onboarded or the Direct-charges allowlist changed after creation). NULL
+  // on rows created before this migration; those readers fall back to the old
+  // recompute-on-read behavior.
+  /// Connected account the Payment Link was created against. NULL = platform-only /
+  /// pre-migration row.
+  stripeAccountId      String?
+  /// 'DIRECT' | 'DESTINATION' -- same vocabulary as Purchase.chargeType /
+  /// HoldInvoice.chargeType. NULL = pre-migration row (account/shape unknown, callers recompute).
+  chargeType           String?
 
   @@index([organizerId, status])
   @@index([saleId])
+  @@index([stripeAccountId])
 }
 
 model POSPaymentRequest {
