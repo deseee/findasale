@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-# cache-bust: 2026-08-19T03-05-00Z -- retry after Railway build for bfd775288 hung ~4h (22:57->02:51) then FAILED with no usable build logs; 3 later commits (dc3dc1871/c58e3752e/d55dda36c) were SKIPPED as superseded while that build was stuck, not due to CI. This is a fresh build attempt now that the stuck build has terminated.
+# cache-bust: 2026-08-20T17-50-00Z -- retry after Railway build for afb745328 FAILED at [deps 5/5] `pnpm install --frozen-lockfile`: transient network failure downloading onnxruntime-node's native binary postinstall (ETIMEDOUT/ENETUNREACH to 150.171.110.193:443), NOT a lockfile mismatch and NOT related to the posController.ts/pos.tsx code change in that commit (confirmed via Railway build logs, deployment ea38bc41-cce4-43b8-84af-e8761a8cc16e). This is a fresh build attempt to retry past the network flake.
 # real backend changes for #602/#603 landed in commit 98fc4a57a, but the next two pushes
 # (a6d56f9f9, a15ac32e) were frontend-only fixes -- Railway evaluated watchPatterns against
 # those push tips and SKIPPED the backend deploy both times (confirmed via Railway MCP
