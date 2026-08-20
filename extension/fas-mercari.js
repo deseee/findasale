@@ -235,6 +235,19 @@
   // "prefix substring happened to match" false positives. Used ONLY here, not by
   // fillSelectLike/fillBrand elsewhere in this file (those single-option-family pickers don't have
   // this problem the same way).
+  // BUG FIX 2026-08-20 (S-EXT-BATCH-10, P0, live-Chrome-confirmed): flat overlap-count scoring
+  // (one point per shared whole word, shorter text breaking ties) live-confirmed picking the WRONG
+  // option for a real query: searching "tracksuits & sets" against real Vinted leaves ["Tracksuits",
+  // "Sets", ...] scored "Sets" (1 shared word, 4 chars -> 96) HIGHER than "Tracksuits" (1 shared
+  // word, 10 chars -> 90) purely because it's shorter -- even though "Tracksuits" is the obviously
+  // correct match for an actual tracksuit. The length tie-break was designed for a different case
+  // (preferring a concise label over a redundant full-breadcrumb repeat of the SAME match), not for
+  // choosing between two genuinely different single-word options. Fixed by weighting each matched
+  // word by its POSITION in the query instead of counting matches flatly -- FindA.Sale's category
+  // segments consistently put the specific/significant term first and a broader catch-all term after
+  // (e.g. "Tracksuits & Sets", "Accessories & More"), so an earlier-word match should outrank a
+  // later-word match even when both are single whole-word hits. Length now only nudges a genuine
+  // near-tie, never overrides a real position-weighted lead.
   function bestScoringOption(options, wantText) {
     const want = norm(wantText);
     const wantWords = want.split(' ').filter(Boolean);
@@ -245,12 +258,15 @@
       if (!text) continue;
       let score;
       if (text === want) {
-        score = 1000;
+        score = 100000;
       } else {
         const textWords = text.split(' ').filter(Boolean);
-        const overlap = wantWords.filter((w) => textWords.indexOf(w) !== -1).length;
-        if (overlap === 0) continue; // no shared whole word -- not a real candidate
-        score = overlap * 100 - text.length; // more shared words wins; shorter label breaks ties
+        let weighted = 0;
+        for (let i = 0; i < wantWords.length; i++) {
+          if (textWords.indexOf(wantWords[i]) !== -1) weighted += (wantWords.length - i) * 100;
+        }
+        if (weighted === 0) continue; // no shared whole word -- not a real candidate
+        score = weighted - text.length * 0.01; // position-weighted match wins; length only nudges near-ties
       }
       if (score > bestScore) { bestScore = score; best = opt; }
     }
@@ -489,9 +505,26 @@
   // up mid-wait. This can only ever DELAY a false "doesn't look fillable" message, never change
   // success-path behavior for a page that was already ready in time.
   async function waitForFormReady(maxWaitMs) {
+    // BUG FIX 2026-08-20 (S-EXT-BATCH-10, P0, Patrick-confirmed live 2026-08-20): this loop used to
+    // return 'interstitial' the INSTANT looksLikeInterstitial() was true on any single poll -- but
+    // Patrick confirmed live that this platform's Sell page can show verification/security-adjacent
+    // copy transiently for a second or two right after navigation (a loading skeleton, an interim
+    // state) before the real form settles, and that transient copy alone was enough to trip the old
+    // one-shot check and bail immediately, well before waitForFormReady's own multi-second poll
+    // window could give the page a chance to actually finish loading. 'ready' still wins the instant
+    // it's seen (never delayed) -- only 'interstitial' now requires the SAME reading on 3 consecutive
+    // polls (~1.2s) before being trusted, so a momentary false reading can no longer end the poll
+    // early, while a genuine, persistent lockout screen (which by definition doesn't clear itself)
+    // still gets caught correctly, just ~1.2s slower.
     const start = Date.now();
+    let interstitialStreak = 0;
     while (Date.now() - start < maxWaitMs) {
-      if (looksLikeInterstitial()) return 'interstitial';
+      if (looksLikeInterstitial()) {
+        interstitialStreak++;
+        if (interstitialStreak >= 3) return 'interstitial';
+      } else {
+        interstitialStreak = 0;
+      }
       if (looksLikeSellForm()) return 'ready';
       await sleep(400);
     }

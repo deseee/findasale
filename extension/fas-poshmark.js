@@ -176,6 +176,26 @@
   }
   // A clickable "opener" (button/combobox/select-like div) for a labeled field, used for
   // category/brand/size/color pickers that aren't plain <input>/<textarea>.
+  // *** CONFIRMED PLATFORM LIMITATION 2026-08-20 (S-EXT-BATCH-10, live-Chrome-confirmed, HIGH
+  // PRIORITY -- read before attempting to "fix" Category/Size/Color/Condition on this platform
+  // again): Poshmark's custom dropdown fields (Category/Size/Color/Condition -- all share the same
+  // `data-test="dropdown"` component) do NOT open in response to ANY synthetic JS event this content
+  // script can produce. Tested and confirmed live, all failed to open anything (zero new DOM nodes):
+  // plain el.click(), a full pointerdown+mousedown+pointerup+mouseup+click sequence at real screen
+  // coordinates (the exact technique that DOES work on Grailed's Radix dropdowns), el.focus() +
+  // keydown Enter, and clicking the inner data-test="dropdown-container" child directly. A REAL
+  // mouse click via Chrome's own input pipeline (not page-context JS) opened it immediately and
+  // correctly, confirmed live via screenshot. This means Category/Size/Color/Condition on Poshmark
+  // cannot be automated from a content script at all with the techniques available to every other
+  // file in this extension -- it is not a selector-accuracy problem, it is that the click itself
+  // never reaches whatever handler opens the panel. The only known way to produce a genuinely
+  // trusted click from an extension is chrome.debugger (Input.dispatchMouseEvent via CDP), which
+  // requires the "debugger" permission and shows Chrome's own "this extension is debugging this
+  // browser" banner on every tab it touches while attached -- a real product/UX tradeoff, not a
+  // drop-in fix, and NOT added here without an explicit decision. Until that decision is made,
+  // fillSelectLike/pickCategory below still try (in case Poshmark ever changes this component to
+  // something synthetic-event-friendly), fail cleanly, and warn -- Category/Size/Color/Condition
+  // stay organizer-filled fields on this platform for now. ***
   function openerByLabel(labelText) {
     const want = norm(labelText);
     const direct = document.querySelector('[aria-label="' + labelText + '"]');
@@ -293,12 +313,23 @@
   // unrelated leaf option that happens to share a word with it, e.g. "Accessories"), and verify the
   // opener's own displayed text actually changed before calling it committed rather than trusting an
   // internal "something got clicked" flag alone.
+  // BUG FIX 2026-08-20 (S-EXT-BATCH-10, P0, live-Chrome-confirmed on fas-vinted.js's identical
+  // scoring formula): flat overlap-count scoring (one point per shared whole word, shorter text
+  // breaking ties) live-confirmed picking the WRONG option for a real query -- see fas-vinted.js's
+  // bestScoringOption comment for the full live example ("tracksuits & sets" wrongly scored "Sets"
+  // above "Tracksuits" purely for being shorter). Ported the same position-weighted fix here: each
+  // matched word is weighted by its position in the query (earlier = more significant) instead of
+  // counted flatly, since FindA.Sale's category segments consistently put the specific term first
+  // and a broader catch-all after.
   function scoreMatch(text, want) {
-    if (text === want) return 1000;
+    if (text === want) return 100000;
     const wantWords = want.split(' ').filter(Boolean);
     const textWords = text.split(' ').filter(Boolean);
-    const overlap = wantWords.filter((w) => textWords.indexOf(w) !== -1).length;
-    if (overlap > 0) return overlap * 100 - text.length;
+    let weighted = 0;
+    for (let i = 0; i < wantWords.length; i++) {
+      if (textWords.indexOf(wantWords[i]) !== -1) weighted += (wantWords.length - i) * 100;
+    }
+    if (weighted > 0) return weighted - text.length * 0.01;
     const subOverlap = wantWords.filter((w) => w.length >= 3 && textWords.some((tw) => tw.length >= 3 && (tw.indexOf(w) !== -1 || w.indexOf(tw) !== -1))).length;
     if (subOverlap === 0) return null;
     return subOverlap * 10 - text.length;
@@ -421,9 +452,26 @@
   // up mid-wait. This can only ever DELAY a false "doesn't look fillable" message, never change
   // success-path behavior for a page that was already ready in time.
   async function waitForFormReady(maxWaitMs) {
+    // BUG FIX 2026-08-20 (S-EXT-BATCH-10, P0, Patrick-confirmed live 2026-08-20): this loop used to
+    // return 'interstitial' the INSTANT looksLikeInterstitial() was true on any single poll -- but
+    // Patrick confirmed live that this platform's Sell page can show verification/security-adjacent
+    // copy transiently for a second or two right after navigation (a loading skeleton, an interim
+    // state) before the real form settles, and that transient copy alone was enough to trip the old
+    // one-shot check and bail immediately, well before waitForFormReady's own multi-second poll
+    // window could give the page a chance to actually finish loading. 'ready' still wins the instant
+    // it's seen (never delayed) -- only 'interstitial' now requires the SAME reading on 3 consecutive
+    // polls (~1.2s) before being trusted, so a momentary false reading can no longer end the poll
+    // early, while a genuine, persistent lockout screen (which by definition doesn't clear itself)
+    // still gets caught correctly, just ~1.2s slower.
     const start = Date.now();
+    let interstitialStreak = 0;
     while (Date.now() - start < maxWaitMs) {
-      if (looksLikeInterstitial()) return 'interstitial';
+      if (looksLikeInterstitial()) {
+        interstitialStreak++;
+        if (interstitialStreak >= 3) return 'interstitial';
+      } else {
+        interstitialStreak = 0;
+      }
       if (looksLikeSellForm()) return 'ready';
       await sleep(400);
     }
