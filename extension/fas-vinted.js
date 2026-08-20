@@ -179,6 +179,141 @@
     const opts = qa('[role="option"], li[role="option"], [role="menuitem"], [role="menuitemradio"], li');
     return opts.find((o) => norm(o.textContent) === want) || opts.find((o) => norm(o.textContent).indexOf(want) !== -1 && norm(o.textContent).length < 60) || null;
   }
+
+  // BUG FIX 2026-08-19 (S-EXT-BATCH-4, P0, live-Chrome-confirmed): Vinted's real category picker
+  // opened by clicking the "category" input is NOT a plain click-through tree -- live DOM inspection
+  // (data-testid="catalog-select-dropdown-content") showed a search box (#catalog-search-input,
+  // placeholder "Find a category") plus a results list of plain, unmarked <div class="web_ui__Cell__title">
+  // leaves (a "Suggested" section with full breadcrumb bodies like "Men > Clothing > Activewear", and a
+  // "Catalog sections" section of top-level names like "Men"/"Women"). None of these carry role="option"
+  // or role="menuitem", and the nearest matching ancestor optionElByText() could find was the outer <li>
+  // wrapper -- clicking that li does NOT reach the real role="button" click handler, which sits on a
+  // DESCENDANT div between the li and the title text (event bubbling only reaches ancestors of the click
+  // target, never descendants). Clicking the innermost text-bearing leaf (Cell__title) is what actually
+  // bubbles up through that handler. bestScoringOption mirrors fas-mercari.js's identical helper so both
+  // search-based pickers use the same scored best-match logic instead of a first-substring-match guess.
+  function bestScoringOption(options, wantText) {
+    const want = norm(wantText);
+    const wantWords = want.split(' ').filter(Boolean);
+    let best = null;
+    let bestScore = -1;
+    for (const opt of options) {
+      const text = norm(opt.textContent);
+      if (!text) continue;
+      let score;
+      if (text === want) {
+        score = 1000;
+      } else {
+        const textWords = text.split(' ').filter(Boolean);
+        const overlap = wantWords.filter((w) => textWords.indexOf(w) !== -1).length;
+        if (overlap === 0) continue; // no shared whole word -- not a real candidate
+        score = overlap * 100 - text.length; // more shared words wins; shorter label breaks ties
+      }
+      if (score > bestScore) { bestScore = score; best = opt; }
+    }
+    return best;
+  }
+
+  // BUG FIX 2026-08-19 (S-EXT-BATCH-4, P0, live-Chrome-confirmed): Category/Brand/Size/Condition/
+  // Color/Material all open the SAME family of floating picker panels when their (readonly) field is
+  // clicked, but the panel's internal shape differs per field, confirmed live against
+  // https://www.vinted.com/items/new via data-testid inspection:
+  //   - Category (catalog-select-dropdown-*) and Brand (brand-select-dropdown-*) and Color
+  //     (color-select-dropdown-*): a SEPARATE nested search input opens inside the panel
+  //     (#catalog-search-input, #brand-search-input, etc.) -- typing into the outer readonly field
+  //     itself (the old fillBrand/pickCategory approach) does nothing, since that field only ever
+  //     reflects the already-CONFIRMED selection, not a live filter.
+  //   - Size (category-size-single-grid-*) and Condition (category-condition-single-list-*) and
+  //     Material (category-material-multi-list-*): no search input -- the panel shows a small fixed
+  //     option set immediately (e.g. xs/s/m/l/xl or New with tags/New without tags/Very good/Good/
+  //     Satisfactory) as plain leaf elements (a <span> for Size, a `[data-testid$="--title"]` <div>
+  //     for Condition) -- neither carries role="option"/"menuitem", matching the same non-ARIA pattern
+  //     already found on Poshmark. Rather than hardcode Vinted's versioned CSS-module class names
+  //     (e.g. "web_ui__Cell__title", fragile the moment Vinted ships a new build hash), this scans
+  //     the open panel for ANY visible, childless, short-text element and scores it against the
+  //     target value with the same bestScoringOption used for the search-driven fields.
+  function findOpenPanel(fieldId) {
+    // Vinted names each panel's container '<field>-...-content' (confirmed: catalog-select-dropdown
+    // -content, brand-select-dropdown-content, color-select-dropdown-content, category-size-single-
+    // grid-content, category-condition-single-list-content, category-material-multi-list-content).
+    const byTestid = qa('[data-testid*="content" i]').find((el) => {
+      const t = norm(el.getAttribute('data-testid') || '');
+      return t.indexOf(fieldId) !== -1 && el.offsetParent !== null;
+    });
+    if (byTestid) return byTestid;
+    // Fallback: any visible panel-looking element that just appeared (class name contains "dropdown"
+    // or "panel" or "popover"), least-fragile generic guess if the testid naming ever changes.
+    return qa('[class*="dropdown" i], [class*="Dropdown" i], [role="dialog"], [role="listbox"]')
+      .find((el) => el.offsetParent !== null) || null;
+  }
+  function leafOptionsIn(container) {
+    if (!container) return [];
+    return Array.from(container.querySelectorAll('*')).filter((el) => {
+      if (el.children.length > 0) return false;
+      const txt = el.textContent && el.textContent.trim();
+      if (!txt || txt.length === 0 || txt.length > 40) return false;
+      return el.offsetParent !== null;
+    });
+  }
+  async function pickFromPanel(fieldId, labelText, value) {
+    const opener = openerByLabel(labelText) || document.getElementById(fieldId);
+    if (!opener) return false;
+    opener.click();
+    await sleep(400);
+    // BUG FIX 2026-08-19 (S-EXT-BATCH-4, P0, live-Chrome-confirmed): the search input MUST be looked
+    // up scoped to the just-opened panel, not page-wide. Vinted's site nav bar has its own unrelated
+    // input[data-testid="search-text--input"] (id="search_text") that a page-wide selector also
+    // matches -- confirmed live it was silently winning the .find() for Color (which has NO real
+    // search input at all, just a color-swatch grid: filter-grid-option-N/color-N testids). Typing a
+    // color name into Vinted's live site-search box triggered a real navigation/autocomplete side
+    // effect that froze the tab (CDP Runtime.evaluate timeout hit during this exact live test).
+    // Find the panel FIRST, then only look for a search input that is a DESCENDANT of that panel.
+    const panel = findOpenPanel(fieldId);
+    // qa() only ever queries from `document` (its sel-only signature, shared across all 4 platform
+    // files) -- passing panel as a second arg to it would be silently ignored, NOT scoped. Query
+    // directly off panel.querySelectorAll instead so this genuinely stays panel-scoped.
+    const searchInput = panel
+      ? Array.from(panel.querySelectorAll('input[data-testid*="search" i]')).find((el) => el.offsetParent !== null)
+        || Array.from(panel.querySelectorAll('input[type="text"], input:not([type])')).find((el) => {
+          const ph = norm(el.getAttribute('placeholder') || '');
+          return el.offsetParent !== null && el !== opener && (ph.indexOf('search') !== -1 || ph.indexOf('find') !== -1);
+        })
+      : null;
+    if (searchInput) {
+      searchInput.focus();
+      setNativeValue(searchInput, String(value));
+      await sleep(600);
+    }
+    const leaves = leafOptionsIn(panel);
+    const opt = bestScoringOption(leaves, value);
+    if (opt) {
+      // BUG FIX 2026-08-19 (S-EXT-BATCH-4, P1, live-Chrome-confirmed, corrected after a live re-check
+      // caught the first version of this fix as a regression): clicking the innermost leaf worked
+      // reliably for Category/Size/Brand/Condition/Material (all live-confirmed setting the field's
+      // real value). Color's swatch grid did NOT reliably register on the leaf <span> alone --
+      // clicking its nearest data-testid ancestor ([data-testid="color-N"]) did. The first attempt at
+      // this fix used opt.closest('[data-testid]') unconditionally -- re-tested live against Category
+      // and that climbs ALL the way to [data-testid="catalog-select-dropdown-content"] (the whole
+      // results panel, 677 chars of unrelated option text), because Category's own option leaves have
+      // NO close data-testid ancestor at all. Clicking that would have silently done nothing. Bound
+      // the climb: only use a data-testid ancestor within 3 hops AND whose own text is still
+      // option-sized (<=80 chars, i.e. clearly one option, not the whole panel) -- otherwise click the
+      // leaf itself, which is what's already confirmed working for every field except Color.
+      let clickTarget = opt;
+      let hop = opt;
+      for (let i = 0; i < 3 && hop; i++) {
+        hop = hop.parentElement;
+        if (hop && hop.hasAttribute('data-testid') && hop.textContent.trim().length <= 80) {
+          clickTarget = hop;
+          break;
+        }
+      }
+      clickTarget.click();
+      await sleep(350);
+      return true;
+    }
+    return false;
+  }
   function setNativeValue(el, value) {
     const proto = el.tagName === 'TEXTAREA' ? window.HTMLTextAreaElement.prototype : window.HTMLInputElement.prototype;
     const setter = Object.getOwnPropertyDescriptor(proto, 'value') && Object.getOwnPropertyDescriptor(proto, 'value').set;
@@ -227,10 +362,48 @@
   // level has no confident match.
   async function pickCategory(categoryText) {
     if (!categoryText) return false;
+    // Try the shared panel picker first with the most-specific segment (Vinted's "Suggested" search
+    // results are full resolved leaf paths, e.g. "Shorts" -> Men > Clothing > Activewear, live-
+    // confirmed to fully select in one shot) before falling back to the older segmented search below.
+    const quickSegments = categoryText.split(':').map((s) => s.trim()).filter(Boolean);
+    for (const seg of [...quickSegments.slice().reverse(), categoryText]) {
+      if (!seg) continue;
+      if (await pickFromPanel('category', 'Category', seg)) return true;
+    }
     const opener = openerByLabel('Category');
     if (!opener) return false;
     opener.click();
     await sleep(400);
+    const segments = quickSegments;
+    // BUG FIX 2026-08-19 (S-EXT-BATCH-4, P0, live-Chrome-confirmed): prefer the real search input
+    // (#catalog-search-input, confirmed live) over the old blind tree-walk -- see bestScoringOption's
+    // comment above for the full live-DOM finding. Searching the most specific segment first (reversed)
+    // then the full string mirrors fas-mercari.js's identical fix for the same picker shape.
+    const searchInput = document.getElementById('catalog-search-input')
+      || qa('input[type="text"], input:not([type])').find((el) => {
+        const ph = norm(el.getAttribute('placeholder') || '');
+        return ph.indexOf('find a categor') !== -1 || (ph.indexOf('search') !== -1 && ph.indexOf('categor') !== -1);
+      });
+    if (searchInput) {
+      const searchCandidates = [...segments.slice().reverse(), categoryText];
+      for (const query of searchCandidates) {
+        if (!query) continue;
+        searchInput.focus();
+        setNativeValue(searchInput, query);
+        await sleep(600);
+        const leaves = qa('.web_ui__Cell__title, [role="option"], li[role="option"], [role="menuitemradio"]')
+          .filter((el) => el.textContent && el.textContent.trim().length > 0 && el.textContent.trim().length < 60);
+        const opt = bestScoringOption(leaves, query);
+        if (opt) {
+          opt.click();
+          await sleep(300);
+          return true;
+        }
+      }
+      console.warn('[FAS Vinted] Category "' + categoryText + '" -- search input found but no result matched any segment (UNVERIFIED taxonomy) -- left for the organizer to choose.');
+      return false;
+    }
+    // Fallback: old blind tree-walk, kept in case Vinted ever reverts to a plain click-through tree.
     let pickedAny = false;
     for (let level = 0; level < 4; level++) {
       await sleep(250);
@@ -250,14 +423,12 @@
   // fallback per this dispatch's explicit instruction, rather than leaving brand blank or
   // crashing.
   async function fillBrand(labelText, value) {
-    const el = fieldByLabel(labelText);
-    if (!el) return false;
-    el.focus();
-    setNativeValue(el, String(value));
-    await sleep(700); // UNVERIFIED -- suggestion-list settle time, best-effort guess
-    const match = optionElByText(value);
-    if (match) { match.click(); await sleep(200); return true; }
-    const noBrand = qa('[role="option"], li, div[role="button"], button').find((n) => /no brand/.test(norm(n.textContent)));
+    // BUG FIX 2026-08-19 (S-EXT-BATCH-4, P0, live-Chrome-confirmed): the old version typed directly
+    // into #brand -- but #brand is `readonly` (confirmed live) and only ever reflects the CONFIRMED
+    // selection. The real live-filter is a separate nested input, #brand-search-input, that only
+    // exists after #brand is clicked open -- see pickFromPanel's comment above for the full finding.
+    if (await pickFromPanel('brand', labelText, value)) return true;
+    const noBrand = qa('[role="option"], li, div[role="button"], button, [data-testid$="--title"]').find((n) => /no brand/.test(norm(n.textContent)));
     if (noBrand) { noBrand.click(); await sleep(200); console.warn('[FAS Vinted] Brand "' + value + '" had no matching suggestion -- selected Vinted\'s own "No brand" fallback instead.'); return true; }
     console.warn('[FAS Vinted] Brand "' + value + '" had no matching suggestion and no "No brand" option was found (UNVERIFIED) -- left unset.');
     return false;
@@ -272,6 +443,13 @@
       native.dispatchEvent(new Event('change', { bubbles: true }));
       return true;
     }
+    // BUG FIX 2026-08-19 (S-EXT-BATCH-4, P0, live-Chrome-confirmed): the old version clicked the
+    // opener then matched optionElByText (role="option"/li only) -- live DOM showed Size's grid uses
+    // plain <span> leaves and Condition's list uses `[data-testid$="--title"]` <div> leaves, neither
+    // of which optionElByText could ever match. pickFromPanel's generic childless-leaf scan (shared
+    // with Category/Brand) is class-name-agnostic and live-confirmed working for both widget shapes.
+    const fieldId = norm(labelText).replace(/[^a-z0-9]+/g, '');
+    if (await pickFromPanel(fieldId, labelText, value)) return true;
     const opener = openerByLabel(labelText);
     if (!opener) return false;
     opener.click();

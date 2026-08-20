@@ -277,11 +277,34 @@
         if (opt) {
           opt.click();
           await sleep(300);
-          // The modal may need an explicit confirm/apply/done click to close and commit the pick --
-          // best-effort, silent no-op if no such button is found (some search-select UIs close and
-          // commit on the option click alone).
-          const confirmBtn = qa('button, [role="button"]').find((b) => /^(apply|done|select|confirm|save)$/.test(norm(b.textContent)));
-          if (confirmBtn) { confirmBtn.click(); await sleep(200); }
+          // BUG FIX 2026-08-19 (S-EXT-BATCH-4, P0): Patrick's own live screenshot showed the search
+          // modal still open AFTER a correct pick landed (breadcrumb read "Selected: Men > Tops >
+          // T-shirts" with the full top-level category list still showing underneath) -- reported as
+          // "Mercari is stuck further into picking categories". The old confirm-button match required
+          // the button's ENTIRE normalized text to equal exactly one of apply/done/select/confirm/save
+          // -- any real button phrased as e.g. "Save category" or "Done selecting", or with icon
+          // alt-text bundled in, would silently miss and leave the modal open with no further attempt.
+          // Switched to a substring match (still scoped to short, button-sized text so it can't grab
+          // an unrelated page element), and added a fallback close-button pass if no confirm control
+          // is found at all -- the pick itself already succeeded (opt.click() above), so the modal
+          // should be dismissed one way or another rather than left blocking the rest of the fill.
+          let confirmBtn = qa('button, [role="button"]').find((b) => {
+            const t = norm(b.textContent);
+            return t.length > 0 && t.length < 30 && /\b(apply|done|select|confirm|save)\b/.test(t);
+          });
+          if (confirmBtn) {
+            confirmBtn.click();
+            await sleep(250);
+          } else {
+            // No explicit confirm control -- try dismissing via an "x"/close control so the modal
+            // doesn't sit open and block whatever field the extension tries to fill next.
+            const closeBtn = qa('button, [role="button"], [aria-label]').find((b) => {
+              const aria = norm(b.getAttribute('aria-label') || '');
+              const t = norm(b.textContent);
+              return (aria === 'close' || aria.indexOf('close') !== -1 || t === '×' || t === 'x') && b.offsetParent !== null;
+            });
+            if (closeBtn) { closeBtn.click(); await sleep(200); }
+          }
           return true;
         }
       }

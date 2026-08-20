@@ -179,6 +179,51 @@
     const opts = qa('[role="option"], li[role="option"], [role="menuitem"], [role="menuitemradio"], li');
     return opts.find((o) => norm(o.textContent) === want) || opts.find((o) => norm(o.textContent).indexOf(want) !== -1 && norm(o.textContent).length < 60) || null;
   }
+
+  // BUG FIX 2026-08-19 (S-EXT-BATCH-4, P0, live-Chrome-confirmed): Grailed's dropdowns are Radix UI
+  // primitives (confirmed live: trigger buttons have id="radix-:xx:", aria-haspopup="menu",
+  // aria-controls pointing at a portal-rendered content div). A plain el.click() opened the
+  // "Department / Category" trigger reliably in one live test but the "Sub-category" trigger did NOT
+  // open on two consecutive plain .click() calls (aria-expanded stayed "false") -- only a full
+  // pointerdown+mousedown+pointerup+mouseup+click sequence at the element's real screen coordinates
+  // reliably opened it. Using this sequence everywhere a dropdown trigger needs to be clicked removes
+  // that flakiness instead of leaving it to chance.
+  function syntheticClick(el) {
+    const rect = el.getBoundingClientRect();
+    const cx = rect.x + rect.width / 2;
+    const cy = rect.y + rect.height / 2;
+    const common = { bubbles: true, cancelable: true, composed: true, view: window, clientX: cx, clientY: cy, pointerId: 1, pointerType: 'mouse', button: 0 };
+    el.dispatchEvent(new PointerEvent('pointerdown', common));
+    el.dispatchEvent(new MouseEvent('mousedown', common));
+    el.dispatchEvent(new PointerEvent('pointerup', common));
+    el.dispatchEvent(new MouseEvent('mouseup', common));
+    el.dispatchEvent(new MouseEvent('click', common));
+  }
+  // Shared with fas-vinted.js's identical helper -- scores candidates by exact match first, then by
+  // shared-word overlap (more shared words wins, shorter label breaks ties), instead of the old
+  // first-substring-match which was prone to grabbing an unrelated option that merely contained one
+  // matching word.
+  function bestScoringOption(options, wantText) {
+    const want = norm(wantText);
+    const wantWords = want.split(' ').filter(Boolean);
+    let best = null;
+    let bestScore = -1;
+    for (const opt of options) {
+      const text = norm(opt.textContent);
+      if (!text) continue;
+      let score;
+      if (text === want) {
+        score = 1000;
+      } else {
+        const textWords = text.split(' ').filter(Boolean);
+        const overlap = wantWords.filter((w) => textWords.indexOf(w) !== -1).length;
+        if (overlap === 0) continue;
+        score = overlap * 100 - text.length;
+      }
+      if (score > bestScore) { bestScore = score; best = opt; }
+    }
+    return best;
+  }
   function setNativeValue(el, value) {
     const proto = el.tagName === 'TEXTAREA' ? window.HTMLTextAreaElement.prototype : window.HTMLInputElement.prototype;
     const setter = Object.getOwnPropertyDescriptor(proto, 'value') && Object.getOwnPropertyDescriptor(proto, 'value').set;
@@ -257,12 +302,16 @@
       opener.dispatchEvent(new Event('change', { bubbles: true }));
       return true;
     }
-    opener.click();
-    await sleep(350);
-    const opt = optionElByText(value);
+    // BUG FIX 2026-08-19 (S-EXT-BATCH-4, P0, live-Chrome-confirmed): plain opener.click() was
+    // confirmed unreliable against Grailed's Radix dropdown triggers (see syntheticClick's comment).
+    // Also switched optionElByText -> bestScoringOption so a scored match wins instead of the first
+    // substring hit.
+    syntheticClick(opener);
+    await sleep(400);
+    const opt = bestScoringOption(qa('[role="menuitem"], [role="menuitemradio"], [role="option"], li[role="option"], li').filter((el) => el.offsetParent !== null), value);
     if (!opt) return false;
-    opt.click();
-    await sleep(200);
+    syntheticClick(opt);
+    await sleep(250);
     return true;
   }
 
@@ -288,18 +337,67 @@
       console.warn('[FAS Grailed] Category "' + categoryText + '" -- no option matched the native select (UNVERIFIED taxonomy) -- left for the organizer to choose.');
       return false;
     }
-    opener.click();
-    await sleep(400);
+    // BUG FIX 2026-08-19 (S-EXT-BATCH-4, P0, live-Chrome-confirmed): the old version searched every
+    // level of the picker for the whole, un-split categoryText -- confirmed live that the real
+    // "Department / Category" trigger opens a Radix menu showing ONLY "Menswear"/"Womenswear"
+    // (role="menuitem") at first; clicking one updates the SAME panel in place to show that
+    // department's top-level categories (e.g. Tops/Bottoms/Outerwear/Footwear/Tailoring/Accessories,
+    // also role="menuitem"), and clicking one of those closes the dropdown with both levels set
+    // (confirmed live: button text became "Menswear / Tops"). Segment categoryText and score each
+    // level's options against progressively-consumed segments (mirrors fas-mercari.js/fas-vinted.js's
+    // identical segmented-scoring approach) instead of blindly re-searching for the whole string at
+    // every level.
+    const segments = categoryText.split(':').map((s) => s.trim()).filter(Boolean);
+    const levelQueries = segments.length ? segments : [categoryText];
+    syntheticClick(opener);
+    await sleep(450);
     let pickedAny = false;
-    for (let level = 0; level < 3; level++) {
-      await sleep(250);
-      const opt = optionElByText(categoryText);
-      if (!opt) break;
-      opt.click();
-      pickedAny = true;
+    let queryIdx = 0;
+    for (let level = 0; level < 4; level++) {
       await sleep(300);
+      if (opener.getAttribute && opener.getAttribute('aria-expanded') === 'false') break; // menu auto-closed -- fully resolved
+      const contentId = opener.getAttribute && opener.getAttribute('aria-controls');
+      const content = contentId ? document.getElementById(contentId) : null;
+      const items = content
+        ? Array.from(content.querySelectorAll('[role="menuitem"], [role="menuitemradio"], [role="option"]'))
+        : qa('[role="menuitem"], [role="menuitemradio"], [role="option"]').filter((el) => el.offsetParent !== null);
+      if (!items.length) break;
+      // Try the next not-yet-consumed segment first (most specific remaining), then fall back to the
+      // full string, so a picker with fewer levels than segments still gets a reasonable match.
+      const query = queryIdx < levelQueries.length ? levelQueries[queryIdx] : categoryText;
+      const opt = bestScoringOption(items, query) || bestScoringOption(items, categoryText);
+      if (!opt) break;
+      syntheticClick(opt);
+      pickedAny = true;
+      queryIdx++;
+      await sleep(350);
     }
-    if (!pickedAny) console.warn('[FAS Grailed] Category "' + categoryText + '" -- no level matched in the picker (UNVERIFIED taxonomy) -- left for the organizer to choose.');
+    if (!pickedAny) {
+      console.warn('[FAS Grailed] Category "' + categoryText + '" -- no level matched in the picker (UNVERIFIED taxonomy) -- left for the organizer to choose.');
+      return false;
+    }
+    // Sub-category is a SEPARATE trigger, gated on Category being set first (confirmed live: it was
+    // disabled/placeholder before Category resolved, then enabled). Best-effort: only attempt if the
+    // organizer's category string had a segment beyond what the two-level Department/Category picker
+    // above likely consumed.
+    if (queryIdx < levelQueries.length) {
+      const subOpener = openerByLabel('Sub-category') || openerByLabel('Subcategory');
+      if (subOpener) {
+        syntheticClick(subOpener);
+        await sleep(450);
+        const contentId = subOpener.getAttribute && subOpener.getAttribute('aria-controls');
+        const content = contentId ? document.getElementById(contentId) : null;
+        const items = content ? Array.from(content.querySelectorAll('[role="menuitem"], [role="menuitemradio"], [role="option"]')) : [];
+        const subQuery = levelQueries[levelQueries.length - 1];
+        const subOpt = items.length ? (bestScoringOption(items, subQuery) || bestScoringOption(items, categoryText)) : null;
+        if (subOpt) {
+          syntheticClick(subOpt);
+          await sleep(300);
+        } else {
+          console.warn('[FAS Grailed] Sub-category "' + subQuery + '" -- no option matched (UNVERIFIED taxonomy) -- left for the organizer to choose.');
+        }
+      }
+    }
     return pickedAny;
   }
 
