@@ -409,7 +409,12 @@ async function startQueue() {
     .filter((it) => !(ch === 'facebook' && it.facebookRestricted === true))
     .map((it) => ({
     id: it.id, title: it.title, price: it.price, condition: it.condition,
-    description: it.description, category: it.category, photoUrls: it.photoUrls || [],
+    description: it.description, category: it.category,
+    // S-EXT-BATCH-12 (2026-08-20): categoryBreadcrumb -- the original full eBay-taxonomy breadcrumb,
+    // now sent alongside the cleaner `category` (see extensionController.ts's comment on the `category`
+    // field build for the full reasoning). Passed through unconditionally the same way every other
+    // field on this map already is; absent stays undefined, same never-invent rule as everywhere else.
+    categoryBreadcrumb: it.categoryBreadcrumb, photoUrls: it.photoUrls || [],
     packageWeightOz: it.packageWeightOz, aiPackageWeightOz: it.aiPackageWeightOz,
     shippingOverride: it.shippingOverride,
     allowBestOffer: it.allowBestOffer, bestOfferMinimumAmt: it.bestOfferMinimumAmt,

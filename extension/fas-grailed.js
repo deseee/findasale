@@ -418,12 +418,35 @@
   // Grailed's own category depth -- tries the full string first, then progressively shorter
   // trailing segments (most-specific-first) if that doesn't match anything, same spirit as the
   // Mercari segmented picker but simpler since Grailed's picker structure is still unconfirmed.
-  async function pickCategory(categoryText) {
+  // BUG FIX 2026-08-20 (S-EXT-BATCH-12, Patrick-confirmed real-world mapping + live-Chrome-
+  // verified against the real picker): FindA.Sale's clean `ebayCategoryName` ("Tracksuits & Sets")
+  // shares no word with Grailed's own Category bucket ("Tops") or Sub-category ("Sweatshirts &
+  // Hoodies") -- no amount of text-similarity scoring bridges that gap, because it isn't a text
+  // problem, it's a taxonomy problem. Patrick browsed real Grailed tracksuit listings and confirmed
+  // where they're actually filed; verified live that "Sweatshirts & Hoodies" is a genuine
+  // Sub-category option under Menswear/Tops (queried the real open panel, not assumed). This is a
+  // manually-curated, append-only table of CONFIRMED real mappings (never a guess) for exactly the
+  // cases where clean-name scoring alone can't find the right leaf. Key is the normalized clean
+  // category name (`item.category`, e.g. "Tracksuits & Sets" post S-EXT-BATCH-12); value is the
+  // Category-level bucket and, optionally, the Sub-category leaf. Add more rows here as they're
+  // confirmed -- do not extend this with guesses.
+  const GRAILED_CATEGORY_OVERRIDES = {
+    'tracksuits & sets': { category: 'Tops', subCategory: 'Sweatshirts & Hoodies' },
+  };
+  // categoryText: FindA.Sale's clean leaf category name (post S-EXT-BATCH-12, e.g. "Tracksuits &
+  // Sets") -- tried directly against Category/Sub-category options and against
+  // GRAILED_CATEGORY_OVERRIDES. breadcrumbText: the original full eBay-taxonomy breadcrumb (e.g.
+  // "Clothing, Shoes & Accessories:men:men's Clothing:activewear:tracksuits & Sets") -- Grailed is
+  // the only one of the four platforms with a gender-level Department field (Menswear/Womenswear),
+  // and that signal ("men"/"women") only exists in the breadcrumb, never in the clean leaf name
+  // alone, so this file specifically still needs both fields where the other three content scripts
+  // (S-EXT-BATCH-12) only need the clean `category` value.
+  async function pickCategory(categoryText, breadcrumbText) {
     if (!categoryText) return false;
     const opener = openerByLabel('Category');
     if (!opener) return false;
     if (opener.tagName === 'SELECT') {
-      const segments = categoryText.split(':').map((s) => s.trim()).filter(Boolean);
+      const segments = (breadcrumbText || categoryText).split(':').map((s) => s.trim()).filter(Boolean);
       const candidates = [categoryText, ...segments.slice().reverse()];
       for (const candidate of candidates) {
         const opt = Array.from(opener.options).find((o) => norm(o.textContent) === norm(candidate) || norm(o.textContent).indexOf(norm(candidate)) !== -1);
@@ -442,7 +465,7 @@
     // level's options against progressively-consumed segments (mirrors fas-mercari.js/fas-vinted.js's
     // identical segmented-scoring approach) instead of blindly re-searching for the whole string at
     // every level.
-    const segments = categoryText.split(':').map((s) => s.trim()).filter(Boolean);
+    const segments = (breadcrumbText || categoryText).split(':').map((s) => s.trim()).filter(Boolean);
     const levelQueries = segments.length ? segments : [categoryText];
     // BUG FIX 2026-08-20 (S-EXT-BATCH-10, P0, live-Chrome-confirmed crash): placeholderText is read
     // much further down (the `committed` check) but was never actually declared anywhere in this
@@ -480,6 +503,13 @@
     // contains "accessories"), and per this file's own "never fabricate/guess a value" spirit, a
     // level that has no real segment match should stay unset rather than risk a wrong pick.
     let remaining = (levelQueries.length > 1 ? levelQueries.slice(1) : levelQueries).map((seg, i) => ({ seg, i }));
+    // Always ALSO offer the clean leaf category name as a candidate -- once Department (level 0)
+    // is resolved from the breadcrumb, the clean name is very often the actual best match for
+    // Category (level 1) itself (e.g. a clean "Hoodies" would directly match a Grailed "Hoodies"
+    // bucket if one existed), so it's added to the pool rather than only tried as a last resort.
+    if (categoryText && !remaining.some((r) => norm(r.seg) === norm(categoryText))) {
+      remaining.push({ seg: categoryText, i: remaining.length });
+    }
     for (let level = 0; level < 4; level++) {
       await sleep(300);
       if (opener.getAttribute && opener.getAttribute('aria-expanded') === 'false') break; // menu auto-closed -- fully resolved
@@ -506,6 +536,30 @@
       pickedAny = true;
       if (bestRemainingIdx !== -1) remaining.splice(bestRemainingIdx, 1);
       await sleep(350);
+    }
+    // BUG FIX 2026-08-20 (S-EXT-BATCH-12): if Department resolved but Category (level 1) never
+    // found a real text match, check the confirmed-mapping table before giving up -- this is the
+    // ONLY place GRAILED_CATEGORY_OVERRIDES is consulted, and only as a fallback after real
+    // scoring already had its shot. Re-queries the currently-open panel (still open -- nothing
+    // closed it, since the normal loop only breaks on a miss, it never dismisses anything) rather
+    // than assuming stale items are still valid.
+    let overrideSubCategory = null;
+    if (pickedAny && norm(opener.textContent) === placeholderText) {
+      const override = GRAILED_CATEGORY_OVERRIDES[norm(categoryText)];
+      if (override) {
+        const contentId = opener.getAttribute && opener.getAttribute('aria-controls');
+        const content = contentId ? document.getElementById(contentId) : null;
+        const items = content
+          ? Array.from(content.querySelectorAll('[role="menuitem"], [role="menuitemradio"], [role="option"]'))
+          : qa('[role="menuitem"], [role="menuitemradio"], [role="option"]').filter((el) => el.offsetParent !== null);
+        const opt = items.find((el) => norm(el.textContent) === norm(override.category));
+        if (opt) {
+          syntheticClick(opt);
+          await sleep(350);
+          overrideSubCategory = override.subCategory || null;
+          console.warn('[FAS Grailed] Category "' + categoryText + '" -- no text match at the Category level; used the confirmed mapping to "' + override.category + '" instead (see GRAILED_CATEGORY_OVERRIDES).');
+        }
+      }
     }
     const queryIdx = levelQueries.length - remaining.length; // segments actually consumed, for Sub-category below
     // BUG FIX 2026-08-20 (S-EXT-BATCH-8, P1, live-Chrome-confirmed): `pickedAny` only means "we
@@ -534,7 +588,7 @@
         const contentId = subOpener.getAttribute && subOpener.getAttribute('aria-controls');
         const content = contentId ? document.getElementById(contentId) : null;
         const items = content ? Array.from(content.querySelectorAll('[role="menuitem"], [role="menuitemradio"], [role="option"]')) : [];
-        const subQuery = levelQueries[levelQueries.length - 1];
+        const subQuery = overrideSubCategory || levelQueries[levelQueries.length - 1];
         const subOpt = items.length ? (bestScoringOption(items, subQuery) || bestScoringOption(items, categoryText)) : null;
         if (subOpt) {
           syntheticClick(subOpt);
@@ -800,7 +854,11 @@
     // placeholder changing to "Search and add a Designer" immediately after Category is set).
     // Previously Designer ran first every time, guaranteeing it always hit a disabled field.
     if (item.category) {
-      const categoryOk = await pickCategory(item.category);
+      // S-EXT-BATCH-12: pass categoryBreadcrumb alongside the clean category -- Grailed is the
+      // only one of the four platforms with its own gender-level Department field, and that
+      // signal ("men"/"women") only survives in the original breadcrumb, not in the clean leaf
+      // name alone (see pickCategory's own comment above for the full explanation).
+      const categoryOk = await pickCategory(item.category, item.categoryBreadcrumb);
       if (!categoryOk) console.warn('[FAS Grailed] Category "' + item.category + '" -- no match found in the picker; Designer field may remain disabled as a result.');
     } else {
       console.warn('[FAS Grailed] No category on this item -- Category picker skipped, which will likely leave the Designer field disabled too.');

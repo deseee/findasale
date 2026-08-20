@@ -103,6 +103,8 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
     select: {
       id: true, saleId: true, title: true, description: true, price: true,
       category: true, condition: true, photoUrls: true, qrEmbedEnabled: true, createdAt: true,
+      // S-EXT-BATCH-12 (2026-08-20): ebayCategoryName -- see the `category` field build below for why.
+      ebayCategoryName: true,
       // 2026-08-18 (S-CROSSLISTER-ESTATE-VERTICAL-RESEARCH batch 5): brand/size/color/material --
       // fas-poshmark.js/fas-mercari.js/fas-vinted.js/fas-grailed.js already reference
       // item.brand/item.size/item.color/item.material(s), but NONE of the four were ever in
@@ -292,7 +294,24 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
     price: it.price != null ? Number(it.price.toFixed(2)) : null,
     condition: toFacebookCondition(it.condition),
     description: buildDescription(it.description, it.saleId),
-    category: it.category || null,
+    // S-EXT-BATCH-12 (2026-08-20, Patrick + live-Chrome-confirmed root cause): `category` on Item
+    // is documented as "eBay L1 category name" (schema.prisma) but in practice holds whatever the
+    // AI-tagging pipeline wrote, which for this item was a full colon-delimited eBay-taxonomy
+    // breadcrumb ("Clothing, Shoes & Accessories:men:men's Clothing:activewear:tracksuits & Sets") --
+    // none of Poshmark/Mercari/Vinted/Grailed's own category pickers are colon-delimited-breadcrumb
+    // trees, so every content script's segment-matching logic was fighting a format mismatch on top
+    // of each platform's own real UI quirks. `ebayCategoryName` (separate field, set when an organizer
+    // confirms a category via EbayCategoryPicker.tsx, e.g. "Tracksuits & Sets") is a single clean leaf
+    // name -- much closer to what a real marketplace category list actually contains. Prefer it when
+    // present; fall back to the legacy `category` value for items with no confirmed eBay category yet
+    // (better than sending nothing). `category` itself is left untouched everywhere else in this file
+    // (eligibility/facebookRestricted checks below still read it directly) -- this only changes what's
+    // sent to the crosslister extension as the `category` field in ITS payload.
+    category: it.ebayCategoryName || it.category || null,
+    // Full original breadcrumb, kept as a SEPARATE field so content scripts that benefit from
+    // department/gender-level signal (e.g. Grailed's Menswear/Womenswear picker) can still use it --
+    // never a straight replacement, since ebayCategoryName alone drops that signal entirely.
+    categoryBreadcrumb: it.category || null,
     // Facebook Commerce Policy gate (coins/currency) -- see isFacebookRestrictedCoinOrCurrencyItem
     // above. FB-specific only; does not affect eBay/craigslist/gumtree/native-checkout fields
     // elsewhere in this same payload. Surfaced so popup.js can disable/badge the item on the
@@ -317,6 +336,20 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
     photoUrls: applyWatermark ? (it.photoUrls || []).map((u) => getWatermarkedUrlWithQR(u, it.id, it.qrEmbedEnabled !== false)) : (it.photoUrls || []),
     packageWeightOz: it.packageWeightOz,
     aiPackageWeightOz: it.aiPackageWeightOz,
+    // BUG FIX 2026-08-20 (S-EXT-BATCH-12, Patrick-reported + confirmed by direct code read): brand/
+    // size/color/material were already added to the Prisma `select` above (2026-08-18) and popup.js's
+    // queue-building map already passes them through (its own comment there even claims "getExtensionItems
+    // now returns them") -- but this `shaped` object, built field-by-field rather than spread from `it`,
+    // never actually included them. So every one of these four values was silently dropped here, at the
+    // one hop between the database and the extension, regardless of what the organizer edited on the
+    // item -- explains Patrick's report that editing brand/size/color/material on a FindA.Sale listing
+    // "didn't seem to take" on Vinted (or any of the other three platforms). Never invents a value: an
+    // unset field stays `null`/`undefined` exactly like every other never-invent field in this payload
+    // (saleCity/saleZip/saleAddress above), the content scripts already skip cleanly on that.
+    brand: it.brand,
+    size: it.size,
+    color: it.color,
+    material: it.material,
     // FB shipping eligibility. Force LOCAL_PICKUP_ONLY when the item is not actually shippable:
     // an explicit LOCAL_PICKUP_ONLY override, OR no usable package weight (FB cannot issue a
     // prepaid label without a weight, so the extension would otherwise stall on the Delivery

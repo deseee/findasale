@@ -149,6 +149,20 @@
   }
   function fieldByLabel(labelText) {
     const want = norm(labelText);
+    // BUG FIX 2026-08-20 (S-EXT-BATCH-11, P0, live-Chrome-confirmed): live DOM inspection of a real
+    // Mercari Sell page found clean, real data-testid anchors on the actual fields ("Title", "Brand",
+    // "Price" all confirmed live) -- checked FIRST, before the fuzzy label-scan/nearestControlAfter
+    // fallback below, because that fallback was confirmed live picking the WRONG element for Price:
+    // nearestControlAfter's CONTROL_SELECTOR includes `div[tabindex]`, and Mercari's price
+    // RECOMMENDATION SLIDER (a `<div class="PriceSuggest__ThumbWrapper..." tabindex="0"
+    // role="slider">`, a totally different widget from the real editable price field) sits close
+    // enough to the "Price" heading to win that scan. setNativeValue's native-input-setter.call(el,
+    // value) then threw "Illegal invocation" against it (a TypeError: the native HTMLInputElement
+    // value setter requires 'this' to actually be a real input, and a slider div isn't one) --
+    // exactly the live error Patrick reported. A direct data-testid match is unambiguous and never
+    // at risk of grabbing an unrelated nearby widget.
+    const byTestid = document.querySelector('input[data-testid="' + labelText + '" i], textarea[data-testid="' + labelText + '" i]');
+    if (byTestid) return byTestid;
     const labels = qa('label');
     for (const lab of labels) {
       const txt = norm(lab.getAttribute('aria-label') || lab.textContent);
@@ -273,13 +287,37 @@
     return best;
   }
 
-  async function pickCategory(categoryText) {
+  // BUG FIX 2026-08-20 (S-EXT-BATCH-12, Patrick's own hypothesis, live-Chrome-confirmed against
+  // the REAL Mercari search box): typed "tracksuits & sets" into Mercari's own Category search --
+  // "No results found". Typed "tracksuits" alone into the exact same box -- 2 correct results
+  // ("Women > Athletic apparel > Tracksuits" and "Men > Athletic apparel > Tracksuits") appeared
+  // immediately. Mercari's own category search is a narrow/literal matcher that chokes on the
+  // trailing "& Sets" qualifier (an eBay-taxonomy convention FindA.Sale's leaf names use, not
+  // something Mercari's own tree uses), even though the core term is exactly what's needed and
+  // exists verbatim in the tree. This generates simplified fallback variants of each search
+  // candidate -- so after the full phrase is tried and fails, the code also tries it with any
+  // trailing "& ..."/"and ..." qualifier stripped, and finally just its first significant word --
+  // instead of only ever trying the literal segment text.
+  function searchSimplifications(text) {
+    const out = [text];
+    const stripped = text.replace(/\s*[&,]\s*.*$/, '').replace(/\s+and\s+.*$/i, '').trim();
+    if (stripped && norm(stripped) !== norm(text)) out.push(stripped);
+    const words = norm(stripped || text).split(' ').filter(Boolean);
+    if (words.length > 1 && words[0].length >= 3) out.push(words[0]);
+    return out;
+  }
+  // breadcrumbText: the original full eBay-taxonomy breadcrumb (colon-delimited, e.g. "...:
+  // activewear:tracksuits & Sets") -- still useful for less-specific fallback segments (activewear,
+  // men, etc.) if the clean leaf name alone doesn't resolve. categoryText: FindA.Sale's clean leaf
+  // category name (post S-EXT-BATCH-12, e.g. "Tracksuits & Sets") -- always tried first, including
+  // its simplified variants, since it's normally the most specific and most useful term.
+  async function pickCategory(categoryText, breadcrumbText) {
     if (!categoryText) return false;
     const opener = openerByLabel('Category');
     if (!opener) return false;
     opener.click();
     await sleep(400);
-    const segments = categoryText.split(':').map((s) => s.trim()).filter(Boolean);
+    const segments = (breadcrumbText || categoryText).split(':').map((s) => s.trim()).filter(Boolean);
     // BUG FIX 2026-08-19 (S-EXT-BATCH-3, P0): live-confirmed real UI (Patrick's screenshot) is a
     // searchable drill-down modal with its OWN "Search category" text input at the top -- far more
     // reliable to type into Mercari's own search and let ITS matching engine surface the right
@@ -294,14 +332,72 @@
         const ph = norm(el.getAttribute('placeholder') || '');
         return ph.indexOf('search') !== -1 && ph.indexOf('categor') !== -1;
       });
+    // BUG FIX 2026-08-20 (S-EXT-BATCH-12, live-Chrome-confirmed): simplifying "Tracksuits & Sets"
+    // down to just "Tracksuits" (above) surfaces Mercari's real search results, but that search
+    // reliably returns BOTH a "Women > Athletic apparel > Tracksuits" AND a "Men > Athletic
+    // apparel > Tracksuits" result tied on the exact same score (both share the one word
+    // "tracksuits", nothing in the query itself says which gender) -- without a tiebreaker,
+    // bestScoringOption keeps whichever came first in DOM order, silently picking the wrong
+    // gender for roughly half of all items. genderHint is pulled from the breadcrumb's own "men"/
+    // "women" segment (present as its own standalone segment on every eBay-taxonomy-style
+    // breadcrumb this file receives) and used ONLY to break ties between otherwise-equal options
+    // in this search-results list -- it never invents a match on its own.
+    const genderHint = segments.map(norm).find((s) => s === 'men' || s === 'women' || s === "men's" || s === "women's") || null;
+    function bestScoringOptionWithGenderHint(options, wantText) {
+      const want = norm(wantText);
+      const wantWords = want.split(' ').filter(Boolean);
+      let best = null, bestScore = -1;
+      for (const opt of options) {
+        const text = norm(opt.textContent);
+        if (!text) continue;
+        let score;
+        if (text === want) {
+          score = 100000;
+        } else {
+          const textWords = text.split(' ').filter(Boolean);
+          let weighted = 0;
+          for (let i = 0; i < wantWords.length; i++) {
+            if (textWords.indexOf(wantWords[i]) !== -1) weighted += (wantWords.length - i) * 100;
+          }
+          if (weighted === 0) continue;
+          score = weighted - text.length * 0.01;
+        }
+        if (genderHint && text.split(' ').indexOf(genderHint.replace(/'s$/, '')) !== -1) score += 5000; // tiebreak only -- smaller than any real word-match delta
+        if (score > bestScore) { bestScore = score; best = opt; }
+      }
+      return best;
+    }
     if (searchInput) {
-      const searchCandidates = [...segments.slice().reverse(), categoryText];
+      // categoryText (the clean leaf name) tried FIRST -- including its simplified variants --
+      // before falling back to less-specific breadcrumb segments. Deduped so the same query text
+      // is never typed twice.
+      const rawCandidates = [categoryText, ...segments.slice().reverse()];
+      const searchCandidates = [];
+      const seen = new Set();
+      for (const c of rawCandidates) {
+        for (const variant of searchSimplifications(c)) {
+          const key = norm(variant);
+          if (!key || seen.has(key)) continue;
+          seen.add(key);
+          searchCandidates.push(variant);
+        }
+      }
       for (const query of searchCandidates) {
         searchInput.focus();
         setNativeValue(searchInput, query);
         await sleep(600); // let Mercari's own search debounce/results settle
-        const options = qa('[role="option"], li[role="option"], [role="menuitem"], [role="menuitemradio"], li');
-        const opt = bestScoringOption(options, query);
+        // BUG FIX 2026-08-20 (S-EXT-BATCH-12, P0, live-Chrome-confirmed): Mercari's real category
+        // search results are plain <button class="...CategoryDialog__ButtonWrapper"> rows with NO
+        // role attribute at all -- confirmed by inspecting the actual DOM nodes for "Women >
+        // Athletic apparel > Tracksuits" / "Men > Athletic apparel > Tracksuits" after a real
+        // search. `button` was missing from this selector, so this scan could never have found a
+        // real search result on this platform -- every prior "search input found but no result
+        // matched any segment" warning was, at least in part, this gap, not (only) a scoring miss.
+        // Safe to add broadly: bestScoringOptionWithGenderHint already requires a real shared word
+        // before a button is even considered a candidate, so unrelated buttons ("Cancel", "×",
+        // etc.) can't accidentally win.
+        const options = qa('[role="option"], li[role="option"], [role="menuitem"], [role="menuitemradio"], li, button');
+        const opt = bestScoringOptionWithGenderHint(options, query);
         if (opt) {
           opt.click();
           await sleep(300);
@@ -349,7 +445,9 @@
     let pickedAny = false;
     for (let level = 0; level < 4 && segmentPointer < segments.length; level++) {
       await sleep(250);
-      const options = qa('[role="option"], li[role="option"], [role="menuitem"], [role="menuitemradio"], li');
+      // S-EXT-BATCH-12: same `button` addition as the search-results scan above -- this tree-walk
+      // fallback shares the same real-DOM gap.
+      const options = qa('[role="option"], li[role="option"], [role="menuitem"], [role="menuitemradio"], li, button');
       let matched = false;
       for (let i = segmentPointer; i < segments.length; i++) {
         const opt = bestScoringOption(options, segments[i]);
@@ -579,7 +677,10 @@
     await tryFill('Title', item.title, (v) => fillText('Title', v));
     await tryFill('Description', padDescriptionForMercariMinimum(item.description, item), (v) => fillText('Description', v));
     // Category BEFORE brand -- Mercari's brand list is category-aware (see fillBrand comment).
-    await tryFill('Category', item.category, (v) => pickCategory(v));
+    // S-EXT-BATCH-12: pass categoryBreadcrumb alongside the clean category -- pickCategory uses
+    // the breadcrumb for less-specific fallback segments (and to derive the men's/women's gender
+    // tiebreak) after the clean leaf name's own simplified variants are tried first.
+    await tryFill('Category', item.category, (v) => pickCategory(v, item.categoryBreadcrumb));
     // 2026-08-18: brand/size/color now exist on Item and flow through getExtensionItems ->
     // popup.js's queue map. tryFill's own guard still skips silently on unset items;
     // category-type gating (apparel-only for size/color) is left to Mercari's own form,
