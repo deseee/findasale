@@ -109,7 +109,19 @@
       for (let hops = 0; hops < maxHops && node; hops++) {
         node = node.nextElementSibling;
         if (!node) break;
-        const control = (node.matches && node.matches(CONTROL_SELECTOR)) ? node : node.querySelector(CONTROL_SELECTOR);
+        // BUG FIX 2026-08-19 (S-EXT-BATCH-6, P0, live-Chrome-confirmed): CONTROL_SELECTOR's
+        // [data-test]/[role=...] alternatives are needed for real non-native pickers, but they can
+        // also match an OUTER wrapper div that merely CONTAINS a plain, directly-typeable real
+        // input several levels deeper -- confirmed live on Poshmark's Title field: the input sits
+        // inside <div data-test="dropdown">...<input placeholder="What are you selling?">...</div>,
+        // and querySelector(CONTROL_SELECTOR) returned that OUTER div (matches [data-test], appears
+        // first in document order) instead of the real <input> nested inside it. setNativeValue()
+        // then silently failed/threw against the div. Always prefer a real input/textarea/select if
+        // one exists anywhere inside the candidate node -- it's never wrong to type into the actual
+        // form element when one is present -- and only fall back to the broader role/data-test/
+        // button match when no real form element exists at all (the genuine custom-picker case).
+        const realField = (node.matches && node.matches('input, textarea, select')) ? node : node.querySelector('input, textarea, select');
+        const control = realField || ((node.matches && node.matches(CONTROL_SELECTOR)) ? node : node.querySelector(CONTROL_SELECTOR));
         if (control) return control;
       }
       return null;
@@ -258,14 +270,71 @@
   // run()/fillListing() below) -- a designer miss is a hard stop for this platform specifically,
   // unlike the soft-skip pattern used for optional fields on the other three new scripts.
   async function fillDesigner(value) {
-    const el = fieldByLabel('Designer') || fieldByLabel('Brand');
+    // BUG FIX 2026-08-19 (S-EXT-BATCH-7, P0, live-Chrome-confirmed, root-caused after Patrick's
+    // "Grailed still isn't filling out ANYTHING" report): the S-EXT-BATCH-5 version of this
+    // function was wrong in THREE independent ways, all confirmed live against a real Grailed
+    // sell form:
+    //   1. openerByLabel('Designer') matched the WRONG element entirely -- a "Shop Popular
+    //      Designers" PROMOTIONAL panel trigger (a curated shortcut widget of <a> links to
+    //      Grailed's public /designers/* catalog pages), not the real field.
+    //   2. The real field -- <input id="designer-autocomplete" placeholder="Designer (Select
+    //      category first)"> -- is DISABLED until Category is set. run() called fillDesigner()
+    //      BEFORE Category, so even targeting the right element would have hit a disabled input.
+    //      Fixed at the call site in run(): pickCategory() now runs first.
+    //   3. This field is NOT a standard React-controlled input -- the well-known "setNativeValue
+    //      prototype-setter + dispatch input AND change" trick (used everywhere else in this file)
+    //      actively BREAKS it: dispatching a 'change' event resets the typed value back to ''
+    //      (live-confirmed: value was 'Bape' immediately after setting, then '' ~100ms after a
+    //      'change' event fired). Dispatching ONLY 'input' (no 'change') is what keeps the typed
+    //      value in place -- live-confirmed working, twice, with real suggestion results
+    //      (typing "Bape" produced a real dropdown: Bape/Balenciaga/Eddie Bauer/Ted Baker/...).
+    // The suggestion list itself is a plain <ul>/<li> structure (Grailed's own
+    // "DesignersAndCollabs" module) with NO role attribute -- found by structural position
+    // (visible <li> elements whose bounding box sits just below the input), not by its CSS-module
+    // class name, consistent with this file's "never select by obfuscated class" rule.
+    const el = document.querySelector('input[placeholder*="designer" i]') || document.getElementById('designer-autocomplete');
     if (!el) return 'field_missing';
+    if (el.disabled) {
+      console.warn('[FAS Grailed] Designer field is disabled -- Category must be set first. This should not happen if run() ordering is correct; skipping Designer.');
+      return 'field_missing';
+    }
     el.focus();
-    setNativeValue(el, String(value));
-    await sleep(700); // UNVERIFIED -- suggestion-list settle time, best-effort guess
-    const match = optionElByText(value);
-    if (match) { match.click(); await sleep(200); return 'matched'; }
-    return 'no_match';
+    el.value = '';
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    await sleep(150);
+    el.value = String(value);
+    el.dispatchEvent(new Event('input', { bubbles: true })); // NEVER dispatch 'change' here -- see comment above.
+    await sleep(700); // suggestion list settle time, live-confirmed necessary
+    const r = el.getBoundingClientRect();
+    const lis = qa('li').filter((li) => {
+      if (!li.offsetParent && li.getBoundingClientRect().width === 0) return false;
+      const rr = li.getBoundingClientRect();
+      return rr.width > 0 && rr.height > 0 && rr.top >= r.bottom - 5 && rr.top < r.bottom + 300 && Math.abs(rr.left - r.left) < 40;
+    });
+    // BUG FIX 2026-08-19 (S-EXT-BATCH-7 follow-up, live-Chrome-confirmed): the suggestion <li>
+    // list reliably appeared on a page's FIRST interaction with this field, but repeat attempts
+    // in the same focus session (clear + retype, or blur + refocus + retype) did NOT reliably
+    // reproduce it again -- confirmed twice, including with a blur/refocus cycle in between.
+    // Root cause not fully isolated (possibly gated on a genuinely-trusted focus/keydown event
+    // this content script cannot produce). Given Patrick's report was "Designer blocks EVERYTHING
+    // else on the page", treating "no suggestion list found" as a hard 'no_match' (which aborts
+    // the whole listing, see run()) is worse than the alternative: the typed text IS correctly
+    // sitting in the real field either way (confirmed reliably, unlike the old bug where it never
+    // even reached the right element). So: a list found and clicked returns 'matched'; a list
+    // NOT found still returns 'typed_unconfirmed' rather than 'no_match' -- the organizer sees
+    // the typed designer name pre-filled and can click Grailed's own suggestion themselves if it
+    // didn't auto-select, instead of getting a fully-blocked, unfilled listing.
+    if (!lis.length) return 'typed_unconfirmed';
+    const opt = bestScoringOption(lis, value);
+    if (!opt) return 'typed_unconfirmed';
+    opt.click();
+    await sleep(300);
+    // Blur to encourage the widget to commit/close on an exact typed match, in case the click
+    // alone doesn't register a formal selection (UNVERIFIED whether Grailed's own submit
+    // validation needs more than matching text in the field -- flagged in the review overlay).
+    el.blur();
+    await sleep(150);
+    return 'matched';
   }
 
   // BUG FIX 2026-08-19 (S-EXT-BATCH-2, P1): live-confirmed against Patrick's real Grailed test --
@@ -452,7 +521,29 @@
     return !!(fieldByLabel('Title') || fieldByLabel('Designer') || fieldByLabel('Brand') || photoInput());
   }
 
-  function showReviewOverlay(item, index, total, photosOk, intlShipping) {
+  // BUG FIX 2026-08-19 (S-EXT-BATCH-5, P0, live-Chrome-confirmed): run()'s gate used to check
+  // looksLikeListingForm() exactly ONCE, immediately, with no retry -- live-confirmed on Mercari this fires too
+  // early: right after navigation the real form had ZERO fields (a bare ~2.5KB page shell, no
+  // <label>Title</label>, no file input), but a few seconds later (after the SPA finished
+  // hydrating) the exact same page had the real form fully rendered (~26KB, real <label>Title</label>
+  // + a real file input). content_scripts run at "document_idle" (initial HTML + sync scripts
+  // done), which is NOT the same as "the SPA has finished rendering" for a heavy client-rendered
+  // page -- checking once at that point is a race, not a reliable signal either way. Polls instead
+  // of checking once: up to ~8s, re-checking every ~400ms, bailing early if an interstitial shows
+  // up mid-wait. This can only ever DELAY a false "doesn't look fillable" message, never change
+  // success-path behavior for a page that was already ready in time.
+  async function waitForFormReady(maxWaitMs) {
+    const start = Date.now();
+    while (Date.now() - start < maxWaitMs) {
+      if (looksLikeInterstitial()) return 'interstitial';
+      if (looksLikeListingForm()) return 'ready';
+      await sleep(400);
+    }
+    return 'timeout';
+  }
+
+
+  function showReviewOverlay(item, index, total, photosOk, intlShipping, designerUnconfirmed) {
     const more = (index + 1) < total;
     // International shipping status line (BUG FIX 2026-08-19, S-EXT-BATCH, P1) -- see
     // disableInternationalShipping()'s comment. Three cases: regions found and turned off (safe,
@@ -470,6 +561,7 @@
       '<b>Measurements were left blank</b> &mdash; Grailed listings perform much better with them, add them yourself before publishing. Then click Grailed\'s own <b>List item</b> yourself &mdash; this extension never publishes for you.</div>' +
       intlLine +
       (!photosOk ? '<div style="color:#ffcf7a;margin-top:6px;font-size:12px">Photos may not have attached -- add them on this screen.</div>' : '') +
+      (designerUnconfirmed ? '<div style="color:#ffcf7a;margin-top:6px;font-size:12px">Designer was typed in but not confirmed -- click the correct suggestion in that field before publishing.</div>' : '') +
       button('fas-gr-next', more ? 'I posted — next item &#9654;' : 'I posted — done', true) +
       button('fas-gr-close', 'Close', false) +
       '<div style="margin-top:8px;font-size:11px;color:#9fb6a8">Item ' + (index + 1) + ' of ' + total + '</div>');
@@ -558,7 +650,9 @@
     await tryFill('Description', item.description, (v) => fillText('Description', v));
     // pickMarketTier() call removed (BUG FIX 2026-08-19, S-EXT-BATCH-2) -- see pickCategory's own
     // comment above; there is no separate Market-tier field on the real form to fill.
-    await tryFill('Category', item.category, (v) => pickCategory(v));
+    // Category is now picked BEFORE fillDesigner() in run() -- see BUG FIX 2026-08-19
+    // (S-EXT-BATCH-7) comment there. Not called again here to avoid double-clicking the
+    // picker a second time.
     // 2026-08-18: color/size now exist on Item and flow through getExtensionItems ->
     // popup.js's queue map. tryFill's own guard still skips silently on unset items.
     // BUG FIX 2026-08-19 (S-EXT-BATCH-2, P1): Color and Condition are both real dropdowns
@@ -581,22 +675,47 @@
   }
 
   async function run(item, index, total) {
-    if (looksLikeInterstitial()) {
+    // BUG FIX 2026-08-19 (S-EXT-BATCH-5, P0): was two separate immediate checks (interstitial,
+    // then listing-form) -- see waitForFormReady()'s comment (fas-mercari.js) for the live-
+    // confirmed SPA-hydration race this pattern is vulnerable to on every one of these 4 files.
+    // Merged into a single poll: waits for either signal to become true instead of judging the
+    // page's state from a single snapshot taken right as the content script loads.
+    const formState = await waitForFormReady(8000);
+    if (formState === 'interstitial') {
       overlayWarn('Grailed is showing a verification/security screen. FindA.Sale never attempts to solve this -- please complete it yourself, then reopen the extension to continue.' + button('fas-gr-close', 'Close', false));
       closeBtnHandler();
       return;
     }
-    if (!looksLikeListingForm()) {
-      overlayWarn('This doesn\'t look like a fillable Grailed listing form yet. If you\'re on the right page, this is an UNVERIFIED-selector miss -- please fill it in yourself.' + button('fas-gr-close', 'Close', false));
+    if (formState === 'timeout') {
+      overlayWarn('This doesn\'t look like a fillable Grailed listing form yet (checked repeatedly for several seconds). If you\'re on the right page, this is an UNVERIFIED-selector miss -- please fill it in yourself.' + button('fas-gr-close', 'Close', false));
       closeBtnHandler();
       return;
+    }
+    // BUG FIX 2026-08-19 (S-EXT-BATCH-7, P0, live-Chrome-confirmed): Category MUST run before
+    // Designer -- the real Designer input (<input id="designer-autocomplete">) is DISABLED until
+    // Category resolves (live-confirmed: disabled=true pre-Category, disabled=false with
+    // placeholder changing to "Search and add a Designer" immediately after Category is set).
+    // Previously Designer ran first every time, guaranteeing it always hit a disabled field.
+    if (item.category) {
+      const categoryOk = await pickCategory(item.category);
+      if (!categoryOk) console.warn('[FAS Grailed] Category "' + item.category + '" -- no match found in the picker; Designer field may remain disabled as a result.');
+    } else {
+      console.warn('[FAS Grailed] No category on this item -- Category picker skipped, which will likely leave the Designer field disabled too.');
     }
     // Designer is a hard gate for this platform: a genuine no-match means Grailed's own form
     // can't be submitted anyway (curated list, no free text), so this stops BEFORE filling
     // anything else rather than leaving a half-filled, unsubmittable listing behind.
+    let designerUnconfirmed = false;
     if (item.brand) {
       const designerResult = await fillDesigner(item.brand);
-      if (designerResult === 'no_match') { showDesignerNotFoundOverlay(item, index, total, item.brand); return; }
+      // BUG FIX 2026-08-19 (S-EXT-BATCH-7 follow-up): fillDesigner no longer returns 'no_match' --
+      // see its own comment. 'typed_unconfirmed' means the text landed in the real field but the
+      // suggestion click couldn't be confirmed; this is a soft flag surfaced on the review overlay
+      // below, not a hard stop that blocks the rest of the form.
+      if (designerResult === 'typed_unconfirmed') {
+        designerUnconfirmed = true;
+        console.warn('[FAS Grailed] Designer "' + item.brand + '" was typed into the field but the suggestion list could not be confirmed -- click the correct suggestion yourself before publishing.');
+      }
       if (designerResult === 'field_missing') console.warn('[FAS Grailed] Designer field not found (UNVERIFIED selector) -- continuing to fill the rest of the form, but Grailed will likely block submission without a Designer set.');
     } else {
       // brand now exists on Item (2026-08-18) but is still commonly unset -- this branch
@@ -611,7 +730,7 @@
       closeBtnHandler();
       return;
     }
-    showReviewOverlay(item, index, total, fillResult.photosOk, fillResult.intlShipping);
+    showReviewOverlay(item, index, total, fillResult.photosOk, fillResult.intlShipping, designerUnconfirmed);
   }
 
   async function start() {

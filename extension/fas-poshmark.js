@@ -120,7 +120,19 @@
       for (let hops = 0; hops < maxHops && node; hops++) {
         node = node.nextElementSibling;
         if (!node) break;
-        const control = (node.matches && node.matches(CONTROL_SELECTOR)) ? node : node.querySelector(CONTROL_SELECTOR);
+        // BUG FIX 2026-08-19 (S-EXT-BATCH-6, P0, live-Chrome-confirmed): CONTROL_SELECTOR's
+        // [data-test]/[role=...] alternatives are needed for real non-native pickers, but they can
+        // also match an OUTER wrapper div that merely CONTAINS a plain, directly-typeable real
+        // input several levels deeper -- confirmed live on Poshmark's Title field: the input sits
+        // inside <div data-test="dropdown">...<input placeholder="What are you selling?">...</div>,
+        // and querySelector(CONTROL_SELECTOR) returned that OUTER div (matches [data-test], appears
+        // first in document order) instead of the real <input> nested inside it. setNativeValue()
+        // then silently failed/threw against the div. Always prefer a real input/textarea/select if
+        // one exists anywhere inside the candidate node -- it's never wrong to type into the actual
+        // form element when one is present -- and only fall back to the broader role/data-test/
+        // button match when no real form element exists at all (the genuine custom-picker case).
+        const realField = (node.matches && node.matches('input, textarea, select')) ? node : node.querySelector('input, textarea, select');
+        const control = realField || ((node.matches && node.matches(CONTROL_SELECTOR)) ? node : node.querySelector(CONTROL_SELECTOR));
         if (control) return control;
       }
       return null;
@@ -349,6 +361,28 @@
     return !!(fieldByLabel('Title') && (fieldByLabel('Price') || fieldByLabel('Listing Price')));
   }
 
+  // BUG FIX 2026-08-19 (S-EXT-BATCH-5, P0, live-Chrome-confirmed): run()'s gate used to check
+  // looksLikeSellForm() exactly ONCE, immediately, with no retry -- live-confirmed on Mercari this fires too
+  // early: right after navigation the real form had ZERO fields (a bare ~2.5KB page shell, no
+  // <label>Title</label>, no file input), but a few seconds later (after the SPA finished
+  // hydrating) the exact same page had the real form fully rendered (~26KB, real <label>Title</label>
+  // + a real file input). content_scripts run at "document_idle" (initial HTML + sync scripts
+  // done), which is NOT the same as "the SPA has finished rendering" for a heavy client-rendered
+  // page -- checking once at that point is a race, not a reliable signal either way. Polls instead
+  // of checking once: up to ~8s, re-checking every ~400ms, bailing early if an interstitial shows
+  // up mid-wait. This can only ever DELAY a false "doesn't look fillable" message, never change
+  // success-path behavior for a page that was already ready in time.
+  async function waitForFormReady(maxWaitMs) {
+    const start = Date.now();
+    while (Date.now() - start < maxWaitMs) {
+      if (looksLikeInterstitial()) return 'interstitial';
+      if (looksLikeSellForm()) return 'ready';
+      await sleep(400);
+    }
+    return 'timeout';
+  }
+
+
   // Best-effort: flags the "recent app login" caveat from Poshmark's own help docs if the form
   // doesn't look filled-out-able at all (no Title field found even though we're on a poshmark.com
   // page that isn't an obvious interstitial) -- informational only, never blocks anything else.
@@ -415,9 +449,18 @@
     // found, falling back to a generic UNVERIFIED-selector warning otherwise. Selector accuracy
     // itself is still CODE-ONLY/UNTESTED (file header) -- this fixes the logic bug, not the DOM
     // selectors; live Chrome QA is still needed to confirm they match Poshmark's real DOM.
-    if (!looksLikeSellForm()) {
+    // BUG FIX 2026-08-19 (S-EXT-BATCH-5, P0): was a single immediate looksLikeSellForm() check --
+    // see waitForFormReady()'s comment (fas-mercari.js) for the live-confirmed SPA-hydration race
+    // this same pattern is vulnerable to on every one of these 4 files.
+    const formState = await waitForFormReady(8000);
+    if (formState === 'interstitial') {
+      overlayWarn('Poshmark is showing a verification/security screen. FindA.Sale never attempts to solve this -- please complete it yourself, then reopen the extension to continue.' + button('fas-posh-close', 'Close', false));
+      closeBtnHandler();
+      return;
+    }
+    if (formState === 'timeout') {
       if (maybeShowAppLoginHint()) return;
-      overlayWarn('This doesn\'t look like a fillable Poshmark listing form yet. If you\'re on the right page, this is an UNVERIFIED-selector miss -- please fill it in yourself.' + button('fas-posh-close', 'Close', false));
+      overlayWarn('This doesn\'t look like a fillable Poshmark listing form yet (checked repeatedly for several seconds). If you\'re on the right page, this is an UNVERIFIED-selector miss -- please fill it in yourself.' + button('fas-posh-close', 'Close', false));
       closeBtnHandler();
       return;
     }

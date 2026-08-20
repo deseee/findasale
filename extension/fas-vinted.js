@@ -109,7 +109,19 @@
       for (let hops = 0; hops < maxHops && node; hops++) {
         node = node.nextElementSibling;
         if (!node) break;
-        const control = (node.matches && node.matches(CONTROL_SELECTOR)) ? node : node.querySelector(CONTROL_SELECTOR);
+        // BUG FIX 2026-08-19 (S-EXT-BATCH-6, P0, live-Chrome-confirmed): CONTROL_SELECTOR's
+        // [data-test]/[role=...] alternatives are needed for real non-native pickers, but they can
+        // also match an OUTER wrapper div that merely CONTAINS a plain, directly-typeable real
+        // input several levels deeper -- confirmed live on Poshmark's Title field: the input sits
+        // inside <div data-test="dropdown">...<input placeholder="What are you selling?">...</div>,
+        // and querySelector(CONTROL_SELECTOR) returned that OUTER div (matches [data-test], appears
+        // first in document order) instead of the real <input> nested inside it. setNativeValue()
+        // then silently failed/threw against the div. Always prefer a real input/textarea/select if
+        // one exists anywhere inside the candidate node -- it's never wrong to type into the actual
+        // form element when one is present -- and only fall back to the broader role/data-test/
+        // button match when no real form element exists at all (the genuine custom-picker case).
+        const realField = (node.matches && node.matches('input, textarea, select')) ? node : node.querySelector('input, textarea, select');
+        const control = realField || ((node.matches && node.matches(CONTROL_SELECTOR)) ? node : node.querySelector(CONTROL_SELECTOR));
         if (control) return control;
       }
       return null;
@@ -258,8 +270,16 @@
   async function pickFromPanel(fieldId, labelText, value) {
     const opener = openerByLabel(labelText) || document.getElementById(fieldId);
     if (!opener) return false;
-    opener.click();
-    await sleep(400);
+    // BUG FIX 2026-08-19 (S-EXT-BATCH-6, P0, live-Chrome-confirmed): pickCategory() calls
+    // pickFromPanel once PER segment attempt against the SAME field -- the old unconditional
+    // opener.click() here meant the second call could TOGGLE an already-open panel CLOSED instead
+    // of leaving it open, silently breaking every attempt after the first. Only click to open if
+    // the panel isn't already open for this field.
+    let panelAlready = findOpenPanel(fieldId);
+    if (!panelAlready) {
+      opener.click();
+      await sleep(400);
+    }
     // BUG FIX 2026-08-19 (S-EXT-BATCH-4, P0, live-Chrome-confirmed): the search input MUST be looked
     // up scoped to the just-opened panel, not page-wide. Vinted's site nav bar has its own unrelated
     // input[data-testid="search-text--input"] (id="search_text") that a page-wide selector also
@@ -282,7 +302,20 @@
     if (searchInput) {
       searchInput.focus();
       setNativeValue(searchInput, String(value));
-      await sleep(600);
+      // BUG FIX 2026-08-19 (S-EXT-BATCH-7, P1, live-Chrome-confirmed): a fixed 600ms sleep here was
+      // sometimes NOT enough for Vinted's search debounce to actually render results -- live-
+      // confirmed: calling pickCategory('Men:Clothing:Activewear:Shorts') against a real page (the
+      // exact category from Patrick's own screenshot) returned false (no match) on the first try,
+      // but a follow-up inspection moments later showed the SAME panel now correctly containing a
+      // "Shorts" leaf under "Men > Clothing > Activewear" -- the real results simply hadn't rendered
+      // yet at the 600ms mark. Polls for a non-empty leaf list instead of a single blind wait, up to
+      // ~1.2s total (300ms x 4) -- deliberately short and NEVER re-types/re-searches mid-poll (only
+      // reads the DOM), since retyping/resubmitting queries in a loop is what caused a real tab
+      // freeze earlier (see pickCategory's own comment on the 2-candidate cap).
+      for (let i = 0; i < 4; i++) {
+        await sleep(300);
+        if (leafOptionsIn(panel).length > 1) break; // >1 excludes the lone placeholder/heading leaf
+      }
     }
     const leaves = leafOptionsIn(panel);
     const opt = bestScoringOption(leaves, value);
@@ -365,10 +398,22 @@
     // Try the shared panel picker first with the most-specific segment (Vinted's "Suggested" search
     // results are full resolved leaf paths, e.g. "Shorts" -> Men > Clothing > Activewear, live-
     // confirmed to fully select in one shot) before falling back to the older segmented search below.
+    // BUG FIX 2026-08-19 (S-EXT-BATCH-6, P1, live-Chrome-confirmed): the old version tried EVERY
+    // reversed segment plus the full string (up to 5+ queries for a deep category path), typing
+    // each into Vinted's real live search sequentially -- live-confirmed this can freeze the tab
+    // (a `CDP Runtime.evaluate` timeout was hit live typing two nonsense/no-match queries back to
+    // back; Vinted's search appears to do something expensive on a query that returns nothing).
+    // Capped to the 2 most useful candidates -- the most-specific (last) segment, which is what
+    // actually matches a real leaf category, and the full string as a single fallback -- both
+    // meaningfully distinct from broad, unlikely-to-match middle segments.
     const quickSegments = categoryText.split(':').map((s) => s.trim()).filter(Boolean);
-    for (const seg of [...quickSegments.slice().reverse(), categoryText]) {
+    const quickCandidates = [];
+    if (quickSegments.length) quickCandidates.push(quickSegments[quickSegments.length - 1]);
+    if (categoryText && quickCandidates.indexOf(categoryText) === -1) quickCandidates.push(categoryText);
+    for (const seg of quickCandidates) {
       if (!seg) continue;
       if (await pickFromPanel('category', 'Category', seg)) return true;
+      await sleep(300); // settle before trying the next candidate -- avoid overlapping search requests
     }
     const opener = openerByLabel('Category');
     if (!opener) return false;
@@ -574,6 +619,28 @@
     return !!(fieldByLabel('Title') || fieldByLabel('Description') || photoInput());
   }
 
+  // BUG FIX 2026-08-19 (S-EXT-BATCH-5, P0, live-Chrome-confirmed): run()'s gate used to check
+  // looksLikeListingForm() exactly ONCE, immediately, with no retry -- live-confirmed on Mercari this fires too
+  // early: right after navigation the real form had ZERO fields (a bare ~2.5KB page shell, no
+  // <label>Title</label>, no file input), but a few seconds later (after the SPA finished
+  // hydrating) the exact same page had the real form fully rendered (~26KB, real <label>Title</label>
+  // + a real file input). content_scripts run at "document_idle" (initial HTML + sync scripts
+  // done), which is NOT the same as "the SPA has finished rendering" for a heavy client-rendered
+  // page -- checking once at that point is a race, not a reliable signal either way. Polls instead
+  // of checking once: up to ~8s, re-checking every ~400ms, bailing early if an interstitial shows
+  // up mid-wait. This can only ever DELAY a false "doesn't look fillable" message, never change
+  // success-path behavior for a page that was already ready in time.
+  async function waitForFormReady(maxWaitMs) {
+    const start = Date.now();
+    while (Date.now() - start < maxWaitMs) {
+      if (looksLikeInterstitial()) return 'interstitial';
+      if (looksLikeListingForm()) return 'ready';
+      await sleep(400);
+    }
+    return 'timeout';
+  }
+
+
   function showReviewOverlay(item, index, total, photosOk, warnings) {
     const more = (index + 1) < total;
     // BUG FIX 2026-08-19 (S-EXT-BATCH, P1): render every collected fillListing() warning
@@ -637,13 +704,19 @@
   }
 
   async function run(item, index, total) {
-    if (looksLikeInterstitial()) {
+    // BUG FIX 2026-08-19 (S-EXT-BATCH-5, P0): was two separate immediate checks (interstitial,
+    // then listing-form) -- see waitForFormReady()'s comment (fas-mercari.js) for the live-
+    // confirmed SPA-hydration race this pattern is vulnerable to on every one of these 4 files.
+    // Merged into a single poll: waits for either signal to become true instead of judging the
+    // page's state from a single snapshot taken right as the content script loads.
+    const formState = await waitForFormReady(8000);
+    if (formState === 'interstitial') {
       overlayWarn('Vinted is showing a verification/security screen. FindA.Sale never attempts to solve this -- please complete it yourself, then reopen the extension to continue.' + button('fas-vin-close', 'Close', false));
       closeBtnHandler();
       return;
     }
-    if (!looksLikeListingForm()) {
-      overlayWarn('This doesn\'t look like a fillable Vinted listing form yet. If you\'re on the right page, this is an UNVERIFIED-selector miss -- please fill it in yourself.' + button('fas-vin-close', 'Close', false));
+    if (formState === 'timeout') {
+      overlayWarn('This doesn\'t look like a fillable Vinted listing form yet (checked repeatedly for several seconds). If you\'re on the right page, this is an UNVERIFIED-selector miss -- please fill it in yourself.' + button('fas-vin-close', 'Close', false));
       closeBtnHandler();
       return;
     }
