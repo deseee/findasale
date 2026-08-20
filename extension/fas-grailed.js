@@ -43,10 +43,21 @@
     const signals = [
       'verify you are human', "verify you're human", 'confirm you are not a robot',
       'unusual activity', 'suspicious activity', "we need to verify it's you",
-      'verify your identity', 'security check', 'complete the challenge',
-      'enter the code we sent', 'two-factor', 'one-time code', 'checkpoint'
+      'complete the challenge', 'enter the code we sent', 'checkpoint'
     ];
-    return signals.some((s) => lower.indexOf(s) !== -1);
+    if (signals.some((s) => lower.indexOf(s) !== -1)) return true;
+    // BUG FIX 2026-08-19 (S-EXT-BATCH-2, P1): "security check", "verify your identity",
+    // "two-factor", "one-time code" are common AMBIENT copy on real e-commerce pages -- account
+    // trust/safety banners, footer links, 2FA settings mentions -- not exclusive to an actual
+    // lockout screen. Live-confirmed false positive 2026-08-19 on Mercari's identical shared
+    // implementation (a normal welcome modal, no real verification screen present) -- applied here
+    // preemptively since this file copies the exact same pattern. Treat these four as WEAK
+    // signals -- only count them if looksLikeListingForm() is false, i.e. we're not already
+    // on the real fillable form -- a present, fillable form is strong countervailing evidence
+    // against a genuine lockout state.
+    const weakSignals = ['security check', 'verify your identity', 'two-factor', 'one-time code'];
+    if (weakSignals.some((s) => lower.indexOf(s) !== -1) && !looksLikeListingForm()) return true;
+    return false;
   }
 
   let bar;
@@ -69,6 +80,61 @@
   }
   function closeBtnHandler() { const c = document.getElementById('fas-gr-close'); if (c) c.onclick = () => bar && bar.remove(); }
 
+  // BUG FIX 2026-08-19 (S-EXT-BATCH-2, P1): fieldByLabel/openerByLabel below only recognize a
+  // real <label> tag (for=/wrapping) or an aria-label attribute. Live-confirmed 2026-08-19
+  // (Patrick's real Grailed test): Item Name/Color/Condition/Description/Category all failed to
+  // fill even though the page visibly shows exactly those words as headings right above each
+  // field -- the real form uses plain styled text (a div/span/h-tag) as the visual "label", not a
+  // semantic <label> element, so the label-tag scan above finds nothing to attach to. This adds
+  // one more fallback tier, tried only after every existing check misses: find a short,
+  // control-free heading-like element whose own text matches (substring, same fuzzy philosophy as
+  // the rest of this function, capped at 80 chars so it can't grab an unrelated paragraph), then
+  // walk forward through its following siblings for the first real form control. Bounded to a
+  // handful of hops so a miss can't run away scanning the whole page.
+  // Control selector used throughout nearestControlAfter -- BUG FIX 2026-08-19 (S-EXT-BATCH-3,
+  // P0) added `[data-test]` and `div[tabindex]`. Live-confirmed on Poshmark's real create-listing
+  // page (direct DOM inspection via a connected Chrome session, not a guess): Category/Subcategory/
+  // Size/Condition/Color are plain, non-semantic `<div>`s with NO role, NO tabindex, and NOT a
+  // native `<select>` -- the only thing distinguishing them at all is a `data-test="dropdown"` /
+  // `data-test="dropdown-container"` / `data-test="size"` attribute (Poshmark's own real
+  // test-automation hook, a structural anchor, not an obfuscated utility class -- consistent with
+  // this file's "never select by CSS class" rule). Without this, nearestControlAfter had no way to
+  // recognize these controls as controls at all.
+  const CONTROL_SELECTOR = 'input, textarea, select, [role="combobox"], [role="button"], [role="switch"], [data-test], div[tabindex], button';
+  function nearestControlAfter(labelText) {
+    const want = norm(labelText);
+    const headingCandidates = qa('label, div, span, p, h1, h2, h3, h4, h5, legend');
+    function searchFollowingSiblings(startEl, maxHops) {
+      let node = startEl;
+      for (let hops = 0; hops < maxHops && node; hops++) {
+        node = node.nextElementSibling;
+        if (!node) break;
+        const control = (node.matches && node.matches(CONTROL_SELECTOR)) ? node : node.querySelector(CONTROL_SELECTOR);
+        if (control) return control;
+      }
+      return null;
+    }
+    for (const el of headingCandidates) {
+      const txt = norm(el.textContent);
+      if (!txt || txt.length > 80 || txt.indexOf(want) === -1) continue;
+      if (el.querySelector(CONTROL_SELECTOR)) continue;
+      // Try siblings of the heading itself first (flat-row layouts).
+      let control = searchFollowingSiblings(el, 6);
+      if (control) return control;
+      // BUG FIX 2026-08-19 (S-EXT-BATCH-3, P0): live-confirmed real Poshmark structure is a
+      // two-COLUMN layout (`common ancestor 2 levels up, heading's own parent is the "label
+      // column", the control lives in a SIBLING "input column" at the PARENT level -- confirmed by
+      // walking the live DOM tree directly) -- not a sibling of the heading itself at all. Walk up
+      // a few ancestor levels and try each ancestor's own following siblings too.
+      let ancestor = el.parentElement;
+      for (let up = 0; up < 3 && ancestor; up++) {
+        control = searchFollowingSiblings(ancestor, 3);
+        if (control) return control;
+        ancestor = ancestor.parentElement;
+      }
+    }
+    return null;
+  }
   function fieldByLabel(labelText) {
     const want = norm(labelText);
     const labels = qa('label');
@@ -81,13 +147,19 @@
         if (inner) return inner;
       }
     }
-    return document.querySelector('input[aria-label="' + labelText + '"], textarea[aria-label="' + labelText + '"], input[placeholder="' + labelText + '"]');
+    const byAttr = document.querySelector('input[aria-label="' + labelText + '"], textarea[aria-label="' + labelText + '"], input[placeholder="' + labelText + '"]');
+    if (byAttr) return byAttr;
+    return nearestControlAfter(labelText);
   }
   function openerByLabel(labelText) {
     const want = norm(labelText);
     const direct = document.querySelector('[aria-label="' + labelText + '"]');
     if (direct) return direct;
-    const candidates = qa('[role="combobox"], [role="button"], button, select, div[tabindex]');
+    // Added [role="switch"] (BUG FIX 2026-08-19, S-EXT-BATCH-2, P1) -- toggle-switch semantics are
+    // common on modern SPA forms (e.g. Grailed's international-shipping region toggles) and were
+    // entirely absent from this candidate list before, a likely contributor to those toggles never
+    // being found at all.
+    const candidates = qa('[role="combobox"], [role="button"], [role="switch"], button, select, div[tabindex]');
     const hit = candidates.find((c) => norm(c.getAttribute('aria-label') || c.textContent).indexOf(want) !== -1 && norm(c.textContent).length < 80);
     if (hit) return hit;
     const labels = qa('label');
@@ -95,12 +167,12 @@
       if (norm(lab.textContent).indexOf(want) !== -1) {
         const forId = lab.getAttribute('for');
         if (forId) { const byId = document.getElementById(forId); if (byId) return byId; }
-        const inner = lab.querySelector('button, [role="button"], select, [role="combobox"], div[tabindex]');
+        const inner = lab.querySelector('button, [role="button"], [role="switch"], select, [role="combobox"], div[tabindex]');
         if (inner) return inner;
         return lab;
       }
     }
-    return null;
+    return nearestControlAfter(labelText);
   }
   function optionElByText(text) {
     const want = norm(text);
@@ -151,28 +223,71 @@
     return 'no_match';
   }
 
-  // Category: "Market" tier (Grails / Hype / Sartorial / Core) + menswear/womenswear split, then
-  // item-type category. FindA.Sale's item.category is a flat string with no reliable mapping to
-  // Grailed's Market tiers -- defaults to "Core" (most neutral) per this dispatch's explicit
-  // instruction, and logs the default so it's visible for review. The menswear/womenswear split
-  // has NO source data on FindA.Sale's Item model at all (confirmed against schema.prisma) -- left
-  // entirely for the organizer, never guessed.
-  async function pickMarketTier() {
-    const opener = openerByLabel('Market');
-    if (!opener) { console.warn('[FAS Grailed] Market tier field not found (UNVERIFIED selector) -- left for the organizer.'); return false; }
+  // BUG FIX 2026-08-19 (S-EXT-BATCH-2, P1): live-confirmed against Patrick's real Grailed test --
+  // there is no separate "Market" tier field on the actual form at all (the earlier "Grails / Hype
+  // / Sartorial / Core" concept doesn't correspond to anything on-screen); the real field is a
+  // single combined "Department / Category" control. pickMarketTier() and its call site have been
+  // removed rather than left as permanently-dead-on-arrival code -- it was never going to find a
+  // field that doesn't exist.
+  //
+  // Shared select-aware fill, mirroring fillSize's existing dual-path pattern: try a native
+  // <select> first (set value directly via matching <option> text -- no click/open needed, and
+  // critically, clicking a native select programmatically does NOT reliably expose its options as
+  // separately queryable DOM nodes, so the click+optionElByText path below would silently do
+  // nothing against a real native select). Falls back to the custom-combobox click+optionElByText
+  // pattern for non-native pickers. Live-confirmed necessary 2026-08-19: Color ("Select a Color")
+  // and Condition ("Item Condition") were being filled with fillText() (typing free text into a
+  // dropdown) before this fix, which cannot select an option in either a native select or a custom
+  // combobox.
+  async function fillSelectLike(labelText, value) {
+    const native = fieldByLabel(labelText);
+    if (native && native.tagName === 'SELECT') {
+      const opt = Array.from(native.options).find((o) => norm(o.textContent) === norm(value) || norm(o.textContent).indexOf(norm(value)) !== -1);
+      if (!opt) return false;
+      native.value = opt.value;
+      native.dispatchEvent(new Event('change', { bubbles: true }));
+      return true;
+    }
+    const opener = openerByLabel(labelText);
+    if (!opener) return false;
+    if (opener.tagName === 'SELECT') {
+      const opt = Array.from(opener.options).find((o) => norm(o.textContent) === norm(value) || norm(o.textContent).indexOf(norm(value)) !== -1);
+      if (!opt) return false;
+      opener.value = opt.value;
+      opener.dispatchEvent(new Event('change', { bubbles: true }));
+      return true;
+    }
     opener.click();
     await sleep(350);
-    const opt = optionElByText('Core');
-    if (!opt) { console.warn('[FAS Grailed] Defaulted Market tier to "Core" but couldn\'t find that option in the picker (UNVERIFIED) -- left for the organizer.'); return false; }
+    const opt = optionElByText(value);
+    if (!opt) return false;
     opt.click();
     await sleep(200);
-    console.warn('[FAS Grailed] Market tier defaulted to "Core" (no clean mapping from FindA.Sale\'s category data) -- review and change if a different tier fits better.');
     return true;
   }
+
+  // Category: "Department / Category" is ONE combined control on the real form (see the BUG FIX
+  // comment above) -- openerByLabel('Category') matches it via substring ("category" is contained
+  // in "department / category") plus the nearestControlAfter fallback. Native-select-aware first
+  // (see fillSelectLike comment), same click+optionElByText fallback otherwise. FindA.Sale's
+  // item.category is a flat, potentially multi-segment string with no reliable 1:1 mapping to
+  // Grailed's own category depth -- tries the full string first, then progressively shorter
+  // trailing segments (most-specific-first) if that doesn't match anything, same spirit as the
+  // Mercari segmented picker but simpler since Grailed's picker structure is still unconfirmed.
   async function pickCategory(categoryText) {
     if (!categoryText) return false;
     const opener = openerByLabel('Category');
     if (!opener) return false;
+    if (opener.tagName === 'SELECT') {
+      const segments = categoryText.split(':').map((s) => s.trim()).filter(Boolean);
+      const candidates = [categoryText, ...segments.slice().reverse()];
+      for (const candidate of candidates) {
+        const opt = Array.from(opener.options).find((o) => norm(o.textContent) === norm(candidate) || norm(o.textContent).indexOf(norm(candidate)) !== -1);
+        if (opt) { opener.value = opt.value; opener.dispatchEvent(new Event('change', { bubbles: true })); return true; }
+      }
+      console.warn('[FAS Grailed] Category "' + categoryText + '" -- no option matched the native select (UNVERIFIED taxonomy) -- left for the organizer to choose.');
+      return false;
+    }
     opener.click();
     await sleep(400);
     let pickedAny = false;
@@ -188,22 +303,14 @@
     return pickedAny;
   }
 
-  // Size: exact input type unconfirmed -- tries a labeled select-like control first, falls back
-  // to a plain text field. Logs a warning rather than crashing if neither is found.
+  // Size: now routed through the shared fillSelectLike (BUG FIX 2026-08-19, S-EXT-BATCH-2) --
+  // falls back to a plain text field only if neither a native select nor a combobox opener is
+  // found for the label, matching the original intent of this function.
   async function fillSize(value) {
+    const ok = await fillSelectLike('Size', value);
+    if (ok) return true;
     const native = fieldByLabel('Size');
-    if (native && native.tagName === 'SELECT') {
-      const opt = Array.from(native.options).find((o) => norm(o.textContent) === norm(value) || norm(o.textContent).indexOf(norm(value)) !== -1);
-      if (opt) { native.value = opt.value; native.dispatchEvent(new Event('change', { bubbles: true })); return true; }
-    }
     if (native) { setNativeValue(native, String(value)); return true; }
-    const opener = openerByLabel('Size');
-    if (opener) {
-      opener.click();
-      await sleep(350);
-      const opt = optionElByText(value);
-      if (opt) { opt.click(); await sleep(200); return true; }
-    }
     return false;
   }
 
@@ -345,18 +452,26 @@
 
   async function fillListing(item) {
     overlay('<b>FindA.Sale</b> - filling the Grailed listing form...');
-    await tryFill('Title', item.title, (v) => fillText('Title', v));
+    // BUG FIX 2026-08-19 (S-EXT-BATCH-2, P1): live-confirmed real field label is "Item Name", not
+    // "Title" -- fieldByLabel('Title') alone matched nothing on Patrick's real test. Tries both;
+    // "Title" first in case a different Grailed page variant still uses it, "Item Name" as the
+    // confirmed real fallback.
+    await tryFill('Title', item.title, (v) => fillText('Title', v) || fillText('Item Name', v));
     await tryFill('Description', item.description, (v) => fillText('Description', v));
-    await pickMarketTier();
+    // pickMarketTier() call removed (BUG FIX 2026-08-19, S-EXT-BATCH-2) -- see pickCategory's own
+    // comment above; there is no separate Market-tier field on the real form to fill.
     await tryFill('Category', item.category, (v) => pickCategory(v));
     // 2026-08-18: color/size now exist on Item and flow through getExtensionItems ->
     // popup.js's queue map. tryFill's own guard still skips silently on unset items.
-    await tryFill('Color', item.color, (v) => fillText('Color', v));
+    // BUG FIX 2026-08-19 (S-EXT-BATCH-2, P1): Color and Condition are both real dropdowns
+    // ("Select a Color" / "Item Condition") -- routed through fillSelectLike instead of fillText,
+    // which was typing free text into a picker that can't accept it.
+    await tryFill('Color', item.color, (v) => fillSelectLike('Color', v));
     await tryFill('Size', item.size, (v) => fillSize(v));
     // Measurements deliberately NEVER filled -- see file header. No call to any measurements
     // field exists in this function on purpose.
     const conditionLabel = mapGrailedCondition(item.condition);
-    await tryFill('Condition', conditionLabel, (v) => fillText('Condition', v) || false);
+    await tryFill('Condition', conditionLabel, (v) => fillSelectLike('Condition', v));
     if (item.price != null && isFinite(Number(item.price))) {
       await tryFill('Price', item.price, (v) => fillText('Price', String(Math.max(1, Math.round(Number(v))))));
     }

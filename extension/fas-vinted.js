@@ -43,10 +43,21 @@
     const signals = [
       'verify you are human', "verify you're human", 'confirm you are not a robot',
       'unusual activity', 'suspicious activity', "we need to verify it's you",
-      'verify your identity', 'security check', 'complete the challenge',
-      'enter the code we sent', 'two-factor', 'one-time code', 'checkpoint'
+      'complete the challenge', 'enter the code we sent', 'checkpoint'
     ];
-    return signals.some((s) => lower.indexOf(s) !== -1);
+    if (signals.some((s) => lower.indexOf(s) !== -1)) return true;
+    // BUG FIX 2026-08-19 (S-EXT-BATCH-2, P1): "security check", "verify your identity",
+    // "two-factor", "one-time code" are common AMBIENT copy on real e-commerce pages -- account
+    // trust/safety banners, footer links, 2FA settings mentions -- not exclusive to an actual
+    // lockout screen. Live-confirmed false positive 2026-08-19 on Mercari's identical shared
+    // implementation (a normal welcome modal, no real verification screen present) -- applied here
+    // preemptively since this file copies the exact same pattern. Treat these four as WEAK
+    // signals -- only count them if looksLikeListingForm() is false, i.e. we're not already
+    // on the real fillable form -- a present, fillable form is strong countervailing evidence
+    // against a genuine lockout state.
+    const weakSignals = ['security check', 'verify your identity', 'two-factor', 'one-time code'];
+    if (weakSignals.some((s) => lower.indexOf(s) !== -1) && !looksLikeListingForm()) return true;
+    return false;
   }
 
   let bar;
@@ -69,6 +80,61 @@
   }
   function closeBtnHandler() { const c = document.getElementById('fas-vin-close'); if (c) c.onclick = () => bar && bar.remove(); }
 
+  // BUG FIX 2026-08-19 (S-EXT-BATCH-2, P1): fieldByLabel/openerByLabel below only recognize a
+  // real <label> tag (for=/wrapping) or an aria-label attribute. Live-confirmed 2026-08-19
+  // (Patrick's real Grailed test): Item Name/Color/Condition/Description/Category all failed to
+  // fill even though the page visibly shows exactly those words as headings right above each
+  // field -- the real form uses plain styled text (a div/span/h-tag) as the visual "label", not a
+  // semantic <label> element, so the label-tag scan above finds nothing to attach to. This adds
+  // one more fallback tier, tried only after every existing check misses: find a short,
+  // control-free heading-like element whose own text matches (substring, same fuzzy philosophy as
+  // the rest of this function, capped at 80 chars so it can't grab an unrelated paragraph), then
+  // walk forward through its following siblings for the first real form control. Bounded to a
+  // handful of hops so a miss can't run away scanning the whole page.
+  // Control selector used throughout nearestControlAfter -- BUG FIX 2026-08-19 (S-EXT-BATCH-3,
+  // P0) added `[data-test]` and `div[tabindex]`. Live-confirmed on Poshmark's real create-listing
+  // page (direct DOM inspection via a connected Chrome session, not a guess): Category/Subcategory/
+  // Size/Condition/Color are plain, non-semantic `<div>`s with NO role, NO tabindex, and NOT a
+  // native `<select>` -- the only thing distinguishing them at all is a `data-test="dropdown"` /
+  // `data-test="dropdown-container"` / `data-test="size"` attribute (Poshmark's own real
+  // test-automation hook, a structural anchor, not an obfuscated utility class -- consistent with
+  // this file's "never select by CSS class" rule). Without this, nearestControlAfter had no way to
+  // recognize these controls as controls at all.
+  const CONTROL_SELECTOR = 'input, textarea, select, [role="combobox"], [role="button"], [role="switch"], [data-test], div[tabindex], button';
+  function nearestControlAfter(labelText) {
+    const want = norm(labelText);
+    const headingCandidates = qa('label, div, span, p, h1, h2, h3, h4, h5, legend');
+    function searchFollowingSiblings(startEl, maxHops) {
+      let node = startEl;
+      for (let hops = 0; hops < maxHops && node; hops++) {
+        node = node.nextElementSibling;
+        if (!node) break;
+        const control = (node.matches && node.matches(CONTROL_SELECTOR)) ? node : node.querySelector(CONTROL_SELECTOR);
+        if (control) return control;
+      }
+      return null;
+    }
+    for (const el of headingCandidates) {
+      const txt = norm(el.textContent);
+      if (!txt || txt.length > 80 || txt.indexOf(want) === -1) continue;
+      if (el.querySelector(CONTROL_SELECTOR)) continue;
+      // Try siblings of the heading itself first (flat-row layouts).
+      let control = searchFollowingSiblings(el, 6);
+      if (control) return control;
+      // BUG FIX 2026-08-19 (S-EXT-BATCH-3, P0): live-confirmed real Poshmark structure is a
+      // two-COLUMN layout (`common ancestor 2 levels up, heading's own parent is the "label
+      // column", the control lives in a SIBLING "input column" at the PARENT level -- confirmed by
+      // walking the live DOM tree directly) -- not a sibling of the heading itself at all. Walk up
+      // a few ancestor levels and try each ancestor's own following siblings too.
+      let ancestor = el.parentElement;
+      for (let up = 0; up < 3 && ancestor; up++) {
+        control = searchFollowingSiblings(ancestor, 3);
+        if (control) return control;
+        ancestor = ancestor.parentElement;
+      }
+    }
+    return null;
+  }
   function fieldByLabel(labelText) {
     const want = norm(labelText);
     const labels = qa('label');
@@ -81,13 +147,19 @@
         if (inner) return inner;
       }
     }
-    return document.querySelector('input[aria-label="' + labelText + '"], textarea[aria-label="' + labelText + '"], input[placeholder="' + labelText + '"]');
+    const byAttr = document.querySelector('input[aria-label="' + labelText + '"], textarea[aria-label="' + labelText + '"], input[placeholder="' + labelText + '"]');
+    if (byAttr) return byAttr;
+    return nearestControlAfter(labelText);
   }
   function openerByLabel(labelText) {
     const want = norm(labelText);
     const direct = document.querySelector('[aria-label="' + labelText + '"]');
     if (direct) return direct;
-    const candidates = qa('[role="combobox"], [role="button"], button, select, div[tabindex]');
+    // Added [role="switch"] (BUG FIX 2026-08-19, S-EXT-BATCH-2, P1) -- toggle-switch semantics are
+    // common on modern SPA forms (e.g. Grailed's international-shipping region toggles) and were
+    // entirely absent from this candidate list before, a likely contributor to those toggles never
+    // being found at all.
+    const candidates = qa('[role="combobox"], [role="button"], [role="switch"], button, select, div[tabindex]');
     const hit = candidates.find((c) => norm(c.getAttribute('aria-label') || c.textContent).indexOf(want) !== -1 && norm(c.textContent).length < 80);
     if (hit) return hit;
     const labels = qa('label');
@@ -95,12 +167,12 @@
       if (norm(lab.textContent).indexOf(want) !== -1) {
         const forId = lab.getAttribute('for');
         if (forId) { const byId = document.getElementById(forId); if (byId) return byId; }
-        const inner = lab.querySelector('button, [role="button"], select, [role="combobox"], div[tabindex]');
+        const inner = lab.querySelector('button, [role="button"], [role="switch"], select, [role="combobox"], div[tabindex]');
         if (inner) return inner;
         return lab;
       }
     }
-    return null;
+    return nearestControlAfter(labelText);
   }
   function optionElByText(text) {
     const want = norm(text);
@@ -229,12 +301,52 @@
 
   const VINTED_MIN_PRICE = 1, VINTED_MAX_PRICE = 1000; // platform-enforced range per this dispatch's spec
 
+  // Direct (non-descendant) text of an element -- BUG FIX 2026-08-19, S-EXT-BATCH-2, helper for
+  // clickableOptionByExactText below. Concatenates only this element's own Text-node children, so
+  // a big card wrapping several lines of nested markup doesn't get treated as one giant text blob.
+  function directText(el) {
+    let out = '';
+    for (const node of el.childNodes) {
+      if (node.nodeType === 3) out += node.textContent;
+    }
+    return norm(out);
+  }
+  // Find a clickable option (radio/card/button) by its OWN exact visible text, independent of any
+  // opener/dropdown structure -- for UI patterns that are persistently-visible selectable
+  // cards/tiles rather than a click-to-open popup. Walks up to the nearest clickable ancestor once
+  // the exact text is found (the text itself is often in an inner <span>/<div>, not the clickable
+  // element itself).
+  function clickableOptionByExactText(text) {
+    const want = norm(text);
+    for (const el of qa('*')) {
+      if (directText(el) === want) {
+        return el.closest('button, [role="radio"], [role="option"], [role="button"], label, div[tabindex]') || el;
+      }
+    }
+    return null;
+  }
+
   // Package size: required final step, determines shipping-label eligibility. FindA.Sale has no
   // package-size data today (no such field on Item -- confirmed against schema.prisma), so this
-  // always defaults to a reasonable middle tier and logs a loud warning either way, since even a
+  // always defaults to a reasonable tier and logs a loud warning either way, since even a
   // "successful" pick here is a real assumption per this dispatch's explicit instruction.
+  // BUG FIX 2026-08-19 (S-EXT-BATCH-2, P1): live-confirmed real UI is three persistently-visible
+  // selectable size cards under a "Select your package size" heading (Small/Medium/Large, each
+  // with its own descriptive sentence, "Medium" marked "Recommended" by Vinted itself) -- NOT a
+  // click-to-open dropdown with popup options the way this function originally assumed (which is
+  // why it was reporting "couldn't find that field automatically" every time). Now looks directly
+  // for the "Medium" card -- a real content-driven default (Vinted's own "Recommended" tag), not
+  // an arbitrary middle-of-whatever-list-appears index guess. Falls back to the old opener+popup
+  // path in case a different Vinted layout variant still uses one.
   async function fillPackageSize() {
-    const opener = openerByLabel('Package size') || openerByLabel('Parcel size');
+    const medium = clickableOptionByExactText('Medium');
+    if (medium) {
+      medium.click();
+      await sleep(200);
+      overlayWarn('Selected Vinted\'s own "Recommended" Medium package size (FindA.Sale has no real package-size data for this item) -- please confirm it before publishing.');
+      return true;
+    }
+    const opener = openerByLabel('Package size') || openerByLabel('Parcel size') || openerByLabel('Select your package size');
     if (!opener) {
       overlayWarn('Vinted requires a package size before you can publish -- FindA.Sale couldn\'t find that field automatically (UNVERIFIED selector). Please choose it yourself.');
       return false;
