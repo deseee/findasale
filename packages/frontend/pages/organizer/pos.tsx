@@ -1960,10 +1960,10 @@ export default function POSPage() {
       setPaymentLinkQr(res.data.qrCodeDataUrl); // base64 data URL
       setPaymentLinkAmount(amountForQr);
       setPaymentLinkStatus('waiting');
-    } catch (err) {
+    } catch (err: any) {
       console.error('[pos] QR generation error:', err);
       setPaymentLinkStatus('idle');
-      setErrorMessage('Failed to generate QR code');
+      setErrorMessage(err?.response?.data?.message || err?.response?.data?.error || err?.message || 'Failed to generate QR code');
     }
   };
 

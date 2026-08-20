@@ -78,24 +78,44 @@ export async function createPaymentLinkInternal(opts: {
   const feeRate = getPlatformFeeRate(subscriptionTier as SubscriptionTier);
   const platformFeeAmount = Math.round(amountCents * feeRate);
 
-  const genericProductId = process.env.STRIPE_GENERIC_ITEM_PRODUCT_ID;
-  const adHocPrice = await stripe().prices.create({
-    currency: 'usd',
-    unit_amount: amountCents,
-    ...(genericProductId
-      ? { product: genericProductId }
-      : {
-          product_data: {
-            name: `FindA.Sale: ${items.map(i => i.title).join(', ').slice(0, 200) || 'Item Sale'}`,
-          },
-        }),
-  });
-
   // Direct-charges migration (2026-08-08): staged-rollout routing decision.
+  // MOVED ABOVE price creation (bug fix, 2026-08-20, S-QR-DIRECT-CHARGE-PRICE-MISMATCH):
+  // a Stripe Price object lives in whichever account context it was created in, and
+  // paymentLinks.create() below is invoked in THAT same context via the
+  // { stripeAccount } request option. The price used to always be created on the
+  // PLATFORM account (no request option) while the Payment Link for Direct-charge
+  // organizers was then created on the CONNECTED account -- a cross-account reference
+  // Stripe rejects outright. Confirmed via Railway deploy logs: two live
+  // "StripeInvalidRequestError: No such price: 'price_...'" failures for organizer
+  // cmnxueoas0005tfv8brnc0kky (artifactmi@gmail.com) at 2026-08-20T17:30:55Z and
+  // 17:31:23Z, both surfaced to the organizer as the generic POS toast
+  // "Failed to generate QR code". Fix: compute useDirect first, create the Price with
+  // the same { stripeAccount } request option the Payment Link uses, and never
+  // reference the platform-side STRIPE_GENERIC_ITEM_PRODUCT_ID for a Direct-charge
+  // organizer (that product also only exists on the platform account) -- always fall
+  // back to inline product_data in that case, same as when no genericProductId is
+  // configured at all.
   const validConnectId = !!(stripeConnectId && stripeConnectId.length >= 21);
   const useDirect = validConnectId
     ? await shouldUseDirectCharge(organizerId, stripeConnectId!)
     : false;
+  const stripeRequestOptions = useDirect ? { stripeAccount: stripeConnectId! } : undefined;
+
+  const genericProductId = process.env.STRIPE_GENERIC_ITEM_PRODUCT_ID;
+  const adHocPrice = await stripe().prices.create(
+    {
+      currency: 'usd',
+      unit_amount: amountCents,
+      ...(genericProductId && !useDirect
+        ? { product: genericProductId }
+        : {
+            product_data: {
+              name: `FindA.Sale: ${items.map(i => i.title).join(', ').slice(0, 200) || 'Item Sale'}`,
+            },
+          }),
+    },
+    stripeRequestOptions
+  );
 
   const paymentLink = await stripe().paymentLinks.create(
     {
@@ -114,7 +134,7 @@ export async function createPaymentLinkInternal(opts: {
           ? ({ application_fee_amount: platformFeeAmount, transfer_data: { destination: stripeConnectId } } as any)
           : {}),
     },
-    useDirect ? { stripeAccount: stripeConnectId! } : undefined
+    stripeRequestOptions
   );
 
   const paymentLinkUrl = paymentLink.url;
