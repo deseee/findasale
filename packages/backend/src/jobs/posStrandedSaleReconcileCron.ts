@@ -4,6 +4,7 @@ import { cronGuard } from '../utils/cronGuard';
 import { getStripe } from '../utils/stripe';
 import { createNotification } from '../lib/notificationService';
 import { recordPosPaymentLinkSale } from '../services/posPaymentLinkRecorder';
+import { shouldUseDirectCharge } from '../services/stripeConnectService';
 import type { POSPaymentLink } from '@prisma/client';
 
 /**
@@ -66,7 +67,16 @@ const stripe = () => getStripe();
  */
 const reclaimExpiredPaymentLink = async (
   link: POSPaymentLink,
-  reasonLabel: string
+  reasonLabel: string,
+  // Direct-charge account-context fix (2026-08-20, S-QR-DIRECT-CHARGE-PRICE-MISMATCH
+  // follow-up): a Direct-charge organizer's Stripe Payment Link lives on their CONNECTED
+  // account, not the platform account -- the best-effort deactivate call below must be
+  // routed the same way the link was originally created, or Stripe rejects it with "No
+  // such payment link" (confirmed live in production for organizer
+  // cmnxueoas0005tfv8brnc0kky, 2026-08-20T18:16:07Z). Undefined = platform account
+  // (DESTINATION-charge / no-Connect links), matching every other call site's
+  // { stripeAccount } convention in this codebase.
+  stripeRequestOptions?: { stripeAccount: string }
 ): Promise<void> => {
   try {
     const { revertIds: revertedItemIds, affectedReservations } = await prisma.$transaction(async (tx) => {
@@ -139,7 +149,7 @@ const reclaimExpiredPaymentLink = async (
     // Best-effort Stripe-side deactivation -- non-fatal, mirrors
     // invoiceExpiryJob.ts's best-effort Checkout Session expire() call.
     try {
-      await stripe().paymentLinks.update(link.stripePaymentLinkId, { active: false });
+      await stripe().paymentLinks.update(link.stripePaymentLinkId, { active: false }, stripeRequestOptions);
     } catch (deactivateErr: any) {
       console.warn(`[pos-reconcile] Failed to deactivate Stripe payment link ${link.stripePaymentLinkId} (non-fatal):`, deactivateErr?.message ?? deactivateErr);
     }
@@ -183,6 +193,31 @@ export const reconcileStrandedPosSales = async (): Promise<void> => {
   console.log(`[pos-reconcile] Checking ${candidates.length} ACTIVE POS payment link(s) older than 10 min for stranded sales.`);
 
   for (const link of candidates) {
+    // Direct-charge account-context fix (2026-08-20): resolve which Stripe account this
+    // link's Payment Link actually lives on BEFORE any Stripe call below. Recomputes the
+    // same live-eligibility + allowlist check createPaymentLinkInternal ran at
+    // link-creation time -- POSPaymentLink has no persisted chargeType/stripeAccountId
+    // column of its own yet (see posPaymentLinkRecorder.ts's matching note; HoldInvoice
+    // got that treatment in the 2026-08-18 migration, POSPaymentLink did not -- flagged
+    // separately as a schema follow-up, not done here). Fails closed to undefined
+    // (platform account) on any lookup error, mirroring shouldUseDirectCharge's own
+    // fail-closed contract.
+    let linkStripeRequestOptions: { stripeAccount: string } | undefined;
+    try {
+      const linkOrganizer = await prisma.organizer.findUnique({
+        where: { id: link.organizerId },
+        select: { stripeConnectId: true },
+      });
+      if (linkOrganizer?.stripeConnectId) {
+        const linkUseDirect = await shouldUseDirectCharge(link.organizerId, linkOrganizer.stripeConnectId);
+        if (linkUseDirect) {
+          linkStripeRequestOptions = { stripeAccount: linkOrganizer.stripeConnectId };
+        }
+      }
+    } catch (routingErr: any) {
+      console.warn(`[pos-reconcile] Failed to resolve Stripe account context for link=${link.id} (falling back to platform account):`, routingErr?.message ?? routingErr);
+    }
+
     if (link.createdAt < staleRowCutoff) {
       // Stale-row-cutoff fix (2026-08-07): previously this branch only logged and
       // skipped -- it never reached the EXPIRED-flip logic below, so these rows sat
@@ -199,17 +234,21 @@ export const reconcileStrandedPosSales = async (): Promise<void> => {
       if (process.env.POS_PAYMENT_LINK_EXPIRY_RECLAIM_DISABLED !== '1') {
         await reclaimExpiredPaymentLink(
           link,
-          `exceeded ${STALE_ROW_CUTOFF_DAYS}d stale-row cutoff (createdAt=${link.createdAt.toISOString()}) without ever resolving`
+          `exceeded ${STALE_ROW_CUTOFF_DAYS}d stale-row cutoff (createdAt=${link.createdAt.toISOString()}) without ever resolving`,
+          linkStripeRequestOptions
         );
       }
       continue;
     }
 
     try {
-      const sessions = await stripe().checkout.sessions.list({
-        payment_link: link.stripePaymentLinkId,
-        limit: 5,
-      });
+      const sessions = await stripe().checkout.sessions.list(
+        {
+          payment_link: link.stripePaymentLinkId,
+          limit: 5,
+        },
+        linkStripeRequestOptions
+      );
 
       const paidSession = sessions.data.find(
         (s) => s.status === 'complete' && s.payment_status === 'paid'
@@ -230,7 +269,8 @@ export const reconcileStrandedPosSales = async (): Promise<void> => {
         ) {
           await reclaimExpiredPaymentLink(
             link,
-            `CHECKOUT_LINK payment link passed its own expiresAt (${linkExpiresAt.toISOString()}) with no paid Stripe session found`
+            `CHECKOUT_LINK payment link passed its own expiresAt (${linkExpiresAt.toISOString()}) with no paid Stripe session found`,
+            linkStripeRequestOptions
           );
         }
         continue;
