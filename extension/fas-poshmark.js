@@ -277,29 +277,77 @@
     return true;
   }
 
-  // Nested 3-level category picker (Department -> Category -> Subcategory). UNVERIFIED taxonomy
-  // -- FindA.Sale's item.category is a single flat string (eBay-style, see schema.prisma comment
-  // "eBay L1 category name"), not a Poshmark 3-tier path, so this clicks through each level by
-  // best-effort fuzzy text match against that one string rather than assuming a mapping table
-  // that would likely be wrong. Stops (does not guess further) as soon as a level has no
-  // confident match, leaving the remaining levels for the organizer.
+  // BUG FIX 2026-08-20 (S-EXT-BATCH-9, P0, live-Chrome-confirmed): the version below this comment
+  // replaces one that called optionElByText(categoryText) with the FULL, unsegmented, colon-
+  // delimited categoryText (e.g. "Clothing, Shoes & Accessories:men:men's Clothing:activewear:
+  // tracksuits & Sets") against Poshmark's real option list on every level -- that whole literal
+  // string (colons included) can never equal or substring-match any real Poshmark option text, so
+  // opt was always null on the very first iteration and Category silently stayed unset on every
+  // real item (live-confirmed: Category field still read "Select Category" after a full fill run
+  // that otherwise completed and reached the review overlay). This is the SAME class of bug already
+  // root-caused and fixed on fas-grailed.js's pickCategory this session -- ported the same fix here:
+  // split into segments, try every not-yet-consumed segment at each picker level (not just the next
+  // one positionally), score matches by shared whole words (falling back to a substring tier for
+  // compound words like "menswear" containing "men"), exclude segment 0 (FindA.Sale's generic
+  // eBay-style top-level umbrella -- always present on clothing items and prone to colliding with an
+  // unrelated leaf option that happens to share a word with it, e.g. "Accessories"), and verify the
+  // opener's own displayed text actually changed before calling it committed rather than trusting an
+  // internal "something got clicked" flag alone.
+  function scoreMatch(text, want) {
+    if (text === want) return 1000;
+    const wantWords = want.split(' ').filter(Boolean);
+    const textWords = text.split(' ').filter(Boolean);
+    const overlap = wantWords.filter((w) => textWords.indexOf(w) !== -1).length;
+    if (overlap > 0) return overlap * 100 - text.length;
+    const subOverlap = wantWords.filter((w) => w.length >= 3 && textWords.some((tw) => tw.length >= 3 && (tw.indexOf(w) !== -1 || w.indexOf(tw) !== -1))).length;
+    if (subOverlap === 0) return null;
+    return subOverlap * 10 - text.length;
+  }
+  function bestScoringOption(options, wantText) {
+    const want = norm(wantText);
+    let best = null, bestScore = -1;
+    for (const opt of options) {
+      const text = norm(opt.textContent);
+      if (!text) continue;
+      const score = scoreMatch(text, want);
+      if (score === null) continue;
+      if (score > bestScore) { bestScore = score; best = opt; }
+    }
+    return best;
+  }
   async function pickCategory(categoryText) {
     if (!categoryText) return false;
     const opener = openerByLabel('Category');
     if (!opener) return false;
+    const placeholderText = norm(opener.textContent);
     opener.click();
     await sleep(400);
+    const levelQueries = categoryText.split(':').map((s) => s.trim()).filter(Boolean);
     let pickedAny = false;
+    let remaining = (levelQueries.length > 1 ? levelQueries.slice(1) : levelQueries).map((seg, i) => ({ seg, i }));
     for (let level = 0; level < 3; level++) {
-      await sleep(250);
-      const opt = optionElByText(categoryText);
-      if (!opt) break;
-      opt.click();
-      pickedAny = true;
       await sleep(300);
+      const items = qa('[role="menuitem"], [role="menuitemradio"], [role="option"], li').filter((el) => el.offsetParent !== null);
+      if (!items.length) break;
+      let best = null, bestScoreForLevel = -1, bestRemainingIdx = -1;
+      for (let r = 0; r < remaining.length; r++) {
+        const candidate = bestScoringOption(items, remaining[r].seg);
+        if (!candidate) continue;
+        const score = scoreMatch(norm(candidate.textContent), norm(remaining[r].seg));
+        if (score !== null && score > bestScoreForLevel) { bestScoreForLevel = score; best = candidate; bestRemainingIdx = r; }
+      }
+      if (!best) break; // no remaining segment is a real match for this level -- stop rather than guess
+      best.click();
+      pickedAny = true;
+      if (bestRemainingIdx !== -1) remaining.splice(bestRemainingIdx, 1);
+      await sleep(350);
     }
-    if (!pickedAny) console.warn('[FAS Poshmark] Category "' + categoryText + '" -- no level matched in the picker (UNVERIFIED taxonomy) -- left for the organizer to choose.');
-    return pickedAny;
+    const committed = pickedAny && norm(opener.textContent) !== placeholderText && norm(opener.textContent).length > 0;
+    if (!committed) {
+      console.warn('[FAS Poshmark] Category "' + categoryText + '" -- ' + (pickedAny ? 'a level was matched but the picker never committed to a final value' : 'no level matched in the picker') + ' (UNVERIFIED taxonomy) -- left for the organizer to choose.');
+      return false;
+    }
+    return true;
   }
 
   const CONDITION_LABELS = {

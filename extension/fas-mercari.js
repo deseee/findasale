@@ -567,11 +567,15 @@
   }
 
   async function run(item, index, total) {
-    if (looksLikeInterstitial()) {
-      overlayWarn('Mercari is showing a verification/security screen. FindA.Sale never attempts to solve this -- please complete it yourself, then reopen the extension to continue.' + button('fas-merc-close', 'Close', false));
-      closeBtnHandler();
-      return;
-    }
+    // BUG FIX 2026-08-20 (S-EXT-BATCH-9, P0, live-Chrome-confirmed): this used to open with an
+    // immediate, single, no-retry looksLikeInterstitial() check before anything else ran -- Patrick
+    // live-confirmed (2026-08-20) Mercari's Sell page can transiently show verification/security-
+    // adjacent copy for the first second or two after navigation, before the real form settles, and
+    // this immediate check had zero tolerance for that -- it fires once, at the worst possible
+    // moment, with no poll. waitForFormReady() below already does exactly the right thing (polls
+    // looksLikeInterstitial() AND looksLikeSellForm() together, up to 8s, re-checking every 400ms) --
+    // this early duplicate check only ever made things WORSE by short-circuiting before that poll
+    // loop got a chance to run. Removed; the poll loop is now the only interstitial gate at start.
     // BUG FIX 2026-08-19 (S-EXT-BATCH, P1): dismiss a first-load welcome/onboarding popup before
     // checking whether this looks like a sell form -- see dismissWelcomePopup()'s comment.
     await dismissWelcomePopup();

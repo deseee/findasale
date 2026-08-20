@@ -244,7 +244,7 @@
   //     (e.g. "web_ui__Cell__title", fragile the moment Vinted ships a new build hash), this scans
   //     the open panel for ANY visible, childless, short-text element and scores it against the
   //     target value with the same bestScoringOption used for the search-driven fields.
-  function findOpenPanel(fieldId) {
+  function findOpenPanel(fieldId, strict) {
     // Vinted names each panel's container '<field>-...-content' (confirmed: catalog-select-dropdown
     // -content, brand-select-dropdown-content, color-select-dropdown-content, category-size-single-
     // grid-content, category-condition-single-list-content, category-material-multi-list-content).
@@ -253,6 +253,15 @@
       return t.indexOf(fieldId) !== -1 && el.offsetParent !== null;
     });
     if (byTestid) return byTestid;
+    // BUG FIX 2026-08-20 (S-EXT-BATCH-9, P0, live-Chrome-confirmed): `strict` skips the generic
+    // fallback below entirely. See pickFromPanel's comment on why this matters -- the fallback finds
+    // ANY visible dropdown-shaped element with no check that it actually belongs to fieldId, which
+    // let a stray still-open panel from an EARLIER field (Material's multi-select list does not
+    // auto-close itself after a pick, live-confirmed by its own testid never disappearing from the
+    // DOM's visible set after clicking one option) get misread as "Condition's panel is already
+    // open" for the NEXT field in fill order, skipping the real open-click entirely and leaving
+    // Condition's actual panel never opened on the first pass.
+    if (strict) return null;
     // Fallback: any visible panel-looking element that just appeared (class name contains "dropdown"
     // or "panel" or "popover"), least-fragile generic guess if the testid naming ever changes.
     return qa('[class*="dropdown" i], [class*="Dropdown" i], [role="dialog"], [role="listbox"]')
@@ -275,8 +284,24 @@
     // opener.click() here meant the second call could TOGGLE an already-open panel CLOSED instead
     // of leaving it open, silently breaking every attempt after the first. Only click to open if
     // the panel isn't already open for this field.
-    let panelAlready = findOpenPanel(fieldId);
+    // BUG FIX 2026-08-20 (S-EXT-BATCH-9, P0, live-Chrome-confirmed): "already open" must be checked
+    // STRICTLY (an exact fieldId testid match) here, not via findOpenPanel's generic any-visible-
+    // dropdown fallback -- live-confirmed root cause of Condition being left open/unfilled: Material
+    // (a multi-select list) does not auto-close after a pick, so by the time fillListing() reaches
+    // Condition next, Material's own panel is still visible; the generic fallback matched IT as if
+    // it were "Condition's panel, already open", skipped the real opener.click(), scored Condition's
+    // target value against Material's option leaves (no match), fell through to the old broken
+    // fallback path below, which finally clicked the real opener but then couldn't find a matching
+    // option there either -- leaving the real Condition panel open with nothing selected, exactly as
+    // Patrick observed live. If a stray panel for a DIFFERENT field is still open, dismiss it first
+    // (click elsewhere on the page) so it can't be mistaken for this field's panel.
+    let panelAlready = findOpenPanel(fieldId, true);
     if (!panelAlready) {
+      const strayPanel = findOpenPanel(fieldId, false);
+      if (strayPanel) {
+        document.body.click();
+        await sleep(250);
+      }
       opener.click();
       await sleep(400);
     }

@@ -215,23 +215,38 @@
   // shared-word overlap (more shared words wins, shorter label breaks ties), instead of the old
   // first-substring-match which was prone to grabbing an unrelated option that merely contained one
   // matching word.
+  // BUG FIX 2026-08-20 (S-EXT-BATCH-8, P0, live-Chrome-confirmed): extracted from bestScoringOption
+  // so pickCategory's own cross-segment comparison (below) can score a specific text/want pair with
+  // the EXACT same rules bestScoringOption uses internally, instead of a separately-hand-rolled
+  // formula that silently drifted out of sync with it (an earlier version of this fix did exactly
+  // that -- pickCategory's inline re-score didn't know about the substring fallback below, so a
+  // genuinely-found match could still lose a cross-segment comparison to nothing). Returns null if
+  // this text/want pair isn't a real candidate at all (mirrors the old `continue` behavior).
+  function scoreMatch(text, want) {
+    if (text === want) return 1000;
+    const wantWords = want.split(' ').filter(Boolean);
+    const textWords = text.split(' ').filter(Boolean);
+    const overlap = wantWords.filter((w) => textWords.indexOf(w) !== -1).length;
+    if (overlap > 0) return overlap * 100 - text.length;
+    // Fallback tier: a want-word contained inside a text-word or vice versa (either direction, 3+
+    // chars to avoid noise like "a" matching everything) -- catches compound-word options like
+    // "Menswear"/"Womenswear" where a real segment ("men") shares zero WHOLE words with the option
+    // text but is obviously the right match. Live-verified directly: without this, scoring
+    // ["Menswear","Womenswear"] against "men" returned no match at all. Scored far lower (x10 not
+    // x100) so a genuine whole-word match anywhere in the option set always wins over this fallback.
+    const subOverlap = wantWords.filter((w) => w.length >= 3 && textWords.some((tw) => tw.length >= 3 && (tw.indexOf(w) !== -1 || w.indexOf(tw) !== -1))).length;
+    if (subOverlap === 0) return null;
+    return subOverlap * 10 - text.length;
+  }
   function bestScoringOption(options, wantText) {
     const want = norm(wantText);
-    const wantWords = want.split(' ').filter(Boolean);
     let best = null;
     let bestScore = -1;
     for (const opt of options) {
       const text = norm(opt.textContent);
       if (!text) continue;
-      let score;
-      if (text === want) {
-        score = 1000;
-      } else {
-        const textWords = text.split(' ').filter(Boolean);
-        const overlap = wantWords.filter((w) => textWords.indexOf(w) !== -1).length;
-        if (overlap === 0) continue;
-        score = overlap * 100 - text.length;
-      }
+      const score = scoreMatch(text, want);
+      if (score === null) continue;
       if (score > bestScore) { bestScore = score; best = opt; }
     }
     return best;
@@ -421,7 +436,32 @@
     syntheticClick(opener);
     await sleep(450);
     let pickedAny = false;
-    let queryIdx = 0;
+    // BUG FIX 2026-08-20 (S-EXT-BATCH-8, P0, live-Chrome-confirmed via Patrick's real re-test): TWO
+    // stacked problems, both confirmed live against the real failing item ("Clothing, Shoes &
+    // Accessories:men:men's Clothing:activewear:tracksuits & Sets", a tracksuit):
+    // (1) The old version queried `levelQueries[queryIdx]` in strict left-to-right order, assuming
+    //     FindA.Sale's segment 0 always corresponds to Grailed's picker level 0. Live-confirmed
+    //     wrong: level 0 of Grailed's picker is Menswear/Womenswear (gender), but segment 0 is
+    //     "Clothing, Shoes & Accessories" -- FindA.Sale's eBay-style TOP-LEVEL UMBRELLA segment,
+    //     present on every single clothing item regardless of type, with zero relation to gender or
+    //     garment type. It never matched level 0, the loop broke immediately, and segment 1 ("men",
+    //     the segment that actually WOULD match) never even got tried.
+    // (2) Fixing (1) by trying every remaining segment at each level surfaced a WORSE, second bug:
+    //     "Clothing, Shoes & Accessories" happens to share the whole word "accessories" with one of
+    //     Grailed's real level-1 leaf options (Tops/Bottoms/Outerwear/Footwear/Tailoring/
+    //     Accessories) -- a coincidental collision that made the picker land on "Accessories" for a
+    //     TRACKSUIT. Live-confirmed via screenshot: "Menswear / Accessories" got set. A wrong
+    //     category silently filled in is worse than an empty one -- it looks correct at a glance and
+    //     an organizer has no reason to double-check it.
+    // Root fix for both: FindA.Sale's segment 0 is ALWAYS this same generic eBay-taxonomy umbrella
+    // for anything clothing-related (confirmed by inspecting the real category string) and Grailed
+    // is fashion-only, so that segment can never correspond to a real Grailed leaf -- it is dropped
+    // entirely from the candidate pool for Grailed's picker specifically, whenever more than one
+    // segment exists. The whole-categoryText fallback (tried at each level if no segment matched)
+    // is ALSO removed -- it re-introduces the exact same collision risk (the full string still
+    // contains "accessories"), and per this file's own "never fabricate/guess a value" spirit, a
+    // level that has no real segment match should stay unset rather than risk a wrong pick.
+    let remaining = (levelQueries.length > 1 ? levelQueries.slice(1) : levelQueries).map((seg, i) => ({ seg, i }));
     for (let level = 0; level < 4; level++) {
       await sleep(300);
       if (opener.getAttribute && opener.getAttribute('aria-expanded') === 'false') break; // menu auto-closed -- fully resolved
@@ -431,18 +471,37 @@
         ? Array.from(content.querySelectorAll('[role="menuitem"], [role="menuitemradio"], [role="option"]'))
         : qa('[role="menuitem"], [role="menuitemradio"], [role="option"]').filter((el) => el.offsetParent !== null);
       if (!items.length) break;
-      // Try the next not-yet-consumed segment first (most specific remaining), then fall back to the
-      // full string, so a picker with fewer levels than segments still gets a reasonable match.
-      const query = queryIdx < levelQueries.length ? levelQueries[queryIdx] : categoryText;
-      const opt = bestScoringOption(items, query) || bestScoringOption(items, categoryText);
-      if (!opt) break;
-      syntheticClick(opt);
+      let best = null, bestScoreForLevel = -1, bestRemainingIdx = -1;
+      for (let r = 0; r < remaining.length; r++) {
+        const candidate = bestScoringOption(items, remaining[r].seg);
+        if (!candidate) continue;
+        // Re-score the winning candidate against THIS segment specifically so segments compete fairly
+        // against each other for this level (bestScoringOption already returns the top pick for one
+        // query; comparing across queries needs its own pass). Uses the SAME scoreMatch() helper
+        // bestScoringOption itself uses -- see that function's comment for why a separately hand-
+        // rolled formula here caused a real regression during this fix.
+        const score = scoreMatch(norm(candidate.textContent), norm(remaining[r].seg));
+        if (score !== null && score > bestScoreForLevel) { bestScoreForLevel = score; best = candidate; bestRemainingIdx = r; }
+      }
+      if (!best) break; // no remaining segment is a real match for this level -- stop rather than guess
+      syntheticClick(best);
       pickedAny = true;
-      queryIdx++;
+      if (bestRemainingIdx !== -1) remaining.splice(bestRemainingIdx, 1);
       await sleep(350);
     }
-    if (!pickedAny) {
-      console.warn('[FAS Grailed] Category "' + categoryText + '" -- no level matched in the picker (UNVERIFIED taxonomy) -- left for the organizer to choose.');
+    const queryIdx = levelQueries.length - remaining.length; // segments actually consumed, for Sub-category below
+    // BUG FIX 2026-08-20 (S-EXT-BATCH-8, P1, live-Chrome-confirmed): `pickedAny` only means "we
+    // clicked something at some level" -- it does NOT mean Grailed actually committed a final value.
+    // Grailed's Department/Category is a single 2-level combo that only updates its own button text
+    // once BOTH levels are resolved (confirmed live: clicking only level 0 -- e.g. Menswear -- with
+    // no confident level-1 match left the button still showing the "Department / Category"
+    // placeholder, even though pickedAny was already true from the level-0 click). Trusting
+    // pickedAny alone would have suppressed the "no match" warning below for a field that is, from
+    // the organizer's perspective, still completely empty. Check Grailed's own ground truth instead:
+    // did the opener's visible text actually change from the placeholder it started with?
+    const committed = pickedAny && norm(opener.textContent) !== placeholderText && norm(opener.textContent).length > 0;
+    if (!committed) {
+      console.warn('[FAS Grailed] Category "' + categoryText + '" -- ' + (pickedAny ? 'a department was matched but the full Department/Category combo never committed' : 'no level matched in the picker') + ' (UNVERIFIED taxonomy) -- left for the organizer to choose.');
       return false;
     }
     // Sub-category is a SEPARATE trigger, gated on Category being set first (confirmed live: it was
@@ -646,7 +705,16 @@
     // "Title" -- fieldByLabel('Title') alone matched nothing on Patrick's real test. Tries both;
     // "Title" first in case a different Grailed page variant still uses it, "Item Name" as the
     // confirmed real fallback.
-    await tryFill('Title', item.title, (v) => fillText('Title', v) || fillText('Item Name', v));
+    // BUG FIX 2026-08-20 (S-EXT-BATCH-8, P0, live-Chrome-confirmed via Patrick's real re-test after
+    // a genuine extension reload -- this is the actual reason Item Name has NEVER filled on Grailed,
+    // across every round since it was first "fixed"): `fillText(...) || fillText(...)` looks like a
+    // normal boolean fallback, but fillText is `async` -- calling it returns a PROMISE, and a Promise
+    // object is always truthy regardless of what it eventually resolves to. `||` short-circuits on
+    // that truthy Promise and NEVER calls the second fillText at all. Since 'Title' genuinely doesn't
+    // exist as a label on Grailed's real form (only 'Item Name' does), this meant tryFill's fillFn
+    // always resolved to `false` and Item Name was silently skipped every single time. Fixed by
+    // actually awaiting each attempt before falling back.
+    await tryFill('Title', item.title, async (v) => (await fillText('Title', v)) || (await fillText('Item Name', v)));
     await tryFill('Description', item.description, (v) => fillText('Description', v));
     // pickMarketTier() call removed (BUG FIX 2026-08-19, S-EXT-BATCH-2) -- see pickCategory's own
     // comment above; there is no separate Market-tier field on the real form to fill.
