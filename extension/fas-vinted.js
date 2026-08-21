@@ -217,9 +217,22 @@
   // (e.g. "Tracksuits & Sets", "Accessories & More"), so an earlier-word match should outrank a
   // later-word match even when both are single whole-word hits. Length now only nudges a genuine
   // near-tie, never overrides a real position-weighted lead.
+  // BUG FIX 2026-08-21 (S-EXT-BATCH, P0, Patrick-directed -- "fill the fields properly or with a
+  // proper default, not a skip message"): word-splitting only on literal spaces meant a real-world
+  // value like "Cotton/Polyester Blend" or "Black/White" was treated as ONE unsplit token
+  // ("cotton/polyester") that could never whole-word-match a plain option like "Cotton" -- live-
+  // confirmed: bestScoringOption(["Cotton","Polyester",...], "Cotton/Polyester Blend") returned null
+  // even though "Cotton" is a real, correct, literal substring of the query. Splitting on slash/
+  // comma/ampersand too (in addition to whitespace) lets "Cotton" resolve out of "Cotton/Polyester
+  // Blend" the same way "Cotton" already resolved out of "Cotton Blend" -- a genuine word-boundary
+  // fix, not a fabricated guess: every matched word is still one Vinted actually listed as an
+  // option, never an invented value.
+  function splitWords(s) {
+    return s.split(/[\s/,&]+/).filter(Boolean);
+  }
   function bestScoringOption(options, wantText) {
     const want = norm(wantText);
-    const wantWords = want.split(' ').filter(Boolean);
+    const wantWords = splitWords(want);
     let best = null;
     let bestScore = -1;
     for (const opt of options) {
@@ -229,7 +242,7 @@
       if (text === want) {
         score = 100000;
       } else {
-        const textWords = text.split(' ').filter(Boolean);
+        const textWords = splitWords(text);
         let weighted = 0;
         for (let i = 0; i < wantWords.length; i++) {
           if (textWords.indexOf(wantWords[i]) !== -1) weighted += (wantWords.length - i) * 100;
@@ -260,13 +273,37 @@
   //     (e.g. "web_ui__Cell__title", fragile the moment Vinted ships a new build hash), this scans
   //     the open panel for ANY visible, childless, short-text element and scores it against the
   //     target value with the same bestScoringOption used for the search-driven fields.
+  // BUG FIX 2026-08-21 (S-EXT-BATCH, P0, live-Chrome-confirmed): raw fieldId substring matching
+  // above collided with Vinted's PERMANENTLY-VISIBLE "Package size" shipping section, whose real
+  // testids ("1-package-size--cell--content", "2-package-size--cell--content", "3-package-size--
+  // cell--content", "package-size-suggestion-badge-id-3--content") all contain the literal
+  // substring "size". Live-confirmed this always won findOpenPanel('size', true) BEFORE the real
+  // clothing-size panel ("category-size-single-grid-content") was ever considered, because these
+  // elements are part of the normal always-rendered Shipping section (offsetParent !== null at all
+  // times), not a temporary open panel. Concretely, this made pickFromPanel('size', ...) believe a
+  // panel was "already open" (skipping the real opener.click() entirely), then score the target
+  // clothing size (e.g. "Medium") against the Package-size leaves (Small/Medium/Large) -- "Medium"
+  // is an EXACT text match there too, so the code silently clicked the already-selected Package
+  // Size radio and reported success, never touching the real clothing Size dropdown at all. This is
+  // the confirmed root cause of Vinted's Size field appearing "stuck"/never filled. Fixed with an
+  // explicit per-field testid hint (Vinted's own real prefixes, taken directly from the comment
+  // above) checked FIRST -- only fields with no known hint fall back to the raw fieldId substring.
+  const FIELD_PANEL_TESTID_HINTS = {
+    category: 'catalog-select-dropdown',
+    brand: 'brand-select-dropdown',
+    color: 'color-select-dropdown',
+    size: 'category-size-single-grid',
+    condition: 'category-condition-single-list',
+    material: 'category-material-multi-list',
+  };
   function findOpenPanel(fieldId, strict) {
     // Vinted names each panel's container '<field>-...-content' (confirmed: catalog-select-dropdown
     // -content, brand-select-dropdown-content, color-select-dropdown-content, category-size-single-
     // grid-content, category-condition-single-list-content, category-material-multi-list-content).
+    const testidHint = FIELD_PANEL_TESTID_HINTS[fieldId] || fieldId;
     const byTestid = qa('[data-testid*="content" i]').find((el) => {
       const t = norm(el.getAttribute('data-testid') || '');
-      return t.indexOf(fieldId) !== -1 && el.offsetParent !== null;
+      return t.indexOf(testidHint) !== -1 && el.offsetParent !== null;
     });
     if (byTestid) return byTestid;
     // BUG FIX 2026-08-20 (S-EXT-BATCH-9, P0, live-Chrome-confirmed): `strict` skips the generic

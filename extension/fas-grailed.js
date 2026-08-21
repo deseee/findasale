@@ -676,7 +676,32 @@
   // Size: now routed through the shared fillSelectLike (BUG FIX 2026-08-19, S-EXT-BATCH-2) --
   // falls back to a plain text field only if neither a native select nor a combobox opener is
   // found for the label, matching the original intent of this function.
-  async function fillSize(value) {
+  // BUG FIX 2026-08-20 (S-EXT-BATCH round 2, P0, live-Chrome-confirmed): live-confirmed this
+  // round that Grailed's real option lists don't contain our raw values at all -- Size options
+  // read "US M / EU 48-50 / 2" (no bare "Medium" anywhere), and Color options are a fixed 15-word
+  // list (Black/White/Gray/Brown/Beige/Yellow/Red/Orange/Pink/Purple/Blue/Green/Multi/Silver/Gold
+  // -- no "Neon"). Same class of vocabulary-mismatch bug already fixed on fas-vinted.js this
+  // session -- same remedy: remap a common non-Grailed word to the real option's dominant token
+  // BEFORE scoring, so it resolves to something real instead of silently failing.
+  const GRAILED_SIZE_ABBREVIATIONS = {
+    'x-small': 'XXS', 'xsmall': 'XXS', 'xxs': 'XXS',
+    small: 'S', s: 'S',
+    medium: 'M', m: 'M',
+    large: 'L', l: 'L',
+    'x-large': 'XL', 'xlarge': 'XL', 'xl': 'XL',
+    'xx-large': 'XXL', 'xxlarge': 'XXL', 'xxl': 'XXL',
+  };
+  const GRAILED_COLOR_SYNONYMS = {
+    neon: 'Yellow', tan: 'Beige', maroon: 'Red', olive: 'Green', ivory: 'White',
+    teal: 'Blue', charcoal: 'Gray', grey: 'Gray', rust: 'Orange', lavender: 'Purple',
+    magenta: 'Pink', indigo: 'Blue', navy: 'Blue', cream: 'White',
+    multicolor: 'Multi', multicolour: 'Multi', transparent: 'White',
+  };
+  function fillSize(value) {
+    const resolved = GRAILED_SIZE_ABBREVIATIONS[norm(value)] || value;
+    return fillSizeInner(resolved);
+  }
+  async function fillSizeInner(value) {
     const ok = await fillSelectLike('Size', value);
     if (ok) return true;
     const native = fieldByLabel('Size');
@@ -838,45 +863,54 @@
   // still on; a genuinely missing selector is loudly flagged rather than assumed handled.
   const INTERNATIONAL_REGION_LABELS = [
     'Canada', 'United Kingdom', 'UK', 'Europe', 'Asia', 'Australia', 'Australia/NZ',
-    'Australia & New Zealand', 'Other', 'Rest of World', 'Worldwide',
+    // 'Australia / NZ' (spaces around the slash) confirmed live 2026-08-20 as Grailed's actual
+    // real label text -- the no-space 'Australia/NZ' variant above never matched it.
+    'Australia / NZ', 'Australia & New Zealand', 'Other', 'Rest of World', 'Worldwide',
   ];
+  // BUG FIX 2026-08-20 (S-EXT-BATCH round 2, P0, live-Chrome-confirmed): the wait-then-scan fix
+  // from round 1 was based on a WRONG diagnosis -- live-confirmed this round that the page was
+  // fully loaded (readyState:complete) and fieldByLabel/openerByLabel STILL returned null for
+  // every region label, no timing involved at all. Root cause: each region's label (e.g. "Asia")
+  // is a bare <p> with no <label> wrapper and no aria-label, and its real checkbox
+  // (name="shipping.asia.enabled") sits TWO ancestor <div> levels up, inside a <div> whose own
+  // text content includes the multi-line description ("Set a shipping cost and purchase your own
+  // label...") -- openerByLabel's <80-char text-length guard rejects that ancestor as a candidate,
+  // and fieldByLabel only ever scans real <label> elements. Neither helper's assumptions match
+  // this DOM shape at all. Fixed by finding the label text as a plain leaf node directly, then
+  // walking up a bounded number of ancestors for the first one containing an
+  // input[type="checkbox"] -- confirmed live this finds shipping.asia.enabled etc. correctly.
+  function findRegionToggle(labelText) {
+    const want = norm(labelText);
+    const leaf = qa('*').find((el) => el.children.length === 0 && norm(el.textContent) === want && el.offsetParent !== null);
+    if (!leaf) return null;
+    let node = leaf;
+    for (let i = 0; i < 5 && node; i++) {
+      const cb = node.querySelector && node.querySelector('input[type="checkbox"]');
+      if (cb) return cb;
+      node = node.parentElement;
+    }
+    return null;
+  }
   async function disableInternationalShipping() {
-    // BUG FIX 2026-08-20 (S-EXT-BATCH, P0, live-Chrome-confirmed): this used to scan for region
-    // toggles immediately with zero wait, called right after Price fill -- live-confirmed it ran
-    // and logged NOTHING at all (not even its own "not found" warning) while the real page showed
-    // all 6 region toggles still ON at $50/region. Same SPA-hydration race documented elsewhere in
-    // this file for Category: the toggles likely weren't attached to the DOM yet at that exact
-    // moment. Poll for at least one region toggle to exist before scanning, same waitFor pattern
-    // used elsewhere in this file.
-    const firstLabel = INTERNATIONAL_REGION_LABELS[0];
-    try {
-      await waitFor(() => fieldByLabel(firstLabel) || openerByLabel(firstLabel), 5000);
-    } catch (e) { /* fall through to the scan below regardless -- worst case it logs "not found" honestly */ }
     let anyFound = false;
     let anyDisabled = false;
     let anyConfirmedOff = true;
     for (const label of INTERNATIONAL_REGION_LABELS) {
-      const toggle = fieldByLabel(label) || openerByLabel(label);
+      const toggle = findRegionToggle(label);
       if (!toggle) continue;
       anyFound = true;
-      const isCheckboxLike = toggle.tagName === 'INPUT' && (toggle.type === 'checkbox' || toggle.type === 'radio');
-      const readOn = () => (isCheckboxLike ? toggle.checked : toggle.getAttribute('aria-checked') === 'true');
+      const readOn = () => toggle.checked;
       if (!readOn()) continue; // already off -- nothing to do
       toggle.click(); // real click, so it fires whatever change handler Grailed's own form expects
       anyDisabled = true;
       await sleep(200);
-      // BUG FIX 2026-08-20 (S-EXT-BATCH, P0): confirm the click actually flipped state -- same
-      // false-positive risk as fillSelectLike's own fix above, a click that silently no-ops must
-      // not be reported as "disabled". Re-query fresh (element may have been replaced) and retry
-      // once before accepting it didn't take.
-      const toggleFresh = fieldByLabel(label) || openerByLabel(label) || toggle;
-      const stillOn = isCheckboxLike ? toggleFresh.checked : toggleFresh.getAttribute('aria-checked') === 'true';
-      if (stillOn) {
+      // Confirm the click actually flipped state -- re-query fresh, retry once before giving up.
+      const toggleFresh = findRegionToggle(label) || toggle;
+      if (toggleFresh.checked) {
         toggleFresh.click();
         await sleep(200);
-        const toggleFresh2 = fieldByLabel(label) || openerByLabel(label) || toggleFresh;
-        const stillOn2 = isCheckboxLike ? toggleFresh2.checked : toggleFresh2.getAttribute('aria-checked') === 'true';
-        if (stillOn2) anyConfirmedOff = false;
+        const toggleFresh2 = findRegionToggle(label) || toggleFresh;
+        if (toggleFresh2.checked) anyConfirmedOff = false;
       }
     }
     if (!anyFound) {
@@ -907,7 +941,16 @@
       floor = price * (1 - declinePct / 100);
     }
     floor = Math.max(1, Math.min(floor, price - 0.01));
-    floor = Math.round(floor * 100) / 100;
+    // BUG FIX 2026-08-20 (S-EXT-BATCH round 2, P0, live-Chrome-confirmed): live-confirmed this
+    // filled as "16874" for a real $225 item with a computed $168.74 floor -- Grailed's Floor
+    // Price input re-interprets whatever digits are typed as a raw digit stream (the same behavior
+    // the working Price field already avoids by only ever sending whole-dollar strings, confirmed
+    // by reading fillListing()'s own Price call a few lines below: String(Math.round(Number(v)))),
+    // so a decimal point in the typed string gets silently stripped and the digits are reflowed
+    // as if $1.6874 had somehow become $16,874 cents-first. Rounding to a WHOLE DOLLAR before
+    // filling -- mirroring the exact pattern already proven safe on the Price field -- avoids this
+    // entirely. Floor prices don't need cent precision anyway.
+    floor = Math.round(floor);
     const el = document.querySelector('input[name="smartPricing.minimumPrice"]')
       || document.querySelector('input[placeholder="Floor Price (USD)"]')
       || fieldByLabel('Floor Price');
@@ -952,7 +995,7 @@
     // BUG FIX 2026-08-19 (S-EXT-BATCH-2, P1): Color and Condition are both real dropdowns
     // ("Select a Color" / "Item Condition") -- routed through fillSelectLike instead of fillText,
     // which was typing free text into a picker that can't accept it.
-    await tryFill('Color', item.color, (v) => fillSelectLike('Color', v));
+    await tryFill('Color', item.color, (v) => fillSelectLike('Color', GRAILED_COLOR_SYNONYMS[norm(v)] || v));
     await tryFill('Size', item.size, (v) => fillSize(v));
     // Measurements deliberately NEVER filled -- see file header. No call to any measurements
     // field exists in this function on purpose.

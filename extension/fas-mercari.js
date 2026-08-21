@@ -65,8 +65,27 @@
   function qa(sel) { return Array.from(document.querySelectorAll(sel)); }
   function escapeHtml(s) { return String(s || '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
 
+  // BUG FIX 2026-08-21 (S-EXT-BATCH, P0, live-Chrome-confirmed): the raw iframe[src*="captcha"]
+  // etc. selector matched Google reCAPTCHA's own PERSISTENT, NON-BLOCKING badge widget --
+  // live-confirmed present on a real Mercari draft-edit page that was otherwise completely normal
+  // and fillable (Title/Description/Category/Brand all visibly filled, no actual verification wall
+  // shown on screen): title exactly "reCAPTCHA", 256x60px, domain www.google.com -- Google's
+  // documented default badge footprint, not an expanded challenge. Mercari (like most sites using
+  // reCAPTCHA) embeds this badge on EVERY page with a protected form, at all times, whether or not
+  // a real human-verification challenge is active. Treating its mere presence as "Mercari is
+  // showing a verification screen" made this check a near-permanent false positive on Mercari's
+  // real sell/edit pages -- the most likely actual explanation for repeated "verification screen"
+  // warnings and stalled fills that were NOT really Mercari blocking anything. A real, active,
+  // must-solve challenge (the expanded image grid / "I'm not a robot" checkbox popup) renders as a
+  // much larger iframe (Google's checkbox widget is 304x78; an expanded image-challenge popup is
+  // taller still) -- requiring height > 100px excludes the passive 60px badge while still catching
+  // a genuine blocking challenge.
+  function isBlockingCaptchaIframe(el) {
+    return el && el.offsetParent !== null && el.offsetHeight > 100;
+  }
   function looksLikeInterstitial() {
-    if (q('iframe[src*="captcha" i]') || q('iframe[title*="captcha" i]') || q('iframe[src*="hcaptcha" i]') || q('iframe[src*="recaptcha" i]')) return true;
+    const captchaIframe = q('iframe[src*="captcha" i]') || q('iframe[title*="captcha" i]') || q('iframe[src*="hcaptcha" i]') || q('iframe[src*="recaptcha" i]');
+    if (isBlockingCaptchaIframe(captchaIframe)) return true;
     const lower = bodyText().toLowerCase();
     const signals = [
       'verify you are human', "verify you're human", 'confirm you are not a robot',
@@ -722,6 +741,19 @@
     return base ? (base + ' -- ' + filler) : filler;
   }
 
+  // BUG FIX 2026-08-21 (S-EXT-BATCH, P0, live-Chrome-confirmed): fillListing used to run all 8
+  // field fills back-to-back and only check looksLikeInterstitial() ONCE at the very end (in run(),
+  // after this whole function returned) -- live-confirmed against a real interrupted draft
+  // (Bored Ape Yacht Club Adidas Tracksuit, draft IU8iw9AjtwBN9570odoo8oOLywCdLrwE): Title/
+  // Description/Category/Brand all filled correctly ("Adidas" visibly saved), but Size/Color/
+  // Condition/Price were all left blank -- Mercari's verification screen appeared PARTWAY through
+  // the sequence (after Brand, before Size), silently swallowing every fill attempt after that
+  // point since the real form was covered/blocked, while the code kept blindly attempting the
+  // remaining fields and only surfaced the interstitial warning once everything had already
+  // (uselessly) run. Checks looksLikeInterstitial() before EACH field now and stops immediately at
+  // the first sign of it, so the reported outcome accurately reflects which fields actually got a
+  // chance to fill, and no further clicks/keystrokes are sent into a screen the extension can't
+  // (and must never try to) solve.
   async function fillListing(item) {
     overlay('<b>FindA.Sale</b> - uploading photos first (Mercari auto-fills after photos, so we wait before touching the rest)...');
     const photosOk = await injectPhotos(item.photoUrls);
@@ -738,38 +770,39 @@
     // automation. A real humanPause is now inserted between every field, widened to 500-1400ms
     // (wider than this file's other internal pauses) so the whole fill spreads out instead of
     // completing in one inhuman burst.
-    await tryFill('Title', item.title, (v) => fillText('Title', v));
-    await humanPause(500, 1400);
-    await tryFill('Description', padDescriptionForMercariMinimum(item.description, item), (v) => fillText('Description', v));
-    await humanPause(500, 1400);
+    let interstitialAt = null;
+    async function guardedFill(label, value, fillFn) {
+      if (interstitialAt) return false; // already stopped -- don't touch anything further
+      if (looksLikeInterstitial()) { interstitialAt = label; return false; }
+      const ok = await tryFill(label, value, fillFn);
+      await humanPause(500, 1400);
+      if (looksLikeInterstitial()) { interstitialAt = label; }
+      return ok;
+    }
+    await guardedFill('Title', item.title, (v) => fillText('Title', v));
+    await guardedFill('Description', padDescriptionForMercariMinimum(item.description, item), (v) => fillText('Description', v));
     // Category BEFORE brand -- Mercari's brand list is category-aware (see fillBrand comment).
     // S-EXT-BATCH-12: pass categoryBreadcrumb alongside the clean category -- pickCategory uses
     // the breadcrumb for less-specific fallback segments (and to derive the men's/women's gender
     // tiebreak) after the clean leaf name's own simplified variants are tried first.
-    await tryFill('Category', item.category, (v) => pickCategory(v, item.categoryBreadcrumb));
-    await humanPause(500, 1400);
+    await guardedFill('Category', item.category, (v) => pickCategory(v, item.categoryBreadcrumb));
     // 2026-08-18: brand/size/color now exist on Item and flow through getExtensionItems ->
     // popup.js's queue map. tryFill's own guard still skips silently on unset items;
     // category-type gating (apparel-only for size/color) is left to Mercari's own form,
     // never assumed here.
-    await tryFill('Brand', item.brand, (v) => fillBrand('Brand', v));
-    await humanPause(500, 1400);
-    await tryFill('Size', item.size, (v) => fillSelectLike('Size', v));
-    await humanPause(500, 1400);
-    await tryFill('Color', item.color, (v) => fillSelectLike('Color', v));
-    await humanPause(500, 1400);
+    await guardedFill('Brand', item.brand, (v) => fillBrand('Brand', v));
+    await guardedFill('Size', item.size, (v) => fillSelectLike('Size', v));
+    await guardedFill('Color', item.color, (v) => fillSelectLike('Color', v));
     const conditionLabel = mapMercariCondition(item.condition);
-    await tryFill('Condition', conditionLabel, (v) => fillMercariCondition(v));
-    await humanPause(500, 1400);
+    await guardedFill('Condition', conditionLabel, (v) => fillMercariCondition(v));
     if (item.price != null && isFinite(Number(item.price))) {
       const priceVal = Math.max(1, Math.round(Number(item.price)));
       if (priceVal > 2000) console.warn('[FAS Mercari] Price $' + priceVal + ' exceeds Mercari\'s standard $2,000 cap -- may need an authenticate-eligible designer category. Filling anyway; Mercari\'s own form is the real gate.');
       // Smart Pricing toggle sits next to Price -- deliberately never touched here.
-      await tryFill('Price', priceVal, (v) => fillText('Price', String(v)));
-      await humanPause(500, 1400);
+      await guardedFill('Price', priceVal, (v) => fillText('Price', String(v)));
     }
-    await fillWeight(item);
-    return photosOk;
+    if (!interstitialAt) await fillWeight(item);
+    return { photosOk, interstitialAt };
   }
 
   async function run(item, index, total) {
@@ -799,9 +832,16 @@
       closeBtnHandler();
       return;
     }
-    const photosOk = await fillListing(item);
-    if (looksLikeInterstitial()) {
-      overlayWarn('Mercari is showing a verification/security screen partway through filling this listing. Please complete it yourself, then finish this listing manually -- nothing further was auto-filled.' + button('fas-merc-close', 'Close', false));
+    const fillResult = await fillListing(item);
+    const photosOk = fillResult.photosOk;
+    // BUG FIX 2026-08-21 (S-EXT-BATCH, P0): fillListing now tracks exactly which field it was
+    // about to attempt when the interstitial first appeared (interstitialAt), instead of this being
+    // a single blind re-check after every field already ran. Reports that field name explicitly so
+    // Patrick/the organizer knows precisely where to pick up manually, rather than "somewhere,
+    // unknown" -- live-confirmed case: Title/Description/Category/Brand filled, Size was where it
+    // stopped.
+    if (fillResult.interstitialAt) {
+      overlayWarn('Mercari is showing a verification/security screen -- filling stopped before <b>' + escapeHtml(fillResult.interstitialAt) + '</b>. Please complete the verification yourself, then finish the remaining fields on this draft manually (fields before ' + escapeHtml(fillResult.interstitialAt) + ' were already filled -- do not start a new listing).' + button('fas-merc-close', 'Close', false));
       closeBtnHandler();
       return;
     }

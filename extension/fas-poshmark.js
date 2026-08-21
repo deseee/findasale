@@ -137,26 +137,42 @@
       }
       return null;
     }
-    for (const el of headingCandidates) {
-      const txt = norm(el.textContent);
-      if (!txt || txt.length > 80 || txt.indexOf(want) === -1) continue;
-      if (el.querySelector(CONTROL_SELECTOR)) continue;
-      // Try siblings of the heading itself first (flat-row layouts).
-      let control = searchFollowingSiblings(el, 6);
-      if (control) return control;
-      // BUG FIX 2026-08-19 (S-EXT-BATCH-3, P0): live-confirmed real Poshmark structure is a
-      // two-COLUMN layout (`common ancestor 2 levels up, heading's own parent is the "label
-      // column", the control lives in a SIBLING "input column" at the PARENT level -- confirmed by
-      // walking the live DOM tree directly) -- not a sibling of the heading itself at all. Walk up
-      // a few ancestor levels and try each ancestor's own following siblings too.
-      let ancestor = el.parentElement;
-      for (let up = 0; up < 3 && ancestor; up++) {
-        control = searchFollowingSiblings(ancestor, 3);
+    // BUG FIX 2026-08-21 (S-EXT-BATCH, P0, live-Chrome-confirmed): the old single-pass loop
+    // accepted the FIRST element whose text merely CONTAINED the label word as a substring, with no
+    // preference for an actual field-label-shaped match over incidental prose -- live-confirmed
+    // this made nearestControlAfter('Brand') match Poshmark's own TITLE section helper text
+    // ("Share key details like Brand, Size, and Color.", a <p> that appears BEFORE the real
+    // Brand field in document order) instead of the real Brand label (a bare `<div>Brand</div>`
+    // appearing later), walked forward from that WRONG paragraph, and returned the TITLE input --
+    // which then got overwritten with the Brand value ("Adidas") after Title had already been
+    // filled correctly, confirmed live: the Title field showed "Adidas" instead of the real title
+    // after a real fillListing() run. Fixed with two passes: first look for an EXACT text match
+    // (real Poshmark field labels are always a single bare word, e.g. "Brand", "Size" -- never a
+    // full sentence), only falling back to substring matching if no exact match exists anywhere,
+    // and even then skipping any candidate whose text contains a comma (the reliable signal of
+    // descriptive/instructional prose like the Title helper text, never a real field label).
+    function tryCandidates(list) {
+      for (const el of list) {
+        if (el.querySelector(CONTROL_SELECTOR)) continue;
+        let control = searchFollowingSiblings(el, 6);
         if (control) return control;
-        ancestor = ancestor.parentElement;
+        let ancestor = el.parentElement;
+        for (let up = 0; up < 3 && ancestor; up++) {
+          control = searchFollowingSiblings(ancestor, 3);
+          if (control) return control;
+          ancestor = ancestor.parentElement;
+        }
       }
+      return null;
     }
-    return null;
+    const exact = headingCandidates.filter((el) => norm(el.textContent) === want);
+    const exactResult = tryCandidates(exact);
+    if (exactResult) return exactResult;
+    const loose = headingCandidates.filter((el) => {
+      const txt = norm(el.textContent);
+      return txt && txt.length <= 80 && txt.indexOf(want) !== -1 && txt.indexOf(',') === -1;
+    });
+    return tryCandidates(loose);
   }
   function fieldByLabel(labelText) {
     const want = norm(labelText);
