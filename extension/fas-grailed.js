@@ -31,11 +31,42 @@
 
   function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
   async function humanPause(minMs, maxMs) { await sleep(minMs + Math.random() * (maxMs - minMs)); }
+  // Added 2026-08-20 (S-EXT-BATCH, P0) -- this file had no generic waitFor() helper (only the
+  // more specialized waitForFormReady below), but disableInternationalShipping's fix needs to
+  // poll for a single element the same way other files in this extension already do. Mirrors the
+  // identical waitFor implementation already used in fas-content.js/fas-vinted.js/fas-mercari.js.
+  function waitFor(getter, timeout = 8000) {
+    return new Promise((resolve, reject) => {
+      const first = getter();
+      if (first) return resolve(first);
+      const obs = new MutationObserver(() => {
+        const el = getter();
+        if (el) { obs.disconnect(); resolve(el); }
+      });
+      obs.observe(document.body, { childList: true, subtree: true });
+      setTimeout(() => { obs.disconnect(); reject(new Error('timeout')); }, timeout);
+    });
+  }
   function norm(s) { return String(s || '').replace(/\s+/g, ' ').trim().toLowerCase(); }
   function bodyText() { return (document.body && document.body.innerText) || ''; }
   function q(sel) { return document.querySelector(sel); }
   function qa(sel) { return Array.from(document.querySelectorAll(sel)); }
   function escapeHtml(s) { return String(s || '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+
+  // BUG FIX 2026-08-20 (S-EXT-BATCH, P0, live-Chrome-confirmed): Grailed enforces a hard 60-char
+  // cap on Item Name ("Must be 60 characters or less", confirmed verbatim on the live page) and
+  // this file never truncated -- a 78-char real title was rejected outright. Truncates at the
+  // last whole-word boundary <=60 chars so the title doesn't end mid-word; if even the first word
+  // alone exceeds 60 chars (pathological case), hard-truncates to exactly 60. Only affects what's
+  // typed into Grailed's own field -- item.title itself, and every other platform's title, are
+  // untouched.
+  function truncateGrailedTitle(title) {
+    const t = String(title || '');
+    if (t.length <= 60) return t;
+    const cut = t.slice(0, 60);
+    const lastSpace = cut.lastIndexOf(' ');
+    return lastSpace > 0 ? cut.slice(0, lastSpace).trim() : cut;
+  }
 
   function looksLikeInterstitial() {
     if (q('iframe[src*="captcha" i]') || q('iframe[title*="captcha" i]') || q('iframe[src*="hcaptcha" i]') || q('iframe[src*="recaptcha" i]')) return true;
@@ -405,9 +436,27 @@
     await sleep(400);
     const opt = bestScoringOption(qa('[role="menuitem"], [role="menuitemradio"], [role="option"], li[role="option"], li').filter((el) => el.offsetParent !== null), value);
     if (!opt) return false;
+    const pickedText = norm(opt.textContent);
     syntheticClick(opt);
     await sleep(250);
-    return true;
+    // BUG FIX 2026-08-20 (S-EXT-BATCH, P0, live-Chrome-confirmed): this used to return true
+    // unconditionally the instant a matching option was clicked -- live-confirmed Color stayed on
+    // Grailed's own "Select a Color" placeholder after a run that logged ZERO warnings for it,
+    // meaning the click landed on something (or timed out) without the value ever actually taking,
+    // and the false "success" suppressed tryFill's own warning path entirely. Confirm the opener's
+    // displayed text now actually reflects the picked value before reporting success (mirrors
+    // pickCategory's own click-then-confirm discipline elsewhere in this file); one retry with a
+    // freshly re-queried opener/option before giving up honestly.
+    if (norm(opener.textContent).indexOf(pickedText) !== -1) return true;
+    const openerFresh = openerByLabel(labelText) || opener;
+    syntheticClick(openerFresh);
+    await sleep(400);
+    const optRetry = bestScoringOption(qa('[role="menuitem"], [role="menuitemradio"], [role="option"], li[role="option"], li').filter((el) => el.offsetParent !== null), value);
+    if (!optRetry) return false;
+    const pickedTextRetry = norm(optRetry.textContent);
+    syntheticClick(optRetry);
+    await sleep(250);
+    return norm(openerFresh.textContent).indexOf(pickedTextRetry) !== -1;
   }
 
   // Category: "Department / Category" is ONE combined control on the real form (see the BUG FIX
@@ -543,9 +592,32 @@
     // scoring already had its shot. Re-queries the currently-open panel (still open -- nothing
     // closed it, since the normal loop only breaks on a miss, it never dismisses anything) rather
     // than assuming stale items are still valid.
+    // BUG FIX 2026-08-20 (S-EXT-BATCH-12 follow-up, live-Chrome-confirmed, Patrick's re-test):
+    // this override lookup used to key ONLY on an exact `norm(categoryText) === ` match against
+    // GRAILED_CATEGORY_OVERRIDES. That's correct once the backend sends the clean leaf name
+    // ("Tracksuits & Sets") as `categoryText`, but the backend change that makes that true
+    // (extensionController.ts preferring `ebayCategoryName`) ships on its own deploy, separate
+    // from this file's reload -- confirmed live: Patrick reloaded the extension and re-tested
+    // BEFORE that backend deploy had gone out (it was stuck, see the Railway WAITING investigation
+    // this session), so `categoryText` was still the full raw breadcrumb
+    // ("Clothing, Shoes & Accessories:men:men's Clothing:activewear:tracksuits & Sets"), which
+    // never equals the override key "tracksuits & sets" -- the override silently never fired, and
+    // Grailed's Category was left uncommitted exactly like before this fix existed. Rather than
+    // make this file's correctness depend on backend/extension deploy ordering, the lookup now
+    // also matches when an override key is CONTAINED in the raw categoryText/breadcrumbText (a
+    // breadcrumb ending in ":tracksuits & Sets" contains the key "tracksuits & sets" as a
+    // substring) -- works whether the backend has shipped the clean name yet or not.
+    function findCategoryOverride(rawCategoryText, rawBreadcrumbText) {
+      const hay = norm(rawCategoryText) + ' | ' + norm(rawBreadcrumbText || '');
+      if (GRAILED_CATEGORY_OVERRIDES[norm(rawCategoryText)]) return GRAILED_CATEGORY_OVERRIDES[norm(rawCategoryText)];
+      for (const key in GRAILED_CATEGORY_OVERRIDES) {
+        if (hay.indexOf(key) !== -1) return GRAILED_CATEGORY_OVERRIDES[key];
+      }
+      return null;
+    }
     let overrideSubCategory = null;
     if (pickedAny && norm(opener.textContent) === placeholderText) {
-      const override = GRAILED_CATEGORY_OVERRIDES[norm(categoryText)];
+      const override = findCategoryOverride(categoryText, breadcrumbText);
       if (override) {
         const contentId = opener.getAttribute && opener.getAttribute('aria-controls');
         const content = contentId ? document.getElementById(contentId) : null;
@@ -769,23 +841,84 @@
     'Australia & New Zealand', 'Other', 'Rest of World', 'Worldwide',
   ];
   async function disableInternationalShipping() {
+    // BUG FIX 2026-08-20 (S-EXT-BATCH, P0, live-Chrome-confirmed): this used to scan for region
+    // toggles immediately with zero wait, called right after Price fill -- live-confirmed it ran
+    // and logged NOTHING at all (not even its own "not found" warning) while the real page showed
+    // all 6 region toggles still ON at $50/region. Same SPA-hydration race documented elsewhere in
+    // this file for Category: the toggles likely weren't attached to the DOM yet at that exact
+    // moment. Poll for at least one region toggle to exist before scanning, same waitFor pattern
+    // used elsewhere in this file.
+    const firstLabel = INTERNATIONAL_REGION_LABELS[0];
+    try {
+      await waitFor(() => fieldByLabel(firstLabel) || openerByLabel(firstLabel), 5000);
+    } catch (e) { /* fall through to the scan below regardless -- worst case it logs "not found" honestly */ }
     let anyFound = false;
     let anyDisabled = false;
+    let anyConfirmedOff = true;
     for (const label of INTERNATIONAL_REGION_LABELS) {
       const toggle = fieldByLabel(label) || openerByLabel(label);
       if (!toggle) continue;
       anyFound = true;
       const isCheckboxLike = toggle.tagName === 'INPUT' && (toggle.type === 'checkbox' || toggle.type === 'radio');
-      const isOn = isCheckboxLike ? toggle.checked : toggle.getAttribute('aria-checked') === 'true';
-      if (!isOn) continue; // already off -- nothing to do
+      const readOn = () => (isCheckboxLike ? toggle.checked : toggle.getAttribute('aria-checked') === 'true');
+      if (!readOn()) continue; // already off -- nothing to do
       toggle.click(); // real click, so it fires whatever change handler Grailed's own form expects
       anyDisabled = true;
       await sleep(200);
+      // BUG FIX 2026-08-20 (S-EXT-BATCH, P0): confirm the click actually flipped state -- same
+      // false-positive risk as fillSelectLike's own fix above, a click that silently no-ops must
+      // not be reported as "disabled". Re-query fresh (element may have been replaced) and retry
+      // once before accepting it didn't take.
+      const toggleFresh = fieldByLabel(label) || openerByLabel(label) || toggle;
+      const stillOn = isCheckboxLike ? toggleFresh.checked : toggleFresh.getAttribute('aria-checked') === 'true';
+      if (stillOn) {
+        toggleFresh.click();
+        await sleep(200);
+        const toggleFresh2 = fieldByLabel(label) || openerByLabel(label) || toggleFresh;
+        const stillOn2 = isCheckboxLike ? toggleFresh2.checked : toggleFresh2.getAttribute('aria-checked') === 'true';
+        if (stillOn2) anyConfirmedOff = false;
+      }
     }
     if (!anyFound) {
       console.warn('[FAS Grailed] International shipping-regions section not found (UNVERIFIED selector) -- if this listing defaults to international shipping at Grailed\'s own placeholder rate, disable it manually before publishing.');
+    } else if (anyDisabled && !anyConfirmedOff) {
+      console.warn('[FAS Grailed] International shipping toggles were clicked but at least one did not confirm as OFF -- check the shipping section before publishing; it may still default to a $50/region charge.');
     }
-    return { anyFound, anyDisabled };
+    return { anyFound, anyDisabled, anyConfirmedOff };
+  }
+
+  // BUG FIX 2026-08-20 (S-EXT-BATCH, P0, Patrick-directed): computes a real Smart Pricing floor
+  // price instead of leaving Grailed's own Floor Price field blank. Prefers the organizer's own
+  // configured item-level minimum (item.bestOfferMinimumAmt, dollars) exactly like Facebook's
+  // Best Offer minimum already does (fas-content.js ~line 524); when that's not set, falls back
+  // to the organizer's own defaultBestOfferDeclinePct (schema.prisma default 25 -- "accept offers
+  // down to X% off") applied against this item's price, same business meaning as "the lowest
+  // price this organizer would actually accept". Clamped to a sane range: never below $1, never
+  // at or above the listing price itself (Grailed's own field would reject a floor >= price).
+  async function fillSmartPricingFloor(item) {
+    if (item.price == null || !isFinite(Number(item.price))) return false;
+    const price = Number(item.price);
+    let floor;
+    if (item.bestOfferMinimumAmt != null && isFinite(Number(item.bestOfferMinimumAmt))) {
+      floor = Number(item.bestOfferMinimumAmt);
+    } else {
+      const declinePct = (item.defaultBestOfferDeclinePct != null && isFinite(Number(item.defaultBestOfferDeclinePct)))
+        ? Number(item.defaultBestOfferDeclinePct) : 25; // schema.prisma's own suggested default
+      floor = price * (1 - declinePct / 100);
+    }
+    floor = Math.max(1, Math.min(floor, price - 0.01));
+    floor = Math.round(floor * 100) / 100;
+    const el = document.querySelector('input[name="smartPricing.minimumPrice"]')
+      || document.querySelector('input[placeholder="Floor Price (USD)"]')
+      || fieldByLabel('Floor Price');
+    if (!el) {
+      console.warn('[FAS Grailed] Smart Pricing floor price field not found (UNVERIFIED selector) -- if Smart Pricing is on, set a floor price manually before publishing.');
+      return false;
+    }
+    el.focus();
+    setNativeValue(el, String(floor));
+    await sleep(150);
+    return true;
   }
 
   async function fillListing(item) {
@@ -803,7 +936,11 @@
     // exist as a label on Grailed's real form (only 'Item Name' does), this meant tryFill's fillFn
     // always resolved to `false` and Item Name was silently skipped every single time. Fixed by
     // actually awaiting each attempt before falling back.
-    await tryFill('Title', item.title, async (v) => (await fillText('Title', v)) || (await fillText('Item Name', v)));
+    // BUG FIX 2026-08-20 (S-EXT-BATCH, P0): pass the value through truncateGrailedTitle so
+    // Grailed's 60-char cap is respected -- see the helper's own comment for the live-confirmed
+    // root cause. tryFill's fillFn receives the ALREADY-truncated value (v below), so fillText
+    // never sees the raw over-length title at all.
+    await tryFill('Title', truncateGrailedTitle(item.title), async (v) => (await fillText('Title', v)) || (await fillText('Item Name', v)));
     await tryFill('Description', item.description, (v) => fillText('Description', v));
     // pickMarketTier() call removed (BUG FIX 2026-08-19, S-EXT-BATCH-2) -- see pickCategory's own
     // comment above; there is no separate Market-tier field on the real form to fill.
@@ -825,6 +962,14 @@
       await tryFill('Price', item.price, (v) => fillText('Price', String(Math.max(1, Math.round(Number(v))))));
     }
     // Offers (negotiation) toggle deliberately left at Grailed's own default -- never touched.
+    // BUG FIX 2026-08-20 (S-EXT-BATCH, P0, Patrick-directed): Grailed defaults Smart Pricing ON
+    // for every new listing (confirmed live: smartPricing.enabled checkbox checked:true) with its
+    // Floor Price field left blank -- this extension never touched either. Patrick's explicit
+    // direction: source the floor price the same real way Facebook's Best Offer minimum already
+    // is (fas-content.js's Offer-minimum logic), not a blank field or a silently-disabled toggle.
+    // Never disables Smart Pricing here -- that's Grailed's own default and not this extension's
+    // call to override; it only ensures a real number backs it when it's on.
+    await fillSmartPricingFloor(item);
     const intlShipping = await disableInternationalShipping();
     await humanPause(400, 800);
     const photosOk = await injectPhotos(item.photoUrls);

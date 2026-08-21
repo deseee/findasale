@@ -176,26 +176,29 @@
   }
   // A clickable "opener" (button/combobox/select-like div) for a labeled field, used for
   // category/brand/size/color pickers that aren't plain <input>/<textarea>.
-  // *** CONFIRMED PLATFORM LIMITATION 2026-08-20 (S-EXT-BATCH-10, live-Chrome-confirmed, HIGH
-  // PRIORITY -- read before attempting to "fix" Category/Size/Color/Condition on this platform
-  // again): Poshmark's custom dropdown fields (Category/Size/Color/Condition -- all share the same
-  // `data-test="dropdown"` component) do NOT open in response to ANY synthetic JS event this content
-  // script can produce. Tested and confirmed live, all failed to open anything (zero new DOM nodes):
-  // plain el.click(), a full pointerdown+mousedown+pointerup+mouseup+click sequence at real screen
-  // coordinates (the exact technique that DOES work on Grailed's Radix dropdowns), el.focus() +
-  // keydown Enter, and clicking the inner data-test="dropdown-container" child directly. A REAL
-  // mouse click via Chrome's own input pipeline (not page-context JS) opened it immediately and
-  // correctly, confirmed live via screenshot. This means Category/Size/Color/Condition on Poshmark
-  // cannot be automated from a content script at all with the techniques available to every other
-  // file in this extension -- it is not a selector-accuracy problem, it is that the click itself
-  // never reaches whatever handler opens the panel. The only known way to produce a genuinely
-  // trusted click from an extension is chrome.debugger (Input.dispatchMouseEvent via CDP), which
-  // requires the "debugger" permission and shows Chrome's own "this extension is debugging this
-  // browser" banner on every tab it touches while attached -- a real product/UX tradeoff, not a
-  // drop-in fix, and NOT added here without an explicit decision. Until that decision is made,
-  // fillSelectLike/pickCategory below still try (in case Poshmark ever changes this component to
-  // something synthetic-event-friendly), fail cleanly, and warn -- Category/Size/Color/Condition
-  // stay organizer-filled fields on this platform for now. ***
+  // *** RESOLVED 2026-08-20 (S-EXT-BATCH, P0, live-Chrome-confirmed -- supersedes the prior
+  // "confirmed platform limitation" note from S-EXT-BATCH-10 below, kept only for history): the
+  // prior note assumed chrome.debugger/CDP was the only way to produce a click Poshmark's dropdown
+  // would accept, and that assumption was WRONG -- confirmed this session by checking what real,
+  // working competitor extensions actually declare in their Chrome Web Store manifests (Vendoo
+  // Crosslist Extension v3, 60K users, and Crosslist, 10K users, both list Poshmark support; NEITHER
+  // has ever requested the "debugger" permission in their full multi-year permission-change
+  // history). The real fix: Poshmark's dropdown is a Vue 2 component (data-test="dropdown", a real
+  // `__vue__` instance is present on the element, componentName "Dropdown", with a local reactive
+  // data property `isExpaned` controlling visibility) -- not React, and not something any DOM-event
+  // trick (trusted or synthetic) needed to fake at all. Setting `opener.__vue__.isExpaned = true`
+  // directly opens the real menu -- screenshot-confirmed live. Once open, plain .click() on the
+  // leaf option elements works normally (also confirmed live: clicking "Men" correctly drilled into
+  // that subcategory) -- only the OPENER needed this treatment. See vueOpenDropdown() below, used by
+  // both fillSelectLike and pickCategory in place of the old opener.click().
+  //
+  // ORIGINAL NOTE (S-EXT-BATCH-10, 2026-08-20, kept for history -- the "only chrome.debugger can do
+  // this" conclusion below is superseded by the finding above): Poshmark's custom dropdown fields
+  // (Category/Size/Color/Condition -- all share the same `data-test="dropdown"` component) do not
+  // open in response to a plain el.click(), a full pointer-event sequence at real screen
+  // coordinates, el.focus()+keydown Enter, or clicking the inner dropdown-container child --
+  // confirmed live, all failed with zero new DOM nodes. A real mouse click via Chrome's own input
+  // pipeline opened it correctly. ***
   function openerByLabel(labelText) {
     const want = norm(labelText);
     const direct = document.querySelector('[aria-label="' + labelText + '"]');
@@ -275,6 +278,20 @@
     return false;
   }
 
+  // BUG FIX 2026-08-20 (S-EXT-BATCH, P0, live-Chrome-confirmed) -- see the RESOLVED comment on
+  // openerByLabel above for the full finding. Directly sets the Vue component's own `isExpaned`
+  // data property instead of dispatching a DOM click event at all. Falls back to a plain .click()
+  // if no __vue__ instance is found (component structure changed since this was confirmed) rather
+  // than throwing -- worse than the Vue path but no worse than this file's old behavior.
+  async function vueOpenDropdown(opener) {
+    const vm = opener && opener.__vue__;
+    if (vm && typeof vm.isExpaned !== 'undefined') {
+      vm.isExpaned = true;
+      return;
+    }
+    opener.click();
+  }
+
   // Structured select (Size, Color): open the field, click the matching option. UNVERIFIED
   // whether these render as native <select> or a custom listbox -- tries both.
   async function fillSelectLike(labelText, value) {
@@ -288,7 +305,7 @@
     }
     const opener = openerByLabel(labelText);
     if (!opener) return false;
-    opener.click();
+    await vueOpenDropdown(opener);
     await sleep(350);
     const opt = optionElByText(value);
     if (!opt) return false;
@@ -351,7 +368,7 @@
     const opener = openerByLabel('Category');
     if (!opener) return false;
     const placeholderText = norm(opener.textContent);
-    opener.click();
+    await vueOpenDropdown(opener);
     await sleep(400);
     const levelQueries = categoryText.split(':').map((s) => s.trim()).filter(Boolean);
     let pickedAny = false;

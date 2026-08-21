@@ -418,6 +418,13 @@ async function startQueue() {
     packageWeightOz: it.packageWeightOz, aiPackageWeightOz: it.aiPackageWeightOz,
     shippingOverride: it.shippingOverride,
     allowBestOffer: it.allowBestOffer, bestOfferMinimumAmt: it.bestOfferMinimumAmt,
+    // S-EXT-BATCH (2026-08-20, Patrick-directed): Grailed's Smart Pricing floor price needs a
+    // real computed default (item.bestOfferMinimumAmt if set, else price * (1 - pct/100)) instead
+    // of being left blank -- mirrors how Facebook's Best Offer minimum is already derived in
+    // fas-content.js. ORGANIZER is the module-level object already populated in load() from this
+    // same /extension/items response's top-level `organizer` field (see ORGANIZER = ... above) --
+    // no new fetch needed, just reading a field that was already on hand.
+    defaultBestOfferDeclinePct: (ORGANIZER && ORGANIZER.defaultBestOfferDeclinePct) || null,
     // 2026-08-18: brand/size/color/material passthrough -- fas-poshmark.js/fas-mercari.js/
     // fas-vinted.js/fas-grailed.js all reference these; previously always undefined since this
     // map never included them even though getExtensionItems now returns them. Same

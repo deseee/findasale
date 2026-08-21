@@ -412,6 +412,14 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
       // 2026-08-06: Craigslist reply-option email autofill -- the organizer's own account
       // email, data we already collect and store, not invented or guessed.
       email: organizer.user?.email || null,
+      // S-EXT-BATCH (2026-08-20): Grailed's Smart Pricing floor price needs a real source of
+      // truth instead of being left blank (Patrick-directed fix). `organizer` above is fetched
+      // with `include` (not `select`), which Prisma returns with ALL scalar fields already
+      // present -- defaultBestOfferDeclinePct (Int?, suggested default 25 per schema.prisma
+      // comment) is already on this object with zero query changes needed. Surfaced here so
+      // fas-grailed.js can compute floorPrice = item.bestOfferMinimumAmt ?? price * (1 - pct/100)
+      // the same way fas-content.js already derives Facebook's Best Offer minimum.
+      defaultBestOfferDeclinePct: organizer.defaultBestOfferDeclinePct,
     },
     items: shaped,
   });

@@ -292,6 +292,80 @@
       return el.offsetParent !== null;
     });
   }
+  // BUG FIX 2026-08-20 (S-EXT-BATCH, P0, Patrick-directed -- "fill the fields properly or with a
+  // proper default, not a skip message"): live-confirmed this session by reading Vinted's actual
+  // full option lists directly off the page. Size fails because Vinted's real grid is letter codes
+  // only (XS/S/M/L/XL/XXL/XXXL/4XL.../8XL/One size) -- "Medium" never whole-word-matches leaf "M".
+  // Color/Material fail because words like "Neon"/"Blended" simply aren't in Vinted's fixed
+  // vocabulary (33 real colors, 58 real materials, confirmed live -- neither word appears in
+  // either list). These maps remap a common non-Vinted word to the real option BEFORE scoring, so
+  // most values resolve to something real instead of silently failing.
+  const SIZE_ABBREVIATIONS = {
+    'x-small': 'XS', 'xsmall': 'XS', 'extra small': 'XS', 'xs': 'XS',
+    small: 'S', s: 'S',
+    medium: 'M', m: 'M',
+    large: 'L', l: 'L',
+    'x-large': 'XL', 'xlarge': 'XL', 'extra large': 'XL', 'xl': 'XL',
+    'xx-large': 'XXL', 'xxlarge': 'XXL', 'xxl': 'XXL',
+    'xxx-large': 'XXXL', 'xxxlarge': 'XXXL', 'xxxl': 'XXXL',
+    'one size': 'One size', 'os': 'One size', 'onesize': 'One size',
+  };
+  // Nearest-real-swatch mappings, not exact synonyms -- Vinted has no "Neon"/"Tan"/etc option, so
+  // these are the closest reasonable real color a human would pick. Commented per-mapping so a
+  // reviewer can judge/adjust any single one without re-deriving the whole table.
+  const COLOR_SYNONYMS = {
+    neon: 'Yellow', // no neon swatch on Vinted -- Yellow is the closest real option
+    tan: 'Beige',
+    maroon: 'Burgundy',
+    olive: 'Khaki',
+    ivory: 'Cream',
+    teal: 'Turquoise',
+    charcoal: 'Gray', grey: 'Gray',
+    rust: 'Orange',
+    lavender: 'Lilac',
+    magenta: 'Pink',
+    indigo: 'Navy',
+    'off white': 'White', offwhite: 'White',
+    multicolor: 'Multi', multicolour: 'Multi', 'multi-color': 'Multi', 'multi color': 'Multi',
+    transparent: 'Clear',
+  };
+  // Real single-fiber synonyms only -- deliberately does NOT include "blended"/"mixed"/"mixed
+  // fibers": picking one real fiber (e.g. Cotton) for an item that's actually a poly-cotton blend
+  // would misrepresent the listing's material composition, a real accuracy problem, not just a UX
+  // one. Those specific words are left unmapped on purpose so they still fall through to the
+  // honest skip-with-warning path below.
+  const MATERIAL_SYNONYMS = {
+    spandex: 'Elastane', lycra: 'Elastane',
+    vinyl: 'Plastic',
+    sherpa: 'Fleece',
+    pleather: 'Faux leather',
+    viscose: 'Rayon',
+  };
+  function resolveSynonym(fieldId, value) {
+    const key = norm(value);
+    if (fieldId === 'size' && SIZE_ABBREVIATIONS[key]) return SIZE_ABBREVIATIONS[key];
+    if (fieldId === 'color' && COLOR_SYNONYMS[key]) return COLOR_SYNONYMS[key];
+    if (fieldId === 'material' && MATERIAL_SYNONYMS[key]) return MATERIAL_SYNONYMS[key];
+    return value;
+  }
+  // BUG FIX 2026-08-20 (S-EXT-BATCH, P0, live-Chrome-confirmed): Size/Color/Material panels were
+  // confirmed live to stay open SIMULTANEOUSLY (all 3 visible stacked on the same real page after
+  // a run) -- pickFromPanel's existing stray-dismiss (a bare document.body.click()) isn't actually
+  // closing Vinted's panels. Explicitly closes via Escape + an off-panel click, then verifies via
+  // findOpenPanel before moving on. Best-effort: never throws, just logs if a panel refuses to close.
+  async function closePanel(fieldId) {
+    document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    await sleep(150);
+    if (findOpenPanel(fieldId, true)) {
+      const heading = document.querySelector('h1, h2') || document.body;
+      heading.click();
+      await sleep(200);
+    }
+    if (findOpenPanel(fieldId, true)) {
+      console.warn('[FAS Vinted] Panel for "' + fieldId + '" did not confirm closed -- it may still be visible on top of the next field.');
+    }
+  }
+
   async function pickFromPanel(fieldId, labelText, value) {
     const opener = openerByLabel(labelText) || document.getElementById(fieldId);
     if (!opener) return false;
@@ -359,7 +433,10 @@
       }
     }
     const leaves = leafOptionsIn(panel);
-    const opt = bestScoringOption(leaves, value);
+    // BUG FIX 2026-08-20 (S-EXT-BATCH, P0): resolve common non-Vinted words to a real option
+    // before scoring -- see SIZE_ABBREVIATIONS/COLOR_SYNONYMS/MATERIAL_SYNONYMS comment above.
+    const resolvedValue = resolveSynonym(fieldId, value);
+    const opt = bestScoringOption(leaves, resolvedValue);
     if (opt) {
       // BUG FIX 2026-08-19 (S-EXT-BATCH-4, P1, live-Chrome-confirmed, corrected after a live re-check
       // caught the first version of this fix as a regression): clicking the innermost leaf worked
@@ -384,8 +461,10 @@
       }
       clickTarget.click();
       await sleep(350);
+      await closePanel(fieldId);
       return true;
     }
+    await closePanel(fieldId);
     return false;
   }
   function setNativeValue(el, value) {

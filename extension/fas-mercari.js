@@ -30,6 +30,35 @@
 
   function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
   async function humanPause(minMs, maxMs) { await sleep(minMs + Math.random() * (maxMs - minMs)); }
+  // BUG FIX 2026-08-20 (S-EXT-BATCH, P0, Patrick-directed): the two stuck drafts this session both
+  // showed Mercari's own boilerplate ($14 draft default, "Condition requires an update") -- the
+  // fill got cut off before Price/Condition ever landed, and looksLikeInterstitial() correctly
+  // caught a REAL verification/security screen at the end of the run (not the earlier, different,
+  // already-fixed false-positive class of bug). Burst-filling many fields within milliseconds via
+  // bare .click()/dispatchEvent with ZERO pointer/mouse activity is a classic automation
+  // fingerprint. Self-contained here (fas-selectors.js is NOT loaded on mercari.com per manifest.json
+  // -- only facebook.com paths get it -- so this can't just reuse SEL.realClick; it's the same
+  // hover-preamble pattern copied in, not a new technique). Used for every field-value click below
+  // instead of a bare .click().
+  async function realClick(el) {
+    try { el.scrollIntoView({ block: 'center', inline: 'center' }); } catch (e) { /* non-fatal */ }
+    await new Promise((r) => requestAnimationFrame(() => setTimeout(r, 60)));
+    const rect = el.getBoundingClientRect();
+    const cx = Math.round(rect.left + rect.width / 2);
+    const cy = Math.round(rect.top + rect.height / 2);
+    const base = { bubbles: true, cancelable: true, composed: true, button: 0, view: window, clientX: cx, clientY: cy };
+    const pointer = (type, buttons) => new PointerEvent(type, Object.assign({}, base, { pointerId: 1, isPrimary: true, pointerType: 'mouse', buttons: buttons }));
+    const mouse = (type, buttons) => new MouseEvent(type, Object.assign({}, base, { buttons: buttons }));
+    el.dispatchEvent(pointer('pointerover', 0));
+    el.dispatchEvent(pointer('pointerenter', 0));
+    el.dispatchEvent(pointer('pointermove', 0));
+    el.dispatchEvent(pointer('pointerdown', 1));
+    el.dispatchEvent(mouse('mousedown', 1));
+    try { if (typeof el.focus === 'function') el.focus(); } catch (e) { /* non-fatal */ }
+    el.dispatchEvent(pointer('pointerup', 0));
+    el.dispatchEvent(mouse('mouseup', 0));
+    el.dispatchEvent(mouse('click', 0));
+  }
   function norm(s) { return String(s || '').replace(/\s+/g, ' ').trim().toLowerCase(); }
   function bodyText() { return (document.body && document.body.innerText) || ''; }
   function q(sel) { return document.querySelector(sel); }
@@ -399,7 +428,7 @@
         const options = qa('[role="option"], li[role="option"], [role="menuitem"], [role="menuitemradio"], li, button');
         const opt = bestScoringOptionWithGenderHint(options, query);
         if (opt) {
-          opt.click();
+          await realClick(opt);
           await sleep(300);
           // BUG FIX 2026-08-19 (S-EXT-BATCH-4, P0): Patrick's own live screenshot showed the search
           // modal still open AFTER a correct pick landed (breadcrumb read "Selected: Men > Tops >
@@ -417,7 +446,7 @@
             return t.length > 0 && t.length < 30 && /\b(apply|done|select|confirm|save)\b/.test(t);
           });
           if (confirmBtn) {
-            confirmBtn.click();
+            await realClick(confirmBtn);
             await sleep(250);
           } else {
             // No explicit confirm control -- try dismissing via an "x"/close control so the modal
@@ -427,7 +456,7 @@
               const t = norm(b.textContent);
               return (aria === 'close' || aria.indexOf('close') !== -1 || t === '×' || t === 'x') && b.offsetParent !== null;
             });
-            if (closeBtn) { closeBtn.click(); await sleep(200); }
+            if (closeBtn) { await realClick(closeBtn); await sleep(200); }
           }
           return true;
         }
@@ -452,7 +481,7 @@
       for (let i = segmentPointer; i < segments.length; i++) {
         const opt = bestScoringOption(options, segments[i]);
         if (opt) {
-          opt.click();
+          await realClick(opt);
           pickedAny = true;
           matched = true;
           segmentPointer = i + 1;
@@ -475,7 +504,7 @@
     setNativeValue(el, String(value));
     await sleep(700); // UNVERIFIED -- suggestion-list settle time, best-effort guess
     const match = optionElByText(value);
-    if (match) { match.click(); await sleep(200); return true; }
+    if (match) { await realClick(match); await sleep(200); return true; }
     console.warn('[FAS Mercari] Brand "' + value + '" had no matching suggestion (UNVERIFIED, category-dependent list) -- left unset.');
     return false;
   }
@@ -491,11 +520,11 @@
     }
     const opener = openerByLabel(labelText);
     if (!opener) return false;
-    opener.click();
+    await realClick(opener);
     await sleep(350);
     const opt = optionElByText(value);
     if (!opt) return false;
-    opt.click();
+    await realClick(opt);
     await sleep(200);
     return true;
   }
@@ -510,6 +539,34 @@
     if (/fair/.test(c)) return 'Fair';
     if (/poor|worn|damaged|for parts/.test(c)) return 'Poor';
     return 'Good';
+  }
+  // BUG FIX 2026-08-20 (S-EXT-BATCH-13, P0, live-Chrome-confirmed): Condition on Mercari's real
+  // Sell page is NOT a dropdown/opener+options widget at all -- it's 5 always-visible card
+  // buttons (New/Like new/Good/Fair/Poor), each a real semantic `<label data-testid="ConditionNew"
+  // | "ConditionLikeNew" | "ConditionGood" | "ConditionFair" | "ConditionPoor">`, confirmed by
+  // walking the live DOM up from the actual "New" card's own text node. `fillSelectLike('Condition',
+  // v)` (used everywhere else in this file for real dropdowns) calls `openerByLabel('Condition')`
+  // first, which requires ONE element whose own text/aria-label contains "condition" -- but none of
+  // the 5 cards say "condition" (they say "New"/"Good"/etc.) and the plain "Condition" heading
+  // itself isn't in openerByLabel's candidate selector list, so this always returned null --
+  // "selector not found", every time, confirmed live via Patrick's real console output. Fixed with
+  // a direct, unambiguous testid lookup + plain click (confirmed live: click on
+  // [data-testid="ConditionGood"] visibly selected that card, screenshot-verified), used INSTEAD of
+  // fillSelectLike for this one field.
+  const MERCARI_CONDITION_TESTID = {
+    'New': 'ConditionNew',
+    'Like New': 'ConditionLikeNew',
+    'Good': 'ConditionGood',
+    'Fair': 'ConditionFair',
+    'Poor': 'ConditionPoor',
+  };
+  async function fillMercariCondition(conditionLabel) {
+    const testid = MERCARI_CONDITION_TESTID[conditionLabel];
+    const el = testid ? document.querySelector('[data-testid="' + testid + '"]') : null;
+    if (!el) return false;
+    await realClick(el);
+    await sleep(200);
+    return true;
   }
 
   // Weight: FindA.Sale carries packageWeightOz / aiPackageWeightOz on the queue item (see
@@ -674,27 +731,42 @@
     await sleep(2500);
 
     overlay('<b>FindA.Sale</b> - filling the rest of the listing (overwriting anything Mercari auto-filled)...');
+    // BUG FIX 2026-08-20 (S-EXT-BATCH, P0, Patrick-directed): these 8 field fills used to run
+    // back-to-back with only each fillX function's own internal settle-sleep (150-700ms) between
+    // them -- no real pause between DIFFERENT fields at all. That's a burst pattern (many fields
+    // filled within milliseconds, zero pointer/mouse activity between them) that reads as
+    // automation. A real humanPause is now inserted between every field, widened to 500-1400ms
+    // (wider than this file's other internal pauses) so the whole fill spreads out instead of
+    // completing in one inhuman burst.
     await tryFill('Title', item.title, (v) => fillText('Title', v));
+    await humanPause(500, 1400);
     await tryFill('Description', padDescriptionForMercariMinimum(item.description, item), (v) => fillText('Description', v));
+    await humanPause(500, 1400);
     // Category BEFORE brand -- Mercari's brand list is category-aware (see fillBrand comment).
     // S-EXT-BATCH-12: pass categoryBreadcrumb alongside the clean category -- pickCategory uses
     // the breadcrumb for less-specific fallback segments (and to derive the men's/women's gender
     // tiebreak) after the clean leaf name's own simplified variants are tried first.
     await tryFill('Category', item.category, (v) => pickCategory(v, item.categoryBreadcrumb));
+    await humanPause(500, 1400);
     // 2026-08-18: brand/size/color now exist on Item and flow through getExtensionItems ->
     // popup.js's queue map. tryFill's own guard still skips silently on unset items;
     // category-type gating (apparel-only for size/color) is left to Mercari's own form,
     // never assumed here.
     await tryFill('Brand', item.brand, (v) => fillBrand('Brand', v));
+    await humanPause(500, 1400);
     await tryFill('Size', item.size, (v) => fillSelectLike('Size', v));
+    await humanPause(500, 1400);
     await tryFill('Color', item.color, (v) => fillSelectLike('Color', v));
+    await humanPause(500, 1400);
     const conditionLabel = mapMercariCondition(item.condition);
-    await tryFill('Condition', conditionLabel, (v) => fillSelectLike('Condition', v));
+    await tryFill('Condition', conditionLabel, (v) => fillMercariCondition(v));
+    await humanPause(500, 1400);
     if (item.price != null && isFinite(Number(item.price))) {
       const priceVal = Math.max(1, Math.round(Number(item.price)));
       if (priceVal > 2000) console.warn('[FAS Mercari] Price $' + priceVal + ' exceeds Mercari\'s standard $2,000 cap -- may need an authenticate-eligible designer category. Filling anyway; Mercari\'s own form is the real gate.');
       // Smart Pricing toggle sits next to Price -- deliberately never touched here.
       await tryFill('Price', priceVal, (v) => fillText('Price', String(v)));
+      await humanPause(500, 1400);
     }
     await fillWeight(item);
     return photosOk;
