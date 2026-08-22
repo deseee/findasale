@@ -396,12 +396,49 @@
   // file's "never select by CSS class" rule. Targets the real visible field directly first; falls
   // back to the old generic fieldByLabel path only if that specific attribute is ever removed/
   // renamed, so this degrades no worse than before rather than becoming a hard dependency.
+  // BUG FIX 2026-08-22 (S-EXT-POSHMARK-SMARTSELL, P0, live-Chrome-confirmed on Patrick's real
+  // tab): setting listingPrice auto-opens Poshmark's own "Listing Price" Smart Sell modal, which
+  // blocks the rest of the page while open -- live-confirmed pickCategory() finds zero
+  // interactable menu items while this modal is up, exactly matching Patrick's real-world report
+  // of Category failing completely ("nothing could be selected in the picker at all") right after
+  // Price filled. The modal's own close button (.modal__close-btn.simple-modal-close) does NOT
+  // respond to a dispatched synthetic click sequence (confirmed live: full pointerdown/mousedown/
+  // pointerup/mouseup/click dispatch had no effect) -- only a genuine OS-level trusted click
+  // closes it, which this content script cannot perform. Fix, confirmed live: walk up from the
+  // close button to its Vue "Modal" wrapper component (`$options.name === 'Modal'`) and call its
+  // own `closeModal()` method directly -- confirmed on Patrick's real tab to close the modal
+  // cleanly (offsetParent becomes null, 0x0 rect) and leave Category/Size/Color/etc. fully
+  // interactable again, same technique family as the isExpaned dropdown-toggle pattern elsewhere
+  // in this file (never a raw class-name click, always the real component's own state/method).
+  async function dismissSmartSellModal() {
+    await sleep(400); // let Poshmark's own debounce actually open the modal, if it's going to
+    const closeBtn = document.querySelector('.simple-modal-close, .modal__close-btn');
+    if (!closeBtn) return;
+    let p = closeBtn;
+    for (let i = 0; i < 8 && p; i++) {
+      const vm = p.__vue__;
+      if (vm && vm.$options && vm.$options.name === 'Modal' && typeof vm.closeModal === 'function') {
+        try { vm.closeModal(); } catch (e) { /* fall through to click fallback below */ }
+        await sleep(250);
+        break;
+      }
+      p = p.parentElement;
+    }
+    const stillOpen = document.querySelector('.simple-modal-close');
+    if (stillOpen && stillOpen.offsetParent !== null) {
+      // Last-resort fallback -- known unreliable for this element, but harmless to attempt.
+      realClick(stillOpen.closest('button') || stillOpen);
+      await sleep(250);
+    }
+  }
+
   async function fillPoshmarkPrice(value) {
     const el = document.querySelector('input[data-vv-name="listingPrice"]') || fieldByLabel('Price') || fieldByLabel('Listing Price');
     if (!el) return false;
     el.focus();
     setNativeValue(el, String(value));
     await sleep(150);
+    await dismissSmartSellModal();
     return true;
   }
 
@@ -591,8 +628,20 @@
   // so "men" can never match merely because it's spelled inside "women".
   function scoreMatch(text, want) {
     if (text === want) return 100000;
-    const wantWords = want.split(' ').filter(Boolean);
-    const textWords = text.split(' ').filter(Boolean);
+    // BUG FIX 2026-08-22 (S-EXT-POSHMARK-SMARTSELL, P0, live-Chrome-confirmed root cause of
+    // "Poshmark picked the wrong category" -- e.g. "Tracksuits & Sets" resolving to "Bath & Body"):
+    // .split(' ').filter(Boolean) kept a bare "&" as its own "word" token. The weighted whole-word
+    // branch below then scored ANY two category names that both merely CONTAIN an ampersand as a
+    // 100-point exact-word match (textWords.indexOf('&') !== -1 is true for "Bath & Body",
+    // "Jackets & Coats", "Pants & Jumpsuits", "Intimates & Sleepwear" -- basically every ampersand-
+    // joined Poshmark category name) -- live-confirmed: scoreMatch('bath & body', 'tracksuits & sets')
+    // returned 199.89 (a pure "&"-token match) while sharing zero real semantic content, and beat
+    // every other candidate including the correct null-score "no match" outcome. Filtering to only
+    // tokens containing a letter or digit (mirrors the length>=3 guard already used two lines down
+    // in the subOverlap branch, which was never affected by this bug) removes the bare punctuation
+    // token from consideration in BOTH branches without changing any real word-matching behavior.
+    const wantWords = want.split(' ').filter((w) => /[a-z0-9]/.test(w));
+    const textWords = text.split(' ').filter((w) => /[a-z0-9]/.test(w));
     let weighted = 0;
     for (let i = 0; i < wantWords.length; i++) {
       if (textWords.indexOf(wantWords[i]) !== -1) weighted += (wantWords.length - i) * 100;
