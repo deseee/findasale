@@ -114,6 +114,17 @@
         "https://www.poshmark.com/*"
       ],
       "js": [
+        "fas-poshmark-bridge.js"
+      ],
+      "world": "MAIN",
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://poshmark.com/*",
+        "https://www.poshmark.com/*"
+      ],
+      "js": [
         "fas-poshmark.js"
       ],
       "run_at": "document_idle"

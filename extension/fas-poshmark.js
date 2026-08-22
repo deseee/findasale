@@ -434,15 +434,12 @@
       await sleep(100);
     }
     if (!closeBtn) return; // modal never opened -- nothing to dismiss
-    let p = closeBtn;
-    for (let i = 0; i < 8 && p; i++) {
-      const vm = p.__vue__;
-      if (vm && vm.$options && vm.$options.name === 'Modal' && typeof vm.closeModal === 'function') {
-        try { vm.closeModal(); } catch (e) { /* fall through to click fallback below */ }
-        break;
-      }
-      p = p.parentElement;
-    }
+    // BUG FIX 2026-08-22 (S-EXT-POSHMARK-ISOLATED-WORLD, P0) -- see vueOpenDropdown's comment for
+    // the full root cause. This parent-walk + el.__vue__ check can never find the Modal component
+    // instance from this isolated-world script (same blind spot as Category/Size/Color); routed
+    // through the MAIN-world bridge instead. The click-based fallback below is unchanged.
+    const modalRes = await bridgeCall('closeVisibleModal', { el: closeBtn });
+    console.log('[FAS Poshmark][catdbg] bridge closeVisibleModal result=', modalRes);
     const deadline2 = Date.now() + 1500;
     while (Date.now() < deadline2) {
       if (!visibleModalCloseBtn()) return; // genuinely closed -- no visible modal instance left
@@ -485,18 +482,60 @@
     return false;
   }
 
-  // BUG FIX 2026-08-20 (S-EXT-BATCH, P0, live-Chrome-confirmed) -- see the RESOLVED comment on
-  // openerByLabel above for the full finding. Directly sets the Vue component's own `isExpaned`
-  // data property instead of dispatching a DOM click event at all. Falls back to a plain .click()
-  // if no __vue__ instance is found (component structure changed since this was confirmed) rather
-  // than throwing -- worse than the Vue path but no worse than this file's old behavior.
+  // BUG FIX 2026-08-22 (S-EXT-POSHMARK-ISOLATED-WORLD, P0, live-Chrome-confirmed root cause of
+  // Category/Size/Color ALL failing to open on Patrick's real installed extension, despite every
+  // test performed THIS SESSION succeeding): a diagnostic log added directly to this file and
+  // captured from Patrick's real browser console confirmed `opener.__vue__` reads as `undefined`
+  // inside this content script's real, installed execution --
+  // `[FAS Poshmark][catdbg] opener.__vue__ typeof= undefined hasIsExpaned= false`. Root cause:
+  // Chrome content scripts run in an ISOLATED JS world that shares the DOM with the page but NOT
+  // custom JS properties/objects the page's own scripts attach to DOM elements (this file's
+  // manifest.json entry had no "world" key, so it defaulted to ISOLATED). Poshmark's own Vue 2
+  // runtime attaches `el.__vue__` from the PAGE's MAIN world -- invisible from here. Every test
+  // performed this session used Chrome DevTools/CDP script injection, which runs in MAIN world
+  // (where __vue__ IS visible) -- exactly why those tests always succeeded while the real
+  // installed extension never could. Fix: fas-poshmark-bridge.js is a companion script declared
+  // in manifest.json with "world": "MAIN" on the same match pattern -- it runs in the page's own
+  // JS world (where __vue__ is visible) and relays results back via a CustomEvent request/
+  // response pair on `window`. DOM CustomEvent detail payloads and DOM element references both
+  // cross the isolated/MAIN world boundary fine (same underlying DOM objects) -- only non-DOM JS
+  // objects like a Vue component instance do not, which is why every call below passes a DOM
+  // element in `payload.el`, never a Vue instance directly.
+  function bridgeCall(action, payload, timeoutMs) {
+    return new Promise((resolve) => {
+      const requestId = 'fas-' + Date.now() + '-' + Math.random().toString(36).slice(2);
+      let done = false;
+      const timeout = setTimeout(() => {
+        if (done) return;
+        done = true;
+        window.removeEventListener('fas-poshmark-vue-response', onResponse);
+        resolve({ ok: false, error: 'bridge-timeout' });
+      }, timeoutMs || 1500);
+      function onResponse(e) {
+        const detail = (e && e.detail) || {};
+        if (detail.requestId !== requestId) return;
+        if (done) return;
+        done = true;
+        clearTimeout(timeout);
+        window.removeEventListener('fas-poshmark-vue-response', onResponse);
+        resolve(Object.assign({ ok: true }, detail.result));
+      }
+      window.addEventListener('fas-poshmark-vue-response', onResponse);
+      window.dispatchEvent(new CustomEvent('fas-poshmark-vue-request', { detail: { requestId: requestId, action: action, payload: payload } }));
+    });
+  }
+
+  // Opens Poshmark's custom Vue dropdown via the MAIN-world bridge above (the ONLY way this
+  // isolated-world script can actually flip the component's `isExpaned` state). Falls back to
+  // realClick() if the bridge can't confirm it opened -- matches this file's prior fallback shape,
+  // though realClick was previously confirmed NOT to open this specific dropdown on its own (see
+  // the ORIGINAL NOTE on openerByLabel above); kept only as a harmless last resort.
   async function vueOpenDropdown(opener) {
-    const vm = opener && opener.__vue__;
-    if (vm && typeof vm.isExpaned !== 'undefined') {
-      vm.isExpaned = true;
-      return;
+    const res = await bridgeCall('openDropdown', { el: opener });
+    console.log('[FAS Poshmark][catdbg] bridge openDropdown result=', res);
+    if (!res || !res.opened) {
+      realClick(opener);
     }
-    realClick(opener);
   }
 
   // BUG FIX 2026-08-21 (S-EXT-BATCH, P0, live-Chrome-confirmed root cause of "Poshmark chose the
@@ -554,10 +593,13 @@
     if (!dropdown || dropdown.children.length < 2) return false;
     const chipRow = dropdown.children[0];
     const tileGrid = dropdown.children[1];
-    const vm = dropdown.__vue__;
+    // BUG FIX 2026-08-22 (S-EXT-POSHMARK-ISOLATED-WORLD, P0) -- see vueOpenDropdown's comment
+    // above for the full root cause. `dropdown.__vue__` is invisible from this isolated-world
+    // script; routed through the same MAIN-world bridge used for Category/Size.
     if (!poshmarkColorPanelOpen(dropdown)) {
-      if (vm && 'isExpaned' in vm) vm.isExpaned = true;
-      else realClick(chipRow.querySelector('[data-et-name="color"]') || chipRow);
+      const openRes = await bridgeCall('openDropdown', { el: dropdown });
+      console.log('[FAS Poshmark][catdbg] color bridge openDropdown result=', openRes);
+      if (!openRes || !openRes.opened) realClick(chipRow.querySelector('[data-et-name="color"]') || chipRow);
       await sleep(400);
     }
     if (!poshmarkColorPanelOpen(dropdown)) {
@@ -588,9 +630,10 @@
         console.warn('[FAS Poshmark] Color "' + value + '" -- no matching swatch found among Poshmark\'s real options (UNVERIFIED) -- left unset.');
       }
     }
-    // Close via the same Vue isExpaned flag used to open -- live-confirmed this closes the panel
-    // reliably (menuEl display flips to "none"), unlike the broken 0x0 "Done" button.
-    if (vm && 'isExpaned' in vm) vm.isExpaned = false;
+    // Close via the same MAIN-world bridge used to open -- live-confirmed (pre-isolated-world-fix)
+    // this closes the panel reliably (menuEl display flips to "none"), unlike the broken 0x0
+    // "Done" button.
+    await bridgeCall('closeDropdown', { el: dropdown });
     await sleep(300);
     return !!target || alreadyOn;
   }
@@ -746,13 +789,12 @@
       if (!other) break;
       realClick(other);
       await sleep(350);
-      let catalogVm = null;
-      for (const el of qa('*')) {
-        const vm = el.__vue__;
-        if (vm && vm.$options && vm.$options.name === 'ListingEditorCatalog') { catalogVm = vm; break; }
-      }
-      const committedNow = !!(catalogVm && (catalogVm.selectedDepartment || catalogVm.selectedGroup || catalogVm.lastSelectedCategoryData));
-      console.log('[FAS Poshmark][catdbg] otherFallback level', level, 'catalogVmFound=', !!catalogVm, 'committedNow=', committedNow);
+      // BUG FIX 2026-08-22 (S-EXT-POSHMARK-ISOLATED-WORLD, P0) -- see vueOpenDropdown's comment
+      // for the full root cause. This qa('*') + el.__vue__ walk can never find a real Vue
+      // instance from this isolated-world script; routed through the MAIN-world bridge instead.
+      const catalogState = await bridgeCall('getCatalogCommitState', {});
+      const committedNow = !!(catalogState && catalogState.committed);
+      console.log('[FAS Poshmark][catdbg] otherFallback level', level, 'catalogFound=', !!(catalogState && catalogState.catalogFound), 'committedNow=', committedNow);
       if (committedNow) return true;
     }
     return false;
@@ -771,6 +813,7 @@
     }
     const placeholderText = norm(opener.textContent);
     console.log('[FAS Poshmark][catdbg] opener found, text=', placeholderText.slice(0, 60));
+    console.log('[FAS Poshmark][catdbg] opener.__vue__ typeof=', typeof opener.__vue__, 'hasIsExpaned=', !!(opener.__vue__ && 'isExpaned' in opener.__vue__));
     await vueOpenDropdown(opener);
     await sleep(400);
     // BUG FIX 2026-08-22 (S-EXT-POSHMARK-CATEGORY-STALE-STATE, P0, live-Chrome-confirmed root
@@ -885,19 +928,18 @@
     // is genuinely committed (live-confirmed: all three are null before any click, and
     // `selectedDepartment` becomes a real object immediately after even a department-only click).
     // Read AFTER the Other-fallback attempt above, since Other itself changes this state too.
-    let catalogVm = null;
-    for (const el of qa('*')) {
-      const vm = el.__vue__;
-      if (vm && vm.$options && vm.$options.name === 'ListingEditorCatalog') { catalogVm = vm; break; }
-    }
-    const committed = !!(catalogVm && (catalogVm.selectedDepartment || catalogVm.selectedGroup || catalogVm.lastSelectedCategoryData));
+    // BUG FIX 2026-08-22 (S-EXT-POSHMARK-ISOLATED-WORLD, P0) -- see vueOpenDropdown's comment
+    // for the full root cause. This qa('*') + el.__vue__ walk can never find a real Vue instance
+    // from this isolated-world script; routed through the MAIN-world bridge instead.
+    const catalogState = await bridgeCall('getCatalogCommitState', {});
+    console.log('[FAS Poshmark][catdbg] pickCategory catalogState=', catalogState);
+    const committed = !!(catalogState && catalogState.committed);
     // Always close the dropdown before returning, success or failure -- live-confirmed an
     // unclosed Category panel leaks its still-visible department/leaf <li> items into every
     // later field's global li/role query (this is exactly how Size's optionElByText('M') matched
     // a stray "Women" <li> left over from this panel instead of any real size option).
-    const openerVm = opener.__vue__;
-    if (openerVm && 'isExpaned' in openerVm) openerVm.isExpaned = false;
-    else realClick(opener);
+    const closeRes = await bridgeCall('closeDropdown', { el: opener });
+    if (!closeRes || !closeRes.closed) realClick(opener);
     await sleep(250);
     if (!committed) {
       console.warn('[FAS Poshmark] Category "' + categoryText + '" -- nothing could be selected in the picker at all (UNVERIFIED taxonomy) -- left for the organizer to choose.');
