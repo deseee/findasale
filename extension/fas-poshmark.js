@@ -410,23 +410,48 @@
   // cleanly (offsetParent becomes null, 0x0 rect) and leave Category/Size/Color/etc. fully
   // interactable again, same technique family as the isExpaned dropdown-toggle pattern elsewhere
   // in this file (never a raw class-name click, always the real component's own state/method).
+  function visibleModalCloseBtn() {
+    // BUG FIX 2026-08-22 (S-EXT-POSHMARK-SMARTSELL-ROUND3, P0, live-Chrome-confirmed root cause
+    // of why ROUND2's poll-based fix STILL failed on Patrick's real run): confirmed live via
+    // `document.querySelectorAll('.simple-modal-close, .modal__close-btn')` that Poshmark keeps
+    // MANY of these wrapper "Modal" component instances mounted in the DOM at once (11+ found
+    // live), almost all with `show: false` and `offsetParent === null` -- only ONE of them is
+    // ever actually open. `document.querySelector(...)` (singular) always returns the FIRST of
+    // these in document order, which live-confirmed is essentially never the one that becomes
+    // visible -- so both the "did it open" check and the "did it close" check in ROUND2 were
+    // silently testing a permanently-hidden, unrelated modal instance the entire time, timing out
+    // and no-op'ing every single run while the REAL open modal sat there untouched. Fix: always
+    // query ALL matches and find the one that is actually rendered right now.
+    return qa('.simple-modal-close, .modal__close-btn').find((el) => el.offsetParent !== null) || null;
+  }
+
   async function dismissSmartSellModal() {
-    await sleep(400); // let Poshmark's own debounce actually open the modal, if it's going to
-    const closeBtn = document.querySelector('.simple-modal-close, .modal__close-btn');
-    if (!closeBtn) return;
+    const deadline1 = Date.now() + 2000;
+    let closeBtn = null;
+    while (Date.now() < deadline1) {
+      closeBtn = visibleModalCloseBtn();
+      if (closeBtn) break;
+      await sleep(100);
+    }
+    if (!closeBtn) return; // modal never opened -- nothing to dismiss
     let p = closeBtn;
     for (let i = 0; i < 8 && p; i++) {
       const vm = p.__vue__;
       if (vm && vm.$options && vm.$options.name === 'Modal' && typeof vm.closeModal === 'function') {
         try { vm.closeModal(); } catch (e) { /* fall through to click fallback below */ }
-        await sleep(250);
         break;
       }
       p = p.parentElement;
     }
-    const stillOpen = document.querySelector('.simple-modal-close');
-    if (stillOpen && stillOpen.offsetParent !== null) {
-      // Last-resort fallback -- known unreliable for this element, but harmless to attempt.
+    const deadline2 = Date.now() + 1500;
+    while (Date.now() < deadline2) {
+      if (!visibleModalCloseBtn()) return; // genuinely closed -- no visible modal instance left
+      await sleep(100);
+    }
+    // Vue method either wasn't found or didn't close it in time -- last-resort fallback, known
+    // unreliable for this specific element, but harmless to attempt.
+    const stillOpen = visibleModalCloseBtn();
+    if (stillOpen) {
       realClick(stillOpen.closest('button') || stillOpen);
       await sleep(250);
     }
