@@ -273,7 +273,27 @@
     // entirely absent from this candidate list before, a likely contributor to those toggles never
     // being found at all.
     const candidates = qa('[role="combobox"], [role="button"], [role="switch"], button, select, div[tabindex]');
-    const hit = candidates.find((c) => wordBoundaryHas(norm(c.getAttribute('aria-label') || c.textContent), want) && norm(c.textContent).length < 80);
+    // BUG FIX 2026-08-21 (S-EXT-BATCH, P0, live-Chrome-confirmed root cause of Size never filling
+    // -- and Poshmark's own "Please select the category first" message staying stuck even after
+    // Category genuinely committed): live-confirmed via Poshmark's own Vue instance that Category
+    // DOES set the real categoryId correctly and Size's `preventClick` prop DOES flip to false --
+    // the field is actually unlocked. The failure is earlier: `openerByLabel('Size')` never finds
+    // an opener at all. Poshmark's Size widget is a single Vue component whose top DOM node
+    // contains BOTH the "Select Size" placeholder AND its own dropdown panel content (tabs, every
+    // size option, a "Done" button) already present in the DOM at all times -- confirmed live its
+    // combined textContent is 142 chars ("Select Size Standard Plus Petite ... Measurements Done"),
+    // so the old `text.length < 80` cap (meant to reject a giant unrelated container, like an
+    // entire form or nav flyout) rejected this legitimate single-field opener too. Category's own
+    // opener happened to stay under 80 chars, which is why it worked while Size never did. Loosened
+    // the check: still require < 80 chars OR the wanted word to appear within the first 20
+    // characters of the normalized text -- true here ("select size..." -- "size" at index 7) and
+    // for any genuine label-prefixed opener, but still rejects a huge container where the word is
+    // buried deep inside unrelated content (the exact case the original cap was protecting against).
+    const hit = candidates.find((c) => {
+      const text = norm(c.getAttribute('aria-label') || c.textContent);
+      if (!wordBoundaryHas(text, want)) return false;
+      return text.length < 80 || text.indexOf(want) < 20;
+    });
     if (hit) return hit;
     const labels = qa('label');
     for (const lab of labels) {
@@ -287,10 +307,17 @@
     }
     return nearestControlAfter(labelText);
   }
+  // BUG FIX (this pass, live-Chrome-confirmed root cause of Size picking "Women" for a query of
+  // "M"): the old fallback tier was a raw `.indexOf(want)`, so a 1-2 char size code like "M"/"S"/"L"
+  // matched as a substring of ANY unrelated option text that happened to contain that letter (e.g.
+  // "Women" contains "m", live-confirmed this exact collision selected "Women" -- a leftover, still-
+  // open Category menu item -- instead of any real size option). Switched to wordBoundaryHas so the
+  // fallback only fires when `want` appears as a whole word, never as a bare letter/substring inside
+  // an unrelated word.
   function optionElByText(text) {
     const want = norm(text);
     const opts = qa('[role="option"], li[role="option"], [role="menuitem"], [role="menuitemradio"], li');
-    return opts.find((o) => norm(o.textContent) === want) || opts.find((o) => norm(o.textContent).indexOf(want) !== -1 && norm(o.textContent).length < 60) || null;
+    return opts.find((o) => norm(o.textContent) === want) || opts.find((o) => wordBoundaryHas(norm(o.textContent), want) && norm(o.textContent).length < 60) || null;
   }
   // React-controlled inputs ignore a plain .value=x; use the native setter then dispatch input
   // (same pattern as fas-content.js's setNativeValue).
@@ -357,6 +384,102 @@
     realClick(opener);
   }
 
+  // BUG FIX 2026-08-21 (S-EXT-BATCH, P0, live-Chrome-confirmed root cause of "Poshmark chose the
+  // wrong color"): Color is NOT the same widget shape as Size/Category at all -- confirmed live
+  // its "opener" has no role/tabindex/button semantics openerByLabel's candidate scan requires, so
+  // fillSelectLike's generic path could never reliably find or fill it (any prior fill was
+  // whatever nearestControlAfter's fallback happened to grab). Poshmark's real Color widget
+  // (structurally: SECTION > .listing-editor__subsection > .dropdown > [chip-summary-row,
+  // tile-grid]) pre-selects a default swatch ("Red", confirmed live on a fresh listing) BEFORE
+  // this extension touches anything, and clicking a target color ADDS to that default instead of
+  // replacing it (live-confirmed: clicking "Pink" then "Done" left BOTH "Red" and "Pink" selected,
+  // shown as the chip-summary "RedPink") -- the exact class of pre-suggestion-stacking bug already
+  // found and fixed on Vinted's Color/Material this session. Each currently-selected color is its
+  // own separate leaf element inside the chip-summary row (confirmed live: ["Red","Pink"], not one
+  // opaque concatenated string), so the pre-existing selections can be read cleanly and toggled off
+  // one by one before picking the real target.
+  function findPoshmarkColorSection() {
+    const helper = qa('*').find((el) => el.children.length === 0 && /select up to \d+ colors?/i.test(norm(el.textContent)) && el.offsetParent !== null);
+    if (!helper) return null;
+    let anc = helper;
+    for (let i = 0; i < 6 && anc; i++) {
+      if (anc.tagName === 'SECTION') return anc;
+      anc = anc.parentElement;
+    }
+    return null;
+  }
+  // Each color tile's real label lives in a nested <span> (not a direct text-node child of the
+  // <li> -- live-confirmed: <li><div><a class="color__circle--large"><i class="checkmark"/></a>
+  // <span>Red</span></div></li>). A tile is "selected" when its <a> contains an
+  // <i class="checkmark"> element at all (live-confirmed: present only on the pre-selected "Red"
+  // tile on a fresh load, absent -- not just hidden -- on every other tile).
+  function poshmarkColorTileText(li) {
+    const span = li.querySelector('span');
+    return span ? span.textContent.trim() : '';
+  }
+  function poshmarkColorTileSelected(li) {
+    return !!li.querySelector('i.checkmark');
+  }
+  // The color dropdown is the same Vue "Dropdown" component (data key "isExpaned") already used
+  // successfully for Size -- open/close it the same way instead of relying on realClick timing or
+  // the "Done" button, which is live-confirmed to render at a genuine 0x0 rect (an ancestor
+  // `.dropdown__menu` collapses to height:0 while still containing real, clickable tiles) and so
+  // cannot be reliably clicked by coordinate. `.dropdown__menu`'s own `display` (none <-> block) is
+  // the real, live-confirmed open/closed signal -- NOT the tile-grid element's offsetParent, which
+  // stays non-null (a separate 0-height sibling) even while the menu is genuinely closed.
+  function poshmarkColorPanelOpen(dropdown) {
+    const menuEl = dropdown.querySelector('.dropdown__menu');
+    if (!menuEl) return false;
+    return getComputedStyle(menuEl).display !== 'none';
+  }
+  async function fillPoshmarkColor(value) {
+    const section = findPoshmarkColorSection();
+    if (!section) return false;
+    const dropdown = section.querySelector('.dropdown');
+    if (!dropdown || dropdown.children.length < 2) return false;
+    const chipRow = dropdown.children[0];
+    const tileGrid = dropdown.children[1];
+    const vm = dropdown.__vue__;
+    if (!poshmarkColorPanelOpen(dropdown)) {
+      if (vm && 'isExpaned' in vm) vm.isExpaned = true;
+      else realClick(chipRow.querySelector('[data-et-name="color"]') || chipRow);
+      await sleep(400);
+    }
+    if (!poshmarkColorPanelOpen(dropdown)) {
+      console.warn('[FAS Poshmark] Color panel did not open -- left unset.');
+      return false;
+    }
+    const tiles = Array.from(tileGrid.querySelectorAll('li'));
+    // Poshmark pre-selects a default swatch ("Red", confirmed live on a fresh listing) BEFORE this
+    // extension touches anything, and clicking a target color ADDS to that default instead of
+    // replacing it (live-confirmed: clicking "Pink" left BOTH "Red" and "Pink" selected, shown as
+    // chip-summary "RedPink") -- the same pre-suggestion-stacking bug already found and fixed on
+    // Vinted's Color/Material this session. Deselect every pre-existing tile that isn't the target
+    // (toggle-click removes it, live-confirmed) before picking the real target.
+    const want = norm(value);
+    const preSelectedTiles = tiles.filter(poshmarkColorTileSelected);
+    for (const stale of preSelectedTiles) {
+      if (norm(poshmarkColorTileText(stale)) === want) continue;
+      realClick(stale);
+      await sleep(200);
+    }
+    const stillSelected = tiles.filter(poshmarkColorTileSelected).map(poshmarkColorTileText);
+    const alreadyOn = stillSelected.some((t) => norm(t) === want);
+    let target = null;
+    if (!alreadyOn) {
+      target = bestScoringOption(tiles.filter((li) => poshmarkColorTileText(li)), value);
+      if (target) { realClick(target); await sleep(200); }
+      else {
+        console.warn('[FAS Poshmark] Color "' + value + '" -- no matching swatch found among Poshmark\'s real options (UNVERIFIED) -- left unset.');
+      }
+    }
+    // Close via the same Vue isExpaned flag used to open -- live-confirmed this closes the panel
+    // reliably (menuEl display flips to "none"), unlike the broken 0x0 "Done" button.
+    if (vm && 'isExpaned' in vm) vm.isExpaned = false;
+    await sleep(300);
+    return !!target || alreadyOn;
+  }
+
   // Structured select (Size, Color): open the field, click the matching option. UNVERIFIED
   // whether these render as native <select> or a custom listbox -- tries both.
   async function fillSelectLike(labelText, value) {
@@ -403,6 +526,16 @@
   // matched word is weighted by its position in the query (earlier = more significant) instead of
   // counted flatly, since FindA.Sale's category segments consistently put the specific term first
   // and a broader catch-all after.
+  // BUG FIX (this pass, live-Chrome-confirmed root cause of Category department picking "Men" for
+  // a query of "Women's"): the subOverlap fallback tier did `tw.indexOf(w) !== -1 || w.indexOf(tw)
+  // !== -1` -- a raw substring test with no word-boundary check. "Men" is a literal substring of
+  // "Women's" (wo-MEN-'s), so a query for "Women's" scored a match against the unrelated department
+  // "Men" via this tier, and since the tier's score REWARDS shorter matched text (subOverlap*10 -
+  // text.length), "Men" (len 3, score 7) beat "Women" (len 5, score 5) even though "Women" is the
+  // semantically correct match reached only via the (bugged) substring path since the apostrophe in
+  // "women's" prevented the exact-word weighted tier above from ever firing. Fixed by requiring
+  // whole-word containment (wordBoundaryHas) in the fallback tier instead of a bare substring test,
+  // so "men" can never match merely because it's spelled inside "women".
   function scoreMatch(text, want) {
     if (text === want) return 100000;
     const wantWords = want.split(' ').filter(Boolean);
@@ -412,7 +545,7 @@
       if (textWords.indexOf(wantWords[i]) !== -1) weighted += (wantWords.length - i) * 100;
     }
     if (weighted > 0) return weighted - text.length * 0.01;
-    const subOverlap = wantWords.filter((w) => w.length >= 3 && textWords.some((tw) => tw.length >= 3 && (tw.indexOf(w) !== -1 || w.indexOf(tw) !== -1))).length;
+    const subOverlap = wantWords.filter((w) => w.length >= 3 && textWords.some((tw) => tw.length >= 3 && (wordBoundaryHas(tw, w) || wordBoundaryHas(w, tw)))).length;
     if (subOverlap === 0) return null;
     return subOverlap * 10 - text.length;
   }
@@ -450,18 +583,38 @@
     await vueOpenDropdown(opener);
     await sleep(400);
     const breadcrumbSegments = (breadcrumbText || '').split(':').map((s) => s.trim()).filter(Boolean);
-    const genderHint = breadcrumbSegments.map(norm).find((s) => s === 'men' || s === 'women' || s === 'kids' || s === "men's" || s === "women's") || null;
     let pickedAny = false;
-    if (genderHint) {
-      await sleep(300);
-      const items0 = qa('[role="menuitem"], [role="menuitemradio"], [role="option"], li').filter((el) => el.offsetParent !== null);
-      const genderWord = genderHint.replace(/'s$/, '');
-      const genderMatch = items0.find((el) => {
-        const t = norm(el.textContent);
-        return t === genderWord || t.split(' ').indexOf(genderWord) !== -1;
-      });
-      if (genderMatch) { realClick(genderMatch); pickedAny = true; await sleep(350); }
+    // BUG FIX 2026-08-21 (S-EXT-BATCH, P0, live-Chrome-confirmed root cause of "Poshmark still
+    // wants category selected first"): the old genderHint step required an EXACT breadcrumb
+    // segment equal to "men"/"women"/"kids"/"men's"/"women's" -- confirmed against
+    // extensionController.ts (S-EXT-BATCH-12 comment) that `categoryBreadcrumb` is `it.category`,
+    // documented in schema.prisma as "eBay L1 category name" but in practice whatever the AI
+    // tagging pipeline wrote -- NOT guaranteed to contain a clean standalone "men"/"women" segment
+    // for every item (schema says L1 name like "Home & Garden" with no gender segment at all is
+    // also a real, valid shape). When no exact segment matched, this whole department-selection
+    // step was skipped entirely with ZERO fallback -- live-confirmed Poshmark's own "All
+    // Categories" option is a dead end (doesn't reveal subcategories, doesn't commit anything), so
+    // Category was NEVER set, and Poshmark's own real validation then correctly blocked
+    // Size/Condition/Price with "select category first" -- exactly Patrick's report. Replaced the
+    // exact-token requirement with the SAME scored-matching bestScoringOption/scoreMatch mechanism
+    // already used for every deeper level below: scores every breadcrumb segment AND categoryText
+    // itself against Poshmark's real 7 department options (All Categories/Women/Men/Kids/Home/
+    // Pets/Electronics, confirmed live), picks whichever candidate scores best across all of them.
+    // This still correctly resolves "men"/"women" when present (scores highest via an exact/
+    // whole-word match) but no longer hard-fails when the breadcrumb doesn't have a clean gender
+    // token -- e.g. a raw L1 name like "Home & Garden" now scores against "Home" via shared-word
+    // matching instead of being silently skipped.
+    await sleep(300);
+    const items0 = qa('[role="menuitem"], [role="menuitemradio"], [role="option"], li').filter((el) => el.offsetParent !== null && norm(el.textContent) !== 'all categories');
+    const departmentCandidates = [...breadcrumbSegments, categoryText].filter(Boolean);
+    let bestDept = null, bestDeptScore = -1;
+    for (const cand of departmentCandidates) {
+      const scored = bestScoringOption(items0, cand);
+      if (!scored) continue;
+      const score = scoreMatch(norm(scored.textContent), norm(cand));
+      if (score !== null && score > bestDeptScore) { bestDeptScore = score; bestDept = scored; }
     }
+    if (bestDept) { realClick(bestDept); pickedAny = true; await sleep(350); }
     const levelQueries = categoryText.split(':').map((s) => s.trim()).filter(Boolean);
     let remaining = (levelQueries.length > 1 ? levelQueries.slice(1) : levelQueries).map((seg, i) => ({ seg, i }));
     for (let level = 0; level < 3; level++) {
@@ -481,9 +634,33 @@
       if (bestRemainingIdx !== -1) remaining.splice(bestRemainingIdx, 1);
       await sleep(350);
     }
-    const committed = pickedAny && norm(opener.textContent) !== placeholderText && norm(opener.textContent).length > 0;
+    // BUG FIX (this pass, live-Chrome-confirmed): the old "committed" check trusted the opener's
+    // OWN textContent changing from its placeholder -- but live-confirmed (same quirk already found
+    // on the Size opener) the Category opener's textContent bundles its ENTIRE currently-rendered
+    // menu, so it changes the instant ANY submenu opens, even if the department click landed on the
+    // WRONG option and no real leaf was ever picked (live-confirmed: a run that picked "Men" instead
+    // of "Women" for a "Women's" query, then found no matching subcategory and broke out of the
+    // level loop with nothing further selected, still read committed=true under the old check).
+    // Poshmark's real Vue state is the only reliable signal: `ListingEditorCatalog`'s
+    // `selectedDepartment` / `selectedGroup` / `lastSelectedCategoryData` are null until a category
+    // is genuinely committed (live-confirmed: all three are null immediately after the mis-fire
+    // above). Read that component directly instead of inferring from bundled DOM text.
+    let catalogVm = null;
+    for (const el of qa('*')) {
+      const vm = el.__vue__;
+      if (vm && vm.$options && vm.$options.name === 'ListingEditorCatalog') { catalogVm = vm; break; }
+    }
+    const committed = !!(catalogVm && (catalogVm.selectedDepartment || catalogVm.selectedGroup || catalogVm.lastSelectedCategoryData));
+    // Always close the dropdown before returning, success or failure -- live-confirmed an
+    // unclosed Category panel leaks its still-visible department/leaf <li> items into every
+    // later field's global li/role query (this is exactly how Size's optionElByText('M') matched
+    // a stray "Women" <li> left over from this panel instead of any real size option).
+    const openerVm = opener.__vue__;
+    if (openerVm && 'isExpaned' in openerVm) openerVm.isExpaned = false;
+    else realClick(opener);
+    await sleep(250);
     if (!committed) {
-      console.warn('[FAS Poshmark] Category "' + categoryText + '" -- ' + (pickedAny ? 'a level was matched but the picker never committed to a final value' : 'no level matched in the picker' + (genderHint ? '' : ' (no gender/department hint found in categoryBreadcrumb -- Poshmark\'s top-level menu could not be steered at all)')) + ' (UNVERIFIED taxonomy) -- left for the organizer to choose.');
+      console.warn('[FAS Poshmark] Category "' + categoryText + '" -- ' + (pickedAny ? 'a level was matched but Poshmark\'s own state shows no category actually committed (likely picked the wrong department/leaf)' : 'no level matched in the picker' + (bestDept ? '' : ' (no department candidate matched in categoryBreadcrumb/categoryText -- Poshmark\'s top-level menu could not be steered at all)')) + ' (UNVERIFIED taxonomy) -- left for the organizer to choose.');
       return false;
     }
     return true;
@@ -647,7 +824,7 @@
     // items where the organizer hasn't set a value.
     await tryFill('Brand', item.brand, (v) => fillAutocomplete('Brand', v));
     await tryFill('Size', item.size, (v) => fillSelectLike('Size', v));
-    await tryFill('Color', item.color, (v) => fillSelectLike('Color', v));
+    await tryFill('Color', item.color, (v) => fillPoshmarkColor(v));
     const conditionLabel = mapPoshmarkCondition(item.condition);
     await tryFill('Condition', conditionLabel, (v) => fillSelectLike('Condition', v));
     await humanPause(400, 800);

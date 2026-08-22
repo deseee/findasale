@@ -390,12 +390,29 @@
   // a run) -- pickFromPanel's existing stray-dismiss (a bare document.body.click()) isn't actually
   // closing Vinted's panels. Explicitly closes via Escape + an off-panel click, then verifies via
   // findOpenPanel before moving on. Best-effort: never throws, just logs if a panel refuses to close.
+  // BUG FIX 2026-08-21 (S-EXT-BATCH, P0, live-Chrome-confirmed, Patrick-reported "color and
+  // material selects were still visible after the extension set them"): the fallback dismiss here
+  // used to be a bare `heading.click()` on document's first h1/h2 -- live-confirmed on the real
+  // Color panel this does NOT close it (panel still present, offsetParent non-null, after both the
+  // Escape keydown AND the bare heading click). Vinted's picker only responds to an outside
+  // dismiss when the click is a REAL multi-event sequence (pointerdown+mousedown+pointerup+mouseup
+  // +click), the same pattern this file (and fas-poshmark.js) already had to adopt for OPENING
+  // these widgets -- live-confirmed the exact same sequence dispatched on document.body (a safe,
+  // definitely-outside-the-panel, definitely-not-a-link target, so no accidental navigation) closes
+  // the panel every time.
+  function realOutsideClick(target) {
+    const opts = { bubbles: true, cancelable: true, view: window, clientX: 5, clientY: 5 };
+    target.dispatchEvent(new PointerEvent('pointerdown', opts));
+    target.dispatchEvent(new MouseEvent('mousedown', opts));
+    target.dispatchEvent(new PointerEvent('pointerup', opts));
+    target.dispatchEvent(new MouseEvent('mouseup', opts));
+    target.dispatchEvent(new MouseEvent('click', opts));
+  }
   async function closePanel(fieldId) {
     document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
     await sleep(150);
     if (findOpenPanel(fieldId, true)) {
-      const heading = document.querySelector('h1, h2') || document.body;
-      heading.click();
+      realOutsideClick(document.body);
       await sleep(200);
     }
     if (findOpenPanel(fieldId, true)) {
@@ -464,11 +481,20 @@
       // exact category from Patrick's own screenshot) returned false (no match) on the first try,
       // but a follow-up inspection moments later showed the SAME panel now correctly containing a
       // "Shorts" leaf under "Men > Clothing > Activewear" -- the real results simply hadn't rendered
-      // yet at the 600ms mark. Polls for a non-empty leaf list instead of a single blind wait, up to
-      // ~1.2s total (300ms x 4) -- deliberately short and NEVER re-types/re-searches mid-poll (only
-      // reads the DOM), since retyping/resubmitting queries in a loop is what caused a real tab
-      // freeze earlier (see pickCategory's own comment on the 2-candidate cap).
-      for (let i = 0; i < 4; i++) {
+      // yet at the 600ms mark. Polls for a non-empty leaf list instead of a single blind wait,
+      // NEVER re-types/re-searches mid-poll (only reads the DOM), since retyping/resubmitting
+      // queries in a loop is what caused a real tab freeze earlier (see pickCategory's own comment
+      // on the 2-candidate cap).
+      // BUG FIX 2026-08-21 (S-EXT-BATCH, P0, live-Chrome-confirmed root cause of Brand -- and
+      // plausibly Color/Material under real network conditions -- never resolving): the old ~1.2s
+      // budget (300ms x 4) was live-confirmed too short. Timed Vinted's real brand search
+      // end-to-end (typed "Adidas" into the real #brand-search--input, polled every 150ms): real
+      // results didn't appear until ~2000ms had elapsed -- the search hits a live network request,
+      // not an instant client-side filter, and the old poll gave up at 1200ms, well before results
+      // existed, leaving `leaves` empty and the whole field silently unfilled. Extended to ~3s
+      // total (300ms x 10) -- comfortably past the observed ~2s real-world latency with margin for
+      // a slower connection, while still bounded (never an infinite/unbounded wait).
+      for (let i = 0; i < 10; i++) {
         await sleep(300);
         if (leafOptionsIn(panel).length > 1) break; // >1 excludes the lone placeholder/heading leaf
       }
@@ -526,6 +552,32 @@
         if (hop && hop.hasAttribute('data-testid') && hop.textContent.trim().length <= 80) {
           clickTarget = hop;
           break;
+        }
+      }
+      // BUG FIX 2026-08-21 (S-EXT-BATCH, P0, live-Chrome-confirmed, Patrick-reported "Poshmark
+      // chose the wrong color" -- same underlying multi-select-stacking bug live-confirmed here on
+      // Vinted too): Color (and Material) are real multi-select swatch grids that come with a
+      // "Suggested" section Vinted pre-highlights on its own (live-confirmed: a fresh Color panel
+      // already had "Yellow" toggled on with the visible module-scoped CSS class suffix
+      // "--selected", before this extension touched anything). FindA.Sale's item.color/material are
+      // single-value strings -- clicking only the target swatch left Vinted's own pre-suggestion
+      // stacked alongside it ("Yellow, Blue" instead of just "Blue"). Every swatch sharing the same
+      // "--selected" class suffix (both the "Suggested" and full-grid copies of a selected color
+      // are marked this way, confirmed live) is deselected first -- via the SAME real multi-event
+      // pointer sequence closePanel's realOutsideClick uses (a bare .click() was not tested for
+      // deselect and the toggle-off is exactly the kind of native-listener-driven interaction that
+      // needed the full sequence elsewhere in this file) -- except the one that's already the
+      // target itself, to avoid a pointless toggle-off-then-on cycle. Scoped to color/material only;
+      // Category/Size/Brand/Condition are genuine single-select and never show this class at all.
+      if (fieldId === 'color' || fieldId === 'material') {
+        const alreadySelected = qa('[class*="--selected"]').filter((el) => {
+          if (!panel.contains(el)) return false;
+          if (el === clickTarget || clickTarget.contains(el) || el.contains(clickTarget)) return false;
+          return el.offsetParent !== null;
+        });
+        for (const stale of alreadySelected) {
+          realOutsideClick(stale);
+          await sleep(150);
         }
       }
       clickTarget.click();

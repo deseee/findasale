@@ -48,6 +48,19 @@
     });
   }
   function norm(s) { return String(s || '').replace(/\s+/g, ' ').trim().toLowerCase(); }
+  // Added this pass (ported from fas-poshmark.js, live-Chrome-confirmed there this session): a
+  // whole-word boundary check, used to stop short/compound-word queries from spuriously matching
+  // as a bare substring of an unrelated word (e.g. "men" is a literal substring of "women" --
+  // confirmed live on Poshmark this session that a "Women's" department query incorrectly matched
+  // "Men" via raw substring scoring and picked the wrong department). This file's scoreMatch/
+  // openerByLabel/optionElByText use the identical substring-scoring pattern that caused that bug,
+  // so hardened defensively even though Grailed's specific Menswear/Womenswear spelling happens not
+  // to collide today (no live Grailed failure reproduced this session).
+  function wordBoundaryHas(text, want) {
+    if (!text || !want) return false;
+    const re = new RegExp('(^|[^a-z0-9])' + want.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '($|[^a-z0-9])');
+    return re.test(text);
+  }
   function bodyText() { return (document.body && document.body.innerText) || ''; }
   function q(sel) { return document.querySelector(sel); }
   function qa(sel) { return Array.from(document.querySelectorAll(sel)); }
@@ -202,12 +215,18 @@
     // common on modern SPA forms (e.g. Grailed's international-shipping region toggles) and were
     // entirely absent from this candidate list before, a likely contributor to those toggles never
     // being found at all.
+    // BUG FIX (this pass, defensive hardening ported from fas-poshmark.js's live-Chrome-confirmed
+    // fix this session): raw `.indexOf(want)` matching is the same substring-collision pattern that
+    // broke Poshmark's opener/option lookups (e.g. "category" as a raw substring of "sub-category").
+    // Grailed's current field labels (Category/Sub-category/Size/Color/Condition) happen to still
+    // resolve correctly by DOM order today (no live collision reproduced this session), but
+    // wordBoundaryHas is strictly safer and costs nothing here.
     const candidates = qa('[role="combobox"], [role="button"], [role="switch"], button, select, div[tabindex]');
-    const hit = candidates.find((c) => norm(c.getAttribute('aria-label') || c.textContent).indexOf(want) !== -1 && norm(c.textContent).length < 80);
+    const hit = candidates.find((c) => wordBoundaryHas(norm(c.getAttribute('aria-label') || c.textContent), want) && norm(c.textContent).length < 80);
     if (hit) return hit;
     const labels = qa('label');
     for (const lab of labels) {
-      if (norm(lab.textContent).indexOf(want) !== -1) {
+      if (wordBoundaryHas(norm(lab.textContent), want)) {
         const forId = lab.getAttribute('for');
         if (forId) { const byId = document.getElementById(forId); if (byId) return byId; }
         const inner = lab.querySelector('button, [role="button"], [role="switch"], select, [role="combobox"], div[tabindex]');
@@ -217,10 +236,15 @@
     }
     return nearestControlAfter(labelText);
   }
+  // BUG FIX (this pass, ported from fas-poshmark.js's live-Chrome-confirmed fix this session): the
+  // old fallback was a raw substring test, which is especially dangerous for short values -- a size
+  // code like "M"/"S"/"L" could match as a bare substring of ANY unrelated option text containing
+  // that letter (live-confirmed on Poshmark: "M" matched a stray "Women" menu item). Switched to
+  // wordBoundaryHas so the fallback only fires on a real whole-word match.
   function optionElByText(text) {
     const want = norm(text);
     const opts = qa('[role="option"], li[role="option"], [role="menuitem"], [role="menuitemradio"], li');
-    return opts.find((o) => norm(o.textContent) === want) || opts.find((o) => norm(o.textContent).indexOf(want) !== -1 && norm(o.textContent).length < 60) || null;
+    return opts.find((o) => norm(o.textContent) === want) || opts.find((o) => wordBoundaryHas(norm(o.textContent), want) && norm(o.textContent).length < 60) || null;
   }
 
   // BUG FIX 2026-08-19 (S-EXT-BATCH-4, P0, live-Chrome-confirmed): Grailed's dropdowns are Radix UI
@@ -261,6 +285,16 @@
   // matched word is weighted by its position in the query (earlier = more significant) instead of
   // counted flatly, since FindA.Sale's category segments consistently put the specific term first
   // and a broader catch-all after.
+  // BUG FIX (this pass, ported from fas-poshmark.js's live-Chrome-confirmed fix this session): the
+  // subOverlap fallback tier below used `tw.indexOf(w) !== -1 || w.indexOf(tw) !== -1` -- a raw
+  // substring test. Live-confirmed on Poshmark this session that "men" is a literal substring of
+  // "women" (wo-MEN), so a department query for a word containing "women" can spuriously score a
+  // match against an unrelated "Men..." option, and since this tier rewards SHORTER matched text,
+  // the wrong option can outscore the right one. Grailed's exact "Menswear"/"Womenswear" spelling
+  // doesn't trigger this today ("menswear" has no "o", so it can't be a substring hit for a "women"
+  // query), but the underlying scoring rule is the same landmine -- hardened to require whole-word
+  // containment (wordBoundaryHas) so a word can never match merely because it's spelled inside a
+  // longer, unrelated word.
   function scoreMatch(text, want) {
     if (text === want) return 100000;
     const wantWords = want.split(' ').filter(Boolean);
@@ -271,12 +305,13 @@
     }
     if (weighted > 0) return weighted - text.length * 0.01;
     // Fallback tier: a want-word contained inside a text-word or vice versa (either direction, 3+
-    // chars to avoid noise like "a" matching everything) -- catches compound-word options like
-    // "Menswear"/"Womenswear" where a real segment ("men") shares zero WHOLE words with the option
-    // text but is obviously the right match. Live-verified directly: without this, scoring
-    // ["Menswear","Womenswear"] against "men" returned no match at all. Scored far lower (x10 not
-    // x100) so a genuine whole-word match anywhere in the option set always wins over this fallback.
-    const subOverlap = wantWords.filter((w) => w.length >= 3 && textWords.some((tw) => tw.length >= 3 && (tw.indexOf(w) !== -1 || w.indexOf(tw) !== -1))).length;
+    // chars to avoid noise like "a" matching everything, WHOLE-WORD only -- see BUG FIX above)
+    // -- catches compound-word options like "Menswear"/"Womenswear" where a real segment ("men")
+    // shares zero WHOLE words with the option text but is obviously the right match. Live-verified
+    // directly: without this, scoring ["Menswear","Womenswear"] against "men" returned no match at
+    // all. Scored far lower (x10 not x100) so a genuine whole-word match anywhere in the option set
+    // always wins over this fallback.
+    const subOverlap = wantWords.filter((w) => w.length >= 3 && textWords.some((tw) => tw.length >= 3 && (wordBoundaryHas(tw, w) || wordBoundaryHas(w, tw)))).length;
     if (subOverlap === 0) return null;
     return subOverlap * 10 - text.length;
   }
