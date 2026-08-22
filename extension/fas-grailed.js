@@ -434,7 +434,27 @@
     // substring hit.
     syntheticClick(opener);
     await sleep(400);
-    const opt = bestScoringOption(qa('[role="menuitem"], [role="menuitemradio"], [role="option"], li[role="option"], li').filter((el) => el.offsetParent !== null), value);
+    // BUG FIX 2026-08-21 (S-EXT-BATCH, P0, live-Chrome-confirmed root cause of Size/Color -- and
+    // any other fillSelectLike field -- never actually selecting despite opening correctly):
+    // the page-wide `qa('[role="menuitem"]...').filter(offsetParent!==null)` query below used to
+    // pull in Grailed's own persistent top-nav mega-menus (DESIGNERS / MENSWEAR / WOMENSWEAR
+    // flyouts) alongside the real just-opened panel's options -- live-confirmed those nav flyouts
+    // report `offsetParent !== null` even while visually closed (Grailed hides them via
+    // opacity/pointer-events, not display:none), so a real Size panel with exactly 7 options
+    // ("US XXS/EU 40" ... "US XXL/EU 58") returned 15 "visible" candidates once mixed with the nav's
+    // own menuitems, several of which happened to out-score the real match. Live-confirmed the fix:
+    // scope the option query to the panel's own `aria-controls` target (the SAME pattern
+    // pickCategory already uses successfully a few functions up) -- 7 real options, zero
+    // contamination, "M" -> "US M / EU 48-50 / 2" resolves and confirms correctly. Falls back to the
+    // old page-wide scan only if the opener has no aria-controls at all (never observed live, but a
+    // safe fallback rather than a hard failure).
+    function scopedMenuItems(triggerEl) {
+      const contentId = triggerEl.getAttribute && triggerEl.getAttribute('aria-controls');
+      const content = contentId ? document.getElementById(contentId) : null;
+      if (content) return Array.from(content.querySelectorAll('[role="menuitem"], [role="menuitemradio"], [role="option"]'));
+      return qa('[role="menuitem"], [role="menuitemradio"], [role="option"], li[role="option"], li').filter((el) => el.offsetParent !== null);
+    }
+    const opt = bestScoringOption(scopedMenuItems(opener), value);
     if (!opt) return false;
     const pickedText = norm(opt.textContent);
     syntheticClick(opt);
@@ -451,7 +471,7 @@
     const openerFresh = openerByLabel(labelText) || opener;
     syntheticClick(openerFresh);
     await sleep(400);
-    const optRetry = bestScoringOption(qa('[role="menuitem"], [role="menuitemradio"], [role="option"], li[role="option"], li').filter((el) => el.offsetParent !== null), value);
+    const optRetry = bestScoringOption(scopedMenuItems(openerFresh), value);
     if (!optRetry) return false;
     const pickedTextRetry = norm(optRetry.textContent);
     syntheticClick(optRetry);
@@ -709,6 +729,77 @@
     return false;
   }
 
+  // BUG FIX 2026-08-21 (S-EXT-BATCH, P1, live-Chrome-confirmed field exists + real option list
+  // read directly off the page): "Select a Style" is a real Radix dropdown under "Describe your
+  // listing's style" -- confirmed live options (read off the actual open panel, not guessed): None,
+  // Luxury, Vintage, Avant-Garde, Streetwear, Workwear, Gorpcore, Sportswear, Basics, Western.
+  // FindA.Sale's Item model has NO dedicated style field (confirmed against schema.prisma -- grepped
+  // for "style", zero matches), so this infers a style from signals the item DOES carry: brand
+  // (matched against real, well-known houses/labels associated with each style tag) and
+  // category/title/description keywords. Each rule below is a real-world association, not a random
+  // guess -- e.g. Carhartt/Dickies are workwear houses, Arc'teryx/Patagonia/TNF are gorpcore/technical
+  // outdoor houses, Supreme/Bape/Stussy/Palace/Kith are streetwear houses. Per this file's own
+  // no-fabrication standard (see Measurements/Designer comments above): if NO real signal matches,
+  // this returns Grailed's own "None" option rather than guessing a specific style with no support --
+  // "None" is a legitimate, Grailed-provided answer (not invented), so the field is still always
+  // filled with something real, never silently skipped.
+  const STYLE_BRAND_MAP = {
+    // Avant-garde houses checked BEFORE the broader luxury list -- more specific and accurate for
+    // these particular names than the generic "Luxury" bucket would be.
+    'rick owens': 'Avant-Garde', 'yohji yamamoto': 'Avant-Garde', 'comme des garcons': 'Avant-Garde',
+    "comme des garçons": 'Avant-Garde', 'maison margiela': 'Avant-Garde',
+    'chanel': 'Luxury', 'dior': 'Luxury', 'gucci': 'Luxury', 'prada': 'Luxury',
+    'louis vuitton': 'Luxury', 'saint laurent': 'Luxury', 'balenciaga': 'Luxury',
+    'bottega veneta': 'Luxury', 'celine': 'Luxury',
+    'supreme': 'Streetwear', 'bape': 'Streetwear', 'stussy': 'Streetwear', 'palace': 'Streetwear',
+    'kith': 'Streetwear', 'off-white': 'Streetwear', 'vetements': 'Streetwear',
+    'chrome hearts': 'Streetwear',
+    "arc'teryx": 'Gorpcore', 'arcteryx': 'Gorpcore', 'the north face': 'Gorpcore',
+    'north face': 'Gorpcore', 'patagonia': 'Gorpcore', 'salomon': 'Gorpcore',
+    'carhartt': 'Workwear', 'dickies': 'Workwear',
+  };
+  const STYLE_KEYWORD_RULES = [
+    // Order matters -- first match wins. Checked against normalized title + description + category.
+    { style: 'Vintage', re: /\bvintage\b|\by2k\b|\bretro\b|\b(70s|80s|90s)\b/ },
+    { style: 'Western', re: /\bwestern\b|\bcowboy\b|\bcowgirl\b|\brodeo\b/ },
+    { style: 'Gorpcore', re: /\bgorpcore\b|\btechnical\b|\boutdoor\b|\bhiking\b/ },
+    { style: 'Workwear', re: /\bworkwear\b|\bwork jacket\b|\bchore coat\b/ },
+    { style: 'Streetwear', re: /\bstreetwear\b|\bhoodie\b|\bsweatshirt\b|\bgraphic tee\b/ },
+    { style: 'Sportswear', re: /\bactivewear\b|\btracksuit\b|\bathletic\b|\bsweatpants\b|\bjersey\b|\bperformance\b|\bgym\b/ },
+  ];
+  function inferGrailedStyle(item) {
+    const brand = norm(item.brand || '');
+    if (STYLE_BRAND_MAP[brand]) return STYLE_BRAND_MAP[brand];
+    const hay = norm([item.title, item.description, item.category].filter(Boolean).join(' '));
+    for (const rule of STYLE_KEYWORD_RULES) {
+      if (rule.re.test(hay)) return rule.style;
+    }
+    return 'None'; // Grailed's own explicit "no particular style" option -- never a fabricated guess.
+  }
+
+  // BUG FIX 2026-08-21 (S-EXT-BATCH, P1, live-Chrome-confirmed field exists): "Where was your item
+  // made?" / "Provide the country of origin for this product for customs" is a real, plain free-text
+  // input (confirmed live: `input[placeholder="Country name"]`, no autocomplete/suggestion list --
+  // unlike Designer, typing a value just sets it directly). UNLIKE Style above, this is a factual
+  // customs-relevant claim about a SPECIFIC physical item, not a subjective marketing tag -- there is
+  // no statistically-defensible "most common" default the way Material's "Cotton" fallback is
+  // (manufacturing origin varies enormously per brand/era with no useful prior, and a wrong customs
+  // declaration is a real accuracy/compliance problem, not just a UX one). FindA.Sale's Item model
+  // has no country-of-origin field today (confirmed against schema.prisma -- zero matches). This
+  // function is written to actually fill the field the moment real per-item data exists (checks a
+  // couple of plausible future field names defensively) -- it is NOT hardcoded to skip forever, only
+  // to skip honestly when there is genuinely nothing to fill it with, exactly like this file's
+  // existing Measurements policy.
+  function fillCountryOfOrigin(item) {
+    const value = item.countryOfOrigin || item.madeInCountry || item.originCountry || null;
+    if (!value) return 'no_data';
+    const el = document.querySelector('input[placeholder="Country name"]') || fieldByLabel('Country name');
+    if (!el) return 'field_missing';
+    el.focus();
+    setNativeValue(el, String(value));
+    return 'filled';
+  }
+
   // *** UNVERIFIED -- HIGH PRIORITY to confirm live (see file header). Commonly-cited wording,
   // not confirmed against any primary Grailed source. ***
   function mapGrailedCondition(condition) {
@@ -788,7 +879,7 @@
   }
 
 
-  function showReviewOverlay(item, index, total, photosOk, intlShipping, designerUnconfirmed) {
+  function showReviewOverlay(item, index, total, photosOk, intlShipping, designerUnconfirmed, countryOriginStatus) {
     const more = (index + 1) < total;
     // International shipping status line (BUG FIX 2026-08-19, S-EXT-BATCH, P1) -- see
     // disableInternationalShipping()'s comment. Three cases: regions found and turned off (safe,
@@ -801,10 +892,19 @@
     } else if (intlShipping && !intlShipping.anyFound) {
       intlLine = '<div style="color:#ffcf7a;margin-top:6px;font-size:12px">Couldn\'t find Grailed\'s international shipping section (UNVERIFIED selector) -- check it before publishing; it may default to a $50/region charge.</div>';
     }
+    // BUG FIX 2026-08-21 (S-EXT-BATCH, P1): honest, specific line for Country of Origin -- see
+    // fillCountryOfOrigin's own comment for why this is never auto-filled with a guess today.
+    let countryLine = '';
+    if (countryOriginStatus === 'no_data') {
+      countryLine = '<div style="margin-top:4px;font-size:12px;color:#cfe3d6">Country of Origin was left blank -- FindA.Sale doesn\'t track where this item was made yet, and this extension won\'t guess a customs claim. Add it yourself if you know it.</div>';
+    } else if (countryOriginStatus === 'field_missing') {
+      countryLine = '<div style="color:#ffcf7a;margin-top:6px;font-size:12px">Country of Origin field not found (UNVERIFIED selector) -- set it manually before publishing.</div>';
+    }
     overlay('<b>FindA.Sale</b><div style="margin-top:6px">Filled <b>' + escapeHtml(item.title) + '</b> as best we could.</div>' +
       '<div style="margin-top:4px;font-size:12px;color:#cfe3d6">Review every field &mdash; category/Market tier/size/condition are all UNVERIFIED guesses (condition especially, see the code comment). ' +
       '<b>Measurements were left blank</b> &mdash; Grailed listings perform much better with them, add them yourself before publishing. Then click Grailed\'s own <b>List item</b> yourself &mdash; this extension never publishes for you.</div>' +
       intlLine +
+      countryLine +
       (!photosOk ? '<div style="color:#ffcf7a;margin-top:6px;font-size:12px">Photos may not have attached -- add them on this screen.</div>' : '') +
       (designerUnconfirmed ? '<div style="color:#ffcf7a;margin-top:6px;font-size:12px">Designer was typed in but not confirmed -- click the correct suggestion in that field before publishing.</div>' : '') +
       button('fas-gr-next', more ? 'I posted — next item &#9654;' : 'I posted — done', true) +
@@ -1001,6 +1101,15 @@
     // field exists in this function on purpose.
     const conditionLabel = mapGrailedCondition(item.condition);
     await tryFill('Condition', conditionLabel, (v) => fillSelectLike('Condition', v));
+    // BUG FIX 2026-08-21 (S-EXT-BATCH, P1): Style -- see inferGrailedStyle's own comment for the
+    // real brand/keyword signals used and why an unmatched item still gets Grailed's own "None"
+    // rather than being left unset.
+    await tryFill('Style', inferGrailedStyle(item), (v) => fillSelectLike('Style', v));
+    // Country of Origin -- see fillCountryOfOrigin's own comment for why this deliberately does NOT
+    // fabricate a value the way Style's "None" fallback does; countryOriginStatus is threaded to
+    // showReviewOverlay so the organizer sees an honest, specific reason (not a generic skip notice)
+    // when there's genuinely no source data for it yet.
+    const countryOriginStatus = fillCountryOfOrigin(item);
     if (item.price != null && isFinite(Number(item.price))) {
       await tryFill('Price', item.price, (v) => fillText('Price', String(Math.max(1, Math.round(Number(v))))));
     }
@@ -1016,7 +1125,7 @@
     const intlShipping = await disableInternationalShipping();
     await humanPause(400, 800);
     const photosOk = await injectPhotos(item.photoUrls);
-    return { photosOk, intlShipping };
+    return { photosOk, intlShipping, countryOriginStatus };
   }
 
   async function run(item, index, total) {
@@ -1079,7 +1188,7 @@
       closeBtnHandler();
       return;
     }
-    showReviewOverlay(item, index, total, fillResult.photosOk, fillResult.intlShipping, designerUnconfirmed);
+    showReviewOverlay(item, index, total, fillResult.photosOk, fillResult.intlShipping, designerUnconfirmed, fillResult.countryOriginStatus);
   }
 
   async function start() {

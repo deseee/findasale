@@ -403,6 +403,10 @@
     }
   }
 
+  // Set true by pickFromPanel's generic-blend Material fallback below; read once, right after the
+  // Material tryFill() call in fillListing(), to surface a visible review-overlay warning (not just
+  // a console.warn) whenever the "Cotton" default was actually used for this run.
+  let lastMaterialFallbackUsed = false;
   async function pickFromPanel(fieldId, labelText, value) {
     const opener = openerByLabel(labelText) || document.getElementById(fieldId);
     if (!opener) return false;
@@ -473,7 +477,35 @@
     // BUG FIX 2026-08-20 (S-EXT-BATCH, P0): resolve common non-Vinted words to a real option
     // before scoring -- see SIZE_ABBREVIATIONS/COLOR_SYNONYMS/MATERIAL_SYNONYMS comment above.
     const resolvedValue = resolveSynonym(fieldId, value);
-    const opt = bestScoringOption(leaves, resolvedValue);
+    let opt = bestScoringOption(leaves, resolvedValue);
+    // BUG FIX 2026-08-21 (S-EXT-BATCH, P1, Patrick-directed -- "give me a real default, not a
+    // skip message, I don't know what override makes sense either"): live-confirmed Vinted's real
+    // Material vocabulary is exactly these 55 fixed options (read directly off
+    // category-material-multi-list-content this session): Acrylic, Alpaca, Bamboo, Canvas,
+    // Cardboard, Cashmere, Ceramic, Chiffon, Corduroy, Cotton, Denim, Down, Elastane, Faux fur,
+    // Faux leather, Felt, Flannel, Fleece, Foam, Glass, Gold, Jute, Lace, Latex, Leather, Linen,
+    // Merino, Mesh, Metal, Mohair, Neoprene, Nylon, Paper, Patent leather, Plastic, Polyester,
+    // Porcelain, Rattan, Rayon, Rubber, Satin, Sequin, Silicone, Silk, Silver, Steel, Stone, Straw,
+    // Suede, Tulle, Tweed, Velour, Velvet, Wood, Wool -- there is NO "Other"/"Mixed"/"Blend"
+    // catch-all. A raw value like "Cotton/Polyester Blend" or "60% cotton, 40% poly" already
+    // resolves correctly above (bestScoringOption's splitWords() tokenizer -- see comment near its
+    // definition -- extracts "Cotton" as a real matching word and scores it highest since it's
+    // listed first, matching the composition-label convention of listing the majority fiber
+    // first). This fallback only fires for the remaining case: a value with ZERO extractable real
+    // fiber word at all (e.g. bare "Blended", "Mixed Fabric", "Mixed Materials", "Various",
+    // "Assorted", "Multi-fiber") -- previously a silent skip. Default to "Cotton": the single most
+    // common majority component in casual secondhand-apparel blends (tees/hoodies/sweats are
+    // overwhelmingly cotton-poly with cotton as the larger share) -- the most defensible single
+    // real-option guess available, not an arbitrary pick. Scoped to material only and only to
+    // genuinely generic-blend phrasing -- never overrides a value that already names a real fiber.
+    if (!opt && fieldId === 'material' && /\b(blend(ed)?|mixed|multi.?fab|multi.?fiber|various|assorted|composite)\b/i.test(String(value))) {
+      const cotton = leaves.find((el) => norm(el.textContent) === 'cotton');
+      if (cotton) {
+        opt = cotton;
+        lastMaterialFallbackUsed = true;
+        console.warn('[FAS Vinted] Material "' + value + '" has no specific fiber Vinted recognizes -- defaulted to "Cotton" (most common blend-majority fiber for casual apparel). Please correct if inaccurate for this item.');
+      }
+    }
     if (opt) {
       // BUG FIX 2026-08-19 (S-EXT-BATCH-4, P1, live-Chrome-confirmed, corrected after a live re-check
       // caught the first version of this fix as a regression): clicking the innermost leaf worked
@@ -873,7 +905,11 @@
     await tryFill('Brand', item.brand, (v) => fillBrand('Brand', v), warnings);
     await tryFill('Size', item.size, (v) => fillSelectLike('Size', v), warnings);
     await tryFill('Color', item.color, (v) => fillSelectLike('Color', v), warnings);
+    lastMaterialFallbackUsed = false;
     await tryFill('Material', item.material, (v) => fillSelectLike('Material', v), warnings);
+    if (lastMaterialFallbackUsed) {
+      warnings.push('Material was set to "Cotton" as a best-guess default (item said "' + item.material + '", which has no specific fiber Vinted recognizes) -- please correct if inaccurate.');
+    }
     const conditionLabel = mapVintedCondition(item.condition);
     await tryFill('Condition', conditionLabel, (v) => fillSelectLike('Condition', v), warnings);
     if (item.price != null && isFinite(Number(item.price))) {

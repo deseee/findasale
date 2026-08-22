@@ -310,9 +310,17 @@
   // (e.g. "Tracksuits & Sets", "Accessories & More"), so an earlier-word match should outrank a
   // later-word match even when both are single whole-word hits. Length now only nudges a genuine
   // near-tie, never overrides a real position-weighted lead.
+  // BUG FIX 2026-08-21 (S-EXT-BATCH, P0, live-Chrome-confirmed): plain .split(' ').filter(Boolean)
+  // treats a bare "&" as its own "word" -- live-confirmed this let "Tracksuits & Sets" match
+  // "Toys & Collectibles" and "Vintage & collectibles" purely on the shared "&" token, nothing
+  // semantically real. wordize() drops any token with no letters or digits at all (so "&", "-",
+  // "," alone are excluded) while leaving real hyphenated words like "t-shirts" intact.
+  function wordize(s) {
+    return s.split(' ').filter((w) => /[a-z0-9]/.test(w));
+  }
   function bestScoringOption(options, wantText) {
     const want = norm(wantText);
-    const wantWords = want.split(' ').filter(Boolean);
+    const wantWords = wordize(want);
     let best = null;
     let bestScore = -1;
     for (const opt of options) {
@@ -322,7 +330,7 @@
       if (text === want) {
         score = 100000;
       } else {
-        const textWords = text.split(' ').filter(Boolean);
+        const textWords = wordize(text);
         let weighted = 0;
         for (let i = 0; i < wantWords.length; i++) {
           if (textWords.indexOf(wantWords[i]) !== -1) weighted += (wantWords.length - i) * 100;
@@ -391,9 +399,18 @@
     // breadcrumb this file receives) and used ONLY to break ties between otherwise-equal options
     // in this search-results list -- it never invents a match on its own.
     const genderHint = segments.map(norm).find((s) => s === 'men' || s === 'women' || s === "men's" || s === "women's") || null;
+    // BUG FIX 2026-08-21 (S-EXT-BATCH, P0, live-Chrome-confirmed): SAME "&"-as-a-word bug as
+    // bestScoringOption above, confirmed live on THIS function specifically -- searching literally
+    // "Tracksuits & Sets" (the untouched full leaf name, tried first before the stripped "Tracksuits"
+    // fallback ever runs) returns Mercari's own irrelevant top-level browse categories (Toys &
+    // Collectibles, Books, Electronics -- Mercari's search chokes on "&" and falls back to a browse
+    // list), and scoring that garbage list against a query still containing "&" scored "Vintage &
+    // collectibles" as a false match purely on the shared "&" token -- getting clicked and
+    // returning success before the correctly-working "Tracksuits" fallback query ever got a turn.
+    // Uses the same wordize() helper (dropping punctuation-only tokens) as bestScoringOption.
     function bestScoringOptionWithGenderHint(options, wantText) {
       const want = norm(wantText);
-      const wantWords = want.split(' ').filter(Boolean);
+      const wantWords = wordize(want);
       let best = null, bestScore = -1;
       for (const opt of options) {
         const text = norm(opt.textContent);
@@ -402,7 +419,7 @@
         if (text === want) {
           score = 100000;
         } else {
-          const textWords = text.split(' ').filter(Boolean);
+          const textWords = wordize(text);
           let weighted = 0;
           for (let i = 0; i < wantWords.length; i++) {
             if (textWords.indexOf(wantWords[i]) !== -1) weighted += (wantWords.length - i) * 100;
@@ -410,7 +427,7 @@
           if (weighted === 0) continue;
           score = weighted - text.length * 0.01;
         }
-        if (genderHint && text.split(' ').indexOf(genderHint.replace(/'s$/, '')) !== -1) score += 5000; // tiebreak only -- smaller than any real word-match delta
+        if (genderHint && wordize(text).indexOf(genderHint.replace(/'s$/, '')) !== -1) score += 5000; // tiebreak only -- smaller than any real word-match delta
         if (score > bestScore) { bestScore = score; best = opt; }
       }
       return best;
@@ -848,7 +865,22 @@
     showReviewOverlay(item, index, total, photosOk);
   }
 
+  // BUG FIX 2026-08-21 (S-EXT-BATCH, P0, Patrick-confirmed live): start() used to check ONLY
+  // whether a queue item existed, with no check of WHICH Mercari page the content script happened
+  // to load on -- since the manifest matches all of mercari.com, clicking "Edit" on an EXISTING
+  // draft from the My Listings page (a real, deliberate manual-review action, not a request to
+  // auto-fill anything) also loads this same content script, which then blindly re-ran the whole
+  // fill sequence over whatever the organizer was reviewing. Patrick confirmed live: "the extension
+  // fires when i click edit on one of the draft items", making it impossible to see the real
+  // current state of a draft. Now only auto-runs on Mercari's actual new-listing page
+  // (/sell/, matching SELL_URL_HINT) -- an edit-existing-draft page (/sell/draft/<id>/) or any
+  // other Mercari page is left alone, exactly like a page with no queue item at all.
+  function isNewListingPage() {
+    const path = location.pathname.replace(/\/+$/, '');
+    return path === '/sell';
+  }
   async function start() {
+    if (!isNewListingPage()) return; // e.g. /sell/draft/<id>/ -- an existing draft being reviewed/edited, never auto-fill
     await sleep(600);
     let queued;
     try { queued = await chrome.runtime.sendMessage({ type: 'getMercariQueueItem' }); } catch (e) { return; }

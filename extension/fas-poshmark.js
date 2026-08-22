@@ -34,6 +34,55 @@
   function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
   async function humanPause(minMs, maxMs) { await sleep(minMs + Math.random() * (maxMs - minMs)); }
   function norm(s) { return String(s || '').replace(/\s+/g, ' ').trim().toLowerCase(); }
+  // BUG FIX 2026-08-21 (S-EXT-BATCH, P0, live-Chrome-confirmed): openerByLabel/fieldByLabel/
+  // nearestControlAfter all used plain text.indexOf(want) !== -1 to decide "this element is the
+  // field I'm looking for" -- a raw substring test with no word boundary. Live-confirmed this
+  // broke Category outright: openerByLabel('Category') matched the Subcategory dropdown instead
+  // ("Select Subcategory (optional)" contains the literal substring "category" inside the compound
+  // word "Subcategory"), so pickCategory('Category') was clicking through the WRONG dropdown the
+  // entire time -- Category itself was NEVER actually touched, which is exactly why Poshmark's own
+  // Size field then correctly refused with "Please select the category first" (a real Poshmark
+  // validation message, not a bug on their end). wordBoundaryHas requires the target word to be a
+  // whole word in the candidate text (bounded by non-letters or string edges), so "category" no
+  // longer matches inside "subcategory" the same way Vinted's tokenized scoring already stopped
+  // "size" matching inside "package-size".
+  // BUG FIX 2026-08-21 (S-EXT-BATCH, P0, live-Chrome-confirmed): a bare el.click() on Poshmark's
+  // Category/Size/Color/Condition drill-down menu items (real <li> elements, no __vue__ instance of
+  // their own -- their click handler is bound higher up, likely via Vue event delegation) silently
+  // did NOTHING -- confirmed live: calling jeansLi.click() left the menu showing the exact same
+  // items afterward, while a real trusted mouse click (via the computer-use tool, not JS) correctly
+  // drilled into the next level. Dispatching a full pointerdown/mousedown/pointerup/mouseup/click
+  // sequence with real coordinates (from getBoundingClientRect) and bubbles/composed:true, matching
+  // what a genuine mouse interaction produces, live-confirmed working identically to the real click
+  // -- drilled from Men into Jeans into the fit sub-list correctly. Used for every leaf-option click
+  // in this file from here on, replacing the bare .click() calls that were confirmed no-ops.
+  // BUG FIX 2026-08-21 (round 2, live-Chrome-confirmed): the full pointer-event sequence above
+  // fixed leaf items shaped like <li><div>Jeans</div></li>, but top-level department items
+  // (Women/Men/Kids/...) are shaped differently -- <li><a data-et-name="men" ...>Men</a></li> --
+  // and dispatching the SAME event sequence at the outer <li> did NOT drill down (confirmed live,
+  // repeatable: 3 separate attempts on the outer <li> left the menu unchanged), while dispatching
+  // the identical sequence at the INNER <a> worked correctly every time. Poshmark's click handler
+  // for this level is bound to the anchor itself, not delegated up to the <li> the way the deeper
+  // leaf levels are. Resolving to the innermost clickable descendant (a/button) when one exists,
+  // falling back to the element itself otherwise, covers both shapes without needing to know which
+  // one a given level uses.
+  function realClick(el) {
+    if (!el) return;
+    const target = el.querySelector('a, button') || el;
+    const rect = target.getBoundingClientRect();
+    const x = rect.left + rect.width / 2, y = rect.top + rect.height / 2;
+    const opts = { bubbles: true, cancelable: true, composed: true, view: window, clientX: x, clientY: y, button: 0, buttons: 1 };
+    target.dispatchEvent(new PointerEvent('pointerdown', opts));
+    target.dispatchEvent(new MouseEvent('mousedown', opts));
+    target.dispatchEvent(new PointerEvent('pointerup', opts));
+    target.dispatchEvent(new MouseEvent('mouseup', opts));
+    target.dispatchEvent(new MouseEvent('click', opts));
+  }
+  function wordBoundaryHas(text, want) {
+    if (!text || !want) return false;
+    const re = new RegExp('(^|[^a-z0-9])' + want.replace(/[.*+?^\${}()|[\]\\]/g, '\\$&') + '($|[^a-z0-9])');
+    return re.test(text);
+  }
   function bodyText() { return (document.body && document.body.innerText) || ''; }
   function q(sel) { return document.querySelector(sel); }
   function qa(sel) { return Array.from(document.querySelectorAll(sel)); }
@@ -170,7 +219,7 @@
     if (exactResult) return exactResult;
     const loose = headingCandidates.filter((el) => {
       const txt = norm(el.textContent);
-      return txt && txt.length <= 80 && txt.indexOf(want) !== -1 && txt.indexOf(',') === -1;
+      return txt && txt.length <= 80 && wordBoundaryHas(txt, want) && txt.indexOf(',') === -1;
     });
     return tryCandidates(loose);
   }
@@ -179,7 +228,7 @@
     const labels = qa('label');
     for (const lab of labels) {
       const txt = norm(lab.getAttribute('aria-label') || lab.textContent);
-      if (txt === want || txt.indexOf(want) !== -1) {
+      if (txt === want || wordBoundaryHas(txt, want)) {
         const forId = lab.getAttribute('for');
         if (forId) { const byId = document.getElementById(forId); if (byId) return byId; }
         const inner = lab.querySelector('input, textarea, select');
@@ -224,11 +273,11 @@
     // entirely absent from this candidate list before, a likely contributor to those toggles never
     // being found at all.
     const candidates = qa('[role="combobox"], [role="button"], [role="switch"], button, select, div[tabindex]');
-    const hit = candidates.find((c) => norm(c.getAttribute('aria-label') || c.textContent).indexOf(want) !== -1 && norm(c.textContent).length < 80);
+    const hit = candidates.find((c) => wordBoundaryHas(norm(c.getAttribute('aria-label') || c.textContent), want) && norm(c.textContent).length < 80);
     if (hit) return hit;
     const labels = qa('label');
     for (const lab of labels) {
-      if (norm(lab.textContent).indexOf(want) !== -1) {
+      if (wordBoundaryHas(norm(lab.textContent), want)) {
         const forId = lab.getAttribute('for');
         if (forId) { const byId = document.getElementById(forId); if (byId) return byId; }
         const inner = lab.querySelector('button, [role="button"], [role="switch"], select, [role="combobox"], div[tabindex]');
@@ -287,9 +336,9 @@
     setNativeValue(el, String(value));
     await sleep(700); // UNVERIFIED -- suggestion-list settle time, best-effort guess
     const match = optionElByText(value);
-    if (match) { match.click(); await sleep(200); return true; }
+    if (match) { realClick(match); await sleep(200); return true; }
     const addCustom = qa('[role="option"], li, div[role="button"], button').find((n) => /add\s+.*brand|custom brand|create\s+"/.test(norm(n.textContent)));
-    if (addCustom) { addCustom.click(); await sleep(200); return true; }
+    if (addCustom) { realClick(addCustom); await sleep(200); return true; }
     console.warn('[FAS Poshmark] Brand "' + value + '" had no matching suggestion and no "add custom brand" action was found (UNVERIFIED) -- left unset.');
     return false;
   }
@@ -305,7 +354,7 @@
       vm.isExpaned = true;
       return;
     }
-    opener.click();
+    realClick(opener);
   }
 
   // Structured select (Size, Color): open the field, click the matching option. UNVERIFIED
@@ -325,7 +374,7 @@
     await sleep(350);
     const opt = optionElByText(value);
     if (!opt) return false;
-    opt.click();
+    realClick(opt);
     await sleep(200);
     return true;
   }
@@ -379,15 +428,41 @@
     }
     return best;
   }
-  async function pickCategory(categoryText) {
+  // BUG FIX 2026-08-21 (S-EXT-BATCH, P0, live-Chrome-confirmed): pickCategory only ever received
+  // item.category -- the clean single leaf name (e.g. "Tracksuits & Sets", see
+  // extensionController.ts's `category: it.ebayCategoryName || it.category`) -- with no gender info
+  // at all. Live-confirmed Poshmark's REAL top-level Category menu is NOT a leaf-name search at
+  // all: it's exactly 7 department buttons (All Categories/Women/Men/Kids/Home/Pets/Electronics),
+  // and "Tracksuits & Sets" shares no word with any of them, so bestScoringOption correctly found
+  // no match and the whole picker aborted at level 0 -- Category was NEVER actually selected on any
+  // real run, which is exactly why Poshmark's own Size field then legitimately refused with
+  // "Please select the category first" (a real validation message, not a bug on Poshmark's end).
+  // Ported the same genderHint approach fas-mercari.js's pickCategory already uses successfully:
+  // item.categoryBreadcrumb (the legacy full breadcrumb, see extensionController.ts's
+  // `categoryBreadcrumb: it.category`) carries a standalone "Men"/"Women"/"Kids" segment on a real
+  // eBay-taxonomy-style breadcrumb -- used to click the correct top-level department FIRST, before
+  // falling through to the existing leaf-name scoring for the levels underneath it.
+  async function pickCategory(categoryText, breadcrumbText) {
     if (!categoryText) return false;
     const opener = openerByLabel('Category');
     if (!opener) return false;
     const placeholderText = norm(opener.textContent);
     await vueOpenDropdown(opener);
     await sleep(400);
-    const levelQueries = categoryText.split(':').map((s) => s.trim()).filter(Boolean);
+    const breadcrumbSegments = (breadcrumbText || '').split(':').map((s) => s.trim()).filter(Boolean);
+    const genderHint = breadcrumbSegments.map(norm).find((s) => s === 'men' || s === 'women' || s === 'kids' || s === "men's" || s === "women's") || null;
     let pickedAny = false;
+    if (genderHint) {
+      await sleep(300);
+      const items0 = qa('[role="menuitem"], [role="menuitemradio"], [role="option"], li').filter((el) => el.offsetParent !== null);
+      const genderWord = genderHint.replace(/'s$/, '');
+      const genderMatch = items0.find((el) => {
+        const t = norm(el.textContent);
+        return t === genderWord || t.split(' ').indexOf(genderWord) !== -1;
+      });
+      if (genderMatch) { realClick(genderMatch); pickedAny = true; await sleep(350); }
+    }
+    const levelQueries = categoryText.split(':').map((s) => s.trim()).filter(Boolean);
     let remaining = (levelQueries.length > 1 ? levelQueries.slice(1) : levelQueries).map((seg, i) => ({ seg, i }));
     for (let level = 0; level < 3; level++) {
       await sleep(300);
@@ -401,14 +476,14 @@
         if (score !== null && score > bestScoreForLevel) { bestScoreForLevel = score; best = candidate; bestRemainingIdx = r; }
       }
       if (!best) break; // no remaining segment is a real match for this level -- stop rather than guess
-      best.click();
+      realClick(best);
       pickedAny = true;
       if (bestRemainingIdx !== -1) remaining.splice(bestRemainingIdx, 1);
       await sleep(350);
     }
     const committed = pickedAny && norm(opener.textContent) !== placeholderText && norm(opener.textContent).length > 0;
     if (!committed) {
-      console.warn('[FAS Poshmark] Category "' + categoryText + '" -- ' + (pickedAny ? 'a level was matched but the picker never committed to a final value' : 'no level matched in the picker') + ' (UNVERIFIED taxonomy) -- left for the organizer to choose.');
+      console.warn('[FAS Poshmark] Category "' + categoryText + '" -- ' + (pickedAny ? 'a level was matched but the picker never committed to a final value' : 'no level matched in the picker' + (genderHint ? '' : ' (no gender/department hint found in categoryBreadcrumb -- Poshmark\'s top-level menu could not be steered at all)')) + ' (UNVERIFIED taxonomy) -- left for the organizer to choose.');
       return false;
     }
     return true;
@@ -462,7 +537,24 @@
     });
     input.files = dt.files;
     input.dispatchEvent(new Event('change', { bubbles: true }));
+    await dismissCovershotModal();
     return true;
+  }
+
+  // BUG FIX 2026-08-21 (S-EXT-BATCH, P0, live-Chrome-confirmed): live-confirmed Poshmark opens its
+  // own native "Select a Covershot" confirmation dialog (a real page-covering modal, "Apply"/
+  // "Cancel" buttons) automatically after photos are added to the dropzone -- this file never
+  // dismissed it. Since fillListing() calls injectPhotos() LAST, this didn't block that same run's
+  // own Category/Brand/Size fills, but it stayed open afterward and blocked every subsequent
+  // interaction (Patrick's own manual review, or the next queued item's run) -- confirmed live:
+  // "Poshmark still on the select a covershot" matches exactly. Accepts Poshmark's own default
+  // cover selection (first photo, already highlighted) by clicking Apply -- never picks a
+  // different photo, just clears the blocking dialog so the rest of the flow can proceed.
+  async function dismissCovershotModal() {
+    await sleep(400);
+    const applyBtn = qa('button').find((b) => norm(b.textContent) === 'apply' && b.offsetParent !== null);
+    if (applyBtn) { realClick(applyBtn); await sleep(300); return true; }
+    return false;
   }
 
   // Detects whether this page actually looks like Poshmark's listing form (Title + Price fields
@@ -549,7 +641,7 @@
       await tryFill('Price', item.price, (v) => fillText('Price', String(Math.max(1, Math.round(Number(v))))) || fillText('Listing Price', String(Math.max(1, Math.round(Number(v))))));
     }
     // Original/MSRP price deliberately skipped -- FindA.Sale carries no such data (never invent).
-    await tryFill('Category', item.category, (v) => pickCategory(v));
+    await tryFill('Category', item.category, (v) => pickCategory(v, item.categoryBreadcrumb));
     // 2026-08-18: brand/size/color now exist on Item and flow through getExtensionItems ->
     // popup.js's queue map. tryFill's own undefined/null/'' guard still skips silently on
     // items where the organizer hasn't set a value.
