@@ -191,9 +191,11 @@ describe('RECORD-mode cash settlement — commission accrual', () => {
         roles: ['USER'],
       },
     });
-    // The rate resolution consults the global FeeStructure override row before falling back to
-    // the tier rate (the convention every charge path in this codebase follows). The test DB has
-    // no such row, so the tier rate is what applies — which is exactly the behaviour under test.
+    // Fee-precedence fix (2026-08-22): resolveCashCommissionRate (services/cashFeeService.ts)
+    // now always uses the organizer's tier rate — a wildcard FeeStructure row can no longer
+    // override it. Cleared anyway as a defensive no-op in case a stray row from another suite
+    // is present; see the "resolves PRO/TEAMS to the tier rate even with a wildcard row
+    // present" test below for the actual regression coverage of the fix.
     await prisma.feeStructure.deleteMany({ where: { listingType: '*' } });
   });
 
@@ -250,6 +252,70 @@ describe('RECORD-mode cash settlement — commission accrual', () => {
     expect(purchase!.platformFeeAmount).toBeCloseTo(8, 2);
     expect(purchase!.commissionRate).toBeCloseTo(PRO_RATE, 4);
     expect(purchase!.commissionAmount).toBeCloseTo(8, 2);
+  });
+
+  // ── Fee-precedence regression (2026-08-22) ──────────────────────────────────────────────
+  // Production had 10/10 FeeStructure rows at listingType='*', feeRate=0.10, and the resolver
+  // used to check that wildcard row BEFORE the organizer's tier rate -- so it silently beat the
+  // tier rate on every charge path, billing PRO/TEAMS organizers 10% instead of their
+  // contractual 8%. These two tests reproduce exactly that production shape (a live '*' row
+  // present) and assert the tier rate wins anyway. Every other test in this suite deletes the
+  // '*' row first, so none of them would have caught the original bug -- these are the tests
+  // that actually would have.
+  describe('tier rate wins over a wildcard FeeStructure row', () => {
+    afterEach(async () => {
+      await prisma.feeStructure.deleteMany({ where: { listingType: '*' } });
+    });
+
+    it('resolves PRO to 0.08 even when a wildcard FeeStructure row (rate 0.10) is present', async () => {
+      await prisma.feeStructure.create({ data: { listingType: '*', feeRate: 0.10 } });
+
+      const { orgUser, organizer, item, hold } = await seed('pro-wildcard', 'PRO', 100);
+
+      const res = await recordSold(orgUser, [hold.id]);
+
+      // Would be 10 if the wildcard row (still present) incorrectly outranked the tier rate.
+      expect(res.json.mock.calls[0][0].platformFee).toBe(8);
+
+      const after = await prisma.organizer.findUnique({ where: { id: organizer.id } });
+      expect(after!.cashFeeBalance).toBeCloseTo(8, 2);
+
+      const purchase = await prisma.purchase.findFirst({ where: { itemId: item.id } });
+      expect(purchase!.platformFeeAmount).toBeCloseTo(8, 2);
+      expect(purchase!.commissionRate).toBeCloseTo(PRO_RATE, 4);
+      expect(purchase!.commissionAmount).toBeCloseTo(8, 2);
+    });
+
+    it('resolves TEAMS to 0.08 even when a wildcard FeeStructure row (rate 0.10) is present', async () => {
+      await prisma.feeStructure.create({ data: { listingType: '*', feeRate: 0.10 } });
+
+      const { orgUser, organizer, item, hold } = await seed('teams-wildcard', 'TEAMS', 100);
+
+      const res = await recordSold(orgUser, [hold.id]);
+
+      expect(res.json.mock.calls[0][0].platformFee).toBe(8);
+
+      const after = await prisma.organizer.findUnique({ where: { id: organizer.id } });
+      expect(after!.cashFeeBalance).toBeCloseTo(8, 2);
+
+      const purchase = await prisma.purchase.findFirst({ where: { itemId: item.id } });
+      expect(purchase!.platformFeeAmount).toBeCloseTo(8, 2);
+      expect(purchase!.commissionRate).toBeCloseTo(PRO_RATE, 4); // TEAMS shares PRO's 0.08 rate
+      expect(purchase!.commissionAmount).toBeCloseTo(8, 2);
+    });
+
+    it('resolves SIMPLE to 0.10 whether or not the wildcard row is present (control)', async () => {
+      await prisma.feeStructure.create({ data: { listingType: '*', feeRate: 0.10 } });
+
+      const { orgUser, organizer, item, hold } = await seed('simple-wildcard', 'SIMPLE', 100);
+
+      const res = await recordSold(orgUser, [hold.id]);
+
+      expect(res.json.mock.calls[0][0].platformFee).toBe(10);
+
+      const purchase = await prisma.purchase.findFirst({ where: { itemId: item.id } });
+      expect(purchase!.commissionRate).toBeCloseTo(SIMPLE_RATE, 4);
+    });
   });
 
   it('reports to the organizer exactly what was accrued — report and ledger agree', async () => {

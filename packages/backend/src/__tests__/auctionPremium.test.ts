@@ -145,7 +145,9 @@ describe('Auction close — configured premium & reserve parity', () => {
       },
     });
 
-    // createPaymentIntent-style FeeStructure override off, so the organizer's tier rate applies.
+    // Fee-precedence fix (2026-08-22): a wildcard FeeStructure row can no longer override the
+    // organizer's tier rate anywhere (see utils/feeCalculator.ts). Cleared anyway as a
+    // defensive no-op in case a stray row from another suite is present.
     await prisma.feeStructure.deleteMany({ where: { listingType: '*' } }).catch(() => {});
   });
 

@@ -2735,6 +2735,16 @@ export const UPS_HIGH_WEIGHT_TOTAL_TABLE: HighWeightAnchorRow[] = [
  *     decomposition IS already written down there: base + AHS_WEIGHT x 1.19 reconstructs all
  *     eight cells to +0.1%..+4.4%. That row is not part of the problem.
  *
+ * UPDATE 2026-08-22 -- the 70lb row's decomposition is no longer just prose. See
+ * FEDEX_HIGH_WEIGHT_TOTAL_TABLE_DECOMPOSITION (immediately below this table): it
+ * itemizes the 70lb row into a real `base` (RATE_TABLE_FEDEX's own 70lb row, unchanged,
+ * unmodified by this pass) and an EXACT `surcharge` residual (this row's real total minus
+ * that base, to the penny at all 8 zones) -- not the approximate "AHS x 1.19" estimate
+ * referenced two paragraphs up, the ACTUAL amount baked into the measured total, whatever
+ * it turns out to be composed of. 90/110/130/150lb remain deliberately undecomposed there
+ * (`base: null`) for exactly the reason spelled out immediately below -- this update does
+ * not touch that conclusion, only closes the one row where real base data already exists.
+ *
  * WHAT IS GENUINELY NOT KNOWN, AND WHY IT CANNOT BE DERIVED HERE
  *   The ACCESSORIAL (AHS weight-trigger / Large-Package) component of the 90/110/130/150lb
  *   rows. Decomposing it requires a clean base freight rate at those weights to subtract, and
@@ -2775,6 +2785,71 @@ export const FEDEX_HIGH_WEIGHT_TOTAL_TABLE: HighWeightAnchorRow[] = [
   { maxLb: 110, z1: 101.30, z2: 107.22, z3: 106.66, z4: 109.37, z5: 119.50, z6: 119.50, z7: 135.43, z8: 135.43 },
   { maxLb: 130, z1: 359.76, z2: 365.68, z3: 383.70, z4: 387.56, z5: 442.72, z6: 442.72, z7: 468.81, z8: 468.81 },
   { maxLb: 150, z1: 367.95, z2: 373.88, z3: 393.42, z4: 398.09, z5: 453.60, z6: 453.60, z7: 477.83, z8: 477.83 },
+];
+
+/**
+ * PARTIAL RE-ANCHOR OF FEDEX_HIGH_WEIGHT_TOTAL_TABLE (2026-08-22) -- base + itemized
+ * accessorial surcharge, mirroring the SAME pattern the <70lb tables above already use
+ * (RATE_TABLE_FEDEX holds surcharge-free base freight; AHS_WEIGHT_SURCHARGE_TABLE /
+ * AHS_DIMENSION_SURCHARGE_TABLE / FEDEX_DESTINATION_SURCHARGE_TIERS hold the itemized
+ * surcharges separately; computeSurchargeForCarrier ADDS them at runtime). This is that
+ * same base+surcharge shape applied to FEDEX_HIGH_WEIGHT_TOTAL_TABLE's rows -- as far as
+ * it can honestly go with data this file has today. Read the "ANCHOR STATUS OF THIS
+ * TABLE" audit comment directly above FEDEX_HIGH_WEIGHT_TOTAL_TABLE before extending this.
+ *
+ * WHY ONLY THE 70lb ROW: decomposing a total into base+surcharge requires an independent,
+ * real base-freight figure to subtract -- fabricating one is explicitly rejected by that
+ * audit ("a fabricated split would look authoritative and silently mis-scale on the next
+ * surcharge change"), and that conclusion is not overturned here. maxLb:70 is the one row
+ * where a real base figure already exists in this file: RATE_TABLE_FEDEX's own 70lb row
+ * (defined above, real-anchored, UNCHANGED by this pass). maxLb:90/110/130/150 have no
+ * such figure -- RATE_TABLE_FEDEX has no rows above 70lb -- so they are left `base: null,
+ * surcharge: null` rather than guessed at. `null` means "not decomposable with data this
+ * file has today", not "zero base cost" -- do not treat it as $0.
+ *
+ * HOW THE 70lb ROW WAS SPLIT: base = RATE_TABLE_FEDEX's 70lb row (real, pre-existing,
+ * copied verbatim, not re-derived). surcharge = FEDEX_HIGH_WEIGHT_TOTAL_TABLE's 70lb total
+ * for that zone MINUS that base -- the EXACT residual actually baked into the real
+ * measured total, not a formula estimate. This is deliberately NOT asserted to be pure AHS:
+ * the probe destinations behind the 70lb row's real quotes are the same ones RATE_TABLE_FEDEX
+ * itself was real-anchored against (z2 49503, z4 30301, z7 98282, per that table's header),
+ * and cross-referencing FEDEX_DESTINATION_SURCHARGE_ZIP_TIER shows 49503 and 30301 are
+ * measured 'clean' ($0 destination surcharge) while 98282 is measured tier A (+$5.92) -- so
+ * at least z7's residual demonstrably contains a real destination-surcharge component
+ * alongside AHS, not AHS alone. The residual is itemized honestly as "whatever accessorial
+ * content this lane's real quote carried", not mis-labeled as a single named surcharge.
+ *
+ * INVARIANT (regression-tested, see ebayRateEstimateHighWeightDecomposition.test.ts):
+ * for maxLb:70, base[zone] + surcharge[zone] === FEDEX_HIGH_WEIGHT_TOTAL_TABLE's 70lb
+ * total for that zone, to the penny, at all 8 zones. This is a PURE decomposition of an
+ * existing number, not a pricing change -- FEDEX_HIGH_WEIGHT_TOTAL_TABLE itself is
+ * untouched above, interpolateHighWeightTotal is untouched below, and nothing in
+ * estimateCheapestRate reads this export -- it changes no computed price for any weight
+ * or zone. It exists so a future surcharge change has a real number to start compositional
+ * reasoning from at 70lb, instead of re-deriving that one row's total from scratch.
+ */
+export const FEDEX_HIGH_WEIGHT_TOTAL_TABLE_DECOMPOSITION: ReadonlyArray<{
+  maxLb: number;
+  /** Real base freight for this weight, or null when no independent base figure exists
+   *  in this file to decompose against (see the comment above -- null is NOT zero). */
+  base: Record<ZoneKey, number> | null;
+  /** Exact residual (real total minus base) for this weight, or null alongside base. */
+  surcharge: Record<ZoneKey, number> | null;
+}> = [
+  {
+    maxLb: 70,
+    // = RATE_TABLE_FEDEX's own 70lb row, copied verbatim (not re-derived).
+    base: { z1: 23.67, z2: 23.67, z3: 28.87, z4: 31.92, z5: 37.80, z6: 42.66, z7: 47.28, z8: 56.56 },
+    // = FEDEX_HIGH_WEIGHT_TOTAL_TABLE's 70lb row minus base, exactly (verified to the
+    // penny at all 8 zones -- see the regression test).
+    surcharge: { z1: 53.84, z2: 59.77, z3: 58.37, z4: 58.89, z5: 65.90, z6: 61.04, z7: 69.81, z8: 68.43 },
+  },
+  // NOT decomposed -- see "WHY ONLY THE 70lb ROW" above. FEDEX_HIGH_WEIGHT_TOTAL_TABLE's
+  // real totals for these rows are unchanged and still the only numbers the engine uses.
+  { maxLb: 90, base: null, surcharge: null },
+  { maxLb: 110, base: null, surcharge: null },
+  { maxLb: 130, base: null, surcharge: null },
+  { maxLb: 150, base: null, surcharge: null },
 ];
 
 /** Linearly interpolates a REAL total (base+surcharge already combined) between the

@@ -56,30 +56,34 @@ export interface CashCommissionOrganizer {
  *
  *   1. An active referral discount zeroes the commission (mirrors terminalController's card
  *      path, `hasReferralDiscount ? 0 : baseFeeRate`).
- *   2. Otherwise the global `FeeStructure` override row (`listingType: '*'`), which is the
- *      established convention shared by stripeController.createPaymentIntent,
- *      terminalController (card AND cash), jobs/auctionJob and
- *      services/nativeShippingSuggestionService.
- *   3. Otherwise the organizer's tier rate from utils/feeCalculator.
+ *   2. Otherwise the organizer's tier rate from utils/feeCalculator.
  *
- * NOTE FOR REVIEW, not a bug introduced here: every `FeeStructure` row in production today has
- * `listingType='*'` and `feeRate=0.1`, so step 2 currently pins EVERY organizer -- PRO and
- * TEAMS included -- to the 10% SIMPLE rate on every path listed above, not just this one.
- * That is a platform-wide question about whether the FeeStructure override should still
- * outrank the tier rate; it is deliberately NOT changed here, because changing it would
- * silently re-price every charge path at once. Flagged, not fixed.
+ * FEE-PRECEDENCE FIX (2026-08-22): step 2 used to be "the global `FeeStructure` override row
+ * (`listingType: '*'`)", checked BEFORE the tier rate, with the tier rate only as a fallback.
+ * Every `FeeStructure` row in production is `listingType='*'`, `feeRate=0.1` (10/10 rows,
+ * confirmed by live query), so that order pinned EVERY organizer -- PRO and TEAMS included --
+ * to the 10% SIMPLE rate on every charge path that used this convention (this function,
+ * stripeController.createPaymentIntent, terminalController's card path, jobs/auctionJob and
+ * services/nativeShippingSuggestionService), silently overcharging PRO/TEAMS organizers 10%
+ * instead of their contractual 8%. A wildcard row is meant to be a platform-wide FALLBACK
+ * default, not an override -- it must never outrank a resolvable tier rate. Fixed here (and at
+ * the four other call sites listed above) by dropping the `FeeStructure` read entirely: the
+ * tier rate from `getPlatformFeeRate` is always resolvable (defaults to SIMPLE for a null
+ * tier), so there was never a legitimate case for the wildcard row to apply. The `FeeStructure`
+ * table and its rows are untouched -- this is a code-precedence fix, not a data change.
  */
 export async function resolveCashCommissionRate(
   organizer: CashCommissionOrganizer,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- kept for call-site/signature
+  // compatibility (transactional callers may still want to pass their tx client in future);
+  // no longer used since the FeeStructure read was removed by the fee-precedence fix above.
   tx?: CashFeeClient
 ): Promise<number> {
   const hasReferralDiscount =
     organizer.referralDiscountExpiry != null && organizer.referralDiscountExpiry > new Date();
   if (hasReferralDiscount) return 0;
 
-  const client: Prisma.TransactionClient = (tx ?? prisma) as Prisma.TransactionClient;
-  const feeStructure = await client.feeStructure.findFirst({ where: { listingType: '*' } });
-  return feeStructure?.feeRate ?? getPlatformFeeRate(organizer.subscriptionTier as SubscriptionTier);
+  return getPlatformFeeRate(organizer.subscriptionTier as SubscriptionTier);
 }
 
 /** The commission owed on one line's amount, in dollars, rounded to cents. */

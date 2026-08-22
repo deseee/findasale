@@ -14,7 +14,20 @@ import { triggerSaleAndCityRevalidation } from '../services/revalidationService'
 // PRUNE_MAX_REVALIDATION_CITY_PATHS (pruneScrapedSales.ts) so a large
 // autoclose batch can never become an unbounded ISR-write source itself.
 // Added 2026-07-29 -- Patrick-approved via findasale-architect ADR.
-const MAX_AUTOCLOSE_REVALIDATION_PATHS = 100;
+// LOWERED 100 -> 25 (2026-08-22, S-REVALIDATION-TIMEOUT-INVESTIGATION):
+// unlike the other two jobs, each path here is a distinct /sales/[id] page
+// regeneration (not deduped like city touches), and /api/revalidate on the
+// frontend processes paths SEQUENTIALLY via `await res.revalidate(path)` in
+// a for loop (packages/frontend/pages/api/revalidate.ts). At 100 paths this
+// batch could easily exceed revalidationService.ts's REVALIDATE_TIMEOUT_MS
+// (10000ms), causing the client AbortController to fire mid-batch -- the
+// prime suspect for the recurring hourly "[revalidationService] Revalidation
+// request errored for" log seen right after this cron's :00 hourly tick.
+// Realigned to the same 25-path cap already proven safe by the scraper and
+// prune jobs. See revalidationService.ts for the matching diagnostic-logging
+// fix (root cause not yet confirmed against live Railway logs -- see
+// dispatch notes).
+const MAX_AUTOCLOSE_REVALIDATION_PATHS = 25;
 
 export function scheduleSaleAutoCloseCron(): void {
   // Every hour at minute 0

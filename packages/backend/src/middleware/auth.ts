@@ -213,7 +213,15 @@ export const authenticate = async (req: AuthRequest, res: Response, next: NextFu
     // Feature #75: Check tier lapse state for organizers
     return checkTierLapse(req, res, next);
   } catch (error) {
-    console.error('Authentication error:', error);
+    // S708-style fix: TokenExpiredError is the routine, expected case of a short-lived
+    // access token naturally expiring - the client silently refreshes via /auth/refresh
+    // and retries. Logging it at error severity floods Sentry with non-actionable noise.
+    // Only genuinely invalid/malformed tokens are logged as errors (see lib/socket.ts:66-71
+    // for the same pattern).
+    const errName = (error as any)?.name;
+    if (errName !== 'TokenExpiredError') {
+      console.error('Authentication error:', error);
+    }
     return res.status(401).json({ message: 'Invalid token' });
   }
 };

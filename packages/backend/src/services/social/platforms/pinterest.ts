@@ -27,7 +27,7 @@
  * constraint. A later session verifies live OAuth + a real pin via Chrome QA.
  */
 
-import axios from 'axios';
+import axios, { type AxiosResponse } from 'axios';
 import type { SocialAccount, SocialPost } from '@prisma/client';
 import type { PlatformPublisher, OAuthStart, PublishResult } from './types';
 import type { RefreshedTokens } from '../tokenStore';
@@ -39,8 +39,23 @@ const PINTEREST_API_BASE = 'https://api.pinterest.com/v5';
 // Minimum viable scope set: read+write boards (resolvePrimaryBoardId() creates a default
 // board when the account has none -- confirmed 2026-08-15 via a real 401 from Pinterest's API,
 // "Missing: ['boards:write']", when this scope was omitted and the connected account had zero
-// existing boards), write pins, read basic profile for display.
-const PINTEREST_SCOPES = ['boards:read', 'boards:write', 'pins:write', 'user_accounts:read'];
+// existing boards), read+write pins, read basic profile for display.
+//
+// 2026-08-22 fix (second missing-scope class, same failure mode as the boards:write gap
+// above): publish() kept 401ing on every attempt even after the boards:write fix and a
+// successful reconnect (SocialAccount platformUserId=1146025505118988836, connected
+// 2026-08-16, board resolution -- a boards:read call -- succeeded fine; only the actual
+// POST /v5/pins call 401s). Pinterest's own docs (developers.pinterest.com/docs/
+// work-with-organic-content-and-users/create-boards-and-pins/, "Before you begin") list the
+// REQUIRED scope set for the create-boards-and-Pins workflow as boards:read, boards:write,
+// pins:read, pins:write -- pins:read was missing here even though publish() only calls the
+// write endpoint directly. Adding it.
+//
+// IMPORTANT: a scope change here only applies to the NEXT OAuth consent grant -- the existing
+// connected account's token was issued under the old (pins:read-less) scope list. It will keep
+// 401ing until the account is reconnected (Disconnect, then Connect again, in
+// /admin/social-accounts) so a fresh token carrying pins:read is issued.
+const PINTEREST_SCOPES = ['boards:read', 'boards:write', 'pins:read', 'pins:write', 'user_accounts:read'];
 
 const PINTEREST_MAX_TITLE_CHARS = 100;
 const PINTEREST_MAX_DESCRIPTION_CHARS = 500;
@@ -133,6 +148,16 @@ async function exchangeCode(params: {
   if (!accessToken) {
     throw new Error('[pinterest] token exchange did not return an access_token');
   }
+
+  // Diagnostic only (not persisted -- SocialAccount has no scope column). Pinterest's token
+  // response echoes back the scopes ACTUALLY granted, which can be a subset of what was
+  // requested (e.g. if the consent screen didn't present every requested scope, or the app's
+  // access tier doesn't have a requested scope enabled). Logging it lets Railway logs confirm
+  // whether a future 401 is a genuine scope gap vs. something else, instead of guessing.
+  console.log(
+    `[pinterest] token exchange granted scope: "${tokenRes.data?.scope ?? '(not returned by Pinterest)'}" ` +
+      `(requested: "${PINTEREST_SCOPES.join(',')}")`
+  );
 
   // Best-effort identity fetch (non-fatal — display sugar, matches x.ts's pattern).
   let platformUsername: string | null = null;
@@ -242,13 +267,32 @@ async function publish(params: {
     body.link = post.linkUrl;
   }
 
-  const res = await axios.post(`${PINTEREST_API_BASE}/pins`, body, {
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      'Content-Type': 'application/json',
-    },
-    timeout: 20000,
-  });
+  let res: AxiosResponse;
+  try {
+    res = await axios.post(`${PINTEREST_API_BASE}/pins`, body, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      timeout: 20000,
+    });
+  } catch (err) {
+    // Surface Pinterest's actual error body -- not just the generic axios "Request failed
+    // with status code 401" message -- so lastErrorMessage captures real diagnostic detail
+    // (e.g. a specific missing-scope name, a Trial-access restriction, a malformed board_id)
+    // instead of a bare status code. Every FAILED SocialPost row for Pinterest so far
+    // (2026-08-16, 2026-08-22) recorded only the generic axios message, which is why this
+    // took multiple sessions to narrow down. scrubTokens() (tokenStore.ts) still runs on
+    // this message before it's persisted, so no token/secret leaks into the stored error.
+    const status = axios.isAxiosError(err) ? err.response?.status : undefined;
+    const responseBody = axios.isAxiosError(err) ? err.response?.data : undefined;
+    const detail = responseBody
+      ? JSON.stringify(responseBody).slice(0, 500)
+      : err instanceof Error
+        ? err.message
+        : String(err);
+    throw new Error(`[pinterest] pin creation failed (status ${status ?? 'unknown'}): ${detail}`);
+  }
 
   const pinId: string | undefined = res.data?.id;
   if (!pinId) {

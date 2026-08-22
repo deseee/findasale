@@ -63,13 +63,31 @@ export async function triggerRevalidation(paths: string[]): Promise<void> {
 
     if (!response.ok) {
       const body = await response.text().catch(() => '');
-      console.error(`[revalidationService] Revalidation request failed (${response.status}) for`, uniquePaths, body);
+      // Diagnostic-message-first (2026-08-22, S-REVALIDATION-TIMEOUT-INVESTIGATION):
+      // uniquePaths can be dozens of entries long (see MAX_AUTOCLOSE_REVALIDATION_PATHS
+      // in saleAutoCloseCron.ts), and log viewers with a per-line truncation limit were
+      // cutting this line off right after the array opened -- burying the actual status
+      // code and response body (the only genuinely diagnostic content) at the end where
+      // it never got seen. Status/body now come first; the path list is summarized
+      // (count + first 5) instead of dumped in full.
+      console.error(
+        `[revalidationService] Revalidation request failed (status=${response.status}, body=${body || '<empty>'}) for ${uniquePaths.length} path(s):`,
+        uniquePaths.slice(0, 5)
+      );
       return;
     }
 
     console.log(`[revalidationService] Revalidated ${uniquePaths.length} path(s):`, uniquePaths);
   } catch (err) {
-    console.error('[revalidationService] Revalidation request errored for', uniquePaths, err instanceof Error ? err.message : err);
+    // Same diagnostic-message-first fix as the !response.ok branch above, plus
+    // err.name so an AbortError (client-side REVALIDATE_TIMEOUT_MS fired) is
+    // distinguishable at a glance from a DNS/connection-level failure.
+    const errName = err instanceof Error ? err.name : typeof err;
+    const errMessage = err instanceof Error ? err.message : String(err);
+    console.error(
+      `[revalidationService] Revalidation request errored (${errName}: ${errMessage}) for ${uniquePaths.length} path(s):`,
+      uniquePaths.slice(0, 5)
+    );
   }
 }
 

@@ -123,13 +123,13 @@ export const endAuctions = async () => {
           data: { currentBid: price, auctionClosed: true },
         });
 
-        // QA: Fee rate now read from FeeStructure table at transaction time.
-        // Fallback corrected 2026-08-17: was a flat 0.10, which billed PRO and TEAMS organizers
-        // the SIMPLE rate. Now matches stripeController.createPaymentIntent exactly.
-        const feeStructure = await tx.feeStructure.findFirst({ where: { listingType: '*' } });
-        const feePercent =
-          feeStructure?.feeRate ??
-          getPlatformFeeRate(currentItem.sale!.organizer.subscriptionTier as SubscriptionTier);
+        // Tier-derived rate wins over a wildcard FeeStructure row (fee-precedence fix,
+        // 2026-08-22): the wildcard '*' row previously beat the organizer's tier rate here too,
+        // billing PRO and TEAMS organizers the SIMPLE rate. Matches
+        // stripeController.createPaymentIntent's identical fix exactly.
+        const feePercent = getPlatformFeeRate(
+          currentItem.sale!.organizer.subscriptionTier as SubscriptionTier
+        );
 
         // TWO SEPARATE FEES (Patrick ruling, 2026-08-17 — see utils/feeCalculator.ts header).
         // This job is the LIVE auction-winner charge path: the cron closes the auction, creates

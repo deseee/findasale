@@ -23,19 +23,25 @@
  * tiers -- it's 10% for SIMPLE/null (default) and 8% for PRO/TEAMS. ADR-104 §3's
  * "confirmed 10% flat across all tiers per tierService.ts" does not match this file
  * (the function actually lives in feeCalculator.ts, not tierService.ts, and grepping
- * tierService.ts for a flat-rate constant returns zero hits). The live checkout path
- * itself (stripeController.ts:625-626) never hardcodes 10% either -- it reads
- * `feeStructure?.feeRate ?? getPlatformFeeRate(organizer.subscriptionTier)` (a global
- * FeeStructure override table, default 0.10, then the tier-based function). This
- * function mirrors that EXACT precedence so the suggested price always grosses up by
- * the SAME rate the checkout will actually deduct for this organizer -- a hardcoded
- * flat 10% would silently overstate the suggestion for every PRO/TEAMS organizer
- * (real fee 8%), the identical class of bug already caught once in this schema (see
+ * tierService.ts for a flat-rate constant returns zero hits). This function mirrors
+ * stripeController.ts's checkout path so the suggested price always grosses up by the
+ * SAME rate the checkout will actually deduct for this organizer -- a hardcoded flat
+ * 10% would silently overstate the suggestion for every PRO/TEAMS organizer (real fee
+ * 8%), the identical class of bug already caught once in this schema (see
  * schema.prisma's VendorBoothSaleLeg.platformFeeCents comment, ~line 5867: "the
  * disclosure that said 10% while the charge was 8%").
+ *
+ * FEE-PRECEDENCE FIX (2026-08-22): this function used to read `feeStructure?.feeRate ??
+ * getPlatformFeeRate(subscriptionTier)` -- a global FeeStructure override for
+ * listingType='*' checked BEFORE the tier rate. Every FeeStructure row in production is
+ * listingType='*', feeRate=0.10 (10/10, confirmed by live query), so that order pinned
+ * the gross-up to 10% for every organizer, PRO/TEAMS included, matching the identical
+ * bug fixed the same day in stripeController.createPaymentIntent and
+ * services/cashFeeService.ts. The FeeStructure read is removed; the tier rate is always
+ * resolvable (defaults to SIMPLE for a null tier) so the wildcard row never had a
+ * legitimate case to apply.
  */
 
-import { prisma } from '../lib/prisma';
 import { computeCheapestForOrigin, ShippingHardBlockError, ZoneKey } from './ebayRateEstimateService';
 import { roundUpToBucket, applyCharmPricing } from '../utils/shippingPriceMath';
 import { getPlatformFeeRate, SubscriptionTier } from '../utils/feeCalculator';
@@ -47,21 +53,21 @@ export interface NativeShippingSuggestion {
   basis: 'actual' | 'dimensional' | 'cubic' | 'oversized' | 'standard_envelope';
   zone: ZoneKey;
   carrier: 'USPS' | 'UPS' | 'FEDEX';
-  /** The platform fee rate actually used for the gross-up (global FeeStructure
-   *  override if set, else the organizer's tier-based rate) -- matches what
-   *  stripeController.ts will actually deduct at checkout for this organizer. */
+  /** The platform fee rate actually used for the gross-up (the organizer's tier-based
+   *  rate) -- matches what stripeController.ts will actually deduct at checkout for
+   *  this organizer. */
   feePercentUsed: number;
 }
 
 /**
- * Resolve the effective platform fee rate for gross-up, using the EXACT SAME
- * precedence stripeController.ts's checkout path uses at L625-626 (global
- * FeeStructure override for listingType "*", falling back to the organizer's
- * tier-based rate) -- so the suggestion and the real deduction can never disagree.
+ * Resolve the effective platform fee rate for gross-up: the organizer's tier-based
+ * rate, the same rate stripeController.ts's checkout path actually deducts -- so the
+ * suggestion and the real deduction can never disagree. (Fee-precedence fix,
+ * 2026-08-22 -- see the file header for why the FeeStructure wildcard lookup that used
+ * to sit ahead of the tier rate here was removed.)
  */
 async function resolveEffectivePlatformFeeRate(subscriptionTier: SubscriptionTier): Promise<number> {
-  const feeStructure = await prisma.feeStructure.findFirst({ where: { listingType: '*' } });
-  return feeStructure?.feeRate ?? getPlatformFeeRate(subscriptionTier ?? 'SIMPLE');
+  return getPlatformFeeRate(subscriptionTier ?? 'SIMPLE');
 }
 
 /**

@@ -692,8 +692,14 @@ export const createPaymentIntent = async (req: AuthRequest, res: Response) => {
       shippingCost = item.shippingPrice;
     }
 
-    const feeStructure = await prisma.feeStructure.findFirst({ where: { listingType: '*' } });
-    const baseFeePercent = feeStructure?.feeRate ?? getPlatformFeeRate(item.sale!.organizer.subscriptionTier as any);
+    // Tier-derived rate wins over a wildcard FeeStructure row (fee-precedence fix, 2026-08-22).
+    // Every FeeStructure row in production is listingType='*', feeRate=0.10 (10/10, confirmed by
+    // live query) -- that wildcard row previously beat the organizer's tier rate here,
+    // unconditionally, silently charging PRO/TEAMS organizers 10% instead of their contractual
+    // 8%. A wildcard row is a platform-wide fallback default, not an override, so it must never
+    // outrank a resolvable tier rate. See utils/feeCalculator.ts getPlatformFeeRate and
+    // services/cashFeeService.ts for the identical fix applied to the cash charge paths.
+    const baseFeePercent = getPlatformFeeRate(item.sale!.organizer.subscriptionTier as any);
 
     const discountExpiry = item.sale!.organizer.referralDiscountExpiry;
     const hasReferralDiscount = discountExpiry != null && discountExpiry > new Date();

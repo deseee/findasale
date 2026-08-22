@@ -259,9 +259,10 @@ describe('Stripe Connect + Fee Capture E2E', () => {
       },
     });
 
-    // The controller prefers a FeeStructure row over the organizer's tier
-    // (stripeController.createPaymentIntent: `feeStructure?.feeRate ?? getPlatformFeeRate(...)`).
-    // Clear it so the SIMPLE/PRO assertions below actually exercise the tier rates.
+    // Fee-precedence fix (2026-08-22): stripeController.createPaymentIntent now always uses
+    // getPlatformFeeRate(tier) -- a wildcard FeeStructure row can no longer override it (see
+    // utils/feeCalculator.ts / services/cashFeeService.ts for the full incident writeup).
+    // Cleared anyway as a defensive no-op in case a stray row from another suite is present.
     await prisma.feeStructure.deleteMany({ where: { listingType: '*' } }).catch(() => {});
 
     console.log('✓ Stripe E2E test data created');

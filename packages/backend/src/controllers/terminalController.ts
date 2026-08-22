@@ -327,10 +327,12 @@ export const createTerminalPaymentIntent = async (req: AuthRequest, res: Respons
       ? totalAmountCents - cashAmountCents
       : totalAmountCents;
 
-    // Fee: read from FeeStructure, apply referral discount if active
-    // Platform fee is calculated on the card portion only (not on cash)
-    const feeStructure = await prisma.feeStructure.findFirst({ where: { listingType: '*' } });
-    const baseFeeRate = feeStructure?.feeRate ?? getPlatformFeeRate(organizer.subscriptionTier as any);
+    // Fee: tier-derived rate, apply referral discount if active. Platform fee is calculated on
+    // the card portion only (not on cash).
+    // Tier-derived rate wins over a wildcard FeeStructure row (fee-precedence fix, 2026-08-22) --
+    // see utils/feeCalculator.ts getPlatformFeeRate and services/cashFeeService.ts (this
+    // controller's cash path got the identical fix).
+    const baseFeeRate = getPlatformFeeRate(organizer.subscriptionTier as any);
     const hasReferralDiscount =
       organizer.referralDiscountExpiry != null && organizer.referralDiscountExpiry > new Date();
     const feeRate = hasReferralDiscount ? 0 : baseFeeRate;

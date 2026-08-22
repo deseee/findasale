@@ -13,6 +13,7 @@ import { useAuth } from '../../components/AuthContext';
 import { useToast } from '../../components/ToastContext';
 import HoldTimer from '../../components/HoldTimer';
 import EmptyState from '../../components/EmptyState';
+import ConfirmDialog from '../../components/ConfirmDialog';
 import { getThumbnailUrl, getItemImageUrl } from '../../lib/imageUtils';
 import { formatDistanceToNow, parseISO } from 'date-fns';
 
@@ -44,6 +45,13 @@ const ShopperHoldsPage = () => {
   const { showToast } = useToast();
   const queryClient = useQueryClient();
   const [copiedHandle, setCopiedHandle] = useState<string | null>(null);
+  // Confirmation gate for Release Hold. Previously used the native window.confirm()
+  // dialog, which blocks the page's main JS thread until dismissed and is not
+  // reachable via normal DOM interaction in some embedded/PWA-standalone contexts --
+  // the release request never fired because execution never reached the mutation
+  // call past the blocked confirm(). Replaced with the same in-app ConfirmDialog
+  // pattern already used and confirmed working on the organizer holds page.
+  const [pendingRelease, setPendingRelease] = useState<HoldItem | null>(null);
 
   const { data: holds = [], isLoading: holdsLoading, refetch } = useQuery({
     queryKey: ['shopper-holds'],
@@ -85,10 +93,8 @@ const ShopperHoldsPage = () => {
     return null;
   }
 
-  const handleReleaseHold = (reservationId: string) => {
-    if (confirm('Are you sure you want to release this hold?')) {
-      cancelMutation.mutate(reservationId);
-    }
+  const handleReleaseHold = (hold: HoldItem) => {
+    setPendingRelease(hold);
   };
 
   const handleHoldExpiry = (reservationId: string) => {
@@ -211,7 +217,7 @@ const ShopperHoldsPage = () => {
                         View Item
                       </Link>
                       <button
-                        onClick={() => handleReleaseHold(hold.id)}
+                        onClick={() => handleReleaseHold(hold)}
                         disabled={cancelMutation.isPending}
                         className="flex-1 sm:flex-none border border-red-400 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/40 dark:bg-red-900/20 font-semibold py-2 px-4 rounded transition-colors disabled:opacity-50 whitespace-nowrap"
                       >
@@ -243,6 +249,22 @@ const ShopperHoldsPage = () => {
           )}
         </div>
       </div>
+      {pendingRelease && (
+        <ConfirmDialog
+          isOpen
+          title="Release this hold?"
+          message={`This releases your hold on "${pendingRelease.item.title}". The item becomes available for other shoppers right away.`}
+          confirmLabel="Release Hold"
+          cancelLabel="Keep Hold"
+          variant="danger"
+          onCancel={() => setPendingRelease(null)}
+          onConfirm={() => {
+            const target = pendingRelease;
+            setPendingRelease(null);
+            cancelMutation.mutate(target.id);
+          }}
+        />
+      )}
     </>
   );
 };
