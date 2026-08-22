@@ -575,8 +575,40 @@
   // `categoryBreadcrumb: it.category`) carries a standalone "Men"/"Women"/"Kids" segment on a real
   // eBay-taxonomy-style breadcrumb -- used to click the correct top-level department FIRST, before
   // falling through to the existing leaf-name scoring for the levels underneath it.
+  // BUG FIX 2026-08-22 (P0, Patrick-directed): last-resort fallback when pickCategory's normal
+  // scored matching never commits a real category -- Size, Color, and Condition are all locked
+  // behind a committed category on Poshmark's own form ("Please select the category first" is a
+  // real Poshmark validation message, not a bug on their end), so leaving Category unset silently
+  // blocks every field gated behind it. Poshmark has a real "Other" option at multiple levels of
+  // its category picker (Patrick, 2026-08-22) -- walks forward from wherever the picker is
+  // currently sitting open, clicking any visible "Other" option and re-checking Poshmark's own
+  // ListingEditorCatalog Vue state after each click, up to maxLevels deep. UNVERIFIED against a
+  // live account -- confirm the "Other" option actually exists at the levels this reaches.
+  async function pickOtherFallback(maxLevels) {
+    for (let level = 0; level < maxLevels; level++) {
+      await sleep(300);
+      const items = qa('[role="menuitem"], [role="menuitemradio"], [role="option"], li').filter((el) => el.offsetParent !== null);
+      if (!items.length) break;
+      const other = items.find((el) => wordBoundaryHas(norm(el.textContent), 'other') && norm(el.textContent).length < 40);
+      if (!other) break;
+      realClick(other);
+      await sleep(350);
+      let catalogVm = null;
+      for (const el of qa('*')) {
+        const vm = el.__vue__;
+        if (vm && vm.$options && vm.$options.name === 'ListingEditorCatalog') { catalogVm = vm; break; }
+      }
+      if (catalogVm && (catalogVm.selectedDepartment || catalogVm.selectedGroup || catalogVm.lastSelectedCategoryData)) return true;
+    }
+    return false;
+  }
   async function pickCategory(categoryText, breadcrumbText) {
-    if (!categoryText) return false;
+    // BUG FIX 2026-08-22 (P0, Patrick-directed): used to return false immediately for an item with
+    // no category at all, skipping the picker entirely -- but Size/Color/Condition are all locked
+    // behind a committed category, so an item with no category ended up with none of those fields
+    // fillable either. Falls through to the same picker + "Other" fallback below instead of bailing
+    // early; an empty categoryText just means no scored candidate matches at any level, landing on
+    // the "Other" fallback (pickOtherFallback above).
     const opener = openerByLabel('Category');
     if (!opener) return false;
     const placeholderText = norm(opener.textContent);
@@ -650,7 +682,15 @@
       const vm = el.__vue__;
       if (vm && vm.$options && vm.$options.name === 'ListingEditorCatalog') { catalogVm = vm; break; }
     }
-    const committed = !!(catalogVm && (catalogVm.selectedDepartment || catalogVm.selectedGroup || catalogVm.lastSelectedCategoryData));
+    let committed = !!(catalogVm && (catalogVm.selectedDepartment || catalogVm.selectedGroup || catalogVm.lastSelectedCategoryData));
+    // BUG FIX 2026-08-22 (P0, Patrick-directed): if normal scored matching never committed a real
+    // category, fall back to Poshmark's own "Other" option (pickOtherFallback above) BEFORE closing
+    // the dropdown -- Other needs the panel still open at whatever level it stopped on.
+    let usedOtherFallback = false;
+    if (!committed) {
+      committed = await pickOtherFallback(4);
+      usedOtherFallback = committed;
+    }
     // Always close the dropdown before returning, success or failure -- live-confirmed an
     // unclosed Category panel leaks its still-visible department/leaf <li> items into every
     // later field's global li/role query (this is exactly how Size's optionElByText('M') matched
@@ -660,8 +700,11 @@
     else realClick(opener);
     await sleep(250);
     if (!committed) {
-      console.warn('[FAS Poshmark] Category "' + categoryText + '" -- ' + (pickedAny ? 'a level was matched but Poshmark\'s own state shows no category actually committed (likely picked the wrong department/leaf)' : 'no level matched in the picker' + (bestDept ? '' : ' (no department candidate matched in categoryBreadcrumb/categoryText -- Poshmark\'s top-level menu could not be steered at all)')) + ' (UNVERIFIED taxonomy) -- left for the organizer to choose.');
+      console.warn('[FAS Poshmark] Category "' + categoryText + '" -- ' + (pickedAny ? 'a level was matched but Poshmark\'s own state shows no category actually committed (likely picked the wrong department/leaf)' : 'no level matched in the picker' + (bestDept ? '' : ' (no department candidate matched in categoryBreadcrumb/categoryText -- Poshmark\'s top-level menu could not be steered at all)')) + ', and no "Other" fallback option was found either (UNVERIFIED taxonomy) -- left for the organizer to choose.');
       return false;
+    }
+    if (usedOtherFallback) {
+      console.warn('[FAS Poshmark] Category "' + categoryText + '" had no confident match against Poshmark\'s real taxonomy -- fell back to "Other". Review and correct the category before publishing.');
     }
     return true;
   }
@@ -818,14 +861,38 @@
       await tryFill('Price', item.price, (v) => fillText('Price', String(Math.max(1, Math.round(Number(v))))) || fillText('Listing Price', String(Math.max(1, Math.round(Number(v))))));
     }
     // Original/MSRP price deliberately skipped -- FindA.Sale carries no such data (never invent).
-    await tryFill('Category', item.category, (v) => pickCategory(v, item.categoryBreadcrumb));
+    // BUG FIX 2026-08-22 (P0, Patrick-directed -- screenshot showed "Please select the category
+    // first" stuck under Size after a full fill run): called through pickCategory directly instead
+    // of tryFill -- tryFill's own undefined/null/'' guard used to skip Category entirely for an item
+    // with no category value, and even when Category DID run, this code proceeded to Size/Color
+    // unconditionally regardless of whether Category actually committed. pickCategory now always
+    // attempts a fill (falling back to Poshmark's own "Other" category when no real match commits --
+    // see its own comment), and Size/Color are skipped with a clear console warning -- instead of
+    // being silently attempted and left blocked by Poshmark's own "select category first" message --
+    // on the rare case even that fallback fails.
+    let categoryCommitted = false;
+    try {
+      categoryCommitted = await pickCategory(item.category || '', item.categoryBreadcrumb);
+    } catch (e) {
+      console.warn('[FAS Poshmark] Field "Category" -- error while filling, skipped:', e && e.message);
+    }
+    if (!categoryCommitted) {
+      console.warn('[FAS Poshmark] Category never committed -- skipping Size/Color since Poshmark locks them behind a chosen category. Fill these in yourself.');
+    }
     // 2026-08-18: brand/size/color now exist on Item and flow through getExtensionItems ->
     // popup.js's queue map. tryFill's own undefined/null/'' guard still skips silently on
-    // items where the organizer hasn't set a value.
+    // items where the organizer hasn't set a value. Brand is a plain autocomplete field, not gated
+    // by category on Poshmark's form (UNVERIFIED against a live account, but not the field named in
+    // Patrick's report) -- kept unconditional.
     await tryFill('Brand', item.brand, (v) => fillAutocomplete('Brand', v));
-    await tryFill('Size', item.size, (v) => fillSelectLike('Size', v));
-    await tryFill('Color', item.color, (v) => fillPoshmarkColor(v));
+    if (categoryCommitted) {
+      await tryFill('Size', item.size, (v) => fillSelectLike('Size', v));
+      await tryFill('Color', item.color, (v) => fillPoshmarkColor(v));
+    }
     const conditionLabel = mapPoshmarkCondition(item.condition);
+    // Condition is not the field Patrick's report named as blocked, and this file has no prior
+    // finding that it's category-gated -- kept unconditional. If it also turns out to be locked
+    // behind Category on a live account, gate it the same way as Size/Color above.
     await tryFill('Condition', conditionLabel, (v) => fillSelectLike('Condition', v));
     await humanPause(400, 800);
     const photosOk = await injectPhotos(item.photoUrls);

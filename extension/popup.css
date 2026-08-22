@@ -1,5 +1,6 @@
 * { box-sizing: border-box; }
-body { width: 380px; max-height: 560px; margin: 0; font: 13px/1.4 -apple-system, Segoe UI, Roboto, sans-serif; background: #14201a; color: #eef3ee; }
+html { overflow-y: auto; }
+body { width: 380px; max-height: 560px; overflow-y: auto; margin: 0; font: 13px/1.4 -apple-system, Segoe UI, Roboto, sans-serif; background: #14201a; color: #eef3ee; }
 header { padding: 12px 14px; border-bottom: 1px solid #26362d; display: flex; align-items: baseline; gap: 8px; }
 .brand { font-weight: 800; font-size: 16px; } .brand b { color: #4caf6d; }
 .sub { font-size: 11px; color: #9fb6a8; }
