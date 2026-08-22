@@ -382,6 +382,29 @@
     return true;
   }
 
+  // BUG FIX 2026-08-22 (P0, Patrick-directed, live-Chrome-confirmed root cause of Price never
+  // actually filling): fieldByLabel('Price')/('Listing Price') was resolving to
+  // input[data-vv-name="originalPrice"] -- a REAL Poshmark input, but a HIDDEN one (its parent div
+  // has class "listing-editor__original-price--hidden", confirmed live), used for Smart Sell's
+  // strikethrough original-price display, not the actual listing price. setNativeValue happily set
+  // its value ("225" confirmed present in the DOM), which is exactly why this looked like it worked
+  // from the extension's own side -- but the field a real seller sees and Poshmark actually submits
+  // is a SEPARATE, visible sibling input, `input[data-vv-name="listingPrice"]` (confirmed live,
+  // same ListingPrice Vue component, empty the whole time), which is what was actually rendering the
+  // "*Required" placeholder in every screenshot. `data-vv-name` is Poshmark's own VeeValidate
+  // field-binding attribute (a structural anchor, not an obfuscated class), consistent with this
+  // file's "never select by CSS class" rule. Targets the real visible field directly first; falls
+  // back to the old generic fieldByLabel path only if that specific attribute is ever removed/
+  // renamed, so this degrades no worse than before rather than becoming a hard dependency.
+  async function fillPoshmarkPrice(value) {
+    const el = document.querySelector('input[data-vv-name="listingPrice"]') || fieldByLabel('Price') || fieldByLabel('Listing Price');
+    if (!el) return false;
+    el.focus();
+    setNativeValue(el, String(value));
+    await sleep(150);
+    return true;
+  }
+
   // Autocomplete field (Brand): type, wait for suggestions, click the best match. Falls back to
   // Poshmark's own "add custom brand" action if present (UNVERIFIED -- exact wording/selector for
   // that action has never been observed live); otherwise logs and skips rather than leaving a
@@ -614,10 +637,34 @@
   // currently sitting open, clicking any visible "Other" option and re-checking Poshmark's own
   // ListingEditorCatalog Vue state after each click, up to maxLevels deep. UNVERIFIED against a
   // live account -- confirm the "Other" option actually exists at the levels this reaches.
+  // BUG FIX 2026-08-22 (P0, Patrick-directed, live-Chrome-confirmed root cause of Category/Size/
+  // Color all coming back completely unset on a REAL fillListing() run, despite this exact
+  // pickCategory logic succeeding every time when called in isolation): the fixed sleep(300)/
+  // sleep(400) windows below assume Vue has already re-rendered the dropdown's option list into the
+  // DOM by the time this queries for it. Live-confirmed: run pickCategory() alone on a freshly
+  // loaded, idle page and it works every time; run the exact same call as part of the real
+  // fillListing() sequence (right after Title/Description/Price were just filled moments earlier,
+  // each via setNativeValue + dispatched events that also trigger their own Vue re-renders) and the
+  // SAME item list a moment later, and the dropdown items are consistently gone by the item-picker
+  // stage -- Category, Size, and Color end up completely unset with nothing to fall back on. Same
+  // class of cross-platform SPA-hydration timing race already found and fixed on Mercari/Vinted
+  // (see waitForFormReady()'s comment in fas-mercari.js). Fix: poll for the item list actually being
+  // non-empty (up to ~1.5s, checked every 100ms) instead of trusting one fixed sleep to be long
+  // enough -- costs nothing extra when Vue is already fast (returns on the first non-empty check),
+  // only helps under real load.
+  async function waitForMenuItems(filterFn, timeoutMs) {
+    const deadline = Date.now() + timeoutMs;
+    let items = [];
+    while (Date.now() < deadline) {
+      items = qa('[role="menuitem"], [role="menuitemradio"], [role="option"], li').filter(filterFn);
+      if (items.length) return items;
+      await sleep(100);
+    }
+    return items;
+  }
   async function pickOtherFallback(maxLevels) {
     for (let level = 0; level < maxLevels; level++) {
-      await sleep(300);
-      const items = qa('[role="menuitem"], [role="menuitemradio"], [role="option"], li').filter((el) => el.offsetParent !== null);
+      const items = await waitForMenuItems((el) => el.offsetParent !== null, 1500);
       if (!items.length) break;
       const other = items.find((el) => wordBoundaryHas(norm(el.textContent), 'other') && norm(el.textContent).length < 40);
       if (!other) break;
@@ -666,8 +713,7 @@
     // whole-word match) but no longer hard-fails when the breadcrumb doesn't have a clean gender
     // token -- e.g. a raw L1 name like "Home & Garden" now scores against "Home" via shared-word
     // matching instead of being silently skipped.
-    await sleep(300);
-    const items0 = qa('[role="menuitem"], [role="menuitemradio"], [role="option"], li').filter((el) => el.offsetParent !== null && norm(el.textContent) !== 'all categories');
+    const items0 = await waitForMenuItems((el) => el.offsetParent !== null && norm(el.textContent) !== 'all categories', 1500);
     const departmentCandidates = [...breadcrumbSegments, categoryText].filter(Boolean);
     let bestDept = null, bestDeptScore = -1;
     for (const cand of departmentCandidates) {
@@ -696,8 +742,7 @@
     // to Poshmark's own "Other" option.
     let anyLeafPicked = false;
     for (let level = 0; level < 3; level++) {
-      await sleep(300);
-      const items = qa('[role="menuitem"], [role="menuitemradio"], [role="option"], li').filter((el) => el.offsetParent !== null);
+      const items = await waitForMenuItems((el) => el.offsetParent !== null, 1500);
       if (!items.length) break;
       let best = null, bestScoreForLevel = -1, bestRemainingIdx = -1;
       for (let r = 0; r < remaining.length; r++) {
@@ -772,11 +817,28 @@
     FAIR: 'Fair'
   };
   // Maps FindA.Sale's condition value to Poshmark's real 4-tier wording (live-confirmed 2026-08-22,
-  // not third-party-blog sourced). Defaults to Good for anything ambiguous, same "never leave unset"
-  // spirit as the prior version.
+  // not third-party-blog sourced).
+  // BUG FIX 2026-08-22 (P0, Patrick-directed, live-DB-confirmed): the fuzzy regex chain below was
+  // built assuming free-text condition strings ("brand new", "very good", "excellent") -- but the
+  // real value reaching this function is NEVER free text. extensionController.ts's shared item
+  // payload (used by every crosslister platform, not just Facebook) runs `it.condition` through
+  // `toFacebookCondition()` before it ever leaves the backend, which only ever emits exactly 4
+  // strings: 'New', 'Used - Like New', 'Used - Fair', 'Used - Good' (default). Confirmed live via a
+  // direct production DB query: this exact failing item had condition='NEW' in the Item table, which
+  // toFacebookCondition() turns into plain 'New' -- and plain "New" matches NONE of the old regexes
+  // (no "with tag", no "brand", no trailing comma), so it fell through to the GOOD default. That is
+  // the exact, confirmed root cause of "chose Good for a brand new sealed item" (Patrick,
+  // 2026-08-22). Switches on the exact known strings first (mirrors toFacebookCondition's own
+  // switch-based approach for reliability), falling back to the old fuzzy matching only for any
+  // value that doesn't look like this file's real, finite input space -- defensive in case that
+  // shared payload function ever changes upstream.
   function mapPoshmarkCondition(condition) {
     const c = norm(condition);
     if (!c) return CONDITION_LABELS.GOOD;
+    if (c === 'new') return CONDITION_LABELS.NWT;
+    if (c === 'used - like new') return CONDITION_LABELS.LIKE_NEW;
+    if (c === 'used - fair') return CONDITION_LABELS.FAIR;
+    if (c === 'used - good') return CONDITION_LABELS.GOOD;
     if (/(new with tag|nwt|brand new|new,)/.test(c)) return CONDITION_LABELS.NWT;
     if (/(new without tag|nwot|like new|excellent)/.test(c)) return CONDITION_LABELS.LIKE_NEW;
     if (/(very good|good)/.test(c)) return CONDITION_LABELS.GOOD;
@@ -912,7 +974,7 @@
     await tryFill('Title', item.title, (v) => fillText('Title', v));
     await tryFill('Description', item.description, (v) => fillText('Description', v));
     if (item.price != null && isFinite(Number(item.price))) {
-      await tryFill('Price', item.price, (v) => fillText('Price', String(Math.max(1, Math.round(Number(v))))) || fillText('Listing Price', String(Math.max(1, Math.round(Number(v))))));
+      await tryFill('Price', item.price, (v) => fillPoshmarkPrice(String(Math.max(1, Math.round(Number(v))))));
     }
     // Original/MSRP price deliberately skipped -- FindA.Sale carries no such data (never invent).
     // BUG FIX 2026-08-22 (P0, Patrick-directed -- screenshot showed "Please select the category
