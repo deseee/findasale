@@ -66,9 +66,23 @@
   // leaf levels are. Resolving to the innermost clickable descendant (a/button) when one exists,
   // falling back to the element itself otherwise, covers both shapes without needing to know which
   // one a given level uses.
+  // BUG FIX 2026-08-22 (P0, Patrick-directed, live-Chrome-confirmed): Condition's real option
+  // shape (<li><div data-et-name="listing_condition" ...><div class="fw--med">Good</div>
+  // <div>description...</div></div></li>) has NO nested <a> or <button> at all, so this used to
+  // fall through to dispatching on the outer <li> itself -- but Poshmark's actual click listener
+  // for this widget is bound to the INNER `[data-et-name]` div specifically, a descendant of the
+  // li, and a dispatched event's listeners only fire on the target element and its ANCESTORS during
+  // bubbling, never on descendants -- so the real listener never received the click and Condition
+  // silently failed to select despite the correct option being found (live-confirmed: dispatching
+  // on the li did nothing; dispatching the identical event sequence on the inner
+  // `[data-et-name]` div selected "Good" correctly, screenshot-confirmed). `[data-et-name]` is
+  // Poshmark's own real test-automation/analytics hook (a structural anchor, not an obfuscated
+  // utility class), consistent with this file's "never select by CSS class" rule. Checked AFTER
+  // a/button (which already correctly resolves Category's department-level `<a data-et-name=...>`
+  // items) so this only adds a new fallback tier -- no change for any element that already worked.
   function realClick(el) {
     if (!el) return;
-    const target = el.querySelector('a, button') || el;
+    const target = el.querySelector('a, button') || el.querySelector('[data-et-name]') || el;
     const rect = target.getBoundingClientRect();
     const x = rect.left + rect.width / 2, y = rect.top + rect.height / 2;
     const opts = { bubbles: true, cancelable: true, composed: true, view: window, clientX: x, clientY: y, button: 0, buttons: 1 };
@@ -314,10 +328,26 @@
   // open Category menu item -- instead of any real size option). Switched to wordBoundaryHas so the
   // fallback only fires when `want` appears as a whole word, never as a bare letter/substring inside
   // an unrelated word.
+  // BUG FIX 2026-08-22 (P0, Patrick-directed, live-Chrome-confirmed): some Poshmark option lists
+  // (live-confirmed: Condition) render a bold title line AND a separate description line inside
+  // the SAME li (e.g. "Good" + "Gently used with minimal signs of wear, to note in description or
+  // photos", real confirmed DOM: <li><div><div class="fw--med">Good</div><div>description...
+  // </div></div></li>) -- the option's full textContent is then well over 100 chars, which both
+  // defeats an exact match against the plain value AND the old 60-char-capped fallback below, so a
+  // perfectly correct value like "Good" could never match at all. Poshmark's own first-child chain
+  // reliably carries just the title in that shape; a plain single-line option (Category/Size leaf
+  // items, e.g. `<li>Jeans</li>` or `<li><a>Men</a></li>`) has no such wrapper, so this simply
+  // returns the same text it always did for those.
+  function optionPrimaryText(o) {
+    let node = o;
+    while (node.children.length === 1) node = node.children[0];
+    const label = node.children.length >= 2 ? node.children[0] : node;
+    return norm(label.textContent);
+  }
   function optionElByText(text) {
     const want = norm(text);
     const opts = qa('[role="option"], li[role="option"], [role="menuitem"], [role="menuitemradio"], li');
-    return opts.find((o) => norm(o.textContent) === want) || opts.find((o) => wordBoundaryHas(norm(o.textContent), want) && norm(o.textContent).length < 60) || null;
+    return opts.find((o) => optionPrimaryText(o) === want) || opts.find((o) => wordBoundaryHas(optionPrimaryText(o), want) && optionPrimaryText(o).length < 60) || null;
   }
   // React-controlled inputs ignore a plain .value=x; use the native setter then dispatch input
   // (same pattern as fas-content.js's setNativeValue).
@@ -646,9 +676,25 @@
       const score = scoreMatch(norm(scored.textContent), norm(cand));
       if (score !== null && score > bestDeptScore) { bestDeptScore = score; bestDept = scored; }
     }
+    // BUG FIX 2026-08-22 (P0, Patrick-directed, live-Chrome-confirmed): when NO department
+    // candidate scored a match at all (live-confirmed real case: item.categoryBreadcrumb was empty
+    // for this item and "Tracksuits & Sets" shares no word with any of Poshmark's real 6 departments
+    // -- Women/Men/Kids/Home/Pets/Electronics, confirmed live), this used to leave the picker sitting
+    // at the unclicked top level with NOTHING selected -- "Poshmark's top-level menu could not be
+    // steered at all", exactly Patrick's report. Defaults to the first real department (items0[0],
+    // live-confirmed to be "Women") instead of giving up -- some department, even a guessed one, is
+    // required before ANY subcategory (including "Other") can even be reached, and the organizer
+    // reviews/corrects it before publishing regardless.
+    const deptWasGuessed = !bestDept;
+    if (!bestDept && items0.length) bestDept = items0[0];
     if (bestDept) { realClick(bestDept); pickedAny = true; await sleep(350); }
     const levelQueries = categoryText.split(':').map((s) => s.trim()).filter(Boolean);
     let remaining = (levelQueries.length > 1 ? levelQueries.slice(1) : levelQueries).map((seg, i) => ({ seg, i }));
+    // BUG FIX 2026-08-22 (P0, Patrick-directed, live-Chrome-confirmed): tracks whether a REAL
+    // subcategory-level match was ever clicked in this loop, separate from `pickedAny` (which is
+    // also true just from the department click above). Needed below to decide whether to fall back
+    // to Poshmark's own "Other" option.
+    let anyLeafPicked = false;
     for (let level = 0; level < 3; level++) {
       await sleep(300);
       const items = qa('[role="menuitem"], [role="menuitemradio"], [role="option"], li').filter((el) => el.offsetParent !== null);
@@ -663,34 +709,35 @@
       if (!best) break; // no remaining segment is a real match for this level -- stop rather than guess
       realClick(best);
       pickedAny = true;
+      anyLeafPicked = true;
       if (bestRemainingIdx !== -1) remaining.splice(bestRemainingIdx, 1);
       await sleep(350);
     }
-    // BUG FIX (this pass, live-Chrome-confirmed): the old "committed" check trusted the opener's
-    // OWN textContent changing from its placeholder -- but live-confirmed (same quirk already found
-    // on the Size opener) the Category opener's textContent bundles its ENTIRE currently-rendered
-    // menu, so it changes the instant ANY submenu opens, even if the department click landed on the
-    // WRONG option and no real leaf was ever picked (live-confirmed: a run that picked "Men" instead
-    // of "Women" for a "Women's" query, then found no matching subcategory and broke out of the
-    // level loop with nothing further selected, still read committed=true under the old check).
+    // BUG FIX 2026-08-22 (P0, Patrick-directed, live-Chrome-confirmed): live-confirmed that clicking
+    // JUST a department (e.g. "Kids"), with NO subcategory chosen at all, already sets
+    // `catalogVm.selectedDepartment` to a real (truthy) object -- so the OLD committed check below
+    // would already read true right after the department-default above, before ever trying "Other",
+    // leaving Category stuck on a bare, unspecific department. A department alone is a much weaker
+    // result than a real subcategory (live-confirmed present in both Men's and Women's lists as the
+    // LAST item, e.g. "Men > Other", "Women > Other") -- whenever no real subcategory was matched
+    // above, try Poshmark's own "Other" now, while the subcategory panel is still open, BEFORE
+    // checking commit state or closing the dropdown at all.
+    let usedOtherFallback = false;
+    if (!anyLeafPicked) {
+      const otherPicked = await pickOtherFallback(3);
+      if (otherPicked) { anyLeafPicked = true; usedOtherFallback = true; }
+    }
     // Poshmark's real Vue state is the only reliable signal: `ListingEditorCatalog`'s
     // `selectedDepartment` / `selectedGroup` / `lastSelectedCategoryData` are null until a category
-    // is genuinely committed (live-confirmed: all three are null immediately after the mis-fire
-    // above). Read that component directly instead of inferring from bundled DOM text.
+    // is genuinely committed (live-confirmed: all three are null before any click, and
+    // `selectedDepartment` becomes a real object immediately after even a department-only click).
+    // Read AFTER the Other-fallback attempt above, since Other itself changes this state too.
     let catalogVm = null;
     for (const el of qa('*')) {
       const vm = el.__vue__;
       if (vm && vm.$options && vm.$options.name === 'ListingEditorCatalog') { catalogVm = vm; break; }
     }
-    let committed = !!(catalogVm && (catalogVm.selectedDepartment || catalogVm.selectedGroup || catalogVm.lastSelectedCategoryData));
-    // BUG FIX 2026-08-22 (P0, Patrick-directed): if normal scored matching never committed a real
-    // category, fall back to Poshmark's own "Other" option (pickOtherFallback above) BEFORE closing
-    // the dropdown -- Other needs the panel still open at whatever level it stopped on.
-    let usedOtherFallback = false;
-    if (!committed) {
-      committed = await pickOtherFallback(4);
-      usedOtherFallback = committed;
-    }
+    const committed = !!(catalogVm && (catalogVm.selectedDepartment || catalogVm.selectedGroup || catalogVm.lastSelectedCategoryData));
     // Always close the dropdown before returning, success or failure -- live-confirmed an
     // unclosed Category panel leaks its still-visible department/leaf <li> items into every
     // later field's global li/role query (this is exactly how Size's optionElByText('M') matched
@@ -700,34 +747,41 @@
     else realClick(opener);
     await sleep(250);
     if (!committed) {
-      console.warn('[FAS Poshmark] Category "' + categoryText + '" -- ' + (pickedAny ? 'a level was matched but Poshmark\'s own state shows no category actually committed (likely picked the wrong department/leaf)' : 'no level matched in the picker' + (bestDept ? '' : ' (no department candidate matched in categoryBreadcrumb/categoryText -- Poshmark\'s top-level menu could not be steered at all)')) + ', and no "Other" fallback option was found either (UNVERIFIED taxonomy) -- left for the organizer to choose.');
+      console.warn('[FAS Poshmark] Category "' + categoryText + '" -- nothing could be selected in the picker at all (UNVERIFIED taxonomy) -- left for the organizer to choose.');
       return false;
     }
-    if (usedOtherFallback) {
-      console.warn('[FAS Poshmark] Category "' + categoryText + '" had no confident match against Poshmark\'s real taxonomy -- fell back to "Other". Review and correct the category before publishing.');
+    if (deptWasGuessed || usedOtherFallback) {
+      console.warn('[FAS Poshmark] Category "' + categoryText + '" had no confident match against Poshmark\'s real taxonomy' + (usedOtherFallback ? ' -- fell back to "Other"' : ' -- department was guessed') + '. Review and correct the category before publishing.');
     }
     return true;
   }
 
+  // BUG FIX 2026-08-22 (P0, Patrick-directed, live-Chrome-confirmed): the prior 5-tier
+  // NWT/NWOT/EUC/VGUC/GUC set below was NOT Poshmark's real condition taxonomy at all -- it's the
+  // wording used elsewhere (Mercari/eBay-style) but live-confirmed Poshmark's own Condition picker
+  // has exactly 4 real options: "New With Tags (NWT)", "Like New", "Good", "Fair" (each with its
+  // own description line, e.g. "Good" / "Gently used with minimal signs of wear, to note in
+  // description or photos"). Since none of the old fabricated labels ("GUC (Good Used
+  // Condition)", etc.) exist anywhere in Poshmark's real DOM, optionElByText could never find a
+  // match and Condition silently failed on every single item, regardless of the
+  // optionPrimaryText length-cap fix above. Corrected to the real 4 values.
   const CONDITION_LABELS = {
-    NWT: 'NWT (New With Tags)',
-    NWOT: 'NWOT (New Without Tags)',
-    EUC: 'EUC (Excellent Used Condition)',
-    VGUC: 'VGUC (Very Good Used Condition)',
-    GUC: 'GUC (Good Used Condition)'
+    NWT: 'New With Tags (NWT)',
+    LIKE_NEW: 'Like New',
+    GOOD: 'Good',
+    FAIR: 'Fair'
   };
-  // Maps FindA.Sale's condition value to Poshmark's 5-tier wording (confirmed current wording
-  // from Poshmark's own listing help -- not third-party-blog sourced). Defaults to GUC for
-  // anything ambiguous per this dispatch's explicit instruction, rather than leaving unset.
+  // Maps FindA.Sale's condition value to Poshmark's real 4-tier wording (live-confirmed 2026-08-22,
+  // not third-party-blog sourced). Defaults to Good for anything ambiguous, same "never leave unset"
+  // spirit as the prior version.
   function mapPoshmarkCondition(condition) {
     const c = norm(condition);
-    if (!c) return CONDITION_LABELS.GUC;
+    if (!c) return CONDITION_LABELS.GOOD;
     if (/(new with tag|nwt|brand new|new,)/.test(c)) return CONDITION_LABELS.NWT;
-    if (/(new without tag|nwot)/.test(c)) return CONDITION_LABELS.NWOT;
-    if (/excellent/.test(c)) return CONDITION_LABELS.EUC;
-    if (/very good/.test(c)) return CONDITION_LABELS.VGUC;
-    if (/good/.test(c)) return CONDITION_LABELS.GUC;
-    return CONDITION_LABELS.GUC; // ambiguous default, per spec
+    if (/(new without tag|nwot|like new|excellent)/.test(c)) return CONDITION_LABELS.LIKE_NEW;
+    if (/(very good|good)/.test(c)) return CONDITION_LABELS.GOOD;
+    if (/fair/.test(c)) return CONDITION_LABELS.FAIR;
+    return CONDITION_LABELS.GOOD; // ambiguous default
   }
 
   function photoInput() {

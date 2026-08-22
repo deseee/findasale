@@ -1,6 +1,5 @@
 * { box-sizing: border-box; }
-html { overflow-y: auto; }
-body { width: 380px; max-height: 560px; overflow-y: auto; margin: 0; font: 13px/1.4 -apple-system, Segoe UI, Roboto, sans-serif; background: #14201a; color: #eef3ee; }
+body { width: 380px; max-height: 560px; margin: 0; font: 13px/1.4 -apple-system, Segoe UI, Roboto, sans-serif; background: #14201a; color: #eef3ee; }
 header { padding: 12px 14px; border-bottom: 1px solid #26362d; display: flex; align-items: baseline; gap: 8px; }
 .brand { font-weight: 800; font-size: 16px; } .brand b { color: #4caf6d; }
 .sub { font-size: 11px; color: #9fb6a8; }
@@ -35,6 +34,13 @@ footer { padding: 10px 14px; border-top: 1px solid #26362d; }
 button.primary { width: 100%; padding: 10px; border: none; border-radius: 8px; background: #3c8c5a; color: #fff; font-weight: 700; cursor: pointer; }
 button.primary:disabled { background: #2a3a30; color: #6b7c72; cursor: default; }
 .note { font-size: 11px; color: #9fb6a8; margin: 8px 0 0; }
+/* 2026-08-22: long explanatory notes moved into <details> (popup.html) so their multi-line
+   paragraphs don't inflate the popup's total height by default -- Patrick reported the "Post
+   to" section becoming unreachable when banners pushed content past the popup's rendering
+   bounds; collapsing these (still one click away) is a safe, direct reduction of that height
+   without touching popup sizing/overflow mechanics at all. */
+.note summary { cursor: pointer; color: #6fd08c; }
+.note[open] summary { margin-bottom: 4px; }
 .removeSetting { margin-top: 12px; padding-top: 10px; border-top: 1px solid #26362d; }
 .renewSetting { margin-top: 12px; padding-top: 10px; border-top: 1px solid #26362d; }
 .select { width: 100%; margin-top: 6px; padding: 7px 8px; border-radius: 6px; border: 1px solid #26362d; background: #1a2620; color: #eef3ee; font: inherit; }
