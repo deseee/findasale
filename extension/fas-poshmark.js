@@ -739,8 +739,10 @@
   async function pickOtherFallback(maxLevels) {
     for (let level = 0; level < maxLevels; level++) {
       const items = await waitForMenuItems((el) => el.offsetParent !== null, 1500);
+      console.log('[FAS Poshmark][catdbg] otherFallback level', level, 'items (' + items.length + '):', items.map((el) => norm(el.textContent)));
       if (!items.length) break;
       const other = items.find((el) => wordBoundaryHas(norm(el.textContent), 'other') && norm(el.textContent).length < 40);
+      console.log('[FAS Poshmark][catdbg] otherFallback level', level, 'otherFound=', !!other);
       if (!other) break;
       realClick(other);
       await sleep(350);
@@ -749,7 +751,9 @@
         const vm = el.__vue__;
         if (vm && vm.$options && vm.$options.name === 'ListingEditorCatalog') { catalogVm = vm; break; }
       }
-      if (catalogVm && (catalogVm.selectedDepartment || catalogVm.selectedGroup || catalogVm.lastSelectedCategoryData)) return true;
+      const committedNow = !!(catalogVm && (catalogVm.selectedDepartment || catalogVm.selectedGroup || catalogVm.lastSelectedCategoryData));
+      console.log('[FAS Poshmark][catdbg] otherFallback level', level, 'catalogVmFound=', !!catalogVm, 'committedNow=', committedNow);
+      if (committedNow) return true;
     }
     return false;
   }
@@ -761,10 +765,33 @@
     // early; an empty categoryText just means no scored candidate matches at any level, landing on
     // the "Other" fallback (pickOtherFallback above).
     const opener = openerByLabel('Category');
-    if (!opener) return false;
+    if (!opener) {
+      console.log('[FAS Poshmark][catdbg] opener NOT FOUND for "Category"');
+      return false;
+    }
     const placeholderText = norm(opener.textContent);
+    console.log('[FAS Poshmark][catdbg] opener found, text=', placeholderText.slice(0, 60));
     await vueOpenDropdown(opener);
     await sleep(400);
+    // BUG FIX 2026-08-22 (S-EXT-POSHMARK-CATEGORY-STALE-STATE, P0, live-Chrome-confirmed root
+    // cause of "nothing could be selected in the picker at all" on a real reinstall/retest --
+    // NOT a scoring bug): live-confirmed on Patrick's real tab that re-opening this dropdown can
+    // land it wherever it was last left navigated to (e.g. already inside "Men"'s subcategory
+    // list) instead of the true top level -- Poshmark's own draft/dropdown state persisted across
+    // a prior navigation attempt on the same page. When that happens, the department-scoring step
+    // below scores against SUBcategory names (Accessories, Bags, ...) instead of the real 6
+    // departments, guesses a department-shaped fallback that is actually a stale subcategory item,
+    // clicking it can bounce the picker back to the top-level department list instead of
+    // navigating deeper, and the leaf-matching loop then finds no real match and "Other" is never
+    // reached -- exactly reproducing Patrick's report with zero categories selectable. Fix:
+    // unconditionally click any visible "All Categories" entry first to force a clean reset to the
+    // true root before doing any real scoring -- confirmed live present as a clickable item in
+    // both the root view and every nested view, so this is always safe, not just a guess.
+    const resetItems = await waitForMenuItems((el) => el.offsetParent !== null, 1000);
+    console.log('[FAS Poshmark][catdbg] resetItems (' + resetItems.length + '):', resetItems.map((el) => norm(el.textContent)));
+    const allCategoriesLink = resetItems.find((el) => norm(el.textContent) === 'all categories');
+    console.log('[FAS Poshmark][catdbg] allCategoriesLink found=', !!allCategoriesLink);
+    if (allCategoriesLink) { realClick(allCategoriesLink); await sleep(350); }
     const breadcrumbSegments = (breadcrumbText || '').split(':').map((s) => s.trim()).filter(Boolean);
     let pickedAny = false;
     // BUG FIX 2026-08-21 (S-EXT-BATCH, P0, live-Chrome-confirmed root cause of "Poshmark still
@@ -788,7 +815,9 @@
     // token -- e.g. a raw L1 name like "Home & Garden" now scores against "Home" via shared-word
     // matching instead of being silently skipped.
     const items0 = await waitForMenuItems((el) => el.offsetParent !== null && norm(el.textContent) !== 'all categories', 1500);
+    console.log('[FAS Poshmark][catdbg] items0 (' + items0.length + '):', items0.map((el) => norm(el.textContent)));
     const departmentCandidates = [...breadcrumbSegments, categoryText].filter(Boolean);
+    console.log('[FAS Poshmark][catdbg] departmentCandidates=', departmentCandidates);
     let bestDept = null, bestDeptScore = -1;
     for (const cand of departmentCandidates) {
       const scored = bestScoringOption(items0, cand);
@@ -807,6 +836,7 @@
     // reviews/corrects it before publishing regardless.
     const deptWasGuessed = !bestDept;
     if (!bestDept && items0.length) bestDept = items0[0];
+    console.log('[FAS Poshmark][catdbg] bestDept=', bestDept ? norm(bestDept.textContent) : null, 'deptWasGuessed=', deptWasGuessed);
     if (bestDept) { realClick(bestDept); pickedAny = true; await sleep(350); }
     const levelQueries = categoryText.split(':').map((s) => s.trim()).filter(Boolean);
     let remaining = (levelQueries.length > 1 ? levelQueries.slice(1) : levelQueries).map((seg, i) => ({ seg, i }));
@@ -817,6 +847,7 @@
     let anyLeafPicked = false;
     for (let level = 0; level < 3; level++) {
       const items = await waitForMenuItems((el) => el.offsetParent !== null, 1500);
+      console.log('[FAS Poshmark][catdbg] leaf level', level, 'items (' + items.length + '):', items.map((el) => norm(el.textContent)));
       if (!items.length) break;
       let best = null, bestScoreForLevel = -1, bestRemainingIdx = -1;
       for (let r = 0; r < remaining.length; r++) {
@@ -825,6 +856,7 @@
         const score = scoreMatch(norm(candidate.textContent), norm(remaining[r].seg));
         if (score !== null && score > bestScoreForLevel) { bestScoreForLevel = score; best = candidate; bestRemainingIdx = r; }
       }
+      console.log('[FAS Poshmark][catdbg] leaf level', level, 'best=', best ? norm(best.textContent) : null, 'score=', bestScoreForLevel);
       if (!best) break; // no remaining segment is a real match for this level -- stop rather than guess
       realClick(best);
       pickedAny = true;
@@ -841,9 +873,11 @@
     // LAST item, e.g. "Men > Other", "Women > Other") -- whenever no real subcategory was matched
     // above, try Poshmark's own "Other" now, while the subcategory panel is still open, BEFORE
     // checking commit state or closing the dropdown at all.
+    console.log('[FAS Poshmark][catdbg] anyLeafPicked=', anyLeafPicked);
     let usedOtherFallback = false;
     if (!anyLeafPicked) {
       const otherPicked = await pickOtherFallback(3);
+      console.log('[FAS Poshmark][catdbg] pickOtherFallback result=', otherPicked);
       if (otherPicked) { anyLeafPicked = true; usedOtherFallback = true; }
     }
     // Poshmark's real Vue state is the only reliable signal: `ListingEditorCatalog`'s
