@@ -127,6 +127,75 @@ async function ensureRemovalAlarmAndCheck() {
 chrome.runtime.onInstalled.addListener(ensureRemovalAlarmAndCheck);
 chrome.runtime.onStartup.addListener(ensureRemovalAlarmAndCheck);
 
+// ---- Auto-publish reporting reliability net (S-EXT-AUTOPUBLISH-REPORTING-NET, 2026-08-22) ----
+// DB-CONFIRMED INCIDENT (queried production this session, not guessed): a Poshmark item had TWO
+// real, distinct, live Poshmark listing IDs (a confirmed duplicate-publish incident, separately
+// mitigated) yet the MarketplaceListingJob table had ZERO Poshmark rows for it at all -- meaning
+// markListed was never successfully reported to the server despite genuinely successful publishes.
+// Root cause (plausible, not 100% proven without live instrumentation of the content script's own
+// execution context): fas-poshmark.js's doPoshmarkAutoPublish calls markListed+advanceQueue
+// immediately after detecting a successful publish (the sell-form disappearing from the DOM) --
+// but both confirmed duplicate listings ended up on real /listing/<id> URLs, and if Poshmark's
+// real post-publish behavior is a hard navigation (full page load) rather than a client-side
+// route change, the content script's execution context is destroyed at that exact moment, and the
+// async continuation (markListed, advanceQueue) may simply never run. A service worker isn't tied
+// to any one tab's navigation lifecycle, so it can catch this independently of whether the content
+// script survives. This is a reliability NET, not a replacement -- each content script's own
+// existing fast-path markListed/advanceQueue calls stay in place; this only catches the case where
+// that fast path never got the chance to fire. Both sides being idempotent (markListed's own
+// "most-recent-row-wins" pattern server-side; the reportKey guard below) makes double-firing safe.
+const FAS_AUTOPUBLISH_LISTING_URL_PATTERNS = {
+  POSHMARK: /poshmark\.com\/listing\//i,
+  // UNVERIFIED -- Mercari's and Grailed's real post-publish redirect URL shape have not been
+  // confirmed live (no equivalent duplicate-listing incident has surfaced their exact pattern
+  // yet). Best-effort guesses based on each site's general listing-detail URL convention; if
+  // these never match in practice, this net simply never fires for that platform and each
+  // content script's own existing fast-path reporting remains the only path (same as before this
+  // fix existed) -- not a regression, just an unconfirmed enhancement.
+  MERCARI: /mercari\.com\/item\//i,
+  GRAILED: /grailed\.com\/listings\//i,
+};
+const FAS_AUTOPUBLISH_QUEUE_KEYS = {
+  POSHMARK: { queue: 'fasPoshmarkQueue', index: 'fasPoshmarkIndex', autoPublish: 'fasPoshmarkAutoPublish' },
+  MERCARI: { queue: 'fasMercariQueue', index: 'fasMercariIndex', autoPublish: 'fasMercariAutoPublish' },
+  GRAILED: { queue: 'fasGrailedQueue', index: 'fasGrailedIndex', autoPublish: 'fasGrailedAutoPublish' },
+};
+// Registered at top level (not inside a message handler) so it survives MV3 service worker
+// restarts -- Chrome re-runs this whole script on wake and re-registers top-level listeners
+// automatically, the same way the existing onInstalled/onStartup listeners below do.
+chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
+  if (!changeInfo.url) return; // only act on an actual URL change, not every tab-update event
+  (async () => {
+    for (const platform of Object.keys(FAS_AUTOPUBLISH_LISTING_URL_PATTERNS)) {
+      if (!FAS_AUTOPUBLISH_LISTING_URL_PATTERNS[platform].test(changeInfo.url)) continue;
+      const keys = FAS_AUTOPUBLISH_QUEUE_KEYS[platform];
+      const st = await chrome.storage.local.get([keys.queue, keys.index, keys.autoPublish, 'fasAutoPublishReportedKey']);
+      const queue = st[keys.queue] || [];
+      const index = st[keys.index] || 0;
+      if (!st[keys.autoPublish] || !queue.length || index >= queue.length) continue; // no active auto-publish run for this platform
+      const item = queue[index];
+      if (!item || !item.id) continue;
+      // Idempotency guard: the content script's own fast-path may have already reported (and
+      // advanced the queue) before this listener even runs -- re-check queue.length/index just
+      // read above already covers "already advanced past this item", and this key guards against
+      // this listener itself firing twice for the same item (e.g. two tab-update events in a row
+      // matching the pattern before storage catches up).
+      const reportKey = platform + ':' + item.id + ':' + index;
+      if (st.fasAutoPublishReportedKey === reportKey) continue;
+      await chrome.storage.local.set({ fasAutoPublishReportedKey: reportKey });
+      try {
+        const resp = await apiFetch('/extension/items/' + encodeURIComponent(item.id) + '/listed',
+          { method: 'POST', body: { remoteListingId: null, platform } });
+        if (!resp.ok) console.log('[FAS autopublish-reporting-net markListed FAILED]', JSON.stringify({ itemId: item.id, platform, resp }));
+      } catch (e) { console.log('[FAS autopublish-reporting-net markListed threw]', platform, e && e.message); }
+      // Re-read the index right before advancing -- if the content script's own fast-path already
+      // advanced it between our read above and now, advancing again here would skip an item.
+      const fresh = await chrome.storage.local.get([keys.index]);
+      if ((fresh[keys.index] || 0) === index) await chrome.storage.local.set({ [keys.index]: index + 1 });
+    }
+  })();
+});
+
 // ---- Silent-mode removal tab lifecycle (2026-07-16 fix) ----
 // Silent ("Remove automatically") mode used to open the "Your listings" page in a HIDDEN
 // background tab (active:false). Chrome throttles rendering in background tabs -- React
