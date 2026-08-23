@@ -34,9 +34,12 @@
  * typically required before submission -- mapped from FindA.Sale's item weight data when present;
  * when absent, this is left for the organizer with a loud overlay warning (never fabricated).
  *
- * Smart Pricing sits next to the price field on the same step and is intentionally NEVER
- * touched/enabled -- only the flat price field is filled, leaving Smart Pricing at Mercari's own
- * default (off).
+ * Smart Pricing sits next to the price field on the same step. Per Patrick's 2026-08-23
+ * decision, the toggle itself is left untouched (Mercari's own default, currently ON) -- but the
+ * floor price is always overwritten with a real computed minimum via
+ * fillMercariSmartPricingFloor(), same pattern as Facebook's Best Offer minimum (fas-content.js
+ * ~line 524) and Grailed's Smart Pricing floor (fas-grailed.js ~line 1129), never left at
+ * Mercari's own irrelevant suggested value.
  */
 (function () {
   const SELL_URL_HINT = 'https://www.mercari.com/sell/'; // UNVERIFIED -- best-effort guess, not live-confirmed
@@ -266,12 +269,30 @@
     const opts = qa('[role="option"], li[role="option"], [role="menuitem"], [role="menuitemradio"], li');
     return opts.find((o) => norm(o.textContent) === want) || opts.find((o) => norm(o.textContent).indexOf(want) !== -1 && norm(o.textContent).length < 60) || null;
   }
+  // BUG FIX 2026-08-23 (S-EXT-MERCARI-BATCH, P0): made defensive -- mirrors fas-poshmark.js's
+  // setNativeValue (S-EXT-POSHMARK-PRICE-ILLEGAL-INVOCATION fix). The native setter can throw
+  // "Illegal invocation" against certain elements (confirmed live on Poshmark's Price field,
+  // same DOM-shape risk exists here); falls back to plain assignment instead of leaving the
+  // field silently unset, and returns whether the value actually stuck so callers can report an
+  // honest success/failure instead of assuming success.
   function setNativeValue(el, value) {
     const proto = el.tagName === 'TEXTAREA' ? window.HTMLTextAreaElement.prototype : window.HTMLInputElement.prototype;
     const setter = Object.getOwnPropertyDescriptor(proto, 'value') && Object.getOwnPropertyDescriptor(proto, 'value').set;
-    if (setter) setter.call(el, value); else el.value = value;
+    let set = false;
+    if (setter) {
+      try { setter.call(el, value); set = true; } catch (e) {
+        console.warn('[FAS Mercari] setNativeValue -- native setter threw (' + (e && e.message) + '), falling back to plain assignment.');
+      }
+    }
+    if (!set) {
+      try { el.value = value; set = (el.value === String(value)); } catch (e) {
+        console.warn('[FAS Mercari] setNativeValue -- plain assignment also failed:', e && e.message);
+      }
+    }
+    if (!set) console.warn('[FAS Mercari] setNativeValue -- could not set value on element (both native setter and plain assignment failed or did not stick).');
     el.dispatchEvent(new Event('input', { bubbles: true }));
     el.dispatchEvent(new Event('change', { bubbles: true }));
+    return set;
   }
 
   async function tryFill(fieldLabel, value, fillFn) {
@@ -578,6 +599,119 @@
     return true;
   }
 
+  // Size -- BUG FIX 2026-08-23 (S-EXT-MERCARI-BATCH, P0, live-Chrome-confirmed 2026-08-22): NEVER
+  // IMPLEMENTED before this fix (no "fillMercariSize"/"itemSizeId" reference existed anywhere in
+  // this file; the fillListing() call below previously routed Size through the generic
+  // fillSelectLike(), which never targeted the real element and never actually filled it). Real
+  // live-confirmed element: `div#itemSizeId[data-testid="Size"]` -- a custom combobox OPENER (not
+  // a real <input>), same "click opener -> panel opens -> click matching option" shape already
+  // used successfully for Category/Brand above. Exact-match ONLY (never falls back to
+  // bestScoringOption's fuzzy word-scoring the way Category does) -- same "report, don't guess"
+  // discipline established for Poshmark's Size field (a wrong physical size risks a real buyer
+  // return): no confident match leaves the field unset rather than picking a nearest guess.
+  async function fillMercariSize(value) {
+    const opener = document.querySelector('[data-testid="Size"]') || openerByLabel('Size');
+    if (!opener) return false;
+    const openerTextBefore = norm(opener.textContent);
+    await realClick(opener);
+    await sleep(350);
+    const want = norm(value);
+    const options = qa('[role="option"], li[role="option"], [role="menuitem"], [role="menuitemradio"], li, button');
+    const opt = options.find((o) => norm(o.textContent) === want);
+    if (!opt) {
+      console.warn('[FAS Mercari] Size "' + value + '" -- no exact match in the opened panel (UNVERIFIED taxonomy) -- left unset rather than guessed.');
+      const closeBtn = qa('button, [role="button"], [aria-label]').find((b) => {
+        const aria = norm(b.getAttribute('aria-label') || '');
+        const t = norm(b.textContent);
+        return (aria === 'close' || aria.indexOf('close') !== -1 || t === '\u00d7' || t === 'x') && b.offsetParent !== null;
+      });
+      if (closeBtn) { await realClick(closeBtn); await sleep(150); }
+      return false;
+    }
+    await realClick(opt);
+    await sleep(250);
+    // BUG FIX 2026-08-23 (S-EXT-MERCARI-BATCH, P0, live-Chrome-confirmed): a real, live re-click
+    // test against the actual Size panel (role="option" / aria-selected="false" <li> items,
+    // data-testid="Size-option") found the match-and-click sequence above does NOT reliably commit
+    // the selection -- confirmed live TWICE, once via synthetic realClick and once via a genuine
+    // OS-level trusted click at the option's real screen coordinates: both closed the panel without
+    // the opener's displayed text ever changing from its "Select size" placeholder, and
+    // aria-selected stayed "false" on the clicked option afterward. This means the old version of
+    // this function could report a false success (found a real exact-text match, clicked it, and
+    // returned true) even when Mercari's own UI never actually registered a size. Now verifies the
+    // click actually committed -- via the option's own aria-selected flag first (most reliable,
+    // doesn't depend on the opener's exact placeholder wording), falling back to a plain
+    // opener-text-changed check -- and reports failure (never a false positive) if neither confirms.
+    // Root cause of WHY the commit fails is not yet resolved (deeper investigation needed next
+    // session, likely a MAIN-world-only click handler similar to Poshmark's Vue dropdowns, per
+    // fas-poshmark-bridge.js's precedent) -- flagged honestly rather than guessed at further here.
+    await sleep(150);
+    const ariaConfirmed = opt.getAttribute && opt.getAttribute('aria-selected') === 'true';
+    const openerTextAfter = norm((document.querySelector('[data-testid="Size"]') || opener).textContent);
+    const textChanged = openerTextAfter !== openerTextBefore && openerTextAfter.indexOf(want) !== -1;
+    const stuck = ariaConfirmed || textChanged;
+    if (!stuck) console.warn('[FAS Mercari] Size "' + value + '" -- matched and clicked "' + opt.textContent.trim() + '" but Mercari\'s own UI never confirmed the selection (aria-selected stayed false, opener text unchanged) -- treating as UNSET rather than reporting a false success. Please set it yourself.');
+    return stuck;
+  }
+
+  // Price -- BUG FIX 2026-08-23 (S-EXT-MERCARI-BATCH, P0): dedicated fill, previously routed
+  // through the generic fillText() which never confirmed the value actually stuck. Mirrors
+  // fas-poshmark.js's fillPoshmarkPrice defensive pattern (S-EXT-POSHMARK-PRICE-ILLEGAL-INVOCATION):
+  // uses the confirmed real selector directly (`input#Price[name="sellPrice"][data-testid="Price"]`,
+  // live-confirmed 2026-08-22), then re-reads the real DOM value after setting rather than trusting
+  // setNativeValue's own return alone -- Mercari's own price-suggestion JS could still silently
+  // overwrite or reject what was typed, and a stuck-check catches that instead of falsely reporting
+  // success. Digits-only comparison so a "$"/comma-formatted echo of the same number still counts.
+  async function fillMercariPrice(value) {
+    const el = document.querySelector('input#Price[name="sellPrice"][data-testid="Price"]') || fieldByLabel('Price');
+    if (!el) return false;
+    el.focus();
+    const set = setNativeValue(el, String(value));
+    await sleep(150);
+    const seenDigits = String(el.value || '').replace(/[^0-9.]/g, '');
+    const wantDigits = String(value).replace(/[^0-9.]/g, '');
+    const stuck = set && seenDigits !== '' && seenDigits === wantDigits;
+    if (!stuck) console.warn('[FAS Mercari] Price -- set attempted but the field did not confirm the expected value afterward (saw "' + el.value + '", wanted "' + value + '") -- UNVERIFIED, please check before publishing.');
+    return stuck;
+  }
+
+  // Smart Pricing floor price -- Patrick confirmed 2026-08-23: Smart Pricing itself stays ON
+  // (Mercari's own default; the toggle is never touched here), but the floor price must reflect
+  // this item's real minimum instead of Mercari's own irrelevant suggested value. Same computed-
+  // floor pattern already proven on Facebook (fas-content.js ~line 524, configureOfferStep) and
+  // Grailed (fas-grailed.js ~line 1129, fillSmartPricingFloor): prefers the organizer's own
+  // per-item dollar floor (item.bestOfferMinimumAmt), falling back to the organizer-level
+  // percentage default (item.defaultBestOfferDeclinePct, schema.prisma suggested default 25%)
+  // applied against this item's price. Both fields already flow onto every extension queue item
+  // via popup.js's shared startQueue() map (not Mercari-specific) -- no new wiring needed. Clamped
+  // to a sane range and rounded to a whole dollar, same digit-reflow avoidance already proven
+  // necessary on Grailed's own floor-price field.
+  async function fillMercariSmartPricingFloor(item) {
+    if (item.price == null || !isFinite(Number(item.price))) return false;
+    const price = Number(item.price);
+    let floor;
+    if (item.bestOfferMinimumAmt != null && isFinite(Number(item.bestOfferMinimumAmt))) {
+      floor = Number(item.bestOfferMinimumAmt);
+    } else {
+      const declinePct = (item.defaultBestOfferDeclinePct != null && isFinite(Number(item.defaultBestOfferDeclinePct)))
+        ? Number(item.defaultBestOfferDeclinePct) : 25; // schema.prisma's own suggested default
+      floor = price * (1 - declinePct / 100);
+    }
+    floor = Math.max(1, Math.min(floor, price - 0.01));
+    floor = Math.round(floor);
+    if (floor >= price) return false; // price too low for a valid floor strictly below it -- leave Mercari's own default rather than set an invalid one
+    const el = document.querySelector('input#sellMinPriceForAutoPriceDrop[name="sellMinPriceForAutoPriceDrop"][data-testid="SmartPricingFloorPrice"]')
+      || fieldByLabel('Smart Pricing Floor Price') || fieldByLabel('Floor Price');
+    if (!el) {
+      console.warn('[FAS Mercari] Smart Pricing floor price field not found (UNVERIFIED selector) -- Smart Pricing is on by default, please set a real floor price manually before publishing.');
+      return false;
+    }
+    el.focus();
+    const set = setNativeValue(el, String(floor));
+    await sleep(150);
+    return set;
+  }
+
   const CONDITION_LABELS = ['New', 'Like New', 'Good', 'Fair', 'Poor'];
   // Mercari's own confirmed 5-tier wording (Mercari help center, not third-party-sourced).
   function mapMercariCondition(condition) {
@@ -602,20 +736,29 @@
   // a direct, unambiguous testid lookup + plain click (confirmed live: click on
   // [data-testid="ConditionGood"] visibly selected that card, screenshot-verified), used INSTEAD of
   // fillSelectLike for this one field.
-  const MERCARI_CONDITION_TESTID = {
-    'New': 'ConditionNew',
-    'Like New': 'ConditionLikeNew',
-    'Good': 'ConditionGood',
-    'Fair': 'ConditionFair',
-    'Poor': 'ConditionPoor',
+  // BUG FIX 2026-08-23 (S-EXT-MERCARI-BATCH, P0, live-Chrome-confirmed 2026-08-22): the
+  // data-testid map below (ConditionNew/ConditionLikeNew/ConditionGood/ConditionFair/ConditionPoor)
+  // does NOT exist on the real page -- confirmed live via direct DOM read against the actual
+  // Mercari draft. The 5 condition options are plain `input[name="sellCondition"]` radios with
+  // bare numeric `id` attributes and NO data-testid at all. Live-confirmed id -> label mapping
+  // (read from each radio's own `<label for="...">` text, not assumed from visual order):
+  // id="1"->New, id="2"->Like new, id="3"->Good, id="4"->Fair, id="5"->Poor.
+  const MERCARI_CONDITION_RADIO_ID = {
+    'New': '1',
+    'Like New': '2',
+    'Good': '3',
+    'Fair': '4',
+    'Poor': '5',
   };
   async function fillMercariCondition(conditionLabel) {
-    const testid = MERCARI_CONDITION_TESTID[conditionLabel];
-    const el = testid ? document.querySelector('[data-testid="' + testid + '"]') : null;
+    const id = MERCARI_CONDITION_RADIO_ID[conditionLabel];
+    const el = id ? document.querySelector('input[name="sellCondition"][id="' + id + '"]') : null;
     if (!el) return false;
     await realClick(el);
     await sleep(200);
-    return true;
+    const stuck = el.checked === true;
+    if (!stuck) console.warn('[FAS Mercari] Condition "' + conditionLabel + '" -- clicked but the radio did not confirm checked (UNVERIFIED) -- please check before publishing.');
+    return stuck;
   }
 
   // Weight: FindA.Sale carries packageWeightOz / aiPackageWeightOz on the queue item (see
@@ -739,7 +882,7 @@
   function showReviewOverlay(item, index, total, photosOk) {
     const more = (index + 1) < total;
     overlay('<b>FindA.Sale</b><div style="margin-top:6px">Filled <b>' + escapeHtml(item.title) + '</b> as best we could.</div>' +
-      '<div style="margin-top:4px;font-size:12px;color:#cfe3d6">Review every field (category/brand/weight are UNVERIFIED guesses), confirm <b>Smart Pricing stayed off</b> if you don\'t want it, then click Mercari\'s own <b>List this item</b> yourself.</div>' +
+      '<div style="margin-top:4px;font-size:12px;color:#cfe3d6">Review every field (category/brand/weight are UNVERIFIED guesses), double-check the <b>Smart Pricing floor price</b> we set, then click Mercari\'s own <b>List this item</b> yourself.</div>' +
       (!photosOk ? '<div style="color:#ffcf7a;margin-top:6px;font-size:12px">Photos may not have attached -- add them on this screen.</div>' : '') +
       button('fas-merc-next', more ? 'I posted — next item &#9654;' : 'I posted — done', true) +
       button('fas-merc-close', 'Close', false) +
@@ -821,17 +964,20 @@
     // category-type gating (apparel-only for size/color) is left to Mercari's own form,
     // never assumed here.
     await guardedFill('Brand', item.brand, (v) => fillBrand('Brand', v));
-    await guardedFill('Size', item.size, (v) => fillSelectLike('Size', v));
+    await guardedFill('Size', item.size, (v) => fillMercariSize(v));
     await guardedFill('Color', item.color, (v) => fillSelectLike('Color', v));
     const conditionLabel = mapMercariCondition(item.condition);
     await guardedFill('Condition', conditionLabel, (v) => fillMercariCondition(v));
     if (item.price != null && isFinite(Number(item.price))) {
       const priceVal = Math.max(1, Math.round(Number(item.price)));
       if (priceVal > 2000) console.warn('[FAS Mercari] Price $' + priceVal + ' exceeds Mercari\'s standard $2,000 cap -- may need an authenticate-eligible designer category. Filling anyway; Mercari\'s own form is the real gate.');
-      // Smart Pricing toggle sits next to Price -- deliberately never touched here.
-      await guardedFill('Price', priceVal, (v) => fillText('Price', String(v)));
+      // Smart Pricing TOGGLE sits next to Price -- deliberately never touched here (stays at
+      // Mercari's own default, currently ON, per Patrick's 2026-08-23 decision). The FLOOR PRICE
+      // next to it is a separate field and IS filled -- see fillMercariSmartPricingFloor() below.
+      await guardedFill('Price', priceVal, (v) => fillMercariPrice(String(v)));
     }
     if (!interstitialAt) await fillWeight(item);
+    if (!interstitialAt) await fillMercariSmartPricingFloor(item);
     return { photosOk, interstitialAt };
   }
 
