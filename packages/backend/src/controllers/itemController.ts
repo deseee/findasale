@@ -13,6 +13,7 @@ import { getIO } from '../lib/socket'; // V1: live bidding broadcast
 import { fireWebhooks } from '../services/webhookService'; // X1
 import { analyzeItemImage, isCloudAIAvailable } from '../services/cloudAIService'; // CB5
 import { checkAiTagQuota, incrementAiTagCount } from '../lib/aiTagsQuotaTracker';
+import { retrieveCheckoutSessionAcrossAccounts } from '../utils/expireCheckoutSession'; // Hold-to-Pay checkout URL live-lookup
 import { notifyPriceDropAlerts } from '../services/priceDropService'; // Price drop alerts
 import { pushEvent } from '../services/liveFeedService'; // Feature #70: Live Sale Feed
 import { PUBLIC_ITEM_FILTER } from '../helpers/itemQueries'; // Phase 1B: Rapidfire Mode public item filtering
@@ -758,7 +759,7 @@ const ITEM_DETAIL_SELECT = {
             expiresAt: true,
             userId: true,
             user: { select: { name: true, email: true } },
-            invoice: { select: { expiresAt: true } }
+            invoice: { select: { expiresAt: true, stripeSessionId: true, stripeAccountId: true, status: true } }
           }
         }
 } as const;
@@ -778,17 +779,17 @@ type HoldForViewer = {
   expiresAt: Date;
   userId: string;
   user?: { name: string | null; email: string } | null;
-  invoice?: { expiresAt: Date } | null;
+  invoice?: { expiresAt: Date; stripeSessionId: string | null; stripeAccountId: string | null; status: string } | null;
 } | null | undefined;
 
 // Statuses in which a hold is genuinely live. A settled ('COMPLETED'), cancelled or
 // expired hold exposes nothing about its former holder.
 const ACTIVE_HOLD_STATUSES = ['PENDING', 'CONFIRMED', 'HOLD_IN_CART', 'INVOICE_ISSUED'];
 
-function buildHoldFieldsForViewer(
+async function buildHoldFieldsForViewer(
   reservation: HoldForViewer,
   viewer: { isOwnerOrAdmin: boolean; viewerUserId?: string }
-): Record<string, unknown> {
+): Promise<Record<string, unknown>> {
   if (!reservation || !ACTIVE_HOLD_STATUSES.includes(reservation.status)) return {};
 
   // Payment deadline: the invoice's own expiry once one exists, otherwise the hold
@@ -812,7 +813,30 @@ function buildHoldFieldsForViewer(
   }
 
   if (viewer.viewerUserId && viewer.viewerUserId === reservation.userId) {
-    return { reservedBy: reservation.userId, invoiceExpiresAt };
+    // P0 fix (2026-08-23, live $0.50 Hold-to-Pay test): this used to return no checkout
+    // URL at all -- item.invoiceCheckoutUrl was a phantom frontend field the backend never
+    // populated, so HoldInvoiceStatusCard's "Complete Payment" button silently no-opped for
+    // every shopper who wasn't reading the raw Stripe link out of their invoice email. The
+    // Session URL is never persisted (HoldInvoice only stores stripeSessionId), so retrieve
+    // it live -- reusing the same platform-then-connected-account fallback helper the
+    // expiry/dead-invoice jobs already rely on for Direct-charge sessions. Only attempted
+    // while the invoice is still PENDING; a PAID/EXPIRED/CANCELLED session isn't payable
+    // and isn't worth a Stripe round-trip on every page view.
+    let invoiceCheckoutUrl: string | null = null;
+    if (reservation.invoice?.stripeSessionId && reservation.invoice.status === 'PENDING') {
+      try {
+        const session = await retrieveCheckoutSessionAcrossAccounts(
+          reservation.invoice.stripeSessionId,
+          reservation.invoice.stripeAccountId
+        );
+        invoiceCheckoutUrl = session.url ?? null;
+      } catch (err: any) {
+        console.warn(
+          `[getItemById] Failed to retrieve checkout session for invoice checkout URL (item=${reservation.id}): ${err?.message ?? err}`
+        );
+      }
+    }
+    return { reservedBy: reservation.userId, invoiceExpiresAt, invoiceCheckoutUrl };
   }
 
   return {};
@@ -911,7 +935,7 @@ export const getItemById = async (req: Request, res: Response) => {
     // Hold-to-Pay (#221): buyer-identity fields, gated on the SAME isOwner/isAdmin
     // signals this endpoint already uses for its DRAFT-sale and inactive-item gates —
     // deliberately not a second, parallel notion of ownership.
-    const holdFields = buildHoldFieldsForViewer(item.reservation, {
+    const holdFields = await buildHoldFieldsForViewer(item.reservation, {
       isOwnerOrAdmin: isOwner || isAdmin,
       viewerUserId: authReq.user?.id,
     });
@@ -1011,7 +1035,7 @@ export const getItemForEdit = async (req: AuthRequest, res: Response) => {
       reservation: undefined
     };
 
-    const holdFields = buildHoldFieldsForViewer(item.reservation, {
+    const holdFields = await buildHoldFieldsForViewer(item.reservation, {
       isOwnerOrAdmin: true,
       viewerUserId: req.user.id,
     });
