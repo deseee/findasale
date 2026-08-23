@@ -425,6 +425,10 @@ async function startQueue() {
     packageWeightOz: it.packageWeightOz, aiPackageWeightOz: it.aiPackageWeightOz,
     shippingOverride: it.shippingOverride,
     allowBestOffer: it.allowBestOffer, bestOfferMinimumAmt: it.bestOfferMinimumAmt,
+    // S-EXT-MERCARI-BATCH-4 (2026-08-23, Patrick-directed): bestOfferAutoAcceptAmt now flows
+    // through too -- Patrick's explicit direction is that this should be the DEFAULT Smart
+    // Pricing floor source (fas-mercari.js/fas-grailed.js), ahead of the 25%-of-price fallback.
+    bestOfferAutoAcceptAmt: it.bestOfferAutoAcceptAmt,
     // S-EXT-BATCH (2026-08-20, Patrick-directed): Grailed's Smart Pricing floor price needs a
     // real computed default (item.bestOfferMinimumAmt if set, else price * (1 - pct/100)) instead
     // of being left blank -- mirrors how Facebook's Best Offer minimum is already derived in

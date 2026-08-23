@@ -677,6 +677,7 @@ function buildRenewalQueueItem(it, organizerEmail) {
     packageWeightOz: it.packageWeightOz, aiPackageWeightOz: it.aiPackageWeightOz,
     shippingOverride: it.shippingOverride,
     allowBestOffer: it.allowBestOffer, bestOfferMinimumAmt: it.bestOfferMinimumAmt,
+    bestOfferAutoAcceptAmt: it.bestOfferAutoAcceptAmt, // S-EXT-MERCARI-BATCH-4 (2026-08-23) -- same passthrough as popup.js's queue map
     city: it.city, geographicArea: it.geographicArea, saleCity: it.saleCity,
     postal: it.postal, postalCode: it.postalCode, zip: it.zip, saleZip: it.saleZip,
     saleAddress: it.saleAddress,

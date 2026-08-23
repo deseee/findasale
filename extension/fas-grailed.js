@@ -1130,8 +1130,18 @@
     if (item.price == null || !isFinite(Number(item.price))) return false;
     const price = Number(item.price);
     let floor;
+    // BUG FIX 2026-08-23 (S-EXT-MERCARI-BATCH-4, Patrick-directed, mirrored here for consistency
+    // with fas-mercari.js's identical fix -- same underlying business logic, kept in sync rather
+    // than diverging): priority reordered per Patrick's explicit instruction ("Auto Accept amount
+    // should be the default"). item.bestOfferMinimumAmt stays first when set -- that's a
+    // deliberate, explicit per-item override, not a default. item.bestOfferAutoAcceptAmt (the
+    // eBay best-offer auto-accept threshold) is now the DEFAULT floor source when no explicit
+    // minimum is set, ahead of the old 25%-of-price calc, which is now the last-resort fallback
+    // only (used when NEITHER item-level field is set at all).
     if (item.bestOfferMinimumAmt != null && isFinite(Number(item.bestOfferMinimumAmt))) {
       floor = Number(item.bestOfferMinimumAmt);
+    } else if (item.bestOfferAutoAcceptAmt != null && isFinite(Number(item.bestOfferAutoAcceptAmt))) {
+      floor = Number(item.bestOfferAutoAcceptAmt);
     } else {
       const declinePct = (item.defaultBestOfferDeclinePct != null && isFinite(Number(item.defaultBestOfferDeclinePct)))
         ? Number(item.defaultBestOfferDeclinePct) : 25; // schema.prisma's own suggested default

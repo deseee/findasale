@@ -112,7 +112,11 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
       // organizer-facing edit-item page has captured all along via a separate, unrelated select).
       brand: true, size: true, color: true, material: true,
       packageWeightOz: true, aiPackageWeightOz: true, ebayShippingOverride: true, shippingAvailable: true,
-      allowBestOffer: true, bestOfferMinimumAmt: true,
+      // BUG FIX 2026-08-23 (S-EXT-MERCARI-BATCH-4, Patrick-directed): bestOfferAutoAcceptAmt
+      // added -- Patrick's explicit direction is that the eBay auto-accept threshold should be
+      // the DEFAULT Smart Pricing floor source (ahead of the old 25%-of-price fallback), but it
+      // was never selected here so it could never reach the extension at all.
+      allowBestOffer: true, bestOfferMinimumAmt: true, bestOfferAutoAcceptAmt: true,
       // ADR fb-package-weight-estimator (2026-07-22): needed to call
       // computeEffectivePackageWeight below, the same package-weight resolver eBay's
       // publish flow uses (package-estimation isolation ADR, 2026-08-05: the resolver
@@ -382,6 +386,10 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
     // coerce to a plain number so it serializes as JSON number, not a Decimal string.
     allowBestOffer: it.allowBestOffer,
     bestOfferMinimumAmt: it.bestOfferMinimumAmt != null ? Number(it.bestOfferMinimumAmt) : null,
+    // BUG FIX 2026-08-23 (S-EXT-MERCARI-BATCH-4, Patrick-directed): same Decimal->Number
+    // coercion as bestOfferMinimumAmt above -- needed so fas-mercari.js/fas-grailed.js can prefer
+    // this as the Smart Pricing floor default ahead of the 25%-of-price fallback.
+    bestOfferAutoAcceptAmt: it.bestOfferAutoAcceptAmt != null ? Number(it.bestOfferAutoAcceptAmt) : null,
     marketplaceListed: postedByItem.has(it.id) && !removedByItem.has(it.id),
     // Per-platform listed flags (2026-08-08 fix) -- see the postedByItemPlatform /
     // removedByItemPlatform comment above. popup.js uses these instead of the any-platform

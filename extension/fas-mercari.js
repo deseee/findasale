@@ -648,17 +648,45 @@
   // bestScoringOption's fuzzy word-scoring the way Category does) -- same "report, don't guess"
   // discipline established for Poshmark's Size field (a wrong physical size risks a real buyer
   // return): no confident match leaves the field unset rather than picking a nearest guess.
+  // BUG FIX 2026-08-23 (S-EXT-MERCARI-BATCH-4, P0, live-console-confirmed root cause): Patrick's
+  // real item stores size as the FULL WORD "Medium" -- Mercari's real options are abbreviated
+  // codes ("M", "S", "L", "XL"...). Exact-match-only against the raw value could never match
+  // "medium" to "m", so this always reported "no exact match" regardless of the click-commit
+  // question below. Maps common full-word/abbreviation variants to Mercari's own letter codes
+  // FIRST, still using exact-match only afterward (never fuzzy word-scoring) -- same "report,
+  // don't guess" discipline, just normalizing the INPUT instead of loosening the match.
+  const MERCARI_SIZE_SYNONYMS = {
+    'xx-small': 'XXS', 'extra extra small': 'XXS', 'xxsmall': 'XXS', 'xxs': 'XXS',
+    'x-small': 'XS', 'extra small': 'XS', 'xsmall': 'XS', 'xs': 'XS',
+    'small': 'S', 'sm': 'S', 's': 'S',
+    'medium': 'M', 'med': 'M', 'm': 'M',
+    'large': 'L', 'lg': 'L', 'l': 'L',
+    'x-large': 'XL', 'extra large': 'XL', 'xlarge': 'XL', 'xl': 'XL',
+    'xx-large': 'XXL', '2x-large': 'XXL', 'xxlarge': 'XXL', '2xl': 'XXL', 'xxl': 'XXL',
+    'xxx-large': 'XXXL', '3x-large': 'XXXL', 'xxxlarge': 'XXXL', '3xl': 'XXXL',
+    'one size': 'One Size', 'onesize': 'One Size', 'os': 'One Size', 'osfa': 'One Size',
+  };
+  // Strips a trailing parenthetical qualifier (e.g. "M (38-40)" -> "M") for a SECOND exact-match
+  // pass only -- Mercari's real panel (live-confirmed 2026-08-22) lists the same nominal size
+  // twice, once bare and once with a numeric range suffix; this lets a clean synonym match either
+  // form without ever falling back to fuzzy word-scoring.
+  function stripMercariSizeQualifier(text) {
+    return norm(String(text || '').replace(/\s*\([^)]*\)\s*$/, '').replace(/\+\s*$/, ''));
+  }
   async function fillMercariSize(value) {
     const opener = await waitForSelector(() => document.querySelector('[data-testid="Size"]') || openerByLabel('Size'), 5000);
     if (!opener) return false;
     const openerTextBefore = norm(opener.textContent);
     await realClick(opener);
     await sleep(350);
-    const want = norm(value);
+    const raw = norm(value);
+    const mapped = MERCARI_SIZE_SYNONYMS[raw] ? norm(MERCARI_SIZE_SYNONYMS[raw]) : null;
+    const want = mapped || raw;
     const options = qa('[role="option"], li[role="option"], [role="menuitem"], [role="menuitemradio"], li, button');
-    const opt = options.find((o) => norm(o.textContent) === want);
+    const opt = options.find((o) => norm(o.textContent) === want)
+      || options.find((o) => stripMercariSizeQualifier(o.textContent) === want);
     if (!opt) {
-      console.warn('[FAS Mercari] Size "' + value + '" -- no exact match in the opened panel (UNVERIFIED taxonomy) -- left unset rather than guessed.');
+      console.warn('[FAS Mercari] Size "' + value + '" (normalized to "' + want + '") -- no exact match in the opened panel (UNVERIFIED taxonomy) -- left unset rather than guessed.');
       const closeBtn = qa('button, [role="button"], [aria-label]').find((b) => {
         const aria = norm(b.getAttribute('aria-label') || '');
         const t = norm(b.textContent);
@@ -667,29 +695,66 @@
       if (closeBtn) { await realClick(closeBtn); await sleep(150); }
       return false;
     }
-    await realClick(opt);
-    await sleep(250);
     // BUG FIX 2026-08-23 (S-EXT-MERCARI-BATCH, P0, live-Chrome-confirmed): a real, live re-click
     // test against the actual Size panel (role="option" / aria-selected="false" <li> items,
-    // data-testid="Size-option") found the match-and-click sequence above does NOT reliably commit
-    // the selection -- confirmed live TWICE, once via synthetic realClick and once via a genuine
+    // data-testid="Size-option") found a plain realClick(opt) does NOT reliably commit the
+    // selection -- confirmed live TWICE, once via synthetic realClick and once via a genuine
     // OS-level trusted click at the option's real screen coordinates: both closed the panel without
     // the opener's displayed text ever changing from its "Select size" placeholder, and
-    // aria-selected stayed "false" on the clicked option afterward. This means the old version of
-    // this function could report a false success (found a real exact-text match, clicked it, and
-    // returned true) even when Mercari's own UI never actually registered a size. Now verifies the
-    // click actually committed -- via the option's own aria-selected flag first (most reliable,
-    // doesn't depend on the opener's exact placeholder wording), falling back to a plain
-    // opener-text-changed check -- and reports failure (never a false positive) if neither confirms.
-    // Root cause of WHY the commit fails is not yet resolved (deeper investigation needed next
-    // session, likely a MAIN-world-only click handler similar to Poshmark's Vue dropdowns, per
-    // fas-poshmark-bridge.js's precedent) -- flagged honestly rather than guessed at further here.
-    await sleep(150);
-    const ariaConfirmed = opt.getAttribute && opt.getAttribute('aria-selected') === 'true';
-    const openerTextAfter = norm((document.querySelector('[data-testid="Size"]') || opener).textContent);
-    const textChanged = openerTextAfter !== openerTextBefore && openerTextAfter.indexOf(want) !== -1;
-    const stuck = ariaConfirmed || textChanged;
-    if (!stuck) console.warn('[FAS Mercari] Size "' + value + '" -- matched and clicked "' + opt.textContent.trim() + '" but Mercari\'s own UI never confirmed the selection (aria-selected stayed false, opener text unchanged) -- treating as UNSET rather than reporting a false success. Please set it yourself.');
+    // aria-selected stayed "false" on the clicked option afterward. Category uses the identical
+    // realClick() against the identical role="option" selector set and DOES commit, so the failure
+    // is specific to this widget's internals, not a generic synthetic-event problem. Rather than
+    // report a false success, this now tries three independent, verified interaction strategies in
+    // order -- pointer click (existing), then keyboard Enter, then keyboard Space -- checking
+    // aria-selected/opener-text after EACH before trying the next. Never reports true unless one of
+    // them actually confirmed via the DOM. If all three fail, this is left honestly UNSET (matching
+    // this file's no-guessing standard) -- the underlying cause (most likely a MAIN-world-only
+    // handler this isolated-world content script cannot trigger via any DOM event, mirroring
+    // fas-poshmark-bridge.js's precedent for Poshmark's Vue dropdowns) still needs a live re-test
+    // once the Chrome instrument that blocked verification this session is working again.
+    function sizeCommitted() {
+      const ariaConfirmed = opt.getAttribute && opt.getAttribute('aria-selected') === 'true';
+      const openerTextAfter = norm((document.querySelector('[data-testid="Size"]') || opener).textContent);
+      const textChanged = openerTextAfter !== openerTextBefore && openerTextAfter.indexOf(want) !== -1;
+      return ariaConfirmed || textChanged;
+    }
+    async function tryKeyStrategy(key, code) {
+      try { if (typeof opt.focus === 'function') opt.focus(); } catch (e) { /* non-fatal */ }
+      const base = { bubbles: true, cancelable: true, composed: true, key: key, code: code, view: window };
+      opt.dispatchEvent(new KeyboardEvent('keydown', base));
+      await sleep(60);
+      opt.dispatchEvent(new KeyboardEvent('keyup', base));
+      await sleep(200);
+    }
+
+    // Strategy 1: pointer click (existing behavior).
+    await realClick(opt);
+    await sleep(250);
+    let stuck = sizeCommitted();
+
+    // Strategy 2: keyboard Enter on the matched option (accessible listbox widgets frequently wire
+    // selection through onKeyDown separately from onClick).
+    if (!stuck) {
+      await tryKeyStrategy('Enter', 'Enter');
+      stuck = sizeCommitted();
+    }
+
+    // Strategy 3: keyboard Space (ARIA listbox pattern -- Space is the canonical "activate option" key
+    // per the WAI-ARIA authoring practices, distinct from Enter in some implementations).
+    if (!stuck) {
+      await tryKeyStrategy(' ', 'Space');
+      stuck = sizeCommitted();
+    }
+
+    if (!stuck) {
+      console.warn('[FAS Mercari] Size "' + value + '" -- matched "' + opt.textContent.trim() + '" and tried pointer click + keyboard Enter + keyboard Space, but Mercari\'s own UI never confirmed the selection (aria-selected stayed false, opener text unchanged) after any of them -- treating as UNSET rather than reporting a false success. Please set it yourself.');
+      const closeBtn2 = qa('button, [role="button"], [aria-label]').find((b) => {
+        const aria = norm(b.getAttribute('aria-label') || '');
+        const t = norm(b.textContent);
+        return (aria === 'close' || aria.indexOf('close') !== -1 || t === '\u00d7' || t === 'x') && b.offsetParent !== null;
+      });
+      if (closeBtn2) { await realClick(closeBtn2); await sleep(150); }
+    }
     return stuck;
   }
 
@@ -729,8 +794,16 @@
     if (item.price == null || !isFinite(Number(item.price))) return false;
     const price = Number(item.price);
     let floor;
+    // BUG FIX 2026-08-23 (S-EXT-MERCARI-BATCH-4, Patrick-directed): priority reordered on Patrick's
+    // explicit instruction ("Auto Accept amount should be the default"). item.bestOfferMinimumAmt
+    // stays first when set -- that's a deliberate, explicit per-item override, not a default.
+    // item.bestOfferAutoAcceptAmt (the eBay best-offer auto-accept threshold) is now the DEFAULT
+    // floor source when no explicit minimum is set, ahead of the old 25%-of-price calc, which is
+    // now the last-resort fallback only (used when NEITHER item-level field is set at all).
     if (item.bestOfferMinimumAmt != null && isFinite(Number(item.bestOfferMinimumAmt))) {
       floor = Number(item.bestOfferMinimumAmt);
+    } else if (item.bestOfferAutoAcceptAmt != null && isFinite(Number(item.bestOfferAutoAcceptAmt))) {
+      floor = Number(item.bestOfferAutoAcceptAmt);
     } else {
       const declinePct = (item.defaultBestOfferDeclinePct != null && isFinite(Number(item.defaultBestOfferDeclinePct)))
         ? Number(item.defaultBestOfferDeclinePct) : 25; // schema.prisma's own suggested default
