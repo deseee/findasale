@@ -857,17 +857,37 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         sendResponse({ ok: true, loggedIn: fasGumtreeAuLoginState, observedAt: fasGumtreeAuLoginObservedAt });
       } else if (msg.type === 'setPoshmarkQueue') {
         // 2026-08-18 dispatch (fas-poshmark.js): same queue-storage shape as
-        // setGumtreeAuQueue above -- no autoPublish flag, since fas-poshmark.js never
-        // auto-clicks the final publish/list action (fills and stops, always -- see
-        // that content script's file header). Not wired into autoRenewDueItems()/
-        // checkRenewals() above -- posting only, no renewal automation for this dispatch.
-        await chrome.storage.local.set({ fasPoshmarkQueue: msg.queue || [], fasPoshmarkIndex: 0 });
+        // setGumtreeAuQueue above. Not wired into autoRenewDueItems()/checkRenewals() above --
+        // posting only, no renewal automation for this dispatch.
+        // autoPublish (2026-08-22, S-EXT-AUTOPUBLISH-POLICY): fas-poshmark.js's blanket
+        // "never auto-publish" was a real deviation from the 2026-07-17 locked decision (full
+        // automation including auto-publish is a PRO/TEAMS-only opt-in, not disabled outright) --
+        // corrected. Same fasAutoPublish pattern as the FB/Craigslist queues, defaults true.
+        // fasPoshmarkRunNotes (2026-08-22, S-EXT-POSHMARK-RUN-SUMMARY, Patrick-directed): reset to
+        // empty on every NEW queue -- these accumulate "published but had to guess something"
+        // notes across the whole run (see recordPoshmarkRunNote/getPoshmarkRunNotes below) and must
+        // not leak stale notes from a prior run into this one.
+        await chrome.storage.local.set({ fasPoshmarkQueue: msg.queue || [], fasPoshmarkIndex: 0, fasPoshmarkAutoPublish: msg.autoPublish !== false, fasPoshmarkRunNotes: [] });
         chrome.tabs.create({ url: CFG.POSH_POST_URL });
         sendResponse({ ok: true });
       } else if (msg.type === 'getPoshmarkQueueItem') {
-        const { fasPoshmarkQueue = [], fasPoshmarkIndex = 0 } =
-          await chrome.storage.local.get(['fasPoshmarkQueue', 'fasPoshmarkIndex']);
-        sendResponse({ ok: true, item: fasPoshmarkQueue[fasPoshmarkIndex] || null, index: fasPoshmarkIndex, total: fasPoshmarkQueue.length });
+        const { fasPoshmarkQueue = [], fasPoshmarkIndex = 0, fasPoshmarkAutoPublish = true } =
+          await chrome.storage.local.get(['fasPoshmarkQueue', 'fasPoshmarkIndex', 'fasPoshmarkAutoPublish']);
+        sendResponse({ ok: true, item: fasPoshmarkQueue[fasPoshmarkIndex] || null, index: fasPoshmarkIndex, total: fasPoshmarkQueue.length, autoPublish: fasPoshmarkAutoPublish });
+      } else if (msg.type === 'recordPoshmarkRunNote') {
+        // FEATURE 2026-08-22 (S-EXT-POSHMARK-RUN-SUMMARY, Patrick-directed): "if you have those
+        // kinds of issues they should be given a default to get them published, reported at the
+        // end of the run and should not be a reason to stop the extension continuing forward" --
+        // auto-publish no longer blocks on a guessed category (see fas-poshmark.js run()); instead
+        // each guessed item appends a note here, and the LAST item's Published screen reads all of
+        // them back (getPoshmarkRunNotes below) instead of interrupting the run mid-way.
+        const { fasPoshmarkRunNotes = [] } = await chrome.storage.local.get(['fasPoshmarkRunNotes']);
+        fasPoshmarkRunNotes.push({ title: msg.title || '', note: msg.note || '' });
+        await chrome.storage.local.set({ fasPoshmarkRunNotes });
+        sendResponse({ ok: true });
+      } else if (msg.type === 'getPoshmarkRunNotes') {
+        const { fasPoshmarkRunNotes = [] } = await chrome.storage.local.get(['fasPoshmarkRunNotes']);
+        sendResponse({ ok: true, notes: fasPoshmarkRunNotes });
       } else if (msg.type === 'advancePoshmarkQueue') {
         const st = await chrome.storage.local.get(['fasPoshmarkQueue', 'fasPoshmarkIndex']);
         const next = (st.fasPoshmarkIndex || 0) + 1;
@@ -876,17 +896,19 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         sendResponse({ ok: true, item, index: next, total: (st.fasPoshmarkQueue || []).length });
       } else if (msg.type === 'setMercariQueue') {
         // 2026-08-18 dispatch (fas-mercari.js): same queue-storage shape as
-        // setGumtreeAuQueue above -- no autoPublish flag, since fas-mercari.js never
-        // auto-clicks the final publish/list action (fills and stops, always -- see
-        // that content script's file header). Not wired into autoRenewDueItems()/
-        // checkRenewals() above -- posting only, no renewal automation for this dispatch.
-        await chrome.storage.local.set({ fasMercariQueue: msg.queue || [], fasMercariIndex: 0 });
+        // setGumtreeAuQueue above. Not wired into autoRenewDueItems()/checkRenewals() above --
+        // posting only, no renewal automation for this dispatch.
+        // autoPublish (2026-08-22, S-EXT-AUTOPUBLISH-POLICY): fas-mercari.js's blanket
+        // "never auto-publish" was a real deviation from the 2026-07-17 locked decision (full
+        // automation including auto-publish is a PRO/TEAMS-only opt-in, not disabled outright) --
+        // corrected. Same fasAutoPublish pattern as the FB/Craigslist queues, defaults true.
+        await chrome.storage.local.set({ fasMercariQueue: msg.queue || [], fasMercariIndex: 0, fasMercariAutoPublish: msg.autoPublish !== false });
         chrome.tabs.create({ url: CFG.MERC_POST_URL });
         sendResponse({ ok: true });
       } else if (msg.type === 'getMercariQueueItem') {
-        const { fasMercariQueue = [], fasMercariIndex = 0 } =
-          await chrome.storage.local.get(['fasMercariQueue', 'fasMercariIndex']);
-        sendResponse({ ok: true, item: fasMercariQueue[fasMercariIndex] || null, index: fasMercariIndex, total: fasMercariQueue.length });
+        const { fasMercariQueue = [], fasMercariIndex = 0, fasMercariAutoPublish = true } =
+          await chrome.storage.local.get(['fasMercariQueue', 'fasMercariIndex', 'fasMercariAutoPublish']);
+        sendResponse({ ok: true, item: fasMercariQueue[fasMercariIndex] || null, index: fasMercariIndex, total: fasMercariQueue.length, autoPublish: fasMercariAutoPublish });
       } else if (msg.type === 'advanceMercariQueue') {
         const st = await chrome.storage.local.get(['fasMercariQueue', 'fasMercariIndex']);
         const next = (st.fasMercariIndex || 0) + 1;
@@ -917,17 +939,21 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         sendResponse({ ok: true, item, index: next, total: (st.fasVintedQueue || []).length });
       } else if (msg.type === 'setGrailedQueue') {
         // 2026-08-18 dispatch (fas-grailed.js): same queue-storage shape as
-        // setGumtreeAuQueue above -- no autoPublish flag, since fas-grailed.js never
-        // auto-clicks the final publish/list action (fills and stops, always -- see
-        // that content script's file header). Not wired into autoRenewDueItems()/
-        // checkRenewals() above -- posting only, no renewal automation for this dispatch.
-        await chrome.storage.local.set({ fasGrailedQueue: msg.queue || [], fasGrailedIndex: 0 });
+        // setGumtreeAuQueue above. Not wired into autoRenewDueItems()/checkRenewals() above --
+        // posting only, no renewal automation for this dispatch.
+        // autoPublish (2026-08-22, S-EXT-AUTOPUBLISH-POLICY): fas-grailed.js's blanket
+        // "never auto-publish" was a real deviation from the 2026-07-17 locked decision (full
+        // automation including auto-publish is a PRO/TEAMS-only opt-in, not disabled outright) --
+        // corrected. Same fasAutoPublish pattern as the FB/Craigslist queues, defaults true.
+        // (fas-grailed.js additionally falls back to manual review whenever Designer wasn't
+        // confirmed, regardless of this flag -- see its own file header/run().)
+        await chrome.storage.local.set({ fasGrailedQueue: msg.queue || [], fasGrailedIndex: 0, fasGrailedAutoPublish: msg.autoPublish !== false });
         chrome.tabs.create({ url: CFG.GRAILED_POST_URL });
         sendResponse({ ok: true });
       } else if (msg.type === 'getGrailedQueueItem') {
-        const { fasGrailedQueue = [], fasGrailedIndex = 0 } =
-          await chrome.storage.local.get(['fasGrailedQueue', 'fasGrailedIndex']);
-        sendResponse({ ok: true, item: fasGrailedQueue[fasGrailedIndex] || null, index: fasGrailedIndex, total: fasGrailedQueue.length });
+        const { fasGrailedQueue = [], fasGrailedIndex = 0, fasGrailedAutoPublish = true } =
+          await chrome.storage.local.get(['fasGrailedQueue', 'fasGrailedIndex', 'fasGrailedAutoPublish']);
+        sendResponse({ ok: true, item: fasGrailedQueue[fasGrailedIndex] || null, index: fasGrailedIndex, total: fasGrailedQueue.length, autoPublish: fasGrailedAutoPublish });
       } else if (msg.type === 'reopenGrailedTab') {
         // BUG FIX 2026-08-19 (S-EXT-BATCH, P0): fas-grailed.js used to advance to the next queue
         // item via `location.href = LISTING_URL_HINT` -- a same-URL in-page reassignment (the

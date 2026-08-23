@@ -4,7 +4,20 @@
  * confirmed DOM anchor. Same hard rules as fas-poshmark.js / fas-selectors.js (ADR-084):
  *   1. NEVER select by obfuscated CSS class -- label text / aria-label / role / structural
  *      anchors only.
- *   2. NEVER auto-click the final "List this item" / publish action -- fills and stops, always.
+ *   2. Auto-publish (clicking the final "List this item" button) is a PRO/TEAMS-only, opt-in
+ *      toggle threaded from popup.js -> background.js (fasMercariAutoPublish) -> here, the SAME
+ *      mechanism fas-craigslist.js already uses -- NOT a blanket "never" rule. Corrected
+ *      2026-08-22 (S-EXT-AUTOPUBLISH-POLICY, Patrick-directed): this file previously hard-coded
+ *      "never auto-click the final publish action" for every organizer regardless of the
+ *      2026-07-17 locked decision (full automation including auto-publish is non-negotiable,
+ *      PRO/TEAMS-only opt-in) -- that was a real deviation, not a faithful implementation of extra
+ *      caution Patrick asked for. Research this session found no evidence Mercari bans accounts
+ *      for listing-automation software specifically (established tools like Nifty/List Perfectly/
+ *      Vendoo operate openly on Mercari; Mercari's own aggressive automated-ban system targets
+ *      prohibited items, suspicious activity, verification issues, and multi-accounting, not
+ *      listing automation). When the toggle is off (organizer's own choice, or an automatic
+ *      fallback if the List this item button can't be found), this script still fills and stops
+ *      exactly as before.
  *   3. HARD-STOP on any CAPTCHA/identity-verification/unrecognized interstitial -- hand off to
  *      the human, never attempt to solve or bypass.
  *   4. Every selector lookup is null-checked; a missing field logs console.warn and is skipped.
@@ -726,7 +739,7 @@
   function showReviewOverlay(item, index, total, photosOk) {
     const more = (index + 1) < total;
     overlay('<b>FindA.Sale</b><div style="margin-top:6px">Filled <b>' + escapeHtml(item.title) + '</b> as best we could.</div>' +
-      '<div style="margin-top:4px;font-size:12px;color:#cfe3d6">Review every field (category/brand/weight are UNVERIFIED guesses), confirm <b>Smart Pricing stayed off</b> if you don\'t want it, then click Mercari\'s own <b>List this item</b> yourself -- this extension never publishes for you.</div>' +
+      '<div style="margin-top:4px;font-size:12px;color:#cfe3d6">Review every field (category/brand/weight are UNVERIFIED guesses), confirm <b>Smart Pricing stayed off</b> if you don\'t want it, then click Mercari\'s own <b>List this item</b> yourself.</div>' +
       (!photosOk ? '<div style="color:#ffcf7a;margin-top:6px;font-size:12px">Photos may not have attached -- add them on this screen.</div>' : '') +
       button('fas-merc-next', more ? 'I posted — next item &#9654;' : 'I posted — done', true) +
       button('fas-merc-close', 'Close', false) +
@@ -822,7 +835,53 @@
     return { photosOk, interstitialAt };
   }
 
-  async function run(item, index, total) {
+  // FEATURE 2026-08-22 (S-EXT-AUTOPUBLISH-POLICY): auto-publish support -- see file header.
+  function findMercariPublishButton() {
+    return qa('button').find((b) => norm(b.textContent) === 'list this item');
+  }
+
+  // Confirms a real publish by polling for the sell form to disappear -- no live-confirmed success
+  // marker exists yet (CODE-ONLY/UNTESTED, file header), same conservative signal
+  // fas-craigslist.js/fas-poshmark.js use for their own publish confirmation.
+  async function waitForMercariPublishConfirmation(maxWaitMs) {
+    const start = Date.now();
+    while (Date.now() - start < maxWaitMs) {
+      if (!looksLikeSellForm()) return true;
+      await sleep(400);
+    }
+    return false;
+  }
+
+  async function doMercariAutoPublish(item, index, total, photosOk) {
+    const publishBtn = findMercariPublishButton();
+    if (!publishBtn) {
+      // Auto-publish is on but the button couldn't be found (UNVERIFIED selector, file header) --
+      // never guess past this; fall back to the exact same manual-review path as autoPublish=false.
+      showReviewOverlay(item, index, total, photosOk);
+      return;
+    }
+    overlay('<b>FindA.Sale</b> - publishing <b>' + escapeHtml(item.title) + '</b>...');
+    await humanPause(500, 900);
+    await realClick(publishBtn);
+    const published = await waitForMercariPublishConfirmation(6000);
+    if (!published) {
+      overlayWarn('Clicked <b>List this item</b> but couldn\'t confirm it went through (UNVERIFIED selector/confirmation signal) -- please check this listing on Mercari yourself before assuming it posted.' + button('fas-merc-close', 'Close', false));
+      closeBtnHandler();
+      return;
+    }
+    try { await chrome.runtime.sendMessage({ type: 'markListed', itemId: item.id, remoteListingId: null, platform: 'MERCARI' }); } catch (e) {}
+    try { await chrome.runtime.sendMessage({ type: 'advanceMercariQueue' }); } catch (e) {}
+    const more = (index + 1) < total;
+    overlay('<b>FindA.Sale</b><div style="margin-top:6px">Published <b>' + escapeHtml(item.title) + '</b>.</div>' +
+      (more ? button('fas-merc-next', 'Next item &#9654;', true) : '') +
+      button('fas-merc-close', 'Close', false) +
+      '<div style="margin-top:8px;font-size:11px;color:#9fb6a8">Item ' + (index + 1) + ' of ' + total + '</div>');
+    const next = document.getElementById('fas-merc-next');
+    if (next) next.onclick = () => { location.href = SELL_URL_HINT; };
+    closeBtnHandler();
+  }
+
+  async function run(item, index, total, autoPublish) {
     // BUG FIX 2026-08-20 (S-EXT-BATCH-9, P0, live-Chrome-confirmed): this used to open with an
     // immediate, single, no-retry looksLikeInterstitial() check before anything else ran -- Patrick
     // live-confirmed (2026-08-20) Mercari's Sell page can transiently show verification/security-
@@ -862,6 +921,7 @@
       closeBtnHandler();
       return;
     }
+    if (autoPublish) { await doMercariAutoPublish(item, index, total, photosOk); return; }
     showReviewOverlay(item, index, total, photosOk);
   }
 
@@ -886,7 +946,7 @@
     try { queued = await chrome.runtime.sendMessage({ type: 'getMercariQueueItem' }); } catch (e) { return; }
     if (!queued || !queued.ok || !queued.item) return; // nothing queued -- stay silent
     try {
-      await run(queued.item, queued.index, queued.total);
+      await run(queued.item, queued.index, queued.total, queued.autoPublish !== false);
     } catch (e) {
       overlayWarn('Something went wrong filling this listing (' + escapeHtml((e && e.message) || 'unknown error') + '). Nothing was published -- complete this listing yourself, or reopen the extension to try again.' + button('fas-merc-close', 'Close', false));
       closeBtnHandler();

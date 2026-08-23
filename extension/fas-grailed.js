@@ -4,7 +4,21 @@
  * as fas-poshmark.js / fas-mercari.js / fas-vinted.js / fas-selectors.js (ADR-084):
  *   1. NEVER select by obfuscated CSS class -- label text / aria-label / role / structural
  *      anchors only.
- *   2. NEVER auto-click the final "List item" / publish action -- fills and stops, always.
+ *   2. Auto-publish (clicking the final "List item" button) is a PRO/TEAMS-only, opt-in toggle
+ *      threaded from popup.js -> background.js (fasGrailedAutoPublish) -> here, the SAME
+ *      mechanism fas-craigslist.js already uses -- NOT a blanket "never" rule. Corrected
+ *      2026-08-22 (S-EXT-AUTOPUBLISH-POLICY, Patrick-directed): this file previously hard-coded
+ *      "never auto-click the final publish action" for every organizer regardless of the
+ *      2026-07-17 locked decision (full automation including auto-publish is non-negotiable,
+ *      PRO/TEAMS-only opt-in) -- that was a real deviation, not a faithful implementation of extra
+ *      caution Patrick asked for. No evidence was found either way of a Grailed ban policy tied to
+ *      automation/crosslisting specifically (weaker evidence than Poshmark/Mercari -- flagged to
+ *      Patrick, absence of a ban signal defaults to automate per his stated policy). Auto-publish
+ *      only fires when the Designer field was actually confirmed (see designerUnconfirmed below) --
+ *      an unconfirmed Designer means Grailed's own required field may not be genuinely committed,
+ *      so that case always falls back to the manual review overlay regardless of the toggle. When
+ *      the toggle is off (organizer's own choice, or that fallback), this script still fills and
+ *      stops exactly as before.
  *   3. HARD-STOP on any CAPTCHA/identity-verification/unrecognized interstitial.
  *   4. Every selector lookup is null-checked; a missing field logs console.warn and is skipped.
  *
@@ -937,7 +951,7 @@
     }
     overlay('<b>FindA.Sale</b><div style="margin-top:6px">Filled <b>' + escapeHtml(item.title) + '</b> as best we could.</div>' +
       '<div style="margin-top:4px;font-size:12px;color:#cfe3d6">Review every field &mdash; category/Market tier/size/condition are all UNVERIFIED guesses (condition especially, see the code comment). ' +
-      '<b>Measurements were left blank</b> &mdash; Grailed listings perform much better with them, add them yourself before publishing. Then click Grailed\'s own <b>List item</b> yourself &mdash; this extension never publishes for you.</div>' +
+      '<b>Measurements were left blank</b> &mdash; Grailed listings perform much better with them, add them yourself before publishing. Then click Grailed\'s own <b>List item</b> yourself.</div>' +
       intlLine +
       countryLine +
       (!photosOk ? '<div style="color:#ffcf7a;margin-top:6px;font-size:12px">Photos may not have attached -- add them on this screen.</div>' : '') +
@@ -956,6 +970,54 @@
       // the (already-advanced) queue on its own start().
       try { await chrome.runtime.sendMessage({ type: 'reopenGrailedTab' }); } catch (e) {}
     } else { bar && bar.remove(); }
+    };
+    closeBtnHandler();
+  }
+
+  // FEATURE 2026-08-22 (S-EXT-AUTOPUBLISH-POLICY): auto-publish support -- see file header.
+  function findGrailedPublishButton() {
+    return qa('button').find((b) => norm(b.textContent) === 'list item');
+  }
+
+  // Confirms a real publish by polling for the listing form to disappear -- no live-confirmed
+  // success marker exists yet (CODE-ONLY/UNTESTED, file header), same conservative signal
+  // fas-craigslist.js/fas-poshmark.js/fas-mercari.js use for their own publish confirmation.
+  async function waitForGrailedPublishConfirmation(maxWaitMs) {
+    const start = Date.now();
+    while (Date.now() - start < maxWaitMs) {
+      if (!looksLikeListingForm()) return true;
+      await sleep(400);
+    }
+    return false;
+  }
+
+  async function doGrailedAutoPublish(item, index, total, photosOk, intlShipping, countryOriginStatus) {
+    const publishBtn = findGrailedPublishButton();
+    if (!publishBtn) {
+      // Auto-publish is on but the button couldn't be found (UNVERIFIED selector, file header) --
+      // never guess past this; fall back to the exact same manual-review path as autoPublish=false.
+      showReviewOverlay(item, index, total, photosOk, intlShipping, false, countryOriginStatus);
+      return;
+    }
+    overlay('<b>FindA.Sale</b> - publishing <b>' + escapeHtml(item.title) + '</b>...');
+    await humanPause(500, 900);
+    syntheticClick(publishBtn);
+    const published = await waitForGrailedPublishConfirmation(6000);
+    if (!published) {
+      overlayWarn('Clicked <b>List item</b> but couldn\'t confirm it went through (UNVERIFIED selector/confirmation signal) -- please check this listing on Grailed yourself before assuming it posted.' + button('fas-gr-close', 'Close', false));
+      closeBtnHandler();
+      return;
+    }
+    try { await chrome.runtime.sendMessage({ type: 'markListed', itemId: item.id, remoteListingId: null, platform: 'GRAILED' }); } catch (e) {}
+    try { await chrome.runtime.sendMessage({ type: 'advanceGrailedQueue' }); } catch (e) {}
+    const more = (index + 1) < total;
+    overlay('<b>FindA.Sale</b><div style="margin-top:6px">Published <b>' + escapeHtml(item.title) + '</b>.</div>' +
+      (more ? button('fas-gr-next', 'Next item &#9654;', true) : '') +
+      button('fas-gr-close', 'Close', false) +
+      '<div style="margin-top:8px;font-size:11px;color:#9fb6a8">Item ' + (index + 1) + ' of ' + total + '</div>');
+    const next = document.getElementById('fas-gr-next');
+    if (next) next.onclick = async () => {
+      try { await chrome.runtime.sendMessage({ type: 'reopenGrailedTab' }); } catch (e) {}
     };
     closeBtnHandler();
   }
@@ -1163,7 +1225,7 @@
     return { photosOk, intlShipping, countryOriginStatus };
   }
 
-  async function run(item, index, total) {
+  async function run(item, index, total, autoPublish) {
     // BUG FIX 2026-08-19 (S-EXT-BATCH-5, P0): was two separate immediate checks (interstitial,
     // then listing-form) -- see waitForFormReady()'s comment (fas-mercari.js) for the live-
     // confirmed SPA-hydration race this pattern is vulnerable to on every one of these 4 files.
@@ -1223,6 +1285,10 @@
       closeBtnHandler();
       return;
     }
+    if (autoPublish && !designerUnconfirmed) {
+      await doGrailedAutoPublish(item, index, total, fillResult.photosOk, fillResult.intlShipping, fillResult.countryOriginStatus);
+      return;
+    }
     showReviewOverlay(item, index, total, fillResult.photosOk, fillResult.intlShipping, designerUnconfirmed, fillResult.countryOriginStatus);
   }
 
@@ -1232,7 +1298,7 @@
     try { queued = await chrome.runtime.sendMessage({ type: 'getGrailedQueueItem' }); } catch (e) { return; }
     if (!queued || !queued.ok || !queued.item) return; // nothing queued -- stay silent
     try {
-      await run(queued.item, queued.index, queued.total);
+      await run(queued.item, queued.index, queued.total, queued.autoPublish !== false);
     } catch (e) {
       overlayWarn('Something went wrong filling this listing (' + escapeHtml((e && e.message) || 'unknown error') + '). Nothing was published -- complete this listing yourself, or reopen the extension to try again.' + button('fas-gr-close', 'Close', false));
       closeBtnHandler();
