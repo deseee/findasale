@@ -340,6 +340,14 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
     photoUrls: applyWatermark ? (it.photoUrls || []).map((u) => getWatermarkedUrlWithQR(u, it.id, it.qrEmbedEnabled !== false)) : (it.photoUrls || []),
     packageWeightOz: it.packageWeightOz,
     aiPackageWeightOz: it.aiPackageWeightOz,
+    // BUG FIX 2026-08-23 (S-EXT-MERCARI-BATCH-8, live-confirmed via Patrick's screenshots): these
+    // three were already selected from Prisma (see the `select` block above) but never actually
+    // included in this response object -- same silent-drop pattern as bestOfferAutoAcceptAmt
+    // earlier this session. Needed so fas-mercari.js can answer Mercari's real "will your item fit
+    // in a shoebox?" shipping-label question from real item dimensions instead of guessing.
+    packageLengthIn: it.packageLengthIn != null ? Number(it.packageLengthIn) : null,
+    packageWidthIn: it.packageWidthIn != null ? Number(it.packageWidthIn) : null,
+    packageHeightIn: it.packageHeightIn != null ? Number(it.packageHeightIn) : null,
     // BUG FIX 2026-08-20 (S-EXT-BATCH-12, Patrick-reported + confirmed by direct code read): brand/
     // size/color/material were already added to the Prisma `select` above (2026-08-18) and popup.js's
     // queue-building map already passes them through (its own comment there even claims "getExtensionItems

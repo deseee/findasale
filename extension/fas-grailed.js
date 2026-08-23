@@ -1130,18 +1130,24 @@
     if (item.price == null || !isFinite(Number(item.price))) return false;
     const price = Number(item.price);
     let floor;
-    // BUG FIX 2026-08-23 (S-EXT-MERCARI-BATCH-4, Patrick-directed, mirrored here for consistency
-    // with fas-mercari.js's identical fix -- same underlying business logic, kept in sync rather
-    // than diverging): priority reordered per Patrick's explicit instruction ("Auto Accept amount
-    // should be the default"). item.bestOfferMinimumAmt stays first when set -- that's a
-    // deliberate, explicit per-item override, not a default. item.bestOfferAutoAcceptAmt (the
-    // eBay best-offer auto-accept threshold) is now the DEFAULT floor source when no explicit
-    // minimum is set, ahead of the old 25%-of-price calc, which is now the last-resort fallback
-    // only (used when NEITHER item-level field is set at all).
-    if (item.bestOfferMinimumAmt != null && isFinite(Number(item.bestOfferMinimumAmt))) {
-      floor = Number(item.bestOfferMinimumAmt);
-    } else if (item.bestOfferAutoAcceptAmt != null && isFinite(Number(item.bestOfferAutoAcceptAmt))) {
+    // BUG FIX 2026-08-23 (S-EXT-MERCARI-BATCH-5, P0, DB-confirmed, mirrored here for consistency
+    // with fas-mercari.js's identical fix): Round 4's priority order put item.bestOfferMinimumAmt
+    // FIRST on the assumption it was "a deliberate, explicit per-item override" -- that assumption
+    // was wrong and never verified against real data. A live DB query on the actual test item
+    // (Bored Ape Yacht Club Adidas Tracksuit) showed bestOfferMinimumAmt ($168.74) and
+    // bestOfferAutoAcceptAmt ($202.49) were BOTH set, and
+    // packages/frontend/pages/organizer/edit-item/[id].tsx confirms why: that page's save handler
+    // computes BOTH fields together from two percentage inputs on the same form -- they are sibling
+    // outputs of one save action, not independent "override vs default" signals, so
+    // bestOfferMinimumAmt was essentially ALWAYS present whenever bestOfferAutoAcceptAmt was,
+    // permanently shadowing Patrick's explicit instruction ("Auto Accept amount should be the
+    // default"). bestOfferAutoAcceptAmt now checked first, as directed. bestOfferMinimumAmt kept
+    // as the next fallback (not removed) because packages/frontend/components/PostSaleEbayPanel.tsx
+    // CAN set it independently, so it's still a real signal when it's the only one present.
+    if (item.bestOfferAutoAcceptAmt != null && isFinite(Number(item.bestOfferAutoAcceptAmt))) {
       floor = Number(item.bestOfferAutoAcceptAmt);
+    } else if (item.bestOfferMinimumAmt != null && isFinite(Number(item.bestOfferMinimumAmt))) {
+      floor = Number(item.bestOfferMinimumAmt);
     } else {
       const declinePct = (item.defaultBestOfferDeclinePct != null && isFinite(Number(item.defaultBestOfferDeclinePct)))
         ? Number(item.defaultBestOfferDeclinePct) : 25; // schema.prisma's own suggested default

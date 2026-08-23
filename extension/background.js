@@ -675,6 +675,8 @@ function buildRenewalQueueItem(it, organizerEmail) {
     id: it.id, title: it.title, price: it.price, condition: it.condition,
     description: it.description, category: it.category, photoUrls: it.photoUrls || [],
     packageWeightOz: it.packageWeightOz, aiPackageWeightOz: it.aiPackageWeightOz,
+    // S-EXT-MERCARI-BATCH-8 (2026-08-23): package dims now flow through, same pattern as bestOfferAutoAcceptAmt
+    packageLengthIn: it.packageLengthIn, packageWidthIn: it.packageWidthIn, packageHeightIn: it.packageHeightIn,
     shippingOverride: it.shippingOverride,
     allowBestOffer: it.allowBestOffer, bestOfferMinimumAmt: it.bestOfferMinimumAmt,
     bestOfferAutoAcceptAmt: it.bestOfferAutoAcceptAmt, // S-EXT-MERCARI-BATCH-4 (2026-08-23) -- same passthrough as popup.js's queue map

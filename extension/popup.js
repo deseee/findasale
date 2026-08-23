@@ -423,6 +423,8 @@ async function startQueue() {
     // field on this map already is; absent stays undefined, same never-invent rule as everywhere else.
     categoryBreadcrumb: it.categoryBreadcrumb, photoUrls: it.photoUrls || [],
     packageWeightOz: it.packageWeightOz, aiPackageWeightOz: it.aiPackageWeightOz,
+    // S-EXT-MERCARI-BATCH-8 (2026-08-23): package dims now flow through, same pattern as bestOfferAutoAcceptAmt
+    packageLengthIn: it.packageLengthIn, packageWidthIn: it.packageWidthIn, packageHeightIn: it.packageHeightIn,
     shippingOverride: it.shippingOverride,
     allowBestOffer: it.allowBestOffer, bestOfferMinimumAmt: it.bestOfferMinimumAmt,
     // S-EXT-MERCARI-BATCH-4 (2026-08-23, Patrick-directed): bestOfferAutoAcceptAmt now flows

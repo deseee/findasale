@@ -148,6 +148,25 @@
     return false;
   }
 
+  // BUG FIX 2026-08-23 (S-EXT-MERCARI-BATCH-6, P0, live-confirmed via Patrick's own screenshot):
+  // clicking Mercari's real "List" button for the first time on an account with no payment method
+  // on file pops a distinct modal -- "You're almost done ... Help us keep our marketplace safer by
+  // adding a payment method" with an "Add credit / debit card" button -- that is NOT covered by
+  // looksLikeInterstitial() (it's not a security/verification wall, it's a payment-setup gate) and
+  // does NOT make the Title field or photo input disappear, so waitForMercariPublishConfirmation()
+  // just silently timed out and reported a generic "couldn't confirm" -- which is exactly what
+  // Patrick saw on his first real auto-publish run. FindA.Sale must NEVER attempt to fill payment/
+  // card details itself (hard rule, this file and the project's own tool-use policy both agree) --
+  // this only detects the modal so it can be reported honestly and specifically, same
+  // report-don't-guess pattern as every other blocker in this file. Text match against the modal's
+  // own real copy, live-confirmed from Patrick's screenshot, not guessed.
+  function looksLikeNeedsPaymentMethod() {
+    const lower = bodyText().toLowerCase();
+    return lower.indexOf('adding a payment method') !== -1
+      || lower.indexOf('add credit / debit card') !== -1
+      || lower.indexOf("you're almost done") !== -1;
+  }
+
   let bar;
   function ensureBar() {
     if (!bar) {
@@ -794,16 +813,26 @@
     if (item.price == null || !isFinite(Number(item.price))) return false;
     const price = Number(item.price);
     let floor;
-    // BUG FIX 2026-08-23 (S-EXT-MERCARI-BATCH-4, Patrick-directed): priority reordered on Patrick's
-    // explicit instruction ("Auto Accept amount should be the default"). item.bestOfferMinimumAmt
-    // stays first when set -- that's a deliberate, explicit per-item override, not a default.
-    // item.bestOfferAutoAcceptAmt (the eBay best-offer auto-accept threshold) is now the DEFAULT
-    // floor source when no explicit minimum is set, ahead of the old 25%-of-price calc, which is
-    // now the last-resort fallback only (used when NEITHER item-level field is set at all).
-    if (item.bestOfferMinimumAmt != null && isFinite(Number(item.bestOfferMinimumAmt))) {
-      floor = Number(item.bestOfferMinimumAmt);
-    } else if (item.bestOfferAutoAcceptAmt != null && isFinite(Number(item.bestOfferAutoAcceptAmt))) {
+    // BUG FIX 2026-08-23 (S-EXT-MERCARI-BATCH-5, P0, DB-confirmed): Round 4's priority order (below)
+    // put item.bestOfferMinimumAmt FIRST on the assumption it was "a deliberate, explicit per-item
+    // override" -- that assumption was wrong and never verified against real data. A live DB query
+    // on the actual test item (Bored Ape Yacht Club Adidas Tracksuit) showed bestOfferMinimumAmt
+    // ($168.74) and bestOfferAutoAcceptAmt ($202.49) were BOTH set, and
+    // packages/frontend/pages/organizer/edit-item/[id].tsx confirms why: that page's save handler
+    // computes BOTH fields together from two percentage inputs on the same form
+    // (bestOfferMinimumAmt = price*(1-declinePct/100), bestOfferAutoAcceptAmt =
+    // price*(1-acceptPct/100)) -- they are not independent "override vs default" signals, they're
+    // sibling outputs of one save action, so bestOfferMinimumAmt was essentially ALWAYS present
+    // whenever bestOfferAutoAcceptAmt was, permanently shadowing Patrick's explicit instruction
+    // ("Auto Accept amount should be the default") and explaining why the floor stayed $169 even
+    // after the Round 4 fix deployed. bestOfferAutoAcceptAmt now checked first, as directed.
+    // bestOfferMinimumAmt kept as the next fallback (not removed) because a second, independent
+    // path -- packages/frontend/components/PostSaleEbayPanel.tsx -- CAN set it without also setting
+    // bestOfferAutoAcceptAmt, so it's still a real, meaningful signal when it's the only one present.
+    if (item.bestOfferAutoAcceptAmt != null && isFinite(Number(item.bestOfferAutoAcceptAmt))) {
       floor = Number(item.bestOfferAutoAcceptAmt);
+    } else if (item.bestOfferMinimumAmt != null && isFinite(Number(item.bestOfferMinimumAmt))) {
+      floor = Number(item.bestOfferMinimumAmt);
     } else {
       const declinePct = (item.defaultBestOfferDeclinePct != null && isFinite(Number(item.defaultBestOfferDeclinePct)))
         ? Number(item.defaultBestOfferDeclinePct) : 25; // schema.prisma's own suggested default
@@ -901,6 +930,138 @@
     setNativeValue(el, String(Math.round((ounces / 16) * 100) / 100));
     overlayWarn('Filled an UNVERIFIED best-guess shipping weight (~' + (Math.round((ounces / 16) * 100) / 100) + ' lb) -- please confirm it before publishing.');
     return true;
+  }
+
+  // BUG FIX 2026-08-23 (S-EXT-MERCARI-BATCH-8, P0, live-confirmed via Patrick's own screenshots):
+  // Round 7 assumed clicking List not registering meant the CLICK itself wasn't reaching Mercari's
+  // handler, and added a 3-strategy click escalation. Patrick's actual next screenshots show what
+  // was really happening: the click DOES register, but Mercari's own client-side validation blocks
+  // submission because the Shipping section was never fully configured -- the real form shows
+  // "Please select a shipping carrier" as an inline error, and clicking through opens Mercari's own
+  // multi-step shipping-label wizard (an info modal, then a weight/shoebox-fit modal, then a
+  // carrier-selection modal) that this file never touched. That's why no publish API request ever
+  // fired (Round 7's Network-tab evidence) -- Mercari's own validation stopped it locally before any
+  // request was made. This runs PROACTIVELY as part of the normal fill sequence (not reactively
+  // after a List click) so the Shipping section is already complete by the time List is ever
+  // clicked, matching how every other required field in this file is handled.
+  //
+  // Every step here is matched by real visible text taken directly from Patrick's screenshots, not
+  // guessed testids (no live DOM access was available this round) -- same defensive, label-text
+  // fallback pattern already used throughout this file (fieldByLabel/openerByLabel). Every step
+  // verifies before moving to the next and reports honestly (never silently) if a step's expected
+  // screen doesn't appear within a reasonable wait.
+  function radioByNearbyText(text) {
+    const want = norm(text);
+    const radios = qa('input[type="radio"], [role="radio"]');
+    return radios.find((r) => {
+      const id = r.id;
+      const labelFor = id ? q('label[for="' + id + '"]') : null;
+      const label = labelFor || r.closest('label');
+      const nearbyText = norm((label && label.textContent) || (r.parentElement && r.parentElement.textContent) || '');
+      return nearbyText.indexOf(want) !== -1 && nearbyText.length < 200;
+    });
+  }
+
+  // Given real dimensions (inches) and Mercari's own stated shoebox size (14 x 10 x 5, from the
+  // modal's own helper text), answers whether the item fits. Falls back to "No" (the safer, more
+  // conservative choice -- the modal's own copy warns "If your package exceeds the label weight/
+  // size, you'll be charged the difference") whenever real dimensions aren't known, rather than
+  // guessing "Yes" and risking an under-sized label.
+  function itemFitsInShoebox(item) {
+    const l = item.packageLengthIn != null ? Number(item.packageLengthIn) : null;
+    const w = item.packageWidthIn != null ? Number(item.packageWidthIn) : null;
+    const h = item.packageHeightIn != null ? Number(item.packageHeightIn) : null;
+    if (l == null || w == null || h == null || !isFinite(l) || !isFinite(w) || !isFinite(h)) return false;
+    // Sort both the item's dims and the shoebox's dims descending, compare position-by-position --
+    // the standard, conservative way to check if a box fits inside another regardless of orientation.
+    const itemDims = [l, w, h].sort((a, b) => b - a);
+    const boxDims = [14, 10, 5].sort((a, b) => b - a);
+    return itemDims[0] <= boxDims[0] && itemDims[1] <= boxDims[1] && itemDims[2] <= boxDims[2];
+  }
+
+  // Parses the first "$X.XX" dollar amount out of a block of text -- used to find each carrier
+  // option's price so the cheapest can be selected as a safe, always-reversible-before-shipping
+  // default (nothing is actually charged until the item ships; the organizer can still change the
+  // label choice later on Mercari directly).
+  function firstDollarAmount(text) {
+    const m = String(text || '').match(/\$\s*([0-9]+(?:\.[0-9]{1,2})?)/);
+    return m ? parseFloat(m[1]) : null;
+  }
+
+  async function fillMercariShippingLabel(item) {
+    const opener = await waitForSelector(() => openerByLabel('Shipping label') || qa('button, [role="button"]').find((b) => norm(b.textContent).indexOf('enable shipping') !== -1), 5000);
+    if (!opener) {
+      overlayWarn('Mercari requires a shipping label to be selected before publishing -- FindA.Sale couldn\'t find that field automatically (UNVERIFIED selector). Please set it yourself before publishing.');
+      return false;
+    }
+    // Already configured (re-run on a draft that already has a label chosen) -- nothing to do.
+    if (norm(opener.textContent).indexOf('enable shipping') === -1 && norm(opener.textContent).indexOf('add title') === -1) return true;
+    await realClick(opener);
+    await sleep(500);
+
+    // Step 1: "Weigh and measure your package accurately" info modal -- click "Got it".
+    const gotIt = await waitForSelector(() => qa('button').find((b) => norm(b.textContent) === 'got it'), 4000);
+    if (gotIt) { await realClick(gotIt); await sleep(400); }
+    // If it didn't appear, this may mean Mercari skipped straight to the next screen (e.g. already
+    // dismissed once, "Don't show this again" from a prior session) -- not fatal, keep going.
+
+    // Step 2: weight/shoebox-fit modal -- weight fields are left alone (Mercari appears to carry
+    // over the value already set on the main form; no evidence this modal's own fields are wrong).
+    // Answers "Will your item fit in a shoebox?" from real dimensions when known, else "No".
+    const shoeboxRadio = await waitForSelector(() => radioByNearbyText(itemFitsInShoebox(item) ? 'yes' : 'no'), 4000);
+    if (!shoeboxRadio) {
+      overlayWarn('Mercari\'s shipping-label setup asked a question FindA.Sale couldn\'t confidently answer (UNVERIFIED selector on the "fits in a shoebox" step) -- please finish selecting a shipping label yourself before publishing.');
+      return false;
+    }
+    await realClick(shoeboxRadio);
+    await sleep(250);
+    const nextBtn = await waitForSelector(() => qa('button').find((b) => norm(b.textContent) === 'next' && !b.disabled), 3000);
+    if (!nextBtn) {
+      overlayWarn('Mercari\'s shipping-label setup didn\'t enable its "Next" button after answering the shoebox question (UNVERIFIED state) -- please finish selecting a shipping label yourself before publishing.');
+      return false;
+    }
+    await realClick(nextBtn);
+    await sleep(500);
+
+    // Step 3: carrier-selection modal -- picks the cheapest listed option (see firstDollarAmount's
+    // comment for why cheapest is a safe default here).
+    const carrierRadios = await waitForSelector(() => {
+      const radios = qa('input[type="radio"], [role="radio"]').filter((r) => {
+        const label = (r.id && q('label[for="' + r.id + '"]')) || r.closest('label') || r.parentElement;
+        return label && firstDollarAmount(label.textContent) != null;
+      });
+      return radios.length ? radios : null;
+    }, 4000);
+    if (!carrierRadios) {
+      overlayWarn('Mercari\'s shipping-label setup showed a carrier list FindA.Sale couldn\'t read (UNVERIFIED selector) -- please finish selecting a shipping label yourself before publishing.');
+      return false;
+    }
+    let cheapest = null;
+    let cheapestPrice = Infinity;
+    for (const r of carrierRadios) {
+      const label = (r.id && q('label[for="' + r.id + '"]')) || r.closest('label') || r.parentElement;
+      const price = firstDollarAmount(label.textContent);
+      if (price != null && price < cheapestPrice) { cheapestPrice = price; cheapest = r; }
+    }
+    if (!cheapest) {
+      overlayWarn('Mercari\'s shipping-label setup showed a carrier list but FindA.Sale couldn\'t parse any prices (UNVERIFIED) -- please finish selecting a shipping label yourself before publishing.');
+      return false;
+    }
+    await realClick(cheapest);
+    await sleep(250);
+    const saveBtn = await waitForSelector(() => qa('button').find((b) => norm(b.textContent) === 'save' && !b.disabled), 3000);
+    if (!saveBtn) {
+      overlayWarn('Mercari\'s shipping-label setup didn\'t enable its "Save" button after picking a carrier (UNVERIFIED state) -- please finish selecting a shipping label yourself before publishing.');
+      return false;
+    }
+    await realClick(saveBtn);
+    await sleep(500);
+
+    // Verify: the opener's placeholder text should no longer say "enable shipping" / "add title".
+    const openerAfter = openerByLabel('Shipping label');
+    const stuck = !openerAfter || (norm(openerAfter.textContent).indexOf('enable shipping') === -1 && norm(openerAfter.textContent).indexOf('add title') === -1);
+    if (!stuck) console.warn('[FAS Mercari] Shipping label -- went through the whole wizard but the field still shows its placeholder text afterward (UNVERIFIED confirmation) -- please double-check before publishing.');
+    return stuck;
   }
 
   function photoInput() {
@@ -1026,6 +1187,25 @@
     return base ? (base + ' -- ' + filler) : filler;
   }
 
+  // BUG FIX 2026-08-23 (S-EXT-MERCARI-BATCH-6, Patrick-directed, live-confirmed): Patrick's real
+  // Sell page screenshot (Bored Ape Yacht Club Adidas Tracksuit, apparel category) shows no Color
+  // field at all on the real form -- the dedicated `guardedFill('Color', ...)` attempt below was
+  // chasing a field that doesn't exist for this category (possibly any category), producing a
+  // confusing "selector not found" console warning for something that was never fillable. Per
+  // Patrick's own instruction ("it would need to be dropped or put in the description"), the
+  // dedicated Color field-fill attempt is now removed entirely and the color is folded into the
+  // description text instead, so the information isn't silently lost. Skips cleanly if the color
+  // is already mentioned in the organizer's own description (case-insensitive substring check) to
+  // avoid a redundant "Color: Black. ... Color: Black" doubling up.
+  function appendColorToDescription(description, color) {
+    const base = String(description || '').trim();
+    const c = String(color || '').trim();
+    if (!c) return base;
+    if (base.toLowerCase().indexOf(c.toLowerCase()) !== -1) return base; // already mentioned, don't duplicate
+    const line = 'Color: ' + c + '.';
+    return base ? (base + ' ' + line) : line;
+  }
+
   // BUG FIX 2026-08-21 (S-EXT-BATCH, P0, live-Chrome-confirmed): fillListing used to run all 8
   // field fills back-to-back and only check looksLikeInterstitial() ONCE at the very end (in run(),
   // after this whole function returned) -- live-confirmed against a real interrupted draft
@@ -1076,7 +1256,7 @@
       return ok;
     }
     await guardedFill('Title', item.title, (v) => fillText('Title', v));
-    await guardedFill('Description', padDescriptionForMercariMinimum(item.description, item), (v) => fillText('Description', v));
+    await guardedFill('Description', padDescriptionForMercariMinimum(appendColorToDescription(item.description, item.color), item), (v) => fillText('Description', v));
     // Category BEFORE brand -- Mercari's brand list is category-aware (see fillBrand comment).
     // S-EXT-BATCH-12: pass categoryBreadcrumb alongside the clean category -- pickCategory uses
     // the breadcrumb for less-specific fallback segments (and to derive the men's/women's gender
@@ -1088,7 +1268,8 @@
     // never assumed here.
     await guardedFill('Brand', item.brand, (v) => fillBrand('Brand', v));
     await guardedFill('Size', item.size, (v) => fillMercariSize(v));
-    await guardedFill('Color', item.color, (v) => fillSelectLike('Color', v));
+    // Color: no dedicated field-fill attempt -- see appendColorToDescription() above, folded into
+    // the Description fill instead (Patrick live-confirmed no Color field exists on the real form).
     const conditionLabel = mapMercariCondition(item.condition);
     await guardedFill('Condition', conditionLabel, (v) => fillMercariCondition(v));
     if (item.price != null && isFinite(Number(item.price))) {
@@ -1100,25 +1281,79 @@
       await guardedFill('Price', priceVal, (v) => fillMercariPrice(String(v)));
     }
     if (!interstitialAt) await fillWeight(item);
+    // S-EXT-MERCARI-BATCH-8: shipping label wizard must be completed BEFORE List is ever clicked --
+    // see fillMercariShippingLabel()'s comment for why (Mercari's own validation blocks submission
+    // otherwise, which is what was actually happening in Round 7, not a click-registration problem).
+    if (!interstitialAt && stillOnSellPage()) await fillMercariShippingLabel(item);
     if (!interstitialAt) await fillMercariSmartPricingFloor(item);
     return { photosOk, interstitialAt, navigatedAwayFrom };
   }
 
   // FEATURE 2026-08-22 (S-EXT-AUTOPUBLISH-POLICY): auto-publish support -- see file header.
+  // BUG FIX 2026-08-23 (S-EXT-MERCARI-BATCH-5, P0, live-Chrome-confirmed): the exact-text match
+  // against "list this item" NEVER matched -- live DOM read of the real Sell page (button list
+  // pulled directly via javascript_tool, not guessed) shows the real button is
+  // `<button data-testid="ListButton" type="submit">List</button>`, plain text "List", not
+  // "List this item". This is why auto-publish silently fell back to the manual-review overlay
+  // every time -- Patrick correctly reported "it didn't click List with auto publish checked."
+  // Real testid checked first (most robust), exact-text "list" kept as a fallback in case Mercari
+  // ever drops the testid.
   function findMercariPublishButton() {
-    return qa('button').find((b) => norm(b.textContent) === 'list this item');
+    return document.querySelector('[data-testid="ListButton"]')
+      || qa('button').find((b) => norm(b.textContent) === 'list');
   }
 
   // Confirms a real publish by polling for the sell form to disappear -- no live-confirmed success
   // marker exists yet (CODE-ONLY/UNTESTED, file header), same conservative signal
   // fas-craigslist.js/fas-poshmark.js use for their own publish confirmation.
+  // BUG FIX 2026-08-23 (S-EXT-MERCARI-BATCH-6, P0): was a plain boolean over a single 6000ms
+  // window, checking only "the Title field/photo input disappeared". Two real gaps live-confirmed
+  // by Patrick's own testing: (1) it had no idea a payment-required modal could appear after
+  // clicking List and would just time out silently against it, reporting a generic "couldn't
+  // confirm" instead of the real, specific reason; (2) a second real run -- WITH a payment method
+  // already on file, so that modal wasn't the cause -- still failed to confirm, and 6000ms may
+  // simply not be enough for a full page transition (route change + API round trip) on a slower
+  // connection. Now returns one of three outcomes instead of a boolean ('published' /
+  // 'needsPayment' / 'timeout'), checks for the payment modal on every poll, adds a second,
+  // independent success signal (the URL leaving /sell entirely -- a real navigation is stronger
+  // evidence than "a field disappeared", which could also happen from an unrelated re-render), and
+  // extends the window to 12000ms. The run-2 "still didn't confirm" case is not fully explained by
+  // this alone (no live evidence of what that second run's actual failure looked like) -- this is a
+  // reasoned hardening of a signal the file's own comments already flagged as weak/UNVERIFIED, not
+  // a claim that the exact cause is now known.
   async function waitForMercariPublishConfirmation(maxWaitMs) {
     const start = Date.now();
     while (Date.now() - start < maxWaitMs) {
-      if (!looksLikeSellForm()) return true;
+      if (looksLikeNeedsPaymentMethod()) return 'needsPayment';
+      if (!location.pathname.replace(/\/+$/, '').startsWith('/sell')) return 'published';
+      if (!looksLikeSellForm()) return 'published';
       await sleep(400);
     }
-    return false;
+    return 'timeout';
+  }
+
+  // BUG FIX 2026-08-23 (S-EXT-MERCARI-BATCH-7, P0, evidence-grounded): Patrick's Network tab
+  // capture, taken immediately after clicking List, shows NO listing-creation API request at all --
+  // only unrelated blocked analytics/session-data calls and one unrelated "sync" beacon. A real
+  // publish attempt (successful OR rejected) would show SOME request to Mercari's own API; seeing
+  // none means the click itself likely never reached Mercari's real submit handler, not that the
+  // request fired and failed. This is the exact same failure class already root-caused and fixed
+  // for the Size option this session (Round 4): a plain synthetic realClick() didn't reliably
+  // trigger a React handler that DID work for a sibling widget (Category), and the fix there was to
+  // try multiple real interaction strategies and verify after each rather than trust the first one.
+  // Applying the same proven pattern here, escalating through three independent ways to submit:
+  // (1) the existing pointer-based realClick(): (2) keyboard Enter/Space on the focused button
+  // (matches how Size's real fix likely worked); (3) HTMLFormElement.requestSubmit(button) --
+  // the browser's own native API for triggering a real form submission via a specific submitter
+  // button, which goes through the browser's actual submit machinery instead of depending on a
+  // synthetic event being correctly interpreted, only applicable if the button lives inside a real
+  // <form> (checked before use, never assumed). Each strategy gets its own confirmation poll and
+  // this only moves to the next strategy if the previous one produced neither 'published' nor
+  // 'needsPayment' (both of which stop immediately -- there is no reason to try more, sometimes
+  // harder, click strategies once we already know why it hasn't gone through).
+  async function tryMercariPublishStrategy(publishBtn, doIt, maxWaitMs) {
+    await doIt();
+    return waitForMercariPublishConfirmation(maxWaitMs);
   }
 
   async function doMercariAutoPublish(item, index, total, photosOk) {
@@ -1131,10 +1366,39 @@
     }
     overlay('<b>FindA.Sale</b> - publishing <b>' + escapeHtml(item.title) + '</b>...');
     await humanPause(500, 900);
-    await realClick(publishBtn);
-    const published = await waitForMercariPublishConfirmation(6000);
-    if (!published) {
-      overlayWarn('Clicked <b>List this item</b> but couldn\'t confirm it went through (UNVERIFIED selector/confirmation signal) -- please check this listing on Mercari yourself before assuming it posted.' + button('fas-merc-close', 'Close', false));
+
+    let result = await tryMercariPublishStrategy(publishBtn, () => realClick(publishBtn), 5000);
+
+    if (result === 'timeout') {
+      result = await tryMercariPublishStrategy(publishBtn, async () => {
+        try { if (typeof publishBtn.focus === 'function') publishBtn.focus(); } catch (e) { /* non-fatal */ }
+        const base = { bubbles: true, cancelable: true, composed: true, view: window };
+        for (const key of [{ key: 'Enter', code: 'Enter' }, { key: ' ', code: 'Space' }]) {
+          publishBtn.dispatchEvent(new KeyboardEvent('keydown', Object.assign({}, base, key)));
+          await sleep(60);
+          publishBtn.dispatchEvent(new KeyboardEvent('keyup', Object.assign({}, base, key)));
+          await sleep(300);
+        }
+      }, 5000);
+    }
+
+    if (result === 'timeout' && publishBtn.form && typeof publishBtn.form.requestSubmit === 'function') {
+      result = await tryMercariPublishStrategy(publishBtn, async () => {
+        try { publishBtn.form.requestSubmit(publishBtn); } catch (e) { /* non-fatal -- next check just sees no change */ }
+      }, 5000);
+    }
+    // BUG FIX 2026-08-23 (S-EXT-MERCARI-BATCH-6, P0, live-confirmed via Patrick's own screenshots):
+    // FindA.Sale never enters payment/card details itself -- hard rule, not just a preference --
+    // so this only reports the real, specific blocker and stops, exactly like every other
+    // interstitial in this file. The organizer adding a payment method is a one-time, Mercari-side
+    // step; once it's done this modal won't reappear on future items.
+    if (result === 'needsPayment') {
+      overlayWarn('Mercari is asking this account to add a payment method before it will let anything be listed ("Help us keep our marketplace safer by adding a payment method"). FindA.Sale never enters payment or card details -- please add a payment method on Mercari yourself, then re-run this item.' + button('fas-merc-close', 'Close', false));
+      closeBtnHandler();
+      return;
+    }
+    if (result === 'timeout') {
+      overlayWarn('Clicked <b>List</b> but couldn\'t confirm it went through (UNVERIFIED selector/confirmation signal) -- please check this listing on Mercari yourself before assuming it posted.' + button('fas-merc-close', 'Close', false));
       closeBtnHandler();
       return;
     }
