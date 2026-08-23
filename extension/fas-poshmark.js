@@ -1655,7 +1655,7 @@
         try { next = await chrome.runtime.sendMessage({ type: 'advanceRemovalQueueFor', platform: 'POSHMARK' }); } catch (e) {}
         if (next && next.ok && next.item) {
           await sleep(1200);
-          location.href = findPoshmarkClosetLink() || CFG.POSH_MANAGE_URL;
+          location.href = findPoshmarkClosetLink() || 'https://poshmark.com/feed'; // BUG FIX 2026-08-22: CFG is not injected into this content script's world (only background.js imports config.js) -- referencing it here threw a ReferenceError whenever findPoshmarkClosetLink() returned null. Inlined the same URL config.js holds for POSH_MANAGE_URL.
         } else {
           try { await chrome.runtime.sendMessage({ type: 'removalQueueDoneFor', platform: 'POSHMARK' }); } catch (e) {}
         }

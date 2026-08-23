@@ -34,5 +34,8 @@ self.FAS_CONFIG = {
   MERC_MANAGE_URL: 'https://www.mercari.com/',
   VINTED_MANAGE_URL: 'https://www.vinted.com/',
   GRAILED_MANAGE_URL: 'https://www.grailed.com/sell',
-  GUMTREE_AU_MANAGE_URL: 'https://www.gumtree.com.au/'
+  GUMTREE_AU_MANAGE_URL: 'https://www.gumtree.com.au/',
+  // Patrick-confirmed (2026-08-22, not a guess): this account page lists every one of the
+  // organizer's own Craigslist postings, so it doubles as the Craigslist "my listings" page.
+  CRAIG_MANAGE_URL: 'https://www.craigslist.org/account'
 };

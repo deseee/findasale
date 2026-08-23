@@ -345,6 +345,7 @@ async function notifyManualReviewIfNew(needsManualReview) {
 // UNVERIFIED until tested live against a genuine sold item.
 const FAS_PLATFORM_LABEL = {
   POSHMARK: 'Poshmark', MERCARI: 'Mercari', VINTED: 'Vinted', GRAILED: 'Grailed', GUMTREE_AU: 'Gumtree Australia',
+  CRAIGSLIST: 'Craigslist',
 };
 const FAS_CROSS_PLATFORM_REMOVAL_CONFIG = {
   POSHMARK: { manageUrlKey: 'POSH_MANAGE_URL', queueKey: 'fasPoshmarkRemovalQueue', indexKey: 'fasPoshmarkRemovalIndex', tabIdKey: 'fasPoshmarkRemovalTabId', prevTabIdKey: 'fasPoshmarkRemovalPrevTabId', startedAtKey: 'fasPoshmarkRemovalStartedAt' },
@@ -352,6 +353,12 @@ const FAS_CROSS_PLATFORM_REMOVAL_CONFIG = {
   VINTED: { manageUrlKey: 'VINTED_MANAGE_URL', queueKey: 'fasVintedRemovalQueue', indexKey: 'fasVintedRemovalIndex', tabIdKey: 'fasVintedRemovalTabId', prevTabIdKey: 'fasVintedRemovalPrevTabId', startedAtKey: 'fasVintedRemovalStartedAt' },
   GRAILED: { manageUrlKey: 'GRAILED_MANAGE_URL', queueKey: 'fasGrailedRemovalQueue', indexKey: 'fasGrailedRemovalIndex', tabIdKey: 'fasGrailedRemovalTabId', prevTabIdKey: 'fasGrailedRemovalPrevTabId', startedAtKey: 'fasGrailedRemovalStartedAt' },
   GUMTREE_AU: { manageUrlKey: 'GUMTREE_AU_MANAGE_URL', queueKey: 'fasGumtreeAuRemovalQueue', indexKey: 'fasGumtreeAuRemovalIndex', tabIdKey: 'fasGumtreeAuRemovalTabId', prevTabIdKey: 'fasGumtreeAuRemovalPrevTabId', startedAtKey: 'fasGumtreeAuRemovalStartedAt' },
+  // Added 2026-08-22 -- Patrick confirmed https://www.craigslist.org/account lists every
+  // posting, removing the earlier data-model blocker (no manage-link was being captured per
+  // posting). FACEBOOK intentionally stays out of this generic map -- it keeps its own
+  // dedicated, mature removal path (fas-remove.js + the silentRemovalInProgress/
+  // openSilentRemovalTab/finishSilentRemoval functions above), unchanged by this feature.
+  CRAIGSLIST: { manageUrlKey: 'CRAIG_MANAGE_URL', queueKey: 'fasCraigslistRemovalQueue', indexKey: 'fasCraigslistRemovalIndex', tabIdKey: 'fasCraigslistRemovalTabId', prevTabIdKey: 'fasCraigslistRemovalPrevTabId', startedAtKey: 'fasCraigslistRemovalStartedAt' },
 };
 
 // Mirrors silentRemovalInProgress/openSilentRemovalTab/finishSilentRemoval above exactly (same

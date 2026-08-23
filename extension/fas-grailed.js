@@ -1381,7 +1381,10 @@
       }
       let next = null;
       try { next = await chrome.runtime.sendMessage({ type: 'advanceRemovalQueueFor', platform: 'GRAILED' }); } catch (e) {}
-      if (next && next.ok && next.item) { await sleep(1200); location.href = CFG.GRAILED_MANAGE_URL; }
+      // BUG FIX 2026-08-22: CFG is not injected into this content script's world (only
+      // background.js imports config.js) -- referencing CFG.Grai_MANAGE_URL directly here
+      // threw a ReferenceError every time this ran. Inlined the literal URL instead.
+      if (next && next.ok && next.item) { await sleep(1200); location.href = 'https://www.grailed.com/sell'; }
       else { try { await chrome.runtime.sendMessage({ type: 'removalQueueDoneFor', platform: 'GRAILED' }); } catch (e) {} }
       return;
     }

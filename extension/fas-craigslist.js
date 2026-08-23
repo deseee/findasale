@@ -468,6 +468,121 @@
     overlayInfo('Ready to autofill. Choose your Craigslist location/area on this screen and continue - FindA.Sale takes over at the posting details.');
   }
 
+  // ================================================================================================
+  // CROSS-PLATFORM AUTO-REMOVE-ON-SOLD-ELSEWHERE (S-EXT-CROSS-PLATFORM-AUTOREMOVE, 2026-08-22)
+  // CODE-ONLY, UNTESTED -- runs on https://www.craigslist.org/account (Patrick-confirmed this
+  // page lists every one of the organizer's own postings, 2026-08-22), a different page from the
+  // post.craigslist.org/* posting flow this file otherwise handles -- see the location gate at the
+  // very bottom of this file that routes between the two. Every selector below is a best-effort
+  // guess against Craigslist's classic account-page markup, never live-confirmed (no test account
+  // with a real posting existed this session) -- same hard-error/hands-to-human philosophy as the
+  // rest of this file: if a confident match can't be found, this stops and asks the organizer to
+  // finish it themselves rather than guessing.
+  function crRemNorm(s) { return String(s || '').toLowerCase().trim().replace(/\s+/g, ' '); }
+
+  function crRemFindButtonByText(text, root) {
+    const wanted = crRemNorm(text);
+    const scope = root || document;
+    const candidates = Array.from(scope.querySelectorAll('a, button'));
+    return candidates.find((el) => crRemNorm(el.textContent).includes(wanted)) || null;
+  }
+
+  // Craigslist's account page traditionally lists each posting as a row/list-item containing the
+  // title link plus its own "delete" action inline (no separate detail-page visit needed) --
+  // UNVERIFIED against the real current markup. Walks up from the matching title link to a
+  // reasonably-sized ancestor container and looks for a delete control inside that same container,
+  // so it doesn't accidentally click a delete link belonging to a different posting.
+  function findCraigslistPostingRowByTitle(title) {
+    const wanted = crRemNorm(title);
+    const links = Array.from(document.querySelectorAll('a'));
+    const scored = links
+      .map((a) => ({ a, t: crRemNorm(a.textContent) }))
+      .filter((x) => x.t.length > 0);
+    const exact = scored.filter((x) => x.t === wanted);
+    const contains = exact.length ? exact : scored.filter((x) => x.t.includes(wanted) || wanted.includes(x.t));
+    if (contains.length !== 1) return null; // zero or ambiguous matches -- never guess
+    let node = contains[0].a;
+    for (let i = 0; i < 6 && node.parentElement; i++) {
+      node = node.parentElement;
+      if (crRemFindButtonByText('delete', node)) return node;
+    }
+    return null; // title matched but no delete control found nearby -- hand off, don't guess further
+  }
+
+  async function deleteCraigslistPostingRow(row) {
+    const del = crRemFindButtonByText('delete', row);
+    if (!del) return 'no_delete_control';
+    del.click(); // Craigslist's classic delete flow is a full-page navigation to a confirm screen
+    return 'navigated';
+  }
+
+  // If this load IS the post-delete-click confirm screen, finish it. Best-effort text match --
+  // UNVERIFIED, never live-confirmed.
+  async function tryCompleteCraigslistDeleteConfirm() {
+    if (!/delete/i.test(location.href) && !/delete/i.test(bodyText().slice(0, 400))) return false;
+    const confirmBtn = crRemFindButtonByText('delete', document) || crRemFindButtonByText('yes', document);
+    if (!confirmBtn) return false;
+    confirmBtn.click();
+    return true;
+  }
+
+  async function reportCraigslistRemoved(item) {
+    try { await chrome.runtime.sendMessage({ type: 'markItemRemovedByRemoval', itemId: item.id, platform: 'CRAIGSLIST' }); } catch (e) {}
+    try { await chrome.runtime.sendMessage({ type: 'advanceRemovalQueueFor', platform: 'CRAIGSLIST' }); } catch (e) {}
+  }
+
+  async function runCraigslistRemovalQueue(item, index, total) {
+    overlayInfo('This item sold elsewhere -- looking for the matching Craigslist posting for <b>' + escapeHtml(item.title) + '</b> to remove it...');
+    if (await tryCompleteCraigslistDeleteConfirm()) {
+      await sleep(600);
+      await reportCraigslistRemoved(item);
+      const more = (index + 1) < total;
+      overlay('<b>FindA.Sale</b><div style="margin-top:6px">Removed the Craigslist posting for <b>' + escapeHtml(item.title) + '</b> (please double-check it\'s gone -- this was not live-verified).</div>' +
+        (more ? button('fas-cl-removed-next', 'Next item &#9654;', true) : '') +
+        button('fas-cl-close', 'Close', false));
+      const next = document.getElementById('fas-cl-removed-next');
+      // NOTE: CFG is not injected into this content script's world (only background.js
+      // imports config.js) -- inlined the literal URL rather than referencing CFG directly
+      // (caught before push, same class of bug found and fixed in fas-poshmark.js/
+      // fas-mercari.js/fas-grailed.js's removal blocks).
+      if (next) next.onclick = () => { location.href = 'https://www.craigslist.org/account'; };
+      const close = document.getElementById('fas-cl-close');
+      if (close) close.onclick = () => bar && bar.remove();
+      return;
+    }
+    const row = findCraigslistPostingRowByTitle(item.title);
+    if (!row) {
+      overlay('<b>FindA.Sale</b><div style="margin-top:6px;color:#ffcf7a">Could not find a Craigslist posting matching "' + escapeHtml(item.title) + '" on this page (UNVERIFIED selectors) -- please delete it yourself.</div>' + button('fas-cl-close', 'Close', false));
+      const close = document.getElementById('fas-cl-close');
+      if (close) close.onclick = () => bar && bar.remove();
+      try { await chrome.runtime.sendMessage({ type: 'advanceRemovalQueueFor', platform: 'CRAIGSLIST' }); } catch (e) {}
+      return;
+    }
+    const result = await deleteCraigslistPostingRow(row);
+    if (result !== 'navigated') {
+      overlay('<b>FindA.Sale</b><div style="margin-top:6px;color:#ffcf7a">Found the posting but no delete control (UNVERIFIED selectors -- reason: ' + result + ') -- please delete it yourself.</div>' + button('fas-cl-close', 'Close', false));
+      const close = document.getElementById('fas-cl-close');
+      if (close) close.onclick = () => bar && bar.remove();
+      try { await chrome.runtime.sendMessage({ type: 'advanceRemovalQueueFor', platform: 'CRAIGSLIST' }); } catch (e) {}
+    }
+    // else: the click navigated to a confirm screen -- this same function re-runs on that next
+    // load via maybeRunCraigslistRemoval() and completes via tryCompleteCraigslistDeleteConfirm().
+  }
+
+  async function maybeRunCraigslistRemoval() {
+    let queued;
+    try { queued = await chrome.runtime.sendMessage({ type: 'getRemovalQueueItemFor', platform: 'CRAIGSLIST' }); } catch (e) { return false; }
+    if (!queued || !queued.ok || !queued.item) return false;
+    try {
+      await runCraigslistRemovalQueue(queued.item, queued.index, queued.total);
+    } catch (e) {
+      overlay('<b>FindA.Sale</b><div style="margin-top:6px;color:#ffcf7a">Something went wrong removing this Craigslist posting (' + escapeHtml((e && e.message) || 'unknown error') + '). Please remove it yourself.</div>' + button('fas-cl-close', 'Close', false));
+      const close = document.getElementById('fas-cl-close');
+      if (close) close.onclick = () => bar && bar.remove();
+    }
+    return true;
+  }
+
   async function start() {
     await sleep(500); // let the page settle before reading the DOM
     // (2026-08-08) Independent of whatever's queued -- runs on every post.craigslist.org load,
@@ -483,5 +598,12 @@
     }
   }
 
-  start();
+  // Location gate: the account/my-listings page (removal flow) is a different page from the
+  // post.craigslist.org posting flow this file otherwise handles -- only one of the two ever
+  // applies on a given load.
+  (async () => {
+    const onAccountPage = location.hostname === 'www.craigslist.org' && location.pathname.indexOf('/account') === 0;
+    if (onAccountPage) { await maybeRunCraigslistRemoval(); return; }
+    start();
+  })();
 })();

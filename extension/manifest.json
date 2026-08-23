@@ -80,7 +80,8 @@
     },
     {
       "matches": [
-        "https://post.craigslist.org/*"
+        "https://post.craigslist.org/*",
+        "https://www.craigslist.org/account*"
       ],
       "js": [
         "fas-craigslist.js"
