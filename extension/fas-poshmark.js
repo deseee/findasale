@@ -439,7 +439,7 @@
     // instance from this isolated-world script (same blind spot as Category/Size/Color); routed
     // through the MAIN-world bridge instead. The click-based fallback below is unchanged.
     const modalRes = await bridgeCall('closeVisibleModal', { el: closeBtn });
-    console.log('[FAS Poshmark][catdbg] bridge closeVisibleModal result=', modalRes);
+    console.log('[FAS Poshmark][catdbg] bridge closeVisibleModal result=', JSON.stringify(modalRes));
     const deadline2 = Date.now() + 1500;
     while (Date.now() < deadline2) {
       if (!visibleModalCloseBtn()) return; // genuinely closed -- no visible modal instance left
@@ -497,18 +497,53 @@
   // installed extension never could. Fix: fas-poshmark-bridge.js is a companion script declared
   // in manifest.json with "world": "MAIN" on the same match pattern -- it runs in the page's own
   // JS world (where __vue__ is visible) and relays results back via a CustomEvent request/
-  // response pair on `window`. DOM CustomEvent detail payloads and DOM element references both
-  // cross the isolated/MAIN world boundary fine (same underlying DOM objects) -- only non-DOM JS
-  // objects like a Vue component instance do not, which is why every call below passes a DOM
-  // element in `payload.el`, never a Vue instance directly.
+  // response pair on `window`.
+  //
+  // BUG FIX 2026-08-22 ROUND 2 (S-EXT-POSHMARK-BRIDGE-ELEMENT-PASSING, P0, live-Chrome-confirmed
+  // via direct diagnostic listeners installed on Patrick's real tab, not a guess): the comment
+  // above originally claimed "DOM element references cross the isolated/MAIN world boundary fine"
+  // -- that was WRONG. Confirmed live: a bridge call with an empty payload (`getCatalogCommitState`,
+  // `{}`) round-tripped perfectly, while every call that put a live DOM element in `payload.el`
+  // (`openDropdown`/`closeDropdown`/`closeVisibleModal`) arrived at the MAIN-world listener with
+  // `event.detail === null` -- the ENTIRE detail silently wiped, not merely the element field --
+  // so the bridge's handler saw `action: undefined` and its error response never matched the
+  // waiting requestId, timing out every single time. Chrome's cross-world CustomEvent delivery
+  // appears to require detail to be plain, structured-clone-compatible data; a live DOM Element
+  // reference breaks that silently instead of throwing. Fix: never put a DOM element in the event
+  // detail at all. Instead, stamp the target element with a temporary, unique marker ATTRIBUTE
+  // (plain DOM state, genuinely shared across worlds -- unlike a JS object reference) and send
+  // only the marker STRING through the bridge; the MAIN-world side re-finds the exact same live
+  // element via `document.querySelector` on that marker. The marker attribute is removed again
+  // once the response comes back (or on timeout) so nothing is left behind on Poshmark's real DOM.
   function bridgeCall(action, payload, timeoutMs) {
     return new Promise((resolve) => {
       const requestId = 'fas-' + Date.now() + '-' + Math.random().toString(36).slice(2);
       let done = false;
+      let markerEl = null;
+      let markerAttr = null;
+      const sendPayload = {};
+      if (payload) {
+        for (const key in payload) {
+          if (key === 'el') continue;
+          sendPayload[key] = payload[key];
+        }
+        if (payload.el) {
+          markerEl = payload.el;
+          markerAttr = 'fas-bm-' + requestId;
+          markerEl.setAttribute('data-fas-bridge-marker', markerAttr);
+          sendPayload.elMarker = markerAttr;
+        }
+      }
+      function cleanupMarker() {
+        if (markerEl) {
+          try { markerEl.removeAttribute('data-fas-bridge-marker'); } catch (e) { /* element may be gone -- fine */ }
+        }
+      }
       const timeout = setTimeout(() => {
         if (done) return;
         done = true;
         window.removeEventListener('fas-poshmark-vue-response', onResponse);
+        cleanupMarker();
         resolve({ ok: false, error: 'bridge-timeout' });
       }, timeoutMs || 1500);
       function onResponse(e) {
@@ -518,10 +553,11 @@
         done = true;
         clearTimeout(timeout);
         window.removeEventListener('fas-poshmark-vue-response', onResponse);
+        cleanupMarker();
         resolve(Object.assign({ ok: true }, detail.result));
       }
       window.addEventListener('fas-poshmark-vue-response', onResponse);
-      window.dispatchEvent(new CustomEvent('fas-poshmark-vue-request', { detail: { requestId: requestId, action: action, payload: payload } }));
+      window.dispatchEvent(new CustomEvent('fas-poshmark-vue-request', { detail: { requestId: requestId, action: action, payload: sendPayload } }));
     });
   }
 
@@ -532,7 +568,7 @@
   // the ORIGINAL NOTE on openerByLabel above); kept only as a harmless last resort.
   async function vueOpenDropdown(opener) {
     const res = await bridgeCall('openDropdown', { el: opener });
-    console.log('[FAS Poshmark][catdbg] bridge openDropdown result=', res);
+    console.log('[FAS Poshmark][catdbg] bridge openDropdown result=', JSON.stringify(res));
     if (!res || !res.opened) {
       realClick(opener);
     }
@@ -598,7 +634,7 @@
     // script; routed through the same MAIN-world bridge used for Category/Size.
     if (!poshmarkColorPanelOpen(dropdown)) {
       const openRes = await bridgeCall('openDropdown', { el: dropdown });
-      console.log('[FAS Poshmark][catdbg] color bridge openDropdown result=', openRes);
+      console.log('[FAS Poshmark][catdbg] color bridge openDropdown result=', JSON.stringify(openRes));
       if (!openRes || !openRes.opened) realClick(chipRow.querySelector('[data-et-name="color"]') || chipRow);
       await sleep(400);
     }
@@ -932,7 +968,7 @@
     // for the full root cause. This qa('*') + el.__vue__ walk can never find a real Vue instance
     // from this isolated-world script; routed through the MAIN-world bridge instead.
     const catalogState = await bridgeCall('getCatalogCommitState', {});
-    console.log('[FAS Poshmark][catdbg] pickCategory catalogState=', catalogState);
+    console.log('[FAS Poshmark][catdbg] pickCategory catalogState=', JSON.stringify(catalogState));
     const committed = !!(catalogState && catalogState.committed);
     // Always close the dropdown before returning, success or failure -- live-confirmed an
     // unclosed Category panel leaks its still-visible department/leaf <li> items into every

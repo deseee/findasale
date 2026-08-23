@@ -12,11 +12,18 @@
  * so it runs in the SAME JS context as Poshmark's own Vue instances and CAN see `__vue__`. It has
  * NO access to any chrome.* extension API (that's unavailable to MAIN-world content scripts) --
  * its only job is DOM/Vue introspection, relayed back to the isolated-world script via a
- * CustomEvent request/response pair on `window`. DOM CustomEvent `detail` payloads and DOM element
- * references both cross the isolated/MAIN world boundary fine (they're the same underlying DOM
- * objects, just exposed through different per-world wrappers) -- only non-DOM JS objects like a
- * Vue component instance do not, which is why every request below passes a DOM element in
- * `payload.el` and only ever returns plain data (booleans/strings), never a Vue instance.
+ * CustomEvent request/response pair on `window`.
+ *
+ * BUG FIX 2026-08-22 ROUND 2 (S-EXT-POSHMARK-BRIDGE-ELEMENT-PASSING, P0, live-Chrome-confirmed via
+ * diagnostic listeners installed directly on Patrick's real tab): this file originally claimed DOM
+ * element references cross the isolated/MAIN boundary fine in a CustomEvent detail -- that was
+ * WRONG. Confirmed live: a request with an empty payload round-tripped perfectly, while every
+ * request that put a live DOM element in `payload.el` arrived here with `event.detail === null`
+ * (the whole detail silently dropped, not just the element). Fix: requests never carry a DOM
+ * element anymore -- the isolated-world side stamps the target element with a temporary
+ * `data-fas-bridge-marker` attribute (plain DOM state, genuinely shared across worlds, unlike a JS
+ * object reference) and sends only that marker STRING as `payload.elMarker`. `resolveEl()` below
+ * re-finds the exact same live element via `document.querySelector` on that marker.
  *
  * Every action here is a verbatim port of logic that already existed directly inline in
  * fas-poshmark.js before this fix -- nothing new is being invented, this only moves the __vue__
@@ -32,9 +39,16 @@
     return null;
   }
 
+  // BUG FIX 2026-08-22 ROUND 2 -- see file header. Re-finds the real element from a marker
+  // attribute the isolated-world side stamped onto it, instead of receiving the element itself
+  // (which does not survive the cross-world CustomEvent, confirmed live).
+  function resolveEl(payload) {
+    return (payload && payload.elMarker) ? document.querySelector('[data-fas-bridge-marker="' + payload.elMarker + '"]') : null;
+  }
+
   function handleAction(action, payload) {
     if (action === 'openDropdown') {
-      const el = payload && payload.el;
+      const el = resolveEl(payload);
       if (!el) return { opened: false, reason: 'no-element' };
       const vm = el.__vue__;
       if (vm && typeof vm.isExpaned !== 'undefined') {
@@ -45,7 +59,7 @@
       return { opened: false, method: 'no-vue-instance' };
     }
     if (action === 'closeDropdown') {
-      const el = payload && payload.el;
+      const el = resolveEl(payload);
       if (!el) return { closed: false, reason: 'no-element' };
       const vm = el.__vue__;
       if (vm && typeof vm.isExpaned !== 'undefined') {
@@ -60,7 +74,7 @@
       return { committed: committed, catalogFound: !!vm };
     }
     if (action === 'closeVisibleModal') {
-      let el = payload && payload.el;
+      let el = resolveEl(payload);
       for (let i = 0; i < 8 && el; i++) {
         const vm = el.__vue__;
         if (vm && vm.$options && vm.$options.name === 'Modal' && typeof vm.closeModal === 'function') {
