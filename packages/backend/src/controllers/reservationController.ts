@@ -2283,6 +2283,13 @@ export const getMyInvoices = async (req: AuthRequest, res: Response) => {
       // below rather than emitted as a bare null for the UI to interpret.
       const reservationId = inv.reservationId ?? inv.reservations[0]?.id ?? null;
 
+      // Both branches are now real, working cancel paths (2026-08-23 fix): a
+      // reservationId routes to POST /reservations/:id/release-invoice; its absence
+      // routes to POST /reservations/invoice/:id/release (releaseInvoiceById), which
+      // cancels a POS-cart invoice directly by its own id when there is no reservation
+      // to key the older endpoint off of. canCancel is therefore unconditionally true
+      // for every PENDING invoice this endpoint returns -- the frontend picks the
+      // endpoint from whether reservationId is present, not from this flag.
       return {
         id: inv.id,
         status: inv.status,
@@ -2292,10 +2299,8 @@ export const getMyInvoices = async (req: AuthRequest, res: Response) => {
         expiresAt: inv.expiresAt,
         createdAt: inv.createdAt,
         reservationId,
-        canCancel: reservationId !== null,
-        cancelUnavailableReason: reservationId === null
-          ? "This payment request came from the register, so it can't be cancelled here. Ask the organizer at checkout."
-          : null,
+        canCancel: true,
+        cancelUnavailableReason: null,
         organizerName: inv.organizer?.organizer?.businessName || inv.organizer?.name || null,
         sale: inv.sale,
         itemCount: items.length,
@@ -2625,6 +2630,190 @@ export const releaseInvoice = async (req: AuthRequest, res: Response) => {
     res.json({ message: 'Invoice released and hold reactivated', itemsReleased: releasedItemIds.length });
   } catch (error: any) {
     console.error('[hold-invoice] releaseInvoice error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// POST /api/reservations/invoice/:invoiceId/release -- cancel a PENDING HoldInvoice
+// directly by its own id, for the ONE case releaseInvoice above cannot reach: a
+// POS-cart invoice created with zero held reservations behind it.
+// posController.createCombinedInvoice omits HoldInvoice.reservationId (and skips the
+// ItemReservation.invoiceId write) whenever `heldReservations.length === 0` -- a
+// register cart made entirely of miscItems (no inventory Item involved at all). Such
+// an invoice has no ItemReservation to key releaseInvoice's `:id` off of, so it was
+// unconditionally uncancellable: getMyInvoices already reported `canCancel: false` for
+// exactly this case (reservationId resolves to null), and no endpoint could act on it
+// either way.
+//
+// Deliberately scoped to ONLY the reservation-less case (guarded below) rather than
+// generalized into a second way to cancel every invoice -- an invoice that DOES have a
+// reservation link must keep going through releaseInvoice, which is the only path that
+// reverts the held Item(s) back to RESERVED. Duplicating that here would be a second
+// source of truth for the same state transition.
+//
+// Auth, two arms (same shape as releaseInvoice's shopper/organizer split, verified
+// against schema.prisma before writing this):
+//   Arm 1 (shopper): HoldInvoice.shopperUserId is NOT NULL on every row --
+//     posController.createCombinedInvoice requires a real shopperId in the request body
+//     and 404s if `prisma.user.findUnique` doesn't resolve it before ever creating the
+//     invoice, so this is always a genuine shopper account, never a placeholder. The
+//     shopper who owns the cart may cancel their own outstanding payment request.
+//   Arm 2 (organizer): HoldInvoice.organizerUserId is already a User id (P0-A fix,
+//     2026-08-16 -- see the identical note on createCombinedInvoice), so the direct-owner
+//     check is a straight id comparison, no Organizer lookup needed. A TEAM_MEMBER on
+//     that organizer's workspace may also cancel -- these invoices are created from the
+//     POS register, which already recognizes TEAM_MEMBER staff via
+//     utils/posAuth.ts's resolveOrganizerOrTeamMember, so register staff who can CREATE
+//     one of these invoices can also cancel it.
+export const releaseInvoiceById = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: 'Authentication required' });
+
+    const { invoiceId } = req.params as { invoiceId: string };
+
+    const invoice = await prisma.holdInvoice.findUnique({
+      where: { id: invoiceId },
+      include: {
+        sale: {
+          include: {
+            organizer: { select: { id: true, stripeConnectId: true } },
+          },
+        },
+        // Only used for the reservation-less guard below -- must be empty for this
+        // endpoint to apply.
+        reservations: { select: { id: true } },
+      },
+    });
+
+    if (!invoice) return res.status(404).json({ message: 'Invoice not found' });
+
+    // Ownership FIRST (information-disclosure discipline matching releaseInvoice above)
+    // -- a caller with no relationship to this invoice must not learn anything about its
+    // state (reservation-linked? already paid? already cancelled?) from a probed id.
+    const isInvoiceShopper = invoice.shopperUserId === req.user.id;
+
+    let isAuthorizedOrganizer = invoice.organizerUserId === req.user.id;
+    if (!isInvoiceShopper && !isAuthorizedOrganizer) {
+      // TEAM_MEMBER arm: an accepted WorkspaceMember with a linked TeamMember row, on
+      // the workspace owned by THIS invoice's organizer specifically -- not "whichever
+      // workspace the caller happens to belong to" (unlike resolveOrganizerOrTeamMember's
+      // own TEAM_MEMBER branch, which resolves "who am I acting as" and has no target to
+      // check against; utils/posAuth.ts's own comment explains why that branch is
+      // deliberately un-scoped). Same WorkspaceMember/TeamMember/OrganizerWorkspace shape
+      // posAuth.ts uses, just filtered down to the one workspace that matters here.
+      const targetOrganizer = await prisma.organizer.findUnique({
+        where: { userId: invoice.organizerUserId },
+        select: { id: true },
+      });
+      if (targetOrganizer) {
+        const member = await prisma.workspaceMember.findFirst({
+          where: {
+            userId: req.user.id,
+            acceptedAt: { not: null },
+            teamMember: { isNot: null },
+            workspace: { ownerId: targetOrganizer.id },
+          },
+          select: { id: true },
+        });
+        isAuthorizedOrganizer = !!member;
+      }
+    }
+
+    if (!isInvoiceShopper && !isAuthorizedOrganizer) {
+      // Same single message for every failure mode as releaseInvoice, for the same
+      // reason: a caller probing invoice ids must not be able to distinguish "not yours"
+      // from any other rejection.
+      return res.status(403).json({ message: 'Access denied. This payment request is not yours.' });
+    }
+
+    // Reservation-less guard: this endpoint is deliberately NOT a general-purpose
+    // invoice canceller -- see the header comment above.
+    if (invoice.reservationId || invoice.reservations.length > 0) {
+      return res.status(409).json({
+        message: "This payment request is linked to a hold \u2014 cancel it from the hold instead.",
+      });
+    }
+
+    if (invoice.status !== 'PENDING') {
+      return res.status(409).json({ message: 'This payment request is no longer open, so there is nothing to cancel.' });
+    }
+
+    const saleOrganizer = invoice.sale?.organizer ?? null;
+
+    // Cancel the Stripe Checkout session, if one exists. Null-guarded: a 100%-cash split
+    // invoice (posController.createCombinedInvoice, cardAmountCents === 0) never creates
+    // one. Identical pattern to releaseInvoice above, including the already-PAID refusal
+    // and the stillPayable 502 refusal.
+    if (invoice.stripeSessionId) {
+      const closure = await expireCheckoutSessionSafely(invoice.stripeSessionId, {
+        stripeAccount: invoice.stripeAccountId ?? saleOrganizer?.stripeConnectId ?? null,
+        context: `releaseInvoiceById invoice=${invoice.id} actor=${isInvoiceShopper ? 'shopper' : 'organizer'}`,
+      });
+
+      if (closure.state === 'PAID') {
+        console.warn(`[hold-invoice] releaseInvoiceById refused: invoice ${invoice.id} is already PAID at Stripe (session ${invoice.stripeSessionId}).`);
+        return res.status(409).json({
+          message: "This payment has already gone through. Refund it from the sale's payments instead of cancelling the request.",
+        });
+      }
+
+      if (closure.stillPayable) {
+        return res.status(502).json({
+          message: 'We could not cancel the payment link with our payment processor just now, so the request was left in place. Please try again in a moment.',
+        });
+      }
+    }
+
+    // No Item/ItemReservation to revert -- the reservation-less guard above already
+    // confirmed this invoice has neither. invoice.itemIds is likewise always empty for
+    // this case (posController.createCombinedInvoice only ever populates itemIds from
+    // heldReservations), but the updateMany below stays scoped correctly if that ever
+    // changes.
+    await prisma.$transaction(async (tx) => {
+      await tx.holdInvoice.update({
+        where: { id: invoice.id },
+        data: { status: 'CANCELLED', releasedAt: new Date() },
+      });
+
+      if (invoice.itemIds.length > 0) {
+        await tx.item.updateMany({
+          where: { id: { in: invoice.itemIds }, status: 'INVOICE_ISSUED' },
+          data: { status: 'RESERVED' },
+        });
+      }
+
+      const amountLabel = `$${(invoice.totalAmount / 100).toFixed(2)}`;
+
+      await tx.notification.create({
+        data: {
+          userId: invoice.shopperUserId,
+          type: 'invoice_cancelled',
+          title: isInvoiceShopper ? 'Payment request cancelled' : 'Invoice cancelled',
+          body: isInvoiceShopper
+            ? `You cancelled the ${amountLabel} payment request.`
+            : `The ${amountLabel} payment request has been cancelled.`,
+          link: '/shopper/dashboard',
+          channel: 'OPERATIONAL',
+        },
+      });
+
+      if (isInvoiceShopper) {
+        await tx.notification.create({
+          data: {
+            userId: invoice.organizerUserId,
+            type: 'invoice_cancelled',
+            title: 'Payment request cancelled by the shopper',
+            body: `A shopper cancelled the ${amountLabel} payment request from the register.`,
+            link: '/organizer/holds',
+            channel: 'OPERATIONAL',
+          },
+        });
+      }
+    });
+
+    res.json({ message: 'Invoice released', invoiceId: invoice.id });
+  } catch (error: any) {
+    console.error('[hold-invoice] releaseInvoiceById error:', error);
     res.status(500).json({ message: 'Server error' });
   }
 };

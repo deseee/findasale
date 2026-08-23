@@ -17,6 +17,7 @@ import {
   getMyHoldsFull,
   getItemInvoiceStatus,
   releaseInvoice,
+  releaseInvoiceById,
 } from '../controllers/reservationController';
 
 const router = express.Router();
@@ -62,6 +63,11 @@ router.post('/batch', batchUpdateHolds);                       // #24: batch rel
 // Hold-to-Pay Phase 2: Invoice endpoints
 router.post('/:id/mark-sold', markSoldAndCreateInvoice);       // Organizer: mark sold + create invoice
 router.post('/:id/release-invoice', releaseInvoice);           // Organizer: cancel pending invoice
+// Reservation-less POS-cart invoices (posController.createCombinedInvoice with zero held
+// reservations) have no ItemReservation for the route above to key off of -- this cancels
+// by the HoldInvoice's own id instead. 3-segment literal-prefixed path, so it cannot be
+// shadowed by any `/:id/...` route registered above or below it.
+router.post('/invoice/:invoiceId/release', releaseInvoiceById); // Shopper or organizer: cancel a reservation-less POS-cart invoice
 
 // Check-in endpoint (Feature #121)
 router.post('/checkin', checkinAtSale);                        // Feature #121: shopper check-in at sale

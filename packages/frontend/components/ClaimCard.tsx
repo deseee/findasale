@@ -8,6 +8,7 @@ import { useState } from 'react';
 import HoldTimer from './HoldTimer';
 import api from '../lib/api';
 import { useToast } from './ToastContext';
+import ConfirmDialog from './ConfirmDialog';
 
 interface ClaimCardProps {
   invoiceId: string;
@@ -63,36 +64,33 @@ export default function ClaimCard({
 
   // Cancel the outstanding payment request.
   //
-  // This used to call `DELETE /reservations/${itemId}` -- wrong on three counts, and it
-  // had never once worked:
-  //   1. DELETE /reservations/:id (cancelHold) takes a RESERVATION id, not an item id.
-  //   2. The caller passed `invoice.itemId`, a key GET /reservations/my-invoices does not
-  //      return, so every click sent a literal `DELETE /reservations/undefined` -> 404.
-  //   3. Even with a correct reservation id, cancelHold now returns 409 for an item at
-  //      INVOICE_ISSUED (reservationController.ts:518) -- which is every card this
-  //      component renders. It points the caller at release-invoice, which is the path
-  //      that actually closes the live Stripe Checkout Session before freeing the item.
-  //      Cancelling the hold without closing that session would leave the shopper's
-  //      payment link open and payable on an item that just went back on sale.
+  // Two backend paths, picked by whether `reservationId` is present:
+  //   - present: POST /reservations/:reservationId/release-invoice (releaseInvoice) --
+  //     the item(s) behind this invoice were actually held, so this is the path that
+  //     also reverts them to RESERVED.
+  //   - absent: POST /reservations/invoice/:invoiceId/release (releaseInvoiceById,
+  //     2026-08-23 fix). A POS-cart invoice built entirely from register-entered misc
+  //     items (posController.createCombinedInvoice with no holdIds) has no
+  //     ItemReservation at all, so release-invoice can never address it -- this
+  //     shopper-or-organizer-authorized endpoint cancels it directly by the invoice's
+  //     own id instead. Before this fix there was genuinely no way to cancel this case;
+  //     the button below silently refused with an apology toast.
   //
-  // Mirrors the organizer-side caller of the same endpoint
+  // Mirrors the organizer-side caller of the reservation-based endpoint
   // (pages/organizer/holds.tsx releaseInvoiceMutation) for status handling and copy.
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+
   const handleCancelRequest = async () => {
-    if (!reservationId) {
-      showToast(
-        `We can't cancel this payment request from here yet. Ask ${displayOrganizer} to cancel it.`,
-        'error'
-      );
-      return;
-    }
     setIsReleasing(true);
     try {
-      const res = await api.post(`/reservations/${reservationId}/release-invoice`);
+      const res = reservationId
+        ? await api.post(`/reservations/${reservationId}/release-invoice`)
+        : await api.post(`/reservations/invoice/${invoiceId}/release`);
       const count = res?.data?.itemsReleased ?? 1;
       showToast(
         count > 1
           ? `Payment request cancelled. ${count} items are back on hold for you.`
-          : 'Payment request cancelled. The item is back on hold for you.',
+          : 'Payment request cancelled.',
         'success'
       );
       onReleaseHold?.();
@@ -173,12 +171,28 @@ export default function ClaimCard({
           cancelHold's 409 gate no longer applies. */}
       <button
         type="button"
-        onClick={handleCancelRequest}
+        onClick={() => setShowCancelConfirm(true)}
         disabled={isReleasing}
         className="w-full mt-2 py-1 text-xs text-amber-700 dark:text-amber-400 hover:text-amber-900 dark:hover:text-amber-300 font-medium disabled:opacity-50 transition-colors"
       >
         {isReleasing ? 'Cancelling...' : 'Cancel payment request'}
       </button>
+
+      {showCancelConfirm && (
+        <ConfirmDialog
+          isOpen
+          title="Cancel this payment request?"
+          message={`Your payment link for ${displayTitle} will stop working. You can ask ${displayOrganizer} for a new one later.`}
+          confirmLabel="Cancel the request"
+          cancelLabel="Leave it active"
+          variant="danger"
+          onCancel={() => setShowCancelConfirm(false)}
+          onConfirm={() => {
+            setShowCancelConfirm(false);
+            handleCancelRequest();
+          }}
+        />
+      )}
     </div>
   );
 }
