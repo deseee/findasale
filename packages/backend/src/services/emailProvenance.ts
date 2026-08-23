@@ -417,6 +417,61 @@ export function isMalformedCandidate(email: string): boolean {
   if (local.startsWith('.') || local.endsWith('.')) return true;
   if (local.includes('..')) return true;
 
+  // 2026-08-22 fix (Blocked Queue P1 root cause): asset-filename false positives — e.g.
+  // "logo_185x@2x.webp" or a UUID-named image "…_120x@2x.jpeg" — match the loose email
+  // shape (word "@" word "." letters) and were confirmed live in production
+  // (Organizer.scrapedEmail, method 'website_scrape', written via scraper/enrichment.ts,
+  // as recently as the day before this fix). emailDiscoveryService.ts's private
+  // isJunkEmail() already rejected this shape; enrichment.ts never shared that rule since
+  // it only calls the extraction primitives below, not isJunkEmail. Bounded so it can't
+  // false-positive on a real word ending near (but not exactly) one of these extensions,
+  // e.g. a domain fragment that merely contains "css" or "ico" mid-word.
+  if (/\.(png|jpe?g|gif|webp|svg|bmp|tiff?|ico|js|css|woff2?)(?:[^a-zA-Z0-9]|$)/i.test(email)) return true;
+
+  return false;
+}
+
+/**
+ * Automated-tooling / bot-artifact addresses — syntactically valid emails that are never
+ * a real business contact. Two live-confirmed shapes (2026-08-22, Blocked Queue P1 root
+ * cause, added ~2026-05-04):
+ *   1. A hex-only local part >= 20 chars — Sentry DSN / event-id shaped
+ *      (e.g. "605a7baede844d278b89dc95ae0a9123@sentry-next.wixpress.com"). No real person
+ *      has a 20+ char pure-hex username.
+ *   2. A domain (or any subdomain of one) in TRACKING_ARTIFACT_DOMAINS — Wix's embedded
+ *      Sentry proxy and Sentry's own per-project ingest hosts (e.g.
+ *      "o4504758505897984.ingest.us.sentry.io") both surface as an "email" when a site's
+ *      client-side error-reporting SDK payload gets swept up by the bare-text extraction
+ *      regex. Domain-suffix matched so any Sentry project subdomain is caught via the bare
+ *      "sentry.io" suffix — not just literal hosts special-cased elsewhere.
+ *
+ * This check previously existed ONLY as a private rule inside emailDiscoveryService.ts's
+ * isJunkEmail() (the daily-cron discovery path). scraper/enrichment.ts's
+ * acceptDiscoveredEmail() (the fires-on-organizer-creation path) never had it — confirmed
+ * live in production: 26 Organizer.scrapedEmail rows and 2 DirectoryClaimEmail.emailAddress
+ * rows matching these two shapes, several written within the 48h before this fix (newest
+ * emailDiscoveredAt 2026-08-21, ~2 seconds after organizer creation — i.e. the synchronous
+ * enrichment path, not the batch cron). Promoted here, same pattern as the 2026-08-16
+ * "Blocked Queue Track A" consolidation, so both callers share one implementation.
+ */
+export const TRACKING_ARTIFACT_DOMAINS = new Set<string>([
+  'wixpress.com',
+  'sentry.io',
+]);
+
+export function isTrackingArtifactEmail(email: string): boolean {
+  const lower = email.toLowerCase().trim();
+  const atIdx = lower.indexOf('@');
+  if (atIdx < 0) return false;
+  const local = lower.substring(0, atIdx);
+  const domain = lower.substring(atIdx + 1);
+
+  if (/^[a-f0-9]{20,}$/.test(local)) return true;
+
+  const parts = domain.split('.');
+  for (let i = 0; i < parts.length - 1; i++) {
+    if (TRACKING_ARTIFACT_DOMAINS.has(parts.slice(i).join('.'))) return true;
+  }
   return false;
 }
 

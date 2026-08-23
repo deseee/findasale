@@ -133,7 +133,13 @@ const EditSalePage = () => {
   // so we can confirm the loaded sale actually belongs to them before rendering the form.
   const {
     data: organizerProfile,
-    isLoading: organizerProfileLoading,
+    // v5 note: `isLoading` (= isPending && isFetching) is FALSE while this query is
+    // merely pending-but-not-actively-fetching (e.g. `enabled: !!user` still false on a
+    // transient render, or the fetch is paused) -- data stays undefined but isLoading
+    // reads false, so a loading gate keyed on isLoading alone can fall through with no
+    // confirmed profile yet. Use isPending (true whenever status !== 'success'/'error')
+    // so "not yet resolved" is never mistaken for "resolved."
+    isPending: organizerProfilePending,
     isError: organizerProfileError,
     refetch: refetchOrganizerProfile,
   } = useQuery<{ id: string }>({
@@ -490,7 +496,7 @@ const EditSalePage = () => {
     }
   };
 
-  if (authLoading || isLoading || organizerProfileLoading) {
+  if (authLoading || isLoading || organizerProfilePending) {
     return (
       <div className="min-h-screen bg-white dark:bg-gray-900 py-8">
         <div className="max-w-2xl mx-auto px-4">
@@ -555,7 +561,13 @@ const EditSalePage = () => {
   // Ownership guard (BQ P1 fix, 2026-08-02; hardened 2026-08-15): don't render the edit form
   // for a sale that belongs to a different organizer. The profile-fetch-error case is now
   // handled above and blocks rendering, so this check no longer needs to no-op on it.
-  if (organizerProfile && sale.organizerId !== organizerProfile.id) {
+  // Fail CLOSED: require organizerProfile to be affirmatively present, not just "not
+  // mismatched." The prior `organizerProfile && ...` form treated an undefined profile
+  // (falsy) as "no mismatch found" and fell through to render -- the exact fail-open gap
+  // this session's QA flagged, reachable via the isPending/isLoading v5 race above even
+  // with the error case handled separately. Never render the edit form without a
+  // confirmed, matching organizerProfile.
+  if (!organizerProfile || sale.organizerId !== organizerProfile.id) {
     return (
       <div className="min-h-screen bg-white dark:bg-gray-900 py-8">
         <div className="max-w-2xl mx-auto px-4">

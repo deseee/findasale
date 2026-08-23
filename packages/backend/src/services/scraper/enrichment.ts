@@ -17,6 +17,7 @@ import {
   padHtmlForTextExtraction,
   sanitizeEmailCandidate,
   isMalformedCandidate,
+  isTrackingArtifactEmail,
   extractEmailCandidatesFromText,
   type DiscoverySource,
 } from '../emailProvenance';
@@ -328,6 +329,21 @@ function acceptDiscoveredEmail(
     console.warn(
       `[Enrichment] Rejected email '${normalized}' for ${organizerId} — domain '${eDomReg}' ` +
       `is a blocked mega-brand/social/aggregator host`
+    );
+    return null;
+  }
+
+  // 2026-08-22 fix (Blocked Queue P1, added ~2026-05-04, root-caused this session): this
+  // gate never rejected error-tracking/bot artifacts (a Sentry DSN or event-id embedded in
+  // a Wix site's client-side error SDK payload, swept up by the bare-text email regex as
+  // e.g. "605a7baede844d278b89dc95ae0a9123@sentry-next.wixpress.com"). The daily-cron
+  // discovery path (emailDiscoveryService.ts) already rejected these via a private
+  // isJunkEmail() rule; this at-organizer-creation enrichment path did not share it, and
+  // was confirmed live in production writing fresh junk rows into Organizer.scrapedEmail /
+  // contactEmail as recently as the day before this fix shipped.
+  if (isTrackingArtifactEmail(normalized)) {
+    console.warn(
+      `[Enrichment] Rejected email '${normalized}' for ${organizerId} — tracking/bot artifact`
     );
     return null;
   }

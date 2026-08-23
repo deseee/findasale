@@ -16,7 +16,8 @@ import { syncMarketplaceStock } from '../services/marketplaceStockSyncService'; 
 import { resolveOrganizerOrTeamMember } from '../utils/posAuth'; // S1183 Fix 1: TEAM_MEMBER fallback for non-venue POS
 import { assertCheckoutAllowed, CheckoutGuardError } from '../services/checkoutGuard'; // S1072 Finding #4 gap fix: POS payment-request self-dealing guard
 import { getAccountStatus } from '../services/stripeConnectService'; // Direct-charges migration (2026-08-08): live capability preflight
-import { snapshotForCommissionOnly } from '../utils/feeCalculator'; // Purchase fee snapshot (2026-08-17)
+import { snapshotForCommissionOnly, getPlatformFeeRate } from '../utils/feeCalculator'; // Purchase fee snapshot (2026-08-17); getPlatformFeeRate: split-payment commission fix (2026-08-22)
+import { resolveCashCommissionRate, cashCommissionOn, accrueCashFeeBalance } from '../services/cashFeeService'; // Split-payment cash-half commission accrual (2026-08-22) -- same mechanism terminalController/reservationController use
 
 const stripe = () => getStripe();
 
@@ -192,8 +193,17 @@ export const createPaymentRequest = async (req: AuthRequest, res: Response) => {
       throw guardError;
     }
 
-    // Platform fee: 10% of the card portion only (for split payments, cash isn't processed by Stripe)
-    const platformFeeCents = Math.round(splitCardAmountCents! * 0.1);
+    // Platform fee on the CARD portion only, resolved through the organizer's own tier rate --
+    // NOT a hardcoded 10% (P2 fix, 2026-08-22). Mirrors terminalController.createTerminalPaymentIntent's
+    // card-fee resolution exactly (baseFeeRate + referral-discount override), which itself got the
+    // fee-precedence fix (tier rate always wins over a wildcard FeeStructure row) the same day. The
+    // CASH portion of a split tender is never touched by Stripe, so it cannot be folded into this
+    // application_fee_amount -- its commission is accrued separately via cashFeeService.ts at
+    // confirmPaymentRequest (below), once the payment has actually succeeded.
+    const hasReferralDiscount =
+      organizer.referralDiscountExpiry != null && organizer.referralDiscountExpiry > new Date();
+    const cardFeeRate = hasReferralDiscount ? 0 : getPlatformFeeRate(organizer.subscriptionTier as any);
+    const platformFeeCents = Math.round(splitCardAmountCents! * cardFeeRate);
     const expiresAt = new Date(Date.now() + expiresInSeconds * 1000);
 
     // P2 idempotency fix (fix-and-reverify batch, same bug class fixed at P1 elsewhere this
@@ -935,7 +945,9 @@ export const confirmPaymentRequest = async (req: AuthRequest, res: Response) => 
     // Fetch Organizer profile to get stripeConnectId (stripeConnectId lives on Organizer, not User)
     const organizerProfile = await prisma.organizer.findUnique({
       where: { userId: posRequest.organizerUserId },
-      select: { stripeConnectId: true },
+      // id/subscriptionTier/referralDiscountExpiry added (2026-08-22) so the split-payment
+      // cash-half commission accrual below can resolve the rate without a second round-trip.
+      select: { id: true, stripeConnectId: true, subscriptionTier: true, referralDiscountExpiry: true },
     });
     if (!organizerProfile?.stripeConnectId) {
       return res.status(400).json({ message: 'Organizer Stripe account not configured' });
@@ -981,6 +993,39 @@ export const confirmPaymentRequest = async (req: AuthRequest, res: Response) => 
         paidAt: new Date(),
       },
     });
+
+    // Cash-half commission accrual (P2 fix, 2026-08-22): the cash leg of a split tender is
+    // never touched by Stripe -- nothing charged it any commission before this fix, at any
+    // rate. Resolved through the SAME shared, tier-aware resolver cashFeeService.ts's other
+    // callers use (terminalController's cash path, reservationController's RECORD mode),
+    // NOT the removed hardcoded 0.10. Resolved now (at confirm/settlement time), matching
+    // every other cash-commission call site -- not at request-creation time, and not from
+    // the card-portion rate computed above (a referral discount or tier change between
+    // request and confirm should apply the same way it would to any other cash sale).
+    if (posRequest.isSplitPayment && posRequest.cashAmountCents) {
+      try {
+        const cashFeeRate = await resolveCashCommissionRate({
+          subscriptionTier: organizerProfile.subscriptionTier,
+          referralDiscountExpiry: organizerProfile.referralDiscountExpiry,
+        });
+        const cashCommission = cashCommissionOn(posRequest.cashAmountCents / 100, cashFeeRate);
+        await accrueCashFeeBalance({ organizerId: organizerProfile.id, commission: cashCommission });
+      } catch (err: any) {
+        console.error('[pos-payment] Failed to accrue cash-half commission for split payment:', err);
+        try {
+          Sentry.captureException(err instanceof Error ? err : new Error(String(err)), {
+            tags: { area: 'pos-payment-request-confirm-split-cash-commission' },
+            extra: {
+              requestId,
+              organizerUserId: posRequest.organizerUserId,
+              cashAmountCents: posRequest.cashAmountCents,
+            },
+          });
+        } catch {
+          // Sentry may not be initialized -- silently continue
+        }
+      }
+    }
 
     // Create Purchase records for each item
     const items = await prisma.item.findMany({
