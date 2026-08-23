@@ -1005,6 +1005,128 @@
     showReviewOverlay(item, index, total, fillResult.photosOk, fillResult.warnings);
   }
 
+  // ================================================================================================
+  // CROSS-PLATFORM AUTO-REMOVE-ON-SOLD-ELSEWHERE (S-EXT-CROSS-PLATFORM-AUTOREMOVE, 2026-08-22)
+  // CODE-ONLY, UNTESTED -- no Vinted seller account with a live listing existed to verify this
+  // session. Every selector below is a best-effort guess (ADR-084 rules apply): no obfuscated
+  // CSS classes, label/text/aria-label/role/structural anchors only, hard-stop on any
+  // CAPTCHA/verification interstitial, every lookup null-checked.
+  //
+  // IMPORTANT -- this is NOT the relist/bump/repost automation the file-header boundary comment
+  // forbids. It does the opposite: when an item has already sold on a DIFFERENT marketplace, this
+  // deletes the organizer's own still-live Vinted listing for that exact item -- a one-time
+  // removal of existing content, not a resubmission, not a new listing, not a bump/refresh, and it
+  // creates zero new images for Vinted's perceptual-hash detection to ever see. It is exactly what
+  // a real seller does by hand the moment something sells elsewhere. If this reasoning is ever
+  // revisited, re-read the file-header boundary comment above first -- that boundary is about
+  // creating/repeating listings, not deleting a genuinely-sold one.
+  function vintRemNorm(s) { return String(s || '').toLowerCase().trim().replace(/\s+/g, ' '); }
+
+  function vintRemSyntheticClick(target) {
+    if (!target) return false;
+    const opts = { bubbles: true, cancelable: true, view: window, clientX: 5, clientY: 5 };
+    target.dispatchEvent(new PointerEvent('pointerdown', opts));
+    target.dispatchEvent(new MouseEvent('mousedown', opts));
+    target.dispatchEvent(new PointerEvent('pointerup', opts));
+    target.dispatchEvent(new MouseEvent('mouseup', opts));
+    target.dispatchEvent(new MouseEvent('click', opts));
+    return true;
+  }
+
+  function vintRemFindButtonByText(text) {
+    const wanted = vintRemNorm(text);
+    const candidates = Array.from(document.querySelectorAll('button, a[role="button"], [role="menuitem"], a'));
+    return candidates.find((el) => vintRemNorm(el.textContent).includes(wanted)) || null;
+  }
+
+  // UNVERIFIED -- Vinted's own listing pages are typically /items/<id>-<slug>; closet/wardrobe
+  // pages list a seller's own active items as links. No live DOM confirmed this session.
+  function findVintedListingLinkByTitle(title) {
+    const wanted = vintRemNorm(title);
+    const links = Array.from(document.querySelectorAll('a[href*="/items/"]'));
+    const scored = links
+      .map((a) => ({ a, t: vintRemNorm(a.textContent || a.getAttribute('title') || '') }))
+      .filter((x) => x.t.length > 0);
+    const exact = scored.filter((x) => x.t === wanted);
+    if (exact.length === 1) return exact[0].a;
+    const contains = scored.filter((x) => x.t.includes(wanted) || wanted.includes(x.t));
+    if (contains.length === 1) return contains[0].a;
+    return null; // zero or ambiguous matches -- never guess
+  }
+
+  // UNVERIFIED -- Vinted's item detail page for the seller's own listing typically exposes a
+  // kebab/"..." menu (aria-label containing "menu" or "options") with a "Delete" action inside.
+  async function deleteVintedListingOnDetailPage() {
+    if (looksLikeInterstitial()) return 'interstitial';
+    const kebab = document.querySelector('button[aria-label*="menu" i], button[aria-label*="options" i], [data-testid*="actions" i] button');
+    if (!kebab) return 'no_menu_button';
+    vintRemSyntheticClick(kebab);
+    await sleep(400);
+    const deleteBtn = vintRemFindButtonByText('Delete');
+    if (!deleteBtn) return 'no_delete_action';
+    vintRemSyntheticClick(deleteBtn);
+    await sleep(400);
+    // Vinted may show a confirmation step -- look for a second explicit confirm control.
+    const confirmBtn = vintRemFindButtonByText('Delete') || vintRemFindButtonByText('Yes') || vintRemFindButtonByText('Confirm');
+    if (confirmBtn) { vintRemSyntheticClick(confirmBtn); await sleep(400); }
+    return 'attempted';
+  }
+
+  async function reportVintedRemoved(item) {
+    try { await chrome.runtime.sendMessage({ type: 'markItemRemovedByRemoval', itemId: item.id, platform: 'VINTED' }); } catch (e) {}
+    try { await chrome.runtime.sendMessage({ type: 'advanceRemovalQueueFor', platform: 'VINTED' }); } catch (e) {}
+  }
+
+  async function runVintedRemovalQueue(item, index, total) {
+    overlay('<b>FindA.Sale</b><div style="margin-top:6px">This item sold elsewhere -- removing the matching Vinted listing for <b>' + escapeHtml(item.title) + '</b>...</div>');
+    const onDetailAlready = /\/items\//.test(location.pathname) && vintRemNorm(document.title).includes(vintRemNorm(item.title));
+    let result;
+    if (onDetailAlready) {
+      result = await deleteVintedListingOnDetailPage();
+    } else {
+      const link = findVintedListingLinkByTitle(item.title);
+      if (!link) {
+        overlayWarn('Could not find a Vinted listing matching "' + escapeHtml(item.title) + '" on this page (UNVERIFIED selectors) -- please delete it yourself, then use "Mark removed" if the extension offers it.' + button('fas-vin-close', 'Close', false));
+        closeBtnHandler();
+        try { await chrome.runtime.sendMessage({ type: 'advanceRemovalQueueFor', platform: 'VINTED' }); } catch (e) {}
+        return;
+      }
+      link.click();
+      overlay('<b>FindA.Sale</b><div style="margin-top:6px">Opening the Vinted listing for <b>' + escapeHtml(item.title) + '</b> to remove it...</div>');
+      return; // the resulting page load re-invokes maybeRunVintedRemoval() against the same queued item
+    }
+    if (result === 'attempted') {
+      await reportVintedRemoved(item);
+      const more = (index + 1) < total;
+      overlay('<b>FindA.Sale</b><div style="margin-top:6px">Removed the Vinted listing for <b>' + escapeHtml(item.title) + '</b> (please double-check it\'s gone -- this was not live-verified).</div>' +
+        (more ? button('fas-vin-next', 'Next item &#9654;', true) : '') +
+        button('fas-vin-close', 'Close', false));
+      const next = document.getElementById('fas-vin-next');
+      if (next) next.onclick = () => location.reload();
+      closeBtnHandler();
+    } else if (result === 'interstitial') {
+      overlayWarn('Vinted is showing a verification/security screen -- please complete it yourself, then remove this listing manually.' + button('fas-vin-close', 'Close', false));
+      closeBtnHandler();
+    } else {
+      overlayWarn('Could not find the delete action on this Vinted listing page (UNVERIFIED selectors -- reason: ' + result + ') -- please delete it yourself.' + button('fas-vin-close', 'Close', false));
+      closeBtnHandler();
+      try { await chrome.runtime.sendMessage({ type: 'advanceRemovalQueueFor', platform: 'VINTED' }); } catch (e) {}
+    }
+  }
+
+  async function maybeRunVintedRemoval() {
+    let queued;
+    try { queued = await chrome.runtime.sendMessage({ type: 'getRemovalQueueItemFor', platform: 'VINTED' }); } catch (e) { return false; }
+    if (!queued || !queued.ok || !queued.item) return false;
+    try {
+      await runVintedRemovalQueue(queued.item, queued.index, queued.total);
+    } catch (e) {
+      overlayWarn('Something went wrong removing this Vinted listing (' + escapeHtml((e && e.message) || 'unknown error') + '). Please remove it yourself.' + button('fas-vin-close', 'Close', false));
+      closeBtnHandler();
+    }
+    return true;
+  }
+
   async function start() {
     await sleep(600);
     let queued;
@@ -1018,5 +1140,8 @@
     }
   }
 
-  start();
+(async () => {
+    const ranRemoval = await maybeRunVintedRemoval();
+    if (!ranRemoval) start();
+  })();
 })();

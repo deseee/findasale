@@ -1325,5 +1325,87 @@
     }
   }
 
-  start();
+  // ---- Cross-platform auto-remove-on-sale-elsewhere (S-EXT-CROSS-PLATFORM-AUTOREMOVE, 2026-08-22)
+  // Same pattern as fas-poshmark.js's own removal block. Patrick's explicit directive: "it must
+  // be built for all of them, that's part of the extension." CODE-ONLY / UNVERIFIED -- no sold
+  // Grailed item exists yet to confirm these selectors against.
+
+  function grRemNorm(s) { return String(s || '').toLowerCase().replace(/\s+/g, ' ').trim(); }
+
+  function grRemFindButtonByText(text) {
+    const want = grRemNorm(text);
+    return qa('button, [role="button"], a').find((el) => grRemNorm(el.textContent) === want && el.offsetParent !== null) || null;
+  }
+
+  // UNVERIFIED -- Grailed's "Selling" dashboard lists active listings with links to each
+  // listing's own detail/edit page; exact tile structure not yet confirmed live.
+  function findGrailedListingLinkByTitle(title) {
+    const want = grRemNorm(title);
+    if (!want) return null;
+    const links = qa('a[href*="/listings/"]');
+    const matches = links.filter((a) => grRemNorm(a.textContent).indexOf(want) !== -1);
+    return matches.length === 1 ? matches[0] : null;
+  }
+
+  function deleteGrailedListingOnDetailPage() {
+    const menuBtn = qa('button, [role="button"]').find((el) => {
+      const label = (el.getAttribute('aria-label') || '').toLowerCase();
+      return label.indexOf('more') !== -1 || label.indexOf('option') !== -1 || el.textContent.trim() === '...';
+    });
+    if (menuBtn) syntheticClick(menuBtn);
+    const deleteBtn = grRemFindButtonByText('Delete listing') || grRemFindButtonByText('Delete') || grRemFindButtonByText('Remove listing');
+    if (!deleteBtn) return false;
+    syntheticClick(deleteBtn);
+    const confirmBtn = grRemFindButtonByText('Yes') || grRemFindButtonByText('Confirm') || grRemFindButtonByText('Delete');
+    if (confirmBtn) syntheticClick(confirmBtn);
+    return true;
+  }
+
+  async function reportGrailedRemoved(item) {
+    try { await chrome.runtime.sendMessage({ type: 'markItemRemovedByRemoval', itemId: item.id, platform: 'GRAILED' }); } catch (e) {}
+  }
+
+  async function runGrailedRemovalQueue(item, index, total) {
+    overlay('<b>FindA.Sale</b> \u2014 removing sold item ' + (index + 1) + ' of ' + total + ': <b>' + escapeHtml(item.title) + '</b>\u2026');
+    await humanPause(400, 800);
+    const pageTitleEl = document.querySelector('h1, [class*="title" i]');
+    const onListingDetailPage = pageTitleEl && grRemNorm(pageTitleEl.textContent).indexOf(grRemNorm(item.title)) !== -1;
+    if (onListingDetailPage) {
+      const deleted = deleteGrailedListingOnDetailPage();
+      await sleep(600);
+      if (deleted) {
+        await reportGrailedRemoved(item);
+        overlay('<b>FindA.Sale</b><div style="margin-top:6px">Removed <b>' + escapeHtml(item.title) + '</b> from Grailed.</div>');
+      } else {
+        overlayWarn('Found the listing but couldn\'t confirm the delete action (UNVERIFIED selector) -- please remove it yourself.' + button('fas-gr-close', 'Close', false));
+      }
+      let next = null;
+      try { next = await chrome.runtime.sendMessage({ type: 'advanceRemovalQueueFor', platform: 'GRAILED' }); } catch (e) {}
+      if (next && next.ok && next.item) { await sleep(1200); location.href = CFG.GRAILED_MANAGE_URL; }
+      else { try { await chrome.runtime.sendMessage({ type: 'removalQueueDoneFor', platform: 'GRAILED' }); } catch (e) {} }
+      return;
+    }
+    const link = findGrailedListingLinkByTitle(item.title);
+    if (!link) {
+      overlayWarn('No confident match for "' + escapeHtml(item.title) + '" in your Grailed listings (zero or more than one found) -- skipped, not guessed.' + button('fas-gr-close', 'Close', false));
+      let next = null;
+      try { next = await chrome.runtime.sendMessage({ type: 'advanceRemovalQueueFor', platform: 'GRAILED' }); } catch (e) {}
+      if (!(next && next.ok && next.item)) { try { await chrome.runtime.sendMessage({ type: 'removalQueueDoneFor', platform: 'GRAILED' }); } catch (e) {} }
+      return;
+    }
+    location.href = link.href;
+  }
+
+  async function maybeRunGrailedRemoval() {
+    let queued;
+    try { queued = await chrome.runtime.sendMessage({ type: 'getRemovalQueueItemFor', platform: 'GRAILED' }); } catch (e) { return false; }
+    if (!queued || !queued.ok || !queued.item) return false;
+    await runGrailedRemovalQueue(queued.item, queued.index, queued.total);
+    return true;
+  }
+
+  (async () => {
+    const ranRemoval = await maybeRunGrailedRemoval();
+    if (!ranRemoval) start();
+  })();
 })();

@@ -320,6 +320,115 @@ async function notifyManualReviewIfNew(needsManualReview) {
   });
 }
 
+// ---- Cross-platform auto-remove-on-sale-elsewhere (S-EXT-CROSS-PLATFORM-AUTOREMOVE, 2026-08-22) ----
+// Patrick, explicit directive: "it must be built for all of them, that's part of the extension."
+// Extends the existing Facebook-only sold-elsewhere auto-removal (checkPendingRemovals/
+// fas-remove.js) to Poshmark, Mercari, Vinted, Grailed, and Gumtree Australia. Facebook's own
+// code path above is completely unchanged -- this is a parallel, additive mechanism.
+//
+// CRAIGSLIST SCOPE NOTE (why it is not included here -- flagged, not silently dropped): Craigslist
+// has no persistent logged-in "my postings" page the way every other platform does -- postings
+// are managed via a unique link emailed at post time. fas-remove.js's own renewal-scope comment
+// already flagged this exact gap for renewal ("the account page's manage-postings links resisted
+// a plain DOM query when checked live"). Automating removal would need that manage-link captured
+// and stored per-item at POST time (fas-craigslist.js does not currently do this) -- a real
+// data-model addition, not just a new DOM script. Needs a Patrick/Architect decision on whether to
+// add that field before Craigslist can be included.
+//
+// CODE-ONLY / UNVERIFIED (consistent with how every other new-platform integration in this
+// extension started, e.g. fas-poshmark.js's original file header): none of the 5 platforms below
+// have had this removal flow confirmed against a real sold item yet (no sold inventory exists on
+// any of them to test against as of this dispatch). Each platform's own removal content-script
+// function is built defensively (single-confident-title-match only, never guesses which listing
+// to remove, skips and reports rather than acting on ambiguity) -- but the actual DOM selectors
+// for "find this listing" and "remove/delete it" on each platform's real management page are
+// UNVERIFIED until tested live against a genuine sold item.
+const FAS_PLATFORM_LABEL = {
+  POSHMARK: 'Poshmark', MERCARI: 'Mercari', VINTED: 'Vinted', GRAILED: 'Grailed', GUMTREE_AU: 'Gumtree Australia',
+};
+const FAS_CROSS_PLATFORM_REMOVAL_CONFIG = {
+  POSHMARK: { manageUrlKey: 'POSH_MANAGE_URL', queueKey: 'fasPoshmarkRemovalQueue', indexKey: 'fasPoshmarkRemovalIndex', tabIdKey: 'fasPoshmarkRemovalTabId', prevTabIdKey: 'fasPoshmarkRemovalPrevTabId', startedAtKey: 'fasPoshmarkRemovalStartedAt' },
+  MERCARI: { manageUrlKey: 'MERC_MANAGE_URL', queueKey: 'fasMercariRemovalQueue', indexKey: 'fasMercariRemovalIndex', tabIdKey: 'fasMercariRemovalTabId', prevTabIdKey: 'fasMercariRemovalPrevTabId', startedAtKey: 'fasMercariRemovalStartedAt' },
+  VINTED: { manageUrlKey: 'VINTED_MANAGE_URL', queueKey: 'fasVintedRemovalQueue', indexKey: 'fasVintedRemovalIndex', tabIdKey: 'fasVintedRemovalTabId', prevTabIdKey: 'fasVintedRemovalPrevTabId', startedAtKey: 'fasVintedRemovalStartedAt' },
+  GRAILED: { manageUrlKey: 'GRAILED_MANAGE_URL', queueKey: 'fasGrailedRemovalQueue', indexKey: 'fasGrailedRemovalIndex', tabIdKey: 'fasGrailedRemovalTabId', prevTabIdKey: 'fasGrailedRemovalPrevTabId', startedAtKey: 'fasGrailedRemovalStartedAt' },
+  GUMTREE_AU: { manageUrlKey: 'GUMTREE_AU_MANAGE_URL', queueKey: 'fasGumtreeAuRemovalQueue', indexKey: 'fasGumtreeAuRemovalIndex', tabIdKey: 'fasGumtreeAuRemovalTabId', prevTabIdKey: 'fasGumtreeAuRemovalPrevTabId', startedAtKey: 'fasGumtreeAuRemovalStartedAt' },
+};
+
+// Mirrors silentRemovalInProgress/openSilentRemovalTab/finishSilentRemoval above exactly (same
+// proven tab-lifecycle design: foregrounded tab, remember+restore the organizer's previous tab,
+// self-heal if the tab was closed or the run went stale) -- parameterized by platform instead of
+// hardcoded to Facebook.
+async function silentCrossPlatformRemovalInProgress(platform) {
+  const cfg = FAS_CROSS_PLATFORM_REMOVAL_CONFIG[platform];
+  const st = await chrome.storage.local.get([cfg.tabIdKey, cfg.startedAtKey]);
+  const tabId = st[cfg.tabIdKey] || null;
+  if (!tabId) return false;
+  if (Date.now() - (st[cfg.startedAtKey] || 0) > FAS_REMOVAL_MAX_MS) {
+    await chrome.storage.local.remove([cfg.tabIdKey, cfg.prevTabIdKey, cfg.startedAtKey]);
+    return false;
+  }
+  const tab = await tabsGet(tabId);
+  if (!tab) { await chrome.storage.local.remove([cfg.tabIdKey, cfg.prevTabIdKey, cfg.startedAtKey]); return false; }
+  return true;
+}
+
+async function openSilentCrossPlatformRemovalTab(platform) {
+  const cfg = FAS_CROSS_PLATFORM_REMOVAL_CONFIG[platform];
+  const activeTabs = await chrome.tabs.query({ active: true, currentWindow: true });
+  const prevTabId = activeTabs && activeTabs[0] ? activeTabs[0].id : null;
+  const tab = await chrome.tabs.create({ url: CFG[cfg.manageUrlKey], active: true });
+  await chrome.storage.local.set({ [cfg.tabIdKey]: tab.id, [cfg.prevTabIdKey]: prevTabId, [cfg.startedAtKey]: Date.now() });
+}
+
+async function finishSilentCrossPlatformRemoval(platform) {
+  const cfg = FAS_CROSS_PLATFORM_REMOVAL_CONFIG[platform];
+  const st = await chrome.storage.local.get([cfg.tabIdKey, cfg.prevTabIdKey]);
+  await chrome.storage.local.remove([cfg.tabIdKey, cfg.prevTabIdKey, cfg.startedAtKey]);
+  if (st[cfg.prevTabIdKey] != null) {
+    await new Promise((resolve) => chrome.tabs.update(st[cfg.prevTabIdKey], { active: true }, () => { void chrome.runtime.lastError; resolve(); }));
+  }
+  if (st[cfg.tabIdKey] != null) {
+    await new Promise((resolve) => chrome.tabs.remove(st[cfg.tabIdKey], () => { void chrome.runtime.lastError; resolve(); }));
+  }
+}
+
+// Called from checkPendingRemovals once per poll, right after the existing Facebook-specific
+// logic (unchanged) has run. `pendingItems` is the SAME array already fetched from
+// /extension/pending-removals -- now platform-aware (each item carries a `platforms` array, see
+// extensionController.ts getPendingRemovals' same-session fix) -- so no extra API call is needed
+// here to route each item to the right platform(s).
+async function checkCrossPlatformRemovals(pendingItems) {
+  const { fasAutoRemoveMode = 'notify' } = await chrome.storage.local.get(['fasAutoRemoveMode']);
+  if (fasAutoRemoveMode === 'off') return 'off';
+  const outcomes = [];
+  for (const platform of Object.keys(FAS_CROSS_PLATFORM_REMOVAL_CONFIG)) {
+    const cfg = FAS_CROSS_PLATFORM_REMOVAL_CONFIG[platform];
+    const itemsForPlatform = pendingItems.filter((i) => Array.isArray(i.platforms) && i.platforms.includes(platform));
+    if (!itemsForPlatform.length) continue;
+    if (fasAutoRemoveMode === 'silent' && await silentCrossPlatformRemovalInProgress(platform)) {
+      outcomes.push(platform + ':skipped_in_progress');
+      continue;
+    }
+    await chrome.storage.local.set({ [cfg.queueKey]: itemsForPlatform, [cfg.indexKey]: 0 });
+    if (fasAutoRemoveMode === 'silent') {
+      await openSilentCrossPlatformRemovalTab(platform);
+      outcomes.push(platform + ':silent_removal_started:' + itemsForPlatform.length);
+    } else {
+      chrome.notifications.create('fasPendingRemovals_' + platform, {
+        type: 'basic',
+        iconUrl: 'icon128.png',
+        title: 'FindA.Sale',
+        message: itemsForPlatform.length === 1
+          ? '1 item sold elsewhere \u2014 remove it from ' + FAS_PLATFORM_LABEL[platform] + '?'
+          : itemsForPlatform.length + ' items sold elsewhere are still listed on ' + FAS_PLATFORM_LABEL[platform] + ' \u2014 remove them?',
+        priority: 1
+      });
+      outcomes.push(platform + ':notified:' + itemsForPlatform.length);
+    }
+  }
+  return outcomes.join(',') || 'no_items';
+}
+
 // Builds the 'fasPendingRemovals' notification body for checkPendingRemovals below. Split out
 // because the message now has three distinct cases (removals only, sold-checks only, or both at
 // once) instead of the original single case -- see the 2026-08-05 sold-detection note there.
@@ -364,6 +473,15 @@ async function checkPendingRemovals() {
   if (!resp.ok) return 'error:' + (resp.error || resp.status);
   const items = (resp.data && resp.data.items) || [];
   await notifyManualReviewIfNew(resp.data && resp.data.needsManualReview);
+
+  // S-EXT-CROSS-PLATFORM-AUTOREMOVE: runs independently of everything else in this function --
+  // must NOT be gated behind Facebook's own early-return conditions below (e.g. `!items.length &&
+  // !soldCheckCount` would otherwise skip this entirely on a poll where only a non-Facebook
+  // platform has something pending). `items` is the exact same platform-aware list just fetched
+  // above (each item now carries a `platforms` array -- see extensionController.ts
+  // getPendingRemovals' same-session fix); checkCrossPlatformRemovals filters it per platform
+  // itself. Wrapped so a failure here can never take down the proven, working Facebook flow below.
+  try { await checkCrossPlatformRemovals(items); } catch (e) { console.log('[FAS cross-platform removal check FAILED]', e && e.message); }
 
   // Sold-checks failure is non-fatal to the removal flow above -- a broken/unreachable
   // pending-sold-checks call must never block a genuine pending removal from being processed.
@@ -769,6 +887,17 @@ chrome.notifications.onClicked.addListener((notifId) => {
     chrome.tabs.create({ url: FAS_YOU_SELLING_SOLD_FILTER_URL, active: true });
     return;
   }
+  // S-EXT-CROSS-PLATFORM-AUTOREMOVE: 'fasPendingRemovals_POSHMARK' etc. -- see
+  // checkCrossPlatformRemovals above.
+  if (notifId.indexOf('fasPendingRemovals_') === 0) {
+    const platform = notifId.slice('fasPendingRemovals_'.length);
+    const cfg = FAS_CROSS_PLATFORM_REMOVAL_CONFIG[platform];
+    if (cfg) {
+      chrome.notifications.clear(notifId);
+      chrome.tabs.create({ url: CFG[cfg.manageUrlKey], active: true });
+    }
+    return;
+  }
   if (notifId.indexOf('fasSavedSearch_') === 0) {
     chrome.notifications.clear(notifId);
     const key = 'fasSavedSearchUrl_' + notifId.slice('fasSavedSearch_'.length);
@@ -1092,8 +1221,42 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         await chrome.storage.local.set({ fasRenewalIndex: next });
         const item = (st.fasRenewalQueue || [])[next] || null;
         sendResponse({ ok: true, item, index: next, total: (st.fasRenewalQueue || []).length });
+      } else if (msg.type === 'getRemovalQueueItemFor') {
+        // S-EXT-CROSS-PLATFORM-AUTOREMOVE: generic version of getRemovalQueueItem, parameterized
+        // by msg.platform instead of hardcoded to Facebook's fasRemovalQueue/fasRemovalIndex.
+        const cfg = FAS_CROSS_PLATFORM_REMOVAL_CONFIG[msg.platform];
+        if (!cfg) { sendResponse({ ok: false, error: 'unknown_platform' }); }
+        else {
+          const st = await chrome.storage.local.get([cfg.queueKey, cfg.indexKey]);
+          const queue = st[cfg.queueKey] || [];
+          const index = st[cfg.indexKey] || 0;
+          sendResponse({ ok: true, item: queue[index] || null, index, total: queue.length });
+        }
+      } else if (msg.type === 'advanceRemovalQueueFor') {
+        const cfg = FAS_CROSS_PLATFORM_REMOVAL_CONFIG[msg.platform];
+        if (!cfg) { sendResponse({ ok: false, error: 'unknown_platform' }); }
+        else {
+          const st = await chrome.storage.local.get([cfg.queueKey, cfg.indexKey]);
+          const next = (st[cfg.indexKey] || 0) + 1;
+          await chrome.storage.local.set({ [cfg.indexKey]: next });
+          const queue = st[cfg.queueKey] || [];
+          sendResponse({ ok: true, item: queue[next] || null, index: next, total: queue.length });
+        }
+      } else if (msg.type === 'removalQueueDoneFor') {
+        // Mirrors the Facebook-only 'removalQueueDone' handler below, parameterized by platform --
+        // restores the organizer's previous tab and closes the auto-opened removal tab (silent
+        // mode only; no-ops harmlessly in notify mode, same as the Facebook version, since notify
+        // mode never sets a tracked tab id).
+        if (FAS_CROSS_PLATFORM_REMOVAL_CONFIG[msg.platform]) await finishSilentCrossPlatformRemoval(msg.platform);
+        sendResponse({ ok: true });
       } else if (msg.type === 'markItemRemovedByRemoval') {
-        sendResponse(await apiFetch('/extension/items/' + encodeURIComponent(msg.itemId) + '/removed', { method: 'POST', body: {} }));
+        // BUG FIX 2026-08-22 (S-EXT-CROSS-PLATFORM-AUTOREMOVE): now threads msg.platform through
+        // (default 'FACEBOOK' preserves fas-remove.js's own exact existing behavior, which never
+        // set one before this fix) -- see extensionController.ts markItemRemoved's own comment for
+        // why an unset platform silently corrupted per-platform LISTED tracking for any non-
+        // Facebook caller.
+        sendResponse(await apiFetch('/extension/items/' + encodeURIComponent(msg.itemId) + '/removed',
+          { method: 'POST', body: { platform: msg.platform || 'FACEBOOK' } }));
       } else if (msg.type === 'markItemRemovalSkipped') {
         // (2026-07-26 fix) Report a genuine removal skip (zero/ambiguous title match) so the
         // backend can eventually stop re-serving an item that keeps failing the same way --

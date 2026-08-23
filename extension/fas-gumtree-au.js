@@ -170,6 +170,45 @@
     doAssistStep(item, index, total);
   }
 
+  // ================================================================================================
+  // CROSS-PLATFORM AUTO-REMOVE-ON-SOLD-ELSEWHERE (S-EXT-CROSS-PLATFORM-AUTOREMOVE, 2026-08-22)
+  // Gumtree AU's logged-in DOM has NEVER been verified (see the file header) -- there is no safe
+  // way to guess a delete/kebab-menu selector on a page structure nobody has confirmed. So unlike
+  // Poshmark/Mercari/Grailed/Vinted (which attempt a real automated delete), this stays consistent
+  // with this file's own existing manual-assist design for POSTING: show the organizer which item
+  // to remove, let them delete it on Gumtree themselves, and record their confirmation. This is
+  // the same "human owns the action the DOM can't safely automate, extension just tracks it"
+  // pattern already used above for posting -- not a new risk, not a guess.
+  function doRemovalAssistStep(item, index, total) {
+    const more = (index + 1) < total;
+    overlay('<b>FindA.Sale</b>' +
+      '<div style="margin-top:6px;font-size:13px;color:#cfe3d6">This item sold elsewhere -- <b>' + escapeHtml(item.title) + '</b> is still listed on Gumtree Australia. Please delete that listing yourself (My Ads &rarr; find it &rarr; Delete), then confirm below.</div>' +
+      (more ? button('fas-gt-removed-next', 'I removed it — next item &#9654;', true) : button('fas-gt-removed-next', 'I removed it — done', true)) +
+      button('fas-gt-close', 'Close', false) +
+      '<div style="margin-top:8px;font-size:11px;color:#9fb6a8">Item ' + (index + 1) + ' of ' + total + '</div>');
+
+    const next = document.getElementById('fas-gt-removed-next');
+    if (next) next.onclick = async () => {
+      try { await chrome.runtime.sendMessage({ type: 'markItemRemovedByRemoval', itemId: item.id, platform: 'GUMTREE_AU' }); } catch (e) {}
+      try { await chrome.runtime.sendMessage({ type: 'advanceRemovalQueueFor', platform: 'GUMTREE_AU' }); } catch (e) {}
+      if (more) { location.reload(); } else { bar && bar.remove(); }
+    };
+    closeBtnHandler();
+  }
+
+  async function maybeRunGumtreeAuRemoval() {
+    let queued;
+    try { queued = await chrome.runtime.sendMessage({ type: 'getRemovalQueueItemFor', platform: 'GUMTREE_AU' }); } catch (e) { return false; }
+    if (!queued || !queued.ok || !queued.item) return false;
+    try {
+      doRemovalAssistStep(queued.item, queued.index, queued.total);
+    } catch (e) {
+      overlay('<b>FindA.Sale</b><div style="margin-top:6px;color:#ffcf7a">Something went wrong showing the removal step. Please delete the listing yourself.</div>' + button('fas-gt-close', 'Close', false));
+      closeBtnHandler();
+    }
+    return true;
+  }
+
   async function start() {
     await sleep(500); // let the page settle before reading the DOM
     reportLoginState(); // fire-and-forget, best-effort, mirrors fas-craigslist.js's reportLoginState
@@ -179,7 +218,10 @@
     run(queued.item, queued.index, queued.total);
   }
 
-  start();
+  (async () => {
+    const ranRemoval = await maybeRunGumtreeAuRemoval();
+    if (!ranRemoval) start();
+  })();
 })();
 
 /* ---- What still needs a real logged-in Gumtree AU seller account to verify (ADR-102 §9/§4) ----

@@ -571,14 +571,33 @@ export const markItemListed = async (req: AuthRequest, res: Response): Promise<v
 };
 
 // POST /api/extension/items/:id/removed — record that the organizer removed this item from Marketplace.
+// BUG FIX 2026-08-22 (S-EXT-CROSS-PLATFORM-AUTOREMOVE, found while building cross-platform
+// auto-remove-on-sale-elsewhere per Patrick's explicit directive -- "it must be built for all of
+// them, that's part of the extension"): this used to create the REMOVE job with NO platform at
+// all, which the schema defaults to FACEBOOK (MarketplaceListingJob.platform @default(FACEBOOK)).
+// That was harmless while Facebook was the only caller (fas-remove.js), but the moment ANY other
+// platform's removal flow calls this same endpoint, a Poshmark/Mercari/etc. removal would get
+// silently recorded as a FACEBOOK REMOVE row instead -- getExtensionItems' per-platform
+// postedByItemPlatform/removedByItemPlatform sets (keyed by `${itemId}:${platform}`) would then
+// never see a REMOVE row under the real platform's key, so marketplaceListedPoshmark (etc.) would
+// stay stuck "listed" forever even after a genuinely successful removal. Exact same bug class as
+// markItemListed's pre-2026-08-19 silent-coercion-to-FACEBOOK bug (see MarketplaceListingPlatform's
+// comment above) -- same fix shape: accept an optional `platform`, validate against the same
+// VALID_LISTING_PLATFORMS superset, default 'FACEBOOK' only to preserve every existing caller's
+// exact current behavior (fas-remove.js never sent one before this fix).
 export const markItemRemoved = async (req: AuthRequest, res: Response): Promise<void> => {
   const userId = req.user?.id;
   const itemId = req.params.id;
   if (!userId) { res.status(401).json({ message: 'Authentication required' }); return; }
   if (!(await assertItemOwned(userId, itemId))) { res.status(404).json({ message: 'Item not found' }); return; }
 
+  const platformRaw = typeof req.body?.platform === 'string' ? req.body.platform.toUpperCase() : 'FACEBOOK';
+  const platform: MarketplaceListingPlatform = (VALID_LISTING_PLATFORMS as string[]).includes(platformRaw)
+    ? (platformRaw as MarketplaceListingPlatform)
+    : 'FACEBOOK';
+
   await prisma.marketplaceListingJob.create({
-    data: { itemId, action: 'REMOVE', status: 'REMOVED' },
+    data: { itemId, action: 'REMOVE', status: 'REMOVED', platform },
   });
   res.json({ ok: true });
 };
@@ -662,13 +681,41 @@ export const getPendingRemovals = async (req: AuthRequest, res: Response): Promi
   const itemIds = soldItems.map((i) => i.id);
   const jobs = await prisma.marketplaceListingJob.findMany({
     where: { itemId: { in: itemIds } },
-    select: { itemId: true, action: true, status: true, lastErrorMessage: true, lastAttemptAt: true },
+    select: { itemId: true, action: true, status: true, lastErrorMessage: true, lastAttemptAt: true, platform: true, createdAt: true },
   });
   const postedByItem = new Set<string>();
   const removedByItem = new Set<string>();
   const skipCountByItem = new Map<string, number>();
   const lastSkipReasonByItem = new Map<string, string | null>();
   const lastSkipAtByItem = new Map<string, Date>();
+  // FEATURE 2026-08-22 (S-EXT-CROSS-PLATFORM-AUTOREMOVE, Patrick-directed: "it must be built for
+  // all of them, that's part of the extension" -- extending Facebook's existing sold-elsewhere
+  // auto-removal to every platform). This endpoint's `items` response has always been
+  // platform-AGNOSTIC (any POST, not yet any REMOVE) -- correct for the "should we even consider
+  // this item" gate, but not enough to tell the extension WHICH platform(s) still have a live
+  // listing to actually remove. getExtensionItems already computes exactly this per-platform
+  // breakdown (postedByItemPlatform/removedByItemPlatform, keyed by `${itemId}:${platform}`) for
+  // AVAILABLE items -- but that endpoint filters to status:'AVAILABLE' only, so it never returns
+  // SOLD items at all. Mirroring the same latest-row-per-item+platform-wins computation here
+  // instead of a second divergent implementation of "is this platform's listing still live".
+  const latestByItemPlatform = new Map<string, { action: string; status: string; createdAt: Date }>();
+  for (const j of jobs) {
+    const key = j.itemId + ':' + j.platform;
+    const existing = latestByItemPlatform.get(key);
+    if (!existing || j.createdAt > existing.createdAt) {
+      latestByItemPlatform.set(key, { action: j.action, status: j.status, createdAt: j.createdAt });
+    }
+  }
+  const stillListedPlatformsByItem = new Map<string, string[]>();
+  for (const [key, latest] of latestByItemPlatform) {
+    if (latest.action !== 'POST' || latest.status !== 'POSTED') continue;
+    const sepIdx = key.lastIndexOf(':');
+    const itemId = key.slice(0, sepIdx);
+    const platform = key.slice(sepIdx + 1);
+    const arr = stillListedPlatformsByItem.get(itemId) || [];
+    arr.push(platform);
+    stillListedPlatformsByItem.set(itemId, arr);
+  }
   for (const j of jobs) {
     if (j.action === 'POST' && j.status === 'POSTED') postedByItem.add(j.itemId);
     if (j.action === 'REMOVE' && j.status === 'REMOVED') removedByItem.add(j.itemId);
@@ -699,9 +746,13 @@ export const getPendingRemovals = async (req: AuthRequest, res: Response): Promi
   };
 
   const stillPending = soldItems.filter((i) => postedByItem.has(i.id) && !removedByItem.has(i.id));
+  // `platforms` is additive -- fas-remove.js (Facebook's own consumer) only ever read
+  // id/title and is unaffected. New per-platform consumers (background.js's generalized
+  // multi-platform removal engine) use this to route each item to the right platform's own
+  // removal tab instead of assuming Facebook.
   const items = stillPending
     .filter((i) => isRetryEligible(i.id))
-    .map((i) => ({ id: i.id, title: i.title }));
+    .map((i) => ({ id: i.id, title: i.title, platforms: stillListedPlatformsByItem.get(i.id) || [] }));
   // S1179: still surfaced here for organizer visibility once an item crosses the cap, even
   // during the cooldown windows where it's also (periodically) back in `items` above -- this
   // is now a "heads up, this one's been stubborn" signal rather than "we've given up on this

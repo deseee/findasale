@@ -19,5 +19,20 @@ self.FAS_CONFIG = {
   POSH_POST_URL: 'https://poshmark.com/create-listing',
   MERC_POST_URL: 'https://www.mercari.com/sell/',
   VINTED_POST_URL: 'https://www.vinted.com/items/new',
-  GRAILED_POST_URL: 'https://www.grailed.com/sell'
+  GRAILED_POST_URL: 'https://www.grailed.com/sell',
+  // S-EXT-CROSS-PLATFORM-AUTOREMOVE (2026-08-22, Patrick-directed): entry points for each
+  // platform's own "my listings" management view, used to auto-remove a listing once the item
+  // sells elsewhere -- same purpose as FAS_YOU_SELLING_SOLD_FILTER_URL (background.js) does for
+  // Facebook. UNVERIFIED like the *_POST_URL entries above -- none of these have a live seller
+  // account with an actual sold item to confirm the real management-page URL/DOM against yet.
+  // Deliberately generic entry points (feed/home, not a guessed deep path) -- each platform's own
+  // removal content-script function discovers the real "my listings"/closet link from the DOM
+  // itself (same defensive pattern as fas-remove.js's ensureFilteredThenRun: navigate to something
+  // safe, let the content script find its own way from there) rather than trusting a guessed URL
+  // that could easily 404 and silently strand the whole flow.
+  POSH_MANAGE_URL: 'https://poshmark.com/feed',
+  MERC_MANAGE_URL: 'https://www.mercari.com/',
+  VINTED_MANAGE_URL: 'https://www.vinted.com/',
+  GRAILED_MANAGE_URL: 'https://www.grailed.com/sell',
+  GUMTREE_AU_MANAGE_URL: 'https://www.gumtree.com.au/'
 };

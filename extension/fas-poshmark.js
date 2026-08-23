@@ -1577,5 +1577,119 @@
     }
   }
 
-  start();
+  // ---- Cross-platform auto-remove-on-sale-elsewhere (S-EXT-CROSS-PLATFORM-AUTOREMOVE, 2026-08-22)
+  // Patrick, explicit directive: "it must be built for all of them, that's part of the extension."
+  // This file already runs on every poshmark.com page (manifest matches poshmark.com/*), so the
+  // removal flow lives here as a second entry point rather than a new content-script file --
+  // gated below on whether a Poshmark removal queue item is actually pending, so it never
+  // interferes with the normal create-listing flow above.
+  //
+  // CODE-ONLY / UNVERIFIED (same honest disclosure as this file's own original header): no sold
+  // item has existed on this organizer's test Poshmark closet yet, so the closet-card and
+  // listing-detail delete-menu selectors below have NOT been confirmed against a real sold
+  // listing. Built defensively (single-confident-title-match only, same discipline as
+  // fas-remove.js's Facebook removal flow -- zero or ambiguous matches are skipped and reported,
+  // never guessed) so a wrong guess fails safe instead of touching the wrong listing.
+
+  function poshRemNorm(s) { return String(s || '').toLowerCase().replace(/\s+/g, ' ').trim(); }
+
+  // Finds the "My Closet" link from wherever we currently are (feed, home, etc.) -- avoids
+  // hardcoding the organizer's own Poshmark username anywhere, since FindA.Sale has no record of
+  // it. UNVERIFIED beyond this session's own live confirmation that this link exists on the feed
+  // page with this exact href pattern.
+  function findPoshmarkClosetLink() {
+    const link = document.querySelector('a[href*="/closet/"]');
+    return link ? link.href : null;
+  }
+
+  // UNVERIFIED -- best-effort guess at Poshmark's closet-tile structure (a tile containing a link
+  // to its own /listing/ detail page), not yet confirmed against a real sold item.
+  function findPoshmarkClosetCardByTitle(title) {
+    const want = poshRemNorm(title);
+    if (!want) return null;
+    const tiles = qa('a[href*="/listing/"]')
+      .map((a) => a.closest('[class*="tile" i], [class*="card" i], li, div') || a)
+      .filter((el, i, arr) => arr.indexOf(el) === i);
+    const matches = tiles.filter((t) => poshRemNorm(t.textContent).indexOf(want) !== -1);
+    return matches.length === 1 ? matches[0] : null;
+  }
+
+  // UNVERIFIED -- Poshmark listing-detail pages typically expose a "..." / kebab menu with a
+  // Delete/Remove Listing action once you own the listing; the exact selector has not been
+  // confirmed live. Matches by visible text within any open menu/dialog, consistent with this
+  // file's own findPoshmarkVisibleButtonByText pattern used elsewhere.
+  async function deletePoshmarkListingOnDetailPage() {
+    const kebab = qa('button, [role="button"]').find((el) => {
+      const label = (el.getAttribute('aria-label') || '').toLowerCase();
+      return label.indexOf('more') !== -1 || label.indexOf('option') !== -1 || el.textContent.trim() === '...' || el.textContent.trim() === '\u2022\u2022\u2022';
+    });
+    if (kebab) { realClick(kebab); await sleep(400); }
+    const deleteBtn = findPoshmarkVisibleButtonByText('delete listing') || findPoshmarkVisibleButtonByText('delete') || findPoshmarkVisibleButtonByText('remove listing');
+    if (!deleteBtn) return false;
+    realClick(deleteBtn);
+    await sleep(400);
+    const confirmBtn = findPoshmarkVisibleButtonByText('yes') || findPoshmarkVisibleButtonByText('confirm') || findPoshmarkVisibleButtonByText('delete');
+    if (confirmBtn) { realClick(confirmBtn); await sleep(600); }
+    return true;
+  }
+
+  async function reportPoshmarkRemoved(item) {
+    try { await chrome.runtime.sendMessage({ type: 'markItemRemovedByRemoval', itemId: item.id, platform: 'POSHMARK' }); } catch (e) {}
+  }
+
+  async function runPoshmarkRemovalQueue(item, index, total) {
+    overlay('<b>FindA.Sale</b> \u2014 removing sold item ' + (index + 1) + ' of ' + total + ': <b>' + escapeHtml(item.title) + '</b>\u2026');
+    // On a listing detail page already matching this item's title -- attempt the delete directly.
+    if (location.pathname.indexOf('/listing/') === 0 || location.pathname.indexOf('/listing/') > 0) {
+      const pageTitleEl = document.querySelector('h1, [class*="title" i]');
+      const onRightPage = pageTitleEl && poshRemNorm(pageTitleEl.textContent).indexOf(poshRemNorm(item.title)) !== -1;
+      if (onRightPage) {
+        const deleted = await deletePoshmarkListingOnDetailPage();
+        if (deleted) {
+          await reportPoshmarkRemoved(item);
+          overlay('<b>FindA.Sale</b><div style="margin-top:6px">Removed <b>' + escapeHtml(item.title) + '</b> from Poshmark.</div>');
+        } else {
+          overlayWarn('Found the listing but couldn\'t confirm the delete action (UNVERIFIED selector) -- please remove it yourself.' + button('fas-posh-close', 'Close', false));
+        }
+        let next = null;
+        try { next = await chrome.runtime.sendMessage({ type: 'advanceRemovalQueueFor', platform: 'POSHMARK' }); } catch (e) {}
+        if (next && next.ok && next.item) {
+          await sleep(1200);
+          location.href = findPoshmarkClosetLink() || CFG.POSH_MANAGE_URL;
+        } else {
+          try { await chrome.runtime.sendMessage({ type: 'removalQueueDoneFor', platform: 'POSHMARK' }); } catch (e) {}
+        }
+        return;
+      }
+    }
+    // Otherwise: on the closet (or some other page) -- find the matching card and navigate into it.
+    const closetLink = findPoshmarkClosetLink();
+    const card = findPoshmarkClosetCardByTitle(item.title);
+    if (!card) {
+      if (location.href.indexOf('/closet/') === -1 && closetLink) {
+        location.href = closetLink; // navigate to closet, fresh load will retry the match there
+        return;
+      }
+      overlayWarn('No confident match for "' + escapeHtml(item.title) + '" in your closet (zero or more than one found) -- skipped, not guessed.' + button('fas-posh-close', 'Close', false));
+      let next = null;
+      try { next = await chrome.runtime.sendMessage({ type: 'advanceRemovalQueueFor', platform: 'POSHMARK' }); } catch (e) {}
+      if (!(next && next.ok && next.item)) { try { await chrome.runtime.sendMessage({ type: 'removalQueueDoneFor', platform: 'POSHMARK' }); } catch (e) {} }
+      return;
+    }
+    const link = card.querySelector('a[href*="/listing/"]');
+    if (link) location.href = link.href; // navigate into the listing; fresh load handles the delete
+  }
+
+  async function maybeRunPoshmarkRemoval() {
+    let queued;
+    try { queued = await chrome.runtime.sendMessage({ type: 'getRemovalQueueItemFor', platform: 'POSHMARK' }); } catch (e) { return false; }
+    if (!queued || !queued.ok || !queued.item) return false;
+    await runPoshmarkRemovalQueue(queued.item, queued.index, queued.total);
+    return true;
+  }
+
+  (async () => {
+    const ranRemoval = await maybeRunPoshmarkRemoval();
+    if (!ranRemoval) start();
+  })();
 })();

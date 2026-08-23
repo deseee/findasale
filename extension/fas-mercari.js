@@ -971,5 +971,86 @@
     }
   }
 
-  start();
+  // ---- Cross-platform auto-remove-on-sale-elsewhere (S-EXT-CROSS-PLATFORM-AUTOREMOVE, 2026-08-22)
+  // Same pattern as fas-poshmark.js's own removal block (see its comment for full context) --
+  // Patrick's explicit directive: "it must be built for all of them, that's part of the extension."
+  // CODE-ONLY / UNVERIFIED: no sold Mercari item exists yet to confirm these selectors against.
+
+  function mercRemNorm(s) { return String(s || '').toLowerCase().replace(/\s+/g, ' ').trim(); }
+
+  function mercRemFindButtonByText(text) {
+    const want = mercRemNorm(text);
+    return qa('button, [role="button"], a').find((el) => mercRemNorm(el.textContent) === want && el.offsetParent !== null) || null;
+  }
+
+  // UNVERIFIED -- Mercari's "Selling" tab under My Page typically lists active listings with an
+  // edit/delete affordance per item; the exact tile/link structure has not been confirmed live.
+  function findMercariListingLinkByTitle(title) {
+    const want = mercRemNorm(title);
+    if (!want) return null;
+    const links = qa('a[href*="/item/"], a[href*="/us/item/"]');
+    const matches = links.filter((a) => mercRemNorm(a.textContent).indexOf(want) !== -1);
+    return matches.length === 1 ? matches[0] : null;
+  }
+
+  async function deleteMercariListingOnDetailPage() {
+    const menuBtn = qa('button, [role="button"]').find((el) => {
+      const label = (el.getAttribute('aria-label') || '').toLowerCase();
+      return label.indexOf('more') !== -1 || label.indexOf('option') !== -1 || el.textContent.trim() === '...';
+    });
+    if (menuBtn) { await realClick(menuBtn); await sleep(400); }
+    const deleteBtn = mercRemFindButtonByText('Delete listing') || mercRemFindButtonByText('Delete') || mercRemFindButtonByText('Remove listing');
+    if (!deleteBtn) return false;
+    await realClick(deleteBtn);
+    await sleep(400);
+    const confirmBtn = mercRemFindButtonByText('Yes') || mercRemFindButtonByText('Confirm') || mercRemFindButtonByText('Delete');
+    if (confirmBtn) { await realClick(confirmBtn); await sleep(600); }
+    return true;
+  }
+
+  async function reportMercariRemoved(item) {
+    try { await chrome.runtime.sendMessage({ type: 'markItemRemovedByRemoval', itemId: item.id, platform: 'MERCARI' }); } catch (e) {}
+  }
+
+  async function runMercariRemovalQueue(item, index, total) {
+    overlay('<b>FindA.Sale</b> \u2014 removing sold item ' + (index + 1) + ' of ' + total + ': <b>' + escapeHtml(item.title) + '</b>\u2026');
+    const pageTitleEl = document.querySelector('h1, [class*="title" i]');
+    const onListingDetailPage = pageTitleEl && mercRemNorm(pageTitleEl.textContent).indexOf(mercRemNorm(item.title)) !== -1;
+    if (onListingDetailPage) {
+      const deleted = await deleteMercariListingOnDetailPage();
+      if (deleted) {
+        await reportMercariRemoved(item);
+        overlay('<b>FindA.Sale</b><div style="margin-top:6px">Removed <b>' + escapeHtml(item.title) + '</b> from Mercari.</div>');
+      } else {
+        overlayWarn('Found the listing but couldn\'t confirm the delete action (UNVERIFIED selector) -- please remove it yourself.' + button('fas-merc-close', 'Close', false));
+      }
+      let next = null;
+      try { next = await chrome.runtime.sendMessage({ type: 'advanceRemovalQueueFor', platform: 'MERCARI' }); } catch (e) {}
+      if (next && next.ok && next.item) { await sleep(1200); location.href = CFG.MERC_MANAGE_URL; }
+      else { try { await chrome.runtime.sendMessage({ type: 'removalQueueDoneFor', platform: 'MERCARI' }); } catch (e) {} }
+      return;
+    }
+    const link = findMercariListingLinkByTitle(item.title);
+    if (!link) {
+      overlayWarn('No confident match for "' + escapeHtml(item.title) + '" in your Mercari listings (zero or more than one found) -- skipped, not guessed.' + button('fas-merc-close', 'Close', false));
+      let next = null;
+      try { next = await chrome.runtime.sendMessage({ type: 'advanceRemovalQueueFor', platform: 'MERCARI' }); } catch (e) {}
+      if (!(next && next.ok && next.item)) { try { await chrome.runtime.sendMessage({ type: 'removalQueueDoneFor', platform: 'MERCARI' }); } catch (e) {} }
+      return;
+    }
+    location.href = link.href;
+  }
+
+  async function maybeRunMercariRemoval() {
+    let queued;
+    try { queued = await chrome.runtime.sendMessage({ type: 'getRemovalQueueItemFor', platform: 'MERCARI' }); } catch (e) { return false; }
+    if (!queued || !queued.ok || !queued.item) return false;
+    await runMercariRemovalQueue(queued.item, queued.index, queued.total);
+    return true;
+  }
+
+  (async () => {
+    const ranRemoval = await maybeRunMercariRemoval();
+    if (!ranRemoval) start();
+  })();
 })();
