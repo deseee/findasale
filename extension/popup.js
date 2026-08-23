@@ -143,11 +143,12 @@ function currentListedFlag(it) {
   const ch = currentChannel();
   if (ch === 'craigslist') return it.marketplaceListedCraigslist === true;
   if (ch === 'gumtree_au') return it.marketplaceListedGumtreeAu === true;
-  // 2026-08-18 dispatch: Poshmark/Mercari/Vinted/Grailed. Backend (extensionController.ts) does
-  // NOT yet return marketplaceListedPoshmark/Mercari/Vinted/Grailed on /extension/items -- this
-  // dispatch is client-side only (see this dispatch's handoff, schema/backend flagged as a
-  // follow-up, not built here). These simply read as undefined -> false on every real item today,
-  // which safely means "never show as already-listed" rather than crashing or guessing.
+  // 2026-08-18 dispatch: Poshmark/Mercari/Vinted/Grailed. RESOLVED 2026-08-22
+  // (S-EXT-POSHMARK-LISTED-BADGE, Patrick live report -- "tracksuit doesn't show as already
+  // listed"): extensionController.ts's `shaped` response now includes marketplaceListedPoshmark/
+  // -Mercari/-Vinted/-Grailed (same generic postedByItemPlatform/removedByItemPlatform data the 3
+  // fields above already used -- the underlying MarketplaceListingJob rows were correct all along,
+  // this endpoint just never read these 4 platforms' keys out). These read real values now.
   if (ch === 'poshmark') return it.marketplaceListedPoshmark === true;
   if (ch === 'mercari') return it.marketplaceListedMercari === true;
   if (ch === 'vinted') return it.marketplaceListedVinted === true;
@@ -163,9 +164,13 @@ function onChannelChange() {
   const fb = ch === 'facebook';
   const cl = ch === 'craigslist';
   const gt = ch === 'gumtree_au';
-  // 2026-08-18 dispatch: Poshmark/Mercari/Vinted/Grailed. None of these four auto-publish (see
-  // each content script's file header -- fills and stops, always, no toggle), so autoPublishRow
-  // stays hidden for all of them, same as Gumtree Australia.
+  // 2026-08-22 (S-EXT-AUTOPUBLISH-POLICY) CORRECTED: Poshmark/Mercari/Grailed now DO support
+  // auto-publish (see each content script's own file header for the corrected policy and the
+  // per-platform ban-risk research this is based on) -- the prior "none of these four auto-
+  // publish" comment was a real deviation from the 2026-07-17 locked decision, not a faithful
+  // caution. Vinted stays fill-and-stop only: real, current, escalating platform enforcement
+  // specifically against crosslisting/automation software (see fas-vinted.js's own file header) --
+  // autoPublishRow stays hidden for Vinted, same as Gumtree Australia.
   const posh = ch === 'poshmark';
   const merc = ch === 'mercari';
   const vinted = ch === 'vinted';
@@ -182,7 +187,9 @@ function onChannelChange() {
   const mercNote = $('mercPostNote'); if (mercNote) mercNote.hidden = !merc;
   const vintedNote = $('vintedPostNote'); if (vintedNote) vintedNote.hidden = !vinted;
   const grailedNote = $('grailedPostNote'); if (grailedNote) grailedNote.hidden = !grailed;
-  const autoPublishRow = $('autoPublishRow'); if (autoPublishRow) autoPublishRow.hidden = gt || posh || merc || vinted || grailed;
+  // (2026-08-22) Only Gumtree AU (no publish step built yet) and Vinted (real ban-risk carve-out)
+  // hide the shared checkbox now -- Poshmark/Mercari/Grailed show it same as FB/Craigslist.
+  const autoPublishRow = $('autoPublishRow'); if (autoPublishRow) autoPublishRow.hidden = gt || vinted;
   const removeSetting = document.querySelector('.removeSetting'); if (removeSetting) removeSetting.hidden = !fb;
   // (2026-08-08 fix) The item list's LISTED badges/hide-filter are channel-specific (see
   // currentListedFlag above) but this handler never used to re-render on channel switch, so
@@ -460,13 +467,20 @@ async function startQueue() {
     window.close();
     return;
   }
-  // 2026-08-18 dispatch: Poshmark/Mercari/Vinted/Grailed. Same shape as the Gumtree AU branch
-  // above -- no autoPublish param for any of these four, since none of their content scripts
-  // ever auto-clicks the final publish/list action (fills and stops, always -- see each script's
-  // file header). CODE-ONLY: none of these four channels has been tested against a live account.
-  const SIMPLE_CHANNEL_MSG = { poshmark: 'setPoshmarkQueue', mercari: 'setMercariQueue', vinted: 'setVintedQueue', grailed: 'setGrailedQueue' };
-  if (SIMPLE_CHANNEL_MSG[currentChannel()]) {
-    await send({ type: SIMPLE_CHANNEL_MSG[currentChannel()], queue });
+  // (2026-08-22, S-EXT-AUTOPUBLISH-POLICY) Vinted has no autoPublish param -- real ban-risk
+  // carve-out, see fas-vinted.js's file header. CODE-ONLY: none of these four channels has been
+  // tested against a live account.
+  if (currentChannel() === 'vinted') {
+    await send({ type: 'setVintedQueue', queue });
+    window.close();
+    return;
+  }
+  // Poshmark/Mercari/Grailed now thread the shared #autoPublish checkbox through, same as
+  // Craigslist above -- corrected 2026-08-22, see each content script's file header.
+  const AUTOPUBLISH_CHANNEL_MSG = { poshmark: 'setPoshmarkQueue', mercari: 'setMercariQueue', grailed: 'setGrailedQueue' };
+  if (AUTOPUBLISH_CHANNEL_MSG[currentChannel()]) {
+    const autoPublish = $('autoPublish').checked;
+    await send({ type: AUTOPUBLISH_CHANNEL_MSG[currentChannel()], queue, autoPublish });
     window.close();
     return;
   }

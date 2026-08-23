@@ -5,8 +5,20 @@
  * comment (ADR-084) and fas-craigslist.js/fas-gumtree-au.js's human-owns-verification boundary:
  *   1. NEVER select by an obfuscated/hashed CSS class -- only visible label text, aria-label,
  *      role, or structural anchors (headings, placeholder text).
- *   2. NEVER auto-click the final "List this listing" / publish action -- this script fills the
- *      form and stops; the organizer reviews and submits it themselves, every time, no toggle.
+ *   2. Auto-publish (clicking the final "List this listing" button) is a PRO/TEAMS-only, opt-in
+ *      toggle threaded from popup.js -> background.js (fasPoshmarkAutoPublish) -> here, the SAME
+ *      mechanism fas-craigslist.js already uses -- NOT a blanket "never" rule. Corrected
+ *      2026-08-22 (S-EXT-AUTOPUBLISH-POLICY, Patrick-directed): this file previously hard-coded
+ *      "never auto-click the final publish action, no toggle" for every organizer regardless of
+ *      the 2026-07-17 locked decision (full automation including auto-publish is non-negotiable,
+ *      PRO/TEAMS-only opt-in) -- that was a real deviation, not a faithful implementation of extra
+ *      caution Patrick asked for. Research this session found no evidence Poshmark bans accounts
+ *      for listing-automation software specifically (ToS technically prohibits "automated
+ *      participation" but enforcement is essentially nonexistent; large crosslisting tools like
+ *      Vendoo/List Perfectly/Crosslist/PrimeLister operate openly at scale). When the toggle is
+ *      off (organizer's own choice, or an automatic fallback if the List This Listing button
+ *      can't be found), this script still fills the form and stops exactly as before -- the
+ *      organizer reviews and submits it themselves.
  *   3. HARD-STOP on any CAPTCHA, identity-verification, or unrecognized interstitial screen --
  *      hand off to the human immediately (see looksLikeInterstitial()), never attempt to solve
  *      or click through one.
@@ -96,6 +108,22 @@
     if (!text || !want) return false;
     const re = new RegExp('(^|[^a-z0-9])' + want.replace(/[.*+?^\${}()|[\]\\]/g, '\\$&') + '($|[^a-z0-9])');
     return re.test(text);
+  }
+  // FEATURE 2026-08-22 (S-EXT-POSHMARK-GENDER-HINT, Patrick-directed): before pickCategory falls
+  // back to Poshmark's own first department in the list (items0[0], live-confirmed "Women" --
+  // see pickCategory's own comment), check the item's title/description for an explicit
+  // men's/women's/etc word first. wordBoundaryHas already guards against a substring landmine
+  // (e.g. "men" being a literal substring of "women") -- reused here for the same reason. Checked
+  // against `norm()`-lowercased text, so no case handling needed here. Returns null (no change in
+  // behavior) when the text carries no such word -- this does NOT make every item resolve
+  // correctly, only items that actually mention a gender somewhere.
+  function detectPoshmarkGenderHint(text) {
+    const t = norm(text);
+    const womenWords = ['women', 'womens', 'woman', 'female', 'girls', 'girl'];
+    const menWords = ['men', 'mens', 'man', 'male', 'boys', 'boy'];
+    for (const w of womenWords) { if (wordBoundaryHas(t, w)) return 'Women'; }
+    for (const w of menWords) { if (wordBoundaryHas(t, w)) return 'Men'; }
+    return null;
   }
   function bodyText() { return (document.body && document.body.innerText) || ''; }
   function q(sel) { return document.querySelector(sel); }
@@ -351,12 +379,43 @@
   }
   // React-controlled inputs ignore a plain .value=x; use the native setter then dispatch input
   // (same pattern as fas-content.js's setNativeValue).
+  // BUG FIX 2026-08-22 (S-EXT-POSHMARK-PRICE-ILLEGAL-INVOCATION, P0, Patrick live-console-report):
+  // real console error captured on Patrick's live tab -- '[FAS Poshmark] Field "Price" -- error
+  // while filling, skipped: Illegal invocation' -- and the visible listingPrice input confirmed
+  // empty on that same tab afterward. "Illegal invocation" is the exact signature of calling a
+  // native accessor with a `this` receiver its own realm doesn't recognize -- plausible here since
+  // this content script's own `window.HTMLInputElement.prototype` (isolated world) is a distinct
+  // object identity from the one the page's real elements are branded to (MAIN world), even though
+  // `instanceof`/prototype-chain checks read as matching. Title/Description/Brand use this exact
+  // same function and were NOT reported failing on Price's own bad run or the earlier confirmed-
+  // successful run, so this isn't a categorical "the setter never works cross-world" case -- more
+  // likely intermittent (timing-dependent element identity, e.g. Vue swapping the real node in
+  // right as this ran). Rather than guess further without being able to execute as the isolated-
+  // world script itself (the only context that can reproduce this) to confirm which theory is
+  // right, made the fallback robust either way: if the native setter throws for ANY reason, fall
+  // back to a plain assignment instead of leaving the field silently unset (previously any throw
+  // here left Price -- a Poshmark-required field -- permanently blank for the whole run, which is
+  // very likely why this run's Next-button sequence then failed to advance and fell back to the
+  // manual-review overlay). Logs a specific warning if even the fallback assignment doesn't stick,
+  // so a repeat failure is diagnosable from console output alone next time.
   function setNativeValue(el, value) {
     const proto = el.tagName === 'TEXTAREA' ? window.HTMLTextAreaElement.prototype : window.HTMLInputElement.prototype;
     const setter = Object.getOwnPropertyDescriptor(proto, 'value') && Object.getOwnPropertyDescriptor(proto, 'value').set;
-    if (setter) setter.call(el, value); else el.value = value;
+    let set = false;
+    if (setter) {
+      try { setter.call(el, value); set = true; } catch (e) {
+        console.warn('[FAS Poshmark] setNativeValue -- native setter threw (' + (e && e.message) + '), falling back to plain assignment.');
+      }
+    }
+    if (!set) {
+      try { el.value = value; set = (el.value === String(value)); } catch (e) {
+        console.warn('[FAS Poshmark] setNativeValue -- plain assignment also failed:', e && e.message);
+      }
+    }
+    if (!set) console.warn('[FAS Poshmark] setNativeValue -- could not set value on element (both native setter and plain assignment failed or did not stick).');
     el.dispatchEvent(new Event('input', { bubbles: true }));
     el.dispatchEvent(new Event('change', { bubbles: true }));
+    return set;
   }
 
   // Defensive wrapper: never throws, always logs a specific skip reason. UNVERIFIED -- confirm
@@ -458,10 +517,19 @@
     const el = document.querySelector('input[data-vv-name="listingPrice"]') || fieldByLabel('Price') || fieldByLabel('Listing Price');
     if (!el) return false;
     el.focus();
-    setNativeValue(el, String(value));
+    // BUG FIX 2026-08-22 (S-EXT-POSHMARK-PRICE-ILLEGAL-INVOCATION): this used to ignore
+    // setNativeValue's success/failure entirely and always return true, so a failed fill (the
+    // "Illegal invocation" case) was reported to tryFill as a SUCCESS -- no warning was logged for
+    // Price specifically at the point it actually mattered, and dismissSmartSellModal() ran anyway
+    // even though there was no modal to dismiss (nothing had actually changed the price). Now
+    // checks the real DOM value after the fact -- Poshmark's own VeeValidate binding can still
+    // reformat/reject what was typed, so re-reading el.value is a more honest success signal than
+    // trusting setNativeValue's own return alone.
+    const set = setNativeValue(el, String(value));
     await sleep(150);
-    await dismissSmartSellModal();
-    return true;
+    const stuck = set && el.value !== '' && el.value != null;
+    if (stuck) await dismissSmartSellModal();
+    return stuck;
   }
 
   // Autocomplete field (Brand): type, wait for suggestions, click the best match. Falls back to
@@ -621,6 +689,21 @@
     const menuEl = dropdown.querySelector('.dropdown__menu');
     if (!menuEl) return false;
     return getComputedStyle(menuEl).display !== 'none';
+  }
+  // FEATURE 2026-08-22 (S-EXT-POSHMARK-COLOR-FALLBACK, Patrick-directed: "guess and report", same
+  // philosophy as the Category department default): Poshmark's real Color picker only offers 15
+  // fixed swatches (Red/Pink/Orange/Yellow/Green/Blue/Purple/Gold/Silver/Black/Gray/White/Cream/
+  // Brown/Tan, live-confirmed) -- a descriptive value like "Neon Green" or "Hot Pink" has no exact
+  // match. First tries to pull a real swatch word out of the value itself (handles the common case
+  // of a compound/descriptive color name); if truly no swatch word is present at all (e.g. a bare
+  // "Neon" with no base color), falls back to "Black" as the most common, safest neutral default --
+  // NOT invented at random, always reported in the run summary either way (see fillListing's use of
+  // this), unlike Size which is never guessed (see fillListing's own comment on that distinction).
+  function mapPoshmarkColorFallback(value) {
+    const known = ['red', 'pink', 'orange', 'yellow', 'green', 'blue', 'purple', 'gold', 'silver', 'black', 'gray', 'white', 'cream', 'brown', 'tan'];
+    const v = norm(value);
+    for (const k of known) { if (wordBoundaryHas(v, k)) return k; }
+    return 'black';
   }
   async function fillPoshmarkColor(value) {
     const section = findPoshmarkColorSection();
@@ -835,7 +918,7 @@
     }
     return false;
   }
-  async function pickCategory(categoryText, breadcrumbText) {
+  async function pickCategory(categoryText, breadcrumbText, genderHintText) {
     // BUG FIX 2026-08-22 (P0, Patrick-directed): used to return false immediately for an item with
     // no category at all, skipping the picker entirely -- but Size/Color/Condition are all locked
     // behind a committed category, so an item with no category ended up with none of those fields
@@ -845,7 +928,7 @@
     const opener = openerByLabel('Category');
     if (!opener) {
       console.log('[FAS Poshmark][catdbg] opener NOT FOUND for "Category"');
-      return false;
+      return { committed: false, confident: false };
     }
     const placeholderText = norm(opener.textContent);
     console.log('[FAS Poshmark][catdbg] opener found, text=', placeholderText.slice(0, 60));
@@ -895,8 +978,15 @@
     // matching instead of being silently skipped.
     const items0 = await waitForMenuItems((el) => el.offsetParent !== null && norm(el.textContent) !== 'all categories', 1500);
     console.log('[FAS Poshmark][catdbg] items0 (' + items0.length + '):', items0.map((el) => norm(el.textContent)));
-    const departmentCandidates = [...breadcrumbSegments, categoryText].filter(Boolean);
-    console.log('[FAS Poshmark][catdbg] departmentCandidates=', departmentCandidates);
+    // FEATURE 2026-08-22 (S-EXT-POSHMARK-GENDER-HINT, Patrick-directed, live-Chrome-confirmed the
+    // problem this addresses): a real "men's"/"women's" word found in the item's own title/
+    // description is a much stronger signal than categoryText's generic fuzzy match, and unlike
+    // the items0[0] default below, actually earns "confident" treatment (see deptWasGuessed below)
+    // since it's a genuine match, not an arbitrary first-in-list guess. Placed FIRST so it wins
+    // ties, but still goes through the normal scoring loop below rather than short-circuiting it.
+    const genderHint = detectPoshmarkGenderHint(genderHintText || '');
+    const departmentCandidates = [genderHint, ...breadcrumbSegments, categoryText].filter(Boolean);
+    console.log('[FAS Poshmark][catdbg] genderHint=', genderHint, 'departmentCandidates=', departmentCandidates);
     let bestDept = null, bestDeptScore = -1;
     for (const cand of departmentCandidates) {
       const scored = bestScoringOption(items0, cand);
@@ -909,12 +999,23 @@
     // for this item and "Tracksuits & Sets" shares no word with any of Poshmark's real 6 departments
     // -- Women/Men/Kids/Home/Pets/Electronics, confirmed live), this used to leave the picker sitting
     // at the unclicked top level with NOTHING selected -- "Poshmark's top-level menu could not be
-    // steered at all", exactly Patrick's report. Defaults to the first real department (items0[0],
-    // live-confirmed to be "Women") instead of giving up -- some department, even a guessed one, is
-    // required before ANY subcategory (including "Other") can even be reached, and the organizer
-    // reviews/corrects it before publishing regardless.
+    // steered at all", exactly Patrick's report. Defaults to a real department instead of giving up
+    // -- some department, even a guessed one, is required before ANY subcategory (including
+    // "Other") can even be reached.
+    // BUG FIX 2026-08-22 (S-EXT-POSHMARK-RUN-SUMMARY, Patrick-directed): was defaulting to
+    // items0[0] (live-confirmed to be Poshmark's own list order, which put "Women" first) --
+    // arbitrary, and biased every zero-signal item toward Women's sizing regardless of what it
+    // actually was. Patrick: "should it not default to mens sizing? otherwise 90% of tee-shirts
+    // other things that are gender neutral will just be stuck in limbo" -- defaults to "Men"
+    // specifically when it's present in the real options, falling back to items0[0] only if a
+    // "Men" entry genuinely isn't found (shouldn't happen on Poshmark's real 6-department list,
+    // but never crash if it did). This is still a guess (deptWasGuessed stays true either way) --
+    // see run()'s use of this flag for the run-summary note, not a publish-blocking gate anymore.
     const deptWasGuessed = !bestDept;
-    if (!bestDept && items0.length) bestDept = items0[0];
+    if (!bestDept && items0.length) {
+      const menOption = items0.find((el) => norm(el.textContent) === 'men');
+      bestDept = menOption || items0[0];
+    }
     console.log('[FAS Poshmark][catdbg] bestDept=', bestDept ? norm(bestDept.textContent) : null, 'deptWasGuessed=', deptWasGuessed);
     if (bestDept) { realClick(bestDept); pickedAny = true; await sleep(350); }
     const levelQueries = categoryText.split(':').map((s) => s.trim()).filter(Boolean);
@@ -979,12 +1080,20 @@
     await sleep(250);
     if (!committed) {
       console.warn('[FAS Poshmark] Category "' + categoryText + '" -- nothing could be selected in the picker at all (UNVERIFIED taxonomy) -- left for the organizer to choose.');
-      return false;
+      return { committed: false, confident: false };
     }
-    if (deptWasGuessed || usedOtherFallback) {
+    // FEATURE 2026-08-22 (S-EXT-AUTOPUBLISH-POLICY, Patrick-directed live-Chrome-confirmed): a
+    // guessed department or an "Other" fallback is NOT a confident match -- live-confirmed real
+    // case (a men's Adidas tracksuit with no gender signal in its category/breadcrumb) landed on
+    // "Women > Other" purely because that happened to be items0[0], Poshmark's first department in
+    // the list. That is an acceptable stopgap for a HUMAN to review and correct before publishing
+    // (which is exactly what happens when autoPublish is off), but auto-publish must never commit a
+    // guessed department to a live Poshmark listing unreviewed -- see run()'s use of this flag.
+    const confident = !(deptWasGuessed || usedOtherFallback);
+    if (!confident) {
       console.warn('[FAS Poshmark] Category "' + categoryText + '" had no confident match against Poshmark\'s real taxonomy' + (usedOtherFallback ? ' -- fell back to "Other"' : ' -- department was guessed') + '. Review and correct the category before publishing.');
     }
-    return true;
+    return { committed: true, confident: confident };
   }
 
   // BUG FIX 2026-08-22 (P0, Patrick-directed, live-Chrome-confirmed): the prior 5-tier
@@ -1141,7 +1250,7 @@
   function showReviewOverlay(item, index, total, photosOk) {
     const more = (index + 1) < total;
     overlay('<b>FindA.Sale</b><div style="margin-top:6px">Filled <b>' + escapeHtml(item.title) + '</b> as best we could.</div>' +
-      '<div style="margin-top:4px;font-size:12px;color:#cfe3d6">Review every field (category/brand/size/color are UNVERIFIED guesses), then click Poshmark\'s own <b>List This Listing</b> yourself -- this extension never publishes for you.</div>' +
+      '<div style="margin-top:4px;font-size:12px;color:#cfe3d6">Review every field (category/brand/size/color are UNVERIFIED guesses), then click Poshmark\'s own <b>List this item</b> yourself.</div>' +
       (!photosOk ? '<div style="color:#ffcf7a;margin-top:6px;font-size:12px">Photos may not have attached -- add them on this screen.</div>' : '') +
       button('fas-posh-next', more ? 'I posted — next item &#9654;' : 'I posted — done', true) +
       button('fas-posh-close', 'Close', false) +
@@ -1155,12 +1264,153 @@
     closeBtnHandler();
   }
 
+  // FEATURE 2026-08-22 (S-EXT-AUTOPUBLISH-POLICY): auto-publish support -- see file header.
+  // Finds a visible button by its exact visible text, never a class name.
+  function findPoshmarkVisibleButtonByText(text) {
+    return qa('button').find((b) => b.offsetParent !== null && norm(b.textContent) === text);
+  }
+  // BUG FIX 2026-08-22 (S-EXT-POSHMARK-PUBLISH-BUTTON-TEXT, P0, live-Chrome-confirmed via a direct
+  // DOM query on Patrick's real tab after Next successfully advanced to the review step): the real
+  // button reads "List this item", not "List This Listing" -- this file's own popup-facing copy
+  // (fas-poshmark.js's showReviewOverlay / popup.html) used the wrong wording throughout, so this
+  // exact-text check never matched even once Next correctly got clicked, and every run silently
+  // fell back to manual review. Checks both the confirmed real text and the originally-assumed one
+  // defensively, in case Poshmark ever A/B tests the copy.
+  function findPoshmarkPublishButton() {
+    return findPoshmarkVisibleButtonByText('list this item') || findPoshmarkVisibleButtonByText('list this listing');
+  }
+  // BUG FIX 2026-08-22 (S-EXT-POSHMARK-NEXT-STEP, P0, live-Chrome-confirmed on Patrick's real tab):
+  // findPoshmarkPublishButton() alone never found anything on a real run -- Poshmark's actual
+  // create-listing flow is TWO steps: a "Next" button (live-confirmed `data-test="next"`, sitting
+  // in a `.form__actions` container -- the main form's own primary action bar, not some unrelated
+  // modal) advances from the fill form to a review/confirm screen, and only THERE does the real
+  // "List This Listing" button appear. The old code looked for the final button immediately, never
+  // found it, and silently fell back to manual review every time -- exactly matching Patrick's live
+  // report ("didn't click the next button or list the item button"). Live-confirmed distinct from
+  // the unrelated "Single Item"/"Multi Item" buttons also visible on this page (different
+  // data-test values, different container) -- those are never touched.
+  function findPoshmarkNextButton() {
+    return qa('button').find((b) => b.offsetParent !== null && (b.getAttribute('data-test') === 'next' || norm(b.textContent) === 'next'));
+  }
+  async function waitForPoshmarkFinalPublishButton(maxWaitMs) {
+    const start = Date.now();
+    while (Date.now() - start < maxWaitMs) {
+      const btn = findPoshmarkPublishButton();
+      if (btn) return btn;
+      await sleep(300);
+    }
+    return null;
+  }
+
+  // Confirms a real publish happened by polling for the sell form to disappear (Title field gone)
+  // -- no live-confirmed success marker exists yet (CODE-ONLY/UNTESTED, file header), so this is
+  // the same conservative "did the form go away" signal fas-craigslist.js uses for its own publish
+  // confirmation (waitForCraigslistPublish), adapted to this file's own looksLikeSellForm() check.
+  async function waitForPoshmarkPublishConfirmation(maxWaitMs) {
+    const start = Date.now();
+    while (Date.now() - start < maxWaitMs) {
+      if (!looksLikeSellForm()) return true;
+      await sleep(400);
+    }
+    return false;
+  }
+
+  // FEATURE 2026-08-22 (S-EXT-POSHMARK-RUN-SUMMARY, Patrick-directed): "if you have those kinds
+  // of issues they should be given a default to get them published, reported at the end of the
+  // run and should not be a reason to stop the extension continuing forward" -- a guessed category
+  // no longer blocks auto-publish (see run()'s call site below). Instead this records a note via
+  // background.js's fasPoshmarkRunNotes list, and the LAST item in the run reads all of them back
+  // and shows a roll-up instead of silently publishing N-1 guessed items with zero visibility.
+  async function doPoshmarkAutoPublish(item, index, total, fillResult) {
+    const photosOk = fillResult.photosOk;
+    let publishBtn = findPoshmarkPublishButton();
+    if (!publishBtn) {
+      const nextBtn = findPoshmarkNextButton();
+      if (nextBtn) {
+        overlay('<b>FindA.Sale</b> - advancing to the review step...');
+        await humanPause(400, 800);
+        realClick(nextBtn);
+        // A real security/verification screen can appear after advancing, same as everywhere else
+        // in this file -- never attempt to click through one.
+        if (looksLikeInterstitial()) {
+          overlayWarn('Poshmark is showing a verification/security screen. FindA.Sale never attempts to solve this -- please complete it yourself, then finish this listing manually.' + button('fas-posh-close', 'Close', false));
+          closeBtnHandler();
+          return;
+        }
+        publishBtn = await waitForPoshmarkFinalPublishButton(4000);
+      }
+    }
+    if (!publishBtn) {
+      // Auto-publish is on but the final button couldn't be reached (UNVERIFIED selector/flow,
+      // file header) -- never guess past this; fall back to the exact same manual-review path as
+      // autoPublish=false. Whatever step Next already advanced to (if any) is left exactly as-is
+      // for the organizer to finish.
+      showReviewOverlay(item, index, total, photosOk);
+      return;
+    }
+    overlay('<b>FindA.Sale</b> - publishing <b>' + escapeHtml(item.title) + '</b>...');
+    await humanPause(500, 900);
+    realClick(publishBtn);
+    const published = await waitForPoshmarkPublishConfirmation(6000);
+    if (!published) {
+      overlayWarn('Clicked <b>List this item</b> but couldn\'t confirm it went through (UNVERIFIED selector/confirmation signal) -- please check this listing on Poshmark yourself before assuming it posted.' + button('fas-posh-close', 'Close', false));
+      closeBtnHandler();
+      return;
+    }
+    try { await chrome.runtime.sendMessage({ type: 'markListed', itemId: item.id, remoteListingId: null, platform: 'POSHMARK' }); } catch (e) {}
+    try { await chrome.runtime.sendMessage({ type: 'advancePoshmarkQueue' }); } catch (e) {}
+    // Record a run note (never blocks) for every field this run had to guess, skip, or couldn't
+    // set -- see this function's own header comment. fillResult.fieldNotes already covers the
+    // "Category never committed at all" and Size/Color cases (fillListing above); a confidently-
+    // committed-but-guessed Category (fell back to a department default or "Other") is a separate
+    // case only known here.
+    const runNotes = fillResult.fieldNotes ? fillResult.fieldNotes.slice() : [];
+    if (fillResult.categoryCommitted && !fillResult.categoryConfident) {
+      runNotes.push('Category was guessed (no clear match on Poshmark\'s taxonomy) -- double-check it.');
+    }
+    for (const note of runNotes) {
+      try { await chrome.runtime.sendMessage({ type: 'recordPoshmarkRunNote', title: item.title, note: note }); } catch (e) {}
+    }
+    const more = (index + 1) < total;
+    let summaryHtml = '';
+    if (!more) {
+      let notes = [];
+      try {
+        const res = await chrome.runtime.sendMessage({ type: 'getPoshmarkRunNotes' });
+        notes = (res && res.notes) || [];
+      } catch (e) {}
+      if (notes.length) {
+        summaryHtml = '<div style="margin-top:8px;font-size:12px;color:#ffcf7a">' + notes.length + ' item' + (notes.length === 1 ? '' : 's') + ' published this run with something worth double-checking:' +
+          '<ul style="margin:4px 0 0 16px;padding:0">' + notes.map((n) => '<li>' + escapeHtml(n.title) + ' -- ' + escapeHtml(n.note) + '</li>').join('') + '</ul></div>';
+      }
+    }
+    overlay('<b>FindA.Sale</b><div style="margin-top:6px">Published <b>' + escapeHtml(item.title) + '</b>.</div>' +
+      summaryHtml +
+      (more ? button('fas-posh-next', 'Next item &#9654;', true) : '') +
+      button('fas-posh-close', 'Close', false) +
+      '<div style="margin-top:8px;font-size:11px;color:#9fb6a8">Item ' + (index + 1) + ' of ' + total + '</div>');
+    const next = document.getElementById('fas-posh-next');
+    if (next) next.onclick = () => { location.href = POST_URL_HINT; };
+    closeBtnHandler();
+  }
+
   async function fillListing(item) {
     overlay('<b>FindA.Sale</b> - filling the Poshmark listing form...');
     await tryFill('Title', item.title, (v) => fillText('Title', v));
     await tryFill('Description', item.description, (v) => fillText('Description', v));
+    // fieldNotes declared early so the Price check below can push to it -- the rest of this
+    // function's own fieldNotes-collection block (Category/Size/Color) appears further down.
+    const fieldNotes = [];
     if (item.price != null && isFinite(Number(item.price))) {
-      await tryFill('Price', item.price, (v) => fillPoshmarkPrice(String(Math.max(1, Math.round(Number(v))))));
+      const priceOk = await tryFill('Price', item.price, (v) => fillPoshmarkPrice(String(Math.max(1, Math.round(Number(v))))));
+      // BUG FIX 2026-08-22 (S-EXT-POSHMARK-PRICE-ILLEGAL-INVOCATION, Patrick live-console-report):
+      // Price is a REQUIRED Poshmark field with a known-correct value already on hand (no guessing
+      // needed, unlike Category/Size/Color) -- but a failed fill here silently blocked the rest of
+      // the flow with no visible signal, since Poshmark's own required-field validation then
+      // refuses to advance past Next, which is what sent this run into the manual-review fallback
+      // with no clear reason shown. Now surfaced explicitly in the run summary so it's never a
+      // silent stall again.
+      if (!priceOk) fieldNotes.push('Price could not be set (technical glitch, not a guess -- value $' + item.price + ' is correct) -- set it yourself and publish.');
     }
     // Original/MSRP price deliberately skipped -- FindA.Sale carries no such data (never invent).
     // BUG FIX 2026-08-22 (P0, Patrick-directed -- screenshot showed "Please select the category
@@ -1173,13 +1423,29 @@
     // being silently attempted and left blocked by Poshmark's own "select category first" message --
     // on the rare case even that fallback fails.
     let categoryCommitted = false;
+    // FEATURE 2026-08-22 (S-EXT-AUTOPUBLISH-POLICY): pickCategory now returns {committed, confident}
+    // instead of a bare boolean -- see its own comment. categoryConfident is threaded out of this
+    // function so run() can refuse to auto-publish a listing whose department was guessed.
+    let categoryConfident = false;
     try {
-      categoryCommitted = await pickCategory(item.category || '', item.categoryBreadcrumb);
+      const genderHintText = [item.title, item.description].filter(Boolean).join(' ');
+      const categoryResult = await pickCategory(item.category || '', item.categoryBreadcrumb, genderHintText);
+      categoryCommitted = !!(categoryResult && categoryResult.committed);
+      categoryConfident = !!(categoryResult && categoryResult.committed && categoryResult.confident);
     } catch (e) {
       console.warn('[FAS Poshmark] Field "Category" -- error while filling, skipped:', e && e.message);
     }
+    // FEATURE 2026-08-22 (S-EXT-POSHMARK-RUN-SUMMARY, Patrick-directed, extends the same
+    // report-don't-block philosophy from Category to Size/Color): collects a plain-language note
+    // for any field that ends up unset so doPoshmarkAutoPublish can add it to the end-of-run
+    // summary, same as a guessed Category. Never invents a Size value -- an actual wrong physical
+    // size (unlike a slightly-off category) can lead to a real buyer complaint/return, so a
+    // missing Size is reported and left for the organizer, not guessed.
+    // (fieldNotes itself is declared earlier, right after Title/Description, so the Price check
+    // above this function can push to the same array -- not redeclared here.)
     if (!categoryCommitted) {
       console.warn('[FAS Poshmark] Category never committed -- skipping Size/Color since Poshmark locks them behind a chosen category. Fill these in yourself.');
+      fieldNotes.push('Category could not be set -- Size/Color were left blank too.');
     }
     // 2026-08-18: brand/size/color now exist on Item and flow through getExtensionItems ->
     // popup.js's queue map. tryFill's own undefined/null/'' guard still skips silently on
@@ -1188,8 +1454,32 @@
     // Patrick's report) -- kept unconditional.
     await tryFill('Brand', item.brand, (v) => fillAutocomplete('Brand', v));
     if (categoryCommitted) {
-      await tryFill('Size', item.size, (v) => fillSelectLike('Size', v));
-      await tryFill('Color', item.color, (v) => fillPoshmarkColor(v));
+      const sizeOk = await tryFill('Size', item.size, (v) => fillSelectLike('Size', v));
+      if (item.size && !sizeOk) fieldNotes.push('Size "' + item.size + '" could not be set (UNVERIFIED selector) -- set it yourself.');
+      // BUG FIX 2026-08-22 (S-EXT-POSHMARK-COLOR-DOUBLE-LOG, Patrick-flagged): fillPoshmarkColor
+      // already logs its own specific reason ("no matching swatch found") when a value like "Neon"
+      // has no real Poshmark option -- routing it through tryFill's generic wrapper ALSO logged a
+      // second, misleading "selector not found" for the exact same failure (the selector WAS
+      // found; the VALUE just didn't match anything). Called directly instead, skipping tryFill's
+      // own undefined/null/'' guard is replicated inline since it's no longer wrapped.
+      if (item.color) {
+        let colorOk = false;
+        try { colorOk = await fillPoshmarkColor(item.color); } catch (e) { console.warn('[FAS Poshmark] Field "Color" -- error while filling, skipped:', e && e.message); }
+        // FEATURE 2026-08-22 (S-EXT-POSHMARK-COLOR-FALLBACK, Patrick-directed: "guess and report"):
+        // an exact swatch match failed -- try the closest real swatch (see
+        // mapPoshmarkColorFallback's own comment) instead of leaving Color unset. Always reported
+        // in the run summary below regardless of whether the fallback itself succeeds, so the
+        // organizer always knows a substitution happened.
+        let colorFallback = null;
+        if (!colorOk) {
+          colorFallback = mapPoshmarkColorFallback(item.color);
+          if (norm(colorFallback) !== norm(item.color)) {
+            try { colorOk = await fillPoshmarkColor(colorFallback); } catch (e) { console.warn('[FAS Poshmark] Field "Color" fallback -- error while filling, skipped:', e && e.message); }
+          }
+        }
+        if (!colorOk) fieldNotes.push('Color "' + item.color + '" has no matching Poshmark swatch and the fallback also failed -- set it yourself.');
+        else if (colorFallback) fieldNotes.push('Color "' + item.color + '" had no exact match -- used closest swatch "' + colorFallback + '" instead. Double-check it.');
+      }
     }
     const conditionLabel = mapPoshmarkCondition(item.condition);
     // Condition is not the field Patrick's report named as blocked, and this file has no prior
@@ -1198,10 +1488,10 @@
     await tryFill('Condition', conditionLabel, (v) => fillSelectLike('Condition', v));
     await humanPause(400, 800);
     const photosOk = await injectPhotos(item.photoUrls);
-    return photosOk;
+    return { photosOk, categoryCommitted, categoryConfident, fieldNotes };
   }
 
-  async function run(item, index, total) {
+  async function run(item, index, total, autoPublish) {
     if (looksLikeInterstitial()) {
       overlayWarn('Poshmark is showing a verification/security screen. FindA.Sale never attempts to solve this -- please complete it yourself, then reopen the extension to continue.' + button('fas-posh-close', 'Close', false));
       closeBtnHandler();
@@ -1231,7 +1521,8 @@
       closeBtnHandler();
       return;
     }
-    const photosOk = await fillListing(item);
+    const fillResult = await fillListing(item);
+    const photosOk = fillResult.photosOk;
     // Re-check for an interstitial that may have appeared mid-fill (e.g. triggered by the photo
     // upload) before showing the "you're ready to review" state.
     if (looksLikeInterstitial()) {
@@ -1239,6 +1530,13 @@
       closeBtnHandler();
       return;
     }
+    // BUG FIX 2026-08-22 (S-EXT-POSHMARK-RUN-SUMMARY, Patrick-directed, reverses the prior
+    // round's gate): a guessed category no longer blocks auto-publish -- Patrick: "this has to be
+    // automated not oh always default to asking the user... if you have those kinds of issues they
+    // should be given a default to get them published, reported at the end of the run and should
+    // not be a reason to stop the extension continuing forward." doPoshmarkAutoPublish now records
+    // a run note instead of refusing to publish; see its own header comment.
+    if (autoPublish) { await doPoshmarkAutoPublish(item, index, total, fillResult); return; }
     showReviewOverlay(item, index, total, photosOk);
   }
 
@@ -1248,7 +1546,7 @@
     try { queued = await chrome.runtime.sendMessage({ type: 'getPoshmarkQueueItem' }); } catch (e) { return; }
     if (!queued || !queued.ok || !queued.item) return; // nothing queued -- stay silent
     try {
-      await run(queued.item, queued.index, queued.total);
+      await run(queued.item, queued.index, queued.total, queued.autoPublish !== false);
     } catch (e) {
       overlayWarn('Something went wrong filling this listing (' + escapeHtml((e && e.message) || 'unknown error') + '). Nothing was published -- complete this listing yourself, or reopen the extension to try again.' + button('fas-posh-close', 'Close', false));
       closeBtnHandler();

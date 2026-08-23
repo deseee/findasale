@@ -393,6 +393,24 @@ export const getExtensionItems = async (req: AuthRequest, res: Response): Promis
     // ADR-102 (2026-08-09): Gumtree Australia -- same per-platform pattern as the two above,
     // read by popup.js's currentListedFlag() when the 'gumtree_au' channel is selected.
     marketplaceListedGumtreeAu: postedByItemPlatform.has(`${it.id}:GUMTREE_AU`) && !removedByItemPlatform.has(`${it.id}:GUMTREE_AU`),
+    // S-EXT-POSHMARK-LISTED-BADGE (2026-08-22, Patrick live report -- "tracksuit doesn't show as
+    // already listed on poshmark"): markItemListed (below) has created a real MarketplaceListingJob
+    // row with platform POSHMARK/MERCARI/VINTED/GRAILED since the 2026-08-19 platform-coercion fix
+    // (see MarketplaceListingPlatform's own comment), and postedByItemPlatform/removedByItemPlatform
+    // above are already generic/platform-agnostic (keyed by `${itemId}:${platform}` for ANY
+    // platform) -- so the data has been correct all along. The bug was narrower than it looked:
+    // this `shaped` object -- built field-by-field, not spread from a generic map -- simply never
+    // read these 4 platforms' keys out into the response, exactly the same class of gap as the
+    // brand/size/color/material bug fixed 2026-08-20 just above. popup.js's currentListedFlag()
+    // already reads marketplaceListedPoshmark/-Mercari/-Vinted/-Grailed and has since 2026-08-18
+    // (its own comment there documented this exact gap and is now stale/resolved) -- these were
+    // simply always undefined -> false. Confirmed via direct source read this session; not the
+    // guessed "maybe markListed never fires for these platforms" theory -- markItemListed's
+    // job-creation call (`prisma.marketplaceListingJob.create`) is platform-agnostic and unconditional.
+    marketplaceListedPoshmark: postedByItemPlatform.has(`${it.id}:POSHMARK`) && !removedByItemPlatform.has(`${it.id}:POSHMARK`),
+    marketplaceListedMercari: postedByItemPlatform.has(`${it.id}:MERCARI`) && !removedByItemPlatform.has(`${it.id}:MERCARI`),
+    marketplaceListedVinted: postedByItemPlatform.has(`${it.id}:VINTED`) && !removedByItemPlatform.has(`${it.id}:VINTED`),
+    marketplaceListedGrailed: postedByItemPlatform.has(`${it.id}:GRAILED`) && !removedByItemPlatform.has(`${it.id}:GRAILED`),
     // Craigslist ZIP/area autofill (2026-08-06) -- fas-craigslist.js reads these exact field
     // names (item.saleCity / item.saleZip) and only fills when present, never invents a value.
     saleCity: saleLocationById.get(it.saleId || '')?.city || null,
