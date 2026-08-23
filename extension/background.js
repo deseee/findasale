@@ -738,6 +738,31 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         // (2026-07-16)
         throttledCheckPendingRemovals(); // fire-and-forget; shared 30s throttle
         sendResponse(await apiFetch('/extension/items'));
+      } else if (msg.type === 'checkItemListedStatus') {
+        // FEATURE 2026-08-22 (S-EXT-DUPLICATE-LISTING-GUARD, Patrick live-confirmed incident):
+        // a Poshmark queue entry got resumed after Patrick had ALREADY manually completed that
+        // listing outside the extension's own "I posted -- done" flow -- nothing re-checked
+        // current listed-status before re-filling and re-publishing, so a second, genuinely
+        // duplicate live Poshmark listing was created for the same item. This is a general
+        // resume-staleness risk, not unique to Poshmark's specific bug that surfaced it.
+        // No new backend endpoint needed -- reuses the same authenticated GET /extension/items
+        // call getItems already makes (extensionController.ts's `shaped` response, which as of
+        // this same session correctly includes marketplaceListedPoshmark/-Mercari/-Vinted/
+        // -Grailed). fas-poshmark.js/fas-mercari.js/fas-grailed.js call this right after pulling
+        // a queue item and before filling anything; a `listed: true` result skips the fill/
+        // publish entirely (see each content script's start()).
+        const FAS_LISTED_FIELD_BY_PLATFORM = {
+          POSHMARK: 'marketplaceListedPoshmark', MERCARI: 'marketplaceListedMercari',
+          GRAILED: 'marketplaceListedGrailed', VINTED: 'marketplaceListedVinted',
+        };
+        const r = await apiFetch('/extension/items');
+        if (!r.ok) { sendResponse({ ok: false, error: r.error || 'request_failed' }); }
+        else {
+          const items = (r.data && r.data.items) || [];
+          const it = items.find((x) => x.id === msg.itemId);
+          const field = FAS_LISTED_FIELD_BY_PLATFORM[msg.platform];
+          sendResponse({ ok: true, found: !!it, listed: !!(it && field && it[field] === true) });
+        }
       } else if (msg.type === 'markListed') {
         // ADR-100 (2026-08-06/07): platform threaded through -- fas-content.js's FB call site
         // never sets it (defaults 'FACEBOOK' server-side, matching today's behavior exactly);

@@ -1297,6 +1297,26 @@
     let queued;
     try { queued = await chrome.runtime.sendMessage({ type: 'getGrailedQueueItem' }); } catch (e) { return; }
     if (!queued || !queued.ok || !queued.item) return; // nothing queued -- stay silent
+    // FEATURE 2026-08-22 (S-EXT-DUPLICATE-LISTING-GUARD) -- see fas-poshmark.js's start() for the
+    // full incident writeup (a resumed Poshmark queue entry produced a real duplicate live
+    // listing this session). Applied here for consistency across all auto-publish-capable
+    // platforms. Best-effort: falls through to the normal flow if the check itself fails.
+    try {
+      const statusRes = await chrome.runtime.sendMessage({ type: 'checkItemListedStatus', itemId: queued.item.id, platform: 'GRAILED' });
+      if (statusRes && statusRes.ok && statusRes.listed) {
+        const more = (queued.index + 1) < queued.total;
+        overlay('<b>FindA.Sale</b><div style="margin-top:6px">Skipped <b>' + escapeHtml(queued.item.title) + '</b> -- this already shows as listed on Grailed, so it was not filled or published again (avoiding a duplicate listing).</div>' +
+          (more ? button('fas-gr-next', 'Next item &#9654;', true) : '') +
+          button('fas-gr-close', 'Close', false));
+        try { await chrome.runtime.sendMessage({ type: 'advanceGrailedQueue' }); } catch (e) {}
+        const next = document.getElementById('fas-gr-next');
+        if (next) next.onclick = async () => {
+          try { await chrome.runtime.sendMessage({ type: 'reopenGrailedTab' }); } catch (e) {}
+        };
+        closeBtnHandler();
+        return;
+      }
+    } catch (e) { /* best-effort -- fall through to normal fill/publish flow */ }
     try {
       await run(queued.item, queued.index, queued.total, queued.autoPublish !== false);
     } catch (e) {

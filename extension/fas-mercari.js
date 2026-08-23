@@ -945,6 +945,24 @@
     let queued;
     try { queued = await chrome.runtime.sendMessage({ type: 'getMercariQueueItem' }); } catch (e) { return; }
     if (!queued || !queued.ok || !queued.item) return; // nothing queued -- stay silent
+    // FEATURE 2026-08-22 (S-EXT-DUPLICATE-LISTING-GUARD) -- see fas-poshmark.js's start() for the
+    // full incident writeup (a resumed Poshmark queue entry produced a real duplicate live
+    // listing this session). Applied here for consistency across all auto-publish-capable
+    // platforms. Best-effort: falls through to the normal flow if the check itself fails.
+    try {
+      const statusRes = await chrome.runtime.sendMessage({ type: 'checkItemListedStatus', itemId: queued.item.id, platform: 'MERCARI' });
+      if (statusRes && statusRes.ok && statusRes.listed) {
+        const more = (queued.index + 1) < queued.total;
+        overlay('<b>FindA.Sale</b><div style="margin-top:6px">Skipped <b>' + escapeHtml(queued.item.title) + '</b> -- this already shows as listed on Mercari, so it was not filled or published again (avoiding a duplicate listing).</div>' +
+          (more ? button('fas-merc-next', 'Next item &#9654;', true) : '') +
+          button('fas-merc-close', 'Close', false));
+        try { await chrome.runtime.sendMessage({ type: 'advanceMercariQueue' }); } catch (e) {}
+        const next = document.getElementById('fas-merc-next');
+        if (next) next.onclick = () => { location.href = SELL_URL_HINT; };
+        closeBtnHandler();
+        return;
+      }
+    } catch (e) { /* best-effort -- fall through to normal fill/publish flow */ }
     try {
       await run(queued.item, queued.index, queued.total, queued.autoPublish !== false);
     } catch (e) {

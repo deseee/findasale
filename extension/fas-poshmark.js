@@ -1545,6 +1545,30 @@
     let queued;
     try { queued = await chrome.runtime.sendMessage({ type: 'getPoshmarkQueueItem' }); } catch (e) { return; }
     if (!queued || !queued.ok || !queued.item) return; // nothing queued -- stay silent
+    // FEATURE 2026-08-22 (S-EXT-DUPLICATE-LISTING-GUARD, Patrick live-confirmed incident): a
+    // resumed queue entry (via popup.js's "reopen that tab" banner, or any tab reload while a
+    // queue is still pending) used to unconditionally re-fill and re-publish, with zero check for
+    // whether the item might already be listed -- e.g. because the organizer finished it manually
+    // outside this overlay's own "I posted -- done" button. That produced a real, confirmed
+    // duplicate live Poshmark listing this session. Best-effort freshness check against the same
+    // authenticated data the popup's own LISTED badge uses (background.js's checkItemListedStatus,
+    // reusing GET /extension/items -- no new backend endpoint). If the check itself fails (offline,
+    // backend hiccup), fall through to the normal flow rather than blocking the whole run on a
+    // check that reduces, but was never the sole guarantee against, this risk.
+    try {
+      const statusRes = await chrome.runtime.sendMessage({ type: 'checkItemListedStatus', itemId: queued.item.id, platform: 'POSHMARK' });
+      if (statusRes && statusRes.ok && statusRes.listed) {
+        const more = (queued.index + 1) < queued.total;
+        overlay('<b>FindA.Sale</b><div style="margin-top:6px">Skipped <b>' + escapeHtml(queued.item.title) + '</b> -- this already shows as listed on Poshmark, so it was not filled or published again (avoiding a duplicate listing).</div>' +
+          (more ? button('fas-posh-next', 'Next item &#9654;', true) : '') +
+          button('fas-posh-close', 'Close', false));
+        try { await chrome.runtime.sendMessage({ type: 'advancePoshmarkQueue' }); } catch (e) {}
+        const next = document.getElementById('fas-posh-next');
+        if (next) next.onclick = () => { location.href = POST_URL_HINT; };
+        closeBtnHandler();
+        return;
+      }
+    } catch (e) { /* best-effort -- fall through to normal fill/publish flow */ }
     try {
       await run(queued.item, queued.index, queued.total, queued.autoPublish !== false);
     } catch (e) {
