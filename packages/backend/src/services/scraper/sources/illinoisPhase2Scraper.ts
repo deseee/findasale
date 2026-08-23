@@ -152,8 +152,11 @@ function mapCategory(licenseType: string): string {
 /**
  * Fetch all pages from a Socrata CSV endpoint using $limit/$offset pagination.
  * Returns all lines concatenated (header only on first page).
+ *
+ * `whereClause` is a raw (unencoded) SoQL $where expression — caller supplies one
+ * tailored to the target dataset's actual column names.
  */
-async function fetchSocrataAllPages(baseUrl: string, domain: string): Promise<string[]> {
+async function fetchSocrataAllPages(baseUrl: string, domain: string, whereClause: string): Promise<string[]> {
   let offset = 0;
   let allLines: string[] = [];
   let headerIncluded = false;
@@ -161,10 +164,18 @@ async function fetchSocrataAllPages(baseUrl: string, domain: string): Promise<st
   console.log(`[IllinoisPhase2] Fetching paginated CSV from ${domain}`);
 
   while (true) {
-    // Server-side full-text filter — reduces egress vs. fetching all license types.
-    // Client-side ALWAYS_INCLUDE_SUBSTRINGS / BROADER_LICENSE_TYPES checks remain as secondary filters.
-    const ilQ = encodeURIComponent('auctioneer pawnbroker secondhand consignment junk dealer vintage antique thrift');
-    const url = `${baseUrl}?$limit=${PAGE_LIMIT}&$offset=${offset}&$q=${ilQ}`;
+    // ROOT-CAUSE FIX 2026-08-23 (roadmap #558 follow-up, tool-cited): this used to be a
+    // single Socrata $q full-text search with 9 space-separated keywords. Verified live
+    // against both data.illinois.gov and data.cityofchicago.org this session: Socrata's
+    // $q treats space-separated terms as an AND (every term must appear as a token in the
+    // SAME row), so a 9-keyword $q is guaranteed to return zero rows on every real record
+    // (curl confirms: $q=auctioneer alone returns matches, $q=auctioneer+pawnbroker returns
+    // none). That is the exact zero-write signature seen since 2026-05 (IllinoisPhase2 has
+    // 3,154 historical rows, none written since 2026-05-11). Replaced with a proper $where
+    // OR-clause per dataset (built by the caller) — confirmed via curl to return 4,721 rows
+    // for IDFPR (license_type='AUCTIONEER' — the only relevant license_type IDFPR actually
+    // has, confirmed via $group=license_type) and 341 rows for Chicago.
+    const url = `${baseUrl}?$limit=${PAGE_LIMIT}&$offset=${offset}&$where=${encodeURIComponent(whereClause)}`;
     await defaultRateLimiter.waitBeforeRequest(domain);
 
     const response = await fetch(url, {
@@ -393,10 +404,25 @@ export async function runIllinoisPhase2Scraper(): Promise<void> {
   let totalMatched  = 0;
   let totalUpserted = 0;
 
+  // Per-dataset $where clauses (raw SoQL — encoded by fetchSocrataAllPages). Built from the
+  // ALWAYS_INCLUDE_SUBSTRINGS list above so server-side filtering stays in sync with the
+  // client-side check; confirmed live via curl this session (see fetchSocrataAllPages comment).
+  const IDFPR_WHERE =
+    "upper(license_type) like '%AUCTIONEER%' OR upper(license_type) like '%SECONDHAND DEALER%' " +
+    "OR upper(license_type) like '%PAWNBROKER%' OR upper(license_type) like '%JUNK DEALER%' " +
+    "OR upper(license_type) like '%CONSIGNMENT STORE%'";
+  const CHICAGO_WHERE =
+    "upper(license_description) like '%PAWNBROKER%' OR upper(license_description) like '%SECONDHAND DEALER%' " +
+    "OR upper(license_description) like '%AUCTION%' OR upper(license_description) like '%JUNK%' " +
+    "OR upper(license_description) like '%CONSIGNMENT%' OR upper(license_description) like '%ANTIQUE%' " +
+    "OR upper(license_description) like '%VINTAGE%' OR upper(license_description) like '%THRIFT%' " +
+    "OR upper(business_activity) like '%PAWNBROKER%' OR upper(business_activity) like '%AUCTION%' " +
+    "OR upper(business_activity) like '%JUNK%' OR upper(business_activity) like '%CONSIGNMENT%'";
+
   try {
     // --- Source 1: IDFPR state licensing ---
     console.log('[IllinoisPhase2] Fetching IDFPR state licensing data...');
-    const idfprLines = await fetchSocrataAllPages(IL_IDFPR_CSV_BASE, IL_IDFPR_DOMAIN);
+    const idfprLines = await fetchSocrataAllPages(IL_IDFPR_CSV_BASE, IL_IDFPR_DOMAIN, IDFPR_WHERE);
     console.log(`[IllinoisPhase2] IDFPR total rows fetched: ${idfprLines.length - 1}`);
 
     const idfprResult = await processIdfprCsv(idfprLines);
@@ -406,7 +432,7 @@ export async function runIllinoisPhase2Scraper(): Promise<void> {
 
     // --- Source 2: Chicago Business Licenses ---
     console.log('[IllinoisPhase2] Fetching Chicago Business Licenses data...');
-    const chicagoLines = await fetchSocrataAllPages(CHICAGO_BIZ_CSV_BASE, CHICAGO_BIZ_DOMAIN);
+    const chicagoLines = await fetchSocrataAllPages(CHICAGO_BIZ_CSV_BASE, CHICAGO_BIZ_DOMAIN, CHICAGO_WHERE);
     console.log(`[IllinoisPhase2] Chicago total rows fetched: ${chicagoLines.length - 1}`);
 
     const chicagoResult = await processChicagoCsv(chicagoLines);

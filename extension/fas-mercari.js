@@ -45,6 +45,30 @@
   const SELL_URL_HINT = 'https://www.mercari.com/sell/'; // UNVERIFIED -- best-effort guess, not live-confirmed
 
   function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
+  // BUG FIX 2026-08-23 (S-EXT-MERCARI-BATCH-2, P0, Patrick-directed, live-confirmed root cause):
+  // Patrick's real run showed Title/Description/Category/Brand landing fine but Condition/Size/
+  // Price/Smart-Pricing-floor ALL failing "selector not found" uniformly, with the page visibly
+  // "moving erratically" while it ran -- there is no multi-step wizard gate (confirmed: Patrick's
+  // screenshot shows one continuous page, only Save draft/List at the bottom, no Next/Continue).
+  // The real cause is almost certainly the same SPA-hydration-timing race already fixed elsewhere
+  // in this file for waitForFormReady() -- but this time it's Mercari's OWN async recognition/
+  // category-dependent rendering still settling well past this file's short FIXED sleeps (700ms
+  // for Brand's suggestion list, 350ms for Size's panel, none at all for Condition/Price/the floor
+  // field), which is plausible on a genuinely NEW listing (full image-recognition + category-
+  // dependent field mounting) in a way that never showed up testing against an existing DRAFT
+  // (already-saved data, nothing left to auto-populate or settle). Rather than guess at a single
+  // bigger fixed delay (fragile, still racy), this polls for the element to actually exist,
+  // re-querying every 300ms up to maxWaitMs -- same philosophy as waitForFormReady()'s own poll
+  // loop just below, applied per-field instead of once at page-open.
+  async function waitForSelector(getEl, maxWaitMs) {
+    const start = Date.now();
+    while (Date.now() - start < maxWaitMs) {
+      const el = getEl();
+      if (el) return el;
+      await sleep(300);
+    }
+    return null;
+  }
   async function humanPause(minMs, maxMs) { await sleep(minMs + Math.random() * (maxMs - minMs)); }
   // BUG FIX 2026-08-20 (S-EXT-BATCH, P0, Patrick-directed): the two stuck drafts this session both
   // showed Mercari's own boilerplate ($14 draft default, "Condition requires an update") -- the
@@ -511,9 +535,24 @@
           // an unrelated page element), and added a fallback close-button pass if no confirm control
           // is found at all -- the pick itself already succeeded (opt.click() above), so the modal
           // should be dismissed one way or another rather than left blocking the rest of the fill.
+          // BUG FIX 2026-08-23 (S-EXT-MERCARI-BATCH-3, P0, live-confirmed root cause of the
+          // redirect Patrick reported): this qa() sweep is PAGE-WIDE, not scoped to the category
+          // picker itself -- and the real Mercari sell page has a permanent, always-present "Save
+          // draft" button at the bottom (confirmed in Patrick's own screenshot). "Save draft"
+          // matches \bsave\b in the regex below, so once the picker closed on its own (no real
+          // confirm button existed to find), this code fell through to clicking Mercari's ACTUAL
+          // page-level Save Draft button -- on a listing still missing Size/Color/Condition/Price
+          // at that point in the fill sequence -- which is exactly why Mercari redirected to
+          // /mypage/listings/draft/action-required/ (an incomplete draft that needs action) and
+          // every field after Category/Brand then failed with "selector not found": the extension
+          // was no longer running against the Sell page at all. Explicitly excludes every known
+          // real page-level submit/save action by exact text so this can never fire the actual
+          // form's own buttons again, no matter what wording a genuine picker-confirm button uses.
+          const MERCARI_REAL_PAGE_ACTIONS = ['save draft', 'save & continue', 'list', 'list this item', 'publish', 'save and continue'];
           let confirmBtn = qa('button, [role="button"]').find((b) => {
             const t = norm(b.textContent);
-            return t.length > 0 && t.length < 30 && /\b(apply|done|select|confirm|save)\b/.test(t);
+            if (MERCARI_REAL_PAGE_ACTIONS.indexOf(t) !== -1) return false;
+            return t.length > 0 && t.length < 30 && /\b(apply|done|select|confirm)\b/.test(t);
           });
           if (confirmBtn) {
             await realClick(confirmBtn);
@@ -610,7 +649,7 @@
   // discipline established for Poshmark's Size field (a wrong physical size risks a real buyer
   // return): no confident match leaves the field unset rather than picking a nearest guess.
   async function fillMercariSize(value) {
-    const opener = document.querySelector('[data-testid="Size"]') || openerByLabel('Size');
+    const opener = await waitForSelector(() => document.querySelector('[data-testid="Size"]') || openerByLabel('Size'), 5000);
     if (!opener) return false;
     const openerTextBefore = norm(opener.textContent);
     await realClick(opener);
@@ -663,7 +702,7 @@
   // overwrite or reject what was typed, and a stuck-check catches that instead of falsely reporting
   // success. Digits-only comparison so a "$"/comma-formatted echo of the same number still counts.
   async function fillMercariPrice(value) {
-    const el = document.querySelector('input#Price[name="sellPrice"][data-testid="Price"]') || fieldByLabel('Price');
+    const el = await waitForSelector(() => document.querySelector('input#Price[name="sellPrice"][data-testid="Price"]') || fieldByLabel('Price'), 5000);
     if (!el) return false;
     el.focus();
     const set = setNativeValue(el, String(value));
@@ -700,8 +739,8 @@
     floor = Math.max(1, Math.min(floor, price - 0.01));
     floor = Math.round(floor);
     if (floor >= price) return false; // price too low for a valid floor strictly below it -- leave Mercari's own default rather than set an invalid one
-    const el = document.querySelector('input#sellMinPriceForAutoPriceDrop[name="sellMinPriceForAutoPriceDrop"][data-testid="SmartPricingFloorPrice"]')
-      || fieldByLabel('Smart Pricing Floor Price') || fieldByLabel('Floor Price');
+    const el = await waitForSelector(() => document.querySelector('input#sellMinPriceForAutoPriceDrop[name="sellMinPriceForAutoPriceDrop"][data-testid="SmartPricingFloorPrice"]')
+      || fieldByLabel('Smart Pricing Floor Price') || fieldByLabel('Floor Price'), 5000);
     if (!el) {
       console.warn('[FAS Mercari] Smart Pricing floor price field not found (UNVERIFIED selector) -- Smart Pricing is on by default, please set a real floor price manually before publishing.');
       return false;
@@ -752,7 +791,7 @@
   };
   async function fillMercariCondition(conditionLabel) {
     const id = MERCARI_CONDITION_RADIO_ID[conditionLabel];
-    const el = id ? document.querySelector('input[name="sellCondition"][id="' + id + '"]') : null;
+    const el = id ? await waitForSelector(() => document.querySelector('input[name="sellCondition"][id="' + id + '"]'), 5000) : null;
     if (!el) return false;
     await realClick(el);
     await sleep(200);
@@ -944,11 +983,22 @@
     // (wider than this file's other internal pauses) so the whole fill spreads out instead of
     // completing in one inhuman burst.
     let interstitialAt = null;
+    // BUG FIX 2026-08-23 (S-EXT-MERCARI-BATCH-3, P0, live-confirmed): a stray click on Mercari's
+    // own real "Save draft" button (root-caused and fixed in pickCategory() above -- see that
+    // fix's comment) silently navigated the whole run off the Sell page mid-fill, and every field
+    // after that point failed with a generic "selector not found" that gave no hint anything had
+    // actually gone wrong with the PAGE itself, not the selector. This checks the URL is still the
+    // real Sell page before each field and stops with an honest, specific message the instant it
+    // isn't -- covers this exact bug's blast radius AND any future cause of the same symptom.
+    let navigatedAwayFrom = null;
+    function stillOnSellPage() { return location.pathname.replace(/\/+$/, '') === '/sell'; }
     async function guardedFill(label, value, fillFn) {
-      if (interstitialAt) return false; // already stopped -- don't touch anything further
+      if (interstitialAt || navigatedAwayFrom) return false; // already stopped -- don't touch anything further
+      if (!stillOnSellPage()) { navigatedAwayFrom = label; return false; }
       if (looksLikeInterstitial()) { interstitialAt = label; return false; }
       const ok = await tryFill(label, value, fillFn);
       await humanPause(500, 1400);
+      if (!stillOnSellPage()) { navigatedAwayFrom = label; return ok; }
       if (looksLikeInterstitial()) { interstitialAt = label; }
       return ok;
     }
@@ -978,7 +1028,7 @@
     }
     if (!interstitialAt) await fillWeight(item);
     if (!interstitialAt) await fillMercariSmartPricingFloor(item);
-    return { photosOk, interstitialAt };
+    return { photosOk, interstitialAt, navigatedAwayFrom };
   }
 
   // FEATURE 2026-08-22 (S-EXT-AUTOPUBLISH-POLICY): auto-publish support -- see file header.
@@ -1062,6 +1112,11 @@
     // Patrick/the organizer knows precisely where to pick up manually, rather than "somewhere,
     // unknown" -- live-confirmed case: Title/Description/Category/Brand filled, Size was where it
     // stopped.
+    if (fillResult.navigatedAwayFrom) {
+      overlayWarn('Mercari navigated away from the Sell page (now on <b>' + escapeHtml(location.pathname) + '</b>) while filling <b>' + escapeHtml(fillResult.navigatedAwayFrom) + '</b> -- fields before that point may have filled, but nothing after it was attempted. This usually means something on the page got clicked that shouldn\'t have (e.g. a Save/List button) -- check your Mercari drafts list and finish this listing manually.' + button('fas-merc-close', 'Close', false));
+      closeBtnHandler();
+      return;
+    }
     if (fillResult.interstitialAt) {
       overlayWarn('Mercari is showing a verification/security screen -- filling stopped before <b>' + escapeHtml(fillResult.interstitialAt) + '</b>. Please complete the verification yourself, then finish the remaining fields on this draft manually (fields before ' + escapeHtml(fillResult.interstitialAt) + ' were already filled -- do not start a new listing).' + button('fas-merc-close', 'Close', false));
       closeBtnHandler();

@@ -138,16 +138,18 @@ async function processRecord(record: Record<string, string>, source: string): Pr
 
   if (!businessName || businessName.length < 3) return null;
 
-  // Resolve license type
-  const licenseTypeRaw = (
-    record['business_type'] ||
-    record['license_type'] ||
-    record['license_description'] ||
-    record['type'] ||
-    record['category'] ||
-    record['purpose'] ||
-    ''
-  ).trim();
+  // Resolve license type — concatenate all candidate fields (not just the first truthy
+  // one) so `purpose` (the field that actually carries descriptive text on this dataset)
+  // still feeds mapCategory() even when `business_type` (entity type, e.g. "Domestic LLC")
+  // is also present. See the same fix in fetchSocrataSource() above for the full rationale.
+  const licenseTypeRaw = [
+    record['business_type'],
+    record['license_type'],
+    record['license_description'],
+    record['type'],
+    record['category'],
+    record['purpose'],
+  ].filter(Boolean).join(' ').trim();
 
   // Determine inclusion
   const alwaysInclude = licenseTypeRaw ? licenseTypeAlwaysInclude(licenseTypeRaw) : false;
@@ -203,14 +205,28 @@ async function fetchSocrataSource(
   let offset = 0;
   const batchRows: ScrapedOrganizerRow[] = [];
 
-  // Server-side full-text filter
-  const searchTerms = 'pawnbroker secondhand auctioneer consignment thrift antique vintage auction pawn resale flea';
-  const q = encodeURIComponent(searchTerms);
+  // ROOT-CAUSE FIX 2026-08-23 (roadmap #558 follow-up, tool-cited): the old $q was a single
+  // Socrata full-text search with 11 space-separated keywords. Verified live via curl this
+  // session against data.honolulu.gov/resource/9k54-ztb8.json: Socrata's $q ANDs
+  // space-separated terms (every term must appear as a token in the same row), so an
+  // 11-keyword $q is guaranteed to return zero rows on any real record — confirmed: $q
+  // with the exact scraper string returns [], while $q=pawnbroker alone returns real
+  // matches. Same failure mode confirmed independently on illinoisPhase2Scraper.ts's two
+  // Socrata sources this session. This is the actual reason HawaiiPhase2 wrote 0 rows for
+  // 3+ months (historical: 47 rows, none since 2026-05-11). Replaced with a $where OR-clause
+  // over the fields that actually carry descriptive text on this dataset (`purpose` and
+  // `name` — confirmed live: e.g. "A LA BROCANTE LLC" / purpose "VINTAGE COLLECTIBLES AND
+  // ANTIQUES RETAIL SHOP" only matches via purpose, not name). Live-verified count: 1,708
+  // rows server-side (296 after the existing client-side active-status filter).
+  const searchTerms = ['PAWN', 'AUCTION', 'SECONDHAND', 'SECOND HAND', 'CONSIGN', 'ANTIQUE', 'VINTAGE', 'THRIFT', 'RESALE', 'SALVAGE', 'JUNK DEALER', 'FLEA MARKET', 'SWAP MEET'];
+  const whereClause = searchTerms
+    .map((k) => `upper(purpose) like '%${k}%' OR upper(name) like '%${k}%'`)
+    .join(' OR ');
 
   console.log(`[HawaiiPhase2] Fetching from ${baseUrl}`);
 
   while (true) {
-    const url = `${baseUrl}?$limit=${PAGE_LIMIT}&$offset=${offset}&$q=${q}`;
+    const url = `${baseUrl}?$limit=${PAGE_LIMIT}&$offset=${offset}&$where=${encodeURIComponent(whereClause)}`;
     await defaultRateLimiter.waitBeforeRequest(domain);
 
     let response: Response;
@@ -254,13 +270,18 @@ async function fetchSocrataSource(
 
     for (const record of records) {
       try {
-        const didMatch = nameMatchesKeyword(
-          (record['name'] || record['business_name'] || record['dba_name'] || '') +
-          ' ' +
-          (record['business_type'] || record['license_type'] || record['type'] || record['category'] || record['purpose'] || '')
-        ) || licenseTypeAlwaysInclude(
-          record['business_type'] || record['license_type'] || record['license_description'] || ''
-        );
+        // ROOT-CAUSE FIX 2026-08-23: the `||` chains below always resolved to the FIRST
+        // truthy field and short-circuited before ever reaching `purpose` — on this dataset
+        // `business_type` (a Socrata field that actually holds the entity type, e.g. "Domestic
+        // Limited Liability Company (LLC)") is populated on almost every row, so `purpose`
+        // (the field that actually carries the descriptive sale-type text, e.g. "VINTAGE
+        // COLLECTIBLES AND ANTIQUES RETAIL SHOP") was never inspected at all. Confirmed live
+        // via curl: records whose keyword only appears in `purpose` (not `name`) were being
+        // silently dropped even after the $where fix above. Now concatenates every candidate
+        // field instead of picking just the first truthy one.
+        const nameFields = [record['name'], record['business_name'], record['dba_name']].filter(Boolean).join(' ');
+        const typeFields = [record['business_type'], record['license_type'], record['type'], record['category'], record['purpose']].filter(Boolean).join(' ');
+        const didMatch = nameMatchesKeyword(`${nameFields} ${typeFields}`) || licenseTypeAlwaysInclude(typeFields);
 
         if (!didMatch) continue;
         matched++;

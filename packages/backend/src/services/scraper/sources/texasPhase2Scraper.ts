@@ -166,11 +166,28 @@ export async function runTexasPhase2Scraper(): Promise<void> {
   try {
     while (true) {
       pageNum++;
-      // Server-side license_type filter — only fetch TDLR records for auctioneers, secondhand
-      // dealers, and pawnshops. Eliminates 99%+ of irrelevant TDLR license types.
-      // Client-side ALWAYS_INCLUDE_TYPES / BROADER_TYPES checks remain as secondary filters.
+      // ROOT-CAUSE FIX 2026-08-23 (roadmap #558 follow-up, tool-cited): the $where above used
+      // an exact-match `IN (...)` list of uppercase abbreviation codes ('AUC', 'SHD', 'JDL',
+      // 'PSH', 'AUCTIONEER', ...) that do not exist in the live TDLR data. Confirmed via curl
+      // this session: data.texas.gov/resource/7358-krk7.json's real license_type values are
+      // Title Case human-readable strings ("Auctioneer", "Associate Auctioneer", "Auctioneer
+      // CE Provider") — the old IN-list matched zero of the 983,494 rows in the dataset every
+      // single run (verified: the exact old $where returns []). There is also no PAWNSHOP/
+      // SECONDHAND/JUNK/CONSIGNMENT/ESTATE SALE license_type in this dataset at all (OCCC
+      // pawnshops are a separate source per the file header) — only Auctioneer variants exist.
+      // This was the actual reason TexasPhase2 wrote 0 rows for 3+ months, not (only) the
+      // timeout bug fixed here 2026-08-17 — that fix was correct but could never be exercised
+      // because this $where already produced 0 records before any page could time out.
+      // Replaced with a case-insensitive LIKE-OR clause matching the same target categories.
+      // Live-verified count: 1,970 matching rows — matches the historical TexasPhase2 row
+      // count (1,971) almost exactly, strong confirmation this is the right filter.
       const TX_WHERE = encodeURIComponent(
-        `license_type IN ('AUC','AUCTIONEER','AUCTION COMPANY','AUCTION HOUSE','SECONDHAND','SECOND HAND','SHD','JUNK','JDL','JUNK DEALER','CONSIGNMENT','ESTATE SALE','PAWNSHOP','PSH','PAWNBROKER','RETAIL','RTL','MERCHANT','MER','DEALER','GENERAL MERCHANDISE')`
+        "upper(license_type) like '%AUCTIONEER%' OR upper(license_type) like '%PAWN%' OR " +
+        "upper(license_type) like '%SECONDHAND%' OR upper(license_type) like '%SECOND HAND%' OR " +
+        "upper(license_type) like '%JUNK%' OR upper(license_type) like '%CONSIGNMENT%' OR " +
+        "upper(license_type) like '%ESTATE SALE%' OR upper(license_type) like '%RETAIL%' OR " +
+        "upper(license_type) like '%MERCHANT%' OR upper(license_type) like '%DEALER%' OR " +
+        "upper(license_type) like '%GENERAL MERCHANDISE%'"
       );
       const url = `${TX_SOCRATA_BASE_URL}?$limit=${PAGE_LIMIT}&$offset=${offset}&$where=${TX_WHERE}`;
 

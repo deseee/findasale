@@ -274,8 +274,23 @@ export async function runNewYorkPhase2Scraper(): Promise<void> {
     );
   }
 
-  processRecords(secondhandRaw, 'secondary_sale', 'secondhand');
-  processRecords(pawnbrokerRaw, 'pawnbroker', 'pawnbroker');
+  // ROOT-CAUSE FIX 2026-08-23 (roadmap #558 follow-up, tool-cited): these two category
+  // strings were 'secondary_sale' and 'pawnbroker' -- neither is in the VALID_CATEGORIES
+  // allowlist enforced by batchUpsertScrapedOrganizers() / getOrCreateScrapedOrganizer()
+  // in scraper/index.ts (valid set: ESTATE_SALE_CO, AUCTION_HOUSE, ANTIQUE_MALL,
+  // ANTIQUE_DEALER, CONSIGNMENT, THRIFT_STORE, FLEA_MARKET, VINTAGE, LIQUIDATION,
+  // USED_FURNITURE, PAWN_SHOP, USED_BOOKSTORE, RECORD_STORE, USED_ELECTRONICS,
+  // COIN_DEALER, RESALE_SHOP, USED_SPORTING_GOODS, JEWELRY_RESALE). Every row this
+  // scraper produced was silently rejected at Step 1 of batchUpsertScrapedOrganizers
+  // (category filter, no log) -- confirmed by reading that function directly. Introduced
+  // 2026-05-09 (commit 156ffcb2) when this scraper was refactored to a categoryFn/
+  // defaultCategory pattern; matches the observed timing exactly (NewYorkPhase2 has
+  // 29,727 historical rows but nothing written since 2026-05-11). Live endpoint checks
+  // this session confirm both Socrata datasets are healthy and returning real records
+  // (data.cityofnewyork.us/resource/9jmq-ziz9.json and /u7z4-p9uq.json, HTTP 200,
+  // business_name field present) -- fetch/parse was never the problem.
+  processRecords(secondhandRaw, 'RESALE_SHOP', 'secondhand');
+  processRecords(pawnbrokerRaw, 'PAWN_SHOP', 'pawnbroker');
 
   console.log(`[NewYork Phase2] ${records.length} unique records to upsert`);
 

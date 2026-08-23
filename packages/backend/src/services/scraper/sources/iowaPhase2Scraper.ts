@@ -174,7 +174,21 @@ export async function runIowaPhase2Scraper(): Promise<void> {
   // redirects to socrata.com and 404s on every dataset, not just this one.
   // No replacement dataset was found on data.iowa.gov (new, non-Socrata portal;
   // no public JSON/CSV API discovered). Exit cleanly so the batch stays green.
+  //
+  // RE-VERIFIED 2026-08-23 (roadmap #558 zero-write investigation, tool-cited): this is
+  // genuinely unfixable today, not a bug — confirmed live via curl this session:
+  //   - mydata.iowa.gov/resource/9k3w-7fwi.json -> HTTP 404 (still retired).
+  //   - data.iowa.gov -> now "Iowa Data Hub", a Next.js app (title/meta confirmed in the
+  //     served HTML), not Socrata. /resource/9k3w-7fwi.json -> 404. Probed for a JSON API
+  //     under common paths (/api/catalog/v1, /api/data, /api/datasets, /api/search,
+  //     /sitemap.xml) and a site search page for "retail sales tax permit" / "business
+  //     registration" — all 404. No public API was discoverable without deeper reverse-
+  //     engineering of the Next.js app's internal client bundles, which is out of scope
+  //     for a scraper fix. Left as a clean no-op skip, matching the sibling STUB/BROKEN
+  //     Phase2 scrapers (delawarePhase2Scraper.ts, kansasPhase2Scraper.ts,
+  //     northCarolinaPhase2Scraper.ts, georgiaPhase2Scraper.ts) — do not re-attempt this
+  //     without first finding an actual replacement API endpoint.
   console.log('[IowaPhase2] Skipping — mydata.iowa.gov (Socrata tenant) is retired (all datasets 404, domain redirects to socrata.com)');
-  console.log('[IowaPhase2] No replacement Iowa open data portal found. To unblock: check https://data.iowa.gov for a JSON/CSV API covering retail sales tax permits.');
+  console.log('[IowaPhase2] No replacement Iowa open data portal found. Re-verified 2026-08-23 — data.iowa.gov is now a Next.js "Iowa Data Hub" app with no discoverable public JSON/CSV API. To unblock: find the Data Hub\'s real internal API (not a guessable REST path) or a JSON/CSV export for retail sales tax permits.');
   return;
 }
