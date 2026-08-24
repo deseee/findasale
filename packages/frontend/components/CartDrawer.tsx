@@ -25,6 +25,11 @@ interface Hold {
   expiresAt: string;
   createdAt: string;
   status: string;
+  // 2026-08-24 (Patrick: "50 cents so fix the cart? why make this difficult for people?"):
+  // live-computed by getMyHoldsFull, same pattern as itemController.ts's buildHoldFieldsForViewer.
+  // Null until the invoice is still PENDING and Stripe returns a session URL.
+  invoiceStatus?: string | null;
+  invoiceCheckoutUrl?: string | null;
   item: {
     id: string;
     title: string;
@@ -355,6 +360,16 @@ const CartDrawer: React.FC<CartDrawerProps> = ({ isOpen, onClose }) => {
                             onExpiry={() => handleHoldExpiry(hold.id)}
                           />
                         </div>
+
+                        {/* Pay Now: hold has a pending invoice with a live Stripe Checkout URL */}
+                        {hold.invoiceCheckoutUrl && (
+                          <button
+                            onClick={() => { window.location.href = hold.invoiceCheckoutUrl as string; }}
+                            className="w-full text-xs font-semibold py-2 px-3 rounded bg-amber-600 hover:bg-amber-700 dark:bg-amber-700 dark:hover:bg-amber-800 text-white transition-colors mb-2"
+                          >
+                            Pay Now
+                          </button>
+                        )}
 
                         {/* Remove Button */}
                         <button

@@ -3,6 +3,7 @@ import { randomUUID } from 'crypto';
 import * as Sentry from '@sentry/node';
 import { prisma } from '../lib/prisma';
 import { AuthRequest } from '../middleware/auth';
+import { retrieveCheckoutSessionAcrossAccounts } from '../utils/expireCheckoutSession'; // Cart drawer Pay Now link (2026-08-24)
 import { createNotification } from '../lib/notificationService'; // S1195 sweep continuation (2026-08-08): payment-deadline notification-gap fixes
 import { getIO } from '../lib/socket';
 import { pushEvent } from '../services/liveFeedService';
@@ -2882,29 +2883,60 @@ export const getMyHoldsFull = async (req: AuthRequest, res: Response) => {
             },
           },
         },
+        invoice: {
+          select: {
+            id: true,
+            status: true,
+            stripeSessionId: true,
+            stripeAccountId: true,
+          },
+        },
       },
       orderBy: { createdAt: 'desc' },
     });
 
-    // Transform response to match CartDrawer interface
-    const response = holds.map(hold => ({
-      id: hold.id,
-      expiresAt: hold.expiresAt,
-      createdAt: hold.createdAt,
-      status: hold.status,
-      item: {
-        id: hold.item.id,
-        title: hold.item.title,
-        price: hold.item.price,
-        photoUrls: hold.item.photoUrls,
-        status: hold.item.status,
-        sale: {
-          id: hold.item.sale!.id,
-          title: hold.item.sale!.title,
-          organizerVenmoHandle: hold.item.sale!.organizer?.venmoHandle ?? null,
-          organizerZelleHandle: hold.item.sale!.organizer?.zelleHandle ?? null,
+    // 2026-08-24 (Patrick: "50 cents so fix the cart? why make this difficult for people?"):
+    // the cart drawer's On Hold section listed holds with no way to actually pay them --
+    // "Go to Checkout" only ever looks at cart.items, never holds. Same fix pattern as
+    // itemController.ts's buildHoldFieldsForViewer: live-retrieve the Stripe Checkout Session
+    // URL (never persisted, only stripeSessionId is) for any hold whose invoice is still
+    // PENDING, so the drawer can render a real "Pay Now" link per hold.
+    const response = await Promise.all(holds.map(async hold => {
+      let invoiceCheckoutUrl: string | null = null;
+      if (hold.invoice?.stripeSessionId && hold.invoice.status === 'PENDING') {
+        try {
+          const session = await retrieveCheckoutSessionAcrossAccounts(
+            hold.invoice.stripeSessionId,
+            hold.invoice.stripeAccountId
+          );
+          invoiceCheckoutUrl = session.url ?? null;
+        } catch (err: any) {
+          console.warn(
+            `[getMyHoldsFull] Failed to retrieve checkout session for hold ${hold.id}: ${err?.message ?? err}`
+          );
+        }
+      }
+      return {
+        id: hold.id,
+        expiresAt: hold.expiresAt,
+        createdAt: hold.createdAt,
+        status: hold.status,
+        invoiceStatus: hold.invoice?.status ?? null,
+        invoiceCheckoutUrl,
+        item: {
+          id: hold.item.id,
+          title: hold.item.title,
+          price: hold.item.price,
+          photoUrls: hold.item.photoUrls,
+          status: hold.item.status,
+          sale: {
+            id: hold.item.sale!.id,
+            title: hold.item.sale!.title,
+            organizerVenmoHandle: hold.item.sale!.organizer?.venmoHandle ?? null,
+            organizerZelleHandle: hold.item.sale!.organizer?.zelleHandle ?? null,
+          },
         },
-      },
+      };
     }));
 
     res.json(response);

@@ -89,6 +89,12 @@ type PaymentStatus = 'idle' | 'creating' | 'waiting_for_card' | 'processing' | '
 type PaymentMode = 'card' | 'manual_card' | 'cash' | 'qr' | 'invoice' | 'phone' | 'venmo' | 'zelle';
 type NumpadMode = 'price';
 
+// 2026-08-24 (Patrick decision, corrected after initial mix-up with cash/card split-tender --
+// see STATE.md): hides the multi-person Split Bill feature (#406/#408) from the POS UI while
+// keeping all state/logic intact for a one-flag re-enable when organizers ask for it. Does NOT
+// touch the cash+card split-tender ('Send to Phone') feature -- that stays live, untouched.
+const ENABLE_SPLIT_BILL = false;
+
 interface CashPaymentResponse {
   platformFee: number;
   cashFeeBalance: number;
@@ -947,6 +953,9 @@ export default function POSPage() {
       // Feature #408: Scan & Split: listen for simultaneous QR scans on the same item
       socketInstance.on('SCAN_AND_SPLIT', (event: { itemId: string; scannerIds: string[]; scannedAt: number }) => {
         if (!isMounted) return;
+        // Split Bill UI hidden per Patrick decision 2026-08-24 -- don't auto-open a panel
+        // that's no longer rendered, and don't tell the cashier it opened when it didn't.
+        if (!ENABLE_SPLIT_BILL) return;
         // Auto-open the split-bill panel with the scanned item in context
         setSplitBillOpen(true);
         setSplitCount(Math.max(2, event.scannerIds.length));
@@ -2574,8 +2583,8 @@ export default function POSPage() {
               <span>${cartTotal.toFixed(2)}</span>
             </div>
 
-            {/* Split Bill button (#406) */}
-            {cart.length > 0 && (
+            {/* Split Bill button (#406) -- hidden per Patrick decision 2026-08-24, code intact */}
+            {ENABLE_SPLIT_BILL && cart.length > 0 && (
               <button
                 onClick={() => {
                   setSplitBillOpen(o => !o);
@@ -2588,8 +2597,8 @@ export default function POSPage() {
               </button>
             )}
 
-            {/* Split Bill Panel (#406) */}
-            {splitBillOpen && cart.length > 0 && (
+            {/* Split Bill Panel (#406) -- hidden per Patrick decision 2026-08-24, code intact */}
+            {ENABLE_SPLIT_BILL && splitBillOpen && cart.length > 0 && (
               <div className="mt-3 p-3 rounded-xl bg-warm-50 dark:bg-gray-800 border border-warm-200 dark:border-gray-700">
                 <p className="text-xs font-semibold text-warm-700 dark:text-warm-300 mb-2">Split Bill</p>
 
