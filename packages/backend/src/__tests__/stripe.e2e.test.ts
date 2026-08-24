@@ -809,6 +809,7 @@ describe('Stripe Connect + Fee Capture E2E', () => {
 
       // Fire the webhook
       mockWebhooksConstruct.mockReturnValueOnce({
+        id:   'evt_test_succeeded_e2e',
         type: 'payment_intent.succeeded',
         data: {
           object: {
@@ -865,6 +866,7 @@ describe('Stripe Connect + Fee Capture E2E', () => {
     it('should return { received: true }', () => {
       // Verify the webhook handler's response contract by firing a second event
       mockWebhooksConstruct.mockReturnValueOnce({
+        id:   'evt_test_succeeded_dup_check_e2e',
         type: 'payment_intent.succeeded',
         data: { object: { id: 'pi_no_db_match', metadata: {} } },
       });
@@ -906,6 +908,7 @@ describe('Stripe Connect + Fee Capture E2E', () => {
 
     it('should update Purchase status to FAILED', async () => {
       mockWebhooksConstruct.mockReturnValueOnce({
+        id:   'evt_test_failed_e2e',
         type: 'payment_intent.payment_failed',
         data: { object: { id: WEBHOOK_PI_ID } },
       });
@@ -961,6 +964,7 @@ describe('Stripe Connect + Fee Capture E2E', () => {
      */
     it('should return { received: true } without crashing for an unhandled event type', async () => {
       mockWebhooksConstruct.mockReturnValueOnce({
+        id:   'evt_test_unhandled_e2e',
         type: 'charge.refunded',
         data: { object: { id: 'ch_test_unhandled' } },
       });
