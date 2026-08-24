@@ -189,9 +189,20 @@ describe('Bounty-fulfillment purchase commission — tier rate, not a hardcoded 
     expect(res.status).not.toHaveBeenCalledWith(402);
 
     // $10.00 (10%) if the old hardcoded shadow function were still in place -- must be $8.00 (8%).
+    // Shape corrected 2026-08-24: this suite's own jest.mock('../services/stripeConnectService')
+    // above mocks shouldUseDirectCharge to always resolve false, which forces bountyController.ts's
+    // DESTINATION-charge branch (on_behalf_of + transfer_data.destination, single call argument,
+    // no `stripeAccount` request option) -- not the direct-charge branch this assertion used to
+    // check for. The routing logic itself is correct and untouched; only this stale assertion
+    // shape was wrong. See bountyController.ts's "Direct-charges migration (2026-08-08)" comment.
     expect(mockPaymentIntentCreate).toHaveBeenCalledWith(
-      expect.objectContaining({ amount: 10000, application_fee_amount: 800 }),
-      expect.objectContaining({ stripeAccount: organizer.stripeConnectId })
+      expect.objectContaining({
+        amount: 10000,
+        application_fee_amount: 800,
+        on_behalf_of: organizer.stripeConnectId,
+        transfer_data: { destination: organizer.stripeConnectId },
+      }),
+      expect.objectContaining({ idempotencyKey: expect.any(String) })
     );
 
     const purchase = await prisma.purchase.findFirst({
@@ -219,8 +230,13 @@ describe('Bounty-fulfillment purchase commission — tier rate, not a hardcoded 
     expect(res.status).not.toHaveBeenCalledWith(402);
 
     expect(mockPaymentIntentCreate).toHaveBeenCalledWith(
-      expect.objectContaining({ amount: 10000, application_fee_amount: 800 }),
-      expect.objectContaining({ stripeAccount: organizer.stripeConnectId })
+      expect.objectContaining({
+        amount: 10000,
+        application_fee_amount: 800,
+        on_behalf_of: organizer.stripeConnectId,
+        transfer_data: { destination: organizer.stripeConnectId },
+      }),
+      expect.objectContaining({ idempotencyKey: expect.any(String) })
     );
 
     const purchase = await prisma.purchase.findFirst({
@@ -246,8 +262,13 @@ describe('Bounty-fulfillment purchase commission — tier rate, not a hardcoded 
     expect(res.status).not.toHaveBeenCalledWith(500);
 
     expect(mockPaymentIntentCreate).toHaveBeenCalledWith(
-      expect.objectContaining({ amount: 10000, application_fee_amount: 1000 }),
-      expect.objectContaining({ stripeAccount: organizer.stripeConnectId })
+      expect.objectContaining({
+        amount: 10000,
+        application_fee_amount: 1000,
+        on_behalf_of: organizer.stripeConnectId,
+        transfer_data: { destination: organizer.stripeConnectId },
+      }),
+      expect.objectContaining({ idempotencyKey: expect.any(String) })
     );
 
     const purchase = await prisma.purchase.findFirst({

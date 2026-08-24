@@ -84,6 +84,16 @@ const makeMockRes = () => {
 };
 
 describe('Terminal split cash+card commission — cash-half accrual', () => {
+  // Root cause of a false-failure found 2026-08-24: mockPaymentIntentCreate/mockPaymentIntentCapture
+  // are module-level `var` mocks shared across both `it()` blocks below with no reset between them.
+  // The second test hardcodes `mockPaymentIntentCreate.mock.calls[0][0]`, which — without this
+  // clear — still points at the FIRST test's call object (isSplitPayment: 'true') instead of its
+  // own (index 1). clearAllMocks() resets call/instance history only, not mockResolvedValue
+  // implementations set in the jest.mock() factories above, so those stay intact.
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
   /** Build an isolated TEAMS organizer + PUBLISHED sale + AVAILABLE item. */
   const seed = async (key: string, price: number) => {
     const orgUser = await prisma.user.create({
