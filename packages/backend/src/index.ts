@@ -183,6 +183,7 @@ import posRoutes from './routes/pos';                         // POS Upgrade: Op
 import ebayRoutes from './routes/ebay';                       // eBay Marketplace Account Deletion
 import ebayTaxonomyRoutes from './routes/ebayTaxonomy';       // Phase C: eBay Taxonomy, Catalog, AI Suggest
 import reverbRoutes from './routes/reverb';                   // Universal Crosslister -- Reverb Official-API Tier
+import discogsRoutes from './routes/discogs';                 // Universal Crosslister -- Discogs Official-API Tier
 import liveAuctioneersExportRoutes from './routes/liveAuctioneersExport'; // LiveAuctioneers lot-upload spreadsheet export (organizer's own account, no automation touches liveauctioneers.com)
 import barcodeRoutes from './routes/barcode';                  // Barcode scan -> eBay Catalog product enrichment
 import shopifyRoutes from './routes/shopify';              // Feature: Shopify Cross-Listing
@@ -864,6 +865,7 @@ app.use('/api/consignor-settlements', consignorSettlementRoutes);          // Fe
 app.use('/api/ebay', ebayRoutes);                                          // eBay Marketplace Account Deletion
 app.use('/api/ebay', ebayTaxonomyRoutes);                                  // Phase C: eBay Taxonomy + Catalog + AI Suggest
 app.use('/api/reverb', reverbRoutes);                                       // Universal Crosslister -- Reverb Official-API Tier
+app.use('/api/discogs', discogsRoutes);                                     // Universal Crosslister -- Discogs Official-API Tier
 app.use('/api/liveauctioneers', liveAuctioneersExportRoutes);                // LiveAuctioneers lot-upload spreadsheet export
 app.use('/api/barcode', barcodeRoutes);                                    // Barcode scan -> eBay Catalog product enrichment
 app.use('/api/shopify', shopifyRoutes);                              // Feature: Shopify Cross-Listing

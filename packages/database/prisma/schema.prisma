@@ -6232,6 +6232,7 @@ model UspsZoneChartEntry {
 // ============================================================================
 enum MarketplaceConnectionPlatform {
   REVERB
+  DISCOGS
 }
 
 enum MarketplaceConnectionStatus {
