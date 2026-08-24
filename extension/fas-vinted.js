@@ -596,7 +596,17 @@
       await closePanel(fieldId);
       return true;
     }
-    await closePanel(fieldId);
+    // BUG FIX 2026-08-24 (Patrick-reported live console log: "Brand had no matching suggestion and
+    // no 'No brand' option was found" -- both misses on the SAME real run). Root-caused by reading
+    // this function's own caller (fillBrand): on a genuine miss it needs to search the still-open
+    // panel for Vinted's own "No brand" fallback option -- but this line unconditionally closed the
+    // panel BEFORE returning false, so fillBrand's follow-up search always ran against an already-
+    // dismissed panel and could never find "No brand" either, regardless of whether it was really
+    // there. Every OTHER field (Size/Color/Condition/Material) has no such follow-up search, so this
+    // was invisible for them -- Brand is the only caller that needs the panel to still be open on a
+    // miss. Leaves the panel open for 'brand' specifically; fillBrand now closes it once its own
+    // follow-up search is done, one way or the other.
+    if (fieldId !== 'brand') await closePanel(fieldId);
     return false;
   }
   function setNativeValue(el, value) {
@@ -739,8 +749,21 @@
     // selection. The real live-filter is a separate nested input, #brand-search-input, that only
     // exists after #brand is clicked open -- see pickFromPanel's comment above for the full finding.
     if (await pickFromPanel('brand', labelText, value)) return true;
-    const noBrand = qa('[role="option"], li, div[role="button"], button, [data-testid$="--title"]').find((n) => /no brand/.test(norm(n.textContent)));
-    if (noBrand) { noBrand.click(); await sleep(200); console.warn('[FAS Vinted] Brand "' + value + '" had no matching suggestion -- selected Vinted\'s own "No brand" fallback instead.'); return true; }
+    // BUG FIX 2026-08-24 (Patrick-reported live, see pickFromPanel's own comment on the matching
+    // change): the panel is deliberately left OPEN by pickFromPanel on a brand miss now -- search it
+    // directly (scoped, not page-wide, same discipline as pickFromPanel's own leaf scan) instead of
+    // the whole document, then close it ourselves once this fallback is done either way.
+    const panel = findOpenPanel('brand', true) || findOpenPanel('brand', false);
+    const scope = panel ? Array.from(panel.querySelectorAll('[role="option"], li, div[role="button"], button, [data-testid$="--title"]')) : qa('[role="option"], li, div[role="button"], button, [data-testid$="--title"]');
+    const noBrand = scope.find((n) => /no brand/.test(norm(n.textContent)));
+    if (noBrand) {
+      noBrand.click();
+      await sleep(200);
+      await closePanel('brand');
+      console.warn('[FAS Vinted] Brand "' + value + '" had no matching suggestion -- selected Vinted\'s own "No brand" fallback instead.');
+      return true;
+    }
+    await closePanel('brand');
     console.warn('[FAS Vinted] Brand "' + value + '" had no matching suggestion and no "No brand" option was found (UNVERIFIED) -- left unset.');
     return false;
   }

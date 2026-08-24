@@ -649,6 +649,64 @@
         const score = scoreMatch(norm(candidate.textContent), norm(remaining[r].seg));
         if (score !== null && score > bestScoreForLevel) { bestScoreForLevel = score; best = candidate; bestRemainingIdx = r; }
       }
+      if (!best && level === 0) {
+        // BUG FIX 2026-08-24 (Patrick-reported live console log: "no level matched in the picker" on
+        // the SAME tracksuit item this whole file's Category logic was built around, AFTER the
+        // separate extensionController.ts fix that made categoryText/breadcrumbText the clean leaf
+        // name -- confirmed this is a DIFFERENT, deeper bug: FindA.Sale has no stored signal for
+        // Grailed's Department (Menswear/Womenswear) at all -- confirmed via schema.prisma, there is
+        // only a flat `category` and a leaf-only `ebayCategoryName`/`ebayCategoryId`, never a full
+        // gendered breadcrumb -- so level 0 here almost never has a real segment to match, and the
+        // plain `break` below left Category (and everything gated on it -- Designer, Size) completely
+        // unset for any item without an explicit gender word in its text, even when the real category
+        // one level down (e.g. "Tracksuits & Sets") is perfectly resolvable once SOME department is
+        // picked. Live-confirmed via Chrome DevTools against the real picker (2026-08-24): Grailed
+        // exposes a genuine, reversible "Back to departments" button (aria-label="Back to
+        // departments") inside this SAME panel -- clicking a department re-renders this panel in
+        // place to show that department's own top-level categories (same aria-controls id the whole
+        // time, confirmed live), and the back button cleanly returns it to the Menswear/Womenswear
+        // list with no other observed side effect. Speculatively try each department in turn, keep
+        // whichever one actually resolves a real remaining segment, and back out to try the next one
+        // if it doesn't -- instead of guessing blind or abandoning the field entirely.
+        let resolvedDept = false;
+        for (const deptItem of items) {
+          syntheticClick(deptItem);
+          await sleep(350);
+          const deptContent = contentId ? document.getElementById(contentId) : null;
+          const deptItems = deptContent
+            ? Array.from(deptContent.querySelectorAll('[role="menuitem"], [role="menuitemradio"], [role="option"]'))
+            : [];
+          let deptBest = null, deptBestScore = -1, deptBestIdx = -1;
+          for (let r = 0; r < remaining.length; r++) {
+            const candidate = bestScoringOption(deptItems, remaining[r].seg);
+            if (!candidate) continue;
+            const score = scoreMatch(norm(candidate.textContent), norm(remaining[r].seg));
+            if (score !== null && score > deptBestScore) { deptBestScore = score; deptBest = candidate; deptBestIdx = r; }
+          }
+          if (deptBest) {
+            console.warn('[FAS Grailed] Category "' + categoryText + '" -- no department/gender signal in the source data; tried "' + norm(deptItem.textContent) + '" and it resolved a real match for "' + remaining[deptBestIdx].seg + '" -- kept this department (UNVERIFIED gender guess -- please confirm this is correct before publishing).');
+            syntheticClick(deptBest);
+            pickedAny = true;
+            remaining.splice(deptBestIdx, 1);
+            await sleep(350);
+            resolvedDept = true;
+            break;
+          }
+          const backBtn = document.querySelector('[aria-label="Back to departments"]');
+          if (backBtn) { backBtn.click(); await sleep(300); }
+        }
+        if (resolvedDept) continue; // aria-expanded check at the top of the next iteration will end the loop once Grailed auto-closes the combo
+        // Neither department resolved a real match -- default to the first so Designer/Size can still
+        // unlock, but say so loudly rather than silently leaving everything blank. Re-select it since
+        // the last "Back to departments" click above left the panel on the department list.
+        if (items.length) {
+          syntheticClick(items[0]);
+          pickedAny = true;
+          await sleep(350);
+          console.warn('[FAS Grailed] Category "' + categoryText + '" -- no department signal in the source data and neither department resolved a real category match -- defaulted to "' + norm(items[0].textContent) + '" as a guess (UNVERIFIED) -- please confirm Category/Designer/Size before publishing.');
+        }
+        break;
+      }
       if (!best) break; // no remaining segment is a real match for this level -- stop rather than guess
       syntheticClick(best);
       pickedAny = true;
