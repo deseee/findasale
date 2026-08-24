@@ -555,10 +555,11 @@ export const captureTerminalPaymentIntent = async (req: AuthRequest, res: Respon
     }
 
     // Capture the payment — platform account in simulated mode, connected account in production
+    let capturedPaymentIntent;
     if (isSimulated) {
-      await stripe().paymentIntents.capture(paymentIntentId);
+      capturedPaymentIntent = await stripe().paymentIntents.capture(paymentIntentId);
     } else {
-      await stripe().paymentIntents.capture(paymentIntentId, {}, { stripeAccount: organizer.stripeConnectId! });
+      capturedPaymentIntent = await stripe().paymentIntents.capture(paymentIntentId, {}, { stripeAccount: organizer.stripeConnectId! });
     }
 
     // Mark all purchases PAID
@@ -566,6 +567,51 @@ export const captureTerminalPaymentIntent = async (req: AuthRequest, res: Respon
       where: { stripePaymentIntentId: paymentIntentId },
       data: { status: 'PAID' },
     });
+
+    // Split cash+terminal-card commission accrual (P2 fix, sibling to posPaymentController.
+    // confirmPaymentRequest's split-cash fix, 2026-08-22): createTerminalPaymentIntent's
+    // split-tender path (cashAmountCents in the body) only ever charged Stripe's
+    // application_fee_amount on the CARD portion -- the cash portion the organizer pockets
+    // in person was never charged any commission at all, on any code path, ever. Resolved
+    // through the SAME shared, tier-aware resolver services/cashFeeService.ts's other
+    // callers use (processCashSaleCore's pure-cash path in this same file,
+    // posPaymentController's split-tender path) -- not a new or duplicated calculation.
+    // Read from the CAPTURED PaymentIntent's own metadata (set at creation time in
+    // createTerminalPaymentIntent, never trust a client-supplied value) and resolve the
+    // rate now, at capture time, rather than at creation time -- matching every other
+    // cash-commission call site, so a referral discount or tier change between creation
+    // and capture applies the same way it would to any other cash sale.
+    //
+    // Wrapped so a failure here can never turn an already-successful card capture into an
+    // error response to the cashier -- same defensive shape as confirmPaymentRequest's cash
+    // leg and the P0 stock-update fixes elsewhere in this file.
+    if (capturedPaymentIntent?.metadata?.isSplitPayment === 'true' && capturedPaymentIntent.metadata?.cashAmountCents) {
+      const splitCashAmountCents = parseInt(capturedPaymentIntent.metadata.cashAmountCents, 10);
+      if (Number.isFinite(splitCashAmountCents) && splitCashAmountCents > 0) {
+        try {
+          const cashFeeRate = await resolveCashCommissionRate({
+            subscriptionTier: organizer.subscriptionTier,
+            referralDiscountExpiry: organizer.referralDiscountExpiry,
+          });
+          const cashCommission = cashCommissionOn(splitCashAmountCents / 100, cashFeeRate);
+          await accrueCashFeeBalance({ organizerId: organizer.id, commission: cashCommission });
+        } catch (err: any) {
+          console.error('[terminal] Failed to accrue cash-half commission for split Terminal payment:', err);
+          try {
+            Sentry.captureException(err instanceof Error ? err : new Error(String(err)), {
+              tags: { area: 'terminal-capture-split-cash-commission' },
+              extra: {
+                paymentIntentId,
+                organizerId: organizer.id,
+                cashAmountCents: splitCashAmountCents,
+              },
+            });
+          } catch {
+            // Sentry may not be initialized -- silently continue
+          }
+        }
+      }
+    }
 
     // Mark items SOLD -- ADR-085 Track B Phase 1 Step 4: atomic, race-safe stock decrement
     // replaces the old unconditional status update.

@@ -2778,6 +2778,20 @@ export const UPS_HIGH_WEIGHT_TOTAL_TABLE: HighWeightAnchorRow[] = [
  * trips the >=70lb billable threshold, and which is not listed on eBay. ZERO items have an
  * actual weight >= 70lb. So the un-decomposed accessorial has no measured live exposure at
  * all today; this is a correctness/maintainability debt, not a money leak.
+ *
+ * UPDATE 2026-08-24 -- item (b) above ('a published FedEx Ground base rate card at 90-150lb')
+ * is now PARTIALLY closed, as an ESTIMATE, not a live A/B measurement. Fetched
+ * fedex.com/ratetools/documents2/GroundNoSvc.pdf directly this pass (FedEx's own current
+ * 'Standard List Rates by service', eff. 2026-01-05, Ground rates 1-150lb x zones 2-8 -- the
+ * exact primary source named above, now actually pulled past the 70lb ceiling). See
+ * FEDEX_HIGH_WEIGHT_TOTAL_TABLE_DECOMPOSITION's own header for the method and its honestly-
+ * stated confidence: base freight at 90/110/130/150lb is MODELLED by applying the one real
+ * eBay-negotiated/published ratio this file has (r = RATE_TABLE_FEDEX's real 70lb row divided
+ * by this same PDF's published 70lb row) HELD FLAT forward onto the PDF's published
+ * 90/110/130/150lb rows -- it is NOT a second live A/B, because none was obtainable (no
+ * browser session in this pass, and per (b) above the AHS trigger cannot be isolated by A/B at
+ * these weights regardless). Item (a) (dimension-trigger A/B at 90-150lb) and (c) (the 3
+ * unmeasured destination ZIPs) are UNCHANGED and still open.
  */
 export const FEDEX_HIGH_WEIGHT_TOTAL_TABLE: HighWeightAnchorRow[] = [
   { maxLb: 70,  z1: 77.51,  z2: 83.44,  z3: 87.24,  z4: 90.81,  z5: 103.70, z6: 103.70, z7: 117.09, z8: 124.99 }, // 70lb row CORRECTED 2026-08-16. PRIOR CELLS, PRESERVED: z1/z2 93.61, z3/z4 110.42, z5 135.90, z6 150.17, z7 171.01, z8 184.48 -- those exceeded this table's OWN real 90lb quotes at 7 of 8 zones (z8 184.48 at 70lb vs a real 129.52 at 90lb: 43% MORE money for 20 FEWER pounds), 7 weight-monotonicity violations, all now closed. The numbers below are not new: they are the eight values that until this pass sat in RATE_TABLE_FEDEX's 70lb row, i.e. the observed 70lb TOTALS (base freight + the >50lb accessorial already inside them) -- which is exactly what THIS table is defined to hold, and the reason they were wrong where they were. z8 124.99 is a real live eBay quote (2026-08-11 full-column re-anchor); z1-z7 are the pre-existing curve-shape-scaled values, unchanged in magnitude, only relocated. Cross-check: base+AHS reconstruction gives 79.01/86.07/91.12/92.31/104.71/104.71/117.19/129.92, within +0.1%..+4.4% of these
@@ -2788,68 +2802,138 @@ export const FEDEX_HIGH_WEIGHT_TOTAL_TABLE: HighWeightAnchorRow[] = [
 ];
 
 /**
- * PARTIAL RE-ANCHOR OF FEDEX_HIGH_WEIGHT_TOTAL_TABLE (2026-08-22) -- base + itemized
- * accessorial surcharge, mirroring the SAME pattern the <70lb tables above already use
- * (RATE_TABLE_FEDEX holds surcharge-free base freight; AHS_WEIGHT_SURCHARGE_TABLE /
- * AHS_DIMENSION_SURCHARGE_TABLE / FEDEX_DESTINATION_SURCHARGE_TIERS hold the itemized
- * surcharges separately; computeSurchargeForCarrier ADDS them at runtime). This is that
- * same base+surcharge shape applied to FEDEX_HIGH_WEIGHT_TOTAL_TABLE's rows -- as far as
- * it can honestly go with data this file has today. Read the "ANCHOR STATUS OF THIS
- * TABLE" audit comment directly above FEDEX_HIGH_WEIGHT_TOTAL_TABLE before extending this.
+ * RE-ANCHOR OF FEDEX_HIGH_WEIGHT_TOTAL_TABLE -- base + itemized accessorial surcharge,
+ * mirroring the SAME pattern the <70lb tables above already use (RATE_TABLE_FEDEX holds
+ * surcharge-free base freight; AHS_WEIGHT_SURCHARGE_TABLE / AHS_DIMENSION_SURCHARGE_TABLE /
+ * FEDEX_DESTINATION_SURCHARGE_TIERS hold the itemized surcharges separately;
+ * computeSurchargeForCarrier ADDS them at runtime). This is that same base+surcharge shape
+ * applied to FEDEX_HIGH_WEIGHT_TOTAL_TABLE's rows -- as far as it can honestly go with data
+ * this file has today. Read the "ANCHOR STATUS OF THIS TABLE" audit comment directly above
+ * FEDEX_HIGH_WEIGHT_TOTAL_TABLE (including its 2026-08-24 UPDATE paragraph) before
+ * extending this further.
  *
- * WHY ONLY THE 70lb ROW: decomposing a total into base+surcharge requires an independent,
- * real base-freight figure to subtract -- fabricating one is explicitly rejected by that
- * audit ("a fabricated split would look authoritative and silently mis-scale on the next
- * surcharge change"), and that conclusion is not overturned here. maxLb:70 is the one row
- * where a real base figure already exists in this file: RATE_TABLE_FEDEX's own 70lb row
- * (defined above, real-anchored, UNCHANGED by this pass). maxLb:90/110/130/150 have no
- * such figure -- RATE_TABLE_FEDEX has no rows above 70lb -- so they are left `base: null,
- * surcharge: null` rather than guessed at. `null` means "not decomposable with data this
- * file has today", not "zero base cost" -- do not treat it as $0.
+ * TWO PASSES, TWO DIFFERENT CONFIDENCE LEVELS -- DO NOT BLUR THEM:
  *
- * HOW THE 70lb ROW WAS SPLIT: base = RATE_TABLE_FEDEX's 70lb row (real, pre-existing,
- * copied verbatim, not re-derived). surcharge = FEDEX_HIGH_WEIGHT_TOTAL_TABLE's 70lb total
- * for that zone MINUS that base -- the EXACT residual actually baked into the real
- * measured total, not a formula estimate. This is deliberately NOT asserted to be pure AHS:
- * the probe destinations behind the 70lb row's real quotes are the same ones RATE_TABLE_FEDEX
- * itself was real-anchored against (z2 49503, z4 30301, z7 98282, per that table's header),
- * and cross-referencing FEDEX_DESTINATION_SURCHARGE_ZIP_TIER shows 49503 and 30301 are
- * measured 'clean' ($0 destination surcharge) while 98282 is measured tier A (+$5.92) -- so
- * at least z7's residual demonstrably contains a real destination-surcharge component
- * alongside AHS, not AHS alone. The residual is itemized honestly as "whatever accessorial
- * content this lane's real quote carried", not mis-labeled as a single named surcharge.
+ *   maxLb:70 -- REAL-ANCHORED (2026-08-22, unchanged by this pass). base = RATE_TABLE_FEDEX's
+ *   own 70lb row (real, pre-existing, copied verbatim, not re-derived). surcharge =
+ *   FEDEX_HIGH_WEIGHT_TOTAL_TABLE's 70lb total for that zone MINUS that base -- the EXACT
+ *   residual actually baked into the real measured total, not a formula estimate. This is
+ *   deliberately NOT asserted to be pure AHS: the probe destinations behind the 70lb row's
+ *   real quotes are the same ones RATE_TABLE_FEDEX itself was real-anchored against (z2 49503,
+ *   z4 30301, z7 98282, per that table's header), and cross-referencing
+ *   FEDEX_DESTINATION_SURCHARGE_ZIP_TIER shows 49503 and 30301 are measured 'clean' ($0
+ *   destination surcharge) while 98282 is measured tier A (+$5.92) -- so at least z7's
+ *   residual demonstrably contains a real destination-surcharge component alongside AHS, not
+ *   AHS alone. The residual is itemized honestly as "whatever accessorial content this lane's
+ *   real quote carried", not mis-labeled as a single named surcharge.
  *
- * INVARIANT (regression-tested, see ebayRateEstimateHighWeightDecomposition.test.ts):
- * for maxLb:70, base[zone] + surcharge[zone] === FEDEX_HIGH_WEIGHT_TOTAL_TABLE's 70lb
- * total for that zone, to the penny, at all 8 zones. This is a PURE decomposition of an
- * existing number, not a pricing change -- FEDEX_HIGH_WEIGHT_TOTAL_TABLE itself is
- * untouched above, interpolateHighWeightTotal is untouched below, and nothing in
- * estimateCheapestRate reads this export -- it changes no computed price for any weight
- * or zone. It exists so a future surcharge change has a real number to start compositional
- * reasoning from at 70lb, instead of re-deriving that one row's total from scratch.
+ *   maxLb:90/110/130/150 -- MODELLED (added 2026-08-24), NOT real-anchored, and NOT a live A/B.
+ *   Previously `base: null, surcharge: null` because RATE_TABLE_FEDEX has no rows above 70lb
+ *   and fabricating a base figure was explicitly rejected ("a fabricated split would look
+ *   authoritative and silently mis-scale on the next surcharge change" -- that principle still
+ *   holds and is why these four rows are labelled MODELLED, never REAL). What changed: this
+ *   pass fetched fedex.com/ratetools/documents2/GroundNoSvc.pdf (FedEx's own published
+ *   "Standard List Rates by service", eff. 2026-01-05, Ground rates 1-150lb x zones 2-8) --
+ *   the exact primary source the file's own audit named as "the cheapest way to get" the
+ *   missing data, now actually pulled past the 70lb ceiling for the first time. That source
+ *   gives real PUBLISHED (retail) base rates at 90/110/130/150lb, but NOT the eBay-negotiated
+ *   discount ratio at those weights -- no live quote at those weights isolates a clean,
+ *   AHS-free base to measure that ratio directly (see "WHY 90/110/130/150 STAY MODELLED"
+ *   below). So the estimate uses the ONLY real negotiated-vs-published ratio this file has:
+ *     r(zone) = RATE_TABLE_FEDEX's real 70lb row[zone] / this PDF's published 70lb row[zone]
+ *   held FLAT forward and applied to the PDF's published 90/110/130/150lb rows:
+ *     base(zone, W) = round2( max(14.07, publishedGroundList(zone, W) x r(zone)) )
+ *     surcharge(zone, W) = FEDEX_HIGH_WEIGHT_TOTAL_TABLE's real total(zone, W) MINUS base(zone, W)
+ *   surcharge is still an EXACT residual against the real measured total (never a guessed
+ *   number, never negative at any of the 28 cells checked -- see the regression test), so
+ *   base+surcharge reproduces the existing total to the penny exactly as the 70lb row does.
+ *   What is NOT exact is the base/surcharge SPLIT ITSELF: r held flat past its one anchor is a
+ *   real, stated assumption, not a verified fact. This file's OWN data shows r is not stable
+ *   across weight even below 70lb -- the real ratio at z2 measures 0.5534 at 50lb but 0.6817 at
+ *   70lb (computed from RATE_TABLE_FEDEX's own 50lb/70lb rows against this PDF's published
+ *   50lb/70lb rows), the same "ratio is NOT constant across this weight range" phenomenon the
+ *   file's audit already flagged for the total-level decomposition attempt. Holding it flat
+ *   from 70 to 150lb is therefore a genuine extrapolation with no bracketing anchor above it --
+ *   the same posture this file already accepts for RATE_TABLE_FEDEX's z8 column (flat-at-r7,
+ *   "still an extrapolation with no zone above it to bracket it") applied here on the weight
+ *   axis instead of the zone axis. Sanity-checked, not just asserted: base(zone, W) comes out
+ *   monotonically increasing in W at every zone (23.67->43.30->58.39->70.68->82.63 at z1, e.g.),
+ *   and the resulting surcharge jumps from the ~$43-68 AHS-range at 90-110lb to the ~$285-390
+ *   range at 130-150lb -- which lines up with LARGE_PACKAGE_MIN_BILLABLE_LB (90lb) and
+ *   LARGE_PACKAGE_SURCHARGE_TABLE's own $254.50-$331.00 figures, i.e. the residual's shape
+ *   matches a real, already-documented FedEx accessorial rather than looking arbitrary.
+ *
+ * WHY 90/110/130/150 STAY MODELLED, NOT REAL-ANCHORED: the >50lb AHS trigger is permanently
+ * active at these weights and cannot be turned off by an A/B test (per the file's own note),
+ * so there is still no way to observe a clean, surcharge-free base at 90lb+ short of an actual
+ * live eBay quote with AHS somehow suppressed, which does not exist. Only a genuine live A/B
+ * at these weights (item (a)/(b) in the ANCHOR STATUS comment) would upgrade these four rows
+ * from MODELLED to REAL. Treat the 90/110/130/150 base/surcharge split as a labelled estimate
+ * for future compositional reasoning, not as ground truth the way the 70lb row is.
+ *
+ * INVARIANT (regression-tested, see ebayRateEstimateHighWeightDecomposition.test.ts): for
+ * EVERY row (70/90/110/130/150), base[zone] + surcharge[zone] === FEDEX_HIGH_WEIGHT_TOTAL_TABLE's
+ * total for that zone, to the penny, at all 8 zones. This is a PURE decomposition of existing
+ * numbers, not a pricing change -- FEDEX_HIGH_WEIGHT_TOTAL_TABLE itself is untouched above,
+ * interpolateHighWeightTotal is untouched below, and nothing in estimateCheapestRate reads
+ * this export -- it changes no computed price for any weight or zone. It exists so a future
+ * surcharge change has a real (70lb) or best-estimate (90/110/130/150lb) number to start
+ * compositional reasoning from, instead of re-deriving a row's total from scratch.
  */
 export const FEDEX_HIGH_WEIGHT_TOTAL_TABLE_DECOMPOSITION: ReadonlyArray<{
   maxLb: number;
-  /** Real base freight for this weight, or null when no independent base figure exists
-   *  in this file to decompose against (see the comment above -- null is NOT zero). */
+  /** Real (maxLb:70) or modelled-estimate (maxLb:90/110/130/150, see header above) base
+   *  freight for this weight, or null when no figure exists in this file to decompose
+   *  against at all (see the comment above -- null is NOT zero). */
   base: Record<ZoneKey, number> | null;
   /** Exact residual (real total minus base) for this weight, or null alongside base. */
   surcharge: Record<ZoneKey, number> | null;
 }> = [
   {
     maxLb: 70,
-    // = RATE_TABLE_FEDEX's own 70lb row, copied verbatim (not re-derived).
+    // REAL. = RATE_TABLE_FEDEX's own 70lb row, copied verbatim (not re-derived).
     base: { z1: 23.67, z2: 23.67, z3: 28.87, z4: 31.92, z5: 37.80, z6: 42.66, z7: 47.28, z8: 56.56 },
     // = FEDEX_HIGH_WEIGHT_TOTAL_TABLE's 70lb row minus base, exactly (verified to the
     // penny at all 8 zones -- see the regression test).
     surcharge: { z1: 53.84, z2: 59.77, z3: 58.37, z4: 58.89, z5: 65.90, z6: 61.04, z7: 69.81, z8: 68.43 },
   },
-  // NOT decomposed -- see "WHY ONLY THE 70lb ROW" above. FEDEX_HIGH_WEIGHT_TOTAL_TABLE's
-  // real totals for these rows are unchanged and still the only numbers the engine uses.
-  { maxLb: 90, base: null, surcharge: null },
-  { maxLb: 110, base: null, surcharge: null },
-  { maxLb: 130, base: null, surcharge: null },
-  { maxLb: 150, base: null, surcharge: null },
+  {
+    maxLb: 90,
+    // MODELLED (2026-08-24) -- NOT real-anchored, see header "WHY 90/110/130/150 STAY
+    // MODELLED" above. = round2(max(14.07, GroundNoSvc.pdf published 90lb row[zone] x r(zone))),
+    // r(zone) = RATE_TABLE_FEDEX's real 70lb row / this PDF's published 70lb row, held flat.
+    // Published 90lb row (PDF, z1 mirrors z2 per this file's convention): z1/z2 63.52, z3 66.24,
+    // z4 73.59, z5 81.48, z6 96.94, z7 113.43, z8 119.53.
+    base: { z1: 43.30, z2: 43.30, z3: 42.81, z4: 44.92, z5: 47.72, z6: 54.36, z7: 61.78, z8: 65.10 },
+    // = FEDEX_HIGH_WEIGHT_TOTAL_TABLE's 90lb row minus base, exactly. Verified non-negative
+    // and base+surcharge recombines to the real total to the penny at all 8 zones (regression
+    // test). Not asserted to be pure AHS -- see header.
+    surcharge: { z1: 47.66, z2: 53.58, z3: 54.51, z4: 55.83, z5: 63.89, z6: 57.25, z7: 67.74, z8: 64.42 },
+  },
+  {
+    maxLb: 110,
+    // MODELLED (2026-08-24) -- see maxLb:90 comment above for method. Published 110lb row
+    // (PDF): z1/z2 85.65, z3 86.24, z4 92.05, z5 98.36, z6 114.18, z7 126.08, z8 139.12.
+    base: { z1: 58.39, z2: 58.39, z3: 55.74, z4: 56.19, z5: 57.61, z6: 64.03, z7: 68.67, z8: 75.77 },
+    surcharge: { z1: 42.91, z2: 48.83, z3: 50.92, z4: 53.18, z5: 61.89, z6: 55.47, z7: 66.76, z8: 59.66 },
+  },
+  {
+    maxLb: 130,
+    // MODELLED (2026-08-24) -- see maxLb:90 comment above for method. Published 130lb row
+    // (PDF): z1/z2 103.67, z3 103.69, z4 111.97, z5 114.78, z6 131.09, z7 145.05, z8 166.42.
+    // Surcharge jumps sharply here vs 90/110lb -- consistent with LARGE_PACKAGE_MIN_BILLABLE_LB
+    // (90lb) and LARGE_PACKAGE_SURCHARGE_TABLE's own $254.50-$331.00 figures kicking in, not
+    // an artifact of the modelling (see header).
+    base: { z1: 70.68, z2: 70.68, z3: 67.01, z4: 68.35, z5: 67.22, z6: 73.52, z7: 79.00, z8: 90.64 },
+    surcharge: { z1: 289.08, z2: 295.00, z3: 316.69, z4: 319.21, z5: 375.50, z6: 369.20, z7: 389.81, z8: 378.17 },
+  },
+  {
+    maxLb: 150,
+    // MODELLED (2026-08-24) -- see maxLb:90 comment above for method. Published 150lb row
+    // (PDF): z1/z2 121.21, z3 124.51, z4 134.51, z5 138.11, z6 151.87, z7 164.36, z8 185.15.
+    base: { z1: 82.63, z2: 82.63, z3: 80.47, z4: 82.11, z5: 80.89, z6: 85.17, z7: 89.52, z8: 100.84 },
+    surcharge: { z1: 285.32, z2: 291.25, z3: 312.95, z4: 315.98, z5: 372.71, z6: 368.43, z7: 388.31, z8: 376.99 },
+  },
 ];
 
 /** Linearly interpolates a REAL total (base+surcharge already combined) between the

@@ -6,6 +6,12 @@ import { createNotification } from '../services/notificationService';
 import { awardXp, spendXp, getSpendableXp, XP_AWARDS } from '../services/xpService';
 import { getStripe } from '../utils/stripe';
 import { shouldUseDirectCharge } from '../services/stripeConnectService'; // Direct-charges migration (2026-08-08): staged-rollout routing decision
+import { getPlatformFeeRate, SubscriptionTier } from '../utils/feeCalculator'; // Fee-precedence bug fix (2026-08-24): this file had its OWN local getPlatformFeeRate
+// shadow (hardcoded 0.10 for PRO/TEAMS too) that was never touched by the 2026-08-22 fee-precedence
+// fix applied everywhere else (stripeController.ts, terminalController.ts, jobs/auctionJob.ts,
+// services/cashFeeService.ts, services/nativeShippingSuggestionService.ts). Every bounty-fulfillment
+// purchase by a PRO/TEAMS organizer was silently charged 10% instead of their contractual 8%. Now
+// wired through the same shared resolver as every other charge path.
 
 const stripe = () => getStripe();
 
@@ -831,16 +837,11 @@ export const completeBountyPurchase = async (req: AuthRequest, res: Response) =>
       ? await shouldUseDirectCharge(submission.item.sale!.organizerId, stripeConnectId)
       : false;
 
-    // Calculate platform fee
-    const getPlatformFeeRate = (tier: string): number => {
-      const rates: Record<string, number> = {
-        SIMPLE: 0.10,
-        PRO: 0.10,
-        TEAMS: 0.10,
-      };
-      return rates[tier] || 0.10;
-    };
-    const platformFeeAmount = Math.round(priceCents * getPlatformFeeRate(subscriptionTier || 'SIMPLE'));
+    // Calculate platform fee -- tier-derived rate via the SHARED resolver (fee-precedence
+    // fix, 2026-08-24). The local shadow helper that used to live here hardcoded 0.10 for
+    // every tier including PRO/TEAMS; see utils/feeCalculator.ts getPlatformFeeRate for the
+    // single source of truth (10% SIMPLE / 8% PRO+TEAMS).
+    const platformFeeAmount = Math.round(priceCents * getPlatformFeeRate(subscriptionTier as SubscriptionTier));
 
     // Create Stripe PaymentIntent
     const idempotencyKey = `bounty-${submissionId}-${userId}`;
@@ -921,12 +922,12 @@ export const completeBountyPurchase = async (req: AuthRequest, res: Response) =>
         platformFeeAmount: platformFeeAmount / 100,
         // FEE SNAPSHOT (2026-08-17): commission-only — a bounty fulfilment is a fixed-price
         // purchase, never an auction lot, so the premium fields record a hard 0. The rate is
-        // the one this charge actually used (local getPlatformFeeRate helper above), pinned so
+        // the one this charge actually used (utils/feeCalculator.ts getPlatformFeeRate), pinned so
         // a later tier change cannot restate this purchase's fee in earnings reporting.
         buyerPremiumAmount: 0,
         buyerPremiumRate: 0,
         commissionAmount: platformFeeAmount / 100,
-        commissionRate: getPlatformFeeRate(subscriptionTier || 'SIMPLE'),
+        commissionRate: getPlatformFeeRate(subscriptionTier as SubscriptionTier),
         organizerAbsorbedPremium: false,
         stripePaymentIntentId: paymentIntent.id,
         status: 'PENDING',

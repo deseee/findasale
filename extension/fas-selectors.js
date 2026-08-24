@@ -384,26 +384,73 @@
   // Commerce Manager, in which case this selector will miss it). Needs a Chrome QA
   // spot-check against a real Facebook-Checkout-sold listing before this is trusted at
   // scale -- see this dispatch's handoff.
+  //
+  // (2026-08-24, defensive hardening -- STILL NOT LIVE-VERIFIED, see note directly above)
+  // The single exact string 'view order' has never been confirmed against a real Facebook
+  // Checkout-sold card -- if Facebook's actual copy differs even slightly ("View your order",
+  // "Order confirmed", "Order details"), the old exact-match check would silently miss it
+  // forever with zero signal, exactly the reverse-sold-detection failure this file exists to
+  // prevent. Two changes, both reusing patterns already used elsewhere in this file rather than
+  // inventing a new selector strategy: (1) widen the single exact string to a small set of
+  // plausible Facebook phrasings, matched as a normalized substring (norm() already
+  // lowercases/collapses whitespace, same as every other text-marker function above); (2) for
+  // matches that land ONLY via this still-unverified widened set (never for the two
+  // already-trusted exact markers), cross-check the enclosing card's own text for the ABSENCE of
+  // "mark as sold" -- the same card-boundary text this function already computes for the dedupe
+  // walk below, no new DOM query -- since a genuinely Sold-via-Checkout card should no longer
+  // carry an active listing's primary action. A widened-marker hit whose card still reads "mark
+  // as sold" is treated as a likely false-positive substring collision and excluded, not trusted.
+  // A separate, deliberately looser "does this text contain the word order at all" check logs
+  // (console.log, not silent) any role-button that looks order-related but matched none of the
+  // markers above, so a human reviewing the extension's console output can catch a real
+  // Facebook-phrasing mismatch instead of it failing silently forever. None of this replaces the
+  // Chrome QA spot-check against a real Facebook-Checkout-sold listing flagged above -- it only
+  // reduces the blast radius of that check still being outstanding.
+  const CHECKOUT_ORDER_MARKERS = ['view order', 'view your order', 'order confirmed', 'order details'];
+  function isCheckoutOrderMarker(t) {
+    return CHECKOUT_ORDER_MARKERS.some((m) => t.indexOf(m) !== -1);
+  }
+  // Deliberately broader than isCheckoutOrderMarker (a bare "order" substring) -- used ONLY for
+  // the diagnostic console.log below, never to accept a card as sold. Exists so a real-world
+  // Facebook phrasing that misses even the widened marker list above still leaves a trace in the
+  // console instead of vanishing with zero signal.
+  function looksOrderRelated(t) {
+    return t.indexOf('order') !== -1;
+  }
   function allSoldListingCards() {
-    const markers = Array.from(document.querySelectorAll('div[role="button"], button, span[role="button"], a[role="button"]'))
-      .filter((b) => {
-        const t = norm(b.textContent);
-        return t === 'mark as available' || t === 'relist this item' || t === 'view order';
-      });
+    const allRoleButtons = Array.from(document.querySelectorAll('div[role="button"], button, span[role="button"], a[role="button"]'));
     // (2026-08-07 fix) Same element-reference dedup bug as alreadySoldCardByTitle above --
     // fixed the same way (dedupe by normalized text, not element reference). Without this, a
     // single real Sold card with two markers could show up TWICE in the returned list, causing
     // matchSoldCardForTitle in fas-remove.js to see 2 matches for what is actually one card and
     // wrongly treat it as ambiguous.
     const seen = new Set(); // normalized card text, deduped
-    for (const btn of markers) {
+    for (const btn of allRoleButtons) {
+      const t = norm(btn.textContent);
+      if (!t) continue;
+      const isTrustedExact = t === 'mark as available' || t === 'relist this item';
+      const isCheckoutMatch = isCheckoutOrderMarker(t);
+      if (!isTrustedExact && !isCheckoutMatch) {
+        if (looksOrderRelated(t)) {
+          console.log('[FindA.Sale] allSoldListingCards: possible unmatched Checkout-sold marker -- element text: "' + t + '". If this is really a sold-via-Checkout card, add its exact phrasing to CHECKOUT_ORDER_MARKERS in fas-selectors.js.');
+        }
+        continue;
+      }
       let el = btn, hops = 0;
       while (el && hops < 16) {
         el = el.parentElement;
         hops++;
         if (!el) break;
-        const t = norm(el.textContent);
-        if (t.indexOf('$') !== -1 && t.length > 40) { seen.add(t); break; }
+        const cardText = norm(el.textContent);
+        if (cardText.indexOf('$') !== -1 && cardText.length > 40) {
+          const cardStillActive = cardText.indexOf('mark as sold') !== -1;
+          if (isTrustedExact || !cardStillActive) {
+            seen.add(cardText);
+          } else {
+            console.log('[FindA.Sale] allSoldListingCards: matched a widened Checkout-sold marker ("' + t + '") but its card still shows "Mark as sold" -- excluded as a likely false-positive substring match. Review manually if this card really is sold.');
+          }
+          break;
+        }
       }
     }
     return Array.from(seen).map((cardText) => ({ cardText }));
