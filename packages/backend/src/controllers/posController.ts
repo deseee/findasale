@@ -1251,16 +1251,18 @@ export const createCombinedInvoice = async (req: AuthRequest, res: Response) => 
     const finalCashAmountCents = Math.min(cashAmountCents ?? 0, grandTotalCents);
     const cardAmountCents = grandTotalCents - finalCashAmountCents;
 
-    // Get organizer tier for platform fee calculation
-    const organizerWithRole = await prisma.organizer.findUnique({
-      where: { id: organizer.id },
-      include: { user: { select: { roleSubscriptions: true } } },
-    });
-
-    const hasPro = organizerWithRole?.user?.roleSubscriptions?.some(
-      rs => rs.subscriptionTier === 'PRO'
-    ) ?? false;
-    const platformFeePercent = hasPro ? 0.08 : 0.10;
+    // Get organizer tier for platform fee calculation.
+    // BUG FIX (2026-08-24, found via a systematic sweep for the same pattern after
+    // reservationController.ts's identical bug was found+fixed off a real ArtifactMI TEAMS
+    // overcharge): this used to query `roleSubscriptions` for `'PRO'` only, silently excluding
+    // TEAMS (same bug class already fixed in posPaymentController.ts/terminalController.ts, and
+    // just now in reservationController.ts's ONLINE Hold-to-Pay path -- this is the 4th real
+    // instance of the same copy-pasted check). `organizer` here (from
+    // `resolveOrganizerOrTeamMember` above) already carries `subscriptionTier` directly for BOTH
+    // the ORGANIZER and TEAM_MEMBER-acting-for-owner branches (posAuth.ts), so the extra
+    // `roleSubscriptions` query is now removed entirely rather than just re-pointed --
+    // `organizer.subscriptionTier` is the authoritative field the Organizer row itself carries.
+    const platformFeePercent = getPlatformFeeRate(organizer.subscriptionTier as SubscriptionTier);
     const platformFeeCents = Math.round(cardAmountCents * platformFeePercent);
 
     // Determine expiresAt

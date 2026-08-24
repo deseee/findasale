@@ -1740,8 +1740,14 @@ export const markSoldAndCreateInvoice = async (req: AuthRequest, res: Response) 
 
     // LOCKED DECISION #1: Fee calculation based on organizer tier
     // Calculate total from all bundled items
-    const hasPro = organizer.user?.roleSubscriptions?.some(rs => rs.subscriptionTier === 'PRO') ?? false;
-    const platformFeePercent = hasPro ? 0.08 : 0.10;
+    // BUG FIX (2026-08-24, found via live ArtifactMI $0.50 charge -- real TEAMS organizer was
+    // charged 10% instead of 8%): this only checked `roleSubscriptions` for 'PRO', silently
+    // excluding TEAMS -- the same hardcoded-tier bug class already fixed in posPaymentController.ts
+    // and terminalController.ts (utils/feeCalculator.ts's own header comment: "10% SIMPLE / 8%
+    // PRO+TEAMS"). Also switched off the role-subscription array (which can drift from the
+    // Organizer's own record) onto `organizer.subscriptionTier` directly via the shared
+    // `getPlatformFeeRate()` resolver, matching every other call site in the codebase.
+    const platformFeePercent = getPlatformFeeRate(organizer.subscriptionTier as SubscriptionTier);
 
     let totalAmount = 0;
     let totalPlatformFeeAmount = 0;

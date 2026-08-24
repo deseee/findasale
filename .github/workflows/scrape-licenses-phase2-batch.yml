@@ -45,7 +45,10 @@ jobs:
   scrape:
     name: License & Registry Phase 2 Batch
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 180 # bumped from 60 (2026-08-24): today's run got cancelled mid-batch
+    # (Illinois alone wrote 4,271 rows before the old 60-min ceiling hit), stranding Texas/
+    # NewYork's portion of the run before they were ever reached -- see STATE.md Blocked Queue
+    # "Phase 2 scraper batch-upsert refactor" row for the live-evidence writeup.
 
     steps:
       - name: Checkout code
