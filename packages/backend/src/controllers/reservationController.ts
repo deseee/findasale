@@ -50,6 +50,14 @@ function resolveDefaultSettlementMode(sale: { saleType?: string | null; isOnline
 // transaction back and is translated to a 409 by the caller — never a silent no-op.
 const MARKSOLD_ALREADY_SETTLED = 'MARKSOLD_ALREADY_SETTLED';
 
+// Sentinel thrown from inside placeHold's transaction when the guarded item-status
+// updateMany below matches zero rows -- i.e. another sale channel (eBay sync, POS,
+// terminal, a plain Buy-Now Stripe checkout) legitimately sold this item in the gap
+// between the earlier AVAILABLE/RESERVED check and this write. Rolls the whole
+// transaction back (no orphaned PENDING reservation) and is translated to the same
+// 409 "Item is not available for hold" response the earlier checks already use.
+const ITEM_SOLD_DURING_HOLD_RACE = 'ITEM_SOLD_DURING_HOLD_RACE';
+
 const DEFAULT_HOLD_MINUTES = 30; // Feature #121: fallback hold duration in minutes
 const EN_ROUTE_RADIUS_M = 16093; // 10 miles in meters — en route grace zone
 
@@ -306,9 +314,30 @@ export const placeHold = async (req: AuthRequest, res: Response) => {
           enRoute,
         },
       });
-      await tx.item.update({ where: { id: itemId }, data: { status: 'RESERVED' } });
+      // TOCTOU guard: another sale channel (eBay sync, POS, terminal, a plain
+      // Buy-Now Stripe checkout) may have legitimately sold this item in the gap
+      // between the AVAILABLE/RESERVED check above and this write. An unconditional
+      // update-by-id here would silently clobber that real SOLD status back to
+      // RESERVED, hiding a completed sale. Guard on status the same way
+      // commitItemSale() (itemSaleGuard.ts) does: atomic updateMany + count check.
+      const itemUpdateResult = await tx.item.updateMany({
+        where: { id: itemId, status: { in: ['AVAILABLE'] } },
+        data: { status: 'RESERVED' },
+      });
+      if (itemUpdateResult.count === 0) {
+        throw new Error(ITEM_SOLD_DURING_HOLD_RACE);
+      }
       return r;
+    }).catch((err) => {
+      if (err instanceof Error && err.message === ITEM_SOLD_DURING_HOLD_RACE) {
+        return null;
+      }
+      throw err;
     });
+
+    if (reservation === null) {
+      return res.status(409).json({ message: 'Item is not available for hold' });
+    }
 
     // Feature #70: Emit live feed event (item.saleId! — reservation path only runs for sale items)
     try {
